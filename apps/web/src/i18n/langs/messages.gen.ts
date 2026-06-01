@@ -2150,8 +2150,9 @@ type Messages = {
         "createNewDescription": "Add as a separate file in the workspace";
         "createNewOption": "Create new file";
         "description": "You dropped \"{fileName}\" onto an existing document.";
-        "extensionMismatch": "Extension mismatch: expected .{expected}, got .{actual}";
+        "extensionMismatch": "Extension mismatch: expected {expected}, got {actual}";
         "extensionMismatchError": "File extension does not match the existing document";
+        "noExtension": "no extension";
         "replaceDescription": "Add as a new version of this document";
         "replaceOption": "Replace as new version";
         "title": "Replace or create new?";

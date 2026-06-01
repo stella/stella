@@ -2147,8 +2147,9 @@
         "createNewDescription": "Přidat jako samostatný soubor do prostoru",
         "createNewOption": "Vytvořit nový soubor",
         "description": "Přetáhli jste \"{fileName}\" na existující dokument.",
-        "extensionMismatch": "Neshodná přípona: očekáváno .{expected}, dostáno .{actual}",
+        "extensionMismatch": "Neshodná přípona: očekáváno {expected}, dostáno {actual}",
         "extensionMismatchError": "Přípona souboru neodpovídá existujícímu dokumentu",
+        "noExtension": "bez přípony",
         "replaceDescription": "Přidat jako novou verzi tohoto dokumentu",
         "replaceOption": "Nahradit jako novou verzi",
         "title": "Nahradit nebo vytvořit nový?"

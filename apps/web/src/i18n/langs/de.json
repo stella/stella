@@ -2147,8 +2147,9 @@
         "createNewDescription": "Als separate Datei im Arbeitsbereich hinzufügen",
         "createNewOption": "Neue Datei erstellen",
         "description": "Sie haben \"{fileName}\" auf ein bestehendes Dokument gezogen.",
-        "extensionMismatch": "Erweiterung stimmt nicht überein: erwartet .{expected}, erhalten .{actual}",
+        "extensionMismatch": "Erweiterung stimmt nicht überein: erwartet {expected}, erhalten {actual}",
         "extensionMismatchError": "Die Dateierweiterung stimmt nicht mit dem bestehenden Dokument überein",
+        "noExtension": "keine Erweiterung",
         "replaceDescription": "Als neue Version dieses Dokuments hinzufügen",
         "replaceOption": "Als neue Version ersetzen",
         "title": "Ersetzen oder neu erstellen?"

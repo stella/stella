@@ -2147,8 +2147,9 @@
         "createNewDescription": "Adicionar como arquivo separado na área de trabalho",
         "createNewOption": "Criar novo arquivo",
         "description": "Você soltou \"{fileName}\" em um documento existente.",
-        "extensionMismatch": "Extensão não corresponde: esperado .{expected}, recebido .{actual}",
+        "extensionMismatch": "Extensão não corresponde: esperado {expected}, recebido {actual}",
         "extensionMismatchError": "A extensão do arquivo não corresponde ao documento existente",
+        "noExtension": "sem extensão",
         "replaceDescription": "Adicionar como nova versão deste documento",
         "replaceOption": "Substituir como nova versão",
         "title": "Substituir ou criar novo?"

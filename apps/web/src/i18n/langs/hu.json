@@ -2147,8 +2147,9 @@
         "createNewDescription": "Hozzáadás különálló fájlként a munkaterületen",
         "createNewOption": "Új fájl létrehozása",
         "description": "A \"{fileName}\" fájlt egy meglévő dokumentumra ejtette.",
-        "extensionMismatch": "A kiterjesztés nem egyezik: várt .{expected}, kapott .{actual}",
+        "extensionMismatch": "A kiterjesztés nem egyezik: várt {expected}, kapott {actual}",
         "extensionMismatchError": "A fájl kiterjesztése nem egyezik a meglévő dokumentummal",
+        "noExtension": "nincs kiterjesztés",
         "replaceDescription": "Hozzáadás a dokumentum új verziójaként",
         "replaceOption": "Csere új verzióként",
         "title": "Csere vagy új létrehozása?"

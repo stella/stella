@@ -2147,8 +2147,9 @@
         "createNewDescription": "Dodaj jako oddzielny plik w przestrzeni roboczej",
         "createNewOption": "Utwórz nowy plik",
         "description": "Upuściłeś \"{fileName}\" na istniejący dokument.",
-        "extensionMismatch": "Niezgodne rozszerzenie: oczekiwano .{expected}, otrzymano .{actual}",
+        "extensionMismatch": "Niezgodne rozszerzenie: oczekiwano {expected}, otrzymano {actual}",
         "extensionMismatchError": "Rozszerzenie pliku nie zgadza się z istniejącym dokumentem",
+        "noExtension": "brak rozszerzenia",
         "replaceDescription": "Dodaj jako nową wersję tego dokumentu",
         "replaceOption": "Zastąp jako nową wersję",
         "title": "Zastąpić czy utworzyć nowy?"

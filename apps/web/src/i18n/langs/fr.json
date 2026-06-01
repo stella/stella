@@ -2147,8 +2147,9 @@
         "createNewDescription": "Ajouter comme fichier séparé dans l'espace de travail",
         "createNewOption": "Créer un nouveau fichier",
         "description": "Vous avez déposé \"{fileName}\" sur un document existant.",
-        "extensionMismatch": "Extension non concordante : attendu .{expected}, reçu .{actual}",
+        "extensionMismatch": "Extension non concordante : attendu {expected}, reçu {actual}",
         "extensionMismatchError": "L'extension du fichier ne correspond pas au document existant",
+        "noExtension": "sans extension",
         "replaceDescription": "Ajouter comme nouvelle version de ce document",
         "replaceOption": "Remplacer comme nouvelle version",
         "title": "Remplacer ou créer nouveau ?"

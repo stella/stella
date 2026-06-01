@@ -2147,8 +2147,9 @@
         "createNewDescription": "Pridėti kaip atskirą failą darbo erdvėje",
         "createNewOption": "Sukurti naują failą",
         "description": "Numetėte \"{fileName}\" ant esamo dokumento.",
-        "extensionMismatch": "Plėtinys nesutampa: tikėtasi .{expected}, gauta .{actual}",
+        "extensionMismatch": "Plėtinys nesutampa: tikėtasi {expected}, gauta {actual}",
         "extensionMismatchError": "Failo plėtinys nesutampa su esamu dokumentu",
+        "noExtension": "be plėtinio",
         "replaceDescription": "Pridėti kaip naują šio dokumento versiją",
         "replaceOption": "Pakeisti kaip naują versiją",
         "title": "Pakeisti ar sukurti naują?"

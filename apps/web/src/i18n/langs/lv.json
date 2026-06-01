@@ -2147,8 +2147,9 @@
         "createNewDescription": "Pievienot kā atsevišķu failu darba telpā",
         "createNewOption": "Izveidot jaunu failu",
         "description": "Jūs nometāt \"{fileName}\" uz esoša dokumenta.",
-        "extensionMismatch": "Paplašinājums nesakrīt: gaidīts .{expected}, saņemts .{actual}",
+        "extensionMismatch": "Paplašinājums nesakrīt: gaidīts {expected}, saņemts {actual}",
         "extensionMismatchError": "Faila paplašinājums nesakrīt ar esošo dokumentu",
+        "noExtension": "bez paplašinājuma",
         "replaceDescription": "Pievienot kā šī dokumenta jaunu versiju",
         "replaceOption": "Aizstāt ar jaunu versiju",
         "title": "Aizstāt vai izveidot jaunu?"

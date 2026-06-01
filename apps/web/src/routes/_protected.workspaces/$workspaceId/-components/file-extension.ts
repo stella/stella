@@ -20,6 +20,8 @@ type ExtensionMatchInput = {
 /**
  * Checks if the file extension of an uploaded file matches the extension
  * of an existing entity's file. Extensions are compared case-insensitively.
+ * Two extensionless files (e.g. `Dockerfile` → `Dockerfile`) are considered
+ * a match.
  *
  * Returns false if the entity has no file or if extensions don't match exactly.
  */
@@ -31,13 +33,5 @@ export const extensionMatches = ({
     return false;
   }
 
-  const entityExt = getExtension(entityFileName);
-  const uploadExt = getExtension(uploadFileName);
-
-  // Both files must have extensions, and they must match
-  if (entityExt === null || uploadExt === null) {
-    return false;
-  }
-
-  return entityExt === uploadExt;
+  return getExtension(entityFileName) === getExtension(uploadFileName);
 };

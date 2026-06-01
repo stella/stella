@@ -119,8 +119,12 @@ const VersionOrNewFileDialogBody = ({
             {canReplace
               ? t("workspaces.files.versionOrNewFile.replaceDescription")
               : t("workspaces.files.versionOrNewFile.extensionMismatch", {
-                  expected: entityExt ?? "unknown",
-                  actual: uploadExt ?? "unknown",
+                  expected: entityExt
+                    ? `.${entityExt}`
+                    : t("workspaces.files.versionOrNewFile.noExtension"),
+                  actual: uploadExt
+                    ? `.${uploadExt}`
+                    : t("workspaces.files.versionOrNewFile.noExtension"),
                 })}
           </div>
         </button>

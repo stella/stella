@@ -2147,8 +2147,9 @@
         "createNewDescription": "Lisa eraldi failina tööruumi",
         "createNewOption": "Loo uus fail",
         "description": "Sa lohistasid \"{fileName}\" olemasolevale dokumendile.",
-        "extensionMismatch": "Laiend ei ühti: oodatud .{expected}, saadud .{actual}",
+        "extensionMismatch": "Laiend ei ühti: oodatud {expected}, saadud {actual}",
         "extensionMismatchError": "Faililaiend ei ühti olemasoleva dokumendiga",
+        "noExtension": "laiendita",
         "replaceDescription": "Lisa selle dokumendi uue versioonina",
         "replaceOption": "Asenda uue versiooniga",
         "title": "Asendada või luua uus?"
