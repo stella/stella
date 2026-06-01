@@ -20,7 +20,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/ai-models.ts#22"
+            "location": "apps/api/src/lib/ai-models.ts#25"
           }
         ]
       },
@@ -77,7 +77,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/ai-models.ts#23"
+            "location": "apps/api/src/lib/ai-models.ts#26"
           }
         ]
       },
@@ -134,7 +134,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/ai-models.ts#24"
+            "location": "apps/api/src/lib/ai-models.ts#27"
           }
         ]
       },
@@ -191,7 +191,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/ai-models.ts#26"
+            "location": "apps/api/src/lib/ai-models.ts#29"
           }
         ]
       },
@@ -248,19 +248,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#10"
-          },
-          {
-            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/search/ai.ts#1"
-          },
-          {
-            "location": "apps/api/src/lib/ai-models.ts#25"
-          },
-          {
-            "location": "apps/api/src/lib/bbox/ai-generate-b-boxes.ts#1"
+            "location": "apps/api/src/lib/ai-models.ts#28"
           }
         ]
       },
@@ -377,7 +365,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/ai-models.ts#27"
+            "location": "apps/api/src/lib/ai-models.ts#30"
           }
         ]
       },
@@ -434,7 +422,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/ai-models.ts#28"
+            "location": "apps/api/src/lib/ai-models.ts#31"
           }
         ]
       },
@@ -529,6 +517,63 @@
       ],
       "type": "framework",
       "version": "4.0.27"
+    },
+    {
+      "bom-ref": "pkg:npm/@ai-sdk/provider@3.0.10",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@ai-sdk/provider/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@ai-sdk/provider/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/ai-models.ts#32"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://ai-sdk.dev/docs"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/vercel/ai"
+        }
+      ],
+      "group": "@ai-sdk",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
+          }
+        }
+      ],
+      "name": "provider",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@ai-sdk/provider/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40ai-sdk/provider@3.0.10",
+      "scope": "required",
+      "tags": [
+        "framework"
+      ],
+      "type": "framework",
+      "version": "3.0.10"
     },
     {
       "bom-ref": "pkg:npm/@ai-sdk/react@3.0.193",
@@ -1851,7 +1896,7 @@
             "location": "apps/api/src/env.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#14"
+            "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#13"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/active-docx-edit-tool.ts#3"
@@ -1899,13 +1944,13 @@
             "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#5"
           },
           {
-            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#8"
+            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#7"
           },
           {
-            "location": "apps/api/src/handlers/mcp-connectors/oauth.ts#3"
+            "location": "apps/api/src/handlers/mcp-connectors/oauth.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/search/ai.ts#8"
+            "location": "apps/api/src/handlers/search/ai.ts#7"
           },
           {
             "location": "apps/api/src/handlers/skills/generate-draft.ts#5"
@@ -6485,7 +6530,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/ai-models.ts#29"
+            "location": "apps/api/src/lib/ai-models.ts#33"
           }
         ]
       },
@@ -8835,7 +8880,7 @@
     },
     {
       "bom-ref": "pkg:npm/@stll/business-registries@0.1.0",
-      "description": "Typed clients for national business / commercial registries (Czech ARES, Norwegian Brreg, Finnish PRH, Polish KRS, UK Companies House, French INSEE Sirene, ...)",
+      "description": "Typed clients for national business / commercial registries (Czech ARES, Norwegian Brreg, US SEC EDGAR, Slovak ORSR, Taiwanese GCIS, Finnish PRH, Polish KRS, UK Companies House, French INSEE Sirene, ...)",
       "evidence": {
         "identity": [
           {
@@ -8857,6 +8902,30 @@
           },
           {
             "location": "apps/api/src/lib/business-registries/dispatch.ts#34"
+          },
+          {
+            "location": "apps/api/src/lib/business-registries/dispatch.ts#45"
+          },
+          {
+            "location": "apps/api/src/lib/business-registries/dispatch.ts#53"
+          },
+          {
+            "location": "apps/api/src/lib/business-registries/dispatch.ts#63"
+          },
+          {
+            "location": "apps/api/src/lib/business-registries/dispatch.ts#71"
+          },
+          {
+            "location": "apps/api/src/lib/business-registries/dispatch.ts#82"
+          },
+          {
+            "location": "apps/api/src/lib/business-registries/dispatch.ts#92"
+          },
+          {
+            "location": "apps/api/src/lib/business-registries/dispatch.ts#104"
+          },
+          {
+            "location": "apps/api/src/lib/business-registries/dispatch.ts#113"
           }
         ]
       },
@@ -9024,6 +9093,9 @@
             "location": "apps/api/src/handlers/catalogue/list-catalogue.ts#9"
           },
           {
+            "location": "apps/api/src/handlers/catalogue/native-tool-deploy-availability.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/mcp-connectors/catalog-metadata.ts#6"
           },
           {
@@ -9033,13 +9105,13 @@
             "location": "apps/web/src/routes/onboarding/-components/catalogue-detail-preview.tsx#14"
           },
           {
-            "location": "apps/web/src/routes/onboarding/-components/catalogue-stack-preview.tsx#8"
+            "location": "apps/web/src/routes/onboarding/-components/catalogue-stack-preview.tsx#5"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/onboarding-wizard.tsx#7"
           },
           {
-            "location": "apps/web/src/routes/onboarding/-components/steps/catalogue-step.tsx#20"
+            "location": "apps/web/src/routes/onboarding/-components/steps/catalogue-step.tsx#19"
           }
         ]
       },
@@ -9087,16 +9159,13 @@
             "location": "apps/api/src/db/schema.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/business-registry-tools.ts#5"
-          },
-          {
             "location": "apps/api/src/handlers/mcp-connectors/catalog-metadata.ts#7"
           },
           {
             "location": "apps/api/src/handlers/organization-settings/update-practice-jurisdictions.ts#4"
           },
           {
-            "location": "apps/api/src/lib/business-registries/dispatch.ts#35"
+            "location": "apps/api/src/lib/business-registries/dispatch.ts#114"
           },
           {
             "location": "apps/web/src/lib/country-centroids.ts#1"
@@ -9772,6 +9841,9 @@
         "occurrences": [
           {
             "location": "packages/business-registries/src/ares/validation.ts#1"
+          },
+          {
+            "location": "packages/business-registries/src/orsr/validation.ts#1"
           }
         ]
       },
@@ -10726,7 +10798,7 @@
             "location": "apps/web/src/routes/onboarding/-components/steps/ai-step.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/onboarding/-components/steps/catalogue-step.tsx#21"
+            "location": "apps/web/src/routes/onboarding/-components/steps/catalogue-step.tsx#20"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/download-step.tsx#3"
@@ -11380,7 +11452,7 @@
             "location": "apps/web/src/routes/onboarding/-components/onboarding-progress.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/onboarding/-components/steps/catalogue-step.tsx#28"
+            "location": "apps/web/src/routes/onboarding/-components/steps/catalogue-step.tsx#27"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/download-step.tsx#4"
@@ -11728,7 +11800,7 @@
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#97"
           },
           {
-            "location": "apps/web/src/routes/onboarding/-components/steps/catalogue-step.tsx#22"
+            "location": "apps/web/src/routes/onboarding/-components/steps/catalogue-step.tsx#21"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/invite-step.tsx#7"
@@ -11959,7 +12031,7 @@
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#143"
           },
           {
-            "location": "apps/web/src/routes/onboarding/-components/steps/catalogue-step.tsx#27"
+            "location": "apps/web/src/routes/onboarding/-components/steps/catalogue-step.tsx#26"
           },
           {
             "location": "packages/folio/src/components/ui/AlignmentButtons.tsx#22"
@@ -13316,6 +13388,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/-queries.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/onboarding/-queries.ts#1"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#27"
@@ -16811,7 +16886,7 @@
             "location": "apps/api/src/handlers/case-law/analysis/generate.ts#10"
           },
           {
-            "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#12"
+            "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#11"
           },
           {
             "location": "apps/api/src/handlers/chat/attachment-validation.ts#1"
@@ -16826,7 +16901,16 @@
             "location": "apps/api/src/handlers/chat/chat-schema.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/chat/compaction.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/compaction.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/chat/generate-thread-title.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/loop-detector.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/stream-chat.ts#8"
@@ -16889,13 +16973,13 @@
             "location": "apps/api/src/handlers/chat/upload-files.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#3"
+            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#2"
           },
           {
             "location": "apps/api/src/handlers/properties/suggest-prompt.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/search/ai.ts#3"
+            "location": "apps/api/src/handlers/search/ai.ts#2"
           },
           {
             "location": "apps/api/src/handlers/skills/generate-draft.ts#2"
@@ -16910,16 +16994,16 @@
             "location": "apps/api/src/lib/ai-error.ts#9"
           },
           {
-            "location": "apps/api/src/lib/ai-models.ts#30"
+            "location": "apps/api/src/lib/ai-models.ts#34"
           },
           {
-            "location": "apps/api/src/lib/ai-models.ts#31"
+            "location": "apps/api/src/lib/ai-models.ts#35"
           },
           {
             "location": "apps/api/src/lib/analytics/ai.ts#6"
           },
           {
-            "location": "apps/api/src/lib/bbox/ai-generate-b-boxes.ts#3"
+            "location": "apps/api/src/lib/bbox/ai-generate-b-boxes.ts#2"
           },
           {
             "location": "apps/api/src/lib/workflow/ai-generate-batch.ts#2"
@@ -17283,7 +17367,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/pipeline.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#13"
+            "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#12"
           },
           {
             "location": "apps/api/src/handlers/case-law/routes.ts#1"
@@ -17298,6 +17382,9 @@
             "location": "apps/api/src/handlers/catalogue/list-catalogue.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/catalogue/native-tool-deploy-availability.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/chat/attachment-validation.ts#3"
           },
           {
@@ -17308,6 +17395,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/chat-scope.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/compaction.ts#3"
           },
           {
             "location": "apps/api/src/handlers/chat/data-scope.ts#1"
@@ -17505,7 +17595,7 @@
             "location": "apps/api/src/handlers/entities/open-folio-collab-session.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#4"
+            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#3"
           },
           {
             "location": "apps/api/src/handlers/entities/query-entities.ts#1"
@@ -17790,7 +17880,7 @@
             "location": "apps/api/src/handlers/rates/update.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/search/ai.ts#4"
+            "location": "apps/api/src/handlers/search/ai.ts#3"
           },
           {
             "location": "apps/api/src/handlers/search/routes.ts#1"
@@ -18120,7 +18210,7 @@
             "location": "apps/api/src/handlers/workspaces/workspace-members-remove.ts#1"
           },
           {
-            "location": "apps/api/src/lib/ai-models.ts#32"
+            "location": "apps/api/src/lib/ai-models.ts#36"
           },
           {
             "location": "apps/api/src/lib/ai-provider-probe.ts#8"
@@ -18141,7 +18231,7 @@
             "location": "apps/api/src/lib/azure-foundry.ts#1"
           },
           {
-            "location": "apps/api/src/lib/bbox/ai-generate-b-boxes.ts#4"
+            "location": "apps/api/src/lib/bbox/ai-generate-b-boxes.ts#3"
           },
           {
             "location": "apps/api/src/lib/bbox/generate-b-boxes-shared.ts#2"
@@ -18175,6 +18265,9 @@
           },
           {
             "location": "apps/api/src/lib/file-scan/scan.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/huggingface.ts#1"
           },
           {
             "location": "apps/api/src/lib/matter-reference.ts#1"
@@ -18285,6 +18378,9 @@
             "location": "apps/web/src/lib/pdf/pdf-renderer.ts#1"
           },
           {
+            "location": "apps/web/src/lib/react-query.ts#7"
+          },
+          {
             "location": "apps/web/src/lib/secret-token.ts#1"
           },
           {
@@ -18334,6 +18430,9 @@
           },
           {
             "location": "packages/folio/src/core/layout-engine/index.ts#7"
+          },
+          {
+            "location": "packages/folio/src/core/layout-engine/measure/font-metrics.worker.ts#18"
           },
           {
             "location": "packages/folio/src/core/layout-engine/measure/measureContainer.ts#14"
@@ -18547,6 +18646,9 @@
         "occurrences": [
           {
             "location": "apps/api/src/lib/file-derivative-queue.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/redis-client.ts#1"
           },
           {
             "location": "apps/api/src/lib/scheduler/bullmq.ts#1"
@@ -19624,7 +19726,7 @@
             "location": "apps/api/src/handlers/entities/open-folio-collab-session.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#5"
+            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#4"
           },
           {
             "location": "apps/api/src/handlers/entities/query-entities.ts#2"
@@ -19810,7 +19912,7 @@
             "location": "apps/api/src/handlers/rates/update.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/search/ai.ts#5"
+            "location": "apps/api/src/handlers/search/ai.ts#4"
           },
           {
             "location": "apps/api/src/handlers/shortcuts/create.ts#2"
@@ -20125,7 +20227,7 @@
             "location": "apps/api/src/lib/workflow/generate-batch-shared.ts#2"
           },
           {
-            "location": "apps/api/src/lib/workflow-queue.ts#4"
+            "location": "apps/api/src/lib/workflow-queue.ts#5"
           },
           {
             "location": "apps/api/src/mcp/compat-tools.ts#2"
@@ -20587,10 +20689,10 @@
             "location": "apps/api/src/handlers/entities/open-folio-collab-session.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#6"
+            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#5"
           },
           {
-            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#7"
+            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#6"
           },
           {
             "location": "apps/api/src/handlers/entities/read-filesystem-tree.ts#2"
@@ -20851,10 +20953,10 @@
             "location": "apps/api/src/handlers/rates/update.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/search/ai.ts#6"
+            "location": "apps/api/src/handlers/search/ai.ts#5"
           },
           {
-            "location": "apps/api/src/handlers/search/ai.ts#7"
+            "location": "apps/api/src/handlers/search/ai.ts#6"
           },
           {
             "location": "apps/api/src/handlers/search/facets.ts#1"
@@ -21532,80 +21634,6 @@
       "scope": "required",
       "type": "library",
       "version": "1.4.2"
-    },
-    {
-      "authors": [
-        {
-          "name": "Zihua Li <i@zihua.li> (http://zihua.li)"
-        }
-      ],
-      "bom-ref": "pkg:npm/ioredis@5.10.1",
-      "description": "A robust, performance-focused and full-featured Redis client for Node.js.",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/ioredis/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/ioredis/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/api/src/lib/file-derivative-queue.ts#4"
-          },
-          {
-            "location": "apps/api/src/lib/rate-limit/auth-storage.ts#13"
-          },
-          {
-            "location": "apps/api/src/lib/redis-options.ts#14"
-          },
-          {
-            "location": "apps/api/src/lib/scheduler/bullmq.ts#2"
-          },
-          {
-            "location": "apps/api/src/lib/sse.ts#1"
-          },
-          {
-            "location": "apps/api/src/lib/workflow-queue.ts#5"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "git://github.com/luin/ioredis.git"
-        }
-      ],
-      "group": "",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-          }
-        }
-      ],
-      "name": "ioredis",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/ioredis/package.json"
-        }
-      ],
-      "purl": "pkg:npm/ioredis@5.10.1",
-      "scope": "required",
-      "tags": [
-        "redis"
-      ],
-      "type": "library",
-      "version": "5.10.1"
     },
     {
       "authors": [
@@ -22536,250 +22564,6 @@
       ],
       "type": "library",
       "version": "1.16.0"
-    },
-    {
-      "authors": [
-        {
-          "name": "Christopher Jeffrey"
-        }
-      ],
-      "bom-ref": "pkg:npm/marked@15.0.12",
-      "description": "A markdown parser built for speed",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@react-email/markdown/node_modules/marked/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@react-email/markdown/node_modules/marked/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/api/src/lib/markdown/ai-tool.ts#2"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://marked.js.org"
-        },
-        {
-          "type": "vcs",
-          "url": "git://github.com/markedjs/marked.git"
-        }
-      ],
-      "group": "",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-          }
-        }
-      ],
-      "name": "marked",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/react-email/node_modules/marked/package.json"
-        },
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@react-email/markdown/node_modules/marked/package.json"
-        }
-      ],
-      "purl": "pkg:npm/marked@15.0.12",
-      "scope": "required",
-      "type": "library",
-      "version": "15.0.12"
-    },
-    {
-      "authors": [
-        {
-          "name": "Christopher Jeffrey"
-        }
-      ],
-      "bom-ref": "pkg:npm/marked@16.4.2",
-      "description": "A markdown parser built for speed",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/mermaid/node_modules/marked/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/mermaid/node_modules/marked/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/api/src/lib/markdown/ai-tool.ts#2"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://marked.js.org"
-        },
-        {
-          "type": "vcs",
-          "url": "git://github.com/markedjs/marked.git"
-        }
-      ],
-      "group": "",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-          }
-        }
-      ],
-      "name": "marked",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/mermaid/node_modules/marked/package.json"
-        }
-      ],
-      "purl": "pkg:npm/marked@16.4.2",
-      "scope": "required",
-      "type": "library",
-      "version": "16.4.2"
-    },
-    {
-      "authors": [
-        {
-          "name": "Christopher Jeffrey"
-        }
-      ],
-      "bom-ref": "pkg:npm/marked@17.0.5",
-      "description": "A markdown parser built for speed",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/streamdown/node_modules/marked/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/streamdown/node_modules/marked/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/api/src/lib/markdown/ai-tool.ts#2"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://marked.js.org"
-        },
-        {
-          "type": "vcs",
-          "url": "git://github.com/markedjs/marked.git"
-        }
-      ],
-      "group": "",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-          }
-        }
-      ],
-      "name": "marked",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/streamdown/node_modules/marked/package.json"
-        }
-      ],
-      "purl": "pkg:npm/marked@17.0.5",
-      "scope": "required",
-      "type": "library",
-      "version": "17.0.5"
-    },
-    {
-      "authors": [
-        {
-          "name": "Christopher Jeffrey"
-        }
-      ],
-      "bom-ref": "pkg:npm/marked@18.0.4",
-      "description": "A markdown parser built for speed",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/marked/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/marked/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/api/src/lib/markdown/ai-tool.ts#2"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://marked.js.org"
-        },
-        {
-          "type": "vcs",
-          "url": "git://github.com/markedjs/marked.git"
-        }
-      ],
-      "group": "",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-          }
-        }
-      ],
-      "name": "marked",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/marked/package.json"
-        }
-      ],
-      "purl": "pkg:npm/marked@18.0.4",
-      "scope": "required",
-      "type": "library",
-      "version": "18.0.4"
     },
     {
       "authors": [
@@ -26773,7 +26557,7 @@
             "location": "apps/api/src/env.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#14"
+            "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#13"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/active-docx-edit-tool.ts#3"
@@ -26821,13 +26605,13 @@
             "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#5"
           },
           {
-            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#8"
+            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#7"
           },
           {
-            "location": "apps/api/src/handlers/mcp-connectors/oauth.ts#3"
+            "location": "apps/api/src/handlers/mcp-connectors/oauth.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/search/ai.ts#8"
+            "location": "apps/api/src/handlers/search/ai.ts#7"
           },
           {
             "location": "apps/api/src/handlers/skills/generate-draft.ts#5"
