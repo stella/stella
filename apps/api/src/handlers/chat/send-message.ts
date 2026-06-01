@@ -13,7 +13,13 @@ import { env } from "@/api/env";
 import {
   buildChatPromptCacheKey,
   buildChatSystemPromptParts,
+  extendChatSafePrompt,
+  extendChatUntrustedPromptSuffix,
   extractTitle,
+} from "@/api/handlers/chat/chat-prompt";
+import type {
+  ChatSafePrompt,
+  ChatUntrustedPromptSuffix,
 } from "@/api/handlers/chat/chat-prompt";
 import type {
   IncomingActiveDecision,
@@ -513,12 +519,13 @@ const sendMessage = createSafeRootHandler(
     // external MCP catalog is organization/user-configured text, so
     // it rides with the dynamic suffix and crosses the boundary in
     // anonymized mode.
-    const systemSafe = [chatContext.systemSafe, anonymizedSystemHint]
-      .filter((part): part is string => part !== null && part.length > 0)
-      .join("\n\n");
-    const systemUntrusted = [chatContext.systemUntrusted, externalMcpSystemHint]
-      .filter((part) => part.length > 0)
-      .join("\n\n");
+    const systemSafe = extendChatSafePrompt(chatContext.systemSafe, [
+      anonymizedSystemHint,
+    ]);
+    const systemUntrusted = extendChatUntrustedPromptSuffix(
+      chatContext.systemUntrusted,
+      [externalMcpSystemHint],
+    );
     let externalMcpToolsClosed = false;
     const closeExternalMcpTools = async () => {
       if (externalMcpToolsClosed) {
@@ -1171,14 +1178,14 @@ type PrepareChatContextResult = Result<
     /**
      * Server-built scaffold. Safe to send to the LLM verbatim.
      */
-    systemSafe: string;
+    systemSafe: ChatSafePrompt;
     /**
      * Dynamic user-supplied context (active file body, decision
      * text, external source, matter labels). Pass through the
      * boundary in anonymized mode before concatenating with
      * `systemSafe`.
      */
-    systemUntrusted: string;
+    systemUntrusted: ChatUntrustedPromptSuffix;
     skillMetadata: readonly SkillMetadata[];
   },
   HandlerError<422 | 500> | SafeDbError

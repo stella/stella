@@ -1,4 +1,5 @@
 import { defineConfig } from "oxlint";
+
 import {
   libraryIgnorePatterns,
   libraryOverrides,
@@ -99,6 +100,7 @@ export default defineConfig({
     "must-use-result/must-use-result": "error",
     "no-any-casts/no-any-casts": "error",
     "no-dangerous-type-assertions/no-dangerous-type-assertions": "error",
+    "no-prompt-boundary-casts/no-prompt-boundary-casts": "error",
     "require-contained-handler/require-contained-handler": "error",
     "no-void": ["error", { allowAsStatement: true }],
 
@@ -286,6 +288,7 @@ export default defineConfig({
     "./.oxlint-plugins/must-use-result.ts",
     "./.oxlint-plugins/no-any-casts.ts",
     "./.oxlint-plugins/no-dangerous-type-assertions.ts",
+    "./.oxlint-plugins/no-prompt-boundary-casts.ts",
     "./.oxlint-plugins/folio-layer-boundaries.ts",
     "./.oxlint-plugins/require-contained-handler.ts",
   ],

@@ -23,6 +23,10 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { getUserFileIdFromPart } from "@/api/handlers/chat/attachment-validation";
+import type {
+  ChatSafePrompt,
+  ChatUntrustedPromptSuffix,
+} from "@/api/handlers/chat/chat-prompt";
 import { compactModelMessagesForModel } from "@/api/handlers/chat/compaction";
 import {
   createLoopRecoverySystemPrompt,
@@ -342,14 +346,14 @@ type StreamChatProps = {
    * Server-built scaffold half of the system prompt. Sent to the
    * model verbatim.
    */
-  systemSafe: string;
+  systemSafe: ChatSafePrompt;
   /**
    * Dynamic, user-supplied half of the system prompt (active file
    * body, decision text, external source content, matter labels).
    * In anonymized mode this passes through the boundary first;
    * otherwise it concatenates straight onto `systemSafe`.
    */
-  systemUntrusted: string;
+  systemUntrusted: ChatUntrustedPromptSuffix;
   thirdPartyBoundary: ChatThirdPartyBoundary;
   latestMessageId: string;
   threadId: SafeId<"chatThread">;

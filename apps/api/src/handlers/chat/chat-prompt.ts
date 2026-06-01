@@ -84,14 +84,32 @@ type PromptSkillMetadata = SkillMetadata & {
   source?: "built-in" | "installed" | undefined;
 };
 
+declare const __chatPromptPartBrand: unique symbol;
+
+export type ChatCacheStablePrefix = string & {
+  readonly [__chatPromptPartBrand]: "cacheStablePrefix";
+};
+
+export type ChatSafePrompt = string & {
+  readonly [__chatPromptPartBrand]: "safePrompt";
+};
+
+export type ChatUntrustedPromptSuffix = string & {
+  readonly [__chatPromptPartBrand]: "untrustedSuffix";
+};
+
+export type ChatFullPrompt = string & {
+  readonly [__chatPromptPartBrand]: "fullPrompt";
+};
+
 export type ChatPromptParts = {
-  cacheStablePrefix: string;
+  cacheStablePrefix: ChatCacheStablePrefix;
   /**
    * Server-built scaffold: product copy, built-in skill catalog,
    * jurisdictions, workspace metadata. Carries no third-party PII
    * and is sent to the model verbatim — *no anonymization*.
    */
-  safePrompt: string;
+  safePrompt: ChatSafePrompt;
   /**
    * User-supplied dynamic context concatenated onto the scaffold:
    * active file body, case-law decision text, external-source
@@ -99,18 +117,69 @@ export type ChatPromptParts = {
    * anonymizer runs over this before it reaches the third-party
    * model, so any names embedded inside get placeholdered.
    */
-  untrustedSuffix: string;
+  untrustedSuffix: ChatUntrustedPromptSuffix;
   /**
    * `safePrompt + untrustedSuffix`. Kept for callers that want
    * the whole thing without going through the boundary (e.g.
    * non-anonymized mode, prompt-cache key derivation, debug
    * logging).
    */
-  fullPrompt: string;
+  fullPrompt: ChatFullPrompt;
   skillMetadata: readonly PromptSkillMetadata[];
 };
 
-export const buildChatPromptCacheKey = (cacheStablePrefix: string) => {
+const brandChatCacheStablePrefix = (text: string): ChatCacheStablePrefix =>
+  // SAFETY: only this prompt assembler mints cache-stable prefixes.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  text as ChatCacheStablePrefix;
+
+const brandChatSafePrompt = (text: string): ChatSafePrompt =>
+  // SAFETY: only this prompt assembler mints the trusted scaffold.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  text as ChatSafePrompt;
+
+const brandChatUntrustedPromptSuffix = (
+  text: string,
+): ChatUntrustedPromptSuffix =>
+  // SAFETY: only this prompt assembler mints the dynamic suffix.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  text as ChatUntrustedPromptSuffix;
+
+const brandChatFullPrompt = (text: string): ChatFullPrompt =>
+  // SAFETY: fullPrompt is derived from already-branded prompt parts.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  text as ChatFullPrompt;
+
+const buildChatFullPrompt = ({
+  safePrompt,
+  untrustedSuffix,
+}: {
+  safePrompt: ChatSafePrompt;
+  untrustedSuffix: ChatUntrustedPromptSuffix;
+}): ChatFullPrompt => brandChatFullPrompt(`${safePrompt}${untrustedSuffix}`);
+
+const nonEmptyPromptPart = (part: string | null | undefined): part is string =>
+  part !== null && part !== undefined && part.length > 0;
+
+export const extendChatSafePrompt = (
+  base: ChatSafePrompt,
+  additions: readonly (string | null | undefined)[],
+): ChatSafePrompt => {
+  const parts = [base, ...additions].filter(nonEmptyPromptPart);
+  return brandChatSafePrompt(parts.join("\n\n"));
+};
+
+export const extendChatUntrustedPromptSuffix = (
+  base: ChatUntrustedPromptSuffix,
+  additions: readonly (string | null | undefined)[],
+): ChatUntrustedPromptSuffix => {
+  const parts = [base, ...additions].filter(nonEmptyPromptPart);
+  return brandChatUntrustedPromptSuffix(parts.join("\n\n"));
+};
+
+export const buildChatPromptCacheKey = (
+  cacheStablePrefix: ChatCacheStablePrefix,
+) => {
   const hash = new Bun.CryptoHasher("sha256")
     .update(cacheStablePrefix)
     .digest("hex")
@@ -247,13 +316,18 @@ export const buildChatSystemPromptParts = async ({
     // produced an untrusted half (matter-name interpolation, user
     // profile block); prepend it so anonymization covers the
     // whole user-driven tail.
-    const untrustedSuffix = `${safeParts.untrustedSuffix}${appendedUntrusted}`;
+    const untrustedSuffix = brandChatUntrustedPromptSuffix(
+      `${safeParts.untrustedSuffix}${appendedUntrusted}`,
+    );
 
     return Result.ok({
       cacheStablePrefix: safeParts.cacheStablePrefix,
       safePrompt: safeParts.safePrompt,
       untrustedSuffix,
-      fullPrompt: `${safeParts.safePrompt}${untrustedSuffix}`,
+      fullPrompt: buildChatFullPrompt({
+        safePrompt: safeParts.safePrompt,
+        untrustedSuffix,
+      }),
       skillMetadata,
     });
   });
@@ -875,21 +949,23 @@ const buildPromptParts = ({
 }: BuildPromptProps): ChatPromptParts => {
   const { safeSkillMetadata, untrustedSkillMetadata } =
     splitSkillMetadataForPrompt(skillMetadata);
-  const cacheStablePrefix = joinPromptSections([
-    ...CORE_RULE_SECTIONS,
-    buildSkillCatalogSection(safeSkillMetadata),
-    READONLY_API_HINT,
-  ]);
+  const cacheStablePrefix = brandChatCacheStablePrefix(
+    joinPromptSections([
+      ...CORE_RULE_SECTIONS,
+      buildSkillCatalogSection(safeSkillMetadata),
+      READONLY_API_HINT,
+    ]),
+  );
   // Safe half: scaffold + jurisdiction labels. Both are
   // server-defined catalogs with no third-party PII.
-  const safeSections = [cacheStablePrefix];
+  const safeSections: string[] = [cacheStablePrefix];
   const practiceJurisdictionLine = buildPracticeJurisdictionLine(
     practiceJurisdictions,
   );
   if (practiceJurisdictionLine) {
     safeSections.push(practiceJurisdictionLine);
   }
-  const safePrompt = joinPromptSections(safeSections);
+  const safePrompt = brandChatSafePrompt(joinPromptSections(safeSections));
 
   // Untrusted half: anything that interpolates user-controlled
   // text into the prompt. Installed skill names/descriptions are
@@ -906,16 +982,17 @@ const buildPromptParts = ({
   if (userContextBlock) {
     untrustedSections.push(userContextBlock);
   }
-  const untrustedSuffix =
+  const untrustedSuffix = brandChatUntrustedPromptSuffix(
     untrustedSections.length > 0
       ? `\n\n${joinPromptSections(untrustedSections)}`
-      : "";
+      : "",
+  );
 
   return {
     cacheStablePrefix,
     safePrompt,
     untrustedSuffix,
-    fullPrompt: `${safePrompt}${untrustedSuffix}`,
+    fullPrompt: buildChatFullPrompt({ safePrompt, untrustedSuffix }),
     skillMetadata,
   };
 };

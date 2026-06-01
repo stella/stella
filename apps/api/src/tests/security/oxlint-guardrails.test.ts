@@ -65,4 +65,15 @@ describe("custom oxlint guardrails", () => {
     expect(helperSource).toContain("instanceof Node");
     expect(helperSource).not.toContain("instanceof Element");
   });
+
+  test("prompt boundary cast rule protects chat prompt brands", () => {
+    const pluginSource = readRootFixture(
+      ".oxlint-plugins/no-prompt-boundary-casts.ts",
+    );
+
+    expect(pluginSource).toContain("ChatCacheStablePrefix");
+    expect(pluginSource).toContain("ChatSafePrompt");
+    expect(pluginSource).toContain("ChatUntrustedPromptSuffix");
+    expect(pluginSource).toContain("apps/api/src/handlers/chat/chat-prompt.ts");
+  });
 });
