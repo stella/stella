@@ -13,6 +13,7 @@ import type {
 import { ChevronRightIcon, FolderIcon, FolderOpenIcon } from "lucide-react";
 
 import { Checkbox } from "@stll/ui/components/checkbox";
+import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 import { cn } from "@stll/ui/lib/utils";
 
 import { renderDragPreview } from "@/components/drag-preview";
@@ -428,7 +429,7 @@ export const DraggableRow = ({
       data-index={virtualIndex}
       data-state={row.getIsSelected() ? "selected" : undefined}
       key={row.id}
-      onClick={handleRowClick}
+      onClick={containedHandler(rowRef, handleRowClick)}
       onContextMenu={handleContextMenu}
       ref={setRowRef}
     >

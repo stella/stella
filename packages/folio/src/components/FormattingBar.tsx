@@ -26,6 +26,7 @@ import { useTranslations } from "use-intl";
 import { ColorPicker } from "@stll/ui/components/color-picker";
 import type { ColorPreset } from "@stll/ui/components/color-picker";
 import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/components/menu";
+import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 
 import type { ParagraphAlignment } from "../core/types/document";
 import { cn } from "../lib/utils";
@@ -361,36 +362,14 @@ export function FormattingBar(props: FormattingBarProps) {
       return;
     }
     const target = e.target;
-    // Skip events that bubbled in from portaled descendants (Dialog,
-    // Combobox popups, dropdown menus). React forwards synthetic events
-    // through the parent React tree even when the descendant is rendered
-    // via createPortal; without this guard, preventDefault on the bar
-    // mousedown swallows clicks on portaled items so popups can never
-    // commit a selection.
-    if (barRef.current && !barRef.current.contains(target)) {
-      return;
-    }
     if (target.tagName !== "INPUT" && target.tagName !== "SELECT") {
       e.preventDefault();
     }
   }, []);
 
-  const handleBarMouseUp = useCallback(
-    (e: React.MouseEvent) => {
-      // See handleBarMouseDown — skip portaled descendants so a popup
-      // selection doesn't immediately punt focus back to the editor and
-      // dismiss the popup before its onValueChange fires.
-      if (
-        e.target instanceof HTMLElement &&
-        barRef.current &&
-        !barRef.current.contains(e.target)
-      ) {
-        return;
-      }
-      requestAnimationFrame(() => onRefocusEditor?.());
-    },
-    [onRefocusEditor],
-  );
+  const handleBarMouseUp = useCallback(() => {
+    requestAnimationFrame(() => onRefocusEditor?.());
+  }, [onRefocusEditor]);
 
   const secondaryControls = (
     <>
@@ -497,8 +476,12 @@ export function FormattingBar(props: FormattingBarProps) {
       aria-label={t("formattingToolbar")}
       tabIndex={-1}
       data-folio-toolbar="true"
-      onMouseDown={inline ? undefined : handleBarMouseDown}
-      onMouseUp={inline ? undefined : handleBarMouseUp}
+      onMouseDown={
+        inline ? undefined : containedHandler(barRef, handleBarMouseDown)
+      }
+      onMouseUp={
+        inline ? undefined : containedHandler(barRef, handleBarMouseUp)
+      }
     >
       {/* Formatting controls */}
       <div className="flex min-w-0 flex-1 [scrollbar-width:none] items-center gap-0.5 overflow-x-auto overflow-y-hidden overscroll-x-contain [&::-webkit-scrollbar]:hidden">

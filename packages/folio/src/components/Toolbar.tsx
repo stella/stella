@@ -14,6 +14,8 @@
 
 import React, { useCallback, useRef } from "react";
 
+import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
+
 import { cn } from "../lib/utils";
 import { FormattingBar } from "./FormattingBar";
 import {
@@ -120,8 +122,8 @@ export function Toolbar({
       tabIndex={-1}
       data-testid="toolbar"
       data-folio-toolbar="true"
-      onMouseDown={handleToolbarMouseDown}
-      onMouseUp={handleToolbarMouseUp}
+      onMouseDown={containedHandler(toolbarRef, handleToolbarMouseDown)}
+      onMouseUp={containedHandler(toolbarRef, handleToolbarMouseUp)}
     >
       {/* Formatting icons — rendered inline (display:contents) */}
       <FormattingBar

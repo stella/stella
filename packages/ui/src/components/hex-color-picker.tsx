@@ -18,6 +18,7 @@
 import type * as React from "react";
 import { useEffect, useRef, useState } from "react";
 
+import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 import { cn } from "@stll/ui/lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -390,8 +391,8 @@ const InteractiveArea = ({
       {...rest}
       className="absolute inset-0 touch-none rounded-[inherit] outline-none"
       onKeyDown={handleKeyDown}
-      onMouseDown={handleStart}
-      onTouchStart={handleStart}
+      onMouseDown={containedHandler(container, handleStart)}
+      onTouchStart={containedHandler(container, handleStart)}
       ref={container}
       // eslint-disable-next-line jsx-a11y/role-has-required-aria-props -- aria-value* props are passed via ...rest by callers
       role="slider"

@@ -31,6 +31,8 @@ import type { EditorState, Transaction, Plugin } from "prosemirror-state";
 import { CellSelection } from "prosemirror-tables";
 import type { EditorView } from "prosemirror-view";
 
+import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
+
 import { HiddenHeaderFooterPMs } from "../components/HiddenHeaderFooterPMs";
 import type { HiddenHeaderFooterPMsRef } from "../components/HiddenHeaderFooterPMs";
 import { getFootnoteText } from "../core/docx/footnoteParser";
@@ -4678,19 +4680,8 @@ export function PagedEditor(
         return;
       }
 
-      // Don't process clicks that originated in portaled descendants
-      // (Dialog popup, Combobox popup, dropdowns, etc.). React bubbles
-      // synthetic events through the parent React tree even when the
-      // descendant is rendered via createPortal, so a click on a popup
-      // outside the editor DOM still reaches this handler. Without the
-      // guard, selection/focus logic below steals focus and dismisses
-      // the popup.
-      if (
-        pagesContainerRef.current &&
-        !pagesContainerRef.current.contains(target)
-      ) {
-        return;
-      }
+      // Portaled descendants (Dialog, Combobox) are filtered upstream by
+      // `containedHandler(pagesContainerRef, …)` at the JSX site.
 
       // Prevent default browser navigation for hyperlink clicks,
       // but let the rest of the handler run for cursor placement and drag selection.
@@ -5740,14 +5731,8 @@ export function PagedEditor(
       if (!target) {
         return;
       }
-      // Skip clicks from portaled descendants (Dialog, Combobox popups
-      // etc.) — see handlePagesMouseDown for rationale.
-      if (
-        pagesContainerRef.current &&
-        !pagesContainerRef.current.contains(target)
-      ) {
-        return;
-      }
+      // Portaled descendants (Dialog, Combobox) are filtered upstream by
+      // `containedHandler(pagesContainerRef, …)` at the JSX site.
       // Handle hyperlink clicks (single-click only, not drag-to-select)
       const anchorClosest = target.closest("a[href]");
       const anchorEl =
@@ -6138,18 +6123,8 @@ export function PagedEditor(
       ) {
         return;
       }
-      // Don't steal focus from portaled popups (Dialog, Combobox, etc.).
-      // React bubbles synthetic events through the parent React tree even
-      // when descendants are rendered via createPortal; checking DOM
-      // containment against containerRef catches every portaled child,
-      // not just specific data-slot allowlists.
-      if (
-        e.target instanceof HTMLElement &&
-        containerRef.current &&
-        !containerRef.current.contains(e.target)
-      ) {
-        return;
-      }
+      // Portaled descendants (Dialog, Combobox) are filtered upstream
+      // by `containedHandler(containerRef, …)` at the JSX site.
       focusHiddenEditor();
     },
     [focusHiddenEditor],
@@ -6490,21 +6465,9 @@ export function PagedEditor(
       ) {
         return;
       }
-      // Don't steal focus from portaled popups (Dialog, Combobox, etc.).
-      // React bubbles synthetic events through the parent React tree even
-      // when descendants are rendered via createPortal; checking DOM
-      // containment against containerRef catches every portaled child,
-      // not just specific data-slot allowlists. Without this guard,
-      // focusHiddenEditor() snaps focus to the hidden PM and dismisses
-      // any open popup.
-      if (
-        e.target instanceof HTMLElement &&
-        containerRef.current &&
-        !containerRef.current.contains(e.target)
-      ) {
-        return;
-      }
-      // Focus hidden PM if clicking outside pages area
+      // Focus hidden PM if clicking outside pages area. Wrapped via
+      // `containedHandler(containerRef, …)` at the JSX site to skip
+      // events bubbled in from portaled descendants (Dialog, Combobox).
       if (!hiddenPMRef.current?.isFocused()) {
         focusHiddenEditor();
       }
@@ -7040,10 +7003,10 @@ export function PagedEditor(
       tabIndex={0}
       role="textbox"
       aria-multiline
-      onFocus={handleContainerFocus}
+      onFocus={containedHandler(containerRef, handleContainerFocus)}
       onBlur={handleContainerBlur}
       onKeyDown={handleKeyDown}
-      onMouseDown={handleContainerMouseDown}
+      onMouseDown={containedHandler(containerRef, handleContainerMouseDown)}
     >
       {/* Persistent off-screen ProseMirror per HF rId — the painter reads
           from these views when a slot's view exists (see HF unification port,
@@ -7091,9 +7054,12 @@ export function PagedEditor(
             ref={pagesContainerRef}
             className={`paged-editor__pages${readOnly ? " paged-editor--readonly" : ""}${hfEditMode ? ` paged-editor--hf-editing paged-editor--editing-${hfEditMode}` : ""}`}
             style={pagesContainerStyles}
-            onMouseDown={handlePagesMouseDown}
+            onMouseDown={containedHandler(
+              pagesContainerRef,
+              handlePagesMouseDown,
+            )}
             onMouseMove={handlePagesMouseMove}
-            onClick={handlePagesClick}
+            onClick={containedHandler(pagesContainerRef, handlePagesClick)}
             onContextMenu={handlePagesContextMenu}
             aria-hidden="true" // Visual only, PM provides semantic content
           />
