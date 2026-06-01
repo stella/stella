@@ -43,7 +43,7 @@ type CatalogueEntryResponse = LoadedCatalogueEntry & {
 
 const listCatalogue = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, user }) {
+  async function* ({ memberRole, safeDb, session, user }) {
     const entries = loadCatalogue();
     const skillSlugs = entries
       .filter((entry) => entry.kind === "skill")
@@ -133,11 +133,23 @@ const listCatalogue = createSafeRootHandler(
     );
     const installedMcpUrls = new Set(installedMcps.map((row) => row.url));
 
-    // Prefer the team-scope row when both team and user-scope installs
-    // exist for the same skill; org-scope MCP connector when both an
-    // org-owned and a globally-curated connector match.
+    // Per-installation uninstall handles. We only surface a handle the
+    // caller is actually allowed to delete:
+    //
+    // - Skills: team-scope rows require admin/owner role
+    //   (`apps/api/src/handlers/skills/delete.ts`). Members get the
+    //   user-scope row's ID, if any, or null. Prefer the team row when
+    //   the caller is admin/owner.
+    // - MCP connectors: `DELETE /mcp/connectors/:slug` only deletes
+    //   org-owned rows, so globally-curated connectors (organizationId
+    //   = null) never produce a usable slug.
+    const canDeleteTeamSkills =
+      memberRole.role === "admin" || memberRole.role === "owner";
     const skillIdBySlug = new Map<string, string>();
     for (const row of visibleSkillRows) {
+      if (row.scope === "team" && !canDeleteTeamSkills) {
+        continue;
+      }
       const existing = skillIdBySlug.get(row.slug);
       if (!existing || row.scope === "team") {
         skillIdBySlug.set(row.slug, row.id);
@@ -145,10 +157,10 @@ const listCatalogue = createSafeRootHandler(
     }
     const connectorSlugByUrl = new Map<string, string>();
     for (const row of installedMcps) {
-      const existing = connectorSlugByUrl.get(row.url);
-      if (!existing || row.organizationId !== null) {
-        connectorSlugByUrl.set(row.url, row.slug);
+      if (row.organizationId !== session.activeOrganizationId) {
+        continue;
       }
+      connectorSlugByUrl.set(row.url, row.slug);
     }
     const nativeToolBackendSet = new Set(NATIVE_TOOL_SLUGS);
     const webSearchDeployAvailable = isWebSearchDeployAvailable();
