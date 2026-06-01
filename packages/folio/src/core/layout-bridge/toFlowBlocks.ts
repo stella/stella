@@ -276,6 +276,16 @@ function getLastListCounters(
   return lastCounters;
 }
 
+function applyMarkerAllCaps(
+  marker: string | null,
+  allCaps: boolean | undefined,
+): string | null {
+  if (marker === null || !allCaps) {
+    return marker;
+  }
+  return marker.toLocaleUpperCase();
+}
+
 function computeListMarker(
   pmAttrs: PMParagraphAttrs,
   listCounters: Map<number, number[]>,
@@ -330,6 +340,14 @@ function computeListMarker(
   for (let i = level + 1; i < counters.length; i += 1) {
     counters[i] = 0;
   }
+  // Word's default LISTNUM field advances the counter at one ilvl deeper
+  // than the host paragraph. Carrying the consumed advances forward here
+  // means a later sibling at that depth (e.g. an OutNum3 "(b)" following an
+  // OutNum2 "(a)") picks up the next letter instead of restarting at "(a)".
+  const childAdvances = pmAttrs.listImplicitChildLevelAdvances ?? 0;
+  if (childAdvances > 0 && level + 1 < counters.length) {
+    counters[level + 1] = (counters[level + 1] ?? 0) + childAdvances;
+  }
   listCounters.set(numId, counters);
   if (abstractNumId !== undefined) {
     abstractCounters.set(abstractNumId, [...counters]);
@@ -348,6 +366,15 @@ function computeListMarker(
   }
   if (pmAttrs.listMarker) {
     return pmAttrs.listMarker;
+  }
+  // OOXML allows a list level to set lvlText="" with numFmt="none" to attach
+  // numbering metadata (counters, indents) without painting a marker — Word
+  // glossary/definition styles use this. An empty listMarker means the level
+  // explicitly opts out; synthesising a decimal counter here would forge a
+  // marker the source never authored.
+  const levelFormat = levelFormats?.[level] ?? pmAttrs.listNumFmt;
+  if (levelFormat === "none" || pmAttrs.listMarker === "") {
+    return null;
   }
   return formatNumberedMarker(counters, level);
 }
@@ -1587,14 +1614,17 @@ function convertParagraphAttrs(
       }
     }
   }
-  const resolvedMarker = listCounters
-    ? computeListMarker(
-        pmAttrs,
-        listCounters,
-        listAbstractCounters ?? new Map(),
-        listSeenNumIds ?? new Set(),
-      )
-    : null;
+  const resolvedMarker = applyMarkerAllCaps(
+    listCounters
+      ? computeListMarker(
+          pmAttrs,
+          listCounters,
+          listAbstractCounters ?? new Map(),
+          listSeenNumIds ?? new Set(),
+        )
+      : null,
+    pmAttrs.listMarkerAllCaps,
+  );
   if (resolvedMarker !== null) {
     attrs.listMarker = resolvedMarker;
   } else if (pmAttrs.listMarker) {
@@ -1616,6 +1646,10 @@ function convertParagraphAttrs(
   }
   if (pmAttrs.listMarkerSuffix) {
     attrs.listMarkerSuffix = pmAttrs.listMarkerSuffix;
+  }
+  if (pmAttrs.listMarkerSecondSlotOffsetTwips !== undefined) {
+    attrs.listMarkerSecondSlotOffsetTwips =
+      pmAttrs.listMarkerSecondSlotOffsetTwips;
   }
   if (!pmAttrs.numPr) {
     const numberingRemovedChange = propertyChanges.find(

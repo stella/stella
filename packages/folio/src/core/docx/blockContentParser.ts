@@ -144,6 +144,16 @@ const computeListMarker = (
     counters[i] = 0;
   }
 
+  // Word's default LISTNUM field advances the counter at one ilvl deeper
+  // than the host paragraph. Mirror the toFlowBlocks logic here so the
+  // marker substituted at parse time agrees with the renderer's counters —
+  // otherwise a follow-up paragraph at that depth picks up the stale,
+  // pre-substituted "(a)" instead of "(b)".
+  const childAdvances = listRendering.implicitChildLevelAdvances ?? 0;
+  if (childAdvances > 0 && level + 1 < counters.length) {
+    counters[level + 1] = (counters[level + 1] ?? 0) + childAdvances;
+  }
+
   if (abstractNumId !== null) {
     abstractCounters.set(abstractNumId, [...counters]);
   }

@@ -83,6 +83,14 @@ export type FieldCharContent = {
   fldLock?: boolean;
   /** Field is dirty (needs update) */
   dirty?: boolean;
+  /**
+   * Cached display value from a child `<w:numberingChange w:original="…"/>`.
+   * Word writes this on the end fldChar of self-numbering fields (LISTNUM,
+   * AUTONUM, …) so the static "(a)" / "1." text is recoverable without
+   * re-evaluating the field. Used as a fallback `fieldResult` when the
+   * field has no `separate` run.
+   */
+  originalValue?: string;
 };
 
 /**
@@ -250,6 +258,7 @@ export type FieldType =
   | "AUTONUM"
   | "AUTONUMLGL"
   | "AUTONUMOUT"
+  | "LISTNUM"
   | "IF"
   | "MERGEFIELD"
   | "NEXT"

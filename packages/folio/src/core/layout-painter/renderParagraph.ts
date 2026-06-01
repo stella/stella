@@ -1425,9 +1425,32 @@ export function renderLine(
 
   // Get runs for this line
   const runsForLine = sliceRunsForLine(block, line);
+  // OOXML `<m:oMathPara>` (display math) defaults to `jc="centerGroup"` —
+  // Word renders display math centred on its own paragraph. When the line
+  // holds a single block math run, centre it horizontally so the equation
+  // sits in the middle of the column instead of hugging the left margin.
+  const onlyRun = runsForLine.length === 1 ? runsForLine[0] : undefined;
+  if (
+    onlyRun &&
+    isMathRun(onlyRun) &&
+    onlyRun.display === "block" &&
+    alignment !== "right"
+  ) {
+    lineEl.style.textAlign = "center";
+  }
   if (runsForLine.length === 1 && isImageRun(runsForLine[0]!)) {
     lineEl.style.display = "flex";
     lineEl.style.alignItems = "center";
+    // Flex defaults to flex-start regardless of the parent's text-align, so
+    // an image-only line in a centred / right-aligned paragraph would
+    // left-align after the flex switch. Mirror the paragraph alignment onto
+    // justify-content so logo-only header lines stay centred / right-aligned
+    // like Word.
+    if (alignment === "center") {
+      lineEl.style.justifyContent = "center";
+    } else if (alignment === "right") {
+      lineEl.style.justifyContent = "flex-end";
+    }
   } else if (runsForLine.some((r) => isImageRun(r) && !isFloatingImageRun(r))) {
     // Inline image flowing alongside text/tabs (logo + label header). Word
     // seats an inline image as a tall glyph on the text baseline, so
@@ -1534,8 +1557,12 @@ export function renderLine(
     // - With hanging indent (firstLineIndentPx < 0): starts at leftIndent + firstLineIndent
     // - With first-line indent (firstLineIndentPx > 0): starts at leftIndent + firstLineIndent
     // - No indent: starts at leftIndent
+    // Add the list marker's painted footprint so the body cursor aligns with
+    // where text actually starts after the marker (matches the measurer; see
+    // measureParagraph.ts contentX comment).
     const firstLineIndentPx = options.firstLineIndentPx ?? 0;
-    currentX = leftIndentPx + firstLineIndentPx;
+    const markerInlineWidth = getListMarkerInlineWidth(block);
+    currentX = leftIndentPx + firstLineIndentPx + markerInlineWidth;
   } else {
     // Non-first lines start at the left indent position
     currentX = leftIndentPx;
@@ -2305,6 +2332,7 @@ export function renderParagraphFragment(
         markerFontFamily,
         markerFontSize,
         block.attrs.listMarkerRevision,
+        block.attrs.listMarkerSecondSlotOffsetTwips,
       );
       lineEl.prepend(marker);
     }
@@ -2331,6 +2359,7 @@ function renderListMarker(
   fontFamily?: string,
   fontSize?: number,
   revision?: ParagraphAttrs["listMarkerRevision"],
+  secondSlotOffsetTwips?: number,
 ): HTMLElement {
   const span = doc.createElement("span");
   span.className = "layout-list-marker";
@@ -2346,8 +2375,12 @@ function renderListMarker(
     span.style.fontSize = `${(fontSize * 96) / 72}px`;
   }
 
-  span.textContent = marker;
+  // `text-align-last` inherits, so a justified paragraph would distribute the
+  // marker's internal whitespace across its minWidth box — pushing folded
+  // LISTNUM markers like "(a)" away from "7.1" to the right edge. Force the
+  // marker's own last (only) line back to left.
   span.style.textAlign = "left";
+  span.style.textAlignLast = "left";
   span.style.boxSizing = "border-box";
   if (minWidth > 0) {
     span.style.minWidth = `${minWidth}px`;
@@ -2387,5 +2420,30 @@ function renderListMarker(
     }
   }
 
+  // Tab-separated markers carry a folded LISTNUM cached value in their
+  // second slot ("7.1\t(a)"). Render the slots as inline children with the
+  // second one pinned at the deeper level's marker column (twips → px at
+  // 1440 twips/inch, 96px/inch → divide by 15) so it lines up with the
+  // following OutNum3 "(b)".
+  const tabIdx = marker.indexOf("\t");
+  if (tabIdx !== -1 && secondSlotOffsetTwips !== undefined) {
+    const firstSlot = doc.createElement("span");
+    firstSlot.textContent = marker.slice(0, tabIdx);
+    firstSlot.style.display = "inline-block";
+    const secondSlot = doc.createElement("span");
+    secondSlot.textContent = marker.slice(tabIdx + 1);
+    secondSlot.style.display = "inline-block";
+    // Position the second slot via absolute offset inside a relative
+    // container so its left edge sits at the desired column regardless of
+    // the first slot's width.
+    span.style.position = "relative";
+    secondSlot.style.position = "absolute";
+    secondSlot.style.left = `${secondSlotOffsetTwips / 15}px`;
+    secondSlot.style.top = "0";
+    span.append(firstSlot, secondSlot);
+    return span;
+  }
+
+  span.textContent = marker;
   return span;
 }

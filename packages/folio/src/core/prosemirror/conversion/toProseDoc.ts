@@ -180,13 +180,20 @@ function convertParagraph(
   const paragraphRunFormatting = paragraph.formatting?.runProperties
     ? resolveTextFormatting(paragraph.formatting.runProperties, styleResolver)
     : undefined;
+  // Word does not propagate paragraph-mark-only visual decorations
+  // (highlight, shading) to body runs — they paint the pilcrow alone. Strip
+  // them off the inheritance path so a `<w:pPr><w:rPr><w:highlight/></w:rPr>`
+  // used to mark just the paragraph glyph doesn't bleed onto every run.
+  const inheritableParagraphRunFormatting = paragraphRunFormatting
+    ? stripParagraphMarkOnlyFormatting(paragraphRunFormatting)
+    : undefined;
   const baseRunFormatting = mergeTextFormatting(
     styleRunFormatting,
     extraRunFormatting,
   );
   const defaultRunFormatting = mergeTextFormatting(
     baseRunFormatting,
-    paragraphRunFormatting,
+    inheritableParagraphRunFormatting,
   );
   const getInheritedRunFormatting = (
     formatting: TextFormatting | undefined,
@@ -196,7 +203,7 @@ function convertParagraph(
     }
     return suppressParagraphMarkFormatting(
       baseRunFormatting,
-      paragraphRunFormatting,
+      inheritableParagraphRunFormatting,
       formatting,
     );
   };
@@ -451,6 +458,17 @@ function paragraphFormattingToAttrs(
   }
   if (paragraph.listRendering?.markerSuffix) {
     attrs.listMarkerSuffix = paragraph.listRendering.markerSuffix;
+  }
+  if (paragraph.listRendering?.markerAllCaps) {
+    attrs.listMarkerAllCaps = paragraph.listRendering.markerAllCaps;
+  }
+  if (paragraph.listRendering?.implicitChildLevelAdvances !== undefined) {
+    attrs.listImplicitChildLevelAdvances =
+      paragraph.listRendering.implicitChildLevelAdvances;
+  }
+  if (paragraph.listRendering?.markerSecondSlotOffsetTwips !== undefined) {
+    attrs.listMarkerSecondSlotOffsetTwips =
+      paragraph.listRendering.markerSecondSlotOffsetTwips;
   }
   if (paragraph.listRendering?.levelNumFmts) {
     attrs.listLevelNumFmts = paragraph.listRendering.levelNumFmts;
@@ -744,6 +762,13 @@ function hasDirectRunFormatting(
   );
 }
 
+function stripParagraphMarkOnlyFormatting(
+  formatting: TextFormatting,
+): TextFormatting | undefined {
+  const { highlight: _h, shading: _s, ...rest } = formatting;
+  return Object.keys(rest).length > 0 ? rest : undefined;
+}
+
 function suppressParagraphMarkFormatting(
   base: TextFormatting | undefined,
   paragraphMark: TextFormatting | undefined,
@@ -828,8 +853,21 @@ function resolveParagraphDefaultTextFormatting(
       styleResolver.getDefaultParagraphStyle())
     : styleResolver.getDefaultParagraphStyle();
   const paragraphStyleRpr = style?.type === "paragraph" ? style.rPr : undefined;
-  const paragraphRunProperties = formatting?.runProperties
-    ? resolveTextFormatting(formatting.runProperties, styleResolver)
+  // The pPr/rPr block describes the paragraph mark only — see the comment on
+  // `stripParagraphMarkOnlyFormatting`. We must NOT route this through
+  // `resolveTextFormatting` here, because that folds docDefaults back into
+  // the run properties and then overwrites the paragraph style's font
+  // (e.g. FootnoteText's Times New Roman) with the docDefault Calibri when
+  // merged into the cascade below.
+  const rawParagraphMarkRpr = formatting?.runProperties;
+  const characterStyleRpr =
+    rawParagraphMarkRpr?.styleId !== undefined
+      ? styleResolver.getRunStyleOwnProperties(rawParagraphMarkRpr.styleId)
+      : undefined;
+  const paragraphRunProperties = rawParagraphMarkRpr
+    ? stripParagraphMarkOnlyFormatting(
+        mergeTextFormatting(characterStyleRpr, rawParagraphMarkRpr) ?? {},
+      )
     : undefined;
 
   return mergeTextFormatting(

@@ -264,6 +264,7 @@ export const FIELD_TYPE_VALUES = [
   "AUTONUM",
   "AUTONUMLGL",
   "AUTONUMOUT",
+  "LISTNUM",
   "IF",
   "MERGEFIELD",
   "NEXT",

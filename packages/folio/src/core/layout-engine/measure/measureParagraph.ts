@@ -909,7 +909,18 @@ export function measureParagraph(
       // folded in here; the line-wrap math further down stays indent-relative.
       const lineX = currentLine.width + currentLine.leftOffset;
       const isFirstLine = lines.length === 0;
-      const contentX = indentLeft + (isFirstLine ? firstLineOffset : 0) + lineX;
+      // First-line text body starts past any list marker (the marker occupies
+      // the hanging zone for `suff="tab"` lists, or sits inline before the
+      // body for other suffixes). Folding `markerInlineWidth` in keeps
+      // `contentX` aligned with where the body cursor actually sits in the
+      // content area — without it, a hanging + tab-suffix list (e.g. a TOC
+      // entry style with a right-aligned dot-leader tab stop) understates
+      // the cursor by `hanging`, the resulting tab width overshoots the
+      // line's text budget by the same amount, and the line wrongly wraps.
+      const contentX =
+        indentLeft +
+        (isFirstLine ? firstLineOffset + markerInlineWidth : 0) +
+        lineX;
       const tabContext: TabContext = {
         ...(attrs?.tabs !== undefined ? { explicitStops: attrs.tabs } : {}),
         leftIndent: pixelsToTwips(indentLeft),

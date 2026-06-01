@@ -387,6 +387,14 @@ export type ParagraphAttrs = {
     date?: string;
     revisionId?: number;
   };
+  /**
+   * When the marker text contains a TAB character (\t), the marker is
+   * rendered as a flex layout with two slots; this is the column offset
+   * (in twips, from the marker zone's left edge) where the second slot
+   * lands. Used to align an inline LISTNUM "(a)" with the deeper level's
+   * marker column.
+   */
+  listMarkerSecondSlotOffsetTwips?: number;
   // Default font for empty paragraphs (from style's rPr / pPr/rPr)
   defaultFontSize?: number; // in points
   defaultFontFamily?: string;

@@ -314,6 +314,24 @@ export const readParagraphAttrs = (
     "paragraph.attrs.listMarkerSuffix",
     issues,
   );
+  optionalBoolean(
+    attrs,
+    "listMarkerAllCaps",
+    "paragraph.attrs.listMarkerAllCaps",
+    issues,
+  );
+  optionalNumber(
+    attrs,
+    "listImplicitChildLevelAdvances",
+    "paragraph.attrs.listImplicitChildLevelAdvances",
+    issues,
+  );
+  optionalNumber(
+    attrs,
+    "listMarkerSecondSlotOffsetTwips",
+    "paragraph.attrs.listMarkerSecondSlotOffsetTwips",
+    issues,
+  );
   optionalNumber(
     attrs,
     "listStartOverride",

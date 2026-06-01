@@ -192,6 +192,18 @@ function parseListItems(
 /**
  * Extract plain text from a math element (recursive text content extraction)
  */
+function extractPlainText(runs: Run[]): string {
+  let out = "";
+  for (const run of runs) {
+    for (const c of run.content) {
+      if (c.type === "text") {
+        out += c.text;
+      }
+    }
+  }
+  return out;
+}
+
 function extractMathText(el: XmlElement): string {
   let text = "";
   if (el.type === "text" && typeof el.text === "string") {
@@ -1387,6 +1399,7 @@ function parseParagraphContents(
         let hasFieldBegin = false;
         let hasFieldSeparate = false;
         let hasFieldEnd = false;
+        let endOriginalValue: string | undefined;
         let instrText = "";
 
         for (const content of run.content) {
@@ -1403,6 +1416,9 @@ function parseParagraphContents(
               hasFieldSeparate = true;
             } else {
               hasFieldEnd = true;
+              if (content.originalValue !== undefined) {
+                endOriginalValue = content.originalValue;
+              }
             }
           } else if (content.type === "instrText") {
             instrText += content.text;
@@ -1410,7 +1426,18 @@ function parseParagraphContents(
         }
 
         if (hasFieldBegin) {
-          // Starting a new complex field
+          // Nested complex field. Word allows fields inside the result region
+          // of another field (e.g. PAGEREF inside a TOC entry). We don't model
+          // nesting in ParagraphContent, so before resetting state for the
+          // inner field, flush any result-region runs the outer field has
+          // already accumulated (e.g. the TOC entry text + tab before its
+          // PAGEREF) into `contents` so they don't get destroyed by the reset.
+          // Pre-separator nesting (a field inside the outer's field code) is
+          // exotic enough to leave to the outer's fieldCode array.
+          if (inComplexField && afterSeparator) {
+            contents.push(...complexFieldResultRuns);
+            inComplexField = false;
+          }
           inComplexField = true;
           afterSeparator = false;
           complexFieldInstr = "";
@@ -1440,13 +1467,32 @@ function parseParagraphContents(
           }
 
           if (hasFieldEnd) {
+            // Self-numbering fields (LISTNUM, AUTONUM, …) often skip the
+            // `separate` and stash their last-rendered display on the end
+            // fldChar's `<w:numberingChange w:original="…"/>`. Without this
+            // synthesized result run, the field renders empty and any tab
+            // that follows pushes the body text into the wrong column.
+            let resultRuns = complexFieldResultRuns;
+            if (
+              resultRuns.length === 0 &&
+              !afterSeparator &&
+              endOriginalValue !== undefined
+            ) {
+              resultRuns = [
+                {
+                  type: "run",
+                  content: [{ type: "text", text: endOriginalValue }],
+                },
+              ];
+            }
+
             // Close the complex field
             const complexField: ComplexField = {
               type: "complexField",
               instruction: complexFieldInstr.trim(),
               fieldType: parseFieldType(complexFieldInstr),
               fieldCode: complexFieldCodeRuns,
-              fieldResult: complexFieldResultRuns,
+              fieldResult: resultRuns,
             };
 
             if (complexFieldLock) {
@@ -1682,6 +1728,13 @@ function parseParagraphContents(
     }
   }
 
+  // Paragraph ended while an outer complex field is still open past its
+  // separator (e.g. a TOC field begun here but closed in a later paragraph).
+  // Flush the accumulated result runs so the displayed content survives.
+  if (inComplexField && afterSeparator) {
+    contents.push(...complexFieldResultRuns);
+  }
+
   return contents;
 }
 
@@ -1852,8 +1905,83 @@ export function parseParagraph(
         if (level.rPr?.fontSize) {
           listRendering.markerFontSize = level.rPr.fontSize / 2;
         }
+        if (level.rPr?.allCaps) {
+          listRendering.markerAllCaps = true;
+        }
         if (level.suffix) {
           listRendering.markerSuffix = level.suffix;
+        }
+        // Count inline LISTNUM (default-list) complex fields this paragraph
+        // carries. Word advances the counter at `ilvl + 1` for each, so a
+        // later sibling at that depth picks up the next letter. We also
+        // fold each LISTNUM's cached display value into the marker text and
+        // strip the field (plus its trailing tab, which Word swallowed into
+        // the marker zone) from the inline content — that way the host
+        // paragraph's marker zone reads "7.1[gap](a)" and the body text on
+        // line 1 begins at the same column as the wrapped lines below.
+        let implicitChildLevelAdvances = 0;
+        const foldedMarkerSuffix: string[] = [];
+        const filteredContent: ParagraphContent[] = [];
+        let dropNextTab = false;
+        // Word inserts paragraph-mark / bookmark / comment-range metadata
+        // between a LISTNUM field and its trailing tab. Skip those when
+        // hunting for the tab to drop, otherwise `dropNextTab` clears on
+        // the metadata node and the tab survives, breaking alignment.
+        const isMetadataContent = (content: ParagraphContent): boolean =>
+          content.type === "bookmarkStart" ||
+          content.type === "bookmarkEnd" ||
+          content.type === "commentRangeStart" ||
+          content.type === "commentRangeEnd" ||
+          content.type === "commentReference";
+        for (const content of paragraph.content) {
+          if (dropNextTab && isMetadataContent(content)) {
+            filteredContent.push(content);
+            continue;
+          }
+          if (dropNextTab) {
+            dropNextTab = false;
+            if (
+              content.type === "run" &&
+              content.content.length === 1 &&
+              content.content[0]?.type === "tab"
+            ) {
+              continue;
+            }
+          }
+          if (content.type === "complexField") {
+            const isListNum =
+              content.fieldType === "LISTNUM" ||
+              content.instruction.trim().toUpperCase().startsWith("LISTNUM");
+            if (isListNum) {
+              implicitChildLevelAdvances += 1;
+              const cached = extractPlainText(content.fieldResult);
+              if (cached) {
+                foldedMarkerSuffix.push(cached);
+              }
+              dropNextTab = true;
+              continue;
+            }
+          }
+          filteredContent.push(content);
+        }
+        if (foldedMarkerSuffix.length > 0) {
+          paragraph.content = filteredContent;
+          listRendering.marker = `${listRendering.marker}\t${foldedMarkerSuffix.join(" ")}`;
+          const nextLevel = numbering.getLevel(numId, ilvl + 1);
+          if (
+            nextLevel?.pPr?.hangingIndent === true &&
+            nextLevel.pPr.indentFirstLine !== undefined
+          ) {
+            // `indentFirstLine` is negative for hanging indents — the
+            // marker column sits at the indent's positive distance.
+            const hangingTwips = -nextLevel.pPr.indentFirstLine;
+            if (hangingTwips > 0) {
+              listRendering.markerSecondSlotOffsetTwips = hangingTwips;
+            }
+          }
+        }
+        if (implicitChildLevelAdvances > 0) {
+          listRendering.implicitChildLevelAdvances = implicitChildLevelAdvances;
         }
         paragraph.listRendering = listRendering;
 
