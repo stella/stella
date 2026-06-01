@@ -375,7 +375,11 @@ export const clearFormatting: Command = (state, dispatch) => {
 
   if (empty) {
     if (dispatch) {
-      dispatch(state.tr.setStoredMarks([]));
+      // Clear the paragraph's run defaults too, so EmptyParagraphFormatExtension
+      // doesn't re-derive stored marks from them right after the clear.
+      const tr = saveStoredMarksToParagraph(state, state.tr, []);
+      tr.setStoredMarks([]);
+      dispatch(tr);
     }
     return true;
   }

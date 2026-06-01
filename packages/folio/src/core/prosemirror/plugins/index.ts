@@ -16,3 +16,9 @@ export type {
   SelectionContext,
   SelectionChangeCallback,
 } from "./selectionTracker";
+
+export {
+  documentStylesKey,
+  createDocumentStylesPlugin,
+  getDocumentStyleResolver,
+} from "./documentStyles";

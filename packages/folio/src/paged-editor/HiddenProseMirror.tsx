@@ -44,6 +44,7 @@ import type * as Yjs from "yjs";
 import { toProseDoc, createEmptyDoc } from "../core/prosemirror/conversion";
 import { fromProseDoc } from "../core/prosemirror/conversion/fromProseDoc";
 import type { ExtensionManager } from "../core/prosemirror/extensions/ExtensionManager";
+import { createDocumentStylesPlugin } from "../core/prosemirror/plugins/documentStyles";
 import { schema } from "../core/prosemirror/schema";
 import type { Document, Theme, StyleDefinitions } from "../core/types/document";
 import { suppressHiddenEditorScrollToSelection } from "./hiddenEditorScroll";
@@ -390,6 +391,13 @@ export function createHiddenEditorState(
     );
   }
 
+  // Expose the document's styles to style-aware commands (e.g. the Enter
+  // handler's `w:next` switch from heading to body text). Same resolver for
+  // collab and non-collab paths.
+  const styleResolverPlugin = createDocumentStylesPlugin(
+    styles ?? document?.package.styles,
+  );
+
   if (collaboration) {
     if (!collaborationModules) {
       panic(
@@ -414,7 +422,11 @@ export function createHiddenEditorState(
     const state = EditorState.create({
       doc,
       schema: activeSchema,
-      plugins: [...externalPlugins, ...(manager?.getPlugins() ?? [])],
+      plugins: [
+        ...externalPlugins,
+        ...(manager?.getPlugins() ?? []),
+        styleResolverPlugin,
+      ],
     });
     recordHiddenEditorPhase(
       reason,
@@ -429,6 +441,7 @@ export function createHiddenEditorState(
   const plugins: Plugin[] = [
     ...externalPlugins,
     ...(manager?.getPlugins() ?? []),
+    styleResolverPlugin,
   ];
 
   const startedAt = performance.now();

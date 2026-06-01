@@ -24,6 +24,7 @@ import { paragraphToStyle } from "../../../utils/formatToStyle";
 import { collectHeadings } from "../../../utils/headingCollector";
 import { expectParagraphAttrs } from "../../attrs";
 import type { ParagraphAttrs } from "../../schema/nodes";
+import { paragraphAttrsFromResolvedStyle } from "../../styles/resolvedStyleAttrs";
 import { createNodeExtension } from "../create";
 import type { ExtensionContext, ExtensionRuntime } from "../types";
 
@@ -707,22 +708,15 @@ function makeApplyStyle(schema: Schema) {
             // When applying a style, explicitly reset all style-controlled
             // paragraph attrs to the new style's values (or null to clear).
             // This prevents old style properties (e.g. heading line spacing)
-            // from persisting when switching to a different style.
-            const ppr = resolvedAttrs.paragraphFormatting;
-            newAttrs["alignment"] = ppr?.alignment ?? null;
-            newAttrs["spaceBefore"] = ppr?.spaceBefore ?? null;
-            newAttrs["spaceAfter"] = ppr?.spaceAfter ?? null;
-            newAttrs["lineSpacing"] = ppr?.lineSpacing ?? null;
-            newAttrs["lineSpacingRule"] = ppr?.lineSpacingRule ?? null;
-            newAttrs["indentLeft"] = ppr?.indentLeft ?? null;
-            newAttrs["indentRight"] = ppr?.indentRight ?? null;
-            newAttrs["indentFirstLine"] = ppr?.indentFirstLine ?? null;
-            newAttrs["hangingIndent"] = ppr?.hangingIndent ?? null;
-            newAttrs["contextualSpacing"] = ppr?.contextualSpacing ?? null;
-            newAttrs["keepNext"] = ppr?.keepNext ?? null;
-            newAttrs["keepLines"] = ppr?.keepLines ?? null;
-            newAttrs["pageBreakBefore"] = ppr?.pageBreakBefore ?? null;
-            newAttrs["outlineLevel"] = ppr?.outlineLevel ?? null;
+            // from persisting when switching to a different style. The same
+            // projection drives the Enter handler's next-style switch, so
+            // both paths produce identical paragraph attrs — and the resulting
+            // `defaultTextFormatting` lets EmptyParagraphFormatExtension keep
+            // typed text styled after the style picker steals focus.
+            Object.assign(
+              newAttrs,
+              paragraphAttrsFromResolvedStyle(resolvedAttrs),
+            );
           }
 
           tr = tr.setNodeMarkup(pos, undefined, newAttrs);
