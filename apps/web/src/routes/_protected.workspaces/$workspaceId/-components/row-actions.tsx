@@ -751,9 +751,9 @@ export const RowActions = ({
         />
       )}
       {/* Hidden file input for upload new version */}
-      {canUploadVersion && (
+      {canUploadVersion && file && (
         <input
-          accept="*/*"
+          accept={file.mimeType}
           className="hidden"
           onChange={handleUploadVersionChange}
           ref={uploadVersionInputRef}
