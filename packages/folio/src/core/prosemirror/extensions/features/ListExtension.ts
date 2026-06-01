@@ -40,8 +40,8 @@ function appendParagraphPropertyChange(
   previousFormatting: Record<string, unknown>,
   rev: { id: number; author: string; date: string },
 ): Record<string, unknown> {
-  const existing = Array.isArray(attrs._propertyChanges)
-    ? attrs._propertyChanges
+  const existing = Array.isArray(attrs["_propertyChanges"])
+    ? (attrs["_propertyChanges"] as unknown[])
     : [];
   return {
     ...attrs,

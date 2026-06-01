@@ -108,21 +108,25 @@ function resolveChange(
           }
 
           // Process paragraph property changes (w:pPrChange)
-          if (
-            Array.isArray(node.attrs._propertyChanges) &&
-            node.attrs._propertyChanges.length > 0
-          ) {
-            const matches = node.attrs._propertyChanges.filter(
+          const propertyChanges = node.attrs["_propertyChanges"] as
+            | {
+                info?: { id: number; author: string; date: string };
+                previousFormatting?: Record<string, unknown>;
+              }[]
+            | undefined;
+
+          if (Array.isArray(propertyChanges) && propertyChanges.length > 0) {
+            const matches = propertyChanges.filter(
               (c) =>
                 revisionSet === null || (c.info && revisionSet.has(c.info.id)),
             );
             if (matches.length > 0) {
-              const remaining = node.attrs._propertyChanges.filter(
+              const remaining = propertyChanges.filter(
                 (c) =>
                   revisionSet !== null &&
                   (!c.info || !revisionSet.has(c.info.id)),
               );
-              const nextAttrs = {
+              const nextAttrs: Record<string, unknown> = {
                 ...node.attrs,
                 _propertyChanges: remaining.length > 0 ? remaining : null,
               };
