@@ -70,6 +70,9 @@ const generic = raw as Array<ChatSafePrompt>;
 const tuple = raw as [ChatSafePrompt, string];
 
 // oxlint-disable-next-line no-prompt-boundary-casts/no-prompt-boundary-casts
+const namedTuple = raw as [prompt: ChatSafePrompt];
+
+// oxlint-disable-next-line no-prompt-boundary-casts/no-prompt-boundary-casts
 const objectContainer = raw as { readonly prompt: ChatSafePrompt };
 
 // oxlint-disable-next-line no-prompt-boundary-casts/no-prompt-boundary-casts
@@ -157,6 +160,7 @@ export const __noPromptBoundaryCastsFixture = {
   interfaceExtends,
   interfaceGeneric,
   interfaceMethod,
+  namedTuple,
   objectCallSignature,
   objectConstructSignature,
   objectContainer,

@@ -219,6 +219,15 @@ const hasPromptBoundaryType = (
     );
   }
 
+  if (typeAnnotation.type === "TSNamedTupleMember") {
+    return hasPromptBoundaryType(
+      typeAnnotation.elementType,
+      promptBoundaryTypeNames,
+      namedTypeAnnotations,
+      seenTypeNames,
+    );
+  }
+
   if (typeAnnotation.type === "TSTupleType") {
     return typeAnnotation.elementTypes.some((elementType) =>
       hasPromptBoundaryType(
