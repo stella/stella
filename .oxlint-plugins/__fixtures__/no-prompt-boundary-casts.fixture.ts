@@ -17,6 +17,8 @@ type ChatSafePromptForwardAlias = ChatSafePromptForwardTarget;
 type ChatSafePromptForwardTarget = ChatSafePrompt;
 type ChatSafePromptImportType =
   import("../../apps/api/src/handlers/chat/chat-prompt").ChatSafePrompt;
+type ChatSafePromptIndexedBox = { readonly prompt: ChatSafePrompt };
+type ChatSafePromptIndexedAlias = ChatSafePromptIndexedBox["prompt"];
 
 interface ChatSafePromptInterface {
   readonly prompt: ChatSafePrompt;
@@ -115,6 +117,14 @@ const importAlias = raw as ImportedChatSafePromptAlias;
 const importTypeAlias = raw as ChatSafePromptImportType;
 
 // oxlint-disable-next-line no-prompt-boundary-casts/no-prompt-boundary-casts
+const indexedAccessAlias = raw as ChatSafePromptIndexedAlias;
+
+// oxlint-disable-next-line no-prompt-boundary-casts/no-prompt-boundary-casts
+const indexedAccessLiteral = raw as {
+  readonly prompt: ChatSafePrompt;
+}["prompt"];
+
+// oxlint-disable-next-line no-prompt-boundary-casts/no-prompt-boundary-casts
 const interfaceContainer = raw as ChatSafePromptInterface;
 
 // oxlint-disable-next-line no-prompt-boundary-casts/no-prompt-boundary-casts
@@ -138,6 +148,8 @@ export const __noPromptBoundaryCastsFixture = {
   functionParam,
   functionReturn,
   generic,
+  indexedAccessAlias,
+  indexedAccessLiteral,
   importAlias,
   importTypeAlias,
   intersection,
