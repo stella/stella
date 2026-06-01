@@ -1098,6 +1098,28 @@ function isRemovedNumberingChange(
   );
 }
 
+function isChangedNumberingChange(
+  currentNumPr: NonNullable<PMParagraphAttrs["numPr"]>,
+  change: ListPropertyChange,
+): change is ListPropertyChange & {
+  previousFormatting: Record<string, unknown>;
+} {
+  const previousFormatting = change.previousFormatting;
+  return (
+    previousFormatting != null &&
+    Object.hasOwn(previousFormatting, "numPr") &&
+    isListNumPr(previousFormatting["numPr"]) &&
+    !areListNumPrEqual(previousFormatting["numPr"], currentNumPr)
+  );
+}
+
+function areListNumPrEqual(
+  left: NonNullable<PMParagraphAttrs["numPr"]>,
+  right: NonNullable<PMParagraphAttrs["numPr"]>,
+): boolean {
+  return left.numId === right.numId && left.ilvl === right.ilvl;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -1551,10 +1573,16 @@ function convertParagraphAttrs(
       );
     } else {
       const numberingAddedChange = propertyChanges.find(isAddedNumberingChange);
-      if (numberingAddedChange) {
+      const currentNumPr = pmAttrs.numPr;
+      const numberingChangedChange = propertyChanges.find((change) =>
+        isChangedNumberingChange(currentNumPr, change),
+      );
+      const numberingInsertionChange =
+        numberingAddedChange ?? numberingChangedChange;
+      if (numberingInsertionChange) {
         attrs.listMarkerRevision = toListMarkerRevision(
           "ins",
-          numberingAddedChange.info,
+          numberingInsertionChange.info,
         );
       }
     }
