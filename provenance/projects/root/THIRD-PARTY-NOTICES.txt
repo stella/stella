@@ -15,6 +15,7 @@ Project: root
 - @ai-sdk/mcp 1.0.43 — Apache-2.0
 - @ai-sdk/mistral 3.0.37 — Apache-2.0
 - @ai-sdk/openai 3.0.65 — Apache-2.0
+- @ai-sdk/provider 3.0.10 — Apache-2.0
 - @ai-sdk/provider-utils 4.0.27 — Apache-2.0
 - @ai-sdk/react 3.0.193 — Apache-2.0
 - @ai-sdk/valibot 2.0.28 — Apache-2.0
@@ -124,15 +125,10 @@ Project: root
 - idb 8.0.3 — ISC
 - immer 11.1.8 — MIT
 - input-otp 1.4.2 — MIT
-- ioredis 5.10.1 — MIT
 - jose 6.2.1 — MIT
 - jose 6.2.3 — MIT
 - jszip 3.10.1 — (MIT OR GPL-3.0-or-later)
 - lucide-react 1.16.0 — ISC
-- marked 15.0.12 — MIT
-- marked 16.4.2 — MIT
-- marked 17.0.5 — MIT
-- marked 18.0.4 — MIT
 - nodemailer 8.0.8 — MIT-0
 - pdfjs-dist 5.7.284 — Apache-2.0
 - posthog-js 1.376.0 — SEE LICENSE IN LICENSE
