@@ -99,6 +99,7 @@ export default defineConfig({
     "must-use-result/must-use-result": "error",
     "no-any-casts/no-any-casts": "error",
     "no-dangerous-type-assertions/no-dangerous-type-assertions": "error",
+    "require-contained-handler/require-contained-handler": "error",
     "no-void": ["error", { allowAsStatement: true }],
 
     "sonarjs/array-callback-without-return": "error",
@@ -286,6 +287,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-any-casts.ts",
     "./.oxlint-plugins/no-dangerous-type-assertions.ts",
     "./.oxlint-plugins/folio-layer-boundaries.ts",
+    "./.oxlint-plugins/require-contained-handler.ts",
   ],
 
   overrides: [
