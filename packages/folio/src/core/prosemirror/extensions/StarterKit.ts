@@ -20,6 +20,7 @@ import { BidiShortcutExtension } from "./features/BidiShortcutExtension";
 import { ContentControlWidgetsExtension } from "./features/ContentControlWidgetsExtension";
 import { DropCursorExtension } from "./features/DropCursorExtension";
 import { EmptyParagraphFormatExtension } from "./features/EmptyParagraphFormatExtension";
+import { GapCursorExtension } from "./features/GapCursorExtension";
 import { ImageDragExtension } from "./features/ImageDragExtension";
 import { ImagePasteExtension } from "./features/ImagePasteExtension";
 // Features
@@ -158,6 +159,7 @@ export function createStarterKit(
   add("imageDrag", ImageDragExtension());
   add("imagePaste", ImagePasteExtension());
   add("dropCursor", DropCursorExtension());
+  add("gapCursor", GapCursorExtension());
   add("horizontalRule", HorizontalRuleExtension());
   add("pageBreak", PageBreakExtension());
   add("field", FieldExtension());

@@ -795,3 +795,29 @@
     transparent
   );
 }
+
+/* ============================================================================
+   prosemirror-gapcursor — caret slots before/between/after isolating blocks
+   ============================================================================ */
+.ProseMirror-gapcursor {
+  display: none;
+  pointer-events: none;
+  position: absolute;
+}
+.ProseMirror-gapcursor::after {
+  content: "";
+  display: block;
+  position: absolute;
+  top: -2px;
+  width: 20px;
+  border-top: 1px solid var(--doc-text, currentcolor);
+  animation: folio-gapcursor-blink 1.1s linear infinite;
+}
+@keyframes folio-gapcursor-blink {
+  to {
+    visibility: hidden;
+  }
+}
+.ProseMirror-focused .ProseMirror-gapcursor {
+  display: block;
+}
