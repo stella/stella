@@ -2151,8 +2151,8 @@
         "extensionMismatchError": "Faila paplašinājums nesakrīt ar esošo dokumentu",
         "noExtension": "bez paplašinājuma",
         "replaceDescription": "Pievienot kā šī dokumenta jaunu versiju",
-        "replaceOption": "Aizstāt ar jaunu versiju",
-        "title": "Aizstāt vai izveidot jaunu?"
+        "replaceOption": "Augšupielādēt kā jaunu versiju",
+        "title": "Augšupielādēt jaunu versiju vai izveidot jaunu failu?"
       },
       "versionUploadFailed": "Versijas augšupielāde neizdevās",
       "versionUploaded": "Jauna versija augšupielādēta",

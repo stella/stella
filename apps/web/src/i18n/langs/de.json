@@ -2151,8 +2151,8 @@
         "extensionMismatchError": "Die Dateierweiterung stimmt nicht mit dem bestehenden Dokument überein",
         "noExtension": "keine Erweiterung",
         "replaceDescription": "Als neue Version dieses Dokuments hinzufügen",
-        "replaceOption": "Als neue Version ersetzen",
-        "title": "Ersetzen oder neu erstellen?"
+        "replaceOption": "Als neue Version hochladen",
+        "title": "Neue Version hochladen oder neu erstellen?"
       },
       "versionUploadFailed": "Version-Upload fehlgeschlagen",
       "versionUploaded": "Neue Version hochgeladen",

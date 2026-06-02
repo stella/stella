@@ -2151,8 +2151,8 @@
         "extensionMismatchError": "A extensão do arquivo não corresponde ao documento existente",
         "noExtension": "sem extensão",
         "replaceDescription": "Adicionar como nova versão deste documento",
-        "replaceOption": "Substituir como nova versão",
-        "title": "Substituir ou criar novo?"
+        "replaceOption": "Enviar como nova versão",
+        "title": "Enviar nova versão ou criar novo arquivo?"
       },
       "versionUploadFailed": "Falha ao enviar versão",
       "versionUploaded": "Nova versão enviada",

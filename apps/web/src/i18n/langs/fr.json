@@ -2151,8 +2151,8 @@
         "extensionMismatchError": "L'extension du fichier ne correspond pas au document existant",
         "noExtension": "sans extension",
         "replaceDescription": "Ajouter comme nouvelle version de ce document",
-        "replaceOption": "Remplacer comme nouvelle version",
-        "title": "Remplacer ou créer nouveau ?"
+        "replaceOption": "Téléverser comme nouvelle version",
+        "title": "Téléverser une nouvelle version ou créer un nouveau fichier ?"
       },
       "versionUploadFailed": "Échec de l'import de version",
       "versionUploaded": "Nouvelle version importée",

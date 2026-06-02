@@ -2151,8 +2151,8 @@
         "extensionMismatchError": "Prípona súboru nezodpovedá existujúcemu dokumentu",
         "noExtension": "bez prípony",
         "replaceDescription": "Pridať ako novú verziu tohto dokumentu",
-        "replaceOption": "Nahradiť ako novú verziu",
-        "title": "Nahradiť alebo vytvoriť nový?"
+        "replaceOption": "Nahrať ako novú verziu",
+        "title": "Nahrať novú verziu alebo vytvoriť nový súbor?"
       },
       "versionUploadFailed": "Nahratie verzie zlyhalo",
       "versionUploaded": "Nová verzia nahraná",

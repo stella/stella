@@ -2151,8 +2151,8 @@
         "extensionMismatchError": "Faililaiend ei ühti olemasoleva dokumendiga",
         "noExtension": "laiendita",
         "replaceDescription": "Lisa selle dokumendi uue versioonina",
-        "replaceOption": "Asenda uue versiooniga",
-        "title": "Asendada või luua uus?"
+        "replaceOption": "Laadi üles uue versioonina",
+        "title": "Laadida üles uus versioon või luua uus fail?"
       },
       "versionUploadFailed": "Versiooni üleslaadimine ebaõnnestus",
       "versionUploaded": "Uus versioon üles laaditud",

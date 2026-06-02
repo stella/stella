@@ -2151,8 +2151,8 @@
         "extensionMismatchError": "A fájl kiterjesztése nem egyezik a meglévő dokumentummal",
         "noExtension": "nincs kiterjesztés",
         "replaceDescription": "Hozzáadás a dokumentum új verziójaként",
-        "replaceOption": "Csere új verzióként",
-        "title": "Csere vagy új létrehozása?"
+        "replaceOption": "Feltöltés új verzióként",
+        "title": "Új verzió feltöltése vagy új fájl létrehozása?"
       },
       "versionUploadFailed": "Verzió feltöltése sikertelen",
       "versionUploaded": "Új verzió feltöltve",

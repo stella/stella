@@ -2151,8 +2151,8 @@
         "extensionMismatchError": "Failo plėtinys nesutampa su esamu dokumentu",
         "noExtension": "be plėtinio",
         "replaceDescription": "Pridėti kaip naują šio dokumento versiją",
-        "replaceOption": "Pakeisti kaip naują versiją",
-        "title": "Pakeisti ar sukurti naują?"
+        "replaceOption": "Įkelti kaip naują versiją",
+        "title": "Įkelti naują versiją ar sukurti naują failą?"
       },
       "versionUploadFailed": "Nepavyko įkelti versijos",
       "versionUploaded": "Nauja versija įkelta",

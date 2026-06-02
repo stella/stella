@@ -2151,8 +2151,8 @@
         "extensionMismatchError": "Přípona souboru neodpovídá existujícímu dokumentu",
         "noExtension": "bez přípony",
         "replaceDescription": "Přidat jako novou verzi tohoto dokumentu",
-        "replaceOption": "Nahradit jako novou verzi",
-        "title": "Nahradit nebo vytvořit nový?"
+        "replaceOption": "Nahrát jako novou verzi",
+        "title": "Nahrát novou verzi nebo vložit jako nový soubor?"
       },
       "versionUploadFailed": "Nahrání verze selhalo",
       "versionUploaded": "Nová verze nahrána",
