@@ -54,6 +54,23 @@ describe("reconcileRawSdtPr — checkbox state", () => {
     expect(out).not.toContain('w14:val="0"');
   });
 
+  test("preserves the original sdtPr prefix when inserting a missing child", () => {
+    // A source DOCX could use any namespace prefix for the WordprocessingML
+    // namespace. Previously the insertion path hard-coded `</w:sdtPr>`,
+    // which produced malformed XML for inputs like `<ns0:sdtPr>` (open
+    // tag uses `ns0`, close tag would use `w`). Capture the prefix from
+    // the matched closing tag and reuse it.
+    const raw = '<ns0:sdtPr><ns0:tag ns0:val="agree"/></ns0:sdtPr>';
+    const out = reconcileRawSdtPr(raw, checkboxProps(true));
+    // The injected wrapper itself stays in the `w14:` family (that is
+    // the standard prefix for Word checkboxes), but the parent's closing
+    // tag must keep the source prefix.
+    expect(out).toContain("<ns0:sdtPr>");
+    expect(out).toContain("</ns0:sdtPr>");
+    expect(out).not.toContain("</w:sdtPr>");
+    expect(out).toContain('<w14:checked w14:val="1"/>');
+  });
+
   test("synthesizes the whole wrapper when the raw sdtPr has neither", () => {
     const raw = '<w:sdtPr><w:tag w:val="agree"/></w:sdtPr>';
     const out = reconcileRawSdtPr(raw, checkboxProps(false));

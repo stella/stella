@@ -83,10 +83,16 @@ function upsertSdtPrChild(
   if (opened.test(raw)) {
     return raw.replace(opened, replacement);
   }
-  // Inject before </w:sdtPr> (handles both `</w:sdtPr>` and `</prefix:sdtPr>`).
-  const closing = /<\/\w+:sdtPr>/iu;
-  if (closing.test(raw)) {
-    return raw.replace(closing, `${replacement}</w:sdtPr>`);
+  // Inject before the matching closing tag. Capture the source prefix and
+  // reuse it for the rewritten closing tag so an exotic namespace prefix
+  // (`<ns0:sdtPr>...</ns0:sdtPr>`) doesn't end up with a mismatched
+  // `</w:sdtPr>` — the resulting XML would be malformed and Word would
+  // refuse the file.
+  const closing = /<\/(\w+):sdtPr>/iu;
+  const closingMatch = closing.exec(raw);
+  if (closingMatch) {
+    const closingPrefix = closingMatch[1];
+    return raw.replace(closing, `${replacement}</${closingPrefix}:sdtPr>`);
   }
   // Self-closing `<w:sdtPr/>` — expand to a container.
   const selfClosingPr = /<(\w+):sdtPr([^/>]*)\/>/iu;
