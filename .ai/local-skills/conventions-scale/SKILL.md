@@ -24,8 +24,12 @@ without a rewrite.
 ## What This Means in Practice
 
 **Pagination and streaming.** Never return unbounded result sets.
-Every list endpoint must accept `limit`/`cursor` (or
-`limit`/`offset`). For file processing, prefer streaming over
+Every list endpoint should accept `limit`/`cursor` and return the
+standard `Page<T>` envelope from `apps/api/src/lib/pagination.ts`:
+`{ items, nextCursor, limit }`. Cursors are opaque to callers, and
+`limit` is the normalized server-applied limit. Offset pagination,
+`totalCount`, and unbounded lists require explicit justification in
+the endpoint design. For file processing, prefer streaming over
 loading entire files into memory.
 
 **Tenant isolation.** Application-level filtering (via `SafeId`

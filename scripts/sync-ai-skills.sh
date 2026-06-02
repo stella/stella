@@ -13,4 +13,4 @@ if [[ ! -f ".ai/shared/scripts/sync-ai-skills.sh" ]]; then
   exit 1
 fi
 
-bash .ai/shared/scripts/sync-ai-skills.sh .
+bash .ai/shared/scripts/sync-ai-skills.sh "$@" .

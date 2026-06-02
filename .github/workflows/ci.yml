@@ -73,6 +73,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+          submodules: true
 
       - name: Check changed file scope
         id: changed-files
@@ -112,6 +113,10 @@ jobs:
           if [[ "$package_checks_required" != "true" ]]; then
             echo "::notice::Only workflow/provenance files changed; skipping package CI checks."
           fi
+
+      - name: Check AI prompt sync
+        if: steps.changed-files.outputs.package_checks_required == 'true'
+        run: bash scripts/sync-ai-skills.sh --check
 
       - name: Setup Bun
         if: steps.changed-files.outputs.package_checks_required == 'true'

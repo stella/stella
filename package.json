@@ -27,6 +27,7 @@
     "typecheck": "turbo run typecheck",
     "secrets:check:staged": "bash scripts/check-staged-secrets.sh",
     "sync-ai": "bash scripts/sync-ai-skills.sh",
+    "sync-ai:check": "bash scripts/sync-ai-skills.sh --check",
     "link-codex": "bash scripts/link-codex-skills.sh",
     "format": "turbo run format",
     "format:check": "turbo run format -- --check",
