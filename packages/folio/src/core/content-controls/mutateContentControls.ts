@@ -36,11 +36,32 @@ function formatDateForSdtBody(
   if (!dateFormat) {
     return isoDate;
   }
-  const parsed = new Date(isoDate);
-  if (Number.isNaN(parsed.getTime())) {
+  const parsed = parseSdtDate(isoDate);
+  if (!parsed) {
     return isoDate;
   }
   return formatDate(parsed, dateFormat);
+}
+
+/**
+ * Parse an OOXML SDT date string. For a date-only `YYYY-MM-DD` (or a
+ * `YYYY-MM-DDT…Z` whose date portion is what the user picked) we build a
+ * Date at local midnight matching the calendar day, so `formatDate`'s
+ * local-time accessors return the same day no matter the user's
+ * timezone. `new Date("2026-06-02")` would parse as UTC midnight and a
+ * Pacific user would see the previous day in the rendered display.
+ */
+function parseSdtDate(iso: string): Date | null {
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})/u.exec(iso);
+  if (dateOnly) {
+    return new Date(
+      Number(dateOnly[1]),
+      Number(dateOnly[2]) - 1,
+      Number(dateOnly[3]),
+    );
+  }
+  const parsed = new Date(iso);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 type ForceOption = { force?: boolean };

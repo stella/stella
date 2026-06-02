@@ -144,11 +144,21 @@ export function reconcileRawSdtPr(
   // for checkboxes authored since Word 2010.
   if (props.sdtType === "checkbox" && typeof props.checked === "boolean") {
     const val = props.checked ? "1" : "0";
-    // Update existing w14:checked first; if missing, fold one into the
-    // existing w14:checkbox wrapper, otherwise synthesize the wrapper.
-    if (/<\w+:checked\b[^/>]*\/?>/iu.test(next)) {
+    // Handle the expanded-empty form `<w14:checked ...></w14:checked>` first
+    // so we replace the whole element, not just the opening tag (which
+    // would leave a stray closing tag behind). Then the self-closing
+    // form, then folding into an existing <w14:checkbox> wrapper, then a
+    // synthesized wrapper as the last resort.
+    const checkedOpened = /<(\w+):checked\b[^>]*>[\s\S]*?<\/\w+:checked>/iu;
+    const checkedSelfClosing = /<(\w+):checked\b[^>]*\/>/iu;
+    if (checkedOpened.test(next)) {
       next = next.replaceAll(
-        /<(\w+):checked\b[^/>]*\/?>/giu,
+        /<(\w+):checked\b[^>]*>[\s\S]*?<\/\w+:checked>/giu,
+        (_m, prefix: string) => `<${prefix}:checked ${prefix}:val="${val}"/>`,
+      );
+    } else if (checkedSelfClosing.test(next)) {
+      next = next.replaceAll(
+        /<(\w+):checked\b[^>]*\/>/giu,
         (_m, prefix: string) => `<${prefix}:checked ${prefix}:val="${val}"/>`,
       );
     } else if (/<\w+:checkbox\b[^>]*>/iu.test(next)) {

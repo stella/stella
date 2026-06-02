@@ -14,6 +14,7 @@ import {
   readHyperlinkMarkAttrs,
   readImageAttrs,
   readMathAttrs,
+  readBlockSdtAttrs,
   readParagraphAttrs,
   readRunFormattingOverrideMarkAttrs,
   readSdtAttrs,
@@ -171,9 +172,10 @@ const validateNodeAttrs = (
       return;
 
     case "blockSdt":
-      // blockSdt attrs are passthrough projections of SdtProperties + raw
-      // sdtPr strings; the schema enforces shape, and we accept additional
-      // unknown OOXML markers carried only by rawPropertiesXml.
+      // Validate attrs through the typed reader so malformed projections
+      // (wrong sdtType, non-string rawPropertiesXml, etc.) surface here
+      // instead of leaking into the serializer or downstream consumers.
+      appendAttrIssues(path, readBlockSdtAttrs(node), issues);
       for (let i = 0; i < node.childCount; i += 1) {
         validateNode(node.child(i), `${path}.content[${i}]`, issues);
       }

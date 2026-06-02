@@ -16,6 +16,7 @@ import {
   elementToXml,
   findChild,
   getAttribute,
+  getLocalName,
   type XmlElement,
 } from "./xmlParser";
 
@@ -58,7 +59,11 @@ export function parseSdtProperties(
       if (el.type !== "element") {
         continue;
       }
-      const name = el.name?.replace(/^w:/u, "") ?? "";
+      // The checkbox marker is `w14:checkbox`, not `w:checkbox`; strip *any*
+      // namespace prefix so non-`w:` SDT property elements (w14, w15, ...)
+      // route to the right case instead of falling through to default and
+      // misclassifying the control as richText.
+      const name = el.name ? getLocalName(el.name) : "";
 
       switch (name) {
         case "id": {

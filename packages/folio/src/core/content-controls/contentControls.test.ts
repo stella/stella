@@ -206,6 +206,26 @@ describe("setContentControlValue", () => {
     expect(ctrl.properties.dateValueISO).toBe("2026-06-02");
   });
 
+  test("date-only ISO is rendered as the same calendar day regardless of TZ", () => {
+    // `new Date("2026-06-02")` parses as UTC midnight; a user in any
+    // negative-offset TZ would see Date#getDate() return 1 instead of 2.
+    // Pin the contract: a date-only input renders as the picked day.
+    const doc = makeDoc([
+      makeControl({
+        tag: "effective",
+        sdtType: "date",
+        dateFormat: "yyyy-MM-dd",
+      }),
+    ]);
+    const updated = setContentControlValue(
+      doc,
+      { tag: "effective" },
+      { kind: "date", date: "2026-06-02" },
+    );
+    const ctrl = findContentControl(updated, { tag: "effective" })!.control;
+    expect(getContentControlText(ctrl)).toBe("2026-06-02");
+  });
+
   test("with a dateFormat, body shows the rendered display + dateValueISO holds ISO", () => {
     const doc = makeDoc([
       makeControl({

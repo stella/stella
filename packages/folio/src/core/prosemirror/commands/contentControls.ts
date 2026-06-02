@@ -347,11 +347,21 @@ export function setContentControlValueTr(
     const listItemsAttr = match.node.attrs["listItems"];
     let display = input.value;
     if (typeof listItemsAttr === "string" && listItemsAttr) {
-      const items = JSON.parse(listItemsAttr) as
-        | { displayText: string; value: string }[]
-        | null;
+      // Guard against malformed listItems JSON (extension code that
+      // mutated the attr, schema drift). A bare `JSON.parse` would crash
+      // the transaction; treat malformed input as "no list" and fall
+      // back to writing the raw value with no displayText lookup.
+      let items: { displayText: string; value: string }[] | null = null;
+      try {
+        const parsed: unknown = JSON.parse(listItemsAttr);
+        if (Array.isArray(parsed)) {
+          items = parsed as { displayText: string; value: string }[];
+        }
+      } catch {
+        items = null;
+      }
       const item = items?.find((i) => i.value === input.value);
-      if (!item && !options.force) {
+      if (!item && !options.force && items !== null) {
         throw new ContentControlTypeError({
           message: `Value "${input.value}" not in the control's list items.`,
           sdtType,
@@ -414,11 +424,29 @@ function formatDateForBody(
   if (!dateFormat) {
     return isoDate;
   }
-  const parsed = new Date(isoDate);
-  if (Number.isNaN(parsed.getTime())) {
+  const parsed = parseSdtDate(isoDate);
+  if (!parsed) {
     return isoDate;
   }
   return formatDate(parsed, dateFormat);
+}
+
+/**
+ * See `formatDateForSdtBody` in the headless helpers for the rationale.
+ * For a date-only `YYYY-MM-DD` value we build a local-midnight Date so
+ * the format's local accessors see the right day regardless of TZ.
+ */
+function parseSdtDate(iso: string): Date | null {
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})/u.exec(iso);
+  if (dateOnly) {
+    return new Date(
+      Number(dateOnly[1]),
+      Number(dateOnly[2]) - 1,
+      Number(dateOnly[3]),
+    );
+  }
+  const parsed = new Date(iso);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 function isRepeatingSection(node: PMNode): boolean {
@@ -456,7 +484,19 @@ export function removeContentControlTr(
       .replaceWith(match.pos, match.pos + match.node.nodeSize, children)
       .setMeta(SUGGESTION_BYPASS_META, true);
   }
-  // Drop entirely.
+  // Drop entirely. DocExtension requires `+` at the doc root, so if the
+  // SDT was the only top-level child we substitute an empty paragraph to
+  // keep the doc valid — the headless removeContentControl already does
+  // this for the same case.
+  if (match.node === state.doc.firstChild && state.doc.childCount === 1) {
+    return state.tr
+      .replaceWith(
+        match.pos,
+        match.pos + match.node.nodeSize,
+        paragraphFromText(state.schema, ""),
+      )
+      .setMeta(SUGGESTION_BYPASS_META, true);
+  }
   return state.tr
     .delete(match.pos, match.pos + match.node.nodeSize)
     .setMeta(SUGGESTION_BYPASS_META, true);

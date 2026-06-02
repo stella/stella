@@ -193,6 +193,33 @@ describe("setContentControlValueTr", () => {
     expect(sdt?.firstChild?.textContent).toBe("☒");
   });
 
+  test("tolerates malformed listItems JSON and falls back to writing the raw value", () => {
+    const sdt = schema.node(
+      "blockSdt",
+      {
+        sdtType: "dropdown",
+        tag: "state",
+        listItems: "not even close to JSON {{",
+      },
+      [schema.node("paragraph", {}, [])],
+    );
+    const state = makeState(schema.node("doc", null, [sdt]));
+    // Should not throw despite the malformed listItems attribute.
+    const tr = setContentControlValueTr(
+      state,
+      { tag: "state" },
+      {
+        kind: "dropdown",
+        value: "California",
+      },
+    );
+    if (!tr) {
+      throw new TypeError("expected tx");
+    }
+    const next = state.apply(tr);
+    expect(next.doc.firstChild?.firstChild?.textContent).toBe("California");
+  });
+
   test("rejects a checkbox toggle on a richText control", () => {
     const state = makeState();
     expect(() =>
@@ -236,6 +263,25 @@ describe("removeContentControlTr", () => {
     expect(next.doc.childCount).toBe(2);
     expect(next.doc.firstChild?.type.name).toBe("paragraph");
     expect(next.doc.firstChild?.textContent).toBe("original");
+  });
+
+  test("removing the only top-level SDT inserts an empty paragraph (doc stays valid)", () => {
+    // Doc consists of a single blockSdt; deleting it would leave the doc
+    // with 0 children, violating the `(...)+` doc content spec. The PM
+    // helper must substitute a placeholder paragraph, matching the
+    // headless removeContentControl behavior.
+    const sdt = schema.node("blockSdt", { sdtType: "richText", tag: "lone" }, [
+      schema.node("paragraph", {}, [schema.text("solo")]),
+    ]);
+    const state = makeState(schema.node("doc", null, [sdt]));
+    const tr = removeContentControlTr(state, { tag: "lone" });
+    if (!tr) {
+      throw new TypeError("expected tx");
+    }
+    const next = state.apply(tr);
+    expect(next.doc.childCount).toBe(1);
+    expect(next.doc.firstChild?.type.name).toBe("paragraph");
+    expect(next.doc.firstChild?.content.size).toBe(0);
   });
 
   test("contentLocked allows container removal (OOXML lock semantics)", () => {

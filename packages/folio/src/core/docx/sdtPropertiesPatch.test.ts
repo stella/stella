@@ -40,6 +40,20 @@ describe("reconcileRawSdtPr — checkbox state", () => {
     expect(out).toContain('<w14:checked w14:val="1"/>');
   });
 
+  test("replaces the expanded `<w14:checked></w14:checked>` form without leaving stray closing tags", () => {
+    // OOXML lets the empty element be written in either self-closing or
+    // expanded form. The self-closing path was already covered; this
+    // pins the expanded one so the patch does not produce
+    // `<w14:checked .../></w14:checked>`.
+    const raw =
+      '<w:sdtPr><w14:checkbox><w14:checked w14:val="0"></w14:checked></w14:checkbox></w:sdtPr>';
+    const out = reconcileRawSdtPr(raw, checkboxProps(true));
+    expect(out).toContain('<w14:checked w14:val="1"/>');
+    // No stray closing tag remains.
+    expect(out).not.toMatch(/<w14:checked[^>]*\/>\s*<\/w14:checked>/u);
+    expect(out).not.toContain('w14:val="0"');
+  });
+
   test("synthesizes the whole wrapper when the raw sdtPr has neither", () => {
     const raw = '<w:sdtPr><w:tag w:val="agree"/></w:sdtPr>';
     const out = reconcileRawSdtPr(raw, checkboxProps(false));
