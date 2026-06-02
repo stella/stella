@@ -18,6 +18,15 @@ type SlashSkillRow = {
   name: string;
   scope: SlashSkillScope;
   slug: string;
+  /**
+   * Optional slash-command handle. Installed skills with a command
+   * are surfaced as prompt-style items by the parallel
+   * commandSkills feed; we filter them out of the skill section so
+   * the same skill doesn't render twice (once as `/command` prompt
+   * insert, once as `#stella-skill-ref` skill chip).
+   * Built-in skills never carry a command.
+   */
+  command?: string | null;
 };
 
 type SlashSkillPage = {
@@ -82,6 +91,10 @@ const getChatVisibleInstalledSkillRows = (
   const seenSlugs = new Set<string>();
   const chatMetadataRows = installedRows
     .filter((row) => row.enabled)
+    // Command-bearing installed skills are surfaced as prompt slash
+    // items by the commandSkills feed; skip them here so the same
+    // skill doesn't appear twice in the menu.
+    .filter((row) => !row.command)
     .toSorted(compareChatInstalledSkillRows)
     .slice(0, CHAT_VISIBLE_INSTALLED_SKILL_LIMIT);
 

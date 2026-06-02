@@ -91,33 +91,49 @@ const seedSkills = createSafeRootHandler(
           autoInvokeHint: null,
         }));
 
-        await tx
+        const insertedRows = await tx
           .insert(agentSkills)
           .values(seedRows)
           // Defensive in case two clients race the seed; the
           // existence check above is the primary gate.
-          .onConflictDoNothing();
+          .onConflictDoNothing()
+          .returning({ id: agentSkills.id, slug: agentSkills.slug });
 
-        await recordAuditEvent(
-          tx,
-          seedRows.map((row) => ({
-            action: AUDIT_ACTION.CREATE,
-            resourceType: AUDIT_RESOURCE_TYPE.AGENT_SKILL,
-            resourceId: row.id,
-            changes: {
-              created: {
-                old: null,
-                new: {
-                  scope: row.scope,
-                  slug: row.slug,
-                  origin: row.origin,
-                  command: row.command,
+        // Audit only what we actually wrote — a racing concurrent
+        // seed could have inserted the same rows first, in which case
+        // `onConflictDoNothing` returns nothing and a CREATE event
+        // for a non-existent resource id would corrupt the trail.
+        const insertedBySlug = new Map(
+          insertedRows.map((row) => [row.slug, row.id] as const),
+        );
+        const auditEntries = seedRows.flatMap((row) => {
+          const insertedId = insertedBySlug.get(row.slug);
+          if (!insertedId) {
+            return [];
+          }
+          return [
+            {
+              action: AUDIT_ACTION.CREATE,
+              resourceType: AUDIT_RESOURCE_TYPE.AGENT_SKILL,
+              resourceId: insertedId,
+              changes: {
+                created: {
+                  old: null,
+                  new: {
+                    scope: row.scope,
+                    slug: row.slug,
+                    origin: row.origin,
+                    command: row.command,
+                  },
                 },
               },
+              metadata: { seeded: true },
             },
-            metadata: { seeded: true },
-          })),
-        );
+          ];
+        });
+        if (auditEntries.length > 0) {
+          await recordAuditEvent(tx, auditEntries);
+        }
       }),
     );
 

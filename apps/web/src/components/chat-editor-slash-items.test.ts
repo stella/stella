@@ -198,6 +198,49 @@ describe("buildChatSlashItems", () => {
     });
   });
 
+  test("hides installed skills that carry a slash command (covered by prompt feed)", () => {
+    const items = buildChatSlashItems({
+      shortcuts: [
+        {
+          id: "summarize-default",
+          scope: "private",
+          name: "Summarise a document",
+          command: "summarize",
+          prompt: "Summarise...",
+        },
+      ],
+      skillPages: [
+        {
+          builtIn: [],
+          installed: [
+            {
+              description: "Same skill that backs /summarize.",
+              enabled: true,
+              id: "summarize-default",
+              name: "Summarise a document",
+              scope: "private",
+              slug: "summarize-default",
+              command: "summarize",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(items).toEqual([
+      {
+        kind: "prompt",
+        prompt: {
+          id: "summarize-default",
+          scope: "private",
+          name: "Summarise a document",
+          command: "summarize",
+          body: "Summarise...",
+        },
+      },
+    ]);
+  });
+
   test("keeps built-in skills shadowed only by disabled installed skills", () => {
     const items = buildChatSlashItems({
       shortcuts: [],
