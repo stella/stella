@@ -96,6 +96,34 @@ describe("parseSdtProperties — prefixed marker elements", () => {
     expect(props.listItems).toEqual([{ displayText: "Yes", value: "Yes" }]);
   });
 
+  test("respects w:showingPlcHdr OnOff val (false / off / 0)", () => {
+    // The presence-implies-true semantics still applies, but an explicit
+    // negation must be honored. Previously the parser flipped
+    // `val="false"` back to `true` because it ignored the attribute.
+    const ns =
+      'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+    expect(
+      parseSdtPrXml(`<w:sdtPr ${ns}><w:showingPlcHdr/></w:sdtPr>`)
+        .showingPlaceholder,
+    ).toBe(true);
+    expect(
+      parseSdtPrXml(`<w:sdtPr ${ns}><w:showingPlcHdr w:val="true"/></w:sdtPr>`)
+        .showingPlaceholder,
+    ).toBe(true);
+    expect(
+      parseSdtPrXml(`<w:sdtPr ${ns}><w:showingPlcHdr w:val="false"/></w:sdtPr>`)
+        .showingPlaceholder,
+    ).toBe(false);
+    expect(
+      parseSdtPrXml(`<w:sdtPr ${ns}><w:showingPlcHdr w:val="0"/></w:sdtPr>`)
+        .showingPlaceholder,
+    ).toBe(false);
+    expect(
+      parseSdtPrXml(`<w:sdtPr ${ns}><w:showingPlcHdr w:val="off"/></w:sdtPr>`)
+        .showingPlaceholder,
+    ).toBe(false);
+  });
+
   test("falls back to richText when the marker is unknown", () => {
     const props = parseSdtPrXml(
       '<w:sdtPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml"><w15:appearance w15:val="boundingBox"/><w:tag w:val="t"/></w:sdtPr>',

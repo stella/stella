@@ -120,7 +120,13 @@ export function parseSdtProperties(
           break;
         }
         case "showingPlcHdr":
-          props.showingPlaceholder = true;
+          // OOXML OnOff: element presence with no val attribute means
+          // true; val="0" / "false" / "off" means false. Source DOCXs
+          // rarely write the negation explicitly (Word typically omits
+          // the element when not showing placeholder), but the
+          // serializer's `reconcileRawSdtPr` round-trip can produce one
+          // and we shouldn't silently flip its semantics.
+          props.showingPlaceholder = parseBooleanElement(el, "w");
           break;
         case "text":
           props.sdtType = "plainText";
