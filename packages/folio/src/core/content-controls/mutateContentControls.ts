@@ -27,25 +27,62 @@ export type SetContentControlValueInput =
   | { kind: "checkbox"; checked: boolean }
   | { kind: "date"; date: string };
 
-function lockBlocksMutation(
+function throwLocked(
+  control: BlockSdt,
+  lock: NonNullable<typeof control.properties.lock>,
+): never {
+  throw new ContentControlLockedError({
+    message: `Control "${control.properties.tag ?? control.properties.alias ?? "(unnamed)"}" has w:lock=${lock}.`,
+    lock,
+    ...(control.properties.tag !== undefined
+      ? { tag: control.properties.tag }
+      : {}),
+    ...(control.properties.alias !== undefined
+      ? { alias: control.properties.alias }
+      : {}),
+  });
+}
+
+/**
+ * Refuse content mutations (setContentControlContent /
+ * setContentControlValue) when `w:lock` forbids them.
+ *
+ * Per OOXML §17.5.2.16:
+ * - `contentLocked` blocks content edits but allows the container to be
+ *   removed.
+ * - `sdtContentLocked` blocks both.
+ * - `sdtLocked` blocks only container removal, NOT content edits.
+ */
+function ensureContentNotLocked(
   control: BlockSdt,
   force: boolean | undefined,
 ): void {
-  const lock = control.properties.lock;
   if (force) {
     return;
   }
+  const lock = control.properties.lock;
   if (lock === "contentLocked" || lock === "sdtContentLocked") {
-    throw new ContentControlLockedError({
-      message: `Control "${control.properties.tag ?? control.properties.alias ?? "(unnamed)"}" has w:lock=${lock}.`,
-      lock,
-      ...(control.properties.tag !== undefined
-        ? { tag: control.properties.tag }
-        : {}),
-      ...(control.properties.alias !== undefined
-        ? { alias: control.properties.alias }
-        : {}),
-    });
+    throwLocked(control, lock);
+  }
+}
+
+/**
+ * Refuse container removal (removeContentControl) when `w:lock` forbids it.
+ *
+ * - `sdtLocked` blocks container removal but allows content edits.
+ * - `sdtContentLocked` blocks both.
+ * - `contentLocked` blocks only content edits, NOT container removal.
+ */
+function ensureSdtNotLocked(
+  control: BlockSdt,
+  force: boolean | undefined,
+): void {
+  if (force) {
+    return;
+  }
+  const lock = control.properties.lock;
+  if (lock === "sdtLocked" || lock === "sdtContentLocked") {
+    throwLocked(control, lock);
   }
 }
 
@@ -186,7 +223,7 @@ export function setContentControlContent(
       if (!controlMatchesFilter(control, filter)) {
         return undefined;
       }
-      lockBlocksMutation(control, options.force);
+      ensureContentNotLocked(control, options.force);
       const blocks: BlockContent[] =
         typeof input === "string"
           ? [makeParagraphFromText(input)]
@@ -220,7 +257,7 @@ export function setContentControlValue(
       if (!controlMatchesFilter(control, filter)) {
         return undefined;
       }
-      lockBlocksMutation(control, options.force);
+      ensureContentNotLocked(control, options.force);
 
       const sdtType = control.properties.sdtType;
       if (input.kind === "dropdown") {
@@ -324,7 +361,7 @@ export function removeContentControl(
       if (!controlMatchesFilter(control, filter)) {
         return undefined;
       }
-      lockBlocksMutation(control, options.force);
+      ensureSdtNotLocked(control, options.force);
       if (options.keepContent) {
         if (isRepeatingSection(control) && !options.force) {
           throw new ContentControlTypeError({

@@ -153,6 +153,36 @@ describe("removeContentControlTr", () => {
     expect(next.doc.firstChild?.textContent).toBe("original");
   });
 
+  test("contentLocked allows container removal (OOXML lock semantics)", () => {
+    const sdt = schema.node(
+      "blockSdt",
+      { sdtType: "richText", tag: "a", lock: "contentLocked" },
+      [schema.node("paragraph", {}, [schema.text("x")])],
+    );
+    const state = makeState(schema.node("doc", null, [sdt]));
+    const tr = removeContentControlTr(state, { tag: "a" });
+    if (!tr) {
+      throw new Error("expected tx");
+    }
+    const next = state.apply(tr);
+    expect(next.doc.firstChild?.type.name).not.toBe("blockSdt");
+  });
+
+  test("sdtLocked refuses container removal but allows content edits", () => {
+    const sdt = schema.node(
+      "blockSdt",
+      { sdtType: "richText", tag: "a", lock: "sdtLocked" },
+      [schema.node("paragraph", {}, [schema.text("x")])],
+    );
+    const state = makeState(schema.node("doc", null, [sdt]));
+    expect(() => removeContentControlTr(state, { tag: "a" })).toThrow(
+      ContentControlLockedError,
+    );
+    // ... but content edits succeed.
+    const tr = setContentControlContentTr(state, { tag: "a" }, "edit ok");
+    expect(tr).not.toBeNull();
+  });
+
   test("refuses to unwrap a w15:repeatingSection without force", () => {
     const repeating = schema.node(
       "blockSdt",

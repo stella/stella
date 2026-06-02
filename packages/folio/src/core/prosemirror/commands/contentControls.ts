@@ -112,19 +112,45 @@ function attrsToProperties(node: PMNode): SdtProperties {
   return props;
 }
 
-function ensureNotLocked(node: PMNode, options: ForceOption): void {
+function throwLockedNode(
+  node: PMNode,
+  lock: NonNullable<SdtProperties["lock"]>,
+): never {
+  const props = attrsToProperties(node);
+  throw new ContentControlLockedError({
+    message: `Control "${props.tag ?? props.alias ?? "(unnamed)"}" has w:lock=${lock}.`,
+    lock,
+    ...(props.tag !== undefined ? { tag: props.tag } : {}),
+    ...(props.alias !== undefined ? { alias: props.alias } : {}),
+  });
+}
+
+/**
+ * Per OOXML §17.5.2.16: `contentLocked` and `sdtContentLocked` block
+ * content edits; `sdtLocked` does NOT (it only forbids container
+ * removal). Mirrors the headless `ensureContentNotLocked` helper.
+ */
+function ensureContentNotLocked(node: PMNode, options: ForceOption): void {
   if (options.force) {
     return;
   }
   const lock = node.attrs["lock"];
   if (lock === "contentLocked" || lock === "sdtContentLocked") {
-    const props = attrsToProperties(node);
-    throw new ContentControlLockedError({
-      message: `Control "${props.tag ?? props.alias ?? "(unnamed)"}" has w:lock=${String(lock)}.`,
-      lock: lock as NonNullable<SdtProperties["lock"]>,
-      ...(props.tag !== undefined ? { tag: props.tag } : {}),
-      ...(props.alias !== undefined ? { alias: props.alias } : {}),
-    });
+    throwLockedNode(node, lock);
+  }
+}
+
+/**
+ * Per OOXML §17.5.2.16: `sdtLocked` and `sdtContentLocked` block container
+ * removal; `contentLocked` does NOT (it only forbids content edits).
+ */
+function ensureSdtNotLocked(node: PMNode, options: ForceOption): void {
+  if (options.force) {
+    return;
+  }
+  const lock = node.attrs["lock"];
+  if (lock === "sdtLocked" || lock === "sdtContentLocked") {
+    throwLockedNode(node, lock);
   }
 }
 
@@ -163,7 +189,7 @@ export function setContentControlContentTr(
   if (!match) {
     return null;
   }
-  ensureNotLocked(match.node, options);
+  ensureContentNotLocked(match.node, options);
 
   let children: PMNode[];
   if (typeof input === "string") {
@@ -194,7 +220,7 @@ export function setContentControlValueTr(
   if (!match) {
     return null;
   }
-  ensureNotLocked(match.node, options);
+  ensureContentNotLocked(match.node, options);
 
   const sdtType = match.node.attrs["sdtType"] as SdtProperties["sdtType"];
 
@@ -272,7 +298,7 @@ export function removeContentControlTr(
   if (!match) {
     return null;
   }
-  ensureNotLocked(match.node, options);
+  ensureSdtNotLocked(match.node, options);
 
   if (options.keepContent) {
     if (isRepeatingSection(match.node) && !options.force) {

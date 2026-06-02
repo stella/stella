@@ -231,6 +231,40 @@ describe("removeContentControl", () => {
     expect(para?.type).toBe("paragraph");
   });
 
+  test("contentLocked does NOT block container removal (only blocks edits)", () => {
+    // OOXML §17.5.2.16: contentLocked locks content, sdtLocked locks the
+    // container. Removal must succeed on contentLocked.
+    const doc = makeDoc([
+      makeControl({ tag: "a", lock: "contentLocked" }, "x"),
+    ]);
+    const updated = removeContentControl(doc, { tag: "a" });
+    expect(findContentControl(updated, { tag: "a" })).toBeNull();
+  });
+
+  test("sdtLocked refuses container removal even though edits are allowed", () => {
+    const doc = makeDoc([makeControl({ tag: "a", lock: "sdtLocked" }, "x")]);
+    expect(() => removeContentControl(doc, { tag: "a" })).toThrow(
+      ContentControlLockedError,
+    );
+    // ... but a content edit IS allowed on sdtLocked.
+    const updated = setContentControlContent(doc, { tag: "a" }, "edit ok");
+    expect(
+      getContentControlText(findContentControl(updated, { tag: "a" })!.control),
+    ).toBe("edit ok");
+  });
+
+  test("sdtContentLocked blocks both edits and removal", () => {
+    const doc = makeDoc([
+      makeControl({ tag: "a", lock: "sdtContentLocked" }, "x"),
+    ]);
+    expect(() => removeContentControl(doc, { tag: "a" })).toThrow(
+      ContentControlLockedError,
+    );
+    expect(() => setContentControlContent(doc, { tag: "a" }, "y")).toThrow(
+      ContentControlLockedError,
+    );
+  });
+
   test("refuses to unwrap a w15:repeatingSection control without force", () => {
     const repeating: BlockSdt = {
       type: "blockSdt",
