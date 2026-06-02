@@ -798,6 +798,9 @@
             "location": "packages/transactional/emails/_shared.ts#1"
           },
           {
+            "location": "packages/ui/src/hooks/use-contained-handler.ts#1"
+          },
+          {
             "location": "packages/ui/src/hooks/use-mobile.ts#1"
           },
           {
@@ -954,6 +957,9 @@
             "location": "apps/web/src/components/contact-picker.tsx#2"
           },
           {
+            "location": "apps/web/src/components/context-menu.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/dev-sidebar-group.tsx#1"
           },
           {
@@ -1018,6 +1024,9 @@
           },
           {
             "location": "apps/web/src/components/tooltip.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/translate-document-dialog.tsx#10"
           },
           {
             "location": "apps/web/src/lib/analytics/provider.tsx#1"
@@ -1219,6 +1228,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/deepl-key-card.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#1"
@@ -1962,6 +1974,9 @@
             "location": "apps/api/src/lib/bbox/ai-prompts.ts#1"
           },
           {
+            "location": "apps/api/src/lib/deepl/client.ts#17"
+          },
+          {
             "location": "apps/api/src/lib/safe-outbound-fetch.ts#7"
           },
           {
@@ -2346,6 +2361,9 @@
             "location": "packages/transactional/emails/_shared.ts#1"
           },
           {
+            "location": "packages/ui/src/hooks/use-contained-handler.ts#1"
+          },
+          {
             "location": "packages/ui/src/hooks/use-mobile.ts#1"
           },
           {
@@ -2502,6 +2520,9 @@
             "location": "apps/web/src/components/contact-picker.tsx#2"
           },
           {
+            "location": "apps/web/src/components/context-menu.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/dev-sidebar-group.tsx#1"
           },
           {
@@ -2566,6 +2587,9 @@
           },
           {
             "location": "apps/web/src/components/tooltip.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/translate-document-dialog.tsx#10"
           },
           {
             "location": "apps/web/src/lib/analytics/provider.tsx#1"
@@ -2767,6 +2791,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/deepl-key-card.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#1"
@@ -4817,6 +4844,9 @@
             "location": "packages/transactional/emails/_shared.ts#1"
           },
           {
+            "location": "packages/ui/src/hooks/use-contained-handler.ts#1"
+          },
+          {
             "location": "packages/ui/src/hooks/use-mobile.ts#1"
           },
           {
@@ -4973,6 +5003,9 @@
             "location": "apps/web/src/components/contact-picker.tsx#2"
           },
           {
+            "location": "apps/web/src/components/context-menu.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/dev-sidebar-group.tsx#1"
           },
           {
@@ -5037,6 +5070,9 @@
           },
           {
             "location": "apps/web/src/components/tooltip.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/translate-document-dialog.tsx#10"
           },
           {
             "location": "apps/web/src/lib/analytics/provider.tsx#1"
@@ -5238,6 +5274,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/deepl-key-card.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#1"
@@ -6989,6 +7028,9 @@
             "location": "packages/transactional/emails/_shared.ts#1"
           },
           {
+            "location": "packages/ui/src/hooks/use-contained-handler.ts#1"
+          },
+          {
             "location": "packages/ui/src/hooks/use-mobile.ts#1"
           },
           {
@@ -7145,6 +7187,9 @@
             "location": "apps/web/src/components/contact-picker.tsx#2"
           },
           {
+            "location": "apps/web/src/components/context-menu.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/dev-sidebar-group.tsx#1"
           },
           {
@@ -7209,6 +7254,9 @@
           },
           {
             "location": "apps/web/src/components/tooltip.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/translate-document-dialog.tsx#10"
           },
           {
             "location": "apps/web/src/lib/analytics/provider.tsx#1"
@@ -7410,6 +7458,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/deepl-key-card.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#1"
@@ -10048,6 +10099,9 @@
             "location": "apps/web/src/components/search-dialog.tsx#40"
           },
           {
+            "location": "apps/web/src/components/translate-document-dialog.tsx#37"
+          },
+          {
             "location": "apps/web/src/router.tsx#10"
           },
           {
@@ -10144,7 +10198,7 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx#30"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/catalogue/catalogue-entry-card.tsx#5"
+            "location": "apps/web/src/routes/_protected.settings/-components/catalogue/catalogue-entry-card.tsx#6"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/catalogue/install-pack-button.tsx#7"
@@ -10154,6 +10208,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#20"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/deepl-key-card.tsx#19"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#7"
@@ -10321,7 +10378,7 @@
             "location": "apps/web/src/routes/auth/organization.tsx#23"
           },
           {
-            "location": "apps/web/src/routes/auth/otp.tsx#21"
+            "location": "apps/web/src/routes/auth/otp.tsx#20"
           },
           {
             "location": "apps/web/src/routes/consent.tsx#16"
@@ -10432,6 +10489,9 @@
             "location": "apps/web/src/components/sidebar.tsx#10"
           },
           {
+            "location": "apps/web/src/components/translate-document-dialog.tsx#17"
+          },
+          {
             "location": "apps/web/src/lib/pdf/pdf-viewport.tsx#16"
           },
           {
@@ -10540,7 +10600,7 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/catalogue/catalogue-entry-card.tsx#4"
+            "location": "apps/web/src/routes/_protected.settings/-components/catalogue/catalogue-entry-card.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/catalogue/install-pack-button.tsx#6"
@@ -10550,6 +10610,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/deepl-key-card.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/matter-numbering-card.tsx#7"
@@ -10903,6 +10966,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#18"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/deepl-key-card.tsx#17"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#6"
           },
           {
@@ -10933,7 +10999,7 @@
             "location": "apps/web/src/routes/auth/organization.tsx#20"
           },
           {
-            "location": "apps/web/src/routes/auth/otp.tsx#15"
+            "location": "apps/web/src/routes/auth/otp.tsx#14"
           },
           {
             "location": "apps/web/src/routes/consent.tsx#15"
@@ -11173,7 +11239,7 @@
             "location": "apps/web/src/components/inline-pill.tsx#8"
           },
           {
-            "location": "apps/web/src/components/jurisdiction-picker.tsx#8"
+            "location": "apps/web/src/components/jurisdiction-picker.tsx#12"
           },
           {
             "location": "apps/web/src/components/matter-number-hint.tsx#12"
@@ -11296,7 +11362,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-day-cell.tsx#13"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx#13"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx#14"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-week-header.tsx#1"
@@ -11344,7 +11410,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-pdf-error-fallback.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-rail.tsx#16"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-rail.tsx#17"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-tab-header.tsx#6"
@@ -11353,7 +11419,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/justification.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx#14"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx#15"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#60"
@@ -11365,7 +11431,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/members-section.tsx#28"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/overview-view.tsx#52"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/overview-view.tsx#53"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/parties-section.tsx#35"
@@ -11407,7 +11473,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx#21"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells.tsx#16"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells.tsx#17"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-badges.tsx#10"
@@ -11449,10 +11515,13 @@
             "location": "apps/web/src/routes/auth/index.tsx#14"
           },
           {
+            "location": "apps/web/src/routes/auth/otp.tsx#21"
+          },
+          {
             "location": "apps/web/src/routes/onboarding/-components/onboarding-progress.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/onboarding/-components/steps/catalogue-step.tsx#27"
+            "location": "apps/web/src/routes/onboarding/-components/steps/catalogue-step.tsx#31"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/download-step.tsx#4"
@@ -11462,6 +11531,9 @@
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/jurisdiction-step.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/onboarding/-components/steps/organization-step.tsx#11"
           },
           {
             "location": "packages/ui/src/components/accordion.tsx#6"
@@ -11485,7 +11557,7 @@
             "location": "packages/ui/src/components/color-picker.tsx#9"
           },
           {
-            "location": "packages/ui/src/components/combobox.tsx#10"
+            "location": "packages/ui/src/components/combobox.tsx#11"
           },
           {
             "location": "packages/ui/src/components/command.tsx#10"
@@ -11509,7 +11581,7 @@
             "location": "packages/ui/src/components/frame.tsx#3"
           },
           {
-            "location": "packages/ui/src/components/hex-color-picker.tsx#21"
+            "location": "packages/ui/src/components/hex-color-picker.tsx#22"
           },
           {
             "location": "packages/ui/src/components/input-group.tsx#12"
@@ -11647,9 +11719,6 @@
             "location": "apps/web/src/components/breadcrumbs/workspace-breadcrumb.tsx#18"
           },
           {
-            "location": "apps/web/src/components/jurisdiction-picker.tsx#7"
-          },
-          {
             "location": "apps/web/src/components/search-dialog.tsx#38"
           },
           {
@@ -11717,6 +11786,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#19"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/deepl-key-card.tsx#18"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/matter-numbering-card.tsx#10"
@@ -11798,9 +11870,6 @@
           },
           {
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#97"
-          },
-          {
-            "location": "apps/web/src/routes/onboarding/-components/steps/catalogue-step.tsx#21"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/invite-step.tsx#7"
@@ -11932,6 +12001,9 @@
             "location": "apps/web/src/components/contact-picker.tsx#16"
           },
           {
+            "location": "apps/web/src/components/translate-document-dialog.tsx#25"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#17"
           },
           {
@@ -12031,7 +12103,7 @@
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#143"
           },
           {
-            "location": "apps/web/src/routes/onboarding/-components/steps/catalogue-step.tsx#26"
+            "location": "apps/web/src/routes/onboarding/-components/steps/catalogue-step.tsx#30"
           },
           {
             "location": "packages/folio/src/components/ui/AlignmentButtons.tsx#22"
@@ -12044,6 +12116,9 @@
           },
           {
             "location": "apps/web/src/components/chat/chat-matter-picker.tsx#14"
+          },
+          {
+            "location": "apps/web/src/components/context-menu.tsx#5"
           },
           {
             "location": "apps/web/src/components/dev-sidebar-group.tsx#26"
@@ -12187,10 +12262,28 @@
             "location": "apps/web/src/components/date-picker-popover.tsx#4"
           },
           {
+            "location": "apps/web/src/components/jurisdiction-picker.tsx#11"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#42"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx#12"
+          },
+          {
+            "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#104"
+          },
+          {
+            "location": "apps/web/src/routes/onboarding/-components/steps/catalogue-step.tsx#25"
+          },
+          {
             "location": "apps/web/src/components/require-ai-key.tsx#25"
           },
           {
             "location": "apps/web/src/components/shortcut-hints-overlay.tsx#10"
+          },
+          {
+            "location": "apps/web/src/components/translate-document-dialog.tsx#36"
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#34"
@@ -12475,15 +12568,6 @@
             "location": "apps/web/src/routes/onboarding/-components/steps/organization-step.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.contacts/index.tsx#42"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx#12"
-          },
-          {
-            "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#104"
-          },
-          {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#56"
           },
           {
@@ -12544,6 +12628,45 @@
             "location": "apps/web/src/routes/_protected.knowledge/case/$decisionId.tsx#11"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx#13"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-rail.tsx#16"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx#14"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/overview-view.tsx#52"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells.tsx#16"
+          },
+          {
+            "location": "packages/folio/src/components/CommentsSidebar.tsx#24"
+          },
+          {
+            "location": "packages/folio/src/components/DocxEditor.tsx#57"
+          },
+          {
+            "location": "packages/folio/src/components/FormattingBar.tsx#29"
+          },
+          {
+            "location": "packages/folio/src/components/Toolbar.tsx#17"
+          },
+          {
+            "location": "packages/folio/src/components/ui/HyperlinkPopup.tsx#25"
+          },
+          {
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#34"
+          },
+          {
+            "location": "packages/ui/src/components/combobox.tsx#10"
+          },
+          {
+            "location": "packages/ui/src/components/hex-color-picker.tsx#21"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/entity-pagination.tsx#9"
           },
           {
@@ -12556,7 +12679,7 @@
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#148"
           },
           {
-            "location": "apps/web/src/routes/auth/otp.tsx#20"
+            "location": "apps/web/src/routes/auth/otp.tsx#19"
           },
           {
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#110"
@@ -13195,6 +13318,9 @@
             "location": "apps/web/src/lib/anonymize/use-chat-anonymize.ts#3"
           },
           {
+            "location": "apps/web/src/lib/deepl/queries.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/pdf/hooks/use-pdf-document.ts#3"
           },
           {
@@ -13471,6 +13597,9 @@
             "location": "apps/web/src/components/selfhost-update-banner.tsx#3"
           },
           {
+            "location": "apps/web/src/components/translate-document-dialog.tsx#12"
+          },
+          {
             "location": "apps/web/src/main.tsx#4"
           },
           {
@@ -13570,10 +13699,16 @@
             "location": "apps/web/src/routes/_protected.settings/-components/catalogue/catalogue-browser.tsx#3"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/catalogue/catalogue-entry-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/deepl-key-card.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#3"
@@ -14080,6 +14215,9 @@
             "location": "apps/web/src/components/shortcut-hints-overlay.tsx#5"
           },
           {
+            "location": "apps/web/src/components/translate-document-dialog.tsx#13"
+          },
+          {
             "location": "apps/web/src/main.tsx#5"
           },
           {
@@ -14180,6 +14318,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/deepl-key-card.tsx#12"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx#3"
@@ -15651,6 +15792,9 @@
             "location": "packages/transactional/emails/_shared.ts#1"
           },
           {
+            "location": "packages/ui/src/hooks/use-contained-handler.ts#1"
+          },
+          {
             "location": "packages/ui/src/hooks/use-mobile.ts#1"
           },
           {
@@ -15807,6 +15951,9 @@
             "location": "apps/web/src/components/contact-picker.tsx#2"
           },
           {
+            "location": "apps/web/src/components/context-menu.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/dev-sidebar-group.tsx#1"
           },
           {
@@ -15871,6 +16018,9 @@
           },
           {
             "location": "apps/web/src/components/tooltip.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/translate-document-dialog.tsx#10"
           },
           {
             "location": "apps/web/src/lib/analytics/provider.tsx#1"
@@ -16072,6 +16222,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/deepl-key-card.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#1"
@@ -17637,6 +17790,9 @@
             "location": "apps/api/src/handlers/entities/restore-version.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/entities/translate.ts#12"
+          },
+          {
             "location": "apps/api/src/handlers/entities/update-version-description.ts#1"
           },
           {
@@ -17802,6 +17958,9 @@
             "location": "apps/api/src/handlers/mcp-connectors/url-normalization.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/organization-settings/delete-deepl-key.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/organization-settings/preview.ts#1"
           },
           {
@@ -17811,10 +17970,16 @@
             "location": "apps/api/src/handlers/organization-settings/read-anonymization-blacklist.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/organization-settings/read-deepl-availability.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/organization-settings/read.ts#1"
           },
           {
             "location": "apps/api/src/handlers/organization-settings/update-anonymization-blacklist.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/update-deepl-key.ts#1"
           },
           {
             "location": "apps/api/src/handlers/organization-settings/update-practice-jurisdictions.ts#1"
@@ -18247,6 +18412,9 @@
           },
           {
             "location": "apps/api/src/lib/db/assert-migrations-applied.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/deepl/errors.ts#1"
           },
           {
             "location": "apps/api/src/lib/document-counter.ts#1"
@@ -19768,6 +19936,9 @@
             "location": "apps/api/src/handlers/entities/restore-version.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/entities/translate.ts#13"
+          },
+          {
             "location": "apps/api/src/handlers/entities/update-version-description.ts#2"
           },
           {
@@ -19862,6 +20033,9 @@
           },
           {
             "location": "apps/api/src/handlers/mcp-connectors/update-native-tool.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/delete-deepl-key.ts#2"
           },
           {
             "location": "apps/api/src/handlers/organization-settings/read-anonymization-blacklist.ts#2"
@@ -20731,6 +20905,9 @@
             "location": "apps/api/src/handlers/entities/status-desktop-edit-session.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/entities/translate.ts#14"
+          },
+          {
             "location": "apps/api/src/handlers/entities/update-version-description.ts#3"
           },
           {
@@ -20897,6 +21074,9 @@
           },
           {
             "location": "apps/api/src/handlers/organization-settings/update-anonymization-blacklist.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/update-deepl-key.ts#2"
           },
           {
             "location": "apps/api/src/handlers/organization-settings/update-practice-jurisdictions.ts#2"
@@ -22011,6 +22191,9 @@
             "location": "apps/web/src/components/theme-picker.tsx#1"
           },
           {
+            "location": "apps/web/src/components/translate-document-dialog.tsx#14"
+          },
+          {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-anonymized-toggle.tsx#1"
           },
           {
@@ -22116,7 +22299,7 @@
             "location": "apps/web/src/routes/_protected.organization/-components/invite-member-dialog.tsx#7"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/catalogue/catalogue-entry-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.settings/-components/catalogue/catalogue-entry-card.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/catalogue/catalogue-entry-icon.tsx#1"
@@ -22129,6 +22312,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/deepl-key-card.tsx#13"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx#4"
@@ -22955,6 +23141,9 @@
             "location": "packages/folio/src/core/prosemirror/extensions/core/HistoryExtension.ts#5"
           },
           {
+            "location": "packages/folio/src/core/prosemirror/plugins/suggestionMode.ts#14"
+          },
+          {
             "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#31"
           },
           {
@@ -23141,7 +23330,7 @@
             "location": "packages/folio/src/core/prosemirror/plugins/anonymizationDecorations.ts#20"
           },
           {
-            "location": "packages/folio/src/core/prosemirror/plugins/suggestionMode.ts#14"
+            "location": "packages/folio/src/core/prosemirror/plugins/suggestionMode.ts#15"
           },
           {
             "location": "packages/folio/src/core/prosemirror/selectionState.ts#7"
@@ -23318,10 +23507,10 @@
             "location": "packages/folio/src/core/prosemirror/plugins/selectionTracker.ts#12"
           },
           {
-            "location": "packages/folio/src/core/prosemirror/plugins/suggestionMode.ts#15"
+            "location": "packages/folio/src/core/prosemirror/plugins/suggestionMode.ts#16"
           },
           {
-            "location": "packages/folio/src/core/prosemirror/plugins/suggestionMode.ts#16"
+            "location": "packages/folio/src/core/prosemirror/plugins/suggestionMode.ts#17"
           },
           {
             "location": "packages/folio/src/core/prosemirror/selectionState.ts#8"
@@ -23556,7 +23745,7 @@
             "location": "packages/folio/src/core/prosemirror/plugins/selectionTracker.ts#13"
           },
           {
-            "location": "packages/folio/src/core/prosemirror/plugins/suggestionMode.ts#17"
+            "location": "packages/folio/src/core/prosemirror/plugins/suggestionMode.ts#18"
           },
           {
             "location": "packages/folio/src/paged-editor/useVisualLineNavigation.ts#17"
@@ -24078,6 +24267,9 @@
             "location": "packages/transactional/emails/_shared.ts#1"
           },
           {
+            "location": "packages/ui/src/hooks/use-contained-handler.ts#1"
+          },
+          {
             "location": "packages/ui/src/hooks/use-mobile.ts#1"
           },
           {
@@ -24234,6 +24426,9 @@
             "location": "apps/web/src/components/contact-picker.tsx#2"
           },
           {
+            "location": "apps/web/src/components/context-menu.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/dev-sidebar-group.tsx#1"
           },
           {
@@ -24298,6 +24493,9 @@
           },
           {
             "location": "apps/web/src/components/tooltip.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/translate-document-dialog.tsx#10"
           },
           {
             "location": "apps/web/src/lib/analytics/provider.tsx#1"
@@ -24499,6 +24697,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/deepl-key-card.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#1"
@@ -25771,6 +25972,9 @@
             "location": "apps/web/src/components/theme-picker.tsx#2"
           },
           {
+            "location": "apps/web/src/components/translate-document-dialog.tsx#15"
+          },
+          {
             "location": "apps/web/src/lib/pdf/pdf-viewport.tsx#13"
           },
           {
@@ -25915,7 +26119,7 @@
             "location": "apps/web/src/routes/_protected.settings/-components/catalogue/catalogue-browser.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/catalogue/catalogue-entry-card.tsx#2"
+            "location": "apps/web/src/routes/_protected.settings/-components/catalogue/catalogue-entry-card.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/catalogue/install-pack-button.tsx#4"
@@ -25925,6 +26129,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#6"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/deepl-key-card.tsx#14"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#4"
@@ -26621,6 +26828,9 @@
           },
           {
             "location": "apps/api/src/lib/bbox/ai-prompts.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/deepl/client.ts#17"
           },
           {
             "location": "apps/api/src/lib/safe-outbound-fetch.ts#7"
