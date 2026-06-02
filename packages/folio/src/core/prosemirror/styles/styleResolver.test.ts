@@ -443,4 +443,63 @@ describe("StyleResolver", () => {
       expect(result.runFormatting?.fontFamily?.eastAsia).toBe("SimSun"); // Preserved from docDefaults
     });
   });
+
+  describe("getNextStyleId", () => {
+    test("returns next styleId when it points to an existing style", () => {
+      const styleDefinitions: StyleDefinitions = {
+        styles: [
+          {
+            styleId: "Heading1",
+            type: "paragraph",
+            name: "Heading 1",
+            next: "Normal",
+          },
+          { styleId: "Normal", type: "paragraph", name: "Normal" },
+        ],
+      };
+      const resolver = createStyleResolver(styleDefinitions);
+      expect(resolver.getNextStyleId("Heading1")).toBe("Normal");
+    });
+
+    test("returns null when next points back at the same style", () => {
+      const styleDefinitions: StyleDefinitions = {
+        styles: [
+          {
+            styleId: "Normal",
+            type: "paragraph",
+            name: "Normal",
+            next: "Normal",
+          },
+        ],
+      };
+      const resolver = createStyleResolver(styleDefinitions);
+      expect(resolver.getNextStyleId("Normal")).toBeNull();
+    });
+
+    test("returns null when next references a style that does not exist", () => {
+      const styleDefinitions: StyleDefinitions = {
+        styles: [
+          {
+            styleId: "Heading1",
+            type: "paragraph",
+            name: "Heading 1",
+            next: "MissingStyle",
+          },
+        ],
+      };
+      const resolver = createStyleResolver(styleDefinitions);
+      expect(resolver.getNextStyleId("Heading1")).toBeNull();
+    });
+
+    test("returns null for unknown source style", () => {
+      const resolver = createStyleResolver({ styles: [] });
+      expect(resolver.getNextStyleId("Heading1")).toBeNull();
+    });
+
+    test("returns null for nullish input", () => {
+      const resolver = createStyleResolver({ styles: [] });
+      expect(resolver.getNextStyleId(null)).toBeNull();
+      expect(resolver.getNextStyleId(undefined)).toBeNull();
+    });
+  });
 });

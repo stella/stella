@@ -153,14 +153,19 @@ export class StyleResolver {
    *
    * Returns null when the style has no `w:next`, when `next` points back at
    * the same style (the common heading-stays-heading case is handled by the
-   * caller), or when the style is unknown.
+   * caller), when the style is unknown, or when `next` is a dangling
+   * reference to a style that does not exist (OOXML allows this; treat it as
+   * absent so we do not write a non-resolvable styleId into the document).
    */
   getNextStyleId(styleId: string | undefined | null): string | null {
     if (!styleId) {
       return null;
     }
     const next = this.stylesById.get(styleId)?.next;
-    return next && next !== styleId ? next : null;
+    if (!next || next === styleId || !this.stylesById.has(next)) {
+      return null;
+    }
+    return next;
   }
 
   /**
