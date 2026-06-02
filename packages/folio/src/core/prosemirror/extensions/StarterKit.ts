@@ -17,6 +17,7 @@ import { TextExtension } from "./core/TextExtension";
 import { BaseKeymapExtension } from "./features/BaseKeymapExtension";
 // oxlint-disable-next-line import/no-cycle
 import { BidiShortcutExtension } from "./features/BidiShortcutExtension";
+import { ContentControlWidgetsExtension } from "./features/ContentControlWidgetsExtension";
 import { DropCursorExtension } from "./features/DropCursorExtension";
 import { EmptyParagraphFormatExtension } from "./features/EmptyParagraphFormatExtension";
 import { ImageDragExtension } from "./features/ImageDragExtension";
@@ -189,6 +190,7 @@ export function createStarterKit(
   add("paraIdAllocator", ParaIdAllocatorExtension());
   add("paragraphChangeTracker", ParagraphChangeTrackerExtension());
   add("bidiShortcut", BidiShortcutExtension());
+  add("contentControlWidgets", ContentControlWidgetsExtension());
 
   return extensions;
 }

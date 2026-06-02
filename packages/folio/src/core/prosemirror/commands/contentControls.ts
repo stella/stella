@@ -9,7 +9,7 @@
  * walk PM nodes (not the Document model).
  */
 
-import type { Node as PMNode } from "prosemirror-model";
+import type { Node as PMNode, Schema } from "prosemirror-model";
 import type { EditorState, Transaction } from "prosemirror-state";
 
 import type {
@@ -22,7 +22,6 @@ import {
   ContentControlTypeError,
 } from "../../content-controls/errors";
 import type { SdtProperties } from "../../types/document";
-import { schema } from "../schema";
 
 type ForceOption = { force?: boolean };
 
@@ -129,7 +128,7 @@ function ensureNotLocked(node: PMNode, options: ForceOption): void {
   }
 }
 
-function paragraphFromText(text: string): PMNode {
+function paragraphFromText(schema: Schema, text: string): PMNode {
   if (text.length === 0) {
     return schema.node("paragraph", {}, []);
   }
@@ -142,10 +141,10 @@ function replaceBlockSdtChildren(
   children: readonly PMNode[],
   propertyOverrides: Partial<Record<string, unknown>> = {},
 ): Transaction {
-  const next = schema.node(
+  const next = state.schema.node(
     "blockSdt",
     { ...match.node.attrs, showingPlaceholder: false, ...propertyOverrides },
-    children.length === 0 ? [paragraphFromText("")] : children,
+    children.length === 0 ? [paragraphFromText(state.schema, "")] : children,
   );
   return state.tr.replaceWith(match.pos, match.pos + match.node.nodeSize, next);
 }
@@ -168,7 +167,7 @@ export function setContentControlContentTr(
 
   let children: PMNode[];
   if (typeof input === "string") {
-    children = [paragraphFromText(input)];
+    children = [paragraphFromText(state.schema, input)];
   } else {
     // Caller provided Document-model BlockContent[]; convert via toProseDoc
     // would re-enter the whole pipeline. Keep this PM-direct: only string
@@ -225,7 +224,9 @@ export function setContentControlValueTr(
         display = item.displayText;
       }
     }
-    return replaceBlockSdtChildren(state, match, [paragraphFromText(display)]);
+    return replaceBlockSdtChildren(state, match, [
+      paragraphFromText(state.schema, display),
+    ]);
   }
   if (input.kind === "checkbox") {
     if (sdtType !== "checkbox") {
@@ -236,9 +237,14 @@ export function setContentControlValueTr(
       });
     }
     const glyph = input.checked ? "☒" : "☐";
-    return replaceBlockSdtChildren(state, match, [paragraphFromText(glyph)], {
-      checked: input.checked,
-    });
+    return replaceBlockSdtChildren(
+      state,
+      match,
+      [paragraphFromText(state.schema, glyph)],
+      {
+        checked: input.checked,
+      },
+    );
   }
   if (sdtType !== "date") {
     throw new ContentControlTypeError({
@@ -247,7 +253,9 @@ export function setContentControlValueTr(
       reason: "kind=date requires sdtType=date",
     });
   }
-  return replaceBlockSdtChildren(state, match, [paragraphFromText(input.date)]);
+  return replaceBlockSdtChildren(state, match, [
+    paragraphFromText(state.schema, input.date),
+  ]);
 }
 
 function isRepeatingSection(node: PMNode): boolean {
