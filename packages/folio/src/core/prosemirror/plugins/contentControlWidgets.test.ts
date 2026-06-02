@@ -49,8 +49,9 @@ describe("dispatchDropdownPick", () => {
     });
     const ref = { state: initial };
     // The helper expects an `EditorView`; only `state` and `dispatch` are
-    // touched here, so a structural stub satisfies the contract.
-    const ok = dispatchDropdownPick(viewLike(ref) as EditorView, "state", "ny");
+    // touched here, so a structural stub satisfies the contract. The PM
+    // position of the SDT is 0 (it is the doc's first child).
+    const ok = dispatchDropdownPick(viewLike(ref) as EditorView, 0, "ny");
     expect(ok).toBe(true);
     expect(ref.state.doc.firstChild?.firstChild?.textContent).toBe("New York");
   });
@@ -67,11 +68,7 @@ describe("dispatchDatePick", () => {
       plugins: [...singletonManager.getPlugins()],
     });
     const ref = { state: initial };
-    const ok = dispatchDatePick(
-      viewLike(ref) as EditorView,
-      "effective",
-      "2026-06-02",
-    );
+    const ok = dispatchDatePick(viewLike(ref) as EditorView, 0, "2026-06-02");
     expect(ok).toBe(true);
     expect(ref.state.doc.firstChild?.firstChild?.textContent).toBe(
       "2026-06-02",

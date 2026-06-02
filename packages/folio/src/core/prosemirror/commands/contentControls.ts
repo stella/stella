@@ -37,9 +37,16 @@ export type BlockSdtPMMatch = {
 
 function nodeMatchesFilter(
   node: PMNode,
+  pos: number,
   filter: ContentControlFilter,
 ): boolean {
   if (node.type.name !== "blockSdt") {
+    return false;
+  }
+  // pmPos addresses one specific control instance — use it first so the
+  // widgets plugin (which derives the position from the clicked anchor)
+  // never has to disambiguate between SDTs that share a tag/alias.
+  if (filter.pmPos !== undefined && pos !== filter.pmPos) {
     return false;
   }
   const attrs = node.attrs;
@@ -68,7 +75,7 @@ export function findBlockSdtMatches(
     if (node.type.name !== "blockSdt") {
       return true;
     }
-    if (nodeMatchesFilter(node, filter)) {
+    if (nodeMatchesFilter(node, pos, filter)) {
       matches.push({ node, pos, path: [...resolvePath(doc, pos), index] });
     }
     return true;

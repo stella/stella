@@ -2336,6 +2336,7 @@ export function toFlowBlocks(
         sdtSeq += 1;
         const group: SdtGroup = {
           id: `sdt-${sdtSeq}`,
+          pmPos: pos,
           sdtType: attrs.sdtType,
         };
         if (attrs.alias) {

@@ -49,6 +49,33 @@ describe("findBlockSdtMatches", () => {
     const state = makeState();
     expect(findBlockSdtMatch(state.doc, { tag: "missing" })).toBeNull();
   });
+
+  test("filter by pmPos addresses one specific instance, not the first matching tag", () => {
+    // Two SDTs share the tag "name"; setContentControlValueTr must land on
+    // the one the user actually clicked (identified by pmPos), not the
+    // first one in document order.
+    const first = schema.node(
+      "blockSdt",
+      { sdtType: "richText", tag: "name" },
+      [schema.node("paragraph", {}, [schema.text("first")])],
+    );
+    const second = schema.node(
+      "blockSdt",
+      { sdtType: "richText", tag: "name" },
+      [schema.node("paragraph", {}, [schema.text("second")])],
+    );
+    const state = makeState(schema.node("doc", null, [first, second]));
+    const allByTag = findBlockSdtMatches(state.doc, { tag: "name" });
+    expect(allByTag).toHaveLength(2);
+
+    const secondPos = allByTag[1]?.pos;
+    if (typeof secondPos !== "number") {
+      throw new TypeError("expected pos to be a number");
+    }
+    const onlySecond = findBlockSdtMatches(state.doc, { pmPos: secondPos });
+    expect(onlySecond).toHaveLength(1);
+    expect(onlySecond[0]?.node.firstChild?.textContent).toBe("second");
+  });
 });
 
 describe("blockSdtAttrsToSdtProperties", () => {

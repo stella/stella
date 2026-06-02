@@ -33,13 +33,14 @@ type ListItem = { displayText: string; value: string };
 type OpenPicker =
   | {
       kind: "dropdown";
-      tag: string;
+      /** PM position addressing the clicked SDT instance. */
+      pmPos: number;
       items: ListItem[];
       anchorRect: DOMRect;
     }
   | {
       kind: "date";
-      tag: string;
+      pmPos: number;
       anchorRect: DOMRect;
     };
 
@@ -101,7 +102,7 @@ export function ContentControlWidgetsOverlay({
         const items = parseListItems(detail.listItemsJson);
         setOpen({
           kind: "dropdown",
-          tag: detail.tag,
+          pmPos: detail.pmPos,
           items,
           anchorRect: detail.anchor.getBoundingClientRect(),
         });
@@ -110,7 +111,7 @@ export function ContentControlWidgetsOverlay({
       if (detail.kind === "datePick") {
         setOpen({
           kind: "date",
-          tag: detail.tag,
+          pmPos: detail.pmPos,
           anchorRect: detail.anchor.getBoundingClientRect(),
         });
       }
@@ -160,7 +161,7 @@ export function ContentControlWidgetsOverlay({
   const onDropdownPick = (value: string): void => {
     const view = getEditorView();
     if (view) {
-      dispatchDropdownPick(view, open.tag, value);
+      dispatchDropdownPick(view, open.pmPos, value);
     }
     close();
   };
@@ -168,7 +169,7 @@ export function ContentControlWidgetsOverlay({
   const onDatePick = (value: string): void => {
     const view = getEditorView();
     if (view && value.length > 0) {
-      dispatchDatePick(view, open.tag, value);
+      dispatchDatePick(view, open.pmPos, value);
     }
     close();
   };

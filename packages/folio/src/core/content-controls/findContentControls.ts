@@ -21,6 +21,18 @@ export type ContentControlFilter = {
   /** OOXML numeric `w:id`. */
   id?: number;
   sdtType?: SdtProperties["sdtType"];
+  /**
+   * ProseMirror absolute position of the blockSdt's open token. The
+   * widgets plugin uses this to disambiguate SDTs that share a tag: each
+   * clicked control resolves to exactly one position, so the mutation
+   * lands on the intended instance even when multiple share the same
+   * tag/alias. Only meaningful for PM-layer addressing (see
+   * `prosemirror/commands/contentControls`). The headless walker matches
+   * on it too, but `findContentControls` over the headless model does
+   * not produce PM positions — so this filter is effectively a no-op
+   * when called on a headless Document.
+   */
+  pmPos?: number;
 };
 
 export type ContentControlMatch = {

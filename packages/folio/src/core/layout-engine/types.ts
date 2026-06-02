@@ -658,6 +658,12 @@ export type TextBoxBlock = {
 export type SdtGroup = {
   /** Folio-local identifier (stable within one toFlowBlocks call). */
   id: string;
+  /**
+   * ProseMirror position of the blockSdt's open token in the source doc.
+   * Stable across renders for the same control and unique per instance —
+   * the addressing API uses this to disambiguate SDTs that share a tag.
+   */
+  pmPos: number;
   sdtType: string;
   /** OOXML `w:alias` (friendly display name). */
   alias?: string;

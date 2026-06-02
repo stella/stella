@@ -23,6 +23,7 @@ export function applySdtDataAttrs(
   const innermost = sdtGroups.at(-1);
   if (innermost) {
     el.dataset["sdtId"] = innermost.id;
+    el.dataset["sdtPmPos"] = String(innermost.pmPos);
     el.dataset["sdtType"] = innermost.sdtType;
     if (innermost.alias) {
       el.dataset["sdtAlias"] = innermost.alias;

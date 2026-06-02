@@ -29,6 +29,8 @@ export type ContentControlWidgetEvent =
   | {
       kind: "dropdownOpen";
       tag: string;
+      /** PM position of the clicked SDT instance — disambiguates duplicates. */
+      pmPos: number;
       sdtType: "dropdown" | "comboBox";
       anchor: HTMLElement;
       listItemsJson: string | undefined;
@@ -36,6 +38,7 @@ export type ContentControlWidgetEvent =
   | {
       kind: "datePick";
       tag: string;
+      pmPos: number;
       anchor: HTMLElement;
       currentValue: string | undefined;
     }
@@ -47,6 +50,7 @@ export type ContentControlWidgetEvent =
        */
       kind: "refused";
       tag: string;
+      pmPos: number;
       sdtType: string;
       anchor: HTMLElement;
       error: ContentControlLockedError | ContentControlTypeError;
@@ -102,9 +106,14 @@ export function createContentControlWidgetsPlugin(
           if (!anchor) {
             return false;
           }
-          const tag = anchor.dataset["sdtTag"];
+          const tag = anchor.dataset["sdtTag"] ?? "";
           const sdtType = anchor.dataset["sdtType"];
-          if (!tag || !sdtType) {
+          // pmPos is what addresses the clicked instance unambiguously. The
+          // painter stamps it from the SdtGroup; tag is kept on the event
+          // for telemetry but is no longer the addressing key.
+          const pmPosRaw = anchor.dataset["sdtPmPos"];
+          const pmPos = pmPosRaw ? Number.parseInt(pmPosRaw, 10) : Number.NaN;
+          if (!sdtType || Number.isNaN(pmPos)) {
             return false;
           }
           // The lock check happens inside the transaction helper; we just
@@ -115,7 +124,7 @@ export function createContentControlWidgetsPlugin(
               const current = anchor.dataset["sdtChecked"] === "true";
               const tr = setContentControlValueTr(
                 view.state,
-                { tag },
+                { pmPos },
                 {
                   kind: "checkbox",
                   checked: !current,
@@ -130,6 +139,7 @@ export function createContentControlWidgetsPlugin(
               emit(view, {
                 kind: "dropdownOpen",
                 tag,
+                pmPos,
                 sdtType,
                 anchor,
                 listItemsJson: anchor.dataset["sdtListItems"],
@@ -140,6 +150,7 @@ export function createContentControlWidgetsPlugin(
               emit(view, {
                 kind: "datePick",
                 tag,
+                pmPos,
                 anchor,
                 currentValue: undefined,
               });
@@ -155,7 +166,14 @@ export function createContentControlWidgetsPlugin(
               // and let the editor shell decide what to do (toast,
               // analytics, no-op). The plugin itself stays silent so
               // refusals never end up as ad-hoc console noise.
-              emit(view, { kind: "refused", tag, sdtType, anchor, error });
+              emit(view, {
+                kind: "refused",
+                tag,
+                pmPos,
+                sdtType,
+                anchor,
+                error,
+              });
               return true;
             }
             throw error;
@@ -175,19 +193,23 @@ export function createContentControlWidgetsPlugin(
 /**
  * Stable resolver helpers exposed for the UI shell so a popover menu or
  * date picker can dispatch the same transaction the plugin would.
+ *
+ * Both take the PM `pmPos` of the clicked SDT (from the widget event's
+ * `pmPos` field) so the dispatch lands on the exact instance the user
+ * interacted with — duplicate-tag SDTs are no longer ambiguous.
  */
 export function dispatchDropdownPick(
   view: EditorView,
-  tag: string,
+  pmPos: number,
   value: string,
 ): boolean {
-  const match = findBlockSdtMatch(view.state.doc, { tag });
+  const match = findBlockSdtMatch(view.state.doc, { pmPos });
   if (!match) {
     return false;
   }
   const tr = setContentControlValueTr(
     view.state,
-    { tag },
+    { pmPos },
     {
       kind: "dropdown",
       value,
@@ -202,12 +224,12 @@ export function dispatchDropdownPick(
 
 export function dispatchDatePick(
   view: EditorView,
-  tag: string,
+  pmPos: number,
   date: string,
 ): boolean {
   const tr = setContentControlValueTr(
     view.state,
-    { tag },
+    { pmPos },
     {
       kind: "date",
       date,
