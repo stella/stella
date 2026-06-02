@@ -54,6 +54,63 @@ describe("setContentControlContentBlocksTr", () => {
     expect(sdt?.child(1).textContent).toBe("Second line");
   });
 
+  test("accepts a table in the fill input and emits it as a PM child", () => {
+    const blocks: BlockContent[] = [
+      {
+        type: "table",
+        columnWidths: [2400, 2400],
+        rows: [
+          {
+            type: "tableRow",
+            cells: [
+              {
+                type: "tableCell",
+                content: [
+                  {
+                    type: "paragraph",
+                    content: [
+                      {
+                        type: "run",
+                        content: [{ type: "text", text: "left" }],
+                      },
+                    ],
+                  },
+                ],
+              },
+              {
+                type: "tableCell",
+                content: [
+                  {
+                    type: "paragraph",
+                    content: [
+                      {
+                        type: "run",
+                        content: [{ type: "text", text: "right" }],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ];
+    const state = makeState();
+    const tr = setContentControlContentBlocksTr(
+      state,
+      { tag: "clause" },
+      blocks,
+    );
+    if (!tr) {
+      throw new TypeError("expected a transaction");
+    }
+    const next = state.apply(tr);
+    const sdt = next.doc.firstChild;
+    expect(sdt?.type.name).toBe("blockSdt");
+    expect(sdt?.firstChild?.type.name).toBe("table");
+  });
+
   test("returns null when no control matches the filter", () => {
     const state = makeState();
     expect(

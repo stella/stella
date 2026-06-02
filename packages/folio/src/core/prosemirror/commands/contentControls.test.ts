@@ -51,6 +51,26 @@ describe("findBlockSdtMatches", () => {
     expect(findBlockSdtMatch(state.doc, { tag: "missing" })).toBeNull();
   });
 
+  test("path includes the index of every enclosing ancestor for a nested SDT", () => {
+    // Outer SDT contains a paragraph, then an inner SDT. The inner
+    // match's path should reflect the doc → outer → inner ancestry so
+    // callers can walk back to it via doc.child(path[0]).child(path[1]).
+    const inner = schema.node("blockSdt", { sdtType: "richText", tag: "in" }, [
+      schema.node("paragraph", {}, [schema.text("deep")]),
+    ]);
+    const outer = schema.node("blockSdt", { sdtType: "richText", tag: "out" }, [
+      schema.node("paragraph", {}, [schema.text("pre")]),
+      inner,
+    ]);
+    const state = makeState(schema.node("doc", null, [outer]));
+    const match = findBlockSdtMatch(state.doc, { tag: "in" });
+    if (!match) {
+      throw new TypeError("expected inner match");
+    }
+    // Outer is doc child 0; inner is outer's child 1.
+    expect(match.path).toEqual([0, 1]);
+  });
+
   test("filter by pmPos addresses one specific instance, not the first matching tag", () => {
     // Two SDTs share the tag "name"; setContentControlValueTr must land on
     // the one the user actually clicked (identified by pmPos), not the
