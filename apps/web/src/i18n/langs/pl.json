@@ -1139,6 +1139,9 @@
       "unknownAuthor": "Nieznany",
       "visibility": "Komentarze"
     },
+    "contentControlDateAriaLabel": "Pick a date",
+    "contentControlDropdownAriaLabel": "Dropdown options",
+    "contentControlDropdownNoOptions": "No options",
     "copy": "Kopiuj",
     "copyLink": "Kopiuj link",
     "cut": "Wytnij",

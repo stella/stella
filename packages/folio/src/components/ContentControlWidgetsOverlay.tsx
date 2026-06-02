@@ -5,21 +5,22 @@
  * `folio:content-control-widget` CustomEvent on the editor's view DOM
  * whenever the user clicks a typed control. This component subscribes to
  * those events and renders a small floating picker positioned at the
- * anchor element — a dropdown menu for `dropdown` / `comboBox` controls,
- * a native date input for `date` controls — then dispatches back through
- * `dispatchDropdownPick` / `dispatchDatePick` so the change rides the
- * normal undo stack.
+ * anchor element — a list of menu items for dropdown / comboBox
+ * controls, a native date input for date controls — then dispatches back
+ * through `dispatchDropdownPick` / `dispatchDatePick` so the change rides
+ * the normal undo stack.
  *
- * The component keeps its own dependencies small (native `<select>` /
- * `<input type="date">` rendered via a React portal) so the visual chrome
- * stays consistent with the rest of folio without pulling additional UI
- * primitives into the editor's bundle.
+ * The dropdown popover uses `@stll/ui` `MenuItem` styling for visual + a11y
+ * consistency with the rest of the editor.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import type { EditorView } from "prosemirror-view";
+import { useTranslations } from "use-intl";
+
+import { MenuItem } from "@stll/ui/components/menu";
 
 import {
   CONTENT_CONTROL_WIDGET_EVENT_NAME,
@@ -74,8 +75,10 @@ function parseListItems(raw: string | undefined): ListItem[] {
 
 type ContentControlWidgetsOverlayProps = {
   /**
-   * Resolver for the live editor view. Called every render so the host can
-   * defer/recreate the view without re-mounting this overlay.
+   * Resolver for the live editor view. Stored in a ref so the parent can
+   * pass a fresh function each render without triggering listener churn —
+   * the subscription only re-establishes when the editor view's DOM node
+   * actually changes.
    */
   getEditorView: () => EditorView | null;
 };
@@ -83,18 +86,27 @@ type ContentControlWidgetsOverlayProps = {
 export function ContentControlWidgetsOverlay({
   getEditorView,
 }: ContentControlWidgetsOverlayProps) {
+  const t = useTranslations("folio");
   const [open, setOpen] = useState<OpenPicker | null>(null);
-  const containerRef = useRef<HTMLElement | null>(null);
+
+  // Hold the latest resolver in a ref so the subscription effect's
+  // dependency is the underlying view's identity, not the caller's
+  // function literal (which changes every parent render).
+  const getEditorViewRef = useRef(getEditorView);
+  getEditorViewRef.current = getEditorView;
 
   const close = useCallback(() => setOpen(null), []);
 
+  // Re-subscribe when the editor's view DOM node changes. Tracking the DOM
+  // node (not the view object) means we tolerate parent re-renders that
+  // hand us a stable view without recreating the listener.
+  const view = getEditorView();
+  const viewDom = view?.dom ?? null;
+
   useEffect(() => {
-    const view = getEditorView();
-    if (!view) {
+    if (!viewDom) {
       return;
     }
-    const target = view.dom;
-    containerRef.current = target;
     const onWidget = (event: Event): void => {
       const custom = event as CustomEvent<ContentControlWidgetEvent>;
       const detail = custom.detail;
@@ -115,14 +127,14 @@ export function ContentControlWidgetsOverlay({
           anchorRect: detail.anchor.getBoundingClientRect(),
         });
       }
-      // "refused" is delivered for the host's logging hook; the overlay
+      // `refused` is delivered for the host's logging hook; the overlay
       // intentionally does not render anything for it.
     };
-    target.addEventListener(CONTENT_CONTROL_WIDGET_EVENT_NAME, onWidget);
+    viewDom.addEventListener(CONTENT_CONTROL_WIDGET_EVENT_NAME, onWidget);
     return () => {
-      target.removeEventListener(CONTENT_CONTROL_WIDGET_EVENT_NAME, onWidget);
+      viewDom.removeEventListener(CONTENT_CONTROL_WIDGET_EVENT_NAME, onWidget);
     };
-  }, [getEditorView]);
+  }, [viewDom]);
 
   useEffect(() => {
     if (!open) {
@@ -149,7 +161,7 @@ export function ContentControlWidgetsOverlay({
     return {
       position: "fixed" as const,
       top: `${open.anchorRect.bottom + 4}px`,
-      left: `${open.anchorRect.left}px`,
+      insetInlineStart: `${open.anchorRect.left}px`,
       zIndex: 9999,
     };
   }, [open]);
@@ -159,17 +171,17 @@ export function ContentControlWidgetsOverlay({
   }
 
   const onDropdownPick = (value: string): void => {
-    const view = getEditorView();
-    if (view) {
-      dispatchDropdownPick(view, open.pmPos, value);
+    const liveView = getEditorViewRef.current();
+    if (liveView) {
+      dispatchDropdownPick(liveView, open.pmPos, value);
     }
     close();
   };
 
   const onDatePick = (value: string): void => {
-    const view = getEditorView();
-    if (view && value.length > 0) {
-      dispatchDatePick(view, open.pmPos, value);
+    const liveView = getEditorViewRef.current();
+    if (liveView && value.length > 0) {
+      dispatchDatePick(liveView, open.pmPos, value);
     }
     close();
   };
@@ -177,30 +189,31 @@ export function ContentControlWidgetsOverlay({
   return createPortal(
     <div
       role="dialog"
-      aria-label={open.kind === "dropdown" ? "Dropdown options" : "Pick a date"}
+      aria-label={
+        open.kind === "dropdown"
+          ? t("contentControlDropdownAriaLabel")
+          : t("contentControlDateAriaLabel")
+      }
       style={style}
-      className="bg-popover text-popover-foreground min-w-[10rem] rounded-md border p-2 shadow-md"
+      className="bg-popover text-popover-foreground min-w-[10rem] rounded-md border p-1 shadow-md"
     >
       {open.kind === "dropdown" && (
-        <ul className="m-0 flex list-none flex-col gap-1 p-0">
+        <div role="menu" className="flex flex-col">
           {open.items.length === 0 ? (
-            <li className="text-muted-foreground px-2 py-1 text-sm">
-              No options
-            </li>
+            <div className="text-muted-foreground px-2 py-1 text-sm">
+              {t("contentControlDropdownNoOptions")}
+            </div>
           ) : (
             open.items.map((item) => (
-              <li key={`${item.value}::${item.displayText}`}>
-                <button
-                  type="button"
-                  onClick={() => onDropdownPick(item.value)}
-                  className="hover:bg-accent focus:bg-accent w-full rounded px-2 py-1 text-start focus:outline-none"
-                >
-                  {item.displayText}
-                </button>
-              </li>
+              <MenuItem
+                key={`${item.value}::${item.displayText}`}
+                onClick={() => onDropdownPick(item.value)}
+              >
+                {item.displayText}
+              </MenuItem>
             ))
           )}
-        </ul>
+        </div>
       )}
       {open.kind === "date" && (
         <input
