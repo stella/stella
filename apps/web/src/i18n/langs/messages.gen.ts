@@ -2154,8 +2154,8 @@ type Messages = {
         "extensionMismatchError": "File extension does not match the existing document";
         "noExtension": "no extension";
         "replaceDescription": "Add as a new version of this document";
-        "replaceOption": "Replace as new version";
-        "title": "Replace or create new?";
+        "replaceOption": "Upload as new version";
+        "title": "Upload new version or create new file?";
       };
       "versionUploadFailed": "Version upload failed";
       "versionUploaded": "New version uploaded";
