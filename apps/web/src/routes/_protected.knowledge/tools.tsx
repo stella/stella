@@ -54,13 +54,20 @@ export const Route = createFileRoute("/_protected/knowledge/tools")({
     if (seededThisSession.has(orgId)) {
       return;
     }
-    seededThisSession.add(orgId);
     const response = await api.skills.seed.post({ queryKey: ["skills"] });
+    // Only mark the org as seeded once the server confirmed — a
+    // transient failure would otherwise pin us into the "already
+    // seeded" branch for the rest of the session and the user would
+    // never get default slash commands without a full reload.
+    if (response.error) {
+      return;
+    }
+    seededThisSession.add(orgId);
     // When the server actually wrote rows, invalidate the local
     // skill/catalogue caches so chat (slash menu) and any open Tools
     // browser pick the new commands up immediately instead of waiting
     // for staleTime to lapse. Both queries are keyed by org id.
-    if (response.data?.seeded) {
+    if (response.data.seeded) {
       await Promise.all([
         context.queryClient.invalidateQueries({
           queryKey: knowledgeKeys.skills.all(orgId),
