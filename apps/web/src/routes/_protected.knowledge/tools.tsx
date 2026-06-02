@@ -36,14 +36,24 @@ const searchSchema = v.object({
   kind: v.optional(v.picklist(KIND_VALUES)),
 });
 
+// Per-tab flag so we POST /skills/seed at most once per browser
+// session. The handler itself is idempotent (returns early when any
+// slash-command skill already exists for the user), but a wasted
+// round trip on every Tools navigation still hurts; this gates it
+// to the first visit.
+const seededThisSession = new Set<string>();
+
 export const Route = createFileRoute("/_protected/knowledge/tools")({
   validateSearch: searchSchema,
-  // Seed default slash-command skills on first Tools visit. The
-  // handler is idempotent at the user level — if any slash-command
-  // skill already exists for this user, it short-circuits and does
-  // not write. Used to live on the standalone Prompts page, which
-  // no longer exists.
-  loader: async () => {
+  // Seed default slash-command skills on first Tools visit per
+  // session. Used to live on the standalone Prompts page, which no
+  // longer exists.
+  loader: async ({ context }) => {
+    const orgId = context.user.activeOrganizationId;
+    if (seededThisSession.has(orgId)) {
+      return;
+    }
+    seededThisSession.add(orgId);
     await api.skills.seed.post({ queryKey: ["skills"] });
   },
   component: ToolsPage,

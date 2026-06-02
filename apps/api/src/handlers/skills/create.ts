@@ -40,13 +40,16 @@ const slugify = (name: string): string => {
       lastWasSeparator = true;
     }
   }
-  while (buffer.endsWith("-")) {
-    buffer = buffer.slice(0, -1);
+  // Clip first, then trim trailing hyphens — slicing after trimming
+  // could re-introduce a trailing hyphen if the 56th char is one.
+  let clipped = buffer.slice(0, 56);
+  while (clipped.endsWith("-")) {
+    clipped = clipped.slice(0, -1);
   }
-  if (buffer.length === 0) {
+  if (clipped.length === 0) {
     return "skill";
   }
-  return buffer.slice(0, 56);
+  return clipped;
 };
 
 // Stable-ish suffix to break (org, scope, slug) collisions without

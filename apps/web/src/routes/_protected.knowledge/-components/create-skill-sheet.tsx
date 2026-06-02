@@ -129,7 +129,7 @@ const CreateSkillSheetBody = ({
     },
     onError: (error: unknown) => {
       if (APIError.is(error) && error.status === 409) {
-        setCommandError(tSkills("errors.commandConflict"));
+        setCommandError(tSkills("commandConflict"));
         return;
       }
       stellaToast.add({
@@ -144,6 +144,7 @@ const CreateSkillSheetBody = ({
     form.name.trim().length > 0 &&
     form.description.trim().length > 0 &&
     form.body.trim().length > 0 &&
+    (!form.autoInvokeEnabled || form.autoInvokeHint.trim().length > 0) &&
     !commandError;
 
   const onSubmit = () => {
@@ -271,6 +272,7 @@ const CreateSkillSheetBody = ({
               <Textarea
                 className="min-h-20 resize-y"
                 id="create-skill-auto-hint"
+                maxLength={2000}
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,

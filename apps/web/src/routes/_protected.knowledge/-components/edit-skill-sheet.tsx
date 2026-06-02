@@ -720,6 +720,7 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
               <Textarea
                 className="min-h-12 resize-y"
                 id="edit-skill-auto-hint"
+                maxLength={2000}
                 onBlur={commitAutoInvokeHint}
                 onChange={(event) => setAutoInvokeHint(event.target.value)}
                 placeholder={t("knowledge.skills.autoInvokeHintPlaceholder")}
