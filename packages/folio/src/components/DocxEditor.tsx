@@ -132,6 +132,7 @@ import {
   findPreviousChange,
 } from "../core/prosemirror/commands/comments";
 import {
+  blockSdtAttrsToSdtProperties,
   findBlockSdtMatch,
   findBlockSdtMatches,
   removeContentControlTr,
@@ -158,7 +159,6 @@ import {
 import type { Comment } from "../core/types/content";
 import type {
   Document,
-  SdtProperties,
   SectionProperties,
   FootnoteProperties,
   EndnoteProperties,
@@ -2827,23 +2827,10 @@ export function DocxEditor({
         if (!view) {
           return [];
         }
-        return findBlockSdtMatches(view.state.doc, filter).map((match) => {
-          const attrs = match.node.attrs;
-          const properties: SdtProperties = {
-            sdtType: (attrs["sdtType"] ??
-              "richText") as SdtProperties["sdtType"],
-          };
-          if (attrs["alias"]) {
-            properties.alias = String(attrs["alias"]);
-          }
-          if (attrs["tag"]) {
-            properties.tag = String(attrs["tag"]);
-          }
-          if (typeof attrs["id"] === "number") {
-            properties.id = attrs["id"];
-          }
-          return { properties, path: match.path };
-        });
+        return findBlockSdtMatches(view.state.doc, filter).map((match) => ({
+          properties: blockSdtAttrsToSdtProperties(match.node),
+          path: match.path,
+        }));
       },
       scrollToContentControl: (filter) => {
         const view = pagedEditorRef.current?.getView();

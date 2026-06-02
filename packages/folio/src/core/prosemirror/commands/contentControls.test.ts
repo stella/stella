@@ -11,6 +11,7 @@ import {
 } from "../../content-controls";
 import { schema, singletonManager } from "../schema";
 import {
+  blockSdtAttrsToSdtProperties,
   findBlockSdtMatch,
   findBlockSdtMatches,
   removeContentControlTr,
@@ -47,6 +48,42 @@ describe("findBlockSdtMatches", () => {
   test("findBlockSdtMatch returns null when nothing matches", () => {
     const state = makeState();
     expect(findBlockSdtMatch(state.doc, { tag: "missing" })).toBeNull();
+  });
+});
+
+describe("blockSdtAttrsToSdtProperties", () => {
+  test("surfaces every modeled field (lock, placeholder, dateFormat, listItems, checked)", () => {
+    const node = schema.node(
+      "blockSdt",
+      {
+        sdtType: "dropdown",
+        alias: "State",
+        tag: "state",
+        id: 42,
+        lock: "contentLocked",
+        placeholder: "Pick a state",
+        showingPlaceholder: true,
+        dateFormat: null,
+        listItems: JSON.stringify([
+          { value: "ca", displayText: "California" },
+          { value: "ny", displayText: "New York" },
+        ]),
+        checked: null,
+      },
+      [schema.node("paragraph", {}, [])],
+    );
+    const props = blockSdtAttrsToSdtProperties(node);
+    expect(props.sdtType).toBe("dropdown");
+    expect(props.alias).toBe("State");
+    expect(props.tag).toBe("state");
+    expect(props.id).toBe(42);
+    expect(props.lock).toBe("contentLocked");
+    expect(props.placeholder).toBe("Pick a state");
+    expect(props.showingPlaceholder).toBe(true);
+    expect(props.listItems).toEqual([
+      { value: "ca", displayText: "California" },
+      { value: "ny", displayText: "New York" },
+    ]);
   });
 });
 

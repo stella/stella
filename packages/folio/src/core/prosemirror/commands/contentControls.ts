@@ -22,6 +22,7 @@ import {
   ContentControlTypeError,
 } from "../../content-controls/errors";
 import type { SdtProperties } from "../../types/document";
+import { expectBlockSdtAttrs } from "../attrs";
 
 type ForceOption = { force?: boolean };
 
@@ -94,7 +95,79 @@ function resolvePath(doc: PMNode, pos: number): number[] {
   return path;
 }
 
+/**
+ * Project a `blockSdt` PM node's attrs onto the full modeled `SdtProperties`
+ * shape so the editor-ref `getContentControls` and lock-error messages
+ * surface every field downstream tooling expects (lock, placeholder,
+ * dateFormat, listItems, checked, etc.). Raw XML payloads are not exposed —
+ * those are for serializer replay, not for callers.
+ */
+export function blockSdtAttrsToSdtProperties(node: PMNode): SdtProperties {
+  const attrs = expectBlockSdtAttrs(node);
+  const props: SdtProperties = { sdtType: attrs.sdtType };
+  if (attrs.alias !== undefined) {
+    props.alias = attrs.alias;
+  }
+  if (attrs.tag !== undefined) {
+    props.tag = attrs.tag;
+  }
+  if (typeof attrs.id === "number") {
+    props.id = attrs.id;
+  }
+  if (attrs.lock !== undefined) {
+    props.lock = attrs.lock;
+  }
+  if (attrs.placeholder !== undefined) {
+    props.placeholder = attrs.placeholder;
+  }
+  if (attrs.showingPlaceholder !== undefined) {
+    props.showingPlaceholder = attrs.showingPlaceholder;
+  }
+  if (attrs.dateFormat !== undefined) {
+    props.dateFormat = attrs.dateFormat;
+  }
+  if (attrs.listItems) {
+    const parsed = parseListItemsAttr(attrs.listItems);
+    if (parsed) {
+      props.listItems = parsed;
+    }
+  }
+  if (typeof attrs.checked === "boolean") {
+    props.checked = attrs.checked;
+  }
+  return props;
+}
+
+function parseListItemsAttr(
+  raw: string,
+): { displayText: string; value: string }[] | null {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return null;
+    }
+    const items: { displayText: string; value: string }[] = [];
+    for (const entry of parsed) {
+      if (
+        entry !== null &&
+        typeof entry === "object" &&
+        "displayText" in entry &&
+        "value" in entry &&
+        typeof (entry as { displayText: unknown }).displayText === "string" &&
+        typeof (entry as { value: unknown }).value === "string"
+      ) {
+        items.push(entry as { displayText: string; value: string });
+      }
+    }
+    return items.length > 0 ? items : null;
+  } catch {
+    return null;
+  }
+}
+
 function attrsToProperties(node: PMNode): SdtProperties {
+  // Used only for lock-error messages; keep the projection minimal so the
+  // error path does not pull through the full attrs reader.
   const attrs = node.attrs;
   const sdtType = String(
     attrs["sdtType"] ?? "richText",
