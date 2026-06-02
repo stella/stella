@@ -1,11 +1,14 @@
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import { stellaToast } from "@stll/ui/components/toast";
+
 import { registerInspectorView } from "@/components/inspector/view-registry";
+import { subscribeToMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { CatalogueBrowser } from "@/routes/_protected.knowledge/-components/catalogue/catalogue-browser";
 import type { CatalogueBrowserFilterKind } from "@/routes/_protected.knowledge/-components/catalogue/catalogue-browser";
 import {
@@ -13,6 +16,7 @@ import {
   ToolDetailView,
   type ToolDetailPayload,
 } from "@/routes/_protected.knowledge/-components/catalogue/tool-detail-view";
+import { catalogueKeys } from "@/routes/_protected.knowledge/-queries/catalogue";
 import { organizationSettingsOptions } from "@/routes/_protected.organization/-settings-queries";
 
 // Tool-detail tabs live next to a route; they auto-close when the
@@ -40,12 +44,40 @@ const protectedRouteApi = getRouteApi("/_protected");
 
 function ToolsPage() {
   const t = useTranslations();
+  const queryClient = useQueryClient();
   const organizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
   const initialKind = Route.useSearch({
     select: (s): CatalogueBrowserFilterKind | undefined => s.kind,
   });
+
+  // OAuth completion lands in a popup tab/window; the popup
+  // broadcasts via BroadcastChannel (falling back to opener
+  // postMessage), so the catalogue page needs an active subscription
+  // to surface the toast and refetch the catalogue. The legacy
+  // listener lived on /knowledge/mcp before the surface unified.
+  useEffect(
+    () =>
+      subscribeToMcpOAuthOutcome((outcome) => {
+        if (outcome.status === "connected") {
+          stellaToast.add({
+            title: t("knowledge.mcp.connectedToast"),
+            type: "success",
+          });
+          void queryClient.invalidateQueries({
+            queryKey: catalogueKeys.list(organizationId),
+          });
+          return;
+        }
+        stellaToast.add({
+          title: t("knowledge.mcp.errorTitle"),
+          description: t("knowledge.mcp.errorDescription"),
+          type: "error",
+        });
+      }),
+    [organizationId, queryClient, t],
+  );
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto p-6">
