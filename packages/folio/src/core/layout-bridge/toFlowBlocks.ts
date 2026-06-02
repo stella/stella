@@ -28,6 +28,7 @@ import type {
   FieldRun,
   RunFormatting,
   ParagraphAttrs,
+  SdtGroup,
   TabStop,
   FloatingTablePosition,
 } from "../layout-engine/types";
@@ -2294,7 +2295,8 @@ export function toFlowBlocks(
   };
 
   const blocks: FlowBlock[] = [];
-  const offset = 0; // Start at document beginning
+  const offset = 0; // Start at document beginning; kept for clarity.
+  void offset;
   let lastSectionMarginsTwips = {
     top: 1440,
     bottom: 1440,
@@ -2302,16 +2304,84 @@ export function toFlowBlocks(
     right: 1440,
   };
 
-  // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
-  doc.forEach((node, nodeOffset) => {
-    const pos = offset + nodeOffset;
+  let sdtSeq = 0;
+  const sdtStack: SdtGroup[] = [];
+
+  /**
+   * Stamp the active SDT stack (outer→inner) onto every block produced by the
+   * current call. ParagraphBlock/TableBlock accept `sdtGroups`; section breaks
+   * and page breaks deliberately do not — they bracket layout, not content.
+   */
+  const tagBlockWithSdtStack = (block: FlowBlock): void => {
+    if (sdtStack.length === 0) {
+      return;
+    }
+    if (block.kind === "paragraph" || block.kind === "table") {
+      block.sdtGroups = [...sdtStack];
+    }
+  };
+
+  const trackedPush = (block: FlowBlock): void => {
+    tagBlockWithSdtStack(block);
+    blocks.push(block);
+  };
+
+  // Refactored visit-style traversal so blockSdt can recurse into its
+  // children without duplicating the per-block conversion code.
+  const visit = (node: PMNode, pos: number): void => {
+    switch (node.type.name) {
+      case "blockSdt": {
+        const attrs = node.attrs;
+        sdtSeq += 1;
+        const group: SdtGroup = {
+          id: `sdt-${sdtSeq}`,
+          sdtType: String(attrs["sdtType"] ?? "richText"),
+        };
+        if (attrs["alias"]) {
+          group.alias = String(attrs["alias"]);
+        }
+        if (attrs["tag"]) {
+          group.tag = String(attrs["tag"]);
+        }
+        if (typeof attrs["id"] === "number") {
+          group.sdtId = attrs["id"];
+        }
+        if (attrs["lock"]) {
+          group.lock = String(attrs["lock"]);
+        }
+        if (attrs["showingPlaceholder"]) {
+          group.showingPlaceholder = true;
+        }
+        if (attrs["checked"] !== null && attrs["checked"] !== undefined) {
+          group.checked = Boolean(attrs["checked"]);
+        }
+        if (attrs["dateFormat"]) {
+          group.dateFormat = String(attrs["dateFormat"]);
+        }
+        if (typeof attrs["listItems"] === "string" && attrs["listItems"]) {
+          group.listItemsJson = attrs["listItems"];
+        }
+
+        sdtStack.push(group);
+        let childOffset = pos + 1; // skip the blockSdt opening token
+        for (let i = 0; i < node.childCount; i += 1) {
+          const child = node.child(i);
+          visit(child, childOffset);
+          childOffset += child.nodeSize;
+        }
+        sdtStack.pop();
+        return;
+      }
+      default:
+        break;
+    }
 
     switch (node.type.name) {
       case "paragraph": {
         const block = convertParagraph(node, pos, opts);
         const pmAttrs = expectParagraphAttrs(node);
 
-        blocks.push(block);
+        trackedPush(block);
 
         // Emit section break block if this paragraph ends a section
         const secProps = pmAttrs._sectionProperties as
@@ -2382,22 +2452,22 @@ export function toFlowBlocks(
             }
           }
 
-          blocks.push(sectionBreak);
+          trackedPush(sectionBreak);
         }
         break;
       }
 
       case "table":
-        blocks.push(convertTable(node, pos, opts));
+        trackedPush(convertTable(node, pos, opts));
         break;
 
       case "image":
         // Standalone image block (if not inline)
-        blocks.push(convertImage(node, pos, opts.pageContentHeight));
+        trackedPush(convertImage(node, pos, opts.pageContentHeight));
         break;
 
       case "textBox":
-        blocks.push(convertTextBoxNode(node, pos, opts));
+        trackedPush(convertTextBoxNode(node, pos, opts));
         break;
 
       case "horizontalRule":
@@ -2408,12 +2478,17 @@ export function toFlowBlocks(
           pmStart: pos,
           pmEnd: pos + node.nodeSize,
         };
-        blocks.push(pb);
+        trackedPush(pb);
         break;
       }
       default:
         break;
     }
+  };
+
+  // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
+  doc.forEach((node, nodeOffset) => {
+    visit(node, offset + nodeOffset);
   });
 
   return mergeRunInParagraphs(blocks);

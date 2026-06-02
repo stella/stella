@@ -766,3 +766,32 @@
   animation: folio-outline-flash 1.2s ease-out;
   border-radius: 2px;
 }
+
+/* ============================================================================
+   Block-level content controls (w:sdt) — boundary chrome
+   ============================================================================
+   Painted blocks carry `data-sdt-boundary="true"` when they sit inside a
+   block-level SDT (see core/layout-painter/sdtBoundary.ts). The boundary
+   is a soft outline that appears only when the user's pointer hovers over
+   the wrapper, so the editor stays visually quiet in the common case.
+*/
+.layout-page-content [data-sdt-boundary="true"] {
+  position: relative;
+}
+.layout-page-content [data-sdt-boundary="true"]::before {
+  content: "";
+  position: absolute;
+  inset: -2px -4px;
+  border: 1px dashed transparent;
+  border-radius: 2px;
+  pointer-events: none;
+  transition: border-color 120ms ease-out;
+}
+.layout-page-content [data-sdt-boundary="true"]:hover::before,
+.layout-page-content [data-sdt-boundary="true"]:focus-within::before {
+  border-color: color-mix(
+    in oklch,
+    var(--color-border, oklch(0.85 0 0)) 60%,
+    transparent
+  );
+}

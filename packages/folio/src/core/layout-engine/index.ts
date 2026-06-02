@@ -443,6 +443,7 @@ function layoutParagraph(
       toLine: 0,
       ...(block.pmStart !== undefined ? { pmStart: block.pmStart } : {}),
       ...(block.pmEnd !== undefined ? { pmEnd: block.pmEnd } : {}),
+      ...(block.sdtGroups ? { sdtGroups: block.sdtGroups } : {}),
     };
 
     paginator.addFragment(fragment, 0, spaceBefore, spaceAfter);
@@ -524,6 +525,7 @@ function layoutParagraph(
       ...(block.pmEnd !== undefined ? { pmEnd: block.pmEnd } : {}),
       ...(!isFirstFragment ? { continuesFromPrev: true } : {}),
       ...(!isLastFragment ? { continuesOnNext: true } : {}),
+      ...(block.sdtGroups ? { sdtGroups: block.sdtGroups } : {}),
     };
 
     // Ensure the page can accommodate body lines + footnote demand
@@ -699,6 +701,7 @@ function layoutTable(
       ...(!isFirstFragment ? { continuesFromPrev: true } : {}),
       ...(!isLastFragment ? { continuesOnNext: true } : {}),
       ...(!isFirstFragment && headerRowCount > 0 ? { headerRowCount } : {}),
+      ...(block.sdtGroups ? { sdtGroups: block.sdtGroups } : {}),
     };
 
     const result = paginator.addFragment(fragment, fragmentHeight, 0, 0);
@@ -810,6 +813,7 @@ function layoutFloatingTable(
     ...(block.pmStart !== undefined ? { pmStart: block.pmStart } : {}),
     ...(block.pmEnd !== undefined ? { pmEnd: block.pmEnd } : {}),
     isFloating: true,
+    ...(block.sdtGroups ? { sdtGroups: block.sdtGroups } : {}),
   };
 
   // Add directly without advancing cursor

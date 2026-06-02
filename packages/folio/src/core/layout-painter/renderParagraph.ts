@@ -46,6 +46,7 @@ import {
 } from "./renderImage";
 import { isFloatingImageRun } from "./renderUtils";
 import type { RenderContext } from "./renderUtils";
+import { applySdtDataAttrs } from "./sdtBoundary";
 
 /**
  * CSS class names for paragraph rendering
@@ -1906,6 +1907,7 @@ export function renderParagraphFragment(
   fragmentEl.dataset["toLine"] = String(fragment.toLine);
 
   applyPmPositions(fragmentEl, fragment.pmStart, fragment.pmEnd);
+  applySdtDataAttrs(fragmentEl, fragment.sdtGroups);
 
   if (fragment.continuesFromPrev) {
     fragmentEl.dataset["continuesFromPrev"] = "true";
