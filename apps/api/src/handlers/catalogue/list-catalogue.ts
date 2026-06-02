@@ -16,6 +16,7 @@ import {
 import { NATIVE_TOOL_SLUGS } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import type { SafeId } from "@/api/lib/branded-types";
 import { isBusinessRegistryNativeToolDeployAvailable } from "@/api/lib/business-registries/dispatch";
 import { isWebSearchDeployAvailable } from "@/api/lib/web-search/select-provider";
 
@@ -130,6 +131,39 @@ const listCatalogue = createSafeRootHandler(
             ),
           );
 
+    // Org-owned MCP connectors that don't match any curated catalogue
+    // entry URL. These are "custom" connectors the user added via the
+    // old /knowledge/mcp page (or its successor); they need to show up
+    // in /knowledge/tools so the user can manage them after the
+    // surface unification.
+    const orgCustomMcps = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .select({
+            id: mcpConnectors.id,
+            slug: mcpConnectors.slug,
+            displayName: mcpConnectors.displayName,
+            description: mcpConnectors.description,
+            url: mcpConnectors.url,
+            authType: mcpConnectors.authType,
+            isCurated: mcpConnectors.isCurated,
+            oauthRequestedScopes: mcpConnectors.oauthRequestedScopes,
+            allowedTools: mcpConnectors.allowedTools,
+            documentationUrl: mcpConnectors.documentationUrl,
+            tokenHelpUrl: mcpConnectors.tokenHelpUrl,
+            iconUrl: mcpConnectors.iconUrl,
+          })
+          .from(mcpConnectors)
+          .where(
+            and(
+              eq(mcpConnectors.organizationId, session.activeOrganizationId),
+              eq(mcpConnectors.isCurated, false),
+            ),
+          ),
+      ),
+    );
+    const curatedMcpUrlSet = new Set(mcpUrls);
+
     const practiceJurisdictions = settings?.practiceJurisdictions ?? [];
     const nativeToolOverrides = settings?.nativeToolOverrides ?? {};
     const practiceCountryCodes = new Set(
@@ -231,11 +265,98 @@ const listCatalogue = createSafeRootHandler(
       });
     }
 
+    // Append synthetic catalogue entries for the org's custom MCP
+    // connectors that aren't represented by a curated catalogue entry.
+    // The user already installed these directly, so install state is
+    // always "installed" and the slug routes to the existing DELETE
+    // /mcp/connectors/:slug uninstall handler.
+    appendCustomMcpEntries({
+      response,
+      connectors: orgCustomMcps,
+      curatedMcpUrls: curatedMcpUrlSet,
+      organizationId: session.activeOrganizationId,
+    });
+
     return Result.ok({
       entries: response,
       practiceJurisdictions,
     });
   },
 );
+
+type OrgCustomMcpRow = {
+  id: string;
+  slug: string;
+  displayName: string;
+  description: string;
+  url: string;
+  authType: "none" | "bearer" | "oauth2";
+  oauthRequestedScopes: string[] | null;
+  allowedTools: string[] | null;
+  documentationUrl: string | null;
+  tokenHelpUrl: string | null;
+  iconUrl: string | null;
+};
+
+type AppendCustomMcpArgs = {
+  response: CatalogueEntryResponse[];
+  connectors: readonly OrgCustomMcpRow[];
+  curatedMcpUrls: ReadonlySet<string>;
+  organizationId: SafeId<"organization">;
+};
+
+const appendCustomMcpEntries = ({
+  response,
+  connectors,
+  curatedMcpUrls,
+  organizationId,
+}: AppendCustomMcpArgs): void => {
+  for (const connector of connectors) {
+    if (curatedMcpUrls.has(connector.url)) {
+      continue;
+    }
+    response.push(buildCustomMcpCatalogueEntry(connector, organizationId));
+  }
+};
+
+const buildCustomMcpCatalogueEntry = (
+  connector: OrgCustomMcpRow,
+  organizationId: SafeId<"organization">,
+): CatalogueEntryResponse => {
+  // DB stores `oauth2`; the curated catalogue schema uses `oauth`.
+  // The auth flow is the same; only the literal differs.
+  const catalogueAuthType =
+    connector.authType === "oauth2" ? "oauth" : connector.authType;
+  return {
+    kind: "mcp",
+    slug: connector.slug,
+    displayName: connector.displayName,
+    description: connector.description,
+    author: organizationId,
+    license: "MIT",
+    cost: "free",
+    setup: connector.authType === "none" ? "none" : "api-key",
+    tags: [],
+    jurisdictions: [],
+    url: connector.url,
+    authType: catalogueAuthType,
+    oauthRequestedScopes: connector.oauthRequestedScopes ?? [],
+    allowedTools: connector.allowedTools ?? [],
+    ...(connector.documentationUrl !== null
+      ? { documentationUrl: connector.documentationUrl }
+      : {}),
+    ...(connector.tokenHelpUrl !== null
+      ? { tokenHelpUrl: connector.tokenHelpUrl }
+      : {}),
+    ...(connector.iconUrl !== null ? { iconUrl: connector.iconUrl } : {}),
+    icon: null,
+    isLocked: false,
+    isRecommendedForOrg: false,
+    installState: "installed",
+    installedSkillId: null,
+    installedConnectorSlug: connector.slug,
+    enabled: null,
+  };
+};
 
 export default listCatalogue;

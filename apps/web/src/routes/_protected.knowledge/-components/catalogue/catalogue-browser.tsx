@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import {
+  useQuery,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -43,6 +47,7 @@ import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { McpIcon } from "@/components/mcp-icon";
 import type { TranslationKey } from "@/i18n/types";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
+import { roleOptions } from "@/routes/-queries";
 import { EditSkillSheet } from "@/routes/_protected.knowledge/-components/edit-skill-sheet";
 import { knowledgeKeys } from "@/routes/_protected.knowledge/-queries";
 import {
@@ -111,6 +116,11 @@ export const CatalogueBrowser = ({
 }: CatalogueBrowserProps) => {
   const t = useTranslations();
   const { data } = useSuspenseQuery(catalogueOptions(organizationId));
+  const { data: role } = useQuery(roleOptions);
+  // Match the backend gate: only admins/owners can create MCP
+  // connectors (see `POST /mcp/connectors`). Members would see the
+  // form open and the submit 403, so hide the affordance entirely.
+  const canAddCustom = role === "admin" || role === "owner";
   const [filter, setFilter] = useState<CatalogueBrowserFilterKind>(
     initialKind ?? "all",
   );
@@ -388,7 +398,7 @@ export const CatalogueBrowser = ({
             </div>
           </PopoverPopup>
         </Popover>
-        {showAddCustom && (
+        {showAddCustom && canAddCustom && (
           <Menu>
             <MenuTrigger render={<Button className="shrink-0" type="button" />}>
               <PlusIcon className="size-3.5" />
