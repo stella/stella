@@ -137,7 +137,18 @@ function mapBlock(
       return replaced;
     }
     const nextContent = transformBlocks(block.content, match);
-    return { ...block, content: nextContent };
+    // OOXML accepts an empty <w:sdtContent> and folio's toProseDoc has a
+    // safety net that inserts a placeholder before the doc reaches PM, but
+    // a consumer reading the headless model directly (AI agents, template
+    // scanners) would see an inner-empty BlockSdt that nothing in OOXML
+    // requires. Keep the model self-consistent: when removing a nested SDT
+    // empties its parent SDT, insert a placeholder paragraph so the
+    // wrapper still has at least one child.
+    const guarded =
+      nextContent.length === 0 && block.content.length > 0
+        ? [makeParagraphFromText("")]
+        : nextContent;
+    return { ...block, content: guarded };
   }
   if (block.type === "table") {
     const rows = block.rows.map((row) => ({

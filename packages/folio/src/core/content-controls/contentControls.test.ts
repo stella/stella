@@ -285,6 +285,27 @@ describe("removeContentControl", () => {
     );
   });
 
+  test("removing an only-child nested SDT keeps the outer SDT non-empty", () => {
+    // Outer SDT contains exactly one inner SDT; removing the inner one
+    // would leave the outer with empty content. The model invariant is
+    // that wrappers carry at least one child block — verify we patch a
+    // placeholder paragraph into the outer.
+    const inner = makeControl({ tag: "inner" }, "doomed");
+    const outer: BlockSdt = {
+      type: "blockSdt",
+      properties: { sdtType: "richText", tag: "outer" },
+      content: [inner],
+    };
+    const doc = makeDoc([outer]);
+    const updated = removeContentControl(doc, { tag: "inner" });
+    const outerAfter = updated.package.document.content[0];
+    if (!outerAfter || outerAfter.type !== "blockSdt") {
+      throw new TypeError("expected outer to remain a blockSdt");
+    }
+    expect(outerAfter.content).toHaveLength(1);
+    expect(outerAfter.content[0]?.type).toBe("paragraph");
+  });
+
   test("refuses to unwrap a w15:repeatingSection control without force", () => {
     const repeating: BlockSdt = {
       type: "blockSdt",
