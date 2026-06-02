@@ -1,0 +1,292 @@
+/**
+ * ProseMirror transaction helpers for the block-level content controls API.
+ *
+ * Each helper finds the target `blockSdt` PM node, mutates the doc via a
+ * normal transaction, and returns it so the caller can dispatch (writes are
+ * undoable and suggestion-mode-safe via `isHistoryTransaction`). The
+ * headless helpers in `core/content-controls/` are the source of truth for
+ * lock / type validation; we re-implement the search here because we need to
+ * walk PM nodes (not the Document model).
+ */
+
+import type { Node as PMNode } from "prosemirror-model";
+import type { EditorState, Transaction } from "prosemirror-state";
+
+import type {
+  ContentControlFilter,
+  SetContentControlContentInput,
+  SetContentControlValueInput,
+} from "../../content-controls";
+import {
+  ContentControlLockedError,
+  ContentControlTypeError,
+} from "../../content-controls/errors";
+import type { SdtProperties } from "../../types/document";
+import { schema } from "../schema";
+
+type ForceOption = { force?: boolean };
+
+export type BlockSdtPMMatch = {
+  node: PMNode;
+  /** Absolute PM position of the blockSdt's open tag. */
+  pos: number;
+  /** Outer→inner index path through doc children. */
+  path: number[];
+};
+
+function nodeMatchesFilter(
+  node: PMNode,
+  filter: ContentControlFilter,
+): boolean {
+  if (node.type.name !== "blockSdt") {
+    return false;
+  }
+  const attrs = node.attrs;
+  if (filter.tag !== undefined && attrs["tag"] !== filter.tag) {
+    return false;
+  }
+  if (filter.alias !== undefined && attrs["alias"] !== filter.alias) {
+    return false;
+  }
+  if (filter.id !== undefined && attrs["id"] !== filter.id) {
+    return false;
+  }
+  if (filter.sdtType !== undefined && attrs["sdtType"] !== filter.sdtType) {
+    return false;
+  }
+  return true;
+}
+
+/** All blockSdt nodes in `doc` matching `filter`. Outer→inner traversal. */
+export function findBlockSdtMatches(
+  doc: PMNode,
+  filter: ContentControlFilter = {},
+): BlockSdtPMMatch[] {
+  const matches: BlockSdtPMMatch[] = [];
+  doc.descendants((node, pos, _parent, index) => {
+    if (node.type.name !== "blockSdt") {
+      return true;
+    }
+    if (nodeMatchesFilter(node, filter)) {
+      matches.push({ node, pos, path: [...resolvePath(doc, pos), index] });
+    }
+    return true;
+  });
+  return matches;
+}
+
+/** First match or null — convenience for editor-ref callers. */
+export function findBlockSdtMatch(
+  doc: PMNode,
+  filter: ContentControlFilter,
+): BlockSdtPMMatch | null {
+  for (const match of findBlockSdtMatches(doc, filter)) {
+    return match;
+  }
+  return null;
+}
+
+function resolvePath(doc: PMNode, pos: number): number[] {
+  const $pos = doc.resolve(pos);
+  const path: number[] = [];
+  for (let depth = 1; depth <= $pos.depth; depth += 1) {
+    path.push($pos.index(depth - 1));
+  }
+  return path;
+}
+
+function attrsToProperties(node: PMNode): SdtProperties {
+  const attrs = node.attrs;
+  const sdtType = String(
+    attrs["sdtType"] ?? "richText",
+  ) as SdtProperties["sdtType"];
+  const props: SdtProperties = { sdtType };
+  if (attrs["alias"]) {
+    props.alias = String(attrs["alias"]);
+  }
+  if (attrs["tag"]) {
+    props.tag = String(attrs["tag"]);
+  }
+  if (typeof attrs["id"] === "number") {
+    props.id = attrs["id"];
+  }
+  return props;
+}
+
+function ensureNotLocked(node: PMNode, options: ForceOption): void {
+  if (options.force) {
+    return;
+  }
+  const lock = node.attrs["lock"];
+  if (lock === "contentLocked" || lock === "sdtContentLocked") {
+    const props = attrsToProperties(node);
+    throw new ContentControlLockedError({
+      message: `Control "${props.tag ?? props.alias ?? "(unnamed)"}" has w:lock=${String(lock)}.`,
+      lock: lock as NonNullable<SdtProperties["lock"]>,
+      ...(props.tag !== undefined ? { tag: props.tag } : {}),
+      ...(props.alias !== undefined ? { alias: props.alias } : {}),
+    });
+  }
+}
+
+function paragraphFromText(text: string): PMNode {
+  if (text.length === 0) {
+    return schema.node("paragraph", {}, []);
+  }
+  return schema.node("paragraph", {}, [schema.text(text)]);
+}
+
+function replaceBlockSdtChildren(
+  state: EditorState,
+  match: BlockSdtPMMatch,
+  children: readonly PMNode[],
+  propertyOverrides: Partial<Record<string, unknown>> = {},
+): Transaction {
+  const next = schema.node(
+    "blockSdt",
+    { ...match.node.attrs, showingPlaceholder: false, ...propertyOverrides },
+    children.length === 0 ? [paragraphFromText("")] : children,
+  );
+  return state.tr.replaceWith(match.pos, match.pos + match.node.nodeSize, next);
+}
+
+/**
+ * Replace a control's children with plain text (one paragraph) or
+ * pre-built PM blocks. Returns null when no match is present.
+ */
+export function setContentControlContentTr(
+  state: EditorState,
+  filter: ContentControlFilter,
+  input: SetContentControlContentInput,
+  options: ForceOption = {},
+): Transaction | null {
+  const match = findBlockSdtMatch(state.doc, filter);
+  if (!match) {
+    return null;
+  }
+  ensureNotLocked(match.node, options);
+
+  let children: PMNode[];
+  if (typeof input === "string") {
+    children = [paragraphFromText(input)];
+  } else {
+    // Caller provided Document-model BlockContent[]; convert via toProseDoc
+    // would re-enter the whole pipeline. Keep this PM-direct: only string
+    // input is supported here; block-content fill should go through the
+    // headless API + loadDocument for now (matches upstream's caveat).
+    throw new ContentControlTypeError({
+      message:
+        "Block-content fill is only supported via the headless API; pass a string here.",
+      sdtType: (match.node.attrs["sdtType"] ??
+        "richText") as SdtProperties["sdtType"],
+      reason: "PM-direct path takes string input only",
+    });
+  }
+  return replaceBlockSdtChildren(state, match, children);
+}
+
+export function setContentControlValueTr(
+  state: EditorState,
+  filter: ContentControlFilter,
+  input: SetContentControlValueInput,
+  options: ForceOption = {},
+): Transaction | null {
+  const match = findBlockSdtMatch(state.doc, filter);
+  if (!match) {
+    return null;
+  }
+  ensureNotLocked(match.node, options);
+
+  const sdtType = match.node.attrs["sdtType"] as SdtProperties["sdtType"];
+
+  if (input.kind === "dropdown") {
+    if (sdtType !== "dropdown" && sdtType !== "comboBox") {
+      throw new ContentControlTypeError({
+        message: `Cannot set dropdown value on a ${sdtType} control.`,
+        sdtType,
+        reason: "kind=dropdown requires sdtType=dropdown|comboBox",
+      });
+    }
+    const listItemsAttr = match.node.attrs["listItems"];
+    let display = input.value;
+    if (typeof listItemsAttr === "string" && listItemsAttr) {
+      const items = JSON.parse(listItemsAttr) as
+        | { displayText: string; value: string }[]
+        | null;
+      const item = items?.find((i) => i.value === input.value);
+      if (!item && !options.force) {
+        throw new ContentControlTypeError({
+          message: `Value "${input.value}" not in the control's list items.`,
+          sdtType,
+          reason: "value not in listItems",
+        });
+      }
+      if (item) {
+        display = item.displayText;
+      }
+    }
+    return replaceBlockSdtChildren(state, match, [paragraphFromText(display)]);
+  }
+  if (input.kind === "checkbox") {
+    if (sdtType !== "checkbox") {
+      throw new ContentControlTypeError({
+        message: `Cannot toggle checkbox on a ${sdtType} control.`,
+        sdtType,
+        reason: "kind=checkbox requires sdtType=checkbox",
+      });
+    }
+    const glyph = input.checked ? "☒" : "☐";
+    return replaceBlockSdtChildren(state, match, [paragraphFromText(glyph)], {
+      checked: input.checked,
+    });
+  }
+  if (sdtType !== "date") {
+    throw new ContentControlTypeError({
+      message: `Cannot set date on a ${sdtType} control.`,
+      sdtType,
+      reason: "kind=date requires sdtType=date",
+    });
+  }
+  return replaceBlockSdtChildren(state, match, [paragraphFromText(input.date)]);
+}
+
+function isRepeatingSection(node: PMNode): boolean {
+  const raw = node.attrs["rawPropertiesXml"];
+  return typeof raw === "string" && raw.includes("w15:repeatingSection");
+}
+
+export function removeContentControlTr(
+  state: EditorState,
+  filter: ContentControlFilter,
+  options: ForceOption & { keepContent?: boolean } = {},
+): Transaction | null {
+  const match = findBlockSdtMatch(state.doc, filter);
+  if (!match) {
+    return null;
+  }
+  ensureNotLocked(match.node, options);
+
+  if (options.keepContent) {
+    if (isRepeatingSection(match.node) && !options.force) {
+      throw new ContentControlTypeError({
+        message:
+          "Refusing to unwrap a w15:repeatingSection — would orphan its w15 row items.",
+        sdtType: (match.node.attrs["sdtType"] ??
+          "richText") as SdtProperties["sdtType"],
+        reason: "repeatingSection unwrap orphans items",
+      });
+    }
+    // Replace the SDT with its children in place.
+    const children: PMNode[] = [];
+    for (let i = 0; i < match.node.childCount; i += 1) {
+      children.push(match.node.child(i));
+    }
+    return state.tr.replaceWith(
+      match.pos,
+      match.pos + match.node.nodeSize,
+      children,
+    );
+  }
+  // Drop entirely.
+  return state.tr.delete(match.pos, match.pos + match.node.nodeSize);
+}

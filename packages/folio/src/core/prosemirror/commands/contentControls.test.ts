@@ -1,0 +1,172 @@
+/**
+ * PM transaction helpers for content controls.
+ */
+
+import { describe, expect, test } from "bun:test";
+import { EditorState } from "prosemirror-state";
+
+import {
+  ContentControlLockedError,
+  ContentControlTypeError,
+} from "../../content-controls";
+import { schema, singletonManager } from "../schema";
+import {
+  findBlockSdtMatch,
+  findBlockSdtMatches,
+  removeContentControlTr,
+  setContentControlContentTr,
+  setContentControlValueTr,
+} from "./contentControls";
+
+function makeState(docNode = defaultDoc()): EditorState {
+  return EditorState.create({
+    doc: docNode,
+    schema,
+    plugins: [...singletonManager.getPlugins()],
+  });
+}
+
+function defaultDoc() {
+  const sdt = schema.node(
+    "blockSdt",
+    { sdtType: "richText", tag: "name", alias: "Name" },
+    [schema.node("paragraph", {}, [schema.text("original")])],
+  );
+  const tail = schema.node("paragraph", {}, [schema.text("after")]);
+  return schema.node("doc", null, [sdt, tail]);
+}
+
+describe("findBlockSdtMatches", () => {
+  test("filters by tag", () => {
+    const state = makeState();
+    const matches = findBlockSdtMatches(state.doc, { tag: "name" });
+    expect(matches).toHaveLength(1);
+    expect(matches[0]?.node.attrs["alias"]).toBe("Name");
+  });
+
+  test("findBlockSdtMatch returns null when nothing matches", () => {
+    const state = makeState();
+    expect(findBlockSdtMatch(state.doc, { tag: "missing" })).toBeNull();
+  });
+});
+
+describe("setContentControlContentTr", () => {
+  test("replaces the SDT children with a paragraph carrying the new text", () => {
+    const state = makeState();
+    const tr = setContentControlContentTr(state, { tag: "name" }, "replaced");
+    if (!tr) {
+      throw new Error("expected a transaction");
+    }
+    const next = state.apply(tr);
+    const sdt = next.doc.firstChild;
+    expect(sdt?.type.name).toBe("blockSdt");
+    expect(sdt?.firstChild?.textContent).toBe("replaced");
+  });
+
+  test("returns null when no control matches", () => {
+    const state = makeState();
+    expect(
+      setContentControlContentTr(state, { tag: "missing" }, "x"),
+    ).toBeNull();
+  });
+
+  test("refuses to write into a locked control without force", () => {
+    const lockedSdt = schema.node(
+      "blockSdt",
+      { sdtType: "richText", tag: "locked", lock: "contentLocked" },
+      [schema.node("paragraph", {}, [schema.text("x")])],
+    );
+    const state = makeState(schema.node("doc", null, [lockedSdt]));
+    expect(() =>
+      setContentControlContentTr(state, { tag: "locked" }, "boom"),
+    ).toThrow(ContentControlLockedError);
+  });
+});
+
+describe("setContentControlValueTr", () => {
+  test("toggles a checkbox and writes the checked attribute", () => {
+    const checkbox = schema.node(
+      "blockSdt",
+      { sdtType: "checkbox", tag: "agree", checked: false },
+      [schema.node("paragraph", {}, [schema.text("☐")])],
+    );
+    const state = makeState(schema.node("doc", null, [checkbox]));
+    const tr = setContentControlValueTr(
+      state,
+      { tag: "agree" },
+      {
+        kind: "checkbox",
+        checked: true,
+      },
+    );
+    if (!tr) {
+      throw new Error("expected tx");
+    }
+    const next = state.apply(tr);
+    const sdt = next.doc.firstChild;
+    expect(sdt?.attrs["checked"]).toBe(true);
+    expect(sdt?.firstChild?.textContent).toBe("☒");
+  });
+
+  test("rejects a checkbox toggle on a richText control", () => {
+    const state = makeState();
+    expect(() =>
+      setContentControlValueTr(
+        state,
+        { tag: "name" },
+        {
+          kind: "checkbox",
+          checked: true,
+        },
+      ),
+    ).toThrow(ContentControlTypeError);
+  });
+});
+
+describe("removeContentControlTr", () => {
+  test("drops the control by default", () => {
+    const state = makeState();
+    const tr = removeContentControlTr(state, { tag: "name" });
+    if (!tr) {
+      throw new Error("expected tx");
+    }
+    const next = state.apply(tr);
+    expect(next.doc.childCount).toBe(1);
+    expect(next.doc.firstChild?.type.name).toBe("paragraph");
+  });
+
+  test("keepContent: true unwraps the children in place", () => {
+    const state = makeState();
+    const tr = removeContentControlTr(
+      state,
+      { tag: "name" },
+      {
+        keepContent: true,
+      },
+    );
+    if (!tr) {
+      throw new Error("expected tx");
+    }
+    const next = state.apply(tr);
+    expect(next.doc.childCount).toBe(2);
+    expect(next.doc.firstChild?.type.name).toBe("paragraph");
+    expect(next.doc.firstChild?.textContent).toBe("original");
+  });
+
+  test("refuses to unwrap a w15:repeatingSection without force", () => {
+    const repeating = schema.node(
+      "blockSdt",
+      {
+        sdtType: "richText",
+        tag: "parties",
+        rawPropertiesXml:
+          '<w:sdtPr><w:tag w:val="parties"/><w15:repeatingSection/></w:sdtPr>',
+      },
+      [schema.node("paragraph", {}, [])],
+    );
+    const state = makeState(schema.node("doc", null, [repeating]));
+    expect(() =>
+      removeContentControlTr(state, { tag: "parties" }, { keepContent: true }),
+    ).toThrow(ContentControlTypeError);
+  });
+});

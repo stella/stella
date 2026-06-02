@@ -131,6 +131,13 @@ import {
   findNextChange,
   findPreviousChange,
 } from "../core/prosemirror/commands/comments";
+import {
+  findBlockSdtMatch,
+  findBlockSdtMatches,
+  removeContentControlTr,
+  setContentControlContentTr,
+  setContentControlValueTr,
+} from "../core/prosemirror/commands/contentControls";
 import { proseDocToBlocks } from "../core/prosemirror/conversion/fromProseDoc";
 import { ExtensionManager } from "../core/prosemirror/extensions/ExtensionManager";
 import {
@@ -151,6 +158,7 @@ import {
 import type { Comment } from "../core/types/content";
 import type {
   Document,
+  SdtProperties,
   SectionProperties,
   FootnoteProperties,
   EndnoteProperties,
@@ -2812,6 +2820,88 @@ export function DocxEditor({
         requestAnimationFrame(() => {
           pagedEditorRef.current?.scrollToPosition(from);
         });
+        return true;
+      },
+      getContentControls: (filter = {}) => {
+        const view = pagedEditorRef.current?.getView();
+        if (!view) {
+          return [];
+        }
+        return findBlockSdtMatches(view.state.doc, filter).map((match) => {
+          const attrs = match.node.attrs;
+          const properties: SdtProperties = {
+            sdtType: (attrs["sdtType"] ??
+              "richText") as SdtProperties["sdtType"],
+          };
+          if (attrs["alias"]) {
+            properties.alias = String(attrs["alias"]);
+          }
+          if (attrs["tag"]) {
+            properties.tag = String(attrs["tag"]);
+          }
+          if (typeof attrs["id"] === "number") {
+            properties.id = attrs["id"];
+          }
+          return { properties, path: match.path };
+        });
+      },
+      scrollToContentControl: (filter) => {
+        const view = pagedEditorRef.current?.getView();
+        if (!view) {
+          return false;
+        }
+        const match = findBlockSdtMatch(view.state.doc, filter);
+        if (!match) {
+          return false;
+        }
+        // Place selection just inside the SDT (after its opening token).
+        const inside = match.pos + 1;
+        const $pos = view.state.doc.resolve(inside);
+        view.dispatch(view.state.tr.setSelection(TextSelection.near($pos)));
+        requestAnimationFrame(() => {
+          pagedEditorRef.current?.scrollToPosition(inside);
+        });
+        return true;
+      },
+      setContentControlContent: (filter, input, options = {}) => {
+        const view = pagedEditorRef.current?.getView();
+        if (!view) {
+          return false;
+        }
+        const tr = setContentControlContentTr(
+          view.state,
+          filter,
+          input,
+          options,
+        );
+        if (!tr) {
+          return false;
+        }
+        view.dispatch(tr);
+        return true;
+      },
+      setContentControlValue: (filter, input, options = {}) => {
+        const view = pagedEditorRef.current?.getView();
+        if (!view) {
+          return false;
+        }
+        const tr = setContentControlValueTr(view.state, filter, input, options);
+        if (!tr) {
+          return false;
+        }
+        view.dispatch(tr);
+        return true;
+      },
+      removeContentControl: (filter, options = {}) => {
+        const view = pagedEditorRef.current?.getView();
+        if (!view) {
+          return false;
+        }
+        const tr = removeContentControlTr(view.state, filter, options);
+        if (!tr) {
+          return false;
+        }
+        view.dispatch(tr);
         return true;
       },
     }),
