@@ -36,7 +36,7 @@ pre-push:
       # (turbo `...[ref]` filter). tsgo itself still runs project-wide
       # within each selected package, but unaffected packages are skipped
       # entirely instead of being walked for cache decisions.
-      run: bun run typecheck '--filter=...[origin/main]' --concurrency=2
+      run: bun run typecheck "--filter=...[origin/main]" --concurrency=2
     # Lint runs in CI on every push (~10-15 min full-monorepo). Keeping
     # it on pre-push too added another ~15-18 min of waiting that
     # duplicated the CI signal, so the local hook drops it. The
