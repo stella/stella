@@ -39,7 +39,16 @@ import { useUninstallEntry } from "./use-uninstall-entry";
  * a separate `iconHint` field — read-only, never the source of
  * truth for the rendered detail body.
  */
+/**
+ * Catalogue entries are unique by (kind, slug), not slug alone — a
+ * custom MCP can claim a slug that also exists as a built-in skill
+ * or native tool (e.g. `web-search`). Carry the kind so the panel
+ * resolves to the right row instead of the first slug match.
+ */
+type ToolDetailKind = "skill" | "mcp" | "native-tool";
+
 export type ToolDetailPayload = {
+  kind: ToolDetailKind;
   slug: string;
   organizationId: string;
   /**
@@ -65,10 +74,11 @@ export const ToolDetailView = ({
   tab,
   onClose,
 }: InspectorViewRenderProps<ToolDetailPayload>) => {
-  const { slug, organizationId } = tab.payload;
+  const { kind, slug, organizationId } = tab.payload;
   const { data } = useSuspenseQuery(catalogueOptions(organizationId));
   const entry = data.entries.find(
-    (candidate: CatalogueEntry) => candidate.slug === slug,
+    (candidate: CatalogueEntry) =>
+      candidate.kind === kind && candidate.slug === slug,
   );
 
   // Entry no longer in the catalogue — usually because the user
@@ -211,5 +221,11 @@ export const ToolDetailRailIcon = ({
   />
 );
 
-/** Build the inspector tab id for a given catalogue entry slug. */
-export const toolDetailTabId = (slug: string): string => `tool-detail:${slug}`;
+/**
+ * Build the inspector tab id for a given catalogue entry. The kind
+ * is part of the id because (kind, slug) is the catalogue's actual
+ * uniqueness key; using slug alone would collapse an MCP and a skill
+ * sharing the same slug onto the same tab.
+ */
+export const toolDetailTabId = (kind: ToolDetailKind, slug: string): string =>
+  `tool-detail:${kind}:${slug}`;

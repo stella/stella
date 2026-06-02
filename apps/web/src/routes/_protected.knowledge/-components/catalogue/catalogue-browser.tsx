@@ -129,7 +129,7 @@ export const CatalogueBrowser = ({
   // Active tool-detail tab in the inspector → focused slug for the
   // row highlight. One source of truth; closing the inspector tab
   // clears the highlight automatically.
-  const focusedSlug = useInspectorStore((s) => {
+  const focusedTabId = useInspectorStore((s) => {
     const active = s.tabs.find((tab) => tab.id === s.activeId);
     if (active === undefined || active.type !== "view") {
       return null;
@@ -137,9 +137,7 @@ export const CatalogueBrowser = ({
     if (active.viewType !== "tool-detail") {
       return null;
     }
-    return active.id.startsWith("tool-detail:")
-      ? active.id.slice("tool-detail:".length)
-      : null;
+    return active.id;
   });
   // Pre-populate from the user's practice + "EU" when at least one
   // practice country is an EU-27 member. Mirrors the onboarding
@@ -217,8 +215,8 @@ export const CatalogueBrowser = ({
   }, [entries]);
 
   const onRowFocus = (entry: CatalogueEntry) => {
-    const tabId = toolDetailTabId(entry.slug);
-    if (focusedSlug === entry.slug) {
+    const tabId = toolDetailTabId(entry.kind, entry.slug);
+    if (focusedTabId === tabId) {
       inspector.close(tabId);
       return;
     }
@@ -227,6 +225,7 @@ export const CatalogueBrowser = ({
       id: tabId,
       label: entry.displayName,
       payload: {
+        kind: entry.kind,
         slug: entry.slug,
         organizationId,
         iconHint: {
@@ -478,7 +477,9 @@ export const CatalogueBrowser = ({
             {recommendedFiltered.map((entry) => (
               <CatalogueEntryRow
                 entry={entry}
-                focused={focusedSlug === entry.slug}
+                focused={
+                  focusedTabId === toolDetailTabId(entry.kind, entry.slug)
+                }
                 key={`${entry.kind}-${entry.slug}`}
                 onEditSkill={() => openEditInstalledSkill(entry)}
                 onFocus={() => onRowFocus(entry)}
@@ -500,7 +501,7 @@ export const CatalogueBrowser = ({
         {otherFiltered.map((entry) => (
           <CatalogueEntryRow
             entry={entry}
-            focused={focusedSlug === entry.slug}
+            focused={focusedTabId === toolDetailTabId(entry.kind, entry.slug)}
             key={`${entry.kind}-${entry.slug}`}
             onEditSkill={() => openEditInstalledSkill(entry)}
             onFocus={() => onRowFocus(entry)}
