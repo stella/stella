@@ -130,9 +130,14 @@ function parseSdtProperties(sdtPr: XmlElement | null): SdtProperties {
         break;
       case "date": {
         props.sdtType = "date";
-        const dateVal = getAttribute(el, "w", "fullDate");
-        if (dateVal !== null) {
-          props.dateFormat = dateVal;
+        // The display format lives in the child <w:dateFormat w:val="..."/>;
+        // <w:date w:fullDate="..."/> is the bound *value*, not the format.
+        const dateFormatEl = findChild(el, "w", "dateFormat");
+        if (dateFormatEl) {
+          const fmt = getAttribute(dateFormatEl, "w", "val");
+          if (fmt !== null) {
+            props.dateFormat = fmt;
+          }
         }
         break;
       }
