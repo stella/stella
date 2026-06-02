@@ -278,11 +278,19 @@ export const KanbanCard = ({
             isActiveTask && "ring-primary/30 ring-2",
           )}
           onClick={containedHandler(cardRef, () =>
-            useInspectorStore.getState().openTask(entity.entityId, name),
+            useInspectorStore.getState().openTask({
+              taskId: entity.entityId,
+              workspaceId,
+              label: name,
+            }),
           )}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
-              useInspectorStore.getState().openTask(entity.entityId, name);
+              useInspectorStore.getState().openTask({
+                taskId: entity.entityId,
+                workspaceId,
+                label: name,
+              });
             }
           }}
           ref={cardRef}

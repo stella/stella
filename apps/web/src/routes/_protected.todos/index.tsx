@@ -143,7 +143,9 @@ function MyTodosPage() {
       to: "/workspaces/$workspaceId",
       params: { workspaceId: wsId },
     });
-    useInspectorStore.getState().openTask(entityId, "", true);
+    useInspectorStore
+      .getState()
+      .openTask({ taskId: entityId, workspaceId: wsId, isNew: true });
   };
 
   return (
@@ -280,7 +282,11 @@ const TaskRow = ({ task }: { task: ValidTask }) => {
     <Link
       className="group hover:bg-muted/50 flex items-center gap-3 rounded-md px-2 py-1.5 text-sm transition-colors"
       onClick={() => {
-        useInspectorStore.getState().openTask(task.id, task.name);
+        useInspectorStore.getState().openTask({
+          taskId: task.id,
+          workspaceId: task.workspaceId,
+          label: task.name,
+        });
       }}
       params={{ workspaceId: task.workspaceId }}
       to="/workspaces/$workspaceId"

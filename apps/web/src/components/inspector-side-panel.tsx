@@ -111,6 +111,9 @@ export const InspectorSidePanel = () => {
     if (activeTab?.type === "chat") {
       return activeTab.contextMatterIds.at(0) ?? null;
     }
+    if (activeTab?.type === "task") {
+      return activeTab.workspaceId;
+    }
     return null;
   })();
   const fallbackPdfTab = tabs.find(

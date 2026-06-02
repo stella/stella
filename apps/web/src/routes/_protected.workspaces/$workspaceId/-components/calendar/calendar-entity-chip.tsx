@@ -39,11 +39,13 @@ export const TASK_STATUS_DOT_COLORS: Record<string, string> = {
 type CalendarEntityChipProps = {
   entity: CalendarTask;
   isEditable: boolean;
+  workspaceId: string;
 };
 
 export const CalendarEntityChip = ({
   entity,
   isEditable,
+  workspaceId,
 }: CalendarEntityChipProps) => {
   const t = useTranslations();
   const locale = useLocale();
@@ -86,7 +88,7 @@ export const CalendarEntityChip = ({
   }, [entity.taskId, isEditable, name]);
 
   const handleClick = () => {
-    openTask(entity.taskId, name);
+    openTask({ taskId: entity.taskId, workspaceId, label: name });
   };
 
   const createdLabel = new Date(entity.createdAt).toLocaleDateString(locale, {

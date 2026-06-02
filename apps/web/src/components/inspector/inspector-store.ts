@@ -70,6 +70,13 @@ export type TaskTab = {
   label: string;
   isNew: boolean;
   status?: string | null;
+  /**
+   * Owning workspace for the underlying task. Preserved on the tab
+   * so the detail panel keeps querying the original matter even
+   * when the user navigates to a different workspace before
+   * closing the tab.
+   */
+  workspaceId: string;
 };
 
 export type ChatTab = {
@@ -255,7 +262,12 @@ type Actions = {
    * version switches don't multiply tabs.
    */
   openFileForEntity: (tab: Omit<FileTab, "type">) => void;
-  openTask: (taskId: string, label?: string, isNew?: boolean) => void;
+  openTask: (args: {
+    taskId: string;
+    workspaceId: string;
+    label?: string;
+    isNew?: boolean;
+  }) => void;
   openExternal: (args: {
     url: string;
     connectorSlug?: string | undefined;
@@ -1002,7 +1014,7 @@ export const useInspectorStore = create<State & Actions>()(
         state.minimized = false;
       }),
 
-    openTask: (taskId, label = "", isNew = false) =>
+    openTask: ({ taskId, workspaceId, label = "", isNew = false }) =>
       set((state) => {
         const existing = state.tabs.find((t) => t.id === taskId);
         if (!existing) {
@@ -1011,6 +1023,7 @@ export const useInspectorStore = create<State & Actions>()(
             id: taskId,
             label,
             isNew,
+            workspaceId,
           });
         } else if (existing.type === "task") {
           if (label) {
@@ -1019,6 +1032,7 @@ export const useInspectorStore = create<State & Actions>()(
           if (isNew) {
             existing.isNew = true;
           }
+          existing.workspaceId = workspaceId;
         }
         state.activeId = taskId;
         state.activationSeq += 1;
