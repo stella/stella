@@ -95,22 +95,25 @@ const getChatVisibleInstalledSkillRows = (
   const installedRows = skillPages?.flatMap((page) => page.installed) ?? [];
   const visibleRows: SlashSkillRow[] = [];
   const seenSlugs = new Set<string>();
-  // Every enabled installed slug must shadow the built-in entry of
-  // the same name, even when the installed row is filtered out of
-  // the skill list because it carries a command — the backend
-  // load-skill resolves the slug to the installed row regardless.
-  const shadowSlugs = new Set<string>();
-  const enabledInstalled = installedRows.filter((row) => row.enabled);
-  for (const row of enabledInstalled) {
-    shadowSlugs.add(row.slug);
-  }
-  const chatMetadataRows = enabledInstalled
-    // Command-bearing installed skills are surfaced as prompt slash
-    // items by the commandSkills feed; skip them here so the same
-    // skill doesn't appear twice in the menu.
-    .filter((row) => !row.command)
+  // Apply the chat-metadata cap to enabled installed rows BEFORE
+  // building either set, so we shadow the same window the backend
+  // `load-skill` sees. Earlier-sorted rows beyond the cap are
+  // invisible to the model too, so they must not block built-ins
+  // and must not appear as skill chips.
+  const chatVisibleEnabled = installedRows
+    .filter((row) => row.enabled)
     .toSorted(compareChatInstalledSkillRows)
     .slice(0, CHAT_VISIBLE_INSTALLED_SKILL_LIMIT);
+  // Every chat-visible installed slug shadows the built-in entry of
+  // the same name — including ones that carry a command. The
+  // backend load-skill resolves the slug to the installed row, so
+  // rendering the built-in description would mislead the user about
+  // what selecting it actually inserts.
+  const shadowSlugs = new Set(chatVisibleEnabled.map((row) => row.slug));
+  // Command-bearing installed skills are surfaced as prompt slash
+  // items by the commandSkills feed; drop them from the skill-chip
+  // list so the same skill doesn't appear twice in the menu.
+  const chatMetadataRows = chatVisibleEnabled.filter((row) => !row.command);
 
   for (const row of chatMetadataRows) {
     if (seenSlugs.has(row.slug)) {
