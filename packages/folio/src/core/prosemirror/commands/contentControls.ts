@@ -24,6 +24,7 @@ import {
 import { formatDate } from "../../docx/fieldParser";
 import type { SdtProperties } from "../../types/document";
 import { expectBlockSdtAttrs } from "../attrs";
+import { SUGGESTION_BYPASS_META } from "../plugins/suggestionMode";
 
 type ForceOption = { force?: boolean };
 
@@ -256,7 +257,14 @@ function replaceBlockSdtChildren(
     { ...match.node.attrs, showingPlaceholder: false, ...propertyOverrides },
     children.length === 0 ? [paragraphFromText(state.schema, "")] : children,
   );
-  return state.tr.replaceWith(match.pos, match.pos + match.node.nodeSize, next);
+  // Tag the transaction so suggestion mode's catch-all appendTransaction
+  // does NOT stamp insertion marks on the new body content. A content
+  // control widget interaction is a typed write against the SDT's state,
+  // not a tracked edit by the user — the same reason undoing a tracked
+  // Enter does not mark the rejoined text as inserted.
+  return state.tr
+    .replaceWith(match.pos, match.pos + match.node.nodeSize, next)
+    .setMeta(SUGGESTION_BYPASS_META, true);
 }
 
 /**
@@ -444,12 +452,12 @@ export function removeContentControlTr(
     for (let i = 0; i < match.node.childCount; i += 1) {
       children.push(match.node.child(i));
     }
-    return state.tr.replaceWith(
-      match.pos,
-      match.pos + match.node.nodeSize,
-      children,
-    );
+    return state.tr
+      .replaceWith(match.pos, match.pos + match.node.nodeSize, children)
+      .setMeta(SUGGESTION_BYPASS_META, true);
   }
   // Drop entirely.
-  return state.tr.delete(match.pos, match.pos + match.node.nodeSize);
+  return state.tr
+    .delete(match.pos, match.pos + match.node.nodeSize)
+    .setMeta(SUGGESTION_BYPASS_META, true);
 }

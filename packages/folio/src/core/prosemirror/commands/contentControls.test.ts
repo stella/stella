@@ -9,6 +9,7 @@ import {
   ContentControlLockedError,
   ContentControlTypeError,
 } from "../../content-controls";
+import { createSuggestionModePlugin } from "../plugins/suggestionMode";
 import { schema, singletonManager } from "../schema";
 import {
   blockSdtAttrsToSdtProperties,
@@ -245,6 +246,53 @@ describe("removeContentControlTr", () => {
     // ... but content edits succeed.
     const tr = setContentControlContentTr(state, { tag: "a" }, "edit ok");
     expect(tr).not.toBeNull();
+  });
+
+  test("does not stamp insertion marks when suggesting mode is active", () => {
+    // Toggling a checkbox / picking a date through a widget should not be
+    // re-classified as a tracked insertion by the suggestion-mode
+    // appendTransaction catch-all — the mutation is a typed write
+    // against the SDT's state, not a user-authored edit. We assert that
+    // by activating suggestion mode and confirming the new body text
+    // carries no insertion mark.
+    const checkbox = schema.node(
+      "blockSdt",
+      { sdtType: "checkbox", tag: "agree", checked: false },
+      [schema.node("paragraph", {}, [schema.text("☐")])],
+    );
+    const state = EditorState.create({
+      doc: schema.node("doc", null, [checkbox]),
+      schema,
+      plugins: [
+        createSuggestionModePlugin(true, "Reviewer"),
+        ...singletonManager.getPlugins(),
+      ],
+    });
+    const tr = setContentControlValueTr(
+      state,
+      { tag: "agree" },
+      {
+        kind: "checkbox",
+        checked: true,
+      },
+    );
+    if (!tr) {
+      throw new TypeError("expected tx");
+    }
+    const next = state.apply(tr);
+    const sdt = next.doc.firstChild;
+    const firstText = sdt?.firstChild?.firstChild;
+    expect(sdt?.attrs["checked"]).toBe(true);
+    // The new text node must not carry an `insertion` mark — that would
+    // be visible to reviewers as a pending change they have to accept.
+    const insertionType = schema.marks["insertion"];
+    if (!insertionType) {
+      throw new TypeError("expected insertion mark in schema");
+    }
+    const hasInsertion = firstText?.marks.some(
+      (mark) => mark.type === insertionType,
+    );
+    expect(hasInsertion).toBe(false);
   });
 
   test("refuses to unwrap a w15:repeatingSection without force", () => {
