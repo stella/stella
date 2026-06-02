@@ -35,8 +35,8 @@ export const HighlightedText = ({ text }: { text: string }) => {
       <mark
         className={`rounded-sm px-0.5 ${
           isClauseSlot
-            ? "bg-purple-100 dark:bg-purple-900/30"
-            : "bg-amber-100 dark:bg-amber-900/30"
+            ? "bg-muted dark:bg-muted"
+            : "bg-warning/15 dark:bg-warning/15"
         }`}
         key={start}
       >
@@ -93,8 +93,8 @@ export const DirectiveLabel = ({
     <span
       className={`text-xs font-medium ${
         isConditional
-          ? "text-blue-600 dark:text-blue-400"
-          : "text-emerald-600 dark:text-emerald-400"
+          ? "text-foreground dark:text-foreground-muted"
+          : "text-success"
       }`}
     >
       {label}

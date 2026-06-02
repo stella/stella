@@ -300,11 +300,17 @@
     }
   },
   "catalogue": {
+    "add": "Añadir",
+    "addCustom": "Añadir personalizado",
+    "addCustomMcp": "Añadir servidor MCP",
+    "addCustomSkill": "Añadir habilidad",
     "by": "Por {author}",
+    "configuration": "Configuración",
     "cost": {
       "free": "Gratis",
       "paid": "De pago"
     },
+    "detailAuthMethod": "Autenticación",
     "empty": "Ninguna entrada coincide con el filtro actual.",
     "filter": {
       "all": "Todo",
@@ -312,7 +318,9 @@
       "nativeTools": "Herramientas integradas",
       "skills": "Habilidades"
     },
+    "filterHint": "Filtrado a {codes}",
     "firstParty": "stella",
+    "firstPartyTooltip": "Creado por el equipo de stella",
     "install": "Instalar",
     "installFailed": "Instalación fallida",
     "installPack": "{count, plural, one {Instalar # herramienta} other {Instalar # herramientas}}",
@@ -326,6 +334,9 @@
     "packInstalled": "{count, plural, one {# herramienta instalada} other {# herramientas instaladas}}",
     "packPartial": "{installed} instaladas, {failed} con error",
     "recommended": "Recomendado",
+    "removed": "Esta herramienta ya no está disponible.",
+    "sectionOthers": "Otros",
+    "sectionRecommended": "Recomendados",
     "settings": {
       "packTitle": "Paquete recomendado"
     },
@@ -334,6 +345,7 @@
       "apiKey": "Clave de API",
       "none": "Sin configuración"
     },
+    "showAll": "Mostrar todo",
     "unavailable": "Aún no disponible"
   },
   "chat": {
@@ -1455,6 +1467,10 @@
       "templates": {
         "description": "Plantillas de documentos con marcadores de posición",
         "title": "Plantillas"
+      },
+      "tools": {
+        "description": "Conecte stella con registros públicos y otras fuentes",
+        "title": "Herramientas"
       }
     },
     "skills": {

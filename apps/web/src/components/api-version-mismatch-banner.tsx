@@ -79,7 +79,7 @@ export const ApiVersionMismatchBanner = () => {
   };
 
   return (
-    <div className="border-b bg-blue-50 px-4 py-2 text-sm text-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
+    <div className="bg-accent text-foreground border-b px-4 py-2 text-sm">
       <div className="flex items-center justify-between gap-3">
         <span>
           {t("app.versionMismatch.message", {
@@ -97,7 +97,7 @@ export const ApiVersionMismatchBanner = () => {
         </span>
         <button
           aria-label={t("app.versionMismatch.dismiss")}
-          className="-me-1 rounded-sm p-1 hover:bg-blue-100 dark:hover:bg-blue-900/40"
+          className="hover:bg-accent-foreground/10 -me-1 rounded-sm p-1"
           onClick={handleDismiss}
           type="button"
         >

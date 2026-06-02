@@ -4,14 +4,25 @@ import { PDF_MIME_TYPE } from "@/consts";
 
 type DocxIconProps = {
   className?: string | undefined;
+  style?: React.CSSProperties | undefined;
+  width?: number | string;
+  height?: number | string;
 };
 
-const DocxIcon = ({ className }: DocxIconProps) => (
+export const DocxIcon = ({
+  className,
+  style,
+  width,
+  height,
+}: DocxIconProps) => (
   <svg
     aria-hidden="true"
     className={className}
     fill="none"
+    height={height}
+    style={style}
     viewBox="0 0 48 48"
+    width={width}
     xmlns="http://www.w3.org/2000/svg"
   >
     <path

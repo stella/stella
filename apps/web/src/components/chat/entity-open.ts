@@ -78,7 +78,9 @@ const openEntityByKind = ({
   workspaceId: string;
 }): OpenEntityResult | null => {
   if (kind === "task") {
-    useInspectorStore.getState().openTask(entityId, label);
+    useInspectorStore
+      .getState()
+      .openTask({ taskId: entityId, workspaceId, label });
     return { type: "opened" };
   }
 

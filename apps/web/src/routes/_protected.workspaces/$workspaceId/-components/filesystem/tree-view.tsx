@@ -1491,7 +1491,10 @@ const FilesystemRow = ({
       };
     }
     if (node.kind === "task") {
-      return () => useInspectorStore.getState().openTask(node.entityId, name);
+      return () =>
+        useInspectorStore
+          .getState()
+          .openTask({ taskId: node.entityId, workspaceId, label: name });
     }
     if (navigable) {
       return () =>

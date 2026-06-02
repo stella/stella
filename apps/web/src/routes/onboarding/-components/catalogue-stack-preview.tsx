@@ -5,7 +5,7 @@ import { useTranslations } from "use-intl";
 import type { LoadedCatalogueEntry } from "@stll/catalogue";
 
 import { StellaWordmark } from "@/components/stella-wordmark";
-import { CatalogueEntryIcon } from "@/routes/_protected.settings/-components/catalogue/catalogue-entry-icon";
+import { CatalogueEntryIcon } from "@/routes/_protected.knowledge/-components/catalogue/catalogue-entry-icon";
 
 /**
  * Right-panel "agent profile" for the onboarding catalogue step. A

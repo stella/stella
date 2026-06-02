@@ -134,6 +134,7 @@ export const SourceChips = ({
         <ExternalSourceChip
           key={`${messageId}-external-source-${source.url}`}
           source={source}
+          workspaceId={workspaceId ?? null}
         />
       ))}
     </div>
@@ -225,7 +226,13 @@ const SourceIcon = ({
   return <FileTextIcon className={cn(cls, "text-muted-foreground")} />;
 };
 
-const ExternalSourceChip = ({ source }: { source: ExternalSourceEntry }) => {
+const ExternalSourceChip = ({
+  source,
+  workspaceId,
+}: {
+  source: ExternalSourceEntry;
+  workspaceId: string | null;
+}) => {
   // Defer the favicon GET until the user actively hovers/focuses
   // this chip — passive renders of a chat message must not fan out
   // requests to every cited host.
@@ -241,6 +248,7 @@ const ExternalSourceChip = ({ source }: { source: ExternalSourceEntry }) => {
       sourceToolName: source.sourceToolName,
       text: source.text,
       url: source.url,
+      workspaceId,
     });
   };
 

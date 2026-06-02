@@ -300,11 +300,17 @@
     }
   },
   "catalogue": {
+    "add": "Pridať",
+    "addCustom": "Pridať vlastné",
+    "addCustomMcp": "Pridať MCP server",
+    "addCustomSkill": "Pridať zručnosť",
     "by": "Od {author}",
+    "configuration": "Konfigurácia",
     "cost": {
       "free": "Zadarmo",
       "paid": "Platené"
     },
+    "detailAuthMethod": "Autentifikácia",
     "empty": "Žiadne položky nezodpovedajú aktuálnemu filtru.",
     "filter": {
       "all": "Všetko",
@@ -312,7 +318,9 @@
       "nativeTools": "Vstavané nástroje",
       "skills": "Zručnosti"
     },
+    "filterHint": "Filtrované: {codes}",
     "firstParty": "stella",
+    "firstPartyTooltip": "Vytvorené tímom stella",
     "install": "Nainštalovať",
     "installFailed": "Inštalácia zlyhala",
     "installPack": "Nainštalovať {count, plural, one {# nástroj} few {# nástroje} other {# nástrojov}}",
@@ -326,6 +334,9 @@
     "packInstalled": "{count, plural, one {# nástroj nainštalovaný} few {# nástroje nainštalované} other {# nástrojov nainštalovaných}}",
     "packPartial": "Nainštalované {installed}, {failed} zlyhalo",
     "recommended": "Odporúčané",
+    "removed": "Tento nástroj už nie je dostupný.",
+    "sectionOthers": "Ostatné",
+    "sectionRecommended": "Odporúčané",
     "settings": {
       "packTitle": "Odporúčaný balík"
     },
@@ -334,6 +345,7 @@
       "apiKey": "API kľúč",
       "none": "Bez nastavenia"
     },
+    "showAll": "Zobraziť všetko",
     "unavailable": "Zatiaľ nedostupné"
   },
   "chat": {
@@ -1455,6 +1467,10 @@
       "templates": {
         "description": "Šablóny dokumentov so zástupnými znakmi",
         "title": "Šablóny"
+      },
+      "tools": {
+        "description": "Pripojte stella k verejným registrom a ďalším zdrojom",
+        "title": "Nástroje"
       }
     },
     "skills": {

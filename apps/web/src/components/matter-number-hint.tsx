@@ -37,7 +37,7 @@ const MatterNumberHintBody = ({
         <p className="text-muted-foreground">
           {t("workspaces.referenceConventionHint", { example })}
         </p>
-        <p className="text-amber-600">
+        <p className="text-warning-foreground">
           {t("workspaces.referenceFormatWarning")}
         </p>
         <Link
@@ -98,7 +98,7 @@ export const MatterNumberHint = (props: MatterNumberHintProps) => {
               render={
                 <Button
                   aria-label={t("workspaces.referenceFormatWarning")}
-                  className="text-amber-600 hover:text-amber-700"
+                  className="text-warning-foreground hover:text-warning"
                   size="icon-xs"
                   title={t("workspaces.referenceFormatWarning")}
                   variant="ghost"

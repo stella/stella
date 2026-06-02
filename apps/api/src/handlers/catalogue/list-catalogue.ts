@@ -16,12 +16,19 @@ import {
 import { NATIVE_TOOL_SLUGS } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import type { SafeId } from "@/api/lib/branded-types";
 import { isBusinessRegistryNativeToolDeployAvailable } from "@/api/lib/business-registries/dispatch";
 import { isWebSearchDeployAvailable } from "@/api/lib/web-search/select-provider";
 
 const config = {
   permissions: { workspace: ["read"] },
 } satisfies HandlerConfig;
+
+// Matches the cap on `GET /mcp/connectors`. The catalogue listing
+// surfaces every org-owned custom connector as a synthetic entry,
+// so the same bound applies — otherwise an org with thousands of
+// custom MCPs could turn `/catalogue` into an unbounded read.
+const ORG_CUSTOM_MCP_LIMIT = 100;
 
 type CatalogueEntryResponse = LoadedCatalogueEntry & {
   isRecommendedForOrg: boolean;
@@ -39,6 +46,16 @@ type CatalogueEntryResponse = LoadedCatalogueEntry & {
    */
   installedSkillId: string | null;
   installedConnectorSlug: string | null;
+  /**
+   * Whether the installed entry is currently enabled (turned on for
+   * use in chat). Only meaningful when `installState === "installed"`.
+   * For skills this mirrors `agentSkills.enabled`; for native-tools it
+   * is always `true` when installed (install-state already encodes the
+   * jurisdiction/override decision); for MCP entries this is `null`
+   * because the user connection lives on a separate row and is
+   * surfaced via the dedicated MCP detail flow.
+   */
+  enabled: boolean | null;
 };
 
 const listCatalogue = createSafeRootHandler(
@@ -74,6 +91,7 @@ const listCatalogue = createSafeRootHandler(
                   id: agentSkills.id,
                   slug: agentSkills.slug,
                   scope: agentSkills.scope,
+                  enabled: agentSkills.enabled,
                 })
                 .from(agentSkills)
                 .where(
@@ -119,6 +137,42 @@ const listCatalogue = createSafeRootHandler(
             ),
           );
 
+    // Org-owned MCP connectors that don't match any curated catalogue
+    // entry URL. These are "custom" connectors the user added via the
+    // old /knowledge/mcp page (or its successor); they need to show up
+    // in /knowledge/tools so the user can manage them after the
+    // surface unification. Capped to match /mcp/connectors so a large
+    // org can't turn this endpoint into an unbounded read.
+    const orgCustomMcps = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .select({
+            id: mcpConnectors.id,
+            slug: mcpConnectors.slug,
+            displayName: mcpConnectors.displayName,
+            description: mcpConnectors.description,
+            url: mcpConnectors.url,
+            authType: mcpConnectors.authType,
+            isCurated: mcpConnectors.isCurated,
+            oauthRequestedScopes: mcpConnectors.oauthRequestedScopes,
+            allowedTools: mcpConnectors.allowedTools,
+            documentationUrl: mcpConnectors.documentationUrl,
+            tokenHelpUrl: mcpConnectors.tokenHelpUrl,
+            iconUrl: mcpConnectors.iconUrl,
+          })
+          .from(mcpConnectors)
+          .where(
+            and(
+              eq(mcpConnectors.organizationId, session.activeOrganizationId),
+              eq(mcpConnectors.isCurated, false),
+            ),
+          )
+          .orderBy(mcpConnectors.displayName, mcpConnectors.id)
+          .limit(ORG_CUSTOM_MCP_LIMIT),
+      ),
+    );
+    const curatedMcpUrlSet = new Set(mcpUrls);
+
     const practiceJurisdictions = settings?.practiceJurisdictions ?? [];
     const nativeToolOverrides = settings?.nativeToolOverrides ?? {};
     const practiceCountryCodes = new Set(
@@ -146,6 +200,7 @@ const listCatalogue = createSafeRootHandler(
     const canDeleteTeamSkills =
       memberRole.role === "admin" || memberRole.role === "owner";
     const skillIdBySlug = new Map<string, string>();
+    const skillEnabledBySlug = new Map<string, boolean>();
     for (const row of visibleSkillRows) {
       if (row.scope === "team" && !canDeleteTeamSkills) {
         continue;
@@ -153,6 +208,7 @@ const listCatalogue = createSafeRootHandler(
       const existing = skillIdBySlug.get(row.slug);
       if (!existing || row.scope === "team") {
         skillIdBySlug.set(row.slug, row.id);
+        skillEnabledBySlug.set(row.slug, row.enabled);
       }
     }
     const connectorSlugByUrl = new Map<string, string>();
@@ -196,6 +252,16 @@ const listCatalogue = createSafeRootHandler(
         entry.kind === "mcp" && installState === "installed"
           ? (connectorSlugByUrl.get(entry.url) ?? null)
           : null;
+      let enabled: boolean | null = null;
+      if (installState === "installed") {
+        if (entry.kind === "skill") {
+          enabled = skillEnabledBySlug.get(entry.slug) ?? null;
+        } else if (entry.kind === "native-tool") {
+          // Native-tools encode the enabled decision into install-state
+          // already (jurisdiction default + overrides). Installed ⇒ on.
+          enabled = true;
+        }
+      }
       response.push({
         ...entry,
         isLocked,
@@ -204,8 +270,21 @@ const listCatalogue = createSafeRootHandler(
         installState,
         installedSkillId,
         installedConnectorSlug,
+        enabled,
       });
     }
+
+    // Append synthetic catalogue entries for the org's custom MCP
+    // connectors that aren't represented by a curated catalogue entry.
+    // The user already installed these directly, so install state is
+    // always "installed" and the slug routes to the existing DELETE
+    // /mcp/connectors/:slug uninstall handler.
+    appendCustomMcpEntries({
+      response,
+      connectors: orgCustomMcps,
+      curatedMcpUrls: curatedMcpUrlSet,
+      organizationId: session.activeOrganizationId,
+    });
 
     return Result.ok({
       entries: response,
@@ -213,5 +292,80 @@ const listCatalogue = createSafeRootHandler(
     });
   },
 );
+
+type OrgCustomMcpRow = {
+  id: string;
+  slug: string;
+  displayName: string;
+  description: string;
+  url: string;
+  authType: "none" | "bearer" | "oauth2";
+  oauthRequestedScopes: string[] | null;
+  allowedTools: string[] | null;
+  documentationUrl: string | null;
+  tokenHelpUrl: string | null;
+  iconUrl: string | null;
+};
+
+type AppendCustomMcpArgs = {
+  response: CatalogueEntryResponse[];
+  connectors: readonly OrgCustomMcpRow[];
+  curatedMcpUrls: ReadonlySet<string>;
+  organizationId: SafeId<"organization">;
+};
+
+const appendCustomMcpEntries = ({
+  response,
+  connectors,
+  curatedMcpUrls,
+  organizationId,
+}: AppendCustomMcpArgs): void => {
+  for (const connector of connectors) {
+    if (curatedMcpUrls.has(connector.url)) {
+      continue;
+    }
+    response.push(buildCustomMcpCatalogueEntry(connector, organizationId));
+  }
+};
+
+const buildCustomMcpCatalogueEntry = (
+  connector: OrgCustomMcpRow,
+  organizationId: SafeId<"organization">,
+): CatalogueEntryResponse => {
+  // DB stores `oauth2`; the curated catalogue schema uses `oauth`.
+  // The auth flow is the same; only the literal differs.
+  const catalogueAuthType =
+    connector.authType === "oauth2" ? "oauth" : connector.authType;
+  return {
+    kind: "mcp",
+    slug: connector.slug,
+    displayName: connector.displayName,
+    description: connector.description,
+    author: organizationId,
+    license: "MIT",
+    cost: "free",
+    setup: connector.authType === "none" ? "none" : "api-key",
+    tags: [],
+    jurisdictions: [],
+    url: connector.url,
+    authType: catalogueAuthType,
+    oauthRequestedScopes: connector.oauthRequestedScopes ?? [],
+    allowedTools: connector.allowedTools ?? [],
+    ...(connector.documentationUrl !== null
+      ? { documentationUrl: connector.documentationUrl }
+      : {}),
+    ...(connector.tokenHelpUrl !== null
+      ? { tokenHelpUrl: connector.tokenHelpUrl }
+      : {}),
+    ...(connector.iconUrl !== null ? { iconUrl: connector.iconUrl } : {}),
+    icon: null,
+    isLocked: false,
+    isRecommendedForOrg: false,
+    installState: "installed",
+    installedSkillId: null,
+    installedConnectorSlug: connector.slug,
+    enabled: null,
+  };
+};
 
 export default listCatalogue;

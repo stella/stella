@@ -15,6 +15,13 @@ export const TOOLBAR_ROW_MIN_HEIGHT = "min-h-12" as const;
 export const TOOLBAR_ROW_HEIGHT_PX = 48 as const;
 export const SIDE_RAIL_WIDTH = "w-12" as const;
 export const SIDE_RAIL_ICON_BUTTON_SIZE = "size-8" as const;
+/** Glyph size inside a rail tab button — matches the `size-3.5`
+ * class every built-in rail icon uses. Numeric form is for
+ * components that take a pixel size prop instead of a Tailwind
+ * class (e.g. bundled image icons). Keep both in sync; they refer
+ * to the same 14px design token. */
+export const SIDE_RAIL_TAB_ICON_SIZE = "size-3.5" as const;
+export const SIDE_RAIL_TAB_ICON_SIZE_PX = 14 as const;
 
 export const STALE_TIME = {
   INFINITE: Number.POSITIVE_INFINITY,

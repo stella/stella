@@ -169,7 +169,9 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     queryClient.invalidateQueries({
       queryKey: workspacesKeys.overview(workspaceId),
     });
-    useInspectorStore.getState().openTask(entityId, "", true);
+    useInspectorStore
+      .getState()
+      .openTask({ taskId: entityId, workspaceId, isNew: true });
   }, [workspaceId, t, queryClient]);
 
   const updateTaskStatus = useMutation({
@@ -426,7 +428,11 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           onClick={() => {
             const task = tasksWithDue.at(0);
             if (task) {
-              useInspectorStore.getState().openTask(task.entityId, task.name);
+              useInspectorStore.getState().openTask({
+                taskId: task.entityId,
+                workspaceId,
+                label: task.name,
+              });
             }
           }}
           sublabel={tasksWithDue.at(0)?.name}
@@ -499,9 +505,11 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                         className="hover:bg-accent/50 flex w-full items-center gap-3 px-3 py-2.5 text-start transition-colors"
                         key={task.entityId}
                         onClick={() =>
-                          useInspectorStore
-                            .getState()
-                            .openTask(task.entityId, task.name)
+                          useInspectorStore.getState().openTask({
+                            taskId: task.entityId,
+                            workspaceId,
+                            label: task.name,
+                          })
                         }
                         onContextMenu={handleTaskContextMenu({
                           entityId: task.entityId,
@@ -594,9 +602,11 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                       if (task === null) {
                         return;
                       }
-                      useInspectorStore
-                        .getState()
-                        .openTask(task.entityId, task.name);
+                      useInspectorStore.getState().openTask({
+                        taskId: task.entityId,
+                        workspaceId,
+                        label: task.name,
+                      });
                     }}
                   >
                     <SquareCheckIcon />
@@ -842,8 +852,8 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                         className={cn(
                           "text-xs font-medium",
                           totalHoursThisWeek > prevWeekHours
-                            ? "text-green-600"
-                            : "text-red-500",
+                            ? "text-success"
+                            : "text-destructive",
                         )}
                       >
                         {totalHoursThisWeek > prevWeekHours ? "▲" : "▼"}{" "}
@@ -1155,7 +1165,11 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
   const handleOpen = (() => {
     if (entity.kind === "task") {
       return () =>
-        useInspectorStore.getState().openTask(entity.entityId, entity.name);
+        useInspectorStore.getState().openTask({
+          taskId: entity.entityId,
+          workspaceId,
+          label: entity.name,
+        });
     }
     if (navigable && fieldId) {
       return () =>

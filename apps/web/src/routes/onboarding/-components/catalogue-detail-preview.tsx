@@ -15,7 +15,7 @@ import type { LoadedCatalogueEntry } from "@stll/catalogue";
 import { Button } from "@stll/ui/components/button";
 
 import { sanitizeHref } from "@/lib/sanitize-href";
-import { CatalogueEntryIcon } from "@/routes/_protected.settings/-components/catalogue/catalogue-entry-icon";
+import { CatalogueEntryIcon } from "@/routes/_protected.knowledge/-components/catalogue/catalogue-entry-icon";
 
 /**
  * iOS Privacy-Nutritional-Label-style detail panel. Replaces the stack

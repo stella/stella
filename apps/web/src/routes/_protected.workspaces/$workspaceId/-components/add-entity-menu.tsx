@@ -134,7 +134,9 @@ export const AddEntityMenu = ({
       title: t("success.taskCreated"),
       type: "success",
     });
-    useInspectorStore.getState().openTask(entityId, "", true);
+    useInspectorStore
+      .getState()
+      .openTask({ taskId: entityId, workspaceId, isNew: true });
   };
 
   const handleUploadClick = () => {

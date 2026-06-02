@@ -159,7 +159,7 @@ export const TypeChipsRow = ({
         )}
       </div>
       {typeChanged && (
-        <p className="inline-flex items-center gap-1.5 text-[11px] text-amber-600 dark:text-amber-400">
+        <p className="text-warning-foreground inline-flex items-center gap-1.5 text-[11px]">
           <AlertTriangleIcon className="size-3 shrink-0" />
           {t("workspaces.properties.typeChangeWarning")}
         </p>

@@ -53,7 +53,7 @@ const renderCaseNumberCell = (info: CellContext<Decision, string>) => {
       </Link>
       {headline && (
         <p
-          className="text-muted-foreground [&_mark]:text-foreground mt-0.5 line-clamp-2 text-xs [&_mark]:bg-yellow-200/50 [&_mark]:font-medium dark:[&_mark]:bg-yellow-500/20"
+          className="text-muted-foreground [&_mark]:text-foreground [&_mark]:bg-warning/30 dark:[&_mark]:bg-warning/20 mt-0.5 line-clamp-2 text-xs [&_mark]:font-medium"
           dangerouslySetInnerHTML={{ __html: headline }}
         />
       )}

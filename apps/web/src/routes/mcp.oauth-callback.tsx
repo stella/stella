@@ -17,7 +17,7 @@ import type { McpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { broadcastMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { pageTitle } from "@/lib/page-title";
 
-const KNOWLEDGE_MCP_PATH = "/knowledge/mcp";
+const KNOWLEDGE_MCP_PATH = "/knowledge/tools";
 const FALLBACK_NAVIGATE_DELAY_MS = 150;
 
 const searchSchema = v.object({

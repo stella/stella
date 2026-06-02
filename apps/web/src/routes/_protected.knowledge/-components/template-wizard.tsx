@@ -199,9 +199,9 @@ export const ConfigureStep = ({
         </div>
 
         {structureErrors.length > 0 && (
-          <div className="mb-6 flex items-start gap-2 rounded-lg border border-yellow-500/30 bg-yellow-50 p-3 dark:bg-yellow-900/10">
-            <AlertTriangleIcon className="mt-0.5 size-4 shrink-0 text-yellow-600 dark:text-yellow-500" />
-            <span className="text-sm text-yellow-800 dark:text-yellow-200">
+          <div className="border-warning/30 bg-warning/10 dark:bg-warning/10 mb-6 flex items-start gap-2 rounded-lg border p-3">
+            <AlertTriangleIcon className="text-warning-foreground mt-0.5 size-4 shrink-0" />
+            <span className="text-warning-foreground text-sm">
               {t("templates.structureWarnings", {
                 count: structureErrors.length,
               })}

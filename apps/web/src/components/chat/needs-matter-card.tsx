@@ -408,7 +408,7 @@ const CreatedSuccessCard = ({ output, onOpen }: CreatedSuccessCardProps) => {
       <div className="flex items-center gap-2 px-3 py-2">
         <FilePlusIcon className="text-muted-foreground size-4 shrink-0" />
         <span className="font-medium">{t("chat.createDocument.created")}</span>
-        <CheckIcon className="ms-auto size-3.5 shrink-0 text-green-600 dark:text-green-400" />
+        <CheckIcon className="text-success ms-auto size-3.5 shrink-0" />
       </div>
       {canOpen ? (
         <button

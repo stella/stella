@@ -92,7 +92,7 @@ export const PageCitation = ({
 
         return (
           <div
-            className="rounded-xs bg-indigo-500"
+            className="bg-foreground-strong-muted rounded-xs"
             key={key}
             ref={(el) => {
               if (

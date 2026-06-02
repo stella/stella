@@ -109,8 +109,8 @@ export const TimerControls = ({ workspaceId }: TimerControlsProps) => {
 
   if (isRunning) {
     return (
-      <div className="flex items-center gap-3 rounded-md border border-green-500/30 bg-green-500/5 px-3 py-2">
-        <span className="size-2 animate-pulse rounded-full bg-green-500" />
+      <div className="border-success/30 bg-success/8 flex items-center gap-3 rounded-md border px-3 py-2">
+        <span className="bg-success size-2 animate-pulse rounded-full" />
         <span className="text-sm font-medium tabular-nums">
           {formatElapsed(elapsed)}
         </span>

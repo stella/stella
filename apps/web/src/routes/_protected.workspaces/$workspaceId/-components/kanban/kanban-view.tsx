@@ -108,7 +108,9 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         title: t("success.taskCreated"),
         type: "success",
       });
-      useInspectorStore.getState().openTask(entityId, "", true);
+      useInspectorStore
+        .getState()
+        .openTask({ taskId: entityId, workspaceId, isNew: true });
       return;
     }
 

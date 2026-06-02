@@ -300,11 +300,17 @@
     }
   },
   "catalogue": {
+    "add": "Adicionar",
+    "addCustom": "Adicionar personalizado",
+    "addCustomMcp": "Adicionar servidor MCP",
+    "addCustomSkill": "Adicionar habilidade",
     "by": "Por {author}",
+    "configuration": "Configuração",
     "cost": {
       "free": "Grátis",
       "paid": "Pago"
     },
+    "detailAuthMethod": "Autenticação",
     "empty": "Nenhuma entrada corresponde ao filtro atual.",
     "filter": {
       "all": "Todos",
@@ -312,7 +318,9 @@
       "nativeTools": "Ferramentas integradas",
       "skills": "Habilidades"
     },
+    "filterHint": "Filtrado para {codes}",
     "firstParty": "stella",
+    "firstPartyTooltip": "Criado pela equipe stella",
     "install": "Instalar",
     "installFailed": "Falha na instalação",
     "installPack": "{count, plural, one {Instalar # ferramenta} other {Instalar # ferramentas}}",
@@ -326,6 +334,9 @@
     "packInstalled": "{count, plural, one {# ferramenta instalada} other {# ferramentas instaladas}}",
     "packPartial": "{installed} instaladas, {failed} com falha",
     "recommended": "Recomendado",
+    "removed": "Esta ferramenta não está mais disponível.",
+    "sectionOthers": "Outros",
+    "sectionRecommended": "Recomendados",
     "settings": {
       "packTitle": "Pacote recomendado"
     },
@@ -334,6 +345,7 @@
       "apiKey": "Chave de API",
       "none": "Sem configuração"
     },
+    "showAll": "Mostrar tudo",
     "unavailable": "Ainda não disponível"
   },
   "chat": {
@@ -1455,6 +1467,10 @@
       "templates": {
         "description": "Modelos de documentos com espaços reservados",
         "title": "Modelos"
+      },
+      "tools": {
+        "description": "Conecte stella a registros públicos e outras fontes",
+        "title": "Ferramentas"
       }
     },
     "skills": {

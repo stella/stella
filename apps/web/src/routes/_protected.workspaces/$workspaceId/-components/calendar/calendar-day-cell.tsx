@@ -35,6 +35,7 @@ type CalendarDayCellProps = {
   entries: CalendarEntry[];
   mode: "month" | "week";
   isEditable: boolean;
+  workspaceId: string;
   onDrop: (entityId: string, kind: string) => void;
   onCreate: (kind: EntityKind) => void;
 };
@@ -44,6 +45,7 @@ export const CalendarDayCell = ({
   entries,
   mode,
   isEditable,
+  workspaceId,
   onDrop,
   onCreate,
 }: CalendarDayCellProps) => {
@@ -167,6 +169,7 @@ export const CalendarDayCell = ({
             entity={entity}
             isEditable={isEditable}
             key={`${entity.taskId}-${propertyId}`}
+            workspaceId={workspaceId}
           />
         ))}
       </div>

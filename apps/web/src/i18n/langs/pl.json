@@ -300,11 +300,17 @@
     }
   },
   "catalogue": {
+    "add": "Dodaj",
+    "addCustom": "Dodaj własne",
+    "addCustomMcp": "Dodaj serwer MCP",
+    "addCustomSkill": "Dodaj umiejętność",
     "by": "Autor: {author}",
+    "configuration": "Konfiguracja",
     "cost": {
       "free": "Bezpłatne",
       "paid": "Płatne"
     },
+    "detailAuthMethod": "Uwierzytelnianie",
     "empty": "Żadne wpisy nie odpowiadają bieżącemu filtrowi.",
     "filter": {
       "all": "Wszystkie",
@@ -312,7 +318,9 @@
       "nativeTools": "Wbudowane narzędzia",
       "skills": "Umiejętności"
     },
+    "filterHint": "Filtrowane do: {codes}",
     "firstParty": "stella",
+    "firstPartyTooltip": "Stworzone przez zespół stella",
     "install": "Zainstaluj",
     "installFailed": "Instalacja nie powiodła się",
     "installPack": "{count, plural, one {Zainstaluj # narzędzie} few {Zainstaluj # narzędzia} other {Zainstaluj # narzędzi}}",
@@ -326,6 +334,9 @@
     "packInstalled": "{count, plural, one {Zainstalowano # narzędzie} few {Zainstalowano # narzędzia} other {Zainstalowano # narzędzi}}",
     "packPartial": "Zainstalowano {installed}, {failed} nieudane",
     "recommended": "Polecane",
+    "removed": "To narzędzie nie jest już dostępne.",
+    "sectionOthers": "Pozostałe",
+    "sectionRecommended": "Polecane",
     "settings": {
       "packTitle": "Polecany pakiet"
     },
@@ -334,6 +345,7 @@
       "apiKey": "Klucz API",
       "none": "Bez konfiguracji"
     },
+    "showAll": "Pokaż wszystko",
     "unavailable": "Jeszcze niedostępne"
   },
   "chat": {
@@ -1455,6 +1467,10 @@
       "templates": {
         "description": "Szablony dokumentów z symbolami zastępczymi",
         "title": "Szablony"
+      },
+      "tools": {
+        "description": "Połącz stella z rejestrami publicznymi i innymi źródłami",
+        "title": "Narzędzia"
       }
     },
     "skills": {

@@ -300,11 +300,17 @@
     }
   },
   "catalogue": {
+    "add": "Lisa",
+    "addCustom": "Lisa kohandatud",
+    "addCustomMcp": "Lisa MCP-server",
+    "addCustomSkill": "Lisa oskus",
     "by": "Autor: {author}",
+    "configuration": "Konfiguratsioon",
     "cost": {
       "free": "Tasuta",
       "paid": "Tasuline"
     },
+    "detailAuthMethod": "Autentimine",
     "empty": "Praegusele filtrile ei vasta ükski kirje.",
     "filter": {
       "all": "Kõik",
@@ -312,7 +318,9 @@
       "nativeTools": "Sisseehitatud tööriistad",
       "skills": "Oskused"
     },
+    "filterHint": "Filtreeritud: {codes}",
     "firstParty": "stella",
+    "firstPartyTooltip": "Loodud stella tiimi poolt",
     "install": "Installi",
     "installFailed": "Installimine ebaõnnestus",
     "installPack": "{count, plural, one {Installi # tööriist} other {Installi # tööriista}}",
@@ -326,6 +334,9 @@
     "packInstalled": "{count, plural, one {# tööriist installitud} other {# tööriista installitud}}",
     "packPartial": "{installed} installitud, {failed} ebaõnnestus",
     "recommended": "Soovitatud",
+    "removed": "See tööriist pole enam saadaval.",
+    "sectionOthers": "Muud",
+    "sectionRecommended": "Soovitatud",
     "settings": {
       "packTitle": "Soovitatud pakett"
     },
@@ -334,6 +345,7 @@
       "apiKey": "API võti",
       "none": "Seadistus puudub"
     },
+    "showAll": "Näita kõiki",
     "unavailable": "Veel pole saadaval"
   },
   "chat": {
@@ -1455,6 +1467,10 @@
       "templates": {
         "description": "Dokumendimallid kohatäitjatega",
         "title": "Mallid"
+      },
+      "tools": {
+        "description": "Ühenda stella avalike registritega ja muude allikatega",
+        "title": "Tööriistad"
       }
     },
     "skills": {

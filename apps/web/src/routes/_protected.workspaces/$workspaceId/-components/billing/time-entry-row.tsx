@@ -73,7 +73,7 @@ export const TimeEntryRow = ({
       <div
         className={cn(
           "group hover:bg-muted/50 flex items-center gap-3 rounded-md border px-3 py-2 transition-colors",
-          isActive && "border-green-500/30 bg-green-500/5",
+          isActive && "border-success/30 bg-success/8",
           selected && "border-primary/30 bg-primary/5",
         )}
       >
@@ -125,7 +125,7 @@ export const TimeEntryRow = ({
         <span className="text-muted-foreground shrink-0 text-sm tabular-nums">
           {isActive ? (
             <span className="flex items-center gap-1.5">
-              <span className="size-1.5 animate-pulse rounded-full bg-green-500" />
+              <span className="bg-success size-1.5 animate-pulse rounded-full" />
               {t("billing.running")}
             </span>
           ) : (

@@ -91,20 +91,19 @@ type SeverityTone = { dot: string; chip: string; chipActive: string };
 // false positive here; suppressed at the constant declarations
 // rather than inside the object so reformatting can't split the
 // suppression away from the value.
-const HIGH_DOT = "bg-red-500";
-const HIGH_CHIP = "border-red-500/30 text-red-700 dark:text-red-300";
+const HIGH_DOT = "bg-destructive";
+const HIGH_CHIP = "border-destructive/30 text-destructive";
 const HIGH_CHIP_ACTIVE =
-  "bg-red-500/10 border-red-500 text-red-700 dark:text-red-200";
+  "bg-destructive/10 border-destructive text-destructive dark:text-destructive";
 
-const MEDIUM_DOT = "bg-amber-500";
-const MEDIUM_CHIP = "border-amber-500/30 text-amber-700 dark:text-amber-300";
+const MEDIUM_DOT = "bg-warning";
+const MEDIUM_CHIP = "border-warning/30 text-warning-foreground";
 const MEDIUM_CHIP_ACTIVE =
-  "bg-amber-500/10 border-amber-500 text-amber-700 dark:text-amber-200";
+  "bg-warning/10 border-warning text-warning-foreground dark:text-warning-foreground";
 
-const LOW_DOT = "bg-sky-500";
-const LOW_CHIP = "border-sky-500/30 text-sky-700 dark:text-sky-300";
-const LOW_CHIP_ACTIVE =
-  "bg-sky-500/10 border-sky-500 text-sky-700 dark:text-sky-200";
+const LOW_DOT = "bg-foreground-strong-muted";
+const LOW_CHIP = "border-foreground-disabled text-foreground";
+const LOW_CHIP_ACTIVE = "bg-accent border-foreground text-foreground";
 
 const severityTone = (severity: ReviewSeverityKey): SeverityTone => {
   switch (severity) {
@@ -931,8 +930,7 @@ const RedlinePreview = ({
   );
   const muted = "text-foreground-strong-muted";
   const contextCls = "text-foreground";
-  const insCls =
-    "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 px-1 py-0.5 rounded-sm";
+  const insCls = "bg-success/15 text-success px-1 py-0.5 rounded-sm";
   const delCls =
     "bg-destructive/10 text-destructive line-through decoration-destructive/70 px-1 py-0.5 rounded-sm";
 

@@ -245,8 +245,8 @@ function RouteComponent() {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
         <div className="flex w-full max-w-md flex-col items-center gap-4 text-center">
-          <div className="flex size-12 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-            <CheckCircle2Icon className="size-6 text-emerald-600 dark:text-emerald-400" />
+          <div className="bg-success/15 dark:bg-success/15 flex size-12 items-center justify-center rounded-lg">
+            <CheckCircle2Icon className="text-success size-6" />
           </div>
           <div>
             <h2 className="text-base font-semibold">

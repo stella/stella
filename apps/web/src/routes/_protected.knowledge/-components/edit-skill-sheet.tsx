@@ -1477,7 +1477,7 @@ function ResourceRow({
         {dirty && (
           <span
             aria-hidden="true"
-            className="ms-auto size-1.5 shrink-0 rounded-full bg-amber-500"
+            className="bg-warning ms-auto size-1.5 shrink-0 rounded-full"
           />
         )}
       </button>
@@ -1556,7 +1556,7 @@ function FileRow({ dirty, icon, label, onClick, selected }: FileRowProps) {
       {dirty && (
         <span
           aria-hidden="true"
-          className="ms-auto size-1.5 shrink-0 rounded-full bg-amber-500"
+          className="bg-warning ms-auto size-1.5 shrink-0 rounded-full"
         />
       )}
     </button>

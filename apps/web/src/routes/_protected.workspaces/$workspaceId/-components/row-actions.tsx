@@ -172,7 +172,11 @@ export const RowActions = ({
     (() => {
       if (entity.kind === "task") {
         return () =>
-          useInspectorStore.getState().openTask(entity.entityId, name);
+          useInspectorStore.getState().openTask({
+            taskId: entity.entityId,
+            workspaceId,
+            label: name,
+          });
       }
       if (file && isFileDisplayable(file)) {
         return () =>

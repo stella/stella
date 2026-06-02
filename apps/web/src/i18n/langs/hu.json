@@ -300,11 +300,17 @@
     }
   },
   "catalogue": {
+    "add": "Hozzáadás",
+    "addCustom": "Egyéni hozzáadása",
+    "addCustomMcp": "MCP-szerver hozzáadása",
+    "addCustomSkill": "Skill hozzáadása",
     "by": "Készítette: {author}",
+    "configuration": "Konfiguráció",
     "cost": {
       "free": "Ingyenes",
       "paid": "Fizetős"
     },
+    "detailAuthMethod": "Hitelesítés",
     "empty": "Nincs az aktuális szűrőnek megfelelő bejegyzés.",
     "filter": {
       "all": "Összes",
@@ -312,7 +318,9 @@
       "nativeTools": "Beépített eszközök",
       "skills": "Skillek"
     },
+    "filterHint": "Szűrve: {codes}",
     "firstParty": "stella",
+    "firstPartyTooltip": "A stella csapat által készítve",
     "install": "Telepítés",
     "installFailed": "Telepítés sikertelen",
     "installPack": "{count, plural, one {# eszköz telepítése} other {# eszköz telepítése}}",
@@ -326,6 +334,9 @@
     "packInstalled": "{count, plural, one {# eszköz telepítve} other {# eszköz telepítve}}",
     "packPartial": "{installed} telepítve, {failed} sikertelen",
     "recommended": "Ajánlott",
+    "removed": "Ez az eszköz már nem érhető el.",
+    "sectionOthers": "Egyéb",
+    "sectionRecommended": "Ajánlott",
     "settings": {
       "packTitle": "Ajánlott csomag"
     },
@@ -334,6 +345,7 @@
       "apiKey": "API-kulcs",
       "none": "Nincs beállítás"
     },
+    "showAll": "Összes megjelenítése",
     "unavailable": "Még nem elérhető"
   },
   "chat": {
@@ -1455,6 +1467,10 @@
       "templates": {
         "description": "Dokumentumsablonok helyőrzőkkel",
         "title": "Sablonok"
+      },
+      "tools": {
+        "description": "Kapcsolja össze stella-t nyilvános nyilvántartásokkal és más forrásokkal",
+        "title": "Eszközök"
       }
     },
     "skills": {

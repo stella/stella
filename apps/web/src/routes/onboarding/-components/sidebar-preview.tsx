@@ -30,8 +30,8 @@ type SidebarPreviewProps = {
 
 const STATUS_DOT_CLASS: Record<ProviderValidationStatus, string> = {
   checking: "bg-muted-foreground",
-  valid: "bg-emerald-500",
-  invalid: "bg-rose-500",
+  valid: "bg-success",
+  invalid: "bg-destructive",
 };
 
 const ANIMATION_STYLE = `
@@ -156,7 +156,7 @@ export const SidebarPreview = ({
 
         {matterName ? (
           <div className="animate-slide-in flex items-center gap-2 rounded-md px-2 py-1.5">
-            <LayersIcon className="size-3.5 shrink-0 text-blue-500" />
+            <LayersIcon className="text-foreground size-3.5 shrink-0" />
             <span className="text-foreground truncate text-sm">
               {matterName}
             </span>

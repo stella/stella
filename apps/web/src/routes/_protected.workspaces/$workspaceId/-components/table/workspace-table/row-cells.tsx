@@ -280,7 +280,11 @@ export const DraggableRow = ({
       return;
     }
 
-    useInspectorStore.getState().openTask(entity.entityId, name);
+    useInspectorStore.getState().openTask({
+      taskId: entity.entityId,
+      workspaceId,
+      label: name,
+    });
   };
 
   const toggleExpandedCell = (columnId: string, mode?: "toggle" | "open") => {

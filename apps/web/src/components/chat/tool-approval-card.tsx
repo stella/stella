@@ -489,7 +489,7 @@ export const ToolApprovalCard = ({
           <LoaderIcon className="text-muted-foreground ms-auto size-3.5 shrink-0 animate-spin" />
         )}
         {isApproved && (
-          <CheckIcon className="ms-auto size-3.5 shrink-0 text-green-600 dark:text-green-400" />
+          <CheckIcon className="text-success ms-auto size-3.5 shrink-0" />
         )}
         {isDenied && (
           <XIcon className="text-destructive ms-auto size-3.5 shrink-0" />
