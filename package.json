@@ -37,6 +37,7 @@
     "i18n:check": "turbo run i18n:check --",
     "i18n:sync": "turbo run i18n:sync --",
     "test": "turbo run test",
+    "db:push": "bun --filter @stll/api db:push",
     "clean": "turbo run clean && git clean -xdf node_modules",
     "sync:well-known": "cp -r .well-known apps/web/public/",
     "setup:dev": "bun run dev",
