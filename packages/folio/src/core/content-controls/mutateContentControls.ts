@@ -381,7 +381,11 @@ export function setContentControlValue(
         const display = item?.displayText ?? input.value;
         return {
           ...control,
-          properties: { ...control.properties, showingPlaceholder: false },
+          properties: {
+            ...control.properties,
+            dropdownLastValue: input.value,
+            showingPlaceholder: false,
+          },
           content: [makeParagraphFromText(display)],
         };
       }

@@ -1184,6 +1184,14 @@ export type SdtProperties = {
   dateValueISO?: string;
   /** Dropdown/combobox list items. */
   listItems?: { displayText: string; value: string }[];
+  /**
+   * Selected dropdown / comboBox value (`w:dropDownList@w:lastValue`).
+   * Persisted as the OOXML value, independent of the body display text.
+   * Without this, the serializer had to recover the saved value by
+   * matching the body's display text against `listItems`, which picked
+   * the wrong entry when two items shared a `displayText`.
+   */
+  dropdownLastValue?: string;
   /** Checkbox checked state (`w14:checkbox/w14:checked`). */
   checked?: boolean;
   /**

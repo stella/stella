@@ -113,6 +113,38 @@ describe("serializeBlockSdt — raw sdtPr replay", () => {
     expect(xml).toContain("</w:dropDownList>");
   });
 
+  test("dropdownLastValue from the model wins over body-text matching when displayText collides", () => {
+    // Two list items share a displayText ("Other"). The body shows the
+    // friendly label, but the API set the picked OOXML value to "other-b".
+    // Without the modeled dropdownLastValue, the serializer used to look
+    // up the value by display-text match and returned the FIRST collision
+    // ("other-a") — Word reopened the doc with the wrong selection.
+    const sdt: BlockSdt = {
+      type: "blockSdt",
+      properties: {
+        sdtType: "dropdown",
+        tag: "category",
+        listItems: [
+          { displayText: "First", value: "first" },
+          { displayText: "Other", value: "other-a" },
+          { displayText: "Other", value: "other-b" },
+        ],
+        dropdownLastValue: "other-b",
+      },
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "run", content: [{ type: "text", text: "Other" }] },
+          ],
+        },
+      ],
+    };
+    const xml = serializeBlockSdt(sdt, noChildSerializer);
+    expect(xml).toContain('w:lastValue="other-b"');
+    expect(xml).not.toContain('w:lastValue="other-a"');
+  });
+
   test("fallback sdtPr emits w:date with fullDate + dateFormat for date controls", () => {
     const sdt: BlockSdt = {
       type: "blockSdt",

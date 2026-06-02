@@ -37,6 +37,12 @@ export const BlockSdtExtension = createNodeExtension({
       /** ISO 8601 bound date value (`w:date@w:fullDate`). */
       dateValueISO: { default: null },
       listItems: { default: null },
+      /**
+       * Selected dropdown / comboBox value (`w:dropDownList@w:lastValue`).
+       * Persisted independently of body display text so duplicate-label
+       * items round-trip to the right OOXML value on save.
+       */
+      dropdownLastValue: { default: null },
       checked: { default: null },
       rawPropertiesXml: { default: null },
       rawEndPropertiesXml: { default: null },
@@ -68,6 +74,7 @@ export const BlockSdtExtension = createNodeExtension({
             dateFormat: dom.dataset["dateFormat"] ?? null,
             dateValueISO: dom.dataset["dateValueIso"] ?? null,
             listItems: dom.dataset["listItems"] ?? null,
+            dropdownLastValue: dom.dataset["dropdownLastValue"] ?? null,
             checked,
             // Raw XML is preserved on the model, not the DOM; consumers that
             // round-trip through PM must re-attach it from the source.
@@ -109,6 +116,9 @@ export const BlockSdtExtension = createNodeExtension({
       }
       if (attrs["listItems"]) {
         data["data-list-items"] = String(attrs["listItems"]);
+      }
+      if (attrs["dropdownLastValue"]) {
+        data["data-dropdown-last-value"] = String(attrs["dropdownLastValue"]);
       }
       if (attrs["checked"] !== null && attrs["checked"] !== undefined) {
         data["data-checked"] = String(attrs["checked"]);

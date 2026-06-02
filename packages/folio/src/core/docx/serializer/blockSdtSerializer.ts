@@ -122,8 +122,16 @@ function extractDropdownLastValue(blockSdt: BlockSdt): string | undefined {
   ) {
     return undefined;
   }
-  // The dropdown's "current" value is the displayed text of the first run
-  // in the SDT body. Mirrors what setContentControlValue writes back.
+  // Prefer the modeled `dropdownLastValue` (written by `setContentControlValue`
+  // and reload-recovered by the parser from the source `w:lastValue`).
+  // Recovering it from the body's display text mis-selects the wrong entry
+  // when two list items share a displayText, so the body-text fallback
+  // below only kicks in for documents that have neither been updated via
+  // the API nor parsed from a doc that carried a w:lastValue.
+  const modeled = blockSdt.properties.dropdownLastValue;
+  if (modeled !== undefined && modeled.length > 0) {
+    return modeled;
+  }
   const firstBlock = blockSdt.content[0];
   if (!firstBlock || firstBlock.type !== "paragraph") {
     return undefined;
@@ -142,8 +150,6 @@ function extractDropdownLastValue(blockSdt: BlockSdt): string | undefined {
   if (text.length === 0) {
     return undefined;
   }
-  // Map back from displayText to value when listItems are present so
-  // Word's w:lastValue carries the OOXML value, not the friendly label.
   const items = blockSdt.properties.listItems;
   if (items) {
     const match = items.find((item) => item.displayText === text);

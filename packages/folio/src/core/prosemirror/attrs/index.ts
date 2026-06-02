@@ -748,6 +748,12 @@ export const readSdtAttrs = (
   optionalString(attrs, "dateFormat", "sdt.attrs.dateFormat", issues);
   optionalString(attrs, "dateValueISO", "sdt.attrs.dateValueISO", issues);
   optionalSdtListItems(attrs, "listItems", "sdt.attrs.listItems", issues);
+  optionalString(
+    attrs,
+    "dropdownLastValue",
+    "sdt.attrs.dropdownLastValue",
+    issues,
+  );
   optionalBoolean(attrs, "checked", "sdt.attrs.checked", issues);
 
   return attrsResult(attrs, issues);
@@ -786,6 +792,12 @@ export const readBlockSdtAttrs = (
   optionalString(attrs, "dateFormat", "blockSdt.attrs.dateFormat", issues);
   optionalString(attrs, "dateValueISO", "blockSdt.attrs.dateValueISO", issues);
   optionalSdtListItems(attrs, "listItems", "blockSdt.attrs.listItems", issues);
+  optionalString(
+    attrs,
+    "dropdownLastValue",
+    "blockSdt.attrs.dropdownLastValue",
+    issues,
+  );
   optionalBoolean(attrs, "checked", "blockSdt.attrs.checked", issues);
   optionalString(
     attrs,

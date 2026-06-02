@@ -306,6 +306,9 @@ function convertPMBlockSdt(node: PMNode): BlockSdt {
       properties.listItems = items;
     }
   }
+  if (typeof attrs.dropdownLastValue === "string") {
+    properties.dropdownLastValue = attrs.dropdownLastValue;
+  }
   if (typeof attrs.checked === "boolean") {
     properties.checked = attrs.checked;
   }

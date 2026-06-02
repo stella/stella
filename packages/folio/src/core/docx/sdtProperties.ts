@@ -156,13 +156,19 @@ export function parseSdtProperties(
           break;
         }
         case "dropDownList":
-          props.sdtType = "dropdown";
+        case "comboBox": {
+          props.sdtType = name === "dropDownList" ? "dropdown" : "comboBox";
           props.listItems = parseListItems(el);
+          // Capture the source's `w:lastValue` so a parse → save round trip
+          // for a dropdown that was previously chosen in Word keeps the
+          // exact OOXML value, even if duplicate displayText would have
+          // made the body-text fallback ambiguous.
+          const lastValue = getAttributeAnyPrefix(el, "lastValue");
+          if (lastValue !== null) {
+            props.dropdownLastValue = lastValue;
+          }
           break;
-        case "comboBox":
-          props.sdtType = "comboBox";
-          props.listItems = parseListItems(el);
-          break;
+        }
         case "checkbox": {
           props.sdtType = "checkbox";
           // OOXML OnOff values are "1" | "true" | "on" (or absent attribute

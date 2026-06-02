@@ -144,6 +144,9 @@ export function blockSdtAttrsToSdtProperties(node: PMNode): SdtProperties {
       props.listItems = parsed;
     }
   }
+  if (typeof attrs.dropdownLastValue === "string") {
+    props.dropdownLastValue = attrs.dropdownLastValue;
+  }
   if (typeof attrs.checked === "boolean") {
     props.checked = attrs.checked;
   }
@@ -372,9 +375,15 @@ export function setContentControlValueTr(
         display = item.displayText;
       }
     }
-    return replaceBlockSdtChildren(state, match, [
-      paragraphFromText(state.schema, display),
-    ]);
+    return replaceBlockSdtChildren(
+      state,
+      match,
+      [paragraphFromText(state.schema, display)],
+      // Persist the picked OOXML value separately so duplicate-label items
+      // round-trip to the right selection on save — the serializer reads
+      // dropdownLastValue before falling back to display-text matching.
+      { dropdownLastValue: input.value },
+    );
   }
   if (input.kind === "checkbox") {
     if (sdtType !== "checkbox") {

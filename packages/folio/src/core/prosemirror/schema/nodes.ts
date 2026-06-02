@@ -323,6 +323,8 @@ export type SdtAttrs = {
   dateValueISO?: string;
   /** Dropdown/combobox list items as JSON string */
   listItems?: string;
+  /** Selected dropdown / comboBox value (`w:dropDownList@w:lastValue`). */
+  dropdownLastValue?: string;
   /** Checkbox checked state */
   checked?: boolean;
 };
@@ -346,6 +348,8 @@ export type BlockSdtAttrs = {
   dateValueISO?: string;
   /** Dropdown/combobox list items as JSON string. */
   listItems?: string;
+  /** Selected dropdown / comboBox value (`w:dropDownList@w:lastValue`). */
+  dropdownLastValue?: string;
   checked?: boolean;
   /** Captured `<w:sdtPr>…</w:sdtPr>` for round-trip replay. */
   rawPropertiesXml?: string;

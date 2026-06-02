@@ -162,6 +162,7 @@ function convertBlockSdt(
     dateFormat: props.dateFormat ?? null,
     dateValueISO: props.dateValueISO ?? null,
     listItems: props.listItems ? JSON.stringify(props.listItems) : null,
+    dropdownLastValue: props.dropdownLastValue ?? null,
     checked: props.checked ?? null,
     rawPropertiesXml: props.rawPropertiesXml ?? null,
     rawEndPropertiesXml: props.rawEndPropertiesXml ?? null,
