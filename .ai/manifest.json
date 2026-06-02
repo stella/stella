@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "agents": {
+    "title": "Stella Development Guidelines",
+    "modules": [
+      "stella-public-repo",
+      "engineering",
+      "scalability",
+      "frontend-react",
+      "typescript",
+      "backend-elysia",
+      "error-handling",
+      "database",
+      "testing",
+      "i18n",
+      "linting"
+    ],
+    "local": ".ai/local/agents.md"
+  }
+}

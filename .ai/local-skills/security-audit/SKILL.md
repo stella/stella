@@ -50,11 +50,15 @@ documents — security is non-negotiable.
 
 7. **Dependency vulnerabilities**:
 
+   If `bunfig.toml` configures a security scanner, run the configured
+   Bun dependency scan:
+
    ```bash
-   bun pm audit
+   bun pm scan
    ```
 
-   Also check the Dependabot alerts:
+   If no scanner is configured, note that local Bun dependency scanning
+   is unavailable for this repo and check the Dependabot alerts instead:
 
    ```bash
    gh api repos/{owner}/{repo}/dependabot/alerts --jq '.[].security_advisory.summary'
