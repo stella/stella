@@ -255,7 +255,7 @@ const LinkedClauseRow = ({
             <p className="text-sm font-medium">{link.clause?.title}</p>
             <div className="text-muted-foreground flex items-center gap-2 text-xs">
               {link.slotName && (
-                <span className="rounded-sm bg-purple-100 px-1.5 py-0.5 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+                <span className="bg-muted text-foreground dark:bg-muted dark:text-foreground rounded-sm px-1.5 py-0.5">
                   {link.slotName}
                 </span>
               )}
@@ -268,7 +268,7 @@ const LinkedClauseRow = ({
                 </span>
               )}
               {link.isOutdated && (
-                <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                <span className="text-warning-foreground flex items-center gap-1">
                   <AlertTriangleIcon className="size-3" />
                   {t("clauses.outdatedVersion")}
                 </span>

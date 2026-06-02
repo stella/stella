@@ -30,18 +30,28 @@ import {
 } from "@stll/ui/components/popover";
 import { cn } from "@stll/ui/lib/utils";
 
-import { ContextMenu, type ContextMenuAction } from "@/components/context-menu";
-import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import {
-  FirstPartyBadge,
-  CostBadge,
-  SetupBadge,
-} from "@/routes/_protected.settings/-components/catalogue/catalogue-badges";
-import { CatalogueEntryIcon } from "@/routes/_protected.settings/-components/catalogue/catalogue-entry-icon";
+  CatalogueRow,
+  type CatalogueRowDisplay,
+} from "@/components/catalogue/catalogue-row";
+import type { ContextMenuAction } from "@/components/context-menu";
+import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import {
   createCatalogueAutoSelectionPlan,
   isCatalogueEntryAvailableDuringOnboarding,
 } from "@/routes/onboarding/-components/onboarding-catalogue-setup.logic";
+
+const toRowDisplay = (entry: LoadedCatalogueEntry): CatalogueRowDisplay => ({
+  slug: entry.slug,
+  displayName: entry.displayName,
+  description: entry.description,
+  author: entry.author,
+  cost: entry.cost,
+  setup: entry.setup,
+  icon: entry.icon,
+  iconUrl: entry.iconUrl,
+  jurisdictions: entry.jurisdictions,
+});
 
 type CatalogueStepProps = {
   practiceJurisdictions: readonly PracticeJurisdiction[];
@@ -407,7 +417,7 @@ export const CatalogueStep = ({
             {filteredEntries
               .filter((entry) => recommendedSet.has(entry.slug))
               .map((entry) => (
-                <CatalogueRow
+                <OnboardingCatalogueRow
                   addLabel={t("common.add")}
                   entry={entry}
                   focused={focusedSlug === entry.slug}
@@ -443,7 +453,7 @@ export const CatalogueStep = ({
             {filteredEntries
               .filter((entry) => !recommendedSet.has(entry.slug))
               .map((entry) => (
-                <CatalogueRow
+                <OnboardingCatalogueRow
                   addLabel={t("common.add")}
                   entry={entry}
                   focused={focusedSlug === entry.slug}
@@ -511,7 +521,7 @@ export const CatalogueStep = ({
   );
 };
 
-type CatalogueRowProps = {
+type OnboardingCatalogueRowProps = {
   entry: LoadedCatalogueEntry;
   selected: boolean;
   focused: boolean;
@@ -521,7 +531,13 @@ type CatalogueRowProps = {
   removeLabel: string;
 };
 
-const CatalogueRow = ({
+/**
+ * Adapter that maps the onboarding-specific `LoadedCatalogueEntry` and
+ * selection semantics onto the shared `CatalogueRow`. Direct Add stays
+ * limited to first-party entries; third-party additions still flow
+ * through the detail-panel acknowledgement.
+ */
+const OnboardingCatalogueRow = ({
   entry,
   selected,
   focused,
@@ -529,10 +545,10 @@ const CatalogueRow = ({
   onToggleSelection,
   addLabel,
   removeLabel,
-}: CatalogueRowProps) => {
+}: OnboardingCatalogueRowProps) => {
   const isFirstParty = entry.author === "stella";
 
-  const actions: readonly ContextMenuAction[] =
+  const contextActions: readonly ContextMenuAction[] =
     onToggleSelection && selected
       ? [
           {
@@ -543,91 +559,33 @@ const CatalogueRow = ({
         ]
       : [];
 
-  // Use div + role=button so we can nest the Add/Remove button without
-  // hitting the HTML "no button-in-button" rule.
-  return (
-    <ContextMenu actions={actions}>
-      <div
-        aria-pressed={focused}
-        className={cn(
-          "flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-start transition-colors",
-          focused && "border-foreground bg-accent/60 ring-foreground/20 ring-1",
-          !focused && selected && "border-foreground-disabled bg-accent/20",
-          !focused && !selected && "border-border hover:bg-muted/40",
-        )}
-        onClick={onClick}
-        onKeyDown={(e) => {
-          // Don't swallow Space/Enter when an interactive descendant
-          // (the Add/Remove button) holds focus — let the descendant
-          // handle its own activation.
-          if (e.target !== e.currentTarget) {
-            return;
-          }
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onClick();
-          }
+  let actions: React.ReactNode = null;
+  if (focused && onToggleSelection && (selected || isFirstParty)) {
+    actions = (
+      <Button
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleSelection();
         }}
-        role="button"
-        tabIndex={0}
+        size="xs"
+        type="button"
+        variant={selected ? "destructive-outline" : "outline"}
       >
-        <CatalogueEntryIcon
-          className="text-muted-foreground mt-0.5 shrink-0"
-          icon={entry.icon}
-          iconUrl={entry.iconUrl ?? null}
-          size={20}
-          slug={entry.slug}
-        />
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          {/* Title row reserves the button-sized height so the
-              CheckIcon ↔ Button swap on focus doesn't reflow the
-              card and nudge neighbours. */}
-          <div className="flex min-h-7 items-center gap-2 sm:min-h-6">
-            <span className="text-sm font-medium">{entry.displayName}</span>
-            {focused &&
-            onToggleSelection &&
-            // Direct Add bypasses the third-party acknowledgement that
-            // lives in the detail panel; only first-party entries get
-            // the inline Add affordance. Remove is always safe to surface
-            // since it reverses an already-confirmed choice.
-            (selected || isFirstParty) ? (
-              <Button
-                className="ms-auto"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleSelection();
-                }}
-                size="xs"
-                type="button"
-                variant={selected ? "destructive-outline" : "outline"}
-              >
-                {selected ? removeLabel : addLabel}
-              </Button>
-            ) : (
-              selected && (
-                <CheckIcon className="text-foreground ms-auto size-4 shrink-0" />
-              )
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {isFirstParty && <FirstPartyBadge />}
-            <CostBadge cost={entry.cost} />
-            <SetupBadge setup={entry.setup} />
-            {entry.jurisdictions.length > 0 && (
-              <div className="ms-auto flex flex-wrap items-center gap-1.5">
-                {entry.jurisdictions.map((code) => (
-                  <span
-                    className="bg-muted text-muted-foreground inline-flex items-center rounded-md px-1.5 py-0.5 text-xs"
-                    key={code}
-                  >
-                    {code}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </ContextMenu>
+        {selected ? removeLabel : addLabel}
+      </Button>
+    );
+  } else if (selected) {
+    actions = <CheckIcon className="text-foreground size-4 shrink-0" />;
+  }
+
+  return (
+    <CatalogueRow
+      accentWhenUnfocused={selected}
+      actions={actions}
+      contextActions={contextActions}
+      display={toRowDisplay(entry)}
+      focused={focused}
+      onFocus={onClick}
+    />
   );
 };

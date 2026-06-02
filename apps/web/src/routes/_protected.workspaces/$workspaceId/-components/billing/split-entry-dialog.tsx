@@ -170,7 +170,7 @@ export const SplitEntryDialog = ({
             <span
               className={
                 totalPercentage === 100
-                  ? "text-xs text-emerald-600"
+                  ? "text-success text-xs"
                   : "text-destructive text-xs"
               }
             >

@@ -39,6 +39,16 @@ type CatalogueEntryResponse = LoadedCatalogueEntry & {
    */
   installedSkillId: string | null;
   installedConnectorSlug: string | null;
+  /**
+   * Whether the installed entry is currently enabled (turned on for
+   * use in chat). Only meaningful when `installState === "installed"`.
+   * For skills this mirrors `agentSkills.enabled`; for native-tools it
+   * is always `true` when installed (install-state already encodes the
+   * jurisdiction/override decision); for MCP entries this is `null`
+   * because the user connection lives on a separate row and is
+   * surfaced via the dedicated MCP detail flow.
+   */
+  enabled: boolean | null;
 };
 
 const listCatalogue = createSafeRootHandler(
@@ -74,6 +84,7 @@ const listCatalogue = createSafeRootHandler(
                   id: agentSkills.id,
                   slug: agentSkills.slug,
                   scope: agentSkills.scope,
+                  enabled: agentSkills.enabled,
                 })
                 .from(agentSkills)
                 .where(
@@ -146,6 +157,7 @@ const listCatalogue = createSafeRootHandler(
     const canDeleteTeamSkills =
       memberRole.role === "admin" || memberRole.role === "owner";
     const skillIdBySlug = new Map<string, string>();
+    const skillEnabledBySlug = new Map<string, boolean>();
     for (const row of visibleSkillRows) {
       if (row.scope === "team" && !canDeleteTeamSkills) {
         continue;
@@ -153,6 +165,7 @@ const listCatalogue = createSafeRootHandler(
       const existing = skillIdBySlug.get(row.slug);
       if (!existing || row.scope === "team") {
         skillIdBySlug.set(row.slug, row.id);
+        skillEnabledBySlug.set(row.slug, row.enabled);
       }
     }
     const connectorSlugByUrl = new Map<string, string>();
@@ -196,6 +209,16 @@ const listCatalogue = createSafeRootHandler(
         entry.kind === "mcp" && installState === "installed"
           ? (connectorSlugByUrl.get(entry.url) ?? null)
           : null;
+      let enabled: boolean | null = null;
+      if (installState === "installed") {
+        if (entry.kind === "skill") {
+          enabled = skillEnabledBySlug.get(entry.slug) ?? null;
+        } else if (entry.kind === "native-tool") {
+          // Native-tools encode the enabled decision into install-state
+          // already (jurisdiction default + overrides). Installed ⇒ on.
+          enabled = true;
+        }
+      }
       response.push({
         ...entry,
         isLocked,
@@ -204,6 +227,7 @@ const listCatalogue = createSafeRootHandler(
         installState,
         installedSkillId,
         installedConnectorSlug,
+        enabled,
       });
     }
 

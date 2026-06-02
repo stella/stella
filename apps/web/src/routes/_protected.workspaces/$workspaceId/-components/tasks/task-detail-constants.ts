@@ -63,13 +63,10 @@ export const STATUS_ICONS = {
 
 export const STATUS_COLORS = {
   open: "text-muted-foreground",
-  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
-  in_progress: "text-blue-500 dark:text-blue-400",
-  in_review: "text-amber-500",
-  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
-  done: "text-green-500 dark:text-green-400",
-  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
-  cancelled: "text-red-400 dark:text-red-300",
+  in_progress: "text-foreground dark:text-foreground-muted",
+  in_review: "text-warning",
+  done: "text-success dark:text-success",
+  cancelled: "text-destructive dark:text-destructive",
 } as const satisfies Record<TaskStatus, string>;
 
 export const PRIORITY_ICONS = {
@@ -82,10 +79,8 @@ export const PRIORITY_ICONS = {
 
 export const PRIORITY_COLORS = {
   none: "text-muted-foreground",
-  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
-  urgent: "text-red-500 dark:text-red-400",
-  high: "text-orange-500",
-  medium: "text-yellow-500",
-  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
-  low: "text-blue-400 dark:text-blue-300",
+  urgent: "text-destructive",
+  high: "text-warning",
+  medium: "text-warning",
+  low: "text-foreground-muted dark:text-foreground",
 } as const satisfies Record<TaskPriority, string>;

@@ -175,8 +175,17 @@ function PromptsPage() {
         />
       )}
 
+      {/* Section eyebrows only surface when both buckets have
+          content; the heading exists to disambiguate team vs
+          private. Alone, it duplicates the page title. */}
       {teamShortcuts.length > 0 && (
-        <Section title={t("knowledge.skills.teamSection")}>
+        <Section
+          title={
+            privateShortcuts.length > 0
+              ? t("knowledge.skills.teamSection")
+              : undefined
+          }
+        >
           {teamShortcuts.map((s) => (
             <ShortcutCard
               key={s.id}
@@ -191,7 +200,13 @@ function PromptsPage() {
       )}
 
       {privateShortcuts.length > 0 && (
-        <Section title={t("knowledge.skills.privateSection")}>
+        <Section
+          title={
+            teamShortcuts.length > 0
+              ? t("knowledge.skills.privateSection")
+              : undefined
+          }
+        >
           {privateShortcuts.map((s) => (
             <ShortcutCard
               key={s.id}
@@ -256,16 +271,18 @@ function PromptsPage() {
 // ── Sub-components ───────────────────────────────────
 
 type SectionProps = {
-  title: string;
+  title?: string | undefined;
   children: React.ReactNode;
 };
 
 function Section({ title, children }: SectionProps) {
   return (
     <div className="mb-8">
-      <h2 className="text-muted-foreground mb-3 text-xs font-semibold tracking-wider uppercase">
-        {title}
-      </h2>
+      {title !== undefined && (
+        <h2 className="text-muted-foreground mb-3 text-xs font-semibold tracking-wider uppercase">
+          {title}
+        </h2>
+      )}
       <div className="flex flex-col gap-2">{children}</div>
     </div>
   );
@@ -309,7 +326,7 @@ function ShortcutCard({
             </span>
           )}
           {shadowed && (
-            <span className="rounded border border-amber-200 px-1.5 py-0.5 text-xs text-amber-600 dark:border-amber-800 dark:text-amber-400">
+            <span className="border-warning/30 text-warning-foreground dark:border-warning/40 dark:text-warning rounded border px-1.5 py-0.5 text-xs">
               {t("knowledge.skills.shadowed")}
             </span>
           )}

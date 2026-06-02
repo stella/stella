@@ -758,7 +758,7 @@ const RedlineOverlay = ({
           {t("fileDetail.redlinePreview")}
         </span>
         <span
-          className="shrink-0 text-xs font-medium text-green-600 tabular-nums"
+          className="text-success shrink-0 text-xs font-medium tabular-nums"
           title={`${String(compareState.wordsAdded)} ${t("fileDetail.wordsAdded")}`}
         >
           +{compareState.wordsAdded}

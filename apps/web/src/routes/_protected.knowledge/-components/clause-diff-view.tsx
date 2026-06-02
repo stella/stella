@@ -23,9 +23,9 @@ export const ClauseDiffView = ({ diffs }: ClauseDiffViewProps) => (
         {para.segments.map((seg, j) => (
           <span
             className={cn(
-              seg.type === "added" && "bg-green-100 dark:bg-green-900/30",
+              seg.type === "added" && "bg-success/15 dark:bg-success/15",
               seg.type === "removed" &&
-                "bg-red-100 line-through dark:bg-red-900/30",
+                "bg-destructive/15 dark:bg-destructive/15 line-through",
             )}
             key={j}
           >

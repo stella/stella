@@ -17,13 +17,14 @@ const PRIORITY_CONFIG: Record<
 > = {
   urgent: {
     icon: AlertCircleIcon,
-    // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present
-    className: "text-red-500 dark:text-red-400",
+    className: "text-destructive",
   },
-  high: { icon: ArrowUpIcon, className: "text-orange-500" },
-  medium: { icon: MinusIcon, className: "text-yellow-500" },
-  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
-  low: { icon: ArrowDownIcon, className: "text-blue-400 dark:text-blue-300" },
+  high: { icon: ArrowUpIcon, className: "text-warning" },
+  medium: { icon: MinusIcon, className: "text-warning" },
+  low: {
+    icon: ArrowDownIcon,
+    className: "text-foreground-muted dark:text-foreground",
+  },
 };
 
 const isOverdue = (dueDate: string, status: string | null) =>
@@ -69,7 +70,7 @@ export const TaskBadges = ({ entity, className }: TaskBadgesProps) => {
         <span
           className={cn(
             "flex items-center gap-0.5",
-            overdue && "text-red-500 dark:text-red-400",
+            overdue && "text-destructive",
           )}
         >
           <CalendarIcon className="size-3" />

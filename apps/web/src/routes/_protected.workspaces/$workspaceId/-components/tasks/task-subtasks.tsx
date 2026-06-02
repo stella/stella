@@ -25,7 +25,7 @@ const SubtaskRow = ({
       type="button"
     >
       {isDone ? (
-        <CheckCircle2Icon className="size-3.5 text-green-500" />
+        <CheckCircle2Icon className="text-success size-3.5" />
       ) : (
         <CircleIcon className="text-muted-foreground size-3.5" />
       )}

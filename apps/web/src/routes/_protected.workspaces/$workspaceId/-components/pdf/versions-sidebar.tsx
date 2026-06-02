@@ -77,11 +77,12 @@ type LabelPreset = {
 
 const LABEL_PRESETS: LabelPreset[] = [
   { key: "draft", color: "bg-foreground-disabled" },
-  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
-  { key: "counterpartyReview", color: "bg-blue-500 dark:bg-blue-400" },
-  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
-  { key: "final", color: "bg-green-500 dark:bg-green-400" },
-  { key: "signed", color: "bg-amber-500" },
+  {
+    key: "counterpartyReview",
+    color: "bg-foreground-strong-muted dark:bg-foreground-strong-muted",
+  },
+  { key: "final", color: "bg-success dark:bg-success" },
+  { key: "signed", color: "bg-warning" },
 ];
 
 const UPLOAD_PUT_TIMEOUT_MS = 5 * 60 * 1000;
@@ -420,7 +421,7 @@ function VersionItem({
           )}
           {hasDiff && (
             <span className="ms-auto flex items-center gap-1 text-[10px] tabular-nums">
-              <span className="text-green-600">+{version.diffWordsAdded}</span>
+              <span className="text-success">+{version.diffWordsAdded}</span>
               <span className="text-destructive">
                 −{version.diffWordsRemoved}
               </span>

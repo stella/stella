@@ -51,8 +51,8 @@ const ClauseParagraphRow = ({ paragraph }: { paragraph: ClauseParagraph }) => {
       <div
         className={`rounded-sm border-s-[3px] py-1.5 ps-3 pe-2 ${
           isConditional
-            ? "border-blue-400 bg-blue-50/50 dark:border-blue-600 dark:bg-blue-950/20"
-            : "border-emerald-400 bg-emerald-50/50 dark:border-emerald-600 dark:bg-emerald-950/20"
+            ? "border-foreground-disabled bg-accent/50 dark:border-foreground-disabled dark:bg-accent/30"
+            : "border-success/40 bg-success/10 dark:border-success/40 dark:bg-success/10"
         }`}
       >
         <DirectiveLabel

@@ -303,11 +303,17 @@ type Messages = {
     };
   };
   "catalogue": {
+    "add": "Add";
+    "addCustom": "Add custom";
+    "addCustomMcp": "Add MCP server";
+    "addCustomSkill": "Add skill";
     "by": "By {author}";
+    "configuration": "Configuration";
     "cost": {
       "free": "Free";
       "paid": "Paid";
     };
+    "detailAuthMethod": "Authentication";
     "empty": "No entries match the current filter.";
     "filter": {
       "all": "All";
@@ -315,7 +321,9 @@ type Messages = {
       "nativeTools": "Built-in tools";
       "skills": "Skills";
     };
+    "filterHint": "Filtered to {codes}";
     "firstParty": "stella";
+    "firstPartyTooltip": "Built by the stella team";
     "install": "Install";
     "installFailed": "Install failed";
     "installPack": "Install {count, plural, one {# tool} other {# tools}}";
@@ -329,6 +337,8 @@ type Messages = {
     "packInstalled": "{count, plural, one {# tool installed} other {# tools installed}}";
     "packPartial": "Installed {installed}, {failed} failed";
     "recommended": "Recommended";
+    "sectionOthers": "Others";
+    "sectionRecommended": "Recommended";
     "settings": {
       "packTitle": "Recommended pack";
     };
@@ -337,6 +347,7 @@ type Messages = {
       "apiKey": "API key";
       "none": "No setup";
     };
+    "showAll": "Show all";
     "unavailable": "Not available yet";
   };
   "chat": {
@@ -1459,6 +1470,10 @@ type Messages = {
         "description": "Document templates with placeholders";
         "title": "Templates";
       };
+      "tools": {
+        "description": "Skills, MCP servers, and built-in tools the AI can use in chat";
+        "title": "Tools";
+      };
     };
     "skills": {
       "addShortcut": "Add prompt";
@@ -1822,8 +1837,8 @@ type Messages = {
         "termAddedToast": "Added \"{value}\" to the firm-wide deny list.";
         "title": "Anonymization";
       };
-      "catalogue": "Catalogue";
-      "catalogueDescription": "Browse and install skills, MCP servers, and first-party tools for your jurisdiction";
+      "catalogue": "Tools";
+      "catalogueDescription": "Connect stella to public registries, VAT lookups, and other sources. Recommendations follow your jurisdiction.";
       "matterNumbering": "Matter numbering";
       "matterNumberingDescription": "Configure how new matter reference numbers are generated";
       "membersDescription": "Manage who has access to this organization and any pending invitations";

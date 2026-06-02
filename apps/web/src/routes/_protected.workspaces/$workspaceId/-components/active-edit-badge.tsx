@@ -28,7 +28,7 @@ export const ActiveEditBadge = ({
       className={cn("inline-flex items-center gap-0.5", className)}
       render={<span />}
     >
-      <LockIcon className="size-3 text-amber-500" />
+      <LockIcon className="text-warning size-3" />
       <Avatar className="size-4">
         <AvatarImage alt={name} src={image ?? undefined} />
         <AvatarFallback className="text-[7px]">

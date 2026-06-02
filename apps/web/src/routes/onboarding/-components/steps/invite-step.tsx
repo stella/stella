@@ -182,7 +182,7 @@ export const InviteStep = ({
                   key={email}
                 >
                   {isExternal && (
-                    <AlertTriangleIcon className="size-3 shrink-0 text-amber-500" />
+                    <AlertTriangleIcon className="text-warning size-3 shrink-0" />
                   )}
                   {email}
                   <button
@@ -197,7 +197,7 @@ export const InviteStep = ({
             })}
             {userDomain.length > 0 &&
               emails.some((e) => getDomain(e) !== userDomain) && (
-                <p className="text-xs text-amber-500">
+                <p className="text-warning text-xs">
                   <AlertTriangleIcon className="me-1 inline size-3" />
                   {t("onboarding.inviteExternal")}
                 </p>

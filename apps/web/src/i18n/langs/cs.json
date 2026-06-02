@@ -300,11 +300,17 @@
     }
   },
   "catalogue": {
+    "add": "Přidat",
+    "addCustom": "Přidat vlastní",
+    "addCustomMcp": "Přidat MCP server",
+    "addCustomSkill": "Přidat dovednost",
     "by": "Od {author}",
+    "configuration": "Konfigurace",
     "cost": {
-      "free": "Zdarma",
+      "free": "Bezplatné",
       "paid": "Placené"
     },
+    "detailAuthMethod": "Autentizace",
     "empty": "Žádné položky neodpovídají aktuálnímu filtru.",
     "filter": {
       "all": "Vše",
@@ -312,7 +318,9 @@
       "nativeTools": "Vestavěné nástroje",
       "skills": "Dovednosti"
     },
+    "filterHint": "Filtrováno: {codes}",
     "firstParty": "stella",
+    "firstPartyTooltip": "Vytvořeno týmem stella",
     "install": "Nainstalovat",
     "installFailed": "Instalace selhala",
     "installPack": "Nainstalovat {count, plural, one {# nástroj} few {# nástroje} other {# nástrojů}}",
@@ -326,6 +334,8 @@
     "packInstalled": "{count, plural, one {# nástroj nainstalován} few {# nástroje nainstalovány} other {# nástrojů nainstalováno}}",
     "packPartial": "Nainstalováno {installed}, {failed} selhalo",
     "recommended": "Doporučeno",
+    "sectionOthers": "Ostatní",
+    "sectionRecommended": "Doporučené",
     "settings": {
       "packTitle": "Doporučený balík"
     },
@@ -334,6 +344,7 @@
       "apiKey": "API klíč",
       "none": "Bez nastavení"
     },
+    "showAll": "Zobrazit vše",
     "unavailable": "Zatím nedostupné"
   },
   "chat": {
@@ -1455,6 +1466,10 @@
       "templates": {
         "description": "Šablony dokumentů se zástupnými znaky",
         "title": "Šablony"
+      },
+      "tools": {
+        "description": "Dovednosti, MCP servery a vestavěné nástroje, které AI může použít v chatu",
+        "title": "Nástroje"
       }
     },
     "skills": {
@@ -1819,8 +1834,8 @@
         "termAddedToast": "Pojem „{value}“ byl přidán do firemního seznamu.",
         "title": "Anonymizace"
       },
-      "catalogue": "Katalog",
-      "catalogueDescription": "Procházejte a instalujte dovednosti, MCP servery a nástroje první strany pro svou jurisdikci",
+      "catalogue": "Nástroje",
+      "catalogueDescription": "Připojte stella k veřejným rejstříkům, registrům DPH a dalším zdrojům. Doporučení podle vaší jurisdikce.",
       "matterNumbering": "Číslování spisů",
       "matterNumberingDescription": "Nastavte, jak se generují referenční čísla nových spisů",
       "membersDescription": "Spravujte, kdo má přístup k této organizaci, a čekající pozvánky",

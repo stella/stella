@@ -257,7 +257,7 @@ export default defineConfig({
     "@tanstack/eslint-plugin-router",
     "eslint-plugin-drizzle",
     "eslint-plugin-sonarjs",
-    "./.oxlint-plugins/no-raw-colors.ts",
+    "@stll/oxlint-config/no-raw-colors",
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
     "./.oxlint-plugins/no-physical-properties.ts",

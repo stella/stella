@@ -49,13 +49,10 @@ export const Route = createFileRoute("/_protected/todos/")({
 
 const STATUS_COLORS: Record<string, string> = {
   open: "bg-muted-foreground",
-  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
-  in_progress: "bg-blue-500 dark:bg-blue-400",
-  in_review: "bg-amber-500",
-  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
-  done: "bg-green-500 dark:bg-green-400",
-  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
-  cancelled: "bg-red-400 dark:bg-red-300",
+  in_progress: "bg-foreground-strong-muted dark:bg-foreground-strong-muted",
+  in_review: "bg-warning",
+  done: "bg-success dark:bg-success",
+  cancelled: "bg-destructive dark:bg-destructive",
 };
 
 const PRIORITY_ICONS: Record<string, typeof MinusIcon> = {
@@ -68,12 +65,10 @@ const PRIORITY_ICONS: Record<string, typeof MinusIcon> = {
 
 const PRIORITY_COLORS: Record<string, string> = {
   none: "text-muted-foreground",
-  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
-  urgent: "text-red-500 dark:text-red-400",
-  high: "text-orange-500",
-  medium: "text-yellow-500",
-  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
-  low: "text-blue-400 dark:text-blue-300",
+  urgent: "text-destructive",
+  high: "text-warning",
+  medium: "text-warning",
+  low: "text-foreground-muted dark:text-foreground",
 };
 
 type ValidTask = TaskItem & {
@@ -300,7 +295,7 @@ const TaskRow = ({ task }: { task: ValidTask }) => {
           className={cn(
             "flex shrink-0 items-center gap-1",
             "text-muted-foreground text-xs",
-            isOverdue && "text-red-500",
+            isOverdue && "text-destructive",
           )}
         >
           <CalendarIcon className="size-3" />

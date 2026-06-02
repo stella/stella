@@ -842,8 +842,8 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                         className={cn(
                           "text-xs font-medium",
                           totalHoursThisWeek > prevWeekHours
-                            ? "text-green-600"
-                            : "text-red-500",
+                            ? "text-success"
+                            : "text-destructive",
                         )}
                       >
                         {totalHoursThisWeek > prevWeekHours ? "▲" : "▼"}{" "}

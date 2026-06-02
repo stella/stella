@@ -322,7 +322,7 @@ export const AskUserCard = ({
         <HelpCircleIcon className="text-muted-foreground size-4 shrink-0" />
         <span className="font-medium">{t("chat.tool.ask-user")}</span>
         {isDone && (
-          <CheckIcon className="ms-auto size-3.5 shrink-0 text-green-600 dark:text-green-400" />
+          <CheckIcon className="text-success ms-auto size-3.5 shrink-0" />
         )}
         {isDone && canRerun && answeredOutput !== null && (
           <button

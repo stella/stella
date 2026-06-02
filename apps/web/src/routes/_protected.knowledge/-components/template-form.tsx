@@ -992,9 +992,9 @@ export const TemplateForm = ({
         </div>
 
         {structureErrors.length > 0 && (
-          <div className="mb-6 flex items-start gap-2 rounded-lg border border-yellow-500/30 bg-yellow-50 p-3 dark:bg-yellow-900/10">
-            <AlertTriangleIcon className="mt-0.5 size-4 shrink-0 text-yellow-600 dark:text-yellow-500" />
-            <span className="text-sm text-yellow-800 dark:text-yellow-200">
+          <div className="border-warning/30 bg-warning/10 dark:bg-warning/10 mb-6 flex items-start gap-2 rounded-lg border p-3">
+            <AlertTriangleIcon className="text-warning-foreground mt-0.5 size-4 shrink-0" />
+            <span className="text-warning-foreground text-sm">
               {t("templates.structureWarnings", {
                 count: structureErrors.length,
               })}
@@ -1093,9 +1093,9 @@ export const TemplateForm = ({
               {preview.kind === "ready" && (
                 <>
                   {preview.unmatchedPlaceholders.length > 0 && (
-                    <div className="mb-3 flex items-start gap-2 rounded-lg border border-yellow-500/30 bg-yellow-50 p-2.5 dark:bg-yellow-900/10">
-                      <AlertTriangleIcon className="mt-0.5 size-3.5 shrink-0 text-yellow-600 dark:text-yellow-500" />
-                      <p className="text-xs text-yellow-800 dark:text-yellow-200">
+                    <div className="border-warning/30 bg-warning/10 dark:bg-warning/10 mb-3 flex items-start gap-2 rounded-lg border p-2.5">
+                      <AlertTriangleIcon className="text-warning-foreground mt-0.5 size-3.5 shrink-0" />
+                      <p className="text-warning-foreground text-xs">
                         {t("templates.unmatchedPlaceholders", {
                           list: preview.unmatchedPlaceholders.join(", "),
                         })}
@@ -1103,9 +1103,9 @@ export const TemplateForm = ({
                     </div>
                   )}
                   {preview.unusedValues.length > 0 && (
-                    <div className="mb-3 flex items-start gap-2 rounded-lg border border-blue-500/30 bg-blue-50 p-2.5 dark:bg-blue-900/10">
-                      <AlertTriangleIcon className="mt-0.5 size-3.5 shrink-0 text-blue-600 dark:text-blue-500" />
-                      <p className="text-xs text-blue-800 dark:text-blue-200">
+                    <div className="border-foreground/30 bg-accent dark:bg-accent/30 mb-3 flex items-start gap-2 rounded-lg border p-2.5">
+                      <AlertTriangleIcon className="text-foreground mt-0.5 size-3.5 shrink-0" />
+                      <p className="text-foreground text-xs">
                         {t("templates.unusedValues", {
                           list: preview.unusedValues.join(", "),
                         })}

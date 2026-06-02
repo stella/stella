@@ -438,7 +438,7 @@ function DatePickerPopover({
               "hover:bg-muted transition-colors",
               (() => {
                 if (isOverdue) {
-                  return "text-red-500";
+                  return "text-destructive";
                 }
                 if (value) {
                   return "text-foreground";
@@ -455,7 +455,7 @@ function DatePickerPopover({
           {displayLabel}
         </span>
         {isOverdue && overdueLabel && (
-          <span className="text-xs text-red-500">{overdueLabel}</span>
+          <span className="text-destructive text-xs">{overdueLabel}</span>
         )}
       </PopoverTrigger>
       <PopoverPopup

@@ -254,7 +254,7 @@ const RateTablesView = ({
                     {table.currency}
                   </span>
                   {table.isDefault && (
-                    <StarIcon className="size-3 shrink-0 fill-amber-400 text-amber-400" />
+                    <StarIcon className="fill-warning text-warning size-3 shrink-0" />
                   )}
                 </div>
                 <span className="text-muted-foreground text-xs">

@@ -241,7 +241,7 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
       {sourceHref && decision.sourceUrl && (
         <div>
           <a
-            className="text-sm text-blue-600 hover:underline dark:text-blue-400"
+            className="text-foreground dark:text-foreground-muted text-sm hover:underline"
             href={sourceHref}
             rel="noopener noreferrer"
             target="_blank"

@@ -315,7 +315,9 @@ const SkillRefChip = ({
   return (
     <InlinePill
       leadingIcon={icon}
-      onActivate={() => void navigate({ to: "/knowledge/skills" })}
+      onActivate={() =>
+        void navigate({ to: "/knowledge/tools", search: { kind: "skill" } })
+      }
       truncate
     >
       {label}
