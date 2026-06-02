@@ -700,23 +700,31 @@ const createInspectorBroadcastSession = (
 
 const applySharedInspectorTabs = (tabs: InspectorTab[]) => {
   const current = useInspectorStore.getState();
+  // Generic registry-backed `view` tabs (e.g. `tool-detail`) are
+  // local-only — `postTabs` strips them from the broadcast because
+  // their payloads can hold non-cloneable values. Preserve the
+  // receiver's local view tabs so a peer's pdf/chat/task update
+  // doesn't silently close them.
+  const localViewTabs = current.tabs.filter((tab) => tab.type === "view");
+  const mergedTabs: InspectorTab[] = [...tabs, ...localViewTabs];
   const activeId =
-    current.activeId !== null && tabs.some((tab) => tab.id === current.activeId)
+    current.activeId !== null &&
+    mergedTabs.some((tab) => tab.id === current.activeId)
       ? current.activeId
-      : (tabs.at(0)?.id ?? null);
+      : (mergedTabs.at(0)?.id ?? null);
   const pendingRenameTabId =
     current.pendingRenameTabId !== null &&
-    tabs.some((tab) => tab.id === current.pendingRenameTabId)
+    mergedTabs.some((tab) => tab.id === current.pendingRenameTabId)
       ? current.pendingRenameTabId
       : null;
   const pendingBlockScroll =
     current.pendingBlockScroll !== null &&
-    tabs.some((tab) => tab.id === current.pendingBlockScroll?.tabId)
+    mergedTabs.some((tab) => tab.id === current.pendingBlockScroll?.tabId)
       ? current.pendingBlockScroll
       : null;
 
   useInspectorStore.setState({
-    tabs,
+    tabs: mergedTabs,
     activeId,
     pendingRenameTabId,
     pendingBlockScroll,
