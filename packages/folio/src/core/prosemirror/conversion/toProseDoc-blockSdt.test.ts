@@ -15,6 +15,7 @@ import type {
   BlockSdt,
   DocumentBody,
 } from "../../types/document";
+import { schema } from "../schema";
 import { fromProseDoc } from "./fromProseDoc";
 import { toProseDoc } from "./toProseDoc";
 
@@ -74,6 +75,25 @@ describe("toProseDoc/fromProseDoc — blockSdt round-trip", () => {
     expect(recoveredSdt.properties.alias).toBe("Effective Date");
     // Unmodeled w:dataBinding survives because rawPropertiesXml round-trips.
     expect(recoveredSdt.properties.rawPropertiesXml).toContain("w:dataBinding");
+  });
+
+  test("preserves an explicit showingPlaceholder=false through the PM round-trip", () => {
+    // Regression: the conversion previously preserved only `true`, so a
+    // user filling a placeholder-bearing control via the widget path
+    // (which writes `showingPlaceholder: false`) would round-trip with
+    // `properties.showingPlaceholder = undefined`. `reconcileRawSdtPr`
+    // then never saw `false` and could not strip the source
+    // `<w:showingPlcHdr/>` from rawPropertiesXml, so Word reopened the
+    // doc still treating the filled body as placeholder text.
+    const sdt = schema.node(
+      "blockSdt",
+      { sdtType: "richText", tag: "name", showingPlaceholder: false },
+      [schema.node("paragraph", {}, [schema.text("Real value")])],
+    );
+    const pmDoc = schema.node("doc", null, [sdt]);
+    const recovered = fromProseDoc(pmDoc);
+    const ctrl = expectBlockSdt(recovered.package.document.content[0]);
+    expect(ctrl.properties.showingPlaceholder).toBe(false);
   });
 
   test("guarantees a trailing paragraph after a doc-final blockSdt (idempotent)", () => {

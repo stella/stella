@@ -284,8 +284,15 @@ function convertPMBlockSdt(node: PMNode): BlockSdt {
   if (attrs.placeholder) {
     properties.placeholder = attrs.placeholder;
   }
-  if (attrs.showingPlaceholder) {
-    properties.showingPlaceholder = true;
+  // Preserve the explicit boolean — including `false`. When the widget
+  // / editor-ref path fills a placeholder-bearing control,
+  // `replaceBlockSdtChildren` sets `showingPlaceholder: false` so the
+  // serializer's `reconcileRawSdtPr` knows to remove the source DOCX's
+  // `<w:showingPlcHdr/>`. A truthy-only check (the prior shape) would
+  // drop that `false` and the saved file would keep marking the
+  // newly filled body as placeholder text.
+  if (attrs.showingPlaceholder !== undefined) {
+    properties.showingPlaceholder = attrs.showingPlaceholder;
   }
   if (attrs.dateFormat) {
     properties.dateFormat = attrs.dateFormat;
