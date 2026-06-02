@@ -190,6 +190,7 @@ import {
   removePendingCommentMarkRange,
 } from "./commentsHelpers";
 import type { TrackedChangeEntry } from "./CommentsSidebar";
+import { ContentControlWidgetsOverlay } from "./ContentControlWidgetsOverlay";
 // Dialog hooks and utilities (static imports — lightweight, no UI)
 import type { FindMatch } from "./dialogs/findReplaceUtils";
 import type { ImagePropertiesData } from "./dialogs/ImagePropertiesDialog";
@@ -3880,6 +3881,11 @@ export function DocxEditor({
               />
             </Suspense>
           )}
+
+          {/* Dropdown / date pickers for content controls */}
+          <ContentControlWidgetsOverlay
+            getEditorView={() => pagedEditorRef.current?.getView() ?? null}
+          />
 
           {/* Toast notifications */}
           {/* Toast notifications provided by host app */}

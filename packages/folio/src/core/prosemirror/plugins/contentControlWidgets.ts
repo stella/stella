@@ -38,6 +38,18 @@ export type ContentControlWidgetEvent =
       tag: string;
       anchor: HTMLElement;
       currentValue: string | undefined;
+    }
+  | {
+      /**
+       * The plugin refused a click because the control's `w:lock` or type
+       * forbade the interaction. The shell decides how to surface this —
+       * toast, telemetry, or no-op. The plugin itself never logs.
+       */
+      kind: "refused";
+      tag: string;
+      sdtType: string;
+      anchor: HTMLElement;
+      error: ContentControlLockedError | ContentControlTypeError;
     };
 
 export type ContentControlWidgetCallback = (
@@ -47,6 +59,17 @@ export type ContentControlWidgetCallback = (
 export const contentControlWidgetsPluginKey = new PluginKey<unknown>(
   "contentControlWidgets",
 );
+
+/**
+ * CustomEvent name dispatched on the editor view DOM whenever the plugin
+ * needs to surface a `ContentControlWidgetEvent` to the React shell. The
+ * shell subscribes via `addEventListener` and renders the matching chrome.
+ *
+ * Using a CustomEvent keeps the plugin from owning a React reference and
+ * makes the host's responsibility explicit: receive event → render UI →
+ * call dispatchDropdownPick / dispatchDatePick.
+ */
+export const CONTENT_CONTROL_WIDGET_EVENT_NAME = "folio:content-control-widget";
 
 function findSdtAncestor(target: EventTarget | null): HTMLElement | null {
   if (!(target instanceof Element)) {
@@ -58,6 +81,18 @@ function findSdtAncestor(target: EventTarget | null): HTMLElement | null {
 export function createContentControlWidgetsPlugin(
   onEvent: ContentControlWidgetCallback = () => undefined,
 ): Plugin {
+  const emit = (
+    view: { dom: HTMLElement },
+    payload: ContentControlWidgetEvent,
+  ): void => {
+    onEvent(payload);
+    view.dom.dispatchEvent(
+      new CustomEvent(CONTENT_CONTROL_WIDGET_EVENT_NAME, {
+        detail: payload,
+        bubbles: true,
+      }),
+    );
+  };
   return new Plugin({
     key: contentControlWidgetsPluginKey,
     props: {
@@ -92,7 +127,7 @@ export function createContentControlWidgetsPlugin(
                 return true;
               }
             } else if (sdtType === "dropdown" || sdtType === "comboBox") {
-              onEvent({
+              emit(view, {
                 kind: "dropdownOpen",
                 tag,
                 sdtType,
@@ -102,7 +137,7 @@ export function createContentControlWidgetsPlugin(
               event.preventDefault();
               return true;
             } else if (sdtType === "date") {
-              onEvent({
+              emit(view, {
                 kind: "datePick",
                 tag,
                 anchor,
@@ -116,10 +151,11 @@ export function createContentControlWidgetsPlugin(
               error instanceof ContentControlLockedError ||
               error instanceof ContentControlTypeError
             ) {
-              // Refusal is expected — log to console for debugging but do
-              // not break the editor or surface a runtime crash.
-              // oxlint-disable-next-line no-console
-              console.warn("[content-controls]", error.message);
+              // Refusal is expected — emit it through the typed callback
+              // and let the editor shell decide what to do (toast,
+              // analytics, no-op). The plugin itself stays silent so
+              // refusals never end up as ad-hoc console noise.
+              emit(view, { kind: "refused", tag, sdtType, anchor, error });
               return true;
             }
             throw error;
