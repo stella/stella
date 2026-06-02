@@ -40,6 +40,11 @@ export function paragraphAttrsFromResolvedStyle(
     keepLines: ppr?.keepLines ?? null,
     pageBreakBefore: ppr?.pageBreakBefore ?? null,
     outlineLevel: ppr?.outlineLevel ?? null,
+    // Custom paragraph styles (callouts, bordered headings) carry their own
+    // `w:pBdr`; the picker and the Enter-into-w:next path both need to apply
+    // them, while clearing any source paragraph's leftover borders when the
+    // new style has none.
+    borders: ppr?.borders ?? null,
     // The style's run defaults drive the caret height in an empty paragraph
     // and the formatting typed text inherits (see EmptyParagraphFormatExtension).
     defaultTextFormatting: hasRunFormatting ? runFormatting : null,

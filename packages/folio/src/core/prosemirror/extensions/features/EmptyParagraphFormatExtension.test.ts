@@ -126,6 +126,68 @@ describe("splitBlockClearBorders — w:next style switch", () => {
     expect(tr.doc.child(1).attrs["styleId"]).toBe("Heading1");
   });
 
+  test("applies the next style's own borders (callout / bordered next style)", () => {
+    // Regression: the handler used to hardcode `borders: null` on the new
+    // paragraph, dropping the legitimate borders of a w:next that defines its
+    // own pBdr (e.g. a heading whose follow-on is a bordered callout).
+    const calloutBorder = {
+      top: { style: "single", size: 4, color: { auto: true } },
+      bottom: { style: "single", size: 4, color: { auto: true } },
+      left: { style: "single", size: 4, color: { auto: true } },
+      right: { style: "single", size: 4, color: { auto: true } },
+    };
+    const customResolver = createStyleResolver({
+      styles: [
+        { styleId: "Normal", type: "paragraph", name: "Normal", default: true },
+        {
+          styleId: "BorderedHeading",
+          type: "paragraph",
+          name: "Bordered Heading",
+          next: "Callout",
+        },
+        {
+          styleId: "Callout",
+          type: "paragraph",
+          name: "Callout",
+          pPr: { borders: calloutBorder },
+        },
+      ],
+    });
+    const heading = schema.node("paragraph", { styleId: "BorderedHeading" }, [
+      schema.text("Heading"),
+    ]);
+    const plugins = [
+      ...singletonManager.getPlugins(),
+      createDocumentStylesPlugin(customResolver),
+    ];
+    let state = EditorState.create({
+      doc: schema.node("doc", null, [heading]),
+      schema,
+      plugins,
+    });
+    const headingNode = state.doc.firstChild;
+    if (!headingNode) {
+      throw new Error("Expected heading paragraph");
+    }
+    state = state.apply(
+      state.tr.setSelection(
+        TextSelection.create(state.doc, headingNode.nodeSize - 1),
+      ),
+    );
+
+    const captured: { tr: Transaction | null } = { tr: null };
+    splitBlockClearBorders(state, (tr) => {
+      captured.tr = tr;
+    });
+    if (!captured.tr) {
+      throw new Error("Enter handler did not produce a transaction");
+    }
+
+    const newPara = captured.tr.doc.child(1);
+    expect(newPara.attrs["styleId"]).toBe("Callout");
+    expect(newPara.attrs["borders"]).toEqual(calloutBorder);
+  });
+
   test("mid-paragraph split before an inline atom keeps the heading style", () => {
     // Regression: textContent.length === 0 was incorrectly true for a
     // paragraph carrying only an inline atom (image/equation/field/etc.),

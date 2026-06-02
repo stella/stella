@@ -130,11 +130,13 @@ function applyNextParagraphStyle(
 
   const resolved = resolver.resolveParagraphStyle(nextStyleId);
   const { $from } = tr.selection;
+  // `paragraphAttrsFromResolvedStyle` already projects the next style's
+  // borders (or null), which both clears the source paragraph's leftover
+  // border and applies a bordered next style (callouts, etc.).
   tr.setNodeMarkup($from.before(), undefined, {
     ...newPara.attrs,
     styleId: nextStyleId,
     ...paragraphAttrsFromResolvedStyle(resolved),
-    borders: null,
   });
 
   // setStoredMarks MUST come after setNodeMarkup — every step clears it.
