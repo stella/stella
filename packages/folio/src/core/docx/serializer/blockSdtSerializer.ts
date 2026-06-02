@@ -21,6 +21,7 @@ import type {
   BlockSdt,
   SdtProperties,
 } from "../../types/document";
+import { reconcileRawSdtPr } from "../sdtPropertiesPatch";
 
 function escapeXmlAttr(value: string): string {
   return value
@@ -55,12 +56,83 @@ function serializeFallbackSdtPr(props: SdtProperties): string {
   return `<w:sdtPr>${parts.join("")}</w:sdtPr>`;
 }
 
+function extractDropdownLastValue(blockSdt: BlockSdt): string | undefined {
+  if (
+    blockSdt.properties.sdtType !== "dropdown" &&
+    blockSdt.properties.sdtType !== "comboBox"
+  ) {
+    return undefined;
+  }
+  // The dropdown's "current" value is the displayed text of the first run
+  // in the SDT body. Mirrors what setContentControlValue writes back.
+  const firstBlock = blockSdt.content[0];
+  if (!firstBlock || firstBlock.type !== "paragraph") {
+    return undefined;
+  }
+  const parts: string[] = [];
+  for (const child of firstBlock.content) {
+    if (child.type === "run") {
+      for (const item of child.content) {
+        if (item.type === "text") {
+          parts.push(item.text);
+        }
+      }
+    }
+  }
+  const text = parts.join("");
+  if (text.length === 0) {
+    return undefined;
+  }
+  // Map back from displayText to value when listItems are present so
+  // Word's w:lastValue carries the OOXML value, not the friendly label.
+  const items = blockSdt.properties.listItems;
+  if (items) {
+    const match = items.find((item) => item.displayText === text);
+    if (match) {
+      return match.value;
+    }
+  }
+  return text;
+}
+
+function extractDateFullDate(blockSdt: BlockSdt): string | undefined {
+  if (blockSdt.properties.sdtType !== "date") {
+    return undefined;
+  }
+  const firstBlock = blockSdt.content[0];
+  if (!firstBlock || firstBlock.type !== "paragraph") {
+    return undefined;
+  }
+  const parts: string[] = [];
+  for (const child of firstBlock.content) {
+    if (child.type === "run") {
+      for (const item of child.content) {
+        if (item.type === "text") {
+          parts.push(item.text);
+        }
+      }
+    }
+  }
+  const text = parts.join("").trim();
+  return text.length > 0 ? text : undefined;
+}
+
 export function serializeBlockSdt(
   blockSdt: BlockSdt,
   serializeChild: (block: BlockContent) => string,
 ): string {
   const props = blockSdt.properties;
-  const sdtPrXml = props.rawPropertiesXml ?? serializeFallbackSdtPr(props);
+  const baseSdtPr = props.rawPropertiesXml ?? serializeFallbackSdtPr(props);
+  // Reconcile any modeled property mutations the editor may have made into
+  // the raw XML before replay so checkbox / dropdown / date interactions
+  // survive the round-trip. Unmodeled markers (dataBinding,
+  // w15:repeatingSection, etc.) inside the raw string are preserved.
+  const dateFullDate = extractDateFullDate(blockSdt);
+  const dropdownLastValue = extractDropdownLastValue(blockSdt);
+  const sdtPrXml = reconcileRawSdtPr(baseSdtPr, props, {
+    ...(dateFullDate !== undefined ? { dateFullDate } : {}),
+    ...(dropdownLastValue !== undefined ? { dropdownLastValue } : {}),
+  });
   const sdtEndPrXml = props.rawEndPropertiesXml ?? "";
   const contentXml = blockSdt.content.map(serializeChild).join("");
   return `<w:sdt>${sdtPrXml}${sdtEndPrXml}<w:sdtContent>${contentXml}</w:sdtContent></w:sdt>`;
