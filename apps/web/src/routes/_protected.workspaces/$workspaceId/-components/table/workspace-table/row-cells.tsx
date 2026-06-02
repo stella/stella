@@ -43,8 +43,10 @@ import {
   PinnedBoundary,
   selectColId,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
+import { VersionOrNewFileDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog";
 import type { TableContentMode } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
+import { useVersionOrNewFileDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-version-or-new-file-drop";
 import {
   getEntityName,
   getFirstFile,
@@ -245,6 +247,12 @@ export const DraggableRow = ({
     visibleCells,
   });
 
+  const { isDropTarget, pendingDrop } = useVersionOrNewFileDrop({
+    entity,
+    workspaceId,
+    rowRef,
+  });
+
   const getBulkSelectedEntities = () => {
     const selectedRows = table.getSelectedRowModel().rows;
     if (!row.getIsSelected() || selectedRows.length <= 1) {
@@ -415,43 +423,58 @@ export const DraggableRow = ({
   }
 
   return (
-    <WorkspaceGridRow
-      aria-rowindex={virtualIndex + 2}
-      aria-selected={row.getIsSelected()}
-      className={cn(
-        "transition-opacity duration-150",
-        contentMode === "tight" && TOOLBAR_ROW_HEIGHT,
-        isTask && "cursor-pointer",
-        isFocusedExpansionRow && "relative z-20",
-        isMutedByExpandedCell && "opacity-[0.92] hover:opacity-100",
+    <>
+      <WorkspaceGridRow
+        aria-rowindex={virtualIndex + 2}
+        aria-selected={row.getIsSelected()}
+        className={cn(
+          "transition-opacity duration-150",
+          contentMode === "tight" && TOOLBAR_ROW_HEIGHT,
+          isTask && "cursor-pointer",
+          isFocusedExpansionRow && "z-20",
+          isMutedByExpandedCell && "opacity-[0.92] hover:opacity-100",
+        )}
+        data-active={activeRow || undefined}
+        data-drop-target={isDropTarget || undefined}
+        data-index={virtualIndex}
+        data-state={row.getIsSelected() ? "selected" : undefined}
+        key={row.id}
+        onClick={containedHandler(rowRef, handleRowClick)}
+        onContextMenu={handleContextMenu}
+        ref={setRowRef}
+      >
+        <DataRowCells
+          expandedCellId={expandedCellId}
+          contentMode={contentMode}
+          hasExpandedCell={isFocusedExpansionRow}
+          onCellClick={handleCellClick}
+          selectCellWithActions={selectCellWithActions}
+          visibleCells={visibleCells}
+        />
+        <RowEndFillerCell
+          addPropertyColumn={addPropertyColumn}
+          renderColumns={renderColumns}
+          selected={row.getIsSelected()}
+        />
+        <AddPropertyCell
+          cell={addPropertyCell}
+          columnIndex={renderColumns.length + 1}
+          selected={row.getIsSelected()}
+        />
+      </WorkspaceGridRow>
+      {pendingDrop && (
+        <VersionOrNewFileDialog
+          droppedFile={pendingDrop.droppedFile}
+          entityFileName={pendingDrop.entityFileName}
+          isReplacePending={pendingDrop.isReplacePending}
+          onCreateNewFile={pendingDrop.onCreateNewFile}
+          onOpenChange={pendingDrop.onOpenChange}
+          onOpenChangeComplete={pendingDrop.onOpenChangeComplete}
+          onReplaceVersion={pendingDrop.onReplaceVersion}
+          open={pendingDrop.open}
+        />
       )}
-      data-active={activeRow || undefined}
-      data-index={virtualIndex}
-      data-state={row.getIsSelected() ? "selected" : undefined}
-      key={row.id}
-      onClick={containedHandler(rowRef, handleRowClick)}
-      onContextMenu={handleContextMenu}
-      ref={setRowRef}
-    >
-      <DataRowCells
-        expandedCellId={expandedCellId}
-        contentMode={contentMode}
-        hasExpandedCell={isFocusedExpansionRow}
-        onCellClick={handleCellClick}
-        selectCellWithActions={selectCellWithActions}
-        visibleCells={visibleCells}
-      />
-      <RowEndFillerCell
-        addPropertyColumn={addPropertyColumn}
-        renderColumns={renderColumns}
-        selected={row.getIsSelected()}
-      />
-      <AddPropertyCell
-        cell={addPropertyCell}
-        columnIndex={renderColumns.length + 1}
-        selected={row.getIsSelected()}
-      />
-    </WorkspaceGridRow>
+    </>
   );
 };
 

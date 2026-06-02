@@ -2143,6 +2143,17 @@
       "uploading": "Import des fichiers",
       "uploadingDescription": "Ne fermez pas cette page tant que les fichiers ne sont pas importés",
       "uploadingProgress": "{completed, number} sur {total, number} importés",
+      "versionOrNewFile": {
+        "createNewOption": "Créer un nouveau fichier",
+        "description": "Vous avez déposé \"{fileName}\" sur un document existant.",
+        "extensionMismatch": "Extension non concordante : attendu {expected}, reçu {actual}",
+        "extensionMismatchError": "L'extension du fichier ne correspond pas au document existant",
+        "noExtension": "sans extension",
+        "replaceOption": "Téléverser comme nouvelle version",
+        "title": "Téléverser une nouvelle version ou créer un nouveau fichier ?"
+      },
+      "versionUploadFailed": "Échec de l'import de version",
+      "versionUploaded": "Nouvelle version importée",
       "xfaFormNotSupported": "Ce PDF contient un formulaire XFA. L'aperçu peut ne pas s'afficher correctement."
     },
     "filesystem": {

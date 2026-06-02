@@ -75,7 +75,9 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-cells";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
 import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
+import { VersionOrNewFileDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog";
 import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
+import { useVersionOrNewFileDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-version-or-new-file-drop";
 import {
   useMoveEntity,
   useRenameEntity,
@@ -1187,7 +1189,10 @@ const FilesystemRow = ({
   useInspectorFlash(node.entityId, rowRef);
 
   const moveEntity = useMoveEntity();
-  const [isDropTarget, setIsDropTarget] = useState(false);
+  const [isFolderDropTarget, setIsFolderDropTarget] = useState(false);
+
+  const { isDropTarget: isExternalDropTarget, pendingDrop } =
+    useVersionOrNewFileDrop({ entity: node, workspaceId, rowRef });
 
   // Store volatile values in refs so the effect doesn't
   // re-register drag/drop handlers on every render.
@@ -1293,17 +1298,17 @@ const FilesystemRow = ({
               },
               getData: () => ({ entityId: node.entityId }),
               onDragEnter: () => {
-                setIsDropTarget(true);
+                setIsFolderDropTarget(true);
                 if (!expandedRef.current) {
                   scheduleAutoExpand();
                 }
               },
               onDragLeave: () => {
-                setIsDropTarget(false);
+                setIsFolderDropTarget(false);
                 scheduleAutoExpand.cancel();
               },
               onDrop: ({ source }) => {
-                setIsDropTarget(false);
+                setIsFolderDropTarget(false);
                 scheduleAutoExpand.cancel();
                 const entityIds = getDragEntityIds(source.data);
                 if (!entityIds) {
@@ -1431,8 +1436,8 @@ const FilesystemRow = ({
   ));
 
   const gridCls = cn(
-    "hover:bg-muted grid h-full w-full items-center gap-x-4 rounded px-2 text-start text-sm",
-    isDropTarget && "bg-accent ring-primary ring-2",
+    "hover:bg-muted grid h-full w-full items-center gap-x-4 rounded px-2 text-start text-sm transition-colors duration-150",
+    (isFolderDropTarget || isExternalDropTarget) && "bg-accent",
     isSelected && "bg-accent",
   );
 
@@ -1545,56 +1550,76 @@ const FilesystemRow = ({
   );
 
   return (
-    <div
-      className="group/row relative h-full"
-      data-entity-row
-      onContextMenu={handleContextMenu}
-      ref={rowRef}
-    >
-      {isFolder ? (
-        <div className={gridCls} style={{ gridTemplateColumns: gridTemplate }}>
-          <button
-            className="text-start"
-            onClick={(e) => {
-              const intent = getFolderClickIntent({
-                currentFolderId,
-                hasModifier: e.metaKey || e.ctrlKey,
-              });
-
-              if (intent.type === "toggle-selection") {
-                onSelect(node.entityId, true);
-                return;
-              }
-
-              onClearSelection();
-              if (intent.type === "clear-and-navigate") {
-                onNavigateToFolder(node.entityId);
-              } else {
-                onToggleFolder(node.entityId);
-              }
-            }}
-            onDoubleClick={() => onNavigateToFolder(node.entityId)}
-            style={contentSpanStyle}
-            type="button"
+    <>
+      <div
+        className="group/row relative h-full"
+        data-entity-row
+        onContextMenu={handleContextMenu}
+        ref={rowRef}
+      >
+        {isFolder ? (
+          <div
+            className={gridCls}
+            style={{ gridTemplateColumns: gridTemplate }}
           >
-            {contentCells}
-          </button>
-          {rowActionsNode}
-        </div>
-      ) : (
-        <div className={gridCls} style={{ gridTemplateColumns: gridTemplate }}>
-          <button
-            onClick={(e) => onSelect(node.entityId, e.metaKey || e.ctrlKey)}
-            onDoubleClick={() => openInInspector?.()}
-            style={contentSpanStyle}
-            type="button"
+            <button
+              className="text-start"
+              onClick={(e) => {
+                const intent = getFolderClickIntent({
+                  currentFolderId,
+                  hasModifier: e.metaKey || e.ctrlKey,
+                });
+
+                if (intent.type === "toggle-selection") {
+                  onSelect(node.entityId, true);
+                  return;
+                }
+
+                onClearSelection();
+                if (intent.type === "clear-and-navigate") {
+                  onNavigateToFolder(node.entityId);
+                } else {
+                  onToggleFolder(node.entityId);
+                }
+              }}
+              onDoubleClick={() => onNavigateToFolder(node.entityId)}
+              style={contentSpanStyle}
+              type="button"
+            >
+              {contentCells}
+            </button>
+            {rowActionsNode}
+          </div>
+        ) : (
+          <div
+            className={gridCls}
+            style={{ gridTemplateColumns: gridTemplate }}
           >
-            {contentCells}
-          </button>
-          {rowActionsNode}
-        </div>
+            <button
+              onClick={(e) => onSelect(node.entityId, e.metaKey || e.ctrlKey)}
+              onDoubleClick={() => openInInspector?.()}
+              style={contentSpanStyle}
+              type="button"
+            >
+              {contentCells}
+            </button>
+            {rowActionsNode}
+          </div>
+        )}
+      </div>
+      {pendingDrop && (
+        <VersionOrNewFileDialog
+          droppedFile={pendingDrop.droppedFile}
+          entityFileName={pendingDrop.entityFileName}
+          isReplacePending={pendingDrop.isReplacePending}
+          onCreateNewFile={pendingDrop.onCreateNewFile}
+          onOpenChange={pendingDrop.onOpenChange}
+          onOpenChangeComplete={pendingDrop.onOpenChangeComplete}
+          onReplaceVersion={pendingDrop.onReplaceVersion}
+          open={pendingDrop.open}
+        />
       )}
-    </div>
+    </>
   );
 };
 

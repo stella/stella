@@ -2143,6 +2143,17 @@
       "uploading": "Dateien werden hochgeladen",
       "uploadingDescription": "Schließen Sie diese Seite nicht, bis die Dateien hochgeladen sind",
       "uploadingProgress": "{completed, number} von {total, number} hochgeladen",
+      "versionOrNewFile": {
+        "createNewOption": "Neue Datei erstellen",
+        "description": "Sie haben \"{fileName}\" auf ein bestehendes Dokument gezogen.",
+        "extensionMismatch": "Erweiterung stimmt nicht überein: erwartet {expected}, erhalten {actual}",
+        "extensionMismatchError": "Die Dateierweiterung stimmt nicht mit dem bestehenden Dokument überein",
+        "noExtension": "keine Erweiterung",
+        "replaceOption": "Als neue Version hochladen",
+        "title": "Neue Version hochladen oder neu erstellen?"
+      },
+      "versionUploadFailed": "Version-Upload fehlgeschlagen",
+      "versionUploaded": "Neue Version hochgeladen",
       "xfaFormNotSupported": "Diese PDF enthält ein XFA-Formular. Die Vorschau wird möglicherweise nicht korrekt dargestellt."
     },
     "filesystem": {

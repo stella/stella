@@ -11,7 +11,7 @@ export const WorkspaceGridRow = ({
 }: React.ComponentProps<"div">) => (
   <div
     className={cn(
-      "group/row isolate grid border-none transition-colors",
+      "group/row relative isolate grid border-none transition-colors",
       className,
     )}
     data-slot="workspace-grid-row"
@@ -46,7 +46,7 @@ export const WorkspaceGridCell = ({
 }: React.ComponentProps<"div">) => (
   <div
     className={cn(
-      "group/cell-content bg-background relative z-0 h-auto overflow-hidden border-e border-b p-2 whitespace-nowrap group-hover/row:bg-[color-mix(in_srgb,var(--color-foreground)_4%,var(--color-background))] group-data-[active]/row:bg-[color-mix(in_srgb,var(--color-foreground)_4%,var(--color-background))] group-data-[state=selected]/row:bg-[color-mix(in_srgb,var(--color-info)_10%,var(--color-background))] group-data-[state=selected]/row:group-hover/row:bg-[color-mix(in_srgb,var(--color-info)_15%,var(--color-background))]",
+      "group/cell-content bg-background relative z-0 h-auto overflow-hidden border-e border-b p-2 whitespace-nowrap transition-colors duration-150 group-hover/row:bg-[color-mix(in_srgb,var(--color-foreground)_4%,var(--color-background))] group-data-[active]/row:bg-[color-mix(in_srgb,var(--color-foreground)_4%,var(--color-background))] group-data-[drop-target]/row:bg-[color-mix(in_srgb,var(--color-primary)_10%,var(--color-background))] group-data-[state=selected]/row:bg-[color-mix(in_srgb,var(--color-info)_10%,var(--color-background))] group-data-[state=selected]/row:group-hover/row:bg-[color-mix(in_srgb,var(--color-info)_15%,var(--color-background))]",
       TOOLBAR_ROW_MIN_HEIGHT,
       className,
     )}

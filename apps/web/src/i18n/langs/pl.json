@@ -2143,6 +2143,17 @@
       "uploading": "Przesyłanie plików",
       "uploadingDescription": "Nie zamykaj tej strony, dopóki pliki nie zostaną przesłane",
       "uploadingProgress": "{completed, number} z {total, number} przesłano",
+      "versionOrNewFile": {
+        "createNewOption": "Utwórz nowy plik",
+        "description": "Upuściłeś \"{fileName}\" na istniejący dokument.",
+        "extensionMismatch": "Niezgodne rozszerzenie: oczekiwano {expected}, otrzymano {actual}",
+        "extensionMismatchError": "Rozszerzenie pliku nie zgadza się z istniejącym dokumentem",
+        "noExtension": "brak rozszerzenia",
+        "replaceOption": "Prześlij jako nową wersję",
+        "title": "Przesłać nową wersję czy utworzyć nowy plik?"
+      },
+      "versionUploadFailed": "Przesyłanie wersji nie powiodło się",
+      "versionUploaded": "Nowa wersja przesłana",
       "xfaFormNotSupported": "Ten plik PDF zawiera formularz XFA. Podgląd może nie wyświetlać się poprawnie."
     },
     "filesystem": {

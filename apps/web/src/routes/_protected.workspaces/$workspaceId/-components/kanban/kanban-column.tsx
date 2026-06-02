@@ -11,11 +11,6 @@ import {
   draggable,
   dropTargetForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
-import { dropTargetForExternal } from "@atlaskit/pragmatic-drag-and-drop/external/adapter";
-import {
-  containsFiles,
-  getFiles,
-} from "@atlaskit/pragmatic-drag-and-drop/external/file";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   EllipsisVerticalIcon,
@@ -70,6 +65,7 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import { KanbanCard } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card";
+import { useExternalFileDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-external-file-drop";
 
 const KANBAN_CARD_ESTIMATE_PX = 128;
 const KANBAN_CARD_OVERSCAN = 8;
@@ -152,7 +148,6 @@ export const KanbanColumn = ({
     });
     setCtxOpen(true);
   };
-  const [isFileDragOver, setIsFileDragOver] = useState(false);
   const [isEntityDragOver, setIsEntityDragOver] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [closestColumnEdge, setClosestColumnEdge] = useState<Edge | null>(null);
@@ -181,8 +176,13 @@ export const KanbanColumn = ({
   // Store callbacks in refs to keep effect deps stable.
   const onDropRef = useRef(onDrop);
   onDropRef.current = onDrop;
-  const onFileUploadRef = useRef(onFileUpload);
-  onFileUploadRef.current = onFileUpload;
+
+  const { isDropTarget, isInnerActive } = useExternalFileDrop({
+    externalRef: columnRef,
+    enabled: !!onFileUpload,
+    onDrop: (files) => onFileUpload?.(files),
+  });
+  const isFileDragOver = isDropTarget && !isInnerActive;
 
   useEffect(() => {
     const el = columnRef.current;
@@ -254,25 +254,6 @@ export const KanbanColumn = ({
         },
       }),
     ];
-
-    // External file drop target
-    if (onFileUploadRef.current) {
-      cleanups.push(
-        dropTargetForExternal({
-          element: el,
-          canDrop: containsFiles,
-          onDragEnter: () => setIsFileDragOver(true),
-          onDragLeave: () => setIsFileDragOver(false),
-          onDrop: ({ source }) => {
-            setIsFileDragOver(false);
-            const files = getFiles({ source });
-            if (files.length > 0) {
-              onFileUploadRef.current?.(files);
-            }
-          },
-        }),
-      );
-    }
 
     // Column draggable: entire column is the element,
     // grip icon is the drag handle (Trello-style).

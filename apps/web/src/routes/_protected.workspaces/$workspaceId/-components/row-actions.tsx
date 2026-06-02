@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -19,6 +19,7 @@ import {
   PencilIcon,
   RefreshCwIcon,
   Trash2Icon,
+  UploadIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -63,11 +64,13 @@ import {
   CellMetadataMenuSection,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags";
 import { CopyToMatterDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog";
+import { getExtension } from "@/routes/_protected.workspaces/$workspaceId/-components/file-extension";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { getPdfDownloadFileName } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
 import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { useEntitiesCountLimit } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-limits";
 import { useRetryCell } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-retry-cell";
+import { useUploadVersion } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-upload-version";
 import {
   useCreateEntities,
   useDeleteEntities,
@@ -123,11 +126,13 @@ export const RowActions = ({
   const t = useTranslations();
   const navigate = useNavigate();
   const deleteEntities = useDeleteEntities();
+  const uploadVersion = useUploadVersion();
   const requestChatAbout = useRequestChatAbout(workspaceId);
   const retryCell = useRetryCell(workspaceId);
   const [copyToMatterOpen, setCopyToMatterOpen] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const { data: properties } = useQuery(propertiesOptions(workspaceId));
+  const uploadVersionInputRef = useRef<HTMLInputElement>(null);
   const file = getFirstFile(entity);
   const name = getEntityName(entity);
   const isFolder = entity.kind === "folder";
@@ -472,6 +477,29 @@ export const RowActions = ({
     );
   };
 
+  const handleUploadVersionSelect = () => {
+    uploadVersionInputRef.current?.click();
+  };
+
+  const handleUploadVersionChange = (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const uploadedFile = event.target.files?.[0];
+    if (!uploadedFile || !file) {
+      return;
+    }
+
+    uploadVersion.mutate({
+      workspaceId,
+      entityId: entity.entityId,
+      entityFileName: file.fileName,
+      file: uploadedFile,
+    });
+
+    // Reset input to allow uploading the same file again
+    event.target.value = "";
+  };
+
   // Whether any selected entity has a downloadable file.
   const hasAnyFile = isBulk
     ? selectedEntities.some((e) => getFirstFile(e) !== null)
@@ -479,6 +507,18 @@ export const RowActions = ({
   const hasAnyFolder = isBulk
     ? selectedEntities.some((e) => e.kind === "folder")
     : isFolder;
+
+  // Show "Upload new version" for non-folder, non-bulk entities with a file
+  const canUploadVersion =
+    !isBulk && !isFolder && !entity.readOnly && file !== null;
+  // Extension-based filter for the OS file picker. Browser-reported MIME
+  // strings vary across platforms for the same extension; matching by
+  // extension is consistent across Chrome, Safari, Firefox, and Edge.
+  // Falls back to `*/*` for extensionless files (e.g. `Dockerfile`).
+  const versionAcceptExtension = file ? getExtension(file.fileName) : null;
+  const versionAccept = versionAcceptExtension
+    ? `.${versionAcceptExtension}`
+    : "*/*";
 
   return (
     <Menu onOpenChange={onOpenChange} open={open}>
@@ -511,6 +551,15 @@ export const RowActions = ({
           <MenuItem onClick={onRename}>
             <PencilIcon />
             {t("common.rename")}
+          </MenuItem>
+        )}
+        {!isCellContext && canUploadVersion && (
+          <MenuItem
+            disabled={uploadVersion.isPending}
+            onClick={handleUploadVersionSelect}
+          >
+            <UploadIcon />
+            {t("fileDetail.uploadNewVersion")}
           </MenuItem>
         )}
         {!isBulk && cellMetadataTarget && (
@@ -709,6 +758,16 @@ export const RowActions = ({
           onOpenChange={setCopyToMatterOpen}
           open={copyToMatterOpen}
           sourceWorkspaceId={workspaceId}
+        />
+      )}
+      {/* Hidden file input for upload new version */}
+      {canUploadVersion && (
+        <input
+          accept={versionAccept}
+          className="hidden"
+          onChange={handleUploadVersionChange}
+          ref={uploadVersionInputRef}
+          type="file"
         />
       )}
     </Menu>

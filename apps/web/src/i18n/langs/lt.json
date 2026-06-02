@@ -2143,6 +2143,17 @@
       "uploading": "Failai keliami",
       "uploadingDescription": "Neuždarykite šio puslapio, kol failai bus įkelti",
       "uploadingProgress": "{completed, number} iš {total, number} įkelta",
+      "versionOrNewFile": {
+        "createNewOption": "Sukurti naują failą",
+        "description": "Numetėte \"{fileName}\" ant esamo dokumento.",
+        "extensionMismatch": "Plėtinys nesutampa: tikėtasi {expected}, gauta {actual}",
+        "extensionMismatchError": "Failo plėtinys nesutampa su esamu dokumentu",
+        "noExtension": "be plėtinio",
+        "replaceOption": "Įkelti kaip naują versiją",
+        "title": "Įkelti naują versiją ar sukurti naują failą?"
+      },
+      "versionUploadFailed": "Nepavyko įkelti versijos",
+      "versionUploaded": "Nauja versija įkelta",
       "xfaFormNotSupported": "Šis PDF yra XFA forma. Peržiūra gali būti neteisinga."
     },
     "filesystem": {
