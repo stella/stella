@@ -58,10 +58,16 @@ export const buildChatSlashItems = ({
     },
   }));
 
-  const installedSkillRows = getChatVisibleInstalledSkillRows(skillPages);
-  const enabledInstalledSlugs = new Set(
-    installedSkillRows.map((row) => row.slug),
-  );
+  const {
+    visibleRows: installedSkillRows,
+    shadowSlugs: enabledInstalledSlugs,
+  } = getChatVisibleInstalledSkillRows(skillPages);
+  // Shadow the built-in row whenever an installed skill claims the
+  // same slug — even if the installed row is omitted from the skill
+  // list because it has a command. The backend `load-skill` resolves
+  // by slug and would return the installed skill, so showing the
+  // built-in description here would mislead the user about what the
+  // slash item actually inserts.
   const builtInSkillRows =
     skillPages
       ?.at(0)
@@ -85,12 +91,20 @@ export const buildChatSlashItems = ({
 
 const getChatVisibleInstalledSkillRows = (
   skillPages: readonly SlashSkillPage[] | undefined,
-): SlashSkillRow[] => {
+): { visibleRows: SlashSkillRow[]; shadowSlugs: Set<string> } => {
   const installedRows = skillPages?.flatMap((page) => page.installed) ?? [];
   const visibleRows: SlashSkillRow[] = [];
   const seenSlugs = new Set<string>();
-  const chatMetadataRows = installedRows
-    .filter((row) => row.enabled)
+  // Every enabled installed slug must shadow the built-in entry of
+  // the same name, even when the installed row is filtered out of
+  // the skill list because it carries a command — the backend
+  // load-skill resolves the slug to the installed row regardless.
+  const shadowSlugs = new Set<string>();
+  const enabledInstalled = installedRows.filter((row) => row.enabled);
+  for (const row of enabledInstalled) {
+    shadowSlugs.add(row.slug);
+  }
+  const chatMetadataRows = enabledInstalled
     // Command-bearing installed skills are surfaced as prompt slash
     // items by the commandSkills feed; skip them here so the same
     // skill doesn't appear twice in the menu.
@@ -106,7 +120,7 @@ const getChatVisibleInstalledSkillRows = (
     visibleRows.push(row);
   }
 
-  return visibleRows;
+  return { visibleRows, shadowSlugs };
 };
 
 const compareChatInstalledSkillRows = (
