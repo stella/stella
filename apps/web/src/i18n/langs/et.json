@@ -1475,6 +1475,13 @@
     },
     "skills": {
       "addShortcut": "Lisa prompt",
+      "autoInvokeHintLabel": "Vihje mudelile",
+      "autoInvokeHintPlaceholder": "Millal peaks mudel selle oskuse automaatselt valima?",
+      "autoInvokeLabel": "Lase tehisintellektil automaatselt käivitada",
+      "commandConflict": "Selle / käsuga oskus on juba olemas",
+      "commandLabel": "Kaldkriipsu käsk (valikuline)",
+      "commandPlaceholder": "nt kokku võtta",
+      "createTitle": "Uus oskus",
       "defaultBadge": "Default",
       "deleteConfirmDescription": "See prompt eemaldatakse jäädavalt.",
       "deleteConfirmTitle": "Kustutada prompt?",

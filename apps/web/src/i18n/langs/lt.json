@@ -1475,6 +1475,13 @@
     },
     "skills": {
       "addShortcut": "Pridėti promptą",
+      "autoInvokeHintLabel": "Užuomina modeliui",
+      "autoInvokeHintPlaceholder": "Kada modelis turėtų automatiškai pasirinkti šį įgūdį?",
+      "autoInvokeLabel": "Leisti DI vykdyti automatiškai",
+      "commandConflict": "Įgūdis su šia / komanda jau egzistuoja",
+      "commandLabel": "Įstrižo brūkšnio komanda (neprivaloma)",
+      "commandPlaceholder": "pvz. apibendrinti",
+      "createTitle": "Naujas įgūdis",
       "defaultBadge": "Default",
       "deleteConfirmDescription": "Šis promptas bus pašalintas visam laikui.",
       "deleteConfirmTitle": "Ištrinti promptą?",

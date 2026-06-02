@@ -1475,6 +1475,13 @@
     },
     "skills": {
       "addShortcut": "Prompt hinzufügen",
+      "autoInvokeHintLabel": "Hinweis für das Modell",
+      "autoInvokeHintPlaceholder": "Wann soll das Modell diesen Skill automatisch wählen?",
+      "autoInvokeLabel": "KI darf diesen Skill automatisch ausführen",
+      "commandConflict": "Ein Skill mit diesem / Befehl existiert bereits",
+      "commandLabel": "Schrägstrich-Befehl (optional)",
+      "commandPlaceholder": "z. B. zusammenfassen",
+      "createTitle": "Neuer Skill",
       "defaultBadge": "Default",
       "deleteConfirmDescription": "Dieser Prompt wird dauerhaft entfernt.",
       "deleteConfirmTitle": "Prompt löschen?",

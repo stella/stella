@@ -1475,6 +1475,13 @@
     },
     "skills": {
       "addShortcut": "Adicionar habilidade",
+      "autoInvokeHintLabel": "Dica para o modelo",
+      "autoInvokeHintPlaceholder": "Quando o modelo deve escolher esta habilidade automaticamente?",
+      "autoInvokeLabel": "Deixar a IA executar automaticamente",
+      "commandConflict": "Já existe uma habilidade com este comando /",
+      "commandLabel": "Comando com barra (opcional)",
+      "commandPlaceholder": "p. ex. resumir",
+      "createTitle": "Nova habilidade",
       "defaultBadge": "Padrão",
       "deleteConfirmDescription": "Esta habilidade será removida permanentemente.",
       "deleteConfirmTitle": "Excluir habilidade?",

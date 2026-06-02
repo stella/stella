@@ -4,6 +4,7 @@ import type { AgentSkillOrigin } from "@/api/db/schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const EDITABLE_AGENT_SKILL_ORIGINS = new Set<AgentSkillOrigin>([
+  "authored",
   "upload",
   "url",
 ]);

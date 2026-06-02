@@ -1,16 +1,19 @@
 import Elysia from "elysia";
 
+import createSkill from "@/api/handlers/skills/create";
 import deleteSkill from "@/api/handlers/skills/delete";
 import generateSkillDraft from "@/api/handlers/skills/generate-draft";
 import getSkill from "@/api/handlers/skills/get";
 import importSkillFromUrl from "@/api/handlers/skills/import-url";
 import listSkills from "@/api/handlers/skills/list";
+import listSkillCommands from "@/api/handlers/skills/list-commands";
 import createSkillResource from "@/api/handlers/skills/resources/create";
 import deleteSkillResource from "@/api/handlers/skills/resources/delete";
 import renameSkillResource from "@/api/handlers/skills/resources/rename";
 import rewriteSkillResource from "@/api/handlers/skills/resources/rewrite";
 import updateSkillResource from "@/api/handlers/skills/resources/update";
 import uploadSkillResource from "@/api/handlers/skills/resources/upload";
+import seedSkills from "@/api/handlers/skills/seed";
 import updateSkill from "@/api/handlers/skills/update";
 import uploadSkill from "@/api/handlers/skills/upload";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
@@ -25,9 +28,21 @@ export const skillsRoute = new Elysia({ prefix: "/skills" })
     permissions: listSkills.config.permissions,
     query: listSkills.config.query,
   })
+  .get("/commands", listSkillCommands.handler, {
+    permissions: listSkillCommands.config.permissions,
+  })
   .get("/:skillId", getSkill.handler, {
     params: getSkill.config.params,
     permissions: getSkill.config.permissions,
+  })
+  .post("/", createSkill.handler, {
+    body: createSkill.config.body,
+    invalidateQuery: true,
+    permissions: createSkill.config.permissions,
+  })
+  .post("/seed", seedSkills.handler, {
+    invalidateQuery: true,
+    permissions: seedSkills.config.permissions,
   })
   .post("/upload", uploadSkill.handler, {
     body: uploadSkill.config.body,

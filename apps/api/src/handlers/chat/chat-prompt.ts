@@ -82,6 +82,9 @@ export type UserContext = IncomingUserContext;
 
 type PromptSkillMetadata = SkillMetadata & {
   source?: "built-in" | "installed" | undefined;
+  /** Optional model-facing guidance from the skill author; surfaced
+   *  in the skill catalog so the model can decide when to invoke. */
+  autoInvokeHint?: string | null | undefined;
 };
 
 declare const __chatPromptPartBrand: unique symbol;
@@ -1049,7 +1052,9 @@ const buildPracticeJurisdictionLine = (
 const joinPromptSections = (sections: readonly string[]) =>
   sections.filter((section) => section.length > 0).join("\n\n");
 
-const buildSkillCatalogSection = (skillMetadata: readonly SkillMetadata[]) => {
+const buildSkillCatalogSection = (
+  skillMetadata: readonly PromptSkillMetadata[],
+) => {
   if (skillMetadata.length === 0) {
     return "";
   }
@@ -1057,7 +1062,10 @@ const buildSkillCatalogSection = (skillMetadata: readonly SkillMetadata[]) => {
   const skillLines = skillMetadata
     .map((skill) => {
       const version = skill.version ? ` (version ${skill.version})` : "";
-      return `- ${skill.name}: ${skill.description}${version}`;
+      const hint = skill.autoInvokeHint
+        ? `\n    Auto-invoke when: ${skill.autoInvokeHint}`
+        : "";
+      return `- ${skill.name}: ${skill.description}${version}${hint}`;
     })
     .join("\n");
 

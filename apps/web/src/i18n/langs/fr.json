@@ -1475,6 +1475,13 @@
     },
     "skills": {
       "addShortcut": "Ajouter un prompt",
+      "autoInvokeHintLabel": "Indication pour le modèle",
+      "autoInvokeHintPlaceholder": "Quand le modèle doit-il choisir automatiquement cette compétence ?",
+      "autoInvokeLabel": "Laisser l'IA l'exécuter automatiquement",
+      "commandConflict": "Une compétence avec cette commande / existe déjà",
+      "commandLabel": "Commande slash (facultatif)",
+      "commandPlaceholder": "p. ex. résumer",
+      "createTitle": "Nouvelle compétence",
       "defaultBadge": "Default",
       "deleteConfirmDescription": "Ce prompt sera supprimé définitivement.",
       "deleteConfirmTitle": "Supprimer le prompt ?",

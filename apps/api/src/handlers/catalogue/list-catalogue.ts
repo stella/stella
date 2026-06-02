@@ -110,6 +110,36 @@ const listCatalogue = createSafeRootHandler(
             ),
           );
 
+    // Authored skills the user created via "Add custom skill" (and
+    // legacy prompt_shortcuts migrated by the unification migration).
+    // They have no curated catalogue entry, so the loop below would
+    // miss them — append synthetic entries so the unified Tools page
+    // can manage them after creation.
+    const authoredSkillRows = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .select({
+            id: agentSkills.id,
+            slug: agentSkills.slug,
+            scope: agentSkills.scope,
+            enabled: agentSkills.enabled,
+            name: agentSkills.name,
+            description: agentSkills.description,
+          })
+          .from(agentSkills)
+          .where(
+            and(
+              eq(agentSkills.organizationId, session.activeOrganizationId),
+              eq(agentSkills.origin, "authored"),
+              or(
+                eq(agentSkills.scope, "team"),
+                eq(agentSkills.userId, user.id),
+              ),
+            ),
+          ),
+      ),
+    );
+
     const installedMcps =
       mcpUrls.length === 0
         ? []
@@ -286,6 +316,14 @@ const listCatalogue = createSafeRootHandler(
       organizationId: session.activeOrganizationId,
     });
 
+    appendAuthoredSkillEntries({
+      response,
+      skills: authoredSkillRows,
+      curatedSlugs: new Set(skillSlugs),
+      canDeleteTeamSkills,
+      organizationId: session.activeOrganizationId,
+    });
+
     return Result.ok({
       entries: response,
       practiceJurisdictions,
@@ -367,5 +405,76 @@ const buildCustomMcpCatalogueEntry = (
     enabled: null,
   };
 };
+
+type AuthoredSkillRow = {
+  id: string;
+  slug: string;
+  scope: "team" | "private";
+  enabled: boolean;
+  name: string;
+  description: string;
+};
+
+type AppendAuthoredSkillsArgs = {
+  response: CatalogueEntryResponse[];
+  skills: readonly AuthoredSkillRow[];
+  curatedSlugs: ReadonlySet<string>;
+  canDeleteTeamSkills: boolean;
+  organizationId: SafeId<"organization">;
+};
+
+const appendAuthoredSkillEntries = ({
+  response,
+  skills,
+  curatedSlugs,
+  canDeleteTeamSkills,
+  organizationId,
+}: AppendAuthoredSkillsArgs): void => {
+  // De-dupe by slug. A team-scope row and a private-scope row can
+  // coexist (different uniqueness gates), but the catalogue surface
+  // is keyed by slug, so we prefer the team row when both are visible
+  // and the caller can delete it.
+  const bySlug = new Map<string, AuthoredSkillRow>();
+  for (const row of skills) {
+    if (curatedSlugs.has(row.slug)) {
+      continue;
+    }
+    if (row.scope === "team" && !canDeleteTeamSkills) {
+      continue;
+    }
+    const existing = bySlug.get(row.slug);
+    if (!existing || row.scope === "team") {
+      bySlug.set(row.slug, row);
+    }
+  }
+  for (const row of bySlug.values()) {
+    response.push(buildAuthoredSkillCatalogueEntry(row, organizationId));
+  }
+};
+
+const buildAuthoredSkillCatalogueEntry = (
+  skill: AuthoredSkillRow,
+  organizationId: SafeId<"organization">,
+): CatalogueEntryResponse => ({
+  kind: "skill",
+  slug: skill.slug,
+  displayName: skill.name,
+  description: skill.description,
+  author: organizationId,
+  license: "MIT",
+  cost: "free",
+  setup: "none",
+  tags: [],
+  jurisdictions: [],
+  entryPath: "",
+  resources: [],
+  icon: null,
+  isLocked: false,
+  isRecommendedForOrg: false,
+  installState: "installed",
+  installedSkillId: skill.id,
+  installedConnectorSlug: null,
+  enabled: skill.enabled,
+});
 
 export default listCatalogue;

@@ -1475,6 +1475,13 @@
     },
     "skills": {
       "addShortcut": "Dodaj prompt",
+      "autoInvokeHintLabel": "Wskazówka dla modelu",
+      "autoInvokeHintPlaceholder": "Kiedy model powinien automatycznie wybrać tę umiejętność?",
+      "autoInvokeLabel": "Pozwól AI uruchamiać automatycznie",
+      "commandConflict": "Umiejętność z tym poleceniem / już istnieje",
+      "commandLabel": "Polecenie ukośnikowe (opcjonalne)",
+      "commandPlaceholder": "np. podsumuj",
+      "createTitle": "Nowa umiejętność",
       "defaultBadge": "Default",
       "deleteConfirmDescription": "Ten prompt zostanie trwale usunięty.",
       "deleteConfirmTitle": "Usunąć prompt?",

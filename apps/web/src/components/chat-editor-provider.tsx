@@ -62,7 +62,7 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
 import type { WorkspaceEntity } from "@/lib/types";
 import {
-  shortcutsOptions,
+  skillCommandsOptions,
   skillsOptions,
 } from "@/routes/_protected.knowledge/-queries";
 import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
@@ -701,8 +701,13 @@ export const useChatEditor = ({
     }
   });
 
-  const { data: shortcuts = [] } = useQuery(
-    shortcutsOptions(activeOrganizationId),
+  // Slash-command skills (formerly "prompt shortcuts") feed the chat
+  // composer's slash menu. After the prompts→skills consolidation
+  // they live in `agent_skills` and the dedicated commands endpoint
+  // returns only the command-bearing subset, so the slash menu
+  // doesn't pay for resource-heavy fields it doesn't render.
+  const { data: commandSkills = [] } = useQuery(
+    skillCommandsOptions(activeOrganizationId),
   );
   const {
     data: skillPages,
@@ -719,9 +724,34 @@ export const useChatEditor = ({
   }, [fetchNextSkillPage, hasNextSkillPage, isFetchingNextSkillPage]);
 
   const skillPageRows = skillPages?.pages;
+  // Adapt the unified commands-endpoint shape to the legacy
+  // `SlashShortcutRow` contract `buildChatSlashItems` consumes.
+  // `body` (the prompt text) now lives on the skill row, where
+  // shortcuts called it `prompt`.
+  const slashShortcutRows = useMemo(
+    () =>
+      commandSkills.flatMap((row) =>
+        row.command === null
+          ? []
+          : [
+              {
+                id: row.id,
+                scope: row.scope,
+                name: row.name,
+                command: row.command,
+                prompt: row.body,
+              },
+            ],
+      ),
+    [commandSkills],
+  );
   const slashItems = useMemo<SlashItem[]>(
-    () => buildChatSlashItems({ shortcuts, skillPages: skillPageRows }),
-    [shortcuts, skillPageRows],
+    () =>
+      buildChatSlashItems({
+        shortcuts: slashShortcutRows,
+        skillPages: skillPageRows,
+      }),
+    [slashShortcutRows, skillPageRows],
   );
   const slashItemsRef = useRef(slashItems);
   slashItemsRef.current = slashItems;
