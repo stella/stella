@@ -38,6 +38,33 @@ describe("toFlowBlocks — blockSdt grouping", () => {
     expect(second?.sdtGroups).toBeUndefined();
   });
 
+  test("assigns first/middle/last positions across the SDT's child blocks", () => {
+    // Multi-block SDTs should paint chrome as a continuous outline; the
+    // innermost SdtGroup on each block carries the position so the painter
+    // / CSS can stitch the dashed border across consecutive blocks.
+    const sdt = schema.node("blockSdt", { sdtType: "richText", tag: "x" }, [
+      schema.node("paragraph", {}, [schema.text("a")]),
+      schema.node("paragraph", {}, [schema.text("b")]),
+      schema.node("paragraph", {}, [schema.text("c")]),
+    ]);
+    const blocks = toFlowBlocks(schema.node("doc", null, [sdt]));
+    const positions = blocks
+      .filter((b) => b.kind === "paragraph")
+      .map((b) => b.sdtGroups?.at(-1)?.position);
+    expect(positions).toEqual(["first", "middle", "last"]);
+  });
+
+  test("a single-block SDT marks the only block as `only`", () => {
+    const sdt = schema.node("blockSdt", { sdtType: "richText", tag: "y" }, [
+      schema.node("paragraph", {}, [schema.text("solo")]),
+    ]);
+    const blocks = toFlowBlocks(schema.node("doc", null, [sdt]));
+    const innermost = blocks
+      .filter((b) => b.kind === "paragraph")
+      .map((b) => b.sdtGroups?.at(-1)?.position);
+    expect(innermost).toEqual(["only"]);
+  });
+
   test("nested block SDTs produce an outer→inner stack on the inner paragraph", () => {
     const innerPara = schema.node("paragraph", {}, [schema.text("nested")]);
     const innerSdt = schema.node("blockSdt", { tag: "inner" }, [innerPara]);

@@ -782,10 +782,36 @@
   content: "";
   position: absolute;
   inset: -2px -4px;
-  border: 1px dashed transparent;
-  border-radius: 2px;
+  border-style: dashed;
+  border-width: 1px;
+  border-color: transparent;
   pointer-events: none;
   transition: border-color 120ms ease-out;
+}
+/* Multi-block SDTs paint as a single continuous outline: the top edge sits
+   on the first block, the bottom edge on the last, and the sides span the
+   middle. `only` and the unmarked legacy case keep the full closed box. */
+.layout-page-content
+  [data-sdt-boundary="true"][data-sdt-position="first"]::before {
+  border-bottom-width: 0;
+  border-radius: 2px 2px 0 0;
+}
+.layout-page-content
+  [data-sdt-boundary="true"][data-sdt-position="middle"]::before {
+  border-top-width: 0;
+  border-bottom-width: 0;
+  border-radius: 0;
+}
+.layout-page-content
+  [data-sdt-boundary="true"][data-sdt-position="last"]::before {
+  border-top-width: 0;
+  border-radius: 0 0 2px 2px;
+}
+.layout-page-content
+  [data-sdt-boundary="true"][data-sdt-position="only"]::before,
+.layout-page-content
+  [data-sdt-boundary="true"]:not([data-sdt-position])::before {
+  border-radius: 2px;
 }
 .layout-page-content [data-sdt-boundary="true"]:hover::before,
 .layout-page-content [data-sdt-boundary="true"]:focus-within::before {

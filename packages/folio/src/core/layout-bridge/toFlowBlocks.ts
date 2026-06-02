@@ -2365,6 +2365,7 @@ export function toFlowBlocks(
         }
 
         sdtStack.push(group);
+        const startIndex = blocks.length;
         let childOffset = pos + 1; // skip the blockSdt opening token
         for (let i = 0; i < node.childCount; i += 1) {
           const child = node.child(i);
@@ -2372,6 +2373,44 @@ export function toFlowBlocks(
           childOffset += child.nodeSize;
         }
         sdtStack.pop();
+        // Stamp first/middle/last/only on the innermost group of each block
+        // that was emitted inside this SDT so the painter chrome continues
+        // visually across the block sequence. Only paragraph/table blocks
+        // carry sdtGroups; section breaks etc. were skipped at tag time.
+        const groupBlocks: (ParagraphBlock | TableBlock)[] = [];
+        for (let i = startIndex; i < blocks.length; i += 1) {
+          const b = blocks[i];
+          if (b && (b.kind === "paragraph" || b.kind === "table")) {
+            groupBlocks.push(b);
+          }
+        }
+        for (let i = 0; i < groupBlocks.length; i += 1) {
+          const b = groupBlocks[i];
+          if (!b || !b.sdtGroups) {
+            continue;
+          }
+          const innermost = b.sdtGroups.at(-1);
+          if (!innermost) {
+            continue;
+          }
+          let position: NonNullable<SdtGroup["position"]>;
+          if (groupBlocks.length === 1) {
+            position = "only";
+          } else if (i === 0) {
+            position = "first";
+          } else if (i === groupBlocks.length - 1) {
+            position = "last";
+          } else {
+            position = "middle";
+          }
+          // Replace the innermost group with a copy carrying the position.
+          // (The same SdtGroup object is shared across blocks of this
+          // group, so swap in a new last entry to keep the others untouched.)
+          b.sdtGroups = [
+            ...b.sdtGroups.slice(0, -1),
+            { ...innermost, position },
+          ];
+        }
         return;
       }
       default:

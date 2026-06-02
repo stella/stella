@@ -681,6 +681,15 @@ export type SdtGroup = {
   dateFormat?: string;
   /** Modeled `w:dropDownList`/`w:comboBox` items (JSON-encoded). */
   listItemsJson?: string;
+  /**
+   * Position of the carrying block within its SDT group (`first`/`middle`/
+   * `last`/`only`). The painter stamps `data-sdt-position` from this so the
+   * CSS chrome can draw a continuous outline across the block sequence —
+   * top edge on `first`, bottom edge on `last`, only side edges in
+   * between. Without this, every block painted its own closed box and a
+   * multi-paragraph SDT looked like several stacked rectangles.
+   */
+  position?: "first" | "middle" | "last" | "only";
 };
 
 /**

@@ -25,6 +25,9 @@ export function applySdtDataAttrs(
     el.dataset["sdtId"] = innermost.id;
     el.dataset["sdtPmPos"] = String(innermost.pmPos);
     el.dataset["sdtType"] = innermost.sdtType;
+    if (innermost.position) {
+      el.dataset["sdtPosition"] = innermost.position;
+    }
     if (innermost.alias) {
       el.dataset["sdtAlias"] = innermost.alias;
     }
