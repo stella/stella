@@ -17,6 +17,7 @@ import {
   ToolDetailView,
   type ToolDetailPayload,
 } from "@/routes/_protected.knowledge/-components/catalogue/tool-detail-view";
+import { knowledgeKeys } from "@/routes/_protected.knowledge/-queries";
 import { catalogueKeys } from "@/routes/_protected.knowledge/-queries/catalogue";
 import { organizationSettingsOptions } from "@/routes/_protected.organization/-settings-queries";
 
@@ -54,7 +55,21 @@ export const Route = createFileRoute("/_protected/knowledge/tools")({
       return;
     }
     seededThisSession.add(orgId);
-    await api.skills.seed.post({ queryKey: ["skills"] });
+    const response = await api.skills.seed.post({ queryKey: ["skills"] });
+    // When the server actually wrote rows, invalidate the local
+    // skill/catalogue caches so chat (slash menu) and any open Tools
+    // browser pick the new commands up immediately instead of waiting
+    // for staleTime to lapse. Both queries are keyed by org id.
+    if (response.data?.seeded) {
+      await Promise.all([
+        context.queryClient.invalidateQueries({
+          queryKey: knowledgeKeys.skills.all(orgId),
+        }),
+        context.queryClient.invalidateQueries({
+          queryKey: catalogueKeys.all(orgId),
+        }),
+      ]);
+    }
   },
   component: ToolsPage,
 });
