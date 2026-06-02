@@ -37,6 +37,7 @@ import {
   DEFAULT_TEXTBOX_WIDTH,
 } from "../layout-engine/types";
 import {
+  expectBlockSdtAttrs,
   expectCharacterSpacingMarkAttrs,
   expectCommentMarkAttrs,
   expectEmphasisMarkAttrs,
@@ -2331,35 +2332,35 @@ export function toFlowBlocks(
   const visit = (node: PMNode, pos: number): void => {
     switch (node.type.name) {
       case "blockSdt": {
-        const attrs = node.attrs;
+        const attrs = expectBlockSdtAttrs(node);
         sdtSeq += 1;
         const group: SdtGroup = {
           id: `sdt-${sdtSeq}`,
-          sdtType: String(attrs["sdtType"] ?? "richText"),
+          sdtType: attrs.sdtType,
         };
-        if (attrs["alias"]) {
-          group.alias = String(attrs["alias"]);
+        if (attrs.alias) {
+          group.alias = attrs.alias;
         }
-        if (attrs["tag"]) {
-          group.tag = String(attrs["tag"]);
+        if (attrs.tag) {
+          group.tag = attrs.tag;
         }
-        if (typeof attrs["id"] === "number") {
-          group.sdtId = attrs["id"];
+        if (typeof attrs.id === "number") {
+          group.sdtId = attrs.id;
         }
-        if (attrs["lock"]) {
-          group.lock = String(attrs["lock"]);
+        if (attrs.lock) {
+          group.lock = attrs.lock;
         }
-        if (attrs["showingPlaceholder"]) {
+        if (attrs.showingPlaceholder) {
           group.showingPlaceholder = true;
         }
-        if (attrs["checked"] !== null && attrs["checked"] !== undefined) {
-          group.checked = Boolean(attrs["checked"]);
+        if (typeof attrs.checked === "boolean") {
+          group.checked = attrs.checked;
         }
-        if (attrs["dateFormat"]) {
-          group.dateFormat = String(attrs["dateFormat"]);
+        if (attrs.dateFormat) {
+          group.dateFormat = attrs.dateFormat;
         }
-        if (typeof attrs["listItems"] === "string" && attrs["listItems"]) {
-          group.listItemsJson = attrs["listItems"];
+        if (attrs.listItems) {
+          group.listItemsJson = attrs.listItems;
         }
 
         sdtStack.push(group);

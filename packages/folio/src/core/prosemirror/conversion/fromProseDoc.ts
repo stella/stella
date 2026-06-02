@@ -74,6 +74,7 @@ import {
   expectMathAttrs,
   expectParagraphAttrs,
   expectRunFormattingOverrideMarkAttrs,
+  expectBlockSdtAttrs,
   expectSdtAttrs,
   expectShapeAttrs,
   expectStrikeMarkAttrs,
@@ -266,51 +267,43 @@ type PreviousStandaloneTextBox = {
 };
 
 function convertPMBlockSdt(node: PMNode): BlockSdt {
-  const attrs = node.attrs;
-  const properties: SdtProperties = {
-    sdtType: (attrs["sdtType"] ?? "richText") as SdtProperties["sdtType"],
-  };
-  if (attrs["alias"]) {
-    properties.alias = String(attrs["alias"]);
+  const attrs = expectBlockSdtAttrs(node);
+  const properties: SdtProperties = { sdtType: attrs.sdtType };
+  if (attrs.alias) {
+    properties.alias = attrs.alias;
   }
-  if (attrs["tag"]) {
-    properties.tag = String(attrs["tag"]);
+  if (attrs.tag) {
+    properties.tag = attrs.tag;
   }
-  if (typeof attrs["id"] === "number") {
-    properties.id = attrs["id"];
+  if (typeof attrs.id === "number") {
+    properties.id = attrs.id;
   }
-  const lockAttr = attrs["lock"];
-  if (
-    lockAttr === "sdtLocked" ||
-    lockAttr === "contentLocked" ||
-    lockAttr === "sdtContentLocked" ||
-    lockAttr === "unlocked"
-  ) {
-    properties.lock = lockAttr;
+  if (attrs.lock) {
+    properties.lock = attrs.lock;
   }
-  if (attrs["placeholder"]) {
-    properties.placeholder = String(attrs["placeholder"]);
+  if (attrs.placeholder) {
+    properties.placeholder = attrs.placeholder;
   }
-  if (attrs["showingPlaceholder"]) {
+  if (attrs.showingPlaceholder) {
     properties.showingPlaceholder = true;
   }
-  if (attrs["dateFormat"]) {
-    properties.dateFormat = String(attrs["dateFormat"]);
+  if (attrs.dateFormat) {
+    properties.dateFormat = attrs.dateFormat;
   }
-  if (typeof attrs["listItems"] === "string" && attrs["listItems"]) {
-    const items = parseListItemsJson(attrs["listItems"]);
+  if (attrs.listItems) {
+    const items = parseListItemsJson(attrs.listItems);
     if (items) {
       properties.listItems = items;
     }
   }
-  if (attrs["checked"] !== null && attrs["checked"] !== undefined) {
-    properties.checked = Boolean(attrs["checked"]);
+  if (typeof attrs.checked === "boolean") {
+    properties.checked = attrs.checked;
   }
-  if (typeof attrs["rawPropertiesXml"] === "string") {
-    properties.rawPropertiesXml = attrs["rawPropertiesXml"];
+  if (attrs.rawPropertiesXml) {
+    properties.rawPropertiesXml = attrs.rawPropertiesXml;
   }
-  if (typeof attrs["rawEndPropertiesXml"] === "string") {
-    properties.rawEndPropertiesXml = attrs["rawEndPropertiesXml"];
+  if (attrs.rawEndPropertiesXml) {
+    properties.rawEndPropertiesXml = attrs.rawEndPropertiesXml;
   }
 
   // Recursively materialize children. PM `blockSdt` content is `block+`, so a

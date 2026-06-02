@@ -326,6 +326,30 @@ export type SdtAttrs = {
 };
 
 /**
+ * Block-level structured document tag node attributes. Mirrors `SdtAttrs`
+ * plus an optional numeric `w:id` and the verbatim `w:sdtPr`/`w:sdtEndPr`
+ * strings captured by the parser for lossless round-trip.
+ */
+export type BlockSdtAttrs = {
+  sdtType: SdtType;
+  alias?: string;
+  tag?: string;
+  /** Numeric `w:id/@w:val`. */
+  id?: number;
+  lock?: NonNullable<SdtProperties["lock"]>;
+  placeholder?: string;
+  showingPlaceholder?: boolean;
+  dateFormat?: string;
+  /** Dropdown/combobox list items as JSON string. */
+  listItems?: string;
+  checked?: boolean;
+  /** Captured `<w:sdtPr>…</w:sdtPr>` for round-trip replay. */
+  rawPropertiesXml?: string;
+  /** Captured `<w:sdtEndPr>…</w:sdtEndPr>` for round-trip replay. */
+  rawEndPropertiesXml?: string;
+};
+
+/**
  * Shape node attributes
  */
 export type ShapeAttrs = {

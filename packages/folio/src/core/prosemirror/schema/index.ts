@@ -19,6 +19,7 @@ export type {
   ImagePositionAttrs,
   MathAttrs,
   SdtAttrs,
+  BlockSdtAttrs,
   ShapeAttrs,
   TableAttrs,
   TableRowAttrs,
