@@ -264,22 +264,42 @@ export function setContentControlContentTr(
   }
   ensureContentNotLocked(match.node, options);
 
-  let children: PMNode[];
-  if (typeof input === "string") {
-    children = [paragraphFromText(state.schema, input)];
-  } else {
-    // Caller provided Document-model BlockContent[]; convert via toProseDoc
-    // would re-enter the whole pipeline. Keep this PM-direct: only string
-    // input is supported here; block-content fill should go through the
-    // headless API + loadDocument for now (matches upstream's caveat).
+  if (typeof input !== "string") {
+    // Block-content fill is supported via `setContentControlContentBlocksTr`
+    // (separate module to avoid a cycle: the conversion pipeline imports
+    // the schema, which transitively imports the widgets plugin, which
+    // imports this module). Refuse early with a clear message instead of
+    // silently coercing.
     throw new ContentControlTypeError({
       message:
-        "Block-content fill is only supported via the headless API; pass a string here.",
+        "Block-content fill must go through `setContentControlContentBlocksTr` (avoids a schema/plugin import cycle); pass a string here.",
       sdtType: (match.node.attrs["sdtType"] ??
         "richText") as SdtProperties["sdtType"],
       reason: "PM-direct path takes string input only",
     });
   }
+  return replaceBlockSdtChildren(state, match, [
+    paragraphFromText(state.schema, input),
+  ]);
+}
+
+/**
+ * Internal helper for the block-content fill variant. Lives in this module
+ * so callers reuse the same lock-check and `replaceWith` shape; the
+ * conversion-aware `setContentControlContentBlocksTr` in
+ * `./contentControlsBlockFill.ts` wraps it.
+ */
+export function replaceBlockSdtChildrenForFill(
+  state: EditorState,
+  filter: ContentControlFilter,
+  children: readonly PMNode[],
+  options: ForceOption = {},
+): Transaction | null {
+  const match = findBlockSdtMatch(state.doc, filter);
+  if (!match) {
+    return null;
+  }
+  ensureContentNotLocked(match.node, options);
   return replaceBlockSdtChildren(state, match, children);
 }
 

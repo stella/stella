@@ -139,6 +139,7 @@ import {
   setContentControlContentTr,
   setContentControlValueTr,
 } from "../core/prosemirror/commands/contentControls";
+import { setContentControlContentBlocksTr } from "../core/prosemirror/commands/contentControlsBlockFill";
 import { proseDocToBlocks } from "../core/prosemirror/conversion/fromProseDoc";
 import { ExtensionManager } from "../core/prosemirror/extensions/ExtensionManager";
 import {
@@ -2855,12 +2856,15 @@ export function DocxEditor({
         if (!view) {
           return false;
         }
-        const tr = setContentControlContentTr(
-          view.state,
-          filter,
-          input,
-          options,
-        );
+        const tr =
+          typeof input === "string"
+            ? setContentControlContentTr(view.state, filter, input, options)
+            : setContentControlContentBlocksTr(
+                view.state,
+                filter,
+                input,
+                options,
+              );
         if (!tr) {
           return false;
         }
