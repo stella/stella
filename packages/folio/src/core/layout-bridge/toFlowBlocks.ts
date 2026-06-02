@@ -2564,6 +2564,29 @@ export function toFlowBlocks(
  * preserve runInWithNext only when the second paragraph itself has
  * specVanish).
  */
+function sdtGroupStacksEqual(
+  a: SdtGroup[] | undefined,
+  b: SdtGroup[] | undefined,
+): boolean {
+  // pmPos is unique per SDT instance within a single toFlowBlocks call, so
+  // comparing the pmPos stacks is enough to tell "same membership" vs.
+  // "different membership" without copying the rest of the group payload.
+  const lenA = a?.length ?? 0;
+  const lenB = b?.length ?? 0;
+  if (lenA !== lenB) {
+    return false;
+  }
+  if (lenA === 0) {
+    return true;
+  }
+  for (let i = 0; i < lenA; i++) {
+    if (a?.[i]?.pmPos !== b?.[i]?.pmPos) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function mergeRunInParagraphs(blocks: FlowBlock[]): FlowBlock[] {
   const out: FlowBlock[] = [];
   for (let i = 0; i < blocks.length; i++) {
@@ -2588,6 +2611,15 @@ function mergeRunInParagraphs(blocks: FlowBlock[]): FlowBlock[] {
       }
       const a = current as ParagraphBlock;
       const b = next as ParagraphBlock;
+      // Stop merging when the two paragraphs sit in different SDT stacks.
+      // The merged ParagraphBlock would inherit only `a`'s sdtGroups via
+      // spread, so a `<w:specVanish/>` adjacent to a paragraph across an
+      // SDT boundary would either claim outside text as part of the SDT
+      // or strip SDT membership from inside text — chrome and widget
+      // click targets would line up against the wrong content range.
+      if (!sdtGroupStacksEqual(a.sdtGroups, b.sdtGroups)) {
+        break;
+      }
       const mergedAttrs: ParagraphAttrs = { ...a.attrs };
       // Heading typically has no spaceAfter; the body's spaceAfter
       // governs the merged paragraph's trailing gap.

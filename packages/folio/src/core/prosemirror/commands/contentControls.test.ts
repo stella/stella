@@ -220,6 +220,31 @@ describe("setContentControlValueTr", () => {
     expect(next.doc.firstChild?.firstChild?.textContent).toBe("California");
   });
 
+  test("date: rejects partial-prefix dateValueISO and writes the raw value", () => {
+    // Without an end anchor, `2026-06-02abc` matched the regex prefix and
+    // formatDate happily rendered the well-formed slice. The model would
+    // still store the malformed ISO, so the visible body silently
+    // disagreed with the bound value.
+    const sdt = schema.node(
+      "blockSdt",
+      { sdtType: "date", tag: "due", dateFormat: "yyyy-MM-dd" },
+      [schema.node("paragraph", {}, [])],
+    );
+    const state = makeState(schema.node("doc", null, [sdt]));
+    const tr = setContentControlValueTr(
+      state,
+      { tag: "due" },
+      { kind: "date", date: "2026-06-02abc" },
+    );
+    if (!tr) {
+      throw new TypeError("expected tx");
+    }
+    const next = state.apply(tr);
+    // Falls back to "return unchanged" rendering — the body shows the
+    // raw input rather than a deceptively well-formatted partial match.
+    expect(next.doc.firstChild?.firstChild?.textContent).toBe("2026-06-02abc");
+  });
+
   test("rejects a checkbox toggle on a richText control", () => {
     const state = makeState();
     expect(() =>

@@ -205,7 +205,16 @@ export function reconcileRawSdtPr(
           wDate,
           (_m, prefix: string, _attrs: string, inner: string) => {
             // Remove any existing w:dateFormat, re-emit ours if provided.
-            let body = inner.replaceAll(/<\w+:dateFormat\b[^/>]*\/>/giu, "");
+            // Match BOTH the self-closing and expanded-empty forms — a valid
+            // DOCX is free to write `<w:dateFormat w:val="…"></w:dateFormat>`,
+            // and stripping only `…/>` would leave a stale sibling next to
+            // the freshly-prepended replacement on the next save.
+            let body = inner
+              .replaceAll(/<\w+:dateFormat\b[^/>]*\/>/giu, "")
+              .replaceAll(
+                /<\w+:dateFormat\b[^>]*>[\s\S]*?<\/\w+:dateFormat>/giu,
+                "",
+              );
             if (formatChild) {
               body = `${formatChild}${body}`;
             }

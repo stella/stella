@@ -439,8 +439,11 @@ function formatDateForBody(
  * regardless of TZ.
  */
 function parseSdtDate(iso: string): Date | null {
+  // See headless helper for the rationale on anchoring at end.
   const match =
-    /^(\d{4})-(\d{2})-(\d{2})(?:[Tt](\d{2}):(\d{2})(?::(\d{2}))?)?/u.exec(iso);
+    /^(\d{4})-(\d{2})-(\d{2})(?:[Tt](\d{2}):(\d{2})(?::(\d{2}))?)?(?:[Zz]|[+-]\d{2}:?\d{2})?$/u.exec(
+      iso,
+    );
   if (match) {
     const year = Number(match[1]);
     const month = Number(match[2]);

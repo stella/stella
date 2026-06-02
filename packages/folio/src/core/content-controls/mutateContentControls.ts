@@ -56,8 +56,17 @@ function formatDateForSdtBody(
  * UTC.
  */
 function parseSdtDate(iso: string): Date | null {
+  // Anchor at end so a malformed input that starts with a valid prefix
+  // (e.g. `2026-06-02abc`, `2026-06-02T`) does not silently succeed on the
+  // prefix — that would let `formatDate` render a body that disagrees with
+  // the bound `dateValueISO`. The optional trailing group accepts `Z` / a
+  // numeric TZ offset since those are valid OOXML date forms; the actual
+  // moment-in-time is ignored downstream, but the input has to parse
+  // cleanly to be considered a date at all.
   const match =
-    /^(\d{4})-(\d{2})-(\d{2})(?:[Tt](\d{2}):(\d{2})(?::(\d{2}))?)?/u.exec(iso);
+    /^(\d{4})-(\d{2})-(\d{2})(?:[Tt](\d{2}):(\d{2})(?::(\d{2}))?)?(?:[Zz]|[+-]\d{2}:?\d{2})?$/u.exec(
+      iso,
+    );
   if (match) {
     const year = Number(match[1]);
     const month = Number(match[2]);

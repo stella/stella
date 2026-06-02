@@ -103,6 +103,24 @@ describe("reconcileRawSdtPr — dataBinding / repeatingSection passthrough", () 
 });
 
 describe("reconcileRawSdtPr — date format", () => {
+  test("replaces an expanded-empty dateFormat element on round-trip", () => {
+    // A producer DOCX that writes `<w:dateFormat …></w:dateFormat>` instead
+    // of self-closing would otherwise leave a stale sibling next to our
+    // freshly-prepended replacement — Word would see two dateFormat
+    // children and the picked display string would not stick.
+    const raw =
+      '<w:sdtPr><w:date w:fullDate="2026-06-02"><w:dateFormat w:val="d MMMM yyyy"></w:dateFormat></w:date></w:sdtPr>';
+    const out = reconcileRawSdtPr(
+      raw,
+      { sdtType: "date", dateFormat: "yyyy-MM-dd" },
+      { dateFullDate: "2026-06-02" },
+    );
+    // Exactly one self-closing dateFormat child remains.
+    expect(out.match(/dateFormat/giu)?.length).toBe(1);
+    expect(out).toContain('<w:dateFormat w:val="yyyy-MM-dd"/>');
+    expect(out).not.toContain('w:val="d MMMM yyyy"');
+  });
+
   test("updates dateFormat without disturbing the surrounding w:date element", () => {
     const raw =
       '<w:sdtPr><w:date w:fullDate="2026-06-02"><w:dateFormat w:val="d MMMM yyyy"/><w:lid w:val="en-GB"/></w:date></w:sdtPr>';

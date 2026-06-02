@@ -11,6 +11,49 @@ import { describe, expect, test } from "bun:test";
 import { schema } from "../prosemirror/schema";
 import { toFlowBlocks } from "./toFlowBlocks";
 
+describe("toFlowBlocks — run-in merge respects SDT boundaries", () => {
+  test("does not merge a runInWithNext paragraph inside an SDT with one outside it", () => {
+    // The first paragraph carries specVanish (`runInWithNext`) and lives
+    // inside an SDT. Its successor is a top-level body paragraph. Without
+    // the membership check, mergeRunInParagraphs would carry only the
+    // first paragraph's sdtGroups onto the merged block, so the body
+    // text after the boundary would render as if it were part of the SDT
+    // — chrome and widget click targets would line up against the wrong
+    // range.
+    const inner = schema.node("paragraph", { runInWithNext: true }, [
+      schema.text("Heading"),
+    ]);
+    const sdt = schema.node("blockSdt", { sdtType: "richText", tag: "wrap" }, [
+      inner,
+    ]);
+    const tail = schema.node("paragraph", {}, [schema.text("body text")]);
+    const blocks = toFlowBlocks(schema.node("doc", null, [sdt, tail]));
+    const paragraphs = blocks.filter((b) => b.kind === "paragraph");
+
+    expect(paragraphs).toHaveLength(2);
+    expect(paragraphs[0]?.sdtGroups?.[0]?.tag).toBe("wrap");
+    expect(paragraphs[1]?.sdtGroups).toBeUndefined();
+  });
+
+  test("still merges runInWithNext when both paragraphs share the same SDT membership", () => {
+    // Sanity: the same-membership case must keep working — a specVanish
+    // heading immediately above its body paragraph inside one SDT should
+    // collapse exactly like it does outside an SDT.
+    const heading = schema.node("paragraph", { runInWithNext: true }, [
+      schema.text("Heading"),
+    ]);
+    const body = schema.node("paragraph", {}, [schema.text(" body text")]);
+    const sdt = schema.node("blockSdt", { sdtType: "richText", tag: "wrap" }, [
+      heading,
+      body,
+    ]);
+    const blocks = toFlowBlocks(schema.node("doc", null, [sdt]));
+    const paragraphs = blocks.filter((b) => b.kind === "paragraph");
+    expect(paragraphs).toHaveLength(1);
+    expect(paragraphs[0]?.sdtGroups?.[0]?.tag).toBe("wrap");
+  });
+});
+
 describe("toFlowBlocks — blockSdt grouping", () => {
   test("flattens block SDT children and tags each with the enclosing SdtGroup", () => {
     const inner = schema.node("paragraph", {}, [schema.text("inside the SDT")]);
