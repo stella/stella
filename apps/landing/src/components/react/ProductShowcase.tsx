@@ -17,15 +17,40 @@ export default function ProductShowcase() {
 
           return (
             <article
-              className="showcase-tile min-w-[82%] snap-center self-start transition-[opacity,transform] duration-300 ease-out sm:min-w-[20rem] md:min-w-0"
+              data-reveal
+              className="showcase-tile min-w-[82%] snap-center self-start transition-[opacity,transform] duration-[500ms] ease-[cubic-bezier(0.22,1,0.36,1)] sm:min-w-[20rem] md:min-w-0"
               key={item.title}
             >
               <div
                 className={cn(
-                  "group border-border/45 relative flex aspect-[0.75] min-h-[20rem] items-center justify-center overflow-hidden rounded-[1.45rem] border bg-[color-mix(in_srgb,var(--background)_90%,var(--auth-gradient-end)_10%)] shadow-[0_14px_34px_-28px_rgba(0,0,0,0.16)] transition-[border-color,box-shadow,transform] duration-300 ease-out sm:min-h-[24rem]",
+                  "group border-border/45 relative flex aspect-square min-h-[15rem] items-center justify-center overflow-hidden rounded-[1.45rem] border backdrop-blur-md transition-[border-color,box-shadow,transform] duration-300 ease-out sm:min-h-[18rem]",
                 )}
                 data-showcase-shell
+                style={{
+                  background:
+                    "color-mix(in srgb, var(--card) 78%, transparent)",
+                  boxShadow:
+                    "inset 0 1px 0 color-mix(in srgb, white 10%, transparent), 0 18px 40px -28px rgba(0, 0, 0, 0.28)",
+                }}
               >
+                {/* Glass light catch — brighter at top edge, fades down. */}
+                <div
+                  className="pointer-events-none absolute inset-0"
+                  style={{
+                    background:
+                      "linear-gradient(180deg, color-mix(in srgb, white 7%, transparent) 0%, transparent 38%)",
+                  }}
+                  aria-hidden="true"
+                />
+                {/* Subtle bottom darkening — adds depth, like glass thickness. */}
+                <div
+                  className="pointer-events-none absolute inset-0"
+                  style={{
+                    background:
+                      "linear-gradient(180deg, transparent 65%, color-mix(in srgb, black 14%, transparent) 100%)",
+                  }}
+                  aria-hidden="true"
+                />
                 <Illustration />
                 <div className="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-black/4 transition-opacity duration-300 group-hover:opacity-70 dark:ring-white/6" />
                 <div className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 transition-opacity duration-300 group-hover:opacity-100">
@@ -34,11 +59,24 @@ export default function ProductShowcase() {
                 </div>
               </div>
 
-              <div className="px-1 pt-4">
-                <h3 className="showcase-title text-base font-medium tracking-tight transition-colors duration-300">
+              <div className="px-1 pt-5">
+                <h3 className="showcase-title font-display text-xl leading-tight font-medium tracking-tight transition-colors duration-300 sm:text-2xl">
+                  <span
+                    className="tabular-nums"
+                    style={{ color: "var(--muted-foreground)" }}
+                  >
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                  <span
+                    className="mx-2"
+                    style={{ color: "var(--muted-foreground)" }}
+                    aria-hidden="true"
+                  >
+                    —
+                  </span>
                   {item.title}
                 </h3>
-                <p className="showcase-description text-muted-foreground mt-2 text-sm leading-6 transition-colors duration-300">
+                <p className="showcase-description text-muted-foreground mt-3 text-sm leading-[1.7] transition-colors duration-300">
                   {item.description}
                 </p>
               </div>
@@ -48,6 +86,13 @@ export default function ProductShowcase() {
       </div>
 
       <style>{`
+        /* Stagger the per-tile reveal — set as CSS vars rather than
+           inline style so the React type checker stays out of CSS
+           variable territory. */
+        .showcase-grid > .showcase-tile:nth-child(1) { --reveal-delay: 0ms; }
+        .showcase-grid > .showcase-tile:nth-child(2) { --reveal-delay: 100ms; }
+        .showcase-grid > .showcase-tile:nth-child(3) { --reveal-delay: 200ms; }
+
         @media (hover: hover) and (pointer: fine) {
           .showcase-grid:hover .showcase-tile {
             opacity: 0.88;
@@ -77,330 +122,145 @@ export default function ProductShowcase() {
             box-shadow: 0 18px 38px -30px rgba(0, 0, 0, 0.22);
           }
         }
+
+        /* ——— Line-art illustrations ——— */
+
+        /* The brand accent is on the scan line statically; the drafting
+           cursor word is set dynamically per-frame by the rAF driver so
+           the blue follows the active write/erase position. The sunburst
+           rays' blue moment is set per-keyframe by the WAAPI driver. */
+        .review-line .scan {
+          stroke: #549CD1;
+          filter: drop-shadow(0 0 7px rgba(84, 156, 209, 0.55));
+        }
       `}</style>
     </div>
   );
 }
 
 /**
- * Geometric abstractions for each capability.
- * Minimal wireframe illustrations using brand blues (hsl 204-215°).
+ * Line-art glyphs. Pure strokes, no fills, no fake UI.
+ * The illustrations sit centered with generous negative space.
  */
 
-/** Tabular review: a grid of rows with status indicators */
+/** Tabular review: lines light up to white as the scan passes; all fade together at cycle end. */
 function ReviewIllustration() {
+  const lines = Array.from({ length: 6 }, (_, i) => 80 + i * 28);
   return (
-    <svg viewBox="0 0 320 280" fill="none" className="h-full w-full">
-      {/* Table header */}
-      <rect
-        x="40"
-        y="40"
-        width="240"
-        height="28"
-        rx="6"
-        fill="currentColor"
-        opacity="0.06"
-      />
-      <rect
-        x="52"
-        y="50"
-        width="48"
-        height="8"
-        rx="3"
-        fill="currentColor"
-        opacity="0.15"
-      />
-      <rect
-        x="120"
-        y="50"
-        width="32"
-        height="8"
-        rx="3"
-        fill="currentColor"
-        opacity="0.1"
-      />
-      <rect
-        x="172"
-        y="50"
-        width="28"
-        height="8"
-        rx="3"
-        fill="currentColor"
-        opacity="0.1"
-      />
-      <rect
-        x="220"
-        y="50"
-        width="44"
-        height="8"
-        rx="3"
-        fill="currentColor"
-        opacity="0.1"
-      />
-      {/* Rows */}
-      {[0, 1, 2, 3, 4].map((i) => {
-        const y = 80 + i * 36;
-        const active = i === 1 || i === 3;
-        return (
-          <g key={i}>
-            <rect
-              x="40"
-              y={y}
-              width="240"
-              height="28"
-              rx="6"
-              fill={active ? "#549CD1" : "currentColor"}
-              opacity={active ? 0.08 : 0.03}
-            />
-            <rect
-              x="52"
-              y={y + 10}
-              width={36 + ((i * 7) % 20)}
-              height="8"
-              rx="3"
-              fill="currentColor"
-              opacity={active ? 0.2 : 0.1}
-            />
-            <rect
-              x="120"
-              y={y + 10}
-              width="24"
-              height="8"
-              rx="3"
-              fill="currentColor"
-              opacity={0.08}
-            />
-            <circle
-              cx="184"
-              cy={y + 14}
-              r="4"
-              fill={active ? "#549CD1" : "currentColor"}
-              opacity={active ? 0.5 : 0.1}
-            />
-            <rect
-              x="220"
-              y={y + 10}
-              width={20 + ((i * 11) % 24)}
-              height="8"
-              rx="3"
-              fill="currentColor"
-              opacity={0.08}
-            />
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
-/** Template drafting: a document outline with fields and structure */
-function DraftIllustration() {
-  return (
-    <svg viewBox="0 0 320 280" fill="none" className="h-full w-full">
-      <rect
-        x="60"
-        y="30"
-        width="200"
-        height="220"
-        rx="10"
-        fill="currentColor"
-        opacity="0.03"
-        stroke="currentColor"
-        strokeOpacity="0.08"
-        strokeWidth="1"
-      />
-      <rect
-        x="80"
-        y="50"
-        width="100"
-        height="10"
-        rx="4"
-        fill="currentColor"
-        opacity="0.15"
-      />
-      <line
-        x1="80"
-        y1="72"
-        x2="240"
-        y2="72"
-        stroke="currentColor"
-        strokeOpacity="0.06"
-      />
-      <rect
-        x="80"
-        y="84"
-        width="40"
-        height="6"
-        rx="2"
-        fill="currentColor"
-        opacity="0.1"
-      />
-      <rect
-        x="80"
-        y="96"
-        width="140"
-        height="20"
-        rx="5"
-        fill="#549CD1"
-        opacity="0.06"
-        stroke="#549CD1"
-        strokeOpacity="0.15"
-        strokeWidth="1"
-      />
-      <rect
-        x="90"
-        y="103"
-        width="60"
-        height="6"
-        rx="2"
-        fill="#549CD1"
-        opacity="0.2"
-      />
-      <rect
-        x="80"
-        y="128"
-        width="36"
-        height="6"
-        rx="2"
-        fill="currentColor"
-        opacity="0.1"
-      />
-      <rect
-        x="80"
-        y="140"
-        width="140"
-        height="20"
-        rx="5"
-        fill="currentColor"
-        opacity="0.03"
-        stroke="currentColor"
-        strokeOpacity="0.08"
-        strokeWidth="1"
-      />
-      <rect
-        x="90"
-        y="147"
-        width="80"
-        height="6"
-        rx="2"
-        fill="currentColor"
-        opacity="0.1"
-      />
-      <rect
-        x="80"
-        y="176"
-        width="150"
-        height="6"
-        rx="2"
-        fill="currentColor"
-        opacity="0.08"
-      />
-      <rect
-        x="80"
-        y="188"
-        width="130"
-        height="6"
-        rx="2"
-        fill="currentColor"
-        opacity="0.06"
-      />
-      <rect
-        x="80"
-        y="200"
-        width="144"
-        height="6"
-        rx="2"
-        fill="currentColor"
-        opacity="0.06"
-      />
-      <rect
-        x="80"
-        y="212"
-        width="90"
-        height="6"
-        rx="2"
-        fill="currentColor"
-        opacity="0.05"
-      />
-      <rect
-        x="80"
-        y="176"
-        width="1.5"
-        height="14"
-        rx="0.5"
-        fill="#549CD1"
-        opacity="0.4"
-      />
-    </svg>
-  );
-}
-
-/** Grounded research: connected nodes (citation constellation) */
-function ResearchIllustration() {
-  const nodes = [
-    { x: 160, y: 100, r: 10, primary: true },
-    { x: 90, y: 70, r: 6, primary: false },
-    { x: 230, y: 80, r: 7, primary: false },
-    { x: 110, y: 160, r: 8, primary: true },
-    { x: 210, y: 170, r: 6, primary: false },
-    { x: 160, y: 210, r: 5, primary: false },
-    { x: 70, y: 130, r: 5, primary: false },
-    { x: 250, y: 140, r: 5, primary: false },
-  ];
-  const edges = [
-    [0, 1],
-    [0, 2],
-    [0, 3],
-    [0, 4],
-    [3, 5],
-    [3, 6],
-    [4, 5],
-    [2, 7],
-  ] as const;
-
-  return (
-    <svg viewBox="0 0 320 280" fill="none" className="h-full w-full">
-      {edges.map(([a, b], i) => (
+    <svg
+      viewBox="0 0 320 280"
+      fill="none"
+      className="review-line h-full w-full"
+    >
+      {lines.map((y) => (
         <line
-          key={`e${i}`}
-          x1={nodes[a].x}
-          y1={nodes[a].y}
-          x2={nodes[b].x}
-          y2={nodes[b].y}
-          stroke="#549CD1"
-          strokeOpacity="0.15"
-          strokeWidth="1"
+          key={y}
+          className="line"
+          x1="60"
+          y1={y}
+          x2="260"
+          y2={y}
+          stroke="currentColor"
+          strokeOpacity="0.32"
+          strokeWidth="1.25"
+          strokeLinecap="round"
         />
       ))}
-      {nodes.map((n, i) => (
-        <g key={`n${i}`}>
-          {n.primary && (
-            <circle
-              cx={n.x}
-              cy={n.y}
-              r={n.r + 8}
-              fill="#549CD1"
-              opacity="0.06"
-            />
-          )}
-          <circle
-            cx={n.x}
-            cy={n.y}
-            r={n.r}
-            fill={n.primary ? "#549CD1" : "currentColor"}
-            opacity={n.primary ? 0.3 : 0.1}
-          />
-          <rect
-            x={n.x + n.r + 6}
-            y={n.y - 3}
-            width={n.primary ? 32 : 20}
-            height="6"
-            rx="2"
-            fill="currentColor"
-            opacity={n.primary ? 0.12 : 0.06}
-          />
-        </g>
+      <line
+        className="scan"
+        x1="60"
+        y1="80"
+        x2="260"
+        y2="80"
+        stroke="currentColor"
+        strokeOpacity="1"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/** Drafting: short dashes grouped as "words" appear one at a time, building paragraphs. */
+function DraftIllustration() {
+  const startX = 60;
+  const gap = 8;
+  const lineSpec: { y: number; words: number[] }[] = [
+    { y: 100, words: [20, 14, 28, 12, 22, 16] },
+    { y: 130, words: [16, 26, 14, 32, 12, 20] },
+    { y: 160, words: [22, 16, 28, 14, 18, 26] },
+    { y: 190, words: [18, 28, 14, 22] },
+  ];
+
+  type Word = { idx: number; y: number; x1: number; x2: number };
+  const words: Word[] = [];
+  let counter = 0;
+  for (const line of lineSpec) {
+    let x = startX;
+    for (const w of line.words) {
+      words.push({ idx: counter, y: line.y, x1: x, x2: x + w });
+      x += w + gap;
+      counter += 1;
+    }
+  }
+
+  return (
+    <svg viewBox="0 0 320 280" fill="none" className="draft-line h-full w-full">
+      {words.map((w) => (
+        <line
+          key={w.idx}
+          className="word"
+          data-word-idx={w.idx}
+          x1={w.x1}
+          y1={w.y}
+          x2={w.x2}
+          y2={w.y}
+          stroke="currentColor"
+          strokeOpacity="0.9"
+          strokeWidth="1.25"
+          strokeLinecap="round"
+        />
       ))}
+    </svg>
+  );
+}
+
+/** Grounded research: sunburst with varied ray lengths; spotlight sweep brightens each ray to blue. */
+function ResearchIllustration() {
+  const rayCount = 16;
+  const cx = 160;
+  const cy = 140;
+  const inner = 20;
+  return (
+    <svg
+      viewBox="0 0 320 280"
+      fill="none"
+      className="research-burst h-full w-full"
+    >
+      {Array.from({ length: rayCount }, (_, i) => {
+        const angle = (i / rayCount) * Math.PI * 2 - Math.PI / 2;
+        // Deterministic length variance so the burst feels hand-drawn.
+        const variance = ((i * 11 + 3) % 7) / 7;
+        const outer = 56 + variance * 24;
+        const x1 = cx + Math.cos(angle) * inner;
+        const y1 = cy + Math.sin(angle) * inner;
+        const x2 = cx + Math.cos(angle) * outer;
+        const y2 = cy + Math.sin(angle) * outer;
+        return (
+          <line
+            key={i}
+            className="ray"
+            x1={x1}
+            y1={y1}
+            x2={x2}
+            y2={y2}
+            stroke="currentColor"
+            strokeOpacity="0.25"
+            strokeWidth="1.25"
+            strokeLinecap="round"
+          />
+        );
+      })}
     </svg>
   );
 }
