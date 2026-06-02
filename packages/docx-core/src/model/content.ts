@@ -1175,6 +1175,13 @@ export type SdtProperties = {
   showingPlaceholder?: boolean;
   /** Date display format (`w:date/w:dateFormat@w:val`). */
   dateFormat?: string;
+  /**
+   * Bound date value (`w:date/@w:fullDate`), ISO 8601. Independent of
+   * `dateFormat` (which controls display): the body text may show a
+   * formatted version like "2 June 2026" while this stays as
+   * `2026-06-02T00:00:00Z` so Word's date binding round-trips losslessly.
+   */
+  dateValueISO?: string;
   /** Dropdown/combobox list items. */
   listItems?: { displayText: string; value: string }[];
   /** Checkbox checked state (`w14:checkbox/w14:checked`). */

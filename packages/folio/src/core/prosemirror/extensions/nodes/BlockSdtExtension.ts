@@ -34,6 +34,8 @@ export const BlockSdtExtension = createNodeExtension({
       placeholder: { default: null },
       showingPlaceholder: { default: false },
       dateFormat: { default: null },
+      /** ISO 8601 bound date value (`w:date@w:fullDate`). */
+      dateValueISO: { default: null },
       listItems: { default: null },
       checked: { default: null },
       rawPropertiesXml: { default: null },
@@ -64,6 +66,7 @@ export const BlockSdtExtension = createNodeExtension({
             placeholder: dom.dataset["placeholder"] ?? null,
             showingPlaceholder: dom.dataset["showingPlaceholder"] === "true",
             dateFormat: dom.dataset["dateFormat"] ?? null,
+            dateValueISO: dom.dataset["dateValueIso"] ?? null,
             listItems: dom.dataset["listItems"] ?? null,
             checked,
             // Raw XML is preserved on the model, not the DOM; consumers that
@@ -100,6 +103,9 @@ export const BlockSdtExtension = createNodeExtension({
       }
       if (attrs["dateFormat"]) {
         data["data-date-format"] = String(attrs["dateFormat"]);
+      }
+      if (attrs["dateValueISO"]) {
+        data["data-date-value-iso"] = String(attrs["dateValueISO"]);
       }
       if (attrs["listItems"]) {
         data["data-list-items"] = String(attrs["listItems"]);

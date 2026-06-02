@@ -21,6 +21,7 @@ import {
   ContentControlLockedError,
   ContentControlTypeError,
 } from "../../content-controls/errors";
+import { formatDate } from "../../docx/fieldParser";
 import type { SdtProperties } from "../../types/document";
 import { expectBlockSdtAttrs } from "../attrs";
 
@@ -125,6 +126,9 @@ export function blockSdtAttrsToSdtProperties(node: PMNode): SdtProperties {
   }
   if (attrs.dateFormat !== undefined) {
     props.dateFormat = attrs.dateFormat;
+  }
+  if (attrs.dateValueISO !== undefined) {
+    props.dateValueISO = attrs.dateValueISO;
   }
   if (attrs.listItems) {
     const parsed = parseListItemsAttr(attrs.listItems);
@@ -372,9 +376,34 @@ export function setContentControlValueTr(
       reason: "kind=date requires sdtType=date",
     });
   }
-  return replaceBlockSdtChildren(state, match, [
-    paragraphFromText(state.schema, input.date),
-  ]);
+  // Keep the ISO value on `dateValueISO` and render the format-aware
+  // display string into the body — `w:fullDate` is the bound value, the
+  // body text is what Word shows. Mirrors the headless setter.
+  const dateFormatAttr = match.node.attrs["dateFormat"];
+  const display = formatDateForBody(
+    input.date,
+    typeof dateFormatAttr === "string" ? dateFormatAttr : undefined,
+  );
+  return replaceBlockSdtChildren(
+    state,
+    match,
+    [paragraphFromText(state.schema, display)],
+    { dateValueISO: input.date },
+  );
+}
+
+function formatDateForBody(
+  isoDate: string,
+  dateFormat: string | undefined,
+): string {
+  if (!dateFormat) {
+    return isoDate;
+  }
+  const parsed = new Date(isoDate);
+  if (Number.isNaN(parsed.getTime())) {
+    return isoDate;
+  }
+  return formatDate(parsed, dateFormat);
 }
 
 function isRepeatingSection(node: PMNode): boolean {

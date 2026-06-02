@@ -783,6 +783,7 @@ export const readBlockSdtAttrs = (
     issues,
   );
   optionalString(attrs, "dateFormat", "blockSdt.attrs.dateFormat", issues);
+  optionalString(attrs, "dateValueISO", "blockSdt.attrs.dateValueISO", issues);
   optionalSdtListItems(attrs, "listItems", "blockSdt.attrs.listItems", issues);
   optionalBoolean(attrs, "checked", "blockSdt.attrs.checked", issues);
   optionalString(

@@ -194,7 +194,7 @@ describe("setContentControlValue", () => {
     ).toThrow(ContentControlTypeError);
   });
 
-  test("sets a date value", () => {
+  test("sets a date value (no dateFormat → body shows ISO input)", () => {
     const doc = makeDoc([makeControl({ tag: "effective", sdtType: "date" })]);
     const updated = setContentControlValue(
       doc,
@@ -203,6 +203,26 @@ describe("setContentControlValue", () => {
     );
     const ctrl = findContentControl(updated, { tag: "effective" })!.control;
     expect(getContentControlText(ctrl)).toBe("2026-06-02");
+    expect(ctrl.properties.dateValueISO).toBe("2026-06-02");
+  });
+
+  test("with a dateFormat, body shows the rendered display + dateValueISO holds ISO", () => {
+    const doc = makeDoc([
+      makeControl({
+        tag: "effective",
+        sdtType: "date",
+        dateFormat: "d MMMM yyyy",
+      }),
+    ]);
+    const updated = setContentControlValue(
+      doc,
+      { tag: "effective" },
+      { kind: "date", date: "2026-06-02" },
+    );
+    const ctrl = findContentControl(updated, { tag: "effective" })!.control;
+    expect(getContentControlText(ctrl)).toBe("2 June 2026");
+    // Critical: w:fullDate round-trip uses the ISO value, NOT the display.
+    expect(ctrl.properties.dateValueISO).toBe("2026-06-02");
   });
 });
 

@@ -290,6 +290,9 @@ function convertPMBlockSdt(node: PMNode): BlockSdt {
   if (attrs.dateFormat) {
     properties.dateFormat = attrs.dateFormat;
   }
+  if (attrs.dateValueISO) {
+    properties.dateValueISO = attrs.dateValueISO;
+  }
   if (attrs.listItems) {
     const items = parseListItemsJson(attrs.listItems);
     if (items) {

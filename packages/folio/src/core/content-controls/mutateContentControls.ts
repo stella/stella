@@ -8,6 +8,7 @@
  * would orphan their w15 row items.
  */
 
+import { formatDate } from "../docx/fieldParser";
 import type {
   BlockContent,
   BlockSdt,
@@ -17,6 +18,30 @@ import type {
 } from "../types/document";
 import { ContentControlLockedError, ContentControlTypeError } from "./errors";
 import type { ContentControlFilter } from "./findContentControls";
+
+/**
+ * Format an ISO 8601 date string using the SDT's modeled `dateFormat`. The
+ * w:dateFormat tokens (yyyy/MM/dd/MMMM/HH/mm/ss/AM/PM, etc.) match what
+ * `formatDate` already implements for the fields engine; reusing it keeps
+ * both surfaces consistent.
+ *
+ * Returns the ISO input unchanged if the input does not parse as a date or
+ * the format is missing — degrading gracefully is better than corrupting
+ * the body.
+ */
+function formatDateForSdtBody(
+  isoDate: string,
+  dateFormat: string | undefined,
+): string {
+  if (!dateFormat) {
+    return isoDate;
+  }
+  const parsed = new Date(isoDate);
+  if (Number.isNaN(parsed.getTime())) {
+    return isoDate;
+  }
+  return formatDate(parsed, dateFormat);
+}
 
 type ForceOption = { force?: boolean };
 
@@ -335,10 +360,21 @@ export function setContentControlValue(
             : {}),
         });
       }
+      // Keep the ISO value on the model and write the format-aware display
+      // string into the body so the on-screen text and the OOXML
+      // `w:fullDate` round-trip independently.
+      const display = formatDateForSdtBody(
+        input.date,
+        control.properties.dateFormat,
+      );
       return {
         ...control,
-        properties: { ...control.properties, showingPlaceholder: false },
-        content: [makeParagraphFromText(input.date)],
+        properties: {
+          ...control.properties,
+          dateValueISO: input.date,
+          showingPlaceholder: false,
+        },
+        content: [makeParagraphFromText(display)],
       };
     },
   );

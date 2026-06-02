@@ -99,22 +99,14 @@ function extractDateFullDate(blockSdt: BlockSdt): string | undefined {
   if (blockSdt.properties.sdtType !== "date") {
     return undefined;
   }
-  const firstBlock = blockSdt.content[0];
-  if (!firstBlock || firstBlock.type !== "paragraph") {
-    return undefined;
-  }
-  const parts: string[] = [];
-  for (const child of firstBlock.content) {
-    if (child.type === "run") {
-      for (const item of child.content) {
-        if (item.type === "text") {
-          parts.push(item.text);
-        }
-      }
-    }
-  }
-  const text = parts.join("").trim();
-  return text.length > 0 ? text : undefined;
+  // The ISO bound value lives on the modeled `dateValueISO`. We deliberately
+  // do NOT read the SDT body — the body shows the format-rendered display
+  // ("2 June 2026" per dateFormat "d MMMM yyyy") which would corrupt
+  // `w:fullDate` (which OOXML requires to be ISO 8601). If the model has no
+  // ISO value yet (e.g. a fresh control the user never picked a date for),
+  // omit `w:fullDate` so the serializer doesn't write a garbage one.
+  const iso = blockSdt.properties.dateValueISO;
+  return iso !== undefined && iso.length > 0 ? iso : undefined;
 }
 
 export function serializeBlockSdt(

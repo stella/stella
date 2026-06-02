@@ -112,13 +112,17 @@ export function parseSdtProperties(
         case "date": {
           props.sdtType = "date";
           // The display format lives in the child <w:dateFormat w:val="..."/>;
-          // <w:date w:fullDate="..."/> is the bound *value*, not the format.
+          // the bound value is in the parent's <w:date w:fullDate="..."/>.
           const dateFormatEl = findChild(el, "w", "dateFormat");
           if (dateFormatEl) {
             const fmt = getAttribute(dateFormatEl, "w", "val");
             if (fmt !== null) {
               props.dateFormat = fmt;
             }
+          }
+          const fullDate = getAttribute(el, "w", "fullDate");
+          if (fullDate !== null) {
+            props.dateValueISO = fullDate;
           }
           break;
         }

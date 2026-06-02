@@ -340,6 +340,8 @@ export type BlockSdtAttrs = {
   placeholder?: string;
   showingPlaceholder?: boolean;
   dateFormat?: string;
+  /** ISO 8601 bound date value (`w:date@w:fullDate`). */
+  dateValueISO?: string;
   /** Dropdown/combobox list items as JSON string. */
   listItems?: string;
   checked?: boolean;
