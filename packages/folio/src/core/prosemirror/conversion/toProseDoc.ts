@@ -18,6 +18,7 @@ import { createStyleEngine } from "../../style-engine";
 import type { StyleEngine } from "../../style-engine";
 import type {
   BlockContent,
+  BlockSdt,
   Document,
   Paragraph,
   Run,
@@ -89,46 +90,44 @@ export function toProseDoc(
   const theme = options?.theme ?? document.package.theme ?? null;
   let textBoxGroupIndex = 0;
 
-  // Until the PM `blockSdt` node lands, flatten block SDTs into their inner
-  // content so the editor still renders the inside of a content control.
-  // Properties + raw `w:sdtPr` are preserved on the document model and
-  // replayed on serialize, so the round-trip is still safe.
-  const flattenSdts = (blocks: BlockContent[]): (Paragraph | Table)[] => {
-    const flat: (Paragraph | Table)[] = [];
+  const convertBodyBlocks = (blocks: BlockContent[]): PMNode[] => {
+    const out: PMNode[] = [];
     for (const block of blocks) {
-      if (block.type === "blockSdt") {
-        flat.push(...flattenSdts(block.content));
+      if (block.type === "paragraph") {
+        const pbPos = paragraphPageBreakPosition(block);
+        if (pbPos === "before") {
+          out.push(schema.node("pageBreak"));
+        }
+        out.push(
+          ...convertParagraphWithTextBoxes(
+            block,
+            styleResolver,
+            String(textBoxGroupIndex),
+          ),
+        );
+        textBoxGroupIndex += 1;
+        if (pbPos === "after") {
+          out.push(schema.node("pageBreak"));
+        }
+      } else if (block.type === "table") {
+        out.push(convertTable(block, styleResolver, theme));
       } else {
-        flat.push(block);
+        out.push(convertBlockSdt(block, convertBodyBlocks));
       }
     }
-    return flat;
+    return out;
   };
 
-  for (const block of flattenSdts(paragraphs)) {
-    if (block.type === "paragraph") {
-      // Convert paragraph and extract text boxes as sibling nodes
-      // If the paragraph starts with a page break (before any text),
-      // emit the break BEFORE the paragraph so the text lands on the
-      // next page — matching Word's rendering.
-      const pbPos = paragraphPageBreakPosition(block);
-      if (pbPos === "before") {
-        nodes.push(schema.node("pageBreak"));
-      }
-      nodes.push(
-        ...convertParagraphWithTextBoxes(
-          block,
-          styleResolver,
-          String(textBoxGroupIndex),
-        ),
-      );
-      textBoxGroupIndex += 1;
-      if (pbPos === "after") {
-        nodes.push(schema.node("pageBreak"));
-      }
-    } else {
-      const pmTable = convertTable(block, styleResolver, theme);
-      nodes.push(pmTable);
+  nodes.push(...convertBodyBlocks(paragraphs));
+
+  // Guarantee a trailing paragraph after a doc-final blockSdt so the caret is
+  // never trapped inside an isolating wrapper. Idempotent: skip if the doc
+  // already ends in an empty paragraph (so the trailing slot is not accreted
+  // across save cycles).
+  if (nodes.length > 0) {
+    const last = nodes.at(-1);
+    if (last?.type.name === "blockSdt") {
+      nodes.push(schema.node("paragraph", {}, []));
     }
   }
 
@@ -143,6 +142,40 @@ export function toProseDoc(
     "Document conversion produced an invalid ProseMirror document",
   );
   return pmDoc;
+}
+
+/**
+ * Convert a `BlockSdt` model node into a `blockSdt` PM node, recursively
+ * converting its children with the caller-supplied block converter. Pass
+ * `rawPropertiesXml` / `rawEndPropertiesXml` through as attrs so the
+ * serializer can replay them verbatim after a save.
+ */
+function convertBlockSdt(
+  blockSdt: BlockSdt,
+  convertBlocks: (blocks: BlockContent[]) => PMNode[],
+): PMNode {
+  const props = blockSdt.properties;
+  const attrs: Record<string, unknown> = {
+    sdtType: props.sdtType,
+    alias: props.alias ?? null,
+    tag: props.tag ?? null,
+    id: props.id ?? null,
+    lock: props.lock ?? null,
+    placeholder: props.placeholder ?? null,
+    showingPlaceholder: props.showingPlaceholder ?? false,
+    dateFormat: props.dateFormat ?? null,
+    listItems: props.listItems ? JSON.stringify(props.listItems) : null,
+    checked: props.checked ?? null,
+    rawPropertiesXml: props.rawPropertiesXml ?? null,
+    rawEndPropertiesXml: props.rawEndPropertiesXml ?? null,
+  };
+  const children = convertBlocks(blockSdt.content);
+  // ProseMirror `blockSdt` requires at least one block child; insert an empty
+  // paragraph for a truly empty control rather than producing an invalid node.
+  if (children.length === 0) {
+    children.push(schema.node("paragraph", {}, []));
+  }
+  return schema.node("blockSdt", attrs, children);
 }
 
 /**
@@ -2873,34 +2906,30 @@ export function headerFooterToProseDoc(
   const theme = options?.theme ?? null;
   let textBoxGroupIndex = 0;
 
-  // Until the PM `blockSdt` node lands, flatten block SDTs into their inner
-  // content so headers/footers still render. Properties / raw `w:sdtPr` are
-  // already preserved on the model and replayed by the HF serializer.
-  const flatten = (blocks: BlockContent[]): (Paragraph | Table)[] => {
-    const flat: (Paragraph | Table)[] = [];
+  const convertBlocks = (blocks: BlockContent[]): PMNode[] => {
+    const out: PMNode[] = [];
     for (const block of blocks) {
-      if (block.type === "blockSdt") {
-        flat.push(...flatten(block.content));
+      if (block.type === "paragraph") {
+        out.push(
+          ...convertParagraphWithTextBoxes(
+            block,
+            styleResolver,
+            String(textBoxGroupIndex),
+          ),
+        );
+        textBoxGroupIndex += 1;
+      } else if (block.type === "table") {
+        out.push(convertTable(block, styleResolver, theme));
       } else {
-        flat.push(block);
+        out.push(convertBlockSdt(block, convertBlocks));
       }
     }
-    return flat;
+    return out;
   };
 
-  for (const block of flatten(content)) {
-    if (block.type === "paragraph") {
-      nodes.push(
-        ...convertParagraphWithTextBoxes(
-          block,
-          styleResolver,
-          String(textBoxGroupIndex),
-        ),
-      );
-      textBoxGroupIndex += 1;
-    } else {
-      nodes.push(convertTable(block, styleResolver, theme));
-    }
+  nodes.push(...convertBlocks(content));
+  if (nodes.length > 0 && nodes.at(-1)?.type.name === "blockSdt") {
+    nodes.push(schema.node("paragraph", {}, []));
   }
 
   if (nodes.length === 0) {

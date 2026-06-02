@@ -9,12 +9,11 @@ import type { EditorView } from "prosemirror-view";
 
 import { proseDocToBlocks } from "../../core/prosemirror/conversion/fromProseDoc";
 import type {
+  BlockContent,
   Document,
   DocumentBody,
   HeaderFooter,
-  Paragraph,
   SectionProperties,
-  Table,
 } from "../../core/types/document";
 import type { UseHistoryReturn } from "../../hooks/useHistory";
 
@@ -473,7 +472,7 @@ export const useHeaderFooterEditor = ({
         // brand-new Map so the previous Document referenced by every
         // earlier history entry stays untouched and undo can step
         // back to the pre-edit state.
-        const blocks: (Paragraph | Table)[] = proseDocToBlocks(view.state.doc);
+        const blocks: BlockContent[] = proseDocToBlocks(view.state.doc);
         const updated: HeaderFooter = {
           ...existing,
           type: hfEditPosition,

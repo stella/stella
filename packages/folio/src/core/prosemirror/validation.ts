@@ -170,6 +170,15 @@ const validateNodeAttrs = (
       appendAttrIssues(path, readSdtAttrs(node), issues);
       return;
 
+    case "blockSdt":
+      // blockSdt attrs are passthrough projections of SdtProperties + raw
+      // sdtPr strings; the schema enforces shape, and we accept additional
+      // unknown OOXML markers carried only by rawPropertiesXml.
+      for (let i = 0; i < node.childCount; i += 1) {
+        validateNode(node.child(i), `${path}.content[${i}]`, issues);
+      }
+      return;
+
     case "shape":
       appendAttrIssues(path, readShapeAttrs(node), issues);
       return;
