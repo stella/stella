@@ -82,7 +82,10 @@ SELECT
   )
     || '-'
     || substring(md5(ps."id"::text), 1, 7),
-  ps."name",
+  -- agent_skills.name is varchar(64); legacy prompt_shortcuts.name
+  -- allows 256 chars, so truncate to keep the migration runnable on
+  -- existing data.
+  substring(ps."name", 1, 64),
   COALESCE(ps."description", ''),
   NULL,
   NULL,

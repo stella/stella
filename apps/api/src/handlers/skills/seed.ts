@@ -49,14 +49,17 @@ const seedSkills = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, user, recordAuditEvent }) {
     // Authored skills with a command are this surface's primary
-    // hand-rolled artefact. Skip if the user already owns any so a
-    // returning user doesn't get the defaults re-seeded after they
-    // delete them.
+    // hand-rolled artefact. Skip if the user already owns any in
+    // *this* org so a returning user doesn't get the defaults
+    // re-seeded after deleting them. Scoping by `organizationId` is
+    // required: skill rows are per-org, and a user who switches
+    // organizations should still get defaults in the new one.
     const existing = yield* Result.await(
       safeDb((tx) =>
         tx.$count(
           agentSkills,
           and(
+            eq(agentSkills.organizationId, session.activeOrganizationId),
             eq(agentSkills.userId, user.id),
             eq(agentSkills.origin, "authored"),
             isNotNull(agentSkills.command),

@@ -17,6 +17,10 @@ import { LIMITS } from "@/api/lib/limits";
 type AvailableChatSkill = SkillMetadata & {
   id: string;
   source: "built-in" | "installed";
+  /** Free-text guidance shown to the model alongside the skill's
+   *  description so it can decide when to auto-invoke. Always null
+   *  for built-in skills. */
+  autoInvokeHint: string | null;
 };
 
 type ChatSkillContext = {
@@ -48,6 +52,7 @@ export const listAvailableChatSkillMetadata = async ({
         license: agentSkills.license,
         compatibility: agentSkills.compatibility,
         metadata: agentSkills.metadata,
+        autoInvokeHint: agentSkills.autoInvokeHint,
       })
       .from(agentSkills)
       .where(
@@ -270,6 +275,7 @@ type InstalledSkillMetadataRow = {
   scope: "team" | "private";
   slug: string;
   version: string | null;
+  autoInvokeHint: string | null;
 };
 
 const resolveSkillPrecedence = (
@@ -294,6 +300,7 @@ const resolveSkillPrecedence = (
       name: row.slug,
       source: "installed",
       version: row.version,
+      autoInvokeHint: row.autoInvokeHint,
     });
   }
 
@@ -306,6 +313,7 @@ const resolveSkillPrecedence = (
       ...skill,
       id: skill.name,
       source: "built-in",
+      autoInvokeHint: null,
     });
   }
 

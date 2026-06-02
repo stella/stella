@@ -17,8 +17,6 @@ import { PG_ERROR } from "@/api/lib/pg-error";
 
 import { requireEditableSkillOrigin } from "./origin";
 
-const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/u;
-
 const updateSkillParamsSchema = t.Object({
   skillId: tSafeId("agentSkill"),
 });
@@ -220,16 +218,6 @@ const updateSkill = createSafeRootHandler(
         new HandlerError({
           status: 400,
           message: "At least one field must be provided",
-        }),
-      );
-    }
-
-    if (body.name !== undefined && !SKILL_NAME_PATTERN.test(body.name)) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message:
-            "Skill name must use lowercase letters, digits, and hyphens only",
         }),
       );
     }
