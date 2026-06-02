@@ -32,10 +32,11 @@ pre-push:
   parallel: false
   commands:
     typecheck:
-      # Project-wide. tsgo/tsc can't be scoped per file and the type
-      # graph spans the whole monorepo (eden, shared packages), so the
-      # full run is the only honest pre-push gate for type errors.
-      run: bun run typecheck --concurrency=2
+      # Scoped to packages changed vs. origin/main plus their dependents
+      # (turbo `...[ref]` filter). tsgo itself still runs project-wide
+      # within each selected package, but unaffected packages are skipped
+      # entirely instead of being walked for cache decisions.
+      run: bun run typecheck "--filter=...[origin/main]" --concurrency=2
     # Lint runs in CI on every push (~10-15 min full-monorepo). Keeping
     # it on pre-push too added another ~15-18 min of waiting that
     # duplicated the CI signal, so the local hook drops it. The
