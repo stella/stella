@@ -476,6 +476,22 @@ describe("StyleResolver", () => {
       expect(resolver.getNextStyleId("Normal")).toBeNull();
     });
 
+    test("returns null when next references a non-paragraph style", () => {
+      const styleDefinitions: StyleDefinitions = {
+        styles: [
+          {
+            styleId: "Heading1",
+            type: "paragraph",
+            name: "Heading 1",
+            next: "Strong",
+          },
+          { styleId: "Strong", type: "character", name: "Strong" },
+        ],
+      };
+      const resolver = createStyleResolver(styleDefinitions);
+      expect(resolver.getNextStyleId("Heading1")).toBeNull();
+    });
+
     test("returns null when next references a style that does not exist", () => {
       const styleDefinitions: StyleDefinitions = {
         styles: [
