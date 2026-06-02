@@ -18,6 +18,7 @@ import { BaseKeymapExtension } from "./features/BaseKeymapExtension";
 // oxlint-disable-next-line import/no-cycle
 import { BidiShortcutExtension } from "./features/BidiShortcutExtension";
 import { DropCursorExtension } from "./features/DropCursorExtension";
+import { EmptyParagraphFormatExtension } from "./features/EmptyParagraphFormatExtension";
 import { ImageDragExtension } from "./features/ImageDragExtension";
 import { ImagePasteExtension } from "./features/ImagePasteExtension";
 // Features
@@ -170,6 +171,7 @@ export function createStarterKit(
   add("pasteStyleInliner", PasteStyleInlinerExtension());
   add("list", ListExtension());
   add("baseKeymap", BaseKeymapExtension());
+  add("emptyParagraphFormat", EmptyParagraphFormatExtension());
   add(
     "selectionTracker",
     options.onSelectionChange === undefined

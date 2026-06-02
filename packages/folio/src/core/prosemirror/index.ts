@@ -59,6 +59,9 @@ export {
   extractSelectionContext,
   getSelectionContext,
   selectionTrackerKey,
+  createDocumentStylesPlugin,
+  getDocumentStyleResolver,
+  documentStylesKey,
 } from "./plugins";
 export type { SelectionContext, SelectionChangeCallback } from "./plugins";
 

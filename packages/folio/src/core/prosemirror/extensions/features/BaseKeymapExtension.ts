@@ -13,11 +13,14 @@ import {
   selectAll,
   selectParentNode,
 } from "prosemirror-commands";
-import type { Mark } from "prosemirror-model";
+import type { Mark, Node as PMNode } from "prosemirror-model";
 import type { Command, Transaction } from "prosemirror-state";
 
 import type { TextFormatting } from "../../../types/document";
 import { mergeFontFamily } from "../../../utils/fontFamilyMerge";
+import { getDocumentStyleResolver } from "../../plugins/documentStyles";
+import { paragraphAttrsFromResolvedStyle } from "../../styles/resolvedStyleAttrs";
+import type { StyleResolver } from "../../styles/styleResolver";
 import { createExtension } from "../create";
 import { textFormattingToMarks } from "../marks/markUtils";
 import { Priority } from "../types";
@@ -105,6 +108,46 @@ const INHERITED_PARA_ATTRS = [
 /** Mark types that represent style-inherited formatting (font, size, color). */
 const STYLE_MARK_NAMES = new Set(["fontFamily", "fontSize", "textColor"]);
 
+/**
+ * If `sourcePara`'s style defines a `w:next`, replace the empty `newPara`
+ * with that style's resolved attrs and seed stored marks from its run
+ * formatting. Returns true when a switch happened (caller should dispatch
+ * the transaction as-is), false when the source style has no `w:next` and
+ * the caller should fall back to the regular inheritance path.
+ */
+function applyNextParagraphStyle(
+  tr: Transaction,
+  sourcePara: PMNode,
+  newPara: PMNode,
+  resolver: StyleResolver,
+): boolean {
+  const nextStyleId = resolver.getNextStyleId(
+    sourcePara.attrs["styleId"] as string | null | undefined,
+  );
+  if (!nextStyleId) {
+    return false;
+  }
+
+  const resolved = resolver.resolveParagraphStyle(nextStyleId);
+  const { $from } = tr.selection;
+  // `paragraphAttrsFromResolvedStyle` already projects the next style's
+  // borders (or null), which both clears the source paragraph's leftover
+  // border and applies a bordered next style (callouts, etc.).
+  tr.setNodeMarkup($from.before(), undefined, {
+    ...newPara.attrs,
+    styleId: nextStyleId,
+    ...paragraphAttrsFromResolvedStyle(resolved),
+  });
+
+  // setStoredMarks MUST come after setNodeMarkup — every step clears it.
+  tr.setStoredMarks(
+    resolved.runFormatting
+      ? textFormattingToMarks(resolved.runFormatting, tr.doc.type.schema)
+      : [],
+  );
+  return true;
+}
+
 export const splitBlockClearBorders: Command = (state, dispatch, view) => {
   // Capture source paragraph info BEFORE split (splitBlock resets everything)
   const { $from: preSplitFrom } = state.selection;
@@ -138,6 +181,24 @@ export const splitBlockClearBorders: Command = (state, dispatch, view) => {
     const newPara = $from.parent;
 
     if (newPara.type.name === "paragraph") {
+      // Word's `w:next`: pressing Enter at the end of a paragraph (the new
+      // paragraph is empty) switches it to the style's follow-on style — e.g.
+      // a heading drops to body text. Only applies to an empty trailing
+      // paragraph; splitting mid-paragraph keeps the style on both halves.
+      // Use `content.size === 0` rather than `textContent.length` so a
+      // mid-paragraph split before an inline atom (image, equation, field,
+      // sdt, shape) is not mistaken for an empty trailing paragraph.
+      const resolver = getDocumentStyleResolver(state);
+      if (
+        resolver !== null &&
+        sourcePara !== null &&
+        newPara.content.size === 0 &&
+        applyNextParagraphStyle(tr, sourcePara, newPara, resolver)
+      ) {
+        dispatch(tr.scrollIntoView());
+        return true;
+      }
+
       const newAttrs = { ...newPara.attrs };
       let attrsChanged = false;
 

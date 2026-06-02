@@ -39,6 +39,7 @@ import { EditorView } from "prosemirror-view";
 import { headerFooterToProseDoc } from "../core/prosemirror/conversion/toProseDoc";
 import { ExtensionManager } from "../core/prosemirror/extensions/ExtensionManager";
 import { createStarterKit } from "../core/prosemirror/extensions/StarterKit";
+import { createDocumentStylesPlugin } from "../core/prosemirror/plugins/documentStyles";
 import { schema } from "../core/prosemirror/schema";
 import type {
   Document,
@@ -145,10 +146,13 @@ function buildInitialState(
     proseDocOptions.theme = theme;
   }
   const pmDoc = headerFooterToProseDoc(hf.content, proseDocOptions);
+  // Header/footer paragraphs share the document's style table, so they get
+  // the same style-aware behavior (e.g. Enter after a heading → body text).
+  const styleResolverPlugin = createDocumentStylesPlugin(styles);
   return EditorState.create({
     doc: pmDoc,
     schema,
-    plugins: mgr.getPlugins(),
+    plugins: [...mgr.getPlugins(), styleResolverPlugin],
   });
 }
 

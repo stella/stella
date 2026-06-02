@@ -148,6 +148,33 @@ export class StyleResolver {
   }
 
   /**
+   * Resolve the style applied to the paragraph that follows one styled with
+   * `styleId` when the user presses Enter (OOXML `w:next`, §17.7.4.10).
+   *
+   * Returns null when the style has no `w:next`, when `next` points back at
+   * the same style (the common heading-stays-heading case is handled by the
+   * caller), when the style is unknown, when `next` is a dangling reference
+   * to a style that does not exist, or when the target is not a paragraph
+   * style (malformed DOCX may point `w:next` at a character or table style;
+   * writing such an ID into a paragraph's `styleId` would create an invalid
+   * reference).
+   */
+  getNextStyleId(styleId: string | undefined | null): string | null {
+    if (!styleId) {
+      return null;
+    }
+    const next = this.stylesById.get(styleId)?.next;
+    if (!next || next === styleId) {
+      return null;
+    }
+    const target = this.stylesById.get(next);
+    if (!target || target.type !== "paragraph") {
+      return null;
+    }
+    return next;
+  }
+
+  /**
    * Get all available table styles (for style gallery)
    */
   getTableStyles(): Style[] {
