@@ -62,8 +62,11 @@ describe("toProseDoc/fromProseDoc — blockSdt round-trip", () => {
     </w:body>`);
 
     const pmDoc = toProseDoc(asDocument(content));
-    // First child is the blockSdt node, followed by an idempotent trailing
-    // paragraph (PM-side caret slot).
+    // First and only child is the blockSdt node. The caret affordance
+    // after a doc-final isolating SDT is provided at runtime by
+    // prosemirror-gapcursor — no synthetic paragraph is appended (it
+    // would otherwise survive the reverse pass and append a stray
+    // `<w:p/>` to the source DOCX on every save).
     expect(pmDoc.firstChild?.type.name).toBe("blockSdt");
     expect(pmDoc.firstChild?.attrs["tag"]).toBe("effective-date");
     expect(pmDoc.firstChild?.attrs["alias"]).toBe("Effective Date");
@@ -96,7 +99,14 @@ describe("toProseDoc/fromProseDoc — blockSdt round-trip", () => {
     expect(ctrl.properties.showingPlaceholder).toBe(false);
   });
 
-  test("guarantees a trailing paragraph after a doc-final blockSdt (idempotent)", () => {
+  test("does not inject a synthetic trailing paragraph after a doc-final blockSdt", () => {
+    // Codex P2 (PR #587): the converter previously appended an empty
+    // trailing paragraph to keep the caret reachable after a doc-final
+    // isolating SDT, but that paragraph survived the reverse pass and
+    // appended an extra `<w:p/>` to the DOCX on every save — visible
+    // blank space + pagination drift in legal templates. The caret
+    // affordance is now provided by prosemirror-gapcursor at runtime, so
+    // the converter emits only what the source described.
     const content = parseBody(`<w:body ${NS}>
       <w:sdt>
         <w:sdtPr><w:tag w:val="closing"/></w:sdtPr>
@@ -105,18 +115,15 @@ describe("toProseDoc/fromProseDoc — blockSdt round-trip", () => {
     </w:body>`);
 
     const pmDoc = toProseDoc(asDocument(content));
-    expect(pmDoc.childCount).toBe(2);
+    expect(pmDoc.childCount).toBe(1);
     expect(pmDoc.child(0).type.name).toBe("blockSdt");
-    expect(pmDoc.child(1).type.name).toBe("paragraph");
-    expect(pmDoc.child(1).content.size).toBe(0);
 
-    // Round-trip the recovered doc again: the trailing paragraph should NOT
-    // accrete a second time (idempotence).
+    // Round-trip is now lossless: the recovered model has exactly one
+    // top-level block (the SDT), and a second toProseDoc keeps that shape.
     const recovered = fromProseDoc(pmDoc);
+    expect(recovered.package.document.content).toHaveLength(1);
     const pmDoc2 = toProseDoc(recovered);
-    // recovered.content has [blockSdt, paragraph]; the new pmDoc keeps that
-    // shape — no extra trailing paragraph added.
-    expect(pmDoc2.childCount).toBe(2);
+    expect(pmDoc2.childCount).toBe(1);
   });
 
   test("preserves nested block SDTs through the PM layer", () => {

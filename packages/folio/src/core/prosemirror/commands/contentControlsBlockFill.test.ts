@@ -111,6 +111,45 @@ describe("setContentControlContentBlocksTr", () => {
     expect(sdt?.firstChild?.type.name).toBe("table");
   });
 
+  test("does not pad fill input ending in a nested blockSdt with a blank paragraph", () => {
+    // Codex P2 (PR #587): headerFooterToProseDoc used to append a
+    // trailing empty paragraph after any final blockSdt to provide a
+    // caret slot. That meant a caller replacing a control with exactly
+    // one nested content control silently got an extra empty paragraph
+    // inside the outer SDT. The caret affordance is provided by
+    // gapcursor; the converter no longer pads.
+    const blocks: BlockContent[] = [
+      {
+        type: "blockSdt",
+        properties: { sdtType: "richText", tag: "nested" },
+        content: [
+          {
+            type: "paragraph",
+            content: [
+              { type: "run", content: [{ type: "text", text: "inner" }] },
+            ],
+          },
+        ],
+      },
+    ];
+    const state = makeState();
+    const tr = setContentControlContentBlocksTr(
+      state,
+      { tag: "clause" },
+      blocks,
+    );
+    if (!tr) {
+      throw new TypeError("expected a transaction");
+    }
+    const next = state.apply(tr);
+    const outer = next.doc.firstChild;
+    expect(outer?.type.name).toBe("blockSdt");
+    // Exactly one child (the nested blockSdt), no trailing empty paragraph.
+    expect(outer?.childCount).toBe(1);
+    expect(outer?.firstChild?.type.name).toBe("blockSdt");
+    expect(outer?.firstChild?.attrs["tag"]).toBe("nested");
+  });
+
   test("returns null when no control matches the filter", () => {
     const state = makeState();
     expect(

@@ -120,16 +120,12 @@ export function toProseDoc(
 
   nodes.push(...convertBodyBlocks(paragraphs));
 
-  // Guarantee a trailing paragraph after a doc-final blockSdt so the caret is
-  // never trapped inside an isolating wrapper. Idempotent: skip if the doc
-  // already ends in an empty paragraph (so the trailing slot is not accreted
-  // across save cycles).
-  if (nodes.length > 0) {
-    const last = nodes.at(-1);
-    if (last?.type.name === "blockSdt") {
-      nodes.push(schema.node("paragraph", {}, []));
-    }
-  }
+  // Caret-after-final-SDT affordance is provided by `prosemirror-gapcursor`
+  // at runtime; we previously injected a trailing empty paragraph here so
+  // the caret was not trapped inside an isolating blockSdt, but the
+  // synthetic paragraph survived `fromProseDoc` on save and silently
+  // appended a `<w:p/>` to the DOCX on every round trip (which adds blank
+  // space and shifts pagination in legal templates).
 
   // Ensure we have at least one paragraph
   if (nodes.length === 0) {
@@ -2930,9 +2926,12 @@ export function headerFooterToProseDoc(
   };
 
   nodes.push(...convertBlocks(content));
-  if (nodes.length > 0 && nodes.at(-1)?.type.name === "blockSdt") {
-    nodes.push(schema.node("paragraph", {}, []));
-  }
+  // Caret affordance after a final isolating blockSdt is handled by
+  // prosemirror-gapcursor at runtime; we no longer pad the converted doc
+  // with a synthetic trailing paragraph because that paragraph survives
+  // the reverse pass and pollutes both round-trip saves and
+  // `setContentControlContent(filter, blocks)` callers that pass blocks
+  // ending in a nested blockSdt.
 
   if (nodes.length === 0) {
     nodes.push(schema.node("paragraph", {}, []));
