@@ -226,6 +226,28 @@ describe("setContentControlValue", () => {
     expect(getContentControlText(ctrl)).toBe("2026-06-02");
   });
 
+  test("datetime input preserves the picked wall-clock time in the formatted display", () => {
+    // A date SDT with a time-bearing format ("yyyy-MM-dd HH:mm") must
+    // render the user's picked time, not zero it out. Previously the
+    // regex only extracted YYYY-MM-DD and the body showed "15:30" as
+    // "00:00".
+    const doc = makeDoc([
+      makeControl({
+        tag: "scheduled",
+        sdtType: "date",
+        dateFormat: "yyyy-MM-dd HH:mm",
+      }),
+    ]);
+    const updated = setContentControlValue(
+      doc,
+      { tag: "scheduled" },
+      { kind: "date", date: "2026-06-02T15:30:00Z" },
+    );
+    const ctrl = findContentControl(updated, { tag: "scheduled" })!.control;
+    expect(getContentControlText(ctrl)).toBe("2026-06-02 15:30");
+    expect(ctrl.properties.dateValueISO).toBe("2026-06-02T15:30:00Z");
+  });
+
   test("with a dateFormat, body shows the rendered display + dateValueISO holds ISO", () => {
     const doc = makeDoc([
       makeControl({

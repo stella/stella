@@ -790,11 +790,16 @@
 }
 /* Multi-block SDTs paint as a single continuous outline: the top edge sits
    on the first block, the bottom edge on the last, and the sides span the
-   middle. `only` and the unmarked legacy case keep the full closed box. */
+   middle. `only` and the unmarked legacy case keep the full closed box.
+   Use logical corner properties so the rounded corners stay on the
+   inline-leading/trailing sides regardless of writing-mode / RTL. */
 .layout-page-content
   [data-sdt-boundary="true"][data-sdt-position="first"]::before {
   border-bottom-width: 0;
-  border-radius: 2px 2px 0 0;
+  border-start-start-radius: 2px;
+  border-start-end-radius: 2px;
+  border-end-start-radius: 0;
+  border-end-end-radius: 0;
 }
 .layout-page-content
   [data-sdt-boundary="true"][data-sdt-position="middle"]::before {
@@ -805,7 +810,10 @@
 .layout-page-content
   [data-sdt-boundary="true"][data-sdt-position="last"]::before {
   border-top-width: 0;
-  border-radius: 0 0 2px 2px;
+  border-start-start-radius: 0;
+  border-start-end-radius: 0;
+  border-end-start-radius: 2px;
+  border-end-end-radius: 2px;
 }
 .layout-page-content
   [data-sdt-boundary="true"][data-sdt-position="only"]::before,

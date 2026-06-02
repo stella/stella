@@ -44,20 +44,28 @@ function formatDateForSdtBody(
 }
 
 /**
- * Parse an OOXML SDT date string. For a date-only `YYYY-MM-DD` (or a
- * `YYYY-MM-DDT…Z` whose date portion is what the user picked) we build a
- * Date at local midnight matching the calendar day, so `formatDate`'s
- * local-time accessors return the same day no matter the user's
- * timezone. `new Date("2026-06-02")` would parse as UTC midnight and a
- * Pacific user would see the previous day in the rendered display.
+ * Parse an OOXML SDT date string. `new Date(iso)` parses the input as UTC
+ * (a Pacific user would see the previous calendar day via local
+ * accessors), so we instead read the ISO components into a local-midnight
+ * Date so `formatDate`'s local-time accessors return the same calendar
+ * date / wall-clock time in every timezone.
+ *
+ * Supports date-only (`YYYY-MM-DD`) and date+time (`YYYY-MM-DDTHH:mm[:ss]`)
+ * inputs. The trailing `Z` / offset is intentionally ignored — for a date
+ * SDT, what the user picked is the displayed wall time, not a moment in
+ * UTC.
  */
 function parseSdtDate(iso: string): Date | null {
-  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})/u.exec(iso);
-  if (dateOnly) {
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})(?:[Tt](\d{2}):(\d{2})(?::(\d{2}))?)?/u.exec(iso);
+  if (match) {
     return new Date(
-      Number(dateOnly[1]),
-      Number(dateOnly[2]) - 1,
-      Number(dateOnly[3]),
+      Number(match[1]),
+      Number(match[2]) - 1,
+      Number(match[3]),
+      match[4] ? Number(match[4]) : 0,
+      match[5] ? Number(match[5]) : 0,
+      match[6] ? Number(match[6]) : 0,
     );
   }
   const parsed = new Date(iso);

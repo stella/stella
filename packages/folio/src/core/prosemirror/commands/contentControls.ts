@@ -433,16 +433,22 @@ function formatDateForBody(
 
 /**
  * See `formatDateForSdtBody` in the headless helpers for the rationale.
- * For a date-only `YYYY-MM-DD` value we build a local-midnight Date so
- * the format's local accessors see the right day regardless of TZ.
+ * Supports date-only (`YYYY-MM-DD`) and date+time
+ * (`YYYY-MM-DDTHH:mm[:ss]`) inputs, building a local-time Date so
+ * `formatDate`'s accessors return the picked wall-clock components
+ * regardless of TZ.
  */
 function parseSdtDate(iso: string): Date | null {
-  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})/u.exec(iso);
-  if (dateOnly) {
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})(?:[Tt](\d{2}):(\d{2})(?::(\d{2}))?)?/u.exec(iso);
+  if (match) {
     return new Date(
-      Number(dateOnly[1]),
-      Number(dateOnly[2]) - 1,
-      Number(dateOnly[3]),
+      Number(match[1]),
+      Number(match[2]) - 1,
+      Number(match[3]),
+      match[4] ? Number(match[4]) : 0,
+      match[5] ? Number(match[5]) : 0,
+      match[6] ? Number(match[6]) : 0,
     );
   }
   const parsed = new Date(iso);
