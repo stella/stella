@@ -37,7 +37,7 @@ import {
   PromptEditorContent,
 } from "@/components/prompt-editor";
 import {
-  shortcutsOptions,
+  skillCommandsOptions,
   skillsOptions,
 } from "@/routes/_protected.knowledge/-queries";
 import { PropertyFormField } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/form";
@@ -125,16 +125,39 @@ export const PropertyPromptInput = ({
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-  const { data: shortcuts = [] } = useQuery(
-    shortcutsOptions(activeOrganizationId),
+  const { data: commandSkills = [] } = useQuery(
+    skillCommandsOptions(activeOrganizationId),
   );
   const { data: skillPages } = useInfiniteQuery(
     skillsOptions(activeOrganizationId),
   );
+  // See chat-editor-provider for the rationale on adapting the
+  // dedicated command-skills endpoint to the legacy slash shape.
+  const slashShortcutRows = useMemo(
+    () =>
+      commandSkills.flatMap((row) =>
+        row.command === null
+          ? []
+          : [
+              {
+                id: row.id,
+                scope: row.scope,
+                name: row.name,
+                command: row.command,
+                prompt: row.body,
+              },
+            ],
+      ),
+    [commandSkills],
+  );
   const slashItemsRef = useRef<SlashItem[]>([]);
   slashItemsRef.current = useMemo<SlashItem[]>(
-    () => buildChatSlashItems({ shortcuts, skillPages: skillPages?.pages }),
-    [shortcuts, skillPages],
+    () =>
+      buildChatSlashItems({
+        shortcuts: slashShortcutRows,
+        skillPages: skillPages?.pages,
+      }),
+    [slashShortcutRows, skillPages],
   );
 
   const editor = useEditor({

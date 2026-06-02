@@ -1475,6 +1475,13 @@
     },
     "skills": {
       "addShortcut": "Lisa prompt",
+      "autoInvokeHintLabel": "Hint for the model",
+      "autoInvokeHintPlaceholder": "When should the model auto-pick this skill?",
+      "autoInvokeLabel": "Let the AI run this automatically",
+      "commandConflict": "A skill with this / command already exists",
+      "commandLabel": "Slash command (optional)",
+      "commandPlaceholder": "e.g. summarize",
+      "createTitle": "New skill",
       "defaultBadge": "Default",
       "deleteConfirmDescription": "See prompt eemaldatakse jäädavalt.",
       "deleteConfirmTitle": "Kustutada prompt?",

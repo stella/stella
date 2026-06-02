@@ -1,5 +1,13 @@
 import Elysia from "elysia";
 
+// Deprecated: prompt shortcuts have been folded into `agent_skills`.
+// The data migration in
+// `20260602120000_agent_skills_command_autoinvoke` copies every
+// shortcut row into a slash-command-bearing skill. These routes
+// remain mounted for one release so old clients can keep reading
+// their prompts; new clients should hit `/skills` instead. Follow-up
+// cleanup PR will remove the routes and drop the `prompt_shortcuts`
+// table.
 import createShortcut from "@/api/handlers/shortcuts/create";
 import deleteShortcut from "@/api/handlers/shortcuts/delete";
 import listShortcuts from "@/api/handlers/shortcuts/list";

@@ -8,6 +8,7 @@ import * as v from "valibot";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { registerInspectorView } from "@/components/inspector/view-registry";
+import { api } from "@/lib/api";
 import { subscribeToMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { CatalogueBrowser } from "@/routes/_protected.knowledge/-components/catalogue/catalogue-browser";
 import type { CatalogueBrowserFilterKind } from "@/routes/_protected.knowledge/-components/catalogue/catalogue-browser";
@@ -37,6 +38,14 @@ const searchSchema = v.object({
 
 export const Route = createFileRoute("/_protected/knowledge/tools")({
   validateSearch: searchSchema,
+  // Seed default slash-command skills on first Tools visit. The
+  // handler is idempotent at the user level — if any slash-command
+  // skill already exists for this user, it short-circuits and does
+  // not write. Used to live on the standalone Prompts page, which
+  // no longer exists.
+  loader: async () => {
+    await api.skills.seed.post({ queryKey: ["skills"] });
+  },
   component: ToolsPage,
 });
 

@@ -39,7 +39,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { api } from "@/lib/api";
-import { toAPIError, userErrorFromThrown } from "@/lib/errors";
+import { APIError, toAPIError, userErrorFromThrown } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { skillDetailOptions } from "@/routes/_protected.knowledge/-queries";
 
@@ -144,6 +144,9 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
   const [description, setDescription] = useState("");
   const [version, setVersion] = useState("");
   const [enabled, setEnabled] = useState(skill.enabled);
+  const [command, setCommand] = useState("");
+  const [autoInvokeHint, setAutoInvokeHint] = useState("");
+  const [commandError, setCommandError] = useState<string | null>(null);
   const [confirmDiscardFor, setConfirmDiscardFor] =
     useState<SelectedFile | null>(null);
   const [rewritePrompt, setRewritePrompt] = useState("");
@@ -176,6 +179,8 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
     setDescription(detail.data.description);
     setVersion(detail.data.version ?? "");
     setEnabled(detail.data.enabled);
+    setCommand(detail.data.command ?? "");
+    setAutoInvokeHint(detail.data.autoInvokeHint ?? "");
   }, [detail.data]);
 
   const resources: SkillResource[] = useMemo(() => {
@@ -238,6 +243,8 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
       description?: string;
       version?: string | null;
       enabled?: boolean;
+      command?: string | null;
+      autoInvokeHint?: string | null;
     }) => {
       const response = await api
         .skills({ skillId: safeSkillId })
@@ -251,7 +258,13 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
       onChanged();
       void detail.refetch();
     },
-    onError: (error) => toastError(error, t("common.unexpectedError")),
+    onError: (error) => {
+      if (APIError.is(error) && error.status === 409) {
+        setCommandError(t("knowledge.skills.commandConflict"));
+        return;
+      }
+      toastError(error, t("common.unexpectedError"));
+    },
   });
 
   const patchResource = useMutation({
@@ -496,6 +509,40 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
     patchMetadata.mutate({ enabled: next });
   };
 
+  const COMMAND_PATTERN_LOCAL = /^[a-z0-9][a-z0-9_-]{0,48}$/u;
+
+  const commitCommand = () => {
+    if (!detail.data) {
+      return;
+    }
+    const trimmed = command.trim().toLowerCase().replaceAll(/\s/gu, "");
+    const next = trimmed.length === 0 ? null : trimmed;
+    const previous = detail.data.command ?? null;
+    if (next === previous) {
+      setCommandError(null);
+      return;
+    }
+    if (next !== null && !COMMAND_PATTERN_LOCAL.test(next)) {
+      setCommandError(t("knowledge.skills.errors.commandInvalid"));
+      return;
+    }
+    setCommandError(null);
+    patchMetadata.mutate({ command: next });
+  };
+
+  const commitAutoInvokeHint = () => {
+    if (!detail.data) {
+      return;
+    }
+    const trimmed = autoInvokeHint.trim();
+    const next = trimmed.length === 0 ? null : trimmed;
+    const previous = detail.data.autoInvokeHint ?? null;
+    if (next === previous) {
+      return;
+    }
+    patchMetadata.mutate({ autoInvokeHint: next });
+  };
+
   const selectedKindIsText =
     selected.type === "body" ||
     (selectedResource ? TEXT_RESOURCE_KINDS.has(selectedResource.kind) : false);
@@ -631,6 +678,54 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
               placeholder={tSkills("formVersionPlaceholder")}
               value={version}
             />
+          </div>
+          {/* Slash command + auto-invoke hint — the unified surface
+              treats both as optional capability flags on every
+              skill. Either, both, or neither can be set. */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+            <div className="flex flex-1 flex-col gap-1">
+              <label
+                className="text-muted-foreground text-xs"
+                htmlFor="edit-skill-command"
+              >
+                {t("knowledge.skills.commandLabel")}
+              </label>
+              <div className="flex items-stretch">
+                <span className="bg-muted border-border flex items-center rounded-s-md border border-e-0 px-2 text-xs">
+                  /
+                </span>
+                <Input
+                  className={cn(
+                    "rounded-s-none",
+                    commandError && "border-destructive",
+                  )}
+                  id="edit-skill-command"
+                  onBlur={commitCommand}
+                  onChange={(event) => setCommand(event.target.value)}
+                  placeholder={t("knowledge.skills.commandPlaceholder")}
+                  value={command}
+                />
+              </div>
+              {commandError && (
+                <p className="text-destructive text-xs">{commandError}</p>
+              )}
+            </div>
+            <div className="flex flex-1 flex-col gap-1">
+              <label
+                className="text-muted-foreground text-xs"
+                htmlFor="edit-skill-auto-hint"
+              >
+                {t("knowledge.skills.autoInvokeHintLabel")}
+              </label>
+              <Textarea
+                className="min-h-12 resize-y"
+                id="edit-skill-auto-hint"
+                onBlur={commitAutoInvokeHint}
+                onChange={(event) => setAutoInvokeHint(event.target.value)}
+                placeholder={t("knowledge.skills.autoInvokeHintPlaceholder")}
+                value={autoInvokeHint}
+              />
+            </div>
           </div>
         </div>
       </DialogHeader>
