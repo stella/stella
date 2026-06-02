@@ -24,6 +24,12 @@ const config = {
   permissions: { workspace: ["read"] },
 } satisfies HandlerConfig;
 
+// Matches the cap on `GET /mcp/connectors`. The catalogue listing
+// surfaces every org-owned custom connector as a synthetic entry,
+// so the same bound applies — otherwise an org with thousands of
+// custom MCPs could turn `/catalogue` into an unbounded read.
+const ORG_CUSTOM_MCP_LIMIT = 100;
+
 type CatalogueEntryResponse = LoadedCatalogueEntry & {
   isRecommendedForOrg: boolean;
   installState: CatalogueInstallState;
@@ -135,7 +141,8 @@ const listCatalogue = createSafeRootHandler(
     // entry URL. These are "custom" connectors the user added via the
     // old /knowledge/mcp page (or its successor); they need to show up
     // in /knowledge/tools so the user can manage them after the
-    // surface unification.
+    // surface unification. Capped to match /mcp/connectors so a large
+    // org can't turn this endpoint into an unbounded read.
     const orgCustomMcps = yield* Result.await(
       safeDb((tx) =>
         tx
@@ -159,7 +166,9 @@ const listCatalogue = createSafeRootHandler(
               eq(mcpConnectors.organizationId, session.activeOrganizationId),
               eq(mcpConnectors.isCurated, false),
             ),
-          ),
+          )
+          .orderBy(mcpConnectors.displayName, mcpConnectors.id)
+          .limit(ORG_CUSTOM_MCP_LIMIT),
       ),
     );
     const curatedMcpUrlSet = new Set(mcpUrls);
