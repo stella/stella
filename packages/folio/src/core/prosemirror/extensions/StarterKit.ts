@@ -59,6 +59,7 @@ import {
   DeletionExtension,
 } from "./marks/TrackedChangeExtensions";
 import { UnderlineExtension } from "./marks/UnderlineExtension";
+import { BlockSdtExtension } from "./nodes/BlockSdtExtension";
 import { FieldExtension } from "./nodes/FieldExtension";
 // Nodes
 import { HardBreakExtension } from "./nodes/HardBreakExtension";
@@ -160,6 +161,7 @@ export function createStarterKit(
   add("pageBreak", PageBreakExtension());
   add("field", FieldExtension());
   add("sdt", SdtExtension());
+  add("blockSdt", BlockSdtExtension());
   add("math", MathExtension());
 
   // Table (5 extensions grouped)
