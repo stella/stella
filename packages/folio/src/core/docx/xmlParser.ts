@@ -662,7 +662,23 @@ export function parseBooleanElement(
     return false;
   }
 
-  const val = getAttribute(element, namespace, "val");
+  // OOXML binds prefixes to namespace URIs at the doc root; the source is
+  // free to pick any prefix (`w14:checked` vs. `ns0:checked`) so long as
+  // it resolves to the right URI. fast-xml-parser keeps prefixes literal,
+  // so we have to be tolerant of the prefix actually written rather than
+  // assuming the canonical one. Without this, a `<ns0:checked ns0:val="0"/>`
+  // misses the val attribute, falls through to the bare-presence branch,
+  // and an unchecked box renders as checked (codex P2, PR #587).
+  let val: string | null = null;
+  const elementName = element.name ?? "";
+  const colonIdx = elementName.indexOf(":");
+  const elementPrefix = colonIdx > 0 ? elementName.slice(0, colonIdx) : null;
+  if (elementPrefix && elementPrefix !== namespace) {
+    val = getAttribute(element, elementPrefix, "val");
+  }
+  if (val === null) {
+    val = getAttribute(element, namespace, "val");
+  }
 
   // No val attribute = true (element presence implies true)
   if (val === null) {

@@ -96,6 +96,31 @@ describe("parseSdtProperties — prefixed marker elements", () => {
     expect(props.listItems).toEqual([{ displayText: "Yes", value: "Yes" }]);
   });
 
+  test("reads checkbox val under an alternative namespace prefix", () => {
+    // OOXML binds prefixes to URIs at the document root; a valid doc can
+    // bind the w14 namespace under any prefix (here `ns0`). The marker
+    // element matched fine via local-name fallback, but the val attribute
+    // was missed because we only looked for `w14:val` / bare `val`. An
+    // unchecked box was then parsed as checked.
+    const ns =
+      'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:ns0="http://schemas.microsoft.com/office/word/2010/wordml"';
+    expect(
+      parseSdtPrXml(
+        `<w:sdtPr ${ns}><ns0:checkbox><ns0:checked ns0:val="0"/></ns0:checkbox></w:sdtPr>`,
+      ).checked,
+    ).toBe(false);
+    expect(
+      parseSdtPrXml(
+        `<w:sdtPr ${ns}><ns0:checkbox><ns0:checked ns0:val="1"/></ns0:checkbox></w:sdtPr>`,
+      ).checked,
+    ).toBe(true);
+    expect(
+      parseSdtPrXml(
+        `<w:sdtPr ${ns}><ns0:checkbox><ns0:checked ns0:val="false"/></ns0:checkbox></w:sdtPr>`,
+      ).checked,
+    ).toBe(false);
+  });
+
   test("respects w:showingPlcHdr OnOff val (false / off / 0)", () => {
     // The presence-implies-true semantics still applies, but an explicit
     // negation must be honored. Previously the parser flipped
