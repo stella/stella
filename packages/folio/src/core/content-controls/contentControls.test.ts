@@ -226,6 +226,27 @@ describe("setContentControlValue", () => {
     expect(getContentControlText(ctrl)).toBe("2026-06-02");
   });
 
+  test("rejects overflowed date-only inputs instead of silently normalizing", () => {
+    // `new Date(2026, 98, 99)` would silently become a real (distant)
+    // date. The helper documents "return unchanged if the input does
+    // not parse", so an overflow input should leave the body alone.
+    const doc = makeDoc([
+      makeControl({
+        tag: "x",
+        sdtType: "date",
+        dateFormat: "yyyy-MM-dd",
+      }),
+    ]);
+    const updated = setContentControlValue(
+      doc,
+      { tag: "x" },
+      { kind: "date", date: "2026-99-99" },
+    );
+    const ctrl = findContentControl(updated, { tag: "x" })!.control;
+    // Body shows the raw input, not a normalized real date.
+    expect(getContentControlText(ctrl)).toBe("2026-99-99");
+  });
+
   test("datetime input preserves the picked wall-clock time in the formatted display", () => {
     // A date SDT with a time-bearing format ("yyyy-MM-dd HH:mm") must
     // render the user's picked time, not zero it out. Previously the

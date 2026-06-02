@@ -39,6 +39,63 @@ describe("parseSdtProperties — prefixed marker elements", () => {
     expect(props.dateValueISO).toBe("2026-06-02T00:00:00Z");
   });
 
+  test("accepts OOXML OnOff variants for w14:checked val (true / on / 1 / absent)", () => {
+    // Word writes any of these forms; we previously only recognized "1"
+    // and silently flipped state on save.
+    const ns =
+      'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml"';
+    expect(
+      parseSdtPrXml(
+        `<w:sdtPr ${ns}><w14:checkbox><w14:checked w14:val="true"/></w14:checkbox></w:sdtPr>`,
+      ).checked,
+    ).toBe(true);
+    expect(
+      parseSdtPrXml(
+        `<w:sdtPr ${ns}><w14:checkbox><w14:checked w14:val="on"/></w14:checkbox></w:sdtPr>`,
+      ).checked,
+    ).toBe(true);
+    expect(
+      parseSdtPrXml(
+        `<w:sdtPr ${ns}><w14:checkbox><w14:checked w14:val="1"/></w14:checkbox></w:sdtPr>`,
+      ).checked,
+    ).toBe(true);
+    // A bare <w14:checked/> with no val attribute also means true per OnOff.
+    expect(
+      parseSdtPrXml(
+        `<w:sdtPr ${ns}><w14:checkbox><w14:checked/></w14:checkbox></w:sdtPr>`,
+      ).checked,
+    ).toBe(true);
+    // Negations.
+    expect(
+      parseSdtPrXml(
+        `<w:sdtPr ${ns}><w14:checkbox><w14:checked w14:val="false"/></w14:checkbox></w:sdtPr>`,
+      ).checked,
+    ).toBe(false);
+    expect(
+      parseSdtPrXml(
+        `<w:sdtPr ${ns}><w14:checkbox><w14:checked w14:val="0"/></w14:checkbox></w:sdtPr>`,
+      ).checked,
+    ).toBe(false);
+  });
+
+  test("listItem with only w:value falls back to value as displayText", () => {
+    const props = parseSdtPrXml(
+      '<w:sdtPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:dropDownList><w:listItem w:value="ca"/><w:listItem w:value="ny" w:displayText="New York"/></w:dropDownList></w:sdtPr>',
+    );
+    expect(props.sdtType).toBe("dropdown");
+    expect(props.listItems).toEqual([
+      { displayText: "ca", value: "ca" },
+      { displayText: "New York", value: "ny" },
+    ]);
+  });
+
+  test("listItem with only w:displayText falls back to displayText as value", () => {
+    const props = parseSdtPrXml(
+      '<w:sdtPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:dropDownList><w:listItem w:displayText="Yes"/></w:dropDownList></w:sdtPr>',
+    );
+    expect(props.listItems).toEqual([{ displayText: "Yes", value: "Yes" }]);
+  });
+
   test("falls back to richText when the marker is unknown", () => {
     const props = parseSdtPrXml(
       '<w:sdtPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml"><w15:appearance w15:val="boundingBox"/><w:tag w:val="t"/></w:sdtPr>',

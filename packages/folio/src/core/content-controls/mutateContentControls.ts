@@ -59,14 +59,29 @@ function parseSdtDate(iso: string): Date | null {
   const match =
     /^(\d{4})-(\d{2})-(\d{2})(?:[Tt](\d{2}):(\d{2})(?::(\d{2}))?)?/u.exec(iso);
   if (match) {
-    return new Date(
-      Number(match[1]),
-      Number(match[2]) - 1,
-      Number(match[3]),
-      match[4] ? Number(match[4]) : 0,
-      match[5] ? Number(match[5]) : 0,
-      match[6] ? Number(match[6]) : 0,
-    );
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const hours = match[4] ? Number(match[4]) : 0;
+    const minutes = match[5] ? Number(match[5]) : 0;
+    const seconds = match[6] ? Number(match[6]) : 0;
+    const candidate = new Date(year, month - 1, day, hours, minutes, seconds);
+    // Round-trip the captured components against what `Date` actually
+    // stored. JS silently normalizes overflow ("2026-99-99" becomes a
+    // distant real date), which would let `formatDate` render a
+    // misleading body for malformed inputs. Reject the parse when the
+    // normalized Date does not agree with what the caller asked for.
+    if (
+      candidate.getFullYear() !== year ||
+      candidate.getMonth() !== month - 1 ||
+      candidate.getDate() !== day ||
+      candidate.getHours() !== hours ||
+      candidate.getMinutes() !== minutes ||
+      candidate.getSeconds() !== seconds
+    ) {
+      return null;
+    }
+    return candidate;
   }
   const parsed = new Date(iso);
   return Number.isNaN(parsed.getTime()) ? null : parsed;

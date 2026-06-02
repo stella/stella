@@ -301,6 +301,12 @@ export type DocxEditorRef = {
     properties: SdtProperties;
     /** Index in the PM document tree, outer→inner. */
     path: number[];
+    /**
+     * Stable, instance-unique PM position of the control's open token.
+     * Use with `{ pmPos }` on the mutation / scroll filters to target a
+     * specific duplicate when two controls share a tag / alias.
+     */
+    pmPos: number;
   }[];
   /**
    * Scroll to the first content control matching the filter and place the

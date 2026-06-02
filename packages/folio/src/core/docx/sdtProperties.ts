@@ -17,6 +17,7 @@ import {
   findChild,
   getAttribute,
   getLocalName,
+  parseBooleanElement,
   type XmlElement,
 } from "./xmlParser";
 
@@ -29,9 +30,19 @@ function parseListItems(
       child.type === "element" &&
       (child.name === "w:listItem" || child.name?.endsWith(":listItem"))
     ) {
+      // OOXML §17.5.2.10: `w:displayText` is optional, and `w:value` is
+      // optional too. Fall back each to the other so a partially specified
+      // listItem stays selectable + visible — without this, the dropdown
+      // shell renders a blank option and the value-set path writes an
+      // empty paragraph for a real OOXML pick.
+      const displayText = getAttribute(child, "w", "displayText");
+      const value = getAttribute(child, "w", "value");
+      if (displayText === null && value === null) {
+        continue;
+      }
       items.push({
-        displayText: getAttribute(child, "w", "displayText") ?? "",
-        value: getAttribute(child, "w", "value") ?? "",
+        displayText: displayText ?? value ?? "",
+        value: value ?? displayText ?? "",
       });
     }
   }
@@ -141,12 +152,20 @@ export function parseSdtProperties(
           break;
         case "checkbox": {
           props.sdtType = "checkbox";
-          const checked =
-            findChild(el, "w14", "checked") ?? findChild(el, "w", "checked");
-          props.checked = checked
-            ? getAttribute(checked, "w14", "val") === "1" ||
-              getAttribute(checked, "w", "val") === "1"
-            : false;
+          // OOXML OnOff values are "1" | "true" | "on" (or absent attribute
+          // meaning true); their negations are "0" | "false" | "off".
+          // `parseBooleanElement` already encapsulates that vs. our previous
+          // strict `=== "1"` check, which misclassified Word's `val="true"`
+          // and bare `<w14:checked/>` forms as unchecked.
+          const checked14 = findChild(el, "w14", "checked");
+          const checkedW = findChild(el, "w", "checked");
+          if (checked14) {
+            props.checked = parseBooleanElement(checked14, "w14");
+          } else if (checkedW) {
+            props.checked = parseBooleanElement(checkedW, "w");
+          } else {
+            props.checked = false;
+          }
           break;
         }
         case "picture":

@@ -2832,6 +2832,7 @@ export function DocxEditor({
         return findBlockSdtMatches(view.state.doc, filter).map((match) => ({
           properties: blockSdtAttrsToSdtProperties(match.node),
           path: match.path,
+          pmPos: match.pos,
         }));
       },
       scrollToContentControl: (filter) => {

@@ -2384,13 +2384,20 @@ export function toFlowBlocks(
             groupBlocks.push(b);
           }
         }
+        // We're finalizing the SDT that `group` represents — locate that
+        // entry by `pmPos` instead of always taking `at(-1)`. For blocks
+        // that sit inside an inner SDT, `at(-1)` is the inner group, and
+        // overwriting it would clobber the inner SDT's first/middle/last
+        // markers when the outer iterates the same range later. Matching
+        // by pmPos keeps the inner positions intact.
+        const ourPmPos = group.pmPos;
         for (let i = 0; i < groupBlocks.length; i += 1) {
           const b = groupBlocks[i];
           if (!b || !b.sdtGroups) {
             continue;
           }
-          const innermost = b.sdtGroups.at(-1);
-          if (!innermost) {
+          const idx = b.sdtGroups.findIndex((g) => g.pmPos === ourPmPos);
+          if (idx === -1) {
             continue;
           }
           let position: NonNullable<SdtGroup["position"]>;
@@ -2403,13 +2410,17 @@ export function toFlowBlocks(
           } else {
             position = "middle";
           }
-          // Replace the innermost group with a copy carrying the position.
-          // (The same SdtGroup object is shared across blocks of this
-          // group, so swap in a new last entry to keep the others untouched.)
-          b.sdtGroups = [
-            ...b.sdtGroups.slice(0, -1),
-            { ...innermost, position },
-          ];
+          // Replace just the entry for this SDT, leaving inner/outer
+          // sibling entries untouched. (SdtGroup objects are shared
+          // across blocks of the same group; copy-on-write here keeps
+          // the other blocks' references stable.)
+          const next = [...b.sdtGroups];
+          const existing = next[idx];
+          if (!existing) {
+            continue;
+          }
+          next[idx] = { ...existing, position };
+          b.sdtGroups = next;
         }
         return;
       }

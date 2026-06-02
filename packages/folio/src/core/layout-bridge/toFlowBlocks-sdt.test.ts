@@ -65,6 +65,43 @@ describe("toFlowBlocks — blockSdt grouping", () => {
     expect(innermost).toEqual(["only"]);
   });
 
+  test("outer SDT does not overwrite inner SDT's first/middle/last", () => {
+    // Outer SDT has `[pre, inner SDT containing two paragraphs, post]`.
+    // The outer's position-stamping pass must update ITS own group
+    // entry, not the innermost (which is the inner SDT for the two
+    // inner-SDT blocks). The inner SDT's paragraphs should keep their
+    // first/last; the outer entry on those same blocks should report
+    // their position within the outer sequence (middle).
+    const inner = schema.node("blockSdt", { sdtType: "richText", tag: "in" }, [
+      schema.node("paragraph", {}, [schema.text("inner first")]),
+      schema.node("paragraph", {}, [schema.text("inner last")]),
+    ]);
+    const outer = schema.node("blockSdt", { sdtType: "richText", tag: "out" }, [
+      schema.node("paragraph", {}, [schema.text("pre")]),
+      inner,
+      schema.node("paragraph", {}, [schema.text("post")]),
+    ]);
+    const doc = schema.node("doc", null, [outer]);
+    const blocks = toFlowBlocks(doc);
+    const paragraphs = blocks.filter((b) => b.kind === "paragraph");
+    // Block order: pre, inner-first, inner-last, post (4 paragraphs).
+    expect(paragraphs).toHaveLength(4);
+
+    // For the inner-first / inner-last blocks:
+    // - sdtGroups = [outer, inner]
+    // - The OUTER entry's position should be "middle" (those blocks
+    //   sit between `pre` and `post` in the outer sequence)
+    // - The INNER entry's position should be "first" / "last"
+    const innerFirst = paragraphs[1];
+    const innerLast = paragraphs[2];
+    expect(innerFirst?.sdtGroups?.[0]?.tag).toBe("out");
+    expect(innerFirst?.sdtGroups?.[0]?.position).toBe("middle");
+    expect(innerFirst?.sdtGroups?.[1]?.tag).toBe("in");
+    expect(innerFirst?.sdtGroups?.[1]?.position).toBe("first");
+    expect(innerLast?.sdtGroups?.[0]?.position).toBe("middle");
+    expect(innerLast?.sdtGroups?.[1]?.position).toBe("last");
+  });
+
   test("nested block SDTs produce an outer→inner stack on the inner paragraph", () => {
     const innerPara = schema.node("paragraph", {}, [schema.text("nested")]);
     const innerSdt = schema.node("blockSdt", { tag: "inner" }, [innerPara]);
