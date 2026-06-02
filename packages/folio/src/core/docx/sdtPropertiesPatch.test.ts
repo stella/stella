@@ -135,6 +135,28 @@ describe("reconcileRawSdtPr — date format", () => {
 });
 
 describe("reconcileRawSdtPr — dropdown last value", () => {
+  test("strips an existing lastValue under a non-`w` source prefix and re-emits with the same prefix", () => {
+    // The previous literal " w:lastValue=" marker missed `ns0:lastValue`
+    // entirely, so reconcileRawSdtPr appended a fresh w:lastValue next
+    // to the stale ns0:lastValue and Word was free to keep reading the
+    // old value.
+    const raw =
+      '<w:sdtPr><ns0:dropDownList ns0:lastValue="old"><ns0:listItem ns0:displayText="A" ns0:value="a"/><ns0:listItem ns0:displayText="B" ns0:value="b"/></ns0:dropDownList></w:sdtPr>';
+    const out = reconcileRawSdtPr(
+      raw,
+      { sdtType: "dropdown" },
+      { dropdownLastValue: "b" },
+    );
+    // Stale value gone.
+    expect(out).not.toContain('lastValue="old"');
+    // New value emitted under the source's prefix, not a foreign `w:`.
+    expect(out).toContain('ns0:lastValue="b"');
+    // Exactly one lastValue attribute in the output.
+    expect(out.match(/lastValue=/giu)?.length).toBe(1);
+    // listItems still there.
+    expect(out).toContain('ns0:value="a"');
+  });
+
   test("rewrites w:lastValue when the user picks a new item", () => {
     const raw =
       '<w:sdtPr><w:dropDownList w:lastValue="ca"><w:listItem w:displayText="California" w:value="ca"/><w:listItem w:displayText="New York" w:value="ny"/></w:dropDownList></w:sdtPr>';

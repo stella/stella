@@ -15,7 +15,7 @@ import { SdtLockSchema, narrowEnum } from "./parserEnums";
 import {
   elementToXml,
   findChild,
-  getAttribute,
+  getAttributeAnyPrefix,
   getLocalName,
   parseBooleanElement,
   type XmlElement,
@@ -57,29 +57,6 @@ function parseListItems(
 }
 
 /**
- * Read an attribute by local name, trying the element's own prefix first
- * (`<ns0:listItem ns0:displayText="…"/>`), then the canonical `w:` prefix,
- * then unprefixed. Matches `parseBooleanElement`'s prefix tolerance so
- * OOXML producers that use a non-`w` prefix for the Word namespace parse
- * the same as the canonical form.
- */
-function getAttributeAnyPrefix(
-  element: XmlElement,
-  localName: string,
-): string | null {
-  const elementName = element.name ?? "";
-  const colonIdx = elementName.indexOf(":");
-  const elementPrefix = colonIdx > 0 ? elementName.slice(0, colonIdx) : null;
-  if (elementPrefix && elementPrefix !== "w") {
-    const fromPrefix = getAttribute(element, elementPrefix, localName);
-    if (fromPrefix !== null) {
-      return fromPrefix;
-    }
-  }
-  return getAttribute(element, "w", localName);
-}
-
-/**
  * Parse `<w:sdtPr>` (and optional `<w:sdtEndPr>`) into {@link SdtProperties}.
  *
  * Modeled fields drive addressing / template tooling; `rawPropertiesXml`
@@ -108,7 +85,7 @@ export function parseSdtProperties(
 
       switch (name) {
         case "id": {
-          const raw = getAttribute(el, "w", "val");
+          const raw = getAttributeAnyPrefix(el, "val");
           if (raw !== null) {
             const n = Number.parseInt(raw, 10);
             if (!Number.isNaN(n)) {
@@ -118,21 +95,21 @@ export function parseSdtProperties(
           break;
         }
         case "alias": {
-          const aliasVal = getAttribute(el, "w", "val");
+          const aliasVal = getAttributeAnyPrefix(el, "val");
           if (aliasVal !== null) {
             props.alias = aliasVal;
           }
           break;
         }
         case "tag": {
-          const tagVal = getAttribute(el, "w", "val");
+          const tagVal = getAttributeAnyPrefix(el, "val");
           if (tagVal !== null) {
             props.tag = tagVal;
           }
           break;
         }
         case "lock": {
-          const lockVal = getAttribute(el, "w", "val");
+          const lockVal = getAttributeAnyPrefix(el, "val");
           props.lock = narrowEnum(lockVal, SdtLockSchema) ?? "unlocked";
           break;
         }
@@ -141,7 +118,7 @@ export function parseSdtProperties(
           if (docPart) {
             const valEl = findChild(docPart, "w", "val");
             if (valEl) {
-              const phVal = getAttribute(valEl, "w", "val");
+              const phVal = getAttributeAnyPrefix(valEl, "val");
               if (phVal !== null) {
                 props.placeholder = phVal;
               }
@@ -167,12 +144,12 @@ export function parseSdtProperties(
           // the bound value is in the parent's <w:date w:fullDate="..."/>.
           const dateFormatEl = findChild(el, "w", "dateFormat");
           if (dateFormatEl) {
-            const fmt = getAttribute(dateFormatEl, "w", "val");
+            const fmt = getAttributeAnyPrefix(dateFormatEl, "val");
             if (fmt !== null) {
               props.dateFormat = fmt;
             }
           }
-          const fullDate = getAttribute(el, "w", "fullDate");
+          const fullDate = getAttributeAnyPrefix(el, "fullDate");
           if (fullDate !== null) {
             props.dateValueISO = fullDate;
           }

@@ -43,26 +43,55 @@ function escapeXmlAttr(value: string): string {
 }
 
 /**
- * Drop any `w:lastValue="…"` attribute from an attribute-list string. We
- * avoid a single greedy regex with `\s+` (which lint flags as backtracking-
- * risky) and instead match the literal attribute name with bounded values.
+ * Drop any `*:lastValue="…"` attribute (any namespace prefix, or
+ * unprefixed) from an attribute-list string. We avoid a single greedy
+ * regex with `\s+` (which lint flags as backtracking-risky) and instead
+ * scan character-by-character against `lastValue=` while accepting any
+ * preceding `prefix:`. Without prefix tolerance, a source DOCX that
+ * binds the Word namespace under a non-`w` prefix
+ * (`<ns0:dropDownList ns0:lastValue="old">`) would keep the stale
+ * attribute alongside our freshly-emitted `w:lastValue` on save.
  */
 function stripLastValueAttr(attrs: string): string {
-  const marker = " w:lastValue=";
-  let idx = attrs.indexOf(marker);
+  const SUFFIX = "lastValue=";
   let out = attrs;
-  while (idx !== -1) {
-    const quoteIdx = idx + marker.length;
+  let searchFrom = 0;
+  while (searchFrom < out.length) {
+    const hitIdx = out.indexOf(SUFFIX, searchFrom);
+    if (hitIdx === -1) {
+      break;
+    }
+    // Walk backwards over an optional `prefix:` and require a leading
+    // whitespace separator so we don't accidentally chew on an attr like
+    // `mylastValue=`. The attribute we want is always introduced by
+    // whitespace.
+    let nameStart = hitIdx;
+    while (nameStart > 0 && /[A-Za-z0-9_-]/u.test(out[nameStart - 1] ?? "")) {
+      nameStart -= 1;
+    }
+    if (nameStart > 0 && out[nameStart - 1] === ":") {
+      nameStart -= 1;
+      while (nameStart > 0 && /[A-Za-z0-9_-]/u.test(out[nameStart - 1] ?? "")) {
+        nameStart -= 1;
+      }
+    }
+    if (nameStart === 0 || !/\s/u.test(out[nameStart - 1] ?? "")) {
+      searchFrom = hitIdx + SUFFIX.length;
+      continue;
+    }
+    const quoteIdx = hitIdx + SUFFIX.length;
     const quote = out[quoteIdx];
     if (quote !== '"' && quote !== "'") {
-      break;
+      searchFrom = hitIdx + SUFFIX.length;
+      continue;
     }
     const closeIdx = out.indexOf(quote, quoteIdx + 1);
     if (closeIdx === -1) {
       break;
     }
-    out = `${out.slice(0, idx)}${out.slice(closeIdx + 1)}`;
-    idx = out.indexOf(marker, idx);
+    // Drop the leading separator too so two whitespace runs don't merge.
+    out = `${out.slice(0, nameStart - 1)}${out.slice(closeIdx + 1)}`;
+    searchFrom = nameStart - 1;
   }
   return out;
 }
@@ -255,7 +284,7 @@ export function reconcileRawSdtPr(
     (props.sdtType === "dropdown" || props.sdtType === "comboBox") &&
     options.dropdownLastValue !== undefined
   ) {
-    const lastValueAttr = ` w:lastValue="${escapeXmlAttr(options.dropdownLastValue)}"`;
+    const escapedValue = escapeXmlAttr(options.dropdownLastValue);
     const opened =
       /<(\w+):(dropDownList|comboBox)\b([^>]*)>([\s\S]*?)<\/\w+:(?:dropDownList|comboBox)>/iu;
     const selfClosing = /<(\w+):(dropDownList|comboBox)\b([^/>]*)\/>/iu;
@@ -264,7 +293,10 @@ export function reconcileRawSdtPr(
         opened,
         (_m, prefix: string, name: string, attrs: string, inner: string) => {
           const stripped = stripLastValueAttr(attrs);
-          return `<${prefix}:${name}${stripped}${lastValueAttr}>${inner}</${prefix}:${name}>`;
+          // Re-emit under the SOURCE prefix so a producer that bound w:
+          // under `ns0` ends up with `ns0:lastValue` rather than mixing
+          // prefixes inside the same element.
+          return `<${prefix}:${name}${stripped} ${prefix}:lastValue="${escapedValue}">${inner}</${prefix}:${name}>`;
         },
       );
     } else if (selfClosing.test(next)) {
@@ -272,7 +304,7 @@ export function reconcileRawSdtPr(
         selfClosing,
         (_m, prefix: string, name: string, attrs: string) => {
           const stripped = stripLastValueAttr(attrs);
-          return `<${prefix}:${name}${stripped}${lastValueAttr}/>`;
+          return `<${prefix}:${name}${stripped} ${prefix}:lastValue="${escapedValue}"/>`;
         },
       );
     }

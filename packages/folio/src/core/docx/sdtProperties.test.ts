@@ -96,6 +96,23 @@ describe("parseSdtProperties — prefixed marker elements", () => {
     expect(props.listItems).toEqual([{ displayText: "Yes", value: "Yes" }]);
   });
 
+  test("reads top-level SDT property attrs under an alternative namespace prefix", () => {
+    // Same prefix-tolerance theme as listItems and checkbox val: the
+    // top-level w:tag / w:alias / w:id / w:lock readers used to be hard-
+    // coded to the `w:` prefix, so docs that bound the namespace under
+    // ns0 came back with undefined tag / alias / lock and could not be
+    // addressed via getContentControls({ tag }).
+    const ns =
+      'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:ns0="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+    const props = parseSdtPrXml(
+      `<w:sdtPr ${ns}><ns0:id ns0:val="42"/><ns0:tag ns0:val="client"/><ns0:alias ns0:val="Client Name"/><ns0:lock ns0:val="contentLocked"/></w:sdtPr>`,
+    );
+    expect(props.id).toBe(42);
+    expect(props.tag).toBe("client");
+    expect(props.alias).toBe("Client Name");
+    expect(props.lock).toBe("contentLocked");
+  });
+
   test("reads dropdown listItem attrs under an alternative namespace prefix", () => {
     // Same prefix-tolerance bug as checkbox val — `parseListItems` matched
     // `<ns0:listItem>` via local-name fallback but then read `w:displayText`

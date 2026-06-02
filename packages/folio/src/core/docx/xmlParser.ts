@@ -466,6 +466,37 @@ export function getAttribute(
 }
 
 /**
+ * Read an attribute by local name, trying the element's own prefix first,
+ * then the canonical Word prefix, then unprefixed.
+ *
+ * OOXML lets a producer bind the WordprocessingML namespace under any
+ * prefix the file's xmlns declarations choose, so a strict `w:val` /
+ * `w:tag` lookup misses valid docs that use `ns0:` (or any other prefix
+ * resolving to the same URI). This helper mirrors `parseBooleanElement`'s
+ * tolerance for the attribute path — call it whenever you want to read
+ * an OOXML attribute that conventionally lives in the `w:` namespace
+ * but could appear under an alternate prefix bound to the same URI.
+ */
+export function getAttributeAnyPrefix(
+  element: XmlElement | null | undefined,
+  localName: string,
+): string | null {
+  if (!element) {
+    return null;
+  }
+  const elementName = element.name ?? "";
+  const colonIdx = elementName.indexOf(":");
+  const elementPrefix = colonIdx > 0 ? elementName.slice(0, colonIdx) : null;
+  if (elementPrefix && elementPrefix !== "w") {
+    const fromPrefix = getAttribute(element, elementPrefix, localName);
+    if (fromPrefix !== null) {
+      return fromPrefix;
+    }
+  }
+  return getAttribute(element, "w", localName);
+}
+
+/**
  * Get an attribute value, trying multiple possible names
  *
  * @param element - Element to get attribute from
