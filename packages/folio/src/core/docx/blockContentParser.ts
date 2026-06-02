@@ -8,6 +8,8 @@
  */
 
 import type {
+  BlockContent,
+  BlockSdt,
   BookmarkEnd,
   BookmarkStart,
   MediaFile,
@@ -16,7 +18,6 @@ import type {
   Run,
   Shape,
   ShapeContent,
-  Table,
   Theme,
 } from "../types/document";
 import { parseBookmarkEnd, parseBookmarkStart } from "./bookmarkParser";
@@ -28,6 +29,7 @@ import type { BookmarkMarker } from "./bookmarkPlacement";
 import { convertBulletToUnicode } from "./bulletMarkers";
 import type { NumberingMap } from "./numberingParser";
 import { parseParagraph } from "./paragraphParser";
+import { parseSdtProperties } from "./sdtProperties";
 import type { StyleMap } from "./styleParser";
 import { parseTable } from "./tableParser";
 import {
@@ -36,7 +38,12 @@ import {
   parseTextBox,
   parseTextBoxContent,
 } from "./textBoxParser";
-import { findDeep, getChildElements, getLocalName } from "./xmlParser";
+import {
+  findChild,
+  findDeep,
+  getChildElements,
+  getLocalName,
+} from "./xmlParser";
 import type { XmlElement } from "./xmlParser";
 
 type ParseBlockContentOptions = {
@@ -362,7 +369,7 @@ export const parseBlockContent = (
   rels: RelationshipMap | null,
   media: Map<string, MediaFile> | null,
   options?: ParseBlockContentOptions,
-): (Paragraph | Table)[] =>
+): BlockContent[] =>
   parseBlockContentWithState(parent, styles, theme, numbering, rels, media, {
     listCounters: new Map(),
     abstractCounters: new Map(),
@@ -377,8 +384,8 @@ const parseBlockContentWithState = (
   rels: RelationshipMap | null,
   media: Map<string, MediaFile> | null,
   state: ParseBlockContentState,
-): (Paragraph | Table)[] => {
-  const content: (Paragraph | Table)[] = [];
+): BlockContent[] => {
+  const content: BlockContent[] = [];
   const children = getChildElements(parent);
   const pendingBookmarkMarkers: BookmarkMarker[] = [];
 
@@ -439,31 +446,33 @@ const parseBlockContentWithState = (
     }
 
     if (localName === "sdt") {
-      const sdtContent = (child.elements ?? []).find(
-        (el: XmlElement) =>
-          el.type === "element" &&
-          (el.name === "w:sdtContent" || el.name?.endsWith(":sdtContent")),
-      );
-      if (sdtContent) {
-        const sdtBlockContent = parseBlockContentWithState(
-          sdtContent,
-          styles,
-          theme,
-          numbering,
-          rels,
-          media,
-          state,
-        );
-        if (
-          prependBookmarkMarkersToFirstParagraphInBlocks(
-            sdtBlockContent,
-            pendingBookmarkMarkers,
-          )
-        ) {
-          pendingBookmarkMarkers.length = 0;
-        }
-        content.push(...sdtBlockContent);
+      const sdtPr = findChild(child, "w", "sdtPr");
+      const sdtEndPr = findChild(child, "w", "sdtEndPr");
+      const sdtContent = findChild(child, "w", "sdtContent");
+      const blockSdt: BlockSdt = {
+        type: "blockSdt",
+        properties: parseSdtProperties(sdtPr, sdtEndPr),
+        content: sdtContent
+          ? parseBlockContentWithState(
+              sdtContent,
+              styles,
+              theme,
+              numbering,
+              rels,
+              media,
+              state,
+            )
+          : [],
+      };
+      if (
+        prependBookmarkMarkersToFirstParagraphInBlocks(
+          blockSdt.content,
+          pendingBookmarkMarkers,
+        )
+      ) {
+        pendingBookmarkMarkers.length = 0;
       }
+      content.push(blockSdt);
       continue;
     }
 

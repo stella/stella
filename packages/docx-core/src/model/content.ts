@@ -1145,27 +1145,48 @@ export type SdtType =
   | "unknown";
 
 /**
- * SDT properties (w:sdtPr)
+ * SDT properties (`w:sdtPr`).
+ *
+ * Modeled fields are a read-only projection for downstream tooling
+ * (tag/alias addressing, template extraction). They are NOT the
+ * serialization source: the original `<w:sdtPr>` is captured verbatim in
+ * `rawPropertiesXml` and replayed on save, which preserves element order
+ * (`CT_SdtPr` is an `xsd:sequence`), avoids double-emission, and keeps
+ * unmodeled features (`w:dataBinding`, `w15:repeatingSection`, `@lastValue`,
+ * `w:sdtEndPr`) lossless.
  */
 export type SdtProperties = {
-  /** SDT type */
+  /** SDT type (projection; round-trip uses `rawPropertiesXml`). */
   sdtType: SdtType;
-  /** Alias (friendly name) */
+  /** Numeric id (`w:id/@w:val`). */
+  id?: number;
+  /** Alias (friendly name, `w:alias`). */
   alias?: string;
-  /** Tag (developer identifier) */
+  /** Tag (developer identifier, `w:tag`). */
   tag?: string;
-  /** Lock content editing */
+  /** Lock setting (`w:lock`). */
   lock?: "sdtLocked" | "contentLocked" | "sdtContentLocked" | "unlocked";
-  /** Placeholder text */
+  /**
+   * Placeholder building-block name (`w:placeholder/w:docPart@w:val`) — a
+   * reference to a glossary docPart, not the literal placeholder text.
+   */
   placeholder?: string;
-  /** Whether showing placeholder */
+  /** Whether the placeholder is currently shown (`w:showingPlcHdr`). */
   showingPlaceholder?: boolean;
-  /** Date format for date controls */
+  /** Date display format (`w:date/w:dateFormat@w:val`). */
   dateFormat?: string;
-  /** Dropdown/combobox list items */
+  /** Dropdown/combobox list items. */
   listItems?: { displayText: string; value: string }[];
-  /** Checkbox checked state */
+  /** Checkbox checked state (`w14:checkbox/w14:checked`). */
   checked?: boolean;
+  /**
+   * Verbatim `<w:sdtPr>…</w:sdtPr>` captured at parse time. Replayed on
+   * serialize so unmodeled OOXML features (data binding, repeating sections,
+   * `@lastValue`, custom XML mappings) survive round-trip.
+   */
+  rawPropertiesXml?: string;
+  /** Verbatim `<w:sdtEndPr>…</w:sdtEndPr>` captured at parse time. */
+  rawEndPropertiesXml?: string;
 };
 
 /**
@@ -1192,14 +1213,18 @@ export type InlineSdt = {
 };
 
 /**
- * Block-level SDT (content control wrapping paragraphs/tables)
+ * Block-level SDT (content control wrapping paragraphs/tables).
+ *
+ * Content is `BlockContent[]` (not just `(Paragraph | Table)[]`) because
+ * OOXML allows block SDTs to nest — e.g. a repeating-section control
+ * whose row is itself a content control.
  */
 export type BlockSdt = {
   type: "blockSdt";
-  /** SDT properties */
+  /** SDT properties (raw XML in `properties.rawPropertiesXml` round-trips losslessly). */
   properties: SdtProperties;
-  /** Block content inside the control */
-  content: (Paragraph | Table)[];
+  /** Block content inside the control. */
+  content: BlockContent[];
 };
 
 // ============================================================================
@@ -1298,8 +1323,8 @@ export type HeaderFooter = {
   type: "header" | "footer";
   /** Header/footer type */
   hdrFtrType: HeaderFooterType;
-  /** Content (paragraphs, tables, etc.) */
-  content: (Paragraph | Table)[];
+  /** Content (paragraphs, tables, block-level content controls). */
+  content: BlockContent[];
 };
 
 // ============================================================================

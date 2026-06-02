@@ -10,7 +10,8 @@
  * - Content: w:p, w:tbl (same as document body)
  */
 
-import type { HeaderFooter, Paragraph, Table } from "../../types/document";
+import type { BlockContent, HeaderFooter } from "../../types/document";
+import { serializeBlockSdt } from "./blockSdtSerializer";
 import { serializeParagraph } from "./paragraphSerializer";
 import { serializeTable } from "./tableSerializer";
 
@@ -39,13 +40,17 @@ function buildNamespaceDeclarations(): string {
 }
 
 /**
- * Serialize a block content item (paragraph or table) for header/footer
+ * Serialize a block content item (paragraph, table, or block-level SDT) for
+ * header/footer.
  */
-function serializeBlock(block: Paragraph | Table): string {
+function serializeBlock(block: BlockContent): string {
   if (block.type === "paragraph") {
     return serializeParagraph(block);
   }
-  return serializeTable(block);
+  if (block.type === "table") {
+    return serializeTable(block);
+  }
+  return serializeBlockSdt(block, serializeBlock);
 }
 
 /**

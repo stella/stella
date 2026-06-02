@@ -66,7 +66,7 @@ export const normalizeCommentReferences = ({
   const normalizeTable = (table: Table): void => {
     for (const row of table.rows) {
       for (const cell of row.cells) {
-        normalizeParagraphTableBlocks(cell.content);
+        normalizeBlocks(cell.content);
       }
     }
   };
@@ -80,7 +80,7 @@ export const normalizeCommentReferences = ({
       normalizeTable(block);
       return;
     }
-    normalizeParagraphTableBlocks(block.content);
+    normalizeBlocks(block.content);
   };
 
   const normalizeBlocks = (blocks: BlockContent[]): void => {
@@ -89,30 +89,18 @@ export const normalizeCommentReferences = ({
     }
   };
 
-  const normalizeParagraphTableBlocks = (
-    blocks: (Paragraph | Table)[],
-  ): void => {
-    for (const block of blocks) {
-      if (block.type === "paragraph") {
-        normalizeParagraph(block);
-        continue;
-      }
-      normalizeTable(block);
-    }
-  };
-
   normalizeBlocks(documentBody.content);
   for (const header of headers?.values() ?? []) {
-    normalizeParagraphTableBlocks(header.content);
+    normalizeBlocks(header.content);
   }
   for (const footer of footers?.values() ?? []) {
-    normalizeParagraphTableBlocks(footer.content);
+    normalizeBlocks(footer.content);
   }
   for (const footnote of footnotes ?? []) {
-    normalizeParagraphTableBlocks(footnote.content);
+    normalizeBlocks(footnote.content);
   }
   for (const endnote of endnotes ?? []) {
-    normalizeParagraphTableBlocks(endnote.content);
+    normalizeBlocks(endnote.content);
   }
   for (const comment of comments) {
     for (const paragraph of comment.content) {

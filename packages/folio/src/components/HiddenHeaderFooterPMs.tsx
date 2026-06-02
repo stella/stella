@@ -42,11 +42,10 @@ import { createStarterKit } from "../core/prosemirror/extensions/StarterKit";
 import { createDocumentStylesPlugin } from "../core/prosemirror/plugins/documentStyles";
 import { schema } from "../core/prosemirror/schema";
 import type {
+  BlockContent,
   Document,
   HeaderFooter,
-  Paragraph,
   StyleDefinitions,
-  Table,
   Theme,
 } from "../core/types/document";
 
@@ -128,7 +127,7 @@ type MountedView = {
    * history snapshot (the array reference survives if the snapshot
    * spreads `...existing` without overriding content).
    */
-  appliedContent: (Paragraph | Table)[];
+  appliedContent: BlockContent[];
 };
 
 function buildInitialState(

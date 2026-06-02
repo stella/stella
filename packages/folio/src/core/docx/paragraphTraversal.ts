@@ -114,7 +114,7 @@ export const visitDocxParagraphs = (
   const visitTable = (table: Table): void => {
     for (const row of table.rows) {
       for (const cell of row.cells) {
-        visitParagraphTableBlocks(cell.content);
+        visitBlocks(cell.content);
       }
     }
   };
@@ -128,7 +128,7 @@ export const visitDocxParagraphs = (
       visitTable(block);
       return;
     }
-    visitParagraphTableBlocks(block.content);
+    visitBlocks(block.content);
   };
 
   const visitBlocks = (blocks: readonly BlockContent[]): void => {
@@ -137,33 +137,21 @@ export const visitDocxParagraphs = (
     }
   };
 
-  const visitParagraphTableBlocks = (
-    blocks: readonly (Paragraph | Table)[],
-  ): void => {
-    for (const block of blocks) {
-      if (block.type === "paragraph") {
-        visitParagraph(block);
-        continue;
-      }
-      visitTable(block);
-    }
-  };
-
   visitBlocks(documentBody.content);
   for (const section of documentBody.sections ?? []) {
     visitBlocks(section.content);
   }
   for (const header of headers?.values() ?? []) {
-    visitParagraphTableBlocks(header.content);
+    visitBlocks(header.content);
   }
   for (const footer of footers?.values() ?? []) {
-    visitParagraphTableBlocks(footer.content);
+    visitBlocks(footer.content);
   }
   for (const footnote of footnotes ?? []) {
-    visitParagraphTableBlocks(footnote.content);
+    visitBlocks(footnote.content);
   }
   for (const endnote of endnotes ?? []) {
-    visitParagraphTableBlocks(endnote.content);
+    visitBlocks(endnote.content);
   }
   for (const comment of documentBody.comments ?? []) {
     for (const paragraph of comment.content) {

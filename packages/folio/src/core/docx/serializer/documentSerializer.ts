@@ -16,6 +16,7 @@ import type {
   DocumentBody,
   BlockContent,
 } from "../../types/document";
+import { serializeBlockSdt } from "./blockSdtSerializer";
 import { serializeParagraph } from "./paragraphSerializer";
 import { resetAutoIdCounter } from "./runSerializer";
 import { serializeSectionProperties } from "./sectionPropertiesSerializer";
@@ -100,7 +101,7 @@ function buildNamespaceDeclarations(): string {
 // ============================================================================
 
 /**
- * Serialize a single block content item (paragraph or table)
+ * Serialize a single block content item (paragraph, table, or block-level SDT).
  */
 function serializeBlockContent(block: BlockContent): string {
   if (block.type === "paragraph") {
@@ -109,19 +110,7 @@ function serializeBlockContent(block: BlockContent): string {
   if (block.type === "table") {
     return serializeTable(block);
   }
-  // Block-level SDT: wrap content in w:sdt
-  const contentXml = block.content
-    .map((b) => serializeBlockContent(b))
-    .join("");
-  const props = block.properties;
-  const prParts: string[] = [];
-  if (props.alias) {
-    prParts.push(`<w:alias w:val="${props.alias}"/>`);
-  }
-  if (props.tag) {
-    prParts.push(`<w:tag w:val="${props.tag}"/>`);
-  }
-  return `<w:sdt><w:sdtPr>${prParts.join("")}</w:sdtPr><w:sdtContent>${contentXml}</w:sdtContent></w:sdt>`;
+  return serializeBlockSdt(block, serializeBlockContent);
 }
 
 /**

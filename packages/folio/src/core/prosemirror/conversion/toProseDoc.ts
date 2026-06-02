@@ -17,6 +17,7 @@ import type { MarkType, Node as PMNode } from "prosemirror-model";
 import { createStyleEngine } from "../../style-engine";
 import type { StyleEngine } from "../../style-engine";
 import type {
+  BlockContent,
   Document,
   Paragraph,
   Run,
@@ -88,7 +89,23 @@ export function toProseDoc(
   const theme = options?.theme ?? document.package.theme ?? null;
   let textBoxGroupIndex = 0;
 
-  for (const block of paragraphs) {
+  // Until the PM `blockSdt` node lands, flatten block SDTs into their inner
+  // content so the editor still renders the inside of a content control.
+  // Properties + raw `w:sdtPr` are preserved on the document model and
+  // replayed on serialize, so the round-trip is still safe.
+  const flattenSdts = (blocks: BlockContent[]): (Paragraph | Table)[] => {
+    const flat: (Paragraph | Table)[] = [];
+    for (const block of blocks) {
+      if (block.type === "blockSdt") {
+        flat.push(...flattenSdts(block.content));
+      } else {
+        flat.push(block);
+      }
+    }
+    return flat;
+  };
+
+  for (const block of flattenSdts(paragraphs)) {
     if (block.type === "paragraph") {
       // Convert paragraph and extract text boxes as sibling nodes
       // If the paragraph starts with a page break (before any text),
@@ -109,7 +126,7 @@ export function toProseDoc(
       if (pbPos === "after") {
         nodes.push(schema.node("pageBreak"));
       }
-    } else if (block.type === "table") {
+    } else {
       const pmTable = convertTable(block, styleResolver, theme);
       nodes.push(pmTable);
     }
@@ -2846,7 +2863,7 @@ function convertTextBox(
  * `convertTable` does not yet thread it (orthogonal upstream divergence).
  */
 export function headerFooterToProseDoc(
-  content: (Paragraph | Table)[],
+  content: BlockContent[],
   options?: ToProseDocOptions,
 ): PMNode {
   const nodes: PMNode[] = [];
@@ -2856,7 +2873,22 @@ export function headerFooterToProseDoc(
   const theme = options?.theme ?? null;
   let textBoxGroupIndex = 0;
 
-  for (const block of content) {
+  // Until the PM `blockSdt` node lands, flatten block SDTs into their inner
+  // content so headers/footers still render. Properties / raw `w:sdtPr` are
+  // already preserved on the model and replayed by the HF serializer.
+  const flatten = (blocks: BlockContent[]): (Paragraph | Table)[] => {
+    const flat: (Paragraph | Table)[] = [];
+    for (const block of blocks) {
+      if (block.type === "blockSdt") {
+        flat.push(...flatten(block.content));
+      } else {
+        flat.push(block);
+      }
+    }
+    return flat;
+  };
+
+  for (const block of flatten(content)) {
     if (block.type === "paragraph") {
       nodes.push(
         ...convertParagraphWithTextBoxes(
