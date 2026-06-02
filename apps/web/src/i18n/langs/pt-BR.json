@@ -2144,13 +2144,11 @@
       "uploadingDescription": "Não feche esta página até que os arquivos sejam carregados",
       "uploadingProgress": "{completed, number} de {total, number} enviados",
       "versionOrNewFile": {
-        "createNewDescription": "Adicionar como arquivo separado na área de trabalho",
         "createNewOption": "Criar novo arquivo",
         "description": "Você soltou \"{fileName}\" em um documento existente.",
         "extensionMismatch": "Extensão não corresponde: esperado {expected}, recebido {actual}",
         "extensionMismatchError": "A extensão do arquivo não corresponde ao documento existente",
         "noExtension": "sem extensão",
-        "replaceDescription": "Adicionar como nova versão deste documento",
         "replaceOption": "Enviar como nova versão",
         "title": "Enviar nova versão ou criar novo arquivo?"
       },

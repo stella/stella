@@ -2144,13 +2144,11 @@
       "uploadingDescription": "No cierre esta página hasta que se completen las subidas",
       "uploadingProgress": "{completed, number} de {total, number} subidos",
       "versionOrNewFile": {
-        "createNewDescription": "Agregar como archivo separado en el espacio de trabajo",
         "createNewOption": "Crear nuevo archivo",
         "description": "Soltaste \"{fileName}\" sobre un documento existente.",
         "extensionMismatch": "Extensión no coincide: esperado {expected}, recibido {actual}",
         "extensionMismatchError": "La extensión del archivo no coincide con el documento existente",
         "noExtension": "sin extensión",
-        "replaceDescription": "Agregar como nueva versión de este documento",
         "replaceOption": "Subir como nueva versión",
         "title": "¿Subir nueva versión o crear archivo nuevo?"
       },

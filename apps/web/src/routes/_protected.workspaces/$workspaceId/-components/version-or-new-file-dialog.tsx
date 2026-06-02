@@ -6,11 +6,9 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogPanel,
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/components/dialog";
-import { cn } from "@stll/ui/lib/utils";
 
 import { extensionMatches, getExtension } from "./file-extension";
 
@@ -18,15 +16,10 @@ type VersionOrNewFileDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onOpenChangeComplete: (open: boolean) => void;
-  /** The filename of the existing entity's file */
   entityFileName: string | null | undefined;
-  /** The file being dropped */
   droppedFile: File;
-  /** Callback when user chooses to replace as new version */
   onReplaceVersion: () => void;
-  /** Callback when user chooses to create a new file */
   onCreateNewFile: () => void;
-  /** Whether the replace version action is in progress */
   isReplacePending?: boolean;
 };
 
@@ -90,6 +83,7 @@ const VersionOrNewFileDialogBody = ({
   isReplacePending,
 }: VersionOrNewFileDialogBodyProps) => {
   const t = useTranslations();
+  const noExt = t("workspaces.files.versionOrNewFile.noExtension");
 
   return (
     <DialogPopup className="max-w-md">
@@ -101,57 +95,35 @@ const VersionOrNewFileDialogBody = ({
           {t("workspaces.files.versionOrNewFile.description", {
             fileName: droppedFileName,
           })}
+          {!canReplace && (
+            <>
+              {" "}
+              {t("workspaces.files.versionOrNewFile.extensionMismatch", {
+                expected: entityExt ? `.${entityExt}` : noExt,
+                actual: uploadExt ? `.${uploadExt}` : noExt,
+              })}
+            </>
+          )}
         </DialogDescription>
       </DialogHeader>
-
-      <DialogPanel className="space-y-3">
-        {/* Replace as new version option */}
-        <button
-          className={cn(
-            "hover:bg-accent w-full rounded-lg border p-3 text-start transition-colors",
-            !canReplace && "cursor-not-allowed opacity-50",
-            canReplace && "hover:border-primary",
-          )}
-          disabled={!canReplace || isReplacePending}
-          onClick={onReplaceVersion}
-          type="button"
-        >
-          <div className="font-medium">
-            {t("workspaces.files.versionOrNewFile.replaceOption")}
-          </div>
-          <div className="text-muted-foreground text-sm">
-            {canReplace
-              ? t("workspaces.files.versionOrNewFile.replaceDescription")
-              : t("workspaces.files.versionOrNewFile.extensionMismatch", {
-                  expected: entityExt
-                    ? `.${entityExt}`
-                    : t("workspaces.files.versionOrNewFile.noExtension"),
-                  actual: uploadExt
-                    ? `.${uploadExt}`
-                    : t("workspaces.files.versionOrNewFile.noExtension"),
-                })}
-          </div>
-        </button>
-
-        {/* Create new file option */}
-        <button
-          className="hover:bg-accent hover:border-primary w-full rounded-lg border p-3 text-start transition-colors"
-          disabled={isReplacePending}
-          onClick={onCreateNewFile}
-          type="button"
-        >
-          <div className="font-medium">
-            {t("workspaces.files.versionOrNewFile.createNewOption")}
-          </div>
-          <div className="text-muted-foreground text-sm">
-            {t("workspaces.files.versionOrNewFile.createNewDescription")}
-          </div>
-        </button>
-      </DialogPanel>
 
       <DialogFooter>
         <Button disabled={isReplacePending} onClick={onCancel} variant="ghost">
           {t("common.cancel")}
+        </Button>
+        <Button
+          disabled={isReplacePending}
+          onClick={onCreateNewFile}
+          variant="outline"
+        >
+          {t("workspaces.files.versionOrNewFile.createNewOption")}
+        </Button>
+        <Button
+          disabled={!canReplace || isReplacePending}
+          loading={isReplacePending}
+          onClick={onReplaceVersion}
+        >
+          {t("workspaces.files.versionOrNewFile.replaceOption")}
         </Button>
       </DialogFooter>
     </DialogPopup>

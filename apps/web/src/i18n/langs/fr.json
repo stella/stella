@@ -2144,13 +2144,11 @@
       "uploadingDescription": "Ne fermez pas cette page tant que les fichiers ne sont pas importés",
       "uploadingProgress": "{completed, number} sur {total, number} importés",
       "versionOrNewFile": {
-        "createNewDescription": "Ajouter comme fichier séparé dans l'espace de travail",
         "createNewOption": "Créer un nouveau fichier",
         "description": "Vous avez déposé \"{fileName}\" sur un document existant.",
         "extensionMismatch": "Extension non concordante : attendu {expected}, reçu {actual}",
         "extensionMismatchError": "L'extension du fichier ne correspond pas au document existant",
         "noExtension": "sans extension",
-        "replaceDescription": "Ajouter comme nouvelle version de ce document",
         "replaceOption": "Téléverser comme nouvelle version",
         "title": "Téléverser une nouvelle version ou créer un nouveau fichier ?"
       },

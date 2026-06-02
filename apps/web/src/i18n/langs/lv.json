@@ -2144,13 +2144,11 @@
       "uploadingDescription": "Neaizveriet šo lapu, kamēr faili nav augšupielādēti",
       "uploadingProgress": "{completed, number} no {total, number} augšupielādēti",
       "versionOrNewFile": {
-        "createNewDescription": "Pievienot kā atsevišķu failu darba telpā",
         "createNewOption": "Izveidot jaunu failu",
         "description": "Jūs nometāt \"{fileName}\" uz esoša dokumenta.",
         "extensionMismatch": "Paplašinājums nesakrīt: gaidīts {expected}, saņemts {actual}",
         "extensionMismatchError": "Faila paplašinājums nesakrīt ar esošo dokumentu",
         "noExtension": "bez paplašinājuma",
-        "replaceDescription": "Pievienot kā šī dokumenta jaunu versiju",
         "replaceOption": "Augšupielādēt kā jaunu versiju",
         "title": "Augšupielādēt jaunu versiju vai izveidot jaunu failu?"
       },

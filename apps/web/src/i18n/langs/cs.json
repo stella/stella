@@ -2144,13 +2144,11 @@
       "uploadingDescription": "Nezavírejte tuto stránku, dokud nebudou soubory nahrány",
       "uploadingProgress": "{completed, number} z {total, number} nahráno",
       "versionOrNewFile": {
-        "createNewDescription": "Přidat jako samostatný soubor do prostoru",
         "createNewOption": "Vytvořit nový soubor",
         "description": "Přetáhli jste \"{fileName}\" na existující dokument.",
         "extensionMismatch": "Neshodná přípona: očekáváno {expected}, dostáno {actual}",
         "extensionMismatchError": "Přípona souboru neodpovídá existujícímu dokumentu",
         "noExtension": "bez přípony",
-        "replaceDescription": "Přidat jako novou verzi tohoto dokumentu",
         "replaceOption": "Nahrát jako novou verzi",
         "title": "Nahrát novou verzi nebo vložit jako nový soubor?"
       },

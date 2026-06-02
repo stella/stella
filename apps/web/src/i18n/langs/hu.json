@@ -2144,13 +2144,11 @@
       "uploadingDescription": "Ne zárja be ezt az oldalt, amíg a fájlok feltöltése be nem fejeződik",
       "uploadingProgress": "{completed, number}/{total, number} feltöltve",
       "versionOrNewFile": {
-        "createNewDescription": "Hozzáadás különálló fájlként a munkaterületen",
         "createNewOption": "Új fájl létrehozása",
         "description": "A \"{fileName}\" fájlt egy meglévő dokumentumra ejtette.",
         "extensionMismatch": "A kiterjesztés nem egyezik: várt {expected}, kapott {actual}",
         "extensionMismatchError": "A fájl kiterjesztése nem egyezik a meglévő dokumentummal",
         "noExtension": "nincs kiterjesztés",
-        "replaceDescription": "Hozzáadás a dokumentum új verziójaként",
         "replaceOption": "Feltöltés új verzióként",
         "title": "Új verzió feltöltése vagy új fájl létrehozása?"
       },

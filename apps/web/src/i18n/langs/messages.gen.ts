@@ -2147,13 +2147,11 @@ type Messages = {
       "uploadingDescription": "Don't close this page until the files are uploaded";
       "uploadingProgress": "{completed, number} of {total, number} uploaded";
       "versionOrNewFile": {
-        "createNewDescription": "Add as a separate file in the workspace";
         "createNewOption": "Create new file";
         "description": "You dropped \"{fileName}\" onto an existing document.";
         "extensionMismatch": "Extension mismatch: expected {expected}, got {actual}";
         "extensionMismatchError": "File extension does not match the existing document";
         "noExtension": "no extension";
-        "replaceDescription": "Add as a new version of this document";
         "replaceOption": "Upload as new version";
         "title": "Upload new version or create new file?";
       };
