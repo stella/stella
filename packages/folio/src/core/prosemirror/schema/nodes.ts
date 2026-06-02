@@ -319,6 +319,8 @@ export type SdtAttrs = {
   showingPlaceholder?: boolean;
   /** Date format for date controls */
   dateFormat?: string;
+  /** ISO 8601 bound date value (`w:date@w:fullDate`). */
+  dateValueISO?: string;
   /** Dropdown/combobox list items as JSON string */
   listItems?: string;
   /** Checkbox checked state */

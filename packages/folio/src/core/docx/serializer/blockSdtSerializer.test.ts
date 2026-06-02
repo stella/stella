@@ -89,6 +89,57 @@ describe("serializeBlockSdt — raw sdtPr replay", () => {
     expect(xml).toContain("<w:b");
   });
 
+  test("fallback sdtPr emits dropdown type marker + listItems for programmatic controls", () => {
+    // A BlockSdt constructed without rawPropertiesXml (e.g. a template
+    // engine that builds the control programmatically) must still encode
+    // its type so Word reopens it as the right control kind.
+    const sdt: BlockSdt = {
+      type: "blockSdt",
+      properties: {
+        sdtType: "dropdown",
+        tag: "state",
+        listItems: [
+          { displayText: "California", value: "ca" },
+          { displayText: "New York", value: "ny" },
+        ],
+      },
+      content: [],
+    };
+    const xml = serializeBlockSdt(sdt, noChildSerializer);
+    expect(xml).toContain("<w:dropDownList>");
+    expect(xml).toContain('w:displayText="California"');
+    expect(xml).toContain('w:value="ca"');
+    expect(xml).toContain('w:value="ny"');
+    expect(xml).toContain("</w:dropDownList>");
+  });
+
+  test("fallback sdtPr emits w:date with fullDate + dateFormat for date controls", () => {
+    const sdt: BlockSdt = {
+      type: "blockSdt",
+      properties: {
+        sdtType: "date",
+        tag: "effective",
+        dateFormat: "d MMMM yyyy",
+        dateValueISO: "2026-06-02T00:00:00Z",
+      },
+      content: [],
+    };
+    const xml = serializeBlockSdt(sdt, noChildSerializer);
+    expect(xml).toContain('w:fullDate="2026-06-02T00:00:00Z"');
+    expect(xml).toContain('<w:dateFormat w:val="d MMMM yyyy"/>');
+  });
+
+  test("fallback sdtPr emits w14:checkbox with w14:checked for checkbox controls", () => {
+    const sdt: BlockSdt = {
+      type: "blockSdt",
+      properties: { sdtType: "checkbox", tag: "agree", checked: true },
+      content: [],
+    };
+    const xml = serializeBlockSdt(sdt, noChildSerializer);
+    expect(xml).toContain("<w14:checkbox>");
+    expect(xml).toContain('<w14:checked w14:val="1"/>');
+  });
+
   test("falls back to a minimal sdtPr when no raw snapshot exists", () => {
     // Mirrors a programmatically-constructed BlockSdt (no parse cycle), so
     // the serializer can't replay raw XML and must synthesize from props.

@@ -1309,6 +1309,9 @@ function createInlineSdtFromNode(node: PMNode): InlineSdt {
   if (attrs.dateFormat) {
     properties.dateFormat = attrs.dateFormat;
   }
+  if (attrs.dateValueISO) {
+    properties.dateValueISO = attrs.dateValueISO;
+  }
   if (attrs.listItems) {
     properties.listItems = parseSdtListItems(attrs.listItems);
   }

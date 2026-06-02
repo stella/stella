@@ -30,6 +30,8 @@ export const SdtExtension = createNodeExtension({
       showingPlaceholder: { default: false },
       /** Date format for date controls */
       dateFormat: { default: null },
+      /** ISO 8601 bound date value (`w:date@w:fullDate`). */
+      dateValueISO: { default: null },
       /** Dropdown/combobox list items as JSON string */
       listItems: { default: null },
       /** Checkbox checked state */
@@ -51,6 +53,7 @@ export const SdtExtension = createNodeExtension({
             placeholder: el.dataset["placeholder"] || null,
             showingPlaceholder: el.dataset["showingPlaceholder"] === "true",
             dateFormat: el.dataset["dateFormat"] || null,
+            dateValueISO: el.dataset["dateValueIso"] || null,
             listItems: el.dataset["listItems"] || null,
             checked: (() => {
               if (el.dataset["checked"] === "true") {
@@ -89,6 +92,9 @@ export const SdtExtension = createNodeExtension({
       }
       if (attrs.dateFormat) {
         dataAttrs["data-date-format"] = attrs.dateFormat;
+      }
+      if (attrs.dateValueISO) {
+        dataAttrs["data-date-value-iso"] = attrs.dateValueISO;
       }
       if (attrs.listItems) {
         dataAttrs["data-list-items"] = attrs.listItems;

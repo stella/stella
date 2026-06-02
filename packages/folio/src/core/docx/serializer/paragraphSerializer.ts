@@ -826,13 +826,25 @@ function serializeInlineSdt(sdt: InlineSdt): string {
     case "plainText":
       prParts.push("<w:text/>");
       break;
-    case "date":
-      if (props.dateFormat) {
-        prParts.push(`<w:date w:fullDate="${escapeXml(props.dateFormat)}"/>`);
+    case "date": {
+      // `w:date@w:fullDate` is the ISO-8601 bound value; `w:dateFormat` is
+      // the display format. Older code (before the shared parser
+      // split these) wrote the format into `w:fullDate`, which corrupted
+      // round-trip — keep them on separate model fields and emit each
+      // into its right element.
+      const fullDateAttr = props.dateValueISO
+        ? ` w:fullDate="${escapeXml(props.dateValueISO)}"`
+        : "";
+      const formatChild = props.dateFormat
+        ? `<w:dateFormat w:val="${escapeXml(props.dateFormat)}"/>`
+        : "";
+      if (fullDateAttr || formatChild) {
+        prParts.push(`<w:date${fullDateAttr}>${formatChild}</w:date>`);
       } else {
         prParts.push("<w:date/>");
       }
       break;
+    }
     case "dropdown": {
       const items = (props.listItems ?? [])
         .map(

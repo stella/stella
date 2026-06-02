@@ -1894,6 +1894,7 @@ function convertInlineSdt(
       placeholder: props.placeholder ?? null,
       showingPlaceholder: props.showingPlaceholder ?? false,
       dateFormat: props.dateFormat ?? null,
+      dateValueISO: props.dateValueISO ?? null,
       listItems: props.listItems ? JSON.stringify(props.listItems) : null,
       checked: props.checked ?? null,
     },

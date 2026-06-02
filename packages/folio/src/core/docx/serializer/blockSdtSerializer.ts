@@ -53,6 +53,65 @@ function serializeFallbackSdtPr(props: SdtProperties): string {
   if (props.showingPlaceholder) {
     parts.push("<w:showingPlcHdr/>");
   }
+  // Type-specific child elements. Without these, a programmatically-
+  // constructed control with `sdtType: "dropdown"` and a `listItems` set
+  // would serialize as a bare `<w:sdtPr>` — Word would reopen the SDT as
+  // richText and discard the dropdown items. `reconcileRawSdtPr` only
+  // patches existing markers (it does not insert a missing
+  // `<w:dropDownList>`), so the fallback must emit the type-defining
+  // marker itself.
+  switch (props.sdtType) {
+    case "plainText":
+      parts.push("<w:text/>");
+      break;
+    case "date": {
+      const fullDateAttr = props.dateValueISO
+        ? ` w:fullDate="${escapeXmlAttr(props.dateValueISO)}"`
+        : "";
+      const formatChild = props.dateFormat
+        ? `<w:dateFormat w:val="${escapeXmlAttr(props.dateFormat)}"/>`
+        : "";
+      if (fullDateAttr || formatChild) {
+        parts.push(`<w:date${fullDateAttr}>${formatChild}</w:date>`);
+      } else {
+        parts.push("<w:date/>");
+      }
+      break;
+    }
+    case "dropdown":
+    case "comboBox": {
+      const tag =
+        props.sdtType === "dropdown" ? "w:dropDownList" : "w:comboBox";
+      const items = (props.listItems ?? [])
+        .map(
+          (item) =>
+            `<w:listItem w:displayText="${escapeXmlAttr(item.displayText)}" w:value="${escapeXmlAttr(item.value)}"/>`,
+        )
+        .join("");
+      parts.push(`<${tag}>${items}</${tag}>`);
+      break;
+    }
+    case "checkbox": {
+      const val = props.checked ? "1" : "0";
+      parts.push(
+        `<w14:checkbox><w14:checked w14:val="${val}"/></w14:checkbox>`,
+      );
+      break;
+    }
+    case "picture":
+      parts.push("<w:picture/>");
+      break;
+    case "buildingBlockGallery":
+      parts.push("<w:docPartObj/>");
+      break;
+    case "group":
+      parts.push("<w:group/>");
+      break;
+    default:
+      // richText / unknown — no specific marker; bare <w:sdtPr> means
+      // richText per the OOXML default.
+      break;
+  }
   return `<w:sdtPr>${parts.join("")}</w:sdtPr>`;
 }
 

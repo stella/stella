@@ -746,6 +746,7 @@ export const readSdtAttrs = (
     issues,
   );
   optionalString(attrs, "dateFormat", "sdt.attrs.dateFormat", issues);
+  optionalString(attrs, "dateValueISO", "sdt.attrs.dateValueISO", issues);
   optionalSdtListItems(attrs, "listItems", "sdt.attrs.listItems", issues);
   optionalBoolean(attrs, "checked", "sdt.attrs.checked", issues);
 
