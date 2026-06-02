@@ -96,6 +96,23 @@ describe("parseSdtProperties — prefixed marker elements", () => {
     expect(props.listItems).toEqual([{ displayText: "Yes", value: "Yes" }]);
   });
 
+  test("reads dropdown listItem attrs under an alternative namespace prefix", () => {
+    // Same prefix-tolerance bug as checkbox val — `parseListItems` matched
+    // `<ns0:listItem>` via local-name fallback but then read `w:displayText`
+    // / `w:value`, which came back null and the item was silently dropped.
+    // A dropdown bound under any non-`w` prefix would open with no options.
+    const ns =
+      'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:ns0="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+    const props = parseSdtPrXml(
+      `<w:sdtPr ${ns}><w:dropDownList><ns0:listItem ns0:displayText="A" ns0:value="a"/><ns0:listItem ns0:displayText="B" ns0:value="b"/></w:dropDownList></w:sdtPr>`,
+    );
+    expect(props.sdtType).toBe("dropdown");
+    expect(props.listItems).toEqual([
+      { displayText: "A", value: "a" },
+      { displayText: "B", value: "b" },
+    ]);
+  });
+
   test("reads checkbox val under an alternative namespace prefix", () => {
     // OOXML binds prefixes to URIs at the document root; a valid doc can
     // bind the w14 namespace under any prefix (here `ns0`). The marker

@@ -35,8 +35,15 @@ function parseListItems(
       // listItem stays selectable + visible — without this, the dropdown
       // shell renders a blank option and the value-set path writes an
       // empty paragraph for a real OOXML pick.
-      const displayText = getAttribute(child, "w", "displayText");
-      const value = getAttribute(child, "w", "value");
+      //
+      // Read attributes by the element's own prefix first (the spec lets
+      // a producer bind the Word namespace under any prefix, e.g.
+      // `<ns0:listItem ns0:displayText="A" ns0:value="a"/>`). The previous
+      // hard-coded `w:` lookup turned every such item into `(null, null)`
+      // and silently dropped it, so non-standard-prefix dropdowns opened
+      // with no options.
+      const displayText = getAttributeAnyPrefix(child, "displayText");
+      const value = getAttributeAnyPrefix(child, "value");
       if (displayText === null && value === null) {
         continue;
       }
@@ -47,6 +54,29 @@ function parseListItems(
     }
   }
   return items;
+}
+
+/**
+ * Read an attribute by local name, trying the element's own prefix first
+ * (`<ns0:listItem ns0:displayText="…"/>`), then the canonical `w:` prefix,
+ * then unprefixed. Matches `parseBooleanElement`'s prefix tolerance so
+ * OOXML producers that use a non-`w` prefix for the Word namespace parse
+ * the same as the canonical form.
+ */
+function getAttributeAnyPrefix(
+  element: XmlElement,
+  localName: string,
+): string | null {
+  const elementName = element.name ?? "";
+  const colonIdx = elementName.indexOf(":");
+  const elementPrefix = colonIdx > 0 ? elementName.slice(0, colonIdx) : null;
+  if (elementPrefix && elementPrefix !== "w") {
+    const fromPrefix = getAttribute(element, elementPrefix, localName);
+    if (fromPrefix !== null) {
+      return fromPrefix;
+    }
+  }
+  return getAttribute(element, "w", localName);
 }
 
 /**

@@ -23,12 +23,23 @@
 
 import type { SdtProperties } from "../types/document";
 
+const XML_ATTR_ESCAPES: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&apos;",
+};
+
+/**
+ * Escape a value for embedding in an XML attribute. Single-pass replace
+ * over the five XML metacharacters (incl. apostrophe so the function
+ * stays correct for `'`-delimited attributes even though this file always
+ * emits double-quoted ones). Output is XML written to a DOCX zip — no
+ * HTML / browser interpretation downstream.
+ */
 function escapeXmlAttr(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
+  return value.replace(/[&<>"']/gu, (ch) => XML_ATTR_ESCAPES[ch] ?? ch);
 }
 
 /**

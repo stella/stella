@@ -136,6 +136,19 @@ export function createContentControlWidgetsPlugin(
                 return true;
               }
             } else if (sdtType === "dropdown" || sdtType === "comboBox") {
+              const refusal = lockRefusalFor(view, pmPos);
+              if (refusal) {
+                emit(view, {
+                  kind: "refused",
+                  tag,
+                  pmPos,
+                  sdtType,
+                  anchor,
+                  error: refusal,
+                });
+                event.preventDefault();
+                return true;
+              }
               emit(view, {
                 kind: "dropdownOpen",
                 tag,
@@ -147,6 +160,19 @@ export function createContentControlWidgetsPlugin(
               event.preventDefault();
               return true;
             } else if (sdtType === "date") {
+              const refusal = lockRefusalFor(view, pmPos);
+              if (refusal) {
+                emit(view, {
+                  kind: "refused",
+                  tag,
+                  pmPos,
+                  sdtType,
+                  anchor,
+                  error: refusal,
+                });
+                event.preventDefault();
+                return true;
+              }
               emit(view, {
                 kind: "datePick",
                 tag,
@@ -207,19 +233,33 @@ export function dispatchDropdownPick(
   if (!match) {
     return false;
   }
-  const tr = setContentControlValueTr(
-    view.state,
-    { pmPos },
-    {
-      kind: "dropdown",
-      value,
-    },
-  );
-  if (!tr) {
-    return false;
+  try {
+    const tr = setContentControlValueTr(
+      view.state,
+      { pmPos },
+      {
+        kind: "dropdown",
+        value,
+      },
+    );
+    if (!tr) {
+      return false;
+    }
+    view.dispatch(tr);
+    return true;
+  } catch (error) {
+    // The click-time preflight should have caught lock refusals, but the
+    // doc could have changed mid-picker. Swallow the typed refusal so the
+    // React UI does not crash; return false so the caller knows the
+    // change was rejected.
+    if (
+      error instanceof ContentControlLockedError ||
+      error instanceof ContentControlTypeError
+    ) {
+      return false;
+    }
+    throw error;
   }
-  view.dispatch(tr);
-  return true;
 }
 
 export function dispatchDatePick(
@@ -227,17 +267,56 @@ export function dispatchDatePick(
   pmPos: number,
   date: string,
 ): boolean {
-  const tr = setContentControlValueTr(
-    view.state,
-    { pmPos },
-    {
-      kind: "date",
-      date,
-    },
-  );
-  if (!tr) {
-    return false;
+  try {
+    const tr = setContentControlValueTr(
+      view.state,
+      { pmPos },
+      {
+        kind: "date",
+        date,
+      },
+    );
+    if (!tr) {
+      return false;
+    }
+    view.dispatch(tr);
+    return true;
+  } catch (error) {
+    if (
+      error instanceof ContentControlLockedError ||
+      error instanceof ContentControlTypeError
+    ) {
+      return false;
+    }
+    throw error;
   }
-  view.dispatch(tr);
-  return true;
+}
+
+/**
+ * Look up the clicked SDT by pmPos and return a typed refusal when the
+ * lock state forbids content mutation (`contentLocked`,
+ * `sdtContentLocked`). Returning `null` means "go ahead and open the
+ * picker." Preflight at click time so locked dropdowns / date pickers
+ * don't flash open just to close again when the user makes a selection.
+ */
+function lockRefusalFor(
+  view: EditorView,
+  pmPos: number,
+): ContentControlLockedError | null {
+  const match = findBlockSdtMatch(view.state.doc, { pmPos });
+  if (!match) {
+    return null;
+  }
+  const lock = match.node.attrs["lock"];
+  if (lock !== "contentLocked" && lock !== "sdtContentLocked") {
+    return null;
+  }
+  const tag = match.node.attrs["tag"];
+  const alias = match.node.attrs["alias"];
+  return new ContentControlLockedError({
+    message: `Control "${tag ?? alias ?? "(unnamed)"}" has w:lock=${lock}.`,
+    lock,
+    ...(typeof tag === "string" ? { tag } : {}),
+    ...(typeof alias === "string" ? { alias } : {}),
+  });
 }
