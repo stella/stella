@@ -125,4 +125,40 @@ describe("splitBlockClearBorders — w:next style switch", () => {
     const tr = splitAtEndOfHeading(false);
     expect(tr.doc.child(1).attrs["styleId"]).toBe("Heading1");
   });
+
+  test("mid-paragraph split before an inline atom keeps the heading style", () => {
+    // Regression: textContent.length === 0 was incorrectly true for a
+    // paragraph carrying only an inline atom (image/equation/field/etc.),
+    // which made a mid-paragraph split apply w:next and silently demote the
+    // atom-bearing half to Normal. Use a hard_break as the simplest inline
+    // non-text node to reproduce the condition.
+    const heading = schema.node(
+      "paragraph",
+      {
+        styleId: "Heading1",
+        defaultTextFormatting: { fontSize: 40, bold: true },
+      },
+      [schema.text("Title"), schema.node("hardBreak")],
+    );
+    let state = stateWith(schema.node("doc", null, [heading]));
+    // Cursor between "Title" and the hard_break (offset 6 inside the doc:
+    // 1 for paragraph open + 5 text chars).
+    state = state.apply(
+      state.tr.setSelection(TextSelection.create(state.doc, 6)),
+    );
+
+    const captured: { tr: Transaction | null } = { tr: null };
+    splitBlockClearBorders(state, (tr) => {
+      captured.tr = tr;
+    });
+    if (!captured.tr) {
+      throw new Error("Enter handler did not produce a transaction");
+    }
+
+    const trailingPara = captured.tr.doc.child(1);
+    expect(trailingPara.content.size).toBeGreaterThan(0);
+    // Old buggy behavior would set this to "Normal"; w:next must not fire
+    // for a mid-paragraph split.
+    expect(trailingPara.attrs["styleId"]).toBe("Heading1");
+  });
 });

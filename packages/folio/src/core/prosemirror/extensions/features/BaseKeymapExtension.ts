@@ -183,11 +183,14 @@ export const splitBlockClearBorders: Command = (state, dispatch, view) => {
       // paragraph is empty) switches it to the style's follow-on style — e.g.
       // a heading drops to body text. Only applies to an empty trailing
       // paragraph; splitting mid-paragraph keeps the style on both halves.
+      // Use `content.size === 0` rather than `textContent.length` so a
+      // mid-paragraph split before an inline atom (image, equation, field,
+      // sdt, shape) is not mistaken for an empty trailing paragraph.
       const resolver = getDocumentStyleResolver(state);
       if (
         resolver !== null &&
         sourcePara !== null &&
-        newPara.textContent.length === 0 &&
+        newPara.content.size === 0 &&
         applyNextParagraphStyle(tr, sourcePara, newPara, resolver)
       ) {
         dispatch(tr.scrollIntoView());
