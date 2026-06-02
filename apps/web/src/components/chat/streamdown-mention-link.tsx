@@ -605,7 +605,13 @@ export const StreamdownMentionLink = ({
 
   const httpUrl = getHttpUrl(href);
   if (httpUrl) {
-    return <FaviconCitationChip children={children} url={httpUrl} />;
+    return (
+      <FaviconCitationChip
+        children={children}
+        url={httpUrl}
+        workspaceId={workspaceId ?? null}
+      />
+    );
   }
 
   return (
@@ -742,9 +748,11 @@ const isFootnoteLabel = (label: string, hostname: string): boolean =>
 const FaviconCitationChip = ({
   children,
   url,
+  workspaceId,
 }: {
   children: React.ReactNode;
   url: URL;
+  workspaceId: string | null;
 }) => {
   const hostname = url.hostname.replace(/^www\./u, "");
   const inlineLabel = (getPlainText(children) ?? "").trim();
@@ -764,6 +772,7 @@ const FaviconCitationChip = ({
       snippet: source?.snippet,
       sourceToolName: source?.sourceToolName,
       text: source?.text,
+      workspaceId,
     });
   };
 

@@ -134,6 +134,14 @@ export type ExternalTab = {
   snippet?: string | undefined;
   sourceToolName?: string | undefined;
   text?: string | undefined;
+  /**
+   * Owning workspace at the time the source was opened. `null`
+   * means the source was opened from a global (no-workspace) chat.
+   * The inspector reads this so follow-up AI questions for the
+   * external source stay scoped to its original matter even after
+   * the user navigates to a different one.
+   */
+  workspaceId: string | null;
 };
 
 export type SkillResourceTabId = `skill-resource:${string}`;
@@ -270,6 +278,7 @@ type Actions = {
   }) => void;
   openExternal: (args: {
     url: string;
+    workspaceId: string | null;
     connectorSlug?: string | undefined;
     iconHref?: string | undefined;
     label?: string | undefined;
@@ -1056,6 +1065,7 @@ export const useInspectorStore = create<State & Actions>()(
       sourceToolName,
       text,
       url,
+      workspaceId,
     }) =>
       set((state) => {
         const id: ExternalTabId = `external:${url}`;
@@ -1079,6 +1089,7 @@ export const useInspectorStore = create<State & Actions>()(
             sourceToolName,
             text,
             url,
+            workspaceId,
           });
         } else if (existing.type === "external") {
           existing.label = label ?? existing.label;
@@ -1088,6 +1099,7 @@ export const useInspectorStore = create<State & Actions>()(
           existing.snippet = snippet ?? existing.snippet;
           existing.sourceToolName = sourceToolName ?? existing.sourceToolName;
           existing.text = text ?? existing.text;
+          existing.workspaceId = workspaceId;
         }
         state.activeId = id;
         state.activationSeq += 1;

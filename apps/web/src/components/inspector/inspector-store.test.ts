@@ -189,11 +189,13 @@ describe("openExternal", () => {
       iconHref: "https://salvia.example/favicon.ico",
       label: "Decision",
       url: "https://example.test/decision",
+      workspaceId: "ws-origin",
     });
 
     useInspectorStore.getState().openExternal({
       label: "Decision",
       url: "https://example.test/decision",
+      workspaceId: "ws-origin",
     });
 
     const tab = useInspectorStore
@@ -685,6 +687,7 @@ describe("Inspector tab broadcast", () => {
             snippet: "Holding excerpt",
             sourceToolName: "search_decisions",
             text: "Decision text",
+            workspaceId: null,
           },
         ],
       });
@@ -705,6 +708,7 @@ describe("Inspector tab broadcast", () => {
         snippet: "Holding excerpt",
         sourceToolName: "search_decisions",
         text: "Decision text",
+        workspaceId: null,
       },
     ]);
     expect(useInspectorStore.getState().activeId).toBe(

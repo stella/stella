@@ -454,7 +454,11 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         <ExternalReferencePanel
           onClose={() => handleCloseTab(activeTab.id)}
           tab={activeTab}
-          workspaceId={workspaceId}
+          // Prefer the workspace the tab was opened from; only fall
+          // back to the current route when the tab was opened from a
+          // global chat (workspaceId === null) so the panel still
+          // resolves to *something* sensible.
+          workspaceId={activeTab.workspaceId ?? workspaceId}
         />
       )}
 
