@@ -1,15 +1,18 @@
 import { useState } from "react";
 
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import type {
   InspectorRailIconProps,
   InspectorViewRenderProps,
 } from "@/components/inspector/view-registry";
-import { SIDE_RAIL_TAB_ICON_SIZE_PX } from "@/lib/consts";
+import { SIDE_RAIL_TAB_ICON_SIZE_PX, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { EditSkillSheet } from "@/routes/_protected.knowledge/-components/edit-skill-sheet";
 import { knowledgeKeys } from "@/routes/_protected.knowledge/-queries";
 import {
@@ -68,12 +71,13 @@ export const ToolDetailView = ({
     (candidate: CatalogueEntry) => candidate.slug === slug,
   );
 
+  // Entry no longer in the catalogue — usually because the user
+  // just removed a custom MCP. Render a deliberate empty state
+  // instead of imperatively closing the tab; the user dismisses
+  // it via the X. Keeps the data-to-UI mapping pure (no effect,
+  // no render-phase side effect).
   if (entry === undefined) {
-    // Entry vanished — the tool was uninstalled and the catalogue
-    // refetch dropped it from the available set. Close the tab so
-    // the rail doesn't dangle.
-    onClose();
-    return null;
+    return <RemovedToolPlaceholder onClose={onClose} />;
   }
 
   return (
@@ -82,6 +86,33 @@ export const ToolDetailView = ({
       onClose={onClose}
       organizationId={organizationId}
     />
+  );
+};
+
+const RemovedToolPlaceholder = ({ onClose }: { onClose: () => void }) => {
+  const t = useTranslations();
+  return (
+    <div className="flex h-full min-h-0 w-full flex-col">
+      <header
+        className={cn(
+          "border-border flex shrink-0 items-center justify-end border-b px-3",
+          TOOLBAR_ROW_HEIGHT,
+        )}
+      >
+        <Button
+          aria-label={t("common.close")}
+          onClick={onClose}
+          size="icon-xs"
+          type="button"
+          variant="ghost"
+        >
+          <XIcon className="size-3.5" />
+        </Button>
+      </header>
+      <div className="text-muted-foreground flex flex-1 items-center justify-center px-6 text-center text-sm">
+        <p>{t("catalogue.removed")}</p>
+      </div>
+    </div>
   );
 };
 

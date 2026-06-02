@@ -334,6 +334,7 @@
     "packInstalled": "{count, plural, one {# rīks instalēts} other {# rīki instalēti}}",
     "packPartial": "{installed} instalēti, {failed} neizdevās",
     "recommended": "Ieteicams",
+    "removed": "Šis rīks vairs nav pieejams.",
     "sectionOthers": "Citi",
     "sectionRecommended": "Ieteiktie",
     "settings": {

@@ -193,6 +193,7 @@ export const InspectorSidePanel = () => {
         {showPaneContent && (
           <div
             className="hover:bg-border active:bg-border absolute inset-y-0 -start-px z-20 flex w-1 cursor-col-resize items-center justify-center border-s"
+            onPointerCancel={handlePointerUp}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}

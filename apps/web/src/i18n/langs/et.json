@@ -334,6 +334,7 @@
     "packInstalled": "{count, plural, one {# tööriist installitud} other {# tööriista installitud}}",
     "packPartial": "{installed} installitud, {failed} ebaõnnestus",
     "recommended": "Soovitatud",
+    "removed": "See tööriist pole enam saadaval.",
     "sectionOthers": "Muud",
     "sectionRecommended": "Soovitatud",
     "settings": {

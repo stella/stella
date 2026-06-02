@@ -334,6 +334,7 @@
     "packInstalled": "{count, plural, one {# outil installé} other {# outils installés}}",
     "packPartial": "{installed} installés, {failed} en échec",
     "recommended": "Recommandé",
+    "removed": "Cet outil n'est plus disponible.",
     "sectionOthers": "Autres",
     "sectionRecommended": "Recommandés",
     "settings": {

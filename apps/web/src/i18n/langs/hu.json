@@ -334,6 +334,7 @@
     "packInstalled": "{count, plural, one {# eszköz telepítve} other {# eszköz telepítve}}",
     "packPartial": "{installed} telepítve, {failed} sikertelen",
     "recommended": "Ajánlott",
+    "removed": "Ez az eszköz már nem érhető el.",
     "sectionOthers": "Egyéb",
     "sectionRecommended": "Ajánlott",
     "settings": {

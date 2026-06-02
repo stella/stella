@@ -337,6 +337,7 @@ type Messages = {
     "packInstalled": "{count, plural, one {# tool installed} other {# tools installed}}";
     "packPartial": "Installed {installed}, {failed} failed";
     "recommended": "Recommended";
+    "removed": "This tool is no longer available.";
     "sectionOthers": "Others";
     "sectionRecommended": "Recommended";
     "settings": {

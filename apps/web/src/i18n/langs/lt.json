@@ -334,6 +334,7 @@
     "packInstalled": "{count, plural, one {Įdiegta # įrankis} few {Įdiegti # įrankiai} other {Įdiegta # įrankių}}",
     "packPartial": "Įdiegta {installed}, {failed} nepavyko",
     "recommended": "Rekomenduojama",
+    "removed": "Šis įrankis nebepasiekiamas.",
     "sectionOthers": "Kiti",
     "sectionRecommended": "Rekomenduojami",
     "settings": {

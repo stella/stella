@@ -334,6 +334,7 @@
     "packInstalled": "{count, plural, one {# nástroj nainštalovaný} few {# nástroje nainštalované} other {# nástrojov nainštalovaných}}",
     "packPartial": "Nainštalované {installed}, {failed} zlyhalo",
     "recommended": "Odporúčané",
+    "removed": "Tento nástroj už nie je dostupný.",
     "sectionOthers": "Ostatné",
     "sectionRecommended": "Odporúčané",
     "settings": {

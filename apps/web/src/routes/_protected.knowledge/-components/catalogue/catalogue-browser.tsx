@@ -8,7 +8,6 @@ import {
   LoaderIcon,
   PlusIcon,
   SearchIcon,
-  SparklesIcon,
   XIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -166,14 +165,6 @@ export const CatalogueBrowser = ({
   }, [initialKind]);
 
   const entries = data.entries;
-  const installableRecommended = useMemo(
-    () =>
-      entries.filter(
-        (entry) =>
-          entry.isRecommendedForOrg && entry.installState === "available",
-      ),
-    [entries],
-  );
 
   const filtered = useMemo(() => {
     const normalised = query.trim().toLowerCase();
@@ -409,19 +400,6 @@ export const CatalogueBrowser = ({
                 <McpIcon className="size-4" />
                 {t("catalogue.addCustomMcp")}
               </MenuItem>
-              <MenuItem
-                onClick={() =>
-                  setEditSkill({
-                    id: "",
-                    name: "",
-                    scope: "private",
-                    enabled: true,
-                  })
-                }
-              >
-                <SparklesIcon className="size-4" />
-                {t("catalogue.addCustomSkill")}
-              </MenuItem>
             </MenuPopup>
           </Menu>
         )}
@@ -472,12 +450,20 @@ export const CatalogueBrowser = ({
               <h2 className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
                 {t("catalogue.sectionRecommended")}
               </h2>
-              {installableRecommended.length > 0 && (
-                <InstallPackButton
-                  entries={installableRecommended}
-                  organizationId={organizationId}
-                />
-              )}
+              {(() => {
+                const installableInView = recommendedFiltered.filter(
+                  (entry) => entry.installState === "available",
+                );
+                if (installableInView.length === 0) {
+                  return null;
+                }
+                return (
+                  <InstallPackButton
+                    entries={installableInView}
+                    organizationId={organizationId}
+                  />
+                );
+              })()}
             </div>
             {recommendedFiltered.map((entry) => (
               <CatalogueEntryRow
