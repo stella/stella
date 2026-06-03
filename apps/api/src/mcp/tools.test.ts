@@ -183,6 +183,8 @@ const {
   handleMcpToolCall,
   listMcpTools,
 } = await import("@/api/mcp/tools");
+const { caseLawPublicReadDb } =
+  await import("@/api/lib/case-law-public-read-db");
 
 const parseToolPayload = (
   result: Awaited<ReturnType<typeof handleMcpToolCall>>,
@@ -679,7 +681,7 @@ describe("OpenAI-compatible MCP tools", () => {
         limit: 5,
         query: "shareholder dispute",
       },
-      context.scopedDb,
+      caseLawPublicReadDb,
     );
 
     expect(parseToolPayload(result)).toEqual({
@@ -800,12 +802,11 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(readDecisionHandlerMock).toHaveBeenCalledWith(
       "dec_123",
-      context.scopedDb,
+      caseLawPublicReadDb,
     );
 
     expect(parseToolPayload(result)).toEqual({
       decision: {
-        analysis: null,
         appUrl: `${APP_BASE_URL}/knowledge/case/29-cdo-123-2024--dec_123`,
         caseNumber: "29 Cdo 123/2024",
         citationsFrom: [{ citationText: "29 Odo 1/2001", id: "c_1" }],
@@ -844,7 +845,6 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(parseToolPayload(result)).toEqual({
       decision: {
-        analysis: null,
         appUrl: `${APP_BASE_URL}/knowledge/case/29-cdo-123-2024--dec_123`,
         caseNumber: "29 Cdo 123/2024",
         citationsFrom: [{ citationText: "29 Odo 1/2001", id: "c_1" }],
