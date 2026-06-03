@@ -2192,6 +2192,53 @@
       "noFilesYet": "Noch keine Dateien",
       "version": "Version"
     },
+    "filters": {
+      "chips": {
+        "client": "{count, plural, one {Client: # selected} other {Clients: # selected}}",
+        "createdAt": "Created: {label}",
+        "items": "Items: {label}",
+        "lastActivityAt": "Last active: {label}",
+        "lead": "Lead: {label}",
+        "leadAny": "any",
+        "leadNone": "none",
+        "team": "{count, plural, one {Team: # selected} other {Team: # selected}}"
+      },
+      "clear": "Clear filter",
+      "clearAll": "Clear all filters",
+      "date": {
+        "custom": "Custom range…",
+        "customRange": "{from} – {to}",
+        "from": "From {date}",
+        "last30d": "Last 30 days",
+        "last7d": "Last 7 days",
+        "thisMonth": "This month",
+        "thisWeek": "This week",
+        "to": "Until {date}",
+        "today": "Today"
+      },
+      "from": "From",
+      "items": {
+        "between": "{from}–{to}",
+        "gte": "Min",
+        "lte": "Max",
+        "max": "≤ {value}",
+        "min": "≥ {value}"
+      },
+      "noMatches": "No matches",
+      "openFilter": "Filter",
+      "searchClients": "Search clients…",
+      "team": {
+        "filterAsLead": "Set as lead filter",
+        "hasLead": "Has any lead",
+        "lead": "Lead",
+        "leadActive": "Lead",
+        "leadInactive": "Set lead",
+        "members": "Members",
+        "noLead": "No lead",
+        "searchMembers": "Search members…"
+      },
+      "to": "To"
+    },
     "generatingCitations": "Zitate werden generiert...",
     "importOrganizer": {
       "action": "Dateien organisieren",
@@ -2260,6 +2307,13 @@
       "usePropertyHint": "Verwenden Sie Art, Autor oder eine Einfachauswahl-Eigenschaft"
     },
     "lastActive": "Zuletzt aktiv {time}",
+    "lead": "Lead",
+    "leadEmpty": "No lead",
+    "leadPicker": {
+      "noMatchingMembers": "No matching members",
+      "placeholder": "Search members…",
+      "title": "Set lead"
+    },
     "lockMatter": "Sperren",
     "matterInfo": "Akteninformationen",
     "mattersCount": "{count, plural, one {# Akte} other {# Akten}}",
@@ -2497,6 +2551,7 @@
       "wrapContent": "Text umbrechen"
     },
     "tasksCount": "{count, plural, one {# Agendaeintrag} other {# Agendaeinträge}}",
+    "team": "Team",
     "tools": {
       "aiModel": "KI-Modell",
       "manualInput": "Manuell"

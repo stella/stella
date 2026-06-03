@@ -41,6 +41,7 @@ import {
   workspaceMembersKeys,
   workspaceMembersOptions,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace-members";
+import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
 type MembersSectionProps = {
   workspaceId: string;
@@ -123,6 +124,7 @@ const MemberRow = ({
         .members({ userId: toSafeId<"user">(vars.userId) })
         .delete({
           queryKey: workspaceMembersKeys.all(vars.workspaceId),
+          queryKeys: [workspacesKeys.all],
         });
 
       if (response.error) {
@@ -147,6 +149,8 @@ const MemberRow = ({
           queryClient.invalidateQueries({
             queryKey: workspaceMembersKeys.all(workspaceId),
           });
+          // eslint-disable-next-line typescript/no-floating-promises
+          queryClient.invalidateQueries({ queryKey: workspacesKeys.all });
         },
         onError: () => {
           stellaToast.add({

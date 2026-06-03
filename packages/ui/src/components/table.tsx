@@ -1,5 +1,7 @@
 import type * as React from "react";
 
+import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
+
 import { cn } from "@stll/ui/lib/utils";
 
 function Table({ className, ...props }: React.ComponentProps<"table">) {
@@ -98,6 +100,54 @@ function TableCell({ className, ...props }: React.ComponentProps<"td">) {
   );
 }
 
+type SortDirection = "asc" | "desc" | null;
+
+type SortableHeadProps = Omit<React.ComponentProps<"th">, "onClick"> & {
+  sortDirection?: SortDirection;
+  onSort: () => void;
+  /** Rendered next to the sort button inside the same cell (e.g. filter icon). */
+  trailing?: React.ReactNode;
+};
+
+function SortableHead({
+  children,
+  sortDirection = null,
+  onSort,
+  trailing,
+  className,
+  ...props
+}: SortableHeadProps) {
+  let ariaSort: "ascending" | "descending" | "none" = "none";
+  if (sortDirection === "asc") {
+    ariaSort = "ascending";
+  } else if (sortDirection === "desc") {
+    ariaSort = "descending";
+  }
+  let sortIcon: React.ReactNode = null;
+  if (sortDirection === "asc") {
+    sortIcon = <ArrowUpIcon className="size-3" />;
+  } else if (sortDirection === "desc") {
+    sortIcon = <ArrowDownIcon className="size-3" />;
+  }
+  return (
+    <TableHead aria-sort={ariaSort} className={className} {...props}>
+      <span className="inline-flex items-center gap-1">
+        <button
+          className="text-muted-foreground hover:text-foreground inline-flex cursor-pointer items-center gap-1 font-medium select-none"
+          onClick={onSort}
+          type="button"
+        >
+          <span className="truncate">{children}</span>
+          <span aria-hidden className="inline-flex w-3 shrink-0 justify-center">
+            {sortIcon}
+          </span>
+        </button>
+        {trailing}
+      </span>
+    </TableHead>
+  );
+}
+
 function TableCaption({
   className,
   ...props
@@ -123,4 +173,6 @@ export {
   TableRow,
   TableCell,
   TableCaption,
+  SortableHead,
 };
+export type { SortDirection };

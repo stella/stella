@@ -364,6 +364,7 @@ const duplicateWorkspace = createSafeHandler(
             clientId: true,
             billingReference: true,
             color: true,
+            leadUserId: true,
           },
         });
 
@@ -574,6 +575,7 @@ const duplicateWorkspace = createSafeHandler(
         clientId: snapshot.workspace.clientId,
         billingReference: snapshot.workspace.billingReference,
         color: snapshot.workspace.color,
+        leadUserId: snapshot.workspace.leadUserId,
         name: newName,
         reference,
       });

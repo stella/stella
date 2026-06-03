@@ -2195,6 +2195,53 @@ type Messages = {
       "noFilesYet": "No files yet";
       "version": "Version";
     };
+    "filters": {
+      "chips": {
+        "client": "{count, plural, one {Client: # selected} other {Clients: # selected}}";
+        "createdAt": "Created: {label}";
+        "items": "Items: {label}";
+        "lastActivityAt": "Last active: {label}";
+        "lead": "Lead: {label}";
+        "leadAny": "any";
+        "leadNone": "none";
+        "team": "{count, plural, one {Team: # selected} other {Team: # selected}}";
+      };
+      "clear": "Clear filter";
+      "clearAll": "Clear all filters";
+      "date": {
+        "custom": "Custom range…";
+        "customRange": "{from} – {to}";
+        "from": "From {date}";
+        "last30d": "Last 30 days";
+        "last7d": "Last 7 days";
+        "thisMonth": "This month";
+        "thisWeek": "This week";
+        "to": "Until {date}";
+        "today": "Today";
+      };
+      "from": "From";
+      "items": {
+        "between": "{from}–{to}";
+        "gte": "Min";
+        "lte": "Max";
+        "max": "≤ {value}";
+        "min": "≥ {value}";
+      };
+      "noMatches": "No matches";
+      "openFilter": "Filter";
+      "searchClients": "Search clients…";
+      "team": {
+        "filterAsLead": "Set as lead filter";
+        "hasLead": "Has any lead";
+        "lead": "Lead";
+        "leadActive": "Lead";
+        "leadInactive": "Set lead";
+        "members": "Members";
+        "noLead": "No lead";
+        "searchMembers": "Search members…";
+      };
+      "to": "To";
+    };
     "generatingCitations": "Generating citations...";
     "importOrganizer": {
       "action": "Organize files";
@@ -2263,6 +2310,13 @@ type Messages = {
       "usePropertyHint": "Use Kind, Author, or a single-select property";
     };
     "lastActive": "Last active {time}";
+    "lead": "Lead";
+    "leadEmpty": "No lead";
+    "leadPicker": {
+      "noMatchingMembers": "No matching members";
+      "placeholder": "Search members…";
+      "title": "Set lead";
+    };
     "lockMatter": "Lock";
     "matterInfo": "Matter info";
     "mattersCount": "{count, plural, one {# matter} other {# matters}}";
@@ -2500,6 +2554,7 @@ type Messages = {
       "wrapContent": "Wrap content";
     };
     "tasksCount": "{count, plural, one {# agenda item} other {# agenda items}}";
+    "team": "Team";
     "tools": {
       "aiModel": "AI Model";
       "manualInput": "Manually";

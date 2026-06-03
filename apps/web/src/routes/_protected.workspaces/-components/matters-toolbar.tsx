@@ -27,6 +27,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { useColumnLabels } from "@/routes/_protected.workspaces/-hooks/use-column-labels";
 import { useSortLabels } from "@/routes/_protected.workspaces/-hooks/use-sort-labels";
 import { workspacesOptions } from "@/routes/_protected.workspaces/-queries";
 import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
@@ -47,14 +48,6 @@ const SORT_KEYS = [
   "createdAt",
   "clientName",
 ] as const satisfies readonly MattersSortKey[];
-
-const COLUMN_ID_TO_SORT_KEY = {
-  client: "clientName",
-  reference: "reference",
-  entityCount: "entityCount",
-  lastActivityAt: "lastActivityAt",
-  createdAt: "createdAt",
-} as const satisfies Record<MattersColumnId, MattersSortKey>;
 
 type MattersToolbarProps = {
   search: string;
@@ -213,17 +206,13 @@ const CreateMatterPopover = ({ className }: CreateMatterPopoverProps) => {
 
 const ColumnsGroup = () => {
   const t = useTranslations();
-  const sortLabels = useSortLabels();
+  const columnLabels = useColumnLabels();
 
   return (
     <MenuGroup>
       <MenuGroupLabel>{t("common.columns")}</MenuGroupLabel>
       {ALL_COLUMNS.map((id) => (
-        <ColumnToggleItem
-          id={id}
-          key={id}
-          label={sortLabels[COLUMN_ID_TO_SORT_KEY[id]]}
-        />
+        <ColumnToggleItem id={id} key={id} label={columnLabels[id]} />
       ))}
     </MenuGroup>
   );

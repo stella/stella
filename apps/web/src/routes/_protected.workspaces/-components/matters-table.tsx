@@ -1,10 +1,11 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ArrowDownIcon, ArrowUpIcon, ChevronRightIcon } from "lucide-react";
+import { ChevronRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
 import { Frame } from "@stll/ui/components/frame";
 import {
+  SortableHead,
   Table,
   TableBody,
   TableCell,
@@ -17,6 +18,12 @@ import { cn } from "@stll/ui/lib/utils";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { getMatterColor } from "@/lib/matter-colors";
 import { formatRelativeTime } from "@/lib/relative-time";
+import {
+  getInitials,
+  TeamAvatars,
+} from "@/routes/_protected.workspaces/-components/team-avatars";
+import { ColumnFilterButton } from "@/routes/_protected.workspaces/-filters/column-filter-button";
+import { useColumnLabels } from "@/routes/_protected.workspaces/-hooks/use-column-labels";
 import { useSortLabels } from "@/routes/_protected.workspaces/-hooks/use-sort-labels";
 import type {
   MattersColumnId,
@@ -24,20 +31,18 @@ import type {
   Workspace,
   WorkspaceGroup,
 } from "@/routes/_protected.workspaces/-types";
-import { ALL_COLUMNS } from "@/routes/_protected.workspaces/-types";
+import {
+  ALL_COLUMNS,
+  isFilterableColumnId,
+} from "@/routes/_protected.workspaces/-types";
 import { useConfigStore } from "@/stores/config-store";
 
-const SORT_KEY_TO_COLUMN_ID: Partial<Record<MattersSortKey, MattersColumnId>> =
-  {
-    clientName: "client",
-    reference: "reference",
-    entityCount: "entityCount",
-    lastActivityAt: "lastActivityAt",
-    createdAt: "createdAt",
-  };
+const MAX_VISIBLE_AVATARS = 3;
 
 type MattersTableProps = {
   workspaces: Workspace[];
+  /** Full pre-filter pool used to populate filter option lists. */
+  allWorkspaces: readonly Workspace[];
   groups: WorkspaceGroup[] | null;
   focusIndex: number;
   collapsedGroups: string[];
@@ -46,6 +51,7 @@ type MattersTableProps = {
 
 export const MattersTable = ({
   workspaces,
+  allWorkspaces,
   groups,
   focusIndex,
   collapsedGroups,
@@ -61,39 +67,74 @@ export const MattersTable = ({
     })),
   );
 
-  const columnLabels = useSortLabels();
+  const sortLabels = useSortLabels();
+  const columnLabels = useColumnLabels();
   const hiddenColumnSet = new Set(hiddenColumns);
-  const visibleColumns = ALL_COLUMNS.filter((c) => !hiddenColumnSet.has(c));
-  const visibleColumnSet = new Set(visibleColumns);
-  const columns = COLUMNS.filter((col) => {
-    const colId = SORT_KEY_TO_COLUMN_ID[col.key];
-    if (!colId) {
-      return true;
+  // Name is always rendered; user-toggleable columns come from ALL_COLUMNS.
+  const visibleColumnSet = new Set(
+    ALL_COLUMNS.filter((c) => !hiddenColumnSet.has(c)),
+  );
+  const columns = COLUMNS.filter((col) =>
+    col.id === "name" ? true : visibleColumnSet.has(col.id),
+  );
+
+  const filterTrigger = (id: string) => {
+    if (!isFilterableColumnId(id)) {
+      return null;
     }
-    return visibleColumnSet.has(colId);
-  });
+    return <ColumnFilterButton columnId={id} workspaces={allWorkspaces} />;
+  };
 
   return (
     <Frame>
-      <Table>
+      <Table className="table-fixed">
+        <colgroup>
+          {columns.map((col) => (
+            <col
+              key={col.id}
+              style={col.width ? { width: col.width } : undefined}
+            />
+          ))}
+        </colgroup>
         <TableHeader>
           <TableRow>
-            {columns.map((col) => (
-              <SortableHead
-                active={sortKey === col.key}
-                desc={sortDesc}
-                key={col.key}
-                onClick={() => {
-                  if (sortKey === col.key) {
-                    update({ sortDesc: !sortDesc });
-                  } else {
-                    update({ sortKey: col.key, sortDesc: true });
-                  }
-                }}
-              >
-                {columnLabels[col.key]}
-              </SortableHead>
-            ))}
+            {columns.map((col) => {
+              const trailing = filterTrigger(col.id);
+              if (!col.sortKey) {
+                return (
+                  <TableHead className="group/header" key={col.id}>
+                    <span className="inline-flex items-center gap-1">
+                      <span className="truncate">{columnLabels[col.id]}</span>
+                      {trailing}
+                    </span>
+                  </TableHead>
+                );
+              }
+              const key = col.sortKey;
+              const direction: "asc" | "desc" | null = (() => {
+                if (sortKey !== key) {
+                  return null;
+                }
+                return sortDesc ? "desc" : "asc";
+              })();
+              return (
+                <SortableHead
+                  className="group/header"
+                  key={col.id}
+                  onSort={() => {
+                    if (sortKey === key) {
+                      update({ sortDesc: !sortDesc });
+                    } else {
+                      update({ sortKey: key, sortDesc: true });
+                    }
+                  }}
+                  sortDirection={direction}
+                  trailing={trailing}
+                >
+                  {sortLabels[key]}
+                </SortableHead>
+              );
+            })}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -127,14 +168,14 @@ export const MattersTable = ({
 type CellProps = { workspace: Workspace };
 
 const NameCell = ({ workspace }: CellProps) => (
-  <div className="flex items-center gap-2">
+  <div className="flex min-w-0 items-center gap-2">
     <span
       className="size-2 shrink-0 rounded-full"
       style={{
         backgroundColor: getMatterColor(workspace.id),
       }}
     />
-    <span className="font-medium">{workspace.name}</span>
+    <span className="truncate font-medium">{workspace.name}</span>
   </div>
 );
 
@@ -142,20 +183,22 @@ const ClientCell = ({ workspace }: CellProps) => {
   const t = useTranslations();
   if (!workspace.client) {
     return (
-      <span className="text-muted-foreground italic">
+      <span className="text-muted-foreground block truncate italic">
         {t("workspaces.parties.personalLabel")}
       </span>
     );
   }
   return (
-    <span className="text-muted-foreground">
+    <span className="text-muted-foreground block truncate">
       {workspace.client.displayName}
     </span>
   );
 };
 
 const ReferenceCell = ({ workspace }: CellProps) => (
-  <span className="text-muted-foreground font-mono">{workspace.reference}</span>
+  <span className="text-muted-foreground block truncate font-mono">
+    {workspace.reference}
+  </span>
 );
 
 const EntityCountCell = ({ workspace }: CellProps) => (
@@ -179,19 +222,51 @@ const LastActivityCell = ({ workspace }: CellProps) => {
   );
 };
 
+/** Format a Date as `YYYY-MM-DD` in local time (locale-neutral, ISO-style). */
+const toLocalISODate = (date: Date): string => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+
+const TeamCell = ({ workspace }: CellProps) => (
+  <TeamAvatars
+    leadUserId={workspace.leadUserId}
+    maxVisible={MAX_VISIBLE_AVATARS}
+    members={workspace.members}
+  />
+);
+
 const CreatedAtCell = ({ workspace }: CellProps) => {
   const lang = useI18nStore((s) => s.lang);
+  const date = new Date(workspace.createdAt);
   return (
-    <span className="text-muted-foreground">
-      {new Date(workspace.createdAt).toLocaleDateString(lang)}
+    <span
+      className="text-muted-foreground tabular-nums"
+      title={date.toLocaleString(lang, {
+        dateStyle: "full",
+        timeStyle: "medium",
+      })}
+    >
+      {toLocalISODate(date)}
     </span>
   );
 };
 
-type ColumnDef = {
-  key: MattersSortKey;
-  Cell: (props: CellProps) => React.ReactNode;
-};
+type ColumnDef =
+  | {
+      id: MattersColumnId | "name";
+      sortKey: MattersSortKey;
+      width?: string;
+      Cell: (props: CellProps) => React.ReactNode;
+    }
+  | {
+      id: MattersColumnId;
+      sortKey?: undefined;
+      width?: string;
+      Cell: (props: CellProps) => React.ReactNode;
+    };
 
 type MattersTableRowProps = {
   workspace: Workspace;
@@ -232,7 +307,7 @@ const MattersTableRow = ({
       tabIndex={0}
     >
       {columns.map((col) => (
-        <TableCell key={col.key}>
+        <TableCell key={col.id}>
           <col.Cell workspace={workspace} />
         </TableCell>
       ))}
@@ -241,12 +316,33 @@ const MattersTableRow = ({
 };
 
 const COLUMNS: ColumnDef[] = [
-  { key: "name", Cell: NameCell },
-  { key: "clientName", Cell: ClientCell },
-  { key: "reference", Cell: ReferenceCell },
-  { key: "entityCount", Cell: EntityCountCell },
-  { key: "lastActivityAt", Cell: LastActivityCell },
-  { key: "createdAt", Cell: CreatedAtCell },
+  { id: "name", sortKey: "name", Cell: NameCell },
+  { id: "client", sortKey: "clientName", width: "240px", Cell: ClientCell },
+  { id: "team", width: "160px", Cell: TeamCell },
+  {
+    id: "reference",
+    sortKey: "reference",
+    width: "120px",
+    Cell: ReferenceCell,
+  },
+  {
+    id: "entityCount",
+    sortKey: "entityCount",
+    width: "96px",
+    Cell: EntityCountCell,
+  },
+  {
+    id: "lastActivityAt",
+    sortKey: "lastActivityAt",
+    width: "140px",
+    Cell: LastActivityCell,
+  },
+  {
+    id: "createdAt",
+    sortKey: "createdAt",
+    width: "120px",
+    Cell: CreatedAtCell,
+  },
 ];
 
 type MattersTableGroupProps = {
@@ -277,15 +373,33 @@ const MattersTableGroup = ({
 
   return (
     <>
-      <TableRow className="cursor-pointer" onClick={onToggle}>
-        <TableCell className="font-semibold" colSpan={columns.length}>
-          <span className="inline-flex items-center gap-2">
+      <TableRow
+        className="bg-muted/40 hover:bg-muted/60 cursor-pointer"
+        onClick={onToggle}
+      >
+        <TableCell
+          className="h-11 py-2.5 font-semibold"
+          colSpan={columns.length}
+        >
+          <div className="flex items-center gap-2">
             <ChevronRightIcon
               className={cn(
                 "text-muted-foreground size-3.5 shrink-0 transition-transform",
                 !collapsed && "rotate-90",
               )}
             />
+            {group.type === "client" && (
+              <span
+                aria-hidden
+                className={cn(
+                  "bg-background ring-border flex size-5 shrink-0",
+                  "items-center justify-center rounded-full text-[0.625rem]",
+                  "font-medium tracking-tight ring-1",
+                )}
+              >
+                {getInitials(group.clientName)}
+              </span>
+            )}
             {group.type === "personal" ? (
               <span>{t("workspaces.parties.personalLabel")}</span>
             ) : (
@@ -300,13 +414,18 @@ const MattersTableGroup = ({
             )}
             <span
               className={cn(
-                "bg-muted rounded-full px-1.5 py-0.5",
+                "bg-background ring-border rounded-full px-1.5 py-0.5 ring-1",
                 "text-muted-foreground text-[0.625rem] tabular-nums",
               )}
             >
               {group.workspaces.length}
             </span>
-          </span>
+            {group.type === "client" && group.responsibleAttorneyName && (
+              <span className="text-muted-foreground ms-auto truncate text-xs font-normal">
+                {group.responsibleAttorneyName}
+              </span>
+            )}
+          </div>
         </TableCell>
       </TableRow>
       {!collapsed &&
@@ -322,32 +441,3 @@ const MattersTableGroup = ({
     </>
   );
 };
-
-type SortableHeadProps = React.PropsWithChildren<{
-  active: boolean;
-  desc: boolean;
-  onClick: () => void;
-}>;
-
-const SortableHead = ({
-  children,
-  active,
-  desc,
-  onClick,
-}: SortableHeadProps) => (
-  <TableHead>
-    <button
-      className="text-muted-foreground hover:text-foreground inline-flex cursor-pointer items-center gap-1 font-medium select-none"
-      onClick={onClick}
-      type="button"
-    >
-      {children}
-      {active &&
-        (desc ? (
-          <ArrowDownIcon className="size-3" />
-        ) : (
-          <ArrowUpIcon className="size-3" />
-        ))}
-    </button>
-  </TableHead>
-);

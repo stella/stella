@@ -1,6 +1,6 @@
 type ExistingWorkspace = {
   client?: { id: string } | null;
-  contributors: {
+  members: {
     lastActivity?: Date | string | null;
     userId?: string | null;
   }[];
@@ -144,7 +144,7 @@ export const buildCollaboratorStats = ({
   for (const workspace of workspaces) {
     const contributorIds = new Set<string>();
 
-    for (const contributor of workspace.contributors) {
+    for (const contributor of workspace.members) {
       if (contributor.userId) {
         contributorIds.add(contributor.userId);
       }
@@ -152,7 +152,7 @@ export const buildCollaboratorStats = ({
 
     const currentUserContributed = contributorIds.has(currentUserId);
 
-    for (const contributor of workspace.contributors) {
+    for (const contributor of workspace.members) {
       if (!contributor.userId || contributor.userId === currentUserId) {
         continue;
       }

@@ -26,6 +26,9 @@ import { ClientGroupHeader } from "@/routes/_protected.workspaces/-components/cl
 import { MatterCard } from "@/routes/_protected.workspaces/-components/matter-card";
 import { MattersTable } from "@/routes/_protected.workspaces/-components/matters-table";
 import { MattersToolbar } from "@/routes/_protected.workspaces/-components/matters-toolbar";
+import { ActiveFilterChips } from "@/routes/_protected.workspaces/-filters/active-filter-chips";
+import { applyMattersFilters } from "@/routes/_protected.workspaces/-filters/filter-pipeline";
+import { getMatterOrganizationResetPatch } from "@/routes/_protected.workspaces/-organization-reset";
 import {
   workspacesKeys,
   workspacesOptions,
@@ -68,14 +71,16 @@ function RouteComponent() {
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
   const resetMatterVisibilityState = useConfigStore((s) => s.updateMatters);
 
-  const { sortKey, sortDesc, groupBy, collapsedGroups } = useConfigStore(
-    useShallow((s) => ({
-      sortKey: s.matters.sortKey,
-      sortDesc: s.matters.sortDesc,
-      groupBy: s.matters.groupBy,
-      collapsedGroups: s.matters.collapsedGroups,
-    })),
-  );
+  const { sortKey, sortDesc, groupBy, collapsedGroups, filters } =
+    useConfigStore(
+      useShallow((s) => ({
+        sortKey: s.matters.sortKey,
+        sortDesc: s.matters.sortDesc,
+        groupBy: s.matters.groupBy,
+        collapsedGroups: s.matters.collapsedGroups,
+        filters: s.matters.filters,
+      })),
+    );
 
   const [search, setSearch] = useState("");
   const [focusIndex, setFocusIndex] = useState(-1);
@@ -90,7 +95,7 @@ function RouteComponent() {
 
     previousOrganizationIdRef.current = activeOrganizationId;
     setSearch("");
-    resetMatterVisibilityState({ collapsedGroups: [] });
+    resetMatterVisibilityState(getMatterOrganizationResetPatch());
     void queryClient.invalidateQueries({
       queryKey: workspacesKeys.list(activeOrganizationId),
     });
@@ -100,7 +105,7 @@ function RouteComponent() {
   const canOpenCreateMatter =
     canCreateMatter && workspaces.length < data.workspacesCountLimit;
 
-  const filtered = workspaces.filter((w) => {
+  const searched = workspaces.filter((w) => {
     if (!search.trim()) {
       return true;
     }
@@ -111,6 +116,8 @@ function RouteComponent() {
       w.client?.displayName.toLowerCase().includes(q)
     );
   });
+
+  const filtered = applyMattersFilters(searched, filters);
 
   const sorted = filtered.toSorted((a, b) => {
     const cmp = compareWorkspacesByKey(a, b, sortKey);
@@ -161,6 +168,7 @@ function RouteComponent() {
           search={search}
           searchRef={searchRef}
         />
+        <ActiveFilterChips workspaces={workspaces} />
 
         <div className="relative flex-1">
           <div className="absolute inset-0 overflow-y-auto" ref={scrollRef}>
@@ -168,7 +176,7 @@ function RouteComponent() {
               if (sorted.length > 0) {
                 return (
                   <MattersContentView
-                    canCreateMatter={canOpenCreateMatter}
+                    allWorkspaces={workspaces}
                     displayed={displayed}
                     focusIndex={focusIndex}
                     groups={groups}
@@ -285,15 +293,15 @@ const MattersPageContextMenu = ({
 };
 
 type MattersContentViewProps = {
-  canCreateMatter: boolean;
   displayed: Workspace[];
+  allWorkspaces: readonly Workspace[];
   groups: WorkspaceGroup[] | null;
   focusIndex: number;
 };
 
 const MattersContentView = ({
-  canCreateMatter,
   displayed,
+  allWorkspaces,
   groups,
   focusIndex,
 }: MattersContentViewProps) => {
@@ -310,6 +318,7 @@ const MattersContentView = ({
         if (viewMode === "table") {
           return (
             <MattersTable
+              allWorkspaces={allWorkspaces}
               collapsedGroups={collapsedGroups}
               focusIndex={focusIndex}
               groups={groups}
@@ -339,7 +348,6 @@ const MattersContentView = ({
                     {!collapsed &&
                       group.workspaces.map((workspace, i) => (
                         <MatterCard
-                          canCreateMatter={canCreateMatter}
                           focused={focusIndex === baseIndex + i}
                           hideClientName
                           key={workspace.id}
@@ -359,7 +367,6 @@ const MattersContentView = ({
           >
             {displayed.map((workspace, i) => (
               <MatterCard
-                canCreateMatter={canCreateMatter}
                 focused={focusIndex === i}
                 key={workspace.id}
                 workspace={workspace}

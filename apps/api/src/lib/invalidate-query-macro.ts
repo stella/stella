@@ -9,6 +9,7 @@ const queryKeySchema = t.Array(t.String({ minLength: 1 }), { minItems: 1 });
 
 const invalidateQueryBodySchema = t.Object({
   queryKey: queryKeySchema,
+  queryKeys: t.Optional(t.Array(queryKeySchema)),
 });
 
 const INVALIDATE_QUERY_EVENT_TYPE = "invalidate-query";
@@ -38,14 +39,17 @@ export const invalidateQuery = new Elysia({ name: "invalidateQueryMacro" })
     validateAuth: true,
     body: invalidateQueryBodySchema,
     afterHandle: (ctx) => {
-      const event = createInvalidateQueryEvent(ctx.body.queryKey);
       const workspaceId =
         "workspaceId" in ctx ? String(ctx.workspaceId) : undefined;
+      const queryKeys = [ctx.body.queryKey, ...(ctx.body.queryKeys ?? [])];
 
-      if (workspaceId) {
-        broadcast(brandPersistedWorkspaceId(workspaceId), event);
-      } else {
-        broadcastToOrganization(ctx.session.activeOrganizationId, event);
+      for (const queryKey of queryKeys) {
+        const event = createInvalidateQueryEvent(queryKey);
+        if (workspaceId) {
+          broadcast(brandPersistedWorkspaceId(workspaceId), event);
+        } else {
+          broadcastToOrganization(ctx.session.activeOrganizationId, event);
+        }
       }
     },
   })
@@ -53,9 +57,12 @@ export const invalidateQuery = new Elysia({ name: "invalidateQueryMacro" })
     validateAuth: true,
     body: invalidateQueryBodySchema,
     afterHandle: (ctx) => {
-      broadcastQueryInvalidationToOrganization(
-        ctx.session.activeOrganizationId,
-        ctx.body.queryKey,
-      );
+      const queryKeys = [ctx.body.queryKey, ...(ctx.body.queryKeys ?? [])];
+      for (const queryKey of queryKeys) {
+        broadcastQueryInvalidationToOrganization(
+          ctx.session.activeOrganizationId,
+          queryKey,
+        );
+      }
     },
   });

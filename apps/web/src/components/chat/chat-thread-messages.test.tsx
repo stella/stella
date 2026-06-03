@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
@@ -11,10 +11,19 @@ import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import messages from "@/i18n/langs/en.json";
 import type Messages from "@/i18n/langs/messages.gen";
 
-process.env["VITE_API_URL"] = "http://localhost:3001";
+const previousApiUrl = process.env["VITE_API_URL"];
+process.env["VITE_API_URL"] = previousApiUrl ?? "https://api.example.test";
 
 const { ChatThreadMessages } =
   await import("@/components/chat/chat-thread-messages");
+
+afterAll(() => {
+  if (previousApiUrl === undefined) {
+    delete process.env["VITE_API_URL"];
+    return;
+  }
+  process.env["VITE_API_URL"] = previousApiUrl;
+});
 
 const renderWithProviders = (children: ReactNode) =>
   renderToStaticMarkup(
