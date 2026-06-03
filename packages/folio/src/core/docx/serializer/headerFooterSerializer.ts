@@ -171,6 +171,8 @@ function synthesizeTextWatermark(
 // caller's intended ratio.
 const PICTURE_WATERMARK_DEFAULT_WIDTH_PT = 415;
 const PICTURE_WATERMARK_DEFAULT_HEIGHT_PT = 207;
+const PICTURE_WATERMARK_WASHOUT_GAIN = "19661f";
+const PICTURE_WATERMARK_WASHOUT_BLACKLEVEL = "22938f";
 
 function synthesizePictureWatermark(
   watermark: Extract<Watermark, { kind: "picture" }>,
@@ -182,11 +184,15 @@ function synthesizePictureWatermark(
   const scale = watermark.scale ?? 1;
   const widthPt = PICTURE_WATERMARK_DEFAULT_WIDTH_PT * scale;
   const heightPt = PICTURE_WATERMARK_DEFAULT_HEIGHT_PT * scale;
+  const washoutAttrs =
+    watermark.washout === false
+      ? ""
+      : ` gain="${PICTURE_WATERMARK_WASHOUT_GAIN}" blacklevel="${PICTURE_WATERMARK_WASHOUT_BLACKLEVEL}"`;
   return (
     `<w:p><w:r><w:pict>` +
     `<v:shape id="WordPictureWatermark1" type="#_x0000_t75" ` +
     `style="position:absolute;margin-left:0;margin-top:0;width:${widthPt}pt;height:${heightPt}pt;z-index:-251658240;mso-position-horizontal:center;mso-position-horizontal-relative:margin;mso-position-vertical:center;mso-position-vertical-relative:margin">` +
-    `<v:imagedata r:id="${rId}" o:title=""/>` +
+    `<v:imagedata r:id="${rId}" o:title=""${washoutAttrs}/>` +
     `</v:shape></w:pict></w:r></w:p>`
   );
 }

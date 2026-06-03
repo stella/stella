@@ -85,6 +85,8 @@ describe("serializeHeaderFooter — watermark replay", () => {
     // Default Word dimensions emitted unchanged.
     expect(out).toContain("width:415pt");
     expect(out).toContain("height:207pt");
+    expect(out).toContain('gain="19661f"');
+    expect(out).toContain('blacklevel="22938f"');
   });
 
   test("applies the modeled scale factor to the synthesized picture watermark", () => {
@@ -99,6 +101,23 @@ describe("serializeHeaderFooter — watermark replay", () => {
     const out = serializeHeaderFooter(hf);
     expect(out).toContain("width:207.5pt");
     expect(out).toContain("height:103.5pt");
+  });
+
+  test("omits picture washout adjustments when washout is false", () => {
+    const hf: HeaderFooter = {
+      type: "header",
+      hdrFtrType: "default",
+      content: [],
+      watermark: {
+        kind: "picture",
+        imageRId: "rId1",
+        washout: false,
+      },
+    };
+    const out = serializeHeaderFooter(hf);
+    expect(out).toContain('r:id="rId1"');
+    expect(out).not.toContain('gain="19661f"');
+    expect(out).not.toContain('blacklevel="22938f"');
   });
 
   test("escapes XML metacharacters in the synthesized text watermark string", () => {

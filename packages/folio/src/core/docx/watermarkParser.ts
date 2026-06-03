@@ -391,6 +391,9 @@ function readVmlPictureWatermark(
   if (scale !== undefined) {
     watermark.scale = scale;
   }
+  if (!readVmlPictureWatermarkHasWashout(imagedata)) {
+    watermark.washout = false;
+  }
   return watermark;
 }
 
@@ -400,6 +403,8 @@ function readVmlPictureWatermark(
 const PICTURE_WATERMARK_DEFAULT_WIDTH_PT = 415;
 const PICTURE_WATERMARK_DEFAULT_HEIGHT_PT = 207;
 const PICTURE_WATERMARK_SCALE_EPSILON = 0.01;
+const PICTURE_WATERMARK_WASHOUT_GAIN = "19661f";
+const PICTURE_WATERMARK_WASHOUT_BLACKLEVEL = "22938f";
 
 function readVmlPictureWatermarkScale(shape: XmlElement): number | undefined {
   const shapeStyle = getAttribute(shape, null, "style") ?? "";
@@ -427,6 +432,14 @@ function readVmlPictureWatermarkScale(shape: XmlElement): number | undefined {
   }
 
   return widthScale ?? heightScale;
+}
+
+function readVmlPictureWatermarkHasWashout(imagedata: XmlElement): boolean {
+  return (
+    getAttribute(imagedata, null, "gain") === PICTURE_WATERMARK_WASHOUT_GAIN &&
+    getAttribute(imagedata, null, "blacklevel") ===
+      PICTURE_WATERMARK_WASHOUT_BLACKLEVEL
+  );
 }
 
 /**

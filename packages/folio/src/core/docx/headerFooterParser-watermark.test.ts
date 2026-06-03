@@ -115,6 +115,50 @@ describe("parseHeader watermark detection", () => {
     expect(header.watermark.scale).toBe(0.5);
   });
 
+  test("recovers VML picture watermark washout from image adjustments", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}>
+  <w:p>
+    <w:r>
+      <w:pict>
+        <v:shape id="WordPictureWatermark1" type="#_x0000_t75"
+                 style="position:absolute;width:415pt;height:207pt">
+          <v:imagedata r:id="rId7" o:title="" gain="19661f" blacklevel="22938f"/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    if (!header.watermark || header.watermark.kind !== "picture") {
+      throw new TypeError("expected picture watermark");
+    }
+    expect(header.watermark.imageRId).toBe("rId7");
+    expect(header.watermark.washout).toBeUndefined();
+  });
+
+  test("marks VML picture watermarks without washout adjustments as full contrast", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}>
+  <w:p>
+    <w:r>
+      <w:pict>
+        <v:shape id="WordPictureWatermark1" type="#_x0000_t75"
+                 style="position:absolute;width:415pt;height:207pt">
+          <v:imagedata r:id="rId7" o:title=""/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    if (!header.watermark || header.watermark.kind !== "picture") {
+      throw new TypeError("expected picture watermark");
+    }
+    expect(header.watermark.imageRId).toBe("rId7");
+    expect(header.watermark.washout).toBe(false);
+  });
+
   test("recovers a DrawingML behind-content text watermark (modern producers)", () => {
     // Folio improvement over upstream: detect DrawingML watermarks too,
     // which modern Office / Aspose / some Polish legal templates emit.
