@@ -300,14 +300,50 @@ export const shouldUseCaseLawLanguageSegment = ({
   language?: string | null | undefined;
   languageAlternateCount?: number | null | undefined;
   languageAlternates?: readonly unknown[] | null | undefined;
-}): boolean => {
-  const alternateCount =
-    languageAlternateCount ?? languageAlternates?.length ?? 0;
+}): boolean =>
+  normalizeCaseLawLanguageSegment(language) !== null &&
+  getCaseLawLanguageAlternateCount({
+    languageAlternateCount,
+    languageAlternates,
+  }) > 1;
 
-  return (
-    normalizeCaseLawLanguageSegment(language) !== null && alternateCount > 1
-  );
+const getCaseLawLanguageAlternateCount = ({
+  languageAlternateCount,
+  languageAlternates,
+}: {
+  languageAlternateCount?: number | null | undefined;
+  languageAlternates?: readonly unknown[] | null | undefined;
+}): number => {
+  if (languageAlternateCount !== null && languageAlternateCount !== undefined) {
+    return languageAlternateCount;
+  }
+
+  if (!languageAlternates) {
+    return 0;
+  }
+
+  const languages = new Set<string>();
+  for (const alternate of languageAlternates) {
+    if (!isCaseLawLanguageAlternate(alternate)) {
+      continue;
+    }
+
+    const normalized = normalizeCaseLawLanguageSegment(alternate.language);
+    if (normalized !== null) {
+      languages.add(normalized);
+    }
+  }
+
+  return languages.size;
 };
+
+const isCaseLawLanguageAlternate = (
+  alternate: unknown,
+): alternate is { language: string } =>
+  typeof alternate === "object" &&
+  alternate !== null &&
+  "language" in alternate &&
+  typeof alternate.language === "string";
 
 export const createCaseLawDecisionPath = ({
   country,

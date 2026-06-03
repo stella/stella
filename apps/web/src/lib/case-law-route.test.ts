@@ -159,6 +159,62 @@ describe("case-law decision routes", () => {
     ).toBe(true);
   });
 
+  test("does not create case-law language URLs from duplicate or invalid alternates", () => {
+    expect(
+      shouldUseCaseLawLanguageSegment({
+        language: "fr",
+        languageAlternates: [
+          { language: "not a language" },
+          { language: "FR" },
+          { language: "fr" },
+        ],
+      }),
+    ).toBe(false);
+
+    expect(
+      createCaseLawDecisionRouteParams({
+        caseNumber: "C-123/22",
+        country: "EUR",
+        court: "Court of Justice",
+        decisionDate: "2024-03-07",
+        decisionId: DECISION_ID,
+        language: "FR",
+        languageAlternates: [
+          { language: "not a language" },
+          { language: "FR" },
+          { language: "fr" },
+        ],
+        slug: "c-123-22",
+      }),
+    ).toEqual({
+      country: "eur",
+      court: "court-of-justice",
+      date: "2024-03-07",
+      slug: "c-123-22",
+    });
+  });
+
+  test("uses explicit case-law language alternate counts from public APIs", () => {
+    expect(
+      createCaseLawDecisionRouteParams({
+        caseNumber: "C-123/22",
+        country: "EUR",
+        court: "Court of Justice",
+        decisionDate: "2024-03-07",
+        decisionId: DECISION_ID,
+        language: "EN",
+        languageAlternateCount: 2,
+        slug: "c-123-22",
+      }),
+    ).toEqual({
+      country: "eur",
+      court: "court-of-justice",
+      date: "2024-03-07",
+      language: "en",
+      slug: "c-123-22",
+    });
+  });
+
   test("uses stable fallbacks for missing public route metadata", () => {
     expect(
       createCaseLawDecisionRouteParams({
