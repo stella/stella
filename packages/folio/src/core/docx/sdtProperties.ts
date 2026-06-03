@@ -72,6 +72,40 @@ function parseListItems(
 // `<w:color>` inside a placeholder `<w:rPr>` and we'd silently rewrite
 // run formatting as w15 SDT appearance, corrupting the parse → save
 // round trip for any sdtPr that carries nested run properties.
+//
+// W_LOCAL_NAMES covers SDT property children that exist only in the
+// WordprocessingML (w:) namespace by spec — `<x:tag>` inherited from
+// the document root must mean `<w:tag>` because no other namespace
+// defines that local name in a `<w:sdtPr>`/`<w:sdtEndPr>` context.
+const W_LOCAL_NAMES = new Set([
+  "alias",
+  "tag",
+  "id",
+  "lock",
+  "placeholder",
+  "docPart",
+  "showingPlcHdr",
+  "text",
+  "date",
+  "dateFormat",
+  "lid",
+  "calendar",
+  "storeMappedDataAs",
+  "dropDownList",
+  "listItem",
+  "comboBox",
+  "picture",
+  "docPartObj",
+  "docPartList",
+  "docPartCategory",
+  "docPartGallery",
+  "docPartUnique",
+  "group",
+  "equation",
+  "citation",
+  "bibliography",
+  "richText",
+]);
 const W14_LOCAL_NAMES = new Set(["checkbox", "checked"]);
 const W15_LOCAL_NAMES = new Set(["repeatingSection", "repeatingSectionItem"]);
 
@@ -109,7 +143,14 @@ function normalizeWordPrefix(raw: string, source: XmlElement): string {
       out = rewritePrefix(out, sourcePrefix, "w");
     }
   }
-  // Step 2: child elements that live in a known sibling namespace.
+  // Step 2: child elements that live in known sibling namespaces.
+  // - W_LOCAL_NAMES handles inherited alt-prefix SDT property children
+  //   sitting inside a canonical `<w:sdtPr>` wrapper (case the pass-19
+  //   wrapper-only fix missed).
+  // - W14 / W15 sets handle the wider w14:checkbox / w15:repeatingSection
+  //   children that don't share local names with run / paragraph
+  //   formatting.
+  out = normalizeChildrenForLocalNames(out, W_LOCAL_NAMES, "w");
   out = normalizeChildrenForLocalNames(out, W14_LOCAL_NAMES, "w14");
   out = normalizeChildrenForLocalNames(out, W15_LOCAL_NAMES, "w15");
   return out;

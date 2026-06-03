@@ -96,6 +96,27 @@ describe("parseSdtProperties — prefixed marker elements", () => {
     expect(props.listItems).toEqual([{ displayText: "Yes", value: "Yes" }]);
   });
 
+  test("normalizes inherited alt-prefix w-namespace SDT children inside canonical wrapper", () => {
+    // Canonical `<w:sdtPr>` wrapper with children inherited under an
+    // alt prefix (`<x:tag>` declared via xmlns:x on the document root).
+    // The pass-19 wrapper rewrite doesn't trigger because the wrapper
+    // already uses `w:`, and the W14/W15 child fix doesn't apply
+    // because `tag`/`alias` are w:-namespace names. Without W_LOCAL_NAMES
+    // normalization the saved DOCX would carry undefined `x:` prefixes.
+    const ns =
+      'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:x="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+    const props = parseSdtPrXml(
+      `<w:sdtPr ${ns}><x:tag x:val="client"/><x:alias x:val="Client Name"/></w:sdtPr>`,
+    );
+    expect(props.tag).toBe("client");
+    expect(props.alias).toBe("Client Name");
+    expect(props.rawPropertiesXml).toBeDefined();
+    expect(props.rawPropertiesXml).not.toContain("x:tag");
+    expect(props.rawPropertiesXml).not.toContain("x:alias");
+    expect(props.rawPropertiesXml).toContain('<w:tag w:val="client"/>');
+    expect(props.rawPropertiesXml).toContain('<w:alias w:val="Client Name"/>');
+  });
+
   test("leaves nested rPr color elements alone (no overzealous w15 rewrite)", () => {
     // A placeholder rPr inside sdtPr carries `<w:color w:val="…"/>` for
     // run text color. That local name is `color` but it lives in the
