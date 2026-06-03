@@ -228,9 +228,12 @@ export const loadPublicCaseLawDecisionRoute = async ({
   const decision = await ensureCriticalQueryData(
     queryClient,
     decisionBySlugOptions(
-      normalizedRouteLanguage === null
+      params.language === undefined
         ? { slug: params.slug }
-        : { language: normalizedRouteLanguage, slug: params.slug },
+        : {
+            language: normalizedRouteLanguage ?? params.language,
+            slug: params.slug,
+          },
     ),
   );
   const canonicalParams = createCaseLawDecisionRouteParams({
