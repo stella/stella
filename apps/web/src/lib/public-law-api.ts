@@ -10,7 +10,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isDisabledPublicLawData = (
   value: unknown,
 ): value is DisabledPublicLawData =>
-  isRecord(value) && value.error === "Not Found";
+  isRecord(value) && value["error"] === "Not Found";
 
 export function assertPublicLawApiData<T>(
   data: T,
