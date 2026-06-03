@@ -75,18 +75,31 @@ INLINE_TAGS = frozenset(
     }
 )
 
-# Parent tags that mark an SDT as inline-scoped. `w:sdtContent` and the
-# enclosing `w:sdt` are transparent for scope classification: when an inline
-# SDT is nested inside another inline SDT the parent chain is
-# `inner sdt → outer sdtContent → outer sdt → outer sdtContent → w:p`, so we
-# walk past both `w:sdtContent` and `w:sdt` ancestors to find the surrounding
-# paragraph/hyperlink/smartTag that decides scope. Folio preserves nested
-# inline SDTs as `InlineSdt`, so missing this step would misclassify them as
-# `block` and produce false `scope`/`childCount` divergences.
+# Parent tags that mark an SDT as inline-scoped. `w:sdtContent`, the enclosing
+# `w:sdt`, and the tracked-change wrappers `w:ins`/`w:del`/`w:moveFrom`/
+# `w:moveTo` are transparent for scope classification: when an inline SDT is
+# nested inside another inline SDT or wrapped by a tracked change, its direct
+# XML parent is one of these wrappers rather than `w:p`/`w:hyperlink`/
+# `w:smartTag`. Folio parses tracked-change wrappers through
+# `parseParagraphContents` and lifts non-run SDTs back into paragraph-level
+# inline content, so we walk past these ancestors to find the enclosing
+# paragraph/hyperlink/smartTag that decides scope. Missing this step would
+# misclassify wrapped inline SDTs as `block` and produce false
+# `scope`/`childCount` divergences on fixtures with inserted/deleted/moved
+# content controls.
 INLINE_PARENT_TAGS = frozenset({qn("w:p"), qn("w:hyperlink"), qn("w:smartTag")})
 SDT_CONTENT_TAG = qn("w:sdtContent")
 SDT_TAG = qn("w:sdt")
-SCOPE_TRANSPARENT_TAGS = frozenset({SDT_CONTENT_TAG, SDT_TAG})
+SCOPE_TRANSPARENT_TAGS = frozenset(
+    {
+        SDT_CONTENT_TAG,
+        SDT_TAG,
+        qn("w:ins"),
+        qn("w:del"),
+        qn("w:moveFrom"),
+        qn("w:moveTo"),
+    }
+)
 
 
 def detect_sdt_type(sdt_pr: Any) -> str:
@@ -122,13 +135,13 @@ def project_sdt(sdt_elem: Any) -> dict[str, Any]:
     sdt_pr = sdt_elem.find(qn("w:sdtPr"))
     sdt_content = sdt_elem.find(SDT_CONTENT_TAG)
 
-    # Walk up past any `w:sdtContent` and `w:sdt` ancestors so a nested
-    # inline SDT (whose direct parent is the outer SDT's content wrapper,
-    # itself wrapped by an outer `w:sdt`) is still classified by the
-    # surrounding `w:p`/`w:hyperlink`/`w:smartTag`. Folio preserves nested
-    # inline SDTs as `InlineSdt`, so misclassifying them as block here
-    # would produce a false `scope`/`childCount` divergence on every
-    # fixture with nested controls.
+    # Walk up past any `w:sdtContent`, `w:sdt`, or tracked-change wrappers
+    # (`w:ins`/`w:del`/`w:moveFrom`/`w:moveTo`) so a nested or
+    # tracked-change-wrapped inline SDT is still classified by the
+    # surrounding `w:p`/`w:hyperlink`/`w:smartTag`. Folio preserves these
+    # SDTs as `InlineSdt`, so misclassifying them as block here would
+    # produce a false `scope`/`childCount` divergence on every fixture
+    # with nested controls or inserted/deleted/moved content controls.
     scope_parent = sdt_elem.getparent()
     while scope_parent is not None and scope_parent.tag in SCOPE_TRANSPARENT_TAGS:
         scope_parent = scope_parent.getparent()
