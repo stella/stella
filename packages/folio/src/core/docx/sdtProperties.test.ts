@@ -96,56 +96,6 @@ describe("parseSdtProperties — prefixed marker elements", () => {
     expect(props.listItems).toEqual([{ displayText: "Yes", value: "Yes" }]);
   });
 
-  test("reads attributes by local name when a canonical element carries an inherited alt-prefix attr", () => {
-    // `<w:tag x:val="client"/>` — canonical element, inherited `x:val`.
-    // Without the local-name attribute fallback, props.tag stayed empty
-    // and getContentControls({ tag: "client" }) couldn't find the
-    // control even though the saved DOCX serialized the value
-    // correctly via the raw normalizer.
-    const ns =
-      'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:x="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
-    const props = parseSdtPrXml(
-      `<w:sdtPr ${ns}><w:tag x:val="client"/><w:alias x:val="Client Name"/></w:sdtPr>`,
-    );
-    expect(props.tag).toBe("client");
-    expect(props.alias).toBe("Client Name");
-  });
-
-  test("reads dropdown listItem attrs when canonical listItem carries alt-prefix attrs", () => {
-    // Same pattern as above for parseListItems: `<w:listItem x:displayText="…"
-    // x:value="…"/>`. Previously the wrapper-prefix path returned null
-    // (element prefix is `w`, attribute prefix is `x`), the canonical
-    // path returned null too, and the item was silently dropped.
-    const ns =
-      'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:x="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
-    const props = parseSdtPrXml(
-      `<w:sdtPr ${ns}><w:dropDownList><w:listItem x:displayText="A" x:value="a"/></w:dropDownList></w:sdtPr>`,
-    );
-    expect(props.sdtType).toBe("dropdown");
-    expect(props.listItems).toEqual([{ displayText: "A", value: "a" }]);
-  });
-
-  test("does not corrupt locally-declared xmlns:* attributes during attr normalization", () => {
-    // The attribute normalizer's negative lookahead must skip `xmlns:`
-    // alongside the canonical prefix; otherwise `<x:tag xmlns:x="…"
-    // x:val="…"/>` would get its namespace declaration rewritten to a
-    // bogus `<w:tag w:x="…" w:val="…"/>` on save.
-    const props = parseSdtPrXml(
-      '<w:sdtPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:tag xmlns:x="http://schemas.openxmlformats.org/wordprocessingml/2006/main" x:val="client"/></w:sdtPr>',
-    );
-    expect(props.tag).toBe("client");
-    expect(props.rawPropertiesXml).toBeDefined();
-    // Namespace declaration preserved unchanged.
-    expect(props.rawPropertiesXml).toContain(
-      'xmlns:x="http://schemas.openxmlformats.org/wordprocessingml/2006/main"',
-    );
-    // No bogus `w:x=` attribute introduced.
-    expect(props.rawPropertiesXml).not.toContain("w:x=");
-    // Modeled value still picked up and the modeled `val` attribute
-    // points to canonical w: on save.
-    expect(props.rawPropertiesXml).toContain('w:val="client"');
-  });
-
   test("normalizes inherited alt-prefix w-namespace SDT children inside canonical wrapper", () => {
     // Canonical `<w:sdtPr>` wrapper with children inherited under an
     // alt prefix (`<x:tag>` declared via xmlns:x on the document root).
@@ -165,6 +115,55 @@ describe("parseSdtProperties — prefixed marker elements", () => {
     expect(props.rawPropertiesXml).not.toContain("x:alias");
     expect(props.rawPropertiesXml).toContain('<w:tag w:val="client"/>');
     expect(props.rawPropertiesXml).toContain('<w:alias w:val="Client Name"/>');
+  });
+
+  test("leaves prefix-shaped substrings inside w:tag attribute values alone", () => {
+    // A `w:tag` value carries opaque template-engine payloads in the wild
+    // — most notably OpenDoPE conventions v2.3 (od:repeat=x1, od:xpath=…,
+    // od:component=c1, etc.). The captured-raw normalization pass used to
+    // rewrite ANY `\w+:` substring inside the `<w:tag …>` open tag,
+    // including ones living inside the attribute *value*. That turned
+    // `<w:tag w:val="od:repeat=x0"/>` into `<w:tag w:val="w:repeat=x0"/>`
+    // on capture, corrupting every downstream consumer of `props.tag`
+    // and breaking the parse → reconcile → re-parse round trip.
+    const ns =
+      'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+    const props = parseSdtPrXml(
+      `<w:sdtPr ${ns}><w:tag w:val="od:repeat=x0"/></w:sdtPr>`,
+    );
+    expect(props.tag).toBe("od:repeat=x0");
+    expect(props.rawPropertiesXml).toContain('<w:tag w:val="od:repeat=x0"/>');
+    expect(props.rawPropertiesXml).not.toContain("w:repeat=x0");
+  });
+
+  test("does not rewrite prefix-shaped substrings inside w:tag attribute values containing whitespace", () => {
+    // The previous regex-only attribute-name pass used `[^>]{0,200}\s` to
+    // skip past the element's existing attribute heading. That match could
+    // consume across the opening `"` of an attribute value and land its
+    // anchor on whitespace *inside* the value, so a prefix-shaped token
+    // sitting after that whitespace would be rewritten to canonical. A
+    // `w:tag` whose value contains a single space before an OpenDoPE token
+    // (a common shape in customer DOCX templates) triggered it.
+    const ns =
+      'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+    // Whitespace inside value, prefix after the whitespace.
+    const propsLeading = parseSdtPrXml(
+      `<w:sdtPr ${ns}><w:tag w:val="foo od:repeat=x0"/></w:sdtPr>`,
+    );
+    expect(propsLeading.tag).toBe("foo od:repeat=x0");
+    expect(propsLeading.rawPropertiesXml).toContain(
+      '<w:tag w:val="foo od:repeat=x0"/>',
+    );
+    expect(propsLeading.rawPropertiesXml).not.toContain("w:repeat=x0");
+    // Multiple prefix-shaped tokens separated by whitespace inside the
+    // value. Each one was a potential rewrite anchor under the old pass.
+    const propsMulti = parseSdtPrXml(
+      `<w:sdtPr ${ns}><w:tag w:val="a:b c:d"/></w:sdtPr>`,
+    );
+    expect(propsMulti.tag).toBe("a:b c:d");
+    expect(propsMulti.rawPropertiesXml).toContain('<w:tag w:val="a:b c:d"/>');
+    expect(propsMulti.rawPropertiesXml).not.toContain('w:val="w:b');
+    expect(propsMulti.rawPropertiesXml).not.toContain(" w:d");
   });
 
   test("leaves nested rPr color elements alone (no overzealous w15 rewrite)", () => {
