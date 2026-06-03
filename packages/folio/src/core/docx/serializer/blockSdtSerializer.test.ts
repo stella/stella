@@ -145,6 +145,37 @@ describe("serializeBlockSdt — raw sdtPr replay", () => {
     expect(xml).not.toContain('w:lastValue="other-a"');
   });
 
+  test("preserves an intentionally empty modeled dropdownLastValue", () => {
+    // `""` is a legitimate OOXML w:value — a producer can author
+    // `<w:listItem w:value=""/>` and the user can pick it. Treating
+    // `dropdownLastValue: ""` as absent would fall back to body-text
+    // matching and serialize the first display-text-collision sibling
+    // instead of the intended empty selection.
+    const sdt: BlockSdt = {
+      type: "blockSdt",
+      properties: {
+        sdtType: "dropdown",
+        tag: "category",
+        listItems: [
+          { displayText: "Other", value: "" },
+          { displayText: "Other", value: "fallback" },
+        ],
+        dropdownLastValue: "",
+      },
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "run", content: [{ type: "text", text: "Other" }] },
+          ],
+        },
+      ],
+    };
+    const xml = serializeBlockSdt(sdt, noChildSerializer);
+    expect(xml).toContain('w:lastValue=""');
+    expect(xml).not.toContain('w:lastValue="fallback"');
+  });
+
   test("fallback sdtPr emits w:date with fullDate + dateFormat for date controls", () => {
     const sdt: BlockSdt = {
       type: "blockSdt",

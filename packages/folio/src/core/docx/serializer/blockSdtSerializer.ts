@@ -129,7 +129,12 @@ function extractDropdownLastValue(blockSdt: BlockSdt): string | undefined {
   // below only kicks in for documents that have neither been updated via
   // the API nor parsed from a doc that carried a w:lastValue.
   const modeled = blockSdt.properties.dropdownLastValue;
-  if (modeled !== undefined && modeled.length > 0) {
+  // `""` is a legitimate OOXML lastValue (a producer can author
+  // `<w:listItem w:value=""/>` and `setContentControlValue` will pick
+  // it). Only `undefined` means "no modeled selection" — gating on
+  // length would silently fall through to body-text matching and
+  // serialize the wrong sibling when display text collides.
+  if (modeled !== undefined) {
     return modeled;
   }
   const firstBlock = blockSdt.content[0];
