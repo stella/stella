@@ -817,6 +817,14 @@ function serializeInlineSdt(sdt: InlineSdt): string {
   if (props.lock && props.lock !== "unlocked") {
     prParts.push(`<w:lock w:val="${props.lock}"/>`);
   }
+  if (props.placeholder) {
+    // OOXML shape: `<w:placeholder><w:docPart w:val="..."/></w:placeholder>`.
+    // The placeholder identifier lives in `w:val` on the nested `w:docPart`,
+    // mirroring the parse in `paragraphParser.ts`.
+    prParts.push(
+      `<w:placeholder><w:docPart w:val="${escapeXml(props.placeholder)}"/></w:placeholder>`,
+    );
+  }
   if (props.showingPlaceholder) {
     prParts.push("<w:showingPlcHdr/>");
   }
