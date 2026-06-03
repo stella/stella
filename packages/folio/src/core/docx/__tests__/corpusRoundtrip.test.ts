@@ -571,9 +571,10 @@ describe("corpus round-trip: checkbox-val-false.docx", () => {
 // ============================================================================
 
 describe("corpus round-trip: placeholder-docpart.docx", () => {
-  test("placeholder docPart val populates the placeholder field", async () => {
+  test("placeholder docPart val survives the full round-trip", async () => {
     const original = await parseDocx(readFixture("placeholder-docpart.docx"));
-    const sdt = findFirstInlineSdt(original.package.document.content);
+    const roundTripped = await fullRoundTrip(original);
+    const sdt = findFirstInlineSdt(roundTripped.package.document.content);
     expect(sdt).not.toBeNull();
     if (!sdt) {
       return;
