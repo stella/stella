@@ -35,7 +35,16 @@ const caseLawDecisionKeys = {
     },
   ],
   byId: (decisionId: string) => [...caseLawDecisionKeys.all, decisionId],
-  bySlug: (slug: string) => [...caseLawDecisionKeys.all, "slug", slug],
+  bySlug: (key: DecisionBySlugKey) => [
+    ...caseLawDecisionKeys.all,
+    "slug",
+    { language: key.language, slug: key.slug },
+  ],
+};
+
+type DecisionBySlugKey = {
+  language?: string;
+  slug: string;
 };
 
 type FacetBucket = { value: string; count: number };
@@ -118,10 +127,8 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
             court: h.court,
             country: h.country,
             language: h.language,
-            // Search endpoint doesn't return languageGroupKey;
-            // language grouping is only available via the list endpoint.
-            languageAlternateCount: 0,
-            languageGroupKey: null,
+            languageAlternateCount: h.languageAlternateCount,
+            languageGroupKey: h.languageGroupKey,
             decisionDate: h.decisionDate,
             decisionType: h.decisionType,
             sourceUrl: h.sourceUrl,
@@ -192,11 +199,14 @@ export const decisionOptions = (decisionId: string) =>
     },
   });
 
-export const decisionBySlugOptions = (slug: string) =>
+export const decisionBySlugOptions = ({ language, slug }: DecisionBySlugKey) =>
   queryOptions({
-    queryKey: caseLawDecisionKeys.bySlug(slug),
+    queryKey: caseLawDecisionKeys.bySlug(
+      language === undefined ? { slug } : { language, slug },
+    ),
     queryFn: async ({ signal }) => {
       const response = await api.case.decisions["by-slug"]({ slug }).get({
+        ...(language !== undefined && { query: { language } }),
         fetch: { signal },
       });
 

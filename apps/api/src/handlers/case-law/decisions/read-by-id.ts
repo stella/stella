@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { status } from "elysia";
 
 import { caseLawDecisions } from "@/api/db/schema";
@@ -150,17 +150,27 @@ export const readDecisionHandler = async (
 export const readDecisionBySlugHandler = async (
   slug: string,
   caseLawDb: CaseLawPublicReadDb,
+  language?: string,
 ) => {
   const decision = await caseLawDb((tx) =>
-    tx.query.caseLawDecisions.findFirst({
-      where: { slug: { eq: slug } },
-      columns: { id: true },
-    }),
+    tx
+      .select({ id: caseLawDecisions.id })
+      .from(caseLawDecisions)
+      .where(
+        language
+          ? and(
+              eq(caseLawDecisions.slug, slug),
+              eq(caseLawDecisions.language, language),
+            )
+          : eq(caseLawDecisions.slug, slug),
+      )
+      .limit(1),
   );
 
-  if (!decision) {
+  const firstDecision = decision.at(0);
+  if (!firstDecision) {
     return status(404, { message: "Decision not found" });
   }
 
-  return await readDecisionHandler(decision.id, caseLawDb);
+  return await readDecisionHandler(firstDecision.id, caseLawDb);
 };

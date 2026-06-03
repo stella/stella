@@ -1,7 +1,8 @@
-import { sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
+import { caseLawDecisions } from "@/api/db/schema";
 import { courtWeightSql } from "@/api/handlers/case-law/citation-score";
 import { bodyPreviewJoin } from "@/api/handlers/case-law/decisions/search-sql";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -148,6 +149,7 @@ export const searchDecisionsHandler = async (
       d.court,
       d.country,
       d.language,
+      d.language_group_key,
       d.decision_date,
       d.decision_type,
       d.source_url,
@@ -268,6 +270,40 @@ export const searchDecisionsHandler = async (
 
   const hasMore = hitsResult.length > limit;
   const resultRows = hasMore ? hitsResult.slice(0, limit) : hitsResult;
+  const languageGroupKeys = [
+    ...new Set(
+      resultRows
+        .map((row) => toNullableString(row["language_group_key"]))
+        .filter((value): value is string => value !== null),
+    ),
+  ];
+  const languageAlternateCounts =
+    languageGroupKeys.length > 0
+      ? await caseLawDb((tx) =>
+          tx
+            .select({
+              languageGroupKey: caseLawDecisions.languageGroupKey,
+              count: sql<number>`count(*)::int`,
+            })
+            .from(caseLawDecisions)
+            .where(
+              inArray(caseLawDecisions.languageGroupKey, languageGroupKeys),
+            )
+            .groupBy(caseLawDecisions.languageGroupKey),
+        )
+      : [];
+  const languageAlternateCountByGroupKey = new Map(
+    languageAlternateCounts
+      .filter(
+        (
+          row,
+        ): row is {
+          count: number;
+          languageGroupKey: string;
+        } => row.languageGroupKey !== null,
+      )
+      .map((row) => [row.languageGroupKey, row.count]),
+  );
 
   const lastRaw = resultRows.at(-1);
   const nextCursor =
@@ -275,27 +311,36 @@ export const searchDecisionsHandler = async (
       ? encodeCursor(Number(lastRaw["score"]), String(lastRaw["decision_id"]))
       : null;
 
-  const hits = resultRows.map((row) => ({
-    decisionId: String(row["decision_id"]),
-    caseNumber: String(row["case_number"]),
-    slug: toNullableString(row["slug"]),
-    ecli: toNullableString(row["ecli"]),
-    court: String(row["court"]),
-    country: String(row["country"]),
-    language: String(row["language"]),
-    decisionDate: toNullableString(row["decision_date"]),
-    decisionType: toNullableString(row["decision_type"]),
-    sourceUrl: toNullableString(row["source_url"]),
-    // oxlint-disable-next-line typescript/strict-boolean-expressions -- row.headline from DB (any)
-    headline: row["headline"]
-      ? escapeAndHighlight(toNullableString(row["headline"]) ?? "")
-      : null,
-    citationCount: Number(row["citation_count"]) || 0,
-    createdAt:
-      row["created_at"] instanceof Date
-        ? row["created_at"].toISOString()
-        : String(row["created_at"]),
-  }));
+  const hits = resultRows.map((row) => {
+    const languageGroupKey = toNullableString(row["language_group_key"]);
+
+    return {
+      decisionId: String(row["decision_id"]),
+      caseNumber: String(row["case_number"]),
+      slug: toNullableString(row["slug"]),
+      ecli: toNullableString(row["ecli"]),
+      court: String(row["court"]),
+      country: String(row["country"]),
+      language: String(row["language"]),
+      languageAlternateCount:
+        languageGroupKey === null
+          ? 0
+          : (languageAlternateCountByGroupKey.get(languageGroupKey) ?? 1),
+      languageGroupKey,
+      decisionDate: toNullableString(row["decision_date"]),
+      decisionType: toNullableString(row["decision_type"]),
+      sourceUrl: toNullableString(row["source_url"]),
+      // oxlint-disable-next-line typescript/strict-boolean-expressions -- row.headline from DB (any)
+      headline: row["headline"]
+        ? escapeAndHighlight(toNullableString(row["headline"]) ?? "")
+        : null,
+      citationCount: Number(row["citation_count"]) || 0,
+      createdAt:
+        row["created_at"] instanceof Date
+          ? row["created_at"].toISOString()
+          : String(row["created_at"]),
+    };
+  });
 
   const totalCount = parsedCursor
     ? null

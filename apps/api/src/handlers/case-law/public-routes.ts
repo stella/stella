@@ -66,11 +66,15 @@ const readDecision = createSafePublicHandler(
 const readDecisionBySlug = createSafePublicHandler(
   {
     params: t.Object({ slug: t.String({ minLength: 1, maxLength: 256 }) }),
+    query: t.Object({
+      language: t.Optional(t.String({ minLength: 2, maxLength: 8 })),
+    }),
   },
-  async function* ({ params: { slug } }) {
+  async function* ({ params: { slug }, query: { language } }) {
     const response = yield* Result.await(
       Result.tryPromise(
-        async () => await readDecisionBySlugHandler(slug, caseLawPublicReadDb),
+        async () =>
+          await readDecisionBySlugHandler(slug, caseLawPublicReadDb, language),
       ),
     );
 
@@ -132,6 +136,7 @@ export const publicCaseLawRoute = new Elysia({
   .get("/decisions/facets", listDecisionFacets.handler)
   .get("/decisions/by-slug/:slug", readDecisionBySlug.handler, {
     params: readDecisionBySlug.config.params,
+    query: readDecisionBySlug.config.query,
   })
   .get("/decisions/:decisionId", readDecision.handler, {
     params: readDecision.config.params,

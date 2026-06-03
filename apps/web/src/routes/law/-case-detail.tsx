@@ -197,11 +197,38 @@ export const loadPublicCaseLawDecisionRoute = async ({
   const legacyDecisionId = extractLegacyCaseLawDecisionIdFromRouteParam(
     params.slug,
   );
+  if (legacyDecisionId) {
+    const decision = await ensureCriticalQueryData(
+      queryClient,
+      decisionOptions(extractId(legacyDecisionId)),
+    );
+    const canonicalParams = createCaseLawDecisionRouteParams({
+      caseNumber: decision.caseNumber,
+      country: decision.country,
+      court: decision.court,
+      decisionDate: decision.decisionDate,
+      decisionId: decision.id,
+      language: decision.language,
+      languageAlternates: decision.languageAlternates,
+      slug: decision.slug,
+    });
+
+    const canonicalPath = createCaseLawDecisionPath(canonicalParams);
+    const currentPath = createCaseLawDecisionPath(params);
+    if (currentPath !== canonicalPath) {
+      redirectToCanonicalDecisionPath(canonicalParams);
+    }
+
+    return decision;
+  }
+
   const decision = await ensureCriticalQueryData(
     queryClient,
-    legacyDecisionId
-      ? decisionOptions(extractId(legacyDecisionId))
-      : decisionBySlugOptions(params.slug),
+    decisionBySlugOptions(
+      params.language === undefined
+        ? { slug: params.slug }
+        : { language: params.language, slug: params.slug },
+    ),
   );
   const canonicalParams = createCaseLawDecisionRouteParams({
     caseNumber: decision.caseNumber,

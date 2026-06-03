@@ -16,6 +16,7 @@ const SITEMAP_COUNTRY_PATTERN = "^[a-z]{3}$";
 const SITEMAP_YEAR_PATTERN = "^(?:\\d{4}|undated)$";
 const SITEMAP_MONTH_PATTERN = "^(?:0[1-9]|1[0-2]|00)$";
 const SITEMAP_BUCKET_PATTERN = "^(?:all|[0-9]{2})$";
+const SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE = 1000;
 
 export const sitemapShardDecisionsQuerySchema = t.Object({
   country: t.String({ pattern: SITEMAP_COUNTRY_PATTERN }),
@@ -62,6 +63,18 @@ const getBucketPathSegment = (index: number): string =>
 
 const getLastmod = (value: Date | null): string | null =>
   value ? value.toISOString().slice(0, 10) : null;
+
+const chunkArray = <T>(
+  items: readonly T[],
+  chunkSize: number,
+): readonly T[][] => {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += chunkSize) {
+    chunks.push(items.slice(index, index + chunkSize));
+  }
+
+  return chunks;
+};
 
 const getShardConditions = ({
   bucket = SITEMAP_ALL_BUCKET,
@@ -203,28 +216,30 @@ export const listSitemapShardDecisionsHandler = async (
         .filter((value): value is string => value !== null),
     ),
   ];
-  const alternateRows =
-    languageGroupKeys.length > 0
-      ? await caseLawDb((tx) =>
-          tx
-            .select({
-              id: caseLawDecisions.id,
-              caseNumber: caseLawDecisions.caseNumber,
-              slug: caseLawDecisions.slug,
-              country: caseLawDecisions.country,
-              court: caseLawDecisions.court,
-              decisionDate: caseLawDecisions.decisionDate,
-              language: caseLawDecisions.language,
-              languageGroupKey: caseLawDecisions.languageGroupKey,
-              updatedAt: caseLawDecisions.updatedAt,
-            })
-            .from(caseLawDecisions)
-            .where(
-              inArray(caseLawDecisions.languageGroupKey, languageGroupKeys),
-            )
-            .orderBy(asc(caseLawDecisions.language), asc(caseLawDecisions.id)),
-        )
-      : [];
+  const alternateRows = [];
+  for (const groupKeyBatch of chunkArray(
+    languageGroupKeys,
+    SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE,
+  )) {
+    const batchRows = await caseLawDb((tx) =>
+      tx
+        .select({
+          id: caseLawDecisions.id,
+          caseNumber: caseLawDecisions.caseNumber,
+          slug: caseLawDecisions.slug,
+          country: caseLawDecisions.country,
+          court: caseLawDecisions.court,
+          decisionDate: caseLawDecisions.decisionDate,
+          language: caseLawDecisions.language,
+          languageGroupKey: caseLawDecisions.languageGroupKey,
+          updatedAt: caseLawDecisions.updatedAt,
+        })
+        .from(caseLawDecisions)
+        .where(inArray(caseLawDecisions.languageGroupKey, groupKeyBatch))
+        .orderBy(asc(caseLawDecisions.language), asc(caseLawDecisions.id)),
+    );
+    alternateRows.push(...batchRows);
+  }
   const alternatesByGroupKey = new Map<string, SitemapDecisionAlternate[]>();
   for (const alternate of alternateRows) {
     if (alternate.languageGroupKey === null) {

@@ -19,6 +19,8 @@ const READ_DECISION_FILE =
   "apps/api/src/handlers/case-law/decisions/read-by-id.ts";
 const FACETS_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/facets.ts";
+const SEARCH_DECISIONS_FILE =
+  "apps/api/src/handlers/case-law/decisions/search.ts";
 const SITEMAP_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/sitemap.ts";
 const PUBLIC_READ_DB_FILE = "apps/api/src/lib/case-law-public-read-db.ts";
@@ -28,6 +30,8 @@ const readDecisionSource = async () =>
   await Bun.file(READ_DECISION_FILE).text();
 const readFacetsSource = async () =>
   await Bun.file(FACETS_DECISIONS_FILE).text();
+const readSearchSource = async () =>
+  await Bun.file(SEARCH_DECISIONS_FILE).text();
 const readSitemapSource = async () =>
   await Bun.file(SITEMAP_DECISIONS_FILE).text();
 const readPublicReadDbSource = async () =>
@@ -143,6 +147,18 @@ describe("public case-law route boundary", () => {
     expect(source).toContain("LIMITS.caseLawFacetLimit");
   });
 
+  test("public search payload is aggregate public data only", async () => {
+    const source = await readSearchSource();
+
+    expect(source).not.toContain("analysis");
+    expect(source).not.toContain("workspace");
+    expect(source).not.toContain("organization");
+    expect(source).not.toContain("matter");
+    expect(source).toContain("d.language_group_key");
+    expect(source).toContain("languageAlternateCount:");
+    expect(source).toContain("languageGroupKey,");
+  });
+
   test("public sitemap payload is an explicit public allowlist", async () => {
     const source = await readSitemapSource();
 
@@ -159,6 +175,7 @@ describe("public case-law route boundary", () => {
     expect(source).toContain("languageAlternates:");
     expect(source).toContain("updatedAt: caseLawDecisions.updatedAt");
     expect(source).toContain("SITEMAP_SHARD_BUCKET_COUNT");
+    expect(source).toContain("SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE");
     expect(source).toContain("LIMITS.caseLawSitemapIndexEntryLimit");
   });
 });
