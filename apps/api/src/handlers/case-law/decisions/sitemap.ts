@@ -17,6 +17,7 @@ const SITEMAP_YEAR_PATTERN = "^(?:\\d{4}|undated)$";
 const SITEMAP_MONTH_PATTERN = "^(?:0[1-9]|1[0-2]|00)$";
 const SITEMAP_BUCKET_PATTERN = "^(?:all|[0-9]{2})$";
 const SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE = 1000;
+const LANGUAGE_SEGMENT_REGEX = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/u;
 
 export const sitemapShardDecisionsQuerySchema = t.Object({
   country: t.String({ pattern: SITEMAP_COUNTRY_PATTERN }),
@@ -63,6 +64,15 @@ const getBucketPathSegment = (index: number): string =>
 
 const getLastmod = (value: Date | null): string | null =>
   value ? value.toISOString().slice(0, 10) : null;
+
+const normalizeLanguageSegment = (language: string): string | null => {
+  const normalized = language.trim().toLowerCase().replace(/_/gu, "-");
+  if (!normalized || !LANGUAGE_SEGMENT_REGEX.test(normalized)) {
+    return null;
+  }
+
+  return normalized;
+};
 
 const chunkArray = <T>(
   items: readonly T[],
@@ -246,8 +256,23 @@ export const listSitemapShardDecisionsHandler = async (
       continue;
     }
 
+    const normalizedLanguage = normalizeLanguageSegment(alternate.language);
+    if (normalizedLanguage === null) {
+      continue;
+    }
+
     const groupedAlternates =
       alternatesByGroupKey.get(alternate.languageGroupKey) ?? [];
+    if (
+      groupedAlternates.some(
+        (groupedAlternate) =>
+          normalizeLanguageSegment(groupedAlternate.language) ===
+          normalizedLanguage,
+      )
+    ) {
+      continue;
+    }
+
     groupedAlternates.push({
       id: alternate.id,
       caseNumber: alternate.caseNumber,

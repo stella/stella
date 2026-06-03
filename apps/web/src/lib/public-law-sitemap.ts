@@ -12,6 +12,7 @@ import { createPublicLawCanonicalUrl } from "@/lib/public-law-seo";
 
 const LAW_SITEMAP_PATH = "/sitemaps/law.xml";
 const LAW_CASES_SITEMAP_BASE_PATH = "/sitemaps/law-cases";
+const SITEMAP_XML_MAX_BYTES = 50 * 1024 * 1024;
 const SITEMAP_CACHE_CONTROL =
   "public, max-age=3600, s-maxage=21600, stale-while-revalidate=86400";
 
@@ -104,6 +105,21 @@ const xmlEscape = (value: string): string =>
     .replace(/"/gu, "&quot;")
     .replace(/'/gu, "&apos;");
 
+export const assertPublicLawSitemapXmlWithinProtocolLimits = (
+  xml: string,
+  maxBytes = SITEMAP_XML_MAX_BYTES,
+): void => {
+  const byteLength = new TextEncoder().encode(xml).byteLength;
+  if (byteLength <= maxBytes) {
+    return;
+  }
+
+  throw new ClientOperationError({
+    action: "serializePublicCaseLawSitemap",
+    message: `Public case-law sitemap exceeded ${maxBytes} bytes.`,
+  });
+};
+
 const createCaseLawDecisionSitemapUrl = (
   decision: SitemapDecisionUrlInput,
 ): string => {
@@ -129,12 +145,14 @@ const createCaseLawDecisionSitemapAlternateLinks = (
   }
 
   const alternateLinks: SitemapAlternateLink[] = [];
+  const seenHreflangs = new Set<string>();
   for (const alternate of decision.languageAlternates) {
     const hreflang = normalizeCaseLawLanguageSegment(alternate.language);
-    if (hreflang === null) {
+    if (hreflang === null || seenHreflangs.has(hreflang)) {
       continue;
     }
 
+    seenHreflangs.add(hreflang);
     alternateLinks.push({
       hreflang,
       href: createCaseLawDecisionSitemapUrl({
@@ -308,11 +326,15 @@ export const createPublicCaseLawSitemapXml = (
     ? ' xmlns:xhtml="http://www.w3.org/1999/xhtml"'
     : "";
 
-  return `<?xml version="1.0" encoding="UTF-8"?>
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"${namespace}>
 ${entries}
 </urlset>
 `;
+
+  assertPublicLawSitemapXmlWithinProtocolLimits(xml);
+
+  return xml;
 };
 
 export const createRobotsTxt = (): string => {

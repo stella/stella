@@ -6,6 +6,7 @@ Object.assign(import.meta.env, {
 });
 
 const {
+  assertPublicLawSitemapXmlWithinProtocolLimits,
   createPublicCaseLawSitemapXml,
   createPublicLawStaticSitemapXml,
   createPublicLawSitemapIndexXml,
@@ -251,6 +252,62 @@ describe("public law sitemap", () => {
       'hreflang="cs" href="http://localhost:3000/law/eu/cases/court-of-justice/2024-03-07/cs/c-123-22-cs"',
     );
     expect(xml).toContain('hreflang="x-default"');
+  });
+
+  test("case-law shard sitemaps dedupe duplicate-language alternates", () => {
+    const xml = createPublicCaseLawSitemapXml([
+      {
+        id: "11111111-1111-4111-8111-111111111111",
+        caseNumber: "C-123/22",
+        slug: "c-123-22",
+        country: "EU",
+        court: "Court of Justice",
+        decisionDate: "2024-03-07",
+        language: "en",
+        languageAlternates: [
+          {
+            id: "11111111-1111-4111-8111-111111111111",
+            caseNumber: "C-123/22",
+            slug: "c-123-22",
+            country: "EU",
+            court: "Court of Justice",
+            decisionDate: "2024-03-07",
+            language: "EN",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+          {
+            id: "33333333-3333-4333-8333-333333333333",
+            caseNumber: "C-123/22",
+            slug: "c-123-22-duplicate",
+            country: "EU",
+            court: "Court of Justice",
+            decisionDate: "2024-03-07",
+            language: "en",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+          {
+            id: "22222222-2222-4222-8222-222222222222",
+            caseNumber: "C-123/22",
+            slug: "c-123-22-cs",
+            country: "EU",
+            court: "Court of Justice",
+            decisionDate: "2024-03-07",
+            language: "cs",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
+
+    expect(xml.match(/hreflang="en"/gu)).toHaveLength(1);
+    expect(xml.match(/hreflang="cs"/gu)).toHaveLength(1);
+  });
+
+  test("case-law shard sitemaps fail before exceeding the protocol byte limit", () => {
+    expect(() =>
+      assertPublicLawSitemapXmlWithinProtocolLimits("<urlset />", 5),
+    ).toThrow("Public case-law sitemap exceeded 5 bytes.");
   });
 
   test("sitemap XML responses are publicly cacheable", () => {

@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { status } from "elysia";
 
 import { caseLawDecisions } from "@/api/db/schema";
@@ -15,6 +15,40 @@ type PublicDecisionLanguageAlternate = {
   language: string;
   slug: string | null;
   updatedAt: Date;
+};
+
+const LANGUAGE_SEGMENT_REGEX = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/u;
+
+const normalizePublicDecisionLanguage = (
+  language: string | undefined,
+): string | null => {
+  const normalized = language?.trim().toLowerCase().replace(/_/gu, "-");
+  if (!normalized) {
+    return null;
+  }
+
+  return LANGUAGE_SEGMENT_REGEX.test(normalized) ? normalized : null;
+};
+
+const dedupeAlternatesByLanguage = (
+  alternates: readonly PublicDecisionLanguageAlternate[],
+): PublicDecisionLanguageAlternate[] => {
+  const seenLanguages = new Set<string>();
+  const dedupedAlternates: PublicDecisionLanguageAlternate[] = [];
+
+  for (const alternate of alternates) {
+    const normalizedLanguage = normalizePublicDecisionLanguage(
+      alternate.language,
+    );
+    if (normalizedLanguage === null || seenLanguages.has(normalizedLanguage)) {
+      continue;
+    }
+
+    seenLanguages.add(normalizedLanguage);
+    dedupedAlternates.push(alternate);
+  }
+
+  return dedupedAlternates;
 };
 
 const listPublicDecisionLanguageAlternates = async ({
@@ -44,8 +78,9 @@ const listPublicDecisionLanguageAlternates = async ({
       .where(eq(caseLawDecisions.languageGroupKey, languageGroupKey))
       .orderBy(asc(caseLawDecisions.language), asc(caseLawDecisions.id)),
   );
+  const dedupedAlternates = dedupeAlternatesByLanguage(alternates);
 
-  return alternates.length > 1 ? alternates : [];
+  return dedupedAlternates.length > 1 ? dedupedAlternates : [];
 };
 
 export const readDecisionHandler = async (
@@ -152,15 +187,20 @@ export const readDecisionBySlugHandler = async (
   caseLawDb: CaseLawPublicReadDb,
   language?: string,
 ) => {
+  const normalizedLanguage = normalizePublicDecisionLanguage(language);
+  if (language !== undefined && normalizedLanguage === null) {
+    return status(404, { message: "Decision not found" });
+  }
+
   const decision = await caseLawDb((tx) =>
     tx
       .select({ id: caseLawDecisions.id })
       .from(caseLawDecisions)
       .where(
-        language
+        normalizedLanguage
           ? and(
               eq(caseLawDecisions.slug, slug),
-              eq(caseLawDecisions.language, language),
+              sql`replace(lower(${caseLawDecisions.language}), '_', '-') = ${normalizedLanguage}`,
             )
           : eq(caseLawDecisions.slug, slug),
       )

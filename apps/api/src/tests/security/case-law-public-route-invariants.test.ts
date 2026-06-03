@@ -131,6 +131,9 @@ describe("public case-law route boundary", () => {
     expect(source).toContain("caseNumber: decision.caseNumber");
     expect(source).toContain("slug: decision.slug");
     expect(source).toContain("languageAlternates,");
+    expect(source).toContain("normalizePublicDecisionLanguage");
+    expect(source).toContain("replace(lower(");
+    expect(source).toContain("caseLawDecisions.language");
     expect(source).toContain("fulltext,");
   });
 
@@ -155,6 +158,7 @@ describe("public case-law route boundary", () => {
     expect(source).not.toContain("organization");
     expect(source).not.toContain("matter");
     expect(source).toContain("d.language_group_key");
+    expect(source).toContain("count(distinct replace(lower(");
     expect(source).toContain("languageAlternateCount:");
     expect(source).toContain("languageGroupKey,");
   });
@@ -176,6 +180,7 @@ describe("public case-law route boundary", () => {
     expect(source).toContain("updatedAt: caseLawDecisions.updatedAt");
     expect(source).toContain("SITEMAP_SHARD_BUCKET_COUNT");
     expect(source).toContain("SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE");
+    expect(source).toContain("normalizeLanguageSegment");
     expect(source).toContain("LIMITS.caseLawSitemapIndexEntryLimit");
   });
 });

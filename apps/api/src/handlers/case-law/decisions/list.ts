@@ -119,7 +119,7 @@ export const listDecisionsHandler = async (
           tx
             .select({
               languageGroupKey: caseLawDecisions.languageGroupKey,
-              count: sql<number>`count(*)::int`,
+              count: sql<number>`count(distinct replace(lower(${caseLawDecisions.language}), '_', '-'))::int`,
             })
             .from(caseLawDecisions)
             .where(
