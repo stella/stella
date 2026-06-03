@@ -6,7 +6,12 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { parseEndnotes, parseFootnotes } from "./footnoteParser";
+import {
+  getEndnoteText,
+  getFootnoteText,
+  parseEndnotes,
+  parseFootnotes,
+} from "./footnoteParser";
 
 const FOOTNOTE_WITH_SDT = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
@@ -75,5 +80,28 @@ describe("footnote / endnote bodies preserve block-level w:sdt", () => {
     // PR #587 then guards mutations on the bound control).
     expect(sdt.properties.rawPropertiesXml).toContain("w:dataBinding");
     expect(sdt.properties.rawPropertiesXml).toContain('w:xpath="/cite/source"');
+  });
+
+  test("getFootnoteText recurses into block SDTs so citation slot text survives", () => {
+    // Without the recursion, BlockSdt children added by the parser fix
+    // would silently hide their inner paragraphs from text extraction.
+    const map = parseFootnotes(FOOTNOTE_WITH_SDT);
+    const footnote = map.byId.get(1);
+    if (!footnote) {
+      throw new TypeError("expected footnote");
+    }
+    const text = getFootnoteText(footnote);
+    expect(text).toContain("before");
+    expect(text).toContain("cited source");
+    expect(text).toContain("after");
+  });
+
+  test("getEndnoteText recurses into block SDTs", () => {
+    const map = parseEndnotes(ENDNOTE_WITH_SDT);
+    const endnote = map.byId.get(2);
+    if (!endnote) {
+      throw new TypeError("expected endnote");
+    }
+    expect(getEndnoteText(endnote)).toBe("bound endnote");
   });
 });

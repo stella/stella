@@ -438,56 +438,48 @@ export {
 // ============================================================================
 
 /**
- * Get plain text content of a footnote
+ * Get plain text content of a footnote.
+ *
+ * Recurses into block-level SDTs so a citation slot inside a note still
+ * contributes its text; without recursion, the BlockSdt addition from
+ * the previous commit would silently hide the slot's body from this
+ * helper.
  */
 export function getFootnoteText(footnote: Footnote): string {
-  // Import getParagraphText dynamically to avoid circular dependency
-  const texts: string[] = [];
-
-  for (const para of footnote.content) {
-    if (para.type !== "paragraph") {
-      continue;
-    }
-    const paraTexts: string[] = [];
-    for (const content of para.content) {
-      if (content.type === "run") {
-        for (const runContent of content.content) {
-          if (runContent.type === "text") {
-            paraTexts.push(runContent.text);
-          }
-        }
-      }
-    }
-    texts.push(paraTexts.join(""));
-  }
-
-  return texts.join("\n");
+  return collectNoteBlockTexts(footnote.content).join("\n");
 }
 
 /**
- * Get plain text content of an endnote
+ * Get plain text content of an endnote.
  */
 export function getEndnoteText(endnote: Endnote): string {
-  const texts: string[] = [];
+  return collectNoteBlockTexts(endnote.content).join("\n");
+}
 
-  for (const para of endnote.content) {
-    if (para.type !== "paragraph") {
-      continue;
-    }
-    const paraTexts: string[] = [];
-    for (const content of para.content) {
-      if (content.type === "run") {
-        for (const runContent of content.content) {
-          if (runContent.type === "text") {
-            paraTexts.push(runContent.text);
+function collectNoteBlockTexts(
+  blocks: readonly (Paragraph | Table | BlockSdt)[],
+): string[] {
+  const texts: string[] = [];
+  for (const block of blocks) {
+    if (block.type === "paragraph") {
+      const paraTexts: string[] = [];
+      for (const content of block.content) {
+        if (content.type === "run") {
+          for (const runContent of content.content) {
+            if (runContent.type === "text") {
+              paraTexts.push(runContent.text);
+            }
           }
         }
       }
+      texts.push(paraTexts.join(""));
+    } else if (block.type === "blockSdt") {
+      texts.push(...collectNoteBlockTexts(block.content));
     }
-    texts.push(paraTexts.join(""));
+    // Table cells aren't surfaced by this helper today; pre-existing
+    // limitation, leaving out of scope.
   }
-
-  return texts.join("\n");
+  return texts;
 }
 
 /**
