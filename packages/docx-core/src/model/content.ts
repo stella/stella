@@ -1410,8 +1410,14 @@ export type Footnote = {
     | "separator"
     | "continuationSeparator"
     | "continuationNotice";
-  /** Content */
-  content: (Paragraph | Table)[];
+  /**
+   * Content. Note bodies may carry block-level `<w:sdt>` content
+   * controls (citation slots, bound metadata fields) — preserved as
+   * `BlockSdt` so the rest of folio's SDT round-trip + mutate APIs
+   * work in notes the same as they do in the main body. Mirrors the
+   * shape upstream eigenpal/docx-editor#678 fixed for the same case.
+   */
+  content: (Paragraph | Table | BlockSdt)[];
 };
 
 /**
@@ -1427,8 +1433,11 @@ export type Endnote = {
     | "separator"
     | "continuationSeparator"
     | "continuationNotice";
-  /** Content */
-  content: (Paragraph | Table)[];
+  /**
+   * Content. Like `Footnote.content`, may carry block-level `<w:sdt>`
+   * preserved as `BlockSdt` so SDT round-trip works inside endnotes.
+   */
+  content: (Paragraph | Table | BlockSdt)[];
 };
 
 // ============================================================================

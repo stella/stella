@@ -13,6 +13,8 @@ import type {
   BlockContent,
   BlockSdt,
   Document,
+  Endnote,
+  Footnote,
   Paragraph,
   Table,
 } from "../types/document";
@@ -332,7 +334,37 @@ function transformBlocks(
   return out;
 }
 
-function withUpdatedBody(doc: Document, content: BlockContent[]): Document {
+/**
+ * Apply the same SDT match callback to every footnote and endnote body
+ * and return the updated note arrays. Without this, citation slots and
+ * bound metadata inside notes can't be reached through `setContentControl*`
+ * by tag / alias / id even though `findContentControls` surfaces them.
+ */
+function applyMatchToNotes(
+  doc: Document,
+  match: (b: BlockSdt) => SdtMatchResult,
+): { footnotes?: Footnote[]; endnotes?: Endnote[] } {
+  const result: { footnotes?: Footnote[]; endnotes?: Endnote[] } = {};
+  if (doc.package.footnotes) {
+    result.footnotes = doc.package.footnotes.map((note) => ({
+      ...note,
+      content: transformBlocks(note.content, match),
+    }));
+  }
+  if (doc.package.endnotes) {
+    result.endnotes = doc.package.endnotes.map((note) => ({
+      ...note,
+      content: transformBlocks(note.content, match),
+    }));
+  }
+  return result;
+}
+
+function withUpdatedBodyAndNotes(
+  doc: Document,
+  content: BlockContent[],
+  notes: { footnotes?: Footnote[]; endnotes?: Endnote[] },
+): Document {
   return {
     ...doc,
     package: {
@@ -341,6 +373,8 @@ function withUpdatedBody(doc: Document, content: BlockContent[]): Document {
         ...doc.package.document,
         content,
       },
+      ...(notes.footnotes !== undefined ? { footnotes: notes.footnotes } : {}),
+      ...(notes.endnotes !== undefined ? { endnotes: notes.endnotes } : {}),
     },
   };
 }
@@ -392,6 +426,16 @@ function cloneBlock<T extends BlockContent>(block: T): T {
  * explicit `BlockContent[]` is deep-cloned to preserve immutability. The
  * `showingPlcHdr` flag is cleared so the new content is not styled as
  * placeholder.
+ *
+ * Applies to SDTs in the main body AND inside `doc.package.footnotes` /
+ * `doc.package.endnotes`. NOTE: save-path propagation for note SDTs is a
+ * known follow-up — `repackDocxFromRaw` currently replays
+ * `word/footnotes.xml` and `word/endnotes.xml` verbatim from the source
+ * zip, so changes to note SDTs land on the in-memory model but the
+ * saved DOCX still contains the original note text. Read APIs
+ * (`findContentControls`, `getFootnoteText`) reflect the update in the
+ * same session; persisting requires extending the selective-save layer
+ * to re-serialize note parts.
  */
 export function setContentControlContent(
   doc: Document,
@@ -399,34 +443,33 @@ export function setContentControlContent(
   input: SetContentControlContentInput,
   options: ForceOption = {},
 ): Document {
-  const nextContent = transformBlocks(
-    doc.package.document.content,
-    (control) => {
-      if (!controlMatchesFilter(control, filter)) {
-        return undefined;
-      }
-      ensureContentNotLocked(control, options.force);
-      const { strippedRawPropertiesXml } = ensureContentNotBound(
-        control,
-        options.force,
-      );
-      const blocks: BlockContent[] =
-        typeof input === "string"
-          ? [makeParagraphFromText(input)]
-          : input.map(cloneBlock);
-      const properties = { ...control.properties };
-      properties.showingPlaceholder = false;
-      if (strippedRawPropertiesXml !== undefined) {
-        properties.rawPropertiesXml = strippedRawPropertiesXml;
-      }
-      return {
-        ...control,
-        properties,
-        content: blocks,
-      };
-    },
-  );
-  return withUpdatedBody(doc, nextContent);
+  const match = (control: BlockSdt): SdtMatchResult => {
+    if (!controlMatchesFilter(control, filter)) {
+      return undefined;
+    }
+    ensureContentNotLocked(control, options.force);
+    const { strippedRawPropertiesXml } = ensureContentNotBound(
+      control,
+      options.force,
+    );
+    const blocks: BlockContent[] =
+      typeof input === "string"
+        ? [makeParagraphFromText(input)]
+        : input.map(cloneBlock);
+    const properties = { ...control.properties };
+    properties.showingPlaceholder = false;
+    if (strippedRawPropertiesXml !== undefined) {
+      properties.rawPropertiesXml = strippedRawPropertiesXml;
+    }
+    return {
+      ...control,
+      properties,
+      content: blocks,
+    };
+  };
+  const nextContent = transformBlocks(doc.package.document.content, match);
+  const notes = applyMatchToNotes(doc, match);
+  return withUpdatedBodyAndNotes(doc, nextContent, notes);
 }
 
 /**
@@ -440,96 +483,23 @@ export function setContentControlValue(
   input: SetContentControlValueInput,
   options: ForceOption = {},
 ): Document {
-  const nextContent = transformBlocks(
-    doc.package.document.content,
-    (control) => {
-      if (!controlMatchesFilter(control, filter)) {
-        return undefined;
-      }
-      ensureContentNotLocked(control, options.force);
-      const { strippedRawPropertiesXml } = ensureContentNotBound(
-        control,
-        options.force,
-      );
+  const match = (control: BlockSdt): SdtMatchResult => {
+    if (!controlMatchesFilter(control, filter)) {
+      return undefined;
+    }
+    ensureContentNotLocked(control, options.force);
+    const { strippedRawPropertiesXml } = ensureContentNotBound(
+      control,
+      options.force,
+    );
 
-      const sdtType = control.properties.sdtType;
-      if (input.kind === "dropdown") {
-        if (sdtType !== "dropdown" && sdtType !== "comboBox") {
-          throw new ContentControlTypeError({
-            message: `Cannot set dropdown value on a ${sdtType} control.`,
-            sdtType,
-            reason: "kind=dropdown requires sdtType=dropdown|comboBox",
-            ...(control.properties.tag !== undefined
-              ? { tag: control.properties.tag }
-              : {}),
-            ...(control.properties.alias !== undefined
-              ? { alias: control.properties.alias }
-              : {}),
-          });
-        }
-        const items = control.properties.listItems ?? [];
-        const item = items.find((i) => i.value === input.value);
-        if (!item && !options.force) {
-          throw new ContentControlTypeError({
-            message: `Value "${input.value}" not in the control's list items.`,
-            sdtType,
-            reason: "value not in listItems",
-            ...(control.properties.tag !== undefined
-              ? { tag: control.properties.tag }
-              : {}),
-            ...(control.properties.alias !== undefined
-              ? { alias: control.properties.alias }
-              : {}),
-          });
-        }
-        const display = item?.displayText ?? input.value;
-        return {
-          ...control,
-          properties: {
-            ...control.properties,
-            dropdownLastValue: input.value,
-            showingPlaceholder: false,
-            ...(strippedRawPropertiesXml !== undefined
-              ? { rawPropertiesXml: strippedRawPropertiesXml }
-              : {}),
-          },
-          content: [makeParagraphFromText(display)],
-        };
-      }
-      if (input.kind === "checkbox") {
-        if (sdtType !== "checkbox") {
-          throw new ContentControlTypeError({
-            message: `Cannot toggle checkbox on a ${sdtType} control.`,
-            sdtType,
-            reason: "kind=checkbox requires sdtType=checkbox",
-            ...(control.properties.tag !== undefined
-              ? { tag: control.properties.tag }
-              : {}),
-            ...(control.properties.alias !== undefined
-              ? { alias: control.properties.alias }
-              : {}),
-          });
-        }
-        const glyph = input.checked ? "☒" : "☐";
-        return {
-          ...control,
-          properties: {
-            ...control.properties,
-            checked: input.checked,
-            showingPlaceholder: false,
-            ...(strippedRawPropertiesXml !== undefined
-              ? { rawPropertiesXml: strippedRawPropertiesXml }
-              : {}),
-          },
-          content: [makeParagraphFromText(glyph)],
-        };
-      }
-      // date
-      if (sdtType !== "date") {
+    const sdtType = control.properties.sdtType;
+    if (input.kind === "dropdown") {
+      if (sdtType !== "dropdown" && sdtType !== "comboBox") {
         throw new ContentControlTypeError({
-          message: `Cannot set date on a ${sdtType} control.`,
+          message: `Cannot set dropdown value on a ${sdtType} control.`,
           sdtType,
-          reason: "kind=date requires sdtType=date",
+          reason: "kind=dropdown requires sdtType=dropdown|comboBox",
           ...(control.properties.tag !== undefined
             ? { tag: control.properties.tag }
             : {}),
@@ -538,18 +508,27 @@ export function setContentControlValue(
             : {}),
         });
       }
-      // Keep the ISO value on the model and write the format-aware display
-      // string into the body so the on-screen text and the OOXML
-      // `w:fullDate` round-trip independently.
-      const display = formatDateForSdtBody(
-        input.date,
-        control.properties.dateFormat,
-      );
+      const items = control.properties.listItems ?? [];
+      const item = items.find((i) => i.value === input.value);
+      if (!item && !options.force) {
+        throw new ContentControlTypeError({
+          message: `Value "${input.value}" not in the control's list items.`,
+          sdtType,
+          reason: "value not in listItems",
+          ...(control.properties.tag !== undefined
+            ? { tag: control.properties.tag }
+            : {}),
+          ...(control.properties.alias !== undefined
+            ? { alias: control.properties.alias }
+            : {}),
+        });
+      }
+      const display = item?.displayText ?? input.value;
       return {
         ...control,
         properties: {
           ...control.properties,
-          dateValueISO: input.date,
+          dropdownLastValue: input.value,
           showingPlaceholder: false,
           ...(strippedRawPropertiesXml !== undefined
             ? { rawPropertiesXml: strippedRawPropertiesXml }
@@ -557,9 +536,72 @@ export function setContentControlValue(
         },
         content: [makeParagraphFromText(display)],
       };
-    },
-  );
-  return withUpdatedBody(doc, nextContent);
+    }
+    if (input.kind === "checkbox") {
+      if (sdtType !== "checkbox") {
+        throw new ContentControlTypeError({
+          message: `Cannot toggle checkbox on a ${sdtType} control.`,
+          sdtType,
+          reason: "kind=checkbox requires sdtType=checkbox",
+          ...(control.properties.tag !== undefined
+            ? { tag: control.properties.tag }
+            : {}),
+          ...(control.properties.alias !== undefined
+            ? { alias: control.properties.alias }
+            : {}),
+        });
+      }
+      const glyph = input.checked ? "☒" : "☐";
+      return {
+        ...control,
+        properties: {
+          ...control.properties,
+          checked: input.checked,
+          showingPlaceholder: false,
+          ...(strippedRawPropertiesXml !== undefined
+            ? { rawPropertiesXml: strippedRawPropertiesXml }
+            : {}),
+        },
+        content: [makeParagraphFromText(glyph)],
+      };
+    }
+    // date
+    if (sdtType !== "date") {
+      throw new ContentControlTypeError({
+        message: `Cannot set date on a ${sdtType} control.`,
+        sdtType,
+        reason: "kind=date requires sdtType=date",
+        ...(control.properties.tag !== undefined
+          ? { tag: control.properties.tag }
+          : {}),
+        ...(control.properties.alias !== undefined
+          ? { alias: control.properties.alias }
+          : {}),
+      });
+    }
+    // Keep the ISO value on the model and write the format-aware display
+    // string into the body so the on-screen text and the OOXML
+    // `w:fullDate` round-trip independently.
+    const display = formatDateForSdtBody(
+      input.date,
+      control.properties.dateFormat,
+    );
+    return {
+      ...control,
+      properties: {
+        ...control.properties,
+        dateValueISO: input.date,
+        showingPlaceholder: false,
+        ...(strippedRawPropertiesXml !== undefined
+          ? { rawPropertiesXml: strippedRawPropertiesXml }
+          : {}),
+      },
+      content: [makeParagraphFromText(display)],
+    };
+  };
+  const nextContent = transformBlocks(doc.package.document.content, match);
+  const notes = applyMatchToNotes(doc, match);
+  return withUpdatedBodyAndNotes(doc, nextContent, notes);
 }
 
 /**
@@ -572,38 +614,37 @@ export function removeContentControl(
   filter: ContentControlFilter,
   options: ForceOption & { keepContent?: boolean } = {},
 ): Document {
-  const nextContent = transformBlocks(
-    doc.package.document.content,
-    (control) => {
-      if (!controlMatchesFilter(control, filter)) {
-        return undefined;
+  const match = (control: BlockSdt): SdtMatchResult => {
+    if (!controlMatchesFilter(control, filter)) {
+      return undefined;
+    }
+    ensureSdtNotLocked(control, options.force);
+    if (options.keepContent) {
+      if (isRepeatingSection(control) && !options.force) {
+        throw new ContentControlTypeError({
+          message:
+            "Refusing to unwrap a w15:repeatingSection — would orphan its w15 row items.",
+          sdtType: control.properties.sdtType,
+          reason: "repeatingSection unwrap orphans items",
+          ...(control.properties.tag !== undefined
+            ? { tag: control.properties.tag }
+            : {}),
+          ...(control.properties.alias !== undefined
+            ? { alias: control.properties.alias }
+            : {}),
+        });
       }
-      ensureSdtNotLocked(control, options.force);
-      if (options.keepContent) {
-        if (isRepeatingSection(control) && !options.force) {
-          throw new ContentControlTypeError({
-            message:
-              "Refusing to unwrap a w15:repeatingSection — would orphan its w15 row items.",
-            sdtType: control.properties.sdtType,
-            reason: "repeatingSection unwrap orphans items",
-            ...(control.properties.tag !== undefined
-              ? { tag: control.properties.tag }
-              : {}),
-            ...(control.properties.alias !== undefined
-              ? { alias: control.properties.alias }
-              : {}),
-          });
-        }
-        return control.content;
-      }
-      // Drop control + content entirely.
-      return null;
-    },
-  );
+      return control.content;
+    }
+    // Drop control + content entirely.
+    return null;
+  };
+  const nextContent = transformBlocks(doc.package.document.content, match);
   // The body must contain at least one paragraph (OOXML requires a non-empty
   // body). Insert a placeholder if we just emptied it.
   if (nextContent.length === 0) {
     nextContent.push(makeParagraphFromText(""));
   }
-  return withUpdatedBody(doc, nextContent);
+  const notes = applyMatchToNotes(doc, match);
+  return withUpdatedBodyAndNotes(doc, nextContent, notes);
 }
