@@ -35,12 +35,28 @@ export type ContentControlFilter = {
   pmPos?: number;
 };
 
+/**
+ * Source location of a matched content control. Main-body matches stay
+ * the silent default; matches inside a footnote or endnote carry the
+ * note's numeric id so callers can route the right mutate API at it.
+ */
+export type ContentControlLocation =
+  | { kind: "body" }
+  | { kind: "footnote"; noteId: number }
+  | { kind: "endnote"; noteId: number };
+
 export type ContentControlMatch = {
   control: BlockSdt;
   /** Outer→inner stack of enclosing controls (empty when at the body root). */
   ancestry: BlockSdt[];
   /** Indices to walk back into the doc, outer→inner. */
   path: number[];
+  /**
+   * Where in the document this match was found. Defaults to the main
+   * body; populated for matches in `doc.package.footnotes` /
+   * `doc.package.endnotes`.
+   */
+  location: ContentControlLocation;
 };
 
 function matches(control: BlockSdt, filter: ContentControlFilter): boolean {
@@ -76,6 +92,7 @@ function walk(
   out: ContentControlMatch[],
   ancestry: BlockSdt[],
   path: number[],
+  location: ContentControlLocation,
 ): void {
   for (let i = 0; i < blocks.length; i += 1) {
     const block = blocks[i];
@@ -88,10 +105,18 @@ function walk(
           control: block,
           ancestry: [...ancestry],
           path: [...path, i],
+          location,
         });
       }
       // Recurse into the SDT — nested SDTs are addressable too.
-      walk(block.content, filter, out, [...ancestry, block], [...path, i]);
+      walk(
+        block.content,
+        filter,
+        out,
+        [...ancestry, block],
+        [...path, i],
+        location,
+      );
     } else if (block.type === "table") {
       // Walk into table cells so cell-level SDTs (where supported by the
       // parser) are surfaced too. cell.content is `(Paragraph | Table)[]`
@@ -107,7 +132,14 @@ function walk(
           if (!cell) {
             continue;
           }
-          walk(cell.content, filter, out, ancestry, [...path, i, r, c]);
+          walk(
+            cell.content,
+            filter,
+            out,
+            ancestry,
+            [...path, i, r, c],
+            location,
+          );
         }
       }
     }
@@ -119,7 +151,21 @@ export function findContentControls(
   filter: ContentControlFilter = {},
 ): ContentControlMatch[] {
   const out: ContentControlMatch[] = [];
-  walk(doc.package.document.content, filter, out, [], []);
+  walk(doc.package.document.content, filter, out, [], [], { kind: "body" });
+  // Also walk notes — citation slots and bound metadata live there too.
+  // Match objects carry a `location` so callers can route the mutate API.
+  for (const footnote of doc.package.footnotes ?? []) {
+    walk(footnote.content, filter, out, [], [], {
+      kind: "footnote",
+      noteId: footnote.id,
+    });
+  }
+  for (const endnote of doc.package.endnotes ?? []) {
+    walk(endnote.content, filter, out, [], [], {
+      kind: "endnote",
+      noteId: endnote.id,
+    });
+  }
   return out;
 }
 

@@ -7,6 +7,10 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  findContentControls,
+  setContentControlContent,
+} from "../content-controls";
+import {
   getEndnoteText,
   getFootnoteText,
   parseEndnotes,
@@ -103,5 +107,74 @@ describe("footnote / endnote bodies preserve block-level w:sdt", () => {
       throw new TypeError("expected endnote");
     }
     expect(getEndnoteText(endnote)).toBe("bound endnote");
+  });
+});
+
+describe("findContentControls / mutators reach SDTs in notes", () => {
+  test("findContentControls walks footnote and endnote bodies", () => {
+    // Test setup intentionally crosses parser → headless API; this is
+    // the round-trip codex flagged as silently missing.
+    const footnote = parseFootnotes(FOOTNOTE_WITH_SDT).byId.get(1);
+    const endnote = parseEndnotes(ENDNOTE_WITH_SDT).byId.get(2);
+    if (!footnote || !endnote) {
+      throw new TypeError("expected fixtures to parse");
+    }
+    const doc = {
+      package: {
+        document: {
+          content: [
+            {
+              type: "paragraph" as const,
+              content: [
+                {
+                  type: "run" as const,
+                  content: [{ type: "text" as const, text: "body" }],
+                },
+              ],
+            },
+          ],
+        },
+        footnotes: [footnote],
+        endnotes: [endnote],
+      },
+    };
+    const matches = findContentControls(doc, {});
+    // Two SDTs total: one in the footnote, one in the endnote.
+    expect(matches).toHaveLength(2);
+    const locations = matches.map((m) => m.location);
+    expect(locations).toContainEqual({ kind: "footnote", noteId: 1 });
+    expect(locations).toContainEqual({ kind: "endnote", noteId: 2 });
+    // Filter by tag still works across notes.
+    expect(findContentControls(doc, { tag: "cite" })).toHaveLength(1);
+    expect(findContentControls(doc, { tag: "bound" })).toHaveLength(1);
+  });
+
+  test("setContentControlContent mutates SDTs in footnote bodies", () => {
+    const footnote = parseFootnotes(FOOTNOTE_WITH_SDT).byId.get(1);
+    if (!footnote) {
+      throw new TypeError("expected fixture");
+    }
+    const doc = {
+      package: {
+        document: { content: [] },
+        footnotes: [footnote],
+      },
+    };
+    const updated = setContentControlContent(
+      doc,
+      { tag: "cite" },
+      "Smith v Jones",
+    );
+    const sdt = updated.package.footnotes?.[0]?.content[1];
+    if (!sdt || sdt.type !== "blockSdt") {
+      throw new TypeError("expected blockSdt in updated footnote");
+    }
+    const firstBlock = sdt.content[0];
+    if (!firstBlock || firstBlock.type !== "paragraph") {
+      throw new TypeError("expected paragraph inside updated SDT");
+    }
+    expect(getFootnoteText(updated.package.footnotes![0]!)).toContain(
+      "Smith v Jones",
+    );
   });
 });
