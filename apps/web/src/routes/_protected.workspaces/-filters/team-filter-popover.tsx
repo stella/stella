@@ -9,6 +9,7 @@ import { Separator } from "@stll/ui/components/separator";
 import { cn } from "@stll/ui/lib/utils";
 
 import { UserIdentity } from "@/components/user-avatar";
+import { getDisplayName } from "@/routes/_protected.workspaces/-components/team-avatars";
 import type {
   LeadFilter,
   Workspace,
@@ -45,7 +46,7 @@ export const TeamFilterPopover = ({
         if (!map.has(m.userId)) {
           map.set(m.userId, {
             userId: m.userId,
-            userName: m.userName,
+            userName: getDisplayName(m.userName, m.userId),
             userImage: m.userImage,
           });
         }
@@ -174,7 +175,7 @@ export const TeamFilterPopover = ({
         </div>
       </section>
 
-      {(teamValue || leadValue) && (
+      {(teamValue !== undefined || leadValue !== undefined) && (
         <>
           <Separator />
           <Button

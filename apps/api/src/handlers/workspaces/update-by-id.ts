@@ -55,7 +55,7 @@ const validateLeadIsMember = async (
   tx: Transaction,
   leadUserId: string | null | undefined,
   workspaceId: SafeId<"workspace">,
-  requestedMemberUserIds: readonly string[],
+  requestedMemberUserIds: readonly string[] = [],
 ): Promise<LeadValidationFailure | null> => {
   if (leadUserId === undefined || leadUserId === null) {
     return null;

@@ -72,7 +72,12 @@ export const LeadSection = ({ workspaceId }: LeadSectionProps) => {
       <div className="flex min-w-0 items-center gap-1">
         <Select
           disabled={!canUpdate || updateWorkspace.isPending}
-          onValueChange={(v) => handleSelect(v as string)}
+          onValueChange={(value) => {
+            if (typeof value !== "string") {
+              return;
+            }
+            handleSelect(value);
+          }}
           value={leadUserId ?? ""}
         >
           <SelectTrigger className="min-w-0 flex-1 rounded-md shadow-none">

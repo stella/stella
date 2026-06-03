@@ -8,6 +8,24 @@ import type {
 
 const DAY_MS = 86_400_000;
 
+export const parseLocalISODateMs = (value: string): number => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value);
+  if (!match) {
+    return Number.NaN;
+  }
+  const [, year, month, day] = match;
+  return new Date(Number(year), Number(month) - 1, Number(day)).getTime();
+};
+
+type FilterableWorkspace = {
+  client: Pick<NonNullable<Workspace["client"]>, "id"> | null;
+  createdAt: Workspace["createdAt"];
+  entityCount: number;
+  lastActivityAt: Workspace["lastActivityAt"];
+  leadUserId: string | null;
+  members: readonly { userId: string }[];
+};
+
 /** Resolve a DateFilter to a closed-open `[from, to)` epoch range. */
 const resolveDateRange = (
   filter: DateFilter,
@@ -55,14 +73,16 @@ const resolveDateRange = (
       }
       // `from`/`to` are `YYYY-MM-DD` local-date strings (inclusive).
       const fromMs = filter.from
-        ? new Date(`${filter.from}T00:00:00`).getTime()
+        ? parseLocalISODateMs(filter.from)
         : Number.NEGATIVE_INFINITY;
       const toMs = filter.to
-        ? new Date(`${filter.to}T00:00:00`).getTime() + DAY_MS
+        ? parseLocalISODateMs(filter.to) + DAY_MS
         : Number.POSITIVE_INFINITY;
       return { fromMs, toMs };
     }
   }
+  filter.preset satisfies never;
+  return null;
 };
 
 const passesDateFilter = (
@@ -89,7 +109,7 @@ const passesNumericFilter = (value: number, filter: NumericFilter): boolean => {
 };
 
 const passesLeadFilter = (
-  workspace: Workspace,
+  workspace: Pick<FilterableWorkspace, "leadUserId">,
   filter: LeadFilter,
 ): boolean => {
   switch (filter.type) {
@@ -100,16 +120,23 @@ const passesLeadFilter = (
     case "user":
       return workspace.leadUserId === filter.userId;
   }
+  filter satisfies never;
+  return false;
 };
 
 export const isMattersFiltersActive = (filters: MattersFilters): boolean =>
-  Object.values(filters).some((v) => v !== undefined);
+  filters.lastActivityAt !== undefined ||
+  filters.createdAt !== undefined ||
+  filters.client !== undefined ||
+  filters.team !== undefined ||
+  filters.lead !== undefined ||
+  filters.entityCount !== undefined;
 
-export const applyMattersFilters = (
-  workspaces: readonly Workspace[],
+export const applyMattersFilters = <TWorkspace extends FilterableWorkspace>(
+  workspaces: readonly TWorkspace[],
   filters: MattersFilters,
   now: Date = new Date(),
-): Workspace[] => {
+): TWorkspace[] => {
   if (!isMattersFiltersActive(filters)) {
     return [...workspaces];
   }

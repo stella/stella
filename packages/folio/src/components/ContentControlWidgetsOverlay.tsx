@@ -6,7 +6,7 @@
  * whenever the user clicks a typed control. This component subscribes to
  * those events and renders a small floating picker positioned at the
  * anchor element — a list of menu items for dropdown / comboBox
- * controls, a native date input for date controls — then dispatches back
+ * controls, a shared date picker for date controls — then dispatches back
  * through `dispatchDropdownPick` / `dispatchDatePick` so the change rides
  * the normal undo stack.
  *
@@ -20,6 +20,7 @@ import { createPortal } from "react-dom";
 import type { EditorView } from "prosemirror-view";
 import { useTranslations } from "use-intl";
 
+import { DatePickerPopover } from "@stll/ui/components/date-picker-popover";
 import { MenuItem } from "@stll/ui/components/menu";
 
 import {
@@ -87,6 +88,7 @@ export function ContentControlWidgetsOverlay({
   getEditorView,
 }: ContentControlWidgetsOverlayProps) {
   const t = useTranslations("folio");
+  const tCommon = useTranslations("common");
   const [open, setOpen] = useState<OpenPicker | null>(null);
 
   // Hold the latest resolver in a ref so the subscription effect's
@@ -216,11 +218,16 @@ export function ContentControlWidgetsOverlay({
         </div>
       )}
       {open.kind === "date" && (
-        <input
-          type="date"
-          autoFocus
-          onChange={(event) => onDatePick(event.currentTarget.value)}
-          className="bg-background rounded border px-2 py-1 text-sm"
+        <DatePickerPopover
+          clearLabel={tCommon("clearDate")}
+          defaultOpen
+          onChange={(value) => {
+            if (value) {
+              onDatePick(value);
+            }
+          }}
+          showIcon={false}
+          value={null}
         />
       )}
     </div>,

@@ -9,8 +9,11 @@ import { cn } from "@stll/ui/lib/utils";
 
 import type { Workspace } from "@/routes/_protected.workspaces/-types";
 
-export const getInitials = (name: string): string => {
-  const parts = name.trim().split(/\s+/u).filter(Boolean);
+export const getDisplayName = (name: string | null, userId: string): string =>
+  name?.trim() || userId;
+
+export const getInitials = (name: string | null | undefined): string => {
+  const parts = (name ?? "").trim().split(/\s+/u).filter(Boolean);
   if (parts.length === 0) {
     return "?";
   }
@@ -54,6 +57,7 @@ export const TeamAvatars = ({
     <div className="flex items-center -space-x-1.5">
       {visible.map((m) => {
         const isLead = leadUserId === m.userId;
+        const displayName = getDisplayName(m.userName, m.userId);
         return (
           <Avatar
             className={cn(
@@ -64,13 +68,13 @@ export const TeamAvatars = ({
             )}
             key={m.userId}
             title={
-              isLead ? `${m.userName} · ${t("workspaces.lead")}` : m.userName
+              isLead ? `${displayName} · ${t("workspaces.lead")}` : displayName
             }
           >
             {m.userImage ? (
-              <AvatarImage alt={m.userName} src={m.userImage} />
+              <AvatarImage alt={displayName} src={m.userImage} />
             ) : null}
-            <AvatarFallback>{getInitials(m.userName)}</AvatarFallback>
+            <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
           </Avatar>
         );
       })}
@@ -84,7 +88,7 @@ export const TeamAvatars = ({
           )}
           title={members
             .slice(maxVisible)
-            .map((m) => m.userName)
+            .map((m) => getDisplayName(m.userName, m.userId))
             .join(", ")}
         >
           +{overflow}

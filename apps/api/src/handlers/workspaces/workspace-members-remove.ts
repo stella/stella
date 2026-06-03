@@ -1,7 +1,11 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import { desktopEditSessions, workspaceMembers } from "@/api/db/schema";
+import {
+  desktopEditSessions,
+  workspaceMembers,
+  workspaces,
+} from "@/api/db/schema";
 import {
   closeSessionConnections,
   pushSessionEvent,
@@ -31,6 +35,17 @@ const removeWorkspaceMember = createSafeHandler(
     // member rows so concurrent removals serialize.
     const txResult = yield* Result.await(
       safeDb(async (tx) => {
+        const workspaceRows = await tx
+          .select({ leadUserId: workspaces.leadUserId })
+          .from(workspaces)
+          .where(eq(workspaces.id, workspaceId))
+          .for("update");
+        const workspace = workspaceRows.at(0);
+
+        if (!workspace) {
+          return { ok: false as const, reason: "not-found" as const };
+        }
+
         const lockedRows = await tx
           .select({
             id: workspaceMembers.id,
@@ -65,6 +80,14 @@ const removeWorkspaceMember = createSafeHandler(
           return { ok: false as const, reason: "not-found" as const };
         }
 
+        const leadWasCleared = workspace.leadUserId === userId;
+        if (leadWasCleared) {
+          await tx
+            .update(workspaces)
+            .set({ leadUserId: null })
+            .where(eq(workspaces.id, workspaceId));
+        }
+
         const closedSessions = await tx
           .update(desktopEditSessions)
           .set({ status: "cancelled", closedAt: new Date() })
@@ -91,6 +114,20 @@ const removeWorkspaceMember = createSafeHandler(
             closedDesktopEditSessions: closedSessions.length,
           },
         });
+
+        if (leadWasCleared) {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
+            resourceId: workspaceId,
+            changes: {
+              leadUserId: {
+                old: userId,
+                new: null,
+              },
+            },
+          });
+        }
 
         return {
           ok: true as const,

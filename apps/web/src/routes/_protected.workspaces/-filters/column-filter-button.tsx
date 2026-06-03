@@ -49,9 +49,9 @@ export const ColumnFilterButton = ({
   const isActive = (() => {
     switch (columnId) {
       case "client":
-        return !!filters.client?.length;
+        return (filters.client?.length ?? 0) > 0;
       case "team":
-        return !!filters.team?.length || filters.lead !== undefined;
+        return (filters.team?.length ?? 0) > 0 || filters.lead !== undefined;
       case "entityCount":
         return filters.entityCount !== undefined;
       case "lastActivityAt":
@@ -59,6 +59,8 @@ export const ColumnFilterButton = ({
       case "createdAt":
         return filters.createdAt !== undefined;
     }
+    columnId satisfies never;
+    return false;
   })();
 
   return (
