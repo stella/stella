@@ -23,7 +23,7 @@ const createContext = ({
     scopedDb,
     memberRole: { role: "owner" },
     orgAIConfig: null,
-    request: new Request("http://localhost/v1/workspaces/ws_test123"),
+    request: new Request("https://api.example.test/v1/workspaces/ws_test123"),
     session: {
       activeOrganizationId: toSafeId<"organization">("org_test123"),
     },

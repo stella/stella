@@ -26,7 +26,9 @@ const createContext = ({
     organizationId: toSafeId<"organization">("org_test123"),
     workspaceId: toSafeId<"workspace">("ws_test123"),
     userId: toSafeId<"user">("user_test123"),
-    request: new Request("http://localhost/v1/workspaces/ws_test123/members"),
+    request: new Request(
+      "https://api.example.test/v1/workspaces/ws_test123/members",
+    ),
     server: null,
   };
 
