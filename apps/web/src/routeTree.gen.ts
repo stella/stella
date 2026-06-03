@@ -69,6 +69,7 @@ import { Route as ProtectedChatWorkspacesWorkspaceIdNewRouteImport } from './rou
 import { Route as ProtectedChatWorkspacesWorkspaceIdThreadIdRouteImport } from './routes/_protected.chat/workspaces/$workspaceId/$threadId'
 import { Route as SitemapsLawCasesCountryYearMonthChar123bucketChar125DotxmlRouteImport } from './routes/sitemaps/law-cases/$country/$year/$month/{$bucket}[.]xml'
 import { Route as LawCountryCasesCourtDateSlugRouteImport } from './routes/law/$country/cases/$court/$date/$slug'
+import { Route as LawCountryCasesCourtDateLanguageSlugRouteImport } from './routes/law/$country/cases/$court/$date/$language/$slug'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
@@ -401,6 +402,12 @@ const LawCountryCasesCourtDateSlugRoute =
     path: '/$country/cases/$court/$date/$slug',
     getParentRoute: () => LawRouteRoute,
   } as any)
+const LawCountryCasesCourtDateLanguageSlugRoute =
+  LawCountryCasesCourtDateLanguageSlugRouteImport.update({
+    id: '/$country/cases/$court/$date/$language/$slug',
+    path: '/$country/cases/$court/$date/$language/$slug',
+    getParentRoute: () => LawRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -462,6 +469,7 @@ export interface FileRoutesByFullPath {
   '/workspaces/$workspaceId/$viewId/': typeof ProtectedWorkspacesWorkspaceIdViewIdIndexRoute
   '/law/$country/cases/$court/$date/$slug': typeof LawCountryCasesCourtDateSlugRoute
   '/sitemaps/law-cases/$country/$year/$month/{$bucket}.xml': typeof SitemapsLawCasesCountryYearMonthChar123bucketChar125DotxmlRoute
+  '/law/$country/cases/$court/$date/$language/$slug': typeof LawCountryCasesCourtDateLanguageSlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -515,6 +523,7 @@ export interface FileRoutesByTo {
   '/workspaces/$workspaceId/$viewId': typeof ProtectedWorkspacesWorkspaceIdViewIdIndexRoute
   '/law/$country/cases/$court/$date/$slug': typeof LawCountryCasesCourtDateSlugRoute
   '/sitemaps/law-cases/$country/$year/$month/{$bucket}.xml': typeof SitemapsLawCasesCountryYearMonthChar123bucketChar125DotxmlRoute
+  '/law/$country/cases/$court/$date/$language/$slug': typeof LawCountryCasesCourtDateLanguageSlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -578,6 +587,7 @@ export interface FileRoutesById {
   '/_protected/workspaces/$workspaceId/$viewId/': typeof ProtectedWorkspacesWorkspaceIdViewIdIndexRoute
   '/law/$country/cases/$court/$date/$slug': typeof LawCountryCasesCourtDateSlugRoute
   '/sitemaps/law-cases/$country/$year/$month/{$bucket}.xml': typeof SitemapsLawCasesCountryYearMonthChar123bucketChar125DotxmlRoute
+  '/law/$country/cases/$court/$date/$language/$slug': typeof LawCountryCasesCourtDateLanguageSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -641,6 +651,7 @@ export interface FileRouteTypes {
     | '/workspaces/$workspaceId/$viewId/'
     | '/law/$country/cases/$court/$date/$slug'
     | '/sitemaps/law-cases/$country/$year/$month/{$bucket}.xml'
+    | '/law/$country/cases/$court/$date/$language/$slug'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -694,6 +705,7 @@ export interface FileRouteTypes {
     | '/workspaces/$workspaceId/$viewId'
     | '/law/$country/cases/$court/$date/$slug'
     | '/sitemaps/law-cases/$country/$year/$month/{$bucket}.xml'
+    | '/law/$country/cases/$court/$date/$language/$slug'
   id:
     | '__root__'
     | '/'
@@ -756,6 +768,7 @@ export interface FileRouteTypes {
     | '/_protected/workspaces/$workspaceId/$viewId/'
     | '/law/$country/cases/$court/$date/$slug'
     | '/sitemaps/law-cases/$country/$year/$month/{$bucket}.xml'
+    | '/law/$country/cases/$court/$date/$language/$slug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1196,6 +1209,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LawCountryCasesCourtDateSlugRouteImport
       parentRoute: typeof LawRouteRoute
     }
+    '/law/$country/cases/$court/$date/$language/$slug': {
+      id: '/law/$country/cases/$court/$date/$language/$slug'
+      path: '/$country/cases/$court/$date/$language/$slug'
+      fullPath: '/law/$country/cases/$court/$date/$language/$slug'
+      preLoaderRoute: typeof LawCountryCasesCourtDateLanguageSlugRouteImport
+      parentRoute: typeof LawRouteRoute
+    }
   }
 }
 
@@ -1221,12 +1241,15 @@ interface LawRouteRouteChildren {
   LawIndexRoute: typeof LawIndexRoute
   LawCasesIndexRoute: typeof LawCasesIndexRoute
   LawCountryCasesCourtDateSlugRoute: typeof LawCountryCasesCourtDateSlugRoute
+  LawCountryCasesCourtDateLanguageSlugRoute: typeof LawCountryCasesCourtDateLanguageSlugRoute
 }
 
 const LawRouteRouteChildren: LawRouteRouteChildren = {
   LawIndexRoute: LawIndexRoute,
   LawCasesIndexRoute: LawCasesIndexRoute,
   LawCountryCasesCourtDateSlugRoute: LawCountryCasesCourtDateSlugRoute,
+  LawCountryCasesCourtDateLanguageSlugRoute:
+    LawCountryCasesCourtDateLanguageSlugRoute,
 }
 
 const LawRouteRouteWithChildren = LawRouteRoute._addFileChildren(

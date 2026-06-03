@@ -3,6 +3,7 @@ import { env } from "@/env";
 type JsonLdObject = Record<string, unknown>;
 
 type PublicLawHeadInput = {
+  alternateLinks?: readonly PublicLawAlternateLink[];
   description?: string | null;
   jsonLd?: JsonLdObject | null;
   path: `/${string}`;
@@ -14,6 +15,11 @@ type PublicLawMeta =
   | { title: string }
   | { name: string; content: string }
   | { property: string; content: string };
+
+type PublicLawAlternateLink = {
+  href: string;
+  hreflang: string;
+};
 
 type CaseLawDecisionJsonLdInput = {
   canonicalUrl: string;
@@ -85,6 +91,7 @@ export const createPublicLawCanonicalUrl = (path: `/${string}`): string =>
   new URL(path, `${trimTrailingSlash(env.VITE_PUBLIC_APP_URL)}/`).toString();
 
 export const createPublicLawHead = ({
+  alternateLinks = [],
   description,
   jsonLd,
   path,
@@ -92,6 +99,14 @@ export const createPublicLawHead = ({
   type,
 }: PublicLawHeadInput) => {
   const canonicalUrl = createPublicLawCanonicalUrl(path);
+  const links = [
+    { rel: "canonical", href: canonicalUrl },
+    ...alternateLinks.map((link) => ({
+      rel: "alternate",
+      hreflang: link.hreflang,
+      href: link.href,
+    })),
+  ];
   const meta: PublicLawMeta[] = [
     { title },
     { name: "robots", content: PUBLIC_ROBOTS },
@@ -109,7 +124,7 @@ export const createPublicLawHead = ({
   }
 
   return {
-    links: [{ rel: "canonical", href: canonicalUrl }],
+    links,
     meta,
     ...(jsonLd
       ? {

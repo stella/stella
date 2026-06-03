@@ -1,8 +1,52 @@
+import { asc, eq } from "drizzle-orm";
 import { status } from "elysia";
 
+import { caseLawDecisions } from "@/api/db/schema";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+
+type PublicDecisionLanguageAlternate = {
+  caseNumber: string;
+  country: string;
+  court: string;
+  decisionDate: string | null;
+  id: string;
+  language: string;
+  slug: string | null;
+  updatedAt: Date;
+};
+
+const listPublicDecisionLanguageAlternates = async ({
+  caseLawDb,
+  languageGroupKey,
+}: {
+  caseLawDb: CaseLawPublicReadDb;
+  languageGroupKey: string | null;
+}): Promise<PublicDecisionLanguageAlternate[]> => {
+  if (languageGroupKey === null) {
+    return [];
+  }
+
+  const alternates = await caseLawDb((tx) =>
+    tx
+      .select({
+        id: caseLawDecisions.id,
+        caseNumber: caseLawDecisions.caseNumber,
+        slug: caseLawDecisions.slug,
+        country: caseLawDecisions.country,
+        court: caseLawDecisions.court,
+        decisionDate: caseLawDecisions.decisionDate,
+        language: caseLawDecisions.language,
+        updatedAt: caseLawDecisions.updatedAt,
+      })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.languageGroupKey, languageGroupKey))
+      .orderBy(asc(caseLawDecisions.language), asc(caseLawDecisions.id)),
+  );
+
+  return alternates.length > 1 ? alternates : [];
+};
 
 export const readDecisionHandler = async (
   decisionId: SafeId<"caseLawDecision">,
@@ -59,6 +103,11 @@ export const readDecisionHandler = async (
     return status(404, { message: "Decision not found" });
   }
 
+  const languageAlternates = await listPublicDecisionLanguageAlternates({
+    caseLawDb,
+    languageGroupKey: decision.languageGroupKey,
+  });
+
   // Only fetch fulltext if no usable documentAst (fallback).
   // Empty `{}` is stored by adapters without AST parsers;
   // treat it the same as null.
@@ -93,6 +142,7 @@ export const readDecisionHandler = async (
     source: decision.source,
     citationsFrom: decision.citationsFrom,
     citationsTo: decision.citationsTo,
+    languageAlternates,
     fulltext,
   };
 };

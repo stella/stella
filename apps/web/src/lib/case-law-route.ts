@@ -11,7 +11,18 @@ export type CaseLawDecisionSearchHit = {
   decisionDate: string | null;
   decisionId: string;
   ecli: string | null;
+  language?: string | null;
+  languageAlternateCount?: number | null;
+  languageAlternates?: readonly unknown[] | null;
   slug?: string | null;
+};
+
+export type CaseLawDecisionRouteParams = {
+  country: string;
+  court: string;
+  date: string;
+  language?: string;
+  slug: string;
 };
 
 export const isCaseLawDecisionId = (value: string): boolean =>
@@ -195,6 +206,7 @@ export const extractLegacyCaseLawDecisionIdFromRouteParam = (
 
 const UNKNOWN_DATE_SEGMENT = "unknown-date";
 const UNKNOWN_COURT_SEGMENT = "unknown-court";
+const LANGUAGE_SEGMENT_REGEX = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/u;
 
 const formatDecisionDateSegment = (value: Date | string | null): string => {
   if (value === null) {
@@ -223,6 +235,9 @@ export const createCaseLawDecisionRouteParams = ({
   country,
   court,
   decisionDate,
+  language,
+  languageAlternateCount,
+  languageAlternates,
   slug,
 }: {
   caseNumber: string;
@@ -230,29 +245,83 @@ export const createCaseLawDecisionRouteParams = ({
   court: string;
   decisionDate: Date | string | null;
   decisionId: string;
+  language?: string | null | undefined;
+  languageAlternateCount?: number | null | undefined;
+  languageAlternates?: readonly unknown[] | null | undefined;
   slug?: string | null | undefined;
-}) => ({
-  country: country.toLowerCase(),
-  court:
-    court.trim().length > 0
-      ? slugifyCaseLawPathSegment(court)
-      : UNKNOWN_COURT_SEGMENT,
-  date: formatDecisionDateSegment(decisionDate),
-  slug: createCaseLawDecisionRouteParam({ caseNumber, slug }),
-});
+}): CaseLawDecisionRouteParams => {
+  const languageSegment = normalizeCaseLawLanguageSegment(language);
+  const baseParams = {
+    country: country.toLowerCase(),
+    court:
+      court.trim().length > 0
+        ? slugifyCaseLawPathSegment(court)
+        : UNKNOWN_COURT_SEGMENT,
+    date: formatDecisionDateSegment(decisionDate),
+    slug: createCaseLawDecisionRouteParam({ caseNumber, slug }),
+  };
+
+  if (
+    !shouldUseCaseLawLanguageSegment({
+      language,
+      languageAlternateCount,
+      languageAlternates,
+    })
+  ) {
+    return baseParams;
+  }
+
+  if (languageSegment === null) {
+    return baseParams;
+  }
+
+  return {
+    ...baseParams,
+    language: languageSegment,
+  };
+};
+
+export const normalizeCaseLawLanguageSegment = (
+  language: string | null | undefined,
+): string | null => {
+  const normalized = language?.trim().toLowerCase().replace(/_/gu, "-");
+  if (!normalized || !LANGUAGE_SEGMENT_REGEX.test(normalized)) {
+    return null;
+  }
+
+  return normalized;
+};
+
+export const shouldUseCaseLawLanguageSegment = ({
+  language,
+  languageAlternateCount,
+  languageAlternates,
+}: {
+  language?: string | null | undefined;
+  languageAlternateCount?: number | null | undefined;
+  languageAlternates?: readonly unknown[] | null | undefined;
+}): boolean => {
+  const alternateCount =
+    languageAlternateCount ?? languageAlternates?.length ?? 0;
+
+  return (
+    normalizeCaseLawLanguageSegment(language) !== null && alternateCount > 1
+  );
+};
 
 export const createCaseLawDecisionPath = ({
   country,
   court,
   date,
+  language,
   slug,
-}: {
-  country: string;
-  court: string;
-  date: string;
-  slug: string;
-}): `/law/${string}/cases/${string}/${string}/${string}` =>
-  `/law/${country}/cases/${court}/${date}/${slug}`;
+}: CaseLawDecisionRouteParams): `/law/${string}/cases/${string}/${string}/${string}` => {
+  if (language) {
+    return `/law/${country}/cases/${court}/${date}/${language}/${slug}`;
+  }
+
+  return `/law/${country}/cases/${court}/${date}/${slug}`;
+};
 
 export const decodeCaseLawDecisionRef = (value: string): string => {
   try {

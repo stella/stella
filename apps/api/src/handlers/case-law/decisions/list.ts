@@ -1,4 +1,4 @@
-import { and, desc, eq, lt, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
@@ -106,8 +106,61 @@ export const listDecisionsHandler = async (
       .limit(limit + 1),
   );
 
+  const languageGroupKeys = [
+    ...new Set(
+      decisions
+        .map((decision) => decision.languageGroupKey)
+        .filter((value): value is string => value !== null),
+    ),
+  ];
+  const languageAlternateCounts =
+    languageGroupKeys.length > 0
+      ? await caseLawDb((tx) =>
+          tx
+            .select({
+              languageGroupKey: caseLawDecisions.languageGroupKey,
+              count: sql<number>`count(*)::int`,
+            })
+            .from(caseLawDecisions)
+            .where(
+              inArray(caseLawDecisions.languageGroupKey, languageGroupKeys),
+            )
+            .groupBy(caseLawDecisions.languageGroupKey),
+        )
+      : [];
+  const languageAlternateCountByGroupKey = new Map(
+    languageAlternateCounts
+      .filter(
+        (
+          row,
+        ): row is {
+          count: number;
+          languageGroupKey: string;
+        } => row.languageGroupKey !== null,
+      )
+      .map((row) => [row.languageGroupKey, row.count]),
+  );
+
   return createCursorPage({
-    rows: decisions,
+    rows: decisions.map((decision) => ({
+      id: decision.id,
+      caseNumber: decision.caseNumber,
+      slug: decision.slug,
+      ecli: decision.ecli,
+      court: decision.court,
+      country: decision.country,
+      language: decision.language,
+      languageAlternateCount:
+        decision.languageGroupKey === null
+          ? 0
+          : (languageAlternateCountByGroupKey.get(decision.languageGroupKey) ??
+            1),
+      languageGroupKey: decision.languageGroupKey,
+      decisionDate: decision.decisionDate,
+      decisionType: decision.decisionType,
+      sourceUrl: decision.sourceUrl,
+      createdAt: decision.createdAt,
+    })),
     limit,
     cursorForItem: (item) => `${item.createdAt.toISOString()}_${item.id}`,
   });

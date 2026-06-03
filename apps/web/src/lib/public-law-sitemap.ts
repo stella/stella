@@ -5,6 +5,7 @@ import { apiUrl } from "@/lib/api-url";
 import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
+  normalizeCaseLawLanguageSegment,
 } from "@/lib/case-law-route";
 import { ClientOperationError } from "@/lib/errors";
 import { createPublicLawCanonicalUrl } from "@/lib/public-law-seo";
@@ -26,6 +27,19 @@ const sitemapDecisionSchema = v.strictObject({
   country: v.string(),
   court: v.string(),
   decisionDate: v.nullable(v.string()),
+  language: v.string(),
+  languageAlternates: v.array(
+    v.strictObject({
+      id: v.string(),
+      caseNumber: v.string(),
+      slug: v.nullable(v.string()),
+      country: v.string(),
+      court: v.string(),
+      decisionDate: v.nullable(v.string()),
+      language: v.string(),
+      updatedAt: v.string(),
+    }),
+  ),
   updatedAt: v.string(),
 });
 
@@ -51,6 +65,13 @@ const sitemapShardPageSchema = v.strictObject({
 
 type SitemapDecision = v.InferOutput<typeof sitemapDecisionSchema>;
 type SitemapShard = v.InferOutput<typeof sitemapShardSchema>;
+type SitemapDecisionUrlInput = Omit<SitemapDecision, "languageAlternates"> & {
+  languageAlternates?: readonly unknown[];
+};
+type SitemapAlternateLink = {
+  href: string;
+  hreflang: string;
+};
 
 type FetchSitemapDecisionsOptions = {
   fetchImpl?: FetchLike;
@@ -83,17 +104,63 @@ const xmlEscape = (value: string): string =>
     .replace(/"/gu, "&quot;")
     .replace(/'/gu, "&apos;");
 
-const createCaseLawDecisionSitemapUrl = (decision: SitemapDecision): string => {
+const createCaseLawDecisionSitemapUrl = (
+  decision: SitemapDecisionUrlInput,
+): string => {
   const params = createCaseLawDecisionRouteParams({
     caseNumber: decision.caseNumber,
     country: decision.country,
     court: decision.court,
     decisionDate: decision.decisionDate,
     decisionId: decision.id,
+    language: decision.language,
+    languageAlternates: decision.languageAlternates,
     slug: decision.slug,
   });
 
   return createPublicLawCanonicalUrl(createCaseLawDecisionPath(params));
+};
+
+const createCaseLawDecisionSitemapAlternateLinks = (
+  decision: SitemapDecision,
+): SitemapAlternateLink[] => {
+  if (decision.languageAlternates.length <= 1) {
+    return [];
+  }
+
+  const alternateLinks: SitemapAlternateLink[] = [];
+  for (const alternate of decision.languageAlternates) {
+    const hreflang = normalizeCaseLawLanguageSegment(alternate.language);
+    if (hreflang === null) {
+      continue;
+    }
+
+    alternateLinks.push({
+      hreflang,
+      href: createCaseLawDecisionSitemapUrl({
+        ...alternate,
+        languageAlternates: decision.languageAlternates,
+      }),
+    });
+  }
+
+  const defaultAlternate =
+    decision.languageAlternates.find(
+      (alternate) =>
+        normalizeCaseLawLanguageSegment(alternate.language) === "en",
+    ) ?? decision.languageAlternates.at(0);
+
+  if (defaultAlternate) {
+    alternateLinks.push({
+      hreflang: "x-default",
+      href: createCaseLawDecisionSitemapUrl({
+        ...defaultAlternate,
+        languageAlternates: decision.languageAlternates,
+      }),
+    });
+  }
+
+  return alternateLinks;
 };
 
 const createCaseLawShardPath = ({
@@ -217,19 +284,32 @@ export const createPublicCaseLawSitemapXml = (
   const entries = decisions
     .map((decision) => ({
       loc: createCaseLawDecisionSitemapUrl(decision),
+      alternateLinks: createCaseLawDecisionSitemapAlternateLinks(decision),
       lastmod: decision.updatedAt.slice(0, 10),
     }))
     .map(
-      ({ lastmod, loc }) => `  <url>
+      ({ alternateLinks, lastmod, loc }) => `  <url>
     <loc>${xmlEscape(loc)}</loc>${
       lastmod ? `\n    <lastmod>${xmlEscape(lastmod)}</lastmod>` : ""
-    }
+    }${alternateLinks
+      .map(
+        (alternate) =>
+          `\n    <xhtml:link rel="alternate" hreflang="${xmlEscape(
+            alternate.hreflang,
+          )}" href="${xmlEscape(alternate.href)}" />`,
+      )
+      .join("")}
   </url>`,
     )
     .join("\n");
+  const namespace = decisions.some(
+    (decision) => decision.languageAlternates.length > 1,
+  )
+    ? ' xmlns:xhtml="http://www.w3.org/1999/xhtml"'
+    : "";
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"${namespace}>
 ${entries}
 </urlset>
 `;

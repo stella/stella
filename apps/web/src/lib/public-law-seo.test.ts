@@ -43,6 +43,41 @@ describe("public law SEO", () => {
     });
   });
 
+  test("adds hreflang alternates when public routes provide them", () => {
+    expect(
+      createPublicLawHead({
+        alternateLinks: [
+          {
+            hreflang: "en",
+            href: "http://localhost:3000/law/guidelines/wp29/dpia/v/wp-248-rev-01/lang/en",
+          },
+          {
+            hreflang: "fr",
+            href: "http://localhost:3000/law/guidelines/wp29/dpia/v/wp-248-rev-01/lang/fr",
+          },
+        ],
+        path: "/law/guidelines/wp29/dpia/v/wp-248-rev-01/lang/en",
+        title: "WP29 DPIA guidelines | stella",
+        type: "article",
+      }).links,
+    ).toEqual([
+      {
+        rel: "canonical",
+        href: "http://localhost:3000/law/guidelines/wp29/dpia/v/wp-248-rev-01/lang/en",
+      },
+      {
+        rel: "alternate",
+        hreflang: "en",
+        href: "http://localhost:3000/law/guidelines/wp29/dpia/v/wp-248-rev-01/lang/en",
+      },
+      {
+        rel: "alternate",
+        hreflang: "fr",
+        href: "http://localhost:3000/law/guidelines/wp29/dpia/v/wp-248-rev-01/lang/fr",
+      },
+    ]);
+  });
+
   test("serializes JSON-LD through a safe head script", () => {
     expect(
       createPublicLawHead({

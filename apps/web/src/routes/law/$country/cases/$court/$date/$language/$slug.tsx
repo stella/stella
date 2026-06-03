@@ -6,7 +6,9 @@ import {
   PublicDecisionViewer,
 } from "@/routes/law/-case-detail";
 
-export const Route = createFileRoute("/law/$country/cases/$court/$date/$slug")({
+export const Route = createFileRoute(
+  "/law/$country/cases/$court/$date/$language/$slug",
+)({
   loader: async ({ context: { queryClient }, params }) =>
     await loadPublicCaseLawDecisionRoute({ params, queryClient }),
   head: ({ loaderData, params }) => {
@@ -24,10 +26,11 @@ export const Route = createFileRoute("/law/$country/cases/$court/$date/$slug")({
 
 function PublicDecisionRoute() {
   const params = Route.useParams({
-    select: ({ country, court, date, slug }) => ({
+    select: ({ country, court, date, language, slug }) => ({
       country,
       court,
       date,
+      language,
       slug,
     }),
   });

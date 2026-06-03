@@ -120,6 +120,7 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
             language: h.language,
             // Search endpoint doesn't return languageGroupKey;
             // language grouping is only available via the list endpoint.
+            languageAlternateCount: 0,
             languageGroupKey: null,
             decisionDate: h.decisionDate,
             decisionType: h.decisionType,

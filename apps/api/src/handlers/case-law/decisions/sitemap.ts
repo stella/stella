@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
@@ -34,6 +34,17 @@ type NaturalShardRow = {
   month: string;
   total: number;
   year: string;
+};
+
+type SitemapDecisionAlternate = {
+  caseNumber: string;
+  country: string;
+  court: string;
+  decisionDate: string | null;
+  id: string;
+  language: string;
+  slug: string | null;
+  updatedAt: Date;
 };
 
 const decisionYearSql = sql<string>`COALESCE(to_char(${caseLawDecisions.decisionDate}, 'YYYY'), ${SITEMAP_UNDATED_YEAR})`;
@@ -169,6 +180,8 @@ export const listSitemapShardDecisionsHandler = async (
         country: caseLawDecisions.country,
         court: caseLawDecisions.court,
         decisionDate: caseLawDecisions.decisionDate,
+        language: caseLawDecisions.language,
+        languageGroupKey: caseLawDecisions.languageGroupKey,
         updatedAt: caseLawDecisions.updatedAt,
       })
       .from(caseLawDecisions)
@@ -183,8 +196,75 @@ export const listSitemapShardDecisionsHandler = async (
     });
   }
 
+  const languageGroupKeys = [
+    ...new Set(
+      rows
+        .map((row) => row.languageGroupKey)
+        .filter((value): value is string => value !== null),
+    ),
+  ];
+  const alternateRows =
+    languageGroupKeys.length > 0
+      ? await caseLawDb((tx) =>
+          tx
+            .select({
+              id: caseLawDecisions.id,
+              caseNumber: caseLawDecisions.caseNumber,
+              slug: caseLawDecisions.slug,
+              country: caseLawDecisions.country,
+              court: caseLawDecisions.court,
+              decisionDate: caseLawDecisions.decisionDate,
+              language: caseLawDecisions.language,
+              languageGroupKey: caseLawDecisions.languageGroupKey,
+              updatedAt: caseLawDecisions.updatedAt,
+            })
+            .from(caseLawDecisions)
+            .where(
+              inArray(caseLawDecisions.languageGroupKey, languageGroupKeys),
+            )
+            .orderBy(asc(caseLawDecisions.language), asc(caseLawDecisions.id)),
+        )
+      : [];
+  const alternatesByGroupKey = new Map<string, SitemapDecisionAlternate[]>();
+  for (const alternate of alternateRows) {
+    if (alternate.languageGroupKey === null) {
+      continue;
+    }
+
+    const groupedAlternates =
+      alternatesByGroupKey.get(alternate.languageGroupKey) ?? [];
+    groupedAlternates.push({
+      id: alternate.id,
+      caseNumber: alternate.caseNumber,
+      slug: alternate.slug,
+      country: alternate.country,
+      court: alternate.court,
+      decisionDate: alternate.decisionDate,
+      language: alternate.language,
+      updatedAt: alternate.updatedAt,
+    });
+    alternatesByGroupKey.set(alternate.languageGroupKey, groupedAlternates);
+  }
+
   return {
-    items: rows,
+    items: rows.map((row) => {
+      const alternates =
+        row.languageGroupKey === null
+          ? []
+          : (alternatesByGroupKey.get(row.languageGroupKey) ?? []);
+
+      return {
+        id: row.id,
+        caseNumber: row.caseNumber,
+        slug: row.slug,
+        country: row.country,
+        court: row.court,
+        decisionDate: row.decisionDate,
+        language: row.language,
+        languageAlternates: alternates.length > 1 ? alternates : [],
+        updatedAt: row.updatedAt,
+      };
+    }),
     limit: LIMITS.caseLawSitemapUrlLimit,
     nextCursor: null,
   };

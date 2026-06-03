@@ -20,6 +20,7 @@ export type Decision = {
   court: string;
   country: string;
   language: string;
+  languageAlternateCount?: number | null;
   languageGroupKey?: string | null;
   decisionDate: Date | string | null;
   decisionType: string | null;
@@ -36,25 +37,57 @@ type DecisionTableProps = {
 const columnHelper = createColumnHelper<Decision>();
 
 const renderCaseNumberCell = (info: CellContext<Decision, string>) => {
-  const { country, court, decisionDate, headline, id, slug } =
-    info.row.original;
+  const {
+    country,
+    court,
+    decisionDate,
+    headline,
+    id,
+    language,
+    languageAlternateCount,
+    slug,
+  } = info.row.original;
+  const routeParams = createCaseLawDecisionRouteParams({
+    caseNumber: info.getValue(),
+    country,
+    court,
+    decisionDate,
+    decisionId: id,
+    language,
+    languageAlternateCount,
+    slug,
+  });
 
   return (
     <div>
-      <Link
-        className="text-foreground font-medium hover:underline"
-        params={createCaseLawDecisionRouteParams({
-          caseNumber: info.getValue(),
-          country,
-          court,
-          decisionDate,
-          decisionId: id,
-          slug,
-        })}
-        to="/law/$country/cases/$court/$date/$slug"
-      >
-        {info.getValue()}
-      </Link>
+      {routeParams.language ? (
+        <Link
+          className="text-foreground font-medium hover:underline"
+          params={{
+            country: routeParams.country,
+            court: routeParams.court,
+            date: routeParams.date,
+            language: routeParams.language,
+            slug: routeParams.slug,
+          }}
+          to="/law/$country/cases/$court/$date/$language/$slug"
+        >
+          {info.getValue()}
+        </Link>
+      ) : (
+        <Link
+          className="text-foreground font-medium hover:underline"
+          params={{
+            country: routeParams.country,
+            court: routeParams.court,
+            date: routeParams.date,
+            slug: routeParams.slug,
+          }}
+          to="/law/$country/cases/$court/$date/$slug"
+        >
+          {info.getValue()}
+        </Link>
+      )}
       {headline && (
         <p
           className="text-muted-foreground [&_mark]:text-foreground [&_mark]:bg-warning/30 dark:[&_mark]:bg-warning/20 mt-0.5 line-clamp-2 text-xs [&_mark]:font-medium"

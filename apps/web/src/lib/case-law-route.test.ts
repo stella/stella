@@ -4,6 +4,7 @@ import {
   type CaseLawDecisionSearchHit,
   createCaseLawDecisionRouteParams,
   createCaseLawDecisionRouteParam,
+  createCaseLawDecisionPath,
   createStableCaseLawSlug,
   decodeCaseLawDecisionRef,
   decodeCaseLawDecisionIdFromRoute,
@@ -11,8 +12,10 @@ import {
   extractCaseLawDecisionIdFromRouteParam,
   extractLegacyCaseLawDecisionIdFromRouteParam,
   isCaseLawDecisionId,
+  normalizeCaseLawLanguageSegment,
   normalizeCaseLawStoredSlug,
   pickCaseLawDecisionHit,
+  shouldUseCaseLawLanguageSegment,
   slugifyCaseLawCaseNumber,
 } from "@/lib/case-law-route";
 
@@ -90,6 +93,70 @@ describe("case-law decision routes", () => {
       date: "2017-09-20",
       slug: "ecli-cz-ns-2017-20-cdo",
     });
+  });
+
+  test("does not add language route params for ordinary single-language decisions", () => {
+    const params = createCaseLawDecisionRouteParams({
+      caseNumber: "20 Cdo 470/2017",
+      country: "CZE",
+      court: "Nejvyšší soud",
+      decisionDate: "2017-09-20",
+      decisionId: DECISION_ID,
+      language: "cs",
+      languageAlternates: [],
+      slug: "ecli-cz-ns-2017-20-cdo",
+    });
+
+    expect(params).toEqual({
+      country: "cze",
+      court: "nejvyssi-soud",
+      date: "2017-09-20",
+      slug: "ecli-cz-ns-2017-20-cdo",
+    });
+    expect(createCaseLawDecisionPath(params)).toBe(
+      "/law/cze/cases/nejvyssi-soud/2017-09-20/ecli-cz-ns-2017-20-cdo",
+    );
+  });
+
+  test("adds language route params for official multilingual decisions", () => {
+    const params = createCaseLawDecisionRouteParams({
+      caseNumber: "C-123/22",
+      country: "EUR",
+      court: "Court of Justice",
+      decisionDate: "2024-03-07",
+      decisionId: DECISION_ID,
+      language: "EN",
+      languageAlternates: [{ language: "en" }, { language: "cs" }],
+      slug: "c-123-22",
+    });
+
+    expect(params).toEqual({
+      country: "eur",
+      court: "court-of-justice",
+      date: "2024-03-07",
+      language: "en",
+      slug: "c-123-22",
+    });
+    expect(createCaseLawDecisionPath(params)).toBe(
+      "/law/eur/cases/court-of-justice/2024-03-07/en/c-123-22",
+    );
+  });
+
+  test("normalizes language segments without creating fake locale pages", () => {
+    expect(normalizeCaseLawLanguageSegment("PT_BR")).toBe("pt-br");
+    expect(normalizeCaseLawLanguageSegment("not a language")).toBe(null);
+    expect(
+      shouldUseCaseLawLanguageSegment({
+        language: "cs",
+        languageAlternates: [{ language: "cs" }],
+      }),
+    ).toBe(false);
+    expect(
+      shouldUseCaseLawLanguageSegment({
+        language: "cs",
+        languageAlternates: [{ language: "cs" }, { language: "en" }],
+      }),
+    ).toBe(true);
   });
 
   test("uses stable fallbacks for missing public route metadata", () => {

@@ -149,6 +149,8 @@ export const Route = createFileRoute("/law/cases/")({
                   court: decision.court,
                   decisionDate: decision.decisionDate,
                   decisionId: decision.id,
+                  language: decision.language,
+                  languageAlternateCount: decision.languageAlternateCount,
                   slug: decision.slug,
                 }),
               ),

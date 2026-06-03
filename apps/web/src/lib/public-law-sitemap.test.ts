@@ -49,6 +49,8 @@ describe("public law sitemap", () => {
             country: "CZE",
             court: "Nejvyssi soud",
             decisionDate: "2017-09-20",
+            language: "cs",
+            languageAlternates: [],
             updatedAt: "2026-01-01T00:00:00.000Z",
           },
         ],
@@ -191,6 +193,8 @@ describe("public law sitemap", () => {
         country: "CZE",
         court: "Nejvyssi soud",
         decisionDate: "2017-09-20",
+        language: "cs",
+        languageAlternates: [],
         updatedAt: "2026-01-01T00:00:00.000Z",
       },
     ]);
@@ -199,6 +203,54 @@ describe("public law sitemap", () => {
     expect(xml).toContain(
       "http://localhost:3000/law/cze/cases/nejvyssi-soud/2017-09-20/stable-official-slug",
     );
+    expect(xml).not.toContain("xmlns:xhtml");
+    expect(xml).not.toContain("hreflang");
+  });
+
+  test("case-law shard sitemaps include official language alternates only for multilingual decisions", () => {
+    const xml = createPublicCaseLawSitemapXml([
+      {
+        id: "11111111-1111-4111-8111-111111111111",
+        caseNumber: "C-123/22",
+        slug: "c-123-22",
+        country: "EU",
+        court: "Court of Justice",
+        decisionDate: "2024-03-07",
+        language: "en",
+        languageAlternates: [
+          {
+            id: "11111111-1111-4111-8111-111111111111",
+            caseNumber: "C-123/22",
+            slug: "c-123-22",
+            country: "EU",
+            court: "Court of Justice",
+            decisionDate: "2024-03-07",
+            language: "en",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+          {
+            id: "22222222-2222-4222-8222-222222222222",
+            caseNumber: "C-123/22",
+            slug: "c-123-22-cs",
+            country: "EU",
+            court: "Court of Justice",
+            decisionDate: "2024-03-07",
+            language: "cs",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
+
+    expect(xml).toContain('xmlns:xhtml="http://www.w3.org/1999/xhtml"');
+    expect(xml).toContain(
+      "http://localhost:3000/law/eu/cases/court-of-justice/2024-03-07/en/c-123-22",
+    );
+    expect(xml).toContain(
+      'hreflang="cs" href="http://localhost:3000/law/eu/cases/court-of-justice/2024-03-07/cs/c-123-22-cs"',
+    );
+    expect(xml).toContain('hreflang="x-default"');
   });
 
   test("sitemap XML responses are publicly cacheable", () => {
@@ -218,6 +270,8 @@ describe("public law sitemap", () => {
         country: "CZE",
         court: "Nejvyssi soud",
         decisionDate: "2017-09-20",
+        language: "cs",
+        languageAlternates: [],
         updatedAt: "2026-01-01T00:00:00.000Z",
       },
     ]);

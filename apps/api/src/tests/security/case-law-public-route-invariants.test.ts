@@ -126,6 +126,7 @@ describe("public case-law route boundary", () => {
     expect(source).toContain("id: decision.id");
     expect(source).toContain("caseNumber: decision.caseNumber");
     expect(source).toContain("slug: decision.slug");
+    expect(source).toContain("languageAlternates,");
     expect(source).toContain("fulltext,");
   });
 
@@ -154,6 +155,8 @@ describe("public case-law route boundary", () => {
     expect(source).toContain("caseNumber: caseLawDecisions.caseNumber");
     expect(source).toContain("slug: caseLawDecisions.slug");
     expect(source).toContain("country: caseLawDecisions.country");
+    expect(source).toContain("language: caseLawDecisions.language");
+    expect(source).toContain("languageAlternates:");
     expect(source).toContain("updatedAt: caseLawDecisions.updatedAt");
     expect(source).toContain("SITEMAP_SHARD_BUCKET_COUNT");
     expect(source).toContain("LIMITS.caseLawSitemapIndexEntryLimit");
