@@ -55,18 +55,22 @@ function formatDateForSdtBody(
  * SDT, what the user picked is the displayed wall time, not a moment in
  * UTC.
  */
+// Anchor at end so a malformed input that starts with a valid prefix
+// (e.g. `2026-06-02abc`, `2026-06-02T`) does not silently succeed on the
+// prefix — that would let `formatDate` render a body that disagrees
+// with the bound `dateValueISO`. The optional fractional-seconds group
+// is critical: `new Date(iso).toISOString()` always emits `.SSS`, so a
+// caller round-tripping through Date would otherwise miss the
+// timezone-safe component path and the body would shift a day in
+// non-UTC zones. The trailing group accepts `Z` / a numeric TZ offset
+// — the actual moment-in-time is ignored downstream, but the input has
+// to parse cleanly to be considered a date at all.
+const SDT_DATE_RE =
+  // oxlint-disable-next-line sonarjs/regex-complexity -- ISO 8601 shape; see comment block above
+  /^(\d{4})-(\d{2})-(\d{2})(?:[Tt](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?)?(?:[Zz]|[+-]\d{2}:?\d{2})?$/u;
+
 function parseSdtDate(iso: string): Date | null {
-  // Anchor at end so a malformed input that starts with a valid prefix
-  // (e.g. `2026-06-02abc`, `2026-06-02T`) does not silently succeed on the
-  // prefix — that would let `formatDate` render a body that disagrees with
-  // the bound `dateValueISO`. The optional trailing group accepts `Z` / a
-  // numeric TZ offset since those are valid OOXML date forms; the actual
-  // moment-in-time is ignored downstream, but the input has to parse
-  // cleanly to be considered a date at all.
-  const match =
-    /^(\d{4})-(\d{2})-(\d{2})(?:[Tt](\d{2}):(\d{2})(?::(\d{2}))?)?(?:[Zz]|[+-]\d{2}:?\d{2})?$/u.exec(
-      iso,
-    );
+  const match = SDT_DATE_RE.exec(iso);
   if (match) {
     const year = Number(match[1]);
     const month = Number(match[2]);

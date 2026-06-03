@@ -220,6 +220,31 @@ describe("setContentControlValueTr", () => {
     expect(next.doc.firstChild?.firstChild?.textContent).toBe("California");
   });
 
+  test("date: accepts fractional seconds (Date.prototype.toISOString output)", () => {
+    // `new Date("2026-06-02").toISOString()` emits 2026-06-02T00:00:00.000Z.
+    // Without fractional-seconds support, the regex missed it and the
+    // helper fell back to `new Date(iso)`, which would format the value
+    // via UTC accessors and shift the rendered day in non-UTC zones.
+    const sdt = schema.node(
+      "blockSdt",
+      { sdtType: "date", tag: "due", dateFormat: "yyyy-MM-dd" },
+      [schema.node("paragraph", {}, [])],
+    );
+    const state = makeState(schema.node("doc", null, [sdt]));
+    const tr = setContentControlValueTr(
+      state,
+      { tag: "due" },
+      { kind: "date", date: "2026-06-02T00:00:00.000Z" },
+    );
+    if (!tr) {
+      throw new TypeError("expected tx");
+    }
+    const next = state.apply(tr);
+    // Local-time component parsing means the rendered body always shows
+    // the same calendar date the source ISO names, regardless of TZ.
+    expect(next.doc.firstChild?.firstChild?.textContent).toBe("2026-06-02");
+  });
+
   test("date: rejects partial-prefix dateValueISO and writes the raw value", () => {
     // Without an end anchor, `2026-06-02abc` matched the regex prefix and
     // formatDate happily rendered the well-formed slice. The model would

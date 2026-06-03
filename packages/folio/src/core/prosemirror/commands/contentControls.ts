@@ -447,12 +447,14 @@ function formatDateForBody(
  * `formatDate`'s accessors return the picked wall-clock components
  * regardless of TZ.
  */
+// See headless helper for the rationale on the regex shape — in
+// particular the optional fractional-seconds group.
+const SDT_DATE_RE =
+  // oxlint-disable-next-line sonarjs/regex-complexity -- mirrors headless helper
+  /^(\d{4})-(\d{2})-(\d{2})(?:[Tt](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?)?(?:[Zz]|[+-]\d{2}:?\d{2})?$/u;
+
 function parseSdtDate(iso: string): Date | null {
-  // See headless helper for the rationale on anchoring at end.
-  const match =
-    /^(\d{4})-(\d{2})-(\d{2})(?:[Tt](\d{2}):(\d{2})(?::(\d{2}))?)?(?:[Zz]|[+-]\d{2}:?\d{2})?$/u.exec(
-      iso,
-    );
+  const match = SDT_DATE_RE.exec(iso);
   if (match) {
     const year = Number(match[1]);
     const month = Number(match[2]);
