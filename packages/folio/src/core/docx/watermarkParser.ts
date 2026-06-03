@@ -212,60 +212,74 @@ function findEnclosingParagraph(
 }
 
 /**
- * A "watermark-only" paragraph carries no text runs (`w:t`) and no
- * sibling `w:drawing` shapes beyond the watermark itself. Word's UI
- * always emits watermarks this way; third-party producers that mix
- * watermarks with body content fall through this check and are left
- * untouched so their non-watermark content isn't lost on save.
+ * A "watermark-only" paragraph carries one shape plus only
+ * WordprocessingML wrappers/formatting around it. Field runs,
+ * bookmarks, tabs, breaks, text, and sibling shapes are authored
+ * content; those paragraphs stay in the regular header content path
+ * so clearing a watermark cannot drop unrelated header data.
  */
 function isWatermarkOnlyParagraph(paragraph: XmlElement): boolean {
-  let bodyTextRunCount = 0;
-  let drawingShapeCount = 0;
-  let pictShapeCount = 0;
-  // Walk but stop descending when we enter a shape container (`w:pict`
-  // / `w:drawing`): the descendant DrawingML caption (`a:t` / `d:t`
-  // for non-canonical prefixes) is the watermark's own content, not
-  // body text. The rest of the parser is namespace-prefix agnostic
-  // (matches on local name), so this guard matches the same way.
-  walkExcludingShapes(paragraph, (el) => {
-    const local = getLocalName(el.name ?? "");
-    if (local === "t") {
-      bodyTextRunCount++;
-    } else if (local === "drawing") {
-      drawingShapeCount++;
-    } else if (local === "pict") {
-      pictShapeCount++;
-    }
-  });
-  if (bodyTextRunCount > 0) {
+  const counts = countParagraphShapeAndBodyContent(paragraph);
+  if (counts.bodyContentCount > 0) {
     return false;
   }
   // Exactly one shape (the watermark) is the watermark-only case;
   // siblings beyond that are sibling content.
-  return pictShapeCount + drawingShapeCount <= 1;
+  return counts.shapeCount <= 1;
 }
 
 /**
- * Like `walk`, but does not descend into the shape containers
- * (`w:pict` / `w:drawing`). Used by the mixed-paragraph guard so the
- * watermark's own descendant content (text inside `a:txBody`, etc.) is
- * not counted as body text.
+ * Count non-shape WordprocessingML content inside a paragraph while
+ * ignoring pure formatting wrappers. The shape containers themselves
+ * (`w:pict` / `w:drawing`) are counted as shapes, but their descendants
+ * are skipped so the watermark's own text (`a:t`, etc.) is not treated
+ * as body content.
  */
-function walkExcludingShapes(
-  root: XmlElement,
-  visit: (el: XmlElement) => void,
-): void {
-  for (const child of root.elements ?? []) {
-    if (child.type !== "element") {
-      continue;
+function countParagraphShapeAndBodyContent(paragraph: XmlElement): {
+  shapeCount: number;
+  bodyContentCount: number;
+} {
+  let shapeCount = 0;
+  let bodyContentCount = 0;
+
+  const walkParagraph = (
+    root: XmlElement,
+    insidePropertyContainer: boolean,
+  ): void => {
+    for (const child of root.elements ?? []) {
+      if (child.type !== "element") {
+        continue;
+      }
+
+      const local = getLocalName(child.name ?? "");
+      if (local === "pict" || local === "drawing") {
+        shapeCount++;
+        continue;
+      }
+
+      const childInsidePropertyContainer =
+        insidePropertyContainer || isWordprocessingPropertyContainer(local);
+      if (
+        !childInsidePropertyContainer &&
+        !isWatermarkParagraphWrapper(local)
+      ) {
+        bodyContentCount++;
+      }
+
+      walkParagraph(child, childInsidePropertyContainer);
     }
-    visit(child);
-    const local = getLocalName(child.name ?? "");
-    if (local === "pict" || local === "drawing") {
-      continue;
-    }
-    walkExcludingShapes(child, visit);
-  }
+  };
+
+  walkParagraph(paragraph, false);
+  return { shapeCount, bodyContentCount };
+}
+
+function isWordprocessingPropertyContainer(localName: string): boolean {
+  return localName.endsWith("Pr");
+}
+
+function isWatermarkParagraphWrapper(localName: string): boolean {
+  return localName === "r";
 }
 
 function containsElement(root: XmlElement, target: XmlElement): boolean {
@@ -372,7 +386,47 @@ function readVmlPictureWatermark(
   if (!imageRId) {
     return null;
   }
-  return { kind: "picture", imageRId };
+  const watermark: Watermark = { kind: "picture", imageRId };
+  const scale = readVmlPictureWatermarkScale(shape);
+  if (scale !== undefined) {
+    watermark.scale = scale;
+  }
+  return watermark;
+}
+
+// Default picture-watermark dimensions Word emits. Kept in sync with
+// headerFooterSerializer's synthesis defaults so parse/set/save
+// preserves uniform picture-watermark scale.
+const PICTURE_WATERMARK_DEFAULT_WIDTH_PT = 415;
+const PICTURE_WATERMARK_DEFAULT_HEIGHT_PT = 207;
+const PICTURE_WATERMARK_SCALE_EPSILON = 0.01;
+
+function readVmlPictureWatermarkScale(shape: XmlElement): number | undefined {
+  const shapeStyle = getAttribute(shape, null, "style") ?? "";
+  const widthPt = parseInlineStyleLengthPt(shapeStyle, "width");
+  const heightPt = parseInlineStyleLengthPt(shapeStyle, "height");
+
+  if (widthPt === undefined && heightPt === undefined) {
+    return undefined;
+  }
+
+  const widthScale =
+    widthPt !== undefined
+      ? widthPt / PICTURE_WATERMARK_DEFAULT_WIDTH_PT
+      : undefined;
+  const heightScale =
+    heightPt !== undefined
+      ? heightPt / PICTURE_WATERMARK_DEFAULT_HEIGHT_PT
+      : undefined;
+
+  if (widthScale !== undefined && heightScale !== undefined) {
+    if (Math.abs(widthScale - heightScale) > PICTURE_WATERMARK_SCALE_EPSILON) {
+      return undefined;
+    }
+    return widthScale;
+  }
+
+  return widthScale ?? heightScale;
 }
 
 /**
@@ -542,6 +596,44 @@ function parseInlineStyleNumber(
   }
   const num = Number.parseFloat(raw);
   return Number.isFinite(num) ? num : undefined;
+}
+
+const CSS_LENGTH_RE = /^([+-]?(?:\d+|\d*\.\d+))(pt|in|cm|mm|px)?$/iu;
+
+function parseInlineStyleLengthPt(
+  style: string,
+  key: string,
+): number | undefined {
+  const raw = parseInlineStyle(style, key);
+  if (raw === undefined) {
+    return undefined;
+  }
+  const match = CSS_LENGTH_RE.exec(raw.trim());
+  const amountText = match?.at(1);
+  if (amountText === undefined) {
+    return undefined;
+  }
+  const amount = Number.parseFloat(amountText);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return undefined;
+  }
+  const unit = match?.at(2)?.toLowerCase() ?? "pt";
+  if (unit === "pt") {
+    return amount;
+  }
+  if (unit === "in") {
+    return amount * 72;
+  }
+  if (unit === "cm") {
+    return (amount * 72) / 2.54;
+  }
+  if (unit === "mm") {
+    return (amount * 72) / 25.4;
+  }
+  if (unit === "px") {
+    return amount * 0.75;
+  }
+  return undefined;
 }
 
 function stripQuotes(value: string): string {

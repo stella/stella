@@ -93,6 +93,28 @@ describe("parseHeader watermark detection", () => {
     expect(header.watermark.imageRId).toBe("rId7");
   });
 
+  test("recovers uniform VML picture watermark scale from shape dimensions", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}>
+  <w:p>
+    <w:r>
+      <w:pict>
+        <v:shape id="WordPictureWatermark1" type="#_x0000_t75"
+                 style="position:absolute;width:207.5pt;height:103.5pt">
+          <v:imagedata r:id="rId7" o:title="logo"/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    if (!header.watermark || header.watermark.kind !== "picture") {
+      throw new TypeError("expected picture watermark");
+    }
+    expect(header.watermark.imageRId).toBe("rId7");
+    expect(header.watermark.scale).toBe(0.5);
+  });
+
   test("recovers a DrawingML behind-content text watermark (modern producers)", () => {
     // Folio improvement over upstream: detect DrawingML watermarks too,
     // which modern Office / Aspose / some Polish legal templates emit.
@@ -466,6 +488,31 @@ describe("parseHeader watermark detection", () => {
     expect(header.rawWatermarkXml).toBeUndefined();
     // Original mixed paragraph stays in content (the regular block
     // parser surfaces the sibling text run).
+    expect(header.content.length).toBeGreaterThan(0);
+  });
+
+  test("does not detach a paragraph that mixes the watermark with a field", () => {
+    // Page-number fields carry no `w:t`, but they are still authored
+    // header content. If a later setDocumentWatermark clears raw replay,
+    // detaching this paragraph would drop the field on save.
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}>
+  <w:p>
+    <w:r>
+      <w:pict>
+        <v:shape id="PowerPlusWaterMarkObject1" type="#_x0000_t136">
+          <v:textpath string="DRAFT"/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+    <w:r><w:fldChar w:fldCharType="begin"/></w:r>
+    <w:r><w:instrText> PAGE </w:instrText></w:r>
+    <w:r><w:fldChar w:fldCharType="end"/></w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    expect(header.watermark).toBeUndefined();
+    expect(header.rawWatermarkXml).toBeUndefined();
     expect(header.content.length).toBeGreaterThan(0);
   });
 });
