@@ -55,6 +55,12 @@ export const BlockSdtExtension = createNodeExtension({
       _originallyEmpty: { default: false },
       rawPropertiesXml: { default: null },
       rawEndPropertiesXml: { default: null },
+      /**
+       * Verbatim XML for direct sdt siblings of sdtContent (range markers
+       * per MS-OE376 §2.5.2.30). Two slots so position is preserved.
+       */
+      rawSdtChildrenBeforeContent: { default: null },
+      rawSdtChildrenAfterContent: { default: null },
     },
     parseDOM: [
       {
@@ -90,6 +96,8 @@ export const BlockSdtExtension = createNodeExtension({
             // round-trip through PM must re-attach it from the source.
             rawPropertiesXml: null,
             rawEndPropertiesXml: null,
+            rawSdtChildrenBeforeContent: null,
+            rawSdtChildrenAfterContent: null,
           };
         },
       },

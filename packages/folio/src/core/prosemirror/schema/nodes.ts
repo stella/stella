@@ -361,6 +361,10 @@ export type BlockSdtAttrs = {
   rawPropertiesXml?: string;
   /** Captured `<w:sdtEndPr>…</w:sdtEndPr>` for round-trip replay. */
   rawEndPropertiesXml?: string;
+  /** Verbatim XML for sdt siblings before sdtContent (range markers). */
+  rawSdtChildrenBeforeContent?: string;
+  /** Verbatim XML for sdt siblings after sdtContent (range markers). */
+  rawSdtChildrenAfterContent?: string;
 };
 
 /**

@@ -1202,6 +1202,18 @@ export type SdtProperties = {
   rawPropertiesXml?: string;
   /** Verbatim `<w:sdtEndPr>…</w:sdtEndPr>` captured at parse time. */
   rawEndPropertiesXml?: string;
+  /**
+   * Verbatim XML for any non-content direct children of `<w:sdt>` that
+   * appear BEFORE `<w:sdtContent>` — MS-OE376 §2.5.2.30 documents 16
+   * range-marker elements Word emits as direct sdt siblings (bookmark,
+   * comment range, custom XML range, tracked-change range). Captured at
+   * parse time and replayed on serialize so comment threads or tracked
+   * changes that span an SDT boundary round-trip without losing a
+   * delimiter.
+   */
+  rawSdtChildrenBeforeContent?: string;
+  /** Verbatim XML for non-content sdt children that appear AFTER `<w:sdtContent>`. */
+  rawSdtChildrenAfterContent?: string;
 };
 
 /**

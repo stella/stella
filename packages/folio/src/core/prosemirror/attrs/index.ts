@@ -817,6 +817,18 @@ export const readBlockSdtAttrs = (
     "blockSdt.attrs.rawEndPropertiesXml",
     issues,
   );
+  optionalString(
+    attrs,
+    "rawSdtChildrenBeforeContent",
+    "blockSdt.attrs.rawSdtChildrenBeforeContent",
+    issues,
+  );
+  optionalString(
+    attrs,
+    "rawSdtChildrenAfterContent",
+    "blockSdt.attrs.rawSdtChildrenAfterContent",
+    issues,
+  );
 
   return attrsResult(attrs, issues);
 };

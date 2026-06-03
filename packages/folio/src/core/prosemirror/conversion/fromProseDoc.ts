@@ -318,6 +318,12 @@ function convertPMBlockSdt(node: PMNode): BlockSdt {
   if (attrs.rawEndPropertiesXml) {
     properties.rawEndPropertiesXml = attrs.rawEndPropertiesXml;
   }
+  if (attrs.rawSdtChildrenBeforeContent) {
+    properties.rawSdtChildrenBeforeContent = attrs.rawSdtChildrenBeforeContent;
+  }
+  if (attrs.rawSdtChildrenAfterContent) {
+    properties.rawSdtChildrenAfterContent = attrs.rawSdtChildrenAfterContent;
+  }
 
   // Recursively materialize children. PM `blockSdt` content is `block+`, so a
   // mini-doc node is a convenient way to reuse extractBlocks.

@@ -172,6 +172,8 @@ function convertBlockSdt(
     _originallyEmpty: blockSdt.content.length === 0,
     rawPropertiesXml: props.rawPropertiesXml ?? null,
     rawEndPropertiesXml: props.rawEndPropertiesXml ?? null,
+    rawSdtChildrenBeforeContent: props.rawSdtChildrenBeforeContent ?? null,
+    rawSdtChildrenAfterContent: props.rawSdtChildrenAfterContent ?? null,
   };
   const children = convertBlocks(blockSdt.content);
   // ProseMirror `blockSdt` requires at least one block child; insert an empty

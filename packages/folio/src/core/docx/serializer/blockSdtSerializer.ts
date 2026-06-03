@@ -197,5 +197,12 @@ export function serializeBlockSdt(
   });
   const sdtEndPrXml = props.rawEndPropertiesXml ?? "";
   const contentXml = blockSdt.content.map(serializeChild).join("");
-  return `<w:sdt>${sdtPrXml}${sdtEndPrXml}<w:sdtContent>${contentXml}</w:sdtContent></w:sdt>`;
+  // Replay any direct sdt children that lived OUTSIDE sdtContent at parse
+  // time (range markers per MS-OE376 §2.5.2.30: bookmark / comment /
+  // tracked-change / custom XML ranges that span an SDT boundary). Position
+  // matters — the captured before/after strings preserve which side of
+  // sdtContent each marker sat on.
+  const before = props.rawSdtChildrenBeforeContent ?? "";
+  const after = props.rawSdtChildrenAfterContent ?? "";
+  return `<w:sdt>${sdtPrXml}${sdtEndPrXml}${before}<w:sdtContent>${contentXml}</w:sdtContent>${after}</w:sdt>`;
 }

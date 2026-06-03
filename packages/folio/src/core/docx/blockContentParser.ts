@@ -39,12 +39,13 @@ import {
   parseTextBoxContent,
 } from "./textBoxParser";
 import {
+  elementToXml,
   findChild,
   findDeep,
   getChildElements,
   getLocalName,
+  type XmlElement,
 } from "./xmlParser";
-import type { XmlElement } from "./xmlParser";
 
 type ParseBlockContentOptions = {
   inHeaderFooter?: boolean;
@@ -449,9 +450,22 @@ const parseBlockContentWithState = (
       const sdtPr = findChild(child, "w", "sdtPr");
       const sdtEndPr = findChild(child, "w", "sdtEndPr");
       const sdtContent = findChild(child, "w", "sdtContent");
+      const properties = parseSdtProperties(sdtPr, sdtEndPr);
+      // Capture non-content direct children of <w:sdt> (bookmark / comment /
+      // tracked-change / custom XML range markers — MS-OE376 §2.5.2.30) so a
+      // comment thread or tracked change that crosses an SDT boundary
+      // doesn't lose a delimiter on round-trip. Split by position relative
+      // to sdtContent.
+      const captured = captureSdtSiblingMarkers(child);
+      if (captured.before.length > 0) {
+        properties.rawSdtChildrenBeforeContent = captured.before;
+      }
+      if (captured.after.length > 0) {
+        properties.rawSdtChildrenAfterContent = captured.after;
+      }
       const blockSdt: BlockSdt = {
         type: "blockSdt",
-        properties: parseSdtProperties(sdtPr, sdtEndPr),
+        properties,
         content: sdtContent
           ? parseBlockContentWithState(
               sdtContent,
@@ -492,6 +506,45 @@ const parseBlockContentWithState = (
   }
 
   return content;
+};
+
+/**
+ * Walk a `<w:sdt>` element's direct children and return the verbatim XML
+ * for every child that is NOT `<w:sdtPr>`, `<w:sdtEndPr>`, or
+ * `<w:sdtContent>` — split by position relative to sdtContent.
+ *
+ * Per MS-OE376 §2.5.2.30, Word emits 16 range-marker elements (bookmark,
+ * comment, custom XML, tracked-change ranges) as direct sdt siblings of
+ * sdtContent. Without preserving them, a comment thread or tracked
+ * change that crosses an SDT boundary loses a delimiter when folio
+ * serializes the parsed model back out.
+ */
+const captureSdtSiblingMarkers = (
+  sdt: XmlElement,
+): { before: string; after: string } => {
+  const beforeParts: string[] = [];
+  const afterParts: string[] = [];
+  let sawContent = false;
+  for (const ch of sdt.elements ?? []) {
+    if (ch.type !== "element" || !ch.name) {
+      continue;
+    }
+    const local = getLocalName(ch.name);
+    if (local === "sdtPr" || local === "sdtEndPr") {
+      continue;
+    }
+    if (local === "sdtContent") {
+      sawContent = true;
+      continue;
+    }
+    const xml = elementToXml(ch);
+    if (sawContent) {
+      afterParts.push(xml);
+    } else {
+      beforeParts.push(xml);
+    }
+  }
+  return { before: beforeParts.join(""), after: afterParts.join("") };
 };
 
 const parseBookmarkMarker = (

@@ -71,6 +71,50 @@ describe("serializeBlockSdt — raw sdtPr replay", () => {
     expect(xml).toContain("w15:repeatingSection");
   });
 
+  test("replays sdt-sibling range markers (bookmark/comment/tracked) on round-trip", () => {
+    // MS-OE376 §2.5.2.30: Word emits range-marker elements as direct
+    // siblings of <w:sdtContent> inside <w:sdt>, not nested inside it.
+    // Without preserving the captured-before/after raw XML, a comment
+    // thread or tracked-change range that crosses an SDT boundary loses
+    // one delimiter on round-trip.
+    const blocks = parseBlocks(`<w:body ${NS}>
+      <w:sdt>
+        <w:sdtPr><w:tag w:val="x"/></w:sdtPr>
+        <w:bookmarkStart w:id="1" w:name="b1"/>
+        <w:commentRangeStart w:id="0"/>
+        <w:sdtContent><w:p/></w:sdtContent>
+        <w:commentRangeEnd w:id="0"/>
+        <w:bookmarkEnd w:id="1"/>
+      </w:sdt>
+    </w:body>`);
+    const first = blocks[0];
+    if (!first || first.type !== "blockSdt") {
+      throw new Error(`expected blockSdt, got ${String(first?.type)}`);
+    }
+    expect(first.properties.rawSdtChildrenBeforeContent).toContain(
+      "w:bookmarkStart",
+    );
+    expect(first.properties.rawSdtChildrenBeforeContent).toContain(
+      "w:commentRangeStart",
+    );
+    expect(first.properties.rawSdtChildrenAfterContent).toContain(
+      "w:bookmarkEnd",
+    );
+    expect(first.properties.rawSdtChildrenAfterContent).toContain(
+      "w:commentRangeEnd",
+    );
+    const xml = serializeBlockSdt(first, noChildSerializer);
+    // Markers replay in original positions.
+    expect(xml).toContain('<w:bookmarkStart w:id="1" w:name="b1"/>');
+    expect(xml).toContain('<w:commentRangeStart w:id="0"/>');
+    expect(xml).toContain('<w:bookmarkEnd w:id="1"/>');
+    expect(xml).toContain('<w:commentRangeEnd w:id="0"/>');
+    // The before-markers come before <w:sdtContent>, the after-markers come after.
+    const contentIdx = xml.indexOf("<w:sdtContent>");
+    expect(xml.indexOf("w:bookmarkStart")).toBeLessThan(contentIdx);
+    expect(xml.indexOf("w:bookmarkEnd")).toBeGreaterThan(contentIdx);
+  });
+
   test("replays sdtEndPr verbatim", () => {
     const blocks = parseBlocks(`<w:body ${NS}>
       <w:sdt>
