@@ -54,7 +54,7 @@ If the request is vague, default to:
    - `apps/api/Dockerfile` for the base image digest
 
 2. **Inventory outdated candidates**:
-   - run `bun outdated --recursive` for Bun packages
+   - run `bun outdated --filter="*"` for Bun workspace packages
    - run `cargo outdated --root-deps-only` in
      `apps/desktop/src-tauri` for Cargo crates. If `cargo-outdated`
      is missing, prefer `cargo binstall cargo-outdated` (prebuilt
@@ -126,8 +126,7 @@ If the request is vague, default to:
    Good defaults:
 
    ```bash
-   bun info <pkg>@<version> --json
-   npm view <pkg>@<version>
+   npm view <pkg>@<version> --json
    bun pm untrusted
    ```
 
