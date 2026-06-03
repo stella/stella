@@ -125,6 +125,27 @@ describe("parseSdtProperties — prefixed marker elements", () => {
     expect(props.listItems).toEqual([{ displayText: "A", value: "a" }]);
   });
 
+  test("does not corrupt locally-declared xmlns:* attributes during attr normalization", () => {
+    // The attribute normalizer's negative lookahead must skip `xmlns:`
+    // alongside the canonical prefix; otherwise `<x:tag xmlns:x="…"
+    // x:val="…"/>` would get its namespace declaration rewritten to a
+    // bogus `<w:tag w:x="…" w:val="…"/>` on save.
+    const props = parseSdtPrXml(
+      '<w:sdtPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:tag xmlns:x="http://schemas.openxmlformats.org/wordprocessingml/2006/main" x:val="client"/></w:sdtPr>',
+    );
+    expect(props.tag).toBe("client");
+    expect(props.rawPropertiesXml).toBeDefined();
+    // Namespace declaration preserved unchanged.
+    expect(props.rawPropertiesXml).toContain(
+      'xmlns:x="http://schemas.openxmlformats.org/wordprocessingml/2006/main"',
+    );
+    // No bogus `w:x=` attribute introduced.
+    expect(props.rawPropertiesXml).not.toContain("w:x=");
+    // Modeled value still picked up and the modeled `val` attribute
+    // points to canonical w: on save.
+    expect(props.rawPropertiesXml).toContain('w:val="client"');
+  });
+
   test("normalizes inherited alt-prefix w-namespace SDT children inside canonical wrapper", () => {
     // Canonical `<w:sdtPr>` wrapper with children inherited under an
     // alt prefix (`<x:tag>` declared via xmlns:x on the document root).

@@ -187,12 +187,17 @@ function normalizeChildrenForLocalNames(
       prefix === canonical ? `</${prefix}:${local}` : `</${canonical}:${local}`,
     );
     // Also normalize attributes on those elements that use the alt prefix.
-    // Without a parser pass this is best-effort: rewrite `prefix:attr=` only
-    // when the immediately preceding tag is the targeted element. A small
-    // 64-char lookbehind window covers realistic OOXML elements (5-attr SDT
-    // children are short).
+    // Without a parser pass this is best-effort: rewrite `prefix:attr=`
+    // only when the immediately preceding tag is the targeted element AND
+    // the prefix is preceded by an attribute-name boundary (whitespace).
+    // The whitespace anchor is critical — a bare `\b` would also match
+    // inside attribute values, so `xmlns:x="http://…"` would have `http:`
+    // rewritten to `w:` and the namespace URI would be silently
+    // corrupted. Exclude `xmlns:*` so a locally-declared alt-prefix
+    // (`<x:tag xmlns:x="…" x:val="…"/>`) keeps its namespace declaration
+    // intact too.
     const attrRe = new RegExp(
-      `(<${canonical}:${escapedLocal}\\b[^>]{0,200})\\b(?!${canonical}:)(\\w+):`,
+      `(<${canonical}:${escapedLocal}\\b[^>]{0,200}\\s)(?!${canonical}:)(?!xmlns:)(\\w+):`,
       "gu",
     );
     let prev = "";
