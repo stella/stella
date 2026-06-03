@@ -15,6 +15,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import JSZip from "jszip";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -51,6 +52,28 @@ async function fullRoundTrip(original: Document): Promise<Document> {
   const back = fromProseDoc(pmDoc, original);
   const repacked = await repackDocx(back, { updateModifiedDate: false });
   return await parseDocx(repacked);
+}
+
+/**
+ * Variant of `fullRoundTrip` that also returns the raw `word/document.xml`
+ * from the re-serialized package. Used by tests that need to inspect the
+ * on-disk encoding (e.g. checking that ampersands re-escape as `&amp;`
+ * exactly once on the way out).
+ */
+async function fullRoundTripWithXml(
+  original: Document,
+): Promise<{ document: Document; documentXml: string }> {
+  const pmDoc = toProseDoc(original);
+  const back = fromProseDoc(pmDoc, original);
+  const repacked = await repackDocx(back, { updateModifiedDate: false });
+  const zip = await JSZip.loadAsync(repacked);
+  const docFile = zip.file("word/document.xml");
+  if (!docFile) {
+    throw new Error("word/document.xml missing from repacked package");
+  }
+  const documentXml = await docFile.async("string");
+  const document = await parseDocx(repacked);
+  return { document, documentXml };
 }
 
 /** Collect every paragraph in the body, descending into BlockSdt wrappers. */
@@ -582,5 +605,161 @@ describe("corpus round-trip: datahash-sdt.docx", () => {
     expect(sdt.properties.alias).toBe("Hashed slot");
     expect(sdt.properties.tag).toBe("hashed-slot");
     expect(bodyText(roundTripped)).toContain("Hashed content.");
+  });
+});
+
+// ============================================================================
+// FIXTURE 20: bookmark range markers as direct siblings under <w:sdt>
+// ============================================================================
+//
+// MS-OE376 §2.5.2.30 documents that Word emits bookmark range markers as
+// direct children of <w:sdt> (siblings of <w:sdtContent>). Folio does not
+// currently model bookmark markers on the block SDT wrapper, so the
+// guarantee here is the weak-but-useful one: parsing does not throw, the
+// inner paragraph survives the round-trip, and no spurious wrapper or
+// duplicate paragraph is introduced.
+
+describe("corpus round-trip: extraspec-bookmark-sibling.docx", () => {
+  test("sibling bookmark markers under <w:sdt> do not break parse", async () => {
+    // Source: https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oe376/1aee8ae1-fe3a-4ca4-96f4-e416cf43e461
+    const original = await parseDocx(
+      readFixture("extraspec-bookmark-sibling.docx"),
+    );
+    const roundTripped = await fullRoundTrip(original);
+
+    expect(bodyText(roundTripped)).toBe(bodyText(original));
+    expect(bodyText(roundTripped)).toContain("Inside bookmarked sdt.");
+    expect(bodyText(roundTripped)).toContain("After.");
+  });
+});
+
+// ============================================================================
+// FIXTURE 21: comment range markers as direct siblings under <w:sdt>
+// ============================================================================
+//
+// Same shape as fixture 20 but with <w:commentRangeStart> /
+// <w:commentRangeEnd> instead of bookmark markers. Same MS-OE376 source.
+// The parser must tolerate the layout; folio cannot project the comment
+// range onto the BlockSdt today, so the assertion is content fidelity.
+
+describe("corpus round-trip: extraspec-commentrange-sibling.docx", () => {
+  test("sibling comment range markers under <w:sdt> do not break parse", async () => {
+    // Source: https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oe376/1aee8ae1-fe3a-4ca4-96f4-e416cf43e461
+    const original = await parseDocx(
+      readFixture("extraspec-commentrange-sibling.docx"),
+    );
+    const roundTripped = await fullRoundTrip(original);
+
+    expect(bodyText(roundTripped)).toBe(bodyText(original));
+    expect(bodyText(roundTripped)).toContain("Inside commented sdt.");
+    expect(bodyText(roundTripped)).toContain("After.");
+  });
+});
+
+// ============================================================================
+// FIXTURE 22: OpenDoPE-encoded ampersand inside <w:tag>
+// ============================================================================
+//
+// OpenDoPE stores compound binding data in <w:tag w:val="...">; the on-disk
+// form has `&amp;`. The parser must decode the entity; the serializer must
+// re-escape exactly once — no double-escape (`&amp;amp;`), no raw `&`.
+
+describe("corpus round-trip: opendope-encoded-ampersand-tag.docx", () => {
+  test("encoded ampersand decodes on parse and re-escapes once on save", async () => {
+    // Source: https://www.opendope.org/opendope_conventions_v2.3.html
+    const original = await parseDocx(
+      readFixture("opendope-encoded-ampersand-tag.docx"),
+    );
+    const decodedTag = "od:component=c1&od:continuousBefore=true";
+
+    const originalSdt = findFirstInlineSdt(original.package.document.content);
+    expect(originalSdt?.properties.tag).toBe(decodedTag);
+
+    const { document: roundTripped, documentXml } =
+      await fullRoundTripWithXml(original);
+
+    const sdt = findFirstInlineSdt(roundTripped.package.document.content);
+    expect(sdt?.properties.tag).toBe(decodedTag);
+
+    // On-disk: the tag must be encoded exactly once. No double-escape
+    // (`&amp;amp;`) and no raw `&` adjacent to `od:`.
+    expect(documentXml).toContain(
+      '<w:tag w:val="od:component=c1&amp;od:continuousBefore=true"/>',
+    );
+    expect(documentXml).not.toContain("&amp;amp;");
+    expect(documentXml).not.toContain("c1&od:");
+  });
+});
+
+// ============================================================================
+// FIXTURE 23: <w:sdt> with no <w:sdtPr> child
+// ============================================================================
+//
+// Word 2010–2024 tolerate an SDT with no sdtPr (no formal spec backing,
+// but observed in templates produced by non-Word generators). The parser
+// must not throw; the inner paragraph must survive. Block SDT wrappers
+// are unwrapped on parse today, so the recovered model is just the inner
+// paragraph at body scope (matches the BlockSdt unwrap path documented in
+// PROVENANCE.md).
+
+describe("corpus round-trip: sdt-without-sdtpr.docx", () => {
+  test("missing sdtPr does not break parse; inner paragraph survives", async () => {
+    // Source: Word 2010–2024 lenient parse behaviour (no formal spec — tolerance test).
+    const original = await parseDocx(readFixture("sdt-without-sdtpr.docx"));
+    const roundTripped = await fullRoundTrip(original);
+
+    const paras = collectParagraphs(roundTripped.package.document.content);
+    expect(paras).toHaveLength(1);
+    expect(paragraphText(paras[0]!)).toBe("hi");
+  });
+});
+
+// ============================================================================
+// FIXTURE 24: self-closing <w:sdt/>
+// ============================================================================
+//
+// No content, no sdtPr. Same tolerance source as fixture 23. The block
+// parser must not throw; with no <w:sdtContent>, nothing is contributed
+// to body content. The trailing paragraph survives so we have something
+// concrete to anchor on.
+
+describe("corpus round-trip: sdt-self-closing.docx", () => {
+  test("self-closing <w:sdt/> does not break parse; trailing paragraph survives", async () => {
+    // Source: Word 2010–2024 lenient parse behaviour (no formal spec — tolerance test).
+    const original = await parseDocx(readFixture("sdt-self-closing.docx"));
+    const roundTripped = await fullRoundTrip(original);
+
+    expect(bodyText(roundTripped)).toContain("After empty sdt.");
+    // No phantom paragraph injected for the empty SDT — only the trailing
+    // paragraph is recovered.
+    const paras = collectParagraphs(roundTripped.package.document.content);
+    expect(paras).toHaveLength(1);
+  });
+});
+
+// ============================================================================
+// FIXTURE 25: <w:placeholder/> with no <w:docPart> child
+// ============================================================================
+//
+// ECMA-376 §17.5.2.27 nominally requires the docPart child, but Word
+// tolerates its absence. The parser must not crash and must not fabricate
+// a placeholder string — `props.placeholder` stays undefined.
+
+describe("corpus round-trip: placeholder-without-docpart.docx", () => {
+  test("placeholder with no docPart leaves placeholder undefined", async () => {
+    // Source: https://c-rex.net/samples/ooxml/e1/Part4/OOXML_P4_DOCX_Structured_topic_ID0ERWJS.html
+    const original = await parseDocx(
+      readFixture("placeholder-without-docpart.docx"),
+    );
+    const roundTripped = await fullRoundTrip(original);
+
+    const sdt = findFirstInlineSdt(roundTripped.package.document.content);
+    expect(sdt).not.toBeNull();
+    if (!sdt) {
+      return;
+    }
+    expect(sdt.properties.tag).toBe("x");
+    expect(sdt.properties.placeholder).toBeUndefined();
+    expect(bodyText(roundTripped)).toContain("No docPart inside placeholder.");
   });
 });

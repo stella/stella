@@ -18,29 +18,46 @@ bun run scripts/build-corpus-fixtures.ts
 
 ## Inventory
 
-| File                            | What it exercises                                                        |
-| ------------------------------- | ------------------------------------------------------------------------ |
-| `block-sdt-richtext.docx`       | Block-level `<w:sdt>` wrapping a paragraph; alias, tag, lock             |
-| `inline-sdt-dropdown.docx`      | Inline `<w:sdt>` with `<w:dropDownList>` (three `w:listItem`s)           |
-| `inline-sdt-checkbox.docx`      | Inline `<w:sdt>` with `<w14:checkbox>` in the checked state              |
-| `inline-sdt-mixed-rpr.docx`     | Nested inline SDTs whose content carries mixed `<w:rPr>` (bold/italic)   |
-| `alt-prefix-sdt.docx`           | All `w:` elements rebound to an `x:` prefix; date SDT                    |
-| `nested-block-sdt.docx`         | Outer block SDT wrapping an inner block SDT wrapping a paragraph         |
-| `sdt-rpr-placeholder.docx`      | `<w:sdtPr>` containing a `<w:rPr>` (color + bold) and an alias/tag       |
-| `empty-sdt-content.docx`        | Inline SDT with an empty `<w:sdtContent/>`; tests round-trip idempotence |
-| `authored-empty-paragraph.docx` | Block SDT whose content is an authored `<w:p/>` empty paragraph          |
-| `date-fractional-seconds.docx`  | `w:fullDate="2026-06-02T00:00:00.000Z"` with millisecond precision       |
-| `dropdown-empty-value.docx`     | Dropdown whose first `w:listItem` has `w:value=""`                       |
-| `lock-sdt-locked.docx`          | `<w:lock w:val="sdtLocked"/>`                                            |
-| `lock-content-locked.docx`      | `<w:lock w:val="contentLocked"/>`                                        |
-| `lock-sdt-content-locked.docx`  | `<w:lock w:val="sdtContentLocked"/>`                                     |
-| `repeating-section.docx`        | `<w15:repeatingSection/>` marker inside `<w:sdtPr>`                      |
-| `checkbox-val-true.docx`        | `<w14:checked w14:val="true"/>` (boolean form of ST_OnOff)               |
-| `checkbox-val-false.docx`       | `<w14:checked w14:val="false"/>` (boolean form of ST_OnOff)              |
-| `placeholder-docpart.docx`      | `<w:placeholder><w:docPart w:val="DefaultText"/></w:placeholder>`        |
-| `datahash-sdt.docx`             | `<w16sdtdh:dataHash w16sdtdh:val="..."/>` marker inside `<w:sdtPr>`      |
+| File                                  | What it exercises                                                                                        |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `block-sdt-richtext.docx`             | Block-level `<w:sdt>` wrapping a paragraph; alias, tag, lock                                             |
+| `inline-sdt-dropdown.docx`            | Inline `<w:sdt>` with `<w:dropDownList>` (three `w:listItem`s)                                           |
+| `inline-sdt-checkbox.docx`            | Inline `<w:sdt>` with `<w14:checkbox>` in the checked state                                              |
+| `inline-sdt-mixed-rpr.docx`           | Nested inline SDTs whose content carries mixed `<w:rPr>` (bold/italic)                                   |
+| `alt-prefix-sdt.docx`                 | All `w:` elements rebound to an `x:` prefix; date SDT                                                    |
+| `nested-block-sdt.docx`               | Outer block SDT wrapping an inner block SDT wrapping a paragraph                                         |
+| `sdt-rpr-placeholder.docx`            | `<w:sdtPr>` containing a `<w:rPr>` (color + bold) and an alias/tag                                       |
+| `empty-sdt-content.docx`              | Inline SDT with an empty `<w:sdtContent/>`; tests round-trip idempotence                                 |
+| `authored-empty-paragraph.docx`       | Block SDT whose content is an authored `<w:p/>` empty paragraph                                          |
+| `date-fractional-seconds.docx`        | `w:fullDate="2026-06-02T00:00:00.000Z"` with millisecond precision                                       |
+| `dropdown-empty-value.docx`           | Dropdown whose first `w:listItem` has `w:value=""`                                                       |
+| `lock-sdt-locked.docx`                | `<w:lock w:val="sdtLocked"/>`                                                                            |
+| `lock-content-locked.docx`            | `<w:lock w:val="contentLocked"/>`                                                                        |
+| `lock-sdt-content-locked.docx`        | `<w:lock w:val="sdtContentLocked"/>`                                                                     |
+| `repeating-section.docx`              | `<w15:repeatingSection/>` marker inside `<w:sdtPr>`                                                      |
+| `checkbox-val-true.docx`              | `<w14:checked w14:val="true"/>` (boolean form of ST_OnOff)                                               |
+| `checkbox-val-false.docx`             | `<w14:checked w14:val="false"/>` (boolean form of ST_OnOff)                                              |
+| `placeholder-docpart.docx`            | `<w:placeholder><w:docPart w:val="DefaultText"/></w:placeholder>`                                        |
+| `datahash-sdt.docx`                   | `<w16sdtdh:dataHash w16sdtdh:val="..."/>` marker inside `<w:sdtPr>`                                      |
+| `extraspec-bookmark-sibling.docx`     | `<w:bookmarkStart/>` / `<w:bookmarkEnd/>` as direct siblings of `<w:sdtContent>` under `<w:sdt>`         |
+| `extraspec-commentrange-sibling.docx` | `<w:commentRangeStart/>` / `<w:commentRangeEnd/>` as direct siblings of `<w:sdtContent>` under `<w:sdt>` |
+| `opendope-encoded-ampersand-tag.docx` | OpenDoPE binding tag containing an encoded `&amp;`; round-trip must re-escape exactly once               |
+| `sdt-without-sdtpr.docx`              | `<w:sdt>` with no `<w:sdtPr>` child; default-property tolerance                                          |
+| `sdt-self-closing.docx`               | Self-closing `<w:sdt/>` with no `<w:sdtPr>` and no content                                               |
+| `placeholder-without-docpart.docx`    | `<w:placeholder/>` with no `<w:docPart>` child; spec-non-conformant tolerance                            |
 
 All fixtures are under 30 KB.
+
+## Source citations (extra-spec / tolerance fixtures)
+
+| Fixture                               | Source                                                                                                                                                            |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `extraspec-bookmark-sibling.docx`     | [MS-OE376 §2.5.2.30 — Word's additional sdt children](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oe376/1aee8ae1-fe3a-4ca4-96f4-e416cf43e461) |
+| `extraspec-commentrange-sibling.docx` | [MS-OE376 §2.5.2.30 — Word's additional sdt children](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oe376/1aee8ae1-fe3a-4ca4-96f4-e416cf43e461) |
+| `opendope-encoded-ampersand-tag.docx` | [OpenDoPE conventions v2.3](https://www.opendope.org/opendope_conventions_v2.3.html)                                                                              |
+| `sdt-without-sdtpr.docx`              | Word 2010–2024 lenient parse behaviour (no formal spec)                                                                                                           |
+| `sdt-self-closing.docx`               | Word 2010–2024 lenient parse behaviour (no formal spec)                                                                                                           |
+| `placeholder-without-docpart.docx`    | [ECMA-376 §17.5.2.27 (c-rex mirror)](https://c-rex.net/samples/ooxml/e1/Part4/OOXML_P4_DOCX_Structured_topic_ID0ERWJS.html) + observed Word tolerance             |
 
 ## Modelled-coverage skips
 

@@ -496,6 +496,110 @@ const FIXTURES: Fixture[] = [
     </w:p>`,
     documentOpenTag: DATAHASH_DOC_OPEN,
   },
+
+  // 20. Block SDT whose `<w:sdtPr>` is followed by sibling
+  // `<w:bookmarkStart>` / `<w:bookmarkEnd>` markers wrapping the
+  // `<w:sdtContent>`. MS-OE376 §2.5.2.30 documents that Word permits
+  // bookmark range markers as direct children of `<w:sdt>`. Folio does not
+  // currently model them on the block SDT wrapper, so the assertion is
+  // that the parser does not throw and the inner paragraph survives.
+  {
+    filename: "extraspec-bookmark-sibling.docx",
+    body: `
+    <w:sdt>
+      <w:sdtPr>
+        <w:tag w:val="x"/>
+      </w:sdtPr>
+      <w:bookmarkStart w:id="1" w:name="b1"/>
+      <w:sdtContent>
+        <w:p><w:r><w:t>Inside bookmarked sdt.</w:t></w:r></w:p>
+      </w:sdtContent>
+      <w:bookmarkEnd w:id="1"/>
+    </w:sdt>
+    <w:p><w:r><w:t>After.</w:t></w:r></w:p>`,
+  },
+
+  // 21. Same shape as #20 but with `<w:commentRangeStart>` /
+  // `<w:commentRangeEnd>` siblings under `<w:sdt>`. Same source
+  // (MS-OE376 §2.5.2.30). The parser must tolerate the layout.
+  {
+    filename: "extraspec-commentrange-sibling.docx",
+    body: `
+    <w:sdt>
+      <w:sdtPr>
+        <w:tag w:val="y"/>
+      </w:sdtPr>
+      <w:commentRangeStart w:id="0"/>
+      <w:sdtContent>
+        <w:p><w:r><w:t>Inside commented sdt.</w:t></w:r></w:p>
+      </w:sdtContent>
+      <w:commentRangeEnd w:id="0"/>
+    </w:sdt>
+    <w:p><w:r><w:t>After.</w:t></w:r></w:p>`,
+  },
+
+  // 22. OpenDoPE conventions v2.3 stores compound binding data inside
+  // `w:tag` with literal ampersands, so the on-disk encoding is `&amp;`.
+  // fast-xml-parser decodes entities on read, so the parsed `tag` must
+  // contain a literal `&`; the serializer must re-escape it (no double
+  // `&amp;amp;`, no raw `&`). Wrapped in an inline SDT so the inline
+  // serializer (which runs the tag through `escapeXml`) is exercised.
+  {
+    filename: "opendope-encoded-ampersand-tag.docx",
+    body: `
+    <w:p>
+      <w:sdt>
+        <w:sdtPr>
+          <w:tag w:val="od:component=c1&amp;od:continuousBefore=true"/>
+        </w:sdtPr>
+        <w:sdtContent>
+          <w:r><w:t>OpenDoPE slot.</w:t></w:r>
+        </w:sdtContent>
+      </w:sdt>
+    </w:p>`,
+  },
+
+  // 23. `<w:sdt>` without any `<w:sdtPr>` child. Word tolerates this on
+  // parse; the recovered model should fall back to a default richText
+  // SDT (no alias/tag/id) and preserve the inner paragraph.
+  {
+    filename: "sdt-without-sdtpr.docx",
+    body: `
+    <w:sdt>
+      <w:sdtContent>
+        <w:p><w:r><w:t>hi</w:t></w:r></w:p>
+      </w:sdtContent>
+    </w:sdt>`,
+  },
+
+  // 24. Self-closing `<w:sdt/>` with no content and no sdtPr. Same
+  // tolerance source as #23; the parser must not throw and the recovered
+  // model should be either empty or a synthetic empty SDT.
+  {
+    filename: "sdt-self-closing.docx",
+    body: `
+    <w:sdt/>
+    <w:p><w:r><w:t>After empty sdt.</w:t></w:r></w:p>`,
+  },
+
+  // 25. `<w:placeholder>` with no `<w:docPart>` child. ECMA-376 §17.5.2.27
+  // nominally requires the docPart child, but Word tolerates its absence.
+  // The parser must not crash and must not fabricate a placeholder string.
+  {
+    filename: "placeholder-without-docpart.docx",
+    body: `
+    <w:p>
+      <w:sdt>
+        <w:sdtPr>
+          <w:tag w:val="x"/>
+          <w:placeholder/>
+        </w:sdtPr>
+        <w:sdtContent>
+          <w:r><w:t>No docPart inside placeholder.</w:t></w:r>
+        </w:sdtContent>
+      </w:sdt>
+    </w:p>`,
+  },
 ];
 
 async function buildFixture(fixture: Fixture): Promise<ArrayBuffer> {
