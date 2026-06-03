@@ -69,8 +69,14 @@ const NAMESPACES = {
  * Build namespace declaration string for document element
  */
 function buildNamespaceDeclarations(): string {
-  // Minimal set of commonly used namespaces
-  const minimalNamespaces = {
+  // Declare every namespace the parser preserves verbatim through
+  // `rawPropertiesXml` / `rawEndPropertiesXml` (and any other raw
+  // replay path). A canonical `<w:sdtPr>` legitimately contains
+  // `<w16sdtdh:dataHash>` / `<w16cex:*>` / `<w16cid:*>` children that
+  // the parser stores opaquely; without these declarations on the
+  // document root, the replayed XML would carry undefined prefixes and
+  // Word refuses to open the file.
+  const declared = {
     wpc: NAMESPACES.wpc,
     mc: NAMESPACES.mc,
     o: NAMESPACES.o,
@@ -83,11 +89,16 @@ function buildNamespaceDeclarations(): string {
     w: NAMESPACES.w,
     w14: NAMESPACES.w14,
     w15: NAMESPACES.w15,
+    w16: NAMESPACES.w16,
+    w16cex: NAMESPACES.w16cex,
+    w16cid: NAMESPACES.w16cid,
+    w16sdtdh: NAMESPACES.w16sdtdh,
+    w16se: NAMESPACES.w16se,
     wpg: NAMESPACES.wpg,
     wps: NAMESPACES.wps,
   };
 
-  return Object.entries(minimalNamespaces)
+  return Object.entries(declared)
     .map(([prefix, uri]) => `xmlns:${prefix}="${uri}"`)
     .join(" ");
 }

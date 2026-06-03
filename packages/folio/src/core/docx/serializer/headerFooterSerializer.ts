@@ -15,7 +15,10 @@ import { serializeBlockSdt } from "./blockSdtSerializer";
 import { serializeParagraph } from "./paragraphSerializer";
 import { serializeTable } from "./tableSerializer";
 
-// Minimal namespaces needed for header/footer XML
+// Namespaces declared on the header/footer root. Mirrors the document
+// serializer's declared set so any raw replay path (`rawPropertiesXml`,
+// unmodeled OOXML extensions inside a captured SDT) lands on a root that
+// declares every standard prefix it might use.
 const NAMESPACES: Record<string, string> = {
   wpc: "http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas",
   mc: "http://schemas.openxmlformats.org/markup-compatibility/2006",
@@ -29,6 +32,11 @@ const NAMESPACES: Record<string, string> = {
   w: "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
   w14: "http://schemas.microsoft.com/office/word/2010/wordml",
   w15: "http://schemas.microsoft.com/office/word/2012/wordml",
+  w16: "http://schemas.microsoft.com/office/word/2018/wordml",
+  w16cex: "http://schemas.microsoft.com/office/word/2018/wordml/cex",
+  w16cid: "http://schemas.microsoft.com/office/word/2016/wordml/cid",
+  w16sdtdh: "http://schemas.microsoft.com/office/word/2020/wordml/sdtdatahash",
+  w16se: "http://schemas.microsoft.com/office/word/2015/wordml/symex",
   wpg: "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup",
   wps: "http://schemas.microsoft.com/office/word/2010/wordprocessingShape",
 };
