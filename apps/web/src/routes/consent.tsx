@@ -24,6 +24,8 @@ import {
   getOauthRedirectUrl,
 } from "@/lib/oauth-provider";
 import { pageTitle } from "@/lib/page-title";
+import { roleOptions } from "@/routes/-queries";
+import { managementRoles } from "@/routes/_protected.organization/-consts";
 
 const searchSchema = v.object({
   client_id: v.optional(v.string()),
@@ -78,6 +80,13 @@ function ConsentPage() {
   const [isPending, setIsPending] = useState(false);
   const [hasError, setHasError] = useState(false);
   const { data: organizations } = authClient.useListOrganizations();
+  const { data: currentUserRole } = useQuery({
+    ...roleOptions,
+    enabled: activeOrganizationId !== null,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+  const canManageOrganization =
+    currentUserRole !== undefined && managementRoles.includes(currentUserRole);
 
   const clientQuery = useQuery({
     enabled: clientId !== null,
@@ -100,7 +109,7 @@ function ConsentPage() {
   });
 
   const jurisdictionsQuery = useQuery({
-    enabled: activeOrganizationId !== null,
+    enabled: activeOrganizationId !== null && canManageOrganization,
     queryKey: ["consent-practice-jurisdictions", activeOrganizationId],
     queryFn: async ({ signal }) => {
       const response = await api["organization-settings"].get({
@@ -113,6 +122,7 @@ function ConsentPage() {
     },
   });
   const showJurisdictionsNotice =
+    canManageOrganization &&
     jurisdictionsQuery.data !== undefined &&
     jurisdictionsQuery.data.length === 0;
 
