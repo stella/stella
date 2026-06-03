@@ -1352,6 +1352,76 @@ export type HeaderFooter = {
   hdrFtrType: HeaderFooterType;
   /** Content (paragraphs, tables, block-level content controls). */
   content: BlockContent[];
+  /**
+   * Document watermark detected in this header part. Word emits
+   * watermarks as VML or DrawingML behind-content shapes inside header
+   * parts; the body paragraph that contains them is empty otherwise.
+   * The modeled `Watermark` is exposed alongside `content` so callers
+   * can render and edit it without walking raw runs.
+   */
+  watermark?: Watermark;
+  /**
+   * Verbatim XML of the paragraph(s) containing the source watermark
+   * shape. Captured at parse time so an untouched DOCX serializes the
+   * watermark byte-exact even though `runParser` does not surface VML /
+   * DrawingML at the run level. Cleared (or rewritten) when callers
+   * mutate the modeled watermark via the headless API.
+   */
+  rawWatermarkXml?: string;
+  /**
+   * Index where the watermark paragraph sat among block-level siblings
+   * in the source header. The serializer inserts the watermark (raw or
+   * synthesized) at this position so a header that originally placed
+   * the watermark after visible text round-trips with the same flow.
+   * Undefined when no watermark was parsed or when callers built the
+   * watermark programmatically — in that case the serializer emits it
+   * at the top of the header (the same position Word's own UI uses).
+   */
+  watermarkBlockIndex?: number;
+};
+
+/**
+ * Document watermark (MS Word's behind-content page decoration).
+ */
+export type Watermark = TextWatermark | PictureWatermark;
+
+export type TextWatermark = {
+  kind: "text";
+  /** Visible string. Required. */
+  text: string;
+  /** Font family. Word's default is Calibri. */
+  font?: string;
+  /**
+   * Hex color (`"C0C0C0"`), `"auto"`, or `undefined` for the producer
+   * default. Word emits `#C0C0C0` (light gray) for text watermarks.
+   */
+  color?: string;
+  /**
+   * `true` = diagonal (Word default, -45°), `false` = horizontal.
+   * Stored as a boolean since the only Word-supported rotations are
+   * -45 and 0.
+   */
+  diagonal?: boolean;
+  /**
+   * Opacity 0..1. Word's interactive UI exposes a "transparency"
+   * percentage; folio stores it as an opacity scalar for renderer
+   * convenience. Default ~0.5.
+   */
+  opacity?: number;
+};
+
+export type PictureWatermark = {
+  kind: "picture";
+  /** Relationship id of the image part in `word/_rels/header*.xml.rels`. */
+  imageRId: string;
+  /** Optional scale factor (1.0 = native, 0.5 = half-size). */
+  scale?: number;
+  /**
+   * Whether Word's "washout" effect was applied (low contrast).
+   * Default true — Word emits washout=true on every picture
+   * watermark inserted via Insert → Watermark.
+   */
+  washout?: boolean;
 };
 
 // ============================================================================

@@ -142,6 +142,7 @@ import type {
   StyleDefinitions,
   SectionProperties,
   HeaderFooter,
+  Watermark,
   TextFormatting,
 } from "../core/types/document";
 import {
@@ -149,6 +150,7 @@ import {
   htmlQueryAll,
   queryHtmlElement,
 } from "../core/utils/domGuards";
+import { getDocumentWatermark } from "../core/watermark";
 // Internal components
 import { AnonymizationRectsOverlay } from "./AnonymizationRectsOverlay";
 import type { AnonymizationRectGroup } from "./AnonymizationRectsOverlay";
@@ -3306,6 +3308,32 @@ export function PagedEditor(
           }
           if (footnotesByPage?.size) {
             renderOpts.footnotesByPage = footnotesByPage;
+          }
+          // Document watermark (rendered behind every page). Build a
+          // per-header-rId map so titlePg / even-odd / per-section
+          // header parts each paint their own watermark; the painter
+          // falls back to `renderOpts.watermark` for documents that
+          // share one header. Picture watermarks need an image-rId →
+          // asset URL resolver that currently lives outside the
+          // editor; until that's wired in, the painter silently skips
+          // them.
+          if (document) {
+            const watermark = getDocumentWatermark(document);
+            if (watermark) {
+              renderOpts.watermark = watermark;
+            }
+            const headers = document.package.headers;
+            if (headers) {
+              const watermarkByHeaderRId = new Map<string, Watermark>();
+              for (const [rId, header] of headers) {
+                if (header.watermark) {
+                  watermarkByHeaderRId.set(rId, header.watermark);
+                }
+              }
+              if (watermarkByHeaderRId.size > 0) {
+                renderOpts.watermarkByHeaderRId = watermarkByHeaderRId;
+              }
+            }
           }
           renderPages(newLayout.pages, pagesContainerRef.current, renderOpts);
           recordPhaseDuration("render-pages", phaseStartedAt);

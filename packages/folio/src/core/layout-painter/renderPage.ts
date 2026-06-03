@@ -47,7 +47,7 @@ import type {
   FootnoteContent,
   HeaderFooterContent,
 } from "../layout-engine/types";
-import type { BorderSpec, Theme } from "../types/document";
+import type { BorderSpec, Theme, Watermark } from "../types/document";
 import { resolveFontFamily } from "../utils/fontResolver";
 import { borderToStyle } from "../utils/formatToStyle";
 import { eighthsToPixels, pointsToPixels } from "../utils/units";
@@ -67,6 +67,7 @@ import {
   isTextWrappingFloatingImageRun,
 } from "./renderUtils";
 import type { RenderContext } from "./renderUtils";
+import { renderWatermarkLayer } from "./renderWatermark";
 
 /**
  * Page-level floating image that has been extracted from paragraphs.
@@ -196,6 +197,28 @@ export type RenderPageOptions = {
   theme?: Theme | null;
   /** Footnotes to render at the bottom of this page. */
   footnoteArea?: FootnoteRenderItem[];
+  /**
+   * Document watermark to paint behind page content. Applies to every
+   * page that doesn't have a more specific match in
+   * `watermarkByHeaderRId` — the right shape for single-header
+   * documents.
+   */
+  watermark?: Watermark;
+  /**
+   * Per-header-rId watermarks. When a section uses titlePg, even/odd,
+   * or section-scoped headers, each page's active header may carry a
+   * different watermark; this map lets `applySectionHeaderFooterOptions`
+   * select the right one without painting one header's watermark over
+   * the others.
+   */
+  watermarkByHeaderRId?: ReadonlyMap<string, Watermark>;
+  /**
+   * Resolved image src for a picture watermark. The renderer cannot
+   * resolve `imageRId` itself — relationship-id → asset URL belongs to
+   * the package layer; without a resolved src a picture watermark is
+   * silently skipped.
+   */
+  watermarkImageSrc?: string;
 };
 
 type HeaderFooterLayoutInfo = {
@@ -395,6 +418,51 @@ function syncPageBorderOverlay(
   } else {
     pageEl.append(overlay);
   }
+}
+
+/**
+ * Refresh the watermark overlay on a rendered page shell. Incremental
+ * rerenders replace only the body content area, so the watermark sibling
+ * must be reconciled separately when per-section header resolution changes.
+ */
+function syncPageWatermarkOverlay(
+  pageEl: HTMLElement,
+  page: Page,
+  options: RenderPageOptions,
+  doc: Document,
+): void {
+  for (const stale of Array.from(
+    pageEl.querySelectorAll<HTMLElement>(":scope > .layout-page-watermark"),
+  )) {
+    stale.remove();
+  }
+
+  const watermark = options.watermark;
+  if (!watermark) {
+    return;
+  }
+
+  const overlay = renderWatermarkLayer(
+    watermark,
+    page,
+    doc,
+    options.watermarkImageSrc !== undefined
+      ? { imageSrc: options.watermarkImageSrc }
+      : {},
+  );
+  if (!overlay) {
+    return;
+  }
+
+  const contentEl = pageEl.querySelector<HTMLElement>(
+    `:scope > .${PAGE_CLASS_NAMES.content}`,
+  );
+  if (contentEl) {
+    contentEl.before(overlay);
+    return;
+  }
+
+  pageEl.append(overlay);
 }
 
 /**
@@ -1614,6 +1682,19 @@ export function renderPage(
   if (pageBorderEl && options.pageBorders?.zOrder === "back") {
     pageEl.append(pageBorderEl);
   }
+  if (options.watermark) {
+    const watermarkEl = renderWatermarkLayer(
+      options.watermark,
+      page,
+      doc,
+      options.watermarkImageSrc !== undefined
+        ? { imageSrc: options.watermarkImageSrc }
+        : {},
+    );
+    if (watermarkEl) {
+      pageEl.append(watermarkEl);
+    }
+  }
 
   // Create content area
   const contentEl = doc.createElement("div");
@@ -2231,6 +2312,23 @@ export function applySectionHeaderFooterOptions(
     delete pageOptions.footerContent;
   }
 
+  // Per-page watermark resolution. A document with titlePg, even/odd,
+  // or section-scoped headers can carry a different watermark on each
+  // header part. When a per-rId map is present, that map is
+  // authoritative: a page whose active header has no watermark — or no
+  // active header at all (titlePg first page without `headerFirst`) —
+  // must clear the global fallback so we don't paint the default
+  // header's watermark behind a page whose own header is blank.
+  const watermarkByRId = options.watermarkByHeaderRId;
+  if (watermarkByRId) {
+    const pageWatermark = headerRId ? watermarkByRId.get(headerRId) : undefined;
+    if (pageWatermark) {
+      pageOptions.watermark = pageWatermark;
+    } else {
+      delete pageOptions.watermark;
+    }
+  }
+
   return true;
 }
 
@@ -2697,6 +2795,26 @@ function computeOptionsHash(options: RenderPageOptions): string {
   }
   if (options.footerDistance !== undefined) {
     parts.push(`fd:${options.footerDistance}`);
+  }
+
+  // Watermark identity. Without this, virtualized large documents
+  // (8+ pages) keep already-rendered page shells when a watermark is
+  // added, removed, or mutated — `repopulatePageContent` only refreshes
+  // the content area and leaves the old watermark sibling behind. The
+  // image src is fingerprinted too so swapping pictures invalidates.
+  if (options.watermark) {
+    parts.push(`wm:${JSON.stringify(options.watermark)}`);
+  }
+  if (options.watermarkImageSrc !== undefined) {
+    parts.push(`wmsrc:${options.watermarkImageSrc}`);
+  }
+  if (options.watermarkByHeaderRId) {
+    const entries: [string, Watermark][] = [];
+    for (const [rId, wm] of options.watermarkByHeaderRId) {
+      entries.push([rId, wm]);
+    }
+    entries.sort(([a], [b]) => a.localeCompare(b));
+    parts.push(`wm-map:${JSON.stringify(entries)}`);
   }
 
   return parts.join("|");
@@ -3201,12 +3319,19 @@ function repopulatePageContent(
   if (newContentEl && oldContentEl) {
     // Replace only the content area — header/footer stay untouched
     oldContentEl.replaceWith(newContentEl);
-  } else {
-    // Fallback: full replace if structure doesn't match
-    shell.innerHTML = "";
-    data.rendered = false;
-    populatePageShell(shell, pageDataMap, totalPages, options);
+    syncPageWatermarkOverlay(
+      shell,
+      data.page,
+      pageOptions,
+      options.document ?? document,
+    );
+    return;
   }
+
+  // Fallback: full replace if structure doesn't match
+  shell.innerHTML = "";
+  data.rendered = false;
+  populatePageShell(shell, pageDataMap, totalPages, options);
 }
 
 function syncRenderedPmPositionData(

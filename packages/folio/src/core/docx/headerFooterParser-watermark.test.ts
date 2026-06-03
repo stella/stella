@@ -1,0 +1,562 @@
+/**
+ * Watermark recovery from header parts. Word emits a behind-content
+ * watermark inside one or more header parts as either:
+ *
+ * - VML WordArt (`<v:shape type="#_x0000_t136"><v:textpath string="…"/></v:shape>`)
+ *   for text watermarks — the de-facto interchange shape.
+ * - VML picture (`<v:shape><v:imagedata r:id="…"/></v:shape>`) for picture
+ *   watermarks.
+ * - DrawingML behind-content shape (`<w:drawing><wp:anchor behindDoc="1">…`)
+ *   in newer producers. Upstream eigenpal/docx-editor#679 covers only VML;
+ *   folio also detects DrawingML so templates from modern Word builds and
+ *   from libraries like Aspose round-trip without dropping the watermark.
+ */
+
+import { describe, expect, test } from "bun:test";
+
+import { parseHeader } from "./headerFooterParser";
+
+const NS =
+  'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"' +
+  ' xmlns:v="urn:schemas-microsoft-com:vml"' +
+  ' xmlns:o="urn:schemas-microsoft-com:office:office"' +
+  ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+
+describe("parseHeader watermark detection", () => {
+  test("recovers a VML text watermark with the diagonal default", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}>
+  <w:p>
+    <w:r>
+      <w:pict>
+        <v:shape id="PowerPlusWaterMarkObject1" type="#_x0000_t136"
+                 style="position:absolute;margin-left:0;margin-top:0;width:415pt;height:207pt;rotation:315"
+                 fillcolor="#C0C0C0" stroked="f">
+          <v:textpath style="font-family:'Calibri';font-size:1pt" string="CONFIDENTIAL"/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    expect(header.watermark).toBeDefined();
+    if (!header.watermark || header.watermark.kind !== "text") {
+      throw new TypeError("expected text watermark");
+    }
+    expect(header.watermark.text).toBe("CONFIDENTIAL");
+    expect(header.watermark.font).toBe("Calibri");
+    expect(header.watermark.color).toBe("C0C0C0");
+    // rotation:315 is Word's encoding for -45° → diagonal.
+    expect(header.watermark.diagonal).toBe(true);
+  });
+
+  test("recovers a horizontal VML text watermark (rotation 0)", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}>
+  <w:p>
+    <w:r>
+      <w:pict>
+        <v:shape type="#_x0000_t136" style="rotation:0" fillcolor="#FF0000">
+          <v:textpath style="font-family:'Arial'" string="DRAFT"/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    if (!header.watermark || header.watermark.kind !== "text") {
+      throw new TypeError("expected text watermark");
+    }
+    expect(header.watermark.text).toBe("DRAFT");
+    expect(header.watermark.font).toBe("Arial");
+    expect(header.watermark.color).toBe("FF0000");
+    expect(header.watermark.diagonal).toBe(false);
+  });
+
+  test("recovers a VML picture watermark with the image relationship id", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}>
+  <w:p>
+    <w:r>
+      <w:pict>
+        <v:shape id="WordPictureWatermark1" type="#_x0000_t75" style="position:absolute">
+          <v:imagedata r:id="rId7" o:title="logo"/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    if (!header.watermark || header.watermark.kind !== "picture") {
+      throw new TypeError("expected picture watermark");
+    }
+    expect(header.watermark.imageRId).toBe("rId7");
+  });
+
+  test("recovers uniform VML picture watermark scale from shape dimensions", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}>
+  <w:p>
+    <w:r>
+      <w:pict>
+        <v:shape id="WordPictureWatermark1" type="#_x0000_t75"
+                 style="position:absolute;width:207.5pt;height:103.5pt">
+          <v:imagedata r:id="rId7" o:title="logo"/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    if (!header.watermark || header.watermark.kind !== "picture") {
+      throw new TypeError("expected picture watermark");
+    }
+    expect(header.watermark.imageRId).toBe("rId7");
+    expect(header.watermark.scale).toBe(0.5);
+  });
+
+  test("recovers VML picture watermark washout from image adjustments", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}>
+  <w:p>
+    <w:r>
+      <w:pict>
+        <v:shape id="WordPictureWatermark1" type="#_x0000_t75"
+                 style="position:absolute;width:415pt;height:207pt">
+          <v:imagedata r:id="rId7" o:title="" gain="19661f" blacklevel="22938f"/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    if (!header.watermark || header.watermark.kind !== "picture") {
+      throw new TypeError("expected picture watermark");
+    }
+    expect(header.watermark.imageRId).toBe("rId7");
+    expect(header.watermark.washout).toBeUndefined();
+  });
+
+  test("marks VML picture watermarks without washout adjustments as full contrast", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}>
+  <w:p>
+    <w:r>
+      <w:pict>
+        <v:shape id="WordPictureWatermark1" type="#_x0000_t75"
+                 style="position:absolute;width:415pt;height:207pt">
+          <v:imagedata r:id="rId7" o:title=""/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    if (!header.watermark || header.watermark.kind !== "picture") {
+      throw new TypeError("expected picture watermark");
+    }
+    expect(header.watermark.imageRId).toBe("rId7");
+    expect(header.watermark.washout).toBe(false);
+  });
+
+  test("recovers a DrawingML behind-content text watermark (modern producers)", () => {
+    // Folio improvement over upstream: detect DrawingML watermarks too,
+    // which modern Office / Aspose / some Polish legal templates emit.
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}
+  xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+  xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <w:p>
+    <w:r>
+      <w:drawing>
+        <wp:anchor behindDoc="1" allowOverlap="1" simplePos="0" locked="0" layoutInCell="1" relativeHeight="0">
+          <a:graphic>
+            <a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">
+              <a:txBody>
+                <a:bodyPr/>
+                <a:p>
+                  <a:r>
+                    <a:rPr><a:latin typeface="Calibri"/></a:rPr>
+                    <a:t>CONFIDENTIAL</a:t>
+                  </a:r>
+                </a:p>
+              </a:txBody>
+            </a:graphicData>
+          </a:graphic>
+        </wp:anchor>
+      </w:drawing>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    if (!header.watermark || header.watermark.kind !== "text") {
+      throw new TypeError("expected text watermark");
+    }
+    expect(header.watermark.text).toBe("CONFIDENTIAL");
+    expect(header.watermark.font).toBe("Calibri");
+  });
+
+  test("a header logo VML imagedata is not promoted to a picture watermark", () => {
+    // Logo images dropped into a header from the Word ribbon get a
+    // plain `_x0000_sNNN` shape id, not `WordPictureWatermark…`.
+    // Without the id check, every such logo would round-trip as a
+    // full-page behind-content image on save.
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}>
+  <w:p>
+    <w:r>
+      <w:pict>
+        <v:shape id="_x0000_s1025" style="position:absolute" type="#_x0000_t75">
+          <v:imagedata r:id="rId7" o:title="company-logo"/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    expect(header.watermark).toBeUndefined();
+  });
+
+  test("a header logo does not shadow a later real text watermark", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}>
+  <w:p>
+    <w:r>
+      <w:pict>
+        <v:shape id="_x0000_s1025" type="#_x0000_t75">
+          <v:imagedata r:id="rId7"/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+  </w:p>
+  <w:p>
+    <w:r>
+      <w:pict>
+        <v:shape id="PowerPlusWaterMarkObject1" type="#_x0000_t136" style="rotation:315" fillcolor="#C0C0C0">
+          <v:textpath style="font-family:'Calibri'" string="CONFIDENTIAL"/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    if (!header.watermark || header.watermark.kind !== "text") {
+      throw new TypeError("expected text watermark, logo should not shadow");
+    }
+    expect(header.watermark.text).toBe("CONFIDENTIAL");
+  });
+
+  test("a header background DrawingML anchor does not shadow a later real watermark", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}
+  xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+  xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <w:p>
+    <w:r>
+      <w:drawing>
+        <wp:anchor behindDoc="1">
+          <a:graphic><a:graphicData/></a:graphic>
+        </wp:anchor>
+      </w:drawing>
+    </w:r>
+  </w:p>
+  <w:p>
+    <w:r>
+      <w:drawing>
+        <wp:anchor behindDoc="1">
+          <a:graphic>
+            <a:graphicData>
+              <a:txBody>
+                <a:p><a:r><a:t>CONFIDENTIAL</a:t></a:r></a:p>
+              </a:txBody>
+            </a:graphicData>
+          </a:graphic>
+        </wp:anchor>
+      </w:drawing>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    if (!header.watermark || header.watermark.kind !== "text") {
+      throw new TypeError(
+        "expected text watermark, background should not shadow",
+      );
+    }
+    expect(header.watermark.text).toBe("CONFIDENTIAL");
+  });
+
+  test("extracts the primary font from a comma-separated family list", () => {
+    // Word sometimes emits `font-family:'Calibri','sans-serif'`. The
+    // previous stripQuotes implementation saw matching `'` at both
+    // ends of the whole string and returned `Calibri','sans-serif`.
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}>
+  <w:p>
+    <w:r>
+      <w:pict>
+        <v:shape id="PowerPlusWaterMarkObject1" type="#_x0000_t136" style="rotation:315">
+          <v:textpath style="font-family:'Calibri','sans-serif'" string="DRAFT"/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    if (!header.watermark || header.watermark.kind !== "text") {
+      throw new TypeError("expected text watermark");
+    }
+    expect(header.watermark.font).toBe("Calibri");
+  });
+
+  test("tolerates whitespace around the colon in inline styles", () => {
+    // Hand-authored DOCX templates and some legacy tools emit
+    // `key : value` instead of `key:value`. Previously parseInlineStyle
+    // matched the literal prefix `"rotation:"` and missed the spaced form.
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}>
+  <w:p>
+    <w:r>
+      <w:pict>
+        <v:shape id="PowerPlusWaterMarkObject1" type="#_x0000_t136"
+                 style="rotation : 315">
+          <v:textpath style="font-family : Calibri" string="DRAFT"/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    if (!header.watermark || header.watermark.kind !== "text") {
+      throw new TypeError("expected text watermark");
+    }
+    expect(header.watermark.diagonal).toBe(true);
+    expect(header.watermark.font).toBe("Calibri");
+  });
+
+  test("returns watermark: undefined when header has no watermark shape", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}>
+  <w:p><w:r><w:t>Page header text</w:t></w:r></w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    expect(header.watermark).toBeUndefined();
+  });
+
+  test("preserves the documented lowercase 'auto' fillcolor sentinel", () => {
+    // The renderer/serializer special-case the exact lowercase value
+    // when mapping back to Word's silver default; uppercasing "AUTO"
+    // would round-trip as the invalid CSS color `#AUTO`.
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}>
+  <w:p>
+    <w:r>
+      <w:pict>
+        <v:shape id="PowerPlusWaterMarkObject1" type="#_x0000_t136" fillcolor="auto">
+          <v:textpath string="DRAFT"/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    if (!header.watermark || header.watermark.kind !== "text") {
+      throw new TypeError("expected text watermark");
+    }
+    expect(header.watermark.color).toBe("auto");
+  });
+
+  test("recovers a DrawingML watermark when behindDoc is the xsd:boolean 'true'", () => {
+    // ECMA-376 allows the xsd:boolean serializations `"1"` (Word's
+    // default) and `"true"` (equally valid). Producers in the wild
+    // emit both — refusing the textual form would silently drop the
+    // watermark on save.
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS} xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <w:p>
+    <w:r>
+      <w:drawing>
+        <wp:anchor behindDoc="true">
+          <a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">
+            <a:txBody><a:p><a:r><a:t>CONFIDENTIAL</a:t></a:r></a:p></a:txBody>
+          </a:graphicData></a:graphic>
+        </wp:anchor>
+      </w:drawing>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    if (!header.watermark || header.watermark.kind !== "text") {
+      throw new TypeError("expected text watermark");
+    }
+    expect(header.watermark.text).toBe("CONFIDENTIAL");
+  });
+
+  test("captures opacity from the VML fill child (decimal form)", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}>
+  <w:p>
+    <w:r>
+      <w:pict>
+        <v:shape id="PowerPlusWaterMarkObject1" type="#_x0000_t136" fillcolor="#C0C0C0">
+          <v:fill opacity=".25"/>
+          <v:textpath string="DRAFT"/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    if (!header.watermark || header.watermark.kind !== "text") {
+      throw new TypeError("expected text watermark");
+    }
+    expect(header.watermark.opacity).toBe(0.25);
+  });
+
+  test("captures opacity from the VML fill child (fixed-point form)", () => {
+    // Word's older form: opacity="32768f" means 32768/65536 = 0.5.
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}>
+  <w:p>
+    <w:r>
+      <w:pict>
+        <v:shape id="PowerPlusWaterMarkObject1" type="#_x0000_t136" fillcolor="#C0C0C0">
+          <v:fill opacity="32768f"/>
+          <v:textpath string="DRAFT"/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    if (!header.watermark || header.watermark.kind !== "text") {
+      throw new TypeError("expected text watermark");
+    }
+    expect(header.watermark.opacity).toBe(0.5);
+  });
+
+  test("records the watermark's block index so the serializer can replay in place", () => {
+    // Watermark is the second block (index 1) — a visible paragraph
+    // precedes it. The parser must record `watermarkBlockIndex: 1` so
+    // serialization splices the watermark after the visible block,
+    // not at the top.
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}>
+  <w:p><w:r><w:t>preceding text</w:t></w:r></w:p>
+  <w:p>
+    <w:r>
+      <w:pict>
+        <v:shape id="PowerPlusWaterMarkObject1" type="#_x0000_t136">
+          <v:textpath string="DRAFT"/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    expect(header.watermark).toBeDefined();
+    expect(header.watermarkBlockIndex).toBe(1);
+  });
+
+  test("treats `w:t` consistently even when WordprocessingML is bound to a foreign prefix", () => {
+    // Producers occasionally bind WordprocessingML as a non-`w` prefix
+    // (the spec allows any prefix). The mixed-paragraph guard now
+    // matches on local name + prefix, so an `x:t` text run alongside
+    // the watermark is treated as body text just like `w:t` would be.
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<x:hdr xmlns:x="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:o="urn:schemas-microsoft-com:office:office">
+  <x:p>
+    <x:r><x:t>visible header text</x:t></x:r>
+    <x:r>
+      <x:pict>
+        <v:shape id="PowerPlusWaterMarkObject1" type="#_x0000_t136">
+          <v:textpath string="DRAFT"/>
+        </v:shape>
+      </x:pict>
+    </x:r>
+  </x:p>
+</x:hdr>`;
+    const header = parseHeader(xml);
+    expect(header.watermark).toBeUndefined();
+    expect(header.rawWatermarkXml).toBeUndefined();
+  });
+
+  test("captures source xmlns declarations on the raw paragraph for non-canonical prefixes", () => {
+    // A DOCX that binds an extension namespace on the header root with
+    // a non-canonical prefix must survive round-trip. Without forwarding
+    // the source declaration, the serializer's hard-coded root would
+    // re-emit an unbound prefix.
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS} xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:d="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <w:p>
+    <w:r>
+      <w:drawing>
+        <wp:anchor behindDoc="1">
+          <d:graphic><d:graphicData>
+            <d:txBody><d:p><d:r><d:t>CONFIDENTIAL</d:t></d:r></d:p></d:txBody>
+          </d:graphicData></d:graphic>
+        </wp:anchor>
+      </w:drawing>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    expect(header.watermark).toBeDefined();
+    // The header bound DrawingML core to `d:`; the captured raw paragraph
+    // must carry that declaration forward so a replay under the
+    // serializer's root (which only declares the canonical `a:`) still
+    // has a bound `d:`.
+    expect(header.rawWatermarkXml).toContain(
+      'xmlns:d="http://schemas.openxmlformats.org/drawingml/2006/main"',
+    );
+  });
+
+  test("does not detach a paragraph that mixes the watermark with sibling text", () => {
+    // Surgically removing just the shape from a mixed paragraph is out
+    // of scope; refuse to claim the watermark so the original paragraph
+    // round-trips through the normal block parser with its text intact.
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}>
+  <w:p>
+    <w:r><w:t>page header </w:t></w:r>
+    <w:r>
+      <w:pict>
+        <v:shape id="PowerPlusWaterMarkObject1" type="#_x0000_t136">
+          <v:textpath string="DRAFT"/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    expect(header.watermark).toBeUndefined();
+    expect(header.rawWatermarkXml).toBeUndefined();
+    // Original mixed paragraph stays in content (the regular block
+    // parser surfaces the sibling text run).
+    expect(header.content.length).toBeGreaterThan(0);
+  });
+
+  test("does not detach a paragraph that mixes the watermark with a field", () => {
+    // Page-number fields carry no `w:t`, but they are still authored
+    // header content. If a later setDocumentWatermark clears raw replay,
+    // detaching this paragraph would drop the field on save.
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}>
+  <w:p>
+    <w:r>
+      <w:pict>
+        <v:shape id="PowerPlusWaterMarkObject1" type="#_x0000_t136">
+          <v:textpath string="DRAFT"/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+    <w:r><w:fldChar w:fldCharType="begin"/></w:r>
+    <w:r><w:instrText> PAGE </w:instrText></w:r>
+    <w:r><w:fldChar w:fldCharType="end"/></w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    expect(header.watermark).toBeUndefined();
+    expect(header.rawWatermarkXml).toBeUndefined();
+    expect(header.content.length).toBeGreaterThan(0);
+  });
+});
