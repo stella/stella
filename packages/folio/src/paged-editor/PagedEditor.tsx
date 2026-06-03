@@ -149,6 +149,7 @@ import {
   htmlQueryAll,
   queryHtmlElement,
 } from "../core/utils/domGuards";
+import { getDocumentWatermark } from "../core/watermark";
 // Internal components
 import { AnonymizationRectsOverlay } from "./AnonymizationRectsOverlay";
 import type { AnonymizationRectGroup } from "./AnonymizationRectsOverlay";
@@ -3306,6 +3307,16 @@ export function PagedEditor(
           }
           if (footnotesByPage?.size) {
             renderOpts.footnotesByPage = footnotesByPage;
+          }
+          // Document watermark (rendered behind every page). Picture
+          // watermarks need an image-rId → asset URL resolver that
+          // currently lives outside the editor; until that's wired in,
+          // the painter silently skips them.
+          if (document) {
+            const watermark = getDocumentWatermark(document);
+            if (watermark) {
+              renderOpts.watermark = watermark;
+            }
           }
           renderPages(newLayout.pages, pagesContainerRef.current, renderOpts);
           recordPhaseDuration("render-pages", phaseStartedAt);

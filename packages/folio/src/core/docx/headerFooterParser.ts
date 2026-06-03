@@ -128,6 +128,7 @@ export function parseHeader(
   if (watermarkResult) {
     result.watermark = watermarkResult.watermark;
     result.rawWatermarkXml = watermarkResult.rawParagraphXml;
+    result.watermarkBlockIndex = watermarkResult.blockIndex;
   }
   const contentRoot = watermarkResult
     ? withoutChild(rootElement, watermarkResult.hostingParagraph)

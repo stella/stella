@@ -85,21 +85,34 @@ export function serializeHeaderFooter(hf: HeaderFooter): string {
 
   // Watermark replay. The parser captured the hosting paragraph's
   // verbatim XML (`rawWatermarkXml`) and detached it from `content`,
-  // so emit it back as the first child of the header element. If a
-  // caller mutated `hf.watermark` without updating the raw XML (e.g.
-  // a future setDocumentWatermark path), the model-driven synthesizer
-  // takes over and emits a freshly-built VML watermark paragraph.
+  // so emit it back at its original block position (tracked in
+  // `watermarkBlockIndex`). If a caller mutated `hf.watermark` without
+  // updating the raw XML (e.g. the setDocumentWatermark path), the
+  // model-driven synthesizer takes over and emits a freshly-built VML
+  // watermark paragraph at the top of the header.
   const watermarkXml = serializeWatermarkParagraph(hf);
+  const watermarkInsertIndex =
+    hf.watermarkBlockIndex !== undefined
+      ? Math.max(0, Math.min(hf.watermarkBlockIndex, hf.content.length))
+      : 0;
 
-  // Serialize content blocks
-  let contentXml = hf.content.map((block) => serializeBlock(block)).join("");
+  const blocksXml = hf.content.map((block) => serializeBlock(block));
+  let contentXml: string;
+  if (watermarkXml) {
+    contentXml =
+      blocksXml.slice(0, watermarkInsertIndex).join("") +
+      watermarkXml +
+      blocksXml.slice(watermarkInsertIndex).join("");
+  } else {
+    contentXml = blocksXml.join("");
+  }
 
   // Ensure at least one empty paragraph (required by OOXML spec)
-  if (!watermarkXml && !contentXml) {
+  if (!contentXml) {
     contentXml = "<w:p><w:pPr/></w:p>";
   }
 
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<${rootTag} ${nsDecl}>${watermarkXml}${contentXml}</${rootTag}>`;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<${rootTag} ${nsDecl}>${contentXml}</${rootTag}>`;
 }
 
 function serializeWatermarkParagraph(hf: HeaderFooter): string {
@@ -138,14 +151,17 @@ function synthesizeTextWatermark(
       : "#C0C0C0";
   const fontFamily = watermark.font ?? "Calibri";
   const text = escapeXml(watermark.text);
-  return (
-    `<w:p><w:r><w:pict>` +
-    `<v:shape id="PowerPlusWaterMarkObject1" type="#_x0000_t136" ` +
-    `style="position:absolute;margin-left:0;margin-top:0;width:415pt;height:207pt;rotation:${rotation};z-index:-251658240;mso-position-horizontal:center;mso-position-horizontal-relative:margin;mso-position-vertical:center;mso-position-vertical-relative:margin" ` +
-    `fillcolor="${fillcolor}" stroked="f">` +
-    `<v:textpath style="font-family:&quot;${escapeXml(fontFamily)}&quot;;font-size:1pt" string="${text}"/>` +
-    `</v:shape></w:pict></w:r></w:p>`
-  );
+  // VML opacity rides on a `<v:fill>` child rather than the shape's
+  // own `fillcolor` attribute. Word reads the decimal form (`opacity=
+  // ".5"`) and the fixed-point form (`opacity="32768f"`); we use the
+  // decimal form for clarity. Skip emission when the model carries no
+  // explicit opacity so the saved DOCX matches what Word emits at the
+  // default transparency.
+  const fillChild =
+    watermark.opacity !== undefined
+      ? `<v:fill opacity="${watermark.opacity}"/>`
+      : "";
+  return `<w:p><w:r><w:pict><v:shape id="PowerPlusWaterMarkObject1" type="#_x0000_t136" style="position:absolute;margin-left:0;margin-top:0;width:415pt;height:207pt;rotation:${rotation};z-index:-251658240;mso-position-horizontal:center;mso-position-horizontal-relative:margin;mso-position-vertical:center;mso-position-vertical-relative:margin" fillcolor="${fillcolor}" stroked="f">${fillChild}<v:textpath style="font-family:&quot;${escapeXml(fontFamily)}&quot;;font-size:1pt" string="${text}"/></v:shape></w:pict></w:r></w:p>`;
 }
 
 function synthesizePictureWatermark(

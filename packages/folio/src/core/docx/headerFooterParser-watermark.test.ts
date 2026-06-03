@@ -325,6 +325,72 @@ describe("parseHeader watermark detection", () => {
     expect(header.watermark.text).toBe("CONFIDENTIAL");
   });
 
+  test("captures opacity from the VML fill child (decimal form)", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}>
+  <w:p>
+    <w:r>
+      <w:pict>
+        <v:shape id="PowerPlusWaterMarkObject1" type="#_x0000_t136" fillcolor="#C0C0C0">
+          <v:fill opacity=".25"/>
+          <v:textpath string="DRAFT"/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    if (!header.watermark || header.watermark.kind !== "text") {
+      throw new TypeError("expected text watermark");
+    }
+    expect(header.watermark.opacity).toBe(0.25);
+  });
+
+  test("captures opacity from the VML fill child (fixed-point form)", () => {
+    // Word's older form: opacity="32768f" means 32768/65536 = 0.5.
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}>
+  <w:p>
+    <w:r>
+      <w:pict>
+        <v:shape id="PowerPlusWaterMarkObject1" type="#_x0000_t136" fillcolor="#C0C0C0">
+          <v:fill opacity="32768f"/>
+          <v:textpath string="DRAFT"/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    if (!header.watermark || header.watermark.kind !== "text") {
+      throw new TypeError("expected text watermark");
+    }
+    expect(header.watermark.opacity).toBe(0.5);
+  });
+
+  test("records the watermark's block index so the serializer can replay in place", () => {
+    // Watermark is the second block (index 1) — a visible paragraph
+    // precedes it. The parser must record `watermarkBlockIndex: 1` so
+    // serialization splices the watermark after the visible block,
+    // not at the top.
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}>
+  <w:p><w:r><w:t>preceding text</w:t></w:r></w:p>
+  <w:p>
+    <w:r>
+      <w:pict>
+        <v:shape id="PowerPlusWaterMarkObject1" type="#_x0000_t136">
+          <v:textpath string="DRAFT"/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    expect(header.watermark).toBeDefined();
+    expect(header.watermarkBlockIndex).toBe(1);
+  });
+
   test("does not detach a paragraph that mixes the watermark with sibling text", () => {
     // Surgically removing just the shape from a mixed paragraph is out
     // of scope; refuse to claim the watermark so the original paragraph

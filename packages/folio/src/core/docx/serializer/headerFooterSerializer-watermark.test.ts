@@ -100,6 +100,63 @@ describe("serializeHeaderFooter — watermark replay", () => {
     );
   });
 
+  test("emits the synthesized watermark at the recorded block index", () => {
+    // Caller built a watermark and told the serializer to place it
+    // after the first content block. Useful when programmatically
+    // mutating a watermark that was parsed at a non-zero block index.
+    const hf: HeaderFooter = {
+      type: "header",
+      hdrFtrType: "default",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "run", content: [{ type: "text", text: "preceding" }] },
+          ],
+        },
+        {
+          type: "paragraph",
+          content: [
+            { type: "run", content: [{ type: "text", text: "following" }] },
+          ],
+        },
+      ],
+      watermark: { kind: "text", text: "DRAFT" },
+      watermarkBlockIndex: 1,
+    };
+    const out = serializeHeaderFooter(hf);
+    const precedingPos = out.indexOf("preceding");
+    const watermarkPos = out.indexOf('string="DRAFT"');
+    const followingPos = out.indexOf("following");
+    expect(precedingPos).toBeGreaterThan(-1);
+    expect(watermarkPos).toBeGreaterThan(precedingPos);
+    expect(followingPos).toBeGreaterThan(watermarkPos);
+  });
+
+  test("emits opacity on the synthesized text watermark when set in the model", () => {
+    const hf: HeaderFooter = {
+      type: "header",
+      hdrFtrType: "default",
+      content: [],
+      watermark: { kind: "text", text: "DRAFT", opacity: 0.25 },
+    };
+    const out = serializeHeaderFooter(hf);
+    expect(out).toContain('<v:fill opacity="0.25"/>');
+  });
+
+  test("omits opacity on the synthesized text watermark when undefined", () => {
+    // The default Word transparency falls out of the renderer + Word's
+    // own UI when no explicit opacity is present.
+    const hf: HeaderFooter = {
+      type: "header",
+      hdrFtrType: "default",
+      content: [],
+      watermark: { kind: "text", text: "DRAFT" },
+    };
+    const out = serializeHeaderFooter(hf);
+    expect(out).not.toContain("<v:fill");
+  });
+
   test('maps documented color:"auto" to the silver default fillcolor', () => {
     const hf: HeaderFooter = {
       type: "header",

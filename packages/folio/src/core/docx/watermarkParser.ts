@@ -43,6 +43,14 @@ export type ParsedWatermark = {
   watermark: Watermark;
   rawParagraphXml: string;
   hostingParagraph: XmlElement;
+  /**
+   * Index where the watermark paragraph sat among block-level siblings
+   * (`w:p` / `w:tbl`) in the source header. After the host paragraph is
+   * filtered out of `content`, the serializer inserts the watermark
+   * back at this index so a header that originally placed the
+   * watermark after visible text rounds-trips with the same flow.
+   */
+  blockIndex: number;
 };
 
 const VML_TEXT_WATERMARK_SHAPETYPE = "#_x0000_t136";
@@ -77,6 +85,7 @@ export function parseWatermark(
           watermark,
           rawParagraphXml: elementToXml(hosting),
           hostingParagraph: hosting,
+          blockIndex: blockIndexOf(header, hosting),
         };
       }
     }
@@ -90,11 +99,36 @@ export function parseWatermark(
           watermark,
           rawParagraphXml: elementToXml(hosting),
           hostingParagraph: hosting,
+          blockIndex: blockIndexOf(header, hosting),
         };
       }
     }
   }
   return undefined;
+}
+
+/**
+ * Index of `target` among block-level children of `header` (only
+ * `w:p` and `w:tbl` count as blocks). Since the hosting paragraph
+ * is filtered out of `content` after parse, this is the index the
+ * serializer needs to splice the watermark XML back into so the
+ * header rounds-trips with the same flow as the source.
+ */
+function blockIndexOf(header: XmlElement, target: XmlElement): number {
+  let blockIdx = 0;
+  for (const child of header.elements ?? []) {
+    if (child === target) {
+      return blockIdx;
+    }
+    if (child.type !== "element") {
+      continue;
+    }
+    const local = getLocalName(child.name ?? "");
+    if (local === "p" || local === "tbl") {
+      blockIdx++;
+    }
+  }
+  return 0;
 }
 
 /**
@@ -229,6 +263,7 @@ function readVmlTextWatermark(
   const font = parseInlineStyle(textpathStyle, "font-family");
   const color = readVmlFillColor(shape);
   const rotation = parseInlineStyleNumber(shapeStyle, "rotation");
+  const opacity = readVmlFillOpacity(shape);
 
   const watermark: Watermark = { kind: "text", text };
   if (font !== undefined) {
@@ -236,6 +271,9 @@ function readVmlTextWatermark(
   }
   if (color !== undefined) {
     watermark.color = color;
+  }
+  if (opacity !== undefined) {
+    watermark.opacity = opacity;
   }
   // Word emits diagonal = -45° as `rotation:315` (the equivalent
   // unsigned angle). Horizontal watermarks emit rotation:0 or omit it.
@@ -264,6 +302,36 @@ function readVmlPictureWatermark(
     return null;
   }
   return { kind: "picture", imageRId };
+}
+
+/**
+ * Read the watermark's opacity from the shape's `<v:fill>` child. Word
+ * accepts two boolean encodings: the decimal form (`opacity=".5"`) and
+ * the fixed-point form (`opacity="32768f"`, where 65536 = fully
+ * opaque). Returns `undefined` for any malformed value so the caller
+ * falls back to the renderer's silver default.
+ */
+function readVmlFillOpacity(shape: XmlElement): number | undefined {
+  const fill = findChild(shape, "v", "fill");
+  if (!fill) {
+    return undefined;
+  }
+  const raw = getAttribute(fill, null, "opacity");
+  if (!raw) {
+    return undefined;
+  }
+  if (raw.endsWith("f")) {
+    const fixed = Number.parseFloat(raw.slice(0, -1));
+    if (!Number.isFinite(fixed)) {
+      return undefined;
+    }
+    return Math.max(0, Math.min(1, fixed / 65_536));
+  }
+  const decimal = Number.parseFloat(raw);
+  if (!Number.isFinite(decimal)) {
+    return undefined;
+  }
+  return Math.max(0, Math.min(1, decimal));
 }
 
 function readVmlFillColor(shape: XmlElement): string | undefined {

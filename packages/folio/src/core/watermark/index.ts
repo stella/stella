@@ -73,12 +73,17 @@ export function setDocumentWatermark(
     const next: HeaderFooter = { ...header };
     if (watermark === undefined) {
       delete next.watermark;
+      // No watermark left to position — drop the parsed block index too
+      // so the serializer doesn't emit at a phantom slot.
+      delete next.watermarkBlockIndex;
     } else {
       next.watermark = watermark;
     }
     // Clear the captured raw VML so the serializer regenerates from the
     // model. Without this, an untouched raw payload would shadow the
-    // caller's mutation.
+    // caller's mutation. `watermarkBlockIndex` is preserved across a
+    // text/picture mutation so the new watermark appears at the same
+    // flow position as the old one.
     delete next.rawWatermarkXml;
     nextHeaders.set(rId, next);
   }

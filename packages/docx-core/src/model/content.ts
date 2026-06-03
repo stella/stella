@@ -1368,6 +1368,16 @@ export type HeaderFooter = {
    * mutate the modeled watermark via the headless API.
    */
   rawWatermarkXml?: string;
+  /**
+   * Index where the watermark paragraph sat among block-level siblings
+   * in the source header. The serializer inserts the watermark (raw or
+   * synthesized) at this position so a header that originally placed
+   * the watermark after visible text round-trips with the same flow.
+   * Undefined when no watermark was parsed or when callers built the
+   * watermark programmatically — in that case the serializer emits it
+   * at the top of the header (the same position Word's own UI uses).
+   */
+  watermarkBlockIndex?: number;
 };
 
 /**
