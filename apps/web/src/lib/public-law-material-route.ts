@@ -48,15 +48,12 @@ export const shouldUsePublicLegalMaterialLanguageSegment = ({
   language?: string | null | undefined;
   languageAlternateCount?: number | null | undefined;
   languageAlternates?: readonly unknown[] | null | undefined;
-}): boolean => {
-  const alternateCount =
-    languageAlternateCount ?? languageAlternates?.length ?? 0;
-
-  return (
-    normalizePublicLegalMaterialLanguageSegment(language) !== null &&
-    alternateCount > 1
-  );
-};
+}): boolean =>
+  normalizePublicLegalMaterialLanguageSegment(language) !== null &&
+  getPublicLegalMaterialLanguageAlternateCount({
+    languageAlternateCount,
+    languageAlternates,
+  }) > 1;
 
 export const createPublicLegalMaterialRouteParams = ({
   authority,
@@ -128,6 +125,46 @@ export const createPublicLegalMaterialPath = ({
 const normalizePublicLegalMaterialVersionSegment = (
   version: string | null | undefined,
 ): string | null => normalizePublicLegalMaterialPathSegment(version ?? "");
+
+const getPublicLegalMaterialLanguageAlternateCount = ({
+  languageAlternateCount,
+  languageAlternates,
+}: {
+  languageAlternateCount?: number | null | undefined;
+  languageAlternates?: readonly unknown[] | null | undefined;
+}): number => {
+  if (languageAlternateCount !== null && languageAlternateCount !== undefined) {
+    return languageAlternateCount;
+  }
+
+  if (!languageAlternates) {
+    return 0;
+  }
+
+  const languages = new Set<string>();
+  for (const alternate of languageAlternates) {
+    if (!isLanguageAlternate(alternate)) {
+      continue;
+    }
+
+    const normalized = normalizePublicLegalMaterialLanguageSegment(
+      alternate.language,
+    );
+    if (normalized !== null) {
+      languages.add(normalized);
+    }
+  }
+
+  return languages.size;
+};
+
+const isLanguageAlternate = (
+  alternate: unknown,
+): alternate is { language: string } =>
+  typeof alternate === "object" &&
+  alternate !== null &&
+  "language" in alternate &&
+  typeof alternate.language === "string";
 
 const normalizePublicLegalMaterialPathSegment = (
   value: string,

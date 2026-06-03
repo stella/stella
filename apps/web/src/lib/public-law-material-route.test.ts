@@ -79,4 +79,54 @@ describe("public legal material routes", () => {
       }),
     ).toBe(true);
   });
+
+  test("does not create material language URLs from duplicate or invalid alternates", () => {
+    expect(
+      shouldUsePublicLegalMaterialLanguageSegment({
+        language: "fr",
+        languageAlternates: [
+          { language: "not a language" },
+          { language: "FR" },
+          { language: "fr" },
+        ],
+      }),
+    ).toBe(false);
+
+    expect(
+      createPublicLegalMaterialRouteParams({
+        authority: "WP29",
+        language: "FR",
+        languageAlternates: [
+          { language: "not a language" },
+          { language: "FR" },
+          { language: "fr" },
+        ],
+        materialType: "guidelines",
+        slug: "Guidelines on DPIA",
+        version: "WP 248 rev.01",
+      }),
+    ).toEqual({
+      authority: "wp29",
+      materialType: "guidelines",
+      slug: "guidelines-on-dpia",
+      version: "wp-248-rev-01",
+    });
+  });
+
+  test("uses explicit material language alternate counts from public APIs", () => {
+    expect(
+      createPublicLegalMaterialRouteParams({
+        authority: "EDPB",
+        language: "EN",
+        languageAlternateCount: 2,
+        materialType: "guidelines",
+        slug: "Guidelines 05/2020 on consent",
+      }),
+    ).toEqual({
+      authority: "edpb",
+      language: "en",
+      materialType: "guidelines",
+      slug: "guidelines-05-2020-on-consent",
+    });
+  });
 });
