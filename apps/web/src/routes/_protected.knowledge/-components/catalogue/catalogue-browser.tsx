@@ -12,6 +12,7 @@ import {
   LoaderIcon,
   PlusIcon,
   SearchIcon,
+  SparklesIcon,
   XIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -48,6 +49,7 @@ import { McpIcon } from "@/components/mcp-icon";
 import type { TranslationKey } from "@/i18n/types";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import { roleOptions } from "@/routes/-queries";
+import { CreateSkillSheet } from "@/routes/_protected.knowledge/-components/create-skill-sheet";
 import { EditSkillSheet } from "@/routes/_protected.knowledge/-components/edit-skill-sheet";
 import { knowledgeKeys } from "@/routes/_protected.knowledge/-queries";
 import {
@@ -164,7 +166,10 @@ export const CatalogueBrowser = ({
   );
   const [jurisdictionQuery, setJurisdictionQuery] = useState("");
   const [addMcpOpen, setAddMcpOpen] = useState(false);
+  const [createSkillOpen, setCreateSkillOpen] = useState(false);
   const [editSkill, setEditSkill] = useState<EditableSkillRef | null>(null);
+  // Reuse `role` from the canAddCustom block above for team-skill gating.
+  const canManageTeam = role === "admin" || role === "owner";
 
   useEffect(() => {
     if (initialKind !== undefined) {
@@ -409,6 +414,10 @@ export const CatalogueBrowser = ({
                 <McpIcon className="size-4" />
                 {t("catalogue.addCustomMcp")}
               </MenuItem>
+              <MenuItem onClick={() => setCreateSkillOpen(true)}>
+                <SparklesIcon className="size-4" />
+                {t("catalogue.addCustomSkill")}
+              </MenuItem>
             </MenuPopup>
           </Menu>
         )}
@@ -544,6 +553,12 @@ export const CatalogueBrowser = ({
         }}
         open={editSkill !== null && editSkill.id !== ""}
         skill={editSkill !== null && editSkill.id !== "" ? editSkill : null}
+      />
+      <CreateSkillSheet
+        canManageTeam={canManageTeam}
+        onCreated={onSkillSheetChanged}
+        onOpenChange={setCreateSkillOpen}
+        open={createSkillOpen}
       />
     </div>
   );

@@ -1,7 +1,7 @@
 import type { ComponentType, SVGProps } from "react";
 
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { BotIcon, LightbulbIcon, PackageIcon } from "lucide-react";
+import { BotIcon, PackageIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/components/toast";
@@ -11,15 +11,18 @@ export const Route = createFileRoute("/_protected/knowledge/")({
   component: KnowledgeLanding,
 });
 
+// "prompts" used to be its own surface; after the prompts→skills
+// consolidation, slash-command prompts live alongside richer skills
+// on the Tools page. The sidebar entry was removed so the landing
+// doesn't advertise a deleted destination.
 type KnowledgeSection = {
-  key: "agents" | "prompts" | "tools";
+  key: "agents" | "tools";
   icon: ComponentType<SVGProps<SVGSVGElement>>;
-  to?: "/knowledge/prompts" | "/knowledge/tools";
+  to?: "/knowledge/tools";
 };
 
 export const knowledgeSections: readonly KnowledgeSection[] = [
   { key: "tools", icon: PackageIcon, to: "/knowledge/tools" },
-  { key: "prompts", icon: LightbulbIcon, to: "/knowledge/prompts" },
   { key: "agents", icon: BotIcon },
 ];
 

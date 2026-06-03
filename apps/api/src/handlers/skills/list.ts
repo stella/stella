@@ -30,6 +30,13 @@ const listSkills = createSafeRootHandler(
     const limit = query.limit ?? LIMITS.agentSkillsPageSizeDefault;
     const offset = query.offset ?? 0;
 
+    const visibilityFilter = and(
+      eq(agentSkills.organizationId, session.activeOrganizationId),
+      or(
+        eq(agentSkills.scope, AGENT_SKILL_SCOPES[0]), // "team"
+        eq(agentSkills.userId, user.id),
+      ),
+    );
     const installedRows = yield* Result.await(
       safeDb((tx) =>
         tx
@@ -46,19 +53,13 @@ const listSkills = createSafeRootHandler(
             sourceUrl: agentSkills.sourceUrl,
             contentHash: agentSkills.contentHash,
             enabled: agentSkills.enabled,
+            command: agentSkills.command,
+            autoInvokeHint: agentSkills.autoInvokeHint,
             userId: agentSkills.userId,
             createdAt: agentSkills.createdAt,
           })
           .from(agentSkills)
-          .where(
-            and(
-              eq(agentSkills.organizationId, session.activeOrganizationId),
-              or(
-                eq(agentSkills.scope, AGENT_SKILL_SCOPES[0]), // "team"
-                eq(agentSkills.userId, user.id),
-              ),
-            ),
-          )
+          .where(visibilityFilter)
           .orderBy(
             desc(agentSkills.enabled),
             agentSkills.scope,

@@ -1475,6 +1475,13 @@
     },
     "skills": {
       "addShortcut": "Přidat prompt",
+      "autoInvokeHintLabel": "Nápověda pro model",
+      "autoInvokeHintPlaceholder": "Kdy má model tuto dovednost spustit?",
+      "autoInvokeLabel": "Nechat AI spustit automaticky",
+      "commandConflict": "Dovednost s tímto / příkazem už existuje",
+      "commandLabel": "Lomený příkaz (volitelné)",
+      "commandPlaceholder": "např. shrnout",
+      "createTitle": "Nová dovednost",
       "defaultBadge": "Výchozí",
       "deleteConfirmDescription": "Tento prompt bude trvale odstraněn.",
       "deleteConfirmTitle": "Smazat prompt?",

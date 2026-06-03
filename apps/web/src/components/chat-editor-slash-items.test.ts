@@ -198,6 +198,105 @@ describe("buildChatSlashItems", () => {
     });
   });
 
+  test("command-bearing installed skill still shadows a same-slug built-in", () => {
+    // Without shadowing, the built-in row would render its own
+    // description while load-skill resolves the slug to the installed
+    // (custom) skill — misleading the user about what they invoke.
+    const items = buildChatSlashItems({
+      shortcuts: [
+        {
+          id: "summarize-default",
+          scope: "private",
+          name: "Custom summarise",
+          command: "summarize",
+          prompt: "Custom body…",
+        },
+      ],
+      skillPages: [
+        {
+          builtIn: [
+            {
+              description: "Built-in summarise.",
+              enabled: true,
+              id: "summarize",
+              name: "summarize",
+              scope: "built-in",
+              slug: "summarize",
+            },
+          ],
+          installed: [
+            {
+              description: "Custom summarise — shadows the built-in.",
+              enabled: true,
+              id: "summarize-default",
+              name: "Custom summarise",
+              scope: "private",
+              slug: "summarize",
+              command: "summarize",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(items.some((item) => item.kind === "skill")).toBe(false);
+    expect(items).toEqual([
+      {
+        kind: "prompt",
+        prompt: {
+          id: "summarize-default",
+          scope: "private",
+          name: "Custom summarise",
+          command: "summarize",
+          body: "Custom body…",
+        },
+      },
+    ]);
+  });
+
+  test("hides installed skills that carry a slash command (covered by prompt feed)", () => {
+    const items = buildChatSlashItems({
+      shortcuts: [
+        {
+          id: "summarize-default",
+          scope: "private",
+          name: "Summarise a document",
+          command: "summarize",
+          prompt: "Summarise...",
+        },
+      ],
+      skillPages: [
+        {
+          builtIn: [],
+          installed: [
+            {
+              description: "Same skill that backs /summarize.",
+              enabled: true,
+              id: "summarize-default",
+              name: "Summarise a document",
+              scope: "private",
+              slug: "summarize-default",
+              command: "summarize",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(items).toEqual([
+      {
+        kind: "prompt",
+        prompt: {
+          id: "summarize-default",
+          scope: "private",
+          name: "Summarise a document",
+          command: "summarize",
+          body: "Summarise...",
+        },
+      },
+    ]);
+  });
+
   test("keeps built-in skills shadowed only by disabled installed skills", () => {
     const items = buildChatSlashItems({
       shortcuts: [],

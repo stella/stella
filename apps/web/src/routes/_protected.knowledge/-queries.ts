@@ -35,6 +35,14 @@ export const knowledgeKeys = {
       "list",
       { limit },
     ],
+    // Skills with a slash command set. Feeds the chat slash menu and
+    // the property prompt editor's slash picker. Separate cache from
+    // the full skill list so the editor's add/edit invalidations
+    // don't reset the slash-menu data.
+    commands: (organizationId: string) => [
+      ...knowledgeKeys.skills.all(organizationId),
+      "commands",
+    ],
     detail: (organizationId: string, skillId: string) => [
       ...knowledgeKeys.skills.all(organizationId),
       skillId,
@@ -345,6 +353,23 @@ export const skillsOptions = (organizationId: string) =>
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage) => lastPage.nextOffset ?? undefined,
+    staleTime: STALE_TIME.FIVE.MINUTES,
+  });
+
+// Skills with a slash command set. Backs the chat slash menu — the
+// hook returns a stable list, but the upstream cache uses its own
+// key so editor mutations on a single skill don't invalidate this
+// page-scoped read.
+export const skillCommandsOptions = (organizationId: string) =>
+  queryOptions({
+    queryKey: knowledgeKeys.skills.commands(organizationId),
+    queryFn: async ({ signal }) => {
+      const response = await api.skills.commands.get({ fetch: { signal } });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
 

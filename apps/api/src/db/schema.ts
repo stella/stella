@@ -3275,7 +3275,15 @@ export const promptShortcuts = p.pgTable(
 export const AGENT_SKILL_SCOPES = ["team", "private"] as const;
 export type AgentSkillScope = (typeof AGENT_SKILL_SCOPES)[number];
 
-export const AGENT_SKILL_ORIGINS = ["bundled", "upload", "url"] as const;
+// `authored` covers skills the user composes directly in the editor
+// (no uploaded bundle, no URL import). Migrated `prompt_shortcuts`
+// rows also use this origin.
+export const AGENT_SKILL_ORIGINS = [
+  "authored",
+  "bundled",
+  "upload",
+  "url",
+] as const;
 export type AgentSkillOrigin = (typeof AGENT_SKILL_ORIGINS)[number];
 
 export const AGENT_SKILL_RESOURCE_KINDS = [
@@ -3288,6 +3296,11 @@ export const AGENT_SKILL_RESOURCE_KINDS = [
 ] as const;
 export type AgentSkillResourceKind =
   (typeof AGENT_SKILL_RESOURCE_KINDS)[number];
+
+// Slash-command shape for `agentSkills.command`. Mirrors the legacy
+// `prompt_shortcuts.command` constraint so migrated rows remain valid.
+export const AGENT_SKILL_COMMAND_PATTERN = /^[a-z0-9][a-z0-9_-]{0,48}$/;
+export const RESERVED_AGENT_SKILL_COMMANDS = ["model", "new"] as const;
 
 export const agentSkills = p.pgTable(
   "agent_skills",
@@ -3313,6 +3326,16 @@ export const agentSkills = p.pgTable(
     contentHash: p.varchar("content_hash", { length: 64 }).notNull(),
     body: p.text().notNull(),
     enabled: p.boolean().notNull().default(true),
+    // Optional slash-command handle. When set, the skill surfaces in
+    // the chat slash menu. Uniqueness is enforced by partial indexes
+    // below: team commands are unique per org, private commands are
+    // unique per (org, user). Null means "no command" and never
+    // collides.
+    command: p.varchar({ length: 50 }),
+    // Optional hint surfaced to the model so it can decide whether
+    // to auto-invoke this skill. When null, the skill is only
+    // user-triggered (via slash command, picker, etc.).
+    autoInvokeHint: p.text("auto_invoke_hint"),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
     updatedAt: p
       .timestamp("updated_at")
@@ -3334,6 +3357,18 @@ export const agentSkills = p.pgTable(
       .index("agent_skills_org_enabled_idx")
       .on(table.organizationId, table.enabled),
     p.index("agent_skills_user_idx").on(table.userId),
+    p
+      .uniqueIndex("agent_skills_org_team_command_uidx")
+      .on(table.organizationId, table.command)
+      .where(sql`scope = 'team' AND command IS NOT NULL`),
+    p
+      .uniqueIndex("agent_skills_user_private_command_uidx")
+      .on(table.organizationId, table.userId, table.command)
+      .where(sql`scope = 'private' AND command IS NOT NULL`),
+    p
+      .index("agent_skills_org_command_idx")
+      .on(table.organizationId, table.command)
+      .where(sql`command IS NOT NULL`),
     ...agentSkillPolicies(),
   ],
 );

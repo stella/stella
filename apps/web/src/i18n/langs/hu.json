@@ -1475,6 +1475,13 @@
     },
     "skills": {
       "addShortcut": "Prompt hozzáadása",
+      "autoInvokeHintLabel": "Tipp a modellnek",
+      "autoInvokeHintPlaceholder": "Mikor válassza ki a modell automatikusan ezt a készséget?",
+      "autoInvokeLabel": "Az MI futtassa automatikusan",
+      "commandConflict": "Már létezik készség ezzel a / paranccsal",
+      "commandLabel": "Perjeles parancs (nem kötelező)",
+      "commandPlaceholder": "pl. összefoglalás",
+      "createTitle": "Új készség",
       "defaultBadge": "Default",
       "deleteConfirmDescription": "Ez a prompt véglegesen törlődik.",
       "deleteConfirmTitle": "Prompt törlése?",

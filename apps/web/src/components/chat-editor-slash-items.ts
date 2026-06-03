@@ -18,6 +18,15 @@ type SlashSkillRow = {
   name: string;
   scope: SlashSkillScope;
   slug: string;
+  /**
+   * Optional slash-command handle. Installed skills with a command
+   * are surfaced as prompt-style items by the parallel
+   * commandSkills feed; we filter them out of the skill section so
+   * the same skill doesn't render twice (once as `/command` prompt
+   * insert, once as `#stella-skill-ref` skill chip).
+   * Built-in skills never carry a command.
+   */
+  command?: string | null;
 };
 
 type SlashSkillPage = {
@@ -49,10 +58,16 @@ export const buildChatSlashItems = ({
     },
   }));
 
-  const installedSkillRows = getChatVisibleInstalledSkillRows(skillPages);
-  const enabledInstalledSlugs = new Set(
-    installedSkillRows.map((row) => row.slug),
-  );
+  const {
+    visibleRows: installedSkillRows,
+    shadowSlugs: enabledInstalledSlugs,
+  } = getChatVisibleInstalledSkillRows(skillPages);
+  // Shadow the built-in row whenever an installed skill claims the
+  // same slug — even if the installed row is omitted from the skill
+  // list because it has a command. The backend `load-skill` resolves
+  // by slug and would return the installed skill, so showing the
+  // built-in description here would mislead the user about what the
+  // slash item actually inserts.
   const builtInSkillRows =
     skillPages
       ?.at(0)
@@ -76,14 +91,29 @@ export const buildChatSlashItems = ({
 
 const getChatVisibleInstalledSkillRows = (
   skillPages: readonly SlashSkillPage[] | undefined,
-): SlashSkillRow[] => {
+): { visibleRows: SlashSkillRow[]; shadowSlugs: Set<string> } => {
   const installedRows = skillPages?.flatMap((page) => page.installed) ?? [];
   const visibleRows: SlashSkillRow[] = [];
   const seenSlugs = new Set<string>();
-  const chatMetadataRows = installedRows
+  // Apply the chat-metadata cap to enabled installed rows BEFORE
+  // building either set, so we shadow the same window the backend
+  // `load-skill` sees. Earlier-sorted rows beyond the cap are
+  // invisible to the model too, so they must not block built-ins
+  // and must not appear as skill chips.
+  const chatVisibleEnabled = installedRows
     .filter((row) => row.enabled)
     .toSorted(compareChatInstalledSkillRows)
     .slice(0, CHAT_VISIBLE_INSTALLED_SKILL_LIMIT);
+  // Every chat-visible installed slug shadows the built-in entry of
+  // the same name — including ones that carry a command. The
+  // backend load-skill resolves the slug to the installed row, so
+  // rendering the built-in description would mislead the user about
+  // what selecting it actually inserts.
+  const shadowSlugs = new Set(chatVisibleEnabled.map((row) => row.slug));
+  // Command-bearing installed skills are surfaced as prompt slash
+  // items by the commandSkills feed; drop them from the skill-chip
+  // list so the same skill doesn't appear twice in the menu.
+  const chatMetadataRows = chatVisibleEnabled.filter((row) => !row.command);
 
   for (const row of chatMetadataRows) {
     if (seenSlugs.has(row.slug)) {
@@ -93,7 +123,7 @@ const getChatVisibleInstalledSkillRows = (
     visibleRows.push(row);
   }
 
-  return visibleRows;
+  return { visibleRows, shadowSlugs };
 };
 
 const compareChatInstalledSkillRows = (
