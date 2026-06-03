@@ -56,6 +56,23 @@ describe("findContentControls", () => {
     expect(findContentControls(doc)).toHaveLength(2);
   });
 
+  test("refuses pmPos-only filters on the headless model", () => {
+    // pmPos is a PM-position concept; the headless `BlockSdt` model has
+    // no positions. Letting the filter no-op would silently match every
+    // control and a headless `setContentControlValue(doc, { pmPos }, …)`
+    // would mutate them all. The matcher must refuse unsatisfiable
+    // pmPos-only filters.
+    const doc = makeDoc([
+      makeControl({ tag: "a" }, "first"),
+      makeControl({ tag: "b" }, "second"),
+    ]);
+    expect(findContentControls(doc, { pmPos: 0 })).toHaveLength(0);
+    expect(findContentControls(doc, { pmPos: 42 })).toHaveLength(0);
+    // Combined with a stable filter, pmPos still refuses on the headless
+    // side (we'd need the PM walker to honor it).
+    expect(findContentControls(doc, { pmPos: 0, tag: "a" })).toHaveLength(0);
+  });
+
   test("finds nested SDTs and reports their ancestry", () => {
     const inner = makeControl({ tag: "inner" }, "deep");
     const outer: BlockSdt = {

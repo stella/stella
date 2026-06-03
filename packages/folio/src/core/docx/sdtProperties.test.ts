@@ -96,6 +96,29 @@ describe("parseSdtProperties — prefixed marker elements", () => {
     expect(props.listItems).toEqual([{ displayText: "Yes", value: "Yes" }]);
   });
 
+  test("normalizes inherited alt-prefix w14 / w15 child elements on capture", () => {
+    // Source binds the w14 / w15 URIs under non-canonical prefixes at
+    // the document root. The sdtPr wrapper is canonical w:, but the
+    // children inherit `x:` / `y:`. Without normalization the saved
+    // DOCX would carry undefined `x:checkbox` / `y:repeatingSection`.
+    const ns =
+      'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:x="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:y="http://schemas.microsoft.com/office/word/2012/wordml"';
+    const props = parseSdtPrXml(
+      `<w:sdtPr ${ns}><x:checkbox><x:checked x:val="1"/></x:checkbox><y:repeatingSection/></w:sdtPr>`,
+    );
+    expect(props.sdtType).toBe("checkbox");
+    expect(props.checked).toBe(true);
+    expect(props.rawPropertiesXml).toBeDefined();
+    // No alt prefixes left in the replay buffer.
+    expect(props.rawPropertiesXml).not.toContain("x:checkbox");
+    expect(props.rawPropertiesXml).not.toContain("x:checked");
+    expect(props.rawPropertiesXml).not.toContain("y:repeatingSection");
+    // Canonical prefixes present.
+    expect(props.rawPropertiesXml).toContain("<w14:checkbox>");
+    expect(props.rawPropertiesXml).toContain('<w14:checked w14:val="1"/>');
+    expect(props.rawPropertiesXml).toContain("<w15:repeatingSection");
+  });
+
   test("normalizes alt-prefix rawPropertiesXml to canonical w: on capture", () => {
     // A producer that binds the WordprocessingML namespace under `ns0`
     // emits `<ns0:sdtPr>…</ns0:sdtPr>` at parse time. Replaying that

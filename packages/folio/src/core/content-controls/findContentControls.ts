@@ -44,6 +44,14 @@ export type ContentControlMatch = {
 };
 
 function matches(control: BlockSdt, filter: ContentControlFilter): boolean {
+  // The headless `BlockSdt` model does not carry PM positions, so a
+  // pmPos-only filter has nothing meaningful to match against. Returning
+  // `true` here would silently make a headless `setContentControlValue(doc,
+  // { pmPos })` apply to every blockSdt; we refuse instead so the mutation
+  // helpers no-op on an unsatisfiable filter, matching PM-layer semantics.
+  if (filter.pmPos !== undefined) {
+    return false;
+  }
   if (filter.tag !== undefined && control.properties.tag !== filter.tag) {
     return false;
   }

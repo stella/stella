@@ -57,43 +57,113 @@ function parseListItems(
 }
 
 /**
+ * Local names that always belong to one specific OOXML namespace. The
+ * serializer's document root only declares the canonical `w` / `w14` /
+ * `w15` prefixes, so any captured raw SDT child written under an
+ * alternate prefix would replay as an undefined-prefix element (Word
+ * refuses such files). We rewrite by element-local-name so an inherited
+ * `<x:checkbox>` / `<y:repeatingSection>` (where `x` / `y` are bound to
+ * the w14 / w15 URIs at the source's document root) always lands under
+ * the canonical prefix in our output regardless of the source's prefix
+ * choice.
+ */
+const W14_LOCAL_NAMES = new Set(["checkbox", "checked"]);
+const W15_LOCAL_NAMES = new Set([
+  "repeatingSection",
+  "repeatingSectionItem",
+  "color",
+  "appearance",
+]);
+
+/**
  * Rewrite the captured raw `<*:sdtPr>` / `<*:sdtEndPr>` snippet so every
- * element bound to the WordprocessingML URI uses the canonical `w:`
+ * SDT-namespace element uses the canonical `w:` / `w14:` / `w15:`
  * prefix on save. The blockSdtSerializer's document root declares only
- * the standard `w` / `w14` / `w15` prefixes, so replaying a source
- * snippet that uses an alternate prefix (`<ns0:sdtPr>` with `xmlns:ns0`
- * declared on the source's `<w:document>`) would produce invalid XML in
- * the saved DOCX — Word refuses to open files with unresolved
- * namespace prefixes.
+ * those three prefixes, so replaying a source snippet that uses an
+ * alternate prefix (`<ns0:sdtPr>` with `xmlns:ns0` declared on the
+ * source's `<w:document>`, or `<x:checkbox>` inside a canonical sdtPr)
+ * would produce invalid XML in the saved DOCX — Word refuses files
+ * with unresolved namespace prefixes.
  *
- * Heuristic: we only rewrite when the captured element itself uses a
- * non-`w` prefix. fast-xml-parser does not surface namespace URIs in
- * preserveOrder mode, so we infer that the source prefix is bound to
- * the WP URI from the fact that it carries an SDT property element
- * (otherwise the producer's DOCX would already be invalid). Other
- * URIs (w14, w15) are left intact since callers seldom rebind them.
+ * Heuristics, since fast-xml-parser does not surface namespace URIs in
+ * preserveOrder mode:
+ *
+ * 1. If the captured wrapper element itself uses a non-`w` prefix, that
+ *    prefix is taken to be bound to the WP URI (the source DOCX would
+ *    otherwise be invalid) and ALL occurrences of it inside the snippet
+ *    are rewritten to `w:`.
+ * 2. After step 1, any remaining alt-prefix on an element whose local
+ *    name is in W14_LOCAL_NAMES / W15_LOCAL_NAMES gets normalized to
+ *    `w14:` / `w15:`. That handles a canonical `<w:sdtPr>` wrapper
+ *    whose children inherit a non-`w14` / non-`w15` prefix from the
+ *    source's document root.
  */
 function normalizeWordPrefix(raw: string, source: XmlElement): string {
+  let out = raw;
+  // Step 1: wrapper prefix → canonical w.
   const name = source.name ?? "";
   const colonIdx = name.indexOf(":");
-  if (colonIdx <= 0) {
-    return raw;
+  if (colonIdx > 0) {
+    const sourcePrefix = name.slice(0, colonIdx);
+    if (sourcePrefix !== "w") {
+      out = rewritePrefix(out, sourcePrefix, "w");
+    }
   }
-  const sourcePrefix = name.slice(0, colonIdx);
-  if (sourcePrefix === "w") {
-    return raw;
-  }
-  // Escape regex meta-chars in the prefix before substituting. Match
-  // both element-name (`<ns0:tag>` / `</ns0:tag>`) and attribute-name
-  // (`ns0:val="…"`) occurrences.
-  const escaped = sourcePrefix.replaceAll(/[$()*+./?[\\\]^{|}]/gu, "\\$&");
+  // Step 2: child elements that live in a known sibling namespace.
+  out = normalizeChildrenForLocalNames(out, W14_LOCAL_NAMES, "w14");
+  out = normalizeChildrenForLocalNames(out, W15_LOCAL_NAMES, "w15");
+  return out;
+}
+
+function rewritePrefix(raw: string, from: string, to: string): string {
+  const escaped = from.replaceAll(/[$()*+./?[\\\]^{|}]/gu, "\\$&");
   const tagOpen = new RegExp(`<${escaped}:`, "gu");
   const tagClose = new RegExp(`</${escaped}:`, "gu");
   const attr = new RegExp(`(\\s)${escaped}:`, "gu");
   return raw
-    .replaceAll(tagOpen, "<w:")
-    .replaceAll(tagClose, "</w:")
-    .replaceAll(attr, "$1w:");
+    .replaceAll(tagOpen, `<${to}:`)
+    .replaceAll(tagClose, `</${to}:`)
+    .replaceAll(attr, `$1${to}:`);
+}
+
+function normalizeChildrenForLocalNames(
+  raw: string,
+  localNames: ReadonlySet<string>,
+  canonical: string,
+): string {
+  let out = raw;
+  // For each local name, find any `<prefix:localName` and `</prefix:localName>`
+  // whose prefix is NOT already canonical, and swap that prefix to canonical.
+  // The `\b` after the local name keeps `<prefix:checkboxFoo>` from matching.
+  for (const local of localNames) {
+    const escapedLocal = local.replaceAll(/[$()*+./?[\\\]^{|}]/gu, "\\$&");
+    const opener = new RegExp(`<(\\w+):${escapedLocal}\\b`, "gu");
+    const closer = new RegExp(`</(\\w+):${escapedLocal}\\b`, "gu");
+    out = out.replaceAll(opener, (_m, prefix: string) =>
+      prefix === canonical ? `<${prefix}:${local}` : `<${canonical}:${local}`,
+    );
+    out = out.replaceAll(closer, (_m, prefix: string) =>
+      prefix === canonical ? `</${prefix}:${local}` : `</${canonical}:${local}`,
+    );
+    // Also normalize attributes on those elements that use the alt prefix.
+    // Without a parser pass this is best-effort: rewrite `prefix:attr=` only
+    // when the immediately preceding tag is the targeted element. A small
+    // 64-char lookbehind window covers realistic OOXML elements (5-attr SDT
+    // children are short).
+    const attrRe = new RegExp(
+      `(<${canonical}:${escapedLocal}\\b[^>]{0,200})\\b(?!${canonical}:)(\\w+):`,
+      "gu",
+    );
+    let prev = "";
+    while (prev !== out) {
+      prev = out;
+      out = out.replaceAll(
+        attrRe,
+        (_m, head: string, _altPrefix: string) => `${head}${canonical}:`,
+      );
+    }
+  }
+  return out;
 }
 
 /**

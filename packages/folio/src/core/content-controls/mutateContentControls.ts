@@ -271,6 +271,12 @@ function controlMatchesFilter(
   control: BlockSdt,
   filter: ContentControlFilter,
 ): boolean {
+  // Headless `BlockSdt` model has no PM positions; refuse a pmPos-only
+  // filter so a stray pm-side address never accidentally targets every
+  // control (see `matches` in `findContentControls`).
+  if (filter.pmPos !== undefined) {
+    return false;
+  }
   if (filter.tag !== undefined && control.properties.tag !== filter.tag) {
     return false;
   }
