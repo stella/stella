@@ -334,6 +334,35 @@ describe("removeContentControlTr", () => {
     expect(next.doc.firstChild?.content.size).toBe(0);
   });
 
+  test("removes a nested-only-child blockSdt without breaking parent's block+ schema", () => {
+    // The parent blockSdt has `content: "block+"`, so removing its sole
+    // inner blockSdt without substituting a block would leave the parent
+    // empty and fail schema validation. The PM helper must substitute a
+    // placeholder paragraph here too, matching the doc-root case.
+    const inner = schema.node(
+      "blockSdt",
+      { sdtType: "richText", tag: "inner" },
+      [schema.node("paragraph", {}, [schema.text("solo")])],
+    );
+    const outer = schema.node(
+      "blockSdt",
+      { sdtType: "richText", tag: "outer" },
+      [inner],
+    );
+    const state = makeState(schema.node("doc", null, [outer]));
+    const tr = removeContentControlTr(state, { tag: "inner" });
+    if (!tr) {
+      throw new TypeError("expected tx");
+    }
+    const next = state.apply(tr);
+    // Outer survives; its single child is now the placeholder paragraph.
+    expect(next.doc.childCount).toBe(1);
+    expect(next.doc.firstChild?.type.name).toBe("blockSdt");
+    expect(next.doc.firstChild?.childCount).toBe(1);
+    expect(next.doc.firstChild?.firstChild?.type.name).toBe("paragraph");
+    expect(next.doc.firstChild?.firstChild?.content.size).toBe(0);
+  });
+
   test("contentLocked allows container removal (OOXML lock semantics)", () => {
     const sdt = schema.node(
       "blockSdt",

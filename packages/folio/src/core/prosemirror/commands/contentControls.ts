@@ -518,11 +518,16 @@ export function removeContentControlTr(
       .replaceWith(match.pos, match.pos + match.node.nodeSize, children)
       .setMeta(SUGGESTION_BYPASS_META, true);
   }
-  // Drop entirely. DocExtension requires `+` at the doc root, so if the
-  // SDT was the only top-level child we substitute an empty paragraph to
-  // keep the doc valid — the headless removeContentControl already does
-  // this for the same case.
-  if (match.node === state.doc.firstChild && state.doc.childCount === 1) {
+  // Drop entirely. DocExtension requires `+` at the doc root, and any
+  // `block+` container (notably a parent blockSdt) would likewise
+  // become invalid if we removed its sole child without substituting a
+  // block. Substitute an empty paragraph whenever the target is the
+  // ONLY child of its parent, regardless of whether the parent is the
+  // doc root or another blockSdt — the headless `removeContentControl`
+  // already does this for the same case.
+  const $pos = state.doc.resolve(match.pos);
+  const parent = $pos.parent;
+  if (parent.childCount === 1) {
     return state.tr
       .replaceWith(
         match.pos,

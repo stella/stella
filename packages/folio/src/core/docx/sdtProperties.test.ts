@@ -96,6 +96,23 @@ describe("parseSdtProperties — prefixed marker elements", () => {
     expect(props.listItems).toEqual([{ displayText: "Yes", value: "Yes" }]);
   });
 
+  test("leaves nested rPr color elements alone (no overzealous w15 rewrite)", () => {
+    // A placeholder rPr inside sdtPr carries `<w:color w:val="…"/>` for
+    // run text color. That local name is `color` but it lives in the
+    // w: namespace, not w15. The earlier local-name rewrite would have
+    // re-emitted it under w15, corrupting run formatting on every
+    // parse → save round trip.
+    const ns =
+      'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+    const props = parseSdtPrXml(
+      `<w:sdtPr ${ns}><w:rPr><w:color w:val="FF0000"/></w:rPr><w:tag w:val="x"/></w:sdtPr>`,
+    );
+    expect(props.tag).toBe("x");
+    // Color stays under w:, not silently rewritten to w15:.
+    expect(props.rawPropertiesXml).toContain('<w:color w:val="FF0000"/>');
+    expect(props.rawPropertiesXml).not.toContain("w15:color");
+  });
+
   test("normalizes inherited alt-prefix w14 / w15 child elements on capture", () => {
     // Source binds the w14 / w15 URIs under non-canonical prefixes at
     // the document root. The sdtPr wrapper is canonical w:, but the

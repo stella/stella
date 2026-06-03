@@ -67,13 +67,13 @@ function parseListItems(
  * the canonical prefix in our output regardless of the source's prefix
  * choice.
  */
+// Only local names that are UNAMBIGUOUSLY bound to one namespace make it
+// in here. `color` and `appearance` would otherwise look identical to
+// `<w:color>` inside a placeholder `<w:rPr>` and we'd silently rewrite
+// run formatting as w15 SDT appearance, corrupting the parse → save
+// round trip for any sdtPr that carries nested run properties.
 const W14_LOCAL_NAMES = new Set(["checkbox", "checked"]);
-const W15_LOCAL_NAMES = new Set([
-  "repeatingSection",
-  "repeatingSectionItem",
-  "color",
-  "appearance",
-]);
+const W15_LOCAL_NAMES = new Set(["repeatingSection", "repeatingSectionItem"]);
 
 /**
  * Rewrite the captured raw `<*:sdtPr>` / `<*:sdtEndPr>` snippet so every
