@@ -322,9 +322,52 @@ function convertPMBlockSdt(node: PMNode): BlockSdt {
   // Recursively materialize children. PM `blockSdt` content is `block+`, so a
   // mini-doc node is a convenient way to reuse extractBlocks.
   const innerDoc = node.type.schema.node("doc", null, node.content);
-  const content = extractBlocks(innerDoc);
+  const extracted = extractBlocks(innerDoc);
+
+  // `toProseDoc` inserts a synthetic empty paragraph into any blockSdt
+  // whose source had an empty `<w:sdtContent/>` (PM `block+` requires
+  // at least one child). Without this guard, an untouched parse → PM
+  // → save round trip turns that empty control into `<w:sdtContent>
+  // <w:p/></w:sdtContent>`, silently adding a paragraph Word did not
+  // emit. Detect the synthetic shape — exactly one paragraph with no
+  // inline content and no formatting — and emit empty content instead.
+  // If the user typed into the filler or styled it, the heuristic
+  // bails and we preserve the paragraph verbatim.
+  const content = isSyntheticEmptyFiller(extracted) ? [] : extracted;
 
   return { type: "blockSdt", properties, content };
+}
+
+function isSyntheticEmptyFiller(blocks: BlockContent[]): boolean {
+  if (blocks.length !== 1) {
+    return false;
+  }
+  const block = blocks[0];
+  if (!block || block.type !== "paragraph") {
+    return false;
+  }
+  if (block.content.length !== 0) {
+    return false;
+  }
+  // Allow the parser's intrinsic `paraId` marker and bookkeeping fields,
+  // but reject anything that signals a real authored paragraph (style,
+  // formatting, mark changes, section properties).
+  if (block.formatting !== undefined) {
+    return false;
+  }
+  if (block._originalFormatting !== undefined) {
+    return false;
+  }
+  if (block._sectionProperties !== undefined) {
+    return false;
+  }
+  if (block._propertyChanges !== undefined) {
+    return false;
+  }
+  if (block._paragraphMarkChange !== undefined) {
+    return false;
+  }
+  return true;
 }
 
 function parseListItemsJson(

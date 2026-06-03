@@ -126,6 +126,41 @@ describe("toProseDoc/fromProseDoc — blockSdt round-trip", () => {
     expect(pmDoc2.childCount).toBe(1);
   });
 
+  test("round-trips an empty <w:sdtContent/> without adding a synthetic <w:p/>", () => {
+    // Codex P2 (PR #587): toProseDoc inserts a synthetic empty paragraph
+    // for any blockSdt whose source had `<w:sdtContent/>` because the
+    // PM `block+` schema requires at least one child. Without the
+    // fromProseDoc guard, that synthetic paragraph survived the
+    // reverse pass and turned every empty control into
+    // `<w:sdtContent><w:p/></w:sdtContent>` — adding content Word did
+    // not emit.
+    const content = parseBody(`<w:body ${NS}>
+      <w:sdt>
+        <w:sdtPr><w:tag w:val="empty"/></w:sdtPr>
+        <w:sdtContent/>
+      </w:sdt>
+    </w:body>`);
+    const pmDoc = toProseDoc(asDocument(content));
+    expect(pmDoc.childCount).toBe(1);
+    expect(pmDoc.child(0).type.name).toBe("blockSdt");
+    // PM body has one filler paragraph (block+ constraint).
+    expect(pmDoc.child(0).childCount).toBe(1);
+    expect(pmDoc.child(0).firstChild?.type.name).toBe("paragraph");
+    expect(pmDoc.child(0).firstChild?.content.size).toBe(0);
+
+    // Round-trip: recovered model has content: [] again, and a second
+    // toProseDoc gives the same PM shape (idempotent).
+    const recovered = fromProseDoc(pmDoc);
+    const recoveredSdt = recovered.package.document.content[0];
+    if (!recoveredSdt || recoveredSdt.type !== "blockSdt") {
+      throw new TypeError("expected blockSdt");
+    }
+    expect(recoveredSdt.content).toHaveLength(0);
+    const pmDoc2 = toProseDoc(recovered);
+    expect(pmDoc2.childCount).toBe(1);
+    expect(pmDoc2.child(0).childCount).toBe(1);
+  });
+
   test("preserves nested block SDTs through the PM layer", () => {
     const content = parseBody(`<w:body ${NS}>
       <w:sdt>
