@@ -62,11 +62,7 @@ export async function runDifferential(
     };
   }
 
-  const bytes = readFileSync(resolved);
-  const buffer = bytes.buffer.slice(
-    bytes.byteOffset,
-    bytes.byteOffset + bytes.byteLength,
-  );
+  const buffer = readFileSync(resolved);
 
   let folioProjection: StructuralProjection;
   try {
@@ -86,12 +82,17 @@ export async function runDifferential(
     timeout: 30_000,
   });
   if (pythonResult.error || pythonResult.status !== 0) {
-    const stderr = pythonResult.stderr.trim();
+    // `stderr` is null when spawn itself fails (python3 missing from PATH);
+    // guard so the harness still surfaces a clean infra error instead of
+    // crashing on `null.trim()`.
+    const stderr = pythonResult.stderr ? pythonResult.stderr.trim() : "";
+    const spawnError = pythonResult.error?.message ?? "";
     return {
       ok: false,
       reason: "infra",
       message: [
         `python-docx projection failed (exit ${pythonResult.status ?? "?"}).`,
+        spawnError ? `error: ${spawnError}` : "",
         stderr ? `stderr: ${stderr}` : "",
         "Hint: pip install python-docx",
       ]

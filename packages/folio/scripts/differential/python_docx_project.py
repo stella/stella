@@ -46,6 +46,11 @@ SDT_TYPE_ELEMENTS = (
     ("w:group", "group"),
 )
 
+# Pre-resolve the qualified-name lookup so detect_sdt_type does not pay the
+# `qn()` cost on every traversal step (it is called once per `w:sdt` in the
+# document).
+SDT_TYPE_MAP = tuple((qn(tag), normalised) for tag, normalised in SDT_TYPE_ELEMENTS)
+
 # python-docx exposes w14 namespace via the same qn helper if the element
 # is declared. We probe both namespaces for the checkbox case which lives
 # under w14 in real-world templates.
@@ -54,13 +59,33 @@ W14_CHECKBOX = "{http://schemas.microsoft.com/office/word/2010/wordml}checkbox"
 
 LOCK_VALUES = {"sdtLocked", "contentLocked", "sdtContentLocked", "unlocked"}
 
+# Tags that can appear directly inside an inline `w:sdtContent`. Defined at
+# module scope so project_sdt does not rebuild the set per call.
+INLINE_TAGS = frozenset(
+    {
+        qn("w:r"),
+        qn("w:hyperlink"),
+        qn("w:fldSimple"),
+        qn("w:sdt"),
+        "{http://schemas.openxmlformats.org/officeDocument/2006/math}oMath",
+        "{http://schemas.openxmlformats.org/officeDocument/2006/math}oMathPara",
+    }
+)
+
+# Parent tags that mark an SDT as inline-scoped. `w:sdtContent` itself is
+# transparent in OOXML — when an inline SDT is nested inside another inline
+# SDT, the direct parent in the XML tree is the outer `w:sdtContent`, so we
+# walk past sdtContent ancestors when classifying scope.
+INLINE_PARENT_TAGS = frozenset({qn("w:p"), qn("w:hyperlink"), qn("w:smartTag")})
+SDT_CONTENT_TAG = qn("w:sdtContent")
+
 
 def detect_sdt_type(sdt_pr: Any) -> str:
     """Map a w:sdtPr element to a normalised SdtType."""
     if sdt_pr is None:
         return "unknown"
-    for tag, normalised in SDT_TYPE_ELEMENTS:
-        if sdt_pr.find(qn(tag)) is not None:
+    for qn_tag, normalised in SDT_TYPE_MAP:
+        if sdt_pr.find(qn_tag) is not None:
             return normalised
     if sdt_pr.find(W14_CHECKBOX) is not None:
         return "checkbox"
@@ -82,12 +107,19 @@ def project_sdt(sdt_elem: Any) -> dict[str, Any]:
     inside `w:p` it is inline.
     """
     sdt_pr = sdt_elem.find(qn("w:sdtPr"))
-    sdt_content = sdt_elem.find(qn("w:sdtContent"))
+    sdt_content = sdt_elem.find(SDT_CONTENT_TAG)
 
-    parent = sdt_elem.getparent()
-    parent_tag = parent.tag if parent is not None else ""
-    inline_parents = {qn("w:p"), qn("w:hyperlink"), qn("w:smartTag")}
-    scope = "inline" if parent_tag in inline_parents else "block"
+    # Walk up past any `w:sdtContent` ancestors so a nested inline SDT
+    # (whose direct parent is the outer SDT's content wrapper) is still
+    # classified by the surrounding `w:p`/`w:hyperlink`/`w:smartTag`. Folio
+    # preserves nested inline SDTs as `InlineSdt`, so misclassifying them
+    # as block here would produce a false `scope`/`childCount` divergence
+    # on every fixture with nested controls.
+    scope_parent = sdt_elem.getparent()
+    while scope_parent is not None and scope_parent.tag == SDT_CONTENT_TAG:
+        scope_parent = scope_parent.getparent()
+    scope_parent_tag = scope_parent.tag if scope_parent is not None else ""
+    scope = "inline" if scope_parent_tag in INLINE_PARENT_TAGS else "block"
 
     alias = text_attr(sdt_pr, "w:alias") if sdt_pr is not None else None
     tag_val = text_attr(sdt_pr, "w:tag") if sdt_pr is not None else None
@@ -107,15 +139,7 @@ def project_sdt(sdt_elem: Any) -> dict[str, Any]:
     else:
         # Direct inline children: runs, hyperlinks, fields, nested SDTs,
         # math. Match the union in InlineSdt.content in content.ts.
-        inline_tags = {
-            qn("w:r"),
-            qn("w:hyperlink"),
-            qn("w:fldSimple"),
-            qn("w:sdt"),
-            "{http://schemas.openxmlformats.org/officeDocument/2006/math}oMath",
-            "{http://schemas.openxmlformats.org/officeDocument/2006/math}oMathPara",
-        }
-        child_count = sum(1 for child in sdt_content if child.tag in inline_tags)
+        child_count = sum(1 for child in sdt_content if child.tag in INLINE_TAGS)
 
     out: dict[str, Any] = {
         "scope": scope,

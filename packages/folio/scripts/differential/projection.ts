@@ -26,13 +26,19 @@ import type { Document } from "../../src/core/types/document";
 /**
  * Normalised SDT projection. Keys are deliberately ordered and only
  * include fields python-docx can recover from the wire format.
+ *
+ * Optional fields use `string | undefined` (not bare `string?`) so that
+ * with `exactOptionalPropertyTypes: true` callers can assign the source
+ * value directly without first narrowing away `undefined`. The python
+ * projector omits the key when the wire format has no value, so the
+ * structural diff already treats `missing` and `undefined` identically.
  */
 export type SdtProjection = {
   scope: "block" | "inline";
   sdtType: SdtType;
-  alias?: string;
-  tag?: string;
-  lock?: NonNullable<SdtProperties["lock"]>;
+  alias: string | undefined;
+  tag: string | undefined;
+  lock: NonNullable<SdtProperties["lock"]> | undefined;
   /** Number of direct child elements inside the SDT (paragraphs/tables for
    *  block scope, runs/fields/etc. for inline scope). */
   childCount: number;
@@ -85,6 +91,10 @@ export function projectFolioDocument(doc: Document): StructuralProjection {
       visitTable(block);
       return;
     }
+    // BlockContent = Paragraph | Table | BlockSdt — the remaining branch
+    // is structurally guaranteed to be a BlockSdt. An explicit
+    // `block.type === "blockSdt"` check trips no-unnecessary-condition
+    // because the comparison is between two literal types.
     visitBlockSdt(block);
   };
 
