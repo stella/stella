@@ -2955,7 +2955,7 @@ export function headerFooterToProseDoc(
 }
 
 export function footnoteToProseDoc(
-  content: (Paragraph | Table)[],
+  content: BlockContent[],
   options?: ToProseDocOptions,
 ): PMNode {
   return headerFooterToProseDoc(content, options);

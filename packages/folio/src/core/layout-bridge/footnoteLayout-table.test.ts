@@ -66,6 +66,32 @@ const emptyFootnoteWithTable: Footnote = {
   ],
 };
 
+const footnoteWithBlockSdt: Footnote = {
+  type: "footnote",
+  id: 10,
+  noteType: "normal",
+  content: [
+    {
+      type: "blockSdt",
+      properties: {
+        tag: "cite",
+        alias: "Citation",
+      },
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            {
+              type: "run",
+              content: [{ type: "text", text: "Smith v Jones" }],
+            },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
 const footnoteWithRowSpanTable: Footnote = {
   type: "footnote",
   id: 9,
@@ -199,6 +225,34 @@ describe("footnote layout", () => {
       "table",
     ]);
     expect(content.height).toBe(36);
+  });
+
+  test("renders paragraphs nested inside footnote block SDTs", () => {
+    const content = convertFootnoteToContent(footnoteWithBlockSdt, 10, 400, {
+      measureBlocks(blocks) {
+        return blocks.map(() => ({
+          kind: "paragraph",
+          lines: [],
+          totalHeight: 12,
+        }));
+      },
+    });
+
+    expect(content.blocks).toHaveLength(1);
+    const paragraph = content.blocks.at(0);
+    expect(paragraph?.kind).toBe("paragraph");
+    if (paragraph?.kind !== "paragraph") {
+      throw new Error("Expected footnote SDT to produce a paragraph");
+    }
+
+    expect(paragraph.runs.at(1)).toMatchObject({
+      kind: "text",
+      text: "Smith v Jones",
+    });
+    expect(paragraph.sdtGroups?.at(0)).toMatchObject({
+      tag: "cite",
+      alias: "Citation",
+    });
   });
 
   test("measures table footnotes without a caller-provided measurement hook", () => {
