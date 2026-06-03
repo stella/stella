@@ -198,11 +198,20 @@ export type RenderPageOptions = {
   /** Footnotes to render at the bottom of this page. */
   footnoteArea?: FootnoteRenderItem[];
   /**
-   * Document watermark to paint behind page content. Word stores the
-   * watermark on header parts; callers resolve it via
-   * `getDocumentWatermark(doc)` and thread the same value to every page.
+   * Document watermark to paint behind page content. Applies to every
+   * page that doesn't have a more specific match in
+   * `watermarkByHeaderRId` — the right shape for single-header
+   * documents.
    */
   watermark?: Watermark;
+  /**
+   * Per-header-rId watermarks. When a section uses titlePg, even/odd,
+   * or section-scoped headers, each page's active header may carry a
+   * different watermark; this map lets `applySectionHeaderFooterOptions`
+   * select the right one without painting one header's watermark over
+   * the others.
+   */
+  watermarkByHeaderRId?: ReadonlyMap<string, Watermark>;
   /**
    * Resolved image src for a picture watermark. The renderer cannot
    * resolve `imageRId` itself — relationship-id → asset URL belongs to
@@ -2258,6 +2267,21 @@ export function applySectionHeaderFooterOptions(
     delete pageOptions.footerContent;
   }
 
+  // Per-page watermark resolution. A document with titlePg, even/odd,
+  // or section-scoped headers can carry a different watermark on each
+  // header part; without per-page selection, the first header's
+  // watermark would paint behind every page. Fall back to the global
+  // `watermark` only when no rId-scoped match exists.
+  const watermarkByRId = options.watermarkByHeaderRId;
+  if (watermarkByRId && headerRId) {
+    const pageWatermark = watermarkByRId.get(headerRId);
+    if (pageWatermark) {
+      pageOptions.watermark = pageWatermark;
+    } else {
+      delete pageOptions.watermark;
+    }
+  }
+
   return true;
 }
 
@@ -2736,6 +2760,14 @@ function computeOptionsHash(options: RenderPageOptions): string {
   }
   if (options.watermarkImageSrc !== undefined) {
     parts.push(`wmsrc:${options.watermarkImageSrc}`);
+  }
+  if (options.watermarkByHeaderRId) {
+    const entries: [string, Watermark][] = [];
+    for (const [rId, wm] of options.watermarkByHeaderRId) {
+      entries.push([rId, wm]);
+    }
+    entries.sort(([a], [b]) => a.localeCompare(b));
+    parts.push(`wm-map:${JSON.stringify(entries)}`);
   }
 
   return parts.join("|");

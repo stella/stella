@@ -391,6 +391,29 @@ describe("parseHeader watermark detection", () => {
     expect(header.watermarkBlockIndex).toBe(1);
   });
 
+  test("treats `w:t` consistently even when WordprocessingML is bound to a foreign prefix", () => {
+    // Producers occasionally bind WordprocessingML as a non-`w` prefix
+    // (the spec allows any prefix). The mixed-paragraph guard now
+    // matches on local name + prefix, so an `x:t` text run alongside
+    // the watermark is treated as body text just like `w:t` would be.
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<x:hdr xmlns:x="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:o="urn:schemas-microsoft-com:office:office">
+  <x:p>
+    <x:r><x:t>visible header text</x:t></x:r>
+    <x:r>
+      <x:pict>
+        <v:shape id="PowerPlusWaterMarkObject1" type="#_x0000_t136">
+          <v:textpath string="DRAFT"/>
+        </v:shape>
+      </x:pict>
+    </x:r>
+  </x:p>
+</x:hdr>`;
+    const header = parseHeader(xml);
+    expect(header.watermark).toBeUndefined();
+    expect(header.rawWatermarkXml).toBeUndefined();
+  });
+
   test("does not detach a paragraph that mixes the watermark with sibling text", () => {
     // Surgically removing just the shape from a mixed paragraph is out
     // of scope; refuse to claim the watermark so the original paragraph

@@ -82,6 +82,23 @@ describe("serializeHeaderFooter — watermark replay", () => {
     expect(out).toContain('type="#_x0000_t75"');
     expect(out).toContain('r:id="rId42"');
     expect(out).toContain('id="WordPictureWatermark');
+    // Default Word dimensions emitted unchanged.
+    expect(out).toContain("width:415pt");
+    expect(out).toContain("height:207pt");
+  });
+
+  test("applies the modeled scale factor to the synthesized picture watermark", () => {
+    // Model `scale` is a multiplicative factor; 0.5 → half-size on
+    // both axes (the painter does the same multiplication for CSS).
+    const hf: HeaderFooter = {
+      type: "header",
+      hdrFtrType: "default",
+      content: [],
+      watermark: { kind: "picture", imageRId: "rId1", scale: 0.5 },
+    };
+    const out = serializeHeaderFooter(hf);
+    expect(out).toContain("width:207.5pt");
+    expect(out).toContain("height:103.5pt");
   });
 
   test("escapes XML metacharacters in the synthesized text watermark string", () => {

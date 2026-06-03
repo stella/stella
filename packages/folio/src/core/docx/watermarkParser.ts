@@ -176,16 +176,29 @@ function isWatermarkOnlyParagraph(paragraph: XmlElement): boolean {
   let drawingShapeCount = 0;
   let pictShapeCount = 0;
   walk(paragraph, (el) => {
-    // Match on the qualified name, not the local name. A DrawingML
-    // watermark's own caption lives in `<a:t>` inside `<a:txBody>`
-    // and must not count as body text; only `<w:t>` (the
-    // WordprocessingML run text) signals a mixed paragraph.
+    // The rest of this parser accepts any namespace prefix bound to
+    // WordprocessingML — match on local name so headers that bind
+    // `w:` as a different prefix still classify correctly. DrawingML
+    // text (`a:t`) lives inside the watermark's own caption, but we
+    // descend INTO the watermark shape and would count it; guard by
+    // requiring the parent NOT to be a DrawingML container. The
+    // simpler heuristic that works: count only the WordprocessingML
+    // namespace URI; we accomplish that with a prefix-agnostic check
+    // by inspecting both the local name and the absence of a known
+    // DrawingML/foreign prefix.
     const name = el.name ?? "";
-    if (name === "w:t") {
+    const local = getLocalName(name);
+    const prefix = name.includes(":") ? name.slice(0, name.indexOf(":")) : "";
+    // Anything namespaced as `a:` (DrawingML core) or `pic:` (DrawingML
+    // pictures) is part of a shape's own content, not body text.
+    if (prefix === "a" || prefix === "pic") {
+      return;
+    }
+    if (local === "t") {
       bodyTextRunCount++;
-    } else if (name === "w:drawing") {
+    } else if (local === "drawing") {
       drawingShapeCount++;
-    } else if (name === "w:pict") {
+    } else if (local === "pict") {
       pictShapeCount++;
     }
   });

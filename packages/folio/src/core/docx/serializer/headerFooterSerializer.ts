@@ -164,6 +164,14 @@ function synthesizeTextWatermark(
   return `<w:p><w:r><w:pict><v:shape id="PowerPlusWaterMarkObject1" type="#_x0000_t136" style="position:absolute;margin-left:0;margin-top:0;width:415pt;height:207pt;rotation:${rotation};z-index:-251658240;mso-position-horizontal:center;mso-position-horizontal-relative:margin;mso-position-vertical:center;mso-position-vertical-relative:margin" fillcolor="${fillcolor}" stroked="f">${fillChild}<v:textpath style="font-family:&quot;${escapeXml(fontFamily)}&quot;;font-size:1pt" string="${text}"/></v:shape></w:pict></w:r></w:p>`;
 }
 
+// Default picture-watermark dimensions Word's "Insert → Watermark"
+// UI emits when no scale is specified. `scale` in the model is a
+// multiplicative factor (1.0 = native), so 0.5 → half-size, 1.5 →
+// one-and-a-half size; we apply it to both axes to preserve the
+// caller's intended ratio.
+const PICTURE_WATERMARK_DEFAULT_WIDTH_PT = 415;
+const PICTURE_WATERMARK_DEFAULT_HEIGHT_PT = 207;
+
 function synthesizePictureWatermark(
   watermark: Extract<Watermark, { kind: "picture" }>,
 ): string {
@@ -171,10 +179,13 @@ function synthesizePictureWatermark(
   // `WordPictureWatermark` so a future round-trip parses cleanly via
   // the id-prefix guard.
   const rId = escapeXml(watermark.imageRId);
+  const scale = watermark.scale ?? 1;
+  const widthPt = PICTURE_WATERMARK_DEFAULT_WIDTH_PT * scale;
+  const heightPt = PICTURE_WATERMARK_DEFAULT_HEIGHT_PT * scale;
   return (
     `<w:p><w:r><w:pict>` +
     `<v:shape id="WordPictureWatermark1" type="#_x0000_t75" ` +
-    `style="position:absolute;margin-left:0;margin-top:0;width:415pt;height:207pt;z-index:-251658240;mso-position-horizontal:center;mso-position-horizontal-relative:margin;mso-position-vertical:center;mso-position-vertical-relative:margin">` +
+    `style="position:absolute;margin-left:0;margin-top:0;width:${widthPt}pt;height:${heightPt}pt;z-index:-251658240;mso-position-horizontal:center;mso-position-horizontal-relative:margin;mso-position-vertical:center;mso-position-vertical-relative:margin">` +
     `<v:imagedata r:id="${rId}" o:title=""/>` +
     `</v:shape></w:pict></w:r></w:p>`
   );
