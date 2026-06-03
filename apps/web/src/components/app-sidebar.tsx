@@ -80,11 +80,12 @@ import {
 import { StellaWordmark } from "@/components/stella-wordmark";
 import { PALETTES, THEMES, useTheme } from "@/components/theme-provider";
 import {
-  WORKSPACE_PRIMARY_NAV_ITEMS,
+  getWorkspacePrimaryNavItems,
   type WorkspacePrimaryNavId,
 } from "@/components/workspace-primary-nav";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { usePermissions } from "@/hooks/use-permissions";
+import { usePublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
 import { useSignOut } from "@/hooks/use-sign-out";
 import {
   LANG_ENDONYMS,
@@ -598,6 +599,10 @@ export function AppSidebar(props: AppSidebarProps) {
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
   const { state, toggleSidebar, isMobile } = useSidebar();
   const isCollapsed = state === "collapsed" && !isMobile;
+  const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
+  const primaryNavItems = getWorkspacePrimaryNavItems({
+    includePublicLaw: publicLawPreviewEnabled,
+  });
   const { theme, setTheme, palette, setPalette } = useTheme();
   const lang = useI18nStore((s) => s.lang);
   const setLang = useI18nStore((s) => s.setLang);
@@ -839,7 +844,7 @@ export function AppSidebar(props: AppSidebarProps) {
     },
   } satisfies Record<WorkspacePrimaryNavId, FixedNavTarget>;
 
-  const fixedNavTargets = WORKSPACE_PRIMARY_NAV_ITEMS.map(
+  const fixedNavTargets = primaryNavItems.map(
     (item) => fixedNavTargetsById[item.id],
   );
 
@@ -928,7 +933,7 @@ export function AppSidebar(props: AppSidebarProps) {
         {/* Top navigation */}
         <SidebarGroup>
           <SidebarMenu>
-            {WORKSPACE_PRIMARY_NAV_ITEMS.map((item, index) => {
+            {primaryNavItems.map((item, index) => {
               const Icon = item.icon;
               const label = t(item.labelKey);
               const navTarget = fixedNavTargetsById[item.id];
@@ -1008,7 +1013,7 @@ export function AppSidebar(props: AppSidebarProps) {
                       key={ws.id}
                       navBadge={
                         showNavBadges && i < 3
-                          ? WORKSPACE_PRIMARY_NAV_ITEMS.length + 1 + i
+                          ? primaryNavItems.length + 1 + i
                           : undefined
                       }
                       onDelete={handleDeleteWorkspace}

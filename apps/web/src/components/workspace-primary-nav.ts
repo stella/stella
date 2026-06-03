@@ -83,3 +83,12 @@ export const WORKSPACE_PRIMARY_NAV_ITEMS = [
 
 export type WorkspacePrimaryNavId =
   (typeof WORKSPACE_PRIMARY_NAV_ITEMS)[number]["id"];
+
+export const getWorkspacePrimaryNavItems = ({
+  includePublicLaw,
+}: {
+  includePublicLaw: boolean;
+}) =>
+  WORKSPACE_PRIMARY_NAV_ITEMS.filter(
+    (item) => includePublicLaw || item.id !== "caseLaw",
+  );

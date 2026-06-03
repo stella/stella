@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { resolve } from "node:path";
 
 import type { ScopedDb } from "@/api/db";
 import type {
@@ -28,20 +29,20 @@ const SITEMAP_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/sitemap.ts";
 const PUBLIC_READ_DB_FILE = "apps/api/src/lib/case-law-public-read-db.ts";
 
-const readRoutesSource = async () => await Bun.file(ROUTES_FILE).text();
-const readListSource = async () => await Bun.file(LIST_DECISIONS_FILE).text();
-const readDecisionSource = async () =>
-  await Bun.file(READ_DECISION_FILE).text();
-const readFacetsSource = async () =>
-  await Bun.file(FACETS_DECISIONS_FILE).text();
-const readSearchSource = async () =>
-  await Bun.file(SEARCH_DECISIONS_FILE).text();
+const repoRoot = resolve(import.meta.dir, "../../../../..");
+const readSource = async (path: string) =>
+  await Bun.file(resolve(repoRoot, path)).text();
+
+const readRoutesSource = async () => await readSource(ROUTES_FILE);
+const readListSource = async () => await readSource(LIST_DECISIONS_FILE);
+const readDecisionSource = async () => await readSource(READ_DECISION_FILE);
+const readFacetsSource = async () => await readSource(FACETS_DECISIONS_FILE);
+const readSearchSource = async () => await readSource(SEARCH_DECISIONS_FILE);
 const readLanguageSource = async () =>
-  await Bun.file(LANGUAGE_DECISIONS_FILE).text();
-const readSitemapSource = async () =>
-  await Bun.file(SITEMAP_DECISIONS_FILE).text();
+  await readSource(LANGUAGE_DECISIONS_FILE);
+const readSitemapSource = async () => await readSource(SITEMAP_DECISIONS_FILE);
 const readPublicReadDbSource = async () =>
-  await Bun.file(PUBLIC_READ_DB_FILE).text();
+  await readSource(PUBLIC_READ_DB_FILE);
 
 const publicRouteBlock = (source: string): string => {
   const start = source.indexOf("export const publicCaseLawRoute");
@@ -52,6 +53,13 @@ const publicRouteBlock = (source: string): string => {
 };
 
 describe("public case-law route boundary", () => {
+  test("public case-law API is dark-launched outside local development", async () => {
+    const source = await readRoutesSource();
+
+    expect(source).toContain("env.isDev || env.FEATURE_PUBLIC_LAW");
+    expect(source).toContain("set.status = 404");
+  });
+
   test("public read transaction cannot mutate data", () => {
     type PublicTxHasInsert = "insert" extends keyof CaseLawPublicReadTransaction
       ? true

@@ -15,6 +15,7 @@ import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
   extractLegacyCaseLawDecisionIdFromRouteParam,
+  normalizeCaseLawLanguageSegment,
 } from "@/lib/case-law-route";
 import { pageTitleLiteral } from "@/lib/page-title";
 import {

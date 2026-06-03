@@ -11,6 +11,7 @@ import {
   createCaseLawDecisionRouteParams,
 } from "@/lib/case-law-route";
 import { ClientOperationError } from "@/lib/errors";
+import { isPublicLawIndexingEnabled } from "@/lib/public-law-launch";
 import { createPublicLawCanonicalUrl } from "@/lib/public-law-seo";
 
 const LAW_SITEMAP_PATH = "/sitemaps/law.xml";
@@ -82,6 +83,15 @@ type FetchSitemapDecisionsOptions = {
 type FetchSitemapShardsOptions = {
   fetchImpl?: FetchLike;
   signal?: AbortSignal;
+};
+
+type PublicLawSitemapIndexOptions = {
+  maxBytes?: number;
+  publicLawIndexingEnabled?: boolean;
+};
+
+type PublicLawIndexingOptions = {
+  publicLawIndexingEnabled?: boolean;
 };
 
 export type SitemapShardRouteParams = {
@@ -224,18 +234,34 @@ export const fetchPublicSitemapDecisions = async ({
 
 export const createPublicLawSitemapIndexXml = (
   shards: readonly SitemapShard[],
-  maxBytes = SITEMAP_XML_MAX_BYTES,
+  options: number | PublicLawSitemapIndexOptions = {},
 ): string => {
-  const entries = [
-    {
-      loc: createPublicLawCanonicalUrl(LAW_SITEMAP_PATH),
-      lastmod: shards.at(0)?.lastmod ?? null,
-    },
-    ...shards.map((shard) => ({
-      loc: createPublicLawCanonicalUrl(createCaseLawShardPath(shard)),
-      lastmod: shard.lastmod,
-    })),
-  ]
+  const { maxBytes, publicLawIndexingEnabled } =
+    typeof options === "number"
+      ? {
+          maxBytes: options,
+          publicLawIndexingEnabled: isPublicLawIndexingEnabled(),
+        }
+      : {
+          maxBytes: options.maxBytes ?? SITEMAP_XML_MAX_BYTES,
+          publicLawIndexingEnabled:
+            options.publicLawIndexingEnabled ?? isPublicLawIndexingEnabled(),
+        };
+
+  const sitemapEntries = publicLawIndexingEnabled
+    ? [
+        {
+          loc: createPublicLawCanonicalUrl(LAW_SITEMAP_PATH),
+          lastmod: shards.at(0)?.lastmod ?? null,
+        },
+        ...shards.map((shard) => ({
+          loc: createPublicLawCanonicalUrl(createCaseLawShardPath(shard)),
+          lastmod: shard.lastmod,
+        })),
+      ]
+    : [];
+
+  const entries = sitemapEntries
     .map(
       ({ lastmod, loc }) => `  <sitemap>
     <loc>${xmlEscape(loc)}</loc>${
@@ -256,7 +282,16 @@ ${entries}
   return xml;
 };
 
-export const createPublicLawStaticSitemapXml = (): string => {
+export const createPublicLawStaticSitemapXml = ({
+  publicLawIndexingEnabled = isPublicLawIndexingEnabled(),
+}: PublicLawIndexingOptions = {}): string => {
+  if (!publicLawIndexingEnabled) {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+</urlset>
+`;
+  }
+
   const loc = createPublicLawCanonicalUrl("/law/cases");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -307,14 +342,17 @@ ${serializedEntries}
   return xml;
 };
 
-export const createRobotsTxt = (): string => {
+export const createRobotsTxt = ({
+  publicLawIndexingEnabled = isPublicLawIndexingEnabled(),
+}: PublicLawIndexingOptions = {}): string => {
   const sitemapUrl = new URL(
     "/sitemap.xml",
     env.VITE_PUBLIC_APP_URL,
   ).toString();
+  const lawRule = publicLawIndexingEnabled ? "Allow: /law/" : "Disallow: /law/";
 
   return `User-agent: *
-Allow: /law/
+${lawRule}
 Disallow: /auth
 Disallow: /onboarding
 Disallow: /consent

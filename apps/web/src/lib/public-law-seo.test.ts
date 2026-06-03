@@ -22,6 +22,7 @@ describe("public law SEO", () => {
   test("creates indexable canonical Open Graph metadata", () => {
     expect(
       createPublicLawHead({
+        indexingEnabled: true,
         path: "/law/cases",
         title: "Case law | stella",
         type: "website",
@@ -43,6 +44,16 @@ describe("public law SEO", () => {
     });
   });
 
+  test("defaults public-law metadata to noindex until launch", () => {
+    expect(
+      createPublicLawHead({
+        path: "/law/cases",
+        title: "Case law | stella",
+        type: "website",
+      }).meta,
+    ).toContainEqual({ name: "robots", content: "noindex,nofollow" });
+  });
+
   test("adds hreflang alternates when public routes provide them", () => {
     expect(
       createPublicLawHead({
@@ -57,6 +68,7 @@ describe("public law SEO", () => {
           },
         ],
         path: "/law/guidelines/wp29/dpia/v/wp-248-rev-01/lang/en",
+        indexingEnabled: true,
         title: "WP29 DPIA guidelines | stella",
         type: "article",
       }).links,
@@ -81,6 +93,7 @@ describe("public law SEO", () => {
   test("serializes JSON-LD through a safe head script", () => {
     expect(
       createPublicLawHead({
+        indexingEnabled: true,
         jsonLd: { "@context": "https://schema.org", name: "</script>" },
         path: "/law/cases",
         title: "Case law | stella",

@@ -7,6 +7,7 @@ import type {
 } from "@/components/chat-mention-extension";
 import { useMentionProviders } from "@/components/chat-mention-providers";
 import { api } from "@/lib/api";
+import { assertPublicLawApiData } from "@/lib/public-law-api";
 
 const GLOBAL_CHAT_MENTION_EXTENSION_ID = "global-chat:org-mentions";
 
@@ -33,8 +34,10 @@ const searchCaseLawMentions = async (
   if (response.error) {
     return [];
   }
+  const data = response.data;
+  assertPublicLawApiData(data, "searchPublicCaseLawMentions");
 
-  return response.data.hits.map((hit) => ({
+  return data.hits.map((hit) => ({
     id: hit.decisionId,
     label: hit.caseNumber,
     category: "decision",

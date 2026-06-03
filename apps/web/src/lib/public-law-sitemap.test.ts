@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { resolve } from "node:path";
 
 Object.assign(import.meta.env, {
   VITE_API_URL: "http://localhost:3001",
@@ -18,7 +19,9 @@ const {
 const { WORKSPACE_PRIMARY_NAV_ITEMS } =
   await import("@/components/workspace-primary-nav");
 
-const readSource = async (path: string) => await Bun.file(path).text();
+const repoRoot = resolve(import.meta.dir, "../../../..");
+const readSource = async (path: string) =>
+  await Bun.file(resolve(repoRoot, path)).text();
 const expectNoDirectAuthImport = (source: string) => {
   expect(source).not.toMatch(/@\/lib\/auth["']/u);
 };
@@ -144,22 +147,25 @@ describe("public law sitemap", () => {
   });
 
   test("serializes the root sitemap index", () => {
-    const xml = createPublicLawSitemapIndexXml([
-      {
-        bucket: "all",
-        country: "cze",
-        lastmod: "2026-01-01",
-        month: "05",
-        year: "2026",
-      },
-      {
-        bucket: "07",
-        country: "cze",
-        lastmod: "2025-12-31",
-        month: "04",
-        year: "2026",
-      },
-    ]);
+    const xml = createPublicLawSitemapIndexXml(
+      [
+        {
+          bucket: "all",
+          country: "cze",
+          lastmod: "2026-01-01",
+          month: "05",
+          year: "2026",
+        },
+        {
+          bucket: "07",
+          country: "cze",
+          lastmod: "2025-12-31",
+          month: "04",
+          year: "2026",
+        },
+      ],
+      { publicLawIndexingEnabled: true },
+    );
 
     expect(xml).toContain("<sitemapindex");
     expect(xml).toContain("<loc>http://localhost:3000/sitemaps/law.xml</loc>");
@@ -177,7 +183,9 @@ describe("public law sitemap", () => {
   });
 
   test("serializes the static public law sitemap", () => {
-    const xml = createPublicLawStaticSitemapXml();
+    const xml = createPublicLawStaticSitemapXml({
+      publicLawIndexingEnabled: true,
+    });
 
     expect(xml).toContain("http://localhost:3000/law/cases");
     expect(xml).not.toContain("workspace");
@@ -352,20 +360,26 @@ describe("public law sitemap", () => {
 
   test("root sitemap indexes fail before exceeding the protocol byte limit", () => {
     expect(() =>
-      createPublicLawSitemapIndexXml([
-        {
-          bucket: "all",
-          country: "cze",
-          lastmod: "2026-01-01",
-          month: "05",
-          year: "2026",
-        },
-      ]),
+      createPublicLawSitemapIndexXml(
+        [
+          {
+            bucket: "all",
+            country: "cze",
+            lastmod: "2026-01-01",
+            month: "05",
+            year: "2026",
+          },
+        ],
+        { publicLawIndexingEnabled: true },
+      ),
     ).not.toThrow();
 
-    expect(() => createPublicLawSitemapIndexXml([], 5)).toThrow(
-      "Public case-law sitemap exceeded 5 bytes.",
-    );
+    expect(() =>
+      createPublicLawSitemapIndexXml([], {
+        maxBytes: 5,
+        publicLawIndexingEnabled: true,
+      }),
+    ).toThrow("Public case-law sitemap exceeded 5 bytes.");
   });
 
   test("sitemap XML responses are publicly cacheable", () => {
@@ -402,14 +416,37 @@ describe("public law sitemap", () => {
     expect(xml).not.toContain("matter");
   });
 
-  test("robots allows public law and disallows private workspace routes", () => {
+  test("robots disallows public law by default and private workspace routes always", () => {
     const robots = createRobotsTxt();
 
-    expect(robots).toContain("Allow: /law/");
+    expect(robots).toContain("Disallow: /law/");
     expect(robots).toContain("Disallow: /workspaces");
     expect(robots).toContain("Disallow: /knowledge");
     expect(robots).toContain("Disallow: /chat");
     expect(robots).toContain("Sitemap: http://localhost:3000/sitemap.xml");
+  });
+
+  test("robots allows public law only when indexing is explicitly enabled", () => {
+    const robots = createRobotsTxt({ publicLawIndexingEnabled: true });
+
+    expect(robots).toContain("Allow: /law/");
+    expect(robots).not.toContain("Disallow: /law/");
+  });
+
+  test("dark-launched law sitemaps do not publish law URLs", () => {
+    const indexXml = createPublicLawSitemapIndexXml([
+      {
+        bucket: "all",
+        country: "cze",
+        lastmod: "2026-01-01",
+        month: "05",
+        year: "2026",
+      },
+    ]);
+    const staticXml = createPublicLawStaticSitemapXml();
+
+    expect(indexXml).not.toContain("/law");
+    expect(staticXml).not.toContain("/law");
   });
 
   test("root route does not load auth context for public SSR", async () => {
@@ -473,8 +510,21 @@ describe("public law sitemap", () => {
     ]);
 
     for (const source of sources) {
-      expect(source).toContain("WORKSPACE_PRIMARY_NAV_ITEMS.map");
+      expect(source).toContain("getWorkspacePrimaryNavItems");
     }
+  });
+
+  test("case-law navigation is filtered by the shared dark-launch helper", async () => {
+    const [navSource, appSidebarSource, publicShellSource] = await Promise.all([
+      readSource("apps/web/src/components/workspace-primary-nav.ts"),
+      readSource("apps/web/src/components/app-sidebar.tsx"),
+      readSource("apps/web/src/routes/law/-components/public-law-shell.tsx"),
+    ]);
+
+    expect(navSource).toContain("getWorkspacePrimaryNavItems");
+    expect(navSource).toContain('item.id !== "caseLaw"');
+    expect(appSidebarSource).toContain("usePublicLawPreviewEnabled");
+    expect(publicShellSource).toContain("usePublicLawPreviewEnabled");
   });
 
   test("case-law AI mode requires an explicit authenticated availability gate", async () => {

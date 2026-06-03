@@ -9,6 +9,7 @@ import {
   pickCaseLawDecisionHit,
 } from "@/lib/case-law-route";
 import { toAPIError } from "@/lib/errors";
+import { assertPublicLawApiData } from "@/lib/public-law-api";
 import { toSafeId } from "@/lib/safe-id";
 
 type NavigateToCaseLawDecision = (options: {
@@ -43,14 +44,16 @@ const resolveCaseLawDecisionRouteParams = async (
     if (response.error) {
       throw toAPIError(response.error);
     }
+    const data = response.data;
+    assertPublicLawApiData(data, "resolvePublicCaseLawDecision");
 
     return createCaseLawDecisionRouteParams({
-      caseNumber: response.data.caseNumber,
-      country: response.data.country,
-      court: response.data.court,
-      decisionDate: response.data.decisionDate,
-      decisionId: response.data.id,
-      slug: response.data.slug,
+      caseNumber: data.caseNumber,
+      country: data.country,
+      court: data.court,
+      decisionDate: data.decisionDate,
+      decisionId: data.id,
+      slug: data.slug,
     });
   }
 
@@ -62,8 +65,10 @@ const resolveCaseLawDecisionRouteParams = async (
   if (response.error) {
     throw toAPIError(response.error);
   }
+  const data = response.data;
+  assertPublicLawApiData(data, "searchPublicCaseLawDecisionLinks");
 
-  const hit = pickCaseLawDecisionHit(decisionRef, response.data.hits);
+  const hit = pickCaseLawDecisionHit(decisionRef, data.hits);
   if (!hit) {
     return null;
   }

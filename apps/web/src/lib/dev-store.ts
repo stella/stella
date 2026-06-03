@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
+import type { StateStorage } from "zustand/middleware";
 
 import { getStorageKey } from "@/consts";
 
@@ -9,6 +10,7 @@ type State = {
   chatModelId: string | null;
   showToolCallDetails: boolean;
   reactGrab: boolean;
+  publicLawPreview: boolean;
 };
 
 type Actions = {
@@ -17,6 +19,13 @@ type Actions = {
   setChatModelId: (value: string | null) => void;
   setShowToolCallDetails: (value: boolean) => void;
   setReactGrab: (value: boolean) => void;
+  setPublicLawPreview: (value: boolean) => void;
+};
+
+const serverStorage: StateStorage = {
+  getItem: () => null,
+  removeItem: () => undefined,
+  setItem: () => undefined,
 };
 
 export const useDevStore = create<State & Actions>()(
@@ -27,6 +36,7 @@ export const useDevStore = create<State & Actions>()(
       chatModelId: null,
       showToolCallDetails: false,
       reactGrab: false,
+      publicLawPreview: false,
 
       setTanstackDevtools: (tanstackDevtools) => {
         void set({ tanstackDevtools });
@@ -43,8 +53,14 @@ export const useDevStore = create<State & Actions>()(
       setReactGrab: (reactGrab) => {
         void set({ reactGrab });
       },
+      setPublicLawPreview: (publicLawPreview) => {
+        void set({ publicLawPreview });
+      },
     }),
     {
+      storage: createJSONStorage(() =>
+        typeof window === "undefined" ? serverStorage : window.localStorage,
+      ),
       name: getStorageKey("dev"),
     },
   ),

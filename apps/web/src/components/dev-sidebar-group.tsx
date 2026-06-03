@@ -90,6 +90,8 @@ export const DevSidebarGroup = () => {
       setShowToolCallDetails: s.setShowToolCallDetails,
       reactGrab: s.reactGrab,
       setReactGrab: s.setReactGrab,
+      publicLawPreview: s.publicLawPreview,
+      setPublicLawPreview: s.setPublicLawPreview,
     })),
   );
 
@@ -215,6 +217,13 @@ export const DevSidebarGroup = () => {
           variant="switch"
         >
           React Grab
+        </MenuCheckboxItem>
+        <MenuCheckboxItem
+          checked={dev.publicLawPreview}
+          onClick={() => dev.setPublicLawPreview(!dev.publicLawPreview)}
+          variant="switch"
+        >
+          Public law preview
         </MenuCheckboxItem>
         <MenuSeparator />
         <MenuGroup>

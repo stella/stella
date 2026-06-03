@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import Elysia, { t } from "elysia";
 
+import { env } from "@/api/env";
 import { listDecisionFacetsHandler } from "@/api/handlers/case-law/decisions/facets";
 import {
   listDecisionsHandler,
@@ -130,6 +131,14 @@ const listSitemapShards = createSafePublicHandler({}, async function* () {
 export const publicCaseLawRoute = new Elysia({
   prefix: "/case",
 })
+  .onBeforeHandle(({ set }) => {
+    if (env.isDev || env.FEATURE_PUBLIC_LAW) {
+      return undefined;
+    }
+
+    set.status = 404;
+    return { error: "Not Found" } as const;
+  })
   .get("/decisions", listDecisions.handler, {
     query: listDecisions.config.query,
   })

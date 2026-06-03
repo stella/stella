@@ -7,7 +7,7 @@ export const Route = createFileRoute("/")({
     const authContext = await loadAuthContext(context.queryClient);
 
     if (!authContext.session) {
-      throw redirect({ to: "/law/cases", replace: true });
+      throw redirect({ to: "/auth", replace: true });
     }
 
     if (!authContext.session.activeOrganizationId) {

@@ -1,4 +1,5 @@
 import { createEnv } from "@t3-oss/env-core";
+import { panic } from "better-result";
 import * as v from "valibot";
 
 const featureFlagSchema = v.optional(
@@ -67,6 +68,8 @@ export const env = createEnv({
     VITE_FEATURE_BILLING: featureFlagSchema,
     VITE_FEATURE_KNOWLEDGE_TEMPLATES: featureFlagSchema,
     VITE_FEATURE_CASE_LAW: featureFlagSchema,
+    VITE_PUBLIC_LAW_ENABLED: featureFlagSchema,
+    VITE_PUBLIC_LAW_INDEXING_ENABLED: featureFlagSchema,
     VITE_FEATURE_CONTACTS: featureFlagSchema,
     VITE_FEATURE_CALENDAR: featureFlagSchema,
     VITE_FEATURE_TODOS: featureFlagSchema,
@@ -89,3 +92,7 @@ export const env = createEnv({
   runtimeEnv: import.meta.env,
   emptyStringAsUndefined: true,
 });
+
+if (env.VITE_PUBLIC_LAW_INDEXING_ENABLED && !env.VITE_PUBLIC_LAW_ENABLED) {
+  panic("VITE_PUBLIC_LAW_INDEXING_ENABLED requires VITE_PUBLIC_LAW_ENABLED.");
+}

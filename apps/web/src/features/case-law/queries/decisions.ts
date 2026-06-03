@@ -2,6 +2,7 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { assertPublicLawApiData } from "@/lib/public-law-api";
 import { toSafeId } from "@/lib/safe-id";
 
 const DEFAULT_PAGE_SIZE = 50;
@@ -73,7 +74,10 @@ export const decisionFacetsOptions = () =>
         throw toAPIError(response.error);
       }
 
-      return response.data;
+      const data = response.data;
+      assertPublicLawApiData(data, "listPublicCaseLawFacets");
+
+      return data;
     },
   });
 
@@ -118,8 +122,11 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
         if (response.error) {
           throw toAPIError(response.error);
         }
+        const data = response.data;
+        assertPublicLawApiData(data, "searchPublicCaseLawDecisions");
+
         return {
-          decisions: response.data.hits.map((h) => ({
+          decisions: data.hits.map((h) => ({
             id: toSafeId<"caseLawDecision">(h.decisionId),
             caseNumber: h.caseNumber,
             slug: h.slug,
@@ -135,8 +142,8 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
             headline: h.headline,
             createdAt: new Date(h.createdAt),
           })),
-          facets: response.data.facets,
-          nextCursor: response.data.nextCursor,
+          facets: data.facets,
+          nextCursor: data.nextCursor,
         };
       }
 
@@ -173,8 +180,11 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
         throw toAPIError(response.error);
       }
 
+      const data = response.data;
+      assertPublicLawApiData(data, "listPublicCaseLawDecisions");
+
       const facets: SearchFacets = null;
-      const { items, ...page } = response.data;
+      const { items, ...page } = data;
       return { ...page, decisions: items, facets };
     },
     // SAFETY: TanStack Query needs the initial param typed as
@@ -195,7 +205,10 @@ export const decisionOptions = (decisionId: string) =>
         throw toAPIError(response.error);
       }
 
-      return response.data;
+      const data = response.data;
+      assertPublicLawApiData(data, "readPublicCaseLawDecision");
+
+      return data;
     },
   });
 
@@ -214,6 +227,9 @@ export const decisionBySlugOptions = ({ language, slug }: DecisionBySlugKey) =>
         throw toAPIError(response.error);
       }
 
-      return response.data;
+      const data = response.data;
+      assertPublicLawApiData(data, "readPublicCaseLawDecisionBySlug");
+
+      return data;
     },
   });

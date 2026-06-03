@@ -27,8 +27,9 @@ import {
   useSidebar,
 } from "@/components/sidebar";
 import { StellaWordmark } from "@/components/stella-wordmark";
-import { WORKSPACE_PRIMARY_NAV_ITEMS } from "@/components/workspace-primary-nav";
+import { getWorkspacePrimaryNavItems } from "@/components/workspace-primary-nav";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
+import { usePublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import { HOTKEYS } from "@/lib/hotkeys";
 
@@ -97,6 +98,10 @@ function PublicLawSidebar({
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
   const [searchOpen, setSearchOpen] = useState(false);
+  const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
+  const primaryNavItems = getWorkspacePrimaryNavItems({
+    includePublicLaw: publicLawPreviewEnabled,
+  });
 
   const requestPrivateFeature = (redirectTo: string) => {
     if (authStatus.isAuthenticated) {
@@ -146,7 +151,7 @@ function PublicLawSidebar({
       <SidebarContent>
         <SidebarGroup>
           <SidebarMenu>
-            {WORKSPACE_PRIMARY_NAV_ITEMS.map((item) => {
+            {primaryNavItems.map((item) => {
               const Icon = item.icon;
               const label = t(item.labelKey);
 
