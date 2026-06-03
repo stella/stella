@@ -7,7 +7,11 @@
  * these helpers with transactions so writes are undoable.
  */
 
-export { ContentControlLockedError, ContentControlTypeError } from "./errors";
+export {
+  ContentControlBoundError,
+  ContentControlLockedError,
+  ContentControlTypeError,
+} from "./errors";
 export type {
   ContentControlFilter,
   ContentControlMatch,

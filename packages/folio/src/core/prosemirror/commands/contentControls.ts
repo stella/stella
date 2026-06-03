@@ -18,6 +18,7 @@ import type {
   SetContentControlValueInput,
 } from "../../content-controls";
 import {
+  ContentControlBoundError,
   ContentControlLockedError,
   ContentControlTypeError,
 } from "../../content-controls/errors";
@@ -242,6 +243,45 @@ function ensureSdtNotLocked(node: PMNode, options: ForceOption): void {
   }
 }
 
+const DATA_BINDING_RE = /<\w+:dataBinding\b([^>]*)\/?>/iu;
+
+/**
+ * Refuse content mutations on bound SDTs unless force; on force, return
+ * the stripped rawPropertiesXml so the caller can persist it on the new
+ * node attrs. Mirrors the headless `ensureContentNotBound` helper.
+ */
+function ensureContentNotBound(
+  node: PMNode,
+  options: ForceOption,
+): { strippedRawPropertiesXml: string | undefined } {
+  const raw = node.attrs["rawPropertiesXml"];
+  if (typeof raw !== "string") {
+    return { strippedRawPropertiesXml: undefined };
+  }
+  const match = DATA_BINDING_RE.exec(raw);
+  if (!match) {
+    return { strippedRawPropertiesXml: undefined };
+  }
+  if (!options.force) {
+    const attrs = match[1] ?? "";
+    const xpathMatch = /\bxpath="([^"]*)"/iu.exec(attrs);
+    const storeMatch = /\bstoreItemID="([^"]*)"/iu.exec(attrs);
+    const props = attrsToProperties(node);
+    throw new ContentControlBoundError({
+      message: `Control "${props.tag ?? props.alias ?? "(unnamed)"}" is bound to ${xpathMatch?.[1] ?? "(unknown xpath)"}. Word regenerates the body from the bound XML on open; pass { force: true } to strip the binding inline, or remove it explicitly before writing.`,
+      xpath: xpathMatch?.[1] ?? "",
+      ...(storeMatch?.[1] !== undefined ? { storeItemID: storeMatch[1] } : {}),
+      ...(props.tag !== undefined ? { tag: props.tag } : {}),
+      ...(props.alias !== undefined ? { alias: props.alias } : {}),
+    });
+  }
+  const stripped = raw.replaceAll(
+    /<\w+:dataBinding\b[^>]*\/?>(?:[\s\S]*?<\/\w+:dataBinding>)?/giu,
+    "",
+  );
+  return { strippedRawPropertiesXml: stripped };
+}
+
 function paragraphFromText(schema: Schema, text: string): PMNode {
   if (text.length === 0) {
     return schema.node("paragraph", {}, []);
@@ -285,6 +325,10 @@ export function setContentControlContentTr(
     return null;
   }
   ensureContentNotLocked(match.node, options);
+  const { strippedRawPropertiesXml } = ensureContentNotBound(
+    match.node,
+    options,
+  );
 
   if (typeof input !== "string") {
     // Block-content fill is supported via `setContentControlContentBlocksTr`
@@ -300,9 +344,14 @@ export function setContentControlContentTr(
       reason: "PM-direct path takes string input only",
     });
   }
-  return replaceBlockSdtChildren(state, match, [
-    paragraphFromText(state.schema, input),
-  ]);
+  return replaceBlockSdtChildren(
+    state,
+    match,
+    [paragraphFromText(state.schema, input)],
+    strippedRawPropertiesXml !== undefined
+      ? { rawPropertiesXml: strippedRawPropertiesXml }
+      : {},
+  );
 }
 
 /**
@@ -322,7 +371,18 @@ export function replaceBlockSdtChildrenForFill(
     return null;
   }
   ensureContentNotLocked(match.node, options);
-  return replaceBlockSdtChildren(state, match, children);
+  const { strippedRawPropertiesXml } = ensureContentNotBound(
+    match.node,
+    options,
+  );
+  return replaceBlockSdtChildren(
+    state,
+    match,
+    children,
+    strippedRawPropertiesXml !== undefined
+      ? { rawPropertiesXml: strippedRawPropertiesXml }
+      : {},
+  );
 }
 
 export function setContentControlValueTr(
@@ -336,6 +396,14 @@ export function setContentControlValueTr(
     return null;
   }
   ensureContentNotLocked(match.node, options);
+  const { strippedRawPropertiesXml } = ensureContentNotBound(
+    match.node,
+    options,
+  );
+  const bindingOverride: Partial<Record<string, unknown>> =
+    strippedRawPropertiesXml !== undefined
+      ? { rawPropertiesXml: strippedRawPropertiesXml }
+      : {};
 
   const sdtType = match.node.attrs["sdtType"] as SdtProperties["sdtType"];
 
@@ -382,7 +450,7 @@ export function setContentControlValueTr(
       // Persist the picked OOXML value separately so duplicate-label items
       // round-trip to the right selection on save — the serializer reads
       // dropdownLastValue before falling back to display-text matching.
-      { dropdownLastValue: input.value },
+      { dropdownLastValue: input.value, ...bindingOverride },
     );
   }
   if (input.kind === "checkbox") {
@@ -398,9 +466,7 @@ export function setContentControlValueTr(
       state,
       match,
       [paragraphFromText(state.schema, glyph)],
-      {
-        checked: input.checked,
-      },
+      { checked: input.checked, ...bindingOverride },
     );
   }
   if (sdtType !== "date") {
@@ -422,7 +488,7 @@ export function setContentControlValueTr(
     state,
     match,
     [paragraphFromText(state.schema, display)],
-    { dateValueISO: input.date },
+    { dateValueISO: input.date, ...bindingOverride },
   );
 }
 

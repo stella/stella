@@ -23,6 +23,30 @@ export class ContentControlLockedError extends TaggedError(
 }>() {}
 
 /**
+ * Refused because the target control is bound to a `<w:dataBinding>`.
+ *
+ * Word regenerates the SDT body from the bound XML on every open, so a
+ * direct write to `<w:t>` is silently overwritten and the caller's edit
+ * disappears on next open. Aspose.Words handles this by requiring an
+ * explicit `XmlMapping.Delete()` before write; folio mirrors that
+ * pattern: throw by default, accept `{ force: true }` as an opt-in that
+ * strips the binding inline (the same destructive choice the caller
+ * would have made explicitly via Aspose's API).
+ *
+ * Reference: python-docx #965, Aspose forum thread on removing custom
+ * XML mapping before content updates.
+ */
+export class ContentControlBoundError extends TaggedError(
+  "ContentControlBoundError",
+)<{
+  message: string;
+  xpath: string;
+  storeItemID?: string;
+  tag?: string;
+  alias?: string;
+}>() {}
+
+/**
  * Refused because the requested operation does not make sense for the
  * control's type — e.g. setting free text on a checkbox, or unwrapping a
  * `w15:repeatingSection` (which would orphan its row items).

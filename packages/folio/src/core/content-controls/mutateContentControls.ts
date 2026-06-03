@@ -16,7 +16,11 @@ import type {
   Paragraph,
   Table,
 } from "../types/document";
-import { ContentControlLockedError, ContentControlTypeError } from "./errors";
+import {
+  ContentControlBoundError,
+  ContentControlLockedError,
+  ContentControlTypeError,
+} from "./errors";
 import type { ContentControlFilter } from "./findContentControls";
 
 /**
@@ -180,6 +184,80 @@ function isRepeatingSection(control: BlockSdt): boolean {
 
 const REPEATING_SECTION_RE = /<\w+:repeatingSection\b/u;
 
+const DATA_BINDING_RE = /<\w+:dataBinding\b([^>]*)\/?>/iu;
+
+/**
+ * Detect a `<w:dataBinding w:xpath="…"/>` (or alt-prefix variant) inside
+ * the captured rawPropertiesXml + extract the xpath / storeItemID for
+ * the error payload. Returns null when no binding is present.
+ */
+function readDataBinding(
+  control: BlockSdt,
+): { xpath: string; storeItemID?: string } | null {
+  const raw = control.properties.rawPropertiesXml;
+  if (raw === undefined) {
+    return null;
+  }
+  const match = DATA_BINDING_RE.exec(raw);
+  if (!match) {
+    return null;
+  }
+  const attrs = match[1] ?? "";
+  const xpathMatch = /\bxpath="([^"]*)"/iu.exec(attrs);
+  if (!xpathMatch) {
+    return null;
+  }
+  const xpath = xpathMatch[1] ?? "";
+  const storeMatch = /\bstoreItemID="([^"]*)"/iu.exec(attrs);
+  if (storeMatch) {
+    return { xpath, storeItemID: storeMatch[1] ?? "" };
+  }
+  return { xpath };
+}
+
+/**
+ * Refuse content mutations on bound SDTs unless the caller passes
+ * `{ force: true }`. When force is set, return the rawPropertiesXml
+ * with the `<w:dataBinding>` element stripped so the caller's write
+ * actually sticks on next Word open. See `ContentControlBoundError`
+ * for the rationale.
+ */
+function ensureContentNotBound(
+  control: BlockSdt,
+  force: boolean | undefined,
+): { strippedRawPropertiesXml: string | undefined } {
+  const binding = readDataBinding(control);
+  if (!binding) {
+    return { strippedRawPropertiesXml: undefined };
+  }
+  if (!force) {
+    throw new ContentControlBoundError({
+      message: `Control "${control.properties.tag ?? control.properties.alias ?? "(unnamed)"}" is bound to ${binding.xpath}. Word regenerates the body from the bound XML on open; pass { force: true } to strip the binding inline, or remove it explicitly before writing.`,
+      xpath: binding.xpath,
+      ...(binding.storeItemID !== undefined
+        ? { storeItemID: binding.storeItemID }
+        : {}),
+      ...(control.properties.tag !== undefined
+        ? { tag: control.properties.tag }
+        : {}),
+      ...(control.properties.alias !== undefined
+        ? { alias: control.properties.alias }
+        : {}),
+    });
+  }
+  const raw = control.properties.rawPropertiesXml;
+  if (raw === undefined) {
+    return { strippedRawPropertiesXml: undefined };
+  }
+  // Strip every dataBinding occurrence; an SDT theoretically can carry
+  // only one, but match all defensively.
+  const stripped = raw.replaceAll(
+    /<\w+:dataBinding\b[^>]*\/?>(?:[\s\S]*?<\/\w+:dataBinding>)?/giu,
+    "",
+  );
+  return { strippedRawPropertiesXml: stripped };
+}
+
 /**
  * The `match` callback's return shape:
  * - `undefined` — the SDT did not match the filter; recurse into its body
@@ -328,12 +406,19 @@ export function setContentControlContent(
         return undefined;
       }
       ensureContentNotLocked(control, options.force);
+      const { strippedRawPropertiesXml } = ensureContentNotBound(
+        control,
+        options.force,
+      );
       const blocks: BlockContent[] =
         typeof input === "string"
           ? [makeParagraphFromText(input)]
           : input.map(cloneBlock);
       const properties = { ...control.properties };
       properties.showingPlaceholder = false;
+      if (strippedRawPropertiesXml !== undefined) {
+        properties.rawPropertiesXml = strippedRawPropertiesXml;
+      }
       return {
         ...control,
         properties,
@@ -362,6 +447,10 @@ export function setContentControlValue(
         return undefined;
       }
       ensureContentNotLocked(control, options.force);
+      const { strippedRawPropertiesXml } = ensureContentNotBound(
+        control,
+        options.force,
+      );
 
       const sdtType = control.properties.sdtType;
       if (input.kind === "dropdown") {
@@ -400,6 +489,9 @@ export function setContentControlValue(
             ...control.properties,
             dropdownLastValue: input.value,
             showingPlaceholder: false,
+            ...(strippedRawPropertiesXml !== undefined
+              ? { rawPropertiesXml: strippedRawPropertiesXml }
+              : {}),
           },
           content: [makeParagraphFromText(display)],
         };
@@ -425,6 +517,9 @@ export function setContentControlValue(
             ...control.properties,
             checked: input.checked,
             showingPlaceholder: false,
+            ...(strippedRawPropertiesXml !== undefined
+              ? { rawPropertiesXml: strippedRawPropertiesXml }
+              : {}),
           },
           content: [makeParagraphFromText(glyph)],
         };
@@ -456,6 +551,9 @@ export function setContentControlValue(
           ...control.properties,
           dateValueISO: input.date,
           showingPlaceholder: false,
+          ...(strippedRawPropertiesXml !== undefined
+            ? { rawPropertiesXml: strippedRawPropertiesXml }
+            : {}),
         },
         content: [makeParagraphFromText(display)],
       };

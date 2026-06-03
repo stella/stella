@@ -5,6 +5,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  ContentControlBoundError,
   ContentControlLockedError,
   ContentControlTypeError,
   findContentControl,
@@ -139,6 +140,55 @@ describe("setContentControlContent", () => {
     });
     const ctrl = findContentControl(updated, { tag: "locked" })!.control;
     expect(getContentControlText(ctrl)).toBe("ok");
+  });
+
+  test("refuses to write into a w:dataBinding-bound control without force", () => {
+    // Without the guard, the write would silently land but Word would
+    // regenerate the body from the bound XML on next open, erasing the
+    // caller's edit. Mirror Aspose.Words' behavior: require explicit
+    // consent via { force: true } (or pre-stripping the binding).
+    const doc = makeDoc([
+      {
+        type: "blockSdt",
+        properties: {
+          sdtType: "richText",
+          tag: "bound",
+          rawPropertiesXml:
+            '<w:sdtPr><w:tag w:val="bound"/><w:dataBinding w:xpath="/contract/party[1]/name" w:storeItemID="{ABC}"/></w:sdtPr>',
+        },
+        content: [makePara("placeholder")],
+      },
+    ]);
+    expect(() =>
+      setContentControlContent(doc, { tag: "bound" }, "Acme Corp"),
+    ).toThrow(ContentControlBoundError);
+  });
+
+  test("force: true on a bound control strips <w:dataBinding> from rawPropertiesXml", () => {
+    const doc = makeDoc([
+      {
+        type: "blockSdt",
+        properties: {
+          sdtType: "richText",
+          tag: "bound",
+          rawPropertiesXml:
+            '<w:sdtPr><w:tag w:val="bound"/><w:dataBinding w:xpath="/x" w:storeItemID="{ABC}"/></w:sdtPr>',
+        },
+        content: [makePara("placeholder")],
+      },
+    ]);
+    const updated = setContentControlContent(
+      doc,
+      { tag: "bound" },
+      "Acme Corp",
+      { force: true },
+    );
+    const ctrl = findContentControl(updated, { tag: "bound" })!.control;
+    expect(getContentControlText(ctrl)).toBe("Acme Corp");
+    // Binding was stripped so Word's next open won't overwrite the edit.
+    expect(ctrl.properties.rawPropertiesXml).not.toContain("dataBinding");
+    // Other sdtPr children survive.
+    expect(ctrl.properties.rawPropertiesXml).toContain('w:tag w:val="bound"');
   });
 });
 
