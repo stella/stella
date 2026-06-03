@@ -61,6 +61,16 @@ const socialImageUrl = new URL(socialImage, Astro.site);
     <link rel="preload" href="/fonts/CabinetGrotesk-Variable.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/dm-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
 
+    <!--
+      Reveal capability gate. The [data-reveal] hidden initial state in
+      global.css is scoped under .js-reveal so it only applies when JS
+      is available. Without JS, reveal content renders at its natural
+      visible state instead of being trapped at opacity 0.
+    -->
+    <script is:inline>
+      document.documentElement.classList.add("js-reveal");
+    </script>
+
     <!-- Theme: follow system preference, allow manual override -->
     <script is:inline>
       (function() {
@@ -196,6 +206,30 @@ const socialImageUrl = new URL(socialImage, Astro.site);
           document.documentElement.classList.remove("no-transitions");
         });
       });
+    </script>
+
+    <!--
+      Scroll-reveal helper. Elements with [data-reveal] fade up once
+      they enter the viewport. Above-the-fold elements reveal on next
+      frame; the optional [style="--reveal-delay: …"] staggers them.
+    -->
+    <script is:inline>
+      (function () {
+        var targets = document.querySelectorAll("[data-reveal]");
+        if (!targets.length) return;
+        if (typeof IntersectionObserver === "undefined") {
+          targets.forEach(function (el) { el.setAttribute("data-in-view", ""); });
+          return;
+        }
+        var io = new IntersectionObserver(function (entries) {
+          entries.forEach(function (entry) {
+            if (!entry.isIntersecting) return;
+            entry.target.setAttribute("data-in-view", "");
+            io.unobserve(entry.target);
+          });
+        }, { rootMargin: "0px 0px -8% 0px", threshold: 0.05 });
+        targets.forEach(function (el) { io.observe(el); });
+      })();
     </script>
   </body>
 </html>

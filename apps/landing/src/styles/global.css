@@ -89,3 +89,31 @@ body {
   background-color: var(--background);
   color: var(--foreground);
 }
+
+/* Shared easing for entrance and hover motion across the landing. */
+:root {
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Scroll-reveal primitive. Elements with [data-reveal] fade up once
+   they intersect the viewport (or immediately if above the fold).
+   Stagger via inline `style="--reveal-delay: 120ms"`.
+
+   The hidden initial state is gated on the `.js-reveal` class which
+   the head script adds synchronously when JavaScript is available. If
+   JS is disabled or the script is blocked, the class is never set and
+   reveal content stays at its natural visible state. */
+.js-reveal [data-reveal] {
+  opacity: 0;
+  transform: translate3d(0, 8px, 0);
+  transition:
+    opacity 600ms var(--ease-out-quint),
+    transform 600ms var(--ease-out-quint);
+  transition-delay: var(--reveal-delay, 0ms);
+  will-change: opacity, transform;
+}
+
+.js-reveal [data-reveal][data-in-view] {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}

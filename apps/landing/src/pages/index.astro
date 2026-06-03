@@ -65,8 +65,9 @@ const selfHostingDocsUrl =
       <a
         id="github-stars-banner"
         href={githubUrl}
-        class="relative z-10 mx-auto mt-2 inline-flex max-w-[calc(100%-3rem)] items-center gap-3 rounded-full px-4 py-2 text-sm font-medium shadow-sm transition-[border-color,opacity,transform] hover:-translate-y-0.5 hover:opacity-90"
-        style="background: color-mix(in srgb, var(--card) 88%, transparent); border: 1px solid var(--border); color: var(--foreground); backdrop-filter: blur(14px)"
+        data-reveal
+        style="--reveal-delay: 0ms; background: color-mix(in srgb, var(--card) 88%, transparent); border: 1px solid var(--border); color: var(--foreground); backdrop-filter: blur(14px)"
+        class="relative z-10 mx-auto mt-2 inline-flex max-w-[calc(100%-3rem)] items-center gap-3 rounded-full px-4 py-2 text-sm font-medium shadow-sm hover:-translate-y-0.5 hover:opacity-90"
         target="_blank"
         rel="noopener noreferrer"
         aria-label="stella on GitHub"
@@ -87,8 +88,9 @@ const selfHostingDocsUrl =
         class="relative z-10 flex flex-1 flex-col items-center justify-center px-6 pb-16"
       >
         <div
+          data-reveal
+          style="--reveal-delay: 120ms; background: color-mix(in srgb, var(--card) 88%, transparent); border: 1px solid var(--border)"
           class="mb-8 inline-flex items-center gap-3 rounded-full px-4 py-2"
-          style="background: color-mix(in srgb, var(--card) 88%, transparent); border: 1px solid var(--border)"
         >
           <span
             class="hero-beta-dot h-2.5 w-2.5 rounded-full"
@@ -102,13 +104,16 @@ const selfHostingDocsUrl =
           </span>
         </div>
         <h1
+          data-reveal
+          style="--reveal-delay: 240ms"
           class="max-w-3xl text-center font-display text-5xl font-medium leading-[1.08] sm:text-6xl lg:text-7xl"
         >
           Legal workspace.<br />Open source.
         </h1>
         <p
+          data-reveal
+          style="--reveal-delay: 360ms; color: var(--muted-foreground)"
           class="mt-6 max-w-lg text-center text-lg leading-[1.7]"
-          style="color: var(--muted-foreground)"
         >
           Documents, matters, review, and research in one place.
           <br />
@@ -116,8 +121,9 @@ const selfHostingDocsUrl =
         </p>
         <a
           href={appUrl}
+          data-reveal
+          style="--reveal-delay: 480ms; background: var(--primary); color: var(--primary-foreground)"
           class="mt-8 inline-flex h-9 items-center rounded-[0.625rem] px-4 text-sm font-medium transition-opacity hover:opacity-90 whitespace-nowrap"
-          style="background: var(--primary); color: var(--primary-foreground)"
         >
           Start free
         </a>
@@ -140,12 +146,15 @@ const selfHostingDocsUrl =
       <div class="mx-auto max-w-300">
         <div class="mx-auto max-w-4xl text-center">
           <p
-            class="text-xs font-medium uppercase tracking-[0.2em]"
+            data-reveal
             style="color: var(--muted-foreground)"
+            class="text-xs font-medium uppercase tracking-[0.2em]"
           >
             Built to last
           </p>
           <h2
+            data-reveal
+            style="--reveal-delay: 80ms"
             class="mt-3 font-display text-4xl font-medium leading-[1.1] sm:text-5xl lg:text-6xl"
           >
             Ready for you.
@@ -155,8 +164,9 @@ const selfHostingDocsUrl =
             And whatever comes next.
           </h2>
           <p
+            data-reveal
+            style="--reveal-delay: 160ms; color: var(--muted-foreground)"
             class="mx-auto mt-5 max-w-3xl text-base leading-[1.9] sm:text-lg"
-            style="color: var(--muted-foreground)"
           >
             Documents, matters, and search are free in the beta preview. AI
             features are available with your own provider key.
@@ -165,10 +175,11 @@ const selfHostingDocsUrl =
 
         <div class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {
-            controlCapabilities.slice(0, 3).map((card) => (
+            controlCapabilities.slice(0, 3).map((card, index) => (
               <div
+                data-reveal
+                style={`--reveal-delay: ${240 + index * 80}ms; background: var(--card); border: 1px solid var(--border)`}
                 class="rounded-[1.45rem] p-6"
-                style="background: var(--card); border: 1px solid var(--border)"
               >
                 <h3 class="font-display text-lg font-medium tracking-tight">
                   {card.title}
@@ -190,19 +201,23 @@ const selfHostingDocsUrl =
     <section class="px-6 py-16 lg:py-20">
       <div class="mx-auto max-w-300">
         <p
-          class="mb-3 text-center text-xs font-medium uppercase tracking-[0.2em]"
+          data-reveal
           style="color: var(--muted-foreground)"
+          class="mb-3 text-center text-xs font-medium uppercase tracking-[0.2em]"
         >
           Usage options
         </p>
         <h2
+          data-reveal
+          style="--reveal-delay: 80ms"
           class="mb-10 text-center font-display text-4xl font-medium leading-[1.1] sm:text-5xl lg:text-6xl"
         >
           Choose how to run stella.
         </h2>
         <p
+          data-reveal
+          style="--reveal-delay: 160ms; color: var(--muted-foreground)"
           class="mx-auto mb-10 max-w-2xl text-center text-base leading-[1.8] sm:text-lg"
-          style="color: var(--muted-foreground)"
         >
           No lock-in, no per-seat licensing, no hidden pricing.
         </p>
@@ -234,10 +249,11 @@ const selfHostingDocsUrl =
                   "BYOK only",
                 ],
               },
-            ].map((tier) => (
+            ].map((tier, index) => (
               <div
-                class="pricing-card group flex flex-col rounded-2xl p-8 transition-[background-color,border-color,box-shadow] duration-200"
-                style="background: var(--card); border: 1px solid var(--border); color: inherit"
+                data-reveal
+                style={`--reveal-delay: ${240 + index * 80}ms; background: var(--card); border: 1px solid var(--border); color: inherit`}
+                class="pricing-card group flex flex-col rounded-2xl p-8 transition-[background-color,border-color,box-shadow,transform] duration-[500ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
               >
                 <p
                   class="min-h-5 text-sm italic"
@@ -339,6 +355,7 @@ const selfHostingDocsUrl =
         <div class="relative z-10">
           <div class="max-w-3xl">
             <h2
+              data-reveal
               class="font-display text-3xl font-medium leading-tight sm:text-4xl"
             >
               Start with a single click.
@@ -350,15 +367,17 @@ const selfHostingDocsUrl =
           <div class="mt-8 flex flex-col gap-3 sm:flex-row">
             <a
               href={appUrl}
+              data-reveal
+              style="--reveal-delay: 120ms; background: var(--primary); color: var(--primary-foreground)"
               class="inline-flex h-11 items-center justify-center rounded-[0.85rem] px-5 text-sm font-medium transition-opacity hover:opacity-90 whitespace-nowrap"
-              style="background: var(--primary); color: var(--primary-foreground)"
             >
               Start free
             </a>
             <a
               href={discordUrl}
+              data-reveal
+              style="--reveal-delay: 200ms; background: var(--background); border: 1px solid var(--border); color: var(--foreground)"
               class="inline-flex h-11 items-center justify-center rounded-[0.85rem] px-5 text-sm font-medium transition-opacity hover:opacity-90 whitespace-nowrap"
-              style="background: var(--background); border: 1px solid var(--border); color: var(--foreground)"
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -498,28 +517,211 @@ const selfHostingDocsUrl =
 
   <style>
     .hero-beta-dot {
-      animation: hero-beta-pulse 2.1s ease-out infinite;
+      animation: hero-beta-pulse 4s var(--ease-out-quint) infinite;
     }
 
     @keyframes hero-beta-pulse {
-      0% {
-        box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 30%, transparent);
-        transform: scale(1);
+      0%, 100% {
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 22%, transparent);
       }
       60% {
-        box-shadow: 0 0 0 8px color-mix(in srgb, var(--success) 0%, transparent);
-        transform: scale(1.04);
-      }
-      100% {
-        box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 0%, transparent);
-        transform: scale(1);
+        box-shadow: 0 0 0 6px color-mix(in srgb, var(--success) 0%, transparent);
       }
     }
 
     .pricing-card {
       cursor: default;
     }
+
+    @media (hover: hover) and (pointer: fine) {
+      .pricing-card:hover {
+        border-color: color-mix(in srgb, var(--auth-gradient-end) 50%, var(--border) 50%);
+        box-shadow: 0 18px 38px -30px rgba(0, 0, 0, 0.22);
+        transform: translateY(-1px);
+      }
+    }
   </style>
+
+  <!--
+    Web Animations API drives the illustration motion directly.
+    CSS @keyframes get frozen by Chrome when prefers-reduced-motion
+    is set; WAAPI does not, matching how Framer Motion behaves.
+    Negative `delay` starts the animation already in progress so the
+    staggered loops form a continuous cycle.
+  -->
+  <script is:inline>
+    (function () {
+      // Unified master breath shared by all three tiles. Same cycle length
+      // and same 3-phase rhythm (reveal → hold → fade) so they don't drift
+      // in and out of phase side-by-side.
+      var CYCLE      = 9000;
+      var REVEAL_END = 0.60;  // build-up done at 60%
+      var HOLD_END   = 0.85;  // start fading at 85%
+
+      function playReview(svg) {
+        var travelPx = 140;
+
+        var scan = svg.querySelector(".scan");
+        if (scan) {
+          scan.animate(
+            [
+              { transform: "translateY(0px)",                opacity: 0, offset: 0 },
+              { transform: "translateY(0px)",                opacity: 1, offset: 0.015 },
+              { transform: "translateY(" + travelPx + "px)", opacity: 1, offset: REVEAL_END },
+              { transform: "translateY(" + travelPx + "px)", opacity: 0, offset: REVEAL_END + 0.04 },
+              { transform: "translateY(" + travelPx + "px)", opacity: 0, offset: 1 },
+            ],
+            { duration: CYCLE, iterations: Infinity, easing: "linear" }
+          );
+        }
+
+        var lines = svg.querySelectorAll(".line");
+        var count = lines.length;
+        lines.forEach(function (line, i) {
+          var activate = (count > 1 ? i / (count - 1) : 0) * REVEAL_END;
+          var before   = Math.max(0,    activate - 0.012);
+          var after    = Math.min(0.99, activate + 0.012);
+          line.animate(
+            [
+              { strokeOpacity: 0.32, offset: 0 },
+              { strokeOpacity: 0.32, offset: before },
+              { strokeOpacity: 1,    offset: after },
+              { strokeOpacity: 1,    offset: HOLD_END },
+              { strokeOpacity: 0.32, offset: 1 },
+            ],
+            { duration: CYCLE, iterations: Infinity, easing: "linear" }
+          );
+        });
+      }
+
+      function playDraft(svg) {
+        var words = Array.prototype.slice.call(svg.querySelectorAll(".word"));
+        if (!words.length) return;
+        var total = words.length;
+        // Number of trailing words that participate in the delete/rewrite
+        // cycle. The rest stay visible the whole loop.
+        var editCount = Math.min(7, Math.max(3, Math.round(total * 0.32)));
+
+        // Loop phases (offsets in 0-1). At t=0 and t=1 all words are
+        // visible so the cycle seams invisibly.
+        var HOLD_FULL_END = 0.16;  // settled paragraph
+        var DELETE_END    = 0.34;  // backspace pass through last N words
+        var HOLD_PART_END = 0.46;  // brief "thinking" pause
+        // 0.46 → 1.0: slow rewrite of the deleted tail (~600ms per word)
+
+        // Clear any leftover animations from a prior IO activation and
+        // reset inline styles.
+        words.forEach(function (el) {
+          el.getAnimations().forEach(function (a) { a.cancel(); });
+          el.style.opacity = "0.9";
+          el.style.stroke = "";
+          el.style.filter = "";
+        });
+
+        var GLOW = "drop-shadow(0 0 5px rgba(84, 156, 209, 0.55))";
+
+        function frame(now) {
+          var t = (now % CYCLE) / CYCLE;
+          var visible;
+          if (t < HOLD_FULL_END) {
+            visible = total;
+          } else if (t < DELETE_END) {
+            var p = (t - HOLD_FULL_END) / (DELETE_END - HOLD_FULL_END);
+            visible = total - p * editCount;
+          } else if (t < HOLD_PART_END) {
+            visible = total - editCount;
+          } else {
+            var p2 = (t - HOLD_PART_END) / (1 - HOLD_PART_END);
+            visible = (total - editCount) + p2 * editCount;
+          }
+          var intPart = Math.floor(visible);
+          var fracPart = visible - intPart;
+          // The cursor word is the one currently being written or erased
+          // (partial opacity, mid-edit). When fracPart is 0 or 1 we're in
+          // a steady state — no cursor.
+          var activeIdx = (fracPart > 0.01 && fracPart < 0.99 && intPart < total)
+            ? intPart
+            : -1;
+          for (var i = 0; i < total; i++) {
+            var op;
+            if (i < intPart)      op = 0.9;
+            else if (i === intPart) op = fracPart * 0.9;
+            else                  op = 0;
+            var el = words[i];
+            el.style.opacity = op.toFixed(3);
+            if (i === activeIdx) {
+              el.style.stroke = "#549CD1";
+              el.style.filter = GLOW;
+            } else if (el.style.stroke) {
+              el.style.stroke = "";
+              el.style.filter = "";
+            }
+          }
+          requestAnimationFrame(frame);
+        }
+        requestAnimationFrame(frame);
+      }
+
+      function playResearch(svg) {
+        var rays  = svg.querySelectorAll(".ray");
+        var count = rays.length;
+        // The blue is the loading cursor — only the currently-activating
+        // ray is blue. Once the cursor passes a ray it settles to white-
+        // bright (loaded) and stays that way through hold. Dim returns at
+        // the fade.
+        rays.forEach(function (el, i) {
+          var activate = (count > 1 ? i / (count - 1) : 0) * REVEAL_END;
+          var before   = Math.max(0,     activate - 0.012);
+          var blueIn   = Math.max(0.001, activate);
+          var blueOut  = Math.min(0.97,  activate + 0.04);   // hold blue ~360ms
+          var whiteAt  = Math.min(0.985, activate + 0.06);   // settle to white ~180ms later
+          var GLOW_ON  = "drop-shadow(0 0 7px rgba(84, 156, 209, 0.65))";
+          var GLOW_OFF = "drop-shadow(0 0 0px rgba(84, 156, 209, 0))";
+          el.animate(
+            [
+              { stroke: "currentcolor", strokeOpacity: 0.25, filter: GLOW_OFF, offset: 0 },
+              { stroke: "currentcolor", strokeOpacity: 0.25, filter: GLOW_OFF, offset: before },
+              { stroke: "#549CD1",      strokeOpacity: 0.95, filter: GLOW_ON,  offset: blueIn },
+              { stroke: "#549CD1",      strokeOpacity: 0.95, filter: GLOW_ON,  offset: blueOut },
+              { stroke: "currentcolor", strokeOpacity: 0.95, filter: GLOW_OFF, offset: whiteAt },
+              { stroke: "currentcolor", strokeOpacity: 0.95, filter: GLOW_OFF, offset: HOLD_END },
+              { stroke: "currentcolor", strokeOpacity: 0.25, filter: GLOW_OFF, offset: 1 },
+            ],
+            { duration: CYCLE, iterations: Infinity, easing: "linear" }
+          );
+        });
+      }
+
+      function activate(tile) {
+        tile.querySelectorAll(".review-line").forEach(playReview);
+        tile.querySelectorAll(".draft-line").forEach(playDraft);
+        tile.querySelectorAll(".research-burst").forEach(playResearch);
+      }
+
+      function setup() {
+        var tiles = document.querySelectorAll(".showcase-tile");
+        if (!tiles.length) return;
+        if (typeof IntersectionObserver === "undefined") {
+          tiles.forEach(activate);
+          return;
+        }
+        var io = new IntersectionObserver(function (entries) {
+          entries.forEach(function (entry) {
+            if (!entry.isIntersecting) return;
+            activate(entry.target);
+            io.unobserve(entry.target);
+          });
+        }, { rootMargin: "0px 0px -10% 0px", threshold: 0.1 });
+        tiles.forEach(function (t) { io.observe(t); });
+      }
+
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", setup);
+      } else {
+        setup();
+      }
+    })();
+  </script>
 
   <script>
     async function initGradient(containerId: string, svgUrl: string) {
