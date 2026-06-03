@@ -40,6 +40,7 @@ import type {
 import { parseBlockContent } from "./blockContentParser";
 import type { NumberingMap } from "./numberingParser";
 import type { StyleMap } from "./styleParser";
+import { parseWatermark } from "./watermarkParser";
 import { parseXml } from "./xmlParser";
 import type { XmlElement } from "./xmlParser";
 
@@ -128,6 +129,14 @@ export function parseHeader(
     media,
     { inHeaderFooter: true },
   );
+
+  // Watermark detection is structural (walks the raw VML / DrawingML
+  // shapes), so it runs after content extraction rather than from
+  // within the block parser.
+  const watermark = parseWatermark(rootElement);
+  if (watermark) {
+    result.watermark = watermark;
+  }
 
   return result;
 }

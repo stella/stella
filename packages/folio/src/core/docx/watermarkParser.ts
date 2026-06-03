@@ -1,0 +1,270 @@
+/**
+ * Watermark detection inside a `<w:hdr>` element.
+ *
+ * Word emits watermarks behind page content via:
+ *
+ * - VML WordArt: `<w:pict><v:shape type="#_x0000_t136"><v:textpath
+ *   string="…"/></v:shape></w:pict>` for text watermarks. The de-facto
+ *   interchange shape — used by Word, LibreOffice, and most legacy
+ *   templating tools.
+ * - VML picture: `<v:shape><v:imagedata r:id="…"/></v:shape>` for
+ *   picture watermarks.
+ * - DrawingML behind-content shape: `<w:drawing><wp:anchor behindDoc="1">
+ *   …` in modern producers. Not part of the upstream
+ *   eigenpal/docx-editor#679 port; folio detects it so DOCX files from
+ *   recent Office builds and from generators like Aspose round-trip
+ *   without dropping the watermark.
+ *
+ * The walker is structural — it traverses the parsed XML tree rather
+ * than the modeled `BlockContent`, because folio's body parser does
+ * not surface VML shapes or DrawingML graphic data at the run level.
+ */
+
+import type { Watermark } from "../types/document";
+import {
+  findChild,
+  findChildren,
+  findDeep,
+  getAttribute,
+  getLocalName,
+  getTextContent,
+  type XmlElement,
+} from "./xmlParser";
+
+const VML_TEXT_WATERMARK_SHAPETYPE = "#_x0000_t136";
+
+/**
+ * Walk a parsed `<w:hdr>` element and return the watermark it carries,
+ * or `undefined` when none is present. The first matching shape wins —
+ * a single header part typically contains at most one watermark.
+ */
+export function parseWatermark(header: XmlElement): Watermark | undefined {
+  const vmlShape = findVmlWatermarkShape(header);
+  if (vmlShape) {
+    const watermark = readVmlWatermark(vmlShape);
+    if (watermark) {
+      return watermark;
+    }
+  }
+  const drawingAnchor = findDrawingMlWatermarkAnchor(header);
+  if (drawingAnchor) {
+    return readDrawingMlTextWatermark(drawingAnchor);
+  }
+  return undefined;
+}
+
+// ---------------------------------------------------------------------------
+// VML detection (w:pict > v:shape)
+// ---------------------------------------------------------------------------
+
+function findVmlWatermarkShape(header: XmlElement): XmlElement | null {
+  // Walk every <w:pict> inside the header looking for the first shape
+  // that carries either a textpath (text watermark) or imagedata (picture).
+  for (const pict of collectByLocalName(header, "pict")) {
+    for (const shape of findChildren(pict, "v", "shape")) {
+      if (
+        findChild(shape, "v", "textpath") ||
+        findChild(shape, "v", "imagedata")
+      ) {
+        return shape;
+      }
+    }
+  }
+  return null;
+}
+
+function readVmlWatermark(shape: XmlElement): Watermark | null {
+  const textpath = findChild(shape, "v", "textpath");
+  if (textpath) {
+    return readVmlTextWatermark(shape, textpath);
+  }
+  const imagedata = findChild(shape, "v", "imagedata");
+  if (imagedata) {
+    return readVmlPictureWatermark(shape, imagedata);
+  }
+  return null;
+}
+
+function readVmlTextWatermark(
+  shape: XmlElement,
+  textpath: XmlElement,
+): Watermark | null {
+  const text = getAttribute(textpath, null, "string") ?? "";
+  if (text.length === 0) {
+    return null;
+  }
+  const shapeStyle = getAttribute(shape, null, "style") ?? "";
+  const shapeType = getAttribute(shape, null, "type") ?? "";
+  // Anchor on the WordArt shapetype Word uses for text watermarks. Other
+  // VML shapes inside a header (page borders, decorative elements) do
+  // carry textpaths too and should not be promoted to watermarks.
+  if (shapeType !== VML_TEXT_WATERMARK_SHAPETYPE) {
+    return null;
+  }
+  const textpathStyle = getAttribute(textpath, null, "style") ?? "";
+  const font = parseInlineStyle(textpathStyle, "font-family");
+  const color = readVmlFillColor(shape);
+  const rotation = parseInlineStyleNumber(shapeStyle, "rotation");
+
+  const watermark: Watermark = { kind: "text", text };
+  if (font !== undefined) {
+    watermark.font = stripQuotes(font);
+  }
+  if (color !== undefined) {
+    watermark.color = color;
+  }
+  // Word emits diagonal = -45° as `rotation:315` (the equivalent
+  // unsigned angle). Horizontal watermarks emit rotation:0 or omit it.
+  if (rotation !== undefined) {
+    watermark.diagonal = rotation === 315 || rotation === -45;
+  }
+  return watermark;
+}
+
+function readVmlPictureWatermark(
+  _shape: XmlElement,
+  imagedata: XmlElement,
+): Watermark | null {
+  const imageRId =
+    getAttribute(imagedata, "r", "id") ?? getAttribute(imagedata, null, "id");
+  if (!imageRId) {
+    return null;
+  }
+  return { kind: "picture", imageRId };
+}
+
+function readVmlFillColor(shape: XmlElement): string | undefined {
+  const raw = getAttribute(shape, null, "fillcolor");
+  if (!raw) {
+    return undefined;
+  }
+  // Word emits `fillcolor="#C0C0C0"` for the default light-gray text
+  // watermark. Strip the leading `#` so the model holds the bare hex.
+  return raw.startsWith("#") ? raw.slice(1).toUpperCase() : raw.toUpperCase();
+}
+
+// ---------------------------------------------------------------------------
+// DrawingML detection (w:drawing > wp:anchor with behindDoc="1")
+// ---------------------------------------------------------------------------
+
+function findDrawingMlWatermarkAnchor(header: XmlElement): XmlElement | null {
+  for (const drawing of collectByLocalName(header, "drawing")) {
+    const anchor = findDeep(drawing, "wp", "anchor");
+    if (!anchor) {
+      continue;
+    }
+    if (getAttribute(anchor, null, "behindDoc") === "1") {
+      return anchor;
+    }
+  }
+  return null;
+}
+
+function readDrawingMlTextWatermark(anchor: XmlElement): Watermark | undefined {
+  const text = readDrawingMlTextBody(anchor);
+  if (!text) {
+    return undefined;
+  }
+  const font = readDrawingMlFontFamily(anchor);
+  const watermark: Watermark = { kind: "text", text };
+  if (font !== undefined) {
+    watermark.font = font;
+  }
+  return watermark;
+}
+
+function readDrawingMlTextBody(anchor: XmlElement): string | null {
+  // <a:txBody><a:p><a:r><a:t>...</a:t></a:r></a:p></a:txBody>
+  const txBody = findDeep(anchor, "a", "txBody");
+  if (!txBody) {
+    return null;
+  }
+  const parts: string[] = [];
+  for (const p of findChildren(txBody, "a", "p")) {
+    for (const r of findChildren(p, "a", "r")) {
+      const t = findChild(r, "a", "t");
+      if (t) {
+        parts.push(getTextContent(t));
+      }
+    }
+  }
+  const joined = parts.join("");
+  return joined.length > 0 ? joined : null;
+}
+
+function readDrawingMlFontFamily(anchor: XmlElement): string | undefined {
+  // <a:rPr><a:latin typeface="..."/></a:rPr>
+  const latin = findDeep(anchor, "a", "latin");
+  if (!latin) {
+    return undefined;
+  }
+  const typeface = getAttribute(latin, null, "typeface");
+  return typeface ?? undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function collectByLocalName(root: XmlElement, localName: string): XmlElement[] {
+  const out: XmlElement[] = [];
+  walk(root, (el) => {
+    if (getLocalName(el.name ?? "") === localName) {
+      out.push(el);
+    }
+  });
+  return out;
+}
+
+function walk(root: XmlElement, visit: (el: XmlElement) => void): void {
+  for (const child of root.elements ?? []) {
+    if (child.type !== "element") {
+      continue;
+    }
+    visit(child);
+    walk(child, visit);
+  }
+}
+
+function parseInlineStyle(style: string, key: string): string | undefined {
+  // CSS-style key/value pairs separated by `;`. Word emits values that may
+  // contain single-quoted commas (`font-family:'Calibri','sans-serif'`); the
+  // semicolon split is fine because Word never embeds a literal `;` inside
+  // a value.
+  const lower = `${key}:`.toLowerCase();
+  for (const part of style.split(";")) {
+    const trimmed = part.trim();
+    if (trimmed.toLowerCase().startsWith(lower)) {
+      return trimmed.slice(lower.length).trim();
+    }
+  }
+  return undefined;
+}
+
+function parseInlineStyleNumber(
+  style: string,
+  key: string,
+): number | undefined {
+  const raw = parseInlineStyle(style, key);
+  if (raw === undefined) {
+    return undefined;
+  }
+  const num = Number.parseFloat(raw);
+  return Number.isFinite(num) ? num : undefined;
+}
+
+function stripQuotes(value: string): string {
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return value.slice(1, -1);
+  }
+  // Word sometimes emits comma-separated family lists (`'Calibri','sans-serif'`);
+  // strip everything after the first comma so the model holds the primary font.
+  const commaIdx = value.indexOf(",");
+  if (commaIdx !== -1) {
+    return stripQuotes(value.slice(0, commaIdx).trim());
+  }
+  return value;
+}
