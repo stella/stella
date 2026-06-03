@@ -47,7 +47,7 @@ import type {
   FootnoteContent,
   HeaderFooterContent,
 } from "../layout-engine/types";
-import type { BorderSpec, Theme } from "../types/document";
+import type { BorderSpec, Theme, Watermark } from "../types/document";
 import { resolveFontFamily } from "../utils/fontResolver";
 import { borderToStyle } from "../utils/formatToStyle";
 import { eighthsToPixels, pointsToPixels } from "../utils/units";
@@ -67,6 +67,7 @@ import {
   isTextWrappingFloatingImageRun,
 } from "./renderUtils";
 import type { RenderContext } from "./renderUtils";
+import { renderWatermarkLayer } from "./renderWatermark";
 
 /**
  * Page-level floating image that has been extracted from paragraphs.
@@ -196,6 +197,19 @@ export type RenderPageOptions = {
   theme?: Theme | null;
   /** Footnotes to render at the bottom of this page. */
   footnoteArea?: FootnoteRenderItem[];
+  /**
+   * Document watermark to paint behind page content. Word stores the
+   * watermark on header parts; callers resolve it via
+   * `getDocumentWatermark(doc)` and thread the same value to every page.
+   */
+  watermark?: Watermark;
+  /**
+   * Resolved image src for a picture watermark. The renderer cannot
+   * resolve `imageRId` itself — relationship-id → asset URL belongs to
+   * the package layer; without a resolved src a picture watermark is
+   * silently skipped.
+   */
+  watermarkImageSrc?: string;
 };
 
 type HeaderFooterLayoutInfo = {
@@ -1613,6 +1627,14 @@ export function renderPage(
   const pageBorderEl = renderPageBorderOverlay(page, options, doc);
   if (pageBorderEl && options.pageBorders?.zOrder === "back") {
     pageEl.append(pageBorderEl);
+  }
+  if (options.watermark) {
+    const watermarkEl = renderWatermarkLayer(options.watermark, page, doc, {
+      imageSrc: options.watermarkImageSrc,
+    });
+    if (watermarkEl) {
+      pageEl.append(watermarkEl);
+    }
   }
 
   // Create content area
