@@ -31,8 +31,11 @@ SCHEMA_VERSION = 1
 
 
 # OOXML SDT-type element -> normalised SdtType matching folio's union in
-# packages/docx-core/src/model/content.ts. Names without a w:sdtPr child of
-# any recognised type fall back to "unknown" (matches folio's default).
+# packages/docx-core/src/model/content.ts. SDTs without an explicit type
+# child fall back to "richText" — that mirrors folio's `parseSdtProperties`
+# default (a rich-text content control is the OOXML default when no type
+# element is present, so a w:sdtPr containing only w:alias/w:tag is still
+# a rich-text control).
 SDT_TYPE_ELEMENTS = (
     ("w:richText", "richText"),
     ("w:text", "plainText"),
@@ -81,15 +84,19 @@ SDT_CONTENT_TAG = qn("w:sdtContent")
 
 
 def detect_sdt_type(sdt_pr: Any) -> str:
-    """Map a w:sdtPr element to a normalised SdtType."""
+    """Map a w:sdtPr element to a normalised SdtType.
+
+    Mirrors folio's `parseSdtProperties`: a content control without an
+    explicit type child is a rich-text control by default.
+    """
     if sdt_pr is None:
-        return "unknown"
+        return "richText"
     for qn_tag, normalised in SDT_TYPE_MAP:
         if sdt_pr.find(qn_tag) is not None:
             return normalised
     if sdt_pr.find(W14_CHECKBOX) is not None:
         return "checkbox"
-    return "unknown"
+    return "richText"
 
 
 def text_attr(elem: Any, tag: str, attr: str = "w:val") -> str | None:
