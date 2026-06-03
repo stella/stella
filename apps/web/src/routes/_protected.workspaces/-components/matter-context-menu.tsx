@@ -425,6 +425,8 @@ export const AddMemberDialog = ({
           queryClient.invalidateQueries({
             queryKey: workspaceMembersKeys.all(workspaceId),
           });
+          // eslint-disable-next-line typescript/no-floating-promises
+          queryClient.invalidateQueries({ queryKey: workspacesKeys.all });
           onOpenChange(false);
           setSelectedUserId(null);
         },

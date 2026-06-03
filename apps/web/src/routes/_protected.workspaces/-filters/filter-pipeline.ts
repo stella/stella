@@ -6,8 +6,6 @@ import type {
   Workspace,
 } from "@/routes/_protected.workspaces/-types";
 
-const DAY_MS = 86_400_000;
-
 export const parseLocalISODateMs = (value: string): number => {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value);
   if (!match) {
@@ -15,6 +13,15 @@ export const parseLocalISODateMs = (value: string): number => {
   }
   const [, year, month, day] = match;
   return new Date(Number(year), Number(month) - 1, Number(day)).getTime();
+};
+
+const addLocalCalendarDaysMs = (value: number, days: number): number => {
+  const date = new Date(value);
+  return new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate() + days,
+  ).getTime();
 };
 
 type FilterableWorkspace = {
@@ -31,7 +38,7 @@ const resolveDateRange = (
   filter: DateFilter,
   now: Date = new Date(),
 ): { fromMs: number; toMs: number } | null => {
-  const startOfDay = (d: Date) => {
+  const startOfDay = (d: Date): number => {
     const clone = new Date(d);
     clone.setHours(0, 0, 0, 0);
     return clone.getTime();
@@ -40,18 +47,27 @@ const resolveDateRange = (
 
   switch (filter.preset) {
     case "today":
-      return { fromMs: todayStart, toMs: todayStart + DAY_MS };
+      return {
+        fromMs: todayStart,
+        toMs: addLocalCalendarDaysMs(todayStart, 1),
+      };
     case "last7d":
-      return { fromMs: todayStart - 6 * DAY_MS, toMs: todayStart + DAY_MS };
+      return {
+        fromMs: addLocalCalendarDaysMs(todayStart, -6),
+        toMs: addLocalCalendarDaysMs(todayStart, 1),
+      };
     case "last30d":
-      return { fromMs: todayStart - 29 * DAY_MS, toMs: todayStart + DAY_MS };
+      return {
+        fromMs: addLocalCalendarDaysMs(todayStart, -29),
+        toMs: addLocalCalendarDaysMs(todayStart, 1),
+      };
     case "thisWeek": {
       // Monday-start week (ISO).
       const day = now.getDay(); // 0=Sun..6=Sat
       const sinceMonday = (day + 6) % 7;
       return {
-        fromMs: todayStart - sinceMonday * DAY_MS,
-        toMs: todayStart + (7 - sinceMonday) * DAY_MS,
+        fromMs: addLocalCalendarDaysMs(todayStart, -sinceMonday),
+        toMs: addLocalCalendarDaysMs(todayStart, 7 - sinceMonday),
       };
     }
     case "thisMonth": {
@@ -76,7 +92,7 @@ const resolveDateRange = (
         ? parseLocalISODateMs(filter.from)
         : Number.NEGATIVE_INFINITY;
       const toMs = filter.to
-        ? parseLocalISODateMs(filter.to) + DAY_MS
+        ? addLocalCalendarDaysMs(parseLocalISODateMs(filter.to), 1)
         : Number.POSITIVE_INFINITY;
       return { fromMs, toMs };
     }

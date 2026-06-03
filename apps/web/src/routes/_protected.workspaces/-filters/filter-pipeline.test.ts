@@ -61,6 +61,27 @@ describe("matter filters", () => {
     expect(results.map((result) => result.id)).toEqual(["inside"]);
   });
 
+  it("advances custom date ranges by calendar day", () => {
+    const results = applyMattersFilters(
+      [
+        workspace({
+          id: "late-fallback-hour",
+          createdAt: new Date(2026, 9, 25, 23, 30),
+        }),
+      ],
+      {
+        createdAt: {
+          preset: "custom",
+          from: "2026-10-25",
+          to: "2026-10-25",
+        },
+      },
+      new Date("2026-10-30T12:00:00.000"),
+    );
+
+    expect(results.map((result) => result.id)).toEqual(["late-fallback-hour"]);
+  });
+
   it("matches lead and team filters independently", () => {
     const results = applyMattersFilters(
       [
