@@ -385,4 +385,25 @@ describe("removeContentControl", () => {
       removeContentControl(doc, { tag: "parties" }, { keepContent: true }),
     ).toThrow(ContentControlTypeError);
   });
+
+  test("refuses to unwrap a repeatingSection under an alternate namespace prefix", () => {
+    // A producer that binds the Word 2012 namespace under a non-canonical
+    // prefix (`<ns0:repeatingSection/>`) was previously slipping through
+    // the literal substring check and getting unwrapped — which would
+    // orphan the section's row items in the resulting DOCX.
+    const repeating: BlockSdt = {
+      type: "blockSdt",
+      properties: {
+        sdtType: "richText",
+        tag: "rows",
+        rawPropertiesXml:
+          '<w:sdtPr><w:tag w:val="rows"/><ns0:repeatingSection/></w:sdtPr>',
+      },
+      content: [makePara("x")],
+    };
+    const doc = makeDoc([repeating]);
+    expect(() =>
+      removeContentControl(doc, { tag: "rows" }, { keepContent: true }),
+    ).toThrow(ContentControlTypeError);
+  });
 });

@@ -166,10 +166,15 @@ function ensureSdtNotLocked(
 
 function isRepeatingSection(control: BlockSdt): boolean {
   // Not modeled in folio's SdtType enum; detected via the captured raw XML.
-  return Boolean(
-    control.properties.rawPropertiesXml?.includes("w15:repeatingSection"),
-  );
+  // Match by local name so a DOCX that binds the Word 2012 namespace under
+  // an alternate prefix (`<ns0:repeatingSection/>`) is still recognized —
+  // otherwise `removeContentControl(..., { keepContent: true })` would
+  // happily unwrap it and orphan the row items.
+  const raw = control.properties.rawPropertiesXml;
+  return raw !== undefined && REPEATING_SECTION_RE.test(raw);
 }
+
+const REPEATING_SECTION_RE = /<\w+:repeatingSection\b/u;
 
 /**
  * The `match` callback's return shape:

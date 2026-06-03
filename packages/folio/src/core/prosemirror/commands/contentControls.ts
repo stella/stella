@@ -480,8 +480,10 @@ function parseSdtDate(iso: string): Date | null {
 }
 
 function isRepeatingSection(node: PMNode): boolean {
+  // Match by local name so an alt-prefix `<ns0:repeatingSection/>` is
+  // recognized too (the headless helper has the same fix).
   const raw = node.attrs["rawPropertiesXml"];
-  return typeof raw === "string" && raw.includes("w15:repeatingSection");
+  return typeof raw === "string" && /<\w+:repeatingSection\b/u.test(raw);
 }
 
 export function removeContentControlTr(
