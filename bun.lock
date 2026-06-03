@@ -20,6 +20,7 @@
         "oxfmt": "catalog:",
         "oxlint": "catalog:",
         "oxlint-tsgolint": "^0.23.0",
+        "react": "catalog:react19",
         "sherif": "catalog:",
         "turbo": "^2.9.14",
         "typescript": "catalog:",
@@ -300,6 +301,7 @@
         "@tailwindcss/vite": "catalog:",
         "@tanstack/router-plugin": "^1.168.11",
         "@types/babel__core": "^7.20.5",
+        "@types/hast": "^3.0.4",
         "@types/react": "catalog:react19",
         "@types/react-dom": "catalog:react19",
         "@vitejs/plugin-react": "catalog:",
@@ -308,6 +310,7 @@
         "react-grab": "0.1.37",
         "rollup-plugin-visualizer": "^7.0.1",
         "typescript": "catalog:",
+        "unified": "^11.0.5",
       },
     },
     "packages/anonymize-chat": {
