@@ -350,6 +350,24 @@ describe("public law sitemap", () => {
     ).toThrow("Public case-law sitemap exceeded 5 bytes.");
   });
 
+  test("root sitemap indexes fail before exceeding the protocol byte limit", () => {
+    expect(() =>
+      createPublicLawSitemapIndexXml([
+        {
+          bucket: "all",
+          country: "cze",
+          lastmod: "2026-01-01",
+          month: "05",
+          year: "2026",
+        },
+      ]),
+    ).not.toThrow();
+
+    expect(() => createPublicLawSitemapIndexXml([], 5)).toThrow(
+      "Public case-law sitemap exceeded 5 bytes.",
+    );
+  });
+
   test("sitemap XML responses are publicly cacheable", () => {
     expect(SITEMAP_XML_RESPONSE_HEADERS).toEqual({
       "Cache-Control":

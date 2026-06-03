@@ -224,6 +224,7 @@ export const fetchPublicSitemapDecisions = async ({
 
 export const createPublicLawSitemapIndexXml = (
   shards: readonly SitemapShard[],
+  maxBytes = SITEMAP_XML_MAX_BYTES,
 ): string => {
   const entries = [
     {
@@ -244,11 +245,15 @@ export const createPublicLawSitemapIndexXml = (
     )
     .join("\n");
 
-  return `<?xml version="1.0" encoding="UTF-8"?>
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${entries}
 </sitemapindex>
 `;
+
+  assertPublicLawSitemapXmlWithinProtocolLimits(xml, maxBytes);
+
+  return xml;
 };
 
 export const createPublicLawStaticSitemapXml = (): string => {
