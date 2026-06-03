@@ -426,6 +426,16 @@ function cloneBlock<T extends BlockContent>(block: T): T {
  * explicit `BlockContent[]` is deep-cloned to preserve immutability. The
  * `showingPlcHdr` flag is cleared so the new content is not styled as
  * placeholder.
+ *
+ * Applies to SDTs in the main body AND inside `doc.package.footnotes` /
+ * `doc.package.endnotes`. NOTE: save-path propagation for note SDTs is a
+ * known follow-up — `repackDocxFromRaw` currently replays
+ * `word/footnotes.xml` and `word/endnotes.xml` verbatim from the source
+ * zip, so changes to note SDTs land on the in-memory model but the
+ * saved DOCX still contains the original note text. Read APIs
+ * (`findContentControls`, `getFootnoteText`) reflect the update in the
+ * same session; persisting requires extending the selective-save layer
+ * to re-serialize note parts.
  */
 export function setContentControlContent(
   doc: Document,
