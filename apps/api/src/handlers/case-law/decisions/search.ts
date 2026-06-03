@@ -4,6 +4,7 @@ import type { Static } from "elysia";
 
 import { caseLawDecisions } from "@/api/db/schema";
 import { courtWeightSql } from "@/api/handlers/case-law/citation-score";
+import { validCaseLawLanguageAlternateCountSql } from "@/api/handlers/case-law/decisions/language";
 import { bodyPreviewJoin } from "@/api/handlers/case-law/decisions/search-sql";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
@@ -283,7 +284,7 @@ export const searchDecisionsHandler = async (
           tx
             .select({
               languageGroupKey: caseLawDecisions.languageGroupKey,
-              count: sql<number>`count(distinct replace(lower(${caseLawDecisions.language}), '_', '-'))::int`,
+              count: validCaseLawLanguageAlternateCountSql,
             })
             .from(caseLawDecisions)
             .where(

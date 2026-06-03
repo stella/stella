@@ -4,6 +4,7 @@ import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import { caseLawDecisions } from "@/api/db/schema";
+import { validCaseLawLanguageAlternateCountSql } from "@/api/handlers/case-law/decisions/language";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
@@ -119,7 +120,7 @@ export const listDecisionsHandler = async (
           tx
             .select({
               languageGroupKey: caseLawDecisions.languageGroupKey,
-              count: sql<number>`count(distinct replace(lower(${caseLawDecisions.language}), '_', '-'))::int`,
+              count: validCaseLawLanguageAlternateCountSql,
             })
             .from(caseLawDecisions)
             .where(

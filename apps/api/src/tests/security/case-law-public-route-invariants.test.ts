@@ -15,23 +15,29 @@ const scopedDbIsPublicReadDb: ScopedDbIsPublicReadDb = true;
 void scopedDbIsPublicReadDb;
 
 const ROUTES_FILE = "apps/api/src/handlers/case-law/public-routes.ts";
+const LIST_DECISIONS_FILE = "apps/api/src/handlers/case-law/decisions/list.ts";
 const READ_DECISION_FILE =
   "apps/api/src/handlers/case-law/decisions/read-by-id.ts";
 const FACETS_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/facets.ts";
 const SEARCH_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/search.ts";
+const LANGUAGE_DECISIONS_FILE =
+  "apps/api/src/handlers/case-law/decisions/language.ts";
 const SITEMAP_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/sitemap.ts";
 const PUBLIC_READ_DB_FILE = "apps/api/src/lib/case-law-public-read-db.ts";
 
 const readRoutesSource = async () => await Bun.file(ROUTES_FILE).text();
+const readListSource = async () => await Bun.file(LIST_DECISIONS_FILE).text();
 const readDecisionSource = async () =>
   await Bun.file(READ_DECISION_FILE).text();
 const readFacetsSource = async () =>
   await Bun.file(FACETS_DECISIONS_FILE).text();
 const readSearchSource = async () =>
   await Bun.file(SEARCH_DECISIONS_FILE).text();
+const readLanguageSource = async () =>
+  await Bun.file(LANGUAGE_DECISIONS_FILE).text();
 const readSitemapSource = async () =>
   await Bun.file(SITEMAP_DECISIONS_FILE).text();
 const readPublicReadDbSource = async () =>
@@ -158,9 +164,27 @@ describe("public case-law route boundary", () => {
     expect(source).not.toContain("organization");
     expect(source).not.toContain("matter");
     expect(source).toContain("d.language_group_key");
-    expect(source).toContain("count(distinct replace(lower(");
+    expect(source).toContain("validCaseLawLanguageAlternateCountSql");
     expect(source).toContain("languageAlternateCount:");
     expect(source).toContain("languageGroupKey,");
+  });
+
+  test("public language alternate counts only include route-safe languages", async () => {
+    const [listSource, searchSource, languageSource] = await Promise.all([
+      readListSource(),
+      readSearchSource(),
+      readLanguageSource(),
+    ]);
+
+    expect(listSource).toContain("validCaseLawLanguageAlternateCountSql");
+    expect(searchSource).toContain("validCaseLawLanguageAlternateCountSql");
+    expect(languageSource).toContain("count(distinct");
+    expect(languageSource).toContain("replace(lower(");
+    expect(languageSource).toContain("filter (where");
+    expect(languageSource).toMatch(
+      /~ \$\{CASE_LAW_LANGUAGE_SEGMENT_PATTERN\}/u,
+    );
+    expect(languageSource).toContain("^[a-z]{2,3}(-[a-z0-9]{2,8})*$");
   });
 
   test("public sitemap payload is an explicit public allowlist", async () => {
