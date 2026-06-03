@@ -206,7 +206,7 @@ export const extractLegacyCaseLawDecisionIdFromRouteParam = (
 
 const UNKNOWN_DATE_SEGMENT = "unknown-date";
 const UNKNOWN_COURT_SEGMENT = "unknown-court";
-const LANGUAGE_SEGMENT_REGEX = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/u;
+const LANGUAGE_SEGMENT_REGEX = /^(?=.{2,8}$)[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/u;
 
 const formatDecisionDateSegment = (value: Date | string | null): string => {
   if (value === null) {

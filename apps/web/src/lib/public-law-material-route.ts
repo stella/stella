@@ -5,7 +5,7 @@ const PUBLIC_LEGAL_MATERIAL_TYPES = {
   treaties: "treaties",
 } as const;
 
-const LANGUAGE_SEGMENT_REGEX = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/u;
+const LANGUAGE_SEGMENT_REGEX = /^(?=.{2,8}$)[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/u;
 
 export type PublicLegalMaterialType =
   (typeof PUBLIC_LEGAL_MATERIAL_TYPES)[keyof typeof PUBLIC_LEGAL_MATERIAL_TYPES];

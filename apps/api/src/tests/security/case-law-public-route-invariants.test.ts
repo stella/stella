@@ -210,4 +210,11 @@ describe("public case-law route boundary", () => {
     expect(source).toContain("Case-law sitemap bucket exceeds shard capacity");
     expect(source).toContain("LIMITS.caseLawSitemapIndexEntryLimit");
   });
+
+  test("public sitemap shards support EU and three-letter jurisdictions", async () => {
+    const source = await readSitemapSource();
+
+    expect(source).toContain('const SITEMAP_COUNTRY_PATTERN = "^[a-z]{2,3}$"');
+    expect(source).toContain("country.toUpperCase()");
+  });
 });

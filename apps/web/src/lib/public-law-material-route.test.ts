@@ -65,6 +65,12 @@ describe("public legal material routes", () => {
 
   test("normalizes material language segments conservatively", () => {
     expect(normalizePublicLegalMaterialLanguageSegment("PT_BR")).toBe("pt-br");
+    expect(normalizePublicLegalMaterialLanguageSegment("ZH_HANT")).toBe(
+      "zh-hant",
+    );
+    expect(normalizePublicLegalMaterialLanguageSegment("zh-hant-tw")).toBe(
+      null,
+    );
     expect(normalizePublicLegalMaterialLanguageSegment("english")).toBe(null);
     expect(
       shouldUsePublicLegalMaterialLanguageSegment({

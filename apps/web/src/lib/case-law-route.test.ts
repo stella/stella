@@ -144,6 +144,8 @@ describe("case-law decision routes", () => {
 
   test("normalizes language segments without creating fake locale pages", () => {
     expect(normalizeCaseLawLanguageSegment("PT_BR")).toBe("pt-br");
+    expect(normalizeCaseLawLanguageSegment("ZH_HANT")).toBe("zh-hant");
+    expect(normalizeCaseLawLanguageSegment("zh-hant-tw")).toBe(null);
     expect(normalizeCaseLawLanguageSegment("not a language")).toBe(null);
     expect(
       shouldUseCaseLawLanguageSegment({
