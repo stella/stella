@@ -97,8 +97,13 @@ body {
 
 /* Scroll-reveal primitive. Elements with [data-reveal] fade up once
    they intersect the viewport (or immediately if above the fold).
-   Stagger via inline `style="--reveal-delay: 120ms"`. */
-[data-reveal] {
+   Stagger via inline `style="--reveal-delay: 120ms"`.
+
+   The hidden initial state is gated on the `.js-reveal` class which
+   the head script adds synchronously when JavaScript is available. If
+   JS is disabled or the script is blocked, the class is never set and
+   reveal content stays at its natural visible state. */
+.js-reveal [data-reveal] {
   opacity: 0;
   transform: translate3d(0, 8px, 0);
   transition:
@@ -108,7 +113,7 @@ body {
   will-change: opacity, transform;
 }
 
-[data-reveal][data-in-view] {
+.js-reveal [data-reveal][data-in-view] {
   opacity: 1;
   transform: translate3d(0, 0, 0);
 }

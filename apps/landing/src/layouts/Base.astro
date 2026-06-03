@@ -61,6 +61,16 @@ const socialImageUrl = new URL(socialImage, Astro.site);
     <link rel="preload" href="/fonts/CabinetGrotesk-Variable.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/dm-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
 
+    <!--
+      Reveal capability gate. The [data-reveal] hidden initial state in
+      global.css is scoped under .js-reveal so it only applies when JS
+      is available. Without JS, reveal content renders at its natural
+      visible state instead of being trapped at opacity 0.
+    -->
+    <script is:inline>
+      document.documentElement.classList.add("js-reveal");
+    </script>
+
     <!-- Theme: follow system preference, allow manual override -->
     <script is:inline>
       (function() {
