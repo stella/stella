@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { env } from "@/api/env";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -77,6 +78,11 @@ type ScopedDbOptions = {
   practiceJurisdictions?: { countryCode: string; isPrimary: boolean }[] | null;
 };
 
+const createRecordAuditEventMock = () =>
+  asTestRaw<AuditRecorder & ReturnType<typeof mock>>(
+    mock(async () => undefined),
+  );
+
 const createScopedDb = ({
   insert = mock(() => ({
     values: () => ({
@@ -104,14 +110,19 @@ const createScopedDb = ({
   );
 
 const createContext = ({
+  memberRole = "owner",
+  recordAuditEvent = createRecordAuditEventMock(),
   scopedDb = createScopedDb(),
 }: {
+  memberRole?: McpRequestContext["memberRole"];
+  recordAuditEvent?: AuditRecorder;
   scopedDb?: McpRequestContext["scopedDb"];
 } = {}): McpRequestContext => ({
   accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
   accessibleWorkspaceIdSet: new Set(["ws_1"]),
-  memberRole: "owner",
+  memberRole,
   organizationId: toSafeId<"organization">("org_1"),
+  recordAuditEvent,
   safeDb: toSafeDbMock(scopedDb),
   scopedDb,
   userId: toSafeId<"user">("user_1"),
@@ -163,8 +174,13 @@ describe("set_practice_jurisdictions MCP tool", () => {
         onConflictDoUpdate: async () => undefined,
       }),
     }));
+    const recordAuditEvent = createRecordAuditEventMock();
     const context = createContext({
-      scopedDb: createScopedDb({ insert: insertMock }),
+      recordAuditEvent,
+      scopedDb: createScopedDb({
+        insert: insertMock,
+        practiceJurisdictions: [{ countryCode: "US", isPrimary: true }],
+      }),
     });
 
     const result = await handleMcpToolCall({
@@ -186,6 +202,54 @@ describe("set_practice_jurisdictions MCP tool", () => {
       ],
     });
     expect(insertMock).toHaveBeenCalledTimes(1);
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        action: "update",
+        changes: {
+          practiceJurisdictions: {
+            new: [
+              { countryCode: "CZ", isPrimary: true },
+              { countryCode: "SK", isPrimary: false },
+            ],
+            old: [{ countryCode: "US", isPrimary: true }],
+          },
+        },
+        resourceId: "org_1",
+        resourceType: "organization_settings",
+      }),
+    );
+  });
+
+  test("rejects roles without organization settings permission", async () => {
+    const insertMock = mock(() => ({
+      values: () => ({
+        onConflictDoUpdate: async () => undefined,
+      }),
+    }));
+    const recordAuditEvent = createRecordAuditEventMock();
+    const context = createContext({
+      memberRole: "member",
+      recordAuditEvent,
+      scopedDb: createScopedDb({ insert: insertMock }),
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        jurisdictions: [{ countryCode: "CZ", isPrimary: true }],
+      },
+      context,
+      toolName: "set_practice_jurisdictions",
+    });
+
+    expect(result.isError).toBe(true);
+    const item = result.content.at(0);
+    expect(item?.type).toBe("text");
+    if (item?.type === "text") {
+      expect(item.text).toContain("Forbidden");
+    }
+    expect(insertMock).not.toHaveBeenCalled();
+    expect(recordAuditEvent).not.toHaveBeenCalled();
   });
 
   test("promotes the first entry to primary when none was flagged", async () => {
@@ -244,6 +308,29 @@ describe("set_practice_jurisdictions MCP tool", () => {
     });
 
     expect(result.isError).toBe(true);
+  });
+
+  test("rejects empty jurisdictions input", async () => {
+    const insertMock = mock(() => ({
+      values: () => ({
+        onConflictDoUpdate: async () => undefined,
+      }),
+    }));
+    const recordAuditEvent = createRecordAuditEventMock();
+    const context = createContext({
+      recordAuditEvent,
+      scopedDb: createScopedDb({ insert: insertMock }),
+    });
+
+    const result = await handleMcpToolCall({
+      args: { jurisdictions: [] },
+      context,
+      toolName: "set_practice_jurisdictions",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(insertMock).not.toHaveBeenCalled();
+    expect(recordAuditEvent).not.toHaveBeenCalled();
   });
 
   test("rejects input missing the jurisdictions field", async () => {

@@ -216,7 +216,7 @@ function ConsentPage() {
               </p>
               <Link
                 className="text-primary text-sm font-medium hover:underline"
-                to="/onboarding"
+                to="/settings/organization/members"
               >
                 {t("consent.completeSetup")}
               </Link>

@@ -41,7 +41,10 @@ type McpServerDependencies = {
     toolName: string;
   }) => Promise<CallToolResult>;
   listMcpTools: (mode?: McpMode) => McpTool[];
-  resolveMcpSessionContext: (session: McpSession) => Promise<McpRequestContext>;
+  resolveMcpSessionContext: (
+    session: McpSession,
+    options: { request: Request },
+  ) => Promise<McpRequestContext>;
 };
 
 const MCP_SERVER_VERSION = "0.1.0";
@@ -101,12 +104,14 @@ export const createMcpHttpRequestHandler = ({
 }: McpServerDependencies) => {
   const createMcpServer = async ({
     mode,
+    request,
     session,
   }: {
     mode: McpMode;
+    request: Request;
     session: McpSession;
   }) => {
-    const context = await resolveMcpSessionContext(session);
+    const context = await resolveMcpSessionContext(session, { request });
 
     // The low-level Server API accepts JSON Schema directly, which keeps the
     // MCP surface independent from the AI SDK tool generics used elsewhere.
@@ -180,7 +185,7 @@ export const createMcpHttpRequestHandler = ({
 
     try {
       const session = await authenticateMcpRequest(token, mode);
-      server = await createMcpServer({ mode, session });
+      server = await createMcpServer({ mode, request, session });
       transport = new WebStandardStreamableHTTPServerTransport({
         enableJsonResponse: true,
       });

@@ -2,17 +2,19 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import * as v from "valibot";
 
 import { COUNTRY_CODES } from "@stll/country-codes";
-import type { CountryCode } from "@stll/country-codes";
+import { roles } from "@stll/permissions";
 
-import { organizationSettings } from "@/api/db/schema";
 import type { PracticeJurisdiction } from "@/api/db/schema";
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/read-by-id";
 import { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
+import {
+  normalizePracticeJurisdictions,
+  upsertPracticeJurisdictions,
+} from "@/api/handlers/organization-settings/practice-jurisdictions";
 import { readWorkspaceHandler } from "@/api/handlers/workspaces/read-by-id";
 import { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
-import { createSafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -211,6 +213,7 @@ export const STELLA_TOOL_DEFINITIONS = [
             "Practice jurisdictions for this organization. countryCode is an " +
             "ISO 3166-1 alpha-2 code; exactly one entry should set isPrimary " +
             "to true.",
+          minItems: 1,
           maxItems: LIMITS.practiceJurisdictionsPerOrganization,
           items: {
             type: "object",
@@ -865,47 +868,22 @@ const practiceJurisdictionInputSchema = v.strictObject({
 const setPracticeJurisdictionsArgsSchema = v.strictObject({
   jurisdictions: v.pipe(
     v.array(practiceJurisdictionInputSchema),
+    v.minLength(1),
     v.maxLength(LIMITS.practiceJurisdictionsPerOrganization),
   ),
 });
-
-// Deduplicates by countryCode (first wins) and enforces "at most one primary,
-// promote first if none". Mirrors the HTTP handler's normalization without
-// silently dropping inputs — the valibot schema above already rejects unknown
-// country codes at the boundary.
-const normalizePracticeJurisdictions = (
-  jurisdictions: readonly { countryCode: CountryCode; isPrimary: boolean }[],
-): PracticeJurisdiction[] => {
-  const seen = new Set<CountryCode>();
-  const normalized: PracticeJurisdiction[] = [];
-  let primaryAssigned = false;
-
-  for (const jurisdiction of jurisdictions) {
-    if (seen.has(jurisdiction.countryCode)) {
-      continue;
-    }
-    seen.add(jurisdiction.countryCode);
-    const isPrimary: boolean = jurisdiction.isPrimary && !primaryAssigned;
-    primaryAssigned = primaryAssigned || isPrimary;
-    normalized.push({ countryCode: jurisdiction.countryCode, isPrimary });
-  }
-
-  if (normalized.length === 0 || primaryAssigned) {
-    return normalized;
-  }
-
-  const first = normalized.at(0);
-  if (!first) {
-    return normalized;
-  }
-
-  return [{ ...first, isPrimary: true }, ...normalized.slice(1)];
-};
 
 const handleSetPracticeJurisdictionsTool: McpToolHandler = async ({
   args,
   context,
 }) => {
+  const hasPermission = roles[context.memberRole].authorize({
+    organizationSettings: ["update"],
+  });
+  if (!hasPermission.success) {
+    return errorResult("Forbidden");
+  }
+
   const parsed = v.safeParse(setPracticeJurisdictionsArgsSchema, args);
   if (!parsed.success) {
     return errorResult(
@@ -925,20 +903,12 @@ const handleSetPracticeJurisdictionsTool: McpToolHandler = async ({
   );
 
   await context.scopedDb(async (tx) => {
-    await tx
-      .insert(organizationSettings)
-      .values({
-        id: createSafeId<"organizationSettings">(),
-        organizationId: context.organizationId,
-        practiceJurisdictions,
-      })
-      .onConflictDoUpdate({
-        target: organizationSettings.organizationId,
-        set: {
-          practiceJurisdictions,
-          updatedAt: new Date(),
-        },
-      });
+    await upsertPracticeJurisdictions({
+      organizationId: context.organizationId,
+      practiceJurisdictions,
+      recordAuditEvent: context.recordAuditEvent,
+      tx,
+    });
   });
 
   return textResult({ practiceJurisdictions });
