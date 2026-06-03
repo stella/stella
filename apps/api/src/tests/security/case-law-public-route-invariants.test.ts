@@ -181,6 +181,7 @@ describe("public case-law route boundary", () => {
     expect(source).toContain("SITEMAP_SHARD_BUCKET_COUNT");
     expect(source).toContain("SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE");
     expect(source).toContain("normalizeLanguageSegment");
+    expect(source).toContain("LIMITS.caseLawSitemapShardUrlLimit");
     expect(source).toContain("LIMITS.caseLawSitemapIndexEntryLimit");
   });
 });

@@ -57,7 +57,7 @@ const getCountryPathSegment = (country: string): string =>
   country.toLowerCase();
 
 const getBucketCountForNaturalShard = (total: number): number =>
-  total <= LIMITS.caseLawSitemapUrlLimit ? 1 : SITEMAP_SHARD_BUCKET_COUNT;
+  total <= LIMITS.caseLawSitemapShardUrlLimit ? 1 : SITEMAP_SHARD_BUCKET_COUNT;
 
 const getBucketPathSegment = (index: number): string =>
   String(index).padStart(SITEMAP_SHARD_BUCKET_WIDTH, "0");
@@ -149,6 +149,15 @@ export const listSitemapShardsHandler = async (
   }[] = [];
 
   for (const shard of naturalShards as NaturalShardRow[]) {
+    if (
+      shard.total >
+      LIMITS.caseLawSitemapShardUrlLimit * SITEMAP_SHARD_BUCKET_COUNT
+    ) {
+      return status(500, {
+        message: "Case-law sitemap natural shard exceeds bucket capacity.",
+      });
+    }
+
     const bucketCount = getBucketCountForNaturalShard(shard.total);
     if (bucketCount === 1) {
       items.push({
@@ -210,10 +219,10 @@ export const listSitemapShardDecisionsHandler = async (
       .from(caseLawDecisions)
       .where(and(...conditions))
       .orderBy(desc(caseLawDecisions.updatedAt), desc(caseLawDecisions.id))
-      .limit(LIMITS.caseLawSitemapUrlLimit + 1),
+      .limit(LIMITS.caseLawSitemapShardUrlLimit + 1),
   );
 
-  if (rows.length > LIMITS.caseLawSitemapUrlLimit) {
+  if (rows.length > LIMITS.caseLawSitemapShardUrlLimit) {
     return status(500, {
       message: "Case-law sitemap shard exceeds sitemap URL capacity.",
     });
@@ -305,7 +314,7 @@ export const listSitemapShardDecisionsHandler = async (
         updatedAt: row.updatedAt,
       };
     }),
-    limit: LIMITS.caseLawSitemapUrlLimit,
+    limit: LIMITS.caseLawSitemapShardUrlLimit,
     nextCursor: null,
   };
 };
