@@ -123,7 +123,8 @@ const MemberRow = ({
         .workspaces({ workspaceId: toSafeId<"workspace">(vars.workspaceId) })
         .members({ userId: toSafeId<"user">(vars.userId) })
         .delete({
-          queryKey: workspacesKeys.all,
+          queryKey: workspaceMembersKeys.all(vars.workspaceId),
+          queryKeys: [workspacesKeys.all],
         });
 
       if (response.error) {
