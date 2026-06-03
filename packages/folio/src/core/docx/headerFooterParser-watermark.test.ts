@@ -215,6 +215,54 @@ describe("parseHeader watermark detection", () => {
     expect(header.watermark.text).toBe("CONFIDENTIAL");
   });
 
+  test("extracts the primary font from a comma-separated family list", () => {
+    // Word sometimes emits `font-family:'Calibri','sans-serif'`. The
+    // previous stripQuotes implementation saw matching `'` at both
+    // ends of the whole string and returned `Calibri','sans-serif`.
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}>
+  <w:p>
+    <w:r>
+      <w:pict>
+        <v:shape id="PowerPlusWaterMarkObject1" type="#_x0000_t136" style="rotation:315">
+          <v:textpath style="font-family:'Calibri','sans-serif'" string="DRAFT"/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    if (!header.watermark || header.watermark.kind !== "text") {
+      throw new TypeError("expected text watermark");
+    }
+    expect(header.watermark.font).toBe("Calibri");
+  });
+
+  test("tolerates whitespace around the colon in inline styles", () => {
+    // Hand-authored DOCX templates and some legacy tools emit
+    // `key : value` instead of `key:value`. Previously parseInlineStyle
+    // matched the literal prefix `"rotation:"` and missed the spaced form.
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}>
+  <w:p>
+    <w:r>
+      <w:pict>
+        <v:shape id="PowerPlusWaterMarkObject1" type="#_x0000_t136"
+                 style="rotation : 315">
+          <v:textpath style="font-family : Calibri" string="DRAFT"/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    if (!header.watermark || header.watermark.kind !== "text") {
+      throw new TypeError("expected text watermark");
+    }
+    expect(header.watermark.diagonal).toBe(true);
+    expect(header.watermark.font).toBe("Calibri");
+  });
+
   test("returns watermark: undefined when header has no watermark shape", () => {
     const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:hdr ${NS}>

@@ -249,11 +249,18 @@ function parseInlineStyle(style: string, key: string): string | undefined {
   // contain single-quoted commas (`font-family:'Calibri','sans-serif'`); the
   // semicolon split is fine because Word never embeds a literal `;` inside
   // a value.
-  const lower = `${key}:`.toLowerCase();
+  //
+  // Producers sometimes pad the colon (`rotation : 315`, `font-family :
+  // Calibri`), so split each declaration at the first colon rather than
+  // requiring `key:` to be a prefix.
+  const lowerKey = key.toLowerCase();
   for (const part of style.split(";")) {
-    const trimmed = part.trim();
-    if (trimmed.toLowerCase().startsWith(lower)) {
-      return trimmed.slice(lower.length).trim();
+    const colonIdx = part.indexOf(":");
+    if (colonIdx === -1) {
+      continue;
+    }
+    if (part.slice(0, colonIdx).trim().toLowerCase() === lowerKey) {
+      return part.slice(colonIdx + 1).trim();
     }
   }
   return undefined;
@@ -272,17 +279,19 @@ function parseInlineStyleNumber(
 }
 
 function stripQuotes(value: string): string {
-  if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("'") && value.endsWith("'"))
-  ) {
-    return value.slice(1, -1);
-  }
-  // Word sometimes emits comma-separated family lists (`'Calibri','sans-serif'`);
-  // strip everything after the first comma so the model holds the primary font.
-  const commaIdx = value.indexOf(",");
+  // Peel off comma-separated fallback families BEFORE checking for
+  // matched quotes. For `'Calibri','sans-serif'` the previous logic
+  // saw matching `'` at both ends and stripped one char from each,
+  // yielding `Calibri','sans-serif` instead of `Calibri`.
+  let primary = value;
+  const commaIdx = primary.indexOf(",");
   if (commaIdx !== -1) {
-    return stripQuotes(value.slice(0, commaIdx).trim());
+    primary = primary.slice(0, commaIdx).trim();
   }
-  return value;
+  const matchedDouble = primary.startsWith('"') && primary.endsWith('"');
+  const matchedSingle = primary.startsWith("'") && primary.endsWith("'");
+  if (primary.length >= 2 && (matchedDouble || matchedSingle)) {
+    return primary.slice(1, -1);
+  }
+  return primary;
 }
