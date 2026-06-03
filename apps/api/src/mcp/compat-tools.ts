@@ -123,27 +123,62 @@ const anonymizeCompatSearchResults = async ({
     scopedDb: context.scopedDb,
   });
 
-  return await Promise.all(
-    results.map(async ({ workspaceId, ...result }) => {
-      const anonymized = await anonymizeTextFields({
-        fields: [result.title],
-        gazetteerEntries,
-        organizationId: context.organizationId,
-        scopedDb: context.scopedDb,
-        workspaceId,
-      });
+  const byWorkspace = new Map<
+    string,
+    { indexes: number[]; titles: string[] }
+  >();
+  for (const [index, result] of results.entries()) {
+    const group = byWorkspace.get(result.workspaceId);
+    if (group) {
+      group.indexes.push(index);
+      group.titles.push(result.title);
+      continue;
+    }
+    byWorkspace.set(result.workspaceId, {
+      indexes: [index],
+      titles: [result.title],
+    });
+  }
 
-      return {
-        ...result,
+  const output: (Omit<CompatSearchResult, "workspaceId"> | undefined)[] =
+    Array.from({ length: results.length });
+
+  for (const [workspaceId, group] of byWorkspace) {
+    const anonymized = await anonymizeTextFields({
+      fields: group.titles,
+      gazetteerEntries,
+      organizationId: context.organizationId,
+      scopedDb: context.scopedDb,
+      workspaceId,
+    });
+
+    for (const [groupIndex, resultIndex] of group.indexes.entries()) {
+      const result = results[resultIndex];
+      if (result === undefined) {
+        continue;
+      }
+      output[resultIndex] = {
+        id: result.id,
         title: normalizeTextField({
           allowEmptyFallback: false,
           fallback: result.title,
           missingFallback: ANONYMIZED_FIELD_MISSING_FALLBACK,
-          value: anonymized.fields[0],
+          value: anonymized.fields[groupIndex],
         }),
+        url: result.url,
       };
-    }),
-  );
+    }
+  }
+
+  const normalizedResults: Omit<CompatSearchResult, "workspaceId">[] = [];
+  for (const result of output) {
+    if (result === undefined) {
+      continue;
+    }
+    normalizedResults.push(result);
+  }
+
+  return normalizedResults;
 };
 
 const anonymizeCompatFetchPayload = async ({

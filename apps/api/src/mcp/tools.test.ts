@@ -940,6 +940,67 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(loadAnonymizationGazetteerEntriesMock).toHaveBeenCalledTimes(1);
   });
 
+  test("search batches anonymized titles by workspace", async () => {
+    searchAcrossMattersExecute.mockResolvedValue({
+      hits: [
+        {
+          entityId: "entity_1",
+          workspaceId: "ws_1",
+          name: "John Smith SPA",
+        },
+        {
+          entityId: "entity_2",
+          workspaceId: "ws_1",
+          name: "Jane Doe NDA",
+        },
+      ],
+    });
+    anonymizeTextFieldsMock.mockResolvedValue({
+      entityCount: 2,
+      fields: ["[PERSON_1] SPA", "[PERSON_2] NDA"],
+    });
+
+    const result = await handleMcpToolCall({
+      args: { query: "agreement" },
+      context: createContext({
+        scopedDb: createScopedDb([
+          {
+            entityId: "entity_1",
+            fieldId: "field_1",
+            workspaceId: "ws_1",
+          },
+          {
+            entityId: "entity_2",
+            fieldId: "field_2",
+            workspaceId: "ws_1",
+          },
+        ]),
+      }),
+      mode: "anonymized",
+      toolName: "search",
+    });
+
+    expect(parseToolPayload(result)).toEqual({
+      results: [
+        {
+          id: "entity_1",
+          title: "[PERSON_1] SPA",
+          url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=entity_1&field=field_1`,
+        },
+        {
+          id: "entity_2",
+          title: "[PERSON_2] NDA",
+          url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=entity_2&field=field_2`,
+        },
+      ],
+    });
+    expect(anonymizeTextFieldsMock).toHaveBeenCalledTimes(1);
+    expect(anonymizeTextFieldsMock.mock.calls.at(0)?.[0]).toMatchObject({
+      fields: ["John Smith SPA", "Jane Doe NDA"],
+      workspaceId: "ws_1",
+    });
+  });
+
   test("search preserves empty anonymized output instead of leaking the original title", async () => {
     searchAcrossMattersExecute.mockResolvedValue({
       hits: [
