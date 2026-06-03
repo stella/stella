@@ -100,20 +100,70 @@ export function projectFolioDocument(doc: Document): StructuralProjection {
 
   const visitParagraph = (p: Paragraph): void => {
     totalParagraphs += 1;
-    for (const item of p.content) {
-      visitParagraphContent(item);
-    }
+    visitInlineSequence(p.content);
   };
 
-  const visitParagraphContent = (c: ParagraphContent): void => {
-    if (c.type === "inlineSdt") {
-      visitInlineSdt(c);
+  /**
+   * Walk a sequence of inline content (paragraph body or another inline
+   * SDT's children), emitting one SDT projection per *wire* `w:sdt`.
+   *
+   * Folio's `pushInlineSdtSegments` deliberately splits a single wire
+   * `w:sdt` whose content straddles a lifted marker (bookmark / comment
+   * range / tracked-change boundary) into multiple `InlineSdt` records
+   * that all share the same `SdtProperties` object reference. The python
+   * projector walks the XML and emits one entry per wire `w:sdt`, so to
+   * keep the differential signal honest we coalesce those split segments
+   * back into a single projection here (summing their `childCount`).
+   *
+   * Reference identity is sufficient: `parseSdtProperties` is called
+   * exactly once per wire `w:sdt`, and the resulting object is passed
+   * unchanged to every segment. Two distinct `w:sdt`s — even with
+   * identical alias/tag/lock — produce two distinct property objects.
+   *
+   * Runs, fields, comment markers, tracked-change markers, math: we walk
+   * into inline SDTs (they carry alias/tag/lock we want to compare),
+   * but otherwise the projection does not count paragraph-content
+   * items — see the run-count comment near `StructuralProjection`.
+   */
+  const visitInlineSequence = (items: readonly ParagraphContent[]): void => {
+    let pendingProps: SdtProperties | null = null;
+    let pendingChildCount = 0;
+    let pendingNested: InlineSdt[] = [];
+
+    const flush = (): void => {
+      if (pendingProps === null) {
+        return;
+      }
+      sdts.push({
+        scope: "inline",
+        sdtType: pendingProps.sdtType,
+        alias: pendingProps.alias,
+        tag: pendingProps.tag,
+        lock: pendingProps.lock,
+        childCount: pendingChildCount,
+      });
+      const nested = pendingNested;
+      pendingProps = null;
+      pendingChildCount = 0;
+      pendingNested = [];
+      for (const child of nested) {
+        visitInlineSequence(child.content);
+      }
+    };
+
+    for (const item of items) {
+      if (item.type !== "inlineSdt") {
+        flush();
+        continue;
+      }
+      if (pendingProps !== null && pendingProps !== item.properties) {
+        flush();
+      }
+      pendingProps = item.properties;
+      pendingChildCount += item.content.length;
+      pendingNested.push(item);
     }
-    // Runs, fields, comment markers, tracked-change markers, math: we
-    // walk into inline SDTs (because they carry alias/tag/lock we want
-    // to compare), but otherwise the projection does not count
-    // paragraph-content items — see the run-count comment near the
-    // StructuralProjection type for why.
+    flush();
   };
 
   const visitTable = (t: Table): void => {
@@ -153,22 +203,6 @@ export function projectFolioDocument(doc: Document): StructuralProjection {
         visitParagraph(child);
       } else {
         visitTable(child);
-      }
-    }
-  };
-
-  const visitInlineSdt = (sdt: InlineSdt): void => {
-    sdts.push({
-      scope: "inline",
-      sdtType: sdt.properties.sdtType,
-      alias: sdt.properties.alias,
-      tag: sdt.properties.tag,
-      lock: sdt.properties.lock,
-      childCount: sdt.content.length,
-    });
-    for (const child of sdt.content) {
-      if (child.type === "inlineSdt") {
-        visitInlineSdt(child);
       }
     }
   };

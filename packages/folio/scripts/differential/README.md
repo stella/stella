@@ -82,6 +82,14 @@ Both projectors emit the same normalised JSON shape (see
   fixture diverge for an uninteresting reason. If run-level parity
   becomes interesting, compare _consolidated_ runs on both sides
   instead of raw `w:r`.
+- **Split inline SDT segments are coalesced.** Folio splits a wire
+  `w:sdt` whose inline content straddles a lifted marker (bookmark /
+  comment range / tracked-change boundary) into multiple `InlineSdt`
+  segments that share one `SdtProperties` reference. The folio
+  projector merges those segments back into a single entry (summing
+  `childCount`) so it matches the python projector's one-entry-per-
+  `w:sdt` view; otherwise every bookmarked or comment-marked control
+  would diverge on `sdts` length for an uninteresting reason.
 - **Textbox content.** folio models drawing-anchored paragraphs and
   tables as run-level shape content, not block content. The python
   projector excludes paragraphs/tables/SDTs inside `w:txbxContent` to
