@@ -57,6 +57,46 @@ function parseListItems(
 }
 
 /**
+ * Rewrite the captured raw `<*:sdtPr>` / `<*:sdtEndPr>` snippet so every
+ * element bound to the WordprocessingML URI uses the canonical `w:`
+ * prefix on save. The blockSdtSerializer's document root declares only
+ * the standard `w` / `w14` / `w15` prefixes, so replaying a source
+ * snippet that uses an alternate prefix (`<ns0:sdtPr>` with `xmlns:ns0`
+ * declared on the source's `<w:document>`) would produce invalid XML in
+ * the saved DOCX — Word refuses to open files with unresolved
+ * namespace prefixes.
+ *
+ * Heuristic: we only rewrite when the captured element itself uses a
+ * non-`w` prefix. fast-xml-parser does not surface namespace URIs in
+ * preserveOrder mode, so we infer that the source prefix is bound to
+ * the WP URI from the fact that it carries an SDT property element
+ * (otherwise the producer's DOCX would already be invalid). Other
+ * URIs (w14, w15) are left intact since callers seldom rebind them.
+ */
+function normalizeWordPrefix(raw: string, source: XmlElement): string {
+  const name = source.name ?? "";
+  const colonIdx = name.indexOf(":");
+  if (colonIdx <= 0) {
+    return raw;
+  }
+  const sourcePrefix = name.slice(0, colonIdx);
+  if (sourcePrefix === "w") {
+    return raw;
+  }
+  // Escape regex meta-chars in the prefix before substituting. Match
+  // both element-name (`<ns0:tag>` / `</ns0:tag>`) and attribute-name
+  // (`ns0:val="…"`) occurrences.
+  const escaped = sourcePrefix.replaceAll(/[$()*+./?[\\\]^{|}]/gu, "\\$&");
+  const tagOpen = new RegExp(`<${escaped}:`, "gu");
+  const tagClose = new RegExp(`</${escaped}:`, "gu");
+  const attr = new RegExp(`(\\s)${escaped}:`, "gu");
+  return raw
+    .replaceAll(tagOpen, "<w:")
+    .replaceAll(tagClose, "</w:")
+    .replaceAll(attr, "$1w:");
+}
+
+/**
  * Parse `<w:sdtPr>` (and optional `<w:sdtEndPr>`) into {@link SdtProperties}.
  *
  * Modeled fields drive addressing / template tooling; `rawPropertiesXml`
@@ -71,7 +111,7 @@ export function parseSdtProperties(
   const props: SdtProperties = { sdtType: "richText" };
 
   if (sdtPr) {
-    props.rawPropertiesXml = elementToXml(sdtPr);
+    props.rawPropertiesXml = normalizeWordPrefix(elementToXml(sdtPr), sdtPr);
 
     for (const el of sdtPr.elements ?? []) {
       if (el.type !== "element") {
@@ -209,7 +249,10 @@ export function parseSdtProperties(
   }
 
   if (sdtEndPr) {
-    props.rawEndPropertiesXml = elementToXml(sdtEndPr);
+    props.rawEndPropertiesXml = normalizeWordPrefix(
+      elementToXml(sdtEndPr),
+      sdtEndPr,
+    );
   }
 
   return props;

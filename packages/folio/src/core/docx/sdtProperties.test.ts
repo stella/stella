@@ -96,6 +96,28 @@ describe("parseSdtProperties — prefixed marker elements", () => {
     expect(props.listItems).toEqual([{ displayText: "Yes", value: "Yes" }]);
   });
 
+  test("normalizes alt-prefix rawPropertiesXml to canonical w: on capture", () => {
+    // A producer that binds the WordprocessingML namespace under `ns0`
+    // emits `<ns0:sdtPr>…</ns0:sdtPr>` at parse time. Replaying that
+    // verbatim into the serializer's output (which only declares the
+    // canonical `w` / `w14` / `w15` prefixes at the document root)
+    // would produce invalid XML with unresolved `xmlns:ns0` and Word
+    // would refuse to open the saved DOCX. The captured raw snippet
+    // should already use `w:` so the replay is self-contained.
+    const ns =
+      'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:ns0="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+    const props = parseSdtPrXml(
+      `<ns0:sdtPr ${ns}><ns0:tag ns0:val="client"/><ns0:alias ns0:val="Client"/></ns0:sdtPr>`,
+    );
+    expect(props.tag).toBe("client");
+    expect(props.alias).toBe("Client");
+    expect(props.rawPropertiesXml).toBeDefined();
+    // Replay must be canonical.
+    expect(props.rawPropertiesXml).not.toContain("ns0:");
+    expect(props.rawPropertiesXml).toContain("<w:sdtPr");
+    expect(props.rawPropertiesXml).toContain('<w:tag w:val="client"/>');
+  });
+
   test("reads placeholder docPart reference from the docPart's own w:val attribute", () => {
     // The parser used to look for a nested `<w:val>` child inside
     // `<w:docPart>`. The actual OOXML shape is `<w:docPart w:val="…"/>`,
