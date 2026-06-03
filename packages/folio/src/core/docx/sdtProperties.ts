@@ -186,30 +186,143 @@ function normalizeChildrenForLocalNames(
     out = out.replaceAll(closer, (_m, prefix: string) =>
       prefix === canonical ? `</${prefix}:${local}` : `</${canonical}:${local}`,
     );
-    // Also normalize attributes on those elements that use the alt prefix.
-    // Without a parser pass this is best-effort: rewrite `prefix:attr=`
-    // only when the immediately preceding tag is the targeted element AND
-    // the prefix is preceded by an attribute-name boundary (whitespace).
-    // The whitespace anchor is critical — a bare `\b` would also match
-    // inside attribute values, so `xmlns:x="http://…"` would have `http:`
-    // rewritten to `w:` and the namespace URI would be silently
-    // corrupted. Exclude `xmlns:*` so a locally-declared alt-prefix
-    // (`<x:tag xmlns:x="…" x:val="…"/>`) keeps its namespace declaration
-    // intact too.
-    const attrRe = new RegExp(
-      `(<${canonical}:${escapedLocal}\\b[^>]{0,200}\\s)(?!${canonical}:)(?!xmlns:)(\\w+):`,
-      "gu",
-    );
-    let prev = "";
-    while (prev !== out) {
-      prev = out;
-      out = out.replaceAll(
-        attrRe,
-        (_m, head: string, _altPrefix: string) => `${head}${canonical}:`,
-      );
-    }
+    // Normalize attribute-name prefixes on the targeted element. Regex-only
+    // approaches don't track quote state, so `[^>]{0,200}\s(\w+):` would
+    // greedily consume past a quoted attribute value boundary and rewrite
+    // a prefix-shaped token sitting *inside* the value
+    // (e.g. `<w:tag w:val="foo od:repeat=x0"/>` → `w:val="foo w:repeat=x0"`).
+    // Walk the open tag instead, tracking quote state so the rewrite only
+    // fires at real attribute-name positions.
+    out = rewriteOpenTagAttrPrefixes(out, canonical, local);
   }
   return out;
+}
+
+/**
+ * Walk every `<canonical:local …>` open tag in `raw` and rewrite any
+ * attribute-name prefix that is not already `canonical` (and not `xmlns`) to
+ * `canonical`. Quoted attribute values are skipped so prefix-shaped substrings
+ * inside a value (OpenDoPE payloads in `w:tag w:val="…"`, namespace URIs in
+ * `xmlns:foo="…"`, etc.) are left untouched.
+ */
+function rewriteOpenTagAttrPrefixes(
+  raw: string,
+  canonical: string,
+  local: string,
+): string {
+  const opener = `<${canonical}:${local}`;
+  const pieces: string[] = [];
+  let cursor = 0;
+  while (cursor < raw.length) {
+    const tagStart = raw.indexOf(opener, cursor);
+    if (tagStart === -1) {
+      pieces.push(raw.slice(cursor));
+      break;
+    }
+    // Require a word boundary after the opener so `<w:checkbox` does not
+    // also match `<w:checkboxFoo`.
+    const afterOpener = raw.codePointAt(tagStart + opener.length);
+    const isBoundary =
+      afterOpener === undefined ||
+      !(
+        (
+          (afterOpener >= 0x30 && afterOpener <= 0x39) || // 0-9
+          (afterOpener >= 0x41 && afterOpener <= 0x5a) || // A-Z
+          (afterOpener >= 0x61 && afterOpener <= 0x7a) || // a-z
+          afterOpener === 0x5f
+        ) // _
+      );
+    if (!isBoundary) {
+      pieces.push(raw.slice(cursor, tagStart + opener.length));
+      cursor = tagStart + opener.length;
+      continue;
+    }
+    pieces.push(raw.slice(cursor, tagStart + opener.length));
+    cursor = tagStart + opener.length;
+    // Walk the open tag to its closing `>`, tracking quote state. Attribute
+    // names always sit outside quotes; prefix-shaped tokens inside quotes are
+    // attribute values and must be preserved verbatim.
+    let quote: '"' | "'" | null = null;
+    let atAttrNameBoundary = true;
+    while (cursor < raw.length) {
+      const ch = raw.charAt(cursor);
+      if (quote) {
+        pieces.push(ch);
+        cursor += 1;
+        if (ch === quote) {
+          quote = null;
+          // Whitespace between attributes must precede the next attribute
+          // name; flagging the boundary keeps the rewrite anchored to real
+          // attribute-name positions.
+          atAttrNameBoundary = false;
+        }
+        continue;
+      }
+      if (ch === '"' || ch === "'") {
+        quote = ch;
+        pieces.push(ch);
+        cursor += 1;
+        continue;
+      }
+      if (ch === ">") {
+        pieces.push(ch);
+        cursor += 1;
+        break;
+      }
+      if (ch === " " || ch === "\t" || ch === "\n" || ch === "\r") {
+        pieces.push(ch);
+        cursor += 1;
+        atAttrNameBoundary = true;
+        continue;
+      }
+      if (atAttrNameBoundary) {
+        // Read the next token until `=`, whitespace, `/`, or `>`. If it
+        // matches `prefix:localAttr` with a non-canonical, non-xmlns prefix,
+        // rewrite the prefix.
+        const tokenStart = cursor;
+        while (cursor < raw.length) {
+          const c = raw.charAt(cursor);
+          if (
+            c === "=" ||
+            c === " " ||
+            c === "\t" ||
+            c === "\n" ||
+            c === "\r" ||
+            c === "/" ||
+            c === ">"
+          ) {
+            break;
+          }
+          cursor += 1;
+        }
+        const token = raw.slice(tokenStart, cursor);
+        const colonIdx = token.indexOf(":");
+        if (colonIdx > 0) {
+          const prefix = token.slice(0, colonIdx);
+          const localAttr = token.slice(colonIdx + 1);
+          if (
+            prefix !== canonical &&
+            prefix !== "xmlns" &&
+            /^\w+$/u.test(prefix) &&
+            localAttr.length > 0
+          ) {
+            pieces.push(`${canonical}:${localAttr}`);
+          } else {
+            pieces.push(token);
+          }
+        } else {
+          pieces.push(token);
+        }
+        atAttrNameBoundary = false;
+        continue;
+      }
+      // Outside quotes, not at an attribute-name boundary — must be the `=`
+      // or stray characters before a quoted value. Copy verbatim.
+      pieces.push(ch);
+      cursor += 1;
+    }
+  }
+  return pieces.join("");
 }
 
 /**
