@@ -153,7 +153,12 @@ export function projectFolioDocument(doc: Document): StructuralProjection {
 
     for (const item of items) {
       if (item.type !== "inlineSdt") {
-        flush();
+        // Lifted markers (bookmarks, comment ranges, tracked-change
+        // boundaries) appear as non-inlineSdt siblings between segments
+        // of the same wire `w:sdt`. Don't flush on them: keep the
+        // pending SDT alive so a later same-reference segment coalesces
+        // into one projection, matching python-docx's one entry per
+        // `w:sdt`.
         continue;
       }
       if (pendingProps !== null && pendingProps !== item.properties) {
