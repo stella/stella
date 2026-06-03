@@ -215,6 +215,17 @@ jobs:
           [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
           bun run typecheck -- "${args[@]}"
 
+      - name: Knip production dependency check (apps/api)
+        if: steps.changed-files.outputs.package_checks_required == 'true'
+        # Static gate paired with the api-image-deps compile smoke:
+        # knip catches `apps/api` prod code that imports devDeps or
+        # transitively-resolved (unlisted) packages at PR time; the
+        # compile catches dynamic imports the linter misses. Scoped
+        # to apps/api because that's the workspace the Dockerfile
+        # installs with --production. apps/web is bundled by Vite
+        # and does not go through a --production install.
+        run: bun run knip --production --no-progress --include unlisted,unresolved --workspace apps/api
+
       - name: Test
         if: steps.changed-files.outputs.package_checks_required == 'true'
         env:
@@ -549,8 +560,8 @@ jobs:
             /tmp/web.log
           retention-days: 7
 
-  # Pruned-subset lockfile guard. The staging API image is built
-  # via `turbo prune @stll/api --docker` followed by
+  # Pruned-subset lockfile + prod-deps guard. The staging API image
+  # is built via `turbo prune @stll/api --docker` followed by
   # `bun install --frozen-lockfile` against the pruned bun.lock.
   # The other CI jobs all install against the full repo lockfile,
   # so a workspace dep that resolves transitively from outside
@@ -559,6 +570,15 @@ jobs:
   # only to fail at deploy time when the prune drops the masking
   # workspace. Mirror the Dockerfile's install path here so that
   # class of drift fails the PR instead of the deploy.
+  #
+  # The job then re-runs the install with `--production` (no
+  # devDependencies) and compiles + smokes the API entrypoints
+  # against that tree. This catches the second class of deploy-time
+  # failure: prod code (apps/api/src/** or apps/api/scripts/**) that
+  # imports a devDependency, or a `@stll/*` workspace package whose
+  # runtime imports are mis-classified as devDependencies. Without
+  # this gate, flipping the Dockerfile to `--production` would only
+  # fail at deploy time.
   api-image-deps:
     needs: trust-check
     if: >-
@@ -629,6 +649,49 @@ jobs:
         run: |
           cd out/json
           bun install --frozen-lockfile --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Prod-deps compile + ingest smoke
+        if: steps.changed.outputs.run == 'true'
+        # Empirically prove the pruned API tree builds and its
+        # ingestion entrypoint resolves with devDependencies
+        # stripped. Runs a fresh `bun install --production` in a
+        # parallel dir (so the lockfile-drift install above stays
+        # unchanged), overlays the full pruned source via
+        # `cp -a ../full/. .` (mirrors `COPY --from=pruner
+        # /app/out/full/ .` in `apps/api/Dockerfile`), compiles the
+        # API binary, and exercises the ingestion script with a
+        # fake adapter key — the same smoke the Dockerfile's
+        # `runner` stage runs at build time.
+        run: |
+          set -euo pipefail
+          rm -rf out-prod
+          cp -a out out-prod
+          cd out-prod/json
+          bun install --production --frozen-lockfile --ignore-scripts
+          cp -a ../full/. .
+          bun build \
+            --compile \
+            --minify-whitespace \
+            --minify-syntax \
+            --target bun \
+            --outfile /tmp/server \
+            apps/api/src/index.ts
+          cd apps/api
+          set +e
+          out=$(DATABASE_URL=postgres://smoke:smoke@localhost:5432/smoke \
+                S3_ENDPOINT=http://localhost \
+                S3_BUCKET=smoke \
+                S3_REGION=eu-central-1 \
+                bun scripts/ingest-case-law.ts __smoke__ 2>&1)
+          status=$?
+          set -e
+          echo "$out"
+          if ! echo "$out" | grep -q 'Unknown adapter: __smoke__'; then
+            echo "ERROR: ingestion entrypoint smoke failed under --production (exit=$status)" >&2
+            exit 1
+          fi
         env:
           NPM_TOKEN: ""
 
