@@ -421,6 +421,51 @@ function syncPageBorderOverlay(
 }
 
 /**
+ * Refresh the watermark overlay on a rendered page shell. Incremental
+ * rerenders replace only the body content area, so the watermark sibling
+ * must be reconciled separately when per-section header resolution changes.
+ */
+function syncPageWatermarkOverlay(
+  pageEl: HTMLElement,
+  page: Page,
+  options: RenderPageOptions,
+  doc: Document,
+): void {
+  for (const stale of Array.from(
+    pageEl.querySelectorAll<HTMLElement>(":scope > .layout-page-watermark"),
+  )) {
+    stale.remove();
+  }
+
+  const watermark = options.watermark;
+  if (!watermark) {
+    return;
+  }
+
+  const overlay = renderWatermarkLayer(
+    watermark,
+    page,
+    doc,
+    options.watermarkImageSrc !== undefined
+      ? { imageSrc: options.watermarkImageSrc }
+      : {},
+  );
+  if (!overlay) {
+    return;
+  }
+
+  const contentEl = pageEl.querySelector<HTMLElement>(
+    `:scope > .${PAGE_CLASS_NAMES.content}`,
+  );
+  if (contentEl) {
+    contentEl.before(overlay);
+    return;
+  }
+
+  pageEl.append(overlay);
+}
+
+/**
  * Apply content area styles to an element
  */
 function applyContentAreaStyles(element: HTMLElement, page: Page): void {
@@ -3274,12 +3319,19 @@ function repopulatePageContent(
   if (newContentEl && oldContentEl) {
     // Replace only the content area — header/footer stay untouched
     oldContentEl.replaceWith(newContentEl);
-  } else {
-    // Fallback: full replace if structure doesn't match
-    shell.innerHTML = "";
-    data.rendered = false;
-    populatePageShell(shell, pageDataMap, totalPages, options);
+    syncPageWatermarkOverlay(
+      shell,
+      data.page,
+      pageOptions,
+      options.document ?? document,
+    );
+    return;
   }
+
+  // Fallback: full replace if structure doesn't match
+  shell.innerHTML = "";
+  data.rendered = false;
+  populatePageShell(shell, pageDataMap, totalPages, options);
 }
 
 function syncRenderedPmPositionData(
