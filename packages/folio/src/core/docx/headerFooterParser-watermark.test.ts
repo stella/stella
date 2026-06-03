@@ -130,6 +130,91 @@ describe("parseHeader watermark detection", () => {
     expect(header.watermark.font).toBe("Calibri");
   });
 
+  test("a header logo VML imagedata is not promoted to a picture watermark", () => {
+    // Logo images dropped into a header from the Word ribbon get a
+    // plain `_x0000_sNNN` shape id, not `WordPictureWatermark…`.
+    // Without the id check, every such logo would round-trip as a
+    // full-page behind-content image on save.
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}>
+  <w:p>
+    <w:r>
+      <w:pict>
+        <v:shape id="_x0000_s1025" style="position:absolute" type="#_x0000_t75">
+          <v:imagedata r:id="rId7" o:title="company-logo"/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    expect(header.watermark).toBeUndefined();
+  });
+
+  test("a header logo does not shadow a later real text watermark", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}>
+  <w:p>
+    <w:r>
+      <w:pict>
+        <v:shape id="_x0000_s1025" type="#_x0000_t75">
+          <v:imagedata r:id="rId7"/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+    <w:r>
+      <w:pict>
+        <v:shape id="PowerPlusWaterMarkObject1" type="#_x0000_t136" style="rotation:315" fillcolor="#C0C0C0">
+          <v:textpath style="font-family:'Calibri'" string="CONFIDENTIAL"/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    if (!header.watermark || header.watermark.kind !== "text") {
+      throw new TypeError("expected text watermark, logo should not shadow");
+    }
+    expect(header.watermark.text).toBe("CONFIDENTIAL");
+  });
+
+  test("a header background DrawingML anchor does not shadow a later real watermark", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}
+  xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+  xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <w:p>
+    <w:r>
+      <w:drawing>
+        <wp:anchor behindDoc="1">
+          <a:graphic><a:graphicData/></a:graphic>
+        </wp:anchor>
+      </w:drawing>
+    </w:r>
+    <w:r>
+      <w:drawing>
+        <wp:anchor behindDoc="1">
+          <a:graphic>
+            <a:graphicData>
+              <a:txBody>
+                <a:p><a:r><a:t>CONFIDENTIAL</a:t></a:r></a:p>
+              </a:txBody>
+            </a:graphicData>
+          </a:graphic>
+        </wp:anchor>
+      </w:drawing>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    if (!header.watermark || header.watermark.kind !== "text") {
+      throw new TypeError(
+        "expected text watermark, background should not shadow",
+      );
+    }
+    expect(header.watermark.text).toBe("CONFIDENTIAL");
+  });
+
   test("returns watermark: undefined when header has no watermark shape", () => {
     const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:hdr ${NS}>

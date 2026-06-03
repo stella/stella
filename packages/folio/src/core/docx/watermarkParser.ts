@@ -32,23 +32,33 @@ import {
 } from "./xmlParser";
 
 const VML_TEXT_WATERMARK_SHAPETYPE = "#_x0000_t136";
+/**
+ * Word's own UI emits picture watermarks with a shape id beginning
+ * `WordPictureWatermark`. A logo image dropped into a header from the
+ * ribbon gets a plain auto-id like `_x0000_s1025`, so this prefix is
+ * the cleanest signal to separate real picture watermarks from
+ * ordinary header imagery.
+ */
+const VML_PICTURE_WATERMARK_ID_PREFIX = "WordPictureWatermark";
 
 /**
  * Walk a parsed `<w:hdr>` element and return the watermark it carries,
- * or `undefined` when none is present. The first matching shape wins —
- * a single header part typically contains at most one watermark.
+ * or `undefined` when none is present. Scans every candidate shape /
+ * anchor in the header so a non-watermark shape (e.g. a logo image)
+ * earlier in document order does not shadow the real watermark.
  */
 export function parseWatermark(header: XmlElement): Watermark | undefined {
-  const vmlShape = findVmlWatermarkShape(header);
-  if (vmlShape) {
-    const watermark = readVmlWatermark(vmlShape);
+  for (const shape of collectVmlShapesWithContent(header)) {
+    const watermark = readVmlWatermark(shape);
     if (watermark) {
       return watermark;
     }
   }
-  const drawingAnchor = findDrawingMlWatermarkAnchor(header);
-  if (drawingAnchor) {
-    return readDrawingMlTextWatermark(drawingAnchor);
+  for (const anchor of collectDrawingMlBehindContentAnchors(header)) {
+    const watermark = readDrawingMlTextWatermark(anchor);
+    if (watermark) {
+      return watermark;
+    }
   }
   return undefined;
 }
@@ -57,20 +67,19 @@ export function parseWatermark(header: XmlElement): Watermark | undefined {
 // VML detection (w:pict > v:shape)
 // ---------------------------------------------------------------------------
 
-function findVmlWatermarkShape(header: XmlElement): XmlElement | null {
-  // Walk every <w:pict> inside the header looking for the first shape
-  // that carries either a textpath (text watermark) or imagedata (picture).
+function collectVmlShapesWithContent(header: XmlElement): XmlElement[] {
+  const out: XmlElement[] = [];
   for (const pict of collectByLocalName(header, "pict")) {
     for (const shape of findChildren(pict, "v", "shape")) {
       if (
         findChild(shape, "v", "textpath") ||
         findChild(shape, "v", "imagedata")
       ) {
-        return shape;
+        out.push(shape);
       }
     }
   }
-  return null;
+  return out;
 }
 
 function readVmlWatermark(shape: XmlElement): Watermark | null {
@@ -122,9 +131,18 @@ function readVmlTextWatermark(
 }
 
 function readVmlPictureWatermark(
-  _shape: XmlElement,
+  shape: XmlElement,
   imagedata: XmlElement,
 ): Watermark | null {
+  // Word distinguishes picture watermarks from ordinary header images by
+  // stamping a `WordPictureWatermark…` id on the wrapping `<v:shape>`.
+  // Without this check, a company logo dropped into the header would
+  // round-trip as a watermark on save — silently turning a logo into a
+  // full-page behind-content image.
+  const shapeId = getAttribute(shape, null, "id") ?? "";
+  if (!shapeId.startsWith(VML_PICTURE_WATERMARK_ID_PREFIX)) {
+    return null;
+  }
   const imageRId =
     getAttribute(imagedata, "r", "id") ?? getAttribute(imagedata, null, "id");
   if (!imageRId) {
@@ -147,17 +165,17 @@ function readVmlFillColor(shape: XmlElement): string | undefined {
 // DrawingML detection (w:drawing > wp:anchor with behindDoc="1")
 // ---------------------------------------------------------------------------
 
-function findDrawingMlWatermarkAnchor(header: XmlElement): XmlElement | null {
+function collectDrawingMlBehindContentAnchors(
+  header: XmlElement,
+): XmlElement[] {
+  const out: XmlElement[] = [];
   for (const drawing of collectByLocalName(header, "drawing")) {
     const anchor = findDeep(drawing, "wp", "anchor");
-    if (!anchor) {
-      continue;
-    }
-    if (getAttribute(anchor, null, "behindDoc") === "1") {
-      return anchor;
+    if (anchor && getAttribute(anchor, null, "behindDoc") === "1") {
+      out.push(anchor);
     }
   }
-  return null;
+  return out;
 }
 
 function readDrawingMlTextWatermark(anchor: XmlElement): Watermark | undefined {
