@@ -126,6 +126,29 @@ describe("toProseDoc/fromProseDoc — blockSdt round-trip", () => {
     expect(pmDoc2.childCount).toBe(1);
   });
 
+  test("preserves an authored <w:sdtContent><w:p/></w:sdtContent> on round-trip", () => {
+    // Codex P2 follow-up (PR #587): the previous shape-only heuristic
+    // couldn't tell synthetic filler from a real authored empty paragraph
+    // and silently dropped both. The fix marks blockSdt with
+    // `_originallyEmpty` only when the SOURCE content was actually empty,
+    // so an authored `<w:p/>` carries no marker and the paragraph
+    // survives.
+    const content = parseBody(`<w:body ${NS}>
+      <w:sdt>
+        <w:sdtPr><w:tag w:val="authored-empty"/></w:sdtPr>
+        <w:sdtContent><w:p/></w:sdtContent>
+      </w:sdt>
+    </w:body>`);
+    const pmDoc = toProseDoc(asDocument(content));
+    const recovered = fromProseDoc(pmDoc);
+    const sdt = recovered.package.document.content[0];
+    if (!sdt || sdt.type !== "blockSdt") {
+      throw new TypeError("expected blockSdt");
+    }
+    expect(sdt.content).toHaveLength(1);
+    expect(sdt.content[0]?.type).toBe("paragraph");
+  });
+
   test("round-trips an empty <w:sdtContent/> without adding a synthetic <w:p/>", () => {
     // Codex P2 (PR #587): toProseDoc inserts a synthetic empty paragraph
     // for any blockSdt whose source had `<w:sdtContent/>` because the

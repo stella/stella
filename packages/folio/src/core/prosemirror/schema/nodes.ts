@@ -351,6 +351,12 @@ export type BlockSdtAttrs = {
   /** Selected dropdown / comboBox value (`w:dropDownList@w:lastValue`). */
   dropdownLastValue?: string;
   checked?: boolean;
+  /**
+   * Marker: source had empty `<w:sdtContent/>`. `toProseDoc` inserts a
+   * filler paragraph to satisfy PM's `block+`; on save the converter
+   * uses this flag to drop the filler instead of guessing from shape.
+   */
+  _originallyEmpty?: boolean;
   /** Captured `<w:sdtPr>…</w:sdtPr>` for round-trip replay. */
   rawPropertiesXml?: string;
   /** Captured `<w:sdtEndPr>…</w:sdtEndPr>` for round-trip replay. */

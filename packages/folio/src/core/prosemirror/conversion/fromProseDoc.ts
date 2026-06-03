@@ -324,21 +324,22 @@ function convertPMBlockSdt(node: PMNode): BlockSdt {
   const innerDoc = node.type.schema.node("doc", null, node.content);
   const extracted = extractBlocks(innerDoc);
 
-  // `toProseDoc` inserts a synthetic empty paragraph into any blockSdt
-  // whose source had an empty `<w:sdtContent/>` (PM `block+` requires
-  // at least one child). Without this guard, an untouched parse → PM
-  // → save round trip turns that empty control into `<w:sdtContent>
-  // <w:p/></w:sdtContent>`, silently adding a paragraph Word did not
-  // emit. Detect the synthetic shape — exactly one paragraph with no
-  // inline content and no formatting — and emit empty content instead.
-  // If the user typed into the filler or styled it, the heuristic
-  // bails and we preserve the paragraph verbatim.
-  const content = isSyntheticEmptyFiller(extracted) ? [] : extracted;
+  // `toProseDoc` inserts a synthetic filler paragraph into any blockSdt
+  // whose source had an empty `<w:sdtContent/>` and stamps the
+  // `_originallyEmpty` marker on the PM node. Use that explicit marker
+  // (not a shape heuristic) to drop the filler on save — an authored
+  // `<w:sdtContent><w:p/></w:sdtContent>` does NOT carry the marker
+  // and its empty paragraph survives the round trip intact. If the
+  // user typed into the filler we still preserve the paragraph,
+  // matching their intent.
+  const wasOriginallyEmpty = attrs._originallyEmpty === true;
+  const content =
+    wasOriginallyEmpty && isStillSyntheticFiller(extracted) ? [] : extracted;
 
   return { type: "blockSdt", properties, content };
 }
 
-function isSyntheticEmptyFiller(blocks: BlockContent[]): boolean {
+function isStillSyntheticFiller(blocks: BlockContent[]): boolean {
   if (blocks.length !== 1) {
     return false;
   }
@@ -349,9 +350,8 @@ function isSyntheticEmptyFiller(blocks: BlockContent[]): boolean {
   if (block.content.length !== 0) {
     return false;
   }
-  // Allow the parser's intrinsic `paraId` marker and bookkeeping fields,
-  // but reject anything that signals a real authored paragraph (style,
-  // formatting, mark changes, section properties).
+  // Reject anything that signals real editing (formatting, mark changes,
+  // section properties) — if the user authored content, preserve it.
   if (block.formatting !== undefined) {
     return false;
   }

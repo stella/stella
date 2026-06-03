@@ -799,6 +799,12 @@ export const readBlockSdtAttrs = (
     issues,
   );
   optionalBoolean(attrs, "checked", "blockSdt.attrs.checked", issues);
+  optionalBoolean(
+    attrs,
+    "_originallyEmpty",
+    "blockSdt.attrs._originallyEmpty",
+    issues,
+  );
   optionalString(
     attrs,
     "rawPropertiesXml",

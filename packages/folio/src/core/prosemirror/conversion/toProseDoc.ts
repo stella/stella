@@ -164,6 +164,12 @@ function convertBlockSdt(
     listItems: props.listItems ? JSON.stringify(props.listItems) : null,
     dropdownLastValue: props.dropdownLastValue ?? null,
     checked: props.checked ?? null,
+    // Mark explicitly when the source content was empty. fromProseDoc reads
+    // this on save to drop the synthetic filler below — without an explicit
+    // marker we couldn't distinguish source `<w:sdtContent/>` (filler
+    // inserted here) from source `<w:sdtContent><w:p/></w:sdtContent>`
+    // (a real authored empty paragraph the user wants preserved).
+    _originallyEmpty: blockSdt.content.length === 0,
     rawPropertiesXml: props.rawPropertiesXml ?? null,
     rawEndPropertiesXml: props.rawEndPropertiesXml ?? null,
   };

@@ -44,6 +44,15 @@ export const BlockSdtExtension = createNodeExtension({
        */
       dropdownLastValue: { default: null },
       checked: { default: null },
+      /**
+       * True when the source `<w:sdtContent/>` was empty. PM `block+`
+       * requires at least one child so `toProseDoc` inserts a synthetic
+       * filler paragraph; on save, `fromProseDoc` reads this flag to
+       * drop the filler when the body still matches the synthetic shape.
+       * Without the explicit marker we'd silently drop authored
+       * `<w:sdtContent><w:p/></w:sdtContent>` empty-paragraph content too.
+       */
+      _originallyEmpty: { default: false },
       rawPropertiesXml: { default: null },
       rawEndPropertiesXml: { default: null },
     },
@@ -76,6 +85,7 @@ export const BlockSdtExtension = createNodeExtension({
             listItems: dom.dataset["listItems"] ?? null,
             dropdownLastValue: dom.dataset["dropdownLastValue"] ?? null,
             checked,
+            _originallyEmpty: dom.dataset["originallyEmpty"] === "true",
             // Raw XML is preserved on the model, not the DOM; consumers that
             // round-trip through PM must re-attach it from the source.
             rawPropertiesXml: null,
@@ -122,6 +132,9 @@ export const BlockSdtExtension = createNodeExtension({
       }
       if (attrs["checked"] !== null && attrs["checked"] !== undefined) {
         data["data-checked"] = String(attrs["checked"]);
+      }
+      if (attrs["_originallyEmpty"]) {
+        data["data-originally-empty"] = "true";
       }
       return ["div", data, 0];
     },
