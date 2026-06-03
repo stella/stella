@@ -11,6 +11,10 @@ const eden = treaty<API>(env.VITE_API_URL, {
     credentials: "include",
   },
   headers() {
+    if (typeof window === "undefined") {
+      return {};
+    }
+
     const sessionId = posthog.get_session_id();
     return sessionId ? { "x-posthog-session-id": sessionId } : {};
   },

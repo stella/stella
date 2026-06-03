@@ -117,4 +117,124 @@ describe("custom oxlint guardrails", () => {
     expect(pluginSource).toContain("typeArguments");
     expect(pluginSource).toContain("TSTypeAssertion");
   });
+
+  test("public law web modules cannot import protected route code", () => {
+    const configSource = readRootFixture("oxlint.config.ts");
+
+    expect(configSource).toContain("apps/web/src/routes/law/**/*.{ts,tsx}");
+    expect(configSource).toContain(
+      "apps/web/src/features/case-law/**/*.{ts,tsx}",
+    );
+    expect(configSource).toContain("@/routes/_protected.*/**");
+    expect(configSource).toContain(
+      "Public law routes and shared case-law modules must not import protected route code.",
+    );
+  });
+
+  test("public API route files cannot import authenticated route capabilities", () => {
+    const configSource = readRootFixture("oxlint.config.ts");
+
+    expect(configSource).toContain("apps/api/src/handlers/**/public-routes.ts");
+    expect(configSource).toContain(
+      'importNames: ["createSafeHandler", "createSafeRootHandler"]',
+    );
+    expect(configSource).toContain('name: "@/api/lib/auth"');
+    expect(configSource).toContain('name: "@/api/db/root"');
+    expect(configSource).toContain(
+      "Public route files must use createSafePublicHandler",
+    );
+  });
+
+  test("public case-law data files cannot query private tables", () => {
+    const configSource = readRootFixture("oxlint.config.ts");
+    const pluginSource = readRootFixture(
+      ".oxlint-plugins/public-case-law-db-boundary.ts",
+    );
+
+    expect(configSource).toContain(
+      "public-case-law-db-boundary/public-case-law-db-boundary",
+    );
+    expect(configSource).toContain(
+      "apps/api/src/handlers/case-law/decisions/read-by-id.ts",
+    );
+    expect(configSource).toContain(
+      "apps/api/src/lib/case-law-public-read-db.ts",
+    );
+    expect(pluginSource).toContain("privateCaseLawImport");
+    expect(pluginSource).toContain("privateTxQuery");
+    expect(pluginSource).toContain("privateSqlText");
+    expect(pluginSource).toContain("isCaseLawName");
+    expect(pluginSource).toContain("tx.query");
+    expect(pluginSource).toContain("workspace|workspaces");
+    expect(pluginSource).toContain("organization|organizations");
+    expect(pluginSource).toContain("matter|matters");
+  });
+
+  test("public law route SEO must use the central helper", () => {
+    const configSource = readRootFixture("oxlint.config.ts");
+    const pluginSource = readRootFixture(
+      ".oxlint-plugins/no-raw-public-law-seo.ts",
+    );
+
+    expect(configSource).toContain("apps/web/src/routes/law/**/*.{ts,tsx}");
+    expect(configSource).toContain(
+      "no-raw-public-law-seo/no-raw-public-law-seo",
+    );
+    expect(pluginSource).toContain("createPublicLawHead");
+    expect(pluginSource).toContain('value === "canonical"');
+    expect(pluginSource).toContain('value === "robots"');
+    expect(pluginSource).toContain('value.startsWith("og:")');
+    expect(pluginSource).toContain('value.startsWith("twitter:")');
+  });
+
+  test("public law route files cannot import the Eden API client directly", () => {
+    const configSource = readRootFixture("oxlint.config.ts");
+
+    expect(configSource).toContain("apps/web/src/routes/law/**/*.{ts,tsx}");
+    expect(configSource).toContain('name: "@/lib/api"');
+    expect(configSource).toContain('importNames: ["api"]');
+    expect(configSource).toContain(
+      "Public law route files must use approved public case-law query modules",
+    );
+  });
+
+  test("public law modules cannot reference browser globals directly", () => {
+    const configSource = readRootFixture("oxlint.config.ts");
+    const pluginSource = readRootFixture(
+      ".oxlint-plugins/no-public-law-browser-globals.ts",
+    );
+
+    expect(configSource).toContain("apps/web/src/routes/law/**/*.{ts,tsx}");
+    expect(configSource).toContain(
+      "apps/web/src/features/case-law/**/*.{ts,tsx}",
+    );
+    expect(configSource).toContain(
+      "no-public-law-browser-globals/no-public-law-browser-globals",
+    );
+    expect(pluginSource).toContain("Public law modules must be SSR-safe");
+    expect(pluginSource).toContain('"window"');
+    expect(pluginSource).toContain('"document"');
+    expect(pluginSource).toContain('"localStorage"');
+    expect(pluginSource).toContain('"sessionStorage"');
+    expect(pluginSource).toContain('"matchMedia"');
+  });
+
+  test("public SEO endpoints cannot import auth or protected code", () => {
+    const configSource = readRootFixture("oxlint.config.ts");
+
+    expect(configSource).toContain("apps/web/src/routes/robots[.]txt.ts");
+    expect(configSource).toContain("apps/web/src/routes/sitemap[.]xml.ts");
+    expect(configSource).toContain(
+      "apps/web/src/routes/sitemaps/**/*.{ts,tsx}",
+    );
+    expect(configSource).toContain("apps/web/src/lib/public-law-sitemap.ts");
+    expect(configSource).toContain('name: "@/routes/-auth-context"');
+    expect(configSource).toContain('name: "@/lib/auth"');
+    expect(configSource).toContain(
+      "Public SEO endpoints must not import protected route code.",
+    );
+    expect(configSource).toContain(
+      "Public SEO endpoints must use the public case-law API response",
+    );
+  });
 });

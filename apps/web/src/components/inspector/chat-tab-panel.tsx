@@ -23,7 +23,7 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { useNavigate, useRouteContext } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { ArrowUpIcon, Maximize2Icon, SquarePenIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
@@ -57,6 +57,7 @@ import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useDevStore } from "@/lib/dev-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
@@ -129,10 +130,7 @@ export const ChatTabPanel = ({
   };
   const getSendMode = useEffectEvent(() => sendMode);
   const showToolCallDetails = useDevStore((s) => s.showToolCallDetails);
-  const activeOrganizationId = useRouteContext({
-    from: "/_protected",
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const chatContextLabel = useChatContextLabel(tab, activeOrganizationId);
 
   const { openChat, setChatContext, updateLabel } = useInspectorStore(
@@ -574,10 +572,7 @@ const ChatTabPanelChrome = ({
  */
 const PromptBarPlaceholder = ({ tab }: { tab: ChatTab }) => {
   const t = useTranslations();
-  const activeOrganizationId = useRouteContext({
-    from: "/_protected",
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const chatContextLabel = useChatContextLabel(tab, activeOrganizationId);
   return (
     <PromptBarShell aria-hidden="true" layout="standalone">

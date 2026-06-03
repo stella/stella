@@ -23,10 +23,12 @@ export const FeedbackDialog = ({ userEmail }: Props) => {
     return null;
   }
 
+  const route = typeof window === "undefined" ? "/" : window.location.pathname;
+
   return (
     <SidebarMenuItem>
       <SidebarMenuButton asChild size="sm" tooltip={t("feedback.trigger")}>
-        <a href={buildMailto(recipient, userEmail, window.location.pathname)}>
+        <a href={buildMailto(recipient, userEmail, route)}>
           <MegaphoneIcon className="size-4" />
           <span>{t("feedback.trigger")}</span>
         </a>

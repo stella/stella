@@ -1,21 +1,20 @@
 import { status } from "elysia";
 
-import { parsePersistedDecisionAnalysis } from "@stll/case-law/analysis";
-
-import type { ScopedDb } from "@/api/db";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 
 export const readDecisionHandler = async (
   decisionId: SafeId<"caseLawDecision">,
-  scopedDb: ScopedDb,
+  caseLawDb: CaseLawPublicReadDb,
 ) => {
-  const decision = await scopedDb((tx) =>
+  const decision = await caseLawDb((tx) =>
     tx.query.caseLawDecisions.findFirst({
       where: { id: { eq: decisionId } },
       columns: {
         id: true,
         caseNumber: true,
+        slug: true,
         ecli: true,
         court: true,
         country: true,
@@ -24,7 +23,6 @@ export const readDecisionHandler = async (
         decisionDate: true,
         decisionType: true,
         documentAst: true,
-        analysis: true,
         sourceUrl: true,
         documentUrl: true,
         metadata: true,
@@ -61,23 +59,58 @@ export const readDecisionHandler = async (
     return status(404, { message: "Decision not found" });
   }
 
-  const normalizedDecision = {
-    ...decision,
-    analysis: parsePersistedDecisionAnalysis(decision.analysis),
-  };
-
   // Only fetch fulltext if no usable documentAst (fallback).
   // Empty `{}` is stored by adapters without AST parsers;
   // treat it the same as null.
+  let fulltext: string | null = null;
   if (!hasUsableAst(decision.documentAst)) {
-    const fallback = await scopedDb((tx) =>
+    const fallback = await caseLawDb((tx) =>
       tx.query.caseLawDecisions.findFirst({
         where: { id: { eq: decisionId } },
         columns: { fulltext: true },
       }),
     );
-    return { ...normalizedDecision, fulltext: fallback?.fulltext ?? null };
+    fulltext = fallback?.fulltext ?? null;
   }
 
-  return { ...normalizedDecision, fulltext: null };
+  return {
+    id: decision.id,
+    caseNumber: decision.caseNumber,
+    slug: decision.slug,
+    ecli: decision.ecli,
+    court: decision.court,
+    country: decision.country,
+    language: decision.language,
+    languageGroupKey: decision.languageGroupKey,
+    decisionDate: decision.decisionDate,
+    decisionType: decision.decisionType,
+    documentAst: decision.documentAst,
+    sourceUrl: decision.sourceUrl,
+    documentUrl: decision.documentUrl,
+    metadata: decision.metadata,
+    createdAt: decision.createdAt,
+    updatedAt: decision.updatedAt,
+    source: decision.source,
+    citationsFrom: decision.citationsFrom,
+    citationsTo: decision.citationsTo,
+    fulltext,
+  };
+};
+
+export const readDecisionBySlugHandler = async (
+  slug: string,
+  caseLawDb: CaseLawPublicReadDb,
+) => {
+  const decision = await caseLawDb((tx) =>
+    tx.query.caseLawDecisions.findFirst({
+      where: { slug: { eq: slug } },
+      columns: { id: true },
+    }),
+  );
+
+  if (!decision) {
+    return status(404, { message: "Decision not found" });
+  }
+
+  return await readDecisionHandler(decision.id, caseLawDb);
 };

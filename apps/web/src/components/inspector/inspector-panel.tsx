@@ -8,7 +8,7 @@ import {
 } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getRouteApi, useMatch, useNavigate } from "@tanstack/react-router";
+import { useMatch, useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
@@ -42,6 +42,7 @@ import { useTabContextMenu } from "@/components/inspector/use-tab-context-menu";
 import { getInspectorView } from "@/components/inspector/view-registry";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { getCachedAnonymization } from "@/lib/pdf/anonymization-cache";
 import { MatterMetadataPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet";
@@ -70,14 +71,10 @@ const hasInAppHistoryEntry = (): boolean => {
   return typeof idx === "number" && idx > 0;
 };
 
-const protectedRouteApi = getRouteApi("/_protected");
-
 export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   const t = useTranslations();
   const canUpdateEntity = usePermissions({ entity: ["update"] });
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const { tabs, activeId } = useInspectorStore(
     useShallow((s) => ({
       tabs: s.tabs,

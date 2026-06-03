@@ -24,6 +24,7 @@ import {
   getOauthRedirectUrl,
 } from "@/lib/oauth-provider";
 import { pageTitle } from "@/lib/page-title";
+import { loadAuthContext } from "@/routes/-auth-context";
 import { roleOptions } from "@/routes/-queries";
 import { managementRoles } from "@/routes/_protected.organization/-consts";
 
@@ -34,8 +35,10 @@ const searchSchema = v.object({
 
 export const Route = createFileRoute("/consent")({
   validateSearch: searchSchema,
-  beforeLoad: ({ context, location }) => {
-    if (!context.session) {
+  beforeLoad: async ({ context, location }) => {
+    const authContext = await loadAuthContext(context.queryClient);
+
+    if (!authContext.session) {
       throw redirect({
         to: "/auth",
         search: {
@@ -44,6 +47,8 @@ export const Route = createFileRoute("/consent")({
         replace: true,
       });
     }
+
+    return authContext;
   },
   head: () => ({
     meta: [{ title: pageTitle("consent.title") }],

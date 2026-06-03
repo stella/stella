@@ -1,17 +1,15 @@
 import { createContext, use, useMemo } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
 
 import type {
   ChatMentionOption,
   MentionCategory,
 } from "@/components/chat-mention-extension";
 import { buildWorkspaceMentionOptions } from "@/components/chat-mention-helpers";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
 import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
-
-const protectedRouteApi = getRouteApi("/_protected");
 
 type MentionProviders = {
   getItems: (categories: MentionCategory[]) => ChatMentionOption[];
@@ -30,9 +28,7 @@ export const ChatMentionProviders = ({
   children: React.ReactNode;
 }) => {
   const queryClient = useQueryClient();
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const { data: workspacesData } = useQuery(
     workspacesNavigationOptions(activeOrganizationId),
   );

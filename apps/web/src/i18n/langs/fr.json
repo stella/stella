@@ -14,6 +14,7 @@
     }
   },
   "ai": {
+    "analyzeWithAI": "Analyser avec l’IA",
     "editWithAI": "Modifier avec l’IA",
     "keyRequired": {
       "cta": "Ouvrir les paramètres IA",
@@ -272,6 +273,12 @@
       "header": "En-tête",
       "ruling": "Dispositif",
       "unknown": "Autre"
+    },
+    "seo": {
+      "browse": "Browse case law",
+      "countries": "Countries",
+      "courts": "Courts",
+      "years": "Years"
     },
     "sources": {
       "empty": "Aucune source configurée.",

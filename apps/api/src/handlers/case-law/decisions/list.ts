@@ -3,8 +3,8 @@ import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
 import { caseLawDecisions } from "@/api/db/schema";
+import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
@@ -30,7 +30,7 @@ type ListDecisionsQuery = Static<typeof listDecisionsQuerySchema>;
 
 export const listDecisionsHandler = async (
   query: ListDecisionsQuery,
-  scopedDb: ScopedDb,
+  caseLawDb: CaseLawPublicReadDb,
 ) => {
   const limit = query.limit ?? LIMITS.caseLawSearchPageSizeDefault;
   const conditions: SQL[] = [];
@@ -84,11 +84,12 @@ export const listDecisionsHandler = async (
     conditions.push(eq(caseLawDecisions.language, query.language));
   }
 
-  const decisions = await scopedDb((tx) =>
+  const decisions = await caseLawDb((tx) =>
     tx
       .select({
         id: caseLawDecisions.id,
         caseNumber: caseLawDecisions.caseNumber,
+        slug: caseLawDecisions.slug,
         ecli: caseLawDecisions.ecli,
         court: caseLawDecisions.court,
         country: caseLawDecisions.country,

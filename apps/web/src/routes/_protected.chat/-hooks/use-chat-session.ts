@@ -11,7 +11,6 @@ import type { ComponentProps } from "react";
 import { useChat } from "@ai-sdk/react";
 import type { Chat } from "@ai-sdk/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRouteContext } from "@tanstack/react-router";
 import { isToolUIPart } from "ai";
 import { v7 as uuidv7 } from "uuid";
 
@@ -38,6 +37,7 @@ import { openEntityInInspector } from "@/components/chat/entity-open";
 import type { NeedsMatterMatter } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
@@ -121,10 +121,7 @@ export const useChatSession = ({
   getSendMode,
   workspaceId,
 }: UseChatSessionOptions) => {
-  const organizationId = useRouteContext({
-    from: "/_protected",
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const organizationId = useAuthenticatedUser().activeOrganizationId;
   const { data: mcpCatalog } = useQuery(mcpConnectorsOptions(organizationId));
   const mcpConnectorIdentities =
     mcpCatalog?.connectors ?? EMPTY_MCP_CONNECTOR_IDENTITIES;

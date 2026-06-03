@@ -4,10 +4,12 @@ import { useTranslations } from "use-intl";
 import { LanguagePicker } from "@/components/language-picker";
 import { StellaWordmark } from "@/components/stella-wordmark";
 import { ThemePicker } from "@/components/theme-picker";
+import { loadAuthContext } from "@/routes/-auth-context";
 
 const landingUrl = "https://stll.app";
 
 export const Route = createFileRoute("/auth")({
+  beforeLoad: async ({ context }) => await loadAuthContext(context.queryClient),
   component: AuthLayout,
 });
 

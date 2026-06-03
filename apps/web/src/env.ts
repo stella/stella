@@ -21,6 +21,10 @@ export const env = createEnv({
       "false",
     ),
     VITE_API_URL: v.pipe(v.string(), v.url()),
+    VITE_PUBLIC_APP_URL: v.optional(
+      v.pipe(v.string(), v.url()),
+      "http://localhost:3000",
+    ),
     VITE_COLLAB_URL: v.optional(v.pipe(v.string(), v.url())),
     VITE_DESKTOP_BRIDGE_PORT: v.optional(
       v.pipe(

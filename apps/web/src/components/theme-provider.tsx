@@ -34,6 +34,10 @@ const ThemeProviderContext = createContext(initialState);
 const PALETTE_PREFIX = "palette-";
 
 const getStoredTheme = (): Theme => {
+  if (typeof localStorage === "undefined") {
+    return "system";
+  }
+
   const stored = localStorage.getItem(THEME_STORAGE_KEY);
   if (stored === "light" || stored === "dark") {
     return stored;
@@ -42,6 +46,10 @@ const getStoredTheme = (): Theme => {
 };
 
 const getStoredPalette = (): Palette => {
+  if (typeof localStorage === "undefined") {
+    return "neutral";
+  }
+
   const stored = localStorage.getItem(PALETTE_STORAGE_KEY);
   if (stored === "nord" || stored === "flexoki") {
     return stored;
@@ -49,8 +57,17 @@ const getStoredPalette = (): Palette => {
   return "neutral";
 };
 
-const getSystemTheme = (): "light" | "dark" =>
-  matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+const getSystemTheme = (): "light" | "dark" => {
+  if (typeof matchMedia === "undefined") {
+    return "light";
+  }
+
+  if (matchMedia("(prefers-color-scheme: dark)").matches) {
+    return "dark";
+  }
+
+  return "light";
+};
 
 const resolveTheme = (theme: Theme): "light" | "dark" =>
   theme === "system" ? getSystemTheme() : theme;
@@ -73,12 +90,16 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
   );
 
   const setTheme = (next: Theme) => {
-    localStorage.setItem(THEME_STORAGE_KEY, next);
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(THEME_STORAGE_KEY, next);
+    }
     setThemeState(next);
   };
 
   const setPalette = (next: Palette) => {
-    localStorage.setItem(PALETTE_STORAGE_KEY, next);
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(PALETTE_STORAGE_KEY, next);
+    }
     setPaletteState(next);
   };
 

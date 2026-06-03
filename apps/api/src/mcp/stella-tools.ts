@@ -15,6 +15,7 @@ import {
 import { readWorkspaceHandler } from "@/api/handlers/workspaces/read-by-id";
 import { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
+import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -634,7 +635,7 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
   });
 };
 
-const handleSearchCaseLawTool: McpToolHandler = async ({ args, context }) => {
+const handleSearchCaseLawTool: McpToolHandler = async ({ args }) => {
   const query = parseRequiredString(args, "query", {
     maxLength: LIMITS.searchQueryMaxLength,
   });
@@ -722,7 +723,7 @@ const handleSearchCaseLawTool: McpToolHandler = async ({ args, context }) => {
       ...(dateFrom === undefined ? {} : { dateFrom }),
       ...(dateTo === undefined ? {} : { dateTo }),
     },
-    context.scopedDb,
+    caseLawPublicReadDb,
   );
 
   const resultMessage = getResultMessage(result);
@@ -763,10 +764,7 @@ const handleSearchCaseLawTool: McpToolHandler = async ({ args, context }) => {
   });
 };
 
-const handleReadCaseLawDecisionTool: McpToolHandler = async ({
-  args,
-  context,
-}) => {
+const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
   const decisionId = parseRequiredString(args, "decision_id");
   if (typeof decisionId !== "string") {
     return decisionId;
@@ -774,7 +772,7 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({
 
   const result = await readDecisionHandler(
     brandPersistedCaseLawDecisionId(decisionId),
-    context.scopedDb,
+    caseLawPublicReadDb,
   );
   const resultMessage = getResultMessage(result);
   if (resultMessage) {
@@ -786,7 +784,6 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({
 
   return textResult({
     decision: {
-      analysis: result.analysis,
       appUrl: buildCaseLawDecisionUrl({
         caseNumber: result.caseNumber,
         decisionId: result.id,

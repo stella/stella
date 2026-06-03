@@ -17,6 +17,7 @@ type Messages = {
     };
   };
   "ai": {
+    "analyzeWithAI": "Analyze with AI";
     "editWithAI": "Edit with AI";
     "keyRequired": {
       "cta": "Open AI settings";
@@ -275,6 +276,12 @@ type Messages = {
       "header": "Header";
       "ruling": "Ruling";
       "unknown": "Other";
+    };
+    "seo": {
+      "browse": "Browse case law";
+      "countries": "Countries";
+      "courts": "Courts";
+      "years": "Years";
     };
     "sources": {
       "empty": "No sources configured.";

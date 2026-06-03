@@ -1,5 +1,5 @@
 import { Result, panic } from "better-result";
-import { eq } from "drizzle-orm";
+import { eq, like } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db";
 import {
@@ -12,6 +12,10 @@ import {
   ADAPTER_TIMEOUT,
   MAX_SYNC_PAGES,
 } from "@/api/handlers/case-law/consts";
+import {
+  createAvailableCaseLawDecisionSlug,
+  createCaseLawDecisionSlug,
+} from "@/api/handlers/case-law/decisions/slug";
 import { isDocumentAst } from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
@@ -30,6 +34,7 @@ import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import { errorTag } from "@/api/lib/errors/utils";
+import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import { getS3 } from "@/api/lib/s3";
 import { isRecord } from "@/api/lib/type-guards";
@@ -369,11 +374,23 @@ export const processDecision = async (
       return;
     }
 
+    const baseSlug = createCaseLawDecisionSlug(result.caseNumber);
+    const existingSlugRows = await tx
+      .select({ slug: caseLawDecisions.slug })
+      .from(caseLawDecisions)
+      .where(like(caseLawDecisions.slug, `${baseSlug}%`))
+      .limit(LIMITS.caseLawSlugCollisionScanLimit);
+    const slug = createAvailableCaseLawDecisionSlug(
+      baseSlug,
+      existingSlugRows.map((row) => row.slug),
+    );
+
     const [decisionRow] = await tx
       .insert(caseLawDecisions)
       .values({
         sourceId,
         caseNumber: result.caseNumber,
+        slug,
         ecli: result.ecli,
         court: result.court,
         country: result.country,

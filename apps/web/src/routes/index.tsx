@@ -1,12 +1,16 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
+import { loadAuthContext } from "@/routes/-auth-context";
+
 export const Route = createFileRoute("/")({
-  beforeLoad: ({ context }) => {
-    if (!context.session) {
-      throw redirect({ to: "/auth", replace: true });
+  beforeLoad: async ({ context }) => {
+    const authContext = await loadAuthContext(context.queryClient);
+
+    if (!authContext.session) {
+      throw redirect({ to: "/law/cases", replace: true });
     }
 
-    if (!context.session.activeOrganizationId) {
+    if (!authContext.session.activeOrganizationId) {
       throw redirect({
         to: "/auth/organization",
         replace: true,

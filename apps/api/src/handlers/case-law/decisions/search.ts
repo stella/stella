@@ -2,9 +2,9 @@ import { sql } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
 import { courtWeightSql } from "@/api/handlers/case-law/citation-score";
 import { bodyPreviewJoin } from "@/api/handlers/case-law/decisions/search-sql";
+import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 import {
@@ -12,8 +12,25 @@ import {
   TS_HEADLINE_CONFIG,
 } from "@/api/lib/search/highlight";
 
-const toNullableString = (x: unknown): string | null =>
-  x === null ? null : JSON.stringify(x);
+const toNullableString = (x: unknown): string | null => {
+  if (x === null || x === undefined) {
+    return null;
+  }
+
+  if (typeof x === "string") {
+    return x;
+  }
+
+  if (typeof x === "number" || typeof x === "boolean") {
+    return x.toString();
+  }
+
+  if (x instanceof Date) {
+    return x.toISOString();
+  }
+
+  return JSON.stringify(x);
+};
 
 const headlineRegconfig = sql`
   'public.stella_unaccent'::regconfig
@@ -44,7 +61,7 @@ type SearchDecisionsBody = Static<typeof searchDecisionsBodySchema>;
 
 export const searchDecisionsHandler = async (
   body: SearchDecisionsBody,
-  scopedDb: ScopedDb,
+  caseLawDb: CaseLawPublicReadDb,
 ) => {
   const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
   const tsQuery = sql`plainto_tsquery('simple', unaccent(${body.query}))`;
@@ -126,6 +143,7 @@ export const searchDecisionsHandler = async (
     SELECT
       sd.decision_id,
       d.case_number,
+      d.slug,
       d.ecli,
       d.court,
       d.country,
@@ -225,11 +243,13 @@ export const searchDecisionsHandler = async (
   // Skip expensive COUNT(*) and facet queries on paginated
   // requests; these values don't change between pages.
   const queries: Promise<RawRows>[] = [
-    scopedDb((tx) => tx.execute(hitsQuery)),
-    parsedCursor ? emptyRows : scopedDb((tx) => tx.execute(countQuery)),
-    parsedCursor ? emptyRows : scopedDb((tx) => tx.execute(courtFacetQuery)),
-    parsedCursor ? emptyRows : scopedDb((tx) => tx.execute(countryFacetQuery)),
-    parsedCursor ? emptyRows : scopedDb((tx) => tx.execute(languageFacetQuery)),
+    caseLawDb((tx) => tx.execute(hitsQuery)),
+    parsedCursor ? emptyRows : caseLawDb((tx) => tx.execute(countQuery)),
+    parsedCursor ? emptyRows : caseLawDb((tx) => tx.execute(courtFacetQuery)),
+    parsedCursor ? emptyRows : caseLawDb((tx) => tx.execute(countryFacetQuery)),
+    parsedCursor
+      ? emptyRows
+      : caseLawDb((tx) => tx.execute(languageFacetQuery)),
   ];
 
   const [
@@ -258,6 +278,7 @@ export const searchDecisionsHandler = async (
   const hits = resultRows.map((row) => ({
     decisionId: String(row["decision_id"]),
     caseNumber: String(row["case_number"]),
+    slug: toNullableString(row["slug"]),
     ecli: toNullableString(row["ecli"]),
     court: String(row["court"]),
     country: String(row["country"]),
@@ -267,7 +288,7 @@ export const searchDecisionsHandler = async (
     sourceUrl: toNullableString(row["source_url"]),
     // oxlint-disable-next-line typescript/strict-boolean-expressions -- row.headline from DB (any)
     headline: row["headline"]
-      ? escapeAndHighlight(JSON.stringify(row["headline"]))
+      ? escapeAndHighlight(toNullableString(row["headline"]) ?? "")
       : null,
     citationCount: Number(row["citation_count"]) || 0,
     createdAt:

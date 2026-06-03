@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getRouteApi, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import {
   FileTextIcon,
   LayersIcon,
@@ -30,6 +30,7 @@ import { useRailContextMenu } from "@/components/inspector/use-rail-context-menu
 import { useTabContextMenu } from "@/components/inspector/use-tab-context-menu";
 import { getInspectorView } from "@/components/inspector/view-registry";
 import Tooltip from "@/components/tooltip";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import {
   SIDE_RAIL_CONTAINER_CLASS,
   SIDE_RAIL_ICON_BUTTON_SIZE,
@@ -273,8 +274,6 @@ type VerticalTabProps = {
   onClose: () => void;
 };
 
-const protectedRouteApi = getRouteApi("/_protected");
-
 const VerticalTab = ({
   tab,
   active,
@@ -285,9 +284,7 @@ const VerticalTab = ({
   const tabRef = useRef<HTMLButtonElement>(null);
   const tabNavigate = useNavigate();
   const tabQueryClient = useQueryClient();
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const externalConnectorSlug =
     tab.type === "external" ? tab.connectorSlug : undefined;
   const storedExternalIconHref =

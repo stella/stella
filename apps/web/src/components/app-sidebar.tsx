@@ -14,13 +14,11 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, Link, useMatch } from "@tanstack/react-router";
 import {
-  BookOpenIcon,
   ChevronsUpDownIcon,
   EllipsisVerticalIcon,
   GlobeIcon,
   LayersIcon,
   LogOutIcon,
-  MessageSquareIcon,
   MonitorIcon,
   MoonIcon,
   PanelLeftIcon,
@@ -81,6 +79,10 @@ import {
 } from "@/components/sidebar";
 import { StellaWordmark } from "@/components/stella-wordmark";
 import { PALETTES, THEMES, useTheme } from "@/components/theme-provider";
+import {
+  WORKSPACE_PRIMARY_NAV_ITEMS,
+  type WorkspacePrimaryNavId,
+} from "@/components/workspace-primary-nav";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useSignOut } from "@/hooks/use-sign-out";
@@ -757,14 +759,8 @@ export function AppSidebar(props: AppSidebarProps) {
     void navigate({ to: "/chat" });
   };
 
-  const fixedNavTargets: [
-    /* 1: search */ FixedNavTarget,
-    /* 2: chat */ FixedNavTarget,
-    /* 3: workspaces */ FixedNavTarget,
-    /* 4: knowledge */ FixedNavTarget,
-    /* 5: contacts */ FixedNavTarget,
-  ] = [
-    {
+  const fixedNavTargetsById = {
+    search: {
       action: () => setSearchOpen(true),
       contextMenu: {
         primaryAction: {
@@ -774,7 +770,7 @@ export function AppSidebar(props: AppSidebarProps) {
         },
       },
     },
-    {
+    chat: {
       action: openChat,
       contextMenu: {
         primaryAction: {
@@ -784,7 +780,7 @@ export function AppSidebar(props: AppSidebarProps) {
         },
       },
     },
-    {
+    matters: {
       action: () => {
         void navigate({ to: "/workspaces" });
       },
@@ -797,7 +793,13 @@ export function AppSidebar(props: AppSidebarProps) {
         recents: recents.slice(0, 3).map(recentMatterAction),
       },
     },
-    {
+    caseLaw: {
+      action: () => {
+        void navigate({ to: "/law/cases" });
+      },
+      contextMenu: {},
+    },
+    knowledge: {
       action: () => {
         void navigate({ to: "/knowledge" });
       },
@@ -821,7 +823,7 @@ export function AppSidebar(props: AppSidebarProps) {
         }),
       },
     },
-    {
+    contacts: {
       action: () => {
         void navigate({ to: "/contacts" });
       },
@@ -835,7 +837,11 @@ export function AppSidebar(props: AppSidebarProps) {
         },
       },
     },
-  ];
+  } satisfies Record<WorkspacePrimaryNavId, FixedNavTarget>;
+
+  const fixedNavTargets = WORKSPACE_PRIMARY_NAV_ITEMS.map(
+    (item) => fixedNavTargetsById[item.id],
+  );
 
   const navTargets: NavTarget[] = [
     ...fixedNavTargets,
@@ -922,86 +928,64 @@ export function AppSidebar(props: AppSidebarProps) {
         {/* Top navigation */}
         <SidebarGroup>
           <SidebarMenu>
-            <NavContextMenu config={fixedNavTargets[0].contextMenu}>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={() => setSearchOpen(true)}
-                  tooltip={t("navigation.search")}
-                >
-                  <SearchIcon />
-                  <span>{t("navigation.search")}</span>
-                </SidebarMenuButton>
-                {showNavBadges ? (
-                  <NavBadge digit={1} />
-                ) : (
-                  <SidebarMenuBadge>
-                    <kbd className="text-muted-foreground text-[0.625rem]">
-                      {formatForDisplay(HOTKEYS.SEARCH)}
-                    </kbd>
-                  </SidebarMenuBadge>
-                )}
-              </SidebarMenuItem>
-            </NavContextMenu>
-            <NavContextMenu config={fixedNavTargets[1].contextMenu}>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip={t("navigation.chat")}>
-                  <Link activeProps={{ "data-active": true }} to="/chat">
-                    <MessageSquareIcon />
-                    <span>{t("navigation.chat")}</span>
-                  </Link>
-                </SidebarMenuButton>
-                {showNavBadges && <NavBadge digit={2} />}
-              </SidebarMenuItem>
-            </NavContextMenu>
-            <NavContextMenu config={fixedNavTargets[2].contextMenu}>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip={t("common.matters")}>
-                  <Link activeProps={{ "data-active": true }} to="/workspaces">
-                    <LayersIcon />
-                    <span>{t("common.matters")}</span>
-                  </Link>
-                </SidebarMenuButton>
-                {(() => {
-                  if (showNavBadges) {
-                    return <NavBadge digit={3} />;
-                  }
-                  if (canCreateMatter) {
-                    return (
-                      <SidebarMenuAction
-                        onClick={handleCreateWorkspace}
-                        showOnHover
-                        title={t("navigation.newMatter")}
+            {WORKSPACE_PRIMARY_NAV_ITEMS.map((item, index) => {
+              const Icon = item.icon;
+              const label = t(item.labelKey);
+              const navTarget = fixedNavTargetsById[item.id];
+              const digit = index + 1;
+
+              return (
+                <NavContextMenu config={navTarget.contextMenu} key={item.id}>
+                  <SidebarMenuItem>
+                    {item.kind === "action" ? (
+                      <SidebarMenuButton
+                        onClick={navTarget.action}
+                        tooltip={label}
                       >
-                        <PlusIcon />
-                      </SidebarMenuAction>
-                    );
-                  }
-                  return null;
-                })()}
-              </SidebarMenuItem>
-            </NavContextMenu>
-            <NavContextMenu config={fixedNavTargets[3].contextMenu}>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip={t("navigation.knowledge")}>
-                  <Link activeProps={{ "data-active": true }} to="/knowledge">
-                    <BookOpenIcon />
-                    <span>{t("navigation.knowledge")}</span>
-                  </Link>
-                </SidebarMenuButton>
-                {showNavBadges && <NavBadge digit={4} />}
-              </SidebarMenuItem>
-            </NavContextMenu>
-            <NavContextMenu config={fixedNavTargets[4].contextMenu}>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip={t("navigation.contacts")}>
-                  <Link activeProps={{ "data-active": true }} to="/contacts">
-                    <UsersIcon />
-                    <span>{t("navigation.contacts")}</span>
-                  </Link>
-                </SidebarMenuButton>
-                {showNavBadges && <NavBadge digit={5} />}
-              </SidebarMenuItem>
-            </NavContextMenu>
+                        <Icon />
+                        <span>{label}</span>
+                      </SidebarMenuButton>
+                    ) : (
+                      <SidebarMenuButton asChild tooltip={label}>
+                        <Link
+                          activeProps={{ "data-active": true }}
+                          to={item.to}
+                        >
+                          <Icon />
+                          <span>{label}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    )}
+                    {(() => {
+                      if (showNavBadges) {
+                        return <NavBadge digit={digit} />;
+                      }
+                      if (item.id === "search") {
+                        return (
+                          <SidebarMenuBadge>
+                            <kbd className="text-muted-foreground text-[0.625rem]">
+                              {formatForDisplay(HOTKEYS.SEARCH)}
+                            </kbd>
+                          </SidebarMenuBadge>
+                        );
+                      }
+                      if (item.id === "matters" && canCreateMatter) {
+                        return (
+                          <SidebarMenuAction
+                            onClick={handleCreateWorkspace}
+                            showOnHover
+                            title={t("navigation.newMatter")}
+                          >
+                            <PlusIcon />
+                          </SidebarMenuAction>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </SidebarMenuItem>
+                </NavContextMenu>
+              );
+            })}
           </SidebarMenu>
         </SidebarGroup>
 
@@ -1022,7 +1006,11 @@ export function AppSidebar(props: AppSidebarProps) {
                     <MatterItem
                       isPinned
                       key={ws.id}
-                      navBadge={showNavBadges && i < 3 ? 6 + i : undefined}
+                      navBadge={
+                        showNavBadges && i < 3
+                          ? WORKSPACE_PRIMARY_NAV_ITEMS.length + 1 + i
+                          : undefined
+                      }
                       onDelete={handleDeleteWorkspace}
                       onReorder={reorderPinned}
                       onTogglePin={togglePin}

@@ -14,6 +14,7 @@
     }
   },
   "ai": {
+    "analyzeWithAI": "Mit KI analysieren",
     "editWithAI": "Mit KI bearbeiten",
     "keyRequired": {
       "cta": "AI-Einstellungen öffnen",
@@ -272,6 +273,12 @@
       "header": "Kopfzeile",
       "ruling": "Tenor",
       "unknown": "Sonstiges"
+    },
+    "seo": {
+      "browse": "Browse case law",
+      "countries": "Countries",
+      "courts": "Courts",
+      "years": "Years"
     },
     "sources": {
       "empty": "Keine Quellen konfiguriert.",

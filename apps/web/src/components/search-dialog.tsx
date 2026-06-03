@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { UseMutationResult } from "@tanstack/react-query";
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
-import { useNavigate, useRouteContext } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   FileTextIcon,
@@ -44,6 +44,8 @@ import { UserAvatar } from "@/components/user-avatar";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { createCaseLawDecisionRouteParams } from "@/lib/case-law-route";
 import { toAPIError } from "@/lib/errors";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { toSafeId } from "@/lib/safe-id";
@@ -245,20 +247,13 @@ export const SearchDialog = ({
   const t = useTranslations();
   const locale = useLocale();
   const navigate = useNavigate();
-  const searchRecentsUserId = useRouteContext({
-    from: "/_protected",
-    select: (ctx) => ctx.user.id,
-  });
-  const searchRecentsOrganizationId = useRouteContext({
-    from: "/_protected",
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const user = useAuthenticatedUser();
   const searchRecentsScope = useMemo(
     (): SearchRecentsScope => ({
-      organizationId: searchRecentsOrganizationId,
-      userId: searchRecentsUserId,
+      organizationId: user.activeOrganizationId,
+      userId: user.id,
     }),
-    [searchRecentsOrganizationId, searchRecentsUserId],
+    [user.activeOrganizationId, user.id],
   );
   const [resultsElement, setResultsElement] = useState<HTMLDivElement | null>(
     null,
@@ -667,9 +662,18 @@ export const SearchDialog = ({
     }
 
     if (hit.type === "case-law") {
+      const slug =
+        "slug" in hit && typeof hit.slug === "string" ? hit.slug : null;
       await navigate({
-        to: "/knowledge/case/$decisionId",
-        params: { decisionId: hit.decisionId },
+        to: "/law/$country/cases/$court/$date/$slug",
+        params: createCaseLawDecisionRouteParams({
+          caseNumber: hit.caseNumber,
+          country: hit.country,
+          court: hit.court,
+          decisionDate: hit.decisionDate,
+          decisionId: hit.decisionId,
+          slug,
+        }),
         search: {
           ...(hit.headline && {
             q: extractHighlightedText(hit.headline),
