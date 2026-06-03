@@ -18,42 +18,38 @@ const toFacetBuckets = (rows: readonly FacetBucket[]): FacetBucket[] =>
 export const listDecisionFacetsHandler = async (
   caseLawDb: CaseLawPublicReadDb,
 ) => {
-  const [countryRows, courtRows, yearRows] = await Promise.all([
-    caseLawDb((tx) =>
-      tx
-        .select({
-          value: caseLawDecisions.country,
-          count: sql<number>`count(*)::int`,
-        })
-        .from(caseLawDecisions)
-        .groupBy(caseLawDecisions.country)
-        .orderBy(desc(sql`count(*)`), desc(caseLawDecisions.country))
-        .limit(LIMITS.caseLawFacetLimit),
-    ),
-    caseLawDb((tx) =>
-      tx
-        .select({
-          value: caseLawDecisions.court,
-          count: sql<number>`count(*)::int`,
-        })
-        .from(caseLawDecisions)
-        .groupBy(caseLawDecisions.court)
-        .orderBy(desc(sql`count(*)`), desc(caseLawDecisions.court))
-        .limit(LIMITS.caseLawFacetLimit),
-    ),
-    caseLawDb((tx) =>
-      tx
-        .select({
-          value: sql<string>`to_char(${caseLawDecisions.decisionDate}, 'YYYY')`,
-          count: sql<number>`count(*)::int`,
-        })
-        .from(caseLawDecisions)
-        .where(isNotNull(caseLawDecisions.decisionDate))
-        .groupBy(sql`to_char(${caseLawDecisions.decisionDate}, 'YYYY')`)
-        .orderBy(desc(sql`to_char(${caseLawDecisions.decisionDate}, 'YYYY')`))
-        .limit(LIMITS.caseLawFacetLimit),
-    ),
-  ]);
+  const [countryRows, courtRows, yearRows] = await caseLawDb(async (tx) => {
+    const countries = await tx
+      .select({
+        value: caseLawDecisions.country,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(caseLawDecisions)
+      .groupBy(caseLawDecisions.country)
+      .orderBy(desc(sql`count(*)`), desc(caseLawDecisions.country))
+      .limit(LIMITS.caseLawFacetLimit);
+    const courts = await tx
+      .select({
+        value: caseLawDecisions.court,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(caseLawDecisions)
+      .groupBy(caseLawDecisions.court)
+      .orderBy(desc(sql`count(*)`), desc(caseLawDecisions.court))
+      .limit(LIMITS.caseLawFacetLimit);
+    const years = await tx
+      .select({
+        value: sql<string>`to_char(${caseLawDecisions.decisionDate}, 'YYYY')`,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(caseLawDecisions)
+      .where(isNotNull(caseLawDecisions.decisionDate))
+      .groupBy(sql`to_char(${caseLawDecisions.decisionDate}, 'YYYY')`)
+      .orderBy(desc(sql`to_char(${caseLawDecisions.decisionDate}, 'YYYY')`))
+      .limit(LIMITS.caseLawFacetLimit);
+
+    return [countries, courts, years] as const;
+  });
 
   return {
     country: toFacetBuckets(countryRows),

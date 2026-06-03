@@ -15,6 +15,8 @@ import type Messages from "@/i18n/langs/messages.gen";
 import { AnalyticsProvider } from "@/lib/analytics/provider";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
 
+const I18N_TIME_ZONE = "UTC";
+
 const I18nProvider = ({ children }: PropsWithChildren) => {
   const locale = useI18nStore((s) => s.loadedLang);
   const messages = useI18nStore((s) => s.messages);
@@ -38,7 +40,7 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
       // translated locale JSONs necessarily contain different strings.
       // eslint-disable-next-line typescript/no-unsafe-type-assertion
       messages={messages as Messages}
-      timeZone={Intl.DateTimeFormat().resolvedOptions().timeZone}
+      timeZone={I18N_TIME_ZONE}
     >
       {children}
     </IntlProvider>

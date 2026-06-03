@@ -80,6 +80,7 @@ jobs:
             pkg:npm/@stll/docx-core,
             pkg:npm/@stll/errors,
             pkg:npm/@t3-oss/env-core,
+            pkg:npm/@tanstack/react-start,
             pkg:npm/better-result,
             pkg:npm/client-zip,
             pkg:npm/crossws,

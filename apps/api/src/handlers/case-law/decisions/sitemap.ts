@@ -53,6 +53,10 @@ type SitemapDecisionAlternate = {
   updatedAt: Date;
 };
 
+type SitemapDecisionRow = SitemapDecisionAlternate & {
+  languageGroupKey: string | null;
+};
+
 const decisionYearSql = sql<string>`COALESCE(to_char(${caseLawDecisions.decisionDate}, 'YYYY'), ${SITEMAP_UNDATED_YEAR})`;
 const decisionMonthSql = sql<string>`COALESCE(to_char(${caseLawDecisions.decisionDate}, 'MM'), ${SITEMAP_UNDATED_MONTH})`;
 const decisionBucketSql = sql<string>`lpad(mod(hashtext(${caseLawDecisions.id}::text)::bigint + 2147483648, ${SITEMAP_SHARD_BUCKET_COUNT})::text, ${SITEMAP_SHARD_BUCKET_WIDTH}, '0')`;
@@ -133,8 +137,8 @@ const getShardConditions = ({
 export const listSitemapShardsHandler = async (
   caseLawDb: CaseLawPublicReadDb,
 ) => {
-  const naturalShards = await caseLawDb((tx) =>
-    tx
+  const { naturalShards, bucketShardRows } = await caseLawDb(async (tx) => {
+    const natural = await tx
       .select({
         country: caseLawDecisions.country,
         year: decisionYearSql,
@@ -148,14 +152,12 @@ export const listSitemapShardsHandler = async (
         asc(caseLawDecisions.country),
         desc(decisionYearSql),
         desc(decisionMonthSql),
-      ),
-  );
-  const needsBucketShards = (naturalShards as NaturalShardRow[]).some(
-    (shard) => shard.total > LIMITS.caseLawSitemapShardUrlLimit,
-  );
-  const bucketShardRows = needsBucketShards
-    ? await caseLawDb((tx) =>
-        tx
+      );
+    const needsBucketShards = natural.some(
+      (shard) => shard.total > LIMITS.caseLawSitemapShardUrlLimit,
+    );
+    const buckets = needsBucketShards
+      ? await tx
           .select({
             country: caseLawDecisions.country,
             year: decisionYearSql,
@@ -176,11 +178,13 @@ export const listSitemapShardsHandler = async (
             desc(decisionYearSql),
             desc(decisionMonthSql),
             asc(decisionBucketSql),
-          ),
-      )
-    : [];
+          )
+      : [];
+
+    return { naturalShards: natural, bucketShardRows: buckets };
+  });
   const bucketRowsByNaturalShard = new Map<string, BucketShardRow[]>();
-  for (const bucketShard of bucketShardRows as BucketShardRow[]) {
+  for (const bucketShard of bucketShardRows) {
     const shardKey = createNaturalShardKey(bucketShard);
     const bucketRows = bucketRowsByNaturalShard.get(shardKey) ?? [];
     bucketRows.push(bucketShard);
@@ -195,7 +199,7 @@ export const listSitemapShardsHandler = async (
     year: string;
   }[] = [];
 
-  for (const shard of naturalShards as NaturalShardRow[]) {
+  for (const shard of naturalShards) {
     const bucketCount = getBucketCountForNaturalShard(shard.total);
     if (bucketCount === 1) {
       items.push({
@@ -255,8 +259,8 @@ export const listSitemapShardDecisionsHandler = async (
     return status(400, { message: "Invalid sitemap shard" });
   }
 
-  const rows = await caseLawDb((tx) =>
-    tx
+  const queryResult = await caseLawDb(async (tx) => {
+    const rows = await tx
       .select({
         id: caseLawDecisions.id,
         caseNumber: caseLawDecisions.caseNumber,
@@ -271,29 +275,25 @@ export const listSitemapShardDecisionsHandler = async (
       .from(caseLawDecisions)
       .where(and(...conditions))
       .orderBy(desc(caseLawDecisions.updatedAt), desc(caseLawDecisions.id))
-      .limit(LIMITS.caseLawSitemapShardUrlLimit + 1),
-  );
+      .limit(LIMITS.caseLawSitemapShardUrlLimit + 1);
 
-  if (rows.length > LIMITS.caseLawSitemapShardUrlLimit) {
-    return status(500, {
-      message: "Case-law sitemap shard exceeds sitemap URL capacity.",
-    });
-  }
+    if (rows.length > LIMITS.caseLawSitemapShardUrlLimit) {
+      return { type: "capacityExceeded" as const };
+    }
 
-  const languageGroupKeys = [
-    ...new Set(
-      rows
-        .map((row) => row.languageGroupKey)
-        .filter((value): value is string => value !== null),
-    ),
-  ];
-  const alternateRows = [];
-  for (const groupKeyBatch of chunkArray(
-    languageGroupKeys,
-    SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE,
-  )) {
-    const batchRows = await caseLawDb((tx) =>
-      tx
+    const languageGroupKeys = [
+      ...new Set(
+        rows
+          .map((row) => row.languageGroupKey)
+          .filter((value): value is string => value !== null),
+      ),
+    ];
+    const alternateRows: SitemapDecisionRow[] = [];
+    for (const groupKeyBatch of chunkArray(
+      languageGroupKeys,
+      SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE,
+    )) {
+      const batchRows = await tx
         .select({
           id: caseLawDecisions.id,
           caseNumber: caseLawDecisions.caseNumber,
@@ -307,10 +307,20 @@ export const listSitemapShardDecisionsHandler = async (
         })
         .from(caseLawDecisions)
         .where(inArray(caseLawDecisions.languageGroupKey, groupKeyBatch))
-        .orderBy(asc(caseLawDecisions.language), asc(caseLawDecisions.id)),
-    );
-    alternateRows.push(...batchRows);
+        .orderBy(asc(caseLawDecisions.language), asc(caseLawDecisions.id));
+      alternateRows.push(...batchRows);
+    }
+
+    return { type: "rows" as const, rows, alternateRows };
+  });
+
+  if (queryResult.type === "capacityExceeded") {
+    return status(500, {
+      message: "Case-law sitemap shard exceeds sitemap URL capacity.",
+    });
   }
+
+  const { alternateRows, rows } = queryResult;
   const alternatesByGroupKey = new Map<string, SitemapDecisionAlternate[]>();
   for (const alternate of alternateRows) {
     if (alternate.languageGroupKey === null) {
