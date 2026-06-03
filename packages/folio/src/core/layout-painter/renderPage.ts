@@ -1629,9 +1629,14 @@ export function renderPage(
     pageEl.append(pageBorderEl);
   }
   if (options.watermark) {
-    const watermarkEl = renderWatermarkLayer(options.watermark, page, doc, {
-      imageSrc: options.watermarkImageSrc,
-    });
+    const watermarkEl = renderWatermarkLayer(
+      options.watermark,
+      page,
+      doc,
+      options.watermarkImageSrc !== undefined
+        ? { imageSrc: options.watermarkImageSrc }
+        : {},
+    );
     if (watermarkEl) {
       pageEl.append(watermarkEl);
     }
