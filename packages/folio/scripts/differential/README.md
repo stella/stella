@@ -90,6 +90,18 @@ Both projectors emit the same normalised JSON shape (see
   `childCount`) so it matches the python projector's one-entry-per-
   `w:sdt` view; otherwise every bookmarked or comment-marked control
   would diverge on `sdts` length for an uninteresting reason.
+- **Complex field runs are collapsed.** folio represents a `w:fldChar`
+  begin/separate/end span (plus its `w:instrText` and result runs) as a
+  single `complexField` `ParagraphContent` item, so an inline SDT
+  containing a PAGE / REF / etc. field reports `childCount: 1` for the
+  whole field. The python projector applies the same collapse rule when
+  computing `childCount` for inline SDTs: every `w:r` from a `begin`
+  fldChar through the matching `end` fldChar counts as one logical
+  child. Nested complex fields (e.g. PAGEREF inside a TOC entry) are
+  tracked with a depth counter so an inner pair does not close the outer
+  span early. Without this rule any fixture with a complex field inside
+  an inline content control would diverge on `childCount` even when
+  folio's parse is structurally correct.
 - **Textbox content.** folio models drawing-anchored paragraphs and
   tables as run-level shape content, not block content. The python
   projector excludes paragraphs/tables/SDTs inside `w:txbxContent` to

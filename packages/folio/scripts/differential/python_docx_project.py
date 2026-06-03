@@ -125,6 +125,51 @@ def text_attr(elem: Any, tag: str, attr: str = "w:val") -> str | None:
     return child.get(qn(attr))
 
 
+RUN_TAG = qn("w:r")
+FLD_CHAR_TAG = qn("w:fldChar")
+FLD_CHAR_TYPE_ATTR = qn("w:fldCharType")
+
+
+def run_field_char_type(run_elem: Any) -> str | None:
+    """Return the fldCharType of the first w:fldChar inside this w:r, or None."""
+    fld_char = run_elem.find(FLD_CHAR_TAG)
+    if fld_char is None:
+        return None
+    return fld_char.get(FLD_CHAR_TYPE_ATTR)
+
+
+def count_inline_children(sdt_content: Any) -> int:
+    """Count direct inline children, collapsing complex fields to one item.
+
+    A complex field is a `begin` fldChar w:r through the matching `end`
+    fldChar w:r (with separator and result runs in between). Folio models
+    the whole span as a single `complexField` `ParagraphContent` item, so
+    we match that by counting the entire span as 1. Nested complex fields
+    are common (e.g. PAGEREF inside a TOC entry) and tracked with a depth
+    counter.
+    """
+    count = 0
+    field_depth = 0
+    for child in sdt_content:
+        if child.tag != RUN_TAG:
+            if field_depth == 0 and child.tag in INLINE_TAGS:
+                count += 1
+            continue
+        char_type = run_field_char_type(child)
+        if char_type == "begin":
+            if field_depth == 0:
+                count += 1
+            field_depth += 1
+            continue
+        if char_type == "end":
+            if field_depth > 0:
+                field_depth -= 1
+            continue
+        if field_depth == 0:
+            count += 1
+    return count
+
+
 def project_sdt(sdt_elem: Any) -> dict[str, Any]:
     """Project one w:sdt element into the normalised shape.
 
@@ -166,7 +211,19 @@ def project_sdt(sdt_elem: Any) -> dict[str, Any]:
     else:
         # Direct inline children: runs, hyperlinks, fields, nested SDTs,
         # math. Match the union in InlineSdt.content in content.ts.
-        child_count = sum(1 for child in sdt_content if child.tag in INLINE_TAGS)
+        #
+        # Complex fields span multiple direct `w:r` children
+        # (`fldChar begin` … `instrText` … `fldChar separate` … result …
+        # `fldChar end`), but folio collapses them into a single
+        # `complexField` `ParagraphContent` item — see `ComplexField` in
+        # `docx-core/src/model/content.ts` and the inline-SDT parser test
+        # at `paragraphParser.test.ts:337`. To keep `childCount` aligned
+        # we collapse the same range here: every `w:r` from a `begin`
+        # fldChar up to and including the matching `end` fldChar counts
+        # as one logical item. Nested complex fields are tracked with a
+        # depth counter so an inner `begin`/`end` pair doesn't close the
+        # outer field early.
+        child_count = count_inline_children(sdt_content)
 
     out: dict[str, Any] = {
         "scope": scope,
