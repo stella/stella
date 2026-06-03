@@ -257,6 +257,7 @@ function buildTypeFragment(
     fullDate: string;
     dateFormat: string | undefined;
     listItems: [string, string][];
+    dropdownLastValue: string | undefined;
   },
 ): TypeFragmentSpec {
   const w = prefixes.w;
@@ -309,6 +310,10 @@ function buildTypeFragment(
   }
   // dropdown / comboBox.
   const tag = kind === "dropdown" ? "dropDownList" : "comboBox";
+  const lastValueAttr =
+    rng.dropdownLastValue !== undefined
+      ? ` ${w}:lastValue="${rng.dropdownLastValue}"`
+      : "";
   const items = rng.listItems
     .map(
       ([dt, val]) =>
@@ -322,10 +327,13 @@ function buildTypeFragment(
     value: val,
   }));
   return {
-    body: `<${w}:${tag}>${items}</${w}:${tag}>`,
+    body: `<${w}:${tag}${lastValueAttr}>${items}</${w}:${tag}>`,
     expected: {
       sdtType: kind === "dropdown" ? "dropdown" : "comboBox",
       listItems: expectedItems,
+      ...(rng.dropdownLastValue !== undefined
+        ? { dropdownLastValue: rng.dropdownLastValue }
+        : {}),
     },
   };
 }
@@ -359,6 +367,7 @@ const arbSdtSpec: fc.Arbitrary<SdtSpec> = fc
     fullDate: arbDateFullDate,
     dateFormat: fc.option(arbDateFormat, { nil: undefined }),
     listItems: arbListItems,
+    dropdownLastValue: fc.option(arbSafeAttrValue, { nil: undefined }),
     includeSdtEndPr: fc.boolean(),
   })
   .map((spec) => buildSpec(spec, spec.prefixes));
@@ -384,6 +393,7 @@ function buildSpec(
     fullDate: string;
     dateFormat: string | undefined;
     listItems: [string, string][];
+    dropdownLastValue: string | undefined;
     includeSdtEndPr: boolean;
   },
   prefixes: PrefixMap,
@@ -407,6 +417,7 @@ function buildSpec(
     fullDate: spec.fullDate,
     dateFormat: spec.dateFormat,
     listItems: spec.listItems,
+    dropdownLastValue: spec.dropdownLastValue,
   });
 
   const body = joinFragments([
@@ -569,6 +580,7 @@ function rebuildUnderPrefixes(spec: SdtSpec, prefixes: PrefixMap): SdtSpec {
     { from: "w", to: prefixes.w },
   ];
   let next = spec.sdtPrXml;
+  let nextEnd = spec.sdtEndPrXml;
   for (const { from, to } of remap) {
     if (from === to) {
       continue;
@@ -582,11 +594,18 @@ function rebuildUnderPrefixes(spec: SdtSpec, prefixes: PrefixMap): SdtSpec {
       .replaceAll(reClose, `</${to}:`)
       .replaceAll(reAttr, ` ${to}:`)
       .replaceAll(reXmlns, `xmlns:${to}=`);
+    if (nextEnd) {
+      nextEnd = nextEnd
+        .replaceAll(reOpen, `<${to}:`)
+        .replaceAll(reClose, `</${to}:`)
+        .replaceAll(reAttr, ` ${to}:`)
+        .replaceAll(reXmlns, `xmlns:${to}=`);
+    }
   }
   return {
     prefixes,
     sdtPrXml: next,
-    sdtEndPrXml: spec.sdtEndPrXml,
+    sdtEndPrXml: nextEnd,
     expected: spec.expected,
   };
 }
