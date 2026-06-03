@@ -30,8 +30,12 @@ export const SdtExtension = createNodeExtension({
       showingPlaceholder: { default: false },
       /** Date format for date controls */
       dateFormat: { default: null },
+      /** ISO 8601 bound date value (`w:date@w:fullDate`). */
+      dateValueISO: { default: null },
       /** Dropdown/combobox list items as JSON string */
       listItems: { default: null },
+      /** Selected dropdown / comboBox value (`w:dropDownList@w:lastValue`). */
+      dropdownLastValue: { default: null },
       /** Checkbox checked state */
       checked: { default: null },
     },
@@ -51,7 +55,9 @@ export const SdtExtension = createNodeExtension({
             placeholder: el.dataset["placeholder"] || null,
             showingPlaceholder: el.dataset["showingPlaceholder"] === "true",
             dateFormat: el.dataset["dateFormat"] || null,
+            dateValueISO: el.dataset["dateValueIso"] || null,
             listItems: el.dataset["listItems"] || null,
+            dropdownLastValue: el.dataset["dropdownLastValue"] || null,
             checked: (() => {
               if (el.dataset["checked"] === "true") {
                 return true;
@@ -90,8 +96,14 @@ export const SdtExtension = createNodeExtension({
       if (attrs.dateFormat) {
         dataAttrs["data-date-format"] = attrs.dateFormat;
       }
+      if (attrs.dateValueISO) {
+        dataAttrs["data-date-value-iso"] = attrs.dateValueISO;
+      }
       if (attrs.listItems) {
         dataAttrs["data-list-items"] = attrs.listItems;
+      }
+      if (attrs.dropdownLastValue) {
+        dataAttrs["data-dropdown-last-value"] = attrs.dropdownLastValue;
       }
       if (attrs.checked !== undefined) {
         dataAttrs["data-checked"] = String(attrs.checked);

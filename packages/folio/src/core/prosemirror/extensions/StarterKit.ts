@@ -17,8 +17,10 @@ import { TextExtension } from "./core/TextExtension";
 import { BaseKeymapExtension } from "./features/BaseKeymapExtension";
 // oxlint-disable-next-line import/no-cycle
 import { BidiShortcutExtension } from "./features/BidiShortcutExtension";
+import { ContentControlWidgetsExtension } from "./features/ContentControlWidgetsExtension";
 import { DropCursorExtension } from "./features/DropCursorExtension";
 import { EmptyParagraphFormatExtension } from "./features/EmptyParagraphFormatExtension";
+import { GapCursorExtension } from "./features/GapCursorExtension";
 import { ImageDragExtension } from "./features/ImageDragExtension";
 import { ImagePasteExtension } from "./features/ImagePasteExtension";
 // Features
@@ -59,6 +61,7 @@ import {
   DeletionExtension,
 } from "./marks/TrackedChangeExtensions";
 import { UnderlineExtension } from "./marks/UnderlineExtension";
+import { BlockSdtExtension } from "./nodes/BlockSdtExtension";
 import { FieldExtension } from "./nodes/FieldExtension";
 // Nodes
 import { HardBreakExtension } from "./nodes/HardBreakExtension";
@@ -156,10 +159,12 @@ export function createStarterKit(
   add("imageDrag", ImageDragExtension());
   add("imagePaste", ImagePasteExtension());
   add("dropCursor", DropCursorExtension());
+  add("gapCursor", GapCursorExtension());
   add("horizontalRule", HorizontalRuleExtension());
   add("pageBreak", PageBreakExtension());
   add("field", FieldExtension());
   add("sdt", SdtExtension());
+  add("blockSdt", BlockSdtExtension());
   add("math", MathExtension());
 
   // Table (5 extensions grouped)
@@ -187,6 +192,7 @@ export function createStarterKit(
   add("paraIdAllocator", ParaIdAllocatorExtension());
   add("paragraphChangeTracker", ParagraphChangeTrackerExtension());
   add("bidiShortcut", BidiShortcutExtension());
+  add("contentControlWidgets", ContentControlWidgetsExtension());
 
   return extensions;
 }

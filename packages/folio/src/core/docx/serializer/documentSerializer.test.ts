@@ -32,6 +32,27 @@ describe("document section properties are integer-only (issue #417)", () => {
     expect(xml).toContain('w:right="1800"');
   });
 
+  test("document root declares the full namespace set needed by raw-replay paths", () => {
+    // The parser preserves unmodeled OOXML children (data hashes, cex /
+    // cid extensions) inside `rawPropertiesXml`. A canonical
+    // `<w:sdtPr>` with a `<w16sdtdh:dataHash>` would replay an
+    // undeclared prefix if the document root only emits the minimal
+    // set — Word would refuse to open the file. Pin every w16* prefix
+    // here so the regression can't drift.
+    const xml = serializeDocument(createEmptyDocument());
+    for (const prefix of [
+      "w14",
+      "w15",
+      "w16",
+      "w16cex",
+      "w16cid",
+      "w16sdtdh",
+      "w16se",
+    ]) {
+      expect(xml).toContain(`xmlns:${prefix}="`);
+    }
+  });
+
   test("serializer-side defense catches drift even if the model carries floats", () => {
     // Bypass the createEmptyDocument input guard by mutating the model
     // directly — proves the serializer's intAttr() defense works on its own.

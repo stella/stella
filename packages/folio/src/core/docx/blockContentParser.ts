@@ -8,6 +8,8 @@
  */
 
 import type {
+  BlockContent,
+  BlockSdt,
   BookmarkEnd,
   BookmarkStart,
   MediaFile,
@@ -16,7 +18,6 @@ import type {
   Run,
   Shape,
   ShapeContent,
-  Table,
   Theme,
 } from "../types/document";
 import { parseBookmarkEnd, parseBookmarkStart } from "./bookmarkParser";
@@ -28,6 +29,7 @@ import type { BookmarkMarker } from "./bookmarkPlacement";
 import { convertBulletToUnicode } from "./bulletMarkers";
 import type { NumberingMap } from "./numberingParser";
 import { parseParagraph } from "./paragraphParser";
+import { parseSdtProperties } from "./sdtProperties";
 import type { StyleMap } from "./styleParser";
 import { parseTable } from "./tableParser";
 import {
@@ -36,8 +38,14 @@ import {
   parseTextBox,
   parseTextBoxContent,
 } from "./textBoxParser";
-import { findDeep, getChildElements, getLocalName } from "./xmlParser";
-import type { XmlElement } from "./xmlParser";
+import {
+  elementToXml,
+  findChild,
+  findDeep,
+  getChildElements,
+  getLocalName,
+  type XmlElement,
+} from "./xmlParser";
 
 type ParseBlockContentOptions = {
   inHeaderFooter?: boolean;
@@ -362,7 +370,7 @@ export const parseBlockContent = (
   rels: RelationshipMap | null,
   media: Map<string, MediaFile> | null,
   options?: ParseBlockContentOptions,
-): (Paragraph | Table)[] =>
+): BlockContent[] =>
   parseBlockContentWithState(parent, styles, theme, numbering, rels, media, {
     listCounters: new Map(),
     abstractCounters: new Map(),
@@ -377,8 +385,8 @@ const parseBlockContentWithState = (
   rels: RelationshipMap | null,
   media: Map<string, MediaFile> | null,
   state: ParseBlockContentState,
-): (Paragraph | Table)[] => {
-  const content: (Paragraph | Table)[] = [];
+): BlockContent[] => {
+  const content: BlockContent[] = [];
   const children = getChildElements(parent);
   const pendingBookmarkMarkers: BookmarkMarker[] = [];
 
@@ -439,31 +447,46 @@ const parseBlockContentWithState = (
     }
 
     if (localName === "sdt") {
-      const sdtContent = (child.elements ?? []).find(
-        (el: XmlElement) =>
-          el.type === "element" &&
-          (el.name === "w:sdtContent" || el.name?.endsWith(":sdtContent")),
-      );
-      if (sdtContent) {
-        const sdtBlockContent = parseBlockContentWithState(
-          sdtContent,
-          styles,
-          theme,
-          numbering,
-          rels,
-          media,
-          state,
-        );
-        if (
-          prependBookmarkMarkersToFirstParagraphInBlocks(
-            sdtBlockContent,
-            pendingBookmarkMarkers,
-          )
-        ) {
-          pendingBookmarkMarkers.length = 0;
-        }
-        content.push(...sdtBlockContent);
+      const sdtPr = findChild(child, "w", "sdtPr");
+      const sdtEndPr = findChild(child, "w", "sdtEndPr");
+      const sdtContent = findChild(child, "w", "sdtContent");
+      const properties = parseSdtProperties(sdtPr, sdtEndPr);
+      // Capture non-content direct children of <w:sdt> (bookmark / comment /
+      // tracked-change / custom XML range markers — MS-OE376 §2.5.2.30) so a
+      // comment thread or tracked change that crosses an SDT boundary
+      // doesn't lose a delimiter on round-trip. Split by position relative
+      // to sdtContent.
+      const captured = captureSdtSiblingMarkers(child);
+      if (captured.before.length > 0) {
+        properties.rawSdtChildrenBeforeContent = captured.before;
       }
+      if (captured.after.length > 0) {
+        properties.rawSdtChildrenAfterContent = captured.after;
+      }
+      const blockSdt: BlockSdt = {
+        type: "blockSdt",
+        properties,
+        content: sdtContent
+          ? parseBlockContentWithState(
+              sdtContent,
+              styles,
+              theme,
+              numbering,
+              rels,
+              media,
+              state,
+            )
+          : [],
+      };
+      if (
+        prependBookmarkMarkersToFirstParagraphInBlocks(
+          blockSdt.content,
+          pendingBookmarkMarkers,
+        )
+      ) {
+        pendingBookmarkMarkers.length = 0;
+      }
+      content.push(blockSdt);
       continue;
     }
 
@@ -483,6 +506,45 @@ const parseBlockContentWithState = (
   }
 
   return content;
+};
+
+/**
+ * Walk a `<w:sdt>` element's direct children and return the verbatim XML
+ * for every child that is NOT `<w:sdtPr>`, `<w:sdtEndPr>`, or
+ * `<w:sdtContent>` — split by position relative to sdtContent.
+ *
+ * Per MS-OE376 §2.5.2.30, Word emits 16 range-marker elements (bookmark,
+ * comment, custom XML, tracked-change ranges) as direct sdt siblings of
+ * sdtContent. Without preserving them, a comment thread or tracked
+ * change that crosses an SDT boundary loses a delimiter when folio
+ * serializes the parsed model back out.
+ */
+const captureSdtSiblingMarkers = (
+  sdt: XmlElement,
+): { before: string; after: string } => {
+  const beforeParts: string[] = [];
+  const afterParts: string[] = [];
+  let sawContent = false;
+  for (const ch of sdt.elements ?? []) {
+    if (ch.type !== "element" || !ch.name) {
+      continue;
+    }
+    const local = getLocalName(ch.name);
+    if (local === "sdtPr" || local === "sdtEndPr") {
+      continue;
+    }
+    if (local === "sdtContent") {
+      sawContent = true;
+      continue;
+    }
+    const xml = elementToXml(ch);
+    if (sawContent) {
+      afterParts.push(xml);
+    } else {
+      beforeParts.push(xml);
+    }
+  }
+  return { before: beforeParts.join(""), after: afterParts.join("") };
 };
 
 const parseBookmarkMarker = (

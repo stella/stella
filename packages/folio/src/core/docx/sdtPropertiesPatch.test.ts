@@ -1,0 +1,205 @@
+/**
+ * Tests for the rawSdtPr reconcile helper. Asserts that modeled property
+ * mutations get patched into the raw XML before the serializer replays it,
+ * so checkbox / dropdown / date interactions survive a save cycle.
+ */
+
+import { describe, expect, test } from "bun:test";
+
+import type { SdtProperties } from "../types/document";
+import { reconcileRawSdtPr } from "./sdtPropertiesPatch";
+
+function checkboxProps(checked: boolean): SdtProperties {
+  return {
+    sdtType: "checkbox",
+    checked,
+  };
+}
+
+describe("reconcileRawSdtPr — checkbox state", () => {
+  test("updates an existing w14:checked attribute when the user toggles on", () => {
+    const raw =
+      '<w:sdtPr><w:tag w:val="agree"/><w14:checkbox><w14:checked w14:val="0"/></w14:checkbox></w:sdtPr>';
+    const out = reconcileRawSdtPr(raw, checkboxProps(true));
+    expect(out).toContain('<w14:checked w14:val="1"/>');
+    expect(out).not.toContain('w14:val="0"');
+    // Pre-existing markers (tag) survive.
+    expect(out).toContain('<w:tag w:val="agree"/>');
+  });
+
+  test("updates an existing w:checked attribute (no w14: prefix variant)", () => {
+    const raw =
+      '<w:sdtPr><w:checkbox><w:checked w:val="0"/></w:checkbox></w:sdtPr>';
+    const out = reconcileRawSdtPr(raw, checkboxProps(true));
+    expect(out).toContain('<w:checked w:val="1"/>');
+  });
+
+  test("injects a w14:checked when only the wrapper exists", () => {
+    const raw = "<w:sdtPr><w14:checkbox></w14:checkbox></w:sdtPr>";
+    const out = reconcileRawSdtPr(raw, checkboxProps(true));
+    expect(out).toContain('<w14:checked w14:val="1"/>');
+  });
+
+  test("replaces the expanded `<w14:checked></w14:checked>` form without leaving stray closing tags", () => {
+    // OOXML lets the empty element be written in either self-closing or
+    // expanded form. The self-closing path was already covered; this
+    // pins the expanded one so the patch does not produce
+    // `<w14:checked .../></w14:checked>`.
+    const raw =
+      '<w:sdtPr><w14:checkbox><w14:checked w14:val="0"></w14:checked></w14:checkbox></w:sdtPr>';
+    const out = reconcileRawSdtPr(raw, checkboxProps(true));
+    expect(out).toContain('<w14:checked w14:val="1"/>');
+    // No stray closing tag remains.
+    expect(out).not.toMatch(/<w14:checked[^>]*\/>\s*<\/w14:checked>/u);
+    expect(out).not.toContain('w14:val="0"');
+  });
+
+  test("preserves the original sdtPr prefix when inserting a missing child", () => {
+    // A source DOCX could use any namespace prefix for the WordprocessingML
+    // namespace. Previously the insertion path hard-coded `</w:sdtPr>`,
+    // which produced malformed XML for inputs like `<ns0:sdtPr>` (open
+    // tag uses `ns0`, close tag would use `w`). Capture the prefix from
+    // the matched closing tag and reuse it.
+    const raw = '<ns0:sdtPr><ns0:tag ns0:val="agree"/></ns0:sdtPr>';
+    const out = reconcileRawSdtPr(raw, checkboxProps(true));
+    // The injected wrapper itself stays in the `w14:` family (that is
+    // the standard prefix for Word checkboxes), but the parent's closing
+    // tag must keep the source prefix.
+    expect(out).toContain("<ns0:sdtPr>");
+    expect(out).toContain("</ns0:sdtPr>");
+    expect(out).not.toContain("</w:sdtPr>");
+    expect(out).toContain('<w14:checked w14:val="1"/>');
+  });
+
+  test("synthesizes the whole wrapper when the raw sdtPr has neither", () => {
+    const raw = '<w:sdtPr><w:tag w:val="agree"/></w:sdtPr>';
+    const out = reconcileRawSdtPr(raw, checkboxProps(false));
+    expect(out).toContain("<w14:checkbox>");
+    expect(out).toContain('<w14:checked w14:val="0"/>');
+    expect(out).toContain('<w:tag w:val="agree"/>');
+  });
+});
+
+describe("reconcileRawSdtPr — dataBinding / repeatingSection passthrough", () => {
+  test("preserves w15:repeatingSection while updating checked state", () => {
+    const raw =
+      '<w:sdtPr><w14:checkbox><w14:checked w14:val="0"/></w14:checkbox><w15:repeatingSection/></w:sdtPr>';
+    const out = reconcileRawSdtPr(raw, checkboxProps(true));
+    expect(out).toContain("w15:repeatingSection");
+    expect(out).toContain('<w14:checked w14:val="1"/>');
+  });
+
+  test("preserves w:dataBinding while updating w:date@w:fullDate", () => {
+    const raw =
+      '<w:sdtPr><w:dataBinding w:xpath="/c/d" w:storeItemID="{ABC}"/><w:date w:fullDate="2020-01-01T00:00:00Z"><w:dateFormat w:val="yyyy-MM-dd"/></w:date></w:sdtPr>';
+    const out = reconcileRawSdtPr(
+      raw,
+      { sdtType: "date", dateFormat: "yyyy-MM-dd" },
+      { dateFullDate: "2026-06-02T00:00:00Z" },
+    );
+    expect(out).toContain('w:fullDate="2026-06-02T00:00:00Z"');
+    expect(out).toContain('w:xpath="/c/d"');
+  });
+});
+
+describe("reconcileRawSdtPr — date format", () => {
+  test("replaces an expanded-empty dateFormat element on round-trip", () => {
+    // A producer DOCX that writes `<w:dateFormat …></w:dateFormat>` instead
+    // of self-closing would otherwise leave a stale sibling next to our
+    // freshly-prepended replacement — Word would see two dateFormat
+    // children and the picked display string would not stick.
+    const raw =
+      '<w:sdtPr><w:date w:fullDate="2026-06-02"><w:dateFormat w:val="d MMMM yyyy"></w:dateFormat></w:date></w:sdtPr>';
+    const out = reconcileRawSdtPr(
+      raw,
+      { sdtType: "date", dateFormat: "yyyy-MM-dd" },
+      { dateFullDate: "2026-06-02" },
+    );
+    // Exactly one self-closing dateFormat child remains.
+    expect(out.match(/dateFormat/giu)?.length).toBe(1);
+    expect(out).toContain('<w:dateFormat w:val="yyyy-MM-dd"/>');
+    expect(out).not.toContain('w:val="d MMMM yyyy"');
+  });
+
+  test("updates dateFormat without disturbing the surrounding w:date element", () => {
+    const raw =
+      '<w:sdtPr><w:date w:fullDate="2026-06-02"><w:dateFormat w:val="d MMMM yyyy"/><w:lid w:val="en-GB"/></w:date></w:sdtPr>';
+    const out = reconcileRawSdtPr(
+      raw,
+      { sdtType: "date", dateFormat: "yyyy-MM-dd" },
+      { dateFullDate: "2026-06-02" },
+    );
+    expect(out).toContain('<w:dateFormat w:val="yyyy-MM-dd"/>');
+    expect(out).toContain('<w:lid w:val="en-GB"/>');
+  });
+});
+
+describe("reconcileRawSdtPr — dropdown last value", () => {
+  test("strips an existing lastValue under a non-`w` source prefix and re-emits with the same prefix", () => {
+    // The previous literal " w:lastValue=" marker missed `ns0:lastValue`
+    // entirely, so reconcileRawSdtPr appended a fresh w:lastValue next
+    // to the stale ns0:lastValue and Word was free to keep reading the
+    // old value.
+    const raw =
+      '<w:sdtPr><ns0:dropDownList ns0:lastValue="old"><ns0:listItem ns0:displayText="A" ns0:value="a"/><ns0:listItem ns0:displayText="B" ns0:value="b"/></ns0:dropDownList></w:sdtPr>';
+    const out = reconcileRawSdtPr(
+      raw,
+      { sdtType: "dropdown" },
+      { dropdownLastValue: "b" },
+    );
+    // Stale value gone.
+    expect(out).not.toContain('lastValue="old"');
+    // New value emitted under the source's prefix, not a foreign `w:`.
+    expect(out).toContain('ns0:lastValue="b"');
+    // Exactly one lastValue attribute in the output.
+    expect(out.match(/lastValue=/giu)?.length).toBe(1);
+    // listItems still there.
+    expect(out).toContain('ns0:value="a"');
+  });
+
+  test("rewrites w:lastValue when the user picks a new item", () => {
+    const raw =
+      '<w:sdtPr><w:dropDownList w:lastValue="ca"><w:listItem w:displayText="California" w:value="ca"/><w:listItem w:displayText="New York" w:value="ny"/></w:dropDownList></w:sdtPr>';
+    const out = reconcileRawSdtPr(
+      raw,
+      { sdtType: "dropdown" },
+      { dropdownLastValue: "ny" },
+    );
+    expect(out).toContain('w:lastValue="ny"');
+    expect(out).not.toContain('w:lastValue="ca"');
+    // listItems are preserved.
+    expect(out).toContain('w:value="ca"');
+    expect(out).toContain('w:value="ny"');
+  });
+
+  test("escapes special characters in the new last value", () => {
+    const raw = "<w:sdtPr><w:dropDownList/></w:sdtPr>";
+    const out = reconcileRawSdtPr(
+      raw,
+      { sdtType: "dropdown" },
+      { dropdownLastValue: 'Q&A "wrapped"' },
+    );
+    expect(out).toContain('w:lastValue="Q&amp;A &quot;wrapped&quot;"');
+  });
+});
+
+describe("reconcileRawSdtPr — showingPlaceholder toggle", () => {
+  test("removes <w:showingPlcHdr/> when the user fills the control", () => {
+    const raw = '<w:sdtPr><w:tag w:val="x"/><w:showingPlcHdr/></w:sdtPr>';
+    const out = reconcileRawSdtPr(raw, {
+      sdtType: "richText",
+      showingPlaceholder: false,
+    });
+    expect(out).not.toContain("showingPlcHdr");
+    expect(out).toContain('<w:tag w:val="x"/>');
+  });
+
+  test("inserts <w:showingPlcHdr/> when the model says it is shown", () => {
+    const raw = '<w:sdtPr><w:tag w:val="x"/></w:sdtPr>';
+    const out = reconcileRawSdtPr(raw, {
+      sdtType: "richText",
+      showingPlaceholder: true,
+    });
+    expect(out).toContain("<w:showingPlcHdr/>");
+  });
+});

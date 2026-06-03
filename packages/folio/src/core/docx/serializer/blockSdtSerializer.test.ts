@@ -1,0 +1,268 @@
+/**
+ * Round-trip tests for the block-level SDT serializer.
+ *
+ * Parse → re-serialize must preserve the original `<w:sdtPr>` bytes so
+ * unmodeled OOXML features (data binding, repeating sections, sdtEndPr)
+ * survive a save cycle. Picked up from upstream eigenpal/docx-editor#653.
+ */
+
+import { describe, expect, test } from "bun:test";
+
+import type { BlockContent, BlockSdt } from "../../types/document";
+import { parseBlockContent } from "../blockContentParser";
+import { parseXml } from "../xmlParser";
+import { serializeBlockSdt } from "./blockSdtSerializer";
+
+const NS =
+  'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml"';
+
+function parseBlocks(bodyXml: string): BlockContent[] {
+  const root = parseXml(bodyXml);
+  const body = root.elements?.[0];
+  if (!body) {
+    throw new Error("expected root body element");
+  }
+  return parseBlockContent(body, null, null, null, null, null);
+}
+
+function noChildSerializer(_block: BlockContent): string {
+  return "<w:p/>";
+}
+
+describe("serializeBlockSdt — raw sdtPr replay", () => {
+  test("preserves w:dataBinding through parse → serialize", () => {
+    const blocks = parseBlocks(`<w:body ${NS}>
+      <w:sdt>
+        <w:sdtPr>
+          <w:tag w:val="party-name"/>
+          <w:dataBinding w:xpath="/contract/party[1]/name" w:storeItemID="{ABC}"/>
+        </w:sdtPr>
+        <w:sdtContent><w:p/></w:sdtContent>
+      </w:sdt>
+    </w:body>`);
+
+    const first = blocks[0];
+    if (!first || first.type !== "blockSdt") {
+      throw new Error(`expected blockSdt, got ${String(first?.type)}`);
+    }
+    const sdt = first;
+    const xml = serializeBlockSdt(sdt, noChildSerializer);
+    expect(xml).toContain("<w:dataBinding");
+    expect(xml).toContain('w:xpath="/contract/party[1]/name"');
+    expect(xml).toContain('w:storeItemID="{ABC}"');
+  });
+
+  test("preserves w15:repeatingSection through parse → serialize", () => {
+    const blocks = parseBlocks(`<w:body ${NS}>
+      <w:sdt>
+        <w:sdtPr>
+          <w:tag w:val="parties"/>
+          <w15:repeatingSection/>
+        </w:sdtPr>
+        <w:sdtContent><w:p/></w:sdtContent>
+      </w:sdt>
+    </w:body>`);
+    const first = blocks[0];
+    if (!first || first.type !== "blockSdt") {
+      throw new Error(`expected blockSdt, got ${String(first?.type)}`);
+    }
+    const sdt = first;
+    const xml = serializeBlockSdt(sdt, noChildSerializer);
+    expect(xml).toContain("w15:repeatingSection");
+  });
+
+  test("replays sdt-sibling range markers (bookmark/comment/tracked) on round-trip", () => {
+    // MS-OE376 §2.5.2.30: Word emits range-marker elements as direct
+    // siblings of <w:sdtContent> inside <w:sdt>, not nested inside it.
+    // Without preserving the captured-before/after raw XML, a comment
+    // thread or tracked-change range that crosses an SDT boundary loses
+    // one delimiter on round-trip.
+    const blocks = parseBlocks(`<w:body ${NS}>
+      <w:sdt>
+        <w:sdtPr><w:tag w:val="x"/></w:sdtPr>
+        <w:bookmarkStart w:id="1" w:name="b1"/>
+        <w:commentRangeStart w:id="0"/>
+        <w:sdtContent><w:p/></w:sdtContent>
+        <w:commentRangeEnd w:id="0"/>
+        <w:bookmarkEnd w:id="1"/>
+      </w:sdt>
+    </w:body>`);
+    const first = blocks[0];
+    if (!first || first.type !== "blockSdt") {
+      throw new Error(`expected blockSdt, got ${String(first?.type)}`);
+    }
+    expect(first.properties.rawSdtChildrenBeforeContent).toContain(
+      "w:bookmarkStart",
+    );
+    expect(first.properties.rawSdtChildrenBeforeContent).toContain(
+      "w:commentRangeStart",
+    );
+    expect(first.properties.rawSdtChildrenAfterContent).toContain(
+      "w:bookmarkEnd",
+    );
+    expect(first.properties.rawSdtChildrenAfterContent).toContain(
+      "w:commentRangeEnd",
+    );
+    const xml = serializeBlockSdt(first, noChildSerializer);
+    // Markers replay in original positions.
+    expect(xml).toContain('<w:bookmarkStart w:id="1" w:name="b1"/>');
+    expect(xml).toContain('<w:commentRangeStart w:id="0"/>');
+    expect(xml).toContain('<w:bookmarkEnd w:id="1"/>');
+    expect(xml).toContain('<w:commentRangeEnd w:id="0"/>');
+    // The before-markers come before <w:sdtContent>, the after-markers come after.
+    const contentIdx = xml.indexOf("<w:sdtContent>");
+    expect(xml.indexOf("w:bookmarkStart")).toBeLessThan(contentIdx);
+    expect(xml.indexOf("w:bookmarkEnd")).toBeGreaterThan(contentIdx);
+  });
+
+  test("replays sdtEndPr verbatim", () => {
+    const blocks = parseBlocks(`<w:body ${NS}>
+      <w:sdt>
+        <w:sdtPr><w:tag w:val="signature"/></w:sdtPr>
+        <w:sdtEndPr><w:rPr><w:b/></w:rPr></w:sdtEndPr>
+        <w:sdtContent><w:p/></w:sdtContent>
+      </w:sdt>
+    </w:body>`);
+    const first = blocks[0];
+    if (!first || first.type !== "blockSdt") {
+      throw new Error(`expected blockSdt, got ${String(first?.type)}`);
+    }
+    const sdt = first;
+    const xml = serializeBlockSdt(sdt, noChildSerializer);
+    expect(xml).toContain("<w:sdtEndPr>");
+    expect(xml).toContain("<w:b");
+  });
+
+  test("fallback sdtPr emits dropdown type marker + listItems for programmatic controls", () => {
+    // A BlockSdt constructed without rawPropertiesXml (e.g. a template
+    // engine that builds the control programmatically) must still encode
+    // its type so Word reopens it as the right control kind.
+    const sdt: BlockSdt = {
+      type: "blockSdt",
+      properties: {
+        sdtType: "dropdown",
+        tag: "state",
+        listItems: [
+          { displayText: "California", value: "ca" },
+          { displayText: "New York", value: "ny" },
+        ],
+      },
+      content: [],
+    };
+    const xml = serializeBlockSdt(sdt, noChildSerializer);
+    expect(xml).toContain("<w:dropDownList>");
+    expect(xml).toContain('w:displayText="California"');
+    expect(xml).toContain('w:value="ca"');
+    expect(xml).toContain('w:value="ny"');
+    expect(xml).toContain("</w:dropDownList>");
+  });
+
+  test("dropdownLastValue from the model wins over body-text matching when displayText collides", () => {
+    // Two list items share a displayText ("Other"). The body shows the
+    // friendly label, but the API set the picked OOXML value to "other-b".
+    // Without the modeled dropdownLastValue, the serializer used to look
+    // up the value by display-text match and returned the FIRST collision
+    // ("other-a") — Word reopened the doc with the wrong selection.
+    const sdt: BlockSdt = {
+      type: "blockSdt",
+      properties: {
+        sdtType: "dropdown",
+        tag: "category",
+        listItems: [
+          { displayText: "First", value: "first" },
+          { displayText: "Other", value: "other-a" },
+          { displayText: "Other", value: "other-b" },
+        ],
+        dropdownLastValue: "other-b",
+      },
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "run", content: [{ type: "text", text: "Other" }] },
+          ],
+        },
+      ],
+    };
+    const xml = serializeBlockSdt(sdt, noChildSerializer);
+    expect(xml).toContain('w:lastValue="other-b"');
+    expect(xml).not.toContain('w:lastValue="other-a"');
+  });
+
+  test("preserves an intentionally empty modeled dropdownLastValue", () => {
+    // `""` is a legitimate OOXML w:value — a producer can author
+    // `<w:listItem w:value=""/>` and the user can pick it. Treating
+    // `dropdownLastValue: ""` as absent would fall back to body-text
+    // matching and serialize the first display-text-collision sibling
+    // instead of the intended empty selection.
+    const sdt: BlockSdt = {
+      type: "blockSdt",
+      properties: {
+        sdtType: "dropdown",
+        tag: "category",
+        listItems: [
+          { displayText: "Other", value: "" },
+          { displayText: "Other", value: "fallback" },
+        ],
+        dropdownLastValue: "",
+      },
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "run", content: [{ type: "text", text: "Other" }] },
+          ],
+        },
+      ],
+    };
+    const xml = serializeBlockSdt(sdt, noChildSerializer);
+    expect(xml).toContain('w:lastValue=""');
+    expect(xml).not.toContain('w:lastValue="fallback"');
+  });
+
+  test("fallback sdtPr emits w:date with fullDate + dateFormat for date controls", () => {
+    const sdt: BlockSdt = {
+      type: "blockSdt",
+      properties: {
+        sdtType: "date",
+        tag: "effective",
+        dateFormat: "d MMMM yyyy",
+        dateValueISO: "2026-06-02T00:00:00Z",
+      },
+      content: [],
+    };
+    const xml = serializeBlockSdt(sdt, noChildSerializer);
+    expect(xml).toContain('w:fullDate="2026-06-02T00:00:00Z"');
+    expect(xml).toContain('<w:dateFormat w:val="d MMMM yyyy"/>');
+  });
+
+  test("fallback sdtPr emits w14:checkbox with w14:checked for checkbox controls", () => {
+    const sdt: BlockSdt = {
+      type: "blockSdt",
+      properties: { sdtType: "checkbox", tag: "agree", checked: true },
+      content: [],
+    };
+    const xml = serializeBlockSdt(sdt, noChildSerializer);
+    expect(xml).toContain("<w14:checkbox>");
+    expect(xml).toContain('<w14:checked w14:val="1"/>');
+  });
+
+  test("falls back to a minimal sdtPr when no raw snapshot exists", () => {
+    // Mirrors a programmatically-constructed BlockSdt (no parse cycle), so
+    // the serializer can't replay raw XML and must synthesize from props.
+    const sdt: BlockSdt = {
+      type: "blockSdt",
+      properties: {
+        sdtType: "richText",
+        alias: "Synthetic & <wrapped>",
+        tag: "synthetic",
+        lock: "contentLocked",
+      },
+      content: [],
+    };
+    const xml = serializeBlockSdt(sdt, noChildSerializer);
+    expect(xml).toContain('<w:alias w:val="Synthetic &amp; &lt;wrapped&gt;"/>');
+    expect(xml).toContain('<w:tag w:val="synthetic"/>');
+    expect(xml).toContain('<w:lock w:val="contentLocked"/>');
+  });
+});

@@ -48,7 +48,6 @@ import {
   FrameYAlignSchema,
   LineSpacingRuleSchema,
   ParagraphAlignmentSchema,
-  SdtLockSchema,
   ShadingPatternSchema,
   TabLeaderSchema,
   TabStopAlignmentSchema,
@@ -57,6 +56,7 @@ import {
 } from "./parserEnums";
 import { consolidateParagraphContent } from "./runConsolidator";
 import { parseRun, parseRunProperties } from "./runParser";
+import { parseSdtProperties } from "./sdtProperties";
 import { parseSectionProperties } from "./sectionParser";
 import type { StyleMap } from "./styleParser";
 import {
@@ -69,125 +69,6 @@ import {
   elementToXml,
 } from "./xmlParser";
 import type { XmlElement } from "./xmlParser";
-
-// ============================================================================
-// SDT PROPERTIES PARSER
-// ============================================================================
-
-/**
- * Parse SDT properties (w:sdtPr) element
- */
-function parseSdtProperties(sdtPr: XmlElement | null): SdtProperties {
-  const props: SdtProperties = { sdtType: "richText" };
-  if (!sdtPr || !sdtPr.elements) {
-    return props;
-  }
-
-  for (const el of sdtPr.elements) {
-    if (el.type !== "element") {
-      continue;
-    }
-    const name = el.name?.replace(/^w:/u, "") ?? "";
-
-    switch (name) {
-      case "alias": {
-        const aliasVal = getAttribute(el, "w", "val");
-        if (aliasVal !== null) {
-          props.alias = aliasVal;
-        }
-        break;
-      }
-      case "tag": {
-        const tagVal = getAttribute(el, "w", "val");
-        if (tagVal !== null) {
-          props.tag = tagVal;
-        }
-        break;
-      }
-      case "lock": {
-        const lockVal = getAttribute(el, "w", "val");
-        props.lock = narrowEnum(lockVal, SdtLockSchema) ?? "unlocked";
-        break;
-      }
-      case "placeholder": {
-        const docPart = findChild(el, "w", "docPart");
-        if (docPart) {
-          const valEl = findChild(docPart, "w", "val");
-          if (valEl) {
-            const phVal = getAttribute(valEl, "w", "val");
-            if (phVal !== null) {
-              props.placeholder = phVal;
-            }
-          }
-        }
-        break;
-      }
-      case "showingPlcHdr":
-        props.showingPlaceholder = true;
-        break;
-      case "text":
-        props.sdtType = "plainText";
-        break;
-      case "date": {
-        props.sdtType = "date";
-        const dateVal = getAttribute(el, "w", "fullDate");
-        if (dateVal !== null) {
-          props.dateFormat = dateVal;
-        }
-        break;
-      }
-      case "dropDownList":
-        props.sdtType = "dropdown";
-        props.listItems = parseListItems(el);
-        break;
-      case "comboBox":
-        props.sdtType = "comboBox";
-        props.listItems = parseListItems(el);
-        break;
-      case "checkbox": {
-        props.sdtType = "checkbox";
-        const checked =
-          findChild(el, "w14", "checked") ?? findChild(el, "w", "checked");
-        props.checked = checked
-          ? getAttribute(checked, "w14", "val") === "1" ||
-            getAttribute(checked, "w", "val") === "1"
-          : false;
-        break;
-      }
-      case "picture":
-        props.sdtType = "picture";
-        break;
-      case "docPartObj":
-        props.sdtType = "buildingBlockGallery";
-        break;
-      case "group":
-        props.sdtType = "group";
-        break;
-      default:
-        break;
-    }
-  }
-
-  return props;
-}
-
-function parseListItems(
-  el: XmlElement,
-): { displayText: string; value: string }[] {
-  const items: { displayText: string; value: string }[] = [];
-  for (const child of el.elements ?? []) {
-    if (
-      child.type === "element" &&
-      (child.name === "w:listItem" || child.name?.endsWith(":listItem"))
-    ) {
-      items.push({
-        displayText: getAttribute(child, "w", "displayText") ?? "",
-        value: getAttribute(child, "w", "value") ?? "",
-      });
-    }
-  }
-  return items;
-}
 
 /**
  * Extract plain text from a math element (recursive text content extraction)
@@ -1553,16 +1434,9 @@ function parseParagraphContents(
 
       case "sdt": {
         // Structured document tag - extract properties and content
-        const sdtPr = (child.elements ?? []).find(
-          (el: XmlElement) =>
-            el.type === "element" &&
-            (el.name === "w:sdtPr" || el.name?.endsWith(":sdtPr")),
-        );
-        const sdtContentEl = (child.elements ?? []).find(
-          (el: XmlElement) =>
-            el.type === "element" &&
-            (el.name === "w:sdtContent" || el.name?.endsWith(":sdtContent")),
-        );
+        const sdtPr = findChild(child, "w", "sdtPr");
+        const sdtEndPr = findChild(child, "w", "sdtEndPr");
+        const sdtContentEl = findChild(child, "w", "sdtContent");
         if (sdtContentEl) {
           const sdtParsed = parseParagraphContents(
             sdtContentEl,
@@ -1573,7 +1447,7 @@ function parseParagraphContents(
             media,
             trackedContext,
           );
-          const properties = parseSdtProperties(sdtPr ?? null);
+          const properties = parseSdtProperties(sdtPr, sdtEndPr);
           pushInlineSdtSegments({
             contents,
             properties,

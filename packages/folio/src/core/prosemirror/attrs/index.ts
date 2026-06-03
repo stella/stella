@@ -27,6 +27,7 @@ import {
   UNDERLINE_STYLE_VALUES,
 } from "../../types/documentEnumValues";
 import type {
+  BlockSdtAttrs,
   CharacterSpacingAttrs,
   CommentAttrs,
   EmphasisMarkAttrs,
@@ -745,7 +746,14 @@ export const readSdtAttrs = (
     issues,
   );
   optionalString(attrs, "dateFormat", "sdt.attrs.dateFormat", issues);
+  optionalString(attrs, "dateValueISO", "sdt.attrs.dateValueISO", issues);
   optionalSdtListItems(attrs, "listItems", "sdt.attrs.listItems", issues);
+  optionalString(
+    attrs,
+    "dropdownLastValue",
+    "sdt.attrs.dropdownLastValue",
+    issues,
+  );
   optionalBoolean(attrs, "checked", "sdt.attrs.checked", issues);
 
   return attrsResult(attrs, issues);
@@ -753,6 +761,85 @@ export const readSdtAttrs = (
 
 export const expectSdtAttrs = (node: PMNode): SdtAttrs =>
   expectCachedNodeAttrs(node, sdtAttrsCache, readSdtAttrs, "sdt attrs");
+
+const blockSdtAttrsCache = new WeakMap<PMNode, BlockSdtAttrs>();
+
+export const readBlockSdtAttrs = (
+  node: PMNode,
+): ReadProseMirrorAttrsResult<BlockSdtAttrs> => {
+  const attrs = attrsRecord(node.attrs);
+  const issues: ProseMirrorAttrIssue[] = [];
+  expectNodeType(node, "blockSdt", issues);
+
+  requiredOneOf(
+    attrs,
+    "sdtType",
+    "blockSdt.attrs.sdtType",
+    issues,
+    SDT_TYPE_VALUES,
+  );
+  optionalString(attrs, "alias", "blockSdt.attrs.alias", issues);
+  optionalString(attrs, "tag", "blockSdt.attrs.tag", issues);
+  optionalNumber(attrs, "id", "blockSdt.attrs.id", issues);
+  optionalOneOf(attrs, "lock", "blockSdt.attrs.lock", issues, SDT_LOCK_VALUES);
+  optionalString(attrs, "placeholder", "blockSdt.attrs.placeholder", issues);
+  optionalBoolean(
+    attrs,
+    "showingPlaceholder",
+    "blockSdt.attrs.showingPlaceholder",
+    issues,
+  );
+  optionalString(attrs, "dateFormat", "blockSdt.attrs.dateFormat", issues);
+  optionalString(attrs, "dateValueISO", "blockSdt.attrs.dateValueISO", issues);
+  optionalSdtListItems(attrs, "listItems", "blockSdt.attrs.listItems", issues);
+  optionalString(
+    attrs,
+    "dropdownLastValue",
+    "blockSdt.attrs.dropdownLastValue",
+    issues,
+  );
+  optionalBoolean(attrs, "checked", "blockSdt.attrs.checked", issues);
+  optionalBoolean(
+    attrs,
+    "_originallyEmpty",
+    "blockSdt.attrs._originallyEmpty",
+    issues,
+  );
+  optionalString(
+    attrs,
+    "rawPropertiesXml",
+    "blockSdt.attrs.rawPropertiesXml",
+    issues,
+  );
+  optionalString(
+    attrs,
+    "rawEndPropertiesXml",
+    "blockSdt.attrs.rawEndPropertiesXml",
+    issues,
+  );
+  optionalString(
+    attrs,
+    "rawSdtChildrenBeforeContent",
+    "blockSdt.attrs.rawSdtChildrenBeforeContent",
+    issues,
+  );
+  optionalString(
+    attrs,
+    "rawSdtChildrenAfterContent",
+    "blockSdt.attrs.rawSdtChildrenAfterContent",
+    issues,
+  );
+
+  return attrsResult(attrs, issues);
+};
+
+export const expectBlockSdtAttrs = (node: PMNode): BlockSdtAttrs =>
+  expectCachedNodeAttrs(
+    node,
+    blockSdtAttrsCache,
+    readBlockSdtAttrs,
+    "blockSdt attrs",
+  );
 
 export const readShapeAttrs = (
   node: PMNode,

@@ -319,10 +319,52 @@ export type SdtAttrs = {
   showingPlaceholder?: boolean;
   /** Date format for date controls */
   dateFormat?: string;
+  /** ISO 8601 bound date value (`w:date@w:fullDate`). */
+  dateValueISO?: string;
   /** Dropdown/combobox list items as JSON string */
   listItems?: string;
+  /** Selected dropdown / comboBox value (`w:dropDownList@w:lastValue`). */
+  dropdownLastValue?: string;
   /** Checkbox checked state */
   checked?: boolean;
+};
+
+/**
+ * Block-level structured document tag node attributes. Mirrors `SdtAttrs`
+ * plus an optional numeric `w:id` and the verbatim `w:sdtPr`/`w:sdtEndPr`
+ * strings captured by the parser for lossless round-trip.
+ */
+export type BlockSdtAttrs = {
+  sdtType: SdtType;
+  alias?: string;
+  tag?: string;
+  /** Numeric `w:id/@w:val`. */
+  id?: number;
+  lock?: NonNullable<SdtProperties["lock"]>;
+  placeholder?: string;
+  showingPlaceholder?: boolean;
+  dateFormat?: string;
+  /** ISO 8601 bound date value (`w:date@w:fullDate`). */
+  dateValueISO?: string;
+  /** Dropdown/combobox list items as JSON string. */
+  listItems?: string;
+  /** Selected dropdown / comboBox value (`w:dropDownList@w:lastValue`). */
+  dropdownLastValue?: string;
+  checked?: boolean;
+  /**
+   * Marker: source had empty `<w:sdtContent/>`. `toProseDoc` inserts a
+   * filler paragraph to satisfy PM's `block+`; on save the converter
+   * uses this flag to drop the filler instead of guessing from shape.
+   */
+  _originallyEmpty?: boolean;
+  /** Captured `<w:sdtPr>…</w:sdtPr>` for round-trip replay. */
+  rawPropertiesXml?: string;
+  /** Captured `<w:sdtEndPr>…</w:sdtEndPr>` for round-trip replay. */
+  rawEndPropertiesXml?: string;
+  /** Verbatim XML for sdt siblings before sdtContent (range markers). */
+  rawSdtChildrenBeforeContent?: string;
+  /** Verbatim XML for sdt siblings after sdtContent (range markers). */
+  rawSdtChildrenAfterContent?: string;
 };
 
 /**

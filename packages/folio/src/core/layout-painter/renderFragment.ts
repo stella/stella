@@ -12,6 +12,7 @@ import type {
   ImageFragment,
 } from "../layout-engine/types";
 import type { RenderContext } from "./renderUtils";
+import { applySdtDataAttrs } from "./sdtBoundary";
 
 /**
  * CSS class names for fragment elements
@@ -99,6 +100,8 @@ function renderParagraphFragmentPlaceholder(
     el.dataset["continuesOnNext"] = "true";
   }
 
+  applySdtDataAttrs(el, fragment.sdtGroups);
+
   return el;
 }
 
@@ -128,6 +131,8 @@ function renderTableFragmentPlaceholder(
   if (fragment.pmEnd !== undefined) {
     el.dataset["pmEnd"] = String(fragment.pmEnd);
   }
+
+  applySdtDataAttrs(el, fragment.sdtGroups);
 
   return el;
 }

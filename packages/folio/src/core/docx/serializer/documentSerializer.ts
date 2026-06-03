@@ -16,6 +16,7 @@ import type {
   DocumentBody,
   BlockContent,
 } from "../../types/document";
+import { serializeBlockSdt } from "./blockSdtSerializer";
 import { serializeParagraph } from "./paragraphSerializer";
 import { resetAutoIdCounter } from "./runSerializer";
 import { serializeSectionProperties } from "./sectionPropertiesSerializer";
@@ -68,8 +69,14 @@ const NAMESPACES = {
  * Build namespace declaration string for document element
  */
 function buildNamespaceDeclarations(): string {
-  // Minimal set of commonly used namespaces
-  const minimalNamespaces = {
+  // Declare every namespace the parser preserves verbatim through
+  // `rawPropertiesXml` / `rawEndPropertiesXml` (and any other raw
+  // replay path). A canonical `<w:sdtPr>` legitimately contains
+  // `<w16sdtdh:dataHash>` / `<w16cex:*>` / `<w16cid:*>` children that
+  // the parser stores opaquely; without these declarations on the
+  // document root, the replayed XML would carry undefined prefixes and
+  // Word refuses to open the file.
+  const declared = {
     wpc: NAMESPACES.wpc,
     mc: NAMESPACES.mc,
     o: NAMESPACES.o,
@@ -82,11 +89,16 @@ function buildNamespaceDeclarations(): string {
     w: NAMESPACES.w,
     w14: NAMESPACES.w14,
     w15: NAMESPACES.w15,
+    w16: NAMESPACES.w16,
+    w16cex: NAMESPACES.w16cex,
+    w16cid: NAMESPACES.w16cid,
+    w16sdtdh: NAMESPACES.w16sdtdh,
+    w16se: NAMESPACES.w16se,
     wpg: NAMESPACES.wpg,
     wps: NAMESPACES.wps,
   };
 
-  return Object.entries(minimalNamespaces)
+  return Object.entries(declared)
     .map(([prefix, uri]) => `xmlns:${prefix}="${uri}"`)
     .join(" ");
 }
@@ -100,7 +112,7 @@ function buildNamespaceDeclarations(): string {
 // ============================================================================
 
 /**
- * Serialize a single block content item (paragraph or table)
+ * Serialize a single block content item (paragraph, table, or block-level SDT).
  */
 function serializeBlockContent(block: BlockContent): string {
   if (block.type === "paragraph") {
@@ -109,19 +121,7 @@ function serializeBlockContent(block: BlockContent): string {
   if (block.type === "table") {
     return serializeTable(block);
   }
-  // Block-level SDT: wrap content in w:sdt
-  const contentXml = block.content
-    .map((b) => serializeBlockContent(b))
-    .join("");
-  const props = block.properties;
-  const prParts: string[] = [];
-  if (props.alias) {
-    prParts.push(`<w:alias w:val="${props.alias}"/>`);
-  }
-  if (props.tag) {
-    prParts.push(`<w:tag w:val="${props.tag}"/>`);
-  }
-  return `<w:sdt><w:sdtPr>${prParts.join("")}</w:sdtPr><w:sdtContent>${contentXml}</w:sdtContent></w:sdt>`;
+  return serializeBlockSdt(block, serializeBlockContent);
 }
 
 /**

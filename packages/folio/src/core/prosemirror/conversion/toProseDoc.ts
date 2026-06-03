@@ -17,6 +17,8 @@ import type { MarkType, Node as PMNode } from "prosemirror-model";
 import { createStyleEngine } from "../../style-engine";
 import type { StyleEngine } from "../../style-engine";
 import type {
+  BlockContent,
+  BlockSdt,
   Document,
   Paragraph,
   Run,
@@ -88,32 +90,42 @@ export function toProseDoc(
   const theme = options?.theme ?? document.package.theme ?? null;
   let textBoxGroupIndex = 0;
 
-  for (const block of paragraphs) {
-    if (block.type === "paragraph") {
-      // Convert paragraph and extract text boxes as sibling nodes
-      // If the paragraph starts with a page break (before any text),
-      // emit the break BEFORE the paragraph so the text lands on the
-      // next page — matching Word's rendering.
-      const pbPos = paragraphPageBreakPosition(block);
-      if (pbPos === "before") {
-        nodes.push(schema.node("pageBreak"));
+  const convertBodyBlocks = (blocks: BlockContent[]): PMNode[] => {
+    const out: PMNode[] = [];
+    for (const block of blocks) {
+      if (block.type === "paragraph") {
+        const pbPos = paragraphPageBreakPosition(block);
+        if (pbPos === "before") {
+          out.push(schema.node("pageBreak"));
+        }
+        out.push(
+          ...convertParagraphWithTextBoxes(
+            block,
+            styleResolver,
+            String(textBoxGroupIndex),
+          ),
+        );
+        textBoxGroupIndex += 1;
+        if (pbPos === "after") {
+          out.push(schema.node("pageBreak"));
+        }
+      } else if (block.type === "table") {
+        out.push(convertTable(block, styleResolver, theme));
+      } else {
+        out.push(convertBlockSdt(block, convertBodyBlocks));
       }
-      nodes.push(
-        ...convertParagraphWithTextBoxes(
-          block,
-          styleResolver,
-          String(textBoxGroupIndex),
-        ),
-      );
-      textBoxGroupIndex += 1;
-      if (pbPos === "after") {
-        nodes.push(schema.node("pageBreak"));
-      }
-    } else if (block.type === "table") {
-      const pmTable = convertTable(block, styleResolver, theme);
-      nodes.push(pmTable);
     }
-  }
+    return out;
+  };
+
+  nodes.push(...convertBodyBlocks(paragraphs));
+
+  // Caret-after-final-SDT affordance is provided by `prosemirror-gapcursor`
+  // at runtime; we previously injected a trailing empty paragraph here so
+  // the caret was not trapped inside an isolating blockSdt, but the
+  // synthetic paragraph survived `fromProseDoc` on save and silently
+  // appended a `<w:p/>` to the DOCX on every round trip (which adds blank
+  // space and shifts pagination in legal templates).
 
   // Ensure we have at least one paragraph
   if (nodes.length === 0) {
@@ -126,6 +138,50 @@ export function toProseDoc(
     "Document conversion produced an invalid ProseMirror document",
   );
   return pmDoc;
+}
+
+/**
+ * Convert a `BlockSdt` model node into a `blockSdt` PM node, recursively
+ * converting its children with the caller-supplied block converter. Pass
+ * `rawPropertiesXml` / `rawEndPropertiesXml` through as attrs so the
+ * serializer can replay them verbatim after a save.
+ */
+function convertBlockSdt(
+  blockSdt: BlockSdt,
+  convertBlocks: (blocks: BlockContent[]) => PMNode[],
+): PMNode {
+  const props = blockSdt.properties;
+  const attrs: Record<string, unknown> = {
+    sdtType: props.sdtType,
+    alias: props.alias ?? null,
+    tag: props.tag ?? null,
+    id: props.id ?? null,
+    lock: props.lock ?? null,
+    placeholder: props.placeholder ?? null,
+    showingPlaceholder: props.showingPlaceholder ?? false,
+    dateFormat: props.dateFormat ?? null,
+    dateValueISO: props.dateValueISO ?? null,
+    listItems: props.listItems ? JSON.stringify(props.listItems) : null,
+    dropdownLastValue: props.dropdownLastValue ?? null,
+    checked: props.checked ?? null,
+    // Mark explicitly when the source content was empty. fromProseDoc reads
+    // this on save to drop the synthetic filler below — without an explicit
+    // marker we couldn't distinguish source `<w:sdtContent/>` (filler
+    // inserted here) from source `<w:sdtContent><w:p/></w:sdtContent>`
+    // (a real authored empty paragraph the user wants preserved).
+    _originallyEmpty: blockSdt.content.length === 0,
+    rawPropertiesXml: props.rawPropertiesXml ?? null,
+    rawEndPropertiesXml: props.rawEndPropertiesXml ?? null,
+    rawSdtChildrenBeforeContent: props.rawSdtChildrenBeforeContent ?? null,
+    rawSdtChildrenAfterContent: props.rawSdtChildrenAfterContent ?? null,
+  };
+  const children = convertBlocks(blockSdt.content);
+  // ProseMirror `blockSdt` requires at least one block child; insert an empty
+  // paragraph for a truly empty control rather than producing an invalid node.
+  if (children.length === 0) {
+    children.push(schema.node("paragraph", {}, []));
+  }
+  return schema.node("blockSdt", attrs, children);
 }
 
 /**
@@ -1843,6 +1899,7 @@ function convertInlineSdt(
       placeholder: props.placeholder ?? null,
       showingPlaceholder: props.showingPlaceholder ?? false,
       dateFormat: props.dateFormat ?? null,
+      dateValueISO: props.dateValueISO ?? null,
       listItems: props.listItems ? JSON.stringify(props.listItems) : null,
       checked: props.checked ?? null,
     },
@@ -2846,7 +2903,7 @@ function convertTextBox(
  * `convertTable` does not yet thread it (orthogonal upstream divergence).
  */
 export function headerFooterToProseDoc(
-  content: (Paragraph | Table)[],
+  content: BlockContent[],
   options?: ToProseDocOptions,
 ): PMNode {
   const nodes: PMNode[] = [];
@@ -2856,20 +2913,34 @@ export function headerFooterToProseDoc(
   const theme = options?.theme ?? null;
   let textBoxGroupIndex = 0;
 
-  for (const block of content) {
-    if (block.type === "paragraph") {
-      nodes.push(
-        ...convertParagraphWithTextBoxes(
-          block,
-          styleResolver,
-          String(textBoxGroupIndex),
-        ),
-      );
-      textBoxGroupIndex += 1;
-    } else {
-      nodes.push(convertTable(block, styleResolver, theme));
+  const convertBlocks = (blocks: BlockContent[]): PMNode[] => {
+    const out: PMNode[] = [];
+    for (const block of blocks) {
+      if (block.type === "paragraph") {
+        out.push(
+          ...convertParagraphWithTextBoxes(
+            block,
+            styleResolver,
+            String(textBoxGroupIndex),
+          ),
+        );
+        textBoxGroupIndex += 1;
+      } else if (block.type === "table") {
+        out.push(convertTable(block, styleResolver, theme));
+      } else {
+        out.push(convertBlockSdt(block, convertBlocks));
+      }
     }
-  }
+    return out;
+  };
+
+  nodes.push(...convertBlocks(content));
+  // Caret affordance after a final isolating blockSdt is handled by
+  // prosemirror-gapcursor at runtime; we no longer pad the converted doc
+  // with a synthetic trailing paragraph because that paragraph survives
+  // the reverse pass and pollutes both round-trip saves and
+  // `setContentControlContent(filter, blocks)` callers that pass blocks
+  // ending in a nested blockSdt.
 
   if (nodes.length === 0) {
     nodes.push(schema.node("paragraph", {}, []));

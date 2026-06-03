@@ -1,0 +1,150 @@
+/**
+ * BlockSdt Extension — block-level content control node.
+ *
+ * Mirrors OOXML's block `w:sdt` wrapping paragraphs/tables. `isolating: true`
+ * keeps user edits scoped to the control (a backspace at the start of an
+ * inner paragraph cannot merge through the boundary into a sibling), and
+ * `defining: true` preserves the wrapper across split/lift.
+ *
+ * Attributes:
+ * - `sdtType` / `alias` / `tag` / `lock` / `placeholder` /
+ *   `showingPlaceholder` / `dateFormat` / `listItems` / `checked` — modeled
+ *   projection of `w:sdtPr`; drives addressing and widget UX.
+ * - `rawPropertiesXml` / `rawEndPropertiesXml` — verbatim original strings
+ *   so unmodeled OOXML features (`w:dataBinding`, `w15:repeatingSection`,
+ *   etc.) round-trip without being enumerated here.
+ */
+
+import { createNodeExtension } from "../create";
+
+export const BlockSdtExtension = createNodeExtension({
+  name: "blockSdt",
+  schemaNodeName: "blockSdt",
+  nodeSpec: {
+    group: "block",
+    content: "block+",
+    isolating: true,
+    defining: true,
+    attrs: {
+      sdtType: { default: "richText" },
+      alias: { default: null },
+      tag: { default: null },
+      id: { default: null },
+      lock: { default: null },
+      placeholder: { default: null },
+      showingPlaceholder: { default: false },
+      dateFormat: { default: null },
+      /** ISO 8601 bound date value (`w:date@w:fullDate`). */
+      dateValueISO: { default: null },
+      listItems: { default: null },
+      /**
+       * Selected dropdown / comboBox value (`w:dropDownList@w:lastValue`).
+       * Persisted independently of body display text so duplicate-label
+       * items round-trip to the right OOXML value on save.
+       */
+      dropdownLastValue: { default: null },
+      checked: { default: null },
+      /**
+       * True when the source `<w:sdtContent/>` was empty. PM `block+`
+       * requires at least one child so `toProseDoc` inserts a synthetic
+       * filler paragraph; on save, `fromProseDoc` reads this flag to
+       * drop the filler when the body still matches the synthetic shape.
+       * Without the explicit marker we'd silently drop authored
+       * `<w:sdtContent><w:p/></w:sdtContent>` empty-paragraph content too.
+       */
+      _originallyEmpty: { default: false },
+      rawPropertiesXml: { default: null },
+      rawEndPropertiesXml: { default: null },
+      /**
+       * Verbatim XML for direct sdt siblings of sdtContent (range markers
+       * per MS-OE376 §2.5.2.30). Two slots so position is preserved.
+       */
+      rawSdtChildrenBeforeContent: { default: null },
+      rawSdtChildrenAfterContent: { default: null },
+    },
+    parseDOM: [
+      {
+        tag: "div.docx-block-sdt",
+        getAttrs(dom) {
+          if (!(dom instanceof HTMLElement)) {
+            return false;
+          }
+          const checkedRaw = dom.dataset["checked"];
+          let checked: boolean | null = null;
+          if (checkedRaw === "true") {
+            checked = true;
+          } else if (checkedRaw === "false") {
+            checked = false;
+          }
+          const idRaw = dom.dataset["sdtId"];
+          const id = idRaw ? Number.parseInt(idRaw, 10) : null;
+          return {
+            sdtType: dom.dataset["sdtType"] ?? "richText",
+            alias: dom.dataset["alias"] ?? null,
+            tag: dom.dataset["tag"] ?? null,
+            id: id !== null && !Number.isNaN(id) ? id : null,
+            lock: dom.dataset["lock"] ?? null,
+            placeholder: dom.dataset["placeholder"] ?? null,
+            showingPlaceholder: dom.dataset["showingPlaceholder"] === "true",
+            dateFormat: dom.dataset["dateFormat"] ?? null,
+            dateValueISO: dom.dataset["dateValueIso"] ?? null,
+            listItems: dom.dataset["listItems"] ?? null,
+            dropdownLastValue: dom.dataset["dropdownLastValue"] ?? null,
+            checked,
+            _originallyEmpty: dom.dataset["originallyEmpty"] === "true",
+            // Raw XML is preserved on the model, not the DOM; consumers that
+            // round-trip through PM must re-attach it from the source.
+            rawPropertiesXml: null,
+            rawEndPropertiesXml: null,
+            rawSdtChildrenBeforeContent: null,
+            rawSdtChildrenAfterContent: null,
+          };
+        },
+      },
+    ],
+    toDOM(node) {
+      const attrs = node.attrs;
+      const data: Record<string, string> = {
+        class: `docx-block-sdt docx-block-sdt-${String(attrs["sdtType"])}`,
+        "data-sdt-type": String(attrs["sdtType"]),
+      };
+      if (attrs["alias"]) {
+        data["data-alias"] = String(attrs["alias"]);
+      }
+      if (attrs["tag"]) {
+        data["data-tag"] = String(attrs["tag"]);
+      }
+      if (attrs["id"] !== null && attrs["id"] !== undefined) {
+        data["data-sdt-id"] = String(attrs["id"]);
+      }
+      if (attrs["lock"]) {
+        data["data-lock"] = String(attrs["lock"]);
+      }
+      if (attrs["placeholder"]) {
+        data["data-placeholder"] = String(attrs["placeholder"]);
+      }
+      if (attrs["showingPlaceholder"]) {
+        data["data-showing-placeholder"] = "true";
+      }
+      if (attrs["dateFormat"]) {
+        data["data-date-format"] = String(attrs["dateFormat"]);
+      }
+      if (attrs["dateValueISO"]) {
+        data["data-date-value-iso"] = String(attrs["dateValueISO"]);
+      }
+      if (attrs["listItems"]) {
+        data["data-list-items"] = String(attrs["listItems"]);
+      }
+      if (attrs["dropdownLastValue"]) {
+        data["data-dropdown-last-value"] = String(attrs["dropdownLastValue"]);
+      }
+      if (attrs["checked"] !== null && attrs["checked"] !== undefined) {
+        data["data-checked"] = String(attrs["checked"]);
+      }
+      if (attrs["_originallyEmpty"]) {
+        data["data-originally-empty"] = "true";
+      }
+      return ["div", data, 0];
+    },
+  },
+});

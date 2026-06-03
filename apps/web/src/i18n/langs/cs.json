@@ -1139,6 +1139,9 @@
       "unknownAuthor": "Neznámý",
       "visibility": "Komentáře"
     },
+    "contentControlDateAriaLabel": "Pick a date",
+    "contentControlDropdownAriaLabel": "Dropdown options",
+    "contentControlDropdownNoOptions": "No options",
     "copy": "Kopírovat",
     "copyLink": "Kopírovat odkaz",
     "cut": "Vyjmout",

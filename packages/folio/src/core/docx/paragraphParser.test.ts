@@ -153,6 +153,37 @@ describe("parseParagraph tracked-change hardening", () => {
     expect(sdt.content).toHaveLength(0);
   });
 
+  test("reads inline date-SDT format from <w:dateFormat>, not <w:date w:fullDate>", () => {
+    // Regression: parseSdtProperties used to read w:date@w:fullDate as the
+    // format, but w:fullDate is the bound *value*; the display format lives
+    // in the child <w:dateFormat w:val="..."/>. Picked up from upstream
+    // eigenpal/docx-editor#661.
+    const paragraph = parseParagraphXml(`
+      <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:sdt>
+          <w:sdtPr>
+            <w:tag w:val="effective-date"/>
+            <w:date w:fullDate="2026-06-02T00:00:00Z">
+              <w:dateFormat w:val="d MMMM yyyy"/>
+              <w:lid w:val="en-GB"/>
+            </w:date>
+          </w:sdtPr>
+          <w:sdtContent><w:r><w:t>2 June 2026</w:t></w:r></w:sdtContent>
+        </w:sdt>
+      </w:p>
+    `);
+
+    const sdt = paragraph.content.at(0);
+    if (!sdt || sdt.type !== "inlineSdt") {
+      throw new Error("expected inline SDT");
+    }
+    expect(sdt.properties).toMatchObject({
+      sdtType: "date",
+      tag: "effective-date",
+      dateFormat: "d MMMM yyyy",
+    });
+  });
+
   test("preserves point comment references from runs", () => {
     const paragraph = parseParagraphXml(`
       <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">

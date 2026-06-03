@@ -466,6 +466,60 @@ export function getAttribute(
 }
 
 /**
+ * Read an attribute by local name, trying the element's own prefix first,
+ * then the canonical Word prefix, then unprefixed.
+ *
+ * OOXML lets a producer bind the WordprocessingML namespace under any
+ * prefix the file's xmlns declarations choose, so a strict `w:val` /
+ * `w:tag` lookup misses valid docs that use `ns0:` (or any other prefix
+ * resolving to the same URI). This helper mirrors `parseBooleanElement`'s
+ * tolerance for the attribute path — call it whenever you want to read
+ * an OOXML attribute that conventionally lives in the `w:` namespace
+ * but could appear under an alternate prefix bound to the same URI.
+ */
+export function getAttributeAnyPrefix(
+  element: XmlElement | null | undefined,
+  localName: string,
+): string | null {
+  if (!element) {
+    return null;
+  }
+  const elementName = element.name ?? "";
+  const colonIdx = elementName.indexOf(":");
+  const elementPrefix = colonIdx > 0 ? elementName.slice(0, colonIdx) : null;
+  if (elementPrefix && elementPrefix !== "w") {
+    const fromPrefix = getAttribute(element, elementPrefix, localName);
+    if (fromPrefix !== null) {
+      return fromPrefix;
+    }
+  }
+  const canonical = getAttribute(element, "w", localName);
+  if (canonical !== null) {
+    return canonical;
+  }
+  // Final fallback: a canonical element (`<w:tag>`) can still carry
+  // attributes under a different inherited prefix (`<w:tag x:val="…"/>`
+  // when `x` is also bound to the WP URI at the document root). The
+  // wrapper-prefix and canonical-prefix lookups above miss that case;
+  // scan attribute names by local-name suffix as a last resort so the
+  // modeled projection picks the value up — without this, the raw XML
+  // normalizer rewrites it on save but `props.tag` / `listItems` /
+  // similar stay empty and tag-keyed lookups break.
+  const attrs = element.attributes;
+  if (attrs) {
+    const suffix = `:${localName}`;
+    for (const [key, value] of Object.entries(
+      attrs as Record<string, string>,
+    )) {
+      if (key === localName || key.endsWith(suffix)) {
+        return value;
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * Get an attribute value, trying multiple possible names
  *
  * @param element - Element to get attribute from
@@ -662,7 +716,37 @@ export function parseBooleanElement(
     return false;
   }
 
-  const val = getAttribute(element, namespace, "val");
+  // OOXML binds prefixes to namespace URIs at the doc root; the source is
+  // free to pick any prefix (`w14:checked` vs. `ns0:checked`) so long as
+  // it resolves to the right URI. fast-xml-parser keeps prefixes literal,
+  // so we have to be tolerant of the prefix actually written rather than
+  // assuming the canonical one. Without this, a `<ns0:checked ns0:val="0"/>`
+  // misses the val attribute, falls through to the bare-presence branch,
+  // and an unchecked box renders as checked (codex P2, PR #587).
+  let val: string | null = null;
+  const elementName = element.name ?? "";
+  const colonIdx = elementName.indexOf(":");
+  const elementPrefix = colonIdx > 0 ? elementName.slice(0, colonIdx) : null;
+  if (elementPrefix && elementPrefix !== namespace) {
+    val = getAttribute(element, elementPrefix, "val");
+  }
+  if (val === null) {
+    val = getAttribute(element, namespace, "val");
+  }
+  // A canonical element can carry the val attribute under a different
+  // inherited prefix (`<w:b x:val="0"/>` when `x` is bound to the WP
+  // URI). The wrapper-prefix and canonical-prefix lookups above miss
+  // that; scan by local-name suffix so the OnOff parse is honest.
+  if (val === null && element.attributes) {
+    for (const [key, value] of Object.entries(
+      element.attributes as Record<string, string>,
+    )) {
+      if (key === "val" || key.endsWith(":val")) {
+        val = value;
+        break;
+      }
+    }
+  }
 
   // No val attribute = true (element presence implies true)
   if (val === null) {

@@ -10,12 +10,22 @@ import type {
   FolioAIEditOperation,
   FolioAIEditSnapshot,
 } from "../core/ai-edits";
+import type {
+  ContentControlFilter,
+  SetContentControlContentInput,
+  SetContentControlValueInput,
+} from "../core/content-controls";
 import type { DocxCompatibility } from "../core/docx/compatibility";
 import type { FolioSelectiveSaveFlags } from "../core/docx/selectiveSaveFlags";
 import type { TripwireResult } from "../core/docx/selectiveSaveTripwire";
 import type { SelectionState, TableContextInfo } from "../core/prosemirror";
 import type { AnonymizationMatch } from "../core/prosemirror/plugins/anonymizationDecorations";
-import type { Document, Theme, TabStop } from "../core/types/document";
+import type {
+  Document,
+  SdtProperties,
+  Theme,
+  TabStop,
+} from "../core/types/document";
 import type { DocxInput } from "../core/utils/docxInput";
 import type { PagedEditorRef } from "../paged-editor/PagedEditor";
 import type { DocumentLoadState } from "./hooks/useDocumentLoader";
@@ -276,6 +286,74 @@ export type DocxEditorRef = {
    * a fresh-from-live-doc snapshot.
    */
   scrollToBlock: (blockId: string, snapshot?: FolioAIEditSnapshot) => boolean;
+
+  // -------------------------------------------------------------------------
+  // Block-level content controls (w:sdt)
+  // -------------------------------------------------------------------------
+
+  /**
+   * List every block-level content control in the live document, filtered by
+   * tag / alias / id / sdtType. Returns the modeled SdtProperties projection
+   * plus a synthetic identifier so callers can address each control by
+   * insertion order even if tag/alias collide.
+   *
+   * IMPORTANT: the returned `pmPos` values are valid only for the document
+   * state at fetch time. After any mutation that changes earlier content's
+   * size (`setContentControlContent`, `setContentControlValue`,
+   * `removeContentControl`, etc.), later controls shift and stored
+   * `pmPos` values become stale. For batch-fill flows over duplicate-tag
+   * controls, either refetch via `getContentControls()` after each
+   * mutation, or address by stable `{ tag }` / `{ id }` / `{ alias }` so
+   * the lookup uses the document's current shape on every call.
+   */
+  getContentControls: (filter?: ContentControlFilter) => {
+    properties: SdtProperties;
+    /** Index in the PM document tree, outer→inner. */
+    path: number[];
+    /**
+     * PM position of the control's open token in the SOURCE document state.
+     * Disambiguates duplicates within one snapshot, but does not survive
+     * mutations that resize earlier content — see `getContentControls`
+     * for the refetch / address-by-tag guidance.
+     */
+    pmPos: number;
+  }[];
+  /**
+   * Scroll to the first content control matching the filter and place the
+   * caret inside it. Returns false when no match is present.
+   */
+  scrollToContentControl: (filter: ContentControlFilter) => boolean;
+  /**
+   * Replace a control's inner content with plain text or pre-built block
+   * content. Locked controls throw `ContentControlLockedError` unless
+   * `{ force: true }` is passed. Writes go through a normal undoable
+   * transaction.
+   */
+  setContentControlContent: (
+    filter: ContentControlFilter,
+    input: SetContentControlContentInput,
+    options?: { force?: boolean },
+  ) => boolean;
+  /**
+   * Set a structured value on a typed control (dropdown / checkbox / date).
+   * Throws `ContentControlTypeError` when the input shape does not match the
+   * control's sdtType. Writes go through a normal undoable transaction.
+   */
+  setContentControlValue: (
+    filter: ContentControlFilter,
+    input: SetContentControlValueInput,
+    options?: { force?: boolean },
+  ) => boolean;
+  /**
+   * Remove a control. With `{ keepContent: true }` the inner blocks survive
+   * in-place; otherwise the wrapper and its children are dropped. Refuses to
+   * unwrap a `w15:repeatingSection` (would orphan its row items) unless
+   * `{ force: true }` is passed.
+   */
+  removeContentControl: (
+    filter: ContentControlFilter,
+    options?: { keepContent?: boolean; force?: boolean },
+  ) => boolean;
 };
 
 /** Aggregated internal state held by DocxEditor's top-level reducer slot. */

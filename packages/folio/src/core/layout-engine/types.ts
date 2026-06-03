@@ -419,6 +419,12 @@ export type ParagraphBlock = {
   pmStart?: number;
   /** ProseMirror end position for this block. */
   pmEnd?: number;
+  /**
+   * Outer→inner SDT wrappers enclosing this block. Empty / undefined when
+   * the block sits at the body root. The painter stamps `data-sdt-*` from
+   * the innermost group and draws boundary chrome per outer→inner level.
+   */
+  sdtGroups?: SdtGroup[];
 };
 
 /**
@@ -509,6 +515,8 @@ export type TableBlock = {
   floating?: FloatingTablePosition;
   pmStart?: number;
   pmEnd?: number;
+  /** Outer→inner SDT wrappers enclosing this table (see ParagraphBlock). */
+  sdtGroups?: SdtGroup[];
 };
 
 /**
@@ -637,6 +645,51 @@ export type TextBoxBlock = {
   distRight?: number;
   pmStart?: number;
   pmEnd?: number;
+};
+
+/**
+ * Block-level content-control (OOXML `w:sdt`) projection attached to flow
+ * blocks that fall inside an SDT wrapper. The painter stamps `data-sdt-*`
+ * attributes from this so CSS / interactive widgets can find the group.
+ *
+ * `id` is a per-document, monotonically assigned identifier so nested SDTs
+ * stay disambiguated even when alias/tag/sdtId collide.
+ */
+export type SdtGroup = {
+  /** Folio-local identifier (stable within one toFlowBlocks call). */
+  id: string;
+  /**
+   * ProseMirror position of the blockSdt's open token in the source doc.
+   * Stable across renders for the same control and unique per instance —
+   * the addressing API uses this to disambiguate SDTs that share a tag.
+   */
+  pmPos: number;
+  sdtType: string;
+  /** OOXML `w:alias` (friendly display name). */
+  alias?: string;
+  /** OOXML `w:tag` (developer identifier — anchor for addressing API). */
+  tag?: string;
+  /** OOXML numeric `w:id`. */
+  sdtId?: number;
+  /** OOXML `w:lock` setting. */
+  lock?: string;
+  /** True if `w:showingPlcHdr` is set. */
+  showingPlaceholder?: boolean;
+  /** Modeled checkbox state, when the control is `w14:checkbox`. */
+  checked?: boolean;
+  /** Modeled `w:date/w:dateFormat`. */
+  dateFormat?: string;
+  /** Modeled `w:dropDownList`/`w:comboBox` items (JSON-encoded). */
+  listItemsJson?: string;
+  /**
+   * Position of the carrying block within its SDT group (`first`/`middle`/
+   * `last`/`only`). The painter stamps `data-sdt-position` from this so the
+   * CSS chrome can draw a continuous outline across the block sequence —
+   * top edge on `first`, bottom edge on `last`, only side edges in
+   * between. Without this, every block painted its own closed box and a
+   * multi-paragraph SDT looked like several stacked rectangles.
+   */
+  position?: "first" | "middle" | "last" | "only";
 };
 
 /**
@@ -799,6 +852,12 @@ export type FragmentBase = {
   pmStart?: number;
   /** ProseMirror end position (for click mapping). */
   pmEnd?: number;
+  /**
+   * Outer→inner SDT wrappers enclosing the originating block. Copied
+   * verbatim from the FlowBlock so the painter can stamp `data-sdt-*`
+   * attributes per fragment.
+   */
+  sdtGroups?: SdtGroup[];
 };
 
 /**

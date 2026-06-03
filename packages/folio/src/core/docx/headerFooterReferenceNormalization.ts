@@ -69,7 +69,7 @@ export const normalizeHeaderFooterReferences = ({
   const normalizeTable = (table: Table): void => {
     for (const row of table.rows) {
       for (const cell of row.cells) {
-        normalizeParagraphTableBlocks(cell.content);
+        normalizeBlocks(cell.content);
       }
     }
   };
@@ -83,24 +83,12 @@ export const normalizeHeaderFooterReferences = ({
       normalizeTable(block);
       return;
     }
-    normalizeParagraphTableBlocks(block.content);
+    normalizeBlocks(block.content);
   };
 
   const normalizeBlocks = (blocks: BlockContent[]): void => {
     for (const block of blocks) {
       normalizeBlock(block);
-    }
-  };
-
-  const normalizeParagraphTableBlocks = (
-    blocks: (Paragraph | Table)[],
-  ): void => {
-    for (const block of blocks) {
-      if (block.type === "paragraph") {
-        normalizeParagraph(block);
-        continue;
-      }
-      normalizeTable(block);
     }
   };
 

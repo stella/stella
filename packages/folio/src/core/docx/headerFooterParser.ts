@@ -329,6 +329,17 @@ export function getHeaderFooterText(hf: HeaderFooter): string {
         }
       }
       texts.push(paraTexts.join(""));
+    } else if (item.type === "blockSdt") {
+      // The SDT wrapper is invisible to plain-text extraction; recurse via a
+      // synthetic HeaderFooter so the existing per-block dispatch handles
+      // the nested paragraphs/tables/SDTs without code duplication.
+      texts.push(
+        getHeaderFooterText({
+          type: hf.type,
+          hdrFtrType: hf.hdrFtrType,
+          content: item.content,
+        }),
+      );
     } else {
       // Extract text from table cells
       for (const row of item.rows) {

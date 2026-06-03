@@ -28,6 +28,7 @@ import type {
   FieldRun,
   RunFormatting,
   ParagraphAttrs,
+  SdtGroup,
   TabStop,
   FloatingTablePosition,
 } from "../layout-engine/types";
@@ -36,6 +37,7 @@ import {
   DEFAULT_TEXTBOX_WIDTH,
 } from "../layout-engine/types";
 import {
+  expectBlockSdtAttrs,
   expectCharacterSpacingMarkAttrs,
   expectCommentMarkAttrs,
   expectEmphasisMarkAttrs,
@@ -2294,7 +2296,8 @@ export function toFlowBlocks(
   };
 
   const blocks: FlowBlock[] = [];
-  const offset = 0; // Start at document beginning
+  const offset = 0; // Start at document beginning; kept for clarity.
+  void offset;
   let lastSectionMarginsTwips = {
     top: 1440,
     bottom: 1440,
@@ -2302,16 +2305,135 @@ export function toFlowBlocks(
     right: 1440,
   };
 
-  // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
-  doc.forEach((node, nodeOffset) => {
-    const pos = offset + nodeOffset;
+  let sdtSeq = 0;
+  const sdtStack: SdtGroup[] = [];
+
+  /**
+   * Stamp the active SDT stack (outer→inner) onto every block produced by the
+   * current call. ParagraphBlock/TableBlock accept `sdtGroups`; section breaks
+   * and page breaks deliberately do not — they bracket layout, not content.
+   */
+  const tagBlockWithSdtStack = (block: FlowBlock): void => {
+    if (sdtStack.length === 0) {
+      return;
+    }
+    if (block.kind === "paragraph" || block.kind === "table") {
+      block.sdtGroups = [...sdtStack];
+    }
+  };
+
+  const trackedPush = (block: FlowBlock): void => {
+    tagBlockWithSdtStack(block);
+    blocks.push(block);
+  };
+
+  // Refactored visit-style traversal so blockSdt can recurse into its
+  // children without duplicating the per-block conversion code.
+  const visit = (node: PMNode, pos: number): void => {
+    switch (node.type.name) {
+      case "blockSdt": {
+        const attrs = expectBlockSdtAttrs(node);
+        sdtSeq += 1;
+        const group: SdtGroup = {
+          id: `sdt-${sdtSeq}`,
+          pmPos: pos,
+          sdtType: attrs.sdtType,
+        };
+        if (attrs.alias) {
+          group.alias = attrs.alias;
+        }
+        if (attrs.tag) {
+          group.tag = attrs.tag;
+        }
+        if (typeof attrs.id === "number") {
+          group.sdtId = attrs.id;
+        }
+        if (attrs.lock) {
+          group.lock = attrs.lock;
+        }
+        if (attrs.showingPlaceholder) {
+          group.showingPlaceholder = true;
+        }
+        if (typeof attrs.checked === "boolean") {
+          group.checked = attrs.checked;
+        }
+        if (attrs.dateFormat) {
+          group.dateFormat = attrs.dateFormat;
+        }
+        if (attrs.listItems) {
+          group.listItemsJson = attrs.listItems;
+        }
+
+        sdtStack.push(group);
+        const startIndex = blocks.length;
+        let childOffset = pos + 1; // skip the blockSdt opening token
+        for (let i = 0; i < node.childCount; i += 1) {
+          const child = node.child(i);
+          visit(child, childOffset);
+          childOffset += child.nodeSize;
+        }
+        sdtStack.pop();
+        // Stamp first/middle/last/only on the innermost group of each block
+        // that was emitted inside this SDT so the painter chrome continues
+        // visually across the block sequence. Only paragraph/table blocks
+        // carry sdtGroups; section breaks etc. were skipped at tag time.
+        const groupBlocks: (ParagraphBlock | TableBlock)[] = [];
+        for (let i = startIndex; i < blocks.length; i += 1) {
+          const b = blocks[i];
+          if (b && (b.kind === "paragraph" || b.kind === "table")) {
+            groupBlocks.push(b);
+          }
+        }
+        // We're finalizing the SDT that `group` represents — locate that
+        // entry by `pmPos` instead of always taking `at(-1)`. For blocks
+        // that sit inside an inner SDT, `at(-1)` is the inner group, and
+        // overwriting it would clobber the inner SDT's first/middle/last
+        // markers when the outer iterates the same range later. Matching
+        // by pmPos keeps the inner positions intact.
+        const ourPmPos = group.pmPos;
+        for (let i = 0; i < groupBlocks.length; i += 1) {
+          const b = groupBlocks[i];
+          if (!b || !b.sdtGroups) {
+            continue;
+          }
+          const idx = b.sdtGroups.findIndex((g) => g.pmPos === ourPmPos);
+          if (idx === -1) {
+            continue;
+          }
+          let position: NonNullable<SdtGroup["position"]>;
+          if (groupBlocks.length === 1) {
+            position = "only";
+          } else if (i === 0) {
+            position = "first";
+          } else if (i === groupBlocks.length - 1) {
+            position = "last";
+          } else {
+            position = "middle";
+          }
+          // Replace just the entry for this SDT, leaving inner/outer
+          // sibling entries untouched. (SdtGroup objects are shared
+          // across blocks of the same group; copy-on-write here keeps
+          // the other blocks' references stable.)
+          const next = [...b.sdtGroups];
+          const existing = next[idx];
+          if (!existing) {
+            continue;
+          }
+          next[idx] = { ...existing, position };
+          b.sdtGroups = next;
+        }
+        return;
+      }
+      default:
+        break;
+    }
 
     switch (node.type.name) {
       case "paragraph": {
         const block = convertParagraph(node, pos, opts);
         const pmAttrs = expectParagraphAttrs(node);
 
-        blocks.push(block);
+        trackedPush(block);
 
         // Emit section break block if this paragraph ends a section
         const secProps = pmAttrs._sectionProperties as
@@ -2382,22 +2504,22 @@ export function toFlowBlocks(
             }
           }
 
-          blocks.push(sectionBreak);
+          trackedPush(sectionBreak);
         }
         break;
       }
 
       case "table":
-        blocks.push(convertTable(node, pos, opts));
+        trackedPush(convertTable(node, pos, opts));
         break;
 
       case "image":
         // Standalone image block (if not inline)
-        blocks.push(convertImage(node, pos, opts.pageContentHeight));
+        trackedPush(convertImage(node, pos, opts.pageContentHeight));
         break;
 
       case "textBox":
-        blocks.push(convertTextBoxNode(node, pos, opts));
+        trackedPush(convertTextBoxNode(node, pos, opts));
         break;
 
       case "horizontalRule":
@@ -2408,12 +2530,17 @@ export function toFlowBlocks(
           pmStart: pos,
           pmEnd: pos + node.nodeSize,
         };
-        blocks.push(pb);
+        trackedPush(pb);
         break;
       }
       default:
         break;
     }
+  };
+
+  // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
+  doc.forEach((node, nodeOffset) => {
+    visit(node, offset + nodeOffset);
   });
 
   return mergeRunInParagraphs(blocks);
@@ -2437,6 +2564,29 @@ export function toFlowBlocks(
  * preserve runInWithNext only when the second paragraph itself has
  * specVanish).
  */
+function sdtGroupStacksEqual(
+  a: SdtGroup[] | undefined,
+  b: SdtGroup[] | undefined,
+): boolean {
+  // pmPos is unique per SDT instance within a single toFlowBlocks call, so
+  // comparing the pmPos stacks is enough to tell "same membership" vs.
+  // "different membership" without copying the rest of the group payload.
+  const lenA = a?.length ?? 0;
+  const lenB = b?.length ?? 0;
+  if (lenA !== lenB) {
+    return false;
+  }
+  if (lenA === 0) {
+    return true;
+  }
+  for (let i = 0; i < lenA; i++) {
+    if (a?.[i]?.pmPos !== b?.[i]?.pmPos) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function mergeRunInParagraphs(blocks: FlowBlock[]): FlowBlock[] {
   const out: FlowBlock[] = [];
   for (let i = 0; i < blocks.length; i++) {
@@ -2461,6 +2611,15 @@ function mergeRunInParagraphs(blocks: FlowBlock[]): FlowBlock[] {
       }
       const a = current as ParagraphBlock;
       const b = next as ParagraphBlock;
+      // Stop merging when the two paragraphs sit in different SDT stacks.
+      // The merged ParagraphBlock would inherit only `a`'s sdtGroups via
+      // spread, so a `<w:specVanish/>` adjacent to a paragraph across an
+      // SDT boundary would either claim outside text as part of the SDT
+      // or strip SDT membership from inside text — chrome and widget
+      // click targets would line up against the wrong content range.
+      if (!sdtGroupStacksEqual(a.sdtGroups, b.sdtGroups)) {
+        break;
+      }
       const mergedAttrs: ParagraphAttrs = { ...a.attrs };
       // Heading typically has no spaceAfter; the body's spaceAfter
       // governs the merged paragraph's trailing gap.

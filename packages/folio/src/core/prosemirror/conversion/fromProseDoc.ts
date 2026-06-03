@@ -23,6 +23,8 @@ import type {
   SectionStart,
 } from "../../types/content";
 import type {
+  BlockContent,
+  BlockSdt,
   Document,
   DocumentBody,
   Paragraph,
@@ -72,6 +74,7 @@ import {
   expectMathAttrs,
   expectParagraphAttrs,
   expectRunFormattingOverrideMarkAttrs,
+  expectBlockSdtAttrs,
   expectSdtAttrs,
   expectShapeAttrs,
   expectStrikeMarkAttrs,
@@ -180,10 +183,11 @@ export function fromProseDoc(pmDoc: PMNode, baseDocument?: Document): Document {
 }
 
 /**
- * Extract blocks (paragraphs and tables) from ProseMirror document
+ * Extract block content (paragraphs, tables, block SDTs) from a ProseMirror
+ * document.
  */
-function extractBlocks(pmDoc: PMNode): (Paragraph | Table)[] {
-  const blocks: (Paragraph | Table)[] = [];
+function extractBlocks(pmDoc: PMNode): BlockContent[] {
+  const blocks: BlockContent[] = [];
   const documentCounts = buildDocumentTrackedChangeCounts(pmDoc);
   let pendingPageBreaks = 0;
   let previousStandaloneTextBox: PreviousStandaloneTextBox | null = null;
@@ -233,6 +237,15 @@ function extractBlocks(pmDoc: PMNode): (Paragraph | Table)[] {
         previousStandaloneTextBox,
       });
       pendingPageBreaks = 0;
+    } else if (node.type.name === "blockSdt") {
+      if (
+        pendingPageBreaks > 0 &&
+        !appendPendingPageBreaksToPreviousParagraph()
+      ) {
+        flushPendingPageBreaks();
+      }
+      blocks.push(convertPMBlockSdt(node));
+      previousStandaloneTextBox = null;
     }
   });
 
@@ -253,8 +266,142 @@ type PreviousStandaloneTextBox = {
   groupId: string;
 };
 
+function convertPMBlockSdt(node: PMNode): BlockSdt {
+  const attrs = expectBlockSdtAttrs(node);
+  const properties: SdtProperties = { sdtType: attrs.sdtType };
+  if (attrs.alias) {
+    properties.alias = attrs.alias;
+  }
+  if (attrs.tag) {
+    properties.tag = attrs.tag;
+  }
+  if (typeof attrs.id === "number") {
+    properties.id = attrs.id;
+  }
+  if (attrs.lock) {
+    properties.lock = attrs.lock;
+  }
+  if (attrs.placeholder) {
+    properties.placeholder = attrs.placeholder;
+  }
+  // Preserve the explicit boolean — including `false`. When the widget
+  // / editor-ref path fills a placeholder-bearing control,
+  // `replaceBlockSdtChildren` sets `showingPlaceholder: false` so the
+  // serializer's `reconcileRawSdtPr` knows to remove the source DOCX's
+  // `<w:showingPlcHdr/>`. A truthy-only check (the prior shape) would
+  // drop that `false` and the saved file would keep marking the
+  // newly filled body as placeholder text.
+  if (attrs.showingPlaceholder !== undefined) {
+    properties.showingPlaceholder = attrs.showingPlaceholder;
+  }
+  if (attrs.dateFormat) {
+    properties.dateFormat = attrs.dateFormat;
+  }
+  if (attrs.dateValueISO) {
+    properties.dateValueISO = attrs.dateValueISO;
+  }
+  if (attrs.listItems) {
+    const items = parseListItemsJson(attrs.listItems);
+    if (items) {
+      properties.listItems = items;
+    }
+  }
+  if (typeof attrs.dropdownLastValue === "string") {
+    properties.dropdownLastValue = attrs.dropdownLastValue;
+  }
+  if (typeof attrs.checked === "boolean") {
+    properties.checked = attrs.checked;
+  }
+  if (attrs.rawPropertiesXml) {
+    properties.rawPropertiesXml = attrs.rawPropertiesXml;
+  }
+  if (attrs.rawEndPropertiesXml) {
+    properties.rawEndPropertiesXml = attrs.rawEndPropertiesXml;
+  }
+  if (attrs.rawSdtChildrenBeforeContent) {
+    properties.rawSdtChildrenBeforeContent = attrs.rawSdtChildrenBeforeContent;
+  }
+  if (attrs.rawSdtChildrenAfterContent) {
+    properties.rawSdtChildrenAfterContent = attrs.rawSdtChildrenAfterContent;
+  }
+
+  // Recursively materialize children. PM `blockSdt` content is `block+`, so a
+  // mini-doc node is a convenient way to reuse extractBlocks.
+  const innerDoc = node.type.schema.node("doc", null, node.content);
+  const extracted = extractBlocks(innerDoc);
+
+  // `toProseDoc` inserts a synthetic filler paragraph into any blockSdt
+  // whose source had an empty `<w:sdtContent/>` and stamps the
+  // `_originallyEmpty` marker on the PM node. Use that explicit marker
+  // (not a shape heuristic) to drop the filler on save — an authored
+  // `<w:sdtContent><w:p/></w:sdtContent>` does NOT carry the marker
+  // and its empty paragraph survives the round trip intact. If the
+  // user typed into the filler we still preserve the paragraph,
+  // matching their intent.
+  const wasOriginallyEmpty = attrs._originallyEmpty === true;
+  const content =
+    wasOriginallyEmpty && isStillSyntheticFiller(extracted) ? [] : extracted;
+
+  return { type: "blockSdt", properties, content };
+}
+
+function isStillSyntheticFiller(blocks: BlockContent[]): boolean {
+  if (blocks.length !== 1) {
+    return false;
+  }
+  const block = blocks[0];
+  if (!block || block.type !== "paragraph") {
+    return false;
+  }
+  if (block.content.length !== 0) {
+    return false;
+  }
+  // Reject anything that signals real editing (formatting, mark changes,
+  // section properties) — if the user authored content, preserve it.
+  if (block.formatting !== undefined) {
+    return false;
+  }
+  if (block.sectionProperties !== undefined) {
+    return false;
+  }
+  if (block.propertyChanges !== undefined) {
+    return false;
+  }
+  if (block.pPrMark !== undefined) {
+    return false;
+  }
+  return true;
+}
+
+function parseListItemsJson(
+  raw: string,
+): { displayText: string; value: string }[] | undefined {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return undefined;
+    }
+    const items: { displayText: string; value: string }[] = [];
+    for (const entry of parsed) {
+      if (
+        entry !== null &&
+        typeof entry === "object" &&
+        "displayText" in entry &&
+        "value" in entry &&
+        typeof (entry as { displayText: unknown }).displayText === "string" &&
+        typeof (entry as { value: unknown }).value === "string"
+      ) {
+        items.push(entry as { displayText: string; value: string });
+      }
+    }
+    return items.length > 0 ? items : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function appendTextBoxBlock(
-  blocks: (Paragraph | Table)[],
+  blocks: BlockContent[],
   node: PMNode,
   options: AppendTextBoxBlockOptions,
 ): PreviousStandaloneTextBox | null {
@@ -1217,6 +1364,9 @@ function createInlineSdtFromNode(node: PMNode): InlineSdt {
   }
   if (attrs.dateFormat) {
     properties.dateFormat = attrs.dateFormat;
+  }
+  if (attrs.dateValueISO) {
+    properties.dateValueISO = attrs.dateValueISO;
   }
   if (attrs.listItems) {
     properties.listItems = parseSdtListItems(attrs.listItems);
@@ -2439,9 +2589,12 @@ export function updateDocumentContent(
 }
 
 /**
- * Convert a ProseMirror document back to an array of Paragraph/Table blocks.
- * Used for converting edited header/footer PM content back to the document model.
+ * Convert a ProseMirror document back to an array of `BlockContent` blocks
+ * (paragraphs, tables, and block-level content controls).
+ *
+ * Used for converting edited header/footer PM content back to the document
+ * model.
  */
-export function proseDocToBlocks(pmDoc: PMNode): (Paragraph | Table)[] {
+export function proseDocToBlocks(pmDoc: PMNode): BlockContent[] {
   return extractBlocks(pmDoc);
 }

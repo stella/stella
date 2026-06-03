@@ -1142,6 +1142,9 @@ type Messages = {
       "unknownAuthor": "Unknown";
       "visibility": "Comments";
     };
+    "contentControlDateAriaLabel": "Pick a date";
+    "contentControlDropdownAriaLabel": "Dropdown options";
+    "contentControlDropdownNoOptions": "No options";
     "copy": "Copy";
     "copyLink": "Copy link";
     "cut": "Cut";

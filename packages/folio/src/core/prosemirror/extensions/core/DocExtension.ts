@@ -8,6 +8,7 @@ export const DocExtension = createNodeExtension({
   name: "doc",
   schemaNodeName: "doc",
   nodeSpec: {
-    content: "(paragraph | horizontalRule | pageBreak | table | textBox)+",
+    content:
+      "(paragraph | horizontalRule | pageBreak | table | textBox | blockSdt)+",
   },
 });

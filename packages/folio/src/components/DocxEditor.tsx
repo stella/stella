@@ -131,6 +131,15 @@ import {
   findNextChange,
   findPreviousChange,
 } from "../core/prosemirror/commands/comments";
+import {
+  blockSdtAttrsToSdtProperties,
+  findBlockSdtMatch,
+  findBlockSdtMatches,
+  removeContentControlTr,
+  setContentControlContentTr,
+  setContentControlValueTr,
+} from "../core/prosemirror/commands/contentControls";
+import { setContentControlContentBlocksTr } from "../core/prosemirror/commands/contentControlsBlockFill";
 import { proseDocToBlocks } from "../core/prosemirror/conversion/fromProseDoc";
 import { ExtensionManager } from "../core/prosemirror/extensions/ExtensionManager";
 import {
@@ -181,6 +190,7 @@ import {
   removePendingCommentMarkRange,
 } from "./commentsHelpers";
 import type { TrackedChangeEntry } from "./CommentsSidebar";
+import { ContentControlWidgetsOverlay } from "./ContentControlWidgetsOverlay";
 // Dialog hooks and utilities (static imports — lightweight, no UI)
 import type { FindMatch } from "./dialogs/findReplaceUtils";
 import type { ImagePropertiesData } from "./dialogs/ImagePropertiesDialog";
@@ -2814,6 +2824,79 @@ export function DocxEditor({
         });
         return true;
       },
+      getContentControls: (filter = {}) => {
+        const view = pagedEditorRef.current?.getView();
+        if (!view) {
+          return [];
+        }
+        return findBlockSdtMatches(view.state.doc, filter).map((match) => ({
+          properties: blockSdtAttrsToSdtProperties(match.node),
+          path: match.path,
+          pmPos: match.pos,
+        }));
+      },
+      scrollToContentControl: (filter) => {
+        const view = pagedEditorRef.current?.getView();
+        if (!view) {
+          return false;
+        }
+        const match = findBlockSdtMatch(view.state.doc, filter);
+        if (!match) {
+          return false;
+        }
+        // Place selection just inside the SDT (after its opening token).
+        const inside = match.pos + 1;
+        const $pos = view.state.doc.resolve(inside);
+        view.dispatch(view.state.tr.setSelection(TextSelection.near($pos)));
+        requestAnimationFrame(() => {
+          pagedEditorRef.current?.scrollToPosition(inside);
+        });
+        return true;
+      },
+      setContentControlContent: (filter, input, options = {}) => {
+        const view = pagedEditorRef.current?.getView();
+        if (!view) {
+          return false;
+        }
+        const tr =
+          typeof input === "string"
+            ? setContentControlContentTr(view.state, filter, input, options)
+            : setContentControlContentBlocksTr(
+                view.state,
+                filter,
+                input,
+                options,
+              );
+        if (!tr) {
+          return false;
+        }
+        view.dispatch(tr);
+        return true;
+      },
+      setContentControlValue: (filter, input, options = {}) => {
+        const view = pagedEditorRef.current?.getView();
+        if (!view) {
+          return false;
+        }
+        const tr = setContentControlValueTr(view.state, filter, input, options);
+        if (!tr) {
+          return false;
+        }
+        view.dispatch(tr);
+        return true;
+      },
+      removeContentControl: (filter, options = {}) => {
+        const view = pagedEditorRef.current?.getView();
+        if (!view) {
+          return false;
+        }
+        const tr = removeContentControlTr(view.state, filter, options);
+        if (!tr) {
+          return false;
+        }
+        view.dispatch(tr);
+        return true;
+      },
     }),
     [
       author,
@@ -3799,6 +3882,11 @@ export function DocxEditor({
               />
             </Suspense>
           )}
+
+          {/* Dropdown / date pickers for content controls */}
+          <ContentControlWidgetsOverlay
+            getEditorView={() => pagedEditorRef.current?.getView() ?? null}
+          />
 
           {/* Toast notifications */}
           {/* Toast notifications provided by host app */}
