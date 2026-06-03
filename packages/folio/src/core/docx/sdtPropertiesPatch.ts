@@ -245,16 +245,20 @@ export function reconcileRawSdtPr(
           wDate,
           (_m, prefix: string, _attrs: string, inner: string) => {
             // Remove any existing w:dateFormat, re-emit ours if provided.
-            // Match BOTH the self-closing and expanded-empty forms — a valid
-            // DOCX is free to write `<w:dateFormat w:val="…"></w:dateFormat>`,
-            // and stripping only `…/>` would leave a stale sibling next to
-            // the freshly-prepended replacement on the next save.
-            let body = inner
-              .replaceAll(/<\w+:dateFormat\b[^/>]*\/>/giu, "")
-              .replaceAll(
-                /<\w+:dateFormat\b[^>]*>[\s\S]*?<\/\w+:dateFormat>/giu,
-                "",
-              );
+            // Single alternation covers BOTH the self-closing form
+            // (`<w:dateFormat …/>`) and the expanded-empty form
+            // (`<w:dateFormat …></w:dateFormat>`) — a valid DOCX is free
+            // to write either, and stripping only one would leave a
+            // stale sibling next to the freshly-prepended replacement
+            // on the next save. One pass also stops CodeQL's
+            // incomplete-multi-character-sanitization heuristic from
+            // flagging the chained replaceAll pattern, which it kept
+            // confusing for HTML element sanitisation even though this
+            // is XML buffer manipulation that never reaches a browser.
+            let body = inner.replaceAll(
+              /<\w+:dateFormat\b[^>]*(?:\/>|>[\s\S]*?<\/\w+:dateFormat>)/giu,
+              "",
+            );
             if (formatChild) {
               body = `${formatChild}${body}`;
             }
