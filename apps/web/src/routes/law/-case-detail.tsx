@@ -9,12 +9,12 @@ import {
   decisionOptions,
 } from "@/features/case-law/queries/decisions";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
+import { createCaseLawLanguageAlternateLinks } from "@/lib/case-law-language-alternates";
 import {
   type CaseLawDecisionRouteParams,
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
   extractLegacyCaseLawDecisionIdFromRouteParam,
-  normalizeCaseLawLanguageSegment,
 } from "@/lib/case-law-route";
 import { pageTitleLiteral } from "@/lib/page-title";
 import {
@@ -133,62 +133,24 @@ const redirectToCanonicalDecisionPath = (
 
 const createDecisionAlternateLinks = (
   decision: PublicCaseLawDecision,
-): PublicLawAlternateLink[] => {
-  if (decision.languageAlternates.length <= 1) {
-    return [];
-  }
+): PublicLawAlternateLink[] =>
+  createCaseLawLanguageAlternateLinks({
+    alternates: decision.languageAlternates,
+    createHref: (alternate) => {
+      const params = createCaseLawDecisionRouteParams({
+        caseNumber: alternate.caseNumber,
+        country: alternate.country,
+        court: alternate.court,
+        decisionDate: alternate.decisionDate,
+        decisionId: alternate.id,
+        language: alternate.language,
+        languageAlternates: decision.languageAlternates,
+        slug: alternate.slug,
+      });
 
-  const alternateLinks: PublicLawAlternateLink[] = [];
-  for (const alternate of decision.languageAlternates) {
-    const hreflang = normalizeCaseLawLanguageSegment(alternate.language);
-    if (hreflang === null) {
-      continue;
-    }
-
-    const params = createCaseLawDecisionRouteParams({
-      caseNumber: alternate.caseNumber,
-      country: alternate.country,
-      court: alternate.court,
-      decisionDate: alternate.decisionDate,
-      decisionId: alternate.id,
-      language: alternate.language,
-      languageAlternates: decision.languageAlternates,
-      slug: alternate.slug,
-    });
-
-    alternateLinks.push({
-      hreflang,
-      href: createPublicLawCanonicalUrl(createCaseLawDecisionPath(params)),
-    });
-  }
-
-  const defaultAlternate =
-    decision.languageAlternates.find(
-      (alternate) =>
-        normalizeCaseLawLanguageSegment(alternate.language) === "en",
-    ) ?? decision.languageAlternates.at(0);
-  if (!defaultAlternate) {
-    return alternateLinks;
-  }
-
-  const defaultParams = createCaseLawDecisionRouteParams({
-    caseNumber: defaultAlternate.caseNumber,
-    country: defaultAlternate.country,
-    court: defaultAlternate.court,
-    decisionDate: defaultAlternate.decisionDate,
-    decisionId: defaultAlternate.id,
-    language: defaultAlternate.language,
-    languageAlternates: decision.languageAlternates,
-    slug: defaultAlternate.slug,
+      return createPublicLawCanonicalUrl(createCaseLawDecisionPath(params));
+    },
   });
-
-  alternateLinks.push({
-    hreflang: "x-default",
-    href: createPublicLawCanonicalUrl(createCaseLawDecisionPath(defaultParams)),
-  });
-
-  return alternateLinks;
-};
 
 export const loadPublicCaseLawDecisionRoute = async ({
   params,

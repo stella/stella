@@ -3,9 +3,12 @@ import * as v from "valibot";
 import { env } from "@/env";
 import { apiUrl } from "@/lib/api-url";
 import {
+  type CaseLawLanguageAlternateLink,
+  createCaseLawLanguageAlternateLinks,
+} from "@/lib/case-law-language-alternates";
+import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
-  normalizeCaseLawLanguageSegment,
 } from "@/lib/case-law-route";
 import { ClientOperationError } from "@/lib/errors";
 import { createPublicLawCanonicalUrl } from "@/lib/public-law-seo";
@@ -68,10 +71,6 @@ type SitemapDecision = v.InferOutput<typeof sitemapDecisionSchema>;
 type SitemapShard = v.InferOutput<typeof sitemapShardSchema>;
 type SitemapDecisionUrlInput = Omit<SitemapDecision, "languageAlternates"> & {
   languageAlternates?: readonly unknown[];
-};
-type SitemapAlternateLink = {
-  href: string;
-  hreflang: string;
 };
 
 type FetchSitemapDecisionsOptions = {
@@ -139,47 +138,15 @@ const createCaseLawDecisionSitemapUrl = (
 
 const createCaseLawDecisionSitemapAlternateLinks = (
   decision: SitemapDecision,
-): SitemapAlternateLink[] => {
-  if (decision.languageAlternates.length <= 1) {
-    return [];
-  }
-
-  const alternateLinks: SitemapAlternateLink[] = [];
-  const seenHreflangs = new Set<string>();
-  for (const alternate of decision.languageAlternates) {
-    const hreflang = normalizeCaseLawLanguageSegment(alternate.language);
-    if (hreflang === null || seenHreflangs.has(hreflang)) {
-      continue;
-    }
-
-    seenHreflangs.add(hreflang);
-    alternateLinks.push({
-      hreflang,
-      href: createCaseLawDecisionSitemapUrl({
+): CaseLawLanguageAlternateLink[] =>
+  createCaseLawLanguageAlternateLinks({
+    alternates: decision.languageAlternates,
+    createHref: (alternate) =>
+      createCaseLawDecisionSitemapUrl({
         ...alternate,
         languageAlternates: decision.languageAlternates,
       }),
-    });
-  }
-
-  const defaultAlternate =
-    decision.languageAlternates.find(
-      (alternate) =>
-        normalizeCaseLawLanguageSegment(alternate.language) === "en",
-    ) ?? decision.languageAlternates.at(0);
-
-  if (defaultAlternate) {
-    alternateLinks.push({
-      hreflang: "x-default",
-      href: createCaseLawDecisionSitemapUrl({
-        ...defaultAlternate,
-        languageAlternates: decision.languageAlternates,
-      }),
-    });
-  }
-
-  return alternateLinks;
-};
+  });
 
 const createCaseLawShardPath = ({
   bucket,
@@ -299,12 +266,15 @@ export const createPublicLawStaticSitemapXml = (): string => {
 export const createPublicCaseLawSitemapXml = (
   decisions: readonly SitemapDecision[],
 ): string => {
-  const entries = decisions
-    .map((decision) => ({
-      loc: createCaseLawDecisionSitemapUrl(decision),
-      alternateLinks: createCaseLawDecisionSitemapAlternateLinks(decision),
-      lastmod: decision.updatedAt.slice(0, 10),
-    }))
+  const entries = decisions.map((decision) => ({
+    loc: createCaseLawDecisionSitemapUrl(decision),
+    alternateLinks: createCaseLawDecisionSitemapAlternateLinks(decision),
+    lastmod: decision.updatedAt.slice(0, 10),
+  }));
+  const namespace = entries.some((entry) => entry.alternateLinks.length > 0)
+    ? ' xmlns:xhtml="http://www.w3.org/1999/xhtml"'
+    : "";
+  const serializedEntries = entries
     .map(
       ({ alternateLinks, lastmod, loc }) => `  <url>
     <loc>${xmlEscape(loc)}</loc>${
@@ -320,15 +290,10 @@ export const createPublicCaseLawSitemapXml = (
   </url>`,
     )
     .join("\n");
-  const namespace = decisions.some(
-    (decision) => decision.languageAlternates.length > 1,
-  )
-    ? ' xmlns:xhtml="http://www.w3.org/1999/xhtml"'
-    : "";
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"${namespace}>
-${entries}
+${serializedEntries}
 </urlset>
 `;
 

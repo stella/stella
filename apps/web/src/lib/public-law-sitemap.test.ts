@@ -304,6 +304,46 @@ describe("public law sitemap", () => {
     expect(xml.match(/hreflang="cs"/gu)).toHaveLength(1);
   });
 
+  test("case-law shard sitemaps do not add xhtml namespace for invalid alternates", () => {
+    const xml = createPublicCaseLawSitemapXml([
+      {
+        id: "11111111-1111-4111-8111-111111111111",
+        caseNumber: "C-123/22",
+        slug: "c-123-22",
+        country: "EU",
+        court: "Court of Justice",
+        decisionDate: "2024-03-07",
+        language: "en",
+        languageAlternates: [
+          {
+            id: "11111111-1111-4111-8111-111111111111",
+            caseNumber: "C-123/22",
+            slug: "c-123-22",
+            country: "EU",
+            court: "Court of Justice",
+            decisionDate: "2024-03-07",
+            language: "not a language",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+          {
+            id: "22222222-2222-4222-8222-222222222222",
+            caseNumber: "C-123/22",
+            slug: "c-123-22-cs",
+            country: "EU",
+            court: "Court of Justice",
+            decisionDate: "2024-03-07",
+            language: "",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
+
+    expect(xml).not.toContain("xmlns:xhtml");
+    expect(xml).not.toContain("hreflang");
+  });
+
   test("case-law shard sitemaps fail before exceeding the protocol byte limit", () => {
     expect(() =>
       assertPublicLawSitemapXmlWithinProtocolLimits("<urlset />", 5),
