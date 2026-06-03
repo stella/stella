@@ -160,6 +160,104 @@ const arbSafeAttrValue = fc
 
 const arbId = fc.integer({ min: 0, max: 2_147_483_647 });
 
+// ----------------------------------------------------------------------------
+// Tag value arbitraries
+//
+// `w:tag` carries opaque template-engine payloads in the wild. Real producers
+// emit three categories the plain alphanumeric generator does not exercise:
+//
+//   1. OpenDoPE conventions v2.3 ("od:repeat=x{n}", "od:condition=c{n}",
+//      "od:xpath=x{n}", "od:component=c{n}). Wire form equals decoded form
+//      because no XML metacharacters are involved.
+//      Source: https://www.opendope.org/opendope_conventions_v2.3.html
+//   2. Composite OpenDoPE expressions joined by `&`, which on the wire must
+//      be entity-encoded to `&amp;` but parse back to a literal `&` in
+//      `props.tag`. Re-emission must produce `&amp;` once, not `&amp;amp;`.
+//   3. Boundary-length values around Word's observed 64-character `w:tag`
+//      cap (OpenDoPE v2.3 doc cites 74; real-world producers emit longer
+//      strings that Word silently truncates at open time but tolerates on
+//      load). Folio must not truncate — that is Word's prerogative on next
+//      save. We assert byte-exact round-trip for lengths 63 / 64 / 65 /
+//      100 / 200.
+//
+// Each arbitrary yields `{ wire, decoded }` so the generator can splice
+// `wire` into the XML attribute (where XML metacharacters must be entity-
+// encoded) while comparing against `decoded` (what `parseSdtProperties`
+// stores in `props.tag` after the parser's built-in entity decode).
+// ----------------------------------------------------------------------------
+
+type TagValue = { wire: string; decoded: string };
+
+/** OpenDoPE v2.3 — bare `od:`-prefixed payloads (no XML metacharacters). */
+const arbOpenDopeTag: fc.Arbitrary<TagValue> = fc
+  .tuple(
+    fc.constantFrom(
+      "od:repeat=x",
+      "od:condition=c",
+      "od:xpath=x",
+      "od:component=c",
+    ),
+    fc.integer({ min: 0, max: 999 }),
+  )
+  .map(([prefix, n]) => {
+    const value = `${prefix}${n}`;
+    return { wire: value, decoded: value };
+  });
+
+/**
+ * OpenDoPE composite expression with `&`. Real example from the v2.3 doc:
+ * "od:component=c1&od:continuousBefore=true". The wire form encodes `&`
+ * as `&amp;`; `props.tag` holds the decoded `&`.
+ */
+const arbAmpersandTag: fc.Arbitrary<TagValue> = fc
+  .tuple(
+    fc.integer({ min: 0, max: 99 }),
+    fc.constantFrom(
+      "od:continuousBefore=true",
+      "od:continuousAfter=true",
+      "od:after=true",
+    ),
+  )
+  .map(([n, tail]) => {
+    const decoded = `od:component=c${n}&${tail}`;
+    const wire = `od:component=c${n}&amp;${tail}`;
+    return { wire, decoded };
+  });
+
+/**
+ * Boundary-length payloads around Word's observed `w:tag` cap. We use a
+ * pool that contains neither `:` nor whitespace nor `w` so the prefix-
+ * rewriting regex in `rebuildUnderPrefixes` (which only matches `\sw:` and
+ * friends) cannot stumble on the value. ASCII-only also keeps wire ==
+ * decoded.
+ */
+const arbBoundaryLengthTag: fc.Arbitrary<TagValue> = fc
+  .tuple(
+    fc.constantFrom(63, 64, 65, 100, 200),
+    fc.constantFrom("a", "b", "0", "1", "-", "_", "."),
+  )
+  .map(([len, ch]) => {
+    const value = ch.repeat(len);
+    return { wire: value, decoded: value };
+  });
+
+/**
+ * Existing safe ASCII payload, lifted into the `{ wire, decoded }` shape.
+ * Identity mapping because the underlying arbitrary excludes XML
+ * metacharacters by construction.
+ */
+const arbPlainAsciiTag: fc.Arbitrary<TagValue> = arbSafeAttrValue.map((s) => ({
+  wire: s,
+  decoded: s,
+}));
+
+const arbTagValue: fc.Arbitrary<TagValue> = fc.oneof(
+  arbPlainAsciiTag,
+  arbOpenDopeTag,
+  arbAmpersandTag,
+  arbBoundaryLengthTag,
+);
+
 const arbLockValue: fc.Arbitrary<NonNullable<SdtProperties["lock"]>> =
   fc.constantFrom("sdtLocked", "contentLocked", "sdtContentLocked", "unlocked");
 
@@ -360,7 +458,7 @@ const arbSdtSpec: fc.Arbitrary<SdtSpec> = fc
     kind: arbSdtTypeKind,
     id: fc.option(arbId, { nil: undefined }),
     alias: fc.option(arbSafeAttrValue, { nil: undefined }),
-    tag: fc.option(arbSafeAttrValue, { nil: undefined }),
+    tag: fc.option(arbTagValue, { nil: undefined }),
     lock: fc.option(arbLockValue, { nil: undefined }),
     placeholder: fc.option(arbSafeAttrValue, { nil: undefined }),
     onOff: arbOnOffForm,
@@ -386,7 +484,7 @@ function buildSpec(
       | "group";
     id: number | undefined;
     alias: string | undefined;
-    tag: string | undefined;
+    tag: TagValue | undefined;
     lock: NonNullable<SdtProperties["lock"]> | undefined;
     placeholder: string | undefined;
     onOff: { val: string | undefined; expected: boolean };
@@ -404,7 +502,7 @@ function buildSpec(
   const aliasFrag =
     spec.alias !== undefined ? `<${w}:alias ${w}:val="${spec.alias}"/>` : null;
   const tagFrag =
-    spec.tag !== undefined ? `<${w}:tag ${w}:val="${spec.tag}"/>` : null;
+    spec.tag !== undefined ? `<${w}:tag ${w}:val="${spec.tag.wire}"/>` : null;
   const lockFrag =
     spec.lock !== undefined ? `<${w}:lock ${w}:val="${spec.lock}"/>` : null;
   const placeholderFrag =
@@ -444,7 +542,7 @@ function buildSpec(
     expected.alias = spec.alias;
   }
   if (spec.tag !== undefined) {
-    expected.tag = spec.tag;
+    expected.tag = spec.tag.decoded;
   }
   // lock has a default of "unlocked" when the element is present; absent
   // element means undefined.
