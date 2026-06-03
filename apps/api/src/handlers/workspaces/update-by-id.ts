@@ -2,12 +2,14 @@ import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 
+import type { Transaction } from "@/api/db";
 import { member } from "@/api/db/auth-schema";
 import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -24,6 +26,9 @@ const config = {
     reference: t.Optional(t.String({ maxLength: 64, minLength: 1 })),
     billingReference: t.Optional(t.Nullable(t.String({ maxLength: 128 }))),
     color: t.Optional(t.Nullable(t.String({ maxLength: 32 }))),
+    // Pinned-first avatar on the matters list. Must be an existing
+    // workspace member (validated at handler time); pass null to clear.
+    leadUserId: t.Optional(t.Nullable(t.String({ maxLength: 128 }))),
     // Promotion (personal -> client) is one-way and is itself the
     // sharing event: the optional memberUserIds list is added to
     // the workspace at the same time as the client is attached.
@@ -40,6 +45,41 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
+type LeadValidationFailure = {
+  ok: false;
+  status: 400;
+  message: "Lead must be a workspace member";
+};
+
+const validateLeadIsMember = async (
+  tx: Transaction,
+  leadUserId: string | null | undefined,
+  workspaceId: SafeId<"workspace">,
+  requestedMemberUserIds: readonly string[],
+): Promise<LeadValidationFailure | null> => {
+  if (leadUserId === undefined || leadUserId === null) {
+    return null;
+  }
+  const existing = await tx
+    .select({ userId: workspaceMembers.userId })
+    .from(workspaceMembers)
+    .where(
+      and(
+        eq(workspaceMembers.workspaceId, workspaceId),
+        eq(workspaceMembers.userId, leadUserId),
+      ),
+    )
+    .limit(1);
+  if (existing.length === 0 && !requestedMemberUserIds.includes(leadUserId)) {
+    return {
+      ok: false,
+      status: 400,
+      message: "Lead must be a workspace member",
+    };
+  }
+  return null;
+};
+
 const updateWorkspace = createSafeHandler(
   config,
   async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {
@@ -52,6 +92,7 @@ const updateWorkspace = createSafeHandler(
           reference: workspaces.reference,
           billingReference: workspaces.billingReference,
           color: workspaces.color,
+          leadUserId: workspaces.leadUserId,
         })
         .from(workspaces)
         .where(eq(workspaces.id, workspaceId))
@@ -142,6 +183,19 @@ const updateWorkspace = createSafeHandler(
         ? { clientId: body.promote.clientId }
         : {};
 
+      // Lead must be a member of the workspace. Accept both pre-existing
+      // members and any added in this same call (promotion path) so the
+      // caller can promote + add team + set lead atomically.
+      const leadCheck = await validateLeadIsMember(
+        tx,
+        body.leadUserId,
+        workspaceId,
+        requestedMemberUserIds,
+      );
+      if (leadCheck) {
+        return leadCheck;
+      }
+
       await tx
         .update(workspaces)
         .set({
@@ -151,6 +205,7 @@ const updateWorkspace = createSafeHandler(
             "reference",
             "billingReference",
             "color",
+            "leadUserId",
           ]),
           ...promotionUpdate,
         })
@@ -203,6 +258,15 @@ const updateWorkspace = createSafeHandler(
       }
       if (body.color !== undefined && body.color !== workspace.color) {
         changes["color"] = { old: workspace.color, new: body.color };
+      }
+      if (
+        body.leadUserId !== undefined &&
+        body.leadUserId !== workspace.leadUserId
+      ) {
+        changes["leadUserId"] = {
+          old: workspace.leadUserId,
+          new: body.leadUserId,
+        };
       }
       if (insertedMemberUserIds.length > 0) {
         changes["membersAdded"] = {

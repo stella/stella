@@ -10,7 +10,7 @@ import {
 describe("isPossibleDuplicateMatter", () => {
   const workspace = {
     client: { id: "client-1" },
-    contributors: [],
+    members: [],
     id: "workspace-1",
     name: "Acme Employment Dispute",
     reference: "MAT-001",
@@ -66,21 +66,21 @@ describe("getPossibleDuplicateMatters", () => {
       workspaces: [
         {
           client: { id: "client-1" },
-          contributors: [],
+          members: [],
           id: "workspace-1",
           name: "Acme Employment Dispute",
           reference: "MAT-001",
         },
         {
           client: { id: "client-1" },
-          contributors: [],
+          members: [],
           id: "workspace-2",
           name: "Acme Employment Dispute Appeal",
           reference: "MAT-002",
         },
         {
           client: { id: "client-1" },
-          contributors: [],
+          members: [],
           id: "workspace-3",
           name: "Acme",
           reference: "MAT-003",
@@ -102,7 +102,7 @@ describe("compareMembersByCollaboratorStats", () => {
       workspaces: [
         {
           client: { id: "client-1" },
-          contributors: [
+          members: [
             {
               lastActivity: "2026-04-05T10:00:00.000Z",
               userId: "current-user",
@@ -114,7 +114,7 @@ describe("compareMembersByCollaboratorStats", () => {
         },
         {
           client: { id: "client-1" },
-          contributors: [
+          members: [
             {
               lastActivity: "2026-04-06T10:00:00.000Z",
               userId: "current-user",
@@ -126,7 +126,7 @@ describe("compareMembersByCollaboratorStats", () => {
         },
         {
           client: { id: "client-1" },
-          contributors: [
+          members: [
             { lastActivity: "2026-04-07T10:00:00.000Z", userId: "bob" },
           ],
           id: "workspace-3",

@@ -4,6 +4,7 @@ import { persist } from "zustand/middleware";
 import { getStorageKey } from "@/consts";
 import type {
   MattersColumnId,
+  MattersFilters,
   MattersSortKey,
 } from "@/routes/_protected.workspaces/-types";
 import { ALL_COLUMNS } from "@/routes/_protected.workspaces/-types";
@@ -22,6 +23,7 @@ type MattersConfig = {
   hiddenColumns: MattersColumnId[];
   clientFilter: string | null;
   collapsedGroups: string[];
+  filters: MattersFilters;
 };
 
 const DEFAULT_MATTERS: MattersConfig = {
@@ -32,11 +34,18 @@ const DEFAULT_MATTERS: MattersConfig = {
   hiddenColumns: [],
   clientFilter: null,
   collapsedGroups: [],
+  filters: {},
 };
 
 type ConfigState = {
   matters: MattersConfig;
   updateMatters: (patch: Partial<MattersConfig>) => void;
+  setMattersFilter: <K extends keyof MattersFilters>(
+    key: K,
+    value: MattersFilters[K],
+  ) => void;
+  clearMattersFilter: (key: keyof MattersFilters) => void;
+  clearAllMattersFilters: () => void;
   toggleMattersColumn: (id: MattersColumnId) => void;
   toggleGroupCollapsed: (groupId: string) => void;
 };
@@ -49,6 +58,28 @@ export const useConfigStore = create<ConfigState>()(
       updateMatters: (patch) => {
         void set((s) => ({
           matters: { ...s.matters, ...patch },
+        }));
+      },
+
+      setMattersFilter: (key, value) => {
+        void set((s) => ({
+          matters: {
+            ...s.matters,
+            filters: { ...s.matters.filters, [key]: value },
+          },
+        }));
+      },
+
+      clearMattersFilter: (key) => {
+        void set((s) => {
+          const { [key]: _omit, ...rest } = s.matters.filters;
+          return { matters: { ...s.matters, filters: rest } };
+        });
+      },
+
+      clearAllMattersFilters: () => {
+        void set((s) => ({
+          matters: { ...s.matters, filters: {} },
         }));
       },
 

@@ -63,6 +63,7 @@ type UpdateWorkspaceVars = {
   clientId?: string;
   reference?: string;
   color?: string | null;
+  leadUserId?: string | null;
   promote?: {
     clientId: string;
     memberUserIds?: string[];

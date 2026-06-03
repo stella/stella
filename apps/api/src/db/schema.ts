@@ -412,6 +412,13 @@ export const workspaces = p.pgTable(
     clientId: safeUuid<"contact">("client_id").references(() => contacts.id, {
       onDelete: "restrict",
     }),
+    // Optional per-matter lead. Decouples the lead from the client's
+    // responsible attorney so co-counsels can split matters under a
+    // shared client. ON DELETE SET NULL: removing the user must not
+    // cascade-delete the matter.
+    leadUserId: p
+      .text("lead_user_id")
+      .references(() => user.id, { onDelete: "set null" }),
     billingReference: p.varchar("billing_reference", {
       length: 128,
     }),

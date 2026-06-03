@@ -65,7 +65,6 @@ import {
   useUpdateWorkspace,
 } from "@/routes/_protected.workspaces/-mutations";
 import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
-import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
 
 // ── Shared menu items ────────────────────────────────────────
 
@@ -163,19 +162,26 @@ export type RenameState =
 
 // ── MatterContextMenu (card wrapper) ─────────────────────────
 
+export type MatterContextMenuChildArgs = {
+  rename: RenameState;
+  /** True while the right-click menu is open, so the consumer can keep
+   *  the source visually highlighted for the duration of the menu. */
+  menuOpen: boolean;
+};
+
 type MatterContextMenuProps = {
   workspaceId: string;
   workspaceName: string;
-  canCreateMatter?: boolean | undefined;
   isArchived?: boolean;
   isPersonal: boolean;
-  children: React.ReactNode | ((rename: RenameState) => React.ReactNode);
+  children:
+    | React.ReactNode
+    | ((args: MatterContextMenuChildArgs) => React.ReactNode);
 };
 
 export const MatterContextMenu = ({
   workspaceId,
   workspaceName,
-  canCreateMatter = false,
   isArchived = false,
   isPersonal,
   children,
@@ -183,7 +189,6 @@ export const MatterContextMenu = ({
   const t = useTranslations();
   const { togglePin, isPinned } = usePinnedStore();
   const pinned = isPinned(workspaceId);
-  const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
 
   const queryClient = useQueryClient();
   const updateWorkspace = useUpdateWorkspace();
@@ -286,7 +291,9 @@ export const MatterContextMenu = ({
   const matterMenuCallbacks = {
     isPersonal,
     isPinned: pinned,
-    onCreateMatter: canCreateMatter ? () => openCreateMatter() : undefined,
+    // Intentionally no onCreateMatter — right-clicking an existing matter
+    // is a matter-scoped action, not a page-level one. "Create new matter"
+    // lives in the toolbar and on the empty-canvas right-click.
     onAddMember: () => setAddMemberOpen(true),
     onCopyLink: () => {
       void handleCopyLink();
@@ -314,7 +321,9 @@ export const MatterContextMenu = ({
         setMenuOpen(true);
       }}
     >
-      {typeof children === "function" ? children(renameState) : children}
+      {typeof children === "function"
+        ? children({ rename: renameState, menuOpen })
+        : children}
 
       <Menu
         onOpenChange={(nextOpen) => {

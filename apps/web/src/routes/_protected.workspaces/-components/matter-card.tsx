@@ -18,6 +18,7 @@ import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import { MatterContextMenu } from "@/routes/_protected.workspaces/-components/matter-context-menu";
+import { TeamAvatars } from "@/routes/_protected.workspaces/-components/team-avatars";
 import { overviewOptions } from "@/routes/_protected.workspaces/-queries";
 import type { Workspace } from "@/routes/_protected.workspaces/-types";
 
@@ -33,14 +34,12 @@ const DAY_MS = 86_400_000;
 
 type MatterCardProps = {
   workspace: Workspace;
-  canCreateMatter?: boolean | undefined;
   focused: boolean;
   hideClientName?: boolean;
 };
 
 export const MatterCard = ({
   workspace,
-  canCreateMatter = false,
   focused,
   hideClientName,
 }: MatterCardProps) => {
@@ -64,15 +63,18 @@ export const MatterCard = ({
 
   const recencyClass = getRecencyClass(workspace.lastActivityAt);
   const deadline = getDeadlineInfo(workspace.nextDeadline, lang);
+  const isOverdue = deadline?.urgency === "overdue";
+  const matterTintStyle: React.CSSProperties & { "--matter-tint": string } = {
+    "--matter-tint": `color-mix(in srgb, ${getMatterColor(workspace.id)} 8%, transparent)`,
+  };
 
   return (
     <MatterContextMenu
-      canCreateMatter={canCreateMatter}
       isPersonal={!workspace.client}
       workspaceId={workspace.id}
       workspaceName={workspace.name}
     >
-      {(rename) => (
+      {({ rename, menuOpen }) => (
         <PreviewCard
           open={previewOpen}
           onOpenChange={(open) => {
@@ -88,13 +90,16 @@ export const MatterCard = ({
             render={
               <div
                 className={cn(
-                  "bg-card hover:bg-accent/30 relative flex flex-col gap-1 overflow-hidden rounded-xl border px-3 py-2 transition-colors",
+                  "bg-card relative flex flex-col gap-1 overflow-hidden rounded-xl border px-3 py-2 transition-colors",
+                  isOverdue
+                    ? "bg-destructive/[0.04] hover:bg-destructive/[0.08]"
+                    : "hover:bg-[var(--matter-tint)]",
+                  // Keep the matter colour visible while the right-click
+                  // menu is open so the relation is obvious.
+                  !isOverdue && menuOpen && "bg-[var(--matter-tint)]",
                   focused && "ring-primary ring-2",
                 )}
-                style={{
-                  borderInlineStartWidth: 3,
-                  borderInlineStartColor: getMatterColor(workspace.id),
-                }}
+                style={matterTintStyle}
               />
             }
           >
@@ -120,7 +125,12 @@ export const MatterCard = ({
                 )}
               </h2>
               {rename.status !== "editing" && workspace.reference && (
-                <span className="text-muted-foreground shrink-0 font-mono text-xs">
+                <span className="text-muted-foreground inline-flex shrink-0 items-center gap-1.5 font-mono text-xs">
+                  <span
+                    aria-hidden
+                    className="size-1.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: getMatterColor(workspace.id) }}
+                  />
                   {workspace.reference}
                 </span>
               )}
@@ -143,10 +153,10 @@ export const MatterCard = ({
                 </span>
               ))}
 
-            {/* Line 2: tasks/items + deadline (left) | last active (right) */}
+            {/* Line 2: tasks/items + deadline (left) | avatars + last active (right) */}
             <div className="flex items-center justify-between gap-2 text-xs">
-              <div className="text-muted-foreground flex items-center gap-1.5">
-                <span>
+              <div className="text-muted-foreground flex min-w-0 items-center gap-1.5">
+                <span className="truncate">
                   {(() => {
                     if (workspace.openTaskCount > 0) {
                       return t("workspaces.tasksCount", {
@@ -164,19 +174,36 @@ export const MatterCard = ({
                 {deadline && (
                   <>
                     <span>·</span>
-                    <span className={deadline.className}>{deadline.label}</span>
+                    <span className={cn("truncate", deadline.className)}>
+                      {deadline.label}
+                    </span>
                   </>
                 )}
               </div>
-              <span
-                className={cn("shrink-0", recencyClass)}
-                title={new Date(workspace.lastActivityAt).toLocaleString(lang, {
-                  dateStyle: "full",
-                  timeStyle: "medium",
-                })}
-              >
-                {lastActivityAt}
-              </span>
+              <div className="relative z-10 flex shrink-0 items-center gap-2">
+                {workspace.members.length > 0 && (
+                  <TeamAvatars
+                    emptyFallback={null}
+                    leadUserId={workspace.leadUserId}
+                    maxVisible={3}
+                    members={workspace.members}
+                    size="size-5"
+                    textSize="text-[0.5rem]"
+                  />
+                )}
+                <span
+                  className={cn("shrink-0", recencyClass)}
+                  title={new Date(workspace.lastActivityAt).toLocaleString(
+                    lang,
+                    {
+                      dateStyle: "full",
+                      timeStyle: "medium",
+                    },
+                  )}
+                >
+                  {lastActivityAt}
+                </span>
+              </div>
             </div>
           </PreviewCardTrigger>
 
@@ -201,7 +228,12 @@ const getRecencyClass = (date: Date | string): string => {
   return "text-foreground-subtle text-xs";
 };
 
-type DeadlineInfo = { label: string; className: string };
+type DeadlineUrgency = "overdue" | "soon" | "thisWeek" | "later";
+type DeadlineInfo = {
+  label: string;
+  className: string;
+  urgency: DeadlineUrgency;
+};
 
 /** Format deadline with urgency color. Returns null if no deadline. */
 const getDeadlineInfo = (
@@ -221,15 +253,19 @@ const getDeadlineInfo = (
   const label = formatRelativeTime(new Date(`${deadline}T00:00:00`), lang);
 
   if (diff < 0) {
-    return { label, className: "text-destructive font-medium" };
+    return {
+      label,
+      className: "text-destructive font-medium",
+      urgency: "overdue",
+    };
   }
   if (diff < 2 * DAY_MS) {
-    return { label, className: "text-warning font-medium" };
+    return { label, className: "text-warning font-medium", urgency: "soon" };
   }
   if (diff < 7 * DAY_MS) {
-    return { label, className: "text-foreground" };
+    return { label, className: "text-foreground", urgency: "thisWeek" };
   }
-  return { label, className: "text-muted-foreground" };
+  return { label, className: "text-muted-foreground", urgency: "later" };
 };
 
 type PreviewPopupContentProps = {

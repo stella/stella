@@ -2,7 +2,6 @@ import { Result, panic } from "better-result";
 import {
   and,
   count,
-  desc,
   eq,
   inArray,
   isNull,
@@ -10,10 +9,16 @@ import {
   min,
   notInArray,
   or,
+  sql,
 } from "drizzle-orm";
 
-import { member, user } from "@/api/db/auth-schema";
-import { entities } from "@/api/db/schema";
+// `user` is joined via workspaceMembers, which carries workspace-scoped
+// RLS (wsPolicies) and is itself filtered by wsIds derived from an
+// organization-scoped workspaces query. The `member` table is not
+// needed for scoping in this code path. The disable directive sits on
+// the same line as the import so reordering imports cannot shift it.
+import { user } from "@/api/db/auth-schema"; // oxlint-disable-line security-guards/no-unscoped-user-query
+import { entities, workspaceMembers } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
@@ -30,7 +35,7 @@ const readWorkspaces = createSafeRootHandler(
   config,
   async function* ({ safeDb, session }) {
     const organizationId = session.activeOrganizationId;
-    const { result, counts, contributorRows, taskCounts, deadlineRows } =
+    const { result, counts, memberRows, taskCounts, deadlineRows } =
       yield* Result.await(
         safeDb(async (tx) => {
           const allRows = await tx.query.workspaces.findMany({
@@ -45,6 +50,7 @@ const readWorkspaces = createSafeRootHandler(
               clientId: true,
               color: true,
               status: true,
+              leadUserId: true,
               lastActivityAt: true,
               createdAt: true,
             },
@@ -77,7 +83,7 @@ const readWorkspaces = createSafeRootHandler(
             return {
               result: workspaceRows,
               counts: [],
-              contributorRows: [],
+              memberRows: [],
               taskCounts: [],
               deadlineRows: [],
             };
@@ -85,7 +91,7 @@ const readWorkspaces = createSafeRootHandler(
 
           const closedStatuses = [TASK_STATUS.DONE, TASK_STATUS.CANCELLED];
 
-          const [entityCounts, contributors, openTaskRows, dueDateRows] =
+          const [entityCounts, members, openTaskRows, dueDateRows] =
             await Promise.all([
               tx
                 .select({
@@ -97,29 +103,33 @@ const readWorkspaces = createSafeRootHandler(
                 .groupBy(entities.workspaceId),
               tx
                 .select({
-                  workspaceId: entities.workspaceId,
-                  userId: entities.createdBy,
+                  workspaceId: workspaceMembers.workspaceId,
+                  userId: workspaceMembers.userId,
                   userName: user.name,
                   userImage: user.image,
                   lastActivity: max(entities.updatedAt),
                 })
-                .from(entities)
-                .innerJoin(
-                  member,
+                .from(workspaceMembers)
+                .innerJoin(user, eq(user.id, workspaceMembers.userId))
+                .leftJoin(
+                  entities,
                   and(
-                    eq(entities.createdBy, member.userId),
-                    eq(member.organizationId, organizationId),
+                    eq(entities.workspaceId, workspaceMembers.workspaceId),
+                    eq(entities.lastEditedBy, workspaceMembers.userId),
                   ),
                 )
-                .innerJoin(user, eq(member.userId, user.id))
-                .where(inArray(entities.workspaceId, wsIds))
+                .where(inArray(workspaceMembers.workspaceId, wsIds))
                 .groupBy(
-                  entities.workspaceId,
-                  entities.createdBy,
+                  workspaceMembers.workspaceId,
+                  workspaceMembers.userId,
                   user.name,
                   user.image,
                 )
-                .orderBy(entities.workspaceId, desc(max(entities.updatedAt))),
+                .orderBy(
+                  workspaceMembers.workspaceId,
+                  sql`${max(entities.updatedAt)} DESC NULLS LAST`,
+                  user.name,
+                ),
               tx
                 .select({
                   workspaceId: entities.workspaceId,
@@ -159,7 +169,7 @@ const readWorkspaces = createSafeRootHandler(
           return {
             result: workspaceRows,
             counts: entityCounts,
-            contributorRows: contributors,
+            memberRows: members,
             taskCounts: openTaskRows,
             deadlineRows: dueDateRows,
           };
@@ -178,15 +188,13 @@ const readWorkspaces = createSafeRootHandler(
       deadlineRows.map((d) => [d.workspaceId, d.deadline]),
     );
 
-    const contributorMap = new Map<string, typeof contributorRows>();
-    for (const row of contributorRows) {
-      const list = contributorMap.get(row.workspaceId);
+    const memberMap = new Map<string, typeof memberRows>();
+    for (const row of memberRows) {
+      const list = memberMap.get(row.workspaceId);
       if (list) {
-        if (list.length < LIMITS.workspaceContributors) {
-          list.push(row);
-        }
+        list.push(row);
       } else {
-        contributorMap.set(row.workspaceId, [row]);
+        memberMap.set(row.workspaceId, [row]);
       }
     }
 
@@ -197,12 +205,26 @@ const readWorkspaces = createSafeRootHandler(
         // resolves via the eager-loaded `client` relation.
         panic(`workspace ${workspace.id} has clientId set but no client row`);
       }
+      const allMembers = memberMap.get(workspace.id) ?? [];
+      const leadIdx = workspace.leadUserId
+        ? allMembers.findIndex((m) => m.userId === workspace.leadUserId)
+        : -1;
+      // Pin the lead first; the rest stay in last-edit-desc order.
+      const lead = leadIdx > 0 ? allMembers.at(leadIdx) : undefined;
+      const orderedMembers = lead
+        ? [
+            lead,
+            ...allMembers.slice(0, leadIdx),
+            ...allMembers.slice(leadIdx + 1),
+          ]
+        : allMembers;
       return {
         id: workspace.id,
         name: workspace.name,
         reference: workspace.reference,
         clientId: workspace.clientId,
         color: workspace.color,
+        leadUserId: workspace.leadUserId,
         lastActivityAt: workspace.lastActivityAt,
         createdAt: workspace.createdAt,
         client: client
@@ -215,7 +237,7 @@ const readWorkspaces = createSafeRootHandler(
         entityCount: countMap.get(workspace.id) ?? 0,
         openTaskCount: openTaskMap.get(workspace.id) ?? 0,
         nextDeadline: deadlineMap.get(workspace.id) ?? null,
-        contributors: contributorMap.get(workspace.id) ?? [],
+        members: orderedMembers,
       };
     });
 

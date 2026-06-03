@@ -25,6 +25,7 @@ import { MatterNumberHint } from "@/components/matter-number-hint";
 import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { APIError } from "@/lib/errors";
+import { LeadSection } from "@/routes/_protected.workspaces/$workspaceId/-components/lead-section";
 import { MATTER_INFO_ICON_SLOT_CLASS } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-info-layout";
 import { MembersSection } from "@/routes/_protected.workspaces/$workspaceId/-components/members-section";
 import { PartiesSection } from "@/routes/_protected.workspaces/$workspaceId/-components/parties-section";
@@ -340,6 +341,9 @@ export const MatterMetadataPanel = ({
                 or surfaces an EN explainer for non-CS users. */}
         {/* <InfoSoudSection active workspaceId={workspaceId} /> */}
         {/* <Separator /> */}
+
+        {/* Lead */}
+        <LeadSection workspaceId={workspaceId} />
 
         {/* Members */}
         <MembersSection workspaceId={workspaceId} />
