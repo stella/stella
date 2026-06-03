@@ -64,6 +64,7 @@ jobs:
           # allowed licenses. Keep these exceptions package-scoped; do not add
           # namespace/group exceptions.
           allow-dependencies-licenses: >-
+            pkg:npm/@ai-sdk/provider,
             pkg:npm/@ai-sdk/provider-utils,
             pkg:npm/@hocuspocus/provider,
             pkg:npm/@hocuspocus/server,
