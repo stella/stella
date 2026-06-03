@@ -31,6 +31,13 @@ const NAMESPACES: Record<string, string> = {
   r: "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
   m: "http://schemas.openxmlformats.org/officeDocument/2006/math",
   v: "urn:schemas-microsoft-com:vml",
+  // DrawingML core + picture. Required for raw-replay of DrawingML
+  // watermarks captured by `parseWatermark`: `rawWatermarkXml` carries
+  // `<a:graphic>` / `<a:txBody>` / `<pic:pic>` descendants, but the
+  // hosting paragraph alone doesn't preserve the original header's
+  // ancestor namespace declarations.
+  a: "http://schemas.openxmlformats.org/drawingml/2006/main",
+  pic: "http://schemas.openxmlformats.org/drawingml/2006/picture",
   wp14: "http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing",
   wp: "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing",
   w10: "urn:schemas-microsoft-com:office:word",

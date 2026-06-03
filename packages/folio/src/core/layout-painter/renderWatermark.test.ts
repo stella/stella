@@ -70,7 +70,7 @@ describe("renderWatermarkLayer", () => {
     expect(layer.style["width"]).toBe("816px");
     expect(layer.style["height"]).toBe("1056px");
     expect(layer.style["pointerEvents"]).toBe("none");
-    expect(layer.style["zIndex"]).toBe("-1");
+    expect(layer.style["zIndex"]).toBe("0");
     const child = layer.firstElementChild;
     expect(child?.textContent).toBe("CONFIDENTIAL");
     expect(child?.style["transform"]).toBe("rotate(-45deg)");

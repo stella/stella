@@ -42,10 +42,13 @@ export function renderWatermarkLayer(
   layer.style.left = "0";
   layer.style.width = `${page.size.w}px`;
   layer.style.height = `${page.size.h}px`;
-  // Behind all text and images. Page borders ride at z-index 0 or 20;
-  // we sit below page-border-back (the lowest border slot) so a "back"
-  // border still draws over the watermark, matching Word's stack.
-  layer.style.zIndex = "-1";
+  // z-index 0 (not -1) so we stay above the parent page's painted
+  // background. Negative z-index on a positioned child paints behind
+  // the parent's bg layer, which is why the behindDoc image path
+  // already rewrites -1 → 0 in renderPage. Content/text paints above
+  // us via document order (the content area is appended after) — that
+  // keeps the watermark below text without going below the page bg.
+  layer.style.zIndex = "0";
   layer.style.pointerEvents = "none";
   layer.style.overflow = "hidden";
   layer.style.display = "flex";

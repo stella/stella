@@ -2726,6 +2726,18 @@ function computeOptionsHash(options: RenderPageOptions): string {
     parts.push(`fd:${options.footerDistance}`);
   }
 
+  // Watermark identity. Without this, virtualized large documents
+  // (8+ pages) keep already-rendered page shells when a watermark is
+  // added, removed, or mutated — `repopulatePageContent` only refreshes
+  // the content area and leaves the old watermark sibling behind. The
+  // image src is fingerprinted too so swapping pictures invalidates.
+  if (options.watermark) {
+    parts.push(`wm:${JSON.stringify(options.watermark)}`);
+  }
+  if (options.watermarkImageSrc !== undefined) {
+    parts.push(`wmsrc:${options.watermarkImageSrc}`);
+  }
+
   return parts.join("|");
 }
 
