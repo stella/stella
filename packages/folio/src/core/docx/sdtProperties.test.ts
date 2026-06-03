@@ -96,6 +96,18 @@ describe("parseSdtProperties — prefixed marker elements", () => {
     expect(props.listItems).toEqual([{ displayText: "Yes", value: "Yes" }]);
   });
 
+  test("reads placeholder docPart reference from the docPart's own w:val attribute", () => {
+    // The parser used to look for a nested `<w:val>` child inside
+    // `<w:docPart>`. The actual OOXML shape is `<w:docPart w:val="…"/>`,
+    // so the placeholder reference was silently dropped.
+    const ns =
+      'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+    const props = parseSdtPrXml(
+      `<w:sdtPr ${ns}><w:placeholder><w:docPart w:val="DefaultPlaceholder"/></w:placeholder></w:sdtPr>`,
+    );
+    expect(props.placeholder).toBe("DefaultPlaceholder");
+  });
+
   test("reads top-level SDT property attrs under an alternative namespace prefix", () => {
     // Same prefix-tolerance theme as listItems and checkbox val: the
     // top-level w:tag / w:alias / w:id / w:lock readers used to be hard-

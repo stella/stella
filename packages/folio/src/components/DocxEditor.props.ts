@@ -296,15 +296,25 @@ export type DocxEditorRef = {
    * tag / alias / id / sdtType. Returns the modeled SdtProperties projection
    * plus a synthetic identifier so callers can address each control by
    * insertion order even if tag/alias collide.
+   *
+   * IMPORTANT: the returned `pmPos` values are valid only for the document
+   * state at fetch time. After any mutation that changes earlier content's
+   * size (`setContentControlContent`, `setContentControlValue`,
+   * `removeContentControl`, etc.), later controls shift and stored
+   * `pmPos` values become stale. For batch-fill flows over duplicate-tag
+   * controls, either refetch via `getContentControls()` after each
+   * mutation, or address by stable `{ tag }` / `{ id }` / `{ alias }` so
+   * the lookup uses the document's current shape on every call.
    */
   getContentControls: (filter?: ContentControlFilter) => {
     properties: SdtProperties;
     /** Index in the PM document tree, outer→inner. */
     path: number[];
     /**
-     * Stable, instance-unique PM position of the control's open token.
-     * Use with `{ pmPos }` on the mutation / scroll filters to target a
-     * specific duplicate when two controls share a tag / alias.
+     * PM position of the control's open token in the SOURCE document state.
+     * Disambiguates duplicates within one snapshot, but does not survive
+     * mutations that resize earlier content — see `getContentControls`
+     * for the refetch / address-by-tag guidance.
      */
     pmPos: number;
   }[];

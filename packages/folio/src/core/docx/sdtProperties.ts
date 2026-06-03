@@ -114,14 +114,17 @@ export function parseSdtProperties(
           break;
         }
         case "placeholder": {
+          // OOXML §17.5.2.27: the placeholder reference is an attribute
+          // on `<w:docPart>` itself (`<w:docPart w:val="…"/>`), not a
+          // nested `<w:val>` child. We previously looked for a child
+          // `<w:val>`, so `props.placeholder` was never populated on
+          // parse — getContentControls() and reverse serialization lost
+          // the placeholder metadata entirely.
           const docPart = findChild(el, "w", "docPart");
           if (docPart) {
-            const valEl = findChild(docPart, "w", "val");
-            if (valEl) {
-              const phVal = getAttributeAnyPrefix(valEl, "val");
-              if (phVal !== null) {
-                props.placeholder = phVal;
-              }
+            const phVal = getAttributeAnyPrefix(docPart, "val");
+            if (phVal !== null) {
+              props.placeholder = phVal;
             }
           }
           break;
