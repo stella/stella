@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -16,8 +16,9 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import type { TranslationKey } from "@/i18n/types";
+import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
-import { toAuthClientError } from "@/lib/errors";
+import { toAPIError, toAuthClientError } from "@/lib/errors";
 import {
   getOauthClientDisplayName,
   getOauthRedirectUrl,
@@ -53,6 +54,7 @@ const SCOPE_LABELS = {
   "stella:read": "consent.scopeRead",
   "stella:search_anonymized": "consent.scopeSearchAnonymized",
   "stella:read_anonymized": "consent.scopeReadAnonymized",
+  "stella:onboarding": "consent.scopeOnboarding",
   email: "consent.scopeProfile",
   openid: "consent.scopeProfile",
   profile: "consent.scopeProfile",
@@ -96,6 +98,23 @@ function ConsentPage() {
       return result.data;
     },
   });
+
+  const jurisdictionsQuery = useQuery({
+    enabled: activeOrganizationId !== null,
+    queryKey: ["consent-practice-jurisdictions", activeOrganizationId],
+    queryFn: async ({ signal }) => {
+      const response = await api["organization-settings"].get({
+        fetch: { signal },
+      });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data.practiceJurisdictions;
+    },
+  });
+  const showJurisdictionsNotice =
+    jurisdictionsQuery.data !== undefined &&
+    jurisdictionsQuery.data.length === 0;
 
   const scopes = scope?.split(" ").filter(Boolean) ?? [];
   const clientName =
@@ -188,6 +207,19 @@ function ConsentPage() {
                   </li>
                 ))}
               </ul>
+            </div>
+          ) : null}
+          {showJurisdictionsNotice ? (
+            <div className="border-border bg-muted/50 flex flex-col gap-2 rounded-md border p-3">
+              <p className="text-foreground text-sm">
+                {t("consent.missingJurisdictions")}
+              </p>
+              <Link
+                className="text-primary text-sm font-medium hover:underline"
+                to="/onboarding"
+              >
+                {t("consent.completeSetup")}
+              </Link>
             </div>
           ) : null}
           {hasError ? (

@@ -12,7 +12,8 @@ export type ToolScope =
   | "stella:read"
   | "stella:search"
   | "stella:read_anonymized"
-  | "stella:search_anonymized";
+  | "stella:search_anonymized"
+  | "stella:onboarding";
 
 export type McpToolDefinition = {
   annotations?: McpTool["annotations"];

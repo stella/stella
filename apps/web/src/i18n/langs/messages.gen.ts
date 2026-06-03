@@ -832,12 +832,15 @@ type Messages = {
   };
   "consent": {
     "allow": "Allow";
+    "completeSetup": "Complete setup";
     "defaultClientName": "An application";
     "deny": "Deny";
     "description": "{clientName} wants to access your stella workspace";
     "error": "Something went wrong. Please try again.";
+    "missingJurisdictions": "Your stella organization hasn't set up its practice jurisdictions yet. Some jurisdiction-aware tools will be unavailable until you complete setup.";
     "organization": "Organization";
     "permissions": "This will allow the application to:";
+    "scopeOnboarding": "Configure your organization's practice jurisdictions";
     "scopeProfile": "Access your profile information";
     "scopeRead": "Read your documents, matters, and contacts";
     "scopeReadAnonymized": "Read anonymized versions of your documents and matters";
