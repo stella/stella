@@ -129,7 +129,13 @@ function synthesizeTextWatermark(
   // when the caller programmatically built the watermark; a parsed-
   // then-saved DOCX takes the raw replay path above.
   const rotation = watermark.diagonal === false ? 0 : 315;
-  const fillcolor = watermark.color ? `#${watermark.color}` : "#C0C0C0";
+  // `color: "auto"` is a documented model value meaning "use the
+  // producer default"; we map it to Word's silver fallback rather than
+  // emitting an invalid VML `fillcolor="#auto"`.
+  const fillcolor =
+    watermark.color && watermark.color !== "auto"
+      ? `#${watermark.color}`
+      : "#C0C0C0";
   const fontFamily = watermark.font ?? "Calibri";
   const text = escapeXml(watermark.text);
   return (

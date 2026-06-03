@@ -100,6 +100,19 @@ describe("serializeHeaderFooter — watermark replay", () => {
     );
   });
 
+  test('maps documented color:"auto" to the silver default fillcolor', () => {
+    const hf: HeaderFooter = {
+      type: "header",
+      hdrFtrType: "default",
+      content: [],
+      watermark: { kind: "text", text: "X", color: "auto" },
+    };
+    const out = serializeHeaderFooter(hf);
+    // Not `fillcolor="#auto"` (invalid VML) — fall back to silver.
+    expect(out).toContain('fillcolor="#C0C0C0"');
+    expect(out).not.toContain('fillcolor="#auto"');
+  });
+
   test("emits no watermark element when the header carries none", () => {
     const hf: HeaderFooter = {
       type: "header",

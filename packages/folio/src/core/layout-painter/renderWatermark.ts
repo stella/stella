@@ -84,8 +84,13 @@ function renderTextWatermark(
   el.style.whiteSpace = "nowrap";
   // Word's text watermark uses #C0C0C0 (silver) with semi-transparency
   // (the "washout" preset). `opacity` parses out of the model when the
-  // serializer round-trips it from style="opacity:0.5".
-  const color = watermark.color ? `#${watermark.color}` : "#C0C0C0";
+  // serializer round-trips it from style="opacity:0.5". `color: "auto"`
+  // is a documented model value meaning "use the producer default" —
+  // map it to silver rather than emitting invalid CSS `#auto`.
+  const color =
+    watermark.color && watermark.color !== "auto"
+      ? `#${watermark.color}`
+      : "#C0C0C0";
   el.style.color = color;
   el.style.opacity = String(watermark.opacity ?? 0.5);
   // Word's default "diagonal" orientation is bottom-left → top-right,
@@ -107,9 +112,10 @@ function renderPictureWatermark(
   img.alt = "";
   // Decorative — never announced.
   img.setAttribute("aria-hidden", "true");
-  // Scale percent applies to the natural image size. Default to a
-  // visible band of the page width when no explicit scale is captured.
-  const scalePct = watermark.scale ?? 100;
+  // `PictureWatermark.scale` is documented as a factor (1.0 = native,
+  // 0.5 = half-size). Convert to a CSS percentage for max-width/height.
+  // A nil scale defaults to 1.0 (native).
+  const scalePct = (watermark.scale ?? 1) * 100;
   img.style.maxWidth = `${scalePct}%`;
   img.style.maxHeight = `${scalePct}%`;
   img.style.opacity = watermark.washout === false ? "1" : "0.4";

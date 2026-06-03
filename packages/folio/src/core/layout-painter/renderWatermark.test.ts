@@ -139,15 +139,38 @@ describe("renderWatermarkLayer", () => {
     expect(layer.firstElementChild?.style["opacity"]).toBe("1");
   });
 
-  test("honors a custom scale percentage", () => {
+  test("converts the documented scale factor to a CSS percentage", () => {
+    // Model contract: `scale` is a factor (1.0 = native, 0.5 = half).
+    // Painter must multiply by 100 — passing 0.6 unscaled would shrink
+    // the watermark to 0.6% of the page.
     const layer = renderWatermarkLayer(
-      { kind: "picture", imageRId: "rId1", scale: 60 },
+      { kind: "picture", imageRId: "rId1", scale: 0.6 },
       pageFixture(),
       fakeDocument,
       { imageSrc: "data:image/png;base64,_" },
     ) as unknown as FakeElement;
     expect(layer.firstElementChild?.style["maxWidth"]).toBe("60%");
     expect(layer.firstElementChild?.style["maxHeight"]).toBe("60%");
+  });
+
+  test("nil scale defaults to native (100%) size", () => {
+    const layer = renderWatermarkLayer(
+      { kind: "picture", imageRId: "rId1" },
+      pageFixture(),
+      fakeDocument,
+      { imageSrc: "data:image/png;base64,_" },
+    ) as unknown as FakeElement;
+    expect(layer.firstElementChild?.style["maxWidth"]).toBe("100%");
+  });
+
+  test('maps the documented color:"auto" to Word\'s silver default', () => {
+    const layer = renderWatermarkLayer(
+      { kind: "text", text: "X", color: "auto" },
+      pageFixture(),
+      fakeDocument,
+    ) as unknown as FakeElement;
+    // Not `#auto` (invalid CSS) — fall back to Word's silver.
+    expect(layer.firstElementChild?.style["color"]).toBe("#C0C0C0");
   });
 
   test("text watermark uses textContent, not raw HTML injection", () => {
