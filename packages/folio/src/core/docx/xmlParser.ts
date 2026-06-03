@@ -437,6 +437,17 @@ export function getChildElements(
  * @param namespace - Namespace prefix for the attribute (or null for no namespace)
  * @param name - Attribute name
  * @returns Attribute value or null if not found
+ *
+ * Lookup order when a namespace is provided:
+ *   1. exact `${namespace}:${name}` match (`w:val`),
+ *   2. bare `${name}` match (`val`),
+ *   3. any-prefix local-name match (`x:val`, `w14:val`, …).
+ *
+ * The local-name fallback mirrors `findChild` and lets the parser tolerate
+ * producers that rebind the WordprocessingML namespace to an alternative
+ * prefix. Without it, attributes such as `x:val` on an `x:alias` element
+ * would silently drop on round-trip even though the element itself is
+ * recognised.
  */
 export function getAttribute(
   element: XmlElement | null | undefined,
@@ -460,6 +471,19 @@ export function getAttribute(
   // Try without namespace
   if (name in attrs) {
     return attrs[name] ?? null;
+  }
+
+  // Fall back to any-prefix local-name match so alt-prefix producers keep
+  // their attribute values. Only applies when the caller asked for a
+  // namespaced attribute; if `namespace` is null the caller explicitly
+  // wanted an unprefixed attribute.
+  if (namespace) {
+    const suffix = `:${name}`;
+    for (const key of Object.keys(attrs)) {
+      if (key.endsWith(suffix)) {
+        return attrs[key] ?? null;
+      }
+    }
   }
 
   return null;

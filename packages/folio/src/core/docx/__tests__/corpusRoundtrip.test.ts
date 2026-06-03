@@ -282,5 +282,10 @@ describe("corpus round-trip: alt-prefix-sdt.docx", () => {
     // sdtType is derived from a child local name (`date`), so it must
     // round-trip even when the source used a non-default prefix.
     expect(sdt.properties.sdtType).toBe("date");
+    // alias/tag come from `x:val`-style attributes in the source; the
+    // attribute reader has to fall back to local-name matching for these
+    // to survive a parse → serialize → parse round-trip.
+    expect(sdt.properties.alias).toBe("Due date");
+    expect(sdt.properties.tag).toBe("due-date");
   });
 });
