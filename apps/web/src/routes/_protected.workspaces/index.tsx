@@ -28,6 +28,7 @@ import { MattersTable } from "@/routes/_protected.workspaces/-components/matters
 import { MattersToolbar } from "@/routes/_protected.workspaces/-components/matters-toolbar";
 import { ActiveFilterChips } from "@/routes/_protected.workspaces/-filters/active-filter-chips";
 import { applyMattersFilters } from "@/routes/_protected.workspaces/-filters/filter-pipeline";
+import { getMatterOrganizationResetPatch } from "@/routes/_protected.workspaces/-organization-reset";
 import {
   workspacesKeys,
   workspacesOptions,
@@ -94,7 +95,7 @@ function RouteComponent() {
 
     previousOrganizationIdRef.current = activeOrganizationId;
     setSearch("");
-    resetMatterVisibilityState({ collapsedGroups: [] });
+    resetMatterVisibilityState(getMatterOrganizationResetPatch());
     void queryClient.invalidateQueries({
       queryKey: workspacesKeys.list(activeOrganizationId),
     });
