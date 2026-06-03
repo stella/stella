@@ -20,12 +20,13 @@
     },
     "apps/api": {
       "entry": [
-        "src/index.ts",
+        "src/index.ts!",
+        "scripts/ingest-case-law.ts!",
+        "src/handlers/files/pdf-worker.ts!",
+        "src/lib/search/extraction-worker.ts!",
         "scripts/*.ts",
         "src/scripts/*.ts",
-        "src/handlers/files/pdf-worker.ts",
         "src/lib/__fixtures__/*.ts",
-        "src/lib/search/extraction-worker.ts",
         "src/handlers/case-law/seed-court-weights.ts",
         "src/handlers/case-law/ingestion/adapters/health-check.ts",
         "src/handlers/case-law/ingestion/adapters/update-fixtures.ts",

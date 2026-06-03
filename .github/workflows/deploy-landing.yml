@@ -52,14 +52,17 @@ jobs:
           # Must match the `run-name:` template in
           # stella/private-workflows/.github/workflows/deploy-landing.yml.
           expected_title="Deploy landing ${SOURCE_SHA}"
-          dispatch_output="$(
+          if ! dispatch_output="$(
             gh workflow run deploy-landing.yml \
               --repo "$PRIVATE_WORKFLOWS_REPO" \
               --field source_repository="$SOURCE_REPOSITORY" \
               --field source_ref="$SOURCE_REF" \
               --field source_sha="$SOURCE_SHA" \
               --field aws_role_arn_deploy="$AWS_ROLE_ARN_DEPLOY" 2>&1
-          )"
+          )"; then
+            printf '%s\n' "$dispatch_output" >&2
+            exit 1
+          fi
           printf '%s\n' "$dispatch_output"
 
           run_id="$(

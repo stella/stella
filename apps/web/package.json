@@ -109,6 +109,7 @@
     "@tailwindcss/vite": "catalog:",
     "@tanstack/router-plugin": "^1.168.11",
     "@types/babel__core": "^7.20.5",
+    "@types/hast": "^3.0.4",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
     "@vitejs/plugin-react": "catalog:",
@@ -116,6 +117,7 @@
     "elysia": "catalog:",
     "react-grab": "0.1.37",
     "rollup-plugin-visualizer": "^7.0.1",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "unified": "^11.0.5"
   }
 }
