@@ -474,6 +474,12 @@ describe("sdtPr property tests", () => {
           const altSpec = rebuildUnderPrefixes(canonical, altPrefixes);
           const canonProps = projection(parseSdtPr(canonical.sdtPrXml));
           const altProps = projection(parseSdtPr(altSpec.sdtPrXml));
+          // First pin the canonical parse to the generator's modeled
+          // expectations so a parser regression that silently drops a
+          // field (id, alias, tag, lock, placeholder, dateFormat,
+          // listItems, …) fails this property instead of being masked
+          // by the alt-prefix side dropping the same field.
+          expect(canonProps).toMatchObject(canonical.expected);
           expect(altProps).toEqual(canonProps);
         },
       ),
