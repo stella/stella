@@ -355,16 +355,13 @@ function isSyntheticEmptyFiller(blocks: BlockContent[]): boolean {
   if (block.formatting !== undefined) {
     return false;
   }
-  if (block._originalFormatting !== undefined) {
+  if (block.sectionProperties !== undefined) {
     return false;
   }
-  if (block._sectionProperties !== undefined) {
+  if (block.propertyChanges !== undefined) {
     return false;
   }
-  if (block._propertyChanges !== undefined) {
-    return false;
-  }
-  if (block._paragraphMarkChange !== undefined) {
+  if (block.pPrMark !== undefined) {
     return false;
   }
   return true;
