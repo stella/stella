@@ -103,13 +103,19 @@ export function parseWatermark(
  * paragraph; capturing the paragraph (not the shape) means the
  * replayed XML is a self-contained body block the header serializer
  * can splice in without further wrapping.
+ *
+ * If the paragraph mixes the watermark with other meaningful content
+ * (text runs, additional shapes), we refuse to detach — surgically
+ * extracting the watermark shape from such a paragraph is out of
+ * scope here, and silently dropping the rest on `setDocumentWatermark`
+ * would lose data. The caller treats the watermark as unrecoverable
+ * in that case; the original paragraph stays in `content` and
+ * round-trips through the regular block parser.
  */
 function findEnclosingParagraph(
   header: XmlElement,
   target: XmlElement,
 ): XmlElement | null {
-  // Direct ancestor walk: search every paragraph in the header and
-  // return the first one whose descendants include the target shape.
   for (const child of header.elements ?? []) {
     if (child.type !== "element" || !child.name) {
       continue;
@@ -117,11 +123,44 @@ function findEnclosingParagraph(
     if (getLocalName(child.name) !== "p") {
       continue;
     }
-    if (containsElement(child, target)) {
+    if (containsElement(child, target) && isWatermarkOnlyParagraph(child)) {
       return child;
     }
   }
   return null;
+}
+
+/**
+ * A "watermark-only" paragraph carries no text runs (`w:t`) and no
+ * sibling `w:drawing` shapes beyond the watermark itself. Word's UI
+ * always emits watermarks this way; third-party producers that mix
+ * watermarks with body content fall through this check and are left
+ * untouched so their non-watermark content isn't lost on save.
+ */
+function isWatermarkOnlyParagraph(paragraph: XmlElement): boolean {
+  let bodyTextRunCount = 0;
+  let drawingShapeCount = 0;
+  let pictShapeCount = 0;
+  walk(paragraph, (el) => {
+    // Match on the qualified name, not the local name. A DrawingML
+    // watermark's own caption lives in `<a:t>` inside `<a:txBody>`
+    // and must not count as body text; only `<w:t>` (the
+    // WordprocessingML run text) signals a mixed paragraph.
+    const name = el.name ?? "";
+    if (name === "w:t") {
+      bodyTextRunCount++;
+    } else if (name === "w:drawing") {
+      drawingShapeCount++;
+    } else if (name === "w:pict") {
+      pictShapeCount++;
+    }
+  });
+  if (bodyTextRunCount > 0) {
+    return false;
+  }
+  // Exactly one `w:pict` (VML) or one `w:drawing` (DrawingML) carries
+  // the watermark itself; siblings beyond that are sibling content.
+  return pictShapeCount + drawingShapeCount <= 1;
 }
 
 function containsElement(root: XmlElement, target: XmlElement): boolean {
@@ -234,7 +273,12 @@ function readVmlFillColor(shape: XmlElement): string | undefined {
   }
   // Word emits `fillcolor="#C0C0C0"` for the default light-gray text
   // watermark. Strip the leading `#` so the model holds the bare hex.
-  return raw.startsWith("#") ? raw.slice(1).toUpperCase() : raw.toUpperCase();
+  // The documented `"auto"` sentinel is preserved lowercase — the
+  // renderer/serializer special-case the exact lowercase form when
+  // mapping back to Word's silver default; an uppercased `"AUTO"`
+  // would round-trip as the invalid CSS color `#AUTO`.
+  const stripped = raw.startsWith("#") ? raw.slice(1) : raw;
+  return stripped.toLowerCase() === "auto" ? "auto" : stripped.toUpperCase();
 }
 
 // ---------------------------------------------------------------------------
@@ -247,7 +291,14 @@ function collectDrawingMlBehindContentAnchors(
   const out: XmlElement[] = [];
   for (const drawing of collectByLocalName(header, "drawing")) {
     const anchor = findDeep(drawing, "wp", "anchor");
-    if (anchor && getAttribute(anchor, null, "behindDoc") === "1") {
+    if (!anchor) {
+      continue;
+    }
+    // Accept both XSD boolean serializations. ECMA-376 allows
+    // `behindDoc="1"` (Word's default) and `behindDoc="true"`
+    // (the equally valid xsd:boolean form some producers emit).
+    const behindDoc = getAttribute(anchor, null, "behindDoc");
+    if (behindDoc === "1" || behindDoc === "true") {
       out.push(anchor);
     }
   }

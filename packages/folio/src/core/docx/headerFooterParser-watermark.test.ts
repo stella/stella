@@ -162,6 +162,8 @@ describe("parseHeader watermark detection", () => {
         </v:shape>
       </w:pict>
     </w:r>
+  </w:p>
+  <w:p>
     <w:r>
       <w:pict>
         <v:shape id="PowerPlusWaterMarkObject1" type="#_x0000_t136" style="rotation:315" fillcolor="#C0C0C0">
@@ -191,6 +193,8 @@ describe("parseHeader watermark detection", () => {
         </wp:anchor>
       </w:drawing>
     </w:r>
+  </w:p>
+  <w:p>
     <w:r>
       <w:drawing>
         <wp:anchor behindDoc="1">
@@ -270,5 +274,79 @@ describe("parseHeader watermark detection", () => {
 </w:hdr>`;
     const header = parseHeader(xml);
     expect(header.watermark).toBeUndefined();
+  });
+
+  test("preserves the documented lowercase 'auto' fillcolor sentinel", () => {
+    // The renderer/serializer special-case the exact lowercase value
+    // when mapping back to Word's silver default; uppercasing "AUTO"
+    // would round-trip as the invalid CSS color `#AUTO`.
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}>
+  <w:p>
+    <w:r>
+      <w:pict>
+        <v:shape id="PowerPlusWaterMarkObject1" type="#_x0000_t136" fillcolor="auto">
+          <v:textpath string="DRAFT"/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    if (!header.watermark || header.watermark.kind !== "text") {
+      throw new TypeError("expected text watermark");
+    }
+    expect(header.watermark.color).toBe("auto");
+  });
+
+  test("recovers a DrawingML watermark when behindDoc is the xsd:boolean 'true'", () => {
+    // ECMA-376 allows the xsd:boolean serializations `"1"` (Word's
+    // default) and `"true"` (equally valid). Producers in the wild
+    // emit both — refusing the textual form would silently drop the
+    // watermark on save.
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS} xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <w:p>
+    <w:r>
+      <w:drawing>
+        <wp:anchor behindDoc="true">
+          <a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">
+            <a:txBody><a:p><a:r><a:t>CONFIDENTIAL</a:t></a:r></a:p></a:txBody>
+          </a:graphicData></a:graphic>
+        </wp:anchor>
+      </w:drawing>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    if (!header.watermark || header.watermark.kind !== "text") {
+      throw new TypeError("expected text watermark");
+    }
+    expect(header.watermark.text).toBe("CONFIDENTIAL");
+  });
+
+  test("does not detach a paragraph that mixes the watermark with sibling text", () => {
+    // Surgically removing just the shape from a mixed paragraph is out
+    // of scope; refuse to claim the watermark so the original paragraph
+    // round-trips through the normal block parser with its text intact.
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS}>
+  <w:p>
+    <w:r><w:t>page header </w:t></w:r>
+    <w:r>
+      <w:pict>
+        <v:shape id="PowerPlusWaterMarkObject1" type="#_x0000_t136">
+          <v:textpath string="DRAFT"/>
+        </v:shape>
+      </w:pict>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    expect(header.watermark).toBeUndefined();
+    expect(header.rawWatermarkXml).toBeUndefined();
+    // Original mixed paragraph stays in content (the regular block
+    // parser surfaces the sibling text run).
+    expect(header.content.length).toBeGreaterThan(0);
   });
 });
