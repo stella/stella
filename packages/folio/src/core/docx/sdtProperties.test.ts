@@ -96,6 +96,35 @@ describe("parseSdtProperties — prefixed marker elements", () => {
     expect(props.listItems).toEqual([{ displayText: "Yes", value: "Yes" }]);
   });
 
+  test("reads attributes by local name when a canonical element carries an inherited alt-prefix attr", () => {
+    // `<w:tag x:val="client"/>` — canonical element, inherited `x:val`.
+    // Without the local-name attribute fallback, props.tag stayed empty
+    // and getContentControls({ tag: "client" }) couldn't find the
+    // control even though the saved DOCX serialized the value
+    // correctly via the raw normalizer.
+    const ns =
+      'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:x="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+    const props = parseSdtPrXml(
+      `<w:sdtPr ${ns}><w:tag x:val="client"/><w:alias x:val="Client Name"/></w:sdtPr>`,
+    );
+    expect(props.tag).toBe("client");
+    expect(props.alias).toBe("Client Name");
+  });
+
+  test("reads dropdown listItem attrs when canonical listItem carries alt-prefix attrs", () => {
+    // Same pattern as above for parseListItems: `<w:listItem x:displayText="…"
+    // x:value="…"/>`. Previously the wrapper-prefix path returned null
+    // (element prefix is `w`, attribute prefix is `x`), the canonical
+    // path returned null too, and the item was silently dropped.
+    const ns =
+      'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:x="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+    const props = parseSdtPrXml(
+      `<w:sdtPr ${ns}><w:dropDownList><w:listItem x:displayText="A" x:value="a"/></w:dropDownList></w:sdtPr>`,
+    );
+    expect(props.sdtType).toBe("dropdown");
+    expect(props.listItems).toEqual([{ displayText: "A", value: "a" }]);
+  });
+
   test("normalizes inherited alt-prefix w-namespace SDT children inside canonical wrapper", () => {
     // Canonical `<w:sdtPr>` wrapper with children inherited under an
     // alt prefix (`<x:tag>` declared via xmlns:x on the document root).

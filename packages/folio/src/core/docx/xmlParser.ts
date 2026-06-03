@@ -493,7 +493,30 @@ export function getAttributeAnyPrefix(
       return fromPrefix;
     }
   }
-  return getAttribute(element, "w", localName);
+  const canonical = getAttribute(element, "w", localName);
+  if (canonical !== null) {
+    return canonical;
+  }
+  // Final fallback: a canonical element (`<w:tag>`) can still carry
+  // attributes under a different inherited prefix (`<w:tag x:val="…"/>`
+  // when `x` is also bound to the WP URI at the document root). The
+  // wrapper-prefix and canonical-prefix lookups above miss that case;
+  // scan attribute names by local-name suffix as a last resort so the
+  // modeled projection picks the value up — without this, the raw XML
+  // normalizer rewrites it on save but `props.tag` / `listItems` /
+  // similar stay empty and tag-keyed lookups break.
+  const attrs = element.attributes;
+  if (attrs) {
+    const suffix = `:${localName}`;
+    for (const [key, value] of Object.entries(
+      attrs as Record<string, string>,
+    )) {
+      if (key === localName || key.endsWith(suffix)) {
+        return value;
+      }
+    }
+  }
+  return null;
 }
 
 /**
@@ -709,6 +732,20 @@ export function parseBooleanElement(
   }
   if (val === null) {
     val = getAttribute(element, namespace, "val");
+  }
+  // A canonical element can carry the val attribute under a different
+  // inherited prefix (`<w:b x:val="0"/>` when `x` is bound to the WP
+  // URI). The wrapper-prefix and canonical-prefix lookups above miss
+  // that; scan by local-name suffix so the OnOff parse is honest.
+  if (val === null && element.attributes) {
+    for (const [key, value] of Object.entries(
+      element.attributes as Record<string, string>,
+    )) {
+      if (key === "val" || key.endsWith(":val")) {
+        val = value;
+        break;
+      }
+    }
   }
 
   // No val attribute = true (element presence implies true)
