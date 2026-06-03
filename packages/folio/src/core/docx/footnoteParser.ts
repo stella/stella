@@ -19,6 +19,7 @@
  */
 
 import type {
+  BlockSdt,
   Footnote,
   Endnote,
   Paragraph,
@@ -29,16 +30,18 @@ import type {
 } from "../types/document";
 import type { NumberingMap } from "./numberingParser";
 import { parseParagraph } from "./paragraphParser";
+import { parseSdtProperties } from "./sdtProperties";
 import type { StyleMap } from "./styleParser";
 import { parseTable } from "./tableParser";
 import {
-  parseXml,
+  findChild,
   findChildren,
-  getChildElements,
   getAttributes,
+  getChildElements,
   getLocalName,
+  parseXml,
+  type XmlElement,
 } from "./xmlParser";
-import type { XmlElement } from "./xmlParser";
 
 // ============================================================================
 // FOOTNOTE MAP INTERFACE
@@ -152,8 +155,8 @@ function parseNoteBlockContent(
   numbering: NumberingMap | null,
   rels: RelationshipMap | null,
   media: Map<string, MediaFile> | null,
-): (Paragraph | Table)[] {
-  const blocks: (Paragraph | Table)[] = [];
+): (Paragraph | Table | BlockSdt)[] {
+  const blocks: (Paragraph | Table | BlockSdt)[] = [];
 
   for (const child of getChildElements(element)) {
     const localName = getLocalName(child.name ?? "");
@@ -161,6 +164,27 @@ function parseNoteBlockContent(
       blocks.push(parseParagraph(child, styles, theme, numbering, rels));
     } else if (localName === "tbl") {
       blocks.push(parseTable(child, styles, theme, numbering, rels, media));
+    } else if (localName === "sdt") {
+      // Recurse into sdtContent so SDT children inside notes are
+      // recognized; otherwise the note body silently drops citation
+      // slots and bound metadata controls.
+      const sdtPr = findChild(child, "w", "sdtPr");
+      const sdtEndPr = findChild(child, "w", "sdtEndPr");
+      const sdtContent = findChild(child, "w", "sdtContent");
+      blocks.push({
+        type: "blockSdt",
+        properties: parseSdtProperties(sdtPr, sdtEndPr),
+        content: sdtContent
+          ? parseNoteBlockContent(
+              sdtContent,
+              styles,
+              theme,
+              numbering,
+              rels,
+              media,
+            )
+          : [],
+      });
     }
   }
 
