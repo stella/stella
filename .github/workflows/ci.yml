@@ -661,9 +661,9 @@ jobs:
         # unchanged), overlays the full pruned source via
         # `cp -a ../full/. .` (mirrors `COPY --from=pruner
         # /app/out/full/ .` in `apps/api/Dockerfile`), compiles the
-        # API binary, and exercises the ingestion script with a
-        # fake adapter key — the same smoke the Dockerfile's
-        # `runner` stage runs at build time.
+        # API binary plus runtime workers, and exercises the ingestion
+        # script with a fake adapter key — the same smoke the
+        # Dockerfile's `runner` stage runs at build time.
         run: |
           set -euo pipefail
           rm -rf out-prod
@@ -671,6 +671,7 @@ jobs:
           cd out-prod/json
           bun install --production --frozen-lockfile --ignore-scripts
           cp -a ../full/. .
+          export NODE_ENV=production
           bun build \
             --compile \
             --minify-whitespace \
@@ -678,6 +679,16 @@ jobs:
             --target bun \
             --outfile /tmp/server \
             apps/api/src/index.ts
+          mkdir -p /tmp/runtime-workers
+          bun build \
+            --target bun \
+            --outfile /tmp/runtime-workers/pdf-worker.js \
+            apps/api/src/handlers/files/pdf-worker.ts
+          bun build \
+            --target bun \
+            --outfile /tmp/runtime-workers/extraction-worker.js \
+            apps/api/src/lib/search/extraction-worker.ts
+          unset NODE_ENV
           cd apps/api
           set +e
           out=$(DATABASE_URL=postgres://smoke:smoke@localhost:5432/smoke \
@@ -708,7 +719,8 @@ jobs:
         || 'ci-result'
       }}
     if: always()
-    needs: [trust-check, ci-checks, web-build, landing-build, e2e, api-image-deps]
+    needs:
+      [trust-check, ci-checks, web-build, landing-build, e2e, api-image-deps]
     runs-on: ubuntu-latest
     permissions:
       contents: read

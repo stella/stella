@@ -3,13 +3,6 @@
   "version": "0.0.0",
   "private": true,
   "license": "Apache-2.0",
-  "resolutions": {
-    "@emnapi/core": "1.9.1",
-    "@emnapi/runtime": "1.9.1",
-    "prosemirror-model": "1.25.7",
-    "prosemirror-transform": "1.12.0",
-    "prosemirror-view": "1.41.8"
-  },
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -81,6 +74,13 @@
     "@typescript/native-preview-linux-x64": "7.0.0-dev.20260527.2",
     "@typescript/native-preview-win32-arm64": "7.0.0-dev.20260527.2",
     "@typescript/native-preview-win32-x64": "7.0.0-dev.20260527.2"
+  },
+  "resolutions": {
+    "@emnapi/core": "1.9.1",
+    "@emnapi/runtime": "1.9.1",
+    "prosemirror-model": "1.25.7",
+    "prosemirror-transform": "1.12.0",
+    "prosemirror-view": "1.41.8"
   },
   "packageManager": "bun@1.3.14",
   "catalog": {
