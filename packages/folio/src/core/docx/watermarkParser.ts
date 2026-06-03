@@ -76,6 +76,7 @@ const VML_PICTURE_WATERMARK_ID_PREFIX = "WordPictureWatermark";
 export function parseWatermark(
   header: XmlElement,
 ): ParsedWatermark | undefined {
+  const headerXmlns = collectXmlnsDeclarations(header);
   for (const shape of collectVmlShapesWithContent(header)) {
     const watermark = readVmlWatermark(shape);
     if (watermark) {
@@ -83,7 +84,9 @@ export function parseWatermark(
       if (hosting) {
         return {
           watermark,
-          rawParagraphXml: elementToXml(hosting),
+          rawParagraphXml: elementToXml(
+            cloneWithXmlnsDeclarations(hosting, headerXmlns),
+          ),
           hostingParagraph: hosting,
           blockIndex: blockIndexOf(header, hosting),
         };
@@ -97,7 +100,9 @@ export function parseWatermark(
       if (hosting) {
         return {
           watermark,
-          rawParagraphXml: elementToXml(hosting),
+          rawParagraphXml: elementToXml(
+            cloneWithXmlnsDeclarations(hosting, headerXmlns),
+          ),
           hostingParagraph: hosting,
           blockIndex: blockIndexOf(header, hosting),
         };
@@ -105,6 +110,48 @@ export function parseWatermark(
     }
   }
   return undefined;
+}
+
+/**
+ * Collect every `xmlns:*` declaration from a header element's
+ * attributes. The serializer's hard-coded root namespaces only cover
+ * canonical prefixes (`a`, `w`, `wp`, …); a DOCX that binds an
+ * extension namespace to a non-canonical prefix would replay an
+ * unbound prefix when the captured paragraph alone is emitted. We
+ * carry the source declarations forward onto the captured paragraph
+ * so the raw replay is self-contained regardless of prefix choice.
+ */
+function collectXmlnsDeclarations(header: XmlElement): Record<string, string> {
+  const out: Record<string, string> = {};
+  const attrs = header.attributes;
+  if (!attrs) {
+    return out;
+  }
+  for (const [key, value] of Object.entries(attrs)) {
+    if ((key === "xmlns" || key.startsWith("xmlns:")) && value !== undefined) {
+      out[key] = String(value);
+    }
+  }
+  return out;
+}
+
+/**
+ * Return a shallow clone of `element` whose attributes carry every
+ * `xmlns:*` declaration in `xmlnsDecls`. Existing attributes (including
+ * any namespace declarations the paragraph already carries) win over
+ * the header-level ones.
+ */
+function cloneWithXmlnsDeclarations(
+  element: XmlElement,
+  xmlnsDecls: Record<string, string>,
+): XmlElement {
+  if (Object.keys(xmlnsDecls).length === 0) {
+    return element;
+  }
+  return {
+    ...element,
+    attributes: { ...xmlnsDecls, ...element.attributes },
+  };
 }
 
 /**
@@ -175,25 +222,13 @@ function isWatermarkOnlyParagraph(paragraph: XmlElement): boolean {
   let bodyTextRunCount = 0;
   let drawingShapeCount = 0;
   let pictShapeCount = 0;
-  walk(paragraph, (el) => {
-    // The rest of this parser accepts any namespace prefix bound to
-    // WordprocessingML — match on local name so headers that bind
-    // `w:` as a different prefix still classify correctly. DrawingML
-    // text (`a:t`) lives inside the watermark's own caption, but we
-    // descend INTO the watermark shape and would count it; guard by
-    // requiring the parent NOT to be a DrawingML container. The
-    // simpler heuristic that works: count only the WordprocessingML
-    // namespace URI; we accomplish that with a prefix-agnostic check
-    // by inspecting both the local name and the absence of a known
-    // DrawingML/foreign prefix.
-    const name = el.name ?? "";
-    const local = getLocalName(name);
-    const prefix = name.includes(":") ? name.slice(0, name.indexOf(":")) : "";
-    // Anything namespaced as `a:` (DrawingML core) or `pic:` (DrawingML
-    // pictures) is part of a shape's own content, not body text.
-    if (prefix === "a" || prefix === "pic") {
-      return;
-    }
+  // Walk but stop descending when we enter a shape container (`w:pict`
+  // / `w:drawing`): the descendant DrawingML caption (`a:t` / `d:t`
+  // for non-canonical prefixes) is the watermark's own content, not
+  // body text. The rest of the parser is namespace-prefix agnostic
+  // (matches on local name), so this guard matches the same way.
+  walkExcludingShapes(paragraph, (el) => {
+    const local = getLocalName(el.name ?? "");
     if (local === "t") {
       bodyTextRunCount++;
     } else if (local === "drawing") {
@@ -205,9 +240,32 @@ function isWatermarkOnlyParagraph(paragraph: XmlElement): boolean {
   if (bodyTextRunCount > 0) {
     return false;
   }
-  // Exactly one `w:pict` (VML) or one `w:drawing` (DrawingML) carries
-  // the watermark itself; siblings beyond that are sibling content.
+  // Exactly one shape (the watermark) is the watermark-only case;
+  // siblings beyond that are sibling content.
   return pictShapeCount + drawingShapeCount <= 1;
+}
+
+/**
+ * Like `walk`, but does not descend into the shape containers
+ * (`w:pict` / `w:drawing`). Used by the mixed-paragraph guard so the
+ * watermark's own descendant content (text inside `a:txBody`, etc.) is
+ * not counted as body text.
+ */
+function walkExcludingShapes(
+  root: XmlElement,
+  visit: (el: XmlElement) => void,
+): void {
+  for (const child of root.elements ?? []) {
+    if (child.type !== "element") {
+      continue;
+    }
+    visit(child);
+    const local = getLocalName(child.name ?? "");
+    if (local === "pict" || local === "drawing") {
+      continue;
+    }
+    walkExcludingShapes(child, visit);
+  }
 }
 
 function containsElement(root: XmlElement, target: XmlElement): boolean {

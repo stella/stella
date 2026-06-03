@@ -2269,12 +2269,14 @@ export function applySectionHeaderFooterOptions(
 
   // Per-page watermark resolution. A document with titlePg, even/odd,
   // or section-scoped headers can carry a different watermark on each
-  // header part; without per-page selection, the first header's
-  // watermark would paint behind every page. Fall back to the global
-  // `watermark` only when no rId-scoped match exists.
+  // header part. When a per-rId map is present, that map is
+  // authoritative: a page whose active header has no watermark — or no
+  // active header at all (titlePg first page without `headerFirst`) —
+  // must clear the global fallback so we don't paint the default
+  // header's watermark behind a page whose own header is blank.
   const watermarkByRId = options.watermarkByHeaderRId;
-  if (watermarkByRId && headerRId) {
-    const pageWatermark = watermarkByRId.get(headerRId);
+  if (watermarkByRId) {
+    const pageWatermark = headerRId ? watermarkByRId.get(headerRId) : undefined;
     if (pageWatermark) {
       pageOptions.watermark = pageWatermark;
     } else {

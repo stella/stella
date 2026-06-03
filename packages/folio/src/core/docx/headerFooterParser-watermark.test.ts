@@ -414,6 +414,36 @@ describe("parseHeader watermark detection", () => {
     expect(header.rawWatermarkXml).toBeUndefined();
   });
 
+  test("captures source xmlns declarations on the raw paragraph for non-canonical prefixes", () => {
+    // A DOCX that binds an extension namespace on the header root with
+    // a non-canonical prefix must survive round-trip. Without forwarding
+    // the source declaration, the serializer's hard-coded root would
+    // re-emit an unbound prefix.
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr ${NS} xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:d="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <w:p>
+    <w:r>
+      <w:drawing>
+        <wp:anchor behindDoc="1">
+          <d:graphic><d:graphicData>
+            <d:txBody><d:p><d:r><d:t>CONFIDENTIAL</d:t></d:r></d:p></d:txBody>
+          </d:graphicData></d:graphic>
+        </wp:anchor>
+      </w:drawing>
+    </w:r>
+  </w:p>
+</w:hdr>`;
+    const header = parseHeader(xml);
+    expect(header.watermark).toBeDefined();
+    // The header bound DrawingML core to `d:`; the captured raw paragraph
+    // must carry that declaration forward so a replay under the
+    // serializer's root (which only declares the canonical `a:`) still
+    // has a bound `d:`.
+    expect(header.rawWatermarkXml).toContain(
+      'xmlns:d="http://schemas.openxmlformats.org/drawingml/2006/main"',
+    );
+  });
+
   test("does not detach a paragraph that mixes the watermark with sibling text", () => {
     // Surgically removing just the shape from a mixed paragraph is out
     // of scope; refuse to claim the watermark so the original paragraph
