@@ -445,7 +445,10 @@ describe("corpus round-trip: date-fractional-seconds.docx", () => {
       return;
     }
     expect(sdt.properties.sdtType).toBe("date");
-    expect(sdt.properties.dateFormat).toBe("2026-06-02T00:00:00.000Z");
+    // Fixture pins the ISO date value (with fractional seconds) on
+    // dateValueISO; dateFormat carries the display format string
+    // (`yyyy-MM-dd`) — they're independent fields per the parser.
+    expect(sdt.properties.dateValueISO).toBe("2026-06-02T00:00:00.000Z");
     expect(sdt.properties.tag).toBe("signed-at");
   });
 });
