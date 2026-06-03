@@ -840,12 +840,14 @@ type Messages = {
     "missingJurisdictions": "Your stella organization hasn't set up its practice jurisdictions yet. Some jurisdiction-aware tools will be unavailable until you complete setup.";
     "organization": "Organization";
     "permissions": "This will allow the application to:";
+    "scopeExternalMcps": "Use your connected external tools";
     "scopeOnboarding": "Configure your organization's practice jurisdictions";
     "scopeProfile": "Access your profile information";
     "scopeRead": "Read your documents, matters, and contacts";
     "scopeReadAnonymized": "Read anonymized versions of your documents and matters";
     "scopeSearch": "Search your documents and matters";
     "scopeSearchAnonymized": "Search anonymized versions of your documents and matters";
+    "scopeSkills": "Use your saved stella skills";
     "title": "Authorize access";
   };
   "contacts": {

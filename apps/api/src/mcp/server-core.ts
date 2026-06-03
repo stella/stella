@@ -20,15 +20,20 @@ import {
   createMcpCorsHeaders,
   getMcpWwwAuthenticateHeader,
 } from "@/api/mcp/metadata";
-import type { McpToolDefinition } from "@/api/mcp/tool-types";
+import type { McpToolDefinition, ToolScope } from "@/api/mcp/tool-types";
 
 type McpServerDependencies = {
   authenticateMcpRequest: (token: string, mode: McpMode) => Promise<McpSession>;
   captureError: (error: unknown, context?: Record<string, string>) => void;
   getMcpToolDefinition: (
     toolName: string,
+    context: McpRequestContext,
     mode?: McpMode,
-  ) => McpToolDefinition | undefined;
+  ) => Promise<McpToolDefinition | undefined>;
+  getMcpToolScopeHint: (
+    toolName: string,
+    mode?: McpMode,
+  ) => ToolScope | undefined;
   handleMcpToolCall: ({
     args,
     context,
@@ -40,7 +45,11 @@ type McpServerDependencies = {
     mode?: McpMode;
     toolName: string;
   }) => Promise<CallToolResult>;
-  listMcpTools: (mode?: McpMode) => McpTool[];
+  listMcpTools: (
+    context: McpRequestContext,
+    mode?: McpMode,
+    scopes?: readonly string[],
+  ) => Promise<McpTool[]>;
   resolveMcpSessionContext: (
     session: McpSession,
     options: { request: Request },
@@ -98,6 +107,7 @@ export const createMcpHttpRequestHandler = ({
   authenticateMcpRequest,
   captureError,
   getMcpToolDefinition,
+  getMcpToolScopeHint,
   handleMcpToolCall,
   listMcpTools,
   resolveMcpSessionContext,
@@ -121,13 +131,26 @@ export const createMcpHttpRequestHandler = ({
       { capabilities: { tools: {} } },
     );
 
-    server.setRequestHandler(ListToolsRequestSchema, () => ({
-      tools: listMcpTools(mode),
+    server.setRequestHandler(ListToolsRequestSchema, async () => ({
+      tools: await listMcpTools(context, mode, session.scopes),
     }));
 
     server.setRequestHandler(CallToolRequestSchema, async (toolRequest) => {
       const toolName = toolRequest.params.name;
-      const definition = getMcpToolDefinition(toolName, mode);
+      const hintedScope = getMcpToolScopeHint(toolName, mode);
+      if (hintedScope && !session.scopes.includes(hintedScope)) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Insufficient permissions. Required scope: ${hintedScope}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const definition = await getMcpToolDefinition(toolName, context, mode);
       if (!definition) {
         return {
           content: [

@@ -16,6 +16,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { refreshCachedMcpToolsForConnection } from "@/api/lib/mcp-upstream/connections";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const STATE_TTL_MS = 10 * 60 * 1000;
@@ -176,7 +177,7 @@ const mcpOAuthCallback = createSafeRootHandler(
           })
         : null;
 
-      yield* Result.await(
+      const saved = yield* Result.await(
         safeDb(
           async (tx) =>
             await tx.transaction(async (innerTx) => {
@@ -186,7 +187,7 @@ const mcpOAuthCallback = createSafeRootHandler(
               await innerTx
                 .delete(mcpOAuthState)
                 .where(lt(mcpOAuthState.createdAt, cutoff));
-              await innerTx
+              const rows = await innerTx
                 .insert(mcpUserConnections)
                 .values({
                   organizationId: row.organizationId,
@@ -222,11 +223,14 @@ const mcpOAuthCallback = createSafeRootHandler(
                     resourceUrl: row.resourceUrl,
                     authorizationServerUrl: row.authorizationServerUrl,
                     expiresAt: tokenExpiresAt(token.value),
+                    cachedTools: null,
+                    cachedToolsRefreshedAt: null,
                     status: "connected",
                     enabled: true,
                     updatedAt: new Date(),
                   },
-                });
+                })
+                .returning({ id: mcpUserConnections.id });
               await recordAuditEvent(innerTx, {
                 action: AUDIT_ACTION.UPDATE,
                 resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
@@ -239,9 +243,20 @@ const mcpOAuthCallback = createSafeRootHandler(
                   operation: "mcp_oauth_connect",
                 },
               });
+              return rows;
             }),
         ),
       );
+
+      const connection = saved.at(0);
+      if (connection) {
+        await refreshCachedMcpToolsForConnection({
+          connectionId: connection.id,
+          organizationId: session.activeOrganizationId,
+          safeDb,
+          userId: user.id,
+        });
+      }
 
       return Result.ok(redirect({ status: "connected", slug: connectorSlug }));
     } catch (error) {

@@ -3,17 +3,12 @@ import type {
   Tool as McpTool,
 } from "@modelcontextprotocol/sdk/types.js";
 
-import type { McpMode } from "@/api/mcp/constants";
+import type { MCP_ALL_RESOURCE_SCOPES, McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 
 export type JsonSchema = McpTool["inputSchema"];
 
-export type ToolScope =
-  | "stella:read"
-  | "stella:search"
-  | "stella:read_anonymized"
-  | "stella:search_anonymized"
-  | "stella:onboarding";
+export type ToolScope = (typeof MCP_ALL_RESOURCE_SCOPES)[number];
 
 export type McpToolDefinition = {
   annotations?: McpTool["annotations"];

@@ -837,12 +837,14 @@
     "missingJurisdictions": "Your stella organization hasn't set up its practice jurisdictions yet. Some jurisdiction-aware tools will be unavailable until you complete setup.",
     "organization": "Organização",
     "permissions": "Isso permitirá que o aplicativo:",
+    "scopeExternalMcps": "Use suas ferramentas externas conectadas",
     "scopeOnboarding": "Configure your organization's practice jurisdictions",
     "scopeProfile": "Acesse as informações do seu perfil",
     "scopeRead": "Leia seus documentos, casos e contatos",
     "scopeReadAnonymized": "Leia versões anônimas de seus documentos e casos",
     "scopeSearch": "Pesquise seus documentos e casos",
     "scopeSearchAnonymized": "Pesquise versões anônimas de seus documentos e casos",
+    "scopeSkills": "Use suas habilidades stella salvas",
     "title": "Autorizar acesso"
   },
   "contacts": {

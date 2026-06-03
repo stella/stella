@@ -150,22 +150,27 @@ describe("set_practice_jurisdictions MCP tool", () => {
     mock.restore();
   });
 
-  test("requires the stella:onboarding scope", () => {
-    expect(getMcpToolDefinition("set_practice_jurisdictions")?.scope).toBe(
-      "stella:onboarding",
+  test("requires the stella:onboarding scope", async () => {
+    const definition = await getMcpToolDefinition(
+      "set_practice_jurisdictions",
+      createContext(),
     );
+
+    expect(definition?.scope).toBe("stella:onboarding");
   });
 
-  test("is not exposed in anonymized mode", () => {
-    expect(listMcpTools("anonymized").map((tool) => tool.name)).not.toContain(
-      "set_practice_jurisdictions",
-    );
+  test("is not exposed in anonymized mode", async () => {
+    expect(
+      (await listMcpTools(createContext(), "anonymized")).map(
+        (tool) => tool.name,
+      ),
+    ).not.toContain("set_practice_jurisdictions");
   });
 
-  test("is exposed in default mode", () => {
-    expect(listMcpTools().map((tool) => tool.name)).toContain(
-      "set_practice_jurisdictions",
-    );
+  test("is exposed in default mode", async () => {
+    expect(
+      (await listMcpTools(createContext())).map((tool) => tool.name),
+    ).toContain("set_practice_jurisdictions");
   });
 
   test("upserts practice jurisdictions on the happy path", async () => {
