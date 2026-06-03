@@ -549,6 +549,89 @@ jobs:
             /tmp/web.log
           retention-days: 7
 
+  # Pruned-subset lockfile guard. The staging API image is built
+  # via `turbo prune @stll/api --docker` followed by
+  # `bun install --frozen-lockfile` against the pruned bun.lock.
+  # The other CI jobs all install against the full repo lockfile,
+  # so a workspace dep that resolves transitively from outside
+  # @stll/api's tree (e.g. via apps/web) can be missing from the
+  # relevant workspace block and still satisfy the full install —
+  # only to fail at deploy time when the prune drops the masking
+  # workspace. Mirror the Dockerfile's install path here so that
+  # class of drift fails the PR instead of the deploy.
+  api-image-deps:
+    needs: trust-check
+    if: >-
+      needs.trust-check.outputs.trusted == 'true'
+      || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check whether API-image-affecting paths changed
+        id: changed
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          base_ref="origin/$BASE_REF"
+          mapfile -t changed_files < <(git diff --name-only "$base_ref"...HEAD)
+          run=false
+          for file in "${changed_files[@]}"; do
+            case "$file" in
+              apps/api/*|packages/*|bun.lock|package.json|turbo.json|.github/workflows/ci.yml)
+                run=true
+                break
+                ;;
+            esac
+          done
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          if [[ "$run" != "true" ]]; then
+            echo "::notice::No API-image-affecting paths changed; skipping pruned-lockfile guard."
+          fi
+
+      - name: Setup Bun
+        if: steps.changed.outputs.run == 'true'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install turbo
+        if: steps.changed.outputs.run == 'true'
+        # Match apps/api/Dockerfile: a global turbo install, no
+        # workspace dependency resolution beforehand.
+        run: bun install -g turbo@^2
+
+      - name: Prune monorepo for @stll/api
+        if: steps.changed.outputs.run == 'true'
+        run: turbo prune @stll/api --docker
+
+      - name: Install pruned deps with frozen lockfile
+        if: steps.changed.outputs.run == 'true'
+        # This is the exact command the Docker build runs against
+        # the pruned bun.lock in `apps/api/Dockerfile`. It is the
+        # only place that catches workspace-block drift in the
+        # repo lockfile, because the full-repo `bun ci` other jobs
+        # use accepts a stale workspace block as long as the
+        # package resolves transitively somewhere in the graph.
+        run: |
+          cd out/json
+          bun install --frozen-lockfile --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
   # Aggregation job for branch protection. The ruleset requires
   # this check to pass, which ensures untrusted PRs cannot be
   # merged without CI and trusted PRs must pass all checks.
@@ -562,13 +645,14 @@ jobs:
         || 'ci-result'
       }}
     if: always()
-    needs: [trust-check, ci-checks, web-build, landing-build, e2e]
+    needs: [trust-check, ci-checks, web-build, landing-build, e2e, api-image-deps]
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
       - name: Evaluate CI outcome
         env:
+          API_IMAGE_DEPS_RESULT: ${{ needs.api-image-deps.result }}
           CI_RESULT: ${{ needs.ci-checks.result }}
           E2E_RESULT: ${{ needs.e2e.result }}
           EVENT: ${{ github.event_name }}
@@ -589,7 +673,8 @@ jobs:
             if [[ "$CI_RESULT" == "failure" || "$CI_RESULT" == "cancelled" \
                   || "$WEB_RESULT" == "failure" || "$WEB_RESULT" == "cancelled" \
                   || "$LANDING_RESULT" == "failure" || "$LANDING_RESULT" == "cancelled" \
-                  || "$E2E_RESULT" == "failure" || "$E2E_RESULT" == "cancelled" ]]; then
+                  || "$E2E_RESULT" == "failure" || "$E2E_RESULT" == "cancelled" \
+                  || "$API_IMAGE_DEPS_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "cancelled" ]]; then
               echo "::error::CI checks failed."
               exit 1
             fi
@@ -603,12 +688,12 @@ jobs:
 
           # "cancelled" means cancel-in-progress replaced this
           # run with a newer one; the newer run is authoritative.
-          if [[ "$CI_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" ]]; then
+          if [[ "$CI_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" ]]; then
             echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
             exit 0
           fi
 
-          if [[ "$CI_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$E2E_RESULT" == "failure" ]]; then
+          if [[ "$CI_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" ]]; then
             echo "::error::CI checks failed."
             exit 1
           fi
