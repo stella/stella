@@ -120,8 +120,21 @@ export function parseHeader(
     return result;
   }
 
+  // Watermark detection runs first so the hosting paragraph can be
+  // excluded from regular body parsing — otherwise the parser would
+  // emit an empty paragraph placeholder where the watermark sat (the
+  // run-level VML / DrawingML is not surfaced by `runParser`).
+  const watermarkResult = parseWatermark(rootElement);
+  if (watermarkResult) {
+    result.watermark = watermarkResult.watermark;
+    result.rawWatermarkXml = watermarkResult.rawParagraphXml;
+  }
+  const contentRoot = watermarkResult
+    ? withoutChild(rootElement, watermarkResult.hostingParagraph)
+    : rootElement;
+
   result.content = parseBlockContent(
-    rootElement,
+    contentRoot,
     styles,
     theme,
     numbering,
@@ -130,15 +143,21 @@ export function parseHeader(
     { inHeaderFooter: true },
   );
 
-  // Watermark detection is structural (walks the raw VML / DrawingML
-  // shapes), so it runs after content extraction rather than from
-  // within the block parser.
-  const watermark = parseWatermark(rootElement);
-  if (watermark) {
-    result.watermark = watermark;
-  }
-
   return result;
+}
+
+/**
+ * Return a shallow copy of `parent` whose `elements` array omits the
+ * single child reference `child`. Used to skip the watermark paragraph
+ * when feeding the header into `parseBlockContent` — without this the
+ * body parser would emit an empty placeholder paragraph where the
+ * watermark sits in the source.
+ */
+function withoutChild(parent: XmlElement, child: XmlElement): XmlElement {
+  return {
+    ...parent,
+    elements: (parent.elements ?? []).filter((el) => el !== child),
+  };
 }
 
 /**

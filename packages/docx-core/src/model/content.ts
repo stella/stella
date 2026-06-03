@@ -1360,6 +1360,14 @@ export type HeaderFooter = {
    * can render and edit it without walking raw runs.
    */
   watermark?: Watermark;
+  /**
+   * Verbatim XML of the paragraph(s) containing the source watermark
+   * shape. Captured at parse time so an untouched DOCX serializes the
+   * watermark byte-exact even though `runParser` does not surface VML /
+   * DrawingML at the run level. Cleared (or rewritten) when callers
+   * mutate the modeled watermark via the headless API.
+   */
+  rawWatermarkXml?: string;
 };
 
 /**

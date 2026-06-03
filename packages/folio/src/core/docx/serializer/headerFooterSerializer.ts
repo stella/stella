@@ -10,10 +10,15 @@
  * - Content: w:p, w:tbl (same as document body)
  */
 
-import type { BlockContent, HeaderFooter } from "../../types/document";
+import type {
+  BlockContent,
+  HeaderFooter,
+  Watermark,
+} from "../../types/document";
 import { serializeBlockSdt } from "./blockSdtSerializer";
 import { serializeParagraph } from "./paragraphSerializer";
 import { serializeTable } from "./tableSerializer";
+import { escapeXml } from "./xmlUtils";
 
 // Namespaces declared on the header/footer root. Mirrors the document
 // serializer's declared set so any raw replay path (`rawPropertiesXml`,
@@ -71,13 +76,77 @@ export function serializeHeaderFooter(hf: HeaderFooter): string {
   const rootTag = hf.type === "header" ? "w:hdr" : "w:ftr";
   const nsDecl = buildNamespaceDeclarations();
 
+  // Watermark replay. The parser captured the hosting paragraph's
+  // verbatim XML (`rawWatermarkXml`) and detached it from `content`,
+  // so emit it back as the first child of the header element. If a
+  // caller mutated `hf.watermark` without updating the raw XML (e.g.
+  // a future setDocumentWatermark path), the model-driven synthesizer
+  // takes over and emits a freshly-built VML watermark paragraph.
+  const watermarkXml = serializeWatermarkParagraph(hf);
+
   // Serialize content blocks
   let contentXml = hf.content.map((block) => serializeBlock(block)).join("");
 
   // Ensure at least one empty paragraph (required by OOXML spec)
-  if (!contentXml) {
+  if (!watermarkXml && !contentXml) {
     contentXml = "<w:p><w:pPr/></w:p>";
   }
 
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<${rootTag} ${nsDecl}>${contentXml}</${rootTag}>`;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<${rootTag} ${nsDecl}>${watermarkXml}${contentXml}</${rootTag}>`;
+}
+
+function serializeWatermarkParagraph(hf: HeaderFooter): string {
+  if (hf.rawWatermarkXml) {
+    return hf.rawWatermarkXml;
+  }
+  if (hf.watermark) {
+    return synthesizeWatermarkParagraph(hf.watermark);
+  }
+  return "";
+}
+
+function synthesizeWatermarkParagraph(watermark: Watermark): string {
+  if (watermark.kind === "text") {
+    return synthesizeTextWatermark(watermark);
+  }
+  return synthesizePictureWatermark(watermark);
+}
+
+function synthesizeTextWatermark(
+  watermark: Extract<Watermark, { kind: "text" }>,
+): string {
+  // VML shape values mirror what Word's "Insert → Watermark" UI emits.
+  // The shapetype id 136 is the WordArt template the model is anchored
+  // on (gating in the parser); the size and offset numbers come from
+  // Word's default text-watermark layout. Sufficient for round-trip
+  // when the caller programmatically built the watermark; a parsed-
+  // then-saved DOCX takes the raw replay path above.
+  const rotation = watermark.diagonal === false ? 0 : 315;
+  const fillcolor = watermark.color ? `#${watermark.color}` : "#C0C0C0";
+  const fontFamily = watermark.font ?? "Calibri";
+  const text = escapeXml(watermark.text);
+  return (
+    `<w:p><w:r><w:pict>` +
+    `<v:shape id="PowerPlusWaterMarkObject1" type="#_x0000_t136" ` +
+    `style="position:absolute;margin-left:0;margin-top:0;width:415pt;height:207pt;rotation:${rotation};z-index:-251658240;mso-position-horizontal:center;mso-position-horizontal-relative:margin;mso-position-vertical:center;mso-position-vertical-relative:margin" ` +
+    `fillcolor="${fillcolor}" stroked="f">` +
+    `<v:textpath style="font-family:&quot;${escapeXml(fontFamily)}&quot;;font-size:1pt" string="${text}"/>` +
+    `</v:shape></w:pict></w:r></w:p>`
+  );
+}
+
+function synthesizePictureWatermark(
+  watermark: Extract<Watermark, { kind: "picture" }>,
+): string {
+  // Same VML shapetype convention as Word's UI: shape id begins with
+  // `WordPictureWatermark` so a future round-trip parses cleanly via
+  // the id-prefix guard.
+  const rId = escapeXml(watermark.imageRId);
+  return (
+    `<w:p><w:r><w:pict>` +
+    `<v:shape id="WordPictureWatermark1" type="#_x0000_t75" ` +
+    `style="position:absolute;margin-left:0;margin-top:0;width:415pt;height:207pt;z-index:-251658240;mso-position-horizontal:center;mso-position-horizontal-relative:margin;mso-position-vertical:center;mso-position-vertical-relative:margin">` +
+    `<v:imagedata r:id="${rId}" o:title=""/>` +
+    `</v:shape></w:pict></w:r></w:p>`
+  );
 }

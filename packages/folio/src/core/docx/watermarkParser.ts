@@ -22,6 +22,7 @@
 
 import type { Watermark } from "../types/document";
 import {
+  elementToXml,
   findChild,
   findChildren,
   findDeep,
@@ -30,6 +31,19 @@ import {
   getTextContent,
   type XmlElement,
 } from "./xmlParser";
+
+/**
+ * Result of walking a header for its watermark. Carries the modeled
+ * `Watermark`, the verbatim XML of the paragraph that hosts the
+ * watermark shape (replayed on serialize so an untouched DOCX
+ * round-trips byte-exact), and a reference to that hosting paragraph
+ * so the regular body parser can skip it.
+ */
+export type ParsedWatermark = {
+  watermark: Watermark;
+  rawParagraphXml: string;
+  hostingParagraph: XmlElement;
+};
 
 const VML_TEXT_WATERMARK_SHAPETYPE = "#_x0000_t136";
 /**
@@ -46,21 +60,83 @@ const VML_PICTURE_WATERMARK_ID_PREFIX = "WordPictureWatermark";
  * or `undefined` when none is present. Scans every candidate shape /
  * anchor in the header so a non-watermark shape (e.g. a logo image)
  * earlier in document order does not shadow the real watermark.
+ *
+ * Returns the modeled `Watermark`, the verbatim XML of the hosting
+ * paragraph (so the serializer can replay it byte-exact), and a
+ * reference to that paragraph so the regular body parser can skip it.
  */
-export function parseWatermark(header: XmlElement): Watermark | undefined {
+export function parseWatermark(
+  header: XmlElement,
+): ParsedWatermark | undefined {
   for (const shape of collectVmlShapesWithContent(header)) {
     const watermark = readVmlWatermark(shape);
     if (watermark) {
-      return watermark;
+      const hosting = findEnclosingParagraph(header, shape);
+      if (hosting) {
+        return {
+          watermark,
+          rawParagraphXml: elementToXml(hosting),
+          hostingParagraph: hosting,
+        };
+      }
     }
   }
   for (const anchor of collectDrawingMlBehindContentAnchors(header)) {
     const watermark = readDrawingMlTextWatermark(anchor);
     if (watermark) {
-      return watermark;
+      const hosting = findEnclosingParagraph(header, anchor);
+      if (hosting) {
+        return {
+          watermark,
+          rawParagraphXml: elementToXml(hosting),
+          hostingParagraph: hosting,
+        };
+      }
     }
   }
   return undefined;
+}
+
+/**
+ * Walk back from a watermark shape / anchor to its enclosing `<w:p>`
+ * inside the header. Word always wraps a watermark in its own
+ * paragraph; capturing the paragraph (not the shape) means the
+ * replayed XML is a self-contained body block the header serializer
+ * can splice in without further wrapping.
+ */
+function findEnclosingParagraph(
+  header: XmlElement,
+  target: XmlElement,
+): XmlElement | null {
+  // Direct ancestor walk: search every paragraph in the header and
+  // return the first one whose descendants include the target shape.
+  for (const child of header.elements ?? []) {
+    if (child.type !== "element" || !child.name) {
+      continue;
+    }
+    if (getLocalName(child.name) !== "p") {
+      continue;
+    }
+    if (containsElement(child, target)) {
+      return child;
+    }
+  }
+  return null;
+}
+
+function containsElement(root: XmlElement, target: XmlElement): boolean {
+  if (root === target) {
+    return true;
+  }
+  for (const child of root.elements ?? []) {
+    if (child.type !== "element") {
+      continue;
+    }
+    if (containsElement(child, target)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------------------
