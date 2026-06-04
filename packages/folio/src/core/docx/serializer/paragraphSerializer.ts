@@ -431,28 +431,28 @@ export function serializeParagraphFormatting(
 ): string {
   const parts: string[] = [];
 
+  // Emit a boolean toggle: a bare element for true, `w:val="0"` for an explicit
+  // false (which disables a value inherited from a style, so the override
+  // survives round-trip), and nothing when absent ("inherit").
+  const pushToggle = (name: string, value: boolean | undefined): void => {
+    if (value === true) {
+      parts.push(`<w:${name}/>`);
+    } else if (value === false) {
+      parts.push(`<w:${name} w:val="0"/>`);
+    }
+  };
+
   if (formatting) {
     // Style reference (must be first)
     if (formatting.styleId) {
       parts.push(`<w:pStyle w:val="${escapeXml(formatting.styleId)}"/>`);
     }
 
-    // Keep next/lines/widow
-    if (formatting.keepNext) {
-      parts.push("<w:keepNext/>");
-    }
-
-    if (formatting.keepLines) {
-      parts.push("<w:keepLines/>");
-    }
-
-    if (formatting.contextualSpacing) {
-      parts.push("<w:contextualSpacing/>");
-    }
-
-    if (formatting.pageBreakBefore) {
-      parts.push("<w:pageBreakBefore/>");
-    }
+    // Keep next/lines, contextual spacing, page break before.
+    pushToggle("keepNext", formatting.keepNext);
+    pushToggle("keepLines", formatting.keepLines);
+    pushToggle("contextualSpacing", formatting.contextualSpacing);
+    pushToggle("pageBreakBefore", formatting.pageBreakBefore);
 
     // Frame properties
     const frameXml = serializeFrameProperties(formatting.frame);
@@ -461,11 +461,7 @@ export function serializeParagraphFormatting(
     }
 
     // Widow control
-    if (formatting.widowControl === false) {
-      parts.push('<w:widowControl w:val="0"/>');
-    } else if (formatting.widowControl === true) {
-      parts.push("<w:widowControl/>");
-    }
+    pushToggle("widowControl", formatting.widowControl);
 
     // Numbering
     const numPrXml = serializeNumbering(formatting.numPr);
@@ -491,15 +487,9 @@ export function serializeParagraphFormatting(
       parts.push(tabsXml);
     }
 
-    // Suppress line numbers
-    if (formatting.suppressLineNumbers) {
-      parts.push("<w:suppressLineNumbers/>");
-    }
-
-    // Suppress auto hyphens
-    if (formatting.suppressAutoHyphens) {
-      parts.push("<w:suppressAutoHyphens/>");
-    }
+    // Suppress line numbers / auto hyphens
+    pushToggle("suppressLineNumbers", formatting.suppressLineNumbers);
+    pushToggle("suppressAutoHyphens", formatting.suppressAutoHyphens);
 
     // Spacing
     const spacingXml = serializeSpacing(formatting);
@@ -514,9 +504,7 @@ export function serializeParagraphFormatting(
     }
 
     // Text direction (bidi)
-    if (formatting.bidi) {
-      parts.push("<w:bidi/>");
-    }
+    pushToggle("bidi", formatting.bidi);
 
     // Justification
     if (formatting.alignment) {
