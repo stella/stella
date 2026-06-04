@@ -16,7 +16,8 @@ import JSZip from "jszip";
 import { getDocumentWatermark, setDocumentWatermark } from "../watermark";
 import { parseDocx } from "./parser";
 import { RELATIONSHIP_TYPES } from "./relsParser";
-import { repackDocx, validateDocx } from "./rezip";
+import { createEmptyDocx, repackDocx, validateDocx } from "./rezip";
+import { attemptSelectiveSave } from "./selectiveSave";
 
 const XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
 const ONE_PIXEL_PNG_BASE64 =
@@ -144,5 +145,52 @@ describe("picture watermark relationship rebinding (eigenpal #684)", () => {
     const usedRId = /<v:imagedata[^>]*\br:id="([^"]+)"/u.exec(header2Xml)?.[1];
     expect(usedRId).toBeDefined();
     expect(header2Rels).toContain(`Id="${usedRId}"`);
+  });
+
+  test("resolves the image target from a raw-replay (non-pending) source header", async () => {
+    const original = await twoHeaderPictureWatermarkDocx();
+    const doc = await parseDocx(original, { preloadFonts: false });
+
+    // header1 (rId10) keeps its raw VML — so it is NOT pending — while header2
+    // gets a model-driven picture watermark pointing at header1's image rId.
+    // The rebind must still find the target by scanning the non-pending header.
+    const header2 = doc.package.headers?.get("rId11");
+    expect(header2).toBeDefined();
+    if (header2) {
+      header2.watermark = { kind: "picture", imageRId: "rIdImg" };
+    }
+
+    const out = await repackDocx(doc, { updateModifiedDate: false });
+    expect((await validateDocx(out)).valid).toBe(true);
+
+    const zip = await JSZip.loadAsync(out);
+    expect(await countMediaImages(zip)).toBe(1);
+    const header2Rels = await zip
+      .file("word/_rels/header2.xml.rels")!
+      .async("text");
+    expect(header2Rels).toContain('Target="media/image1.png"');
+  });
+
+  test("selective save bails for a single-header model-driven picture watermark", async () => {
+    const base = await createEmptyDocx();
+    const doc = await parseDocx(base, { preloadFonts: false });
+    doc.package.headers = new Map([
+      [
+        "rId1",
+        {
+          type: "header",
+          hdrFtrType: "default",
+          content: [],
+          watermark: { kind: "picture", imageRId: "rIdX" },
+        },
+      ],
+    ]);
+
+    const result = await attemptSelectiveSave(doc, base, {
+      changedParaIds: new Set(),
+      structuralChange: false,
+      hasUntrackedChanges: false,
+    });
+    expect(result).toBeNull();
   });
 });

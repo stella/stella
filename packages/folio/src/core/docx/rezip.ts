@@ -1285,14 +1285,15 @@ const headerRelsPathFor = (target: string): string => {
 
 /**
  * A picture watermark is "model-driven" when its raw VML was cleared (so the
- * serializer synthesizes `<v:imagedata r:id>` from `imageRId`). When more than
- * one header part is involved, each needs a relationship to the image in its
- * own rels — work only the full-repack path does — so the selective fast-path
- * must bail when this returns true.
+ * serializer synthesizes `<v:imagedata r:id>` from `imageRId`). Its image
+ * relationship may need rebinding into the header's own rels — work only the
+ * full-repack path does — so the selective fast-path bails whenever any such
+ * watermark is present, regardless of header count (a single header's rId could
+ * have been set without yet resolving in that header's rels).
  */
 export function hasModelDrivenPictureWatermark(doc: Document): boolean {
   const headers = doc.package.headers;
-  if (!headers || headers.size <= 1) {
+  if (!headers) {
     return false;
   }
   for (const hf of headers.values()) {
@@ -1344,11 +1345,20 @@ async function rebindWatermarkRelIds(
     return;
   }
 
+  // Read every header's rels, not only the ones being rebound: the canonical
+  // image target may live in a header whose own watermark is raw-replayed (so
+  // it is not pending). `document.xml.rels` is intentionally excluded — header
+  // rIds and body rIds both start at rId1, so scanning it could resolve a
+  // watermark to a body image that merely shares the rId number.
   const relsXmlByPath = new Map<string, string>();
-  for (const { relsPath } of pending) {
-    if (!relsXmlByPath.has(relsPath)) {
-      relsXmlByPath.set(relsPath, await readRelsOrStub(zip, relsPath));
+  const headerRelsPaths = new Set<string>(pending.map((p) => p.relsPath));
+  for (const rel of rels.values()) {
+    if (rel.type === RELATIONSHIP_TYPES.header && rel.target) {
+      headerRelsPaths.add(headerRelsPathFor(rel.target));
     }
+  }
+  for (const relsPath of headerRelsPaths) {
+    relsXmlByPath.set(relsPath, await readRelsOrStub(zip, relsPath));
   }
 
   // The canonical media target for an imageRId: the source header is the one
