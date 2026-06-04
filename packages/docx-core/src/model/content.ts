@@ -1417,6 +1417,16 @@ export type PictureWatermark = {
   /** Optional scale factor (1.0 = native, 0.5 = half-size). */
   scale?: number;
   /**
+   * Display width in points from the VML shape, captured at parse so the
+   * source aspect ratio survives a save that re-synthesizes the watermark
+   * (Word stretches the image to the shape box, so a non-2:1 box distorts a
+   * non-2:1 image). Absent for synthesized watermarks, which fall back to
+   * Word's default box scaled by `scale`.
+   */
+  widthPt?: number;
+  /** Display height in points from the VML shape. See {@link widthPt}. */
+  heightPt?: number;
+  /**
    * Whether Word's "washout" effect was applied (low contrast).
    * Default true — Word emits washout=true on every picture
    * watermark inserted via Insert → Watermark.

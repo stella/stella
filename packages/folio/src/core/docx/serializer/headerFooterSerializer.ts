@@ -182,8 +182,13 @@ function synthesizePictureWatermark(
   // the id-prefix guard.
   const rId = escapeXml(watermark.imageRId);
   const scale = watermark.scale ?? 1;
-  const widthPt = PICTURE_WATERMARK_DEFAULT_WIDTH_PT * scale;
-  const heightPt = PICTURE_WATERMARK_DEFAULT_HEIGHT_PT * scale;
+  // Prefer the captured source dimensions so a non-2:1 image keeps its aspect
+  // ratio; fall back to Word's default box scaled by `scale` for watermarks
+  // synthesized without dimensions.
+  const widthPt =
+    watermark.widthPt ?? PICTURE_WATERMARK_DEFAULT_WIDTH_PT * scale;
+  const heightPt =
+    watermark.heightPt ?? PICTURE_WATERMARK_DEFAULT_HEIGHT_PT * scale;
   const washoutAttrs =
     watermark.washout === false
       ? ""

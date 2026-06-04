@@ -391,6 +391,16 @@ function readVmlPictureWatermark(
   if (scale !== undefined) {
     watermark.scale = scale;
   }
+  // Capture the shape's real display dimensions so the source aspect ratio
+  // survives a re-synthesized save. Unlike `scale` (uniform-only), these are
+  // kept even when width and height scale differently from Word's default box.
+  const { widthPt, heightPt } = readVmlPictureWatermarkDimensions(shape);
+  if (widthPt !== undefined) {
+    watermark.widthPt = widthPt;
+  }
+  if (heightPt !== undefined) {
+    watermark.heightPt = heightPt;
+  }
   if (!readVmlPictureWatermarkHasWashout(imagedata)) {
     watermark.washout = false;
   }
@@ -432,6 +442,17 @@ function readVmlPictureWatermarkScale(shape: XmlElement): number | undefined {
   }
 
   return widthScale ?? heightScale;
+}
+
+function readVmlPictureWatermarkDimensions(shape: XmlElement): {
+  widthPt: number | undefined;
+  heightPt: number | undefined;
+} {
+  const shapeStyle = getAttribute(shape, null, "style") ?? "";
+  return {
+    widthPt: parseInlineStyleLengthPt(shapeStyle, "width"),
+    heightPt: parseInlineStyleLengthPt(shapeStyle, "height"),
+  };
 }
 
 function readVmlPictureWatermarkHasWashout(imagedata: XmlElement): boolean {
