@@ -194,6 +194,19 @@ function headerFooterFilename(target: string): string {
   return target.startsWith("/") ? target.slice(1) : `word/${target}`;
 }
 
+/**
+ * The relationships part for a header/footer. A part at `<dir>/<name>` keeps its
+ * rels at `<dir>/_rels/<name>.rels` — e.g. `word/headers/header1.xml` ->
+ * `word/headers/_rels/header1.xml.rels`, not a flattened `word/_rels/...`.
+ */
+function headerFooterRelsPath(target: string): string {
+  const partPath = headerFooterFilename(target);
+  const lastSlash = partPath.lastIndexOf("/");
+  const directory = lastSlash === -1 ? "" : partPath.slice(0, lastSlash);
+  const name = lastSlash === -1 ? partPath : partPath.slice(lastSlash + 1);
+  return `${directory ? `${directory}/` : ""}_rels/${name}.rels`;
+}
+
 function collectImageParts(doc: Document): DocxPart[] {
   const parts: DocxPart[] = [
     {
@@ -218,10 +231,8 @@ function collectImageParts(doc: Document): DocxPart[] {
       if (!rel || rel.type !== type || !rel.target) {
         continue;
       }
-      const filename = headerFooterFilename(rel.target);
-      const basename = filename.replace(/^word\//u, "");
       parts.push({
-        relsPath: `word/_rels/${basename}.rels`,
+        relsPath: headerFooterRelsPath(rel.target),
         blocks: headerFooter.content,
       });
     }
@@ -1340,11 +1351,6 @@ async function materializeNewHeaderFooterParts(
   }
 }
 
-const headerRelsPathFor = (target: string): string => {
-  const filename = headerFooterFilename(target).replace(/^word\//u, "");
-  return `word/_rels/${filename}.rels`;
-};
-
 /**
  * A picture watermark is "model-driven" when its raw VML was cleared (so the
  * serializer synthesizes `<v:imagedata r:id>` from `imageRId`). Its image
@@ -1401,7 +1407,7 @@ async function rebindWatermarkRelIds(
     if (!rel?.target) {
       continue;
     }
-    pending.push({ watermark, relsPath: headerRelsPathFor(rel.target) });
+    pending.push({ watermark, relsPath: headerFooterRelsPath(rel.target) });
   }
   if (pending.length === 0) {
     return;
@@ -1416,7 +1422,7 @@ async function rebindWatermarkRelIds(
   const headerRelsPaths = new Set<string>(pending.map((p) => p.relsPath));
   for (const rel of rels.values()) {
     if (rel.type === RELATIONSHIP_TYPES.header && rel.target) {
-      headerRelsPaths.add(headerRelsPathFor(rel.target));
+      headerRelsPaths.add(headerFooterRelsPath(rel.target));
     }
   }
   for (const relsPath of headerRelsPaths) {

@@ -298,4 +298,97 @@ describe("picture watermark relationship rebinding (eigenpal #684)", () => {
       new RegExp(`Id="${usedRId}"[^>]*Target="media/watermark.png"`, "u"),
     );
   });
+
+  test("writes a subdirectory header's image relationship to the correct rels path", async () => {
+    // A header part in a subdirectory keeps its rels at
+    // word/headers/_rels/header1.xml.rels, not a flattened word/_rels/...
+    const zip = new JSZip();
+    zip.file(
+      "[Content_Types].xml",
+      `${XML}
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Default Extension="png" ContentType="image/png"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/headers/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>
+</Types>`,
+    );
+    zip.file(
+      "_rels/.rels",
+      `${XML}
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="${RELATIONSHIP_TYPES.officeDocument}" Target="word/document.xml"/>
+</Relationships>`,
+    );
+    zip.file(
+      "word/_rels/document.xml.rels",
+      `${XML}
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId10" Type="${RELATIONSHIP_TYPES.header}" Target="headers/header1.xml"/>
+</Relationships>`,
+    );
+    zip.file(
+      "word/document.xml",
+      `${XML}
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body><w:p><w:r><w:t>x</w:t></w:r></w:p>
+    <w:sectPr><w:headerReference w:type="default" r:id="rId10"/></w:sectPr>
+  </w:body>
+</w:document>`,
+    );
+    zip.file(
+      "word/headers/header1.xml",
+      `${XML}
+<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:t>hdr</w:t></w:r></w:p></w:hdr>`,
+    );
+    zip.file(
+      "word/styles.xml",
+      `${XML}
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"></w:styles>`,
+    );
+    const original = await zip.generateAsync({ type: "arraybuffer" });
+
+    const doc = await parseDocx(original, { preloadFonts: false });
+    // Insert a new (data-URL) image into the subdirectory header.
+    const header = doc.package.headers?.get("rId10");
+    expect(header).toBeDefined();
+    if (header) {
+      header.content = [
+        {
+          type: "paragraph",
+          content: [
+            {
+              type: "run",
+              content: [
+                {
+                  type: "drawing",
+                  image: {
+                    type: "image",
+                    rId: "rId_img_1",
+                    src: `data:image/png;base64,${ONE_PIXEL_PNG_BASE64}`,
+                    filename: "h.png",
+                    size: { width: 9525, height: 9525 },
+                    wrap: { type: "inline" },
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ];
+    }
+
+    const out = await repackDocx(doc, { updateModifiedDate: false });
+    const outZip = await JSZip.loadAsync(out);
+    const paths = Object.keys(outZip.files);
+    // The image relationship landed in the subdirectory rels part...
+    const subdirRels = await outZip
+      .file("word/headers/_rels/header1.xml.rels")
+      ?.async("text");
+    expect(subdirRels).toBeDefined();
+    expect(subdirRels).toContain(`Type="${RELATIONSHIP_TYPES.image}"`);
+    // ...not the flattened, unattached path.
+    expect(paths).not.toContain("word/_rels/headers/header1.xml.rels");
+  });
 });
