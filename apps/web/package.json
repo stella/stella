@@ -87,7 +87,7 @@
     "jszip": "catalog:",
     "lucide-react": "catalog:",
     "pdfjs-dist": "^5.7.284",
-    "posthog-js": "^1.376.0",
+    "posthog-js": "^1.376.4",
     "prosemirror-view": "^1.41.8",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
