@@ -240,7 +240,6 @@ type Messages = {
     "stopTimer": "Stop";
     "timerActive": "Timer running";
     "timesheets": "Timesheets";
-    "today": "Today";
     "total": "Total";
     "week": "Week";
     "writeOff": "Write off";
@@ -274,7 +273,6 @@ type Messages = {
       "dissent": "Dissent";
       "footer": "Footer";
       "header": "Header";
-      "history": "History";
       "ruling": "Ruling";
       "unknown": "Other";
     };
@@ -303,7 +301,6 @@ type Messages = {
     };
   };
   "catalogue": {
-    "add": "Add";
     "addCustom": "Add custom";
     "addCustomMcp": "Add MCP server";
     "addCustomSkill": "Add skill";
@@ -316,7 +313,6 @@ type Messages = {
     "detailAuthMethod": "Authentication";
     "empty": "No entries match the current filter.";
     "filter": {
-      "all": "All";
       "mcps": "MCP servers";
       "nativeTools": "Built-in tools";
       "skills": "Skills";
@@ -348,7 +344,6 @@ type Messages = {
       "apiKey": "API key";
       "none": "No setup";
     };
-    "showAll": "Show all";
     "unavailable": "Not available yet";
   };
   "chat": {
@@ -384,7 +379,6 @@ type Messages = {
     };
     "askAnything": "Ask anything";
     "askUser": {
-      "cancelEdit": "Cancel";
       "custom": "Write your own";
       "default": "Default";
       "edit": "Edit answers";
@@ -447,14 +441,11 @@ type Messages = {
     "maxAttachmentsReached": "Maximum {count} files per message";
     "mention": {
       "category": {
-        "clauses": "Clauses";
         "contacts": "Contacts";
         "entities": "In this matter";
-        "matters": "Matters";
         "templates": "Templates";
       };
       "loadError": "Failed to load entities";
-      "noResults": "No results";
     };
     "moveToMain": "Move to main view";
     "moveToSide": "Move to side panel";
@@ -469,7 +460,6 @@ type Messages = {
       "expand": "Show full text";
       "fromClipboard": "Pasted {count, plural, one {# character} other {# characters}}";
       "fromPromptFallback": "Prompt";
-      "remove": "Remove";
     };
     "placeholder": "Type your question here, / for prompts, @ to add context";
     "prompts": {
@@ -514,7 +504,6 @@ type Messages = {
       "stale": "Stale";
     };
     "thinking": "Working with context";
-    "threads": "History";
     "tool": {
       "apply-active-docx-edits": "Preparing document edits";
       "ares_lookup_company": "Searching company records";
@@ -603,7 +592,6 @@ type Messages = {
     "editClause": "Edit clause";
     "export": "Export";
     "exportFailed": "Failed to export clauses";
-    "history": "History";
     "import": "Import";
     "importFailed": "Failed to import clauses";
     "importResult": "{created, plural, one {# created} other {# created}}, {skipped, plural, one {# skipped} other {# skipped}}";
@@ -838,7 +826,6 @@ type Messages = {
     "description": "{clientName} wants to access your stella workspace";
     "error": "Something went wrong. Please try again.";
     "missingJurisdictions": "Your stella organization hasn't set up its practice jurisdictions yet. Some jurisdiction-aware tools will be unavailable until you complete setup.";
-    "organization": "Organization";
     "permissions": "This will allow the application to:";
     "scopeExternalMcps": "Use your connected external tools";
     "scopeOnboarding": "Configure your organization's practice jurisdictions";
@@ -928,7 +915,6 @@ type Messages = {
       "bankAccounts": "Bank accounts";
       "billingAddress": "Billing address";
       "billingAddressCity": "City";
-      "billingAddressCountry": "Country";
       "billingAddressLine1": "Street";
       "billingAddressLine2": "Street 2";
       "billingAddressPostalCode": "Postal code";
@@ -970,9 +956,7 @@ type Messages = {
     };
   };
   "docxReview": {
-    "accept": "Accept";
     "acceptAll": "Accept all";
-    "allFilter": "All";
     "applyAs": "as";
     "applyDirect": "Direct";
     "applyMode": "Apply as:";
@@ -992,13 +976,11 @@ type Messages = {
     "rejectAll": "Reject all";
     "revert": "Revert";
     "reviewed": "reviewed";
-    "saveIdentity": "Save";
     "savingIdentity": "Saving…";
     "severityHigh": "High";
     "severityLow": "Low";
     "severityMedium": "Medium";
     "severityUnspecified": "Unspecified";
-    "showHidden": "Show all";
     "skipped": "Could not apply: {reason}";
     "statusAccepted": "Accepted";
     "statusApplying": "Applying change…";
@@ -1081,7 +1063,6 @@ type Messages = {
     "confirmDeleteVersion": "This will permanently delete version {version}. This action cannot be undone.";
     "current": "Current";
     "deleteVersion": "Delete version";
-    "description": "Description";
     "descriptionPlaceholder": "Add a note about this version...";
     "downloadRedline": "Download redline";
     "dropToUploadVersion": "Drop to upload as new version";
@@ -1166,7 +1147,6 @@ type Messages = {
     "doubleClickHeader": "Double-click to add header";
     "editAuthRequired": "Refresh stella and sign in again before editing this document.";
     "editDownloadFailed": "The document could not be downloaded for editing.";
-    "editFile": "Edit";
     "editLink": "Edit link";
     "editOpenFailed": "The document could not be opened for editing.";
     "editOpenFailedTitle": "Could not open DOCX";
@@ -1264,7 +1244,6 @@ type Messages = {
   };
   "inspector": {
     "anonymization": {
-      "addAction": "Add";
       "addPlaceholder": "Term to anonymize";
       "contextMenuAddAction": "Anonymize selection";
       "deleteAction": "Delete term";
@@ -1298,7 +1277,6 @@ type Messages = {
     };
     "facet": {
       "anonymization": "Anonymization";
-      "preview": "Preview";
       "previewInFullViewToast": "Preview is the main view here. Click the minimize button to see it alongside metadata.";
     };
     "hidePane": "Hide pane";
@@ -1453,11 +1431,9 @@ type Messages = {
       };
       "caseLaw": {
         "description": "Court decisions and case law database";
-        "title": "Case Law";
       };
       "clauses": {
         "description": "Reusable clause library";
-        "title": "Clauses";
       };
       "connectors": {
         "description": "Connect stella to external tools";
@@ -1654,7 +1630,6 @@ type Messages = {
       "keepSavedKey": "Keep saved key";
       "modelForRole": "{role} model";
       "modelIdPlaceholder": "Search models";
-      "modelRequired": "Required";
       "modelsDescription": "Choose a provider and one offered multimodal model for each AI category.";
       "modelsPanel": "Modes";
       "newApiKey": "New API key";
@@ -1822,7 +1797,6 @@ type Messages = {
       "preferredNamePlaceholder": "Your name";
       "profile": "Profile";
       "profileDescription": "Manage your personal preferences";
-      "sessions": "Sessions";
       "timezone": "Timezone";
       "timezoneDescription": "Used for timestamps in notifications and emails";
       "timezoneSaved": "Timezone updated";
@@ -1837,7 +1811,6 @@ type Messages = {
       "ai": "AI configuration";
       "aiDescription": "Bring your own API key or configure data sovereignty region";
       "anonymization": {
-        "addAction": "Add";
         "addPlaceholder": "Term to always mask (e.g. firm name)";
         "deleteAction": "Delete term";
         "description": "Curate the firm-wide deny list of terms the anonymization pipeline always masks, and import a starter list from CSV, TXT, or JSON";
@@ -1867,13 +1840,10 @@ type Messages = {
         "title": "Prompt caching";
         "toggleLabel": "Allow prompt caching with AI providers";
       };
-      "renameAction": "Rename";
       "renameDescription": "Members will see the new name immediately.";
       "renameTitle": "Rename organization";
       "renameTypeToConfirm": "Type the new name to confirm: {name}";
-      "title": "Organization";
     };
-    "title": "Settings";
   };
   "success": {
     "aiConfigDeleted": "AI configuration removed";
@@ -1981,7 +1951,6 @@ type Messages = {
     "fillForm": "Fill template";
     "generate": "Generate document";
     "generating": "Generating...";
-    "history": "History";
     "inputTypes": {
       "boolean": "Yes / No";
       "date": "Date";
@@ -1995,10 +1964,8 @@ type Messages = {
     "newTemplate": "New template";
     "noTemplates": "No templates yet";
     "pdfConversionFailed": "Failed to convert to PDF";
-    "preview": "Preview";
     "previewEmpty": "No content to preview";
     "previewFailed": "Failed to generate preview";
-    "previewFill": "Preview";
     "previewFillLoading": "Generating preview...";
     "previewFillTitle": "Fill preview";
     "previewSectionBody": "Body";
@@ -2037,7 +2004,6 @@ type Messages = {
       "selectPlaceholder": "Choose a language";
       "targetLanguage": "Target language";
       "title": "Translate document";
-      "translate": "Translate";
       "translating": "Translating…";
     };
     "error": {
@@ -2056,7 +2022,7 @@ type Messages = {
       "saved": "DeepL key saved";
       "savedDescription": "Translations are now available.";
       "saving": "Saving…";
-      "tierFree": "Free tier";
+      "tierFree": "Free";
       "tierPro": "Pro";
       "title": "DeepL translation";
     };
@@ -2064,7 +2030,6 @@ type Messages = {
       "description": "Saved as \"{fileName}\"";
       "title": "Translation ready";
     };
-    "tooltip": "Translate";
   };
   "validation": {
     "organizationNameRequired": "Organization name is required";
@@ -2222,7 +2187,6 @@ type Messages = {
         "thisMonth": "This month";
         "thisWeek": "This week";
         "to": "Until {date}";
-        "today": "Today";
       };
       "from": "From";
       "items": {
@@ -2233,7 +2197,6 @@ type Messages = {
         "min": "≥ {value}";
       };
       "noMatches": "No matches";
-      "openFilter": "Filter";
       "searchClients": "Search clients…";
       "team": {
         "filterAsLead": "Set as lead filter";
@@ -2272,7 +2235,6 @@ type Messages = {
       "organized": "Files organized";
       "regenerate": "Regenerate";
       "reset": "Reset to AI suggestions";
-      "retry": "Retry";
       "selectedOfTotal": "{selected, number} / {total, number}";
       "summaryToMove": "to move";
       "summaryToRename": "to rename";
@@ -2404,7 +2366,6 @@ type Messages = {
       "entitySidebar": "Entity details";
       "evidence": "Justification";
       "fullView": "Full view";
-      "goBack": "Go back";
       "incorrectPassword": "Incorrect password. Please try again.";
       "nextPage": "Next page";
       "openFullView": "Open full view";
@@ -2433,10 +2394,8 @@ type Messages = {
         "createdMany": "Created {count} columns";
         "createdOne": "Column created";
         "promptPlaceholder": "What should this column extract? Refine in the column dialog to use / and @.";
-        "removeRow": "Remove";
         "title": "Add columns";
       };
-      "chipDate": "Date";
       "chipManual": "Without AI";
       "chipMulti": "Tags";
       "chipNumber": "Number";
@@ -2448,7 +2407,6 @@ type Messages = {
       "conditions": "Conditions ({count})";
       "createColumn": "Create column";
       "createOption": "Create \"{option}\"";
-      "date": "Date";
       "defaultNames": {
         "file": "File Property";
         "multiSelect": "Multi Select Property";
@@ -2464,7 +2422,6 @@ type Messages = {
       "editConditions": "Edit conditions";
       "editConditionsDescription": "Set conditions for when this property should be generated.";
       "enterAValue": "Enter a value";
-      "error": "Error";
       "extractEntityType": "Extract entity type";
       "extractEntityTypeDescription": "Create an AI-extracted table column.";
       "extractionInstruction": "AI instruction";
@@ -2503,7 +2460,6 @@ type Messages = {
       "rerunColumn": "Rerun column";
       "resultType": "Result type";
       "returnsLabel": "Format";
-      "saveChanges": "Save changes";
       "scopeFile": "Current file";
       "scopeFileDescription": "Use {property} and run this file now.";
       "scopeFileUnavailable": "No file source is available for this view.";
@@ -2579,7 +2535,6 @@ type Messages = {
         "noDates": "No date property selected";
         "showAdditionalDates": "Additional dates";
         "showBy": "Show by";
-        "today": "Today";
         "updatedAt": "Last updated";
         "week": "Week";
         "year": "Year";

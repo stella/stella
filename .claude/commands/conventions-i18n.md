@@ -21,9 +21,10 @@ the current list of target languages (add translations to every
    found in `apps/web/src/i18n/langs/` (every `.json` file
    except `en.json`). Write natural, idiomatic translations;
    avoid literal/robotic phrasing.
-3. Run `i18n-typegen src/i18n/langs` (from `apps/web`) to
-   regenerate type declarations (also runs automatically
-   before `bun run typecheck`).
+3. Run `bun run typegen` (from `apps/web`) to regenerate type
+   declarations. It does **not** run during `bun run typecheck`;
+   drift and untranslated values are caught by `bun run i18n:check`
+   (pre-push).
 
 ## Key Naming
 

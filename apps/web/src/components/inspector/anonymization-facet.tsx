@@ -695,7 +695,7 @@ export const AnonymizationFacet = ({
           </Combobox>
           <AddTermSubmitButton
             disabled={pendingValue.trim().length === 0}
-            label={t("inspector.anonymization.addAction")}
+            label={t("common.add")}
           />
         </div>
       </form>

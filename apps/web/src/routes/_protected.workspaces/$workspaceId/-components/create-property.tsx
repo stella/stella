@@ -766,7 +766,7 @@ const PropertyComposerBody = ({
           size="sm"
         >
           {isEditMode
-            ? t("workspaces.properties.saveChanges")
+            ? t("common.saveChanges")
             : t("workspaces.properties.createColumn")}
         </Button>
       </div>

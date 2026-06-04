@@ -128,7 +128,7 @@ export const OrganizationProfileCard = () => {
       <DestructiveConfirmDialog
         cancelLabel={t("common.cancel")}
         confirmation={pendingName ?? ""}
-        confirmLabel={t("settings.organization.renameAction")}
+        confirmLabel={t("common.rename")}
         description={t("settings.organization.renameDescription")}
         inputLabel={t("settings.organization.renameTypeToConfirm", {
           name: pendingName ?? "",

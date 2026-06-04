@@ -44,7 +44,7 @@ export const ActiveFilterChips = ({ workspaces }: ActiveFilterChipsProps) => {
     to?: string;
   }): string => {
     if (filter.preset === "today") {
-      return t("workspaces.filters.date.today");
+      return t("common.today");
     }
     if (filter.preset === "thisWeek") {
       return t("workspaces.filters.date.thisWeek");

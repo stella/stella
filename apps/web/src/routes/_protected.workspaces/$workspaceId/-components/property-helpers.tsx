@@ -95,11 +95,11 @@ export const PropertyName = ({ type }: PropertyHelperProps) => {
   const labelKeys = {
     text: t("workspaces.properties.text"),
     file: t("workspaces.properties.file"),
-    error: t("workspaces.properties.error"),
+    error: t("common.error"),
     "single-select": t("workspaces.properties.singleSelect"),
     "multi-select": t("workspaces.properties.multiSelect"),
     unsupported: t("workspaces.properties.unsupported"),
-    date: t("workspaces.properties.date"),
+    date: t("common.date"),
     int: t("workspaces.properties.int"),
     clip: t("workspaces.properties.clip"),
   } as const satisfies Record<FieldTypeWithoutPending, string>;

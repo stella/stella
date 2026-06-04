@@ -20,7 +20,7 @@ import { managementRoles } from "@/routes/_protected.organization/-consts";
 
 export const Route = createFileRoute("/_protected/settings")({
   head: () => ({
-    meta: [{ title: pageTitle("settings.title") }],
+    meta: [{ title: pageTitle("common.settings") }],
   }),
   component: SettingsLayout,
 });
@@ -64,7 +64,7 @@ const ACCOUNT_SECTION = {
 
 const ORGANIZATION_SECTION = {
   id: "organization",
-  labelKey: "settings.organization.title",
+  labelKey: "common.organization",
   items: [
     {
       to: "/settings/organization/members",
@@ -101,7 +101,7 @@ function SettingsLayout() {
   return (
     <div className="flex min-h-0 flex-1 overflow-hidden border-t">
       <nav
-        aria-label={t("settings.title")}
+        aria-label={t("common.settings")}
         className="bg-muted/30 flex w-60 shrink-0 flex-col gap-4 overflow-y-auto border-e p-3"
       >
         {sections.map((section) => (

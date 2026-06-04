@@ -315,7 +315,7 @@ function ContactDetailPage() {
                   )}
                   {contact.billingAddress.country && (
                     <InfoRow
-                      label={t("contacts.fields.billingAddressCountry")}
+                      label={t("common.country")}
                       value={contact.billingAddress.country}
                     />
                   )}

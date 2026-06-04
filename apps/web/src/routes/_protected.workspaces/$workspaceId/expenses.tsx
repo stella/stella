@@ -74,7 +74,7 @@ function ExpensesPage() {
 
         <div className="flex items-center gap-2">
           <Button onClick={goToToday} size="sm" variant="outline">
-            {t("billing.today")}
+            {t("common.today")}
           </Button>
           <div className="flex items-center">
             <Button

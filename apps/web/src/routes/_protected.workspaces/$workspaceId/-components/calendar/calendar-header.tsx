@@ -37,7 +37,7 @@ export const CalendarHeader = ({
   return (
     <div className="flex min-w-0 items-center gap-2 px-4 py-2">
       <Button onClick={onNavigateToday} size="sm" variant="outline">
-        {t("workspaces.views.calendar.today")}
+        {t("common.today")}
       </Button>
       <Button onClick={onNavigatePrev} size="icon-sm" variant="ghost">
         <ChevronLeftIcon />

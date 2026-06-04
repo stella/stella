@@ -565,7 +565,7 @@ export const ReviewPanelImpl = ({
                 {t("docxReview.hiddenCount", { count: String(reviewedCount) })}
               </span>
               <span className="text-foreground font-medium">
-                {t("docxReview.showHidden")}
+                {t("common.showAll")}
               </span>
             </button>
           )}
@@ -777,7 +777,7 @@ const IdentityPopoverBody = ({
           >
             {updateIdentity.isPending
               ? t("docxReview.savingIdentity")
-              : t("docxReview.saveIdentity")}
+              : t("common.save")}
           </Button>
         </div>
         <div className="border-border/60 border-t pt-3">
@@ -1293,7 +1293,7 @@ const SuggestionRow = ({
             variant="default"
           >
             <CheckIcon className="me-1 size-3.5" />
-            {t("docxReview.accept")}
+            {t("common.accept")}
           </Button>
           <Button
             className="h-7 px-2.5 text-xs"

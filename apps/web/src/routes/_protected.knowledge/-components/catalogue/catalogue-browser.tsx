@@ -67,7 +67,7 @@ import { useUninstallEntry } from "./use-uninstall-entry";
 export type CatalogueBrowserFilterKind = "all" | "skill" | "mcp";
 
 const KIND_LABEL_KEY = {
-  all: "catalogue.filter.all",
+  all: "common.all",
   skill: "catalogue.filter.skills",
   mcp: "catalogue.filter.mcps",
 } as const satisfies Record<CatalogueBrowserFilterKind, TranslationKey>;
@@ -433,7 +433,7 @@ export const CatalogueBrowser = ({
             onClick={() => setJurisdictionFilter(new Set())}
             type="button"
           >
-            {t("catalogue.showAll")}
+            {t("common.showAll")}
           </button>
         </p>
       )}
@@ -533,7 +533,7 @@ export const CatalogueBrowser = ({
               type="button"
               variant="link"
             >
-              {t("catalogue.showAll")} ({entries.length - filtered.length})
+              {t("common.showAll")} ({entries.length - filtered.length})
             </Button>
           </div>
         )}
@@ -639,7 +639,7 @@ const CatalogueEntryRow = ({
         variant="outline"
       >
         {install.isPending && <LoaderIcon className="size-3.5 animate-spin" />}
-        {t("catalogue.add")}
+        {t("common.add")}
       </Button>
     );
   } else if (canRemove) {

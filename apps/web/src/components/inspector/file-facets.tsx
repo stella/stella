@@ -108,7 +108,7 @@ const FacetBar = ({
   }, [pulseSeq, pulse]);
 
   const labels: Record<Facet, string> = {
-    preview: t("inspector.facet.preview"),
+    preview: t("common.preview"),
     metadata: t("common.metadata"),
     versions: t("fileDetail.versionHistory"),
     suggestions: t("docxReview.title"),

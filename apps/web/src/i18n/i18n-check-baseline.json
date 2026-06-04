@@ -1,0 +1,699 @@
+{
+  "duplicatesCommon": [
+    "contacts.fields.bankAccountIban",
+    "contacts.fields.registrationNumber",
+    "contacts.type.organization",
+    "contacts.type.person",
+    "folio.comments.cancel",
+    "folio.copy",
+    "folio.copyLink",
+    "folio.delete",
+    "folio.findReplace.noResults",
+    "folio.historyGroup",
+    "folio.somethingWentWrong",
+    "knowledge.agentSkills.formDescription",
+    "knowledge.agentSkills.formName",
+    "knowledge.agentSkills.renameFile",
+    "knowledge.skills.form.description",
+    "knowledge.skills.form.name",
+    "onboarding.stepTeam",
+    "organization.invitations.emailAddressLabel",
+    "search.kinds.matter",
+    "search.updatedWithinOptions.day",
+    "tasks.clearDate",
+    "tasks.status",
+    "tasks.statusValues.done",
+    "tasks.statusValues.open",
+    "templates.fieldOptions",
+    "templates.inputTypes.date",
+    "translate.settings.remove",
+    "translate.settings.save",
+    "workspaces.properties.optionsLabel"
+  ],
+  "identicalToSource": {
+    "appearance.flexoki": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "appearance.neutral": [
+      "de"
+    ],
+    "appearance.nord": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "appearance.palette": [
+      "de",
+      "fr"
+    ],
+    "appearance.system": [
+      "de"
+    ],
+    "appearance.warm": [
+      "de"
+    ],
+    "auth.betaNoticeTitle": [
+      "cs",
+      "de",
+      "es",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "billing.codes.codeLabel": [
+      "de",
+      "fr"
+    ],
+    "billing.decimalHours": [
+      "fr",
+      "pt-BR"
+    ],
+    "billing.total": [
+      "es",
+      "fr",
+      "pt-BR"
+    ],
+    "caseLaw.sectionTypes.argumentation": [
+      "fr"
+    ],
+    "caseLaw.sources.title": [
+      "fr"
+    ],
+    "caseLaw.viewer.sections": [
+      "fr"
+    ],
+    "caseLaw.viewer.source": [
+      "fr"
+    ],
+    "catalogue.configuration": [
+      "fr"
+    ],
+    "chat.documentView.original": [
+      "de",
+      "es",
+      "fr",
+      "pt-BR"
+    ],
+    "chat.folioCitationFallback": [
+      "es",
+      "fr"
+    ],
+    "chat.mention.category.contacts": [
+      "fr"
+    ],
+    "chat.pageNumber": [
+      "fr"
+    ],
+    "chat.suggestionSeverity.style": [
+      "fr"
+    ],
+    "chat.webSearch.sources": [
+      "fr"
+    ],
+    "clauses.version": [
+      "de",
+      "fr"
+    ],
+    "common.actions": [
+      "fr"
+    ],
+    "common.anonymizationLabels.date": [
+      "fr"
+    ],
+    "common.anonymizationLabels.person": [
+      "de"
+    ],
+    "common.clauses": [
+      "fr"
+    ],
+    "common.date": [
+      "fr"
+    ],
+    "common.description": [
+      "fr"
+    ],
+    "common.details": [
+      "de"
+    ],
+    "common.documentation": [
+      "fr"
+    ],
+    "common.error": [
+      "es"
+    ],
+    "common.filter": [
+      "et"
+    ],
+    "common.metadata": [
+      "cs"
+    ],
+    "common.name": [
+      "de"
+    ],
+    "common.notes": [
+      "fr"
+    ],
+    "common.options": [
+      "fr"
+    ],
+    "common.reference": [
+      "cs"
+    ],
+    "common.role": [
+      "cs"
+    ],
+    "common.sessions": [
+      "fr"
+    ],
+    "common.status": [
+      "de",
+      "pl",
+      "pt-BR"
+    ],
+    "common.type": [
+      "fr"
+    ],
+    "common.urlIdentifier": [
+      "cs",
+      "es",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "contacts.communication.emailPlaceholder": [
+      "de"
+    ],
+    "contacts.communication.title": [
+      "fr"
+    ],
+    "contacts.create.icoPlaceholder": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "contacts.emailTypes.personal": [
+      "es"
+    ],
+    "contacts.fields.bankAccountBic": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "contacts.fields.color": [
+      "es"
+    ],
+    "contacts.phoneTypes.fax": [
+      "cs",
+      "de",
+      "es",
+      "fr",
+      "hu",
+      "pt-BR",
+      "sk"
+    ],
+    "contacts.phoneTypes.mobile": [
+      "fr"
+    ],
+    "contacts.title": [
+      "fr"
+    ],
+    "contacts.type.person": [
+      "de"
+    ],
+    "docxReview.applyDirect": [
+      "fr"
+    ],
+    "feedback.trigger": [
+      "de",
+      "pt-BR"
+    ],
+    "fileDetail.base": [
+      "es",
+      "fr",
+      "pt-BR"
+    ],
+    "fileDetail.compareVersions": [
+      "et",
+      "fr",
+      "hu",
+      "pl",
+      "pt-BR"
+    ],
+    "fileDetail.version": [
+      "de",
+      "fr"
+    ],
+    "folio.fontGroup": [
+      "et"
+    ],
+    "folio.markupView.original": [
+      "de",
+      "es",
+      "fr",
+      "pt-BR"
+    ],
+    "inspector.matterPicker.directLabel": [
+      "fr"
+    ],
+    "inspector.metadata.version": [
+      "de",
+      "fr"
+    ],
+    "knowledge.agentSkills.formBody": [
+      "fr"
+    ],
+    "knowledge.agentSkills.formDescription": [
+      "fr"
+    ],
+    "knowledge.agentSkills.formName": [
+      "de"
+    ],
+    "knowledge.agentSkills.formVersion": [
+      "de",
+      "fr"
+    ],
+    "knowledge.agentSkills.newFileFilenamePlaceholder": [
+      "cs",
+      "de",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "knowledge.agentSkills.newFilePathPlaceholder": [
+      "cs",
+      "et",
+      "hu",
+      "lv",
+      "pl",
+      "sk"
+    ],
+    "knowledge.agentSkills.newFolderFilenamePlaceholder": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "knowledge.agentSkills.version": [
+      "de"
+    ],
+    "knowledge.mcp.auth.bearer": [
+      "cs",
+      "sk"
+    ],
+    "knowledge.mcp.auth.oauth2": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "knowledge.mcp.tokenLabel": [
+      "cs",
+      "sk"
+    ],
+    "knowledge.mcp.urlPlaceholder": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "knowledge.sections.agents.title": [
+      "fr"
+    ],
+    "knowledge.sections.prompts.title": [
+      "de",
+      "es",
+      "fr",
+      "pt-BR"
+    ],
+    "knowledge.sections.skills.title": [
+      "de"
+    ],
+    "knowledge.sections.tools.title": [
+      "de"
+    ],
+    "knowledge.skills.form.description": [
+      "fr"
+    ],
+    "knowledge.skills.form.name": [
+      "de"
+    ],
+    "knowledge.skills.form.prompt": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "navigation.chat": [
+      "cs",
+      "de",
+      "es",
+      "fr",
+      "sk"
+    ],
+    "navigation.clients": [
+      "fr"
+    ],
+    "navigation.contacts": [
+      "fr"
+    ],
+    "navigation.invitations": [
+      "fr"
+    ],
+    "navigation.shortcutCategories.navigation": [
+      "de",
+      "fr"
+    ],
+    "onboarding.stepDesktop": [
+      "de"
+    ],
+    "onboarding.stepOrganization": [
+      "de"
+    ],
+    "organization.aiConfig.endpoint": [
+      "cs",
+      "pt-BR",
+      "sk"
+    ],
+    "organization.aiConfig.modelsPanel": [
+      "fr"
+    ],
+    "organization.aiConfig.prices.model": [
+      "cs",
+      "pl",
+      "sk"
+    ],
+    "organization.aiConfig.provider": [
+      "de"
+    ],
+    "organization.aiConfig.regions.eu": [
+      "cs",
+      "de",
+      "hu"
+    ],
+    "organization.aiConfig.regions.global": [
+      "de",
+      "es",
+      "fr",
+      "pt-BR"
+    ],
+    "organization.aiConfig.roles.chat": [
+      "cs",
+      "de",
+      "es",
+      "fr",
+      "sk"
+    ],
+    "search.escKey": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "search.kinds.contact": [
+      "fr"
+    ],
+    "search.kinds.document": [
+      "fr"
+    ],
+    "search.kinds.folder": [
+      "pl"
+    ],
+    "search.kinds.link": [
+      "de",
+      "et",
+      "pl",
+      "pt-BR"
+    ],
+    "search.kinds.message": [
+      "fr"
+    ],
+    "settings.account.desktop": [
+      "de"
+    ],
+    "tasks.priorityValues.urgent": [
+      "fr"
+    ],
+    "tasks.status": [
+      "de",
+      "pl",
+      "pt-BR"
+    ],
+    "templates.fieldOptions": [
+      "fr"
+    ],
+    "templates.inputTypes.date": [
+      "fr"
+    ],
+    "templates.inputTypes.text": [
+      "cs",
+      "de",
+      "sk"
+    ],
+    "templates.versionLabel": [
+      "de",
+      "fr"
+    ],
+    "translate.settings.apiKeyPlaceholder": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "translate.settings.tierFree": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "translate.settings.tierPro": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "workspaces.files.defaultPropertyName": [
+      "fr"
+    ],
+    "workspaces.filesystem.version": [
+      "de",
+      "fr"
+    ],
+    "workspaces.filters.chips.lead": [
+      "de"
+    ],
+    "workspaces.filters.items.gte": [
+      "et",
+      "fr",
+      "pl"
+    ],
+    "workspaces.filters.items.lte": [
+      "fr"
+    ],
+    "workspaces.filters.team.lead": [
+      "de",
+      "et",
+      "lv"
+    ],
+    "workspaces.filters.team.leadActive": [
+      "de",
+      "et",
+      "lv"
+    ],
+    "workspaces.infosoud.spisZn": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "workspaces.infosoud.title": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "workspaces.lead": [
+      "de"
+    ],
+    "workspaces.ownerType.client": [
+      "fr"
+    ],
+    "workspaces.ownerType.personal": [
+      "es"
+    ],
+    "workspaces.parties.client": [
+      "fr"
+    ],
+    "workspaces.parties.partyRoles.mediator": [
+      "de",
+      "pl"
+    ],
+    "workspaces.parties.personalLabel": [
+      "es"
+    ],
+    "workspaces.properties.chipSingle": [
+      "pl"
+    ],
+    "workspaces.properties.chipText": [
+      "cs",
+      "de",
+      "sk"
+    ],
+    "workspaces.properties.clip": [
+      "pl"
+    ],
+    "workspaces.properties.conditions": [
+      "fr"
+    ],
+    "workspaces.properties.documentsLabel": [
+      "fr"
+    ],
+    "workspaces.properties.optionsLabel": [
+      "fr"
+    ],
+    "workspaces.properties.text": [
+      "cs",
+      "de",
+      "sk"
+    ],
+    "workspaces.sections.parties": [
+      "fr"
+    ],
+    "workspaces.table.flags.contradiction": [
+      "fr"
+    ],
+    "workspaces.table.flags.important": [
+      "fr"
+    ],
+    "workspaces.team": [
+      "de"
+    ],
+    "workspaces.views.calendar.addDates": [
+      "fr"
+    ],
+    "workspaces.views.calendar.additionalDates": [
+      "fr"
+    ],
+    "workspaces.views.layouts.kanban": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ]
+  }
+}

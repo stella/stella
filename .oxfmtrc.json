@@ -8,7 +8,8 @@
     "**/.oxlintrc.json",
     "**/dist/**",
     "**/.react-email/**",
-    "apps/api/src/db/schema.ts"
+    "apps/api/src/db/schema.ts",
+    "**/i18n-check-baseline.json"
   ],
   "printWidth": 80,
   "sortImports": {

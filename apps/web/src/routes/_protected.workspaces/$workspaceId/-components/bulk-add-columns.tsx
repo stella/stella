@@ -528,7 +528,7 @@ const DraftCard = ({
         />
         {canRemove && (
           <Button
-            aria-label={t("workspaces.properties.bulk.removeRow")}
+            aria-label={t("common.remove")}
             className="text-foreground-placeholder hover:text-foreground ms-auto -me-1 size-6 shrink-0"
             onClick={onRemove}
             size="icon"
