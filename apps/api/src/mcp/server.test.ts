@@ -67,18 +67,25 @@ describe("handleMcpHttpRequest", () => {
         message: "User is not a member of this organization",
       }),
     );
+    const mcpRequest = new Request("http://localhost/mcp", {
+      headers: {
+        authorization: "Bearer token",
+      },
+      method: "POST",
+    });
 
-    const response = await handleMcpHttpRequest(
-      new Request("http://localhost/mcp", {
-        headers: {
-          authorization: "Bearer token",
-        },
-        method: "POST",
-      }),
-    );
+    const response = await handleMcpHttpRequest(mcpRequest);
 
     expect(response.status).toBe(403);
     expect(await response.text()).toBe("Forbidden");
+    expect(resolveMcpSessionContextMock).toHaveBeenCalledWith(
+      {
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      },
+      { request: mcpRequest },
+    );
     expect(captureErrorMock).not.toHaveBeenCalled();
   });
 

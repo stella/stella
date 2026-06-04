@@ -93,6 +93,10 @@ const MCP_TOOL_HANDLERS = new Map<string, McpToolHandler>([
   ],
   ["search_case_law", STELLA_TOOL_HANDLERS.search_case_law],
   ["search_across_matters", STELLA_TOOL_HANDLERS.search_across_matters],
+  [
+    "set_practice_jurisdictions",
+    STELLA_TOOL_HANDLERS.set_practice_jurisdictions,
+  ],
 ]);
 
 export const getMcpToolDefinition = (
@@ -104,11 +108,21 @@ export const listMcpTools = (mode: McpMode = "default"): McpTool[] =>
   (mode === "default"
     ? DEFAULT_TOOL_DEFINITIONS
     : ANONYMIZED_TOOL_DEFINITIONS
-  ).map(({ annotations, description, inputSchema, name }) =>
-    annotations === undefined
-      ? { description, inputSchema, name }
-      : { annotations, description, inputSchema, name },
-  );
+  ).map((tool) => {
+    const annotations = "annotations" in tool ? tool.annotations : undefined;
+    return annotations === undefined
+      ? {
+          description: tool.description,
+          inputSchema: tool.inputSchema,
+          name: tool.name,
+        }
+      : {
+          annotations,
+          description: tool.description,
+          inputSchema: tool.inputSchema,
+          name: tool.name,
+        };
+  });
 
 export const handleMcpToolCall = async ({
   args,

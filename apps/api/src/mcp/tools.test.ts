@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { env } from "@/api/env";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -327,11 +328,18 @@ const createScopedDb = (
     ),
   );
 
+const createRecordAuditEventMock = () =>
+  asTestRaw<AuditRecorder & ReturnType<typeof mock>>(
+    mock(async () => undefined),
+  );
+
 const createContext = ({
   accessibleWorkspaceIds = ["ws_1"],
+  recordAuditEvent = createRecordAuditEventMock(),
   scopedDb = createScopedDb(),
 }: {
   accessibleWorkspaceIds?: string[];
+  recordAuditEvent?: AuditRecorder;
   scopedDb?: McpRequestContext["scopedDb"];
 } = {}): McpRequestContext => ({
   accessibleWorkspaceIds: accessibleWorkspaceIds.map((workspaceId) =>
@@ -340,6 +348,7 @@ const createContext = ({
   accessibleWorkspaceIdSet: new Set(accessibleWorkspaceIds),
   memberRole: "owner",
   organizationId: toSafeId<"organization">("org_1"),
+  recordAuditEvent,
   safeDb: toSafeDbMock(scopedDb),
   scopedDb,
   userId: toSafeId<"user">("user_1"),

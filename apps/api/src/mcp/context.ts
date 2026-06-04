@@ -5,6 +5,8 @@ import { createSafeDb, createScopedDb } from "@/api/db";
 import type { SafeDb, ScopedDb } from "@/api/db";
 import { member } from "@/api/db/auth-schema";
 import { rootDb, rlsDb } from "@/api/db/root";
+import { createAuditRecorder } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import { resolveAccessibleWorkspaces } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isMemberRole } from "@/api/lib/member-roles";
@@ -21,6 +23,7 @@ export type McpRequestContext = {
   accessibleWorkspaceIdSet: Set<string>;
   memberRole: MemberRole;
   organizationId: SafeId<"organization">;
+  recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   scopedDb: ScopedDb;
   userId: SafeId<"user">;
@@ -28,6 +31,7 @@ export type McpRequestContext = {
 
 export const resolveMcpSessionContext = async (
   session: McpSession,
+  { request }: { request: Request },
 ): Promise<McpRequestContext> => {
   const { organizationId, userId } = brandActorSessionIdentity({
     organizationId: session.organizationId,
@@ -76,6 +80,13 @@ export const resolveMcpSessionContext = async (
     accessibleWorkspaceIdSet: new Set(usableWorkspaceIds),
     memberRole,
     organizationId,
+    recordAuditEvent: createAuditRecorder({
+      organizationId,
+      request,
+      server: null,
+      userId,
+      workspaceId: null,
+    }),
     safeDb: createSafeDb(rlsDb, allWorkspaceIds, organizationId, userId),
     scopedDb: createScopedDb(rlsDb, allWorkspaceIds, organizationId, userId),
     userId,

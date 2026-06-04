@@ -18,7 +18,7 @@ export const MCP_TOOL_EXECUTION_OPTIONS: ToolExecutionOptions = {
   toolCallId: "mcp",
 };
 
-const getAppBaseUrl = () => env.FRONTEND_URL.replace(/\/$/u, "");
+export const getAppBaseUrl = () => env.FRONTEND_URL.replace(/\/$/u, "");
 
 export const stringProp = (
   description: string,

@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -16,13 +16,16 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import type { TranslationKey } from "@/i18n/types";
+import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
-import { toAuthClientError } from "@/lib/errors";
+import { toAPIError, toAuthClientError } from "@/lib/errors";
 import {
   getOauthClientDisplayName,
   getOauthRedirectUrl,
 } from "@/lib/oauth-provider";
 import { pageTitle } from "@/lib/page-title";
+import { roleOptions } from "@/routes/-queries";
+import { managementRoles } from "@/routes/_protected.organization/-consts";
 
 const searchSchema = v.object({
   client_id: v.optional(v.string()),
@@ -53,6 +56,7 @@ const SCOPE_LABELS = {
   "stella:read": "consent.scopeRead",
   "stella:search_anonymized": "consent.scopeSearchAnonymized",
   "stella:read_anonymized": "consent.scopeReadAnonymized",
+  "stella:onboarding": "consent.scopeOnboarding",
   email: "consent.scopeProfile",
   openid: "consent.scopeProfile",
   profile: "consent.scopeProfile",
@@ -76,6 +80,13 @@ function ConsentPage() {
   const [isPending, setIsPending] = useState(false);
   const [hasError, setHasError] = useState(false);
   const { data: organizations } = authClient.useListOrganizations();
+  const { data: currentUserRole } = useQuery({
+    ...roleOptions,
+    enabled: activeOrganizationId !== null,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+  const canManageOrganization =
+    currentUserRole !== undefined && managementRoles.includes(currentUserRole);
 
   const clientQuery = useQuery({
     enabled: clientId !== null,
@@ -96,6 +107,24 @@ function ConsentPage() {
       return result.data;
     },
   });
+
+  const jurisdictionsQuery = useQuery({
+    enabled: activeOrganizationId !== null && canManageOrganization,
+    queryKey: ["consent-practice-jurisdictions", activeOrganizationId],
+    queryFn: async ({ signal }) => {
+      const response = await api["organization-settings"].get({
+        fetch: { signal },
+      });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data.practiceJurisdictions;
+    },
+  });
+  const showJurisdictionsNotice =
+    canManageOrganization &&
+    jurisdictionsQuery.data !== undefined &&
+    jurisdictionsQuery.data.length === 0;
 
   const scopes = scope?.split(" ").filter(Boolean) ?? [];
   const clientName =
@@ -188,6 +217,19 @@ function ConsentPage() {
                   </li>
                 ))}
               </ul>
+            </div>
+          ) : null}
+          {showJurisdictionsNotice ? (
+            <div className="border-border bg-muted/50 flex flex-col gap-2 rounded-md border p-3">
+              <p className="text-foreground text-sm">
+                {t("consent.missingJurisdictions")}
+              </p>
+              <Link
+                className="text-primary text-sm font-medium hover:underline"
+                to="/settings/organization/members"
+              >
+                {t("consent.completeSetup")}
+              </Link>
             </div>
           ) : null}
           {hasError ? (

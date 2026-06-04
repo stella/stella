@@ -1,6 +1,17 @@
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import * as v from "valibot";
+
+import { COUNTRY_CODES } from "@stll/country-codes";
+import { roles } from "@stll/permissions";
+
+import type { PracticeJurisdiction } from "@/api/db/schema";
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/read-by-id";
 import { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
+import {
+  normalizePracticeJurisdictions,
+  upsertPracticeJurisdictions,
+} from "@/api/handlers/organization-settings/practice-jurisdictions";
 import { readWorkspaceHandler } from "@/api/handlers/workspaces/read-by-id";
 import { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
@@ -12,6 +23,7 @@ import {
   brandPersistedEntityId,
 } from "@/api/lib/safe-id-boundaries";
 import { getSearchProvider } from "@/api/lib/search/provider";
+import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
 import {
   buildCaseLawDecisionUrl,
@@ -20,6 +32,7 @@ import {
   ensureWorkspaceAccess,
   enumProp,
   errorResult,
+  getAppBaseUrl,
   intProp,
   MAX_LIST_LIMIT,
   MAX_SEARCH_LIMIT,
@@ -39,7 +52,8 @@ type StellaToolName =
   | "read_contact"
   | "read_content_across_matters"
   | "search_case_law"
-  | "search_across_matters";
+  | "search_across_matters"
+  | "set_practice_jurisdictions";
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 
@@ -184,7 +198,90 @@ export const STELLA_TOOL_DEFINITIONS = [
     name: "read_contact",
     scope: "stella:read",
   },
+  {
+    description:
+      "Set the practice jurisdictions for the user's stella organization. " +
+      "Call this when the org's practice jurisdictions are empty (e.g., the " +
+      "user signed up via an OAuth client and skipped onboarding). Pass an " +
+      "array of {countryCode, isPrimary}; exactly one entry should be primary.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        jurisdictions: {
+          type: "array",
+          description:
+            "Practice jurisdictions for this organization. countryCode is an " +
+            "ISO 3166-1 alpha-2 code; exactly one entry should set isPrimary " +
+            "to true.",
+          minItems: 1,
+          maxItems: LIMITS.practiceJurisdictionsPerOrganization,
+          items: {
+            type: "object",
+            properties: {
+              countryCode: {
+                type: "string",
+                description: "ISO 3166-1 alpha-2 country code",
+                enum: [...COUNTRY_CODES],
+              },
+              isPrimary: {
+                type: "boolean",
+                description:
+                  "Whether this is the organization's primary jurisdiction",
+              },
+            },
+            required: ["countryCode", "isPrimary"],
+          },
+        },
+      },
+      required: ["jurisdictions"],
+    },
+    name: "set_practice_jurisdictions",
+    scope: "stella:onboarding",
+  },
 ] as const satisfies readonly McpToolDefinition[];
+
+const loadPracticeJurisdictions = async (
+  context: McpRequestContext,
+): Promise<readonly PracticeJurisdiction[]> => {
+  const row = await context.scopedDb((tx) =>
+    tx.query.organizationSettings.findFirst({
+      where: { organizationId: { eq: context.organizationId } },
+      columns: { practiceJurisdictions: true },
+    }),
+  );
+  return row?.practiceJurisdictions ?? [];
+};
+
+const buildOnboardingHintText = () =>
+  `Your stella organization has not configured its practice jurisdictions ` +
+  `yet. Call \`set_practice_jurisdictions\` (input: array of ` +
+  `\`{ countryCode, isPrimary }\`) to enable jurisdiction-aware tools, or ` +
+  `have the user complete onboarding at ${getAppBaseUrl()}.`;
+
+const withOnboardingHintIfApplicable = async ({
+  context,
+  isEmpty,
+  result,
+}: {
+  context: McpRequestContext;
+  isEmpty: boolean;
+  result: CallToolResult;
+}): Promise<CallToolResult> => {
+  if (!isEmpty) {
+    return result;
+  }
+  const jurisdictions = await loadPracticeJurisdictions(context);
+  if (jurisdictions.length > 0) {
+    return result;
+  }
+  return {
+    ...result,
+    content: [
+      ...result.content,
+      { type: "text", text: buildOnboardingHintText() },
+    ],
+  };
+};
 
 const handleListMattersTool: McpToolHandler = async ({ args, context }) => {
   const status = parseOptionalEnum({
@@ -226,7 +323,7 @@ const handleListMattersTool: McpToolHandler = async ({ args, context }) => {
     }),
   );
 
-  return textResult({
+  const result = textResult({
     matters: matters.map((matter) => ({
       id: matter.id,
       name: matter.name,
@@ -236,6 +333,12 @@ const handleListMattersTool: McpToolHandler = async ({ args, context }) => {
       createdAt: matter.createdAt.toISOString(),
     })),
     totalCountLimit: LIMITS.workspacesCount,
+  });
+
+  return await withOnboardingHintIfApplicable({
+    context,
+    isEmpty: matters.length === 0,
+    result,
   });
 };
 
@@ -630,7 +733,7 @@ const handleSearchCaseLawTool: McpToolHandler = async ({ args, context }) => {
     return errorResult("Case-law search failed");
   }
 
-  return textResult({
+  const payload = textResult({
     facets: result.facets,
     nextCursor: result.nextCursor,
     results: result.hits.map((hit) => ({
@@ -651,6 +754,12 @@ const handleSearchCaseLawTool: McpToolHandler = async ({ args, context }) => {
       sourceUrl: hit.sourceUrl,
     })),
     totalCount: result.totalCount,
+  });
+
+  return await withOnboardingHintIfApplicable({
+    context,
+    isEmpty: result.hits.length === 0,
+    result: payload,
   });
 };
 
@@ -749,6 +858,62 @@ const handleReadContactTool: McpToolHandler = async ({ args, context }) => {
   });
 };
 
+const countryCodeSchema = v.picklist(COUNTRY_CODES);
+
+const practiceJurisdictionInputSchema = v.strictObject({
+  countryCode: countryCodeSchema,
+  isPrimary: v.boolean(),
+});
+
+const setPracticeJurisdictionsArgsSchema = v.strictObject({
+  jurisdictions: v.pipe(
+    v.array(practiceJurisdictionInputSchema),
+    v.minLength(1),
+    v.maxLength(LIMITS.practiceJurisdictionsPerOrganization),
+  ),
+});
+
+const handleSetPracticeJurisdictionsTool: McpToolHandler = async ({
+  args,
+  context,
+}) => {
+  const hasPermission = roles[context.memberRole].authorize({
+    organizationSettings: ["update"],
+  });
+  if (!hasPermission.success) {
+    return errorResult("Forbidden");
+  }
+
+  const parsed = v.safeParse(setPracticeJurisdictionsArgsSchema, args);
+  if (!parsed.success) {
+    return errorResult(
+      "Invalid input: expected { jurisdictions: Array<{ countryCode: ISO 3166-1 alpha-2, isPrimary: boolean }> }",
+    );
+  }
+
+  const primaryCount = parsed.output.jurisdictions.filter(
+    (jurisdiction) => jurisdiction.isPrimary,
+  ).length;
+  if (primaryCount > 1) {
+    return errorResult("Only one jurisdiction can be primary");
+  }
+
+  const practiceJurisdictions = normalizePracticeJurisdictions(
+    parsed.output.jurisdictions,
+  );
+
+  await context.scopedDb(async (tx) => {
+    await upsertPracticeJurisdictions({
+      organizationId: context.organizationId,
+      practiceJurisdictions,
+      recordAuditEvent: context.recordAuditEvent,
+      tx,
+    });
+  });
+
+  return textResult({ practiceJurisdictions });
+};
+
 export const STELLA_TOOL_HANDLERS = {
   get_matter_overview: handleGetMatterOverviewTool,
   list_matters: handleListMattersTool,
@@ -757,4 +922,5 @@ export const STELLA_TOOL_HANDLERS = {
   read_content_across_matters: handleReadContentAcrossMattersTool,
   search_case_law: handleSearchCaseLawTool,
   search_across_matters: handleSearchAcrossMattersTool,
+  set_practice_jurisdictions: handleSetPracticeJurisdictionsTool,
 } satisfies Record<StellaToolName, McpToolHandler>;
