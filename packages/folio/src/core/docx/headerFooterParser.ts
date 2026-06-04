@@ -129,6 +129,9 @@ export function parseHeader(
     result.watermark = watermarkResult.watermark;
     result.rawWatermarkXml = watermarkResult.rawParagraphXml;
     result.watermarkBlockIndex = watermarkResult.blockIndex;
+    // A picture watermark's media target (PictureWatermark.imageTarget) is
+    // anchored to a stable, package-absolute path by parseHeadersAndFooters,
+    // which knows this header part's own path.
   }
   const contentRoot = watermarkResult
     ? withoutChild(rootElement, watermarkResult.hostingParagraph)

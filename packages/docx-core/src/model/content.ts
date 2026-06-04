@@ -1414,8 +1414,33 @@ export type PictureWatermark = {
   kind: "picture";
   /** Relationship id of the image part in `word/_rels/header*.xml.rels`. */
   imageRId: string;
+  /**
+   * Stable identity of the image the `imageRId` resolved to in the header it
+   * was parsed from — an absolute package path for embedded media (e.g.
+   * `word/media/image1.png`) or the URL for a linked image (see
+   * {@link imageTargetExternal}). Relationship ids are scoped per header part
+   * and commonly repeat, so propagating a watermark across headers rebinds
+   * against this anchored target rather than the (ambiguous) source rId; each
+   * target header's relationship is written relative to its own part location.
+   */
+  imageTarget?: string;
+  /**
+   * When true, {@link imageTarget} is an external (linked) URL written back
+   * with `TargetMode="External"`, not an embedded package path.
+   */
+  imageTargetExternal?: boolean;
   /** Optional scale factor (1.0 = native, 0.5 = half-size). */
   scale?: number;
+  /**
+   * Display width in points from the VML shape, captured at parse so the
+   * source aspect ratio survives a save that re-synthesizes the watermark
+   * (Word stretches the image to the shape box, so a non-2:1 box distorts a
+   * non-2:1 image). Absent for synthesized watermarks, which fall back to
+   * Word's default box scaled by `scale`.
+   */
+  widthPt?: number;
+  /** Display height in points from the VML shape. See {@link widthPt}. */
+  heightPt?: number;
   /**
    * Whether Word's "washout" effect was applied (low contrast).
    * Default true — Word emits washout=true on every picture

@@ -38,9 +38,13 @@ import type {
   Image,
   Hyperlink,
 } from "../types/content";
-import type { Document } from "../types/document";
+import type { Document, Watermark } from "../types/document";
 import { assertValidFolioDocumentModel } from "./modelValidation";
-import { RELATIONSHIP_TYPES, resolveRelativePath } from "./relsParser";
+import {
+  parseRelationships,
+  RELATIONSHIP_TYPES,
+  resolveRelativePath,
+} from "./relsParser";
 import { serializeComments } from "./serializer/commentSerializer";
 import { serializeDocument } from "./serializer/documentSerializer";
 import { serializeHeaderFooter } from "./serializer/headerFooterSerializer";
@@ -190,6 +194,44 @@ function headerFooterFilename(target: string): string {
   return target.startsWith("/") ? target.slice(1) : `word/${target}`;
 }
 
+/**
+ * The relationships part for a header/footer. A part at `<dir>/<name>` keeps its
+ * rels at `<dir>/_rels/<name>.rels` — e.g. `word/headers/header1.xml` ->
+ * `word/headers/_rels/header1.xml.rels`, not a flattened `word/_rels/...`.
+ */
+function headerFooterRelsPath(target: string): string {
+  const partPath = headerFooterFilename(target);
+  const lastSlash = partPath.lastIndexOf("/");
+  const directory = lastSlash === -1 ? "" : partPath.slice(0, lastSlash);
+  const name = lastSlash === -1 ? partPath : partPath.slice(lastSlash + 1);
+  return `${directory ? `${directory}/` : ""}_rels/${name}.rels`;
+}
+
+/**
+ * Express an absolute package path as a relationship target relative to the
+ * part at `partPath`. e.g. media `word/media/image1.png` for a part at
+ * `word/headers/header2.xml` -> `../media/image1.png` (and `media/image1.png`
+ * for a part at the `word/` root). The inverse of `resolveRelativePath`.
+ */
+function relativeTargetForPart(
+  partPath: string,
+  absoluteTarget: string,
+): string {
+  const lastSlash = partPath.lastIndexOf("/");
+  const fromDir =
+    lastSlash === -1 ? [] : partPath.slice(0, lastSlash).split("/");
+  const to = absoluteTarget.split("/");
+  let shared = 0;
+  while (
+    shared < fromDir.length &&
+    shared < to.length - 1 &&
+    fromDir[shared] === to[shared]
+  ) {
+    shared += 1;
+  }
+  return `${"../".repeat(fromDir.length - shared)}${to.slice(shared).join("/")}`;
+}
+
 function collectImageParts(doc: Document): DocxPart[] {
   const parts: DocxPart[] = [
     {
@@ -214,10 +256,8 @@ function collectImageParts(doc: Document): DocxPart[] {
       if (!rel || rel.type !== type || !rel.target) {
         continue;
       }
-      const filename = headerFooterFilename(rel.target);
-      const basename = filename.replace(/^word\//u, "");
       parts.push({
-        relsPath: `word/_rels/${basename}.rels`,
+        relsPath: headerFooterRelsPath(rel.target),
         blocks: headerFooter.content,
       });
     }
@@ -404,6 +444,10 @@ async function processNewImages(
     const relsXml = await readRelsOrStub(zip, relsPath);
     let maxId = findMaxRId(relsXml);
     const relEntries: string[] = [];
+    // The part owning these rels (e.g. word/headers/header1.xml). Relationship
+    // targets are resolved relative to it, so a subdirectory header needs
+    // `../media/...` rather than `media/...`.
+    const partPath = relsPath.replace("/_rels/", "/").replace(/\.rels$/u, "");
 
     for (const image of newImages) {
       if (!image.src) {
@@ -423,9 +467,9 @@ async function processNewImages(
         compressionOptions: { level: compressionLevel },
       });
 
-      // Build relationship entry
+      // Build relationship entry (target relative to the owning part).
       relEntries.push(
-        `<Relationship Id="${newRId}" Type="${RELATIONSHIP_TYPES.image}" Target="media/${mediaFilename}"/>`,
+        `<Relationship Id="${newRId}" Type="${RELATIONSHIP_TYPES.image}" Target="${escapeXml(relativeTargetForPart(partPath, mediaPath))}"/>`,
       );
 
       extensionsAdded.add(extension);
@@ -605,6 +649,15 @@ export async function repackDocx(
     });
   }
 
+  // Promote in-memory header/footer parts to real parts/relationships first, so
+  // collectImageParts sees them and processNewImages can write image relations
+  // into a newly created header/footer's own rels.
+  await materializeNewHeaderFooterParts(
+    exportDocument,
+    newZip,
+    compressionLevel,
+  );
+
   // Process newly inserted images (data URLs → binary media files + relationships).
   // This mutates image rIds in-place so the serializer outputs correct references.
   await processNewImages(
@@ -641,6 +694,11 @@ export async function repackDocx(
     compression: "DEFLATE",
     compressionOptions: { level: compressionLevel },
   });
+
+  // Rebind picture-watermark image rIds so each header references the image in
+  // its own rels (materialization, run before image processing above, gave
+  // coverage-created header parts a relationship target to anchor against).
+  await rebindWatermarkRelIds(exportDocument, newZip, compressionLevel);
 
   // Serialize and update modified headers/footers
   serializeHeadersFootersToZip(exportDocument, newZip, compressionLevel);
@@ -722,7 +780,15 @@ export async function repackDocxFromRaw(
     });
   }
 
-  // Serialize and update document.xml
+  // Promote in-memory header/footer parts to real parts/relationships first, so
+  // collectImageParts sees them and processNewImages can write image relations
+  // into a newly created header/footer's own rels.
+  await materializeNewHeaderFooterParts(
+    exportDocument,
+    newZip,
+    compressionLevel,
+  );
+
   await processNewImages(
     collectImageParts(exportDocument),
     newZip,
@@ -751,6 +817,11 @@ export async function repackDocxFromRaw(
     compression: "DEFLATE",
     compressionOptions: { level: compressionLevel },
   });
+
+  // Rebind picture-watermark image rIds so each header references the image in
+  // its own rels (materialization, run before image processing above, gave
+  // coverage-created header parts a relationship target to anchor against).
+  await rebindWatermarkRelIds(exportDocument, newZip, compressionLevel);
 
   // Serialize and update modified headers/footers
   serializeHeadersFootersToZip(exportDocument, newZip, compressionLevel);
@@ -1098,6 +1169,417 @@ export async function addMedia(
  * Collect serialized header/footer XML updates from the document model.
  * Uses the relationship map to resolve rId → filename.
  */
+const HEADER_CONTENT_TYPE =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml";
+const FOOTER_CONTENT_TYPE =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml";
+
+/**
+ * A header/footer is "unmaterialized" when it lives in the package map but its
+ * rId has no resolvable relationship in `document.xml.rels` — i.e. it was
+ * created in memory (header editor, watermark coverage) and still lacks a part,
+ * relationship, and `[Content_Types]` entry. The selective fast-path can't
+ * register those, so it must bail to a full repack when this returns true.
+ */
+export function hasUnmaterializedHeaderFooter(doc: Document): boolean {
+  const rels = doc.package.relationships;
+  const hasNew = (
+    map: Map<string, HeaderFooter> | undefined,
+    type: string,
+  ): boolean => {
+    if (!map) {
+      return false;
+    }
+    for (const rId of map.keys()) {
+      const rel = rels?.get(rId);
+      if (!rel || rel.type !== type || !rel.target) {
+        return true;
+      }
+    }
+    return false;
+  };
+  return (
+    hasNew(doc.package.headers, RELATIONSHIP_TYPES.header) ||
+    hasNew(doc.package.footers, RELATIONSHIP_TYPES.footer)
+  );
+}
+
+function findMaxHeaderFooterNum(
+  zip: JSZip,
+  prefix: "header" | "footer",
+): number {
+  let max = 0;
+  const pattern = new RegExp(`^word/${prefix}(\\d+)\\.xml$`, "u");
+  zip.forEach((relativePath) => {
+    const m = pattern.exec(relativePath);
+    if (m) {
+      // SAFETY: capture group [1] always present when the regex matches.
+      const num = Number.parseInt(m[1]!, 10);
+      if (num > max) {
+        max = num;
+      }
+    }
+  });
+  return max;
+}
+
+/**
+ * Materialize header/footer parts created in memory (rId present in the package
+ * map, absent from `document.xml.rels`). For each: mint a `word/<prefix>N.xml`
+ * target, add a document relationship under the *existing* rId (a valid NCName,
+ * so the section's `<w:headerReference r:id>` keeps resolving without rewriting
+ * document.xml), and a `[Content_Types].xml` Override. The part body is written
+ * afterwards by `serializeHeadersFootersToZip`, which can now resolve the new
+ * relationship.
+ */
+async function materializeNewHeaderFooterParts(
+  doc: Document,
+  zip: JSZip,
+  compressionLevel: number,
+): Promise<void> {
+  const rels = doc.package.relationships;
+  if (!rels) {
+    return;
+  }
+  // Cheap guard so the common repack (no in-memory parts) skips the zip scans
+  // and rels walk below.
+  if (!hasUnmaterializedHeaderFooter(doc)) {
+    return;
+  }
+
+  const relEntries: string[] = [];
+  const overrides: string[] = [];
+  let maxHeaderNum = findMaxHeaderFooterNum(zip, "header");
+  let maxFooterNum = findMaxHeaderFooterNum(zip, "footer");
+  // Seed the rId counter above every numeric id already in use — in the
+  // relationship map AND as a header/footer map key — so a freshly minted id
+  // can never collide with another (possibly not-yet-materialized) part.
+  let maxRId = 0;
+  const considerNumericRId = (id: string): void => {
+    const match = /^rId(\d+)$/u.exec(id);
+    if (match) {
+      // SAFETY: capture group [1] always present when the regex matches.
+      const n = Number.parseInt(match[1]!, 10);
+      if (n > maxRId) {
+        maxRId = n;
+      }
+    }
+  };
+  for (const id of rels.keys()) {
+    considerNumericRId(id);
+  }
+  for (const id of doc.package.headers?.keys() ?? []) {
+    considerNumericRId(id);
+  }
+  for (const id of doc.package.footers?.keys() ?? []) {
+    considerNumericRId(id);
+  }
+
+  const remapRefs = (
+    refs: { rId: string }[] | undefined,
+    oldRId: string,
+    newRId: string,
+  ): void => {
+    for (const ref of refs ?? []) {
+      if (ref.rId === oldRId) {
+        ref.rId = newRId;
+      }
+    }
+  };
+
+  const materialize = (
+    map: Map<string, HeaderFooter> | undefined,
+    relType: string,
+    prefix: "header" | "footer",
+    contentType: string,
+    isHeader: boolean,
+  ): void => {
+    if (!map) {
+      return;
+    }
+    for (const rId of [...map.keys()]) {
+      const existing = rels.get(rId);
+      if (existing && existing.type === relType && existing.target) {
+        continue; // Already a materialized part of this kind.
+      }
+      // When the id is already taken by an unrelated relationship, mint a fresh
+      // one and re-point the section references — reusing it would duplicate the
+      // id or resolve the header reference to the wrong (non-header) target.
+      let effectiveRId = rId;
+      if (existing) {
+        effectiveRId = `rId${++maxRId}`;
+        const headerFooter = map.get(rId);
+        if (headerFooter) {
+          map.delete(rId);
+          map.set(effectiveRId, headerFooter);
+        }
+        for (const block of doc.package.document.content) {
+          if (block.type === "paragraph") {
+            remapRefs(
+              isHeader
+                ? block.sectionProperties?.headerReferences
+                : block.sectionProperties?.footerReferences,
+              rId,
+              effectiveRId,
+            );
+          }
+        }
+        const finalProps = doc.package.document.finalSectionProperties;
+        remapRefs(
+          isHeader
+            ? finalProps?.headerReferences
+            : finalProps?.footerReferences,
+          rId,
+          effectiveRId,
+        );
+      }
+      const num = prefix === "header" ? ++maxHeaderNum : ++maxFooterNum;
+      const filename = `${prefix}${num}.xml`;
+      rels.set(effectiveRId, {
+        id: effectiveRId,
+        type: relType,
+        target: filename,
+      });
+      relEntries.push(
+        `<Relationship Id="${escapeXml(effectiveRId)}" Type="${relType}" Target="${filename}"/>`,
+      );
+      overrides.push(
+        `<Override PartName="/word/${filename}" ContentType="${contentType}"/>`,
+      );
+    }
+  };
+
+  materialize(
+    doc.package.headers,
+    RELATIONSHIP_TYPES.header,
+    "header",
+    HEADER_CONTENT_TYPE,
+    true,
+  );
+  materialize(
+    doc.package.footers,
+    RELATIONSHIP_TYPES.footer,
+    "footer",
+    FOOTER_CONTENT_TYPE,
+    false,
+  );
+
+  if (relEntries.length === 0) {
+    return;
+  }
+
+  const compressionOptions = { level: compressionLevel };
+  const relsPath = "word/_rels/document.xml.rels";
+  const relsXml = await readRelsOrStub(zip, relsPath);
+  zip.file(
+    relsPath,
+    relsXml.replace(
+      "</Relationships>",
+      `${relEntries.join("")}</Relationships>`,
+    ),
+    { compression: "DEFLATE", compressionOptions },
+  );
+
+  const ctFile = zip.file("[Content_Types].xml");
+  if (ctFile) {
+    let ctXml = await ctFile.async("text");
+    const missing = overrides.filter((override) => {
+      const partName = /PartName="([^"]+)"/u.exec(override)?.[1];
+      return partName ? !ctXml.includes(`PartName="${partName}"`) : true;
+    });
+    if (missing.length > 0) {
+      ctXml = ctXml.replace("</Types>", `${missing.join("")}</Types>`);
+      zip.file("[Content_Types].xml", ctXml, {
+        compression: "DEFLATE",
+        compressionOptions,
+      });
+    }
+  }
+}
+
+/**
+ * A picture watermark is "model-driven" when its raw VML was cleared (so the
+ * serializer synthesizes `<v:imagedata r:id>` from `imageRId`). Its image
+ * relationship may need rebinding into the header's own rels — work only the
+ * full-repack path does — so the selective fast-path bails whenever any such
+ * watermark is present, regardless of header count (a single header's rId could
+ * have been set without yet resolving in that header's rels).
+ */
+export function hasModelDrivenPictureWatermark(doc: Document): boolean {
+  const headers = doc.package.headers;
+  if (!headers) {
+    return false;
+  }
+  for (const hf of headers.values()) {
+    if (hf.watermark?.kind === "picture" && !hf.rawWatermarkXml) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Rebind each picture watermark's `imageRId` so it resolves in its own header
+ * part's rels. A watermark propagated across headers (or onto a header created
+ * by coverage) carries the source header's rId, which is meaningless in a
+ * sibling header's `word/_rels/header*.xml.rels`. Per header: keep the rId if
+ * it already resolves; otherwise reuse an existing relationship to the same
+ * media target, or mint a new one. The media bytes are shared (preserved from
+ * the source), so no new media part is written. Raw-replay watermarks are
+ * byte-exact and skipped.
+ */
+async function rebindWatermarkRelIds(
+  doc: Document,
+  zip: JSZip,
+  compressionLevel: number,
+): Promise<void> {
+  const rels = doc.package.relationships;
+  const headers = doc.package.headers;
+  if (!rels || !headers) {
+    return;
+  }
+
+  type PendingHeader = {
+    watermark: Extract<Watermark, { kind: "picture" }>;
+    relsPath: string;
+    partPath: string;
+  };
+  const pending: PendingHeader[] = [];
+  for (const [rId, hf] of headers) {
+    const watermark = hf.watermark;
+    if (!watermark || watermark.kind !== "picture" || hf.rawWatermarkXml) {
+      continue;
+    }
+    const rel = rels.get(rId);
+    if (!rel?.target) {
+      continue;
+    }
+    pending.push({
+      watermark,
+      relsPath: headerFooterRelsPath(rel.target),
+      partPath: headerFooterFilename(rel.target),
+    });
+  }
+  if (pending.length === 0) {
+    return;
+  }
+
+  // Read every header's rels (keyed by path), not only the ones being rebound:
+  // the canonical image may live in a header whose own watermark is raw-replayed
+  // (not pending). `document.xml.rels` is excluded — header rIds and body rIds
+  // both start at rId1, so it could resolve a watermark to an unrelated body
+  // image sharing the rId.
+  const relsXmlByPath = new Map<string, string>();
+  const headerRelsPaths = new Set<string>(pending.map((p) => p.relsPath));
+  for (const rel of rels.values()) {
+    if (rel.type === RELATIONSHIP_TYPES.header && rel.target) {
+      headerRelsPaths.add(headerFooterRelsPath(rel.target));
+    }
+  }
+  for (const relsPath of headerRelsPaths) {
+    relsXmlByPath.set(relsPath, await readRelsOrStub(zip, relsPath));
+  }
+
+  // The canonical image a watermark points at: an embedded media part (as a
+  // package-absolute path) or an external (linked) URL.
+  type CanonicalImage =
+    | { mode: "internal"; absolute: string }
+    | { mode: "external"; url: string };
+
+  const relImage = (
+    rel: { type: string; target?: string; targetMode?: string } | undefined,
+    relsPath: string,
+  ): CanonicalImage | undefined => {
+    if (rel?.type !== RELATIONSHIP_TYPES.image || !rel.target) {
+      return undefined;
+    }
+    return rel.targetMode === "External"
+      ? { mode: "external", url: rel.target }
+      : {
+          mode: "internal",
+          absolute: resolveRelativePath(relsPath, rel.target),
+        };
+  };
+
+  const sameImage = (a: CanonicalImage, b: CanonicalImage): boolean =>
+    a.mode === "internal" && b.mode === "internal"
+      ? a.absolute === b.absolute
+      : a.mode === "external" && b.mode === "external" && a.url === b.url;
+
+  // The source header is the one whose own rels maps the rId to an image.
+  const resolveCanonical = (imageRId: string): CanonicalImage | undefined => {
+    for (const [relsPath, xml] of relsXmlByPath) {
+      const canonical = relImage(
+        parseRelationships(xml).get(imageRId),
+        relsPath,
+      );
+      if (canonical) {
+        return canonical;
+      }
+    }
+    return undefined;
+  };
+
+  const changedPaths = new Set<string>();
+  for (const { watermark, relsPath, partPath } of pending) {
+    // Anchored at parse time (imageTarget, embedded or external); fall back to
+    // a scan only for watermarks built without a parsed source.
+    let canonical: CanonicalImage | undefined;
+    if (watermark.imageTarget !== undefined) {
+      canonical = watermark.imageTargetExternal
+        ? { mode: "external", url: watermark.imageTarget }
+        : { mode: "internal", absolute: watermark.imageTarget };
+    } else {
+      canonical = resolveCanonical(watermark.imageRId);
+    }
+    if (!canonical) {
+      continue; // Orphaned rId with no embedded media anywhere — cannot invent.
+    }
+
+    const relsXml = relsXmlByPath.get(relsPath) ?? EMPTY_RELS_XML;
+    const localRels = parseRelationships(relsXml);
+    const local = relImage(localRels.get(watermark.imageRId), relsPath);
+    if (local && sameImage(local, canonical)) {
+      // Already resolves to the canonical image. (A local rId resolving to a
+      // *different* image — header rIds repeat across parts — must still be
+      // rebound.)
+      continue;
+    }
+
+    // Reuse an existing relationship to the same image, else mint one. An
+    // external image keeps its URL and TargetMode="External".
+    let resolvedRId: string | undefined;
+    for (const [id, rel] of localRels) {
+      const image = relImage(rel, relsPath);
+      if (image && sameImage(image, canonical)) {
+        resolvedRId = id;
+        break;
+      }
+    }
+    if (!resolvedRId) {
+      resolvedRId = `rId${findMaxRId(relsXml) + 1}`;
+      const relXml =
+        canonical.mode === "external"
+          ? `<Relationship Id="${resolvedRId}" Type="${RELATIONSHIP_TYPES.image}" Target="${escapeXml(canonical.url)}" TargetMode="External"/>`
+          : `<Relationship Id="${resolvedRId}" Type="${RELATIONSHIP_TYPES.image}" Target="${escapeXml(relativeTargetForPart(partPath, canonical.absolute))}"/>`;
+      relsXmlByPath.set(
+        relsPath,
+        relsXml.replace("</Relationships>", `${relXml}</Relationships>`),
+      );
+      changedPaths.add(relsPath);
+    }
+    watermark.imageRId = resolvedRId;
+  }
+
+  const compressionOptions = { level: compressionLevel };
+  for (const path of changedPaths) {
+    const xml = relsXmlByPath.get(path);
+    if (xml) {
+      zip.file(path, xml, { compression: "DEFLATE", compressionOptions });
+    }
+  }
+}
+
 export function collectHeaderFooterUpdates(doc: Document): Map<string, string> {
   const updates = new Map<string, string>();
   const rels = doc.package.relationships;

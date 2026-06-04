@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
+import { RELATIONSHIP_TYPES } from "../docx/relsParser";
 import type { Document, HeaderFooter, Watermark } from "../types/document";
-import { getDocumentWatermark, setDocumentWatermark } from "./index";
+import {
+  ensureWatermarkHeaderCoverage,
+  getDocumentWatermark,
+  setDocumentWatermark,
+} from "./index";
 
 function makeDoc(headers: Record<string, HeaderFooter>): Document {
   return {
@@ -79,24 +84,35 @@ describe("setDocumentWatermark", () => {
     expect(next.package.headers?.get("rId2")?.watermark).toBeUndefined();
   });
 
-  test("throws when the document has no header parts", () => {
+  test("creates a default header carrying the watermark when the document has none", () => {
     const doc: Document = { package: { document: { content: [] } } };
-    expect(() =>
-      setDocumentWatermark(doc, { kind: "text", text: "x" }),
-    ).toThrow(TypeError);
+    const next = setDocumentWatermark(doc, { kind: "text", text: "DRAFT" });
+    const headers = [...(next.package.headers?.values() ?? [])];
+    expect(headers).toHaveLength(1);
+    expect(headers[0]?.watermark?.kind).toBe("text");
+    // The final section references the created default header.
+    expect(
+      next.package.document.finalSectionProperties?.headerReferences,
+    ).toContainEqual({ type: "default", rId: expect.any(String) });
   });
 
-  test("throws when applying a picture watermark across multiple header parts", () => {
-    // imageRId is scoped to word/_rels/header*.xml.rels — copying it
-    // across headers without per-rels cloning would produce dangling
-    // r:id references on save.
+  test("applies a picture watermark to every header as a distinct object", () => {
+    // imageRId is scoped to word/_rels/header*.xml.rels. The setter clones
+    // the watermark per header; the save-time rebind pass (rezip) then gives
+    // each header a relationship to the shared media in its own rels.
     const doc = makeDoc({
       rId1: emptyHeader(),
       rId2: emptyHeader(),
     });
-    expect(() =>
-      setDocumentWatermark(doc, { kind: "picture", imageRId: "rId99" }),
-    ).toThrow(/picture watermarks across multiple header parts/u);
+    const next = setDocumentWatermark(doc, {
+      kind: "picture",
+      imageRId: "rId99",
+    });
+    const first = next.package.headers?.get("rId1")?.watermark;
+    const second = next.package.headers?.get("rId2")?.watermark;
+    expect(first?.kind).toBe("picture");
+    expect(second?.kind).toBe("picture");
+    expect(first).not.toBe(second);
   });
 
   test("allows a picture watermark on a single-header document", () => {
@@ -113,5 +129,217 @@ describe("setDocumentWatermark", () => {
     const before = original.package.headers?.get("rId1")?.watermark;
     setDocumentWatermark(original, { kind: "text", text: "x" });
     expect(original.package.headers?.get("rId1")?.watermark).toBe(before);
+  });
+});
+
+describe("ensureWatermarkHeaderCoverage", () => {
+  const watermark: Watermark = { kind: "text", text: "CONFIDENTIAL" };
+
+  test("creates a first-page header for a titlePg section that lacks one", () => {
+    const doc: Document = {
+      package: {
+        document: {
+          content: [],
+          finalSectionProperties: {
+            titlePg: true,
+            headerReferences: [{ type: "default", rId: "rId1" }],
+          },
+        },
+        headers: new Map([["rId1", { ...emptyHeader(), watermark }]]),
+      },
+    };
+
+    const next = ensureWatermarkHeaderCoverage(doc, watermark);
+    const firstRef =
+      next.package.document.finalSectionProperties?.headerReferences?.find(
+        (ref) => ref.type === "first",
+      );
+    expect(firstRef).toBeDefined();
+    const firstHeader = firstRef && next.package.headers?.get(firstRef.rId);
+    expect(firstHeader?.hdrFtrType).toBe("first");
+    expect(firstHeader?.watermark?.kind).toBe("text");
+  });
+
+  test("creates an even header when evenAndOddHeaders is set in settings", () => {
+    const doc: Document = {
+      package: {
+        settings: { defaultTabStop: 720, evenAndOddHeaders: true },
+        document: {
+          content: [],
+          finalSectionProperties: {
+            headerReferences: [{ type: "default", rId: "rId1" }],
+          },
+        },
+        headers: new Map([["rId1", { ...emptyHeader(), watermark }]]),
+      },
+    };
+
+    const next = ensureWatermarkHeaderCoverage(doc, watermark);
+    const evenRef =
+      next.package.document.finalSectionProperties?.headerReferences?.find(
+        (ref) => ref.type === "even",
+      );
+    expect(evenRef).toBeDefined();
+    expect(
+      evenRef && next.package.headers?.get(evenRef.rId)?.watermark?.kind,
+    ).toBe("text");
+  });
+
+  test("preserves inheritance: does not create a type that already exists", () => {
+    const doc: Document = {
+      package: {
+        document: {
+          content: [],
+          finalSectionProperties: {
+            titlePg: true,
+            headerReferences: [
+              { type: "default", rId: "rId1" },
+              { type: "first", rId: "rId2" },
+            ],
+          },
+        },
+        headers: new Map([
+          ["rId1", emptyHeader()],
+          ["rId2", { type: "header", hdrFtrType: "first", content: [] }],
+        ]),
+      },
+    };
+
+    const next = ensureWatermarkHeaderCoverage(doc, watermark);
+    expect(next).toBe(doc);
+    expect(next.package.headers?.size).toBe(2);
+  });
+
+  test("covers an earlier titlePg section even when a later section has its own first header", () => {
+    // Word inherits forward only, so section 1's cover page cannot inherit
+    // section 2's first header. A global "type exists somewhere" check would
+    // wrongly skip coverage for section 1.
+    const doc: Document = {
+      package: {
+        document: {
+          content: [
+            {
+              type: "paragraph",
+              content: [],
+              sectionProperties: {
+                titlePg: true,
+                headerReferences: [{ type: "default", rId: "rId1" }],
+              },
+            },
+          ],
+          finalSectionProperties: {
+            titlePg: true,
+            headerReferences: [
+              { type: "default", rId: "rId1" },
+              { type: "first", rId: "rId2" },
+            ],
+          },
+        },
+        headers: new Map([
+          ["rId1", { ...emptyHeader(), watermark }],
+          [
+            "rId2",
+            { type: "header", hdrFtrType: "first", content: [], watermark },
+          ],
+        ]),
+      },
+    };
+
+    const next = ensureWatermarkHeaderCoverage(doc, watermark);
+    const block = next.package.document.content[0];
+    const section1Refs =
+      block?.type === "paragraph"
+        ? block.sectionProperties?.headerReferences
+        : undefined;
+    // Section 1 (the mid-body break) gains a coverage first header...
+    const coverageRef = section1Refs?.find((ref) => ref.type === "first");
+    expect(coverageRef).toBeDefined();
+    expect(
+      coverageRef &&
+        next.package.headers?.get(coverageRef.rId)?.watermark?.kind,
+    ).toBe("text");
+    // ...while the final section keeps its own first header unchanged.
+    expect(
+      next.package.document.finalSectionProperties?.headerReferences?.filter(
+        (ref) => ref.type === "first",
+      ),
+    ).toEqual([{ type: "first", rId: "rId2" }]);
+  });
+
+  test("covers an earlier section with no default header when a later section defines one", () => {
+    // Word cannot inherit the later section's default header backward, so the
+    // first section's normal pages need their own coverage default header.
+    const doc: Document = {
+      package: {
+        document: {
+          content: [{ type: "paragraph", content: [], sectionProperties: {} }],
+          finalSectionProperties: {
+            headerReferences: [{ type: "default", rId: "rId1" }],
+          },
+        },
+        headers: new Map([["rId1", { ...emptyHeader(), watermark }]]),
+      },
+    };
+
+    const next = ensureWatermarkHeaderCoverage(doc, watermark);
+    const block = next.package.document.content[0];
+    const defaultRef =
+      block?.type === "paragraph"
+        ? block.sectionProperties?.headerReferences?.find(
+            (ref) => ref.type === "default",
+          )
+        : undefined;
+    expect(defaultRef).toBeDefined();
+    expect(
+      defaultRef && next.package.headers?.get(defaultRef.rId)?.watermark?.kind,
+    ).toBe("text");
+    // The later section keeps its own default header.
+    expect(
+      next.package.document.finalSectionProperties?.headerReferences,
+    ).toEqual([{ type: "default", rId: "rId1" }]);
+  });
+
+  test("mints a coverage rId that does not collide with an existing relationship", () => {
+    const doc: Document = {
+      package: {
+        relationships: new Map([
+          [
+            "rId1",
+            {
+              id: "rId1",
+              type: RELATIONSHIP_TYPES.header,
+              target: "header1.xml",
+            },
+          ],
+          // A producer that already used the would-be coverage id for an image.
+          [
+            "rId_wm_first",
+            {
+              id: "rId_wm_first",
+              type: RELATIONSHIP_TYPES.image,
+              target: "media/logo.png",
+            },
+          ],
+        ]),
+        document: {
+          content: [],
+          finalSectionProperties: {
+            titlePg: true,
+            headerReferences: [{ type: "default", rId: "rId1" }],
+          },
+        },
+        headers: new Map([["rId1", { ...emptyHeader(), watermark }]]),
+      },
+    };
+
+    const next = ensureWatermarkHeaderCoverage(doc, watermark);
+    const firstRef =
+      next.package.document.finalSectionProperties?.headerReferences?.find(
+        (ref) => ref.type === "first",
+      );
+    expect(firstRef).toBeDefined();
+    // Did not reuse the taken id, and the minted id resolves to a new header.
+    expect(firstRef?.rId).not.toBe("rId_wm_first");
+    expect(firstRef && next.package.headers?.has(firstRef.rId)).toBe(true);
   });
 });

@@ -181,9 +181,18 @@ function synthesizePictureWatermark(
   // `WordPictureWatermark` so a future round-trip parses cleanly via
   // the id-prefix guard.
   const rId = escapeXml(watermark.imageRId);
-  const scale = watermark.scale ?? 1;
-  const widthPt = PICTURE_WATERMARK_DEFAULT_WIDTH_PT * scale;
-  const heightPt = PICTURE_WATERMARK_DEFAULT_HEIGHT_PT * scale;
+  // `scale` (Word's default-box multiplier) wins when set: it is the documented
+  // resize knob, and the parser only records it for uniform (2:1) watermarks
+  // where it agrees with the captured dimensions. When absent — e.g. a non-2:1
+  // source — the captured per-image dimensions preserve the aspect ratio.
+  const widthPt =
+    watermark.scale === undefined
+      ? (watermark.widthPt ?? PICTURE_WATERMARK_DEFAULT_WIDTH_PT)
+      : PICTURE_WATERMARK_DEFAULT_WIDTH_PT * watermark.scale;
+  const heightPt =
+    watermark.scale === undefined
+      ? (watermark.heightPt ?? PICTURE_WATERMARK_DEFAULT_HEIGHT_PT)
+      : PICTURE_WATERMARK_DEFAULT_HEIGHT_PT * watermark.scale;
   const washoutAttrs =
     watermark.washout === false
       ? ""

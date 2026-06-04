@@ -193,6 +193,12 @@ export type DocumentSettings = {
    * defaults to 720 twips (½ inch) when absent.
    */
   defaultTabStop: number;
+  /**
+   * `w:evenAndOddHeaders` (§17.10.1) — when true, even pages use a distinct
+   * even header/footer. Word stores this in `settings.xml` (not `sectPr`), so
+   * it is a document-wide flag; absent means odd/even share one header.
+   */
+  evenAndOddHeaders?: boolean;
 };
 
 /**

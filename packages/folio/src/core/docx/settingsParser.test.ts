@@ -47,3 +47,22 @@ describe("parseSettings — w:defaultTabStop (§17.6.13)", () => {
     ).toBe(DEFAULT_TAB_STOP_TWIPS);
   });
 });
+
+describe("parseSettings — w:evenAndOddHeaders (§17.10.1)", () => {
+  test("absent flag leaves evenAndOddHeaders undefined", () => {
+    expect(parseSettings(wrap("")).evenAndOddHeaders).toBeUndefined();
+    expect(parseSettings(null).evenAndOddHeaders).toBeUndefined();
+  });
+
+  test("a bare element records the on state", () => {
+    expect(
+      parseSettings(wrap(`<w:evenAndOddHeaders/>`)).evenAndOddHeaders,
+    ).toBe(true);
+  });
+
+  test('an explicit w:val="0" is treated as off', () => {
+    expect(
+      parseSettings(wrap(`<w:evenAndOddHeaders w:val="0"/>`)).evenAndOddHeaders,
+    ).toBeUndefined();
+  });
+});
