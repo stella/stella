@@ -21,7 +21,7 @@
     "test:e2e:ui": "playwright test --config e2e/playwright.config.ts --ui"
   },
   "dependencies": {
-    "@ai-sdk/react": "3.0.193",
+    "@ai-sdk/react": "3.0.195",
     "@atlaskit/pragmatic-drag-and-drop": "^1.8.1",
     "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^2.1.5",
     "@atlaskit/pragmatic-drag-and-drop-hitbox": "^1.1.0",
@@ -76,7 +76,7 @@
     "@tiptap/pm": "^3.23.6",
     "@tiptap/react": "^3.23.6",
     "@tiptap/suggestion": "^3.23.6",
-    "ai": "^6.0.191",
+    "ai": "^6.0.193",
     "better-auth": "catalog:",
     "better-result": "catalog:",
     "class-variance-authority": "^0.7.1",
