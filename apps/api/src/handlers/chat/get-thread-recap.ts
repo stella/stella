@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { chatThreads } from "@/api/db/schema";
@@ -165,6 +165,11 @@ const getThreadRecap = createSafeRootHandler(
           recapMessageId: lastMessage.id,
           recapPromptVersion: RECAP_PROMPT_VERSION,
           recapGeneratedAt: new Date(),
+          // Caching a recap is not thread activity. Pin updatedAt to its
+          // current value (an explicit value skips the column's
+          // $onUpdate) so reopening an old thread doesn't float it to
+          // the top of the updatedAt-ordered thread list.
+          updatedAt: sql`${chatThreads.updatedAt}`,
         })
         .where(
           and(eq(chatThreads.id, threadId), eq(chatThreads.userId, user.id)),
