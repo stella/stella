@@ -242,4 +242,53 @@ describe("header/footer part materialization on save", () => {
     });
     expect(result).toBeNull();
   });
+
+  test("re-keying a colliding header does not overwrite another new header's id", async () => {
+    const base = await createEmptyDocx();
+    const doc = await parseDocx(base, { preloadFonts: false });
+
+    // rId1 already exists (styles) — so the first header must be re-keyed. The
+    // minted id must not land on rId2, which a second new header already uses.
+    const para = (text: string): HeaderFooter["content"][number] => ({
+      type: "paragraph",
+      content: [{ type: "run", content: [{ type: "text", text }] }],
+    });
+    doc.package.headers = new Map([
+      [
+        "rId1",
+        {
+          type: "header",
+          hdrFtrType: "default",
+          content: [para("HEADER-ONE")],
+        },
+      ],
+      [
+        "rId2",
+        { type: "header", hdrFtrType: "first", content: [para("HEADER-TWO")] },
+      ],
+    ]);
+    doc.package.document.finalSectionProperties = {
+      ...doc.package.document.finalSectionProperties,
+      titlePg: true,
+      headerReferences: [
+        { type: "default", rId: "rId1" },
+        { type: "first", rId: "rId2" },
+      ],
+    };
+
+    const out = await repackDocx(doc, { updateModifiedDate: false });
+    expect((await validateDocx(out)).valid).toBe(true);
+
+    const zip = await JSZip.loadAsync(out);
+    const headerFiles = Object.keys(zip.files).filter((p) =>
+      /^word\/header\d+\.xml$/u.test(p),
+    );
+    // Two distinct header parts; neither header was overwritten/dropped.
+    expect(headerFiles).toHaveLength(2);
+    const allHeaderXml = (
+      await Promise.all(headerFiles.map((p) => zip.file(p)!.async("text")))
+    ).join("\n");
+    expect(allHeaderXml).toContain("HEADER-ONE");
+    expect(allHeaderXml).toContain("HEADER-TWO");
+  });
 });

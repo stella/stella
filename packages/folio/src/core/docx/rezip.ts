@@ -1251,8 +1251,11 @@ async function materializeNewHeaderFooterParts(
   const overrides: string[] = [];
   let maxHeaderNum = findMaxHeaderFooterNum(zip, "header");
   let maxFooterNum = findMaxHeaderFooterNum(zip, "footer");
+  // Seed the rId counter above every numeric id already in use — in the
+  // relationship map AND as a header/footer map key — so a freshly minted id
+  // can never collide with another (possibly not-yet-materialized) part.
   let maxRId = 0;
-  for (const id of rels.keys()) {
+  const considerNumericRId = (id: string): void => {
     const match = /^rId(\d+)$/u.exec(id);
     if (match) {
       // SAFETY: capture group [1] always present when the regex matches.
@@ -1261,6 +1264,15 @@ async function materializeNewHeaderFooterParts(
         maxRId = n;
       }
     }
+  };
+  for (const id of rels.keys()) {
+    considerNumericRId(id);
+  }
+  for (const id of doc.package.headers?.keys() ?? []) {
+    considerNumericRId(id);
+  }
+  for (const id of doc.package.footers?.keys() ?? []) {
+    considerNumericRId(id);
   }
 
   const remapRefs = (
