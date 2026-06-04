@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import type { Document, HeaderFooter, Watermark } from "../types/document";
-import { getDocumentWatermark, setDocumentWatermark } from "./index";
+import {
+  ensureWatermarkHeaderCoverage,
+  getDocumentWatermark,
+  setDocumentWatermark,
+} from "./index";
 
 function makeDoc(headers: Record<string, HeaderFooter>): Document {
   return {
@@ -79,11 +83,16 @@ describe("setDocumentWatermark", () => {
     expect(next.package.headers?.get("rId2")?.watermark).toBeUndefined();
   });
 
-  test("throws when the document has no header parts", () => {
+  test("creates a default header carrying the watermark when the document has none", () => {
     const doc: Document = { package: { document: { content: [] } } };
-    expect(() =>
-      setDocumentWatermark(doc, { kind: "text", text: "x" }),
-    ).toThrow(TypeError);
+    const next = setDocumentWatermark(doc, { kind: "text", text: "DRAFT" });
+    const headers = [...(next.package.headers?.values() ?? [])];
+    expect(headers).toHaveLength(1);
+    expect(headers[0]?.watermark?.kind).toBe("text");
+    // The final section references the created default header.
+    expect(
+      next.package.document.finalSectionProperties?.headerReferences,
+    ).toContainEqual({ type: "default", rId: expect.any(String) });
   });
 
   test("applies a picture watermark to every header as a distinct object", () => {
@@ -119,5 +128,84 @@ describe("setDocumentWatermark", () => {
     const before = original.package.headers?.get("rId1")?.watermark;
     setDocumentWatermark(original, { kind: "text", text: "x" });
     expect(original.package.headers?.get("rId1")?.watermark).toBe(before);
+  });
+});
+
+describe("ensureWatermarkHeaderCoverage", () => {
+  const watermark: Watermark = { kind: "text", text: "CONFIDENTIAL" };
+
+  test("creates a first-page header for a titlePg section that lacks one", () => {
+    const doc: Document = {
+      package: {
+        document: {
+          content: [],
+          finalSectionProperties: {
+            titlePg: true,
+            headerReferences: [{ type: "default", rId: "rId1" }],
+          },
+        },
+        headers: new Map([["rId1", { ...emptyHeader(), watermark }]]),
+      },
+    };
+
+    const next = ensureWatermarkHeaderCoverage(doc, watermark);
+    const firstRef =
+      next.package.document.finalSectionProperties?.headerReferences?.find(
+        (ref) => ref.type === "first",
+      );
+    expect(firstRef).toBeDefined();
+    const firstHeader = firstRef && next.package.headers?.get(firstRef.rId);
+    expect(firstHeader?.hdrFtrType).toBe("first");
+    expect(firstHeader?.watermark?.kind).toBe("text");
+  });
+
+  test("creates an even header when evenAndOddHeaders is set in settings", () => {
+    const doc: Document = {
+      package: {
+        settings: { defaultTabStop: 720, evenAndOddHeaders: true },
+        document: {
+          content: [],
+          finalSectionProperties: {
+            headerReferences: [{ type: "default", rId: "rId1" }],
+          },
+        },
+        headers: new Map([["rId1", { ...emptyHeader(), watermark }]]),
+      },
+    };
+
+    const next = ensureWatermarkHeaderCoverage(doc, watermark);
+    const evenRef =
+      next.package.document.finalSectionProperties?.headerReferences?.find(
+        (ref) => ref.type === "even",
+      );
+    expect(evenRef).toBeDefined();
+    expect(
+      evenRef && next.package.headers?.get(evenRef.rId)?.watermark?.kind,
+    ).toBe("text");
+  });
+
+  test("preserves inheritance: does not create a type that already exists", () => {
+    const doc: Document = {
+      package: {
+        document: {
+          content: [],
+          finalSectionProperties: {
+            titlePg: true,
+            headerReferences: [
+              { type: "default", rId: "rId1" },
+              { type: "first", rId: "rId2" },
+            ],
+          },
+        },
+        headers: new Map([
+          ["rId1", emptyHeader()],
+          ["rId2", { type: "header", hdrFtrType: "first", content: [] }],
+        ]),
+      },
+    };
+
+    const next = ensureWatermarkHeaderCoverage(doc, watermark);
+    expect(next).toBe(doc);
+    expect(next.package.headers?.size).toBe(2);
   });
 });
