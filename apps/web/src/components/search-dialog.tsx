@@ -41,6 +41,10 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { UserAvatar } from "@/components/user-avatar";
+import {
+  isPublicLawPreviewEnabled,
+  usePublicLawPreviewEnabled,
+} from "@/hooks/use-public-law-preview";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -121,7 +125,7 @@ const KIND_TRANSLATION_KEYS = {
 const SEARCH_KIND_TYPES = [
   "matter",
   "contact",
-  // "case-law",
+  "case-law",
   "document",
   "folder",
   "task",
@@ -142,6 +146,7 @@ const isSearchKindOption = (
   switch (value) {
     case "matter":
     case "contact":
+    case "case-law":
     case "document":
     case "folder":
     case "task":
@@ -160,6 +165,11 @@ const compactMeta = (parts: readonly (string | null | undefined)[]): string =>
       return trimmed ? [trimmed] : [];
     })
     .join(" · ");
+
+const isAvailableSearchKind = (
+  type: GlobalSearchResultType,
+  includePublicLaw: boolean,
+): boolean => type !== "case-law" || includePublicLaw;
 
 const stripSearchMarkup = (value: string): string =>
   value.replaceAll("<mark>", " ").replaceAll("</mark>", " ").trim();
@@ -248,6 +258,7 @@ export const SearchDialog = ({
   const locale = useLocale();
   const navigate = useNavigate();
   const user = useAuthenticatedUser();
+  const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
   const searchRecentsScope = useMemo(
     (): SearchRecentsScope => ({
       organizationId: user.activeOrganizationId,
@@ -292,11 +303,17 @@ export const SearchDialog = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: include searchQuery so each new query gets a fresh preset cutoff
   }, [filters.time, searchQuery]);
   const updatedTo = filterUpdatedTo(filters);
-  const selectedSearchTypes = filters.types.filter(isSearchKindOption);
+  const selectedSearchTypes = filters.types.filter(
+    (type) =>
+      isSearchKindOption(type) &&
+      isAvailableSearchKind(type, publicLawPreviewEnabled),
+  );
   const activeSearchTypes =
     selectedSearchTypes.length > 0
       ? selectedSearchTypes
-      : [...SEARCH_KIND_TYPES];
+      : SEARCH_KIND_TYPES.filter((type) =>
+          isAvailableSearchKind(type, publicLawPreviewEnabled),
+        );
 
   const {
     data,
@@ -662,6 +679,14 @@ export const SearchDialog = ({
     }
 
     if (hit.type === "case-law") {
+      if (!isPublicLawPreviewEnabled()) {
+        stellaToast.add({
+          title: t("common.comingSoon"),
+          type: "neutral",
+        });
+        return;
+      }
+
       const slug =
         "slug" in hit && typeof hit.slug === "string" ? hit.slug : null;
       await navigate({
@@ -864,6 +889,14 @@ export const SearchDialog = ({
                         buckets={mergeSelectedBuckets(
                           (facets?.type ?? []).flatMap((bucket) => {
                             if (!isSearchKindOption(bucket.value)) {
+                              return [];
+                            }
+                            if (
+                              !isAvailableSearchKind(
+                                bucket.value,
+                                publicLawPreviewEnabled,
+                              )
+                            ) {
                               return [];
                             }
                             return [

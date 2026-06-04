@@ -578,6 +578,32 @@ describe("public law sitemap", () => {
     expect(publicShellSource).toContain("usePublicLawPreviewEnabled");
   });
 
+  test("direct case-law callers are filtered by the shared dark-launch helper", async () => {
+    const [chatOpenSource, chatMentionSource, searchSource] = await Promise.all(
+      [
+        readSource("apps/web/src/components/chat/case-law-open.ts"),
+        readSource(
+          "apps/web/src/routes/_protected.chat/-hooks/use-global-chat-mention-registration.ts",
+        ),
+        readSource("apps/web/src/components/search-dialog.tsx"),
+      ],
+    );
+
+    expect(chatOpenSource).toContain("isPublicLawPreviewEnabled");
+    expect(chatMentionSource).toContain("usePublicLawPreviewEnabled");
+    expect(searchSource).toContain("isPublicLawPreviewEnabled");
+    expect(searchSource).toContain("usePublicLawPreviewEnabled");
+  });
+
+  test("start client initializes i18n before hydrating", async () => {
+    const source = await readSource("apps/web/src/client.tsx");
+    const initializeIndex = source.indexOf("initializeI18n().finally");
+    const hydrateIndex = source.indexOf("hydrateRoot(");
+
+    expect(initializeIndex).toBeGreaterThan(-1);
+    expect(hydrateIndex).toBeGreaterThan(initializeIndex);
+  });
+
   test("case-law AI mode requires an explicit authenticated availability gate", async () => {
     const source = await readSource(
       "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx",

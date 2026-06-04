@@ -1,5 +1,6 @@
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { isPublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
 import { getTranslator } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import {
@@ -90,6 +91,15 @@ export const openCaseLawDecision = async (
   navigate: NavigateToCaseLawDecision,
 ) => {
   try {
+    if (!isPublicLawPreviewEnabled()) {
+      const t = getTranslator();
+      stellaToast.add({
+        title: t("common.comingSoon"),
+        type: "neutral",
+      });
+      return;
+    }
+
     const params = await resolveCaseLawDecisionRouteParams(rawDecisionRef);
     if (!params) {
       const t = getTranslator();
