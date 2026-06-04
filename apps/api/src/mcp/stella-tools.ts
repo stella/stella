@@ -635,7 +635,7 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
   });
 };
 
-const handleSearchCaseLawTool: McpToolHandler = async ({ args }) => {
+const handleSearchCaseLawTool: McpToolHandler = async ({ args, context }) => {
   const query = parseRequiredString(args, "query", {
     maxLength: LIMITS.searchQueryMaxLength,
   });
