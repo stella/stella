@@ -16,6 +16,7 @@ const {
   fetchPublicSitemapShards,
   SITEMAP_XML_RESPONSE_HEADERS,
 } = await import("@/lib/public-law-sitemap");
+const { isPublicSsrPath } = await import("@/lib/public-ssr-paths");
 const { WORKSPACE_PRIMARY_NAV_ITEMS } =
   await import("@/components/workspace-primary-nav");
 
@@ -455,6 +456,21 @@ describe("public law sitemap", () => {
     expect(source).not.toContain("sessionOptions");
     expect(source).not.toContain("loadAuthContext");
     expectNoDirectAuthImport(source);
+  });
+
+  test("root route streams only public law app paths", async () => {
+    const source = await readSource("apps/web/src/routes/__root.tsx");
+
+    expect(isPublicSsrPath("/law")).toBe(true);
+    expect(isPublicSsrPath("/law/cases")).toBe(true);
+    expect(isPublicSsrPath("/law/cze/cases/court/2026-01-01/slug")).toBe(true);
+    expect(isPublicSsrPath("/auth")).toBe(false);
+    expect(isPublicSsrPath("/workspaces/workspace-id")).toBe(false);
+    expect(isPublicSsrPath("/")).toBe(false);
+    expect(source).toContain(
+      "ssr: ({ location }) => isPublicSsrPath(location.pathname)",
+    );
+    expect(source).toContain("shellComponent: RootDocument");
   });
 
   test("server entry preserves streaming SSR for public SEO routes", async () => {

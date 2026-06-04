@@ -17,6 +17,7 @@ import {
 } from "@/components/route-components";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
 import "@/fonts.css";
+import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 import "@stll/ui/globals.css";
 
 const isDev = import.meta.env.DEV;
@@ -29,6 +30,8 @@ export const Route = createRootRouteWithContext<{
   analyticsValue: AnalyticsValue;
   queryClient: QueryClient;
 }>()({
+  ssr: ({ location }) => isPublicSsrPath(location.pathname),
+  shellComponent: RootDocument,
   component: RootComponent,
   // Document head management via route `head` option.
   // https://tanstack.com/router/latest/docs/framework/react/guide/document-head-management
@@ -58,14 +61,12 @@ function RootComponent() {
   });
 
   return (
-    <RootDocument>
-      <AppProviders
-        analyticsValue={appContext.analyticsValue}
-        queryClient={appContext.queryClient}
-      >
-        <RootApp />
-      </AppProviders>
-    </RootDocument>
+    <AppProviders
+      analyticsValue={appContext.analyticsValue}
+      queryClient={appContext.queryClient}
+    >
+      <RootApp />
+    </AppProviders>
   );
 }
 
