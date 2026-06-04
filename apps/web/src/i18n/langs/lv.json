@@ -1592,6 +1592,7 @@
     "stepDesktop": "Datora",
     "stepJurisdiction": "Jurisdikcija",
     "stepOrganization": "Komanda",
+    "stepTeam": "Uzaicināt",
     "termsNotice": "Turpinot jūs piekrītat mūsu <terms>pakalpojumu lietošanas noteikumiem</terms>.",
     "welcomeSubtitle": "Iestatīšana aizņems mazāk par minūti."
   },
@@ -1938,6 +1939,7 @@
     "fieldInputType": "Ievades tips",
     "fieldLabel": "Etiķete",
     "fieldLabelPlaceholder": "piem., Pilns vārds",
+    "fieldOptions": "Opcijas",
     "fieldOptionsPlaceholder": "Ievadiet opciju un nospiediet Enter",
     "fieldUpdateFailed": "Neizdevās atjaunināt laukus",
     "fields": "Lauki",
@@ -2443,6 +2445,7 @@
       "noFirstDocument": "Vēl nav dokumentu priekšskatījumam.",
       "noPropertiesFound": "Rekvizīti nav atrasti",
       "optionsHelp": "Definē vērtības, no kurām AI var izvēlēties.",
+      "optionsLabel": "Iespējas",
       "previewEmpty": "AI nav atgriezis vērtību.",
       "previewMockNotice": "Demonstrācijas priekšskatījums — aizmugure vēl nav savienota.",
       "previewOnFirst": "Priekšskatījums: {document}",

@@ -1592,6 +1592,7 @@
     "stepDesktop": "Töölaud",
     "stepJurisdiction": "Jurisdiktsioon",
     "stepOrganization": "Meeskond",
+    "stepTeam": "Kutsu",
     "termsNotice": "Jätkates nõustud meie <terms>kasutustingimustega</terms>.",
     "welcomeSubtitle": "Seadistamine võtab vähem kui minuti."
   },
@@ -1938,6 +1939,7 @@
     "fieldInputType": "Sisendi tüüp",
     "fieldLabel": "Silt",
     "fieldLabelPlaceholder": "nt Täisnimi",
+    "fieldOptions": "Valikud",
     "fieldOptionsPlaceholder": "Sisestage valik ja vajutage Enter",
     "fieldUpdateFailed": "Väljade uuendamine ebaõnnestus",
     "fields": "Väljad",
@@ -2443,6 +2445,7 @@
       "noFirstDocument": "Eelvaateks pole veel dokumente.",
       "noPropertiesFound": "Omadusi ei leitud",
       "optionsHelp": "Määra väärtused, mille hulgast AI võib valida.",
+      "optionsLabel": "Valikud",
       "previewEmpty": "AI ei tagastanud väärtust.",
       "previewMockNotice": "Mock-eelvaade — taustasüsteem pole veel ühendatud.",
       "previewOnFirst": "Eelvaade: {document}",

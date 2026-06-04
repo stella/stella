@@ -1592,6 +1592,7 @@
     "stepDesktop": "Asztali",
     "stepJurisdiction": "Joghatóság",
     "stepOrganization": "Csapat",
+    "stepTeam": "Meghívás",
     "termsNotice": "A folytatással elfogadja a <terms>felhasználási feltételeket</terms>.",
     "welcomeSubtitle": "A beállítás kevesebb mint egy percet vesz igénybe."
   },
@@ -1938,6 +1939,7 @@
     "fieldInputType": "Beviteli típus",
     "fieldLabel": "Címke",
     "fieldLabelPlaceholder": "pl. Teljes név",
+    "fieldOptions": "Lehetőségek",
     "fieldOptionsPlaceholder": "Írjon be egy lehetőséget, majd nyomja meg az Entert",
     "fieldUpdateFailed": "A mezők frissítése nem sikerült",
     "fields": "Mezők",
@@ -2443,6 +2445,7 @@
       "noFirstDocument": "Még nincsenek dokumentumok az előnézethez.",
       "noPropertiesFound": "Nincsenek tulajdonságok",
       "optionsHelp": "Add meg az értékeket, amelyek közül az AI választhat.",
+      "optionsLabel": "Lehetőségek",
       "previewEmpty": "Az AI nem adott vissza értéket.",
       "previewMockNotice": "Mock előnézet — a háttér még nincs bekötve.",
       "previewOnFirst": "Előnézet: {document}",

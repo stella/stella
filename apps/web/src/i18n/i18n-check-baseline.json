@@ -16,6 +16,7 @@
     "knowledge.agentSkills.renameFile",
     "knowledge.skills.form.description",
     "knowledge.skills.form.name",
+    "onboarding.stepTeam",
     "organization.invitations.emailAddressLabel",
     "search.kinds.matter",
     "search.updatedWithinOptions.day",
@@ -23,9 +24,11 @@
     "tasks.status",
     "tasks.statusValues.done",
     "tasks.statusValues.open",
+    "templates.fieldOptions",
     "templates.inputTypes.date",
     "translate.settings.remove",
-    "translate.settings.save"
+    "translate.settings.save",
+    "workspaces.properties.optionsLabel"
   ],
   "identicalToSource": {
     "appearance.flexoki": [
@@ -509,6 +512,9 @@
       "pl",
       "pt-BR"
     ],
+    "templates.fieldOptions": [
+      "fr"
+    ],
     "templates.inputTypes.date": [
       "fr"
     ],
@@ -622,6 +628,9 @@
       "fr"
     ],
     "workspaces.properties.documentsLabel": [
+      "fr"
+    ],
+    "workspaces.properties.optionsLabel": [
       "fr"
     ],
     "workspaces.properties.text": [

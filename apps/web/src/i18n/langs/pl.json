@@ -245,7 +245,7 @@
     "analysis": {
       "categories": {
         "facts": "Stan faktyczny",
-        "holding": "Sentencja",
+        "holding": "Teza",
         "procedural-history": "Przebieg postępowania",
         "reasoning": "Rozumowanie"
       }
@@ -1592,6 +1592,7 @@
     "stepDesktop": "Aplikacja",
     "stepJurisdiction": "Jurysdykcja",
     "stepOrganization": "Zespół",
+    "stepTeam": "Zaproszenia",
     "termsNotice": "Kontynuując, akceptujesz nasze <terms>Warunki korzystania z usługi</terms>.",
     "welcomeSubtitle": "Konfiguracja zajmie mniej niż minutę."
   },
@@ -1938,6 +1939,7 @@
     "fieldInputType": "Typ pola",
     "fieldLabel": "Etykieta",
     "fieldLabelPlaceholder": "np. Imię i nazwisko",
+    "fieldOptions": "Opcje",
     "fieldOptionsPlaceholder": "Wpisz opcję i naciśnij Enter",
     "fieldUpdateFailed": "Nie udało się zaktualizować pól",
     "fields": "Pola",
@@ -2443,6 +2445,7 @@
       "noFirstDocument": "Brak dokumentów do podglądu.",
       "noPropertiesFound": "Nie znaleziono właściwości",
       "optionsHelp": "Określ wartości, spośród których AI może wybierać.",
+      "optionsLabel": "Opcje",
       "previewEmpty": "AI nie zwróciło żadnej wartości.",
       "previewMockNotice": "Podgląd makietowy — backend jeszcze nie podłączony.",
       "previewOnFirst": "Podgląd na: {document}",

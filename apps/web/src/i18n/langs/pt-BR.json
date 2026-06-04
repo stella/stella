@@ -1592,6 +1592,7 @@
     "stepDesktop": "Área de trabalho",
     "stepJurisdiction": "Jurisdição",
     "stepOrganization": "Equipe",
+    "stepTeam": "Convidar",
     "termsNotice": "Ao continuar, você concorda com nossos <terms>Termos de Serviço</terms>.",
     "welcomeSubtitle": "A configuração leva menos de um minuto."
   },
@@ -1938,6 +1939,7 @@
     "fieldInputType": "Tipo de entrada",
     "fieldLabel": "Rótulo",
     "fieldLabelPlaceholder": "ex.: Nome completo",
+    "fieldOptions": "Opções",
     "fieldOptionsPlaceholder": "Digite uma opção e pressione Enter",
     "fieldUpdateFailed": "Falha ao atualizar campos",
     "fields": "Campos",
@@ -2443,6 +2445,7 @@
       "noFirstDocument": "Ainda não há documentos para visualizar.",
       "noPropertiesFound": "Nenhuma propriedade encontrada",
       "optionsHelp": "Defina os valores que a IA pode escolher.",
+      "optionsLabel": "Opções",
       "previewEmpty": "A IA não retornou nenhum valor.",
       "previewMockNotice": "Visualização simulada – back-end ainda não conectado.",
       "previewOnFirst": "Visualização em {document}",

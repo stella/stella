@@ -68,7 +68,7 @@ export const InlineOptionEditor = ({
     <div className="bg-muted/64 flex flex-col gap-2 rounded-[9px] border p-3">
       <div className="flex items-center gap-1.5">
         <span className="text-muted-foreground text-[11px] font-medium tracking-[0.08em] uppercase">
-          {t("common.options")}
+          {t("workspaces.properties.optionsLabel")}
         </span>
       </div>
 

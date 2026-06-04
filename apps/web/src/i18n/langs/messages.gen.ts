@@ -1595,6 +1595,7 @@ type Messages = {
     "stepDesktop": "Desktop";
     "stepJurisdiction": "Jurisdiction";
     "stepOrganization": "Team";
+    "stepTeam": "Invite";
     "termsNotice": "By continuing, you agree to our <terms>Terms of Service</terms>.";
     "welcomeSubtitle": "Set up takes less than a minute.";
   };
@@ -1941,6 +1942,7 @@ type Messages = {
     "fieldInputType": "Input type";
     "fieldLabel": "Label";
     "fieldLabelPlaceholder": "e.g. Full Name";
+    "fieldOptions": "Options";
     "fieldOptionsPlaceholder": "Type an option and press Enter";
     "fieldUpdateFailed": "Failed to update fields";
     "fields": "Fields";
@@ -2446,6 +2448,7 @@ type Messages = {
       "noFirstDocument": "No documents to preview yet.";
       "noPropertiesFound": "No properties found";
       "optionsHelp": "Define the values the AI may pick from.";
+      "optionsLabel": "Options";
       "previewEmpty": "AI returned no value.";
       "previewMockNotice": "Mock preview — backend not yet wired.";
       "previewOnFirst": "Preview on {document}";

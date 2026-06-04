@@ -245,7 +245,7 @@
     "analysis": {
       "categories": {
         "facts": "Hechos",
-        "holding": "Fallo",
+        "holding": "Doctrina",
         "procedural-history": "Antecedentes procesales",
         "reasoning": "Razonamiento"
       }
@@ -1592,6 +1592,7 @@
     "stepDesktop": "Escritorio",
     "stepJurisdiction": "Jurisdicción",
     "stepOrganization": "Equipo",
+    "stepTeam": "Invitar",
     "termsNotice": "Al continuar, aceptas nuestros <terms>Términos de servicio</terms>.",
     "welcomeSubtitle": "La configuración toma menos de un minuto."
   },
@@ -1938,6 +1939,7 @@
     "fieldInputType": "Tipo de entrada",
     "fieldLabel": "Etiqueta",
     "fieldLabelPlaceholder": "p. ej. Nombre completo",
+    "fieldOptions": "Opciones",
     "fieldOptionsPlaceholder": "Escriba una opción y pulse Intro",
     "fieldUpdateFailed": "Error al actualizar los campos",
     "fields": "Campos",
@@ -2443,6 +2445,7 @@
       "noFirstDocument": "Aún no hay documentos para previsualizar.",
       "noPropertiesFound": "No se encontraron propiedades",
       "optionsHelp": "Define los valores entre los que la IA puede elegir.",
+      "optionsLabel": "Opciones",
       "previewEmpty": "La IA no devolvió ningún valor.",
       "previewMockNotice": "Previsualización ficticia — backend aún no conectado.",
       "previewOnFirst": "Previsualizar en {document}",

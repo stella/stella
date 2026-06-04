@@ -438,7 +438,7 @@ export const FieldConfigEditor = ({
 
       {field.inputType === "select" && (
         <Field>
-          <FieldLabel>{t("common.options")}</FieldLabel>
+          <FieldLabel>{t("templates.fieldOptions")}</FieldLabel>
           <OptionsTagInput
             onChange={(opts) => onUpdate({ options: opts })}
             options={field.options}

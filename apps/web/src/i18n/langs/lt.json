@@ -1592,6 +1592,7 @@
     "stepDesktop": "Kompiuteris",
     "stepJurisdiction": "Jurisdikcija",
     "stepOrganization": "Komanda",
+    "stepTeam": "Kvietimai",
     "termsNotice": "Tęsdami sutinkate su mūsų <terms>paslaugų teikimo sąlygomis</terms>.",
     "welcomeSubtitle": "Nustatymas užtruks mažiau nei minutę."
   },
@@ -1938,6 +1939,7 @@
     "fieldInputType": "Įvesties tipas",
     "fieldLabel": "Etiketė",
     "fieldLabelPlaceholder": "pvz. Pilnas vardas",
+    "fieldOptions": "Parinktys",
     "fieldOptionsPlaceholder": "Įveskite parinktį ir paspauskite Enter",
     "fieldUpdateFailed": "Nepavyko atnaujinti laukų",
     "fields": "Laukai",
@@ -2443,6 +2445,7 @@
       "noFirstDocument": "Dar nėra dokumentų peržiūrai.",
       "noPropertiesFound": "Savybių nerasta",
       "optionsHelp": "Apibrėžk reikšmes, iš kurių AI gali rinktis.",
+      "optionsLabel": "Parinktys",
       "previewEmpty": "AI negrąžino jokios reikšmės.",
       "previewMockNotice": "Demonstracinė peržiūra — galinė dalis dar nesujungta.",
       "previewOnFirst": "Peržiūra: {document}",

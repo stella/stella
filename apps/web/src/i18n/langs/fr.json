@@ -1592,6 +1592,7 @@
     "stepDesktop": "Bureau",
     "stepJurisdiction": "Juridiction",
     "stepOrganization": "Équipe",
+    "stepTeam": "Inviter",
     "termsNotice": "En continuant, vous acceptez nos <terms>conditions d’utilisation</terms>.",
     "welcomeSubtitle": "La configuration prend moins d'une minute."
   },
@@ -1938,6 +1939,7 @@
     "fieldInputType": "Type de saisie",
     "fieldLabel": "Libellé",
     "fieldLabelPlaceholder": "ex. Nom complet",
+    "fieldOptions": "Options",
     "fieldOptionsPlaceholder": "Saisissez une option et appuyez sur Entrée",
     "fieldUpdateFailed": "Impossible de mettre à jour les champs",
     "fields": "Champs",
@@ -2443,6 +2445,7 @@
       "noFirstDocument": "Aucun document à prévisualiser.",
       "noPropertiesFound": "Aucune propriété trouvée",
       "optionsHelp": "Définis les valeurs parmi lesquelles l'IA peut choisir.",
+      "optionsLabel": "Options",
       "previewEmpty": "L'IA n'a renvoyé aucune valeur.",
       "previewMockNotice": "Aperçu factice — backend non connecté.",
       "previewOnFirst": "Aperçu sur {document}",

@@ -1592,6 +1592,7 @@
     "stepDesktop": "Desktop",
     "stepJurisdiction": "Jurisdiktion",
     "stepOrganization": "Team",
+    "stepTeam": "Einladen",
     "termsNotice": "Mit dem Fortfahren stimmen Sie unseren <terms>Nutzungsbedingungen</terms> zu.",
     "welcomeSubtitle": "Die Einrichtung dauert weniger als eine Minute."
   },
@@ -1938,6 +1939,7 @@
     "fieldInputType": "Eingabetyp",
     "fieldLabel": "Bezeichnung",
     "fieldLabelPlaceholder": "z. B. Vollständiger Name",
+    "fieldOptions": "Optionen",
     "fieldOptionsPlaceholder": "Option eingeben und Enter drücken",
     "fieldUpdateFailed": "Felder konnten nicht aktualisiert werden",
     "fields": "Felder",
@@ -2443,6 +2445,7 @@
       "noFirstDocument": "Noch keine Dokumente für die Vorschau.",
       "noPropertiesFound": "Keine Eigenschaften gefunden",
       "optionsHelp": "Lege die Werte fest, aus denen die KI wählen darf.",
+      "optionsLabel": "Optionen",
       "previewEmpty": "Die KI hat keinen Wert zurückgegeben.",
       "previewMockNotice": "Mock-Vorschau — Backend noch nicht angebunden.",
       "previewOnFirst": "Vorschau für {document}",

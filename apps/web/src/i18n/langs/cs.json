@@ -245,7 +245,7 @@
     "analysis": {
       "categories": {
         "facts": "Skutkový stav",
-        "holding": "Výrok",
+        "holding": "Právní věta",
         "procedural-history": "Procesní historie",
         "reasoning": "Uvažování"
       }
@@ -1592,6 +1592,7 @@
     "stepDesktop": "Aplikace",
     "stepJurisdiction": "Jurisdikce",
     "stepOrganization": "Tým",
+    "stepTeam": "Pozvánky",
     "termsNotice": "Pokračováním souhlasíte s <terms>Podmínkami služby</terms>.",
     "welcomeSubtitle": "Nastavení zabere necelou minutu."
   },
@@ -1938,6 +1939,7 @@
     "fieldInputType": "Typ vstupu",
     "fieldLabel": "Popisek",
     "fieldLabelPlaceholder": "např. Celé jméno",
+    "fieldOptions": "Možnosti",
     "fieldOptionsPlaceholder": "Zadejte možnost a stiskněte Enter",
     "fieldUpdateFailed": "Aktualizace polí se nezdařila",
     "fields": "Pole",
@@ -2443,6 +2445,7 @@
       "noFirstDocument": "Zatím žádné dokumenty pro náhled.",
       "noPropertiesFound": "Nebyly nalezeny žádné vlastnosti",
       "optionsHelp": "Zadej hodnoty, ze kterých může AI vybírat.",
+      "optionsLabel": "Možnosti",
       "previewEmpty": "AI nevrátila žádnou hodnotu.",
       "previewMockNotice": "Falešný náhled — backend ještě není napojený.",
       "previewOnFirst": "Náhled na: {document}",

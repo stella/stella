@@ -17,7 +17,7 @@ export const OnboardingProgress = ({
     t("onboarding.stepJurisdiction"),
     t("onboarding.stepCatalogue"),
     t("onboarding.stepAi"),
-    t("common.invite"),
+    t("onboarding.stepTeam"),
     t("onboarding.stepDesktop"),
   ];
 

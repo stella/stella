@@ -245,7 +245,7 @@
     "analysis": {
       "categories": {
         "facts": "Skutkový stav",
-        "holding": "Výrok",
+        "holding": "Právna veta",
         "procedural-history": "Procesná história",
         "reasoning": "Uvažovanie"
       }
@@ -1592,6 +1592,7 @@
     "stepDesktop": "Aplikácia",
     "stepJurisdiction": "Jurisdikcia",
     "stepOrganization": "Tím",
+    "stepTeam": "Pozvánky",
     "termsNotice": "Pokračovaním súhlasíte s <terms>Podmienkami služby</terms>.",
     "welcomeSubtitle": "Nastavenie zaberie necelú minútu."
   },
@@ -1938,6 +1939,7 @@
     "fieldInputType": "Typ vstupu",
     "fieldLabel": "Popisok",
     "fieldLabelPlaceholder": "napr. Celé meno",
+    "fieldOptions": "Možnosti",
     "fieldOptionsPlaceholder": "Zadajte možnosť a stlačte Enter",
     "fieldUpdateFailed": "Aktualizácia polí sa nepodarila",
     "fields": "Polia",
@@ -2443,6 +2445,7 @@
       "noFirstDocument": "Zatiaľ žiadne dokumenty pre náhľad.",
       "noPropertiesFound": "Neboli nájdené žiadne vlastnosti",
       "optionsHelp": "Zadaj hodnoty, z ktorých si AI môže vybrať.",
+      "optionsLabel": "Možnosti",
       "previewEmpty": "AI nevrátila žiadnu hodnotu.",
       "previewMockNotice": "Falošný náhľad — backend ešte nie je napojený.",
       "previewOnFirst": "Náhľad na: {document}",
