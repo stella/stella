@@ -1596,6 +1596,15 @@
             "location": "apps/web/src/routes/_protected.workspaces/-components/pdf-viewer-controls.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/active-filter-chips.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/client-filter-popover.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/team-filter-popover.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/index.tsx#1"
           },
           {
@@ -1666,6 +1675,9 @@
           },
           {
             "location": "packages/folio/src/components/CommentsSidebar.tsx#19"
+          },
+          {
+            "location": "packages/folio/src/components/ContentControlWidgetsOverlay.tsx#17"
           },
           {
             "location": "packages/folio/src/components/DocumentOutline.tsx#15"
@@ -1996,6 +2008,9 @@
           },
           {
             "location": "apps/api/src/lib/workflow/ai-prompts.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/stella-tools.ts#2"
           },
           {
             "location": "apps/collab/src/env.ts#2"
@@ -3168,6 +3183,15 @@
             "location": "apps/web/src/routes/_protected.workspaces/-components/pdf-viewer-controls.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/active-filter-chips.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/client-filter-popover.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/team-filter-popover.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/index.tsx#1"
           },
           {
@@ -3238,6 +3262,9 @@
           },
           {
             "location": "packages/folio/src/components/CommentsSidebar.tsx#19"
+          },
+          {
+            "location": "packages/folio/src/components/ContentControlWidgetsOverlay.tsx#17"
           },
           {
             "location": "packages/folio/src/components/DocumentOutline.tsx#15"
@@ -5639,6 +5666,15 @@
             "location": "apps/web/src/routes/_protected.workspaces/-components/pdf-viewer-controls.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/active-filter-chips.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/client-filter-popover.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/team-filter-popover.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/index.tsx#1"
           },
           {
@@ -5709,6 +5745,9 @@
           },
           {
             "location": "packages/folio/src/components/CommentsSidebar.tsx#19"
+          },
+          {
+            "location": "packages/folio/src/components/ContentControlWidgetsOverlay.tsx#17"
           },
           {
             "location": "packages/folio/src/components/DocumentOutline.tsx#15"
@@ -6180,6 +6219,9 @@
             "location": "apps/web/src/routes/_protected.settings/account.profile.tsx#2"
           },
           {
+            "location": "packages/folio/src/components/ContentControlWidgetsOverlay.tsx#18"
+          },
+          {
             "location": "packages/folio/src/components/TextContextMenu.tsx#9"
           },
           {
@@ -6510,6 +6552,9 @@
           },
           {
             "location": "apps/api/src/mcp/server-core.ts#10"
+          },
+          {
+            "location": "apps/api/src/mcp/stella-tools.ts#1"
           },
           {
             "location": "apps/api/src/mcp/tool-types.ts#4"
@@ -7829,6 +7874,15 @@
             "location": "apps/web/src/routes/_protected.workspaces/-components/pdf-viewer-controls.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/active-filter-chips.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/client-filter-popover.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/team-filter-popover.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/index.tsx#1"
           },
           {
@@ -7899,6 +7953,9 @@
           },
           {
             "location": "packages/folio/src/components/CommentsSidebar.tsx#19"
+          },
+          {
+            "location": "packages/folio/src/components/ContentControlWidgetsOverlay.tsx#17"
           },
           {
             "location": "packages/folio/src/components/DocumentOutline.tsx#15"
@@ -8650,7 +8707,7 @@
       "version": "0.0.6"
     },
     {
-      "bom-ref": "pkg:npm/@stll/anonymize-wasm@1.4.5",
+      "bom-ref": "pkg:npm/@stll/anonymize-wasm@1.4.7",
       "description": "PII detection and anonymization for browsers via WebAssembly. Same API as @stll/anonymize.",
       "evidence": {
         "identity": [
@@ -8682,6 +8739,9 @@
           },
           {
             "location": "apps/api/src/mcp/anonymization.ts#8"
+          },
+          {
+            "location": "apps/api/src/mcp/anonymization.ts#9"
           },
           {
             "location": "apps/web/src/components/inspector/anonymize-pdf.ts#1"
@@ -8731,13 +8791,13 @@
           "value": "node_modules/@stll/anonymize-wasm/package.json"
         }
       ],
-      "purl": "pkg:npm/%40stll/anonymize-wasm@1.4.5",
+      "purl": "pkg:npm/%40stll/anonymize-wasm@1.4.7",
       "scope": "required",
       "tags": [
         "api"
       ],
       "type": "library",
-      "version": "1.4.5"
+      "version": "1.4.7"
     },
     {
       "bom-ref": "pkg:npm/@stll/api@0.0.0",
@@ -9225,10 +9285,13 @@
             "location": "apps/api/src/handlers/mcp-connectors/catalog-metadata.ts#7"
           },
           {
-            "location": "apps/api/src/handlers/organization-settings/update-practice-jurisdictions.ts#4"
+            "location": "apps/api/src/handlers/organization-settings/practice-jurisdictions.ts#1"
           },
           {
             "location": "apps/api/src/lib/business-registries/dispatch.ts#114"
+          },
+          {
+            "location": "apps/api/src/mcp/stella-tools.ts#4"
           },
           {
             "location": "apps/web/src/lib/country-centroids.ts#1"
@@ -9781,6 +9844,9 @@
             "location": "apps/api/src/lib/member-roles.ts#1"
           },
           {
+            "location": "apps/api/src/mcp/stella-tools.ts#5"
+          },
+          {
             "location": "apps/web/src/hooks/use-permissions.ts#3"
           },
           {
@@ -10330,6 +10396,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#20"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/lead-section.tsx#13"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet.tsx#21"
           },
           {
@@ -10433,6 +10502,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/overview-view.tsx#27"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-components/team-avatars.tsx#7"
           },
           {
             "location": "apps/web/src/routes/auth/organization.tsx#10"
@@ -10744,6 +10816,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#38"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/lead-section.tsx#5"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet.tsx#8"
           },
           {
@@ -10847,6 +10922,18 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/-components/pdf-viewer-controls.tsx#15"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/client-filter-popover.tsx#6"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/date-filter-popover.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/items-filter-popover.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/team-filter-popover.tsx#6"
           },
           {
             "location": "apps/web/src/routes/auth/-components/inbox-quick-jump.tsx#3"
@@ -11146,6 +11233,18 @@
             "location": "apps/web/src/routes/_protected.workspaces/-components/pdf-viewer-controls.tsx#16"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/client-filter-popover.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/date-filter-popover.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/items-filter-popover.tsx#6"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/team-filter-popover.tsx#8"
+          },
+          {
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#157"
           },
           {
@@ -11443,6 +11542,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#55"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/lead-section.tsx#14"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet.tsx#22"
           },
           {
@@ -11521,10 +11623,28 @@
             "location": "apps/web/src/routes/_protected.workspaces/-components/matter-card.tsx#13"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/-components/matters-table.tsx#15"
+            "location": "apps/web/src/routes/_protected.workspaces/-components/matters-table.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/-components/matters-toolbar.tsx#26"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-components/team-avatars.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/active-filter-chips.tsx#7"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/client-filter-popover.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/column-filter-button.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/date-filter-popover.tsx#6"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/team-filter-popover.tsx#9"
           },
           {
             "location": "apps/web/src/routes/auth/accept-invitation.$invitationId.tsx#21"
@@ -11644,7 +11764,7 @@
             "location": "packages/ui/src/components/skeleton.tsx#1"
           },
           {
-            "location": "packages/ui/src/components/table.tsx#3"
+            "location": "packages/ui/src/components/table.tsx#5"
           },
           {
             "location": "packages/ui/src/components/tabs.tsx#5"
@@ -11878,6 +11998,15 @@
             "location": "apps/web/src/routes/_protected.workspaces/-components/matters-toolbar.tsx#16"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/client-filter-popover.tsx#7"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/items-filter-popover.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/team-filter-popover.tsx#7"
+          },
+          {
             "location": "apps/web/src/routes/auth/index.tsx#12"
           },
           {
@@ -11963,6 +12092,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/field-value-select.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/lead-section.tsx#12"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/members-section.tsx#26"
@@ -12112,6 +12244,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-metadata.tsx#10"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/column-filter-button.tsx#8"
+          },
+          {
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#143"
           },
           {
@@ -12229,6 +12364,9 @@
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#127"
           },
           {
+            "location": "packages/folio/src/components/ContentControlWidgetsOverlay.tsx#24"
+          },
+          {
             "location": "packages/folio/src/components/DocxEditor.tsx#49"
           },
           {
@@ -12275,6 +12413,9 @@
           },
           {
             "location": "apps/web/src/components/date-picker-popover.tsx#4"
+          },
+          {
+            "location": "packages/folio/src/components/ContentControlWidgetsOverlay.tsx#23"
           },
           {
             "location": "apps/web/src/components/inspector/external-reference-panel.tsx#32"
@@ -12631,7 +12772,7 @@
             "location": "apps/web/src/routes/_protected.settings/organization.members.tsx#35"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/-components/matters-table.tsx#14"
+            "location": "apps/web/src/routes/_protected.workspaces/-components/matters-table.tsx#15"
           },
           {
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#179"
@@ -13847,6 +13988,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#15"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/lead-section.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet.tsx#3"
@@ -16614,6 +16758,15 @@
             "location": "apps/web/src/routes/_protected.workspaces/-components/pdf-viewer-controls.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/active-filter-chips.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/client-filter-popover.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/team-filter-popover.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/index.tsx#1"
           },
           {
@@ -16684,6 +16837,9 @@
           },
           {
             "location": "packages/folio/src/components/CommentsSidebar.tsx#19"
+          },
+          {
+            "location": "packages/folio/src/components/ContentControlWidgetsOverlay.tsx#17"
           },
           {
             "location": "packages/folio/src/components/DocumentOutline.tsx#15"
@@ -18610,6 +18766,9 @@
           },
           {
             "location": "packages/folio/scripts/profile-editor.ts#2"
+          },
+          {
+            "location": "packages/folio/src/core/content-controls/errors.ts#7"
           },
           {
             "location": "packages/folio/src/core/docx/parser.ts#21"
@@ -22021,6 +22180,9 @@
             "location": "packages/docx-utils/src/zip.ts#1"
           },
           {
+            "location": "packages/folio/scripts/build-corpus-fixtures.ts#17"
+          },
+          {
             "location": "packages/folio/src/core/docx/rezip.ts#33"
           },
           {
@@ -22488,6 +22650,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#16"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/lead-section.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet.tsx#5"
           },
           {
@@ -22641,6 +22806,24 @@
             "location": "apps/web/src/routes/_protected.workspaces/-components/pdf-viewer-controls.tsx#12"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/active-filter-chips.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/client-filter-popover.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/column-filter-button.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/date-filter-popover.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/items-filter-popover.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/team-filter-popover.tsx#3"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/index.tsx#6"
           },
           {
@@ -22729,6 +22912,9 @@
           },
           {
             "location": "packages/ui/src/components/sheet.tsx#4"
+          },
+          {
+            "location": "packages/ui/src/components/table.tsx#3"
           },
           {
             "location": "packages/ui/src/components/toast.tsx#14"
@@ -23137,6 +23323,57 @@
       "version": "1.8.2"
     },
     {
+      "bom-ref": "pkg:npm/prosemirror-gapcursor@1.4.0",
+      "description": "ProseMirror plugin for cursors at normally impossible-to-reach positions",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/prosemirror-gapcursor/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/prosemirror-gapcursor/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "packages/folio/src/core/prosemirror/extensions/features/GapCursorExtension.ts#15"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "git://github.com/prosemirror/prosemirror-gapcursor.git"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "prosemirror-gapcursor",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/prosemirror-gapcursor/package.json"
+        }
+      ],
+      "purl": "pkg:npm/prosemirror-gapcursor@1.4.0",
+      "scope": "required",
+      "type": "library",
+      "version": "1.4.0"
+    },
+    {
       "bom-ref": "pkg:npm/prosemirror-history@1.5.0",
       "description": "Undo history for ProseMirror",
       "evidence": {
@@ -23300,6 +23537,12 @@
             "location": "packages/folio/src/core/prosemirror/commands/comments.ts#7"
           },
           {
+            "location": "packages/folio/src/core/prosemirror/commands/contentControls.ts#12"
+          },
+          {
+            "location": "packages/folio/src/core/prosemirror/commands/contentControlsBlockFill.ts#12"
+          },
+          {
             "location": "packages/folio/src/core/prosemirror/commands/formatting.ts#9"
           },
           {
@@ -23441,6 +23684,12 @@
             "location": "packages/folio/src/core/prosemirror/commands/comments.ts#8"
           },
           {
+            "location": "packages/folio/src/core/prosemirror/commands/contentControls.ts#13"
+          },
+          {
+            "location": "packages/folio/src/core/prosemirror/commands/contentControlsBlockFill.ts#13"
+          },
+          {
             "location": "packages/folio/src/core/prosemirror/commands/formatting.ts#10"
           },
           {
@@ -23523,6 +23772,9 @@
           },
           {
             "location": "packages/folio/src/core/prosemirror/plugins/anonymizationDecorations.ts#22"
+          },
+          {
+            "location": "packages/folio/src/core/prosemirror/plugins/contentControlWidgets.ts#16"
           },
           {
             "location": "packages/folio/src/core/prosemirror/plugins/documentStyles.ts#18"
@@ -23769,6 +24021,9 @@
             "location": "packages/folio/src/core/prosemirror/plugins/aiSuggestionDecorations.ts#16"
           },
           {
+            "location": "packages/folio/src/core/prosemirror/plugins/contentControlWidgets.ts#17"
+          },
+          {
             "location": "packages/folio/src/core/prosemirror/plugins/selectionTracker.ts#13"
           },
           {
@@ -23784,13 +24039,16 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#25"
           },
           {
+            "location": "packages/folio/src/components/ContentControlWidgetsOverlay.tsx#20"
+          },
+          {
             "location": "packages/folio/src/components/DocxEditor.tsx#36"
           },
           {
             "location": "packages/folio/src/components/HiddenHeaderFooterPMs.tsx#37"
           },
           {
-            "location": "packages/folio/src/components/HiddenHeaderFooterPMs.tsx#53"
+            "location": "packages/folio/src/components/HiddenHeaderFooterPMs.tsx#52"
           },
           {
             "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#32"
@@ -23811,7 +24069,7 @@
             "location": "packages/folio/src/paged-editor/PagedEditor.tsx#32"
           },
           {
-            "location": "packages/folio/src/components/HiddenHeaderFooterPMs.tsx#53"
+            "location": "packages/folio/src/components/HiddenHeaderFooterPMs.tsx#52"
           },
           {
             "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#35"
@@ -24027,6 +24285,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.profile.tsx#2"
+          },
+          {
+            "location": "packages/folio/src/components/ContentControlWidgetsOverlay.tsx#18"
           },
           {
             "location": "packages/folio/src/components/TextContextMenu.tsx#9"
@@ -25092,6 +25353,15 @@
             "location": "apps/web/src/routes/_protected.workspaces/-components/pdf-viewer-controls.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/active-filter-chips.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/client-filter-popover.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/team-filter-popover.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/index.tsx#1"
           },
           {
@@ -25162,6 +25432,9 @@
           },
           {
             "location": "packages/folio/src/components/CommentsSidebar.tsx#19"
+          },
+          {
+            "location": "packages/folio/src/components/ContentControlWidgetsOverlay.tsx#17"
           },
           {
             "location": "packages/folio/src/components/DocumentOutline.tsx#15"
@@ -25891,6 +26164,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-upload-version.ts#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/-hooks/use-column-labels.ts#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/-hooks/use-sort-labels.ts#1"
           },
           {
@@ -26377,6 +26653,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#17"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/lead-section.tsx#3"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet.tsx#6"
           },
           {
@@ -26515,6 +26794,27 @@
             "location": "apps/web/src/routes/_protected.workspaces/-components/pdf-viewer-controls.tsx#13"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/-components/team-avatars.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/active-filter-chips.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/client-filter-popover.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/column-filter-button.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/date-filter-popover.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/items-filter-popover.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/team-filter-popover.tsx#4"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/index.tsx#7"
           },
           {
@@ -26585,6 +26885,9 @@
           },
           {
             "location": "packages/folio/src/components/CommentsSidebar.tsx#22"
+          },
+          {
+            "location": "packages/folio/src/components/ContentControlWidgetsOverlay.tsx#21"
           },
           {
             "location": "packages/folio/src/components/DocxEditor.tsx#37"
@@ -26885,6 +27188,9 @@
           },
           {
             "location": "apps/api/src/lib/workflow/ai-prompts.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/stella-tools.ts#2"
           },
           {
             "location": "apps/collab/src/env.ts#2"
@@ -27334,6 +27640,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/-components/matters-toolbar.tsx#13"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/active-filter-chips.tsx#5"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/index.tsx#8"
           },
           {
@@ -27416,6 +27725,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/-components/matters-toolbar.tsx#13"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/-filters/active-filter-chips.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/index.tsx#8"

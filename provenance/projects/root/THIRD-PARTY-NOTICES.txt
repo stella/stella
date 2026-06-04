@@ -51,7 +51,7 @@ Project: root
 - @sinclair/typebox 0.34.49 — MIT
 - @stll/anonymize-chat 0.0.0 — Apache-2.0
 - @stll/anonymize-data 0.0.6 — MIT
-- @stll/anonymize-wasm 1.4.5 — MIT
+- @stll/anonymize-wasm 1.4.7 — MIT
 - @stll/api 0.0.0 — Apache-2.0
 - @stll/boe 0.1.0 — Apache-2.0
 - @stll/business-registries 0.1.0 — Apache-2.0
@@ -135,6 +135,7 @@ Project: root
 - posthog-node 5.35.2 — MIT
 - prosemirror-commands 1.7.1 — MIT
 - prosemirror-dropcursor 1.8.2 — MIT
+- prosemirror-gapcursor 1.4.0 — MIT
 - prosemirror-history 1.5.0 — MIT
 - prosemirror-keymap 1.2.3 — MIT
 - prosemirror-model 1.25.7 — MIT
