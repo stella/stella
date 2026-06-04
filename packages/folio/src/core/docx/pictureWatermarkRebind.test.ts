@@ -193,4 +193,109 @@ describe("picture watermark relationship rebinding (eigenpal #684)", () => {
     });
     expect(result).toBeNull();
   });
+
+  test("rebinds a sibling header whose rId resolves to a different image", async () => {
+    // header2 already has rId "rIdImg" pointing at its own logo. The propagated
+    // watermark also carries "rIdImg" (header1's), which means the watermark
+    // image — not header2's logo. The rebind must point header2 at the
+    // watermark media, not skip because the id happens to resolve locally.
+    const zip = new JSZip();
+    zip.file(
+      "[Content_Types].xml",
+      `${XML}
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Default Extension="png" ContentType="image/png"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>
+  <Override PartName="/word/header2.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>
+</Types>`,
+    );
+    zip.file(
+      "_rels/.rels",
+      `${XML}
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="${RELATIONSHIP_TYPES.officeDocument}" Target="word/document.xml"/>
+</Relationships>`,
+    );
+    zip.file(
+      "word/_rels/document.xml.rels",
+      `${XML}
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId10" Type="${RELATIONSHIP_TYPES.header}" Target="header1.xml"/>
+  <Relationship Id="rId11" Type="${RELATIONSHIP_TYPES.header}" Target="header2.xml"/>
+</Relationships>`,
+    );
+    zip.file(
+      "word/document.xml",
+      `${XML}
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body><w:p><w:r><w:t>x</w:t></w:r></w:p>
+    <w:sectPr>
+      <w:headerReference w:type="default" r:id="rId10"/>
+      <w:headerReference w:type="even" r:id="rId11"/>
+    </w:sectPr>
+  </w:body>
+</w:document>`,
+    );
+    zip.file(
+      "word/header1.xml",
+      `${XML}
+<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:p><w:r><w:pict><v:shape id="WordPictureWatermark1" type="#_x0000_t75" style="position:absolute;width:300pt;height:400pt"><v:imagedata r:id="rIdImg" o:title=""/></v:shape></w:pict></w:r></w:p>
+</w:hdr>`,
+    );
+    zip.file(
+      "word/_rels/header1.xml.rels",
+      `${XML}
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rIdImg" Type="${RELATIONSHIP_TYPES.image}" Target="media/watermark.png"/>
+</Relationships>`,
+    );
+    zip.file(
+      "word/header2.xml",
+      `${XML}
+<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:t>even</w:t></w:r></w:p></w:hdr>`,
+    );
+    // header2 already uses rIdImg for a DIFFERENT image (its own logo).
+    zip.file(
+      "word/_rels/header2.xml.rels",
+      `${XML}
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rIdImg" Type="${RELATIONSHIP_TYPES.image}" Target="media/logo.png"/>
+</Relationships>`,
+    );
+    zip.file("word/media/watermark.png", ONE_PIXEL_PNG_BASE64, {
+      base64: true,
+    });
+    zip.file("word/media/logo.png", ONE_PIXEL_PNG_BASE64, { base64: true });
+    zip.file(
+      "word/styles.xml",
+      `${XML}
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"></w:styles>`,
+    );
+    const original = await zip.generateAsync({ type: "arraybuffer" });
+
+    const doc = await parseDocx(original, { preloadFonts: false });
+    const out = await repackDocx(
+      setDocumentWatermark(doc, getDocumentWatermark(doc)),
+      {
+        updateModifiedDate: false,
+      },
+    );
+    expect((await validateDocx(out)).valid).toBe(true);
+
+    const outZip = await JSZip.loadAsync(out);
+    const header2Xml = await outZip.file("word/header2.xml")!.async("text");
+    const usedRId = /<v:imagedata[^>]*\br:id="([^"]+)"/u.exec(header2Xml)?.[1];
+    expect(usedRId).toBeDefined();
+    const header2Rels = await outZip
+      .file("word/_rels/header2.xml.rels")!
+      .async("text");
+    // The watermark in header2 must resolve to the watermark image, not the logo.
+    expect(header2Rels).toMatch(
+      new RegExp(`Id="${usedRId}"[^>]*Target="media/watermark.png"`, "u"),
+    );
+  });
 });

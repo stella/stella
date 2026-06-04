@@ -1368,15 +1368,18 @@ async function rebindWatermarkRelIds(
 
   const changedPaths = new Set<string>();
   for (const { watermark, relsPath } of pending) {
-    const relsXml = relsXmlByPath.get(relsPath) ?? EMPTY_RELS_XML;
-    const localRels = parseRelationships(relsXml);
-    const local = localRels.get(watermark.imageRId);
-    if (local?.type === RELATIONSHIP_TYPES.image && local.target) {
-      continue; // Already resolves in this header's own rels.
-    }
     const target = resolveImageTarget(watermark.imageRId);
     if (!target) {
       continue; // Orphaned rId with no embedded media anywhere — cannot invent.
+    }
+    const relsXml = relsXmlByPath.get(relsPath) ?? EMPTY_RELS_XML;
+    const localRels = parseRelationships(relsXml);
+    const local = localRels.get(watermark.imageRId);
+    if (local?.type === RELATIONSHIP_TYPES.image && local.target === target) {
+      // Already resolves to the canonical watermark media. (A local rId that
+      // resolves to a *different* image — header rIds repeat across parts — must
+      // still be rebound, or the header would render its own unrelated image.)
+      continue;
     }
 
     let resolvedRId: string | undefined;

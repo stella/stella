@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { RELATIONSHIP_TYPES } from "../docx/relsParser";
 import type { Document, HeaderFooter, Watermark } from "../types/document";
 import {
   ensureWatermarkHeaderCoverage,
@@ -263,5 +264,82 @@ describe("ensureWatermarkHeaderCoverage", () => {
         (ref) => ref.type === "first",
       ),
     ).toEqual([{ type: "first", rId: "rId2" }]);
+  });
+
+  test("covers an earlier section with no default header when a later section defines one", () => {
+    // Word cannot inherit the later section's default header backward, so the
+    // first section's normal pages need their own coverage default header.
+    const doc: Document = {
+      package: {
+        document: {
+          content: [{ type: "paragraph", content: [], sectionProperties: {} }],
+          finalSectionProperties: {
+            headerReferences: [{ type: "default", rId: "rId1" }],
+          },
+        },
+        headers: new Map([["rId1", { ...emptyHeader(), watermark }]]),
+      },
+    };
+
+    const next = ensureWatermarkHeaderCoverage(doc, watermark);
+    const block = next.package.document.content[0];
+    const defaultRef =
+      block?.type === "paragraph"
+        ? block.sectionProperties?.headerReferences?.find(
+            (ref) => ref.type === "default",
+          )
+        : undefined;
+    expect(defaultRef).toBeDefined();
+    expect(
+      defaultRef && next.package.headers?.get(defaultRef.rId)?.watermark?.kind,
+    ).toBe("text");
+    // The later section keeps its own default header.
+    expect(
+      next.package.document.finalSectionProperties?.headerReferences,
+    ).toEqual([{ type: "default", rId: "rId1" }]);
+  });
+
+  test("mints a coverage rId that does not collide with an existing relationship", () => {
+    const doc: Document = {
+      package: {
+        relationships: new Map([
+          [
+            "rId1",
+            {
+              id: "rId1",
+              type: RELATIONSHIP_TYPES.header,
+              target: "header1.xml",
+            },
+          ],
+          // A producer that already used the would-be coverage id for an image.
+          [
+            "rId_wm_first",
+            {
+              id: "rId_wm_first",
+              type: RELATIONSHIP_TYPES.image,
+              target: "media/logo.png",
+            },
+          ],
+        ]),
+        document: {
+          content: [],
+          finalSectionProperties: {
+            titlePg: true,
+            headerReferences: [{ type: "default", rId: "rId1" }],
+          },
+        },
+        headers: new Map([["rId1", { ...emptyHeader(), watermark }]]),
+      },
+    };
+
+    const next = ensureWatermarkHeaderCoverage(doc, watermark);
+    const firstRef =
+      next.package.document.finalSectionProperties?.headerReferences?.find(
+        (ref) => ref.type === "first",
+      );
+    expect(firstRef).toBeDefined();
+    // Did not reuse the taken id, and the minted id resolves to a new header.
+    expect(firstRef?.rId).not.toBe("rId_wm_first");
+    expect(firstRef && next.package.headers?.has(firstRef.rId)).toBe(true);
   });
 });

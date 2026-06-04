@@ -88,16 +88,6 @@ export function setDocumentWatermark(
   return ensureWatermarkHeaderCoverage(withExisting, watermark);
 }
 
-// Synthetic rIds for coverage-created header parts. They are valid NCNames, so
-// they serialize as section `<w:headerReference r:id>` values directly; the
-// rezip materialization pass promotes them to real parts + relationships +
-// [Content_Types] entries on save.
-const COVERAGE_RID: Record<HeaderFooterType, string> = {
-  default: "rId_wm_default",
-  first: "rId_wm_first",
-  even: "rId_wm_even",
-};
-
 /**
  * Ensure the watermark shows on every page it should, even when the header
  * parts a section needs are missing:
@@ -109,11 +99,11 @@ const COVERAGE_RID: Record<HeaderFooterType, string> = {
  * - When `w:evenAndOddHeaders` is on but a section has no even header, one is
  *   created (so even pages are covered).
  *
- * A typed header is only created when no instance of that type exists anywhere
- * in the document, so Word's section-to-section header inheritance — and the
- * watermark already written to those inherited headers — is preserved. Created
- * headers use synthetic rIds that the save pipeline materializes into real
- * parts.
+ * A typed header is only created for a section that cannot inherit one of that
+ * type from itself or a preceding section (Word inherits forward only), so
+ * existing headers — and the watermark already written to them — are preserved.
+ * Created headers use freshly minted rIds that the save pipeline materializes
+ * into real parts.
  */
 export function ensureWatermarkHeaderCoverage(
   doc: Document,
@@ -122,7 +112,6 @@ export function ensureWatermarkHeaderCoverage(
   const body = doc.package.document;
   const headers = new Map<string, HeaderFooter>(doc.package.headers);
   const evenOddMode = doc.package.settings?.evenAndOddHeaders === true;
-  const noHeadersAtAll = headers.size === 0;
 
   const resolvesType = (
     props: SectionProperties,
@@ -131,6 +120,32 @@ export function ensureWatermarkHeaderCoverage(
     props.headerReferences?.some(
       (ref) => ref.type === type && headers.has(ref.rId),
     ) ?? false;
+
+  // Mint a coverage rId that collides with no existing relationship, header, or
+  // footer id (a fixed id could clash with a producer-chosen one and corrupt
+  // the saved package). Memoized per type so all sections needing the same type
+  // share one coverage header.
+  const usedRIds = new Set<string>([
+    ...(doc.package.relationships?.keys() ?? []),
+    ...headers.keys(),
+    ...(doc.package.footers?.keys() ?? []),
+  ]);
+  const coverageRIdByType = new Map<HeaderFooterType, string>();
+  const coverageRId = (type: HeaderFooterType): string => {
+    const existing = coverageRIdByType.get(type);
+    if (existing !== undefined) {
+      return existing;
+    }
+    let candidate = `rId_wm_${type}`;
+    let suffix = 1;
+    while (usedRIds.has(candidate)) {
+      suffix += 1;
+      candidate = `rId_wm_${type}_${suffix}`;
+    }
+    usedRIds.add(candidate);
+    coverageRIdByType.set(type, candidate);
+    return candidate;
+  };
 
   // Sections in document order: mid-body section breaks (paragraph sectPr)
   // first, then the body's final sectPr. `blockIndex` ties a slot back to the
@@ -163,15 +178,18 @@ export function ensureWatermarkHeaderCoverage(
         continue;
       }
       if (sectionNeedsType(slot.props) && !inherited) {
-        additions[index]?.push({ type, rId: COVERAGE_RID[type] });
+        additions[index]?.push({ type, rId: coverageRId(type) });
         inherited = true;
       }
     }
   };
 
-  if (noHeadersAtAll) {
-    planType("default", () => true);
-  }
+  // Normal pages (default), cover pages (first under titlePg), and even pages
+  // (under evenAndOddHeaders) each get coverage where a section cannot inherit
+  // that header type forward. Default runs unconditionally so a section that
+  // precedes the first existing default header — or a header-less document — is
+  // still covered.
+  planType("default", () => true);
   planType("first", (props) => props.titlePg === true);
   if (evenOddMode) {
     planType("even", () => true);
@@ -181,10 +199,14 @@ export function ensureWatermarkHeaderCoverage(
     return doc;
   }
 
-  // Materialize only the coverage headers actually referenced.
-  for (const type of new Set(additions.flat().map((ref) => ref.type))) {
-    if (!headers.has(COVERAGE_RID[type])) {
-      headers.set(COVERAGE_RID[type], {
+  // Materialize the coverage headers actually referenced (one per minted rId).
+  const coverageTypeByRId = new Map<string, HeaderFooterType>();
+  for (const ref of additions.flat()) {
+    coverageTypeByRId.set(ref.rId, ref.type);
+  }
+  for (const [rId, type] of coverageTypeByRId) {
+    if (!headers.has(rId)) {
+      headers.set(rId, {
         type: "header",
         hdrFtrType: type,
         content: [],
