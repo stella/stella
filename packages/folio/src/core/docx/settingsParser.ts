@@ -11,7 +11,12 @@
  */
 
 import type { DocumentSettings } from "../types/document";
-import { findChild, getAttribute, parseXmlDocument } from "./xmlParser";
+import {
+  findChild,
+  getAttribute,
+  parseBooleanElement,
+  parseXmlDocument,
+} from "./xmlParser";
 import type { XmlElement } from "./xmlParser";
 
 export type { DocumentSettings };
@@ -28,9 +33,18 @@ const MAX_TAB_STOP_TWIPS = 31_680;
 
 export function parseSettings(xml: string | null): DocumentSettings {
   const root = xml ? (parseXmlDocument(xml) as XmlElement | null) : null;
-  return {
+  const settings: DocumentSettings = {
     defaultTabStop: parseDefaultTabStop(root),
   };
+  // `w:evenAndOddHeaders` lives in settings.xml, not sectPr. Only record the
+  // "on" state; absence means odd/even share one header.
+  const evenAndOddHeaders = root
+    ? findChild(root, "w", "evenAndOddHeaders")
+    : null;
+  if (evenAndOddHeaders && parseBooleanElement(evenAndOddHeaders)) {
+    settings.evenAndOddHeaders = true;
+  }
+  return settings;
 }
 
 function parseDefaultTabStop(root: XmlElement | null): number {
