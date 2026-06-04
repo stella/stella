@@ -200,8 +200,11 @@ export const emptyBaseline = (): CheckBaseline => ({
 
 const HAS_LETTER = /\p{L}/u;
 
-// Strings that are legitimately identical across languages (brand, format,
-// standard, and acronym tokens). Extend sparingly.
+// Strings that are universally identical across languages: acronyms, format /
+// standard tokens, and proper-noun product names. Extend sparingly — a common
+// word that has real translations (e.g. "Free" -> "Gratis") does NOT belong
+// here; scope intentional brand labels (e.g. DeepL "Free"/"Pro" tiers) per-key
+// via the baseline instead.
 const ALLOWED_IDENTICAL = new Set<string>([
   "OK",
   "API",
@@ -222,8 +225,6 @@ const ALLOWED_IDENTICAL = new Set<string>([
   "S3",
   "DeepL",
   "stella",
-  "Pro",
-  "Free",
   "GitHub",
   "Google",
   "Microsoft",

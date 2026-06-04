@@ -540,6 +540,32 @@
       "pt-BR",
       "sk"
     ],
+    "translate.settings.tierFree": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "translate.settings.tierPro": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
     "workspaces.files.defaultPropertyName": [
       "fr"
     ],
