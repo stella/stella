@@ -12,6 +12,7 @@ export const AUDIT_ACTION = {
   UPDATE: "update",
   DELETE: "delete",
   DOWNLOAD: "download",
+  EXECUTE: "execute",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTION)[keyof typeof AUDIT_ACTION];
@@ -35,6 +36,7 @@ export const AUDIT_RESOURCE_TYPE = {
   FIELD: "field",
   FOLIO_COLLAB_SESSION: "folio_collab_session",
   INVOICE: "invoice",
+  MCP_GATEWAY_TOOL: "mcp_gateway_tool",
   ORGANIZATION_SETTINGS: "organization_settings",
   PROMPT_SHORTCUT: "prompt_shortcut",
   PROPERTY: "property",

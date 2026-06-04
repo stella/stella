@@ -23,6 +23,7 @@ import { redactMcpOAuthRegistrationResponse } from "@/api/handlers/mcp-connector
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { refreshCachedMcpToolsForConnection } from "@/api/lib/mcp-upstream/connections";
 
 const routeParams = t.Object({
   slug: t.String({ minLength: 1, maxLength: 80 }),
@@ -57,7 +58,7 @@ const connectMcpConnector = createSafeRootHandler(
     }
 
     if (connector.authType === "none") {
-      yield* Result.await(
+      const saved = yield* Result.await(
         // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
         safeDb((tx) => {
           // audit: skip — per-user MCP connection toggle; SOC 2 relevance lives at the connector-config layer (audited in create-connector / delete-connector).
@@ -85,13 +86,26 @@ const connectMcpConnector = createSafeRootHandler(
                 refreshTokenIv: null,
                 staticTokenEncrypted: null,
                 staticTokenIv: null,
+                cachedTools: null,
+                cachedToolsRefreshedAt: null,
                 resourceUrl: null,
                 authorizationServerUrl: null,
                 updatedAt: new Date(),
               },
-            });
+            })
+            .returning({ id: mcpUserConnections.id });
         }),
       );
+
+      const connection = saved.at(0);
+      if (connection) {
+        await refreshCachedMcpToolsForConnection({
+          connectionId: connection.id,
+          organizationId: session.activeOrganizationId,
+          safeDb,
+          userId: user.id,
+        });
+      }
 
       return Result.ok<ConnectMcpConnectorResult>({
         type: "none",

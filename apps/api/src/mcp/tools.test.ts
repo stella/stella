@@ -177,8 +177,12 @@ void mock.module("@/api/handlers/workspaces/workspace-contacts-read", () => ({
   readWorkspaceContactsHandler: mock(),
 }));
 
-const { getMcpToolDefinition, handleMcpToolCall, listMcpTools } =
-  await import("@/api/mcp/tools");
+const {
+  getMcpToolDefinition,
+  getMcpToolScopeHint,
+  handleMcpToolCall,
+  listMcpTools,
+} = await import("@/api/mcp/tools");
 
 const parseToolPayload = (
   result: Awaited<ReturnType<typeof handleMcpToolCall>>,
@@ -375,8 +379,10 @@ describe("OpenAI-compatible MCP tools", () => {
     mock.restore();
   });
 
-  test("advertises the exact search compatibility input schema", () => {
-    const searchTool = listMcpTools().find((tool) => tool.name === "search");
+  test("advertises the exact search compatibility input schema", async () => {
+    const searchTool = (await listMcpTools(createContext())).find(
+      (tool) => tool.name === "search",
+    );
 
     expect(searchTool?.inputSchema).toEqual({
       type: "object",
@@ -391,8 +397,8 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
-  test("advertises the case-law search tool with filter support", () => {
-    const searchTool = listMcpTools().find(
+  test("advertises the case-law search tool with filter support", async () => {
+    const searchTool = (await listMcpTools(createContext())).find(
       (tool) => tool.name === "search_case_law",
     );
 
@@ -455,27 +461,76 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
-  test("requires search scope for the case-law search tool", () => {
-    expect(getMcpToolDefinition("search_case_law")?.scope).toBe(
-      "stella:search",
-    );
-  });
-
-  test("lists shared case-law tools in anonymized mode", () => {
-    expect(listMcpTools("anonymized").map((tool) => tool.name)).toEqual([
-      "search",
-      "fetch",
-      "search_case_law",
-      "read_case_law_decision",
-    ]);
-  });
-
-  test("remaps case-law tools to anonymized scopes", () => {
-    expect(getMcpToolDefinition("search_case_law", "anonymized")?.scope).toBe(
-      "stella:search_anonymized",
-    );
+  test("requires search scope for the case-law search tool", async () => {
     expect(
-      getMcpToolDefinition("read_case_law_decision", "anonymized")?.scope,
+      (await getMcpToolDefinition("search_case_law", createContext()))?.scope,
+    ).toBe("stella:search");
+  });
+
+  test("hints dynamic tool scopes from names before resolving definitions", () => {
+    expect(getMcpToolScopeHint("search_case_law")).toBe("stella:search");
+    expect(getMcpToolScopeHint("mcp__registry__lookup")).toBe(
+      "stella:external_mcps",
+    );
+    expect(getMcpToolScopeHint("skill__research")).toBe("stella:skills");
+    expect(getMcpToolScopeHint("mcp__registry__lookup", "anonymized")).toBe(
+      undefined,
+    );
+  });
+
+  test("does not resolve dynamic definitions for unprefixed unknown tools", async () => {
+    const scopedDb = createScopedDb();
+
+    expect(
+      await getMcpToolDefinition(
+        "not_a_tool",
+        createContext({ scopedDb }),
+        "default",
+      ),
+    ).toBe(undefined);
+    expect(scopedDb).not.toHaveBeenCalled();
+  });
+
+  test("filters listed tools by granted scopes", async () => {
+    const scopedDb = createScopedDb();
+    const toolNames = (
+      await listMcpTools(createContext({ scopedDb }), "default", [
+        "stella:read",
+      ])
+    ).map((tool) => tool.name);
+
+    expect(toolNames).toContain("list_matters");
+    expect(toolNames).not.toContain("search_case_law");
+    expect(toolNames).not.toContain("set_practice_jurisdictions");
+    expect(scopedDb).not.toHaveBeenCalled();
+  });
+
+  test("lists shared case-law tools in anonymized mode", async () => {
+    expect(
+      (await listMcpTools(createContext(), "anonymized")).map(
+        (tool) => tool.name,
+      ),
+    ).toEqual(["search", "fetch", "search_case_law", "read_case_law_decision"]);
+  });
+
+  test("remaps case-law tools to anonymized scopes", async () => {
+    expect(
+      (
+        await getMcpToolDefinition(
+          "search_case_law",
+          createContext(),
+          "anonymized",
+        )
+      )?.scope,
+    ).toBe("stella:search_anonymized");
+    expect(
+      (
+        await getMcpToolDefinition(
+          "read_case_law_decision",
+          createContext(),
+          "anonymized",
+        )
+      )?.scope,
     ).toBe("stella:read_anonymized");
   });
 

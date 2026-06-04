@@ -837,12 +837,14 @@
     "missingJurisdictions": "Your stella organization hasn't set up its practice jurisdictions yet. Some jurisdiction-aware tools will be unavailable until you complete setup.",
     "organization": "Organizácia",
     "permissions": "Toto umožní aplikácii:",
+    "scopeExternalMcps": "Používať vaše pripojené externé nástroje",
     "scopeOnboarding": "Configure your organization's practice jurisdictions",
     "scopeProfile": "Pristupovať k informáciám o vašom profile",
     "scopeRead": "Čítať vaše dokumenty, spisy a kontakty",
     "scopeReadAnonymized": "Čítať anonymizované verzie vašich dokumentov a spisov",
     "scopeSearch": "Vyhľadávať vo vašich dokumentoch a spisoch",
     "scopeSearchAnonymized": "Vyhľadávať v anonymizovaných verziách vašich dokumentov a spisov",
+    "scopeSkills": "Používať vaše uložené zručnosti stella",
     "title": "Autorizácia prístupu"
   },
   "contacts": {

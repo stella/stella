@@ -1,3 +1,7 @@
+import type {
+  CallToolResult,
+  Tool as McpTool,
+} from "@modelcontextprotocol/sdk/types.js";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import {
@@ -5,13 +9,18 @@ import {
   McpOrganizationAccessError,
 } from "@/api/mcp/errors";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
+import type { ToolScope } from "@/api/mcp/tool-types";
+import { readTestJson } from "@/api/tests/helpers/test-tool-set";
 
 const authenticateMcpRequestMock = mock();
 const captureErrorMock = mock();
 const resolveMcpSessionContextMock = mock();
 const getMcpToolDefinitionMock = mock();
+const getMcpToolScopeHintMock = mock(
+  (_toolName: string): ToolScope | undefined => undefined,
+);
 const handleMcpToolCallMock = mock();
-const listMcpToolsMock = mock(() => []);
+const listMcpToolsMock = mock(async (): Promise<McpTool[]> => []);
 
 const handleMcpHttpRequest = createMcpHttpRequestHandler({
   authenticateMcpRequest: authenticateMcpRequestMock,
@@ -19,19 +28,41 @@ const handleMcpHttpRequest = createMcpHttpRequestHandler({
     captureErrorMock(error, context);
   },
   getMcpToolDefinition: getMcpToolDefinitionMock,
+  getMcpToolScopeHint: getMcpToolScopeHintMock,
   handleMcpToolCall: handleMcpToolCallMock,
   listMcpTools: listMcpToolsMock,
   resolveMcpSessionContext: resolveMcpSessionContextMock,
 });
+
+const createMcpRequest = (body: unknown) =>
+  new Request("http://localhost/mcp", {
+    body: JSON.stringify(body),
+    headers: {
+      accept: "application/json, text/event-stream",
+      authorization: "Bearer token",
+      "content-type": "application/json",
+    },
+    method: "POST",
+  });
+
+type McpJsonResponse<TResult> = {
+  id: number;
+  jsonrpc: "2.0";
+  result: TResult;
+};
 
 describe("handleMcpHttpRequest", () => {
   beforeEach(() => {
     authenticateMcpRequestMock.mockReset();
     captureErrorMock.mockReset();
     getMcpToolDefinitionMock.mockReset();
+    getMcpToolScopeHintMock.mockReset();
+    getMcpToolScopeHintMock.mockImplementation(
+      (_toolName: string): ToolScope | undefined => undefined,
+    );
     handleMcpToolCallMock.mockReset();
     listMcpToolsMock.mockReset();
-    listMcpToolsMock.mockImplementation(() => []);
+    listMcpToolsMock.mockImplementation(async () => []);
     resolveMcpSessionContextMock.mockReset();
   });
 
@@ -113,6 +144,82 @@ describe("handleMcpHttpRequest", () => {
       mode: "default",
       phase: "transport",
       source: "mcp",
+    });
+  });
+
+  test("passes granted scopes to tool listing", async () => {
+    const context = { type: "mcp-context" };
+    authenticateMcpRequestMock.mockResolvedValue({
+      organizationId: "org_1",
+      scopes: ["stella:read"],
+      userId: "user_1",
+    });
+    resolveMcpSessionContextMock.mockResolvedValue(context);
+    listMcpToolsMock.mockResolvedValue([
+      {
+        description: "List matters",
+        inputSchema: { type: "object", properties: {} },
+        name: "list_matters",
+      },
+    ]);
+
+    const response = await handleMcpHttpRequest(
+      createMcpRequest({
+        id: 1,
+        jsonrpc: "2.0",
+        method: "tools/list",
+      }),
+    );
+    const body =
+      await readTestJson<McpJsonResponse<{ tools: McpTool[] }>>(response);
+
+    expect(response.status).toBe(200);
+    expect(listMcpToolsMock).toHaveBeenCalledWith(context, "default", [
+      "stella:read",
+    ]);
+    expect(body.result.tools.map((tool) => tool.name)).toEqual([
+      "list_matters",
+    ]);
+  });
+
+  test("rejects tool calls missing the required scope before dynamic resolution", async () => {
+    const context = { type: "mcp-context" };
+    authenticateMcpRequestMock.mockResolvedValue({
+      organizationId: "org_1",
+      scopes: ["stella:read"],
+      userId: "user_1",
+    });
+    resolveMcpSessionContextMock.mockResolvedValue(context);
+    getMcpToolScopeHintMock.mockReturnValue("stella:skills");
+
+    const response = await handleMcpHttpRequest(
+      createMcpRequest({
+        id: 1,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: {
+          arguments: {},
+          name: "skill__research",
+        },
+      }),
+    );
+    const body = await readTestJson<McpJsonResponse<CallToolResult>>(response);
+
+    expect(response.status).toBe(200);
+    expect(getMcpToolScopeHintMock).toHaveBeenCalledWith(
+      "skill__research",
+      "default",
+    );
+    expect(getMcpToolDefinitionMock).not.toHaveBeenCalled();
+    expect(handleMcpToolCallMock).not.toHaveBeenCalled();
+    expect(body.result).toEqual({
+      content: [
+        {
+          text: "Insufficient permissions. Required scope: stella:skills",
+          type: "text",
+        },
+      ],
+      isError: true,
     });
   });
 });

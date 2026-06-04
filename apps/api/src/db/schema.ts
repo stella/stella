@@ -3045,6 +3045,15 @@ export const mcpOAuthClients = p.pgTable(
   ],
 );
 
+export type CachedMcpToolDefinition = {
+  description?: string;
+  exposedName: string;
+  inputSchema: { type: "object"; [key: string]: unknown };
+  rawName: string;
+  readOnlyHint?: boolean;
+  title?: string;
+};
+
 export const mcpUserConnections = p.pgTable(
   "mcp_user_connections",
   {
@@ -3070,6 +3079,9 @@ export const mcpUserConnections = p.pgTable(
     resourceUrl: p.text("resource_url"),
     authorizationServerUrl: p.text("authorization_server_url"),
     expiresAt: p.timestamp("expires_at"),
+    cachedTools:
+      jsonb("cached_tools").$type<CachedMcpToolDefinition[] | null>(),
+    cachedToolsRefreshedAt: p.timestamp("cached_tools_refreshed_at"),
     status: p
       .text("status", { enum: MCP_CONNECTION_STATUSES })
       .notNull()

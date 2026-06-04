@@ -47,6 +47,8 @@ describe("OAuth authorization server metadata", () => {
     expect(body.scopes_supported).toContain("email");
     expect(body.scopes_supported).toContain("stella:read");
     expect(body.scopes_supported).toContain("stella:search");
+    expect(body.scopes_supported).toContain("stella:skills");
+    expect(body.scopes_supported).toContain("stella:external_mcps");
     expect(body.scopes_supported).toContain("stella:read_anonymized");
     expect(body.scopes_supported).toContain("stella:search_anonymized");
     expect(body.token_endpoint_auth_methods_supported).toContain("none");

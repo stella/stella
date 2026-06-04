@@ -7,6 +7,7 @@ import { encryptMcpSecret } from "@/api/handlers/mcp-connectors/crypto";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { refreshCachedMcpToolsForConnection } from "@/api/lib/mcp-upstream/connections";
 
 const requestBody = t.Object({
   connectorSlug: t.String({ minLength: 1, maxLength: 80 }),
@@ -99,6 +100,8 @@ const createMcpConnection = createSafeRootHandler(
               scope: null,
               staticTokenEncrypted: encrypted.ciphertext,
               staticTokenIv: encrypted.iv,
+              cachedTools: null,
+              cachedToolsRefreshedAt: null,
               status: "connected",
               enabled: true,
               tokenType: "Bearer",
@@ -121,6 +124,13 @@ const createMcpConnection = createSafeRootHandler(
         }),
       );
     }
+
+    await refreshCachedMcpToolsForConnection({
+      connectionId: connection.id,
+      organizationId: session.activeOrganizationId,
+      safeDb,
+      userId: user.id,
+    });
 
     return Result.ok(connection);
   },
