@@ -57,17 +57,6 @@ export function setDocumentWatermark(
       "setDocumentWatermark: document has no header parts; add a default header before setting a watermark",
     );
   }
-  // Picture watermarks reference `imageRId` which is scoped to each
-  // header part's own `word/_rels/header*.xml.rels`. Copying the same
-  // rId into every header would produce `<v:imagedata r:id="..."/>`
-  // entries with no matching relationship in other headers, breaking
-  // the saved DOCX. Cross-header rId cloning lives in the package
-  // layer; this headless API stays single-header for the picture case.
-  if (watermark?.kind === "picture" && headers.size > 1) {
-    throw new TypeError(
-      "setDocumentWatermark: picture watermarks across multiple header parts require per-header relationship cloning; apply via the package layer or use a text watermark",
-    );
-  }
   const nextHeaders = new Map<string, HeaderFooter>();
   for (const [rId, header] of headers) {
     const next: HeaderFooter = { ...header };
@@ -77,7 +66,12 @@ export function setDocumentWatermark(
       // so the serializer doesn't emit at a phantom slot.
       delete next.watermarkBlockIndex;
     } else {
-      next.watermark = watermark;
+      // Give every header its own watermark object. A picture watermark's
+      // `imageRId` is local to each header part's own rels; the package-layer
+      // rebind pass at save time rewrites each copy's `imageRId` to a rId that
+      // resolves in that header's `word/_rels/header*.xml.rels`. Sharing one
+      // object would let that rebind leak across headers.
+      next.watermark = { ...watermark };
     }
     // Clear the captured raw VML so the serializer regenerates from the
     // model. Without this, an untouched raw payload would shadow the

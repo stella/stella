@@ -17,6 +17,7 @@ import {
   updateCoreProperties,
   collectHeaderFooterUpdates,
   hasUnmaterializedHeaderFooter,
+  hasModelDrivenPictureWatermark,
   COMMENTS_CONTENT_TYPE,
 } from "./rezip";
 import { DEFAULT_SELECTIVE_SAVE_MAX_BYTES } from "./selectiveSaveFlags";
@@ -137,6 +138,11 @@ export async function attemptSelectiveSave(
   // A header/footer created in memory needs a new part + relationship +
   // [Content_Types] Override, which only the full repack path writes.
   if (hasUnmaterializedHeaderFooter(doc)) {
+    return null;
+  }
+  // A picture watermark spanning multiple headers needs per-header image
+  // relationship rebinding, which only the full repack path performs.
+  if (hasModelDrivenPictureWatermark(doc)) {
     return null;
   }
   if (!validateFolioDocumentModel(doc).valid) {

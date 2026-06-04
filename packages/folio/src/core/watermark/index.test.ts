@@ -86,17 +86,23 @@ describe("setDocumentWatermark", () => {
     ).toThrow(TypeError);
   });
 
-  test("throws when applying a picture watermark across multiple header parts", () => {
-    // imageRId is scoped to word/_rels/header*.xml.rels — copying it
-    // across headers without per-rels cloning would produce dangling
-    // r:id references on save.
+  test("applies a picture watermark to every header as a distinct object", () => {
+    // imageRId is scoped to word/_rels/header*.xml.rels. The setter clones
+    // the watermark per header; the save-time rebind pass (rezip) then gives
+    // each header a relationship to the shared media in its own rels.
     const doc = makeDoc({
       rId1: emptyHeader(),
       rId2: emptyHeader(),
     });
-    expect(() =>
-      setDocumentWatermark(doc, { kind: "picture", imageRId: "rId99" }),
-    ).toThrow(/picture watermarks across multiple header parts/u);
+    const next = setDocumentWatermark(doc, {
+      kind: "picture",
+      imageRId: "rId99",
+    });
+    const first = next.package.headers?.get("rId1")?.watermark;
+    const second = next.package.headers?.get("rId2")?.watermark;
+    expect(first?.kind).toBe("picture");
+    expect(second?.kind).toBe("picture");
+    expect(first).not.toBe(second);
   });
 
   test("allows a picture watermark on a single-header document", () => {

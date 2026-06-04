@@ -38,9 +38,13 @@ import type {
   Image,
   Hyperlink,
 } from "../types/content";
-import type { Document } from "../types/document";
+import type { Document, Watermark } from "../types/document";
 import { assertValidFolioDocumentModel } from "./modelValidation";
-import { RELATIONSHIP_TYPES, resolveRelativePath } from "./relsParser";
+import {
+  parseRelationships,
+  RELATIONSHIP_TYPES,
+  resolveRelativePath,
+} from "./relsParser";
 import { serializeComments } from "./serializer/commentSerializer";
 import { serializeDocument } from "./serializer/documentSerializer";
 import { serializeHeaderFooter } from "./serializer/headerFooterSerializer";
@@ -650,6 +654,11 @@ export async function repackDocx(
     compressionLevel,
   );
 
+  // Rebind picture-watermark image rIds so each header references the image in
+  // its own rels (after materialization, so coverage-created header parts have
+  // a relationship target to anchor against).
+  await rebindWatermarkRelIds(exportDocument, newZip, compressionLevel);
+
   // Serialize and update modified headers/footers
   serializeHeadersFootersToZip(exportDocument, newZip, compressionLevel);
 
@@ -767,6 +776,11 @@ export async function repackDocxFromRaw(
     newZip,
     compressionLevel,
   );
+
+  // Rebind picture-watermark image rIds so each header references the image in
+  // its own rels (after materialization, so coverage-created header parts have
+  // a relationship target to anchor against).
+  await rebindWatermarkRelIds(exportDocument, newZip, compressionLevel);
 
   // Serialize and update modified headers/footers
   serializeHeadersFootersToZip(exportDocument, newZip, compressionLevel);
@@ -1260,6 +1274,134 @@ async function materializeNewHeaderFooterParts(
         compression: "DEFLATE",
         compressionOptions,
       });
+    }
+  }
+}
+
+const headerRelsPathFor = (target: string): string => {
+  const filename = headerFooterFilename(target).replace(/^word\//u, "");
+  return `word/_rels/${filename}.rels`;
+};
+
+/**
+ * A picture watermark is "model-driven" when its raw VML was cleared (so the
+ * serializer synthesizes `<v:imagedata r:id>` from `imageRId`). When more than
+ * one header part is involved, each needs a relationship to the image in its
+ * own rels — work only the full-repack path does — so the selective fast-path
+ * must bail when this returns true.
+ */
+export function hasModelDrivenPictureWatermark(doc: Document): boolean {
+  const headers = doc.package.headers;
+  if (!headers || headers.size <= 1) {
+    return false;
+  }
+  for (const hf of headers.values()) {
+    if (hf.watermark?.kind === "picture" && !hf.rawWatermarkXml) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Rebind each picture watermark's `imageRId` so it resolves in its own header
+ * part's rels. A watermark propagated across headers (or onto a header created
+ * by coverage) carries the source header's rId, which is meaningless in a
+ * sibling header's `word/_rels/header*.xml.rels`. Per header: keep the rId if
+ * it already resolves; otherwise reuse an existing relationship to the same
+ * media target, or mint a new one. The media bytes are shared (preserved from
+ * the source), so no new media part is written. Raw-replay watermarks are
+ * byte-exact and skipped.
+ */
+async function rebindWatermarkRelIds(
+  doc: Document,
+  zip: JSZip,
+  compressionLevel: number,
+): Promise<void> {
+  const rels = doc.package.relationships;
+  const headers = doc.package.headers;
+  if (!rels || !headers) {
+    return;
+  }
+
+  type PendingHeader = {
+    watermark: Extract<Watermark, { kind: "picture" }>;
+    relsPath: string;
+  };
+  const pending: PendingHeader[] = [];
+  for (const [rId, hf] of headers) {
+    const watermark = hf.watermark;
+    if (!watermark || watermark.kind !== "picture" || hf.rawWatermarkXml) {
+      continue;
+    }
+    const rel = rels.get(rId);
+    if (!rel?.target) {
+      continue;
+    }
+    pending.push({ watermark, relsPath: headerRelsPathFor(rel.target) });
+  }
+  if (pending.length === 0) {
+    return;
+  }
+
+  const relsXmlByPath = new Map<string, string>();
+  for (const { relsPath } of pending) {
+    if (!relsXmlByPath.has(relsPath)) {
+      relsXmlByPath.set(relsPath, await readRelsOrStub(zip, relsPath));
+    }
+  }
+
+  // The canonical media target for an imageRId: the source header is the one
+  // whose rels actually maps that rId to an image relationship.
+  const resolveImageTarget = (imageRId: string): string | undefined => {
+    for (const xml of relsXmlByPath.values()) {
+      const rel = parseRelationships(xml).get(imageRId);
+      if (rel?.type === RELATIONSHIP_TYPES.image && rel.target) {
+        return rel.target;
+      }
+    }
+    return undefined;
+  };
+
+  const changedPaths = new Set<string>();
+  for (const { watermark, relsPath } of pending) {
+    const relsXml = relsXmlByPath.get(relsPath) ?? EMPTY_RELS_XML;
+    const localRels = parseRelationships(relsXml);
+    const local = localRels.get(watermark.imageRId);
+    if (local?.type === RELATIONSHIP_TYPES.image && local.target) {
+      continue; // Already resolves in this header's own rels.
+    }
+    const target = resolveImageTarget(watermark.imageRId);
+    if (!target) {
+      continue; // Orphaned rId with no embedded media anywhere — cannot invent.
+    }
+
+    let resolvedRId: string | undefined;
+    for (const [id, rel] of localRels) {
+      if (rel.type === RELATIONSHIP_TYPES.image && rel.target === target) {
+        resolvedRId = id;
+        break;
+      }
+    }
+    if (!resolvedRId) {
+      resolvedRId = `rId${findMaxRId(relsXml) + 1}`;
+      relsXmlByPath.set(
+        relsPath,
+        relsXml.replace(
+          "</Relationships>",
+          `<Relationship Id="${resolvedRId}" Type="${RELATIONSHIP_TYPES.image}" Target="${escapeXml(target)}"/></Relationships>`,
+        ),
+      );
+      changedPaths.add(relsPath);
+    }
+    watermark.imageRId = resolvedRId;
+  }
+
+  const compressionOptions = { level: compressionLevel };
+  for (const path of changedPaths) {
+    const xml = relsXmlByPath.get(path);
+    if (xml) {
+      zip.file(path, xml, { compression: "DEFLATE", compressionOptions });
     }
   }
 }
