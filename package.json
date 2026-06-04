@@ -88,7 +88,7 @@
     "@better-auth/oauth-provider": "1.6.11",
     "@libpdf/core": "0.3.6",
     "@stll/anonymize-data": "0.0.6",
-    "@stll/anonymize-wasm": "1.4.5",
+    "@stll/anonymize-wasm": "1.4.7",
     "@t3-oss/env-core": "0.13.11",
     "@tailwindcss/postcss": "4.3.0",
     "@tailwindcss/vite": "4.3.0",
