@@ -437,21 +437,31 @@ export function serializeParagraphFormatting(
       parts.push(`<w:pStyle w:val="${escapeXml(formatting.styleId)}"/>`);
     }
 
-    // Keep next/lines/widow
-    if (formatting.keepNext) {
+    // Keep next/lines/widow. Emit `w:val="0"` on an explicit false so an
+    // inline override that disables an inherited (style) value survives
+    // round-trip; a bare element is true and absence means "inherit".
+    if (formatting.keepNext === true) {
       parts.push("<w:keepNext/>");
+    } else if (formatting.keepNext === false) {
+      parts.push('<w:keepNext w:val="0"/>');
     }
 
-    if (formatting.keepLines) {
+    if (formatting.keepLines === true) {
       parts.push("<w:keepLines/>");
+    } else if (formatting.keepLines === false) {
+      parts.push('<w:keepLines w:val="0"/>');
     }
 
-    if (formatting.contextualSpacing) {
+    if (formatting.contextualSpacing === true) {
       parts.push("<w:contextualSpacing/>");
+    } else if (formatting.contextualSpacing === false) {
+      parts.push('<w:contextualSpacing w:val="0"/>');
     }
 
-    if (formatting.pageBreakBefore) {
+    if (formatting.pageBreakBefore === true) {
       parts.push("<w:pageBreakBefore/>");
+    } else if (formatting.pageBreakBefore === false) {
+      parts.push('<w:pageBreakBefore w:val="0"/>');
     }
 
     // Frame properties
@@ -492,13 +502,17 @@ export function serializeParagraphFormatting(
     }
 
     // Suppress line numbers
-    if (formatting.suppressLineNumbers) {
+    if (formatting.suppressLineNumbers === true) {
       parts.push("<w:suppressLineNumbers/>");
+    } else if (formatting.suppressLineNumbers === false) {
+      parts.push('<w:suppressLineNumbers w:val="0"/>');
     }
 
     // Suppress auto hyphens
-    if (formatting.suppressAutoHyphens) {
+    if (formatting.suppressAutoHyphens === true) {
       parts.push("<w:suppressAutoHyphens/>");
+    } else if (formatting.suppressAutoHyphens === false) {
+      parts.push('<w:suppressAutoHyphens w:val="0"/>');
     }
 
     // Spacing
@@ -514,8 +528,10 @@ export function serializeParagraphFormatting(
     }
 
     // Text direction (bidi)
-    if (formatting.bidi) {
+    if (formatting.bidi === true) {
       parts.push("<w:bidi/>");
+    } else if (formatting.bidi === false) {
+      parts.push('<w:bidi w:val="0"/>');
     }
 
     // Justification
