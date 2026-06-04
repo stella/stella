@@ -1,7 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
-import { isSorted, sortKeys, syncMessages } from "./i18n-check";
-import type { NestedMessages } from "./i18n-check";
+import {
+  buildCommonValueMap,
+  emptyBaseline,
+  findCommonDuplicates,
+  findUntranslated,
+  isSorted,
+  sortKeys,
+  syncMessages,
+} from "./i18n-check";
+import type { CheckBaseline, NestedMessages } from "./i18n-check";
 
 describe("syncMessages", () => {
   test("adds missing top-level keys", () => {
@@ -185,5 +193,90 @@ describe("isSorted", () => {
 
   test("returns true for single key", () => {
     expect(isSorted({ only: "one" })).toBe(true);
+  });
+});
+
+describe("findUntranslated", () => {
+  const en: NestedMessages = {
+    common: { greeting: "Hello", api: "API", count: "{n}", ok: "OK" },
+    auth: { signIn: "Sign in" },
+  };
+
+  test("flags a key whose value equals the English source", () => {
+    const target: NestedMessages = {
+      common: { greeting: "Hello", api: "API", count: "{n}", ok: "OK" },
+      auth: { signIn: "Přihlásit se" },
+    };
+    expect(findUntranslated(en, target, "cs", emptyBaseline())).toEqual([
+      "common.greeting",
+    ]);
+  });
+
+  test("skips trivially-identical values (brand tokens, placeholders, short)", () => {
+    const target: NestedMessages = {
+      common: { greeting: "Ahoj", api: "API", count: "{n}", ok: "OK" },
+      auth: { signIn: "Přihlásit se" },
+    };
+    // "API", "{n}", "OK" are identical to en but must not be flagged.
+    expect(findUntranslated(en, target, "cs", emptyBaseline())).toEqual([]);
+  });
+
+  test("skips keys grandfathered for that locale in the baseline", () => {
+    const target: NestedMessages = {
+      common: { greeting: "Hello", api: "API", count: "{n}", ok: "OK" },
+      auth: { signIn: "Přihlásit se" },
+    };
+    const baseline: CheckBaseline = {
+      identicalToSource: { "common.greeting": ["cs"] },
+      duplicatesCommon: [],
+    };
+    expect(findUntranslated(en, target, "cs", baseline)).toEqual([]);
+    // ...but still flagged for a locale NOT in the baseline list.
+    expect(findUntranslated(en, target, "de", baseline)).toEqual([
+      "common.greeting",
+    ]);
+  });
+});
+
+describe("findCommonDuplicates", () => {
+  const en: NestedMessages = {
+    common: { remove: "Remove", save: "Save" },
+    folio: { removeThing: "Remove", uniqueLabel: "Insert footnote" },
+    chat: { saveDraft: "Save" },
+  };
+
+  test("flags feature keys that duplicate a common.* value and suggests reuse", () => {
+    expect(findCommonDuplicates(en, emptyBaseline())).toEqual([
+      { key: "chat.saveDraft", reuse: "common.save" },
+      { key: "folio.removeThing", reuse: "common.remove" },
+    ]);
+  });
+
+  test("does not flag common.* keys themselves or non-duplicate feature keys", () => {
+    const result = findCommonDuplicates(en, emptyBaseline());
+    expect(result.some((o) => o.key.startsWith("common."))).toBe(false);
+    expect(result.some((o) => o.key === "folio.uniqueLabel")).toBe(false);
+  });
+
+  test("skips baseline-grandfathered duplicates", () => {
+    const baseline: CheckBaseline = {
+      identicalToSource: {},
+      duplicatesCommon: ["folio.removeThing"],
+    };
+    expect(findCommonDuplicates(en, baseline)).toEqual([
+      { key: "chat.saveDraft", reuse: "common.save" },
+    ]);
+  });
+});
+
+describe("buildCommonValueMap", () => {
+  test("maps each common value to its first common key, ignoring non-common", () => {
+    const map = buildCommonValueMap({
+      common: { a: "Remove", b: "Remove", c: "Save" },
+      other: { d: "Remove" },
+    });
+    expect(map.get("Remove")).toBe("common.a"); // first wins
+    expect(map.get("Save")).toBe("common.c");
+    expect(map.size).toBe(2);
   });
 });
