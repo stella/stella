@@ -604,17 +604,17 @@ function parseHeadersAndFooters(
         const watermark = header.watermark;
         if (watermark?.kind === "picture") {
           const imageRel = headerRels.get(watermark.imageRId);
-          // Only anchor embedded media. An external (linked) image's target is
-          // a URL, not a package path, so it must be left untouched.
-          if (
-            imageRel?.type === RELATIONSHIP_TYPES.image &&
-            imageRel.target &&
-            imageRel.targetMode !== "External"
-          ) {
-            watermark.imageTarget = resolveRelativePath(
-              headerRelsPath,
-              imageRel.target,
-            );
+          if (imageRel?.type === RELATIONSHIP_TYPES.image && imageRel.target) {
+            if (imageRel.targetMode === "External") {
+              // Linked image: anchor the URL as-is (not a package path).
+              watermark.imageTarget = imageRel.target;
+              watermark.imageTargetExternal = true;
+            } else {
+              watermark.imageTarget = resolveRelativePath(
+                headerRelsPath,
+                imageRel.target,
+              );
+            }
           }
         }
         headers.set(rId, header);

@@ -1522,12 +1522,16 @@ async function rebindWatermarkRelIds(
 
   const changedPaths = new Set<string>();
   for (const { watermark, relsPath, partPath } of pending) {
-    // Anchored at parse time (imageTarget, embedded media only); fall back to a
-    // scan, which also recovers an external (linked) source.
-    const canonical: CanonicalImage | undefined =
-      watermark.imageTarget === undefined
-        ? resolveCanonical(watermark.imageRId)
+    // Anchored at parse time (imageTarget, embedded or external); fall back to
+    // a scan only for watermarks built without a parsed source.
+    let canonical: CanonicalImage | undefined;
+    if (watermark.imageTarget !== undefined) {
+      canonical = watermark.imageTargetExternal
+        ? { mode: "external", url: watermark.imageTarget }
         : { mode: "internal", absolute: watermark.imageTarget };
+    } else {
+      canonical = resolveCanonical(watermark.imageRId);
+    }
     if (!canonical) {
       continue; // Orphaned rId with no embedded media anywhere — cannot invent.
     }

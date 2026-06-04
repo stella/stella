@@ -542,11 +542,12 @@ describe("picture watermark relationship rebinding (eigenpal #684)", () => {
     const original = await zip.generateAsync({ type: "arraybuffer" });
 
     const doc = await parseDocx(original, { preloadFonts: false });
-    // The external target must not be anchored as a package path.
+    // The external target is anchored as the URL, not a package path.
     const wm = getDocumentWatermark(doc);
     expect(wm?.kind).toBe("picture");
     if (wm?.kind === "picture") {
-      expect(wm.imageTarget).toBeUndefined();
+      expect(wm.imageTarget).toBe("https://example.com/wm.png");
+      expect(wm.imageTargetExternal).toBe(true);
     }
 
     const out = await repackDocx(setDocumentWatermark(doc, wm), {

@@ -1415,14 +1415,20 @@ export type PictureWatermark = {
   /** Relationship id of the image part in `word/_rels/header*.xml.rels`. */
   imageRId: string;
   /**
-   * Absolute package path of the media part the `imageRId` resolved to in the
-   * header it was parsed from (e.g. `word/media/image1.png`). Relationship ids
-   * are scoped per header part and commonly repeat, so propagating a watermark
-   * across headers rebinds against this stable, package-absolute target rather
-   * than the (ambiguous) source rId; each target header's relationship is
-   * written relative to its own part location.
+   * Stable identity of the image the `imageRId` resolved to in the header it
+   * was parsed from — an absolute package path for embedded media (e.g.
+   * `word/media/image1.png`) or the URL for a linked image (see
+   * {@link imageTargetExternal}). Relationship ids are scoped per header part
+   * and commonly repeat, so propagating a watermark across headers rebinds
+   * against this anchored target rather than the (ambiguous) source rId; each
+   * target header's relationship is written relative to its own part location.
    */
   imageTarget?: string;
+  /**
+   * When true, {@link imageTarget} is an external (linked) URL written back
+   * with `TargetMode="External"`, not an embedded package path.
+   */
+  imageTargetExternal?: boolean;
   /** Optional scale factor (1.0 = native, 0.5 = half-size). */
   scale?: number;
   /**
