@@ -1488,7 +1488,11 @@ async function rebindWatermarkRelIds(
     imageRId: string,
   ): string | undefined => {
     const rel = parseRelationships(relsXml).get(imageRId);
-    return rel?.type === RELATIONSHIP_TYPES.image && rel.target
+    // External (linked) images have a URL target, not a package path; leaving
+    // them unresolved here makes the rebind skip them so they stay intact.
+    return rel?.type === RELATIONSHIP_TYPES.image &&
+      rel.target &&
+      rel.targetMode !== "External"
       ? resolveRelativePath(relsPath, rel.target)
       : undefined;
   };

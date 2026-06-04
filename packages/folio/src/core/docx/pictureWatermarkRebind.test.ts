@@ -483,4 +483,85 @@ describe("picture watermark relationship rebinding (eigenpal #684)", () => {
     expect(header2Rels).toContain('Target="../media/watermark.png"');
     expect(header2Rels).not.toContain('Target="media/watermark.png"');
   });
+
+  test("leaves an external (linked) picture watermark relationship intact", async () => {
+    const zip = new JSZip();
+    zip.file(
+      "[Content_Types].xml",
+      `${XML}
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>
+</Types>`,
+    );
+    zip.file(
+      "_rels/.rels",
+      `${XML}
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="${RELATIONSHIP_TYPES.officeDocument}" Target="word/document.xml"/>
+</Relationships>`,
+    );
+    zip.file(
+      "word/_rels/document.xml.rels",
+      `${XML}
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId10" Type="${RELATIONSHIP_TYPES.header}" Target="header1.xml"/>
+</Relationships>`,
+    );
+    zip.file(
+      "word/document.xml",
+      `${XML}
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body><w:p><w:r><w:t>x</w:t></w:r></w:p>
+    <w:sectPr><w:headerReference w:type="default" r:id="rId10"/></w:sectPr>
+  </w:body>
+</w:document>`,
+    );
+    zip.file(
+      "word/header1.xml",
+      `${XML}
+<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:p><w:r><w:pict><v:shape id="WordPictureWatermark1" type="#_x0000_t75" style="position:absolute;width:300pt;height:400pt"><v:imagedata r:id="rIdImg" o:title=""/></v:shape></w:pict></w:r></w:p>
+</w:hdr>`,
+    );
+    // The watermark image is a LINKED (external) relationship — a URL target.
+    zip.file(
+      "word/_rels/header1.xml.rels",
+      `${XML}
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rIdImg" Type="${RELATIONSHIP_TYPES.image}" Target="https://example.com/wm.png" TargetMode="External"/>
+</Relationships>`,
+    );
+    zip.file(
+      "word/styles.xml",
+      `${XML}
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"></w:styles>`,
+    );
+    const original = await zip.generateAsync({ type: "arraybuffer" });
+
+    const doc = await parseDocx(original, { preloadFonts: false });
+    // The external target must not be anchored as a package path.
+    const wm = getDocumentWatermark(doc);
+    expect(wm?.kind).toBe("picture");
+    if (wm?.kind === "picture") {
+      expect(wm.imageTarget).toBeUndefined();
+    }
+
+    const out = await repackDocx(setDocumentWatermark(doc, wm), {
+      updateModifiedDate: false,
+    });
+    expect((await validateDocx(out)).valid).toBe(true);
+
+    const outZip = await JSZip.loadAsync(out);
+    const rels = await outZip
+      .file("word/_rels/header1.xml.rels")!
+      .async("text");
+    // The external relationship is preserved, not rewritten into a bogus
+    // internal "../https:/..." target.
+    expect(rels).toContain('Target="https://example.com/wm.png"');
+    expect(rels).toContain('TargetMode="External"');
+    expect(rels).not.toContain("../https");
+  });
 });
