@@ -68,7 +68,7 @@ export const ColumnFilterButton = ({
       <PopoverTrigger
         render={
           <button
-            aria-label={t("workspaces.filters.openFilter")}
+            aria-label={t("common.filter")}
             className={cn(
               "inline-flex size-4 cursor-pointer items-center justify-center rounded-sm opacity-0 transition-opacity",
               "group-hover/header:opacity-100 focus-visible:opacity-100",

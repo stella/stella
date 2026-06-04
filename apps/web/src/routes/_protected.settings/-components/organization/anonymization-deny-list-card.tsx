@@ -445,7 +445,7 @@ export const AnonymizationDenyListCard = () => {
                   pendingCanonical.trim().length === 0 ||
                   updateMutation.isPending
                 }
-                label={t("settings.organization.anonymization.addAction")}
+                label={t("common.add")}
               />
             </div>
             <div className="flex items-center gap-2">

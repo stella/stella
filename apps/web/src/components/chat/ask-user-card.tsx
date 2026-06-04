@@ -456,7 +456,7 @@ export const AskUserCard = ({
                 onClick={handleCancelEdit}
                 type="button"
               >
-                {t("chat.askUser.cancelEdit")}
+                {t("common.cancel")}
               </button>
             )}
           </div>

@@ -1112,7 +1112,7 @@ export function AppSidebar(props: AppSidebarProps) {
                   }}
                 >
                   <Settings2Icon />
-                  {t("settings.title")}
+                  {t("common.settings")}
                 </MenuItem>
                 <MenuSeparator />
                 <MenuSub>

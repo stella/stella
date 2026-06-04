@@ -119,7 +119,7 @@ export const AppBreadcrumbs = () => {
       ),
       [serializeKey(["/knowledge/case/$decisionId"])]: renderCaseLawBreadcrumb,
       [serializeKey(["/settings"])]: (
-        <BreadcrumbLink to="/settings">{t("settings.title")}</BreadcrumbLink>
+        <BreadcrumbLink to="/settings">{t("common.settings")}</BreadcrumbLink>
       ),
       [serializeKey(["/settings/account/profile"])]: (
         <BreadcrumbLink to="/settings/account/profile">
@@ -132,7 +132,7 @@ export const AppBreadcrumbs = () => {
         </BreadcrumbLink>
       ),
       [serializeKey(["/settings/organization"])]: (
-        <BreadcrumbItem>{t("settings.organization.title")}</BreadcrumbItem>
+        <BreadcrumbItem>{t("common.organization")}</BreadcrumbItem>
       ),
       [serializeKey(["/settings/organization/members"])]: (
         <BreadcrumbLink to="/settings/organization/members">

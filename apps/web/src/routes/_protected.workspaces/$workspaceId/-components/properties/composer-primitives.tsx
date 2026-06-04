@@ -58,7 +58,7 @@ export const useChipDefinitions = (): readonly ChipDefinition[] => {
     {
       type: "date",
       icon: CalendarIcon,
-      label: t("workspaces.properties.chipDate"),
+      label: t("common.date"),
     },
     {
       type: "single-select",

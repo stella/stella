@@ -93,7 +93,7 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
                 {chipLabel}
               </span>
               <Button
-                aria-label={t("chat.pastedText.remove")}
+                aria-label={t("common.remove")}
                 className="size-5 p-0"
                 onClick={() => props.deleteNode()}
                 size="icon-xs"

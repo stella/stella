@@ -241,7 +241,7 @@ function TimesheetsPage() {
           </Select>
 
           <Button onClick={goToToday} size="sm" variant="outline">
-            {t("billing.today")}
+            {t("common.today")}
           </Button>
           <div className="flex items-center">
             <Button

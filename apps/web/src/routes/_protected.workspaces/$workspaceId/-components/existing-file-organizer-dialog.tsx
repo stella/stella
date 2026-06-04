@@ -813,7 +813,7 @@ const FailureBanner = ({ disabled, onRetry }: FailureBannerProps) => {
         type="button"
         variant="outline"
       >
-        {t("workspaces.importOrganizer.retry")}
+        {t("common.retry")}
       </Button>
     </div>
   );

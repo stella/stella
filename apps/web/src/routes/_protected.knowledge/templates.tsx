@@ -754,9 +754,9 @@ const TemplateDetail = ({
           <Tabs defaultValue="fields">
             <TabsList variant="underline">
               <TabsTab value="fields">{t("templates.fields")}</TabsTab>
-              <TabsTab value="preview">{t("templates.preview")}</TabsTab>
+              <TabsTab value="preview">{t("common.preview")}</TabsTab>
               <TabsTab value="clauses">{t("common.clauses")}</TabsTab>
-              <TabsTab value="history">{t("templates.history")}</TabsTab>
+              <TabsTab value="history">{t("common.history")}</TabsTab>
             </TabsList>
 
             <TabsPanel value="fields">

@@ -167,7 +167,7 @@ export const CatalogueDetailPanel = ({
             type="button"
           >
             {installing && <LoaderIcon className="size-4 animate-spin" />}
-            {t("catalogue.add")}
+            {t("common.add")}
           </Button>
         )}
         {installed &&

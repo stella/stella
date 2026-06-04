@@ -336,7 +336,7 @@ const DetailContent = ({
         <TabsList variant="underline">
           <TabsTab value="body">{t("clauses.body")}</TabsTab>
           <TabsTab value="variants">{t("clauses.variants")}</TabsTab>
-          <TabsTab value="history">{t("clauses.history")}</TabsTab>
+          <TabsTab value="history">{t("common.history")}</TabsTab>
         </TabsList>
 
         <TabsPanel value="body">

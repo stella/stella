@@ -191,7 +191,7 @@ function ConsentPage() {
           {organizationName ? (
             <div className="flex flex-col gap-1">
               <p className="text-muted-foreground text-sm">
-                {t("consent.organization")}
+                {t("common.organization")}
               </p>
               <p className="text-sm font-medium">{organizationName}</p>
             </div>

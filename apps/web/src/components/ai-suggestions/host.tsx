@@ -1812,7 +1812,7 @@ function SuggestionCard(props: SuggestionCardProps) {
             disabled={suggestion.status === "stale"}
           >
             <CheckIcon aria-hidden="true" />
-            {t("docxReview.accept")}
+            {t("common.accept")}
           </Button>
           <Button
             type="button"

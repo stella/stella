@@ -153,7 +153,7 @@ export const TranslateDocumentDialog = ({
   return (
     <Dialog onOpenChange={setOpen} open={open}>
       <Tooltip
-        content={t("translate.tooltip")}
+        content={t("common.translate")}
         render={
           <DialogTrigger
             render={
@@ -161,7 +161,7 @@ export const TranslateDocumentDialog = ({
                 disabled={disabled}
                 size="icon-xs"
                 variant="ghost"
-                aria-label={t("translate.tooltip")}
+                aria-label={t("common.translate")}
               >
                 <LanguagesIcon className="size-3.5" />
               </Button>
@@ -234,7 +234,7 @@ export const TranslateDocumentDialog = ({
           >
             {isPending
               ? t("translate.dialog.translating")
-              : t("translate.dialog.translate")}
+              : t("common.translate")}
           </Button>
         </DialogFooter>
       </DialogPopup>

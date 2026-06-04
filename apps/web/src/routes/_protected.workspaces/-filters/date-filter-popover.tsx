@@ -110,7 +110,7 @@ const buildCustom = (
 const useDatePresetLabels = (): Record<DateFilterPreset, string> => {
   const t = useTranslations();
   return {
-    today: t("workspaces.filters.date.today"),
+    today: t("common.today"),
     thisWeek: t("workspaces.filters.date.thisWeek"),
     last7d: t("workspaces.filters.date.last7d"),
     last30d: t("workspaces.filters.date.last30d"),

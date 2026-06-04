@@ -435,7 +435,7 @@ export const FileTabPanel = ({
           variant="ghost"
         >
           <LockOpenIcon className="size-3.5" />
-          {t("folio.editFile")}
+          {t("common.edit")}
         </Button>
       );
     }

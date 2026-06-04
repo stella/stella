@@ -1055,7 +1055,7 @@ export const TemplateForm = ({
                 <EyeIcon />
                 {preview.kind === "loading"
                   ? t("templates.previewFillLoading")
-                  : t("templates.previewFill")}
+                  : t("common.preview")}
               </Button>
             )}
             <Button

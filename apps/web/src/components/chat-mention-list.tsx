@@ -44,7 +44,7 @@ const useCategoryLabel = () => {
       case "entity":
         return t("chat.mention.category.entities");
       case "workspace":
-        return t("chat.mention.category.matters");
+        return t("common.matters");
       case "decision":
         return t("common.caseLaw");
       default:
@@ -377,13 +377,13 @@ export const ChatMentionList = ({
 
           {drillState.kind === "none" && activeItems.length === 0 && (
             <div className="text-muted-foreground flex items-center justify-center p-2 text-center text-sm">
-              {t("chat.mention.noResults")}
+              {t("common.noResults")}
             </div>
           )}
 
           {drillState.kind === "loaded" && drillState.items.length === 0 && (
             <div className="text-muted-foreground flex items-center justify-center p-2 text-center text-sm">
-              {t("chat.mention.noResults")}
+              {t("common.noResults")}
             </div>
           )}
 

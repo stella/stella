@@ -209,7 +209,7 @@ function ProfilePageBody() {
 
       <section className="flex flex-col gap-2">
         <h2 className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
-          {t("settings.account.sessions")}
+          {t("common.sessions")}
         </h2>
         <SessionsCard />
       </section>
