@@ -47,7 +47,6 @@ import {
 } from "@/components/inspector/inspector-store";
 import type { InspectorTab } from "@/components/inspector/inspector-store";
 import { AIAvailabilityProvider } from "@/components/require-ai-key";
-import { DefaultPendingComponent } from "@/components/route-components";
 import { SelfhostUpdateBanner } from "@/components/selfhost-update-banner";
 import { ShortcutHintsOverlay } from "@/components/shortcut-hints-overlay";
 import {
@@ -163,7 +162,10 @@ export const Route = createFileRoute("/_protected")({
     };
   },
   component: ProtectedComponent,
-  pendingComponent: () => <DefaultPendingComponent className="h-dvh" />,
+  // This subtree is private and client-only. Rendering a loading
+  // shell in SSR gives no SEO value and currently trips React's
+  // streamed Suspense boundary path under Bun in CI.
+  pendingComponent: () => null,
 });
 
 function ProtectedComponent() {

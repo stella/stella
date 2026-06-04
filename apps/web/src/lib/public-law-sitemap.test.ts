@@ -461,6 +461,7 @@ describe("public law sitemap", () => {
     const source = await readSource("apps/web/src/routes/_protected.tsx");
 
     expect(source).toContain("ssr: false");
+    expect(source).toContain("pendingComponent: () => null");
   });
 
   test("public case-law list route preloads first page for SSR links", async () => {
