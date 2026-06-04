@@ -340,7 +340,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@stll/country-codes": "workspace:*",
-        "@stll/stdnum": "^1.0.0",
+        "@stll/stdnum": "^2.0.0",
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
@@ -1679,7 +1679,7 @@
 
     "@stll/skills": ["@stll/skills@workspace:packages/skills"],
 
-    "@stll/stdnum": ["@stll/stdnum@1.0.0", "", {}, "sha512-Hf3mCNqRyHWKl3PgwWgghJ45rw7sW6qMXZirUL+uah2qZpXKmhBlOrrToScgGYbq1OIDy5u3Il3PVFw4ppAf1A=="],
+    "@stll/stdnum": ["@stll/stdnum@2.0.0", "", {}, "sha512-lSfUL8XAU992sS6ZMJpBicplRKFtTLA8g7sTKxht8GSoRpxHkJb16GpexTERK2FzD4fQ2AK0wp8Npb4r71+pUw=="],
 
     "@stll/template-conditions": ["@stll/template-conditions@workspace:packages/template-conditions"],
 
@@ -3888,6 +3888,8 @@
     "@react-grab/cli/ignore": ["ignore@7.0.5", "", {}, "sha512-Hs59xBNfUIunMFgWAbGX5cq6893IbWg4KnrjbYwX3tx0ztorVgTDA6B2sxf8ejHJ4wz8BqGUMYlnzNBer5NvGg=="],
 
     "@selderee/plugin-htmlparser2/domhandler": ["domhandler@5.0.3", "", { "dependencies": { "domelementtype": "^2.3.0" } }, "sha512-cgwlv/1iFQiFnU96XXgROh8xTeetsnJiDsTc7TYCLFd9+/WNkIqPTxiM/8pSd8VIrhXGTf1Ny1q1hquVqDJB5w=="],
+
+    "@stll/anonymize-wasm/@stll/stdnum": ["@stll/stdnum@1.0.0", "", {}, "sha512-Hf3mCNqRyHWKl3PgwWgghJ45rw7sW6qMXZirUL+uah2qZpXKmhBlOrrToScgGYbq1OIDy5u3Il3PVFw4ppAf1A=="],
 
     "@tailwindcss/oxide-wasm32-wasi/@emnapi/core": ["@emnapi/core@1.9.1", "", { "dependencies": { "@emnapi/wasi-threads": "1.2.0", "tslib": "^2.4.0" }, "bundled": true }, "sha512-mukuNALVsoix/w1BJwFzwXBN/dHeejQtuVzcDsfOEsdpCumXb/E9j8w11h5S54tT1xhifGfbbSm/ICrObRb3KA=="],
 
