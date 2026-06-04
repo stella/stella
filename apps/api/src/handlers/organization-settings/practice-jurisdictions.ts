@@ -51,7 +51,7 @@ export const normalizePracticeJurisdictions = (
 
 type UpsertPracticeJurisdictionsOptions = {
   organizationId: SafeId<"organization">;
-  practiceJurisdictions: readonly PracticeJurisdiction[];
+  practiceJurisdictions: PracticeJurisdiction[];
   recordAuditEvent: AuditRecorder;
   tx: Transaction;
 };
