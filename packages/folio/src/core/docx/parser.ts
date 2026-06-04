@@ -597,6 +597,20 @@ function parseHeadersAndFooters(
           headerRels,
           media,
         );
+        // Anchor a picture watermark to the package-absolute media path so
+        // cross-header propagation can rebind it against a stable target (the
+        // per-header imageRId repeats across parts). Resolved here because this
+        // is where the header part's own rels path is known.
+        const watermark = header.watermark;
+        if (watermark?.kind === "picture") {
+          const imageRel = headerRels.get(watermark.imageRId);
+          if (imageRel?.type === RELATIONSHIP_TYPES.image && imageRel.target) {
+            watermark.imageTarget = resolveRelativePath(
+              headerRelsPath,
+              imageRel.target,
+            );
+          }
+        }
         headers.set(rId, header);
       }
     } else if (rel.type === RELATIONSHIP_TYPES.footer && rel.target) {

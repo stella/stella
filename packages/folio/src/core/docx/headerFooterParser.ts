@@ -39,7 +39,6 @@ import type {
 } from "../types/document";
 import { parseBlockContent } from "./blockContentParser";
 import type { NumberingMap } from "./numberingParser";
-import { RELATIONSHIP_TYPES } from "./relsParser";
 import type { StyleMap } from "./styleParser";
 import { parseWatermark } from "./watermarkParser";
 import { parseXml } from "./xmlParser";
@@ -130,15 +129,9 @@ export function parseHeader(
     result.watermark = watermarkResult.watermark;
     result.rawWatermarkXml = watermarkResult.rawParagraphXml;
     result.watermarkBlockIndex = watermarkResult.blockIndex;
-    // Anchor a picture watermark to its media target (resolved in this header's
-    // own rels) so cross-header propagation rebinds against a stable target
-    // instead of the per-header `imageRId`, which repeats across parts.
-    if (result.watermark.kind === "picture" && rels) {
-      const imageRel = rels.get(result.watermark.imageRId);
-      if (imageRel?.type === RELATIONSHIP_TYPES.image && imageRel.target) {
-        result.watermark.imageTarget = imageRel.target;
-      }
-    }
+    // A picture watermark's media target (PictureWatermark.imageTarget) is
+    // anchored to a stable, package-absolute path by parseHeadersAndFooters,
+    // which knows this header part's own path.
   }
   const contentRoot = watermarkResult
     ? withoutChild(rootElement, watermarkResult.hostingParagraph)

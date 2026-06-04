@@ -207,6 +207,31 @@ function headerFooterRelsPath(target: string): string {
   return `${directory ? `${directory}/` : ""}_rels/${name}.rels`;
 }
 
+/**
+ * Express an absolute package path as a relationship target relative to the
+ * part at `partPath`. e.g. media `word/media/image1.png` for a part at
+ * `word/headers/header2.xml` -> `../media/image1.png` (and `media/image1.png`
+ * for a part at the `word/` root). The inverse of `resolveRelativePath`.
+ */
+function relativeTargetForPart(
+  partPath: string,
+  absoluteTarget: string,
+): string {
+  const lastSlash = partPath.lastIndexOf("/");
+  const fromDir =
+    lastSlash === -1 ? [] : partPath.slice(0, lastSlash).split("/");
+  const to = absoluteTarget.split("/");
+  let shared = 0;
+  while (
+    shared < fromDir.length &&
+    shared < to.length - 1 &&
+    fromDir[shared] === to[shared]
+  ) {
+    shared += 1;
+  }
+  return `${"../".repeat(fromDir.length - shared)}${to.slice(shared).join("/")}`;
+}
+
 function collectImageParts(doc: Document): DocxPart[] {
   const parts: DocxPart[] = [
     {
@@ -1212,6 +1237,11 @@ async function materializeNewHeaderFooterParts(
   if (!rels) {
     return;
   }
+  // Cheap guard so the common repack (no in-memory parts) skips the zip scans
+  // and rels walk below.
+  if (!hasUnmaterializedHeaderFooter(doc)) {
+    return;
+  }
 
   const relEntries: string[] = [];
   const overrides: string[] = [];
@@ -1396,6 +1426,7 @@ async function rebindWatermarkRelIds(
   type PendingHeader = {
     watermark: Extract<Watermark, { kind: "picture" }>;
     relsPath: string;
+    partPath: string;
   };
   const pending: PendingHeader[] = [];
   for (const [rId, hf] of headers) {
@@ -1407,17 +1438,21 @@ async function rebindWatermarkRelIds(
     if (!rel?.target) {
       continue;
     }
-    pending.push({ watermark, relsPath: headerFooterRelsPath(rel.target) });
+    pending.push({
+      watermark,
+      relsPath: headerFooterRelsPath(rel.target),
+      partPath: headerFooterFilename(rel.target),
+    });
   }
   if (pending.length === 0) {
     return;
   }
 
-  // Read every header's rels, not only the ones being rebound: the canonical
-  // image target may live in a header whose own watermark is raw-replayed (so
-  // it is not pending). `document.xml.rels` is intentionally excluded — header
-  // rIds and body rIds both start at rId1, so scanning it could resolve a
-  // watermark to a body image that merely shares the rId number.
+  // Read every header's rels (keyed by path), not only the ones being rebound:
+  // the canonical image may live in a header whose own watermark is raw-replayed
+  // (not pending). `document.xml.rels` is excluded — header rIds and body rIds
+  // both start at rId1, so it could resolve a watermark to an unrelated body
+  // image sharing the rId.
   const relsXmlByPath = new Map<string, string>();
   const headerRelsPaths = new Set<string>(pending.map((p) => p.relsPath));
   for (const rel of rels.values()) {
@@ -1429,51 +1464,68 @@ async function rebindWatermarkRelIds(
     relsXmlByPath.set(relsPath, await readRelsOrStub(zip, relsPath));
   }
 
-  // The canonical media target for an imageRId: the source header is the one
-  // whose rels actually maps that rId to an image relationship.
-  const resolveImageTarget = (imageRId: string): string | undefined => {
-    for (const xml of relsXmlByPath.values()) {
-      const rel = parseRelationships(xml).get(imageRId);
-      if (rel?.type === RELATIONSHIP_TYPES.image && rel.target) {
-        return rel.target;
+  // Absolute (package) path the rId maps to in a header's rels, resolved
+  // relative to that part — undefined when it is not an image relationship.
+  const localImageTarget = (
+    relsXml: string,
+    relsPath: string,
+    imageRId: string,
+  ): string | undefined => {
+    const rel = parseRelationships(relsXml).get(imageRId);
+    return rel?.type === RELATIONSHIP_TYPES.image && rel.target
+      ? resolveRelativePath(relsPath, rel.target)
+      : undefined;
+  };
+
+  // The canonical media (absolute path) the watermark points at: the source
+  // header is the one whose own rels maps the rId to an image.
+  const resolveCanonical = (imageRId: string): string | undefined => {
+    for (const [relsPath, xml] of relsXmlByPath) {
+      const target = localImageTarget(xml, relsPath, imageRId);
+      if (target) {
+        return target;
       }
     }
     return undefined;
   };
 
   const changedPaths = new Set<string>();
-  for (const { watermark, relsPath } of pending) {
-    // The media target is anchored at parse time (imageTarget); fall back to a
-    // best-effort scan only for watermarks built without a parsed source.
-    const target =
-      watermark.imageTarget ?? resolveImageTarget(watermark.imageRId);
-    if (!target) {
+  for (const { watermark, relsPath, partPath } of pending) {
+    // Anchored at parse time (absolute imageTarget); fall back to a scan only
+    // for watermarks built without a parsed source.
+    const canonical =
+      watermark.imageTarget ?? resolveCanonical(watermark.imageRId);
+    if (!canonical) {
       continue; // Orphaned rId with no embedded media anywhere — cannot invent.
     }
     const relsXml = relsXmlByPath.get(relsPath) ?? EMPTY_RELS_XML;
-    const localRels = parseRelationships(relsXml);
-    const local = localRels.get(watermark.imageRId);
-    if (local?.type === RELATIONSHIP_TYPES.image && local.target === target) {
-      // Already resolves to the canonical watermark media. (A local rId that
-      // resolves to a *different* image — header rIds repeat across parts — must
-      // still be rebound, or the header would render its own unrelated image.)
+    if (localImageTarget(relsXml, relsPath, watermark.imageRId) === canonical) {
+      // Already resolves to the canonical media. (A local rId resolving to a
+      // *different* image — header rIds repeat across parts — must still be
+      // rebound.)
       continue;
     }
 
+    const localRels = parseRelationships(relsXml);
     let resolvedRId: string | undefined;
     for (const [id, rel] of localRels) {
-      if (rel.type === RELATIONSHIP_TYPES.image && rel.target === target) {
+      if (
+        rel.type === RELATIONSHIP_TYPES.image &&
+        rel.target &&
+        resolveRelativePath(relsPath, rel.target) === canonical
+      ) {
         resolvedRId = id;
         break;
       }
     }
     if (!resolvedRId) {
       resolvedRId = `rId${findMaxRId(relsXml) + 1}`;
+      const relativeTarget = relativeTargetForPart(partPath, canonical);
       relsXmlByPath.set(
         relsPath,
         relsXml.replace(
           "</Relationships>",
-          `<Relationship Id="${resolvedRId}" Type="${RELATIONSHIP_TYPES.image}" Target="${escapeXml(target)}"/></Relationships>`,
+          `<Relationship Id="${resolvedRId}" Type="${RELATIONSHIP_TYPES.image}" Target="${escapeXml(relativeTarget)}"/></Relationships>`,
         ),
       );
       changedPaths.add(relsPath);
