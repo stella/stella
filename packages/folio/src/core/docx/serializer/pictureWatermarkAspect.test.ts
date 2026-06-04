@@ -101,4 +101,22 @@ describe("picture watermark aspect ratio (eigenpal #684)", () => {
     expect(out).toContain("height:500pt");
     expect(out).not.toContain("width:415pt");
   });
+
+  test("a scale edit overrides captured dimensions", () => {
+    // `scale` is the documented resize knob. Even when dimensions were captured
+    // at parse, changing scale must take effect on save (415x207 * scale),
+    // rather than serializing the now-stale captured size.
+    const out = serializeHeaderFooter(
+      pictureHeaderFooter({
+        kind: "picture",
+        imageRId: "rId1",
+        widthPt: 300,
+        heightPt: 400,
+        scale: 0.5,
+      }),
+    );
+    expect(out).toContain("width:207.5pt");
+    expect(out).toContain("height:103.5pt");
+    expect(out).not.toContain("width:300pt");
+  });
 });
