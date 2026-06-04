@@ -119,6 +119,10 @@ type State = {
   messages: LocaleMessages;
   loadedLang: SupportedLanguage;
   isLoaded: boolean;
+  // True once the first locale has loaded. Latches on and never resets, so a
+  // later language switch (which flips isLoaded false while the new locale
+  // streams in) cannot send the app back to the boot spinner and unmount it.
+  hasLoadedOnce: boolean;
 };
 
 type Actions = {
@@ -153,11 +157,17 @@ export const useI18nStore = create<State & Actions>()(
       messages: defaultMessages,
       loadedLang: "en",
       isLoaded: defaultLanguage === "en",
+      // No locale has finished loading at construction, so the latch starts off
+      // regardless of the browser default. loadMessages turns it on once a
+      // bundle resolves (synchronously for English, after the async import
+      // otherwise), which keeps the boot-spinner gate honest: a persisted
+      // non-English locale cannot skip the spinner before its bundle arrives.
+      hasLoadedOnce: false,
 
       loadMessages: async (lang) => {
         const state = get();
         if (state.loadedLang === lang && state.isLoaded) {
-          set({ lang });
+          set({ lang, hasLoadedOnce: true });
           setDocumentLanguage(lang);
           return;
         }
@@ -175,7 +185,11 @@ export const useI18nStore = create<State & Actions>()(
 
           const fallback = get();
           applyMessages(fallback.loadedLang, fallback.messages);
-          set({ lang: fallback.loadedLang, isLoaded: true });
+          set({
+            lang: fallback.loadedLang,
+            isLoaded: true,
+            hasLoadedOnce: true,
+          });
           return;
         }
 
@@ -184,7 +198,13 @@ export const useI18nStore = create<State & Actions>()(
         }
 
         applyMessages(lang, messages);
-        set({ lang, messages, loadedLang: lang, isLoaded: true });
+        set({
+          lang,
+          messages,
+          loadedLang: lang,
+          isLoaded: true,
+          hasLoadedOnce: true,
+        });
       },
 
       setLang: async (lang) => {

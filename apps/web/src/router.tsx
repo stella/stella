@@ -29,17 +29,22 @@ import { routeTree } from "@/routeTree.gen";
 enableMapSet();
 
 const I18nProvider = ({ children }: PropsWithChildren) => {
-  const lang = useI18nStore((s) => s.lang);
+  const locale = useI18nStore((s) => s.loadedLang);
   const messages = useI18nStore((s) => s.messages);
-  const isLoaded = useI18nStore((s) => s.isLoaded);
+  const hasLoadedOnce = useI18nStore((s) => s.hasLoadedOnce);
 
-  if (!isLoaded) {
+  // Gate the boot spinner on the first load, not on isLoaded: a language
+  // switch flips isLoaded false while the new locale streams in, and gating
+  // the whole subtree on it would unmount the app (losing in-progress state
+  // like onboarding) on every switch. loadedLang/messages are always a
+  // consistent already-loaded pair, so the locale swaps in place instead.
+  if (!hasLoadedOnce) {
     return <DefaultPendingComponent />;
   }
 
   return (
     <IntlProvider
-      locale={lang}
+      locale={locale}
       // SAFETY: locale JSON files are shape-checked in i18n-store.ts;
       // this cast is only at the provider boundary because use-intl's
       // Messages type preserves English literal message values while
