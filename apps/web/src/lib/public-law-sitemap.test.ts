@@ -457,6 +457,13 @@ describe("public law sitemap", () => {
     expectNoDirectAuthImport(source);
   });
 
+  test("server entry uses non-streaming SSR", async () => {
+    const source = await readSource("apps/web/src/server.ts");
+
+    expect(source).toContain("defaultRenderHandler");
+    expect(source).not.toContain("defaultStreamHandler");
+  });
+
   test("protected workspace route opts out of server rendering", async () => {
     const source = await readSource("apps/web/src/routes/_protected.tsx");
 
