@@ -21,7 +21,7 @@
     "better-result": "catalog:",
     "crossws": "^0.4.5",
     "valibot": "catalog:",
-    "yjs": "^13.6.30"
+    "yjs": "^13.6.31"
   },
   "devDependencies": {
     "@hocuspocus/provider": "^4.1.0",
