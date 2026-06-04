@@ -954,7 +954,7 @@
   },
   "docxReview": {
     "acceptAll": "Zaakceptuj wszystkie",
-    "applyAs": "as",
+    "applyAs": "jako",
     "applyDirect": "Bezpośrednio",
     "applyMode": "Zastosuj jako:",
     "applyTracked": "Śledzenie zmian",
@@ -2205,7 +2205,7 @@
         "noLead": "Brak prowadzącego",
         "searchMembers": "Szukaj członków…"
       },
-      "to": "To"
+      "to": "Do"
     },
     "generatingCitations": "Generowanie cytatów...",
     "importOrganizer": {

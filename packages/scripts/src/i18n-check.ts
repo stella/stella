@@ -239,11 +239,10 @@ const isTriviallyIdentical = (value: string): boolean => {
   // Pattern is linear: [^}] cannot match the closing }, so no backtracking.
   // oxlint-disable-next-line sonarjs/slow-regex
   const literal = trimmed.replace(/\{[^}]*\}/gu, "");
-  return (
-    !HAS_LETTER.test(literal) || // numbers, punctuation, placeholder-only
-    trimmed.length <= 2 || // single letters / tiny tokens
-    ALLOWED_IDENTICAL.has(trimmed)
-  );
+  // Exempt only language-neutral content: no letters (numbers, punctuation,
+  // placeholder-only) or an explicit allowed token. Do NOT blanket-exempt by
+  // length — short words like "To"/"as" are translatable.
+  return !HAS_LETTER.test(literal) || ALLOWED_IDENTICAL.has(trimmed);
 };
 
 /**

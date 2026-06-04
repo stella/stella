@@ -954,7 +954,7 @@
   },
   "docxReview": {
     "acceptAll": "Pieņemt visu",
-    "applyAs": "as",
+    "applyAs": "kā",
     "applyDirect": "Tieši",
     "applyMode": "Lietot kā:",
     "applyTracked": "Izsekotās izmaiņas",
@@ -2205,7 +2205,7 @@
         "noLead": "Nav atbildīgā",
         "searchMembers": "Meklēt dalībniekus…"
       },
-      "to": "To"
+      "to": "Līdz"
     },
     "generatingCitations": "Ģenerē atsauces...",
     "importOrganizer": {

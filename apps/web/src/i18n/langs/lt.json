@@ -954,7 +954,7 @@
   },
   "docxReview": {
     "acceptAll": "Priimti visus",
-    "applyAs": "as",
+    "applyAs": "kaip",
     "applyDirect": "Tiesiogiai",
     "applyMode": "Taikyti kaip:",
     "applyTracked": "Sekami pakeitimai",
@@ -2205,7 +2205,7 @@
         "noLead": "Nėra atsakingo",
         "searchMembers": "Ieškoti narių…"
       },
-      "to": "To"
+      "to": "Iki"
     },
     "generatingCitations": "Generuojamos citatos...",
     "importOrganizer": {
