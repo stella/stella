@@ -604,6 +604,24 @@ describe("public law sitemap", () => {
     expect(hydrateIndex).toBeGreaterThan(initializeIndex);
   });
 
+  test("app provider preserves browser time zones for app timestamps", async () => {
+    const source = await readSource("apps/web/src/app-providers.tsx");
+
+    expect(source).toContain('const SERVER_I18N_TIME_ZONE = "UTC"');
+    expect(source).toContain(
+      "Intl.DateTimeFormat().resolvedOptions().timeZone",
+    );
+    expect(source).toContain("timeZone={resolveAppI18nTimeZone()}");
+  });
+
+  test("case-law list keeps date-only legal dates in UTC", async () => {
+    const source = await readSource(
+      "apps/web/src/features/case-law/components/decision-table.tsx",
+    );
+
+    expect(source).toContain('timeZone: "UTC"');
+  });
+
   test("case-law AI mode requires an explicit authenticated availability gate", async () => {
     const source = await readSource(
       "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx",

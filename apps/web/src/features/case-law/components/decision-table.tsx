@@ -134,6 +134,7 @@ export const DecisionTable = ({ decisions, isLoading }: DecisionTableProps) => {
           }
           return format.dateTime(date, {
             dateStyle: "medium",
+            timeZone: "UTC",
           });
         },
       }),
