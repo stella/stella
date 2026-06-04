@@ -444,6 +444,10 @@ async function processNewImages(
     const relsXml = await readRelsOrStub(zip, relsPath);
     let maxId = findMaxRId(relsXml);
     const relEntries: string[] = [];
+    // The part owning these rels (e.g. word/headers/header1.xml). Relationship
+    // targets are resolved relative to it, so a subdirectory header needs
+    // `../media/...` rather than `media/...`.
+    const partPath = relsPath.replace("/_rels/", "/").replace(/\.rels$/u, "");
 
     for (const image of newImages) {
       if (!image.src) {
@@ -463,9 +467,9 @@ async function processNewImages(
         compressionOptions: { level: compressionLevel },
       });
 
-      // Build relationship entry
+      // Build relationship entry (target relative to the owning part).
       relEntries.push(
-        `<Relationship Id="${newRId}" Type="${RELATIONSHIP_TYPES.image}" Target="media/${mediaFilename}"/>`,
+        `<Relationship Id="${newRId}" Type="${RELATIONSHIP_TYPES.image}" Target="${escapeXml(relativeTargetForPart(partPath, mediaPath))}"/>`,
       );
 
       extensionsAdded.add(extension);

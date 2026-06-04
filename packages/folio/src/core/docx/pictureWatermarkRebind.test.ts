@@ -388,6 +388,9 @@ describe("picture watermark relationship rebinding (eigenpal #684)", () => {
       ?.async("text");
     expect(subdirRels).toBeDefined();
     expect(subdirRels).toContain(`Type="${RELATIONSHIP_TYPES.image}"`);
+    // Target is relative to word/headers/, so the media (word/media/...) is up one.
+    expect(subdirRels).toMatch(/Target="\.\.\/media\/image\d+\.png"/u);
+    expect(subdirRels).not.toMatch(/Target="media\/image\d+\.png"/u);
     // ...not the flattened, unattached path.
     expect(paths).not.toContain("word/_rels/headers/header1.xml.rels");
   });
