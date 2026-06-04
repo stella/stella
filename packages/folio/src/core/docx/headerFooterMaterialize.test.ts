@@ -155,6 +155,44 @@ describe("header/footer part materialization on save", () => {
     ).toBe(true);
   });
 
+  test("re-keys a materialized header whose rId collides with an existing relationship", async () => {
+    const base = await createEmptyDocx();
+    const doc = await parseDocx(base, { preloadFonts: false });
+    expect(doc.package.relationships).toBeDefined();
+
+    // An unrelated relationship already uses the would-be header id.
+    doc.package.relationships?.set("rId_new_default", {
+      id: "rId_new_default",
+      type: RELATIONSHIP_TYPES.image,
+      target: "media/decoration.png",
+    });
+    doc.package.headers = new Map([
+      [
+        "rId_new_default",
+        { type: "header", hdrFtrType: "default", content: [] },
+      ],
+    ]);
+    doc.package.document.finalSectionProperties = {
+      ...doc.package.document.finalSectionProperties,
+      headerReferences: [{ type: "default", rId: "rId_new_default" }],
+    };
+
+    const out = await repackDocx(doc, { updateModifiedDate: false });
+    expect((await validateDocx(out)).valid).toBe(true);
+
+    const zip = await JSZip.loadAsync(out);
+    const docXml = await zip.file("word/document.xml")!.async("text");
+    const refRId = /<w:headerReference[^>]*\br:id="([^"]+)"/u.exec(docXml)?.[1];
+    expect(refRId).toBeDefined();
+    // The section reference was re-pointed off the taken id to a fresh one...
+    expect(refRId).not.toBe("rId_new_default");
+    // ...and that fresh id maps to a header part.
+    const rels = await zip.file("word/_rels/document.xml.rels")!.async("text");
+    expect(rels).toMatch(
+      new RegExp(`Id="${refRId}"[^>]*Target="header\\d+\\.xml"`, "u"),
+    );
+  });
+
   test("selective save bails to full repack when a header is unmaterialized", async () => {
     const base = await createEmptyDocx();
     const doc = await parseDocx(base, { preloadFonts: false });

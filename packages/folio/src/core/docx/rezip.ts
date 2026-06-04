@@ -1198,26 +1198,85 @@ async function materializeNewHeaderFooterParts(
   const overrides: string[] = [];
   let maxHeaderNum = findMaxHeaderFooterNum(zip, "header");
   let maxFooterNum = findMaxHeaderFooterNum(zip, "footer");
+  let maxRId = 0;
+  for (const id of rels.keys()) {
+    const match = /^rId(\d+)$/u.exec(id);
+    if (match) {
+      // SAFETY: capture group [1] always present when the regex matches.
+      const n = Number.parseInt(match[1]!, 10);
+      if (n > maxRId) {
+        maxRId = n;
+      }
+    }
+  }
+
+  const remapRefs = (
+    refs: { rId: string }[] | undefined,
+    oldRId: string,
+    newRId: string,
+  ): void => {
+    for (const ref of refs ?? []) {
+      if (ref.rId === oldRId) {
+        ref.rId = newRId;
+      }
+    }
+  };
 
   const materialize = (
     map: Map<string, HeaderFooter> | undefined,
     relType: string,
     prefix: "header" | "footer",
     contentType: string,
+    isHeader: boolean,
   ): void => {
     if (!map) {
       return;
     }
-    for (const rId of map.keys()) {
+    for (const rId of [...map.keys()]) {
       const existing = rels.get(rId);
       if (existing && existing.type === relType && existing.target) {
-        continue;
+        continue; // Already a materialized part of this kind.
+      }
+      // When the id is already taken by an unrelated relationship, mint a fresh
+      // one and re-point the section references — reusing it would duplicate the
+      // id or resolve the header reference to the wrong (non-header) target.
+      let effectiveRId = rId;
+      if (existing) {
+        effectiveRId = `rId${++maxRId}`;
+        const headerFooter = map.get(rId);
+        if (headerFooter) {
+          map.delete(rId);
+          map.set(effectiveRId, headerFooter);
+        }
+        for (const block of doc.package.document.content) {
+          if (block.type === "paragraph") {
+            remapRefs(
+              isHeader
+                ? block.sectionProperties?.headerReferences
+                : block.sectionProperties?.footerReferences,
+              rId,
+              effectiveRId,
+            );
+          }
+        }
+        const finalProps = doc.package.document.finalSectionProperties;
+        remapRefs(
+          isHeader
+            ? finalProps?.headerReferences
+            : finalProps?.footerReferences,
+          rId,
+          effectiveRId,
+        );
       }
       const num = prefix === "header" ? ++maxHeaderNum : ++maxFooterNum;
       const filename = `${prefix}${num}.xml`;
-      rels.set(rId, { id: rId, type: relType, target: filename });
+      rels.set(effectiveRId, {
+        id: effectiveRId,
+        type: relType,
+        target: filename,
+      });
       relEntries.push(
-        `<Relationship Id="${escapeXml(rId)}" Type="${relType}" Target="${filename}"/>`,
+        `<Relationship Id="${escapeXml(effectiveRId)}" Type="${relType}" Target="${filename}"/>`,
       );
       overrides.push(
         `<Override PartName="/word/${filename}" ContentType="${contentType}"/>`,
@@ -1230,12 +1289,14 @@ async function materializeNewHeaderFooterParts(
     RELATIONSHIP_TYPES.header,
     "header",
     HEADER_CONTENT_TYPE,
+    true,
   );
   materialize(
     doc.package.footers,
     RELATIONSHIP_TYPES.footer,
     "footer",
     FOOTER_CONTENT_TYPE,
+    false,
   );
 
   if (relEntries.length === 0) {
@@ -1368,7 +1429,10 @@ async function rebindWatermarkRelIds(
 
   const changedPaths = new Set<string>();
   for (const { watermark, relsPath } of pending) {
-    const target = resolveImageTarget(watermark.imageRId);
+    // The media target is anchored at parse time (imageTarget); fall back to a
+    // best-effort scan only for watermarks built without a parsed source.
+    const target =
+      watermark.imageTarget ?? resolveImageTarget(watermark.imageRId);
     if (!target) {
       continue; // Orphaned rId with no embedded media anywhere — cannot invent.
     }

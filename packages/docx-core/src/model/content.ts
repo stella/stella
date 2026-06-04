@@ -1414,6 +1414,13 @@ export type PictureWatermark = {
   kind: "picture";
   /** Relationship id of the image part in `word/_rels/header*.xml.rels`. */
   imageRId: string;
+  /**
+   * Media part target the `imageRId` resolved to in the header it was parsed
+   * from (e.g. `media/image1.png`). Relationship ids are scoped per header part
+   * and commonly repeat, so propagating a watermark across headers rebinds
+   * against this stable target rather than the (ambiguous) source rId.
+   */
+  imageTarget?: string;
   /** Optional scale factor (1.0 = native, 0.5 = half-size). */
   scale?: number;
   /**
