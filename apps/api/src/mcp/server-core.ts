@@ -125,8 +125,8 @@ export const createMcpHttpRequestHandler = ({
       tools: listMcpTools(mode),
     }));
 
-    server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      const toolName = request.params.name;
+    server.setRequestHandler(CallToolRequestSchema, async (toolRequest) => {
+      const toolName = toolRequest.params.name;
       const definition = getMcpToolDefinition(toolName, mode);
       if (!definition) {
         return {
@@ -150,7 +150,7 @@ export const createMcpHttpRequestHandler = ({
       }
 
       return await handleMcpToolCall({
-        args: request.params.arguments ?? {},
+        args: toolRequest.params.arguments ?? {},
         context,
         mode,
         toolName,
