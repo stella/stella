@@ -1480,30 +1480,41 @@ async function rebindWatermarkRelIds(
     relsXmlByPath.set(relsPath, await readRelsOrStub(zip, relsPath));
   }
 
-  // Absolute (package) path the rId maps to in a header's rels, resolved
-  // relative to that part — undefined when it is not an image relationship.
-  const localImageTarget = (
-    relsXml: string,
+  // The canonical image a watermark points at: an embedded media part (as a
+  // package-absolute path) or an external (linked) URL.
+  type CanonicalImage =
+    | { mode: "internal"; absolute: string }
+    | { mode: "external"; url: string };
+
+  const relImage = (
+    rel: { type: string; target?: string; targetMode?: string } | undefined,
     relsPath: string,
-    imageRId: string,
-  ): string | undefined => {
-    const rel = parseRelationships(relsXml).get(imageRId);
-    // External (linked) images have a URL target, not a package path; leaving
-    // them unresolved here makes the rebind skip them so they stay intact.
-    return rel?.type === RELATIONSHIP_TYPES.image &&
-      rel.target &&
-      rel.targetMode !== "External"
-      ? resolveRelativePath(relsPath, rel.target)
-      : undefined;
+  ): CanonicalImage | undefined => {
+    if (rel?.type !== RELATIONSHIP_TYPES.image || !rel.target) {
+      return undefined;
+    }
+    return rel.targetMode === "External"
+      ? { mode: "external", url: rel.target }
+      : {
+          mode: "internal",
+          absolute: resolveRelativePath(relsPath, rel.target),
+        };
   };
 
-  // The canonical media (absolute path) the watermark points at: the source
-  // header is the one whose own rels maps the rId to an image.
-  const resolveCanonical = (imageRId: string): string | undefined => {
+  const sameImage = (a: CanonicalImage, b: CanonicalImage): boolean =>
+    a.mode === "internal" && b.mode === "internal"
+      ? a.absolute === b.absolute
+      : a.mode === "external" && b.mode === "external" && a.url === b.url;
+
+  // The source header is the one whose own rels maps the rId to an image.
+  const resolveCanonical = (imageRId: string): CanonicalImage | undefined => {
     for (const [relsPath, xml] of relsXmlByPath) {
-      const target = localImageTarget(xml, relsPath, imageRId);
-      if (target) {
-        return target;
+      const canonical = relImage(
+        parseRelationships(xml).get(imageRId),
+        relsPath,
+      );
+      if (canonical) {
+        return canonical;
       }
     }
     return undefined;
@@ -1511,42 +1522,45 @@ async function rebindWatermarkRelIds(
 
   const changedPaths = new Set<string>();
   for (const { watermark, relsPath, partPath } of pending) {
-    // Anchored at parse time (absolute imageTarget); fall back to a scan only
-    // for watermarks built without a parsed source.
-    const canonical =
-      watermark.imageTarget ?? resolveCanonical(watermark.imageRId);
+    // Anchored at parse time (imageTarget, embedded media only); fall back to a
+    // scan, which also recovers an external (linked) source.
+    const canonical: CanonicalImage | undefined =
+      watermark.imageTarget === undefined
+        ? resolveCanonical(watermark.imageRId)
+        : { mode: "internal", absolute: watermark.imageTarget };
     if (!canonical) {
       continue; // Orphaned rId with no embedded media anywhere — cannot invent.
     }
+
     const relsXml = relsXmlByPath.get(relsPath) ?? EMPTY_RELS_XML;
-    if (localImageTarget(relsXml, relsPath, watermark.imageRId) === canonical) {
-      // Already resolves to the canonical media. (A local rId resolving to a
+    const localRels = parseRelationships(relsXml);
+    const local = relImage(localRels.get(watermark.imageRId), relsPath);
+    if (local && sameImage(local, canonical)) {
+      // Already resolves to the canonical image. (A local rId resolving to a
       // *different* image — header rIds repeat across parts — must still be
       // rebound.)
       continue;
     }
 
-    const localRels = parseRelationships(relsXml);
+    // Reuse an existing relationship to the same image, else mint one. An
+    // external image keeps its URL and TargetMode="External".
     let resolvedRId: string | undefined;
     for (const [id, rel] of localRels) {
-      if (
-        rel.type === RELATIONSHIP_TYPES.image &&
-        rel.target &&
-        resolveRelativePath(relsPath, rel.target) === canonical
-      ) {
+      const image = relImage(rel, relsPath);
+      if (image && sameImage(image, canonical)) {
         resolvedRId = id;
         break;
       }
     }
     if (!resolvedRId) {
       resolvedRId = `rId${findMaxRId(relsXml) + 1}`;
-      const relativeTarget = relativeTargetForPart(partPath, canonical);
+      const relXml =
+        canonical.mode === "external"
+          ? `<Relationship Id="${resolvedRId}" Type="${RELATIONSHIP_TYPES.image}" Target="${escapeXml(canonical.url)}" TargetMode="External"/>`
+          : `<Relationship Id="${resolvedRId}" Type="${RELATIONSHIP_TYPES.image}" Target="${escapeXml(relativeTargetForPart(partPath, canonical.absolute))}"/>`;
       relsXmlByPath.set(
         relsPath,
-        relsXml.replace(
-          "</Relationships>",
-          `<Relationship Id="${resolvedRId}" Type="${RELATIONSHIP_TYPES.image}" Target="${escapeXml(relativeTarget)}"/></Relationships>`,
-        ),
+        relsXml.replace("</Relationships>", `${relXml}</Relationships>`),
       );
       changedPaths.add(relsPath);
     }
