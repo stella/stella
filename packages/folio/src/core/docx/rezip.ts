@@ -642,6 +642,14 @@ export async function repackDocx(
     compressionOptions: { level: compressionLevel },
   });
 
+  // Promote any in-memory header/footer parts to real parts/relationships
+  // before serializing them (so collectHeaderFooterUpdates can resolve them).
+  await materializeNewHeaderFooterParts(
+    exportDocument,
+    newZip,
+    compressionLevel,
+  );
+
   // Serialize and update modified headers/footers
   serializeHeadersFootersToZip(exportDocument, newZip, compressionLevel);
 
@@ -751,6 +759,14 @@ export async function repackDocxFromRaw(
     compression: "DEFLATE",
     compressionOptions: { level: compressionLevel },
   });
+
+  // Promote any in-memory header/footer parts to real parts/relationships
+  // before serializing them (so collectHeaderFooterUpdates can resolve them).
+  await materializeNewHeaderFooterParts(
+    exportDocument,
+    newZip,
+    compressionLevel,
+  );
 
   // Serialize and update modified headers/footers
   serializeHeadersFootersToZip(exportDocument, newZip, compressionLevel);
@@ -1098,6 +1114,156 @@ export async function addMedia(
  * Collect serialized header/footer XML updates from the document model.
  * Uses the relationship map to resolve rId → filename.
  */
+const HEADER_CONTENT_TYPE =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml";
+const FOOTER_CONTENT_TYPE =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml";
+
+/**
+ * A header/footer is "unmaterialized" when it lives in the package map but its
+ * rId has no resolvable relationship in `document.xml.rels` — i.e. it was
+ * created in memory (header editor, watermark coverage) and still lacks a part,
+ * relationship, and `[Content_Types]` entry. The selective fast-path can't
+ * register those, so it must bail to a full repack when this returns true.
+ */
+export function hasUnmaterializedHeaderFooter(doc: Document): boolean {
+  const rels = doc.package.relationships;
+  const hasNew = (
+    map: Map<string, HeaderFooter> | undefined,
+    type: string,
+  ): boolean => {
+    if (!map) {
+      return false;
+    }
+    for (const rId of map.keys()) {
+      const rel = rels?.get(rId);
+      if (!rel || rel.type !== type || !rel.target) {
+        return true;
+      }
+    }
+    return false;
+  };
+  return (
+    hasNew(doc.package.headers, RELATIONSHIP_TYPES.header) ||
+    hasNew(doc.package.footers, RELATIONSHIP_TYPES.footer)
+  );
+}
+
+function findMaxHeaderFooterNum(
+  zip: JSZip,
+  prefix: "header" | "footer",
+): number {
+  let max = 0;
+  const pattern = new RegExp(`^word/${prefix}(\\d+)\\.xml$`, "u");
+  zip.forEach((relativePath) => {
+    const m = pattern.exec(relativePath);
+    if (m) {
+      // SAFETY: capture group [1] always present when the regex matches.
+      const num = Number.parseInt(m[1]!, 10);
+      if (num > max) {
+        max = num;
+      }
+    }
+  });
+  return max;
+}
+
+/**
+ * Materialize header/footer parts created in memory (rId present in the package
+ * map, absent from `document.xml.rels`). For each: mint a `word/<prefix>N.xml`
+ * target, add a document relationship under the *existing* rId (a valid NCName,
+ * so the section's `<w:headerReference r:id>` keeps resolving without rewriting
+ * document.xml), and a `[Content_Types].xml` Override. The part body is written
+ * afterwards by `serializeHeadersFootersToZip`, which can now resolve the new
+ * relationship.
+ */
+async function materializeNewHeaderFooterParts(
+  doc: Document,
+  zip: JSZip,
+  compressionLevel: number,
+): Promise<void> {
+  const rels = doc.package.relationships;
+  if (!rels) {
+    return;
+  }
+
+  const relEntries: string[] = [];
+  const overrides: string[] = [];
+  let maxHeaderNum = findMaxHeaderFooterNum(zip, "header");
+  let maxFooterNum = findMaxHeaderFooterNum(zip, "footer");
+
+  const materialize = (
+    map: Map<string, HeaderFooter> | undefined,
+    relType: string,
+    prefix: "header" | "footer",
+    contentType: string,
+  ): void => {
+    if (!map) {
+      return;
+    }
+    for (const rId of map.keys()) {
+      const existing = rels.get(rId);
+      if (existing && existing.type === relType && existing.target) {
+        continue;
+      }
+      const num = prefix === "header" ? ++maxHeaderNum : ++maxFooterNum;
+      const filename = `${prefix}${num}.xml`;
+      rels.set(rId, { id: rId, type: relType, target: filename });
+      relEntries.push(
+        `<Relationship Id="${escapeXml(rId)}" Type="${relType}" Target="${filename}"/>`,
+      );
+      overrides.push(
+        `<Override PartName="/word/${filename}" ContentType="${contentType}"/>`,
+      );
+    }
+  };
+
+  materialize(
+    doc.package.headers,
+    RELATIONSHIP_TYPES.header,
+    "header",
+    HEADER_CONTENT_TYPE,
+  );
+  materialize(
+    doc.package.footers,
+    RELATIONSHIP_TYPES.footer,
+    "footer",
+    FOOTER_CONTENT_TYPE,
+  );
+
+  if (relEntries.length === 0) {
+    return;
+  }
+
+  const compressionOptions = { level: compressionLevel };
+  const relsPath = "word/_rels/document.xml.rels";
+  const relsXml = await readRelsOrStub(zip, relsPath);
+  zip.file(
+    relsPath,
+    relsXml.replace(
+      "</Relationships>",
+      `${relEntries.join("")}</Relationships>`,
+    ),
+    { compression: "DEFLATE", compressionOptions },
+  );
+
+  const ctFile = zip.file("[Content_Types].xml");
+  if (ctFile) {
+    let ctXml = await ctFile.async("text");
+    const missing = overrides.filter((override) => {
+      const partName = /PartName="([^"]+)"/u.exec(override)?.[1];
+      return partName ? !ctXml.includes(`PartName="${partName}"`) : true;
+    });
+    if (missing.length > 0) {
+      ctXml = ctXml.replace("</Types>", `${missing.join("")}</Types>`);
+      zip.file("[Content_Types].xml", ctXml, {
+        compression: "DEFLATE",
+        compressionOptions,
+      });
+    }
+  }
+}
+
 export function collectHeaderFooterUpdates(doc: Document): Map<string, string> {
   const updates = new Map<string, string>();
   const rels = doc.package.relationships;

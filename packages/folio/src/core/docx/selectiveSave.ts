@@ -16,6 +16,7 @@ import {
   findMaxRId,
   updateCoreProperties,
   collectHeaderFooterUpdates,
+  hasUnmaterializedHeaderFooter,
   COMMENTS_CONTENT_TYPE,
 } from "./rezip";
 import { DEFAULT_SELECTIVE_SAVE_MAX_BYTES } from "./selectiveSaveFlags";
@@ -131,6 +132,11 @@ export async function attemptSelectiveSave(
   // Check for new images/hyperlinks that need relationship management
   const content = doc.package.document.content;
   if (hasNewImagesOrHyperlinks(content)) {
+    return null;
+  }
+  // A header/footer created in memory needs a new part + relationship +
+  // [Content_Types] Override, which only the full repack path writes.
+  if (hasUnmaterializedHeaderFooter(doc)) {
     return null;
   }
   if (!validateFolioDocumentModel(doc).valid) {
