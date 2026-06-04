@@ -609,6 +609,15 @@ export async function repackDocx(
     });
   }
 
+  // Promote in-memory header/footer parts to real parts/relationships first, so
+  // collectImageParts sees them and processNewImages can write image relations
+  // into a newly created header/footer's own rels.
+  await materializeNewHeaderFooterParts(
+    exportDocument,
+    newZip,
+    compressionLevel,
+  );
+
   // Process newly inserted images (data URLs → binary media files + relationships).
   // This mutates image rIds in-place so the serializer outputs correct references.
   await processNewImages(
@@ -646,17 +655,9 @@ export async function repackDocx(
     compressionOptions: { level: compressionLevel },
   });
 
-  // Promote any in-memory header/footer parts to real parts/relationships
-  // before serializing them (so collectHeaderFooterUpdates can resolve them).
-  await materializeNewHeaderFooterParts(
-    exportDocument,
-    newZip,
-    compressionLevel,
-  );
-
   // Rebind picture-watermark image rIds so each header references the image in
-  // its own rels (after materialization, so coverage-created header parts have
-  // a relationship target to anchor against).
+  // its own rels (materialization, run before image processing above, gave
+  // coverage-created header parts a relationship target to anchor against).
   await rebindWatermarkRelIds(exportDocument, newZip, compressionLevel);
 
   // Serialize and update modified headers/footers
@@ -769,17 +770,9 @@ export async function repackDocxFromRaw(
     compressionOptions: { level: compressionLevel },
   });
 
-  // Promote any in-memory header/footer parts to real parts/relationships
-  // before serializing them (so collectHeaderFooterUpdates can resolve them).
-  await materializeNewHeaderFooterParts(
-    exportDocument,
-    newZip,
-    compressionLevel,
-  );
-
   // Rebind picture-watermark image rIds so each header references the image in
-  // its own rels (after materialization, so coverage-created header parts have
-  // a relationship target to anchor against).
+  // its own rels (materialization, run before image processing above, gave
+  // coverage-created header parts a relationship target to anchor against).
   await rebindWatermarkRelIds(exportDocument, newZip, compressionLevel);
 
   // Serialize and update modified headers/footers

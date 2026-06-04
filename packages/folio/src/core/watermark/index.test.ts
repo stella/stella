@@ -208,4 +208,60 @@ describe("ensureWatermarkHeaderCoverage", () => {
     expect(next).toBe(doc);
     expect(next.package.headers?.size).toBe(2);
   });
+
+  test("covers an earlier titlePg section even when a later section has its own first header", () => {
+    // Word inherits forward only, so section 1's cover page cannot inherit
+    // section 2's first header. A global "type exists somewhere" check would
+    // wrongly skip coverage for section 1.
+    const doc: Document = {
+      package: {
+        document: {
+          content: [
+            {
+              type: "paragraph",
+              content: [],
+              sectionProperties: {
+                titlePg: true,
+                headerReferences: [{ type: "default", rId: "rId1" }],
+              },
+            },
+          ],
+          finalSectionProperties: {
+            titlePg: true,
+            headerReferences: [
+              { type: "default", rId: "rId1" },
+              { type: "first", rId: "rId2" },
+            ],
+          },
+        },
+        headers: new Map([
+          ["rId1", { ...emptyHeader(), watermark }],
+          [
+            "rId2",
+            { type: "header", hdrFtrType: "first", content: [], watermark },
+          ],
+        ]),
+      },
+    };
+
+    const next = ensureWatermarkHeaderCoverage(doc, watermark);
+    const block = next.package.document.content[0];
+    const section1Refs =
+      block?.type === "paragraph"
+        ? block.sectionProperties?.headerReferences
+        : undefined;
+    // Section 1 (the mid-body break) gains a coverage first header...
+    const coverageRef = section1Refs?.find((ref) => ref.type === "first");
+    expect(coverageRef).toBeDefined();
+    expect(
+      coverageRef &&
+        next.package.headers?.get(coverageRef.rId)?.watermark?.kind,
+    ).toBe("text");
+    // ...while the final section keeps its own first header unchanged.
+    expect(
+      next.package.document.finalSectionProperties?.headerReferences?.filter(
+        (ref) => ref.type === "first",
+      ),
+    ).toEqual([{ type: "first", rId: "rId2" }]);
+  });
 });

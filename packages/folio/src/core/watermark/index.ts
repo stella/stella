@@ -132,74 +132,102 @@ export function ensureWatermarkHeaderCoverage(
       (ref) => ref.type === type && headers.has(ref.rId),
     ) ?? false;
 
-  const allSections: SectionProperties[] = [];
-  for (const block of body.content) {
+  // Sections in document order: mid-body section breaks (paragraph sectPr)
+  // first, then the body's final sectPr. `blockIndex` ties a slot back to the
+  // paragraph it came from for the rebuild; the final section has none.
+  type Slot = { props: SectionProperties; blockIndex: number | null };
+  const slots: Slot[] = [];
+  for (const [index, block] of body.content.entries()) {
     if (block.type === "paragraph" && block.sectionProperties) {
-      allSections.push(block.sectionProperties);
+      slots.push({ props: block.sectionProperties, blockIndex: index });
     }
   }
-  if (body.finalSectionProperties) {
-    allSections.push(body.finalSectionProperties);
+  slots.push({ props: body.finalSectionProperties ?? {}, blockIndex: null });
+
+  // Word inherits headers forward only: a section uses its own typed reference
+  // or the nearest preceding section's. Walk in document order tracking whether
+  // a resolvable header of each type is in effect; the first section that needs
+  // the type but cannot inherit one gets a coverage reference, after which
+  // later sections inherit it. (A backward-inheriting global check would miss a
+  // cover/even page that precedes the first existing typed header.)
+  type Ref = { type: HeaderFooterType; rId: string };
+  const additions: Ref[][] = slots.map(() => []);
+  const planType = (
+    type: HeaderFooterType,
+    sectionNeedsType: (props: SectionProperties) => boolean,
+  ): void => {
+    let inherited = false;
+    for (const [index, slot] of slots.entries()) {
+      if (resolvesType(slot.props, type)) {
+        inherited = true;
+        continue;
+      }
+      if (sectionNeedsType(slot.props) && !inherited) {
+        additions[index]?.push({ type, rId: COVERAGE_RID[type] });
+        inherited = true;
+      }
+    }
+  };
+
+  if (noHeadersAtAll) {
+    planType("default", () => true);
+  }
+  planType("first", (props) => props.titlePg === true);
+  if (evenOddMode) {
+    planType("even", () => true);
   }
 
-  const typeExistsAnywhere = (type: HeaderFooterType): boolean =>
-    allSections.some((props) => resolvesType(props, type));
-
-  const needsFirst = (props: SectionProperties): boolean =>
-    props.titlePg === true && !resolvesType(props, "first");
-  const needsEven = (props: SectionProperties): boolean =>
-    evenOddMode && !resolvesType(props, "even");
-
-  const createFirst =
-    !typeExistsAnywhere("first") && allSections.some(needsFirst);
-  const createEven = !typeExistsAnywhere("even") && allSections.some(needsEven);
-
-  if (!noHeadersAtAll && !createFirst && !createEven) {
+  if (additions.every((refs) => refs.length === 0)) {
     return doc;
   }
 
-  const ensureTypedHeader = (type: HeaderFooterType): string => {
-    const rId = COVERAGE_RID[type];
-    if (!headers.has(rId)) {
-      headers.set(rId, {
+  // Materialize only the coverage headers actually referenced.
+  for (const type of new Set(additions.flat().map((ref) => ref.type))) {
+    if (!headers.has(COVERAGE_RID[type])) {
+      headers.set(COVERAGE_RID[type], {
         type: "header",
         hdrFtrType: type,
         content: [],
         watermark: { ...watermark },
       });
     }
-    return rId;
-  };
+  }
 
-  const addRef = (
-    props: SectionProperties,
-    type: HeaderFooterType,
-    rId: string,
-  ): SectionProperties => ({
-    ...props,
-    headerReferences: [...(props.headerReferences ?? []), { type, rId }],
+  const withRefs = (props: SectionProperties, refs: Ref[]): SectionProperties =>
+    refs.length === 0
+      ? props
+      : {
+          ...props,
+          headerReferences: [...(props.headerReferences ?? []), ...refs],
+        };
+
+  const additionsByBlock = new Map<number, Ref[]>();
+  for (const [index, slot] of slots.entries()) {
+    if (slot.blockIndex !== null) {
+      additionsByBlock.set(slot.blockIndex, additions[index] ?? []);
+    }
+  }
+
+  const newContent = body.content.map((block, index) => {
+    const refs = additionsByBlock.get(index);
+    if (
+      block.type === "paragraph" &&
+      block.sectionProperties &&
+      refs !== undefined &&
+      refs.length > 0
+    ) {
+      return {
+        ...block,
+        sectionProperties: withRefs(block.sectionProperties, refs),
+      };
+    }
+    return block;
   });
-
-  const cover = (props: SectionProperties): SectionProperties => {
-    let next = props;
-    if (noHeadersAtAll && !resolvesType(next, "default")) {
-      next = addRef(next, "default", ensureTypedHeader("default"));
-    }
-    if (createFirst && needsFirst(props)) {
-      next = addRef(next, "first", ensureTypedHeader("first"));
-    }
-    if (createEven && needsEven(props)) {
-      next = addRef(next, "even", ensureTypedHeader("even"));
-    }
-    return next;
-  };
-
-  const newContent = body.content.map((block) =>
-    block.type === "paragraph" && block.sectionProperties
-      ? { ...block, sectionProperties: cover(block.sectionProperties) }
-      : block,
+  // The final section is always the last slot.
+  const newFinal = withRefs(
+    body.finalSectionProperties ?? {},
+    additions.at(-1) ?? [],
   );
-  const newFinal = cover(body.finalSectionProperties ?? {});
 
   return {
     ...doc,

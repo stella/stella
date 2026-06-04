@@ -18,6 +18,7 @@ import JSZip from "jszip";
 
 import type { HeaderFooter } from "../types/document";
 import { parseDocx } from "./parser";
+import { RELATIONSHIP_TYPES } from "./relsParser";
 import {
   createEmptyDocx,
   hasUnmaterializedHeaderFooter,
@@ -25,6 +26,9 @@ import {
   validateDocx,
 } from "./rezip";
 import { attemptSelectiveSave } from "./selectiveSave";
+
+const ONE_PIXEL_PNG_DATA_URL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
 
 const firstPageHeader: HeaderFooter = {
   type: "header",
@@ -85,6 +89,70 @@ describe("header/footer part materialization on save", () => {
 
     doc.package.headers = new Map([["rId_new_x", { ...firstPageHeader }]]);
     expect(hasUnmaterializedHeaderFooter(doc)).toBe(true);
+  });
+
+  test("processes an inserted image inside a newly materialized header", async () => {
+    // Materialization must run before image processing: otherwise
+    // collectImageParts cannot see the new header (no relationship yet) and the
+    // inserted image would save with a dangling rId and no media part.
+    const base = await createEmptyDocx();
+    const doc = await parseDocx(base, { preloadFonts: false });
+
+    const synthRId = "rId_new_default";
+    doc.package.headers = new Map([
+      [
+        synthRId,
+        {
+          type: "header",
+          hdrFtrType: "default",
+          content: [
+            {
+              type: "paragraph",
+              content: [
+                {
+                  type: "run",
+                  content: [
+                    {
+                      type: "drawing",
+                      image: {
+                        type: "image",
+                        rId: "rId_img_1",
+                        src: ONE_PIXEL_PNG_DATA_URL,
+                        filename: "header.png",
+                        size: { width: 9525, height: 9525 },
+                        wrap: { type: "inline" },
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    ]);
+    doc.package.document.finalSectionProperties = {
+      ...doc.package.document.finalSectionProperties,
+      headerReferences: [{ type: "default", rId: synthRId }],
+    };
+
+    const out = await repackDocx(doc, { updateModifiedDate: false });
+    expect((await validateDocx(out)).valid).toBe(true);
+
+    const zip = await JSZip.loadAsync(out);
+    const headerPath = Object.keys(zip.files).find((p) =>
+      /^word\/header\d+\.xml$/u.test(p),
+    );
+    expect(headerPath).toBeDefined();
+    const headerRels = await zip
+      .file(`word/_rels/${headerPath!.replace(/^word\//u, "")}.rels`)!
+      .async("text");
+    // The inserted image got a media part + an image relationship in the new
+    // header's own rels.
+    expect(headerRels).toContain(`Type="${RELATIONSHIP_TYPES.image}"`);
+    expect(
+      Object.keys(zip.files).some((p) => /^word\/media\/image\d+\./u.test(p)),
+    ).toBe(true);
   });
 
   test("selective save bails to full repack when a header is unmaterialized", async () => {
