@@ -457,11 +457,18 @@ describe("public law sitemap", () => {
     expectNoDirectAuthImport(source);
   });
 
-  test("server entry uses non-streaming SSR", async () => {
+  test("server entry preserves streaming SSR for public SEO routes", async () => {
     const source = await readSource("apps/web/src/server.ts");
 
-    expect(source).toContain("defaultRenderHandler");
+    expect(source).toContain("@tanstack/react-start/server-entry");
+    expect(source).not.toContain("defaultRenderHandler");
     expect(source).not.toContain("defaultStreamHandler");
+  });
+
+  test("server router does not render scroll restoration during SSR", async () => {
+    const source = await readSource("apps/web/src/router.tsx");
+
+    expect(source).toContain("scrollRestoration: !import.meta.env.SSR");
   });
 
   test("protected workspace route opts out of server rendering", async () => {

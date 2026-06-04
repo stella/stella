@@ -30,7 +30,10 @@ export function getRouter() {
     routeTree,
     defaultPreload: "intent",
     context: { analyticsValue, queryClient },
-    scrollRestoration: true,
+    // Keep browser scroll restoration after hydration, but avoid rendering
+    // TanStack's restoration sibling during server streaming for client-only
+    // top-level routes.
+    scrollRestoration: !import.meta.env.SSR,
     defaultNotFoundComponent: DefaultNotFoundComponent,
     defaultErrorComponent: DefaultErrorComponent,
     defaultPendingComponent: DefaultPendingComponent,
