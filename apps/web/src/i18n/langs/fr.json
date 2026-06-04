@@ -473,6 +473,7 @@
     },
     "queuedAttachmentCount": "{count, plural, one {# pièce jointe} many {# pièces jointes} other {# pièces jointes}}",
     "queuedNotice": "En file d’attente : envoi à la fin de la réponse en cours",
+    "recapLoading": "Récapitulatif de la conversation…",
     "removeSuggestion": "(supprimer)",
     "resend": "Renvoyer",
     "resizeThread": "Redimensionner la conversation",

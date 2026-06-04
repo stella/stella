@@ -473,6 +473,7 @@
     },
     "queuedAttachmentCount": "{count, plural, one {# manus} other {# manust}}",
     "queuedNotice": "Järjekorras — saadetakse, kui praegune vastus on valmis",
+    "recapLoading": "Vestlus võetakse kokku…",
     "removeSuggestion": "(eemalda)",
     "resend": "Saada uuesti",
     "resizeThread": "Muuda vestluse suurust",

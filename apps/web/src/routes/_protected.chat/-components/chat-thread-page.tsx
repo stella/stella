@@ -43,6 +43,7 @@ import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
 import { toSafeId } from "@/lib/safe-id";
 import { ChatAnonymizedToggle } from "@/routes/_protected.chat/-components/chat-anonymized-toggle";
+import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-thread-recap";
 import { ChatWebSearchToggle } from "@/routes/_protected.chat/-components/chat-web-search-toggle";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
@@ -315,24 +316,36 @@ export const ChatThreadPage = ({
                   />
                 </div>
               ) : (
-                <ChatThreadMessages
-                  approvalPendingMessageId={approvalPendingMessageId}
-                  error={error}
-                  isGenerating={isGenerating}
-                  messages={messages}
-                  onAskUserEditAndRerun={handleAskUserEditAndRerun}
-                  onAskUserSubmit={handleAskUserSubmit}
-                  onCreateDocumentResolve={handleCreateDocumentResolve}
-                  onOpenCreatedDocument={handleOpenCreatedDocument}
-                  onRemoveQueuedMessage={removeQueuedMessage}
-                  onResend={resendLatestMessage}
-                  onSendWithoutAnonymization={sendWithoutAnonymization}
-                  queuedMessages={queuedMessages}
-                  showThinkingIndicator
-                  showToolCallDetails={showToolCallDetails}
-                  streamdownComponents={streamdownComponents}
-                  workspaceId={workspaceId}
-                />
+                <>
+                  <ChatThreadMessages
+                    approvalPendingMessageId={approvalPendingMessageId}
+                    error={error}
+                    isGenerating={isGenerating}
+                    messages={messages}
+                    onAskUserEditAndRerun={handleAskUserEditAndRerun}
+                    onAskUserSubmit={handleAskUserSubmit}
+                    onCreateDocumentResolve={handleCreateDocumentResolve}
+                    onOpenCreatedDocument={handleOpenCreatedDocument}
+                    onRemoveQueuedMessage={removeQueuedMessage}
+                    onResend={resendLatestMessage}
+                    onSendWithoutAnonymization={sendWithoutAnonymization}
+                    queuedMessages={queuedMessages}
+                    showThinkingIndicator
+                    showToolCallDetails={showToolCallDetails}
+                    streamdownComponents={streamdownComponents}
+                    workspaceId={workspaceId}
+                  />
+                  <ChatThreadRecap
+                    activeOrganizationId={activeOrganizationId}
+                    isGenerating={isGenerating}
+                    key={threadRef.threadId}
+                    lastActivityAt={data.lastActivityAt}
+                    lastMessageId={messages.at(-1)?.id ?? null}
+                    lastMessageRole={messages.at(-1)?.role ?? null}
+                    messageCount={messages.length}
+                    threadRef={threadRef}
+                  />
+                </>
               )}
             </ConversationContent>
             <ConversationScrollButton />

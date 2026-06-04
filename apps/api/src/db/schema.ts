@@ -2853,6 +2853,21 @@ export const chatThreads = p.pgTable(
       .boolean("web_search_enabled")
       .notNull()
       .default(false),
+    /**
+     * Cached "where you left off" recap, shown as subtle grey text
+     * below the last message when the user reopens this thread after
+     * a gap (see RECAP_STALENESS_THRESHOLD_MS). Derived from the
+     * transcript and regenerated lazily when `recapMessageId` no
+     * longer matches the latest message or `recapPromptVersion`
+     * changes; all four columns stay null until the first stale
+     * revisit generates one. `recapMessageId` is a plain cache token
+     * (equality-compared only, no FK) so message truncation simply
+     * invalidates the cache rather than dangling a reference.
+     */
+    recapText: p.text("recap_text"),
+    recapMessageId: safeUuid<"chatMessage">("recap_message_id"),
+    recapPromptVersion: p.smallint("recap_prompt_version"),
+    recapGeneratedAt: p.timestamp("recap_generated_at"),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
     updatedAt: p
       .timestamp("updated_at")

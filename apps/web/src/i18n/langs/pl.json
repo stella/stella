@@ -473,6 +473,7 @@
     },
     "queuedAttachmentCount": "{count, plural, one {# załącznik} few {# załączniki} many {# załączników} other {# załącznika}}",
     "queuedNotice": "W kolejce — zostanie wysłana po zakończeniu bieżącej odpowiedzi",
+    "recapLoading": "Podsumowywanie rozmowy…",
     "removeSuggestion": "(usuń)",
     "resend": "Wyślij ponownie",
     "resizeThread": "Zmień rozmiar konwersacji",

@@ -473,6 +473,7 @@
     },
     "queuedAttachmentCount": "{count, plural, one {# příloha} few {# přílohy} other {# příloh}}",
     "queuedNotice": "Zařazeno — odešle se po dokončení aktuální odpovědi",
+    "recapLoading": "Shrnutí konverzace…",
     "removeSuggestion": "(odebrat)",
     "resend": "Odeslat znovu",
     "resizeThread": "Změnit velikost konverzace",

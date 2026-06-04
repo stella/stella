@@ -473,6 +473,7 @@
     },
     "queuedAttachmentCount": "{count, plural, one {# príloha} few {# prílohy} other {# príloh}}",
     "queuedNotice": "V poradí – odošle sa po dokončení aktuálnej odpovede",
+    "recapLoading": "Zhrnutie konverzácie…",
     "removeSuggestion": "(odstrániť)",
     "resend": "Odoslať znova",
     "resizeThread": "Zmeniť veľkosť konverzácie",

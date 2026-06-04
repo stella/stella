@@ -181,6 +181,34 @@ export const chatKeys = {
           key.contextKind ?? "plain",
           CHAT_TRANSPORT_VERSION,
         ],
+  // Sits under the per-thread prefix (chat, org, thread, scope, …ids)
+  // so `invalidateChatThread` drops it too; keyed by the latest
+  // message id so a new turn yields a fresh entry.
+  recap: (
+    activeOrganizationId: string,
+    threadRef: ChatThreadRef,
+    lastMessageId: string,
+  ) =>
+    threadRef.scope === "global"
+      ? [
+          ...chatKeys.all,
+          activeOrganizationId,
+          "thread",
+          threadRef.scope,
+          threadRef.threadId,
+          "recap",
+          lastMessageId,
+        ]
+      : [
+          ...chatKeys.all,
+          activeOrganizationId,
+          "thread",
+          threadRef.scope,
+          threadRef.workspaceId,
+          threadRef.threadId,
+          "recap",
+          lastMessageId,
+        ],
 };
 
 type ChatThreadOptionsInput = QueryOptionsInput<
@@ -191,6 +219,8 @@ type ChatThreadOptionsInput = QueryOptionsInput<
 type ThreadFetch = {
   messages: PersistedChatMessage[];
   contextMatterIds: string[];
+  /** ISO timestamp of the most recent message, or null when empty. */
+  lastActivityAt: string | null;
   webSearchAvailable: boolean;
   webSearchEnabled: boolean;
 };
@@ -221,6 +251,7 @@ const fetchThreadMessages = async (
       return {
         messages: [],
         contextMatterIds: [],
+        lastActivityAt: null,
         webSearchAvailable: false,
         webSearchEnabled: false,
       };
@@ -232,6 +263,7 @@ const fetchThreadMessages = async (
   return {
     messages: response.data.messages,
     contextMatterIds: response.data.contextMatterIds,
+    lastActivityAt: response.data.lastActivityAt,
     webSearchAvailable: response.data.webSearchAvailable,
     webSearchEnabled: response.data.webSearchEnabled,
   };
@@ -595,6 +627,11 @@ export type ChatThreadFetched = {
    * the transport, not through this read.
    */
   contextMatterIds: string[];
+  /**
+   * ISO timestamp of the most recent persisted message (null for an
+   * empty thread). Drives the revisit-recap staleness check.
+   */
+  lastActivityAt: string | null;
   webSearchAvailable: boolean;
   /**
    * Per-thread web-search opt-in. Mutated via PATCH /chat/threads/:id
@@ -642,6 +679,7 @@ export const chatThreadOptions = ({
       const {
         messages,
         contextMatterIds,
+        lastActivityAt,
         webSearchAvailable,
         webSearchEnabled,
       } = await fetchThreadMessages(key, {
@@ -682,8 +720,63 @@ export const chatThreadOptions = ({
         sendAutomaticallyWhen: createSendAutomaticallyPredicate(),
       });
 
-      return { chat, contextMatterIds, webSearchAvailable, webSearchEnabled };
+      return {
+        chat,
+        contextMatterIds,
+        lastActivityAt,
+        webSearchAvailable,
+        webSearchEnabled,
+      };
     },
+  });
+
+type ChatThreadRecapFetched = {
+  recap: string | null;
+};
+
+const fetchThreadRecap = async (
+  threadRef: ChatThreadRef,
+): Promise<ChatThreadRecapFetched> => {
+  const response = await api.chat
+    .threads({ threadId: toSafeId<"chatThread">(threadRef.threadId) })
+    .recap.post(undefined, {
+      query:
+        threadRef.scope === "workspace"
+          ? { workspaceId: toSafeId<"workspace">(threadRef.workspaceId) }
+          : {},
+    });
+
+  if (response.error) {
+    // A recap is a non-critical nicety: surface nothing on failure,
+    // but keep the error in telemetry.
+    getAnalytics().captureError(toAPIError(response.error));
+    return { recap: null };
+  }
+
+  return { recap: response.data.recap };
+};
+
+type ChatThreadRecapOptionsArgs = {
+  activeOrganizationId: string;
+  enabled: boolean;
+  lastMessageId: string;
+  threadRef: ChatThreadRef;
+};
+
+export const chatThreadRecapOptions = ({
+  activeOrganizationId,
+  enabled,
+  lastMessageId,
+  threadRef,
+}: ChatThreadRecapOptionsArgs) =>
+  queryOptions({
+    enabled,
+    // A given message tail yields a stable recap (cached server-side),
+    // so never auto-refetch; a new message produces a new cache key.
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: STALE_TIME.FIVETEEN.MINUTES,
+    queryKey: chatKeys.recap(activeOrganizationId, threadRef, lastMessageId),
+    queryFn: async () => await fetchThreadRecap(threadRef),
   });
 
 export const groupedChatThreadsOptions = (activeOrganizationId: string) =>

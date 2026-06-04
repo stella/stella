@@ -53,6 +53,7 @@ const getMessages = createSafeRootHandler(
                 id: true,
                 role: true,
                 content: true,
+                createdAt: true,
               },
               orderBy: { createdAt: "asc" },
             },
@@ -84,6 +85,7 @@ const getMessages = createSafeRootHandler(
         return Result.ok({
           messages: [],
           contextMatterIds: [],
+          lastActivityAt: null,
           webSearchAvailable,
           webSearchEnabled: false,
         });
@@ -113,6 +115,11 @@ const getMessages = createSafeRootHandler(
       );
     }
 
+    // Most recent message timestamp; the client compares it against
+    // the recap staleness window to decide whether to ask for a recap.
+    const lastActivityAt =
+      thread.messages.at(-1)?.createdAt.toISOString() ?? null;
+
     return Result.ok({
       messages: thread.messages.map((row) => ({
         id: row.id,
@@ -120,6 +127,7 @@ const getMessages = createSafeRootHandler(
         parts: normalizeLegacyToolInputs(row.content.data),
       })),
       contextMatterIds: thread.contextMatterIds,
+      lastActivityAt,
       webSearchAvailable,
       webSearchEnabled: thread.webSearchEnabled,
     });

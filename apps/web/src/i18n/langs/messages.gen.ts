@@ -476,6 +476,7 @@ type Messages = {
     };
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}";
     "queuedNotice": "Queued — sends when the current response finishes";
+    "recapLoading": "Recapping the conversation…";
     "removeSuggestion": "(remove)";
     "resend": "Resend";
     "resizeThread": "Resize conversation";
