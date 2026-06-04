@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import type { QueryClient } from "@tanstack/react-query";
 import {
+  ClientOnly,
   createRootRouteWithContext,
   HeadContent,
   Outlet,
@@ -88,9 +89,11 @@ function RootApp() {
     <div className="flex h-dvh w-full flex-col" id="app">
       <Outlet />
       {DevRoot ? (
-        <Suspense fallback={null}>
-          <DevRoot />
-        </Suspense>
+        <ClientOnly>
+          <Suspense fallback={null}>
+            <DevRoot />
+          </Suspense>
+        </ClientOnly>
       ) : null}
     </div>
   );
