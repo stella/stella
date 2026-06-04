@@ -431,38 +431,28 @@ export function serializeParagraphFormatting(
 ): string {
   const parts: string[] = [];
 
+  // Emit a boolean toggle: a bare element for true, `w:val="0"` for an explicit
+  // false (which disables a value inherited from a style, so the override
+  // survives round-trip), and nothing when absent ("inherit").
+  const pushToggle = (name: string, value: boolean | undefined): void => {
+    if (value === true) {
+      parts.push(`<w:${name}/>`);
+    } else if (value === false) {
+      parts.push(`<w:${name} w:val="0"/>`);
+    }
+  };
+
   if (formatting) {
     // Style reference (must be first)
     if (formatting.styleId) {
       parts.push(`<w:pStyle w:val="${escapeXml(formatting.styleId)}"/>`);
     }
 
-    // Keep next/lines/widow. Emit `w:val="0"` on an explicit false so an
-    // inline override that disables an inherited (style) value survives
-    // round-trip; a bare element is true and absence means "inherit".
-    if (formatting.keepNext === true) {
-      parts.push("<w:keepNext/>");
-    } else if (formatting.keepNext === false) {
-      parts.push('<w:keepNext w:val="0"/>');
-    }
-
-    if (formatting.keepLines === true) {
-      parts.push("<w:keepLines/>");
-    } else if (formatting.keepLines === false) {
-      parts.push('<w:keepLines w:val="0"/>');
-    }
-
-    if (formatting.contextualSpacing === true) {
-      parts.push("<w:contextualSpacing/>");
-    } else if (formatting.contextualSpacing === false) {
-      parts.push('<w:contextualSpacing w:val="0"/>');
-    }
-
-    if (formatting.pageBreakBefore === true) {
-      parts.push("<w:pageBreakBefore/>");
-    } else if (formatting.pageBreakBefore === false) {
-      parts.push('<w:pageBreakBefore w:val="0"/>');
-    }
+    // Keep next/lines, contextual spacing, page break before.
+    pushToggle("keepNext", formatting.keepNext);
+    pushToggle("keepLines", formatting.keepLines);
+    pushToggle("contextualSpacing", formatting.contextualSpacing);
+    pushToggle("pageBreakBefore", formatting.pageBreakBefore);
 
     // Frame properties
     const frameXml = serializeFrameProperties(formatting.frame);
@@ -471,11 +461,7 @@ export function serializeParagraphFormatting(
     }
 
     // Widow control
-    if (formatting.widowControl === false) {
-      parts.push('<w:widowControl w:val="0"/>');
-    } else if (formatting.widowControl === true) {
-      parts.push("<w:widowControl/>");
-    }
+    pushToggle("widowControl", formatting.widowControl);
 
     // Numbering
     const numPrXml = serializeNumbering(formatting.numPr);
@@ -501,19 +487,9 @@ export function serializeParagraphFormatting(
       parts.push(tabsXml);
     }
 
-    // Suppress line numbers
-    if (formatting.suppressLineNumbers === true) {
-      parts.push("<w:suppressLineNumbers/>");
-    } else if (formatting.suppressLineNumbers === false) {
-      parts.push('<w:suppressLineNumbers w:val="0"/>');
-    }
-
-    // Suppress auto hyphens
-    if (formatting.suppressAutoHyphens === true) {
-      parts.push("<w:suppressAutoHyphens/>");
-    } else if (formatting.suppressAutoHyphens === false) {
-      parts.push('<w:suppressAutoHyphens w:val="0"/>');
-    }
+    // Suppress line numbers / auto hyphens
+    pushToggle("suppressLineNumbers", formatting.suppressLineNumbers);
+    pushToggle("suppressAutoHyphens", formatting.suppressAutoHyphens);
 
     // Spacing
     const spacingXml = serializeSpacing(formatting);
@@ -528,11 +504,7 @@ export function serializeParagraphFormatting(
     }
 
     // Text direction (bidi)
-    if (formatting.bidi === true) {
-      parts.push("<w:bidi/>");
-    } else if (formatting.bidi === false) {
-      parts.push('<w:bidi w:val="0"/>');
-    }
+    pushToggle("bidi", formatting.bidi);
 
     // Justification
     if (formatting.alignment) {
