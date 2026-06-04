@@ -17,6 +17,8 @@ const {
   SITEMAP_XML_RESPONSE_HEADERS,
 } = await import("@/lib/public-law-sitemap");
 const { isPublicSsrPath } = await import("@/lib/public-ssr-paths");
+const { isWorkspaceDocumentRoutePath } =
+  await import("@/routes/_protected.workspaces/$workspaceId/-utils");
 const { WORKSPACE_PRIMARY_NAV_ITEMS } =
   await import("@/components/workspace-primary-nav");
 
@@ -492,6 +494,24 @@ describe("public law sitemap", () => {
 
     expect(source).toContain("ssr: false");
     expect(source).toContain("pendingComponent: () => null");
+  });
+
+  test("document routes do not prefetch parent overview billing data", async () => {
+    const source = await readSource(
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx",
+    );
+
+    expect(
+      isWorkspaceDocumentRoutePath("/workspaces/workspace-id/view-id/document"),
+    ).toBe(true);
+    expect(
+      isWorkspaceDocumentRoutePath("/workspaces/workspace-id/view-id"),
+    ).toBe(false);
+    expect(source).toContain(
+      "const isDocumentRoute = isWorkspaceDocumentRoutePath(location.pathname)",
+    );
+    expect(source).toContain("if (isDocumentRoute)");
+    expect(source).toContain("timeEntriesOptions(workspaceId");
   });
 
   test("public case-law list route preloads first page for SSR links", async () => {

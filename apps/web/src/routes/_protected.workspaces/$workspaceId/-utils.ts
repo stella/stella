@@ -11,9 +11,14 @@ import type {
 } from "@/lib/types";
 import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 
+const DOCUMENT_ROUTE_SUFFIX = "/document";
+
 type InternalColId = "select" | "add-property";
 
 export const getInternalColId = (col: InternalColId): InternalColId => col;
+
+export const isWorkspaceDocumentRoutePath = (pathname: string) =>
+  pathname.endsWith(DOCUMENT_ROUTE_SUFFIX);
 
 // -- Internal property IDs (metadata columns stored in view config) --
 
