@@ -740,7 +740,15 @@ export async function repackDocxFromRaw(
     });
   }
 
-  // Serialize and update document.xml
+  // Promote in-memory header/footer parts to real parts/relationships first, so
+  // collectImageParts sees them and processNewImages can write image relations
+  // into a newly created header/footer's own rels.
+  await materializeNewHeaderFooterParts(
+    exportDocument,
+    newZip,
+    compressionLevel,
+  );
+
   await processNewImages(
     collectImageParts(exportDocument),
     newZip,

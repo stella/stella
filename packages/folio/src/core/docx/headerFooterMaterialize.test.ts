@@ -23,9 +23,39 @@ import {
   createEmptyDocx,
   hasUnmaterializedHeaderFooter,
   repackDocx,
+  repackDocxFromRaw,
   validateDocx,
 } from "./rezip";
 import { attemptSelectiveSave } from "./selectiveSave";
+import { unzipDocx } from "./unzip";
+
+const headerWithInlineImage = (rId: string): HeaderFooter => ({
+  type: "header",
+  hdrFtrType: "default",
+  content: [
+    {
+      type: "paragraph",
+      content: [
+        {
+          type: "run",
+          content: [
+            {
+              type: "drawing",
+              image: {
+                type: "image",
+                rId,
+                src: ONE_PIXEL_PNG_DATA_URL,
+                filename: "header.png",
+                size: { width: 9525, height: 9525 },
+                wrap: { type: "inline" },
+              },
+            },
+          ],
+        },
+      ],
+    },
+  ],
+});
 
 const ONE_PIXEL_PNG_DATA_URL =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
@@ -100,36 +130,7 @@ describe("header/footer part materialization on save", () => {
 
     const synthRId = "rId_new_default";
     doc.package.headers = new Map([
-      [
-        synthRId,
-        {
-          type: "header",
-          hdrFtrType: "default",
-          content: [
-            {
-              type: "paragraph",
-              content: [
-                {
-                  type: "run",
-                  content: [
-                    {
-                      type: "drawing",
-                      image: {
-                        type: "image",
-                        rId: "rId_img_1",
-                        src: ONE_PIXEL_PNG_DATA_URL,
-                        filename: "header.png",
-                        size: { width: 9525, height: 9525 },
-                        wrap: { type: "inline" },
-                      },
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
-        },
-      ],
+      [synthRId, headerWithInlineImage("rId_img_1")],
     ]);
     doc.package.document.finalSectionProperties = {
       ...doc.package.document.finalSectionProperties,
@@ -149,6 +150,40 @@ describe("header/footer part materialization on save", () => {
       .async("text");
     // The inserted image got a media part + an image relationship in the new
     // header's own rels.
+    expect(headerRels).toContain(`Type="${RELATIONSHIP_TYPES.image}"`);
+    expect(
+      Object.keys(zip.files).some((p) => /^word\/media\/image\d+\./u.test(p)),
+    ).toBe(true);
+  });
+
+  test("materializes new header parts on the raw repack path too", async () => {
+    // repackDocxFromRaw is a separate save path; it must materialize before
+    // image processing just like repackDocx.
+    const base = await createEmptyDocx();
+    const raw = await unzipDocx(base);
+    const doc = await parseDocx(base, { preloadFonts: false });
+
+    doc.package.headers = new Map([
+      ["rId_new_default", headerWithInlineImage("rId_img_1")],
+    ]);
+    doc.package.document.finalSectionProperties = {
+      ...doc.package.document.finalSectionProperties,
+      headerReferences: [{ type: "default", rId: "rId_new_default" }],
+    };
+
+    const out = await repackDocxFromRaw(doc, raw, {
+      updateModifiedDate: false,
+    });
+    expect((await validateDocx(out)).valid).toBe(true);
+
+    const zip = await JSZip.loadAsync(out);
+    const headerPath = Object.keys(zip.files).find((p) =>
+      /^word\/header\d+\.xml$/u.test(p),
+    );
+    expect(headerPath).toBeDefined();
+    const headerRels = await zip
+      .file(`word/_rels/${headerPath!.replace(/^word\//u, "")}.rels`)!
+      .async("text");
     expect(headerRels).toContain(`Type="${RELATIONSHIP_TYPES.image}"`);
     expect(
       Object.keys(zip.files).some((p) => /^word\/media\/image\d+\./u.test(p)),
