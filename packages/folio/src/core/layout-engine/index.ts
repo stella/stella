@@ -657,7 +657,6 @@ function layoutTable(
   let currentRowIndex = 0;
 
   const breakInfo = buildTableRowBreakInfo(block, measure);
-  const fullPageHeight = paginator.getContentHeight();
 
   // X position from justification / indent, recomputed per fragment because the
   // active column can change across section breaks.
@@ -673,7 +672,13 @@ function layoutTable(
     return x;
   };
 
-  const canSplitRow = (rowIndex: number): boolean => {
+  const getCurrentRowCapacity = (state = paginator.getCurrentState()): number =>
+    state.contentBottom - state.topMargin;
+
+  const canSplitRow = (
+    rowIndex: number,
+    state = paginator.getCurrentState(),
+  ): boolean => {
     const row = rows[rowIndex];
     if (!row) {
       return false;
@@ -681,7 +686,7 @@ function layoutTable(
     const repeatedHeaderOverhead =
       headerRowCount > 0 && rowIndex >= headerRowCount ? headerRowsHeight : 0;
     return (
-      row.height + repeatedHeaderOverhead > fullPageHeight &&
+      row.height + repeatedHeaderOverhead > getCurrentRowCapacity(state) &&
       (breakInfo.breakOffsets[rowIndex]?.length ?? 0) > 1
     );
   };
