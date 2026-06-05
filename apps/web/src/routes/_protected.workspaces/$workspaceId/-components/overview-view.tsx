@@ -1226,13 +1226,13 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
             rows regardless of locale. */}
         <span className="text-muted-foreground grid shrink-0 justify-items-start">
           <span
-            aria-hidden
+            aria-hidden="true"
             className="invisible col-start-1 row-start-1 whitespace-nowrap"
           >
             {t("workspaces.overview.uploaded")}
           </span>
           <span
-            aria-hidden
+            aria-hidden="true"
             className="invisible col-start-1 row-start-1 whitespace-nowrap"
           >
             {t("workspaces.overview.edited")}
