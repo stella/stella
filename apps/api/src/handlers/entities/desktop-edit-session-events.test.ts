@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 
@@ -25,6 +25,10 @@ const sessionId = toSafeId<"desktopEditSession">(
 const sessionToken = "a".repeat(64);
 
 describe("desktop edit session events", () => {
+  afterAll(() => {
+    mock.restore();
+  });
+
   beforeEach(() => {
     authorizeDesktopEditSessionMock.mockReset();
     readDesktopEditSessionEventStateMock.mockReset();
