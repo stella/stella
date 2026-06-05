@@ -1,4 +1,9 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  type RefetchQueryFilters,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { useRouter } from "@tanstack/react-router";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -72,9 +77,21 @@ type UpdateWorkspaceVars = {
 
 export const workspaceUpdateInvalidationKeys = () => [workspacesKeys.all];
 
+export const workspaceUpdateRefetchFilters = (
+  workspaceId: string,
+): RefetchQueryFilters[] => [
+  { queryKey: workspacesKeys.all, type: "active" },
+  {
+    exact: true,
+    queryKey: workspacesKeys.byId(workspaceId),
+    type: "inactive",
+  },
+];
+
 export const useUpdateWorkspace = () => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: UpdateWorkspaceVars) => {
@@ -101,10 +118,27 @@ export const useUpdateWorkspace = () => {
         throw toAPIError(response.error);
       }
     },
-    onSuccess: () => {
-      for (const queryKey of workspaceUpdateInvalidationKeys()) {
-        void queryClient.invalidateQueries({ queryKey });
-      }
+    onSuccess: async (_data, { workspaceId }) => {
+      await Promise.all(
+        workspaceUpdateInvalidationKeys().map(async (queryKey) => {
+          await queryClient.invalidateQueries({
+            queryKey,
+            refetchType: "none",
+          });
+        }),
+      );
+      await Promise.all(
+        workspaceUpdateRefetchFilters(toSafeId<"workspace">(workspaceId)).map(
+          async (filters) => {
+            await queryClient.refetchQueries(filters);
+          },
+        ),
+      );
+      // Re-run route loaders so the document title (driven by the
+      // route `head` from loaderData) reflects the renamed matter
+      // without waiting for a navigation. Query invalidation alone
+      // refreshes components but not the cached loaderData.
+      await router.invalidate();
     },
     onError: (error) => {
       analytics.captureError(error);
