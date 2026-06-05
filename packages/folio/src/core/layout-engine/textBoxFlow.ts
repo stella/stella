@@ -56,3 +56,41 @@ export function bandTopContentY(
     vertical?.posOffset !== undefined ? emuToPixels(vertical.posOffset) : 0;
   return vertical?.relativeTo === "page" ? offset - marginTop : offset;
 }
+
+/** Page geometry needed to resolve a band box's horizontal anchor. */
+export type BandHorizontalGeometry = {
+  pageWidth: number;
+  marginLeft: number;
+  marginRight: number;
+  boxWidth: number;
+};
+
+/**
+ * Page-absolute left X (px) of a `topAndBottom` band box, resolved from its
+ * OOXML horizontal anchor. A page-relative anchor measures from the page edge;
+ * a margin/column anchor measures from the content box. Within that frame an
+ * explicit `posOffset` wins, then `align` (center/right); otherwise the box sits
+ * at the frame's left edge. The band itself is always full-width, so this only
+ * shifts where the box paints, not the reserved vertical space. Ported from
+ * eigenpal #694.
+ */
+export function bandFragmentX(
+  horizontal: ImageRunPosition["horizontal"],
+  geometry: BandHorizontalGeometry,
+): number {
+  const { pageWidth, marginLeft, marginRight, boxWidth } = geometry;
+  const usesPageFrame = horizontal?.relativeTo === "page";
+  const frameLeft = usesPageFrame ? 0 : marginLeft;
+  const frameRight = usesPageFrame ? pageWidth : pageWidth - marginRight;
+
+  if (horizontal?.posOffset !== undefined) {
+    return frameLeft + emuToPixels(horizontal.posOffset);
+  }
+  if (horizontal?.align === "center") {
+    return frameLeft + (frameRight - frameLeft - boxWidth) / 2;
+  }
+  if (horizontal?.align === "right" || horizontal?.align === "outside") {
+    return frameRight - boxWidth;
+  }
+  return frameLeft;
+}

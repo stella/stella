@@ -51,6 +51,13 @@ function banner(
   };
 }
 
+function withHorizontal(
+  block: TextBoxBlock,
+  horizontal: NonNullable<NonNullable<TextBoxBlock["position"]>["horizontal"]>,
+): TextBoxBlock {
+  return { ...block, position: { ...block.position, horizontal } };
+}
+
 const boxMeasure: TextBoxMeasure = {
   kind: "textBox",
   width: 600,
@@ -219,5 +226,63 @@ describe("topAndBottom band text box layout", () => {
 
     expect(page.margins.top).toBe(nextSectionMargins.top);
     expect(box?.y).toBe(0);
+  });
+
+  test("defaults to the content left edge without a horizontal anchor", () => {
+    const frags = textBoxFragments(
+      [banner("page"), para("p")],
+      [boxMeasure, paraMeasure],
+    );
+    const box = frags.find((f) => f.kind === "textBox") as
+      | TextBoxFragment
+      | undefined;
+    // Unchanged behavior: pinned to the column/content left edge.
+    expect(box?.x).toBe(MARGINS.left);
+  });
+
+  test("honors a margin-relative center horizontal anchor", () => {
+    const frags = textBoxFragments(
+      [
+        withHorizontal(banner("page"), {
+          relativeTo: "margin",
+          align: "center",
+        }),
+      ],
+      [boxMeasure],
+    );
+    const box = frags.find((f) => f.kind === "textBox") as
+      | TextBoxFragment
+      | undefined;
+    // content box 624px, 600px banner → 96 + (624 - 600) / 2 = 108.
+    expect(box?.x).toBe(108);
+  });
+
+  test("honors a page-relative right horizontal anchor", () => {
+    const frags = textBoxFragments(
+      [withHorizontal(banner("page"), { relativeTo: "page", align: "right" })],
+      [boxMeasure],
+    );
+    const box = frags.find((f) => f.kind === "textBox") as
+      | TextBoxFragment
+      | undefined;
+    // page 816px, 600px banner → 816 - 600 = 216.
+    expect(box?.x).toBe(216);
+  });
+
+  test("honors a page-relative horizontal posOffset", () => {
+    const frags = textBoxFragments(
+      [
+        withHorizontal(banner("page"), {
+          relativeTo: "page",
+          posOffset: EMU_PER_INCH,
+        }),
+      ],
+      [boxMeasure],
+    );
+    const box = frags.find((f) => f.kind === "textBox") as
+      | TextBoxFragment
+      | undefined;
+    // page frame left 0 + 96px offset = 96.
+    expect(box?.x).toBe(96);
   });
 });

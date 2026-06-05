@@ -15,7 +15,11 @@ import {
 import { measuredLineAdvance } from "./lineFlow";
 import { FOOTNOTE_SEPARATOR_HEIGHT, createPaginator } from "./paginator";
 import { buildTableRowBreakInfo, snapRowBreak } from "./tableRowBreak";
-import { bandTopContentY, floatingTextBoxReservesBand } from "./textBoxFlow";
+import {
+  bandFragmentX,
+  bandTopContentY,
+  floatingTextBoxReservesBand,
+} from "./textBoxFlow";
 import type {
   FlowBlock,
   Measure,
@@ -1108,10 +1112,22 @@ function layoutTextBox(
     // inside the resolver instead would desync the box from its band on a
     // title page whose first-page top margin differs from the section margin.
     const bandTop = bandTopContentY(block.position?.vertical, sectionMarginTop);
+    // Honor the box's horizontal anchor (align center/right, page-relative
+    // offset) instead of always pinning to the column's left edge. The band is
+    // full-width regardless, so this only moves where the box paints.
+    const horizontal = block.position?.horizontal;
+    const x = horizontal
+      ? bandFragmentX(horizontal, {
+          pageWidth: state.page.size.w,
+          marginLeft: state.page.margins.left,
+          marginRight: state.page.margins.right,
+          boxWidth: measure.width,
+        })
+      : paginator.getColumnX(state.columnIndex);
     const fragment: TextBoxFragment = {
       kind: "textBox",
       blockId: block.id,
-      x: paginator.getColumnX(state.columnIndex),
+      x,
       y: state.topMargin + bandTop,
       width: measure.width,
       height: measure.height,

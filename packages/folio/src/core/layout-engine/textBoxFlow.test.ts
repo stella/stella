@@ -5,6 +5,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  bandFragmentX,
   floatingTextBoxReservesBand,
   floatingTextBoxWrapsText,
   isFloatingTextBoxBlock,
@@ -72,5 +73,74 @@ describe("floatingTextBoxReservesBand", () => {
     expect(floatingTextBoxReservesBand({ wrapType: "behind" })).toBe(false);
     expect(floatingTextBoxReservesBand({ displayMode: "float" })).toBe(false);
     expect(floatingTextBoxReservesBand({})).toBe(false);
+  });
+});
+
+describe("bandFragmentX (eigenpal #694)", () => {
+  // 816px page, 96px side margins → 624px content box; 600px banner.
+  const geometry = {
+    pageWidth: 816,
+    marginLeft: 96,
+    marginRight: 96,
+    boxWidth: 600,
+  };
+  const EMU_PER_INCH = 914_400; // 1in = 96px at 96 DPI = marginLeft.
+
+  test("no horizontal anchor → content left edge", () => {
+    expect(bandFragmentX(undefined, geometry)).toBe(96);
+  });
+
+  test("margin-relative align=center centers within the content box", () => {
+    // 96 + (624 - 600) / 2
+    expect(
+      bandFragmentX({ relativeTo: "margin", align: "center" }, geometry),
+    ).toBe(108);
+  });
+
+  test("margin-relative align=right pins to the content right edge", () => {
+    // (816 - 96) - 600
+    expect(
+      bandFragmentX({ relativeTo: "margin", align: "right" }, geometry),
+    ).toBe(120);
+  });
+
+  test("page-relative align=center centers within the full page", () => {
+    // (816 - 600) / 2
+    expect(
+      bandFragmentX({ relativeTo: "page", align: "center" }, geometry),
+    ).toBe(108);
+  });
+
+  test("page-relative align=right pins to the page right edge", () => {
+    // 816 - 600
+    expect(
+      bandFragmentX({ relativeTo: "page", align: "right" }, geometry),
+    ).toBe(216);
+  });
+
+  test("align=outside aliases right, align=inside aliases left", () => {
+    expect(
+      bandFragmentX({ relativeTo: "margin", align: "outside" }, geometry),
+    ).toBe(120);
+    expect(
+      bandFragmentX({ relativeTo: "margin", align: "inside" }, geometry),
+    ).toBe(96);
+  });
+
+  test("explicit posOffset wins over align and is frame-relative", () => {
+    // page frame: 0 + 96
+    expect(
+      bandFragmentX(
+        { relativeTo: "page", posOffset: EMU_PER_INCH, align: "center" },
+        geometry,
+      ),
+    ).toBe(96);
+    // margin frame: 96 + 96
+    expect(
+      bandFragmentX(
+        { relativeTo: "margin", posOffset: EMU_PER_INCH },
+        geometry,
+      ),
+    ).toBe(192);
   });
 });
