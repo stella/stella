@@ -71,6 +71,7 @@ describe("selectRecoverableOrphanWorkspaceIds", () => {
         initialRequestIds: new Map([["a", "request-a"]]),
         liveWorkspaceIds: new Set(),
         pendingWorkspaceIds: new Set(["a"]),
+        recoveryWorkspaceIds: new Set(),
       }),
     ).toEqual(["a"]);
   });
@@ -83,6 +84,7 @@ describe("selectRecoverableOrphanWorkspaceIds", () => {
         initialRequestIds: new Map([["a", "request-a"]]),
         liveWorkspaceIds: new Set(),
         pendingWorkspaceIds: new Set(["a"]),
+        recoveryWorkspaceIds: new Set(),
       }),
     ).toEqual([]);
   });
@@ -95,6 +97,7 @@ describe("selectRecoverableOrphanWorkspaceIds", () => {
         initialRequestIds: new Map([["a", "request-a"]]),
         liveWorkspaceIds: new Set(),
         pendingWorkspaceIds: new Set(),
+        recoveryWorkspaceIds: new Set(),
       }),
     ).toEqual([]);
   });
@@ -107,8 +110,22 @@ describe("selectRecoverableOrphanWorkspaceIds", () => {
         initialRequestIds: new Map([["a", null]]),
         liveWorkspaceIds: new Set(),
         pendingWorkspaceIds: new Set(),
+        recoveryWorkspaceIds: new Set(),
       }),
     ).toEqual([]);
+  });
+
+  test("recovers a recovery-owned lock with no pending-cell evidence", () => {
+    expect(
+      selectRecoverableOrphanWorkspaceIds({
+        candidateWorkspaceIds: ["a"],
+        currentRequestIds: new Map([["a", "request-a"]]),
+        initialRequestIds: new Map([["a", "request-a"]]),
+        liveWorkspaceIds: new Set(),
+        pendingWorkspaceIds: new Set(),
+        recoveryWorkspaceIds: new Set(["a"]),
+      }),
+    ).toEqual(["a"]);
   });
 });
 

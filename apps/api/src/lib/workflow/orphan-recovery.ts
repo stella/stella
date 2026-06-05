@@ -22,6 +22,7 @@ type RecoverableOrphanSelectionInput = OrphanSelectionInput & {
   currentRequestIds: ReadonlyMap<string, string | null>;
   initialRequestIds: ReadonlyMap<string, string | null>;
   pendingWorkspaceIds: ReadonlySet<string>;
+  recoveryWorkspaceIds: ReadonlySet<string>;
 };
 
 type CurrentWorkflowRequestStateInput = {
@@ -71,10 +72,10 @@ export const selectOrphanWorkspaceIds = ({
 /**
  * Final recovery gate after the settle window. A candidate is recoverable only
  * when it still has no live job, its request id did not change during the
- * window, and it is tied to pending cells. The pending-cell requirement avoids
- * reclaiming a healthy workflow that is still planning before its first queue
- * job exists, including legacy starters that set the running lock before the
- * request id.
+ * window, and it is tied to pending cells or a recovery-owned lock. The
+ * evidence requirement avoids reclaiming a healthy workflow that is still
+ * planning before its first queue job exists, including legacy starters that
+ * set the running lock before the request id.
  */
 export const selectRecoverableOrphanWorkspaceIds = ({
   candidateWorkspaceIds,
@@ -82,6 +83,7 @@ export const selectRecoverableOrphanWorkspaceIds = ({
   initialRequestIds,
   liveWorkspaceIds,
   pendingWorkspaceIds,
+  recoveryWorkspaceIds,
 }: RecoverableOrphanSelectionInput): string[] => {
   const recoverable: string[] = [];
   const seen = new Set<string>();
@@ -97,7 +99,9 @@ export const selectRecoverableOrphanWorkspaceIds = ({
       continue;
     }
 
-    if (!pendingWorkspaceIds.has(workspaceId)) {
+    const hasPendingCells = pendingWorkspaceIds.has(workspaceId);
+    const hasRecoveryLock = recoveryWorkspaceIds.has(workspaceId);
+    if (!hasPendingCells && !hasRecoveryLock) {
       continue;
     }
 

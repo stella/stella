@@ -860,6 +860,27 @@ const readWorkflowRequestIds = async (
   return requestIds;
 };
 
+const readWorkflowRunningValues = async (
+  redis: RedisClient,
+  workspaceIds: readonly string[],
+): Promise<Map<string, string | null>> => {
+  const runningValues = new Map<string, string | null>();
+  for (const workspaceIdBatch of chunkItems(
+    workspaceIds,
+    LIMITS.workflowEntityBatchSize,
+  )) {
+    await Promise.all(
+      workspaceIdBatch.map(async (id) => {
+        const runningValue = await redis.get(
+          workflowKey(brandPersistedWorkspaceId(id), "running"),
+        );
+        runningValues.set(id, runningValue);
+      }),
+    );
+  }
+  return runningValues;
+};
+
 const reserveExistingRunningLock = async (
   redis: RedisClient,
   runningKey: string,
@@ -1065,12 +1086,23 @@ export const reconcileOrphanedWorkflows = async ({
     redis,
     orphanCandidates,
   );
+  const currentRunningValues = await readWorkflowRunningValues(
+    redis,
+    orphanCandidates,
+  );
+  const recoveryWorkspaceIds = new Set<string>();
+  for (const workspaceId of orphanCandidates) {
+    if (currentRunningValues.get(workspaceId) === RECOVERY_LOCK_VALUE) {
+      recoveryWorkspaceIds.add(workspaceId);
+    }
+  }
   const recoverableOrphans = selectRecoverableOrphanWorkspaceIds({
     candidateWorkspaceIds: orphanCandidates,
     currentRequestIds,
     initialRequestIds,
     liveWorkspaceIds: confirmed.workspaceIds,
     pendingWorkspaceIds: pendingWorkspaceIdSet,
+    recoveryWorkspaceIds,
   });
 
   for (const workspaceId of recoverableOrphans) {
