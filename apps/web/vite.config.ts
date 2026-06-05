@@ -124,6 +124,7 @@ export default defineConfig(({ mode }) => {
         "@better-fetch/fetch",
         "defu",
         "nanostores",
+<<<<<<< HEAD
         "prosemirror-commands",
         "prosemirror-dropcursor",
         "prosemirror-gapcursor",
