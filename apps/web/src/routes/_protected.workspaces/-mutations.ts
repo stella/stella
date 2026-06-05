@@ -1,4 +1,8 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  type RefetchQueryFilters,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -73,6 +77,17 @@ type UpdateWorkspaceVars = {
 
 export const workspaceUpdateInvalidationKeys = () => [workspacesKeys.all];
 
+export const workspaceUpdateRefetchFilters = (
+  workspaceId: string,
+): RefetchQueryFilters[] => [
+  { queryKey: workspacesKeys.all, type: "active" },
+  {
+    exact: true,
+    queryKey: workspacesKeys.byId(workspaceId),
+    type: "inactive",
+  },
+];
+
 export const useUpdateWorkspace = () => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
@@ -103,11 +118,16 @@ export const useUpdateWorkspace = () => {
         throw toAPIError(response.error);
       }
     },
-    onSuccess: async () => {
+    onSuccess: async (_data, { workspaceId }) => {
       await Promise.all(
-        workspaceUpdateInvalidationKeys().map(async (queryKey) => {
-          await queryClient.invalidateQueries({ queryKey });
-        }),
+        workspaceUpdateInvalidationKeys().map((queryKey) =>
+          queryClient.invalidateQueries({ queryKey, refetchType: "none" }),
+        ),
+      );
+      await Promise.all(
+        workspaceUpdateRefetchFilters(toSafeId<"workspace">(workspaceId)).map(
+          (filters) => queryClient.refetchQueries(filters),
+        ),
       );
       // Re-run route loaders so the document title (driven by the
       // route `head` from loaderData) reflects the renamed matter

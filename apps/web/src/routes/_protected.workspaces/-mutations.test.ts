@@ -29,6 +29,22 @@ describe("workspace update cache invalidation", () => {
     ).toEqual(workspacesKeys.all);
   });
 
+  test("refetches active workspace caches and the inactive loader cache", async () => {
+    const { workspaceUpdateRefetchFilters } =
+      await import("@/routes/_protected.workspaces/-mutations");
+    const { workspacesKeys } =
+      await import("@/routes/_protected.workspaces/-queries");
+
+    expect(workspaceUpdateRefetchFilters("ws_test")).toEqual([
+      { queryKey: workspacesKeys.all, type: "active" },
+      {
+        exact: true,
+        queryKey: workspacesKeys.byId("ws_test"),
+        type: "inactive",
+      },
+    ]);
+  });
+
   test("member mutations invalidate the members query and the matters list", async () => {
     const { workspaceMemberMutationInvalidationKeys } =
       await import("@/routes/_protected.workspaces/$workspaceId/-mutations/workspace-members");
