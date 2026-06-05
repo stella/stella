@@ -182,21 +182,25 @@ const Field = ({
   icon: LucideIcon;
   ariaLabel: string;
   value: string;
-}) => (
-  <div
-    aria-label={ariaLabel}
-    className="flex w-fit max-w-full min-w-0 items-center gap-2"
-    title={ariaLabel}
-  >
-    <Icon
-      aria-hidden="true"
-      className="text-muted-foreground size-4 shrink-0"
-    />
-    <span className="text-foreground min-w-0 truncate text-sm font-medium">
-      {value}
-    </span>
-  </div>
-);
+}) => {
+  const fieldLabel = `${ariaLabel}: ${value}`;
+
+  return (
+    <div
+      aria-label={fieldLabel}
+      className="flex w-fit max-w-full min-w-0 items-center gap-2"
+      title={fieldLabel}
+    >
+      <Icon
+        aria-hidden="true"
+        className="text-muted-foreground size-4 shrink-0"
+      />
+      <span className="text-foreground min-w-0 truncate text-sm font-medium">
+        {value}
+      </span>
+    </div>
+  );
+};
 
 const AuthorField = ({
   ariaLabel,
@@ -209,6 +213,7 @@ const AuthorField = ({
   value: string;
 }) => {
   const safeAuthorUrl = sanitizeHref(authorUrl);
+  const fieldLabel = `${ariaLabel}: ${value}`;
   const inner = (
     <>
       <UserIcon
@@ -230,13 +235,13 @@ const AuthorField = ({
   if (safeAuthorUrl) {
     return (
       <a
-        aria-label={ariaLabel}
+        aria-label={fieldLabel}
         className="hover:bg-muted -mx-1 flex w-fit max-w-full min-w-0 items-center gap-2 rounded-md px-1 py-0.5 transition-colors"
         href={safeAuthorUrl}
         onClick={(e) => e.stopPropagation()}
         rel="noreferrer"
         target="_blank"
-        title={ariaLabel}
+        title={fieldLabel}
       >
         {inner}
       </a>
@@ -245,9 +250,9 @@ const AuthorField = ({
 
   return (
     <div
-      aria-label={ariaLabel}
+      aria-label={fieldLabel}
       className="flex w-fit max-w-full min-w-0 items-center gap-2"
-      title={ariaLabel}
+      title={fieldLabel}
     >
       {inner}
     </div>
