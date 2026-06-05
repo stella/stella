@@ -892,7 +892,10 @@ const shouldRecoverWorkflow = async ({
   }
 
   if (runningValue !== "1") {
-    return runningValue === expectedRequestId;
+    return (
+      runningValue === expectedRequestId ||
+      (expectedRequestId === null && runningValue === RECOVERY_LOCK_VALUE)
+    );
   }
 
   // Legacy locks used "1" as the running value and wrote request-id
