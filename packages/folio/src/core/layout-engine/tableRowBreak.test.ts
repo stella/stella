@@ -461,6 +461,26 @@ describe("oversized table row splits across pages (#570)", () => {
     );
   });
 
+  test("preserves table alignment on split row fragments", () => {
+    const { block, measure } = tallTable(15);
+    block.justification = "center";
+    block.columnWidths = [100];
+    measure.columnWidths = [100];
+    measure.totalWidth = 100;
+    measure.rows[0]!.cells[0]!.width = 100; // SAFETY: tallTable creates one row with one cell.
+    const frags = tableFragments(block, measure);
+    const centeredX =
+      OPTIONS.margins.left +
+      (OPTIONS.pageSize.w -
+        OPTIONS.margins.left -
+        OPTIONS.margins.right -
+        100) /
+        2;
+
+    expect(frags.length).toBeGreaterThan(1);
+    expect(frags.every((f) => f.x === centeredX)).toBe(true);
+  });
+
   test("uses the next column when no first slice fits remaining space", () => {
     const spacer: FlowBlock = {
       kind: "paragraph",

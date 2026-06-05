@@ -783,6 +783,7 @@ function layoutTable(
           0,
         );
         sliceFragment.y = sliceResult.y;
+        sliceFragment.x = computeTableX(sliceResult.state.columnIndex);
         consumed = sliceBottom;
         if (consumed < oversizedRow.height) {
           paginator.forceColumnBreak();
