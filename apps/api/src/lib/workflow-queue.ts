@@ -157,8 +157,17 @@ const isCurrentWorkflowRequest = async ({
 }: {
   requestId: string;
   workspaceId: SafeId<"workspace">;
-}): Promise<boolean> =>
-  (await getRedis().get(workflowKey(workspaceId, "request-id"))) === requestId;
+}): Promise<boolean> => {
+  const redis = getRedis();
+  const [currentRequestId, runningValue] = await Promise.all([
+    redis.get(workflowKey(workspaceId, "request-id")),
+    redis.get(workflowKey(workspaceId, "running")),
+  ]);
+  return (
+    currentRequestId === requestId &&
+    (runningValue === requestId || runningValue === "1")
+  );
+};
 
 // Self-heal levers. Tuned conservatively so the happy path is never
 // disrupted, but a stuck job/worker can't block the workspace.
@@ -211,6 +220,14 @@ const computeJobTimeoutMs = (executionPlan: ExecutionLevel[]): number => {
 const RUNNING_LOCK_TTL_SEC = 60 * 60;
 const RECOVERY_LOCK_SETTLE_MS = 100;
 const RECOVERY_LOCK_VALUE = "recovery";
+const RESERVE_RECOVERY_LOCK_SCRIPT = `
+local current = redis.call("GET", KEYS[1])
+if current == ARGV[1] then
+  redis.call("SET", KEYS[1], ARGV[2], "EX", ARGV[3])
+  return 1
+end
+return 0
+`;
 
 /**
  * Check if a workflow is currently running for a workspace.
@@ -838,16 +855,20 @@ const readWorkflowRequestIds = async (
   return requestIds;
 };
 
-const getAndRefreshRunningLock = async (
+const reserveExistingRunningLock = async (
   redis: RedisClient,
   runningKey: string,
-): Promise<string | null> => {
-  const reply: unknown = await redis.send("GETEX", [
+  expectedRunningValue: string,
+): Promise<boolean> => {
+  const reply: unknown = await redis.send("EVAL", [
+    RESERVE_RECOVERY_LOCK_SCRIPT,
+    "1",
     runningKey,
-    "EX",
+    expectedRunningValue,
+    RECOVERY_LOCK_VALUE,
     String(RUNNING_LOCK_TTL_SEC),
   ]);
-  return typeof reply === "string" ? reply : null;
+  return Number(reply) === 1;
 };
 
 type ShouldRecoverWorkflowOptions = {
@@ -863,10 +884,9 @@ const shouldRecoverWorkflow = async ({
 }: ShouldRecoverWorkflowOptions): Promise<boolean> => {
   const runningKey = workflowKey(workspaceId, "running");
   const requestIdKey = workflowKey(workspaceId, "request-id");
-  const recoveryLockValue = expectedRequestId ?? RECOVERY_LOCK_VALUE;
   const wasSet = await redis.set(
     runningKey,
-    recoveryLockValue,
+    RECOVERY_LOCK_VALUE,
     "EX",
     String(RUNNING_LOCK_TTL_SEC),
     "NX",
@@ -883,7 +903,7 @@ const shouldRecoverWorkflow = async ({
   }
 
   const [runningValue, requestId] = await Promise.all([
-    getAndRefreshRunningLock(redis, runningKey),
+    redis.get(runningKey),
     redis.get(requestIdKey),
   ]);
 
@@ -891,11 +911,16 @@ const shouldRecoverWorkflow = async ({
     return false;
   }
 
+  if (runningValue === RECOVERY_LOCK_VALUE) {
+    return reserveExistingRunningLock(redis, runningKey, RECOVERY_LOCK_VALUE);
+  }
+
   if (runningValue !== "1") {
-    return (
-      runningValue === expectedRequestId ||
-      (expectedRequestId === null && runningValue === RECOVERY_LOCK_VALUE)
-    );
+    if (runningValue !== expectedRequestId) {
+      return false;
+    }
+
+    return reserveExistingRunningLock(redis, runningKey, runningValue);
   }
 
   // Legacy locks used "1" as the running value and wrote request-id
@@ -903,10 +928,14 @@ const shouldRecoverWorkflow = async ({
   // a stable orphan.
   await sleep(RECOVERY_LOCK_SETTLE_MS);
   const [settledRunningValue, settledRequestId] = await Promise.all([
-    getAndRefreshRunningLock(redis, runningKey),
+    redis.get(runningKey),
     redis.get(requestIdKey),
   ]);
-  return settledRunningValue === "1" && settledRequestId === expectedRequestId;
+  if (settledRunningValue !== "1" || settledRequestId !== expectedRequestId) {
+    return false;
+  }
+
+  return reserveExistingRunningLock(redis, runningKey, "1");
 };
 
 type RecoverOrphanedWorkflowOptions = {
