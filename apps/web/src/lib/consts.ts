@@ -14,6 +14,11 @@ export const TOOLBAR_ROW_HEIGHT = "h-12" as const;
 export const TOOLBAR_ROW_MIN_HEIGHT = "min-h-12" as const;
 export const TOOLBAR_ROW_HEIGHT_PX = 48 as const;
 export const SIDE_RAIL_WIDTH = "w-12" as const;
+/** Outer container classes for the inspector icon rail. The lazy-load
+ * fallback rail must stay pixel-identical to the real rail, so both
+ * read this single source instead of repeating the string. */
+export const SIDE_RAIL_CONTAINER_CLASS =
+  `bg-sidebar flex shrink-0 flex-col border-e ${SIDE_RAIL_WIDTH}` as const;
 export const SIDE_RAIL_ICON_BUTTON_SIZE = "size-8" as const;
 /** Glyph size inside a rail tab button — matches the `size-3.5`
  * class every built-in rail icon uses. Numeric form is for
