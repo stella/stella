@@ -85,7 +85,9 @@ describe("desktop edit session events", () => {
       pendingRequest: null,
     });
 
-    let resolveRefresh: ((value: boolean) => void) | null = null;
+    let resolveRefresh: (value: boolean) => void = () => {
+      throw new Error("Expected liveness refresh to start.");
+    };
     const refreshPromise = new Promise<boolean>((resolve) => {
       resolveRefresh = resolve;
     });
@@ -101,15 +103,14 @@ describe("desktop edit session events", () => {
       return response;
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
     expect(refreshDesktopEditSessionLivenessMock).toHaveBeenCalledWith({
       sessionId,
       userId: "user-1",
     });
     expect(settled).toBe(false);
-    if (resolveRefresh === null) {
-      throw new Error("Expected liveness refresh to start.");
-    }
     resolveRefresh(true);
 
     const response = await responsePromise;
