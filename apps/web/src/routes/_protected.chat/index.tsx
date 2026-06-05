@@ -438,7 +438,7 @@ function ChatIndex() {
                       size="sm"
                       variant="outline"
                     >
-                      <PlusIcon />
+                      <PlusIcon className="size-4" />
                       {t("workspaces.createNewWorkspace")}
                     </Button>
                   )}
