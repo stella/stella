@@ -212,11 +212,12 @@ export const AddMcpServerSheet = ({
                 autoComplete="url"
                 autoFocus
                 id="mcp-url"
+                inputMode="url"
                 onChange={(event) =>
                   setWizard({ step: "url", url: event.target.value })
                 }
                 placeholder={t("knowledge.mcp.urlPlaceholder")}
-                type="url"
+                type="text"
                 value={wizard.url}
               />
               <p className="text-muted-foreground text-xs">

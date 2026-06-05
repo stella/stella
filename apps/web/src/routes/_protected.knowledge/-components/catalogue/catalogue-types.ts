@@ -9,8 +9,11 @@ type CommonFields = {
   description: string;
   author: string;
   authorUrl?: string | undefined;
-  license: string;
-  cost: CatalogueCost;
+  // null when unknown — custom MCP connectors expose neither license nor
+  // cost (the MCP spec carries no such metadata), so we omit rather than
+  // fabricate. Curated entries always provide both.
+  license: string | null;
+  cost: CatalogueCost | null;
   setup: CatalogueSetup;
   homepage?: string | undefined;
   iconUrl?: string | undefined;
@@ -53,6 +56,8 @@ export type CatalogueMcp = CommonFields & {
   allowedTools: string[];
   documentationUrl?: string | undefined;
   tokenHelpUrl?: string | undefined;
+  /** Version the server reports during `initialize`; null until connected. */
+  serverVersion?: string | null | undefined;
 };
 
 export type CatalogueNativeTool = CommonFields & {

@@ -3003,6 +3003,14 @@ export const mcpConnectors = p.pgTable(
     documentationUrl: p.text("documentation_url"),
     tokenHelpUrl: p.text("token_help_url"),
     iconUrl: p.text("icon_url"),
+    // Metadata the server itself reports during the MCP `initialize`
+    // handshake. Captured when we open an authenticated client; null
+    // until the first successful connect.
+    serverVersion: p.text("server_version"),
+    instructions: p.text(),
+    // OAuth authorization-server issuer, captured at create time for
+    // oauth2 connectors. Surfaced as the connector's vendor.
+    oauthIssuer: p.text("oauth_issuer"),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
     updatedAt: p
       .timestamp("updated_at")

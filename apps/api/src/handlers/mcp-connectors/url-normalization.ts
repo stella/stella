@@ -30,8 +30,14 @@ export const mcpConnectorUrlVariants = (normalizedUrl: string): string[] => {
   return Array.from(variants);
 };
 
+// MCP servers speak HTTP(S) only. Accept a bare host (e.g.
+// "mcp.example.com") and default it to https so users don't have to type
+// the scheme; an explicit http:// / https:// prefix is preserved.
+const ensureHttpScheme = (rawUrl: string): string =>
+  /^https?:\/\//iu.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
+
 const normalizeUrl = (rawUrl: string): string => {
-  const url = new URL(rawUrl.trim());
+  const url = new URL(ensureHttpScheme(rawUrl.trim()));
   url.hash = "";
   while (url.pathname.length > 1 && url.pathname.endsWith("/")) {
     url.pathname = url.pathname.slice(0, -1);

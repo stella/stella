@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from "react";
+
 import {
   BanknoteIcon,
   ExternalLinkIcon,
@@ -94,11 +96,11 @@ export const CatalogueDetailPanel = ({
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 py-4">
-        <Section title={t("onboarding.catalogueDetailAbout")}>
-          <p className="text-foreground text-sm leading-relaxed text-pretty">
-            {entry.description}
-          </p>
-        </Section>
+        {entry.description && (
+          <Section title={t("onboarding.catalogueDetailAbout")}>
+            <ExpandableText text={entry.description} />
+          </Section>
+        )}
 
         {installed && entry.kind === "mcp" && (
           <Section title={t("catalogue.configuration")}>
@@ -113,6 +115,13 @@ export const CatalogueDetailPanel = ({
                 icon={KeyRoundIcon}
                 value={t(`knowledge.mcp.auth.${authKey(entry.authType)}`)}
               />
+              {entry.serverVersion && (
+                <Field
+                  ariaLabel={t("inspector.metadata.version")}
+                  icon={TagIcon}
+                  value={entry.serverVersion}
+                />
+              )}
             </div>
           </Section>
         )}
@@ -126,16 +135,20 @@ export const CatalogueDetailPanel = ({
                 authorUrl={entry.authorUrl}
                 value={isFirstParty ? "stella" : entry.author}
               />
-              <Field
-                ariaLabel={t("onboarding.catalogueDetailLicense")}
-                icon={ScaleIcon}
-                value={entry.license}
-              />
-              <Field
-                ariaLabel={t("onboarding.catalogueDetailCost")}
-                icon={BanknoteIcon}
-                value={t(`catalogue.cost.${entry.cost}`)}
-              />
+              {entry.license && (
+                <Field
+                  ariaLabel={t("onboarding.catalogueDetailLicense")}
+                  icon={ScaleIcon}
+                  value={entry.license}
+                />
+              )}
+              {entry.cost && (
+                <Field
+                  ariaLabel={t("onboarding.catalogueDetailCost")}
+                  icon={BanknoteIcon}
+                  value={t(`catalogue.cost.${entry.cost}`)}
+                />
+              )}
               <Field
                 ariaLabel={t("onboarding.catalogueDetailSetup")}
                 icon={Settings2Icon}
@@ -207,6 +220,59 @@ export const CatalogueDetailPanel = ({
           </p>
         )}
       </footer>
+    </div>
+  );
+};
+
+/**
+ * About-text block that clamps long copy (e.g. server-reported MCP
+ * `instructions`) to a few lines, with a Show more/less toggle. The
+ * toggle only appears when the text actually overflows the clamp.
+ */
+const ExpandableText = ({ text }: { text: string }) => {
+  const t = useTranslations();
+  const ref = useRef<HTMLParagraphElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflowing, setOverflowing] = useState(false);
+
+  // Collapse when switching to a different entry (the panel is not
+  // remounted per selection, so expanded state would otherwise leak).
+  useEffect(() => {
+    setExpanded(false);
+  }, [text]);
+
+  // Measure only while clamped, so overflow is detected against the
+  // line-clamp height rather than the fully expanded text.
+  useEffect(() => {
+    const el = ref.current;
+    if (expanded || !el) {
+      return;
+    }
+    setOverflowing(el.scrollHeight > el.clientHeight + 1);
+  }, [text, expanded]);
+
+  return (
+    <div className="flex flex-col items-start gap-1.5">
+      <p
+        className={cn(
+          "text-foreground text-sm leading-relaxed text-pretty",
+          !expanded && "line-clamp-5",
+        )}
+        ref={ref}
+      >
+        {text}
+      </p>
+      {(overflowing || expanded) && (
+        <Button
+          className="text-muted-foreground h-auto p-0 text-xs"
+          onClick={() => setExpanded((prev) => !prev)}
+          size="sm"
+          type="button"
+          variant="link"
+        >
+          {expanded ? t("common.showLess") : t("common.showMore")}
+        </Button>
+      )}
     </div>
   );
 };

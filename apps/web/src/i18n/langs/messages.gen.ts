@@ -796,6 +796,7 @@ type Messages = {
     "sessions": "Sessions";
     "settings": "Settings";
     "showAll": "Show all";
+    "showLess": "Show less";
     "showMore": "Show more";
     "signOut": "Sign out";
     "somethingWentWrong": "Something went wrong";

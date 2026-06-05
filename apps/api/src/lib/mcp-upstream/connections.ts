@@ -6,7 +6,7 @@ import {
   type CallToolResult,
 } from "@modelcontextprotocol/sdk/types.js";
 import { Result } from "better-result";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, or, sql } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db";
 import {
@@ -286,6 +286,29 @@ export const createMcpClientForConnection = async ({
   });
 };
 
+const MAX_SERVER_VERSION_LEN = 64;
+const MAX_INSTRUCTIONS_LEN = 4000;
+
+const capServerText = (
+  value: string | undefined,
+  maxLen: number,
+): string | null => {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed.slice(0, maxLen) : null;
+};
+
+/** Metadata the upstream server reports during the MCP `initialize`
+ * handshake. `null` when no authenticated client could be opened. */
+type McpServerMetadata = {
+  version: string | null;
+  instructions: string | null;
+};
+
+type DiscoverCachedMcpToolsResult = {
+  tools: CachedMcpToolDefinition[];
+  server: McpServerMetadata | null;
+};
+
 export const discoverCachedMcpTools = async ({
   organizationId,
   row,
@@ -296,7 +319,7 @@ export const discoverCachedMcpTools = async ({
   row: LoadedMcpConnection;
   safeDb: SafeDb;
   userId: SafeId<"user">;
-}): Promise<CachedMcpToolDefinition[]> => {
+}): Promise<DiscoverCachedMcpToolsResult> => {
   const client = await createMcpClientForConnection({
     organizationId,
     row,
@@ -304,15 +327,26 @@ export const discoverCachedMcpTools = async ({
     userId,
   });
   if (!client) {
-    return [];
+    return { tools: [], server: null };
   }
 
   try {
     const tools = await client.listTools();
-    return normalizeDiscoveredMcpTools({
-      connectorSlug: row.slug,
-      tools: tools.tools,
-    });
+    return {
+      tools: normalizeDiscoveredMcpTools({
+        connectorSlug: row.slug,
+        tools: tools.tools,
+      }),
+      // Bound what an upstream server can persist on our connector row and
+      // ship in the catalogue payload; the values are server-controlled.
+      server: {
+        version: capServerText(
+          client.serverInfo.version,
+          MAX_SERVER_VERSION_LEN,
+        ),
+        instructions: capServerText(client.instructions, MAX_INSTRUCTIONS_LEN),
+      },
+    };
   } finally {
     await client.close();
   }
@@ -340,7 +374,7 @@ export const refreshCachedMcpToolsForConnection = async ({
       return;
     }
 
-    const cachedTools = await discoverCachedMcpTools({
+    const { tools: cachedTools, server } = await discoverCachedMcpTools({
       organizationId,
       row,
       safeDb,
@@ -360,6 +394,35 @@ export const refreshCachedMcpToolsForConnection = async ({
     });
     if (Result.isError(updated)) {
       captureError(updated.error, { source: "mcp-upstream-cache-refresh" });
+    }
+
+    if (server) {
+      // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+      const updatedConnector = await safeDb((tx) => {
+        // audit: skip — server-reported MCP metadata mirrored from the upstream initialize handshake; not a user-facing config change
+        return tx
+          .update(mcpConnectors)
+          .set({
+            serverVersion: server.version,
+            instructions: server.instructions,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(mcpConnectors.id, row.connectorId),
+              // Skip the write (and updatedAt churn) when nothing changed.
+              or(
+                sql`${mcpConnectors.serverVersion} is distinct from ${server.version}`,
+                sql`${mcpConnectors.instructions} is distinct from ${server.instructions}`,
+              ),
+            ),
+          );
+      });
+      if (Result.isError(updatedConnector)) {
+        captureError(updatedConnector.error, {
+          source: "mcp-upstream-server-metadata",
+        });
+      }
     }
   } catch (error) {
     captureError(error, { source: "mcp-upstream-cache-refresh" });

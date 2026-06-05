@@ -18,7 +18,7 @@ export type CatalogueRowDisplay = {
   displayName: string;
   description: string;
   author: string;
-  cost: "free" | "paid";
+  cost: "free" | "paid" | null;
   setup: "none" | "account" | "api-key";
   icon: string | null;
   iconUrl?: string | null | undefined;
