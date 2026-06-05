@@ -129,7 +129,7 @@ function getSpacingAfter(block: ParagraphBlock): number {
  *
  * This mutates the block attrs in-place before layout runs.
  */
-function applyContextualSpacing(blocks: FlowBlock[]): void {
+export function applyContextualSpacing(blocks: FlowBlock[]): void {
   for (let i = 0; i < blocks.length - 1; i++) {
     const curr = blocks[i]!; // SAFETY: i < blocks.length - 1
     const next = blocks[i + 1]!; // SAFETY: i + 1 < blocks.length
@@ -155,6 +155,22 @@ function applyContextualSpacing(blocks: FlowBlock[]): void {
       if (nextAttrs.spacing) {
         nextAttrs.spacing = { ...nextAttrs.spacing, before: 0 };
       }
+    }
+  }
+
+  // Recurse into nested block containers (table cells and text boxes) so
+  // contextual spacing is suppressed there too — measure, pagination, and the
+  // painter all read the (mutated) paragraph spacing, so they stay consistent.
+  // eigenpal/docx-editor#699.
+  for (const block of blocks) {
+    if (block.kind === "table") {
+      for (const row of block.rows) {
+        for (const cell of row.cells) {
+          applyContextualSpacing(cell.blocks);
+        }
+      }
+    } else if (block.kind === "textBox") {
+      applyContextualSpacing(block.content);
     }
   }
 }

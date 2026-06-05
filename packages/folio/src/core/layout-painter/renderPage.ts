@@ -73,7 +73,7 @@ import { renderWatermarkLayer } from "./renderWatermark";
  * Page-level floating image that has been extracted from paragraphs.
  * These are positioned absolutely within the page's content area.
  */
-type PageFloatingImage = {
+export type PageFloatingImage = {
   src: string;
   width: number;
   height: number;
@@ -221,7 +221,7 @@ export type RenderPageOptions = {
   watermarkImageSrc?: string;
 };
 
-type HeaderFooterLayoutInfo = {
+export type HeaderFooterLayoutInfo = {
   flowTop: number;
   flowLeft: number;
   contentWidth: number;
@@ -610,6 +610,69 @@ function resolveHeaderFooterFloatingTablePosition(
   return { left, top };
 }
 
+/**
+ * Resolve the CSS `left` (px string) for an anchored object (image or text box)
+ * in a header/footer, honoring `wp:positionH` (relativeTo page/margin, align
+ * left/center/right, or posOffset). Shared by floating images and text boxes so
+ * a page-centered banner in the header lands centered like Word, not pinned to
+ * the left. Ported from eigenpal/docx-editor#700.
+ */
+export function resolveHeaderFooterFloatLeft(
+  width: number,
+  h:
+    | {
+        relativeTo?: string;
+        posOffset?: number;
+        align?: string;
+        alignment?: string;
+      }
+    | undefined,
+  layout: HeaderFooterLayoutInfo,
+): string {
+  if (!h) {
+    return "0";
+  }
+
+  // Single-sided rendering: OOXML `inside`/`outside` alias `left`/`right`
+  // (matching resolveAnchoredImagePosition / the floating-table resolver).
+  let align = getPositionAlignment(h);
+  if (align === "inside") {
+    align = "left";
+  } else if (align === "outside") {
+    align = "right";
+  }
+
+  if (h.relativeTo === "page") {
+    if (h.posOffset !== undefined) {
+      return `${emuToPixels(h.posOffset) - layout.flowLeft}px`;
+    }
+    if (align === "right") {
+      return `${layout.pageWidth - width - layout.flowLeft}px`;
+    }
+    if (align === "center") {
+      return `${(layout.pageWidth - width) / 2 - layout.flowLeft}px`;
+    }
+    if (align === "left") {
+      return `${-layout.flowLeft}px`;
+    }
+  }
+
+  // `relativeTo: margin` falls through here intentionally: the header/footer
+  // content width IS the margin box, so the content-relative branch is already
+  // margin-correct.
+  if (h.posOffset !== undefined) {
+    return `${emuToPixels(h.posOffset)}px`;
+  }
+  if (align === "right") {
+    return `${layout.contentWidth - width}px`;
+  }
+  if (align === "center") {
+    return `${(layout.contentWidth - width) / 2}px`;
+  }
+
+  return "0";
+}
+
 function applyHeaderFooterFloatHorizontalPosition(
   img: HTMLImageElement,
   floatImg: {
@@ -625,48 +688,11 @@ function applyHeaderFooterFloatHorizontalPosition(
   },
   layout: HeaderFooterLayoutInfo,
 ): void {
-  const h = floatImg.position.horizontal;
-  if (!h) {
-    img.style.left = "0";
-    return;
-  }
-
-  const align = getPositionAlignment(h);
-
-  if (h.relativeTo === "page") {
-    if (h.posOffset !== undefined) {
-      img.style.left = `${emuToPixels(h.posOffset) - layout.flowLeft}px`;
-      return;
-    }
-    if (align === "right") {
-      img.style.left = `${layout.pageWidth - floatImg.width - layout.flowLeft}px`;
-      return;
-    }
-    if (align === "center") {
-      img.style.left = `${(layout.pageWidth - floatImg.width) / 2 - layout.flowLeft}px`;
-      return;
-    }
-    if (align === "left") {
-      img.style.left = `${-layout.flowLeft}px`;
-      return;
-    }
-  }
-
-  if (h.posOffset !== undefined) {
-    img.style.left = `${emuToPixels(h.posOffset)}px`;
-    return;
-  }
-
-  if (align === "right") {
-    img.style.left = `${layout.contentWidth - floatImg.width}px`;
-    return;
-  }
-  if (align === "center") {
-    img.style.left = `${(layout.contentWidth - floatImg.width) / 2}px`;
-    return;
-  }
-
-  img.style.left = "0";
+  img.style.left = resolveHeaderFooterFloatLeft(
+    floatImg.width,
+    floatImg.position.horizontal,
+    layout,
+  );
 }
 
 /**
@@ -964,7 +990,7 @@ function extractFloatingImagesFromParagraph(
  * wrapNone images, e.g. full-page letterhead backgrounds). `"front"` paints
  * above text (default for `inFront` wrapNone and side-wrapping images).
  */
-function renderFloatingImagesLayer(
+export function renderFloatingImagesLayer(
   floatingImages: PageFloatingImage[],
   doc: Document,
   layerMode: "front" | "behind" = "front",
@@ -1005,6 +1031,13 @@ function renderFloatingImagesLayer(
     img.style.width = `${floatImg.width}px`;
     img.style.height = `${floatImg.height}px`;
     img.style.display = "block";
+    // A floating image is sized explicitly from its OOXML extent and may be
+    // anchored so it bleeds into the page margin (e.g. a logo flush to the
+    // right edge). Opt out of the global `img { max-width: 100% }` reset, which
+    // would otherwise cap the width to the remaining content area and squash
+    // the image against its fixed height. eigenpal/docx-editor#694.
+    img.style.maxWidth = "none";
+    img.style.maxHeight = "none";
     if (floatImg.alt) {
       img.alt = floatImg.alt;
     }
@@ -1260,7 +1293,15 @@ function renderHeaderFooterContent(
         { document: doc },
       );
       fragEl.style.top = `${cursorY}px`;
-      fragEl.style.left = "0";
+      // Honor the anchor's horizontal position (e.g. centered relative to the
+      // page) instead of pinning the box to the left. The vertical position
+      // stays on the H/F flow cursor (positionV is not yet honored for H/F text
+      // boxes). eigenpal/docx-editor#700.
+      fragEl.style.left = resolveHeaderFooterFloatLeft(
+        measure.width,
+        block.position?.horizontal,
+        layout,
+      );
       containerEl.append(fragEl);
       cursorY += measure.height;
     }
