@@ -14,7 +14,14 @@
  * here yet (a separate follow-up); each row uses its own cells' content.
  */
 
-import type { FlowBlock, Measure, TableBlock, TableMeasure } from "./types";
+import type {
+  FlowBlock,
+  Measure,
+  TableBlock,
+  TableCell,
+  TableCellMeasure,
+  TableMeasure,
+} from "./types";
 
 type UnsafeBreakRange = {
   top: number;
@@ -38,6 +45,37 @@ function getAtomicBlockHeight(measure: Measure): number {
 
 function isInsideRange(offset: number, range: UnsafeBreakRange): boolean {
   return offset > range.top && offset < range.bottom;
+}
+
+function getVerticalAlignmentOffset(
+  cell: TableCell | undefined,
+  measure: TableCellMeasure,
+  rowHeight: number,
+): number {
+  const spareHeight = Math.max(0, rowHeight - measure.height);
+  if (cell?.verticalAlign === "bottom") {
+    return spareHeight;
+  }
+  if (cell?.verticalAlign === "center") {
+    return spareHeight / 2;
+  }
+  return 0;
+}
+
+function shiftCellGeometry(
+  geometry: CellBreakGeometry,
+  offset: number,
+): CellBreakGeometry {
+  if (offset <= 0) {
+    return geometry;
+  }
+  return {
+    bottoms: geometry.bottoms.map((bottom) => bottom + offset),
+    unsafeRanges: geometry.unsafeRanges.map((range) => ({
+      top: range.top + offset,
+      bottom: range.bottom + offset,
+    })),
+  };
 }
 
 /** Cumulative break geometry within a single cell's content. */
@@ -123,10 +161,9 @@ export function buildTableRowBreakInfo(
       }
       const sourceCell = sourceCells[c];
       const padTop = sourceCell?.padding?.top ?? 0;
-      const geometry = cellBreakGeometry(
-        sourceCell?.blocks,
-        measuredCell.blocks,
-        padTop,
+      const geometry = shiftCellGeometry(
+        cellBreakGeometry(sourceCell?.blocks, measuredCell.blocks, padTop),
+        getVerticalAlignmentOffset(sourceCell, measuredCell, rowHeight),
       );
       cellGeometries.push(geometry);
       for (const b of geometry.bottoms) {

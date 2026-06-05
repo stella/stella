@@ -292,6 +292,69 @@ describe("buildTableRowBreakInfo / snapRowBreak", () => {
     expect(info.breakOffsets[0]).toEqual([60]);
   });
 
+  test("shifts unsafe ranges for vertically aligned cells", () => {
+    const block: TableBlock = {
+      kind: "table",
+      id: "t",
+      rows: [
+        {
+          id: "r0",
+          cells: [
+            {
+              id: "c0",
+              blocks: [
+                {
+                  kind: "paragraph",
+                  id: "p0",
+                  runs: [{ kind: "text", text: "a" }],
+                },
+              ],
+            },
+            {
+              id: "c1",
+              verticalAlign: "bottom",
+              blocks: [
+                {
+                  kind: "paragraph",
+                  id: "p1",
+                  runs: [{ kind: "text", text: "b" }],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      columnWidths: [100, 100],
+    };
+    const measure: TableMeasure = {
+      kind: "table",
+      rows: [
+        {
+          cells: [
+            {
+              blocks: [paraMeasureWithLineHeight(10, 10)],
+              width: 100,
+              height: 100,
+            },
+            {
+              blocks: [paraMeasureWithLineHeight(1, 20)],
+              width: 100,
+              height: 20,
+            },
+          ],
+          height: 100,
+        },
+      ],
+      columnWidths: [100, 100],
+      totalWidth: 200,
+      totalHeight: 100,
+    };
+
+    const info = buildTableRowBreakInfo(block, measure);
+
+    expect(info.breakOffsets[0]).toEqual([10, 20, 30, 40, 50, 60, 70, 80, 100]);
+  });
+
   test("snaps to the deepest whole line that fits", () => {
     const { block, measure } = tallTable(3);
     const info = buildTableRowBreakInfo(block, measure);
@@ -398,6 +461,31 @@ describe("oversized table row splits across pages (#570)", () => {
     );
   });
 
+  test("uses the next column when no first slice fits remaining space", () => {
+    const spacer: FlowBlock = {
+      kind: "paragraph",
+      id: "spacer",
+      runs: [{ kind: "text", text: "spacer" }],
+    };
+    const spacerMeasure = paraMeasureWithLineHeight(1, 110);
+    const { block, measure } = tallTable(15);
+    const layout = layoutDocument(
+      [spacer, block as FlowBlock],
+      [spacerMeasure as Measure, measure as Measure],
+      {
+        ...OPTIONS,
+        columns: { count: 2, gap: 20 },
+      },
+    );
+    const firstPageTableFragments =
+      layout.pages[0]?.fragments.filter(
+        (f): f is TableFragment => f.kind === "table",
+      ) ?? [];
+
+    expect(firstPageTableFragments.length).toBeGreaterThan(0);
+    expect(firstPageTableFragments[0]?.x).toBeGreaterThan(OPTIONS.margins.left);
+  });
+
   test("repeats header rows while splitting a tall body row", () => {
     const { block, measure } = tableWithHeaderAndTallBody(15);
     const frags = tableFragments(block, measure);
@@ -413,6 +501,20 @@ describe("oversized table row splits across pages (#570)", () => {
       expect(f.continuesFromPrev).toBe(true);
       expect(f.height).toBe(LINE + visibleBodyHeight);
       expect(f.height).toBeLessThanOrEqual(pageContentHeight);
+    }
+  });
+
+  test("splits body rows that exceed the page only with repeated headers", () => {
+    const { block, measure } = tableWithHeaderAndTallBody(6);
+    const frags = tableFragments(block, measure);
+    const bodyFrags = frags.filter((f) => f.fromRow === 1);
+
+    expect(bodyFrags.length).toBeGreaterThan(1);
+    for (const f of bodyFrags) {
+      expect(f.headerRowCount).toBe(1);
+      expect(f.height).toBeLessThanOrEqual(
+        OPTIONS.pageSize.h - OPTIONS.margins.top - OPTIONS.margins.bottom,
+      );
     }
   });
 

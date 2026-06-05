@@ -680,13 +680,13 @@ function layoutTable(
     // text lines across pages instead of overflowing the page and clipping the
     // content. eigenpal/docx-editor#698 (fixes their #570).
     const oversizedRow = rows[currentRowIndex]!; // SAFETY: currentRowIndex < rows.length
+    const repeatHeaderRows =
+      headerRowCount > 0 && currentRowIndex >= headerRowCount;
+    const headerOverhead = repeatHeaderRows ? headerRowsHeight : 0;
     if (
-      oversizedRow.height > fullPageHeight &&
+      oversizedRow.height + headerOverhead > fullPageHeight &&
       (breakInfo.breakOffsets[currentRowIndex]?.length ?? 0) > 1
     ) {
-      const repeatHeaderRows =
-        headerRowCount > 0 && currentRowIndex >= headerRowCount;
-      const headerOverhead = repeatHeaderRows ? headerRowsHeight : 0;
       let consumed = 0;
       while (consumed < oversizedRow.height) {
         const sliceState = paginator.getCurrentState();
@@ -705,8 +705,9 @@ function layoutTable(
             sliceState.cursorY === sliceState.topMargin &&
             sliceState.page.fragments.length === 0;
           if (!isFreshPage) {
-            // Not even one line fits in the space left; start a fresh page.
-            paginator.forcePageBreak();
+            // Not even one line fits in the space left; continue in the next
+            // column, or on a fresh page when this is the last column.
+            paginator.forceColumnBreak();
             continue;
           }
           // Fresh page and a single line still exceeds the page height: place
@@ -768,7 +769,7 @@ function layoutTable(
     const availableHeight = rawAvailableHeight - pendingSpacing;
 
     // For continuation fragments, we need space for header rows + at least one content row
-    const headerOverhead =
+    const normalHeaderOverhead =
       !isFirstFragment && headerRowCount > 0 ? headerRowsHeight : 0;
 
     // Calculate how many rows fit (excluding header rows which are prepended separately)
@@ -777,7 +778,7 @@ function layoutTable(
 
     for (let j = currentRowIndex; j < rows.length; j++) {
       const rowHeight = rows[j]!.height; // SAFETY: j < rows.length
-      const totalWithRow = rowsHeight + rowHeight + headerOverhead;
+      const totalWithRow = rowsHeight + rowHeight + normalHeaderOverhead;
 
       if (totalWithRow <= availableHeight || fittingRows === 0) {
         rowsHeight += rowHeight;
@@ -788,7 +789,7 @@ function layoutTable(
     }
 
     // Total fragment height includes header rows for continuation fragments
-    const fragmentHeight = rowsHeight + headerOverhead;
+    const fragmentHeight = rowsHeight + normalHeaderOverhead;
 
     // Create fragment for these rows
     const isLastFragment = currentRowIndex + fittingRows >= rows.length;
