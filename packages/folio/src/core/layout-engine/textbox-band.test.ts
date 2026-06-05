@@ -103,6 +103,28 @@ describe("topAndBottom band text box layout", () => {
     expect(paragraph?.y).toBe(MARGINS.top);
   });
 
+  test("paragraph layout reserves measured float-skip height", () => {
+    const baseLine = paraMeasure.lines[0]!;
+    const skippedMeasure: ParagraphMeasure = {
+      kind: "paragraph",
+      lines: [{ ...baseLine, floatSkipBefore: BOX_HEIGHT }],
+      totalHeight: BOX_HEIGHT + baseLine.lineHeight,
+    };
+
+    const layout = layoutDocument(
+      [para("p1"), para("p2")],
+      [skippedMeasure, paraMeasure],
+      OPTIONS,
+    );
+    const first = layout.pages[0]?.fragments[0];
+    const second = layout.pages[0]?.fragments[1];
+
+    expect(first?.kind).toBe("paragraph");
+    expect(first?.height).toBe(BOX_HEIGHT + baseLine.lineHeight);
+    expect(second?.kind).toBe("paragraph");
+    expect(second?.y).toBe(MARGINS.top + BOX_HEIGHT + baseLine.lineHeight);
+  });
+
   test("margin-relative banner sits at the content top", () => {
     const frags = textBoxFragments(
       [banner("margin"), para("p")],

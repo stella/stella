@@ -6,6 +6,7 @@
  */
 
 import { getHeaderRowsHeight } from "../layout-engine/index";
+import { measuredLineRangeHeight } from "../layout-engine/lineFlow";
 import type {
   Layout,
   Page,
@@ -198,16 +199,11 @@ function calculateParagraphFragmentHeight(
   fragment: ParagraphFragment,
   measure: ParagraphMeasure,
 ): number {
-  let height = 0;
-  for (
-    let i = fragment.fromLine;
-    i < fragment.toLine && i < measure.lines.length;
-    i++
-  ) {
-    // SAFETY: i is bounded by measure.lines.length in loop condition
-    height += measure.lines[i]!.lineHeight;
-  }
-  return height;
+  return measuredLineRangeHeight(
+    measure.lines,
+    fragment.fromLine,
+    fragment.toLine,
+  );
 }
 
 /**

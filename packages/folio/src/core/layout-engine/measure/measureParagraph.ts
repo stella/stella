@@ -12,6 +12,7 @@ import {
 import type { TabContext } from "../../prosemirror/utils/tabCalculator";
 import { DEFAULT_SINGLE_LINE_RATIO } from "../../utils/fontResolver";
 import { inlineImageBoundingBox } from "../../utils/rotationBoundingBox";
+import { measuredLineAdvance } from "../lineFlow";
 import type {
   ParagraphBlock,
   ParagraphMeasure,
@@ -1208,7 +1209,7 @@ export function measureParagraph(
   // Calculate total height — include floatSkipBefore from lines bumped past
   // floats so containers stay sized correctly.
   const totalHeight = lines.reduce(
-    (sum, line) => sum + line.lineHeight + (line.floatSkipBefore ?? 0),
+    (sum, line) => sum + measuredLineAdvance(line),
     0,
   );
 

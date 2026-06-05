@@ -9,6 +9,10 @@
  */
 
 import {
+  measuredLineAdvance,
+  measuredLineContentOffset,
+} from "../layout-engine/lineFlow";
+import {
   measureRun,
   findCharacterAtX as findCharAtX,
 } from "../layout-engine/measure/measureContainer";
@@ -220,13 +224,13 @@ function findLineAtY(
   ) {
     // SAFETY: lineIndex < measure.lines.length in for loop
     const line = measure.lines[lineIndex]!;
-    const lineHeight = line.lineHeight;
+    const lineAdvance = measuredLineAdvance(line);
 
-    if (localY >= y && localY < y + lineHeight) {
+    if (localY >= y && localY < y + lineAdvance) {
       return lineIndex;
     }
 
-    y += lineHeight;
+    y += lineAdvance;
   }
 
   // If Y is beyond all lines, return the last line
@@ -429,12 +433,6 @@ export function clickToPositionInParagraph(
   const line = paragraphMeasure.lines[lineIndex];
   if (!line) {
     return null;
-  }
-
-  // Calculate Y offset from line top
-  let _lineY = 0;
-  for (let i = paragraphFragment.fromLine; i < lineIndex; i++) {
-    _lineY += paragraphMeasure.lines[i]?.lineHeight ?? 0;
   }
 
   // Calculate available width (accounting for indentation)
@@ -682,11 +680,11 @@ export function getPositionRect(
     alignmentOffset = Math.max(0, availableWidth - line.width);
   }
 
-  // Calculate Y position of the line
-  let lineY = 0;
-  for (let i = fromLine; i < result.lineIndex; i++) {
-    lineY += measure.lines[i]?.lineHeight ?? 0;
-  }
+  const lineY = measuredLineContentOffset(
+    measure.lines,
+    fromLine,
+    result.lineIndex,
+  );
 
   return {
     x: fragmentX + indentLeft + alignmentOffset + result.x,

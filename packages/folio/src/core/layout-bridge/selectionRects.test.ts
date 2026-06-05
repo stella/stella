@@ -319,6 +319,80 @@ describe("selection rect geometry", () => {
     expect(caret?.x).toBe(14);
   });
 
+  test("caret Y includes float skip before the target line", () => {
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      pmStart: 0,
+      pmEnd: 4,
+      runs: [
+        {
+          kind: "text",
+          text: "ab",
+          fontFamily: "Calibri",
+          fontSize: 11,
+          pmStart: 1,
+          pmEnd: 3,
+        },
+      ],
+    };
+    const measures: Measure[] = [
+      {
+        kind: "paragraph",
+        lines: [
+          {
+            fromRun: 0,
+            toRun: 0,
+            fromChar: 0,
+            toChar: 1,
+            width: 7,
+            lineHeight: 16,
+            ascent: 12,
+            descent: 4,
+          },
+          {
+            fromRun: 0,
+            toRun: 0,
+            fromChar: 1,
+            toChar: 2,
+            width: 7,
+            lineHeight: 16,
+            ascent: 12,
+            descent: 4,
+            floatSkipBefore: 40,
+          },
+        ],
+        totalHeight: 72,
+      },
+    ];
+    const layout: Layout = {
+      pageGap: 0,
+      pages: [
+        {
+          number: 1,
+          size: { w: 600, h: 800 },
+          margins: { top: 0, right: 0, bottom: 0, left: 0 },
+          fragments: [
+            {
+              kind: "paragraph",
+              blockId: "p1",
+              x: 0,
+              y: 0,
+              width: 500,
+              height: 72,
+              fromLine: 0,
+              toLine: 2,
+            },
+          ],
+        },
+      ],
+    };
+
+    const caret = getCaretPosition(layout, [block], measures, 3);
+
+    expect(caret?.y).toBe(56);
+  });
+
   test("selection rects only include visible lines from clipped table rows", () => {
     const { layout, block, measure } = clippedTableFixture();
 

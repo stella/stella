@@ -12,6 +12,7 @@ import {
   getMidChainIndices,
   hasPageBreakBefore,
 } from "./keep-together";
+import { measuredLineAdvance } from "./lineFlow";
 import { FOOTNOTE_SEPARATOR_HEIGHT, createPaginator } from "./paginator";
 import { buildTableRowBreakInfo, snapRowBreak } from "./tableRowBreak";
 import { bandTopContentY, floatingTextBoxReservesBand } from "./textBoxFlow";
@@ -499,14 +500,14 @@ function layoutParagraph(
 
     for (let j = currentLineIndex; j < lines.length; j++) {
       const line = lines[j]!; // SAFETY: j < lines.length
-      const lineHeight = line.lineHeight;
+      const lineAdvance = measuredLineAdvance(line);
       const lineRefs = getLineFootnoteRefs(
         block,
         line.fromRun,
         line.toRun,
         footnoteHeightById,
       );
-      const totalWithLine = linesHeight + lineHeight;
+      const totalWithLine = linesHeight + lineAdvance;
       const withSpacing =
         totalWithLine +
         firstFragmentSpaceBefore +
@@ -604,7 +605,7 @@ function layoutParagraph(
 
     // If more lines remain, advance to next column/page
     if (currentLineIndex < lines.length) {
-      paginator.ensureFits(lines[currentLineIndex]!.lineHeight); // SAFETY: guarded by length check
+      paginator.ensureFits(measuredLineAdvance(lines[currentLineIndex]!)); // SAFETY: guarded by length check
     }
   }
 }
