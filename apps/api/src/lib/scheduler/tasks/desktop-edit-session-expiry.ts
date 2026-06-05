@@ -82,11 +82,21 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
     }
 
     const batchIds = batch.map((session) => session.id);
+    const notificationPublishedAt = new Date();
+
+    await publishDesktopEditSessionExpiryNotifications({
+      publisher: { publishSessionEvent, publishWorkspaceEvent },
+      sessions: batch,
+    });
 
     const expiredSessions = await rootDb.transaction(async (tx) => {
       const transitioned = await tx
         .update(desktopEditSessions)
-        .set({ status: "expired", closedAt: now })
+        .set({
+          status: "expired",
+          closedAt: now,
+          expiryNotificationPublishedAt: notificationPublishedAt,
+        })
         .where(
           and(
             inArray(desktopEditSessions.id, batchIds),
@@ -108,8 +118,6 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
 
       return batch.filter((session) => expiredIds.has(session.id));
     });
-
-    await publishAndMarkExpiryNotifications(expiredSessions);
 
     expired += expiredSessions.length;
 
