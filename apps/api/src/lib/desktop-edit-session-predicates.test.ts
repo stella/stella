@@ -18,6 +18,6 @@ describe("liveDesktopEditSessionPredicates", () => {
     expect(compiled.sql).toContain("status");
     expect(compiled.sql).toContain("token_expires_at");
     expect(compiled.sql).toContain(" > ");
-    expect(compiled.params).toEqual(["open", now]);
+    expect(compiled.params).toEqual(["open", now.toISOString()]);
   });
 });
