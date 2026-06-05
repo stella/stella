@@ -247,7 +247,9 @@ const ExpandableText = ({ text }: { text: string }) => {
   useEffect(() => {
     const el = ref.current;
     if (expanded || !el) {
-      return;
+      return () => {
+        /* no-op cleanup */
+      };
     }
     const observer = new ResizeObserver(() => {
       setOverflowing(el.scrollHeight > el.clientHeight + 1);
