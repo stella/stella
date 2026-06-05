@@ -19,15 +19,60 @@ function slotSelector(kind: HfSlotKind, rId: string): string {
     : `.layout-page-footer[data-rid="${rId}"]`;
 }
 
+function associatedSlotSelector(kind: HfSlotKind, rId: string): string {
+  return `[data-hf-slot-kind="${kind}"][data-hf-rid="${rId}"]`;
+}
+
+function uniqueElements(elements: HTMLElement[]): HTMLElement[] {
+  return Array.from(new Set(elements));
+}
+
+function querySlotDescendants(
+  container: ParentNode,
+  kind: HfSlotKind,
+  rId: string,
+  selector: string,
+): HTMLElement[] {
+  return uniqueElements([
+    ...Array.from(
+      container.querySelectorAll<HTMLElement>(
+        `${slotSelector(kind, rId)} ${selector}`,
+      ),
+    ),
+    ...Array.from(
+      container.querySelectorAll<HTMLElement>(
+        `${associatedSlotSelector(kind, rId)} ${selector}`,
+      ),
+    ),
+  ]);
+}
+
+function querySlotAnchors(
+  container: ParentNode,
+  kind: HfSlotKind,
+  rId: string,
+  selector: string,
+): HTMLElement[] {
+  return uniqueElements([
+    ...querySlotDescendants(container, kind, rId, selector),
+    ...Array.from(
+      container.querySelectorAll<HTMLElement>(
+        `${associatedSlotSelector(kind, rId)}${selector}`,
+      ),
+    ),
+  ]);
+}
+
 export function findHfPmSpans(
   container: ParentNode,
   kind: HfSlotKind,
   rId: string,
 ): HTMLElement[] {
-  return Array.from(
-    container.querySelectorAll<HTMLElement>(
-      `${slotSelector(kind, rId)} span[data-pm-start][data-pm-end]`,
-    ),
+  return querySlotDescendants(
+    container,
+    kind,
+    rId,
+    "span[data-pm-start][data-pm-end]",
   );
 }
 
@@ -36,11 +81,7 @@ export function findHfPmAnchors(
   kind: HfSlotKind,
   rId: string,
 ): HTMLElement[] {
-  return Array.from(
-    container.querySelectorAll<HTMLElement>(
-      `${slotSelector(kind, rId)} [data-pm-start]`,
-    ),
-  );
+  return querySlotAnchors(container, kind, rId, "[data-pm-start]");
 }
 
 export function findHfPmAnchor(
@@ -52,8 +93,16 @@ export function findHfPmAnchor(
   if (!Number.isFinite(pmStart)) {
     return null;
   }
-  return container.querySelector<HTMLElement>(
-    `${slotSelector(kind, rId)} [data-pm-start="${String(pmStart)}"]`,
+  return (
+    container.querySelector<HTMLElement>(
+      `${slotSelector(kind, rId)} [data-pm-start="${String(pmStart)}"]`,
+    ) ??
+    container.querySelector<HTMLElement>(
+      `${associatedSlotSelector(kind, rId)} [data-pm-start="${String(pmStart)}"]`,
+    ) ??
+    container.querySelector<HTMLElement>(
+      `${associatedSlotSelector(kind, rId)}[data-pm-start="${String(pmStart)}"]`,
+    )
   );
 }
 
@@ -81,15 +130,11 @@ export function findHfCaretSpan(
   if (!Number.isFinite(pos)) {
     return null;
   }
-  const exact = container.querySelector<HTMLElement>(
-    `${slotSelector(kind, rId)} [data-pm-start="${String(pos)}"]`,
-  );
+  const exact = findHfPmAnchor(container, kind, rId, pos);
   if (exact) {
     return { element: exact, edge: "left" };
   }
-  const spans = container.querySelectorAll<HTMLElement>(
-    `${slotSelector(kind, rId)} span[data-pm-start][data-pm-end]`,
-  );
+  const spans = findHfPmSpans(container, kind, rId);
   let best: HfCaretSpanHit | null = null;
   for (const span of spans) {
     const startStr = span.dataset["pmStart"];
@@ -156,7 +201,6 @@ export function clickToPositionInHfSlot(
 ): number | null {
   const ownerDoc =
     container instanceof Element ? container.ownerDocument : document;
-  const slotSel = slotSelector(kind, rId);
   const elements = ownerDoc.elementsFromPoint(clientX, clientY);
   for (const el of elements) {
     if (!(el instanceof HTMLElement)) {
@@ -166,7 +210,8 @@ export function clickToPositionInHfSlot(
     // the same header is referenced across pages, so a drag that crosses
     // between paginated instances must accept the hit regardless of which
     // exact slot DOM node it lands in.
-    if (!el.closest(slotSel)) {
+    const slot = findHfSlotForTarget(el);
+    if (!slot || slot.kind !== kind || slot.rId !== rId) {
       continue;
     }
     if (
@@ -201,9 +246,7 @@ function findNearestSpanInHfSlots(
   clientX: number,
   clientY: number,
 ): number | null {
-  const spans = container.querySelectorAll<HTMLElement>(
-    `${slotSelector(kind, rId)} span[data-pm-start][data-pm-end]`,
-  );
+  const spans = findHfPmSpans(container, kind, rId);
   if (spans.length === 0) {
     return null;
   }
@@ -276,6 +319,14 @@ export function findHfSlotForTarget(target: Node | null): {
     const rId = footer.dataset["rid"];
     if (rId) {
       return { kind: "footer", rId, element: footer };
+    }
+  }
+  const associated = target.closest("[data-hf-slot-kind][data-hf-rid]");
+  if (associated) {
+    const kind = associated.dataset["hfSlotKind"];
+    const rId = associated.dataset["hfRid"];
+    if ((kind === "header" || kind === "footer") && rId) {
+      return { kind, rId, element: associated };
     }
   }
   return null;

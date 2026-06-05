@@ -47,6 +47,7 @@ import {
 import {
   clickToPositionInHfSlot,
   findHfCaretSpan,
+  findHfPmSpans,
   findHfSlotForTarget,
 } from "../core/layout-bridge/findHfPmSpans";
 import {
@@ -746,13 +747,7 @@ function HfCaretOverlay({
       // enough for single-line and multi-line highlights without doing
       // glyph-level math (Word's selection model is paragraph-line-based
       // — same convention).
-      const slotSelector =
-        selection.kind === "header"
-          ? `.layout-page-header[data-rid="${selection.rId}"]`
-          : `.layout-page-footer[data-rid="${selection.rId}"]`;
-      const spans = pageScope.querySelectorAll<HTMLElement>(
-        `${slotSelector} span[data-pm-start][data-pm-end]`,
-      );
+      const spans = findHfPmSpans(pageScope, selection.kind, selection.rId);
       const rects: { x: number; y: number; width: number; height: number }[] =
         [];
       for (const span of spans) {
@@ -4724,8 +4719,7 @@ export function PagedEditor(
       // When in HF edit mode, clicks outside header/footer area close the HF editor
       if (!readOnly && hfEditMode && onBodyClick) {
         const isInHfArea =
-          target.closest(".layout-page-header") ||
-          target.closest(".layout-page-footer") ||
+          findHfSlotForTarget(target) !== null ||
           target.closest(".hf-inline-editor");
         if (!isInHfArea) {
           e.preventDefault();
@@ -4850,9 +4844,7 @@ export function PagedEditor(
       // In normal mode, clicks in header/footer area should place cursor at
       // start of body content, not inside header/footer (matches Word/Google Docs)
       if (!readOnly && !hfEditMode) {
-        const isInHfArea =
-          target.closest(".layout-page-header") ||
-          target.closest(".layout-page-footer");
+        const isInHfArea = findHfSlotForTarget(target) !== null;
         if (isInHfArea) {
           e.preventDefault();
           // Place cursor at start of body content
@@ -5838,9 +5830,8 @@ export function PagedEditor(
         e.detail === 2 &&
         onHeaderFooterDoubleClick
       ) {
-        const headerEl = target.closest(".layout-page-header");
-        const footerEl = target.closest(".layout-page-footer");
-        if (headerEl || footerEl) {
+        const slot = findHfSlotForTarget(target);
+        if (slot) {
           const pageEl = closestHtmlElement(target, "[data-page-number]");
           const pageNum = pageEl ? Number(pageEl.dataset["pageNumber"]) : 1;
           // Seed the HF caret overlay's page scope so the very first
@@ -5848,18 +5839,10 @@ export function PagedEditor(
           // user double-clicked, not the first painted instance of the
           // shared rId.
           activeHfPageNumberRef.current = pageNum;
-          if (headerEl) {
-            e.preventDefault();
-            e.stopPropagation();
-            onHeaderFooterDoubleClick("header", pageNum);
-            return;
-          }
-          if (footerEl) {
-            e.preventDefault();
-            e.stopPropagation();
-            onHeaderFooterDoubleClick("footer", pageNum);
-            return;
-          }
+          e.preventDefault();
+          e.stopPropagation();
+          onHeaderFooterDoubleClick(slot.kind, pageNum);
+          return;
         }
       }
 

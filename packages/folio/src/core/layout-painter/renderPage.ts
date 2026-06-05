@@ -2297,6 +2297,11 @@ function moveBehindHeaderFooterElementsToPage(
   contentTop: number,
   contentLeft: number,
 ): void {
+  const slotKind = slotEl.className.split(" ").includes(PAGE_CLASS_NAMES.header)
+    ? "header"
+    : "footer";
+  const slotRId = slotEl.dataset["rid"];
+
   // behindDoc images and behind text boxes (full-page letterhead backgrounds)
   // must live on the page element, not inside the clipped HF container. Move
   // them out so they aren't constrained by HF bounds/overflow and so body
@@ -2315,6 +2320,10 @@ function moveBehindHeaderFooterElementsToPage(
     const currentLeft = Number.parseFloat(element.style.left) || 0;
     element.style.top = `${currentTop + contentTop}px`;
     element.style.left = `${currentLeft + contentLeft}px`;
+    if (slotRId) {
+      element.dataset["hfSlotKind"] = slotKind;
+      element.dataset["hfRid"] = slotRId;
+    }
     // Use z-index 0 instead of -1 so the element sits above the page
     // background but below body text content (which remains later in DOM).
     element.style.zIndex = "0";
