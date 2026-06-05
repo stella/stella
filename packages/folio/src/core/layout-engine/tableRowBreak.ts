@@ -136,6 +136,7 @@ function cellBreakGeometry(
       if (blockHeight > 0) {
         const top = y;
         y += blockHeight;
+        paragraphY += blockHeight;
         unsafeRanges.push({ top, bottom: y });
         bottoms.push(y);
       }

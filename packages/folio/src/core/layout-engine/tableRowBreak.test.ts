@@ -423,6 +423,91 @@ describe("buildTableRowBreakInfo / snapRowBreak", () => {
     expect(floatedLineSlice).toBeLessThan(120);
   });
 
+  test("keeps floating row split offsets aligned after nested cell blocks", () => {
+    const nestedHeight = 40;
+    const floatHeight = 50;
+    const rowHeight = 160;
+    const block: TableBlock = {
+      kind: "table",
+      id: "t",
+      rows: [
+        {
+          id: "r0",
+          cells: [
+            {
+              id: "c0",
+              padding: { top: 0, right: 0, bottom: 0, left: 0 },
+              blocks: [
+                {
+                  kind: "table",
+                  id: "nested",
+                  rows: [],
+                  columnWidths: [100],
+                },
+                {
+                  kind: "paragraph",
+                  id: "p0",
+                  runs: [
+                    {
+                      kind: "image",
+                      src: "float.png",
+                      width: 65,
+                      height: floatHeight,
+                      wrapType: "square",
+                      cssFloat: "left",
+                      displayMode: "float",
+                    },
+                    {
+                      kind: "text",
+                      text: "nested content should measure the later paragraph against the float at its rendered y",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      columnWidths: [100],
+    };
+    const measure: TableMeasure = {
+      kind: "table",
+      rows: [
+        {
+          cells: [
+            {
+              blocks: [
+                {
+                  kind: "table",
+                  rows: [],
+                  columnWidths: [100],
+                  totalWidth: 100,
+                  totalHeight: nestedHeight,
+                },
+                paraMeasure(4),
+              ],
+              width: 100,
+              height: rowHeight,
+            },
+          ],
+          height: rowHeight,
+        },
+      ],
+      columnWidths: [100],
+      totalWidth: 100,
+      totalHeight: rowHeight,
+    };
+
+    const info = buildTableRowBreakInfo(block, measure);
+    const firstParagraphOffset = info.breakOffsets[0]?.find(
+      (offset) => offset > nestedHeight && offset < rowHeight,
+    );
+
+    expect(firstParagraphOffset).toBeGreaterThanOrEqual(
+      nestedHeight + floatHeight,
+    );
+  });
+
   test("shifts unsafe ranges for vertically aligned cells", () => {
     const block: TableBlock = {
       kind: "table",
