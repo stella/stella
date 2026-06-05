@@ -26,6 +26,8 @@ import type {
   ParagraphMeasure,
   MeasuredLine,
   TableBlock,
+  TableCell,
+  TableCellMeasure,
   TableFragment,
   TableMeasure,
   TextRun,
@@ -114,6 +116,22 @@ function mathRunToFontStyle(run: MathRun): FontStyle {
  */
 function findBlockById(blocks: FlowBlock[], blockId: BlockId): number {
   return blocks.findIndex((block) => block.id === blockId);
+}
+
+function getCellContentOffsetY(
+  cell: TableCell,
+  cellMeasure: TableCellMeasure,
+  rowHeight: number,
+): number {
+  const padTop = cell.padding?.top ?? 0;
+  const spareHeight = Math.max(0, rowHeight - cellMeasure.height);
+  if (cell.verticalAlign === "bottom") {
+    return padTop + spareHeight;
+  }
+  if (cell.verticalAlign === "center") {
+    return padTop + spareHeight / 2;
+  }
+  return padTop;
 }
 
 /**
@@ -562,6 +580,12 @@ export function selectionToRects(
               floatingImages,
               contentWidth,
             );
+            const contentOffsetX = cell.padding?.left ?? 0;
+            const contentOffsetY = getCellContentOffsetY(
+              cell,
+              cellMeasure,
+              rowMeasure.height,
+            );
 
             // Check each paragraph in the cell
             let blockY = 0;
@@ -624,17 +648,17 @@ export function selectionToRects(
                   paragraphBlock,
                   line,
                   charOffsetFrom,
-                  cellMeasure.width,
+                  contentWidth,
                 );
                 const endX = charOffsetToX(
                   paragraphBlock,
                   line,
                   charOffsetTo,
-                  cellMeasure.width,
+                  contentWidth,
                 );
 
                 const lineY = lineHeightBefore(paragraphMeasure, index);
-                const clippedLineY = blockY + lineY;
+                const clippedLineY = contentOffsetY + blockY + lineY;
                 if (
                   clippedLineY + line.lineHeight <= clipTop ||
                   clippedLineY >= clipBottom
@@ -643,7 +667,11 @@ export function selectionToRects(
                 }
 
                 rects.push({
-                  x: tableFragment.x + cellX + Math.min(startX, endX),
+                  x:
+                    tableFragment.x +
+                    cellX +
+                    contentOffsetX +
+                    Math.min(startX, endX),
                   y: tableFragment.y + rowY + clippedLineY - clipTop + pageTopY,
                   width: Math.max(1, Math.abs(endX - startX)),
                   height: line.lineHeight,

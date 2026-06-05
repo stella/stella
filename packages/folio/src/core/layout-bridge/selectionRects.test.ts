@@ -328,6 +328,22 @@ describe("selection rect geometry", () => {
     expect(rects[0]?.height).toBe(20);
   });
 
+  test("selection rect clipping accounts for cell top padding", () => {
+    const { layout, block, measure } = clippedTableFixture();
+    block.rows[0]!.cells[0]!.padding = {
+      top: 40,
+      right: 0,
+      bottom: 0,
+      left: 0,
+    };
+
+    const rects = selectionToRects(layout, [block], [measure], 1, 2);
+
+    expect(rects).toHaveLength(1);
+    expect(rects[0]?.y).toBe(0);
+    expect(rects[0]?.height).toBe(20);
+  });
+
   test("selection rects use floating-aware clipped table line geometry", () => {
     const { layout, block, measure } = floatingClippedTableFixture();
 
