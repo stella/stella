@@ -25,6 +25,17 @@ class FakeElement {
   style: Record<string, string> = {};
   children: FakeElement[] = [];
   parent: FakeElement | undefined;
+  readonly classList = {
+    add: (...classNames: string[]) => {
+      const current = this.className.split(" ").filter(Boolean);
+      for (const className of classNames) {
+        if (!current.includes(className)) {
+          current.push(className);
+        }
+      }
+      this.className = current.join(" ");
+    },
+  };
   private ownText = "";
   readonly tagName: string;
 
@@ -45,14 +56,12 @@ class FakeElement {
 
   append(...children: FakeElement[]): void {
     for (const child of children) {
-      this.appendChild(child);
+      this.addChild(child);
     }
   }
 
   appendChild(child: FakeElement): FakeElement {
-    child.removeFromParent();
-    child.parent = this;
-    this.children.push(child);
+    this.addChild(child);
     return child;
   }
 
@@ -133,10 +142,16 @@ class FakeElement {
       return;
     }
     const index = this.parent.children.indexOf(this);
-    if (index >= 0) {
+    if (index !== -1) {
       this.parent.children.splice(index, 1);
     }
     this.parent = undefined;
+  }
+
+  private addChild(child: FakeElement): void {
+    child.removeFromParent();
+    child.parent = this;
+    this.children.push(child);
   }
 }
 
@@ -409,8 +424,8 @@ describe("header and footer rendering", () => {
       pageElement as unknown as FakeElement,
       "layout-paragraph",
     );
-    const afterParagraph = paragraphs.find((element) =>
-      element.textContent.includes("After box"),
+    const afterParagraph = paragraphs.find(
+      (element) => element.dataset["blockId"] === "hf-after",
     );
 
     expect(afterParagraph?.style.top).toBe("40px");
@@ -441,6 +456,7 @@ describe("header and footer rendering", () => {
       {
         document: fakeDocument,
         footerContent: {
+          rId: "rIdFooter",
           blocks: [footerImageBlock],
           measures: [{ kind: "paragraph", lines: [], totalHeight: 0 }],
           height: 0,
@@ -456,6 +472,8 @@ describe("header and footer rendering", () => {
     expect(image?.style.top).toBe("0px");
     expect(image?.style.left).toBe("72px");
     expect(image?.style.zIndex).toBe("0");
+    expect(image?.dataset["hfSlotKind"]).toBe("footer");
+    expect(image?.dataset["hfRid"]).toBe("rIdFooter");
   });
 });
 
