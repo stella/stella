@@ -117,6 +117,16 @@ export type PageFloatingImage = {
   behindDoc: boolean;
 };
 
+type ScopedFloatingRect = {
+  startsAtFragmentIndex: number;
+  rect: FloatingExclusionRect;
+};
+
+type ScopedFloatingZone = {
+  startsAtFragmentIndex: number;
+  zone: FloatingImageZone;
+};
+
 /**
  * CSS class names for page elements
  */
@@ -464,6 +474,27 @@ function syncPageWatermarkOverlay(
   }
 
   pageEl.append(overlay);
+}
+
+function floatingZonesForFragment(
+  pageWideZones: FloatingImageZone[],
+  scopedZones: ScopedFloatingZone[],
+  fragmentIndex: number,
+): FloatingImageZone[] {
+  if (scopedZones.length === 0) {
+    return pageWideZones;
+  }
+
+  let activeZones: FloatingImageZone[] | undefined;
+  for (const scopedZone of scopedZones) {
+    if (scopedZone.startsAtFragmentIndex > fragmentIndex) {
+      continue;
+    }
+    activeZones ??= [...pageWideZones];
+    activeZones.push(scopedZone.zone);
+  }
+
+  return activeZones ?? pageWideZones;
 }
 
 /**
@@ -1761,6 +1792,7 @@ export function renderPage(
   // PHASE 1: Extract all floating images from paragraphs on this page
   const allFloatingImages: PageFloatingImage[] = [];
   const floatingRects: FloatingExclusionRect[] = [];
+  const scopedFloatingRects: ScopedFloatingRect[] = [];
   const pageGeometry: PageGeometry = {
     pageWidth: page.size.w,
     pageHeight: page.size.h,
@@ -1860,7 +1892,12 @@ export function renderPage(
   // contribution so body text wraps around anchored boxes instead of
   // running underneath them.
   if (options.blockLookup) {
-    for (const fragment of page.fragments) {
+    for (
+      let fragmentIndex = 0;
+      fragmentIndex < page.fragments.length;
+      fragmentIndex++
+    ) {
+      const fragment = page.fragments[fragmentIndex]!; // SAFETY: fragmentIndex < page.fragments.length
       if (fragment.kind !== "textBox") {
         continue;
       }
@@ -1916,7 +1953,14 @@ export function renderPage(
       if (textBoxBlock.wrapType !== undefined) {
         rect.wrapType = textBoxBlock.wrapType;
       }
-      floatingRects.push(rect);
+      if (reservesBand) {
+        scopedFloatingRects.push({
+          startsAtFragmentIndex: fragmentIndex,
+          rect,
+        });
+      } else {
+        floatingRects.push(rect);
+      }
     }
   }
 
@@ -1925,6 +1969,13 @@ export function renderPage(
     floatingRects.length > 0
       ? rectsToFloatingZones(floatingRects, contentWidth)
       : [];
+  const scopedFloatingZones: ScopedFloatingZone[] = scopedFloatingRects.flatMap(
+    ({ startsAtFragmentIndex, rect }) =>
+      rectsToFloatingZones([rect], contentWidth).map((zone) => ({
+        startsAtFragmentIndex,
+        zone,
+      })),
+  );
 
   // PHASE 3a: Render behindDoc images first so they paint below body text.
   // Front-layer images (everything else) are appended after fragments below
@@ -1993,9 +2044,14 @@ export function renderPage(
 
         // Re-measure paragraph with floating zones for text wrapping
         let paragraphMeasure = blockData.measure as ParagraphMeasure;
-        if (floatingZones.length > 0) {
+        const fragmentFloatingZones = floatingZonesForFragment(
+          floatingZones,
+          scopedFloatingZones,
+          i,
+        );
+        if (fragmentFloatingZones.length > 0) {
           paragraphMeasure = measureParagraph(paragraphBlock, contentWidth, {
-            floatingZones,
+            floatingZones: fragmentFloatingZones,
             paragraphYOffset: fragmentContentY,
           });
         }
