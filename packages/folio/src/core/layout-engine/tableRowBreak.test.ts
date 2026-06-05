@@ -486,16 +486,36 @@ describe("oversized table row splits across pages (#570)", () => {
     expect(firstPageTableFragments[0]?.x).toBeGreaterThan(OPTIONS.margins.left);
   });
 
-  test("repeats header rows while splitting a tall body row", () => {
+  test("uses space below the real header before repeating headers", () => {
     const { block, measure } = tableWithHeaderAndTallBody(15);
-    const frags = tableFragments(block, measure);
+    const layout = layoutDocument(
+      [block as FlowBlock],
+      [measure as Measure],
+      OPTIONS,
+    );
+    const frags = layout.pages
+      .flatMap((page) => page.fragments)
+      .filter((f): f is TableFragment => f.kind === "table");
+    const firstPageFrags =
+      layout.pages[0]?.fragments.filter(
+        (f): f is TableFragment => f.kind === "table",
+      ) ?? [];
     const bodyFrags = frags.filter((f) => f.fromRow === 1);
 
     expect(bodyFrags.length).toBeGreaterThan(1);
+    expect(firstPageFrags.map((f) => [f.fromRow, f.toRow])).toEqual([
+      [0, 1],
+      [1, 2],
+    ]);
 
     const pageContentHeight =
       OPTIONS.pageSize.h - OPTIONS.margins.top - OPTIONS.margins.bottom;
-    for (const f of bodyFrags) {
+    const firstBodyFrag = bodyFrags[0]!;
+    expect(firstBodyFrag.y).toBe(OPTIONS.margins.top + LINE);
+    expect(firstBodyFrag.headerRowCount).toBeUndefined();
+    expect(firstBodyFrag.height).toBe(pageContentHeight - LINE);
+
+    for (const f of bodyFrags.slice(1)) {
       const visibleBodyHeight = (f.bottomClip ?? 15 * LINE) - (f.topClip ?? 0);
       expect(f.headerRowCount).toBe(1);
       expect(f.continuesFromPrev).toBe(true);
@@ -504,17 +524,20 @@ describe("oversized table row splits across pages (#570)", () => {
     }
   });
 
-  test("splits body rows that exceed the page only with repeated headers", () => {
+  test("splits body rows that exceed the page only after headers repeat", () => {
     const { block, measure } = tableWithHeaderAndTallBody(6);
     const frags = tableFragments(block, measure);
     const bodyFrags = frags.filter((f) => f.fromRow === 1);
+    const pageContentHeight =
+      OPTIONS.pageSize.h - OPTIONS.margins.top - OPTIONS.margins.bottom;
 
     expect(bodyFrags.length).toBeGreaterThan(1);
-    for (const f of bodyFrags) {
+    expect(bodyFrags[0]?.headerRowCount).toBeUndefined();
+    expect(bodyFrags[0]?.height).toBe(pageContentHeight - LINE);
+
+    for (const f of bodyFrags.slice(1)) {
       expect(f.headerRowCount).toBe(1);
-      expect(f.height).toBeLessThanOrEqual(
-        OPTIONS.pageSize.h - OPTIONS.margins.top - OPTIONS.margins.bottom,
-      );
+      expect(f.height).toBeLessThanOrEqual(pageContentHeight);
     }
   });
 

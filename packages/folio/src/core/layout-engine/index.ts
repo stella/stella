@@ -673,23 +673,57 @@ function layoutTable(
     return x;
   };
 
-  while (currentRowIndex < rows.length) {
-    const state = paginator.getCurrentState();
+  const canSplitRow = (rowIndex: number): boolean => {
+    const row = rows[rowIndex];
+    if (!row) {
+      return false;
+    }
+    const repeatedHeaderOverhead =
+      headerRowCount > 0 && rowIndex >= headerRowCount ? headerRowsHeight : 0;
+    return (
+      row.height + repeatedHeaderOverhead > fullPageHeight &&
+      (breakInfo.breakOffsets[rowIndex]?.length ?? 0) > 1
+    );
+  };
 
+  const hasAdjacentPriorTableRows = (
+    rowIndex: number,
+    state = paginator.getCurrentState(),
+  ): boolean => {
+    const previous = state.page.fragments.at(-1);
+    return (
+      previous?.kind === "table" &&
+      previous.blockId === block.id &&
+      previous.toRow === rowIndex &&
+      previous.y + previous.height === state.cursorY &&
+      previous.x === computeTableX(state.columnIndex)
+    );
+  };
+
+  const shouldRepeatHeaderRows = (
+    rowIndex: number,
+    consumed: number,
+    state = paginator.getCurrentState(),
+  ): boolean =>
+    headerRowCount > 0 &&
+    rowIndex >= headerRowCount &&
+    !(consumed === 0 && hasAdjacentPriorTableRows(rowIndex, state));
+
+  while (currentRowIndex < rows.length) {
     // A row taller than a whole page can't fit anywhere; break it between whole
     // text lines across pages instead of overflowing the page and clipping the
     // content. eigenpal/docx-editor#698 (fixes their #570).
     const oversizedRow = rows[currentRowIndex]!; // SAFETY: currentRowIndex < rows.length
-    const repeatHeaderRows =
-      headerRowCount > 0 && currentRowIndex >= headerRowCount;
-    const headerOverhead = repeatHeaderRows ? headerRowsHeight : 0;
-    if (
-      oversizedRow.height + headerOverhead > fullPageHeight &&
-      (breakInfo.breakOffsets[currentRowIndex]?.length ?? 0) > 1
-    ) {
+    if (canSplitRow(currentRowIndex)) {
       let consumed = 0;
       while (consumed < oversizedRow.height) {
         const sliceState = paginator.getCurrentState();
+        const repeatHeaderRows = shouldRepeatHeaderRows(
+          currentRowIndex,
+          consumed,
+          sliceState,
+        );
+        const headerOverhead = repeatHeaderRows ? headerRowsHeight : 0;
         const sliceAvail =
           paginator.getAvailableHeight() -
           headerOverhead -
@@ -758,6 +792,7 @@ function layoutTable(
       continue;
     }
 
+    const state = paginator.getCurrentState();
     const rawAvailableHeight = paginator.getAvailableHeight();
     const isFirstFragment = currentRowIndex === 0;
 
@@ -822,6 +857,23 @@ function layoutTable(
 
     // If more rows remain, advance to next column/page
     if (currentRowIndex < rows.length) {
+      if (canSplitRow(currentRowIndex)) {
+        const nextState = paginator.getCurrentState();
+        const nextHeaderOverhead = shouldRepeatHeaderRows(
+          currentRowIndex,
+          0,
+          nextState,
+        )
+          ? headerRowsHeight
+          : 0;
+        const nextSliceAvail =
+          paginator.getAvailableHeight() -
+          nextHeaderOverhead -
+          nextState.trailingSpacing;
+        if (snapRowBreak(breakInfo, currentRowIndex, 0, nextSliceAvail) > 0) {
+          continue;
+        }
+      }
       // Need space for at least one content row plus repeated header rows
       const nextRowHeight =
         rows[currentRowIndex]!.height + // SAFETY: guarded by length check
