@@ -1,8 +1,9 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 
-import { useForm, useStore } from "@tanstack/react-form";
+import { useForm } from "@tanstack/react-form";
 import { useNavigate } from "@tanstack/react-router";
+import { useSelector } from "@tanstack/react-store";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
@@ -155,7 +156,7 @@ export function SignInPanel({
     },
   });
 
-  const formErrors = useStore(form.store, (s) => toFormErrors(s.fieldMeta));
+  const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
 
   return (
     <div className={cn("flex w-full max-w-md flex-col gap-8", className)}>
