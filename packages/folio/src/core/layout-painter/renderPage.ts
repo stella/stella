@@ -2554,6 +2554,21 @@ function computePageFingerprintInternal(
       fp += `,fl:${frag.fromLine},tl:${frag.toLine}`;
     } else if (frag.kind === "table") {
       fp += `,fr:${frag.fromRow},tr:${frag.toRow}`;
+      if (frag.headerRowCount !== undefined) {
+        fp += `,hr:${frag.headerRowCount}`;
+      }
+      if (frag.topClip !== undefined) {
+        fp += `,tc:${frag.topClip}`;
+      }
+      if (frag.bottomClip !== undefined) {
+        fp += `,bc:${frag.bottomClip}`;
+      }
+      if (frag.continuesFromPrev) {
+        fp += ",cfp";
+      }
+      if (frag.continuesOnNext) {
+        fp += ",con";
+      }
     }
     if (blockLookup) {
       const block = blockLookup.get(String(frag.blockId))?.block;

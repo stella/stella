@@ -675,22 +675,6 @@ function layoutTable(
   const getCurrentRowCapacity = (state = paginator.getCurrentState()): number =>
     state.contentBottom - state.topMargin;
 
-  const canSplitRow = (
-    rowIndex: number,
-    state = paginator.getCurrentState(),
-  ): boolean => {
-    const row = rows[rowIndex];
-    if (!row) {
-      return false;
-    }
-    const repeatedHeaderOverhead =
-      headerRowCount > 0 && rowIndex >= headerRowCount ? headerRowsHeight : 0;
-    return (
-      row.height + repeatedHeaderOverhead > getCurrentRowCapacity(state) &&
-      (breakInfo.breakOffsets[rowIndex]?.length ?? 0) > 1
-    );
-  };
-
   const hasAdjacentPriorTableRows = (
     rowIndex: number,
     state = paginator.getCurrentState(),
@@ -713,6 +697,23 @@ function layoutTable(
     headerRowCount > 0 &&
     rowIndex >= headerRowCount &&
     !(consumed === 0 && hasAdjacentPriorTableRows(rowIndex, state));
+
+  const canSplitRow = (
+    rowIndex: number,
+    state = paginator.getCurrentState(),
+  ): boolean => {
+    const row = rows[rowIndex];
+    if (!row) {
+      return false;
+    }
+    const repeatedHeaderOverhead = shouldRepeatHeaderRows(rowIndex, 0, state)
+      ? headerRowsHeight
+      : 0;
+    return (
+      row.height + repeatedHeaderOverhead > getCurrentRowCapacity(state) &&
+      (breakInfo.breakOffsets[rowIndex]?.length ?? 0) > 1
+    );
+  };
 
   while (currentRowIndex < rows.length) {
     // A row taller than a whole page can't fit anywhere; break it between whole
@@ -809,9 +810,15 @@ function layoutTable(
     const pendingSpacing = isFirstFragment ? state.trailingSpacing : 0;
     const availableHeight = rawAvailableHeight - pendingSpacing;
 
-    // For continuation fragments, we need space for header rows + at least one content row
+    const repeatHeaderRowsForNormalFragment = shouldRepeatHeaderRows(
+      currentRowIndex,
+      0,
+      state,
+    );
+
+    // For continuation fragments, we need space for header rows + at least one content row.
     const normalHeaderOverhead =
-      !isFirstFragment && headerRowCount > 0 ? headerRowsHeight : 0;
+      repeatHeaderRowsForNormalFragment ? headerRowsHeight : 0;
 
     // Calculate how many rows fit (excluding header rows which are prepended separately)
     let rowsHeight = 0;
@@ -851,7 +858,7 @@ function layoutTable(
       ...(block.pmEnd !== undefined ? { pmEnd: block.pmEnd } : {}),
       ...(!isFirstFragment ? { continuesFromPrev: true } : {}),
       ...(!isLastFragment ? { continuesOnNext: true } : {}),
-      ...(!isFirstFragment && headerRowCount > 0 ? { headerRowCount } : {}),
+      ...(repeatHeaderRowsForNormalFragment ? { headerRowCount } : {}),
       ...(block.sdtGroups ? { sdtGroups: block.sdtGroups } : {}),
     };
 
@@ -881,9 +888,12 @@ function layoutTable(
         }
       }
       // Need space for at least one content row plus repeated header rows
+      const nextState = paginator.getCurrentState();
       const nextRowHeight =
         rows[currentRowIndex]!.height + // SAFETY: guarded by length check
-        (headerRowCount > 0 ? headerRowsHeight : 0);
+        (shouldRepeatHeaderRows(currentRowIndex, 0, nextState)
+          ? headerRowsHeight
+          : 0);
       paginator.ensureFits(nextRowHeight);
     }
   }

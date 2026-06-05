@@ -198,6 +198,34 @@ function tableWithHeaderAndTallBody(bodyLines: number): {
   return { block, measure };
 }
 
+function tableWithHeaderTallBodyAndShortRow(bodyLines: number): {
+  block: TableBlock;
+  measure: TableMeasure;
+} {
+  const { block, measure } = tableWithHeaderAndTallBody(bodyLines);
+  block.rows.push({
+    id: "r-next",
+    cells: [
+      {
+        id: "c-next",
+        blocks: [
+          {
+            kind: "paragraph",
+            id: "p-next",
+            runs: [{ kind: "text", text: "next" }],
+          },
+        ],
+      },
+    ],
+  });
+  measure.rows.push({
+    cells: [{ blocks: [paraMeasure(1)], width: 220, height: LINE }],
+    height: LINE,
+  });
+  measure.totalHeight += LINE;
+  return { block, measure };
+}
+
 describe("buildTableRowBreakInfo / snapRowBreak", () => {
   test("collects line-bottom offsets per row plus the row boundary", () => {
     const { block, measure } = tallTable(3);
@@ -775,6 +803,27 @@ describe("oversized table row splits across pages (#570)", () => {
       expect(f.headerRowCount).toBe(1);
       expect(f.height).toBeLessThanOrEqual(pageContentHeight);
     }
+  });
+
+  test("does not repeat headers after a final split-row slice in the same column", () => {
+    const { block, measure } = tableWithHeaderTallBodyAndShortRow(8);
+    const layout = layoutDocument(
+      [block as FlowBlock],
+      [measure as Measure],
+      OPTIONS,
+    );
+    const secondPageTableFragments =
+      layout.pages[1]?.fragments.filter(
+        (f): f is TableFragment => f.kind === "table",
+      ) ?? [];
+    const nextRowFragment = secondPageTableFragments.find(
+      (f) => f.fromRow === 2,
+    );
+
+    expect(nextRowFragment).toBeDefined();
+    expect(nextRowFragment?.headerRowCount).toBeUndefined();
+    expect(nextRowFragment?.height).toBe(LINE);
+    expect(nextRowFragment?.y).toBe(OPTIONS.margins.top + LINE * 4);
   });
 
   test("a normal row that fits a page is not clipped", () => {
