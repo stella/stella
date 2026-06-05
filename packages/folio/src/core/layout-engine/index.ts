@@ -675,6 +675,10 @@ function layoutTable(
   const getCurrentRowCapacity = (state = paginator.getCurrentState()): number =>
     state.contentBottom - state.topMargin;
 
+  const getCurrentAvailableHeight = (
+    state = paginator.getCurrentState(),
+  ): number => state.contentBottom - state.cursorY;
+
   const hasAdjacentPriorTableRows = (
     rowIndex: number,
     state = paginator.getCurrentState(),
@@ -709,9 +713,16 @@ function layoutTable(
     const repeatedHeaderOverhead = shouldRepeatHeaderRows(rowIndex, 0, state)
       ? headerRowsHeight
       : 0;
+    if ((breakInfo.breakOffsets[rowIndex]?.length ?? 0) <= 1) {
+      return false;
+    }
+    const requiredHeight = row.height + repeatedHeaderOverhead;
+    if (requiredHeight > getCurrentRowCapacity(state)) {
+      return true;
+    }
     return (
-      row.height + repeatedHeaderOverhead > getCurrentRowCapacity(state) &&
-      (breakInfo.breakOffsets[rowIndex]?.length ?? 0) > 1
+      hasAdjacentPriorTableRows(rowIndex, state) &&
+      requiredHeight > getCurrentAvailableHeight(state) - state.trailingSpacing
     );
   };
 
@@ -817,8 +828,9 @@ function layoutTable(
     );
 
     // For continuation fragments, we need space for header rows + at least one content row.
-    const normalHeaderOverhead =
-      repeatHeaderRowsForNormalFragment ? headerRowsHeight : 0;
+    const normalHeaderOverhead = repeatHeaderRowsForNormalFragment
+      ? headerRowsHeight
+      : 0;
 
     // Calculate how many rows fit (excluding header rows which are prepended separately)
     let rowsHeight = 0;
