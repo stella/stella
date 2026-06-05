@@ -120,13 +120,18 @@ export const useUpdateWorkspace = () => {
     },
     onSuccess: async (_data, { workspaceId }) => {
       await Promise.all(
-        workspaceUpdateInvalidationKeys().map((queryKey) =>
-          queryClient.invalidateQueries({ queryKey, refetchType: "none" }),
-        ),
+        workspaceUpdateInvalidationKeys().map(async (queryKey) => {
+          await queryClient.invalidateQueries({
+            queryKey,
+            refetchType: "none",
+          });
+        }),
       );
       await Promise.all(
         workspaceUpdateRefetchFilters(toSafeId<"workspace">(workspaceId)).map(
-          (filters) => queryClient.refetchQueries(filters),
+          async (filters) => {
+            await queryClient.refetchQueries(filters);
+          },
         ),
       );
       // Re-run route loaders so the document title (driven by the
