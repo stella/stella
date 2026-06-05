@@ -443,21 +443,21 @@ const MatterStackIcon = ({
     viewBox="0 0 24 24"
   >
     <path
-      d="m12 3 8 4-8 4-8-4 8-4Z"
+      d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"
       stroke={ALL_MATTERS_STACK_COLORS[0]}
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="2"
     />
     <path
-      d="m4 12 8 4 8-4"
+      d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"
       stroke={ALL_MATTERS_STACK_COLORS[1]}
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="2"
     />
     <path
-      d="m4 17 8 4 8-4"
+      d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"
       stroke={ALL_MATTERS_STACK_COLORS[2]}
       strokeLinecap="round"
       strokeLinejoin="round"
