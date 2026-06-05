@@ -32,6 +32,7 @@
     "@libpdf/core": "catalog:",
     "@posthog/react": "^1.9.1",
     "@pydantic/genai-prices": "^0.0.62",
+    "@stll/ai-catalog": "workspace:*",
     "@stll/anonymize-chat": "workspace:*",
     "@stll/anonymize-data": "catalog:",
     "@stll/anonymize-wasm": "catalog:",

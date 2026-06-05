@@ -17,12 +17,22 @@ import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
 export const AI_ERROR_KINDS = [
   "quota_exhausted",
   "insufficient_credits",
+  "model_unavailable",
   "provider_unavailable",
   "loop_detected",
   "unknown",
 ] as const;
 
 export type AIErrorKind = (typeof AI_ERROR_KINDS)[number];
+
+// The AI SDK throws `NoSuchModelError` (name "AI_NoSuchModelError")
+// when a provider rejects an unknown model id without an HTTP call;
+// matched structurally so we don't depend on the symbol being exported.
+const isNoSuchModelError = (error: unknown): boolean =>
+  error !== null &&
+  typeof error === "object" &&
+  "name" in error &&
+  error.name === "AI_NoSuchModelError";
 
 export const classifyAIError = (error: unknown): AIErrorKind => {
   if (RetryError.isInstance(error)) {
@@ -31,12 +41,21 @@ export const classifyAIError = (error: unknown): AIErrorKind => {
   if (ChatLoopDetectedError.is(error)) {
     return "loop_detected";
   }
+  if (isNoSuchModelError(error)) {
+    return "model_unavailable";
+  }
   if (APICallError.isInstance(error)) {
     if (error.statusCode === 429) {
       return "quota_exhausted";
     }
     if (error.statusCode === 402) {
       return "insufficient_credits";
+    }
+    // A 404 on a generate/stream call means the provider no longer
+    // serves the configured model (retired or renamed upstream) — a
+    // config problem, not a transient outage, so retrying won't help.
+    if (error.statusCode === 404) {
+      return "model_unavailable";
     }
     if (error.statusCode !== undefined && error.statusCode >= 500) {
       return "provider_unavailable";
@@ -89,6 +108,13 @@ export const aiHandlerError = (
         status: 402,
         message:
           "The AI provider needs more credits. Contact your workspace admin to top up the account.",
+        cause: error,
+      });
+    case "model_unavailable":
+      return new HandlerError({
+        status: 502,
+        message:
+          "The configured AI model is no longer available from the provider. An administrator should update the model in organization settings.",
         cause: error,
       });
     case "provider_unavailable":

@@ -212,6 +212,28 @@ describe("chat thread messages", () => {
     expect(html).not.toContain("provider details must stay hidden");
   });
 
+  test("maps model-unavailable stream errors to admin-facing copy", () => {
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        approvalPendingMessageId={null}
+        error={new Error("model_unavailable")}
+        messages={[]}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        onResend={() => {}}
+        showToolCallDetails={false}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+
+    expect(html).toContain("The configured AI model is no longer available");
+    expect(html).toContain("Resend");
+    expect(html).not.toContain("model_unavailable");
+  });
+
   test("offers a raw-send override when anonymization blocks an attachment", () => {
     const html = renderWithProviders(
       <ChatThreadMessages

@@ -3,11 +3,8 @@
   "compilerOptions": {
     "lib": ["ESNext"],
     "module": "ESNext",
-    "types": ["bun"],
-    "paths": {
-      "@stll/ai-catalog": ["../ai-catalog/src/index.ts"]
-    }
+    "types": ["bun"]
   },
   "include": ["."],
-  "exclude": ["node_modules"]
+  "exclude": ["dist", "node_modules"]
 }

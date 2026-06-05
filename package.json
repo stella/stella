@@ -29,6 +29,7 @@
     "lint:ws": "sherif -r unsync-similar-dependencies && bun packages/scripts/src/workspace-hygiene.ts",
     "i18n:check": "turbo run i18n:check --",
     "i18n:sync": "turbo run i18n:sync --",
+    "check:model-catalog": "bun packages/scripts/src/model-catalog-upstream.ts",
     "test": "turbo run test",
     "db:push": "bun --filter @stll/api db:push",
     "clean": "turbo run clean && git clean -xdf node_modules",

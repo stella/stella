@@ -1,3 +1,5 @@
+import { BYOK_DEFAULT_MODELS, BYOK_MODEL_OPTIONS } from "@stll/ai-catalog";
+
 export const PROVIDER_KEYS = [
   "google",
   "anthropic",
@@ -95,71 +97,18 @@ export const ENDPOINT_REQUIRED_PROVIDERS = new Set<ProviderValue>([
   "huggingface",
 ]);
 
-export const DEFAULT_MODELS_BY_PROVIDER = {
-  google: {
-    chat: "gemini-3.5-flash",
-    fast: "gemini-3.1-flash-lite-preview",
-    reasoning: "gemini-3.1-pro-preview",
-    pdf: "gemini-3.5-flash",
-  },
-  anthropic: {
-    chat: "claude-sonnet-4-6",
-    fast: "claude-haiku-4-5-20251001",
-    reasoning: "claude-sonnet-4-6",
-    pdf: "claude-sonnet-4-6",
-  },
-  mistral: {
-    chat: "mistral-large-latest",
-    fast: "mistral-small-latest",
-    reasoning: "magistral-medium-latest",
-    pdf: "mistral-large-latest",
-  },
-  openai: {
-    chat: "gpt-5.4-mini",
-    fast: "gpt-5.4-nano",
-    reasoning: "gpt-5.4",
-    pdf: "gpt-5.4",
-  },
-  openrouter: {
-    chat: "google/gemini-3.5-flash",
-    fast: "google/gemini-3.1-flash-lite-preview",
-    reasoning: "google/gemini-3.1-pro-preview",
-    pdf: "google/gemini-3.5-flash",
-  },
-} as const satisfies Partial<Record<ProviderValue, Record<RoleValue, string>>>;
+// Catalog data is the single source of truth in @stll/ai-catalog,
+// shared with the API runtime. The `satisfies` guards also cross-check
+// that the package's provider/role sets still match the UI's
+// ProviderValue/RoleValue — a divergence fails typecheck here.
+export const DEFAULT_MODELS_BY_PROVIDER = BYOK_DEFAULT_MODELS satisfies Partial<
+  Record<ProviderValue, Record<RoleValue, string>>
+>;
 
-export const MODEL_OPTIONS_BY_PROVIDER = {
-  google: [
-    "gemini-3.1-pro-preview",
-    "gemini-3.5-flash",
-    "gemini-3.1-flash-lite-preview",
-  ],
-  anthropic: [
-    "claude-opus-4-7",
-    "claude-sonnet-4-6",
-    "claude-opus-4-6",
-    "claude-haiku-4-5-20251001",
-  ],
-  mistral: [
-    "mistral-medium-3-5",
-    "mistral-large-latest",
-    "mistral-small-latest",
-    "magistral-medium-latest",
-    "magistral-small-latest",
-  ],
-  openai: ["gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5.2"],
-  azure_foundry: [],
-  huggingface: [],
-  openrouter: [
-    "google/gemini-3.1-pro-preview",
-    "google/gemini-3.5-flash",
-    "google/gemini-3.1-flash-lite-preview",
-    "anthropic/claude-opus-4.5",
-    "anthropic/claude-sonnet-4.5",
-    "openai/gpt-5.4",
-    "openai/gpt-5.4-mini",
-  ],
-} as const satisfies Record<ProviderValue, readonly string[]>;
+export const MODEL_OPTIONS_BY_PROVIDER = BYOK_MODEL_OPTIONS satisfies Record<
+  ProviderValue,
+  readonly string[]
+>;
 
 export const isProviderValue = (value: string | null): value is ProviderValue =>
   value !== null && PROVIDER_VALUES.has(value);

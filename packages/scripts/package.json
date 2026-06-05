@@ -17,6 +17,7 @@
     "format": "oxfmt ."
   },
   "dependencies": {
+    "@stll/ai-catalog": "workspace:*",
     "better-result": "catalog:"
   },
   "devDependencies": {

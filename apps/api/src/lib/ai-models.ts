@@ -35,6 +35,14 @@ import { defaultSettingsMiddleware, wrapLanguageModel } from "ai";
 import type { LanguageModel, LanguageModelMiddleware } from "ai";
 import { panic, Result } from "better-result";
 
+import {
+  AI_PROVIDERS,
+  ANTHROPIC_ADAPTIVE_THINKING_MODELS,
+  BYOK_MODEL_OPTIONS,
+  DEFAULT_MODELS,
+} from "@stll/ai-catalog";
+import type { AIProvider, BYOKProvider, ModelRole } from "@stll/ai-catalog";
+
 import { env } from "@/api/env";
 import {
   AZURE_FOUNDRY_DEFAULT_API_VERSION,
@@ -43,143 +51,21 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-// -- Types ------------------------------------------------------
+// -- Catalog ----------------------------------------------------
 
-/**
- * Logical model roles. Call sites declare *what* they need,
- * not *which* model to use.
- *
- * - fast: classification, extraction, short generation
- * - chat: conversational with tool use and streaming
- * - reasoning: complex multi-step legal analysis
- * - pdf: native PDF/image understanding
- */
-export type ModelRole = "fast" | "chat" | "reasoning" | "pdf";
-
-export const MODEL_ROLES = [
-  "fast",
-  "chat",
-  "reasoning",
-  "pdf",
-] as const satisfies readonly ModelRole[];
-
-export const AI_PROVIDERS = [
-  "google",
-  "openrouter",
-  "openai",
-  "azure_foundry",
-  "anthropic",
-  "mistral",
-  "openai_compatible",
-  "huggingface",
-] as const;
-
-export type AIProvider = (typeof AI_PROVIDERS)[number];
+// Roles, providers, per-role defaults, BYOK options, and the
+// adaptive-thinking set are the single source of truth in
+// @stll/ai-catalog, shared with the BYOK settings UI in apps/web so the
+// picker can never offer a model the API rejects. Re-exported here so
+// existing `@/api/lib/ai-models` consumers keep their imports.
+export { AI_PROVIDERS, BYOK_MODEL_OPTIONS, DEFAULT_MODELS };
+export { MODEL_ROLES } from "@stll/ai-catalog";
+export type { AIProvider, BYOKProvider, ModelRole };
 
 const AI_PROVIDER_VALUES = new Set<string>(AI_PROVIDERS);
 
 const isAIProvider = (value: string): value is AIProvider =>
   AI_PROVIDER_VALUES.has(value);
-
-// -- Default model IDs per provider -----------------------------
-
-export const DEFAULT_MODELS = {
-  google: {
-    fast: "gemini-3.1-flash-lite-preview",
-    chat: "gemini-3.5-flash",
-    reasoning: "gemini-3.1-pro-preview",
-    pdf: "gemini-3.5-flash",
-  },
-  openrouter: {
-    fast: "google/gemini-3.1-flash-lite-preview",
-    chat: "google/gemini-3.5-flash",
-    reasoning: "google/gemini-3.1-pro-preview",
-    pdf: "google/gemini-3.5-flash",
-  },
-  openai: {
-    fast: "gpt-5.4-nano",
-    chat: "gpt-5.4-mini",
-    reasoning: "gpt-5.4",
-    pdf: "gpt-5.4",
-  },
-  azure_foundry: {
-    fast: "gpt-5.4-nano",
-    chat: "gpt-5.4-mini",
-    reasoning: "gpt-5.4",
-    pdf: "gpt-5.4",
-  },
-  anthropic: {
-    fast: "claude-haiku-4-5-20251001",
-    chat: "claude-sonnet-4-6",
-    reasoning: "claude-sonnet-4-6",
-    pdf: "claude-sonnet-4-6",
-  },
-  mistral: {
-    fast: "mistral-small-latest",
-    chat: "mistral-large-latest",
-    reasoning: "magistral-medium-latest",
-    pdf: "mistral-large-latest",
-  },
-  openai_compatible: {
-    fast: "default",
-    chat: "default",
-    reasoning: "default",
-    pdf: "default",
-  },
-  huggingface: {
-    fast: "speakleash/Bielik-1.5B-v3.0-Instruct",
-    chat: "speakleash/Bielik-11B-v2.3-Instruct",
-    reasoning: "speakleash/Bielik-11B-v2.3-Instruct",
-    pdf: "speakleash/Bielik-11B-v2.3-Instruct",
-  },
-} as const satisfies Record<AIProvider, Record<ModelRole, string>>;
-
-/**
- * BYOK-offered model IDs per provider. Server-side allowlist
- * mirroring the picker catalog in
- * apps/web/src/components/ai-config-role-models.logic.ts —
- * keep the two in sync. The frontend list is not a security
- * boundary; this is what the API will accept.
- *
- * Limited to providers BYOK supports (no openai_compatible).
- */
-export const BYOK_MODEL_OPTIONS = {
-  google: [
-    "gemini-3.1-pro-preview",
-    "gemini-3.5-flash",
-    "gemini-3.1-flash-lite-preview",
-  ],
-  anthropic: [
-    "claude-opus-4-7",
-    "claude-sonnet-4-6",
-    "claude-opus-4-6",
-    "claude-haiku-4-5-20251001",
-  ],
-  mistral: [
-    "mistral-medium-3-5",
-    "mistral-large-latest",
-    "mistral-small-latest",
-    "magistral-medium-latest",
-    "magistral-small-latest",
-  ],
-  openai: ["gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5.2"],
-  azure_foundry: [],
-  huggingface: [],
-  openrouter: [
-    "google/gemini-3.1-pro-preview",
-    "google/gemini-3.5-flash",
-    "google/gemini-3.1-flash-lite-preview",
-    "anthropic/claude-opus-4.5",
-    "anthropic/claude-sonnet-4.5",
-    "openai/gpt-5.4",
-    "openai/gpt-5.4-mini",
-  ],
-} as const satisfies Record<
-  Exclude<AIProvider, "openai_compatible">,
-  readonly string[]
->;
-
-export type BYOKProvider = keyof typeof BYOK_MODEL_OPTIONS;
 
 const CUSTOM_BYOK_MODEL_PROVIDERS = new Set<BYOKProvider>([
   "azure_foundry",
@@ -1037,12 +923,6 @@ type AnthropicReasoningSettings = Omit<Settings, "temperature"> & {
 
 const ANTHROPIC_LEGACY_THINKING_BUDGET_TOKENS = 10_000;
 
-const ANTHROPIC_ADAPTIVE_THINKING_MODELS = [
-  "claude-sonnet-4-6",
-  "claude-opus-4-6",
-  "claude-opus-4-7",
-] as const;
-
 const supportsAnthropicAdaptiveThinking = (modelId: string): boolean =>
   ANTHROPIC_ADAPTIVE_THINKING_MODELS.some((supportedModelId) =>
     modelId.includes(supportedModelId),
@@ -1061,8 +941,8 @@ const anthropicReasoningDefaults = (
   modelId: string,
 ): AnthropicReasoningSettings => {
   // AI SDK source: adaptive thinking is supported on Claude
-  // sonnet-4-6, opus-4-6, opus-4-7; earlier 4.5 models use the
-  // budget-based `type: "enabled"` form.
+  // sonnet-4-6, opus-4-6, opus-4-7, opus-4-8; earlier 4.5 models
+  // use the budget-based `type: "enabled"` form.
   const anthropicOptions: JSONObject = {
     ...buildAnthropicMetadata(orgId),
     thinking: anthropicThinkingForModel(modelId),
