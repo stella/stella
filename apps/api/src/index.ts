@@ -78,6 +78,7 @@ const SESSION_ID_HEADER = "x-posthog-session-id";
 const SESSION_ID_MAX_LENGTH = 64;
 const SESSION_ID_PATTERN = /^[\w-]+$/u;
 const S3_REFRESH_CHECK_INTERVAL_MS = 60_000;
+const WORKER_SHUTDOWN_TIMEOUT_MS = 10_000;
 
 const STATUS_BY_ELYSIA_CODE: Partial<Record<string, number>> = {
   VALIDATION: 422,
@@ -396,9 +397,37 @@ await refreshS3();
 startS3RefreshLoop();
 
 // BullMQ worker for asynchronous file derivatives.
-initFileDerivativeWorker();
+const fileDerivativeWorker = initFileDerivativeWorker();
 
 // BullMQ workflow worker for AI extraction.
-initWorkflowWorker();
+const workflowWorker = initWorkflowWorker();
 
 api.listen(getApiPort());
+
+// Graceful shutdown: drain the BullMQ workers on SIGTERM/SIGINT (deploy,
+// container stop, or a local `bun --watch` restart) so an in-flight job
+// is not abandoned mid-write. An abandoned job strands its workflow lock
+// and leaves cells stuck `pending` until the next boot reconciles them;
+// draining first avoids creating that orphan in the common case. Bounded
+// so a slow job can't hang shutdown — anything still in flight past the
+// timeout is reclaimed by the next boot's reconciler.
+let shuttingDown = false;
+const shutdownWorkers = async (signal: string): Promise<void> => {
+  if (shuttingDown) {
+    return;
+  }
+  shuttingDown = true;
+  logger.info("api.shutdown_started", { signal });
+  await Promise.race([
+    Promise.allSettled([workflowWorker.close(), fileDerivativeWorker.close()]),
+    Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),
+  ]);
+  logger.info("api.shutdown_complete", { signal });
+  process.exit(0);
+};
+process.once("SIGTERM", () => {
+  void shutdownWorkers("SIGTERM");
+});
+process.once("SIGINT", () => {
+  void shutdownWorkers("SIGINT");
+});

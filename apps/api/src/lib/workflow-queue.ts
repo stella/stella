@@ -7,6 +7,7 @@ import { and, asc, eq, gt, inArray, or, sql } from "drizzle-orm";
 import { isMockAI } from "@/api/consts";
 import type { ScopedDb } from "@/api/db";
 import { jsonField } from "@/api/db/json-utils";
+import { rootDb } from "@/api/db/root";
 import {
   cellMetadata,
   entities,
@@ -35,6 +36,7 @@ import {
   brandPersistedEntityId,
   brandPersistedPropertyId,
   brandPersistedUserId,
+  brandPersistedWorkspaceId,
   brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
 import { broadcast } from "@/api/lib/sse";
@@ -49,6 +51,10 @@ import {
   getExecutionPlanData,
   getPropertyExecutionPlan,
 } from "@/api/lib/workflow/get-execution-plan";
+import {
+  parseRunningLockWorkspaceId,
+  selectOrphanWorkspaceIds,
+} from "@/api/lib/workflow/orphan-recovery";
 import type { PartialAnswerUpdate } from "@/api/lib/workflow/streaming-answer";
 import { prepareBatch } from "@/api/lib/workflow/utils";
 
@@ -103,7 +109,7 @@ type EntityJobData = {
 
 // ── Public API ─────────────────────────────────────────
 
-let queue: Queue | null = null;
+let queue: Queue<EntityJobData> | null = null;
 let queueConnection: ReturnType<typeof createBullMqConnection> | null = null;
 let redisClient: RedisClient | null = null;
 
@@ -117,8 +123,8 @@ const getRedis = (): RedisClient => {
   return redisClient;
 };
 
-const getQueue = (): Queue => {
-  queue ??= new Queue(QUEUE_NAME, {
+const getQueue = (): Queue<EntityJobData> => {
+  queue ??= new Queue<EntityJobData>(QUEUE_NAME, {
     connection: getQueueConnection(),
     defaultJobOptions: {
       removeOnComplete: 100,
@@ -669,6 +675,203 @@ export const startWorkflow = async ({
   }
 };
 
+// ── Orphan reconciliation ──────────────────────────────
+//
+// A workflow's Redis run-state can outlive the worker that owns it when
+// the API process dies mid-job — a `bun --watch` hot-reload on save, an
+// OOM, a `kill -9`, or SIGTERM on deploy. The job is abandoned after its
+// cells were set to `pending` but before `finishWorkflow` clears the
+// lock, and a hard kill emits no BullMQ `failed` event, so neither the
+// `running` lock nor the `pending` cells self-heal: every retry is
+// rejected with a 409 until the hour-long lock TTL lapses, and the cells
+// spin forever. The reconciler closes that gap. Any workspace holding a
+// `running` lock or owning `pending` cells with no in-flight queue job is
+// orphaned; its pending cells are flipped to `error` (still re-runnable)
+// and its run-state cleared. Death-cause-agnostic: the next worker boot
+// heals whatever the previous one left behind.
+
+const RECONCILE_INTERVAL_MS = 60 * 1000;
+// Settle window before acting. A workflow that has just taken its
+// `running` lock but not yet enqueued its first entity batch would look
+// orphaned for a moment; we re-confirm against a fresh job snapshot after
+// this delay so a starting run is never reconciled away.
+const RECONCILE_SETTLE_MS = 5 * 1000;
+// Non-terminal BullMQ states. A job in any of these means the workspace
+// still has reclaimable work in flight, so its run-state is legitimate.
+const LIVE_JOB_STATES = [
+  "active",
+  "waiting",
+  "delayed",
+  "prioritized",
+  "waiting-children",
+  "paused",
+] as const;
+// Upper bound on the live-job snapshot. If the queue holds more in-flight
+// jobs than this, skip the cycle rather than risk treating a busy
+// workspace as orphaned from a truncated scan — a false positive must
+// never clobber a healthy run. A later, quieter cycle reconciles it.
+const LIVE_JOB_SCAN_LIMIT = 10_000;
+const RUNNING_LOCK_SCAN_PATTERN = `${WORKFLOW_KEY_PREFIX}:*:running`;
+const RUNNING_LOCK_SCAN_COUNT = "200";
+
+type LiveWorkspaceSnapshot = {
+  workspaceIds: Set<string>;
+  truncated: boolean;
+};
+
+// `Array.isArray` widens `unknown` to `any[]`; this guard narrows to
+// `unknown[]` instead so the SCAN reply stays type-checked.
+const isUnknownArray = (value: unknown): value is readonly unknown[] =>
+  Array.isArray(value);
+
+const scanRunningLockWorkspaceIds = async (
+  redis: RedisClient,
+): Promise<string[]> => {
+  const workspaceIds: string[] = [];
+  let cursor = "0";
+  do {
+    // Bun's RedisClient exposes raw commands via `send`; SCAN returns
+    // [nextCursor, keys]. Iterating the cursor keeps a large keyspace off
+    // a single blocking pass (unlike KEYS).
+    const reply: unknown = await redis.send("SCAN", [
+      cursor,
+      "MATCH",
+      RUNNING_LOCK_SCAN_PATTERN,
+      "COUNT",
+      RUNNING_LOCK_SCAN_COUNT,
+    ]);
+    if (!isUnknownArray(reply) || reply.length < 2) {
+      break;
+    }
+    const nextCursor = reply[0];
+    const keys = reply[1];
+    if (typeof nextCursor !== "string" || !isUnknownArray(keys)) {
+      break;
+    }
+    for (const key of keys) {
+      if (typeof key !== "string") {
+        continue;
+      }
+      const workspaceId = parseRunningLockWorkspaceId(key);
+      if (workspaceId !== null) {
+        workspaceIds.push(workspaceId);
+      }
+    }
+    cursor = nextCursor;
+  } while (cursor !== "0");
+  return workspaceIds;
+};
+
+const selectWorkspacesWithPendingCells = async (): Promise<string[]> => {
+  const rows = await rootDb
+    .selectDistinct({ workspaceId: fields.workspaceId })
+    .from(fields)
+    .where(sql`${fields.content}->>'type' = 'pending'`);
+  return rows.map((row) => row.workspaceId);
+};
+
+const snapshotLiveWorkspaceIds = async (
+  q: Queue<EntityJobData>,
+): Promise<LiveWorkspaceSnapshot> => {
+  const jobs = await q.getJobs([...LIVE_JOB_STATES], 0, LIVE_JOB_SCAN_LIMIT);
+  const workspaceIds = new Set<string>();
+  for (const job of jobs) {
+    workspaceIds.add(job.data.workspaceId);
+  }
+  return { workspaceIds, truncated: jobs.length > LIVE_JOB_SCAN_LIMIT };
+};
+
+const recoverOrphanedWorkflow = async (
+  workspaceId: SafeId<"workspace">,
+): Promise<void> => {
+  // Error the stuck `pending` cells first, while the orphaned lock still
+  // blocks any new run from re-populating them. `error` cells stay
+  // eligible for re-extraction (see `prepareBatch`), so a retry or the
+  // next full run picks them back up.
+  const erroredFields = await rootDb
+    .update(fields)
+    .set({ content: { type: "error", version: 1 } })
+    .where(
+      and(
+        eq(fields.workspaceId, workspaceId),
+        sql`${fields.content}->>'type' = 'pending'`,
+      ),
+    )
+    .returning({ id: fields.id });
+
+  // Then release the run-state so retries / new runs stop hitting the
+  // "a workflow is already running" 409.
+  await clearWorkflowRunState(getRedis(), workspaceId);
+
+  logger.warn("workflow.orphan_reconciled", {
+    workspaceId,
+    erroredFields: String(erroredFields.length),
+  });
+
+  // Push the cleared status + errored cells to any connected client.
+  broadcastWorkflowStatus(workspaceId, false);
+};
+
+type ReconcileOrphanedWorkflowsOptions = {
+  // Boot passes `true` to also sweep the DB for `pending` cells whose
+  // lock already lapsed via TTL; periodic ticks pass `false` and rely on
+  // the cheap lock scan alone.
+  scanPendingCells: boolean;
+};
+
+/**
+ * Reconcile workflows orphaned by a killed worker. Safe to call
+ * repeatedly; a no-op when nothing is orphaned. Exported for the boot +
+ * interval wiring in `initWorkflowWorker` and for operational scripts.
+ */
+export const reconcileOrphanedWorkflows = async ({
+  scanPendingCells,
+}: ReconcileOrphanedWorkflowsOptions): Promise<void> => {
+  const redis = getRedis();
+  const lockedWorkspaceIds = await scanRunningLockWorkspaceIds(redis);
+  const pendingWorkspaceIds = scanPendingCells
+    ? await selectWorkspacesWithPendingCells()
+    : [];
+
+  const candidateWorkspaceIds = [...lockedWorkspaceIds, ...pendingWorkspaceIds];
+  if (candidateWorkspaceIds.length === 0) {
+    return;
+  }
+
+  const q = getQueue();
+  const live = await snapshotLiveWorkspaceIds(q);
+  if (live.truncated) {
+    logger.warn("workflow.reconcile_skipped_backlog", {
+      candidates: String(candidateWorkspaceIds.length),
+    });
+    return;
+  }
+
+  const orphanCandidates = selectOrphanWorkspaceIds({
+    candidateWorkspaceIds,
+    liveWorkspaceIds: live.workspaceIds,
+  });
+  if (orphanCandidates.length === 0) {
+    return;
+  }
+
+  // Re-confirm after a settle delay so a workflow that is mid-startup
+  // (lock taken, first batch not yet enqueued) is not mistaken for an
+  // orphan.
+  await sleep(RECONCILE_SETTLE_MS);
+  const confirmed = await snapshotLiveWorkspaceIds(q);
+  if (confirmed.truncated) {
+    return;
+  }
+
+  for (const workspaceId of orphanCandidates) {
+    if (confirmed.workspaceIds.has(workspaceId)) {
+      continue;
+    }
+    await recoverOrphanedWorkflow(brandPersistedWorkspaceId(workspaceId));
+  }
+};
+
 // ── Worker ─────────────────────────────────────────────
 
 /**
@@ -792,6 +995,29 @@ export const initWorkflowWorker = () => {
   logger.info("workflow.worker_started", {
     concurrency: String(MAX_CONCURRENT_ENTITIES),
   });
+
+  // Heal whatever a previously-killed worker left orphaned. Boot runs a
+  // thorough pass (also sweeping the DB for pending cells whose lock has
+  // already lapsed); the interval then catches orphans that form at
+  // runtime — e.g. a job exhausts its retries while the lock is held —
+  // without waiting for a restart.
+  const runReconcile = (scanPendingCells: boolean): void => {
+    void reconcileOrphanedWorkflows({ scanPendingCells }).catch(
+      (error: unknown) => {
+        captureError(error);
+        logger.error("workflow.reconcile_failed", {
+          "error.type": errorTag(error),
+        });
+      },
+    );
+  };
+  runReconcile(true);
+  const reconcileTimer = setInterval(
+    () => runReconcile(false),
+    RECONCILE_INTERVAL_MS,
+  );
+  // The reconcile cadence must not keep the process alive at shutdown.
+  reconcileTimer.unref();
 
   return worker;
 };
