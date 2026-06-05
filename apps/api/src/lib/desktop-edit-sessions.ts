@@ -59,7 +59,7 @@ export const hashDesktopEditSessionToken = (sessionToken: string) =>
   new Bun.CryptoHasher("sha256").update(sessionToken).digest("hex");
 
 export const DESKTOP_EDIT_SESSION_LIVENESS_REFRESH_INTERVAL_MS =
-  SESSION_TOKEN_TTL_MS / 2;
+  SESSION_TOKEN_TTL_MS / 4;
 
 export const refreshDesktopEditSessionLiveness = async ({
   sessionId,
