@@ -1221,7 +1221,26 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
         />
       )}
       <span className="flex min-w-0 flex-1 items-center gap-1 truncate text-sm">
-        <span className="text-muted-foreground shrink-0">{activityLabel}</span>{" "}
+        {/* Grid overlays the active verb on invisible sizers of every verb, so
+            the column is as wide as the longest one and file names align across
+            rows regardless of locale. */}
+        <span className="text-muted-foreground grid shrink-0 justify-items-start">
+          <span
+            aria-hidden="true"
+            className="invisible col-start-1 row-start-1 whitespace-nowrap"
+          >
+            {t("workspaces.overview.uploaded")}
+          </span>
+          <span
+            aria-hidden="true"
+            className="invisible col-start-1 row-start-1 whitespace-nowrap"
+          >
+            {t("workspaces.overview.edited")}
+          </span>
+          <span className="col-start-1 row-start-1 whitespace-nowrap">
+            {activityLabel}
+          </span>
+        </span>
         {icon}
         <span className="truncate">{entity.name}</span>
       </span>
