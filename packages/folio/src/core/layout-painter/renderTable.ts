@@ -826,9 +826,13 @@ export function renderTableFragment(
   // Track spanning cells across rows
   const spanningCells = new Map<string, SpanningCell>();
 
-  // Render repeated header rows for continuation fragments
+  // Render repeated header rows for continuation fragments.
+  // For a mid-content row break (eigenpal #698) the fragment shows the band
+  // [topClip, bottomClip) of a single row: offset the row stack up by topClip
+  // so that band lands at the fragment top; the table's `overflow: hidden` plus
+  // `height` (the slice) clips the rest.
   const headerRowCount = fragment.headerRowCount ?? 0;
-  let y = 0;
+  let y = -(fragment.topClip ?? 0);
   if (headerRowCount > 0 && fragment.continuesFromPrev) {
     for (let hdrIdx = 0; hdrIdx < headerRowCount; hdrIdx++) {
       const hdrRow = block.rows[hdrIdx];

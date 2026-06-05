@@ -13,6 +13,7 @@ import {
   hasPageBreakBefore,
 } from "./keep-together";
 import { FOOTNOTE_SEPARATOR_HEIGHT, createPaginator } from "./paginator";
+import { buildTableRowBreakInfo, snapRowBreak } from "./tableRowBreak";
 import type {
   FlowBlock,
   Measure,
@@ -655,8 +656,93 @@ function layoutTable(
 
   let currentRowIndex = 0;
 
+  const breakInfo = buildTableRowBreakInfo(block, measure);
+  const fullPageHeight = paginator.getContentHeight();
+
+  // X position from justification / indent, recomputed per fragment because the
+  // active column can change across section breaks.
+  const computeTableX = (columnIndex: number): number => {
+    let x = paginator.getColumnX(columnIndex);
+    if (block.justification === "center") {
+      x += (paginator.columnWidth - measure.totalWidth) / 2;
+    } else if (block.justification === "right") {
+      x = x + paginator.columnWidth - measure.totalWidth;
+    } else if (block.indent) {
+      x += block.indent;
+    }
+    return x;
+  };
+
   while (currentRowIndex < rows.length) {
     const state = paginator.getCurrentState();
+
+    // A row taller than a whole page can't fit anywhere; break it between whole
+    // text lines across pages instead of overflowing the page and clipping the
+    // content. eigenpal/docx-editor#698 (fixes their #570).
+    const oversizedRow = rows[currentRowIndex]!; // SAFETY: currentRowIndex < rows.length
+    if (
+      oversizedRow.height > fullPageHeight &&
+      (breakInfo.breakOffsets[currentRowIndex]?.length ?? 0) > 1
+    ) {
+      let consumed = 0;
+      while (consumed < oversizedRow.height) {
+        const sliceState = paginator.getCurrentState();
+        const sliceAvail =
+          paginator.getAvailableHeight() -
+          (consumed === 0 ? sliceState.trailingSpacing : 0);
+        let slice = snapRowBreak(
+          breakInfo,
+          currentRowIndex,
+          consumed,
+          sliceAvail,
+        );
+        if (slice <= 0) {
+          if (sliceAvail < fullPageHeight) {
+            // Not even one line fits in the space left — start a fresh page.
+            paginator.forcePageBreak();
+            continue;
+          }
+          // Fresh page and a single line still exceeds the page height: place
+          // the next whole line anyway so the loop always makes progress.
+          const from = consumed;
+          const next = breakInfo.breakOffsets[currentRowIndex]?.find(
+            (o) => o > from,
+          );
+          slice = (next ?? oversizedRow.height) - consumed;
+        }
+        const sliceBottom = consumed + slice;
+        const reachesRowEnd = sliceBottom >= oversizedRow.height;
+        const moreAfter = !reachesRowEnd || currentRowIndex + 1 < rows.length;
+        const sliceFragment: TableFragment = {
+          kind: "table",
+          blockId: block.id,
+          x: computeTableX(sliceState.columnIndex),
+          y: 0,
+          width: measure.totalWidth,
+          height: slice,
+          fromRow: currentRowIndex,
+          toRow: currentRowIndex + 1,
+          ...(block.pmStart !== undefined ? { pmStart: block.pmStart } : {}),
+          ...(block.pmEnd !== undefined ? { pmEnd: block.pmEnd } : {}),
+          ...(consumed > 0 || currentRowIndex > 0
+            ? { continuesFromPrev: true }
+            : {}),
+          ...(moreAfter ? { continuesOnNext: true } : {}),
+          ...(consumed > 0 ? { topClip: consumed } : {}),
+          ...(reachesRowEnd ? {} : { bottomClip: sliceBottom }),
+          ...(block.sdtGroups ? { sdtGroups: block.sdtGroups } : {}),
+        };
+        const sliceResult = paginator.addFragment(sliceFragment, slice, 0, 0);
+        sliceFragment.y = sliceResult.y;
+        consumed = sliceBottom;
+        if (consumed < oversizedRow.height) {
+          paginator.forcePageBreak();
+        }
+      }
+      currentRowIndex += 1;
+      continue;
+    }
+
     const rawAvailableHeight = paginator.getAvailableHeight();
     const isFirstFragment = currentRowIndex === 0;
 
@@ -694,14 +780,7 @@ function layoutTable(
     const isLastFragment = currentRowIndex + fittingRows >= rows.length;
 
     // Calculate x position based on table justification and indent
-    let desiredX = paginator.getColumnX(state.columnIndex);
-    if (block.justification === "center") {
-      desiredX += (paginator.columnWidth - measure.totalWidth) / 2;
-    } else if (block.justification === "right") {
-      desiredX = desiredX + paginator.columnWidth - measure.totalWidth;
-    } else if (block.indent) {
-      desiredX += block.indent;
-    }
+    const desiredX = computeTableX(state.columnIndex);
 
     const fragment: TableFragment = {
       kind: "table",
