@@ -4,6 +4,10 @@ import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import {
+  desktopEditSessionCloseSignal,
+  isDesktopEditSessionCloseSignal,
+} from "@/api/lib/desktop-edit-session-notifications";
+import {
   authorizeDesktopEditSession,
   DESKTOP_EDIT_SESSION_LIVENESS_REFRESH_INTERVAL_MS,
   DESKTOP_EDIT_SESSION_TAKEN_OVER_CODE,
@@ -50,12 +54,6 @@ const formatSSE = (event: { type: string; data: unknown }): Uint8Array => {
 };
 
 /**
- * Internal close signal carried over the SSE channel. Never enqueued
- * to clients — it tears down the streams instead.
- */
-const SESSION_CLOSE_SIGNAL = "__desktop_edit_session_closed__";
-
-/**
  * Deliver a session event to SSE connections held by THIS instance.
  * Invoked by the Redis pub/sub fan-out (and by the local fallback when
  * Redis is unavailable). The close signal tears the streams down
@@ -70,7 +68,7 @@ const deliverSessionEventLocal = (
     return;
   }
 
-  if (event.type === SESSION_CLOSE_SIGNAL) {
+  if (isDesktopEditSessionCloseSignal(event)) {
     for (const conn of conns) {
       conn.cleanup();
       try {
@@ -120,7 +118,7 @@ export const pushSessionEvent = (
 export const closeSessionConnections = (
   sessionId: SafeId<"desktopEditSession">,
 ): void => {
-  broadcastSessionEvent(sessionId, { type: SESSION_CLOSE_SIGNAL, data: null });
+  broadcastSessionEvent(sessionId, desktopEditSessionCloseSignal());
 };
 
 type DesktopEditSessionEventsHandlerProps = {

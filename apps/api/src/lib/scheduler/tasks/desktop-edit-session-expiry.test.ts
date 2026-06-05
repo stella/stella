@@ -2,6 +2,11 @@ import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { buildExpiryAuditEvents } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry-audit";
+import {
+  publishDesktopEditSessionExpiryNotifications,
+  type ExpiredDesktopEditSessionNotification,
+} from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry-notifications";
+import type { SSEEvent } from "@/api/lib/sse-broadcast";
 
 const session = (id: string, createdBy: string) => ({
   id,
@@ -51,5 +56,71 @@ describe("buildExpiryAuditEvents", () => {
       changes: { status: { old: "open", new: "expired" } },
       metadata: { reason: "token_expired" },
     });
+  });
+});
+
+type PublishedEvent = {
+  scope: "session" | "workspace";
+  id: string;
+  event: SSEEvent;
+};
+
+const notificationSession = (
+  id: string,
+  workspaceId: string,
+): ExpiredDesktopEditSessionNotification => ({
+  id: toSafeId<"desktopEditSession">(id),
+  workspaceId: toSafeId<"workspace">(workspaceId),
+});
+
+describe("publishDesktopEditSessionExpiryNotifications", () => {
+  test("publishes session close events and one invalidation per workspace", async () => {
+    const published: PublishedEvent[] = [];
+
+    await publishDesktopEditSessionExpiryNotifications({
+      publisher: {
+        publishSessionEvent: async (sessionId, event) => {
+          published.push({ scope: "session", id: sessionId, event });
+        },
+        publishWorkspaceEvent: async (workspaceId, event) => {
+          published.push({ scope: "workspace", id: workspaceId, event });
+        },
+      },
+      sessions: [
+        notificationSession("session-1", "workspace-1"),
+        notificationSession("session-2", "workspace-1"),
+      ],
+    });
+
+    expect(published).toContainEqual({
+      scope: "session",
+      id: "session-1",
+      event: { type: "session-closed", data: { reason: "expired" } },
+    });
+    expect(published).toContainEqual({
+      scope: "session",
+      id: "session-1",
+      event: { type: "__desktop_edit_session_closed__", data: null },
+    });
+    expect(published).toContainEqual({
+      scope: "session",
+      id: "session-2",
+      event: { type: "session-closed", data: { reason: "expired" } },
+    });
+    expect(published).toContainEqual({
+      scope: "session",
+      id: "session-2",
+      event: { type: "__desktop_edit_session_closed__", data: null },
+    });
+    expect(published.filter((event) => event.scope === "workspace")).toEqual([
+      {
+        scope: "workspace",
+        id: "workspace-1",
+        event: {
+          type: "invalidate-query",
+          data: ["entities", "workspace-1"],
+        },
+      },
+    ]);
   });
 });

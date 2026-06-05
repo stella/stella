@@ -3,13 +3,14 @@ import { and, asc, eq, inArray, lt } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import { auditLogs, desktopEditSessions, workspaces } from "@/api/db/schema";
-import {
-  closeSessionConnections,
-  pushSessionEvent,
-} from "@/api/handlers/entities/desktop-edit-session-events";
 import { buildExpiryAuditEvents } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry-audit";
+import { publishDesktopEditSessionExpiryNotifications } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry-notifications";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
-import { broadcast } from "@/api/lib/sse";
+import {
+  ensureCrossInstanceBroadcastReady,
+  publishSessionEvent,
+  publishWorkspaceEvent,
+} from "@/api/lib/sse-broadcast";
 
 export const EXPIRE_DESKTOP_EDIT_SESSIONS_TASK =
   "desktopEditSessions.expire" as const;
@@ -59,6 +60,10 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
 
     const batchIds = batch.map((session) => session.id);
 
+    // The scheduler is a separate process from the API instances that hold
+    // desktop SSE streams, so its expiry side effects must go through Redis.
+    await ensureCrossInstanceBroadcastReady();
+
     const expiredSessions = await rootDb.transaction(async (tx) => {
       const transitioned = await tx
         .update(desktopEditSessions)
@@ -85,25 +90,10 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
       return batch.filter((session) => expiredIds.has(session.id));
     });
 
-    // Post-commit, cross-instance side effects, mirroring
-    // release-desktop-edit-lock: tell desktop SSE streams the session is
-    // gone and nudge open entities views to refetch, so the lock clears
-    // for active clients instead of lingering until an unrelated refetch.
-    for (const session of expiredSessions) {
-      pushSessionEvent(session.id, {
-        type: "session-closed",
-        data: { reason: "expired" },
-      });
-      closeSessionConnections(session.id);
-    }
-    for (const workspaceId of new Set(
-      expiredSessions.map((session) => session.workspaceId),
-    )) {
-      broadcast(workspaceId, {
-        type: "invalidate-query",
-        data: ["entities", workspaceId],
-      });
-    }
+    await publishDesktopEditSessionExpiryNotifications({
+      publisher: { publishSessionEvent, publishWorkspaceEvent },
+      sessions: expiredSessions,
+    });
 
     expired += expiredSessions.length;
 

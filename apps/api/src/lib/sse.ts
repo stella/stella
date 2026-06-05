@@ -7,19 +7,20 @@ import {
   brandPersistedOrganizationId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
+import {
+  INSTANCE_ID,
+  parseRedisPayload,
+  publishOrganizationEvent,
+  publishSessionEvent,
+  publishWorkspaceEvent,
+  REDIS_CHANNEL,
+} from "@/api/lib/sse-broadcast";
+import type { SSEEvent } from "@/api/lib/sse-broadcast";
 
 /** Keep-alive interval in milliseconds (20 seconds). */
 const KEEP_ALIVE_INTERVAL_MS = 20_000;
 
-/** Redis pub/sub channel for cross-instance SSE broadcasts. */
-const REDIS_CHANNEL = "sse:broadcast";
-
-const INSTANCE_ID = `api:${process.pid}:${Bun.randomUUIDv7()}`;
-
-export type SSEEvent = {
-  type: string;
-  data: unknown;
-};
+export type { SSEEvent };
 
 type SSEConnection = {
   controller: ReadableStreamDefaultController;
@@ -130,67 +131,17 @@ const broadcastLocalToOrganization = (
 
 // ── Cross-instance broadcast via Redis pub/sub ──────────
 //
-// Two Redis clients: one for publishing, one for subscribing.
-// The subscriber receives messages from ALL instances (including
-// this one) and delivers to local SSE connections.
-
-type RedisPayload = {
-  scope: "workspace" | "organization" | "session";
-  id: string;
-  event: SSEEvent;
-  originInstanceId?: string | undefined;
-};
-
-const parseRedisPayload = (raw: string): RedisPayload | null => {
-  const parsed: unknown = JSON.parse(raw);
-  if (typeof parsed !== "object" || parsed === null) {
-    return null;
-  }
-  if (
-    !("scope" in parsed) ||
-    !("id" in parsed) ||
-    !("event" in parsed) ||
-    typeof parsed.id !== "string"
-  ) {
-    return null;
-  }
-  const scope = parsed.scope;
-  if (
-    scope !== "workspace" &&
-    scope !== "organization" &&
-    scope !== "session"
-  ) {
-    return null;
-  }
-  const event = parsed.event;
-  if (
-    typeof event !== "object" ||
-    event === null ||
-    !("type" in event) ||
-    typeof event.type !== "string"
-  ) {
-    return null;
-  }
-  return {
-    scope,
-    id: parsed.id,
-    event: { type: event.type, data: "data" in event ? event.data : undefined },
-    originInstanceId:
-      "originInstanceId" in parsed &&
-      typeof parsed.originInstanceId === "string"
-        ? parsed.originInstanceId
-        : undefined,
-  };
-};
-
-// Bun's pub/sub puts a connection into a subscribed mode that monopolises
-// it, so the subscriber must be a separate client from the publisher.
-const publisher = createRedisClient();
+// The subscriber receives messages from all instances and delivers to
+// local SSE connections. Publishing lives in sse-broadcast.ts so the
+// scheduler can publish without importing this connection registry.
 
 const handleMessage = (message: string) => {
   try {
     const parsed = parseRedisPayload(message);
     if (!parsed) {
+      return;
+    }
+    if (parsed.scope === "probe") {
       return;
     }
     if (parsed.scope === "workspace") {
@@ -216,7 +167,7 @@ const handleMessage = (message: string) => {
 
 const initRedis = async () => {
   try {
-    const subscriber = await publisher.duplicate();
+    const subscriber = createRedisClient();
     await subscriber.subscribe(REDIS_CHANNEL, (message) => {
       handleMessage(message);
     });
@@ -239,40 +190,26 @@ export const broadcast = (
   workspaceId: SafeId<"workspace">,
   event: SSEEvent,
 ): void => {
-  const payload: RedisPayload = {
-    scope: "workspace",
-    id: workspaceId,
-    event,
-  };
-  publisher
-    .publish(REDIS_CHANNEL, JSON.stringify(payload))
-    .catch((error: unknown) => {
-      logger.warn("sse.redis_publish_failed", {
-        "error.type": errorTag(error),
-      });
-      // Fallback: deliver locally when Redis is unavailable so
-      // single-instance deployments still get SSE invalidation.
-      broadcastLocal(workspaceId, event);
+  publishWorkspaceEvent(workspaceId, event).catch((error: unknown) => {
+    logger.warn("sse.redis_publish_failed", {
+      "error.type": errorTag(error),
     });
+    // Fallback: deliver locally when Redis is unavailable so
+    // single-instance deployments still get SSE invalidation.
+    broadcastLocal(workspaceId, event);
+  });
 };
 
 export const broadcastToOrganization = (
   organizationId: SafeId<"organization">,
   event: SSEEvent,
 ): void => {
-  const payload: RedisPayload = {
-    scope: "organization",
-    id: organizationId,
-    event,
-  };
-  publisher
-    .publish(REDIS_CHANNEL, JSON.stringify(payload))
-    .catch((error: unknown) => {
-      logger.warn("sse.redis_publish_failed", {
-        "error.type": errorTag(error),
-      });
-      broadcastLocalToOrganization(organizationId, event);
+  publishOrganizationEvent(organizationId, event).catch((error: unknown) => {
+    logger.warn("sse.redis_publish_failed", {
+      "error.type": errorTag(error),
     });
+    broadcastLocalToOrganization(organizationId, event);
+  });
 };
 
 // ── Desktop-edit session events ─────────────────────────
@@ -310,19 +247,13 @@ export const broadcastSessionEvent = (
 ): void => {
   sessionDeliveryHandler?.(sessionId, event);
 
-  const payload: RedisPayload = {
-    scope: "session",
-    id: sessionId,
-    event,
+  publishSessionEvent(sessionId, event, {
     originInstanceId: INSTANCE_ID,
-  };
-  publisher
-    .publish(REDIS_CHANNEL, JSON.stringify(payload))
-    .catch((error: unknown) => {
-      logger.warn("sse.redis_publish_failed", {
-        "error.type": errorTag(error),
-      });
+  }).catch((error: unknown) => {
+    logger.warn("sse.redis_publish_failed", {
+      "error.type": errorTag(error),
     });
+  });
 };
 
 // ── Keep-alive heartbeat ────────────────────────────────
