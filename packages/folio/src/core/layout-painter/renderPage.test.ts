@@ -7,6 +7,8 @@ import type {
   ParagraphMeasure,
   TableBlock,
   TableMeasure,
+  TextBoxBlock,
+  TextBoxMeasure,
 } from "../layout-engine/types";
 import type { BlockLookup } from "./index";
 import {
@@ -56,6 +58,22 @@ class FakeElement {
   querySelectorAll(): FakeElement[] {
     return [];
   }
+
+  querySelector(selector: string): FakeElement | null {
+    if (selector.startsWith(".")) {
+      return findByClass(this, selector.slice(1)) ?? null;
+    }
+    if (this.tagName.toLowerCase() === selector.toLowerCase()) {
+      return this;
+    }
+    for (const child of this.children) {
+      const match = child.querySelector(selector);
+      if (match) {
+        return match;
+      }
+    }
+    return null;
+  }
 }
 
 const fakeDocument = {
@@ -98,6 +116,21 @@ function findByClass(
   }
 
   return undefined;
+}
+
+function collectByClass(
+  element: FakeElement,
+  className: string,
+): FakeElement[] {
+  const matches = element.className.split(" ").includes(className)
+    ? [element]
+    : [];
+
+  for (const child of element.children) {
+    matches.push(...collectByClass(child, className));
+  }
+
+  return matches;
 }
 
 const page: Page = {
@@ -172,6 +205,10 @@ function headerFooterTextContent(text: string): HeaderFooterContent {
     measures: [measure],
     height: 12,
   };
+}
+
+function textBoxMeasure(width: number, height: number): TextBoxMeasure {
+  return { kind: "textBox", width, height, innerMeasures: [] };
 }
 
 describe("render page fingerprint", () => {
@@ -266,6 +303,53 @@ describe("header and footer rendering", () => {
     expect(pageOptions).toEqual({
       footerContent: headerFooterTextContent("Default footer"),
     });
+  });
+
+  test("keeps top-and-bottom text boxes in header flow", () => {
+    const textBoxBlock: TextBoxBlock = {
+      kind: "textBox",
+      id: "hf-box",
+      width: 160,
+      height: 40,
+      displayMode: "block",
+      wrapType: "topAndBottom",
+      content: [],
+    };
+    const afterBlock: ParagraphBlock = {
+      kind: "paragraph",
+      id: "hf-after",
+      runs: [{ kind: "text", text: "After box" }],
+    };
+
+    const pageElement = renderPage(
+      { ...page, fragments: [] },
+      { pageNumber: 1, totalPages: 1, section: "body" },
+      {
+        document: fakeDocument,
+        headerContent: {
+          blocks: [textBoxBlock, afterBlock],
+          measures: [
+            textBoxMeasure(textBoxBlock.width, textBoxBlock.height),
+            {
+              kind: "paragraph",
+              lines: [],
+              totalHeight: 12,
+            },
+          ],
+          height: 52,
+        },
+      },
+    );
+
+    const paragraphs = collectByClass(
+      pageElement as unknown as FakeElement,
+      "layout-paragraph",
+    );
+    const afterParagraph = paragraphs.find((element) =>
+      element.textContent.includes("After box"),
+    );
+
+    expect(afterParagraph?.style.top).toBe("40px");
   });
 });
 

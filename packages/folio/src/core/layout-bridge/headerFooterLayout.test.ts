@@ -454,6 +454,30 @@ describe("header/footer layout conversion", () => {
     expect(result?.visualBottom).toBe(1112);
   });
 
+  test("keeps top-and-bottom block text boxes in header/footer flow", () => {
+    const pmDoc = schema.node("doc", null, [
+      schema.node(
+        "textBox",
+        {
+          width: 560,
+          height: 40,
+          displayMode: "block",
+          wrapType: "topAndBottom",
+        },
+        [schema.node("paragraph", null, [])],
+      ),
+      schema.node("paragraph", null, [schema.text("After")]),
+    ]);
+
+    const result = convertHeaderFooterPmDocToContent(pmDoc, 600, metrics, {
+      measureBlocks,
+    });
+
+    expect(result?.height).toBe(52);
+    expect(result?.marginPushBottom).toBe(52);
+    expect(result?.visualBottom).toBe(52);
+  });
+
   test("routes header/footer tables through the body FlowBlock pipeline", () => {
     const header: HeaderFooter = {
       type: "header",
