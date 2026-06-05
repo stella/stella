@@ -54,4 +54,27 @@ describe("resolveHeaderFooterFloatLeft", () => {
       "100px",
     );
   });
+
+  test("inside aliases left, outside aliases right (single-sided rendering)", () => {
+    // inside → left relative to page: -flowLeft = -100
+    expect(
+      resolveHeaderFooterFloatLeft(
+        200,
+        { relativeTo: "page", align: "inside" },
+        layout,
+      ),
+    ).toBe("-100px");
+    // outside → right relative to page: 612 - 200 - 100 = 312
+    expect(
+      resolveHeaderFooterFloatLeft(
+        200,
+        { relativeTo: "page", align: "outside" },
+        layout,
+      ),
+    ).toBe("312px");
+    // outside in the content box: contentWidth 400 - 200 = 200
+    expect(resolveHeaderFooterFloatLeft(200, { align: "outside" }, layout)).toBe(
+      "200px",
+    );
+  });
 });

@@ -158,17 +158,19 @@ export function applyContextualSpacing(blocks: FlowBlock[]): void {
     }
   }
 
-  // Recurse into table cells so contextual spacing is suppressed there too —
-  // measure, pagination, and the painter all read the (mutated) cell paragraph
-  // spacing, so they stay consistent. eigenpal/docx-editor#699.
+  // Recurse into nested block containers (table cells and text boxes) so
+  // contextual spacing is suppressed there too — measure, pagination, and the
+  // painter all read the (mutated) paragraph spacing, so they stay consistent.
+  // eigenpal/docx-editor#699.
   for (const block of blocks) {
-    if (block.kind !== "table") {
-      continue;
-    }
-    for (const row of block.rows) {
-      for (const cell of row.cells) {
-        applyContextualSpacing(cell.blocks);
+    if (block.kind === "table") {
+      for (const row of block.rows) {
+        for (const cell of row.cells) {
+          applyContextualSpacing(cell.blocks);
+        }
       }
+    } else if (block.kind === "textBox") {
+      applyContextualSpacing(block.content);
     }
   }
 }

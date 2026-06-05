@@ -633,7 +633,14 @@ export function resolveHeaderFooterFloatLeft(
     return "0";
   }
 
-  const align = getPositionAlignment(h);
+  // Single-sided rendering: OOXML `inside`/`outside` alias `left`/`right`
+  // (matching resolveAnchoredImagePosition / the floating-table resolver).
+  let align = getPositionAlignment(h);
+  if (align === "inside") {
+    align = "left";
+  } else if (align === "outside") {
+    align = "right";
+  }
 
   if (h.relativeTo === "page") {
     if (h.posOffset !== undefined) {

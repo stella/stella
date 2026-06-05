@@ -9,7 +9,12 @@
 import { describe, expect, test } from "bun:test";
 
 import { applyContextualSpacing } from "./index";
-import type { FlowBlock, ParagraphBlock, TableBlock } from "./types";
+import type {
+  FlowBlock,
+  ParagraphBlock,
+  TableBlock,
+  TextBoxBlock,
+} from "./types";
 
 function bullet(id: string, styleId: string): ParagraphBlock {
   return {
@@ -53,5 +58,22 @@ describe("applyContextualSpacing in table cells", () => {
 
     expect(a.attrs?.spacing?.after).toBe(13);
     expect(b.attrs?.spacing?.before).toBe(5);
+  });
+
+  test("suppresses spacing between same-style contextual paragraphs in a text box", () => {
+    const a = bullet("a", "ListBullet");
+    const b = bullet("b", "ListBullet");
+    const textBox: TextBoxBlock = {
+      kind: "textBox",
+      id: "tb",
+      width: 200,
+      content: [a, b],
+    };
+    const blocks: FlowBlock[] = [textBox];
+
+    applyContextualSpacing(blocks);
+
+    expect(a.attrs?.spacing?.after).toBe(0);
+    expect(b.attrs?.spacing?.before).toBe(0);
   });
 });
