@@ -234,7 +234,7 @@ type FieldProps = {
 
 const Field = ({ icon: Icon, ariaLabel, value }: FieldProps) => (
   <Tooltip
-    className="max-w-80 whitespace-normal text-start"
+    className="max-w-80 text-start whitespace-normal"
     content={<FieldTooltipContent label={ariaLabel} value={value} />}
     render={
       <div
@@ -285,7 +285,7 @@ const AuthorField = ({ ariaLabel, authorUrl, value }: AuthorFieldProps) => {
   if (safeAuthorUrl) {
     return (
       <Tooltip
-        className="max-w-80 whitespace-normal text-start"
+        className="max-w-80 text-start whitespace-normal"
         content={tooltipContent}
         render={
           <a
@@ -305,7 +305,7 @@ const AuthorField = ({ ariaLabel, authorUrl, value }: AuthorFieldProps) => {
 
   return (
     <Tooltip
-      className="max-w-80 whitespace-normal text-start"
+      className="max-w-80 text-start whitespace-normal"
       content={tooltipContent}
       render={
         <div
@@ -327,7 +327,7 @@ type FieldTooltipContentProps = {
 const FieldTooltipContent = ({ label, value }: FieldTooltipContentProps) => (
   <span className="flex flex-col gap-1">
     <span className="text-xs opacity-75">{label}</span>
-    <span className="break-all text-xs font-medium">{value}</span>
+    <span className="text-xs font-medium break-all">{value}</span>
   </span>
 );
 
