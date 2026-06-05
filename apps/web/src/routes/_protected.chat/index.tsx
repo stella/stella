@@ -339,7 +339,7 @@ function ChatIndex() {
               <StellaMark className="size-7" />
             </div>
             <p className="text-foreground max-w-md text-center text-lg font-medium">
-              {t("chat.greetingSubtitle")}
+              {t("chat.greeting")}
             </p>
           </div>
           <div className="w-full">
