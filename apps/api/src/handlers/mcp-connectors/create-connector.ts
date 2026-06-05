@@ -83,6 +83,8 @@ const createMcpConnector = createSafeRootHandler(
               probe.authType === "oauth2" && probe.scopes.length > 0
                 ? probe.scopes
                 : null,
+            oauthIssuer:
+              probe.authType === "oauth2" ? probe.authorizationServerUrl : null,
             iconUrl,
           })
           .returning({

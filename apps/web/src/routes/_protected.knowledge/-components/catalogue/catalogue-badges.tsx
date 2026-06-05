@@ -18,8 +18,11 @@ const SETUP_LABEL_KEY = {
   "api-key": "catalogue.setup.apiKey",
 } as const satisfies Record<Setup, TranslationKey>;
 
-export const CostBadge = ({ cost }: { cost: Cost }) => {
+export const CostBadge = ({ cost }: { cost: Cost | null }) => {
   const t = useTranslations();
+  if (cost === null) {
+    return null;
+  }
   const tone =
     cost === "free"
       ? "bg-success/12 text-success"

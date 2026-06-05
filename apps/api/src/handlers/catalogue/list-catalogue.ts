@@ -5,10 +5,15 @@ import {
   filterCatalogueByKind,
   loadCatalogue,
   recommendedSlugsForJurisdictions,
+  type CatalogueCost,
   type LoadedCatalogueEntry,
 } from "@stll/catalogue";
 
-import { agentSkills, mcpConnectors } from "@/api/db/schema";
+import {
+  agentSkills,
+  mcpConnectors,
+  mcpUserConnections,
+} from "@/api/db/schema";
 import {
   computeCatalogueInstallState,
   type CatalogueInstallState,
@@ -30,33 +35,55 @@ const config = {
 // custom MCPs could turn `/catalogue` into an unbounded read.
 const ORG_CUSTOM_MCP_LIMIT = 100;
 
-type CatalogueEntryResponse = LoadedCatalogueEntry & {
-  isRecommendedForOrg: boolean;
-  installState: CatalogueInstallState;
-  /**
-   * True when the entry is a system capability the user cannot toggle
-   * (non-toggleable pinned native-tools). UI hides install/uninstall
-   * controls and renders the entry in the "Baseline" section.
-   */
-  isLocked: boolean;
-  /**
-   * Per-installation identifiers used by the uninstall path. Set only
-   * when the entry is installed; `null` otherwise. Native-tools uninstall
-   * via `backendSlug` so they don't need a separate handle here.
-   */
-  installedSkillId: string | null;
-  installedConnectorSlug: string | null;
-  /**
-   * Whether the installed entry is currently enabled (turned on for
-   * use in chat). Only meaningful when `installState === "installed"`.
-   * For skills this mirrors `agentSkills.enabled`; for native-tools it
-   * is always `true` when installed (install-state already encodes the
-   * jurisdiction/override decision); for MCP entries this is `null`
-   * because the user connection lives on a separate row and is
-   * surfaced via the dedicated MCP detail flow.
-   */
-  enabled: boolean | null;
-};
+/**
+ * Distributes over the `LoadedCatalogueEntry` union so the per-member
+ * `Omit` keeps each kind's discriminated fields (url/authType, entryPath,
+ * backendSlug) intact while widening license/cost to nullable.
+ */
+type CatalogueEntryResponse = LoadedCatalogueEntry extends infer Entry
+  ? Entry extends LoadedCatalogueEntry
+    ? Omit<Entry, "license" | "cost"> & {
+        /**
+         * License and cost are unknown for user-added custom MCP
+         * connectors — the MCP spec exposes neither — so we surface null
+         * instead of fabricating a value. Curated entries always set both.
+         */
+        license: string | null;
+        cost: CatalogueCost | null;
+        /**
+         * Version the server reports during the MCP `initialize`
+         * handshake. Only populated for custom MCP entries, once the
+         * connector has been connected at least once.
+         */
+        serverVersion?: string | null;
+        isRecommendedForOrg: boolean;
+        installState: CatalogueInstallState;
+        /**
+         * True when the entry is a system capability the user cannot toggle
+         * (non-toggleable pinned native-tools). UI hides install/uninstall
+         * controls and renders the entry in the "Baseline" section.
+         */
+        isLocked: boolean;
+        /**
+         * Per-installation identifiers used by the uninstall path. Set only
+         * when the entry is installed; `null` otherwise. Native-tools
+         * uninstall via `backendSlug` so they don't need a handle here.
+         */
+        installedSkillId: string | null;
+        installedConnectorSlug: string | null;
+        /**
+         * Whether the installed entry is currently enabled (turned on for
+         * use in chat). Only meaningful when `installState === "installed"`.
+         * For skills this mirrors `agentSkills.enabled`; for native-tools it
+         * is always `true` when installed (install-state already encodes the
+         * jurisdiction/override decision); for MCP entries this is `null`
+         * because the user connection lives on a separate row and is
+         * surfaced via the dedicated MCP detail flow.
+         */
+        enabled: boolean | null;
+      }
+    : never
+  : never;
 
 const listCatalogue = createSafeRootHandler(
   config,
@@ -189,8 +216,21 @@ const listCatalogue = createSafeRootHandler(
             documentationUrl: mcpConnectors.documentationUrl,
             tokenHelpUrl: mcpConnectors.tokenHelpUrl,
             iconUrl: mcpConnectors.iconUrl,
+            oauthIssuer: mcpConnectors.oauthIssuer,
+            // Server-reported metadata is per-user; read the caller's own
+            // connection so one member's account-specific text never leaks
+            // to another.
+            instructions: mcpUserConnections.instructions,
+            serverVersion: mcpUserConnections.serverVersion,
           })
           .from(mcpConnectors)
+          .leftJoin(
+            mcpUserConnections,
+            and(
+              eq(mcpUserConnections.connectorId, mcpConnectors.id),
+              eq(mcpUserConnections.userId, user.id),
+            ),
+          )
           .where(
             and(
               eq(mcpConnectors.organizationId, session.activeOrganizationId),
@@ -313,7 +353,6 @@ const listCatalogue = createSafeRootHandler(
       response,
       connectors: orgCustomMcps,
       curatedMcpUrls: curatedMcpUrlSet,
-      organizationId: session.activeOrganizationId,
     });
 
     appendAuthoredSkillEntries({
@@ -343,45 +382,70 @@ type OrgCustomMcpRow = {
   documentationUrl: string | null;
   tokenHelpUrl: string | null;
   iconUrl: string | null;
+  instructions: string | null;
+  serverVersion: string | null;
+  oauthIssuer: string | null;
 };
 
 type AppendCustomMcpArgs = {
   response: CatalogueEntryResponse[];
   connectors: readonly OrgCustomMcpRow[];
   curatedMcpUrls: ReadonlySet<string>;
-  organizationId: SafeId<"organization">;
 };
 
 const appendCustomMcpEntries = ({
   response,
   connectors,
   curatedMcpUrls,
-  organizationId,
 }: AppendCustomMcpArgs): void => {
   for (const connector of connectors) {
     if (curatedMcpUrls.has(connector.url)) {
       continue;
     }
-    response.push(buildCustomMcpCatalogueEntry(connector, organizationId));
+    response.push(buildCustomMcpCatalogueEntry(connector));
   }
+};
+
+/**
+ * Vendor shown as the "author" of a custom MCP connector: the OAuth
+ * issuer host for oauth2 servers, otherwise the server URL host. Both
+ * the connector URL (normalized at create) and the issuer (an OAuth
+ * metadata URL) are absolute, so parsing fails only for genuinely
+ * malformed data, where we fall back to the raw string.
+ */
+const connectorVendor = (
+  connector: OrgCustomMcpRow,
+): { label: string; url: string | undefined } => {
+  const source = connector.oauthIssuer ?? connector.url;
+  const parsed = Result.try(() => new URL(source)).unwrapOr(null);
+  if (!parsed) {
+    return { label: source, url: undefined };
+  }
+  return { label: parsed.host, url: parsed.origin };
 };
 
 const buildCustomMcpCatalogueEntry = (
   connector: OrgCustomMcpRow,
-  organizationId: SafeId<"organization">,
 ): CatalogueEntryResponse => {
   // DB stores `oauth2`; the curated catalogue schema uses `oauth`.
   // The auth flow is the same; only the literal differs.
   const catalogueAuthType =
     connector.authType === "oauth2" ? "oauth" : connector.authType;
+  const vendor = connectorVendor(connector);
   return {
     kind: "mcp",
     slug: connector.slug,
     displayName: connector.displayName,
-    description: connector.description,
-    author: organizationId,
-    license: "MIT",
-    cost: "free",
+    // The user's own description wins; otherwise fall back to the
+    // server-reported `instructions` from the initialize handshake.
+    description: connector.description || connector.instructions || "",
+    author: vendor.label,
+    ...(vendor.url !== undefined ? { authorUrl: vendor.url } : {}),
+    // License and cost are not part of the MCP spec; leave them unknown
+    // for custom connectors rather than asserting a value we don't have.
+    license: null,
+    cost: null,
+    serverVersion: connector.serverVersion,
     setup: connector.authType === "none" ? "none" : "api-key",
     tags: [],
     jurisdictions: [],
