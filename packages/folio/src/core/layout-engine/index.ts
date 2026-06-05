@@ -342,6 +342,7 @@ export function layoutDocument(
           block as TextBoxBlock,
           measure as TextBoxMeasure,
           paginator,
+          margins.top,
         );
         break;
 
@@ -1085,6 +1086,7 @@ function layoutTextBox(
   block: TextBoxBlock,
   measure: TextBoxMeasure,
   paginator: ReturnType<typeof createPaginator>,
+  sectionMarginTop: number,
 ): void {
   // A page/margin-pinned topAndBottom band (e.g. a title banner) floats to the
   // top of its page; the reserved band in the measure pass pushes body text
@@ -1093,11 +1095,14 @@ function layoutTextBox(
   // the page content top without advancing the cursor. eigenpal #694.
   if (isPagePinnedBandTextBox(block)) {
     const state = paginator.getCurrentState();
-    // Position the box at the same Y the measure pass reserved its band at
-    // (bandTopContentY is content-relative; fragment.y is page-absolute, so add
-    // the top margin). Honors the anchor's vertical offset instead of always
-    // pinning to the content top.
-    const bandTop = bandTopContentY(block.position?.vertical, state.topMargin);
+    // Position the box at the same content-Y the measure pass reserved its band
+    // at. The measure pass uses the section top margin (not a page's
+    // first-page margin), so use the same value here; `bandTopContentY` is
+    // content-relative, and `fragment.y` is page-absolute, so add the page's
+    // own top margin (`state.topMargin`) to convert. Using `state.topMargin`
+    // inside the resolver instead would desync the box from its band on a
+    // title page whose first-page top margin differs from the section margin.
+    const bandTop = bandTopContentY(block.position?.vertical, sectionMarginTop);
     const fragment: TextBoxFragment = {
       kind: "textBox",
       blockId: block.id,

@@ -142,4 +142,29 @@ describe("topAndBottom band text box layout", () => {
     expect(box?.y).toBe(MARGINS.top);
     expect(paragraph?.y).toBe(MARGINS.top + BOX_HEIGHT);
   });
+
+  test("band uses the section top margin, not a page's first-page margin", () => {
+    // On a title page the first-page top margin can differ from the section
+    // margin. The measure pass reserves the band using the section margin, so
+    // the box must too — otherwise box and band desync. The box's
+    // content-relative top (fragment.y - page top margin) must equal the band's
+    // content top (= -section margin for a page-relative offset-0 banner).
+    const FIRST_PAGE_TOP = 200;
+    const layout = layoutDocument(
+      [banner("page"), para("p")],
+      [boxMeasure, paraMeasure],
+      {
+        ...OPTIONS,
+        firstPageMargins: { ...MARGINS, top: FIRST_PAGE_TOP },
+      },
+    );
+    const page = layout.pages[0]!;
+    const box = page.fragments.find((f) => f.kind === "textBox") as
+      | TextBoxFragment
+      | undefined;
+    // y = firstPageTop + (0 - sectionMarginTop) = 200 - 96 = 104, so the
+    // content-relative top is 104 - 200 = -96 = -section margin (band-aligned).
+    expect(box?.y).toBe(FIRST_PAGE_TOP - MARGINS.top);
+    expect((box?.y ?? 0) - page.margins.top).toBe(-MARGINS.top);
+  });
 });
