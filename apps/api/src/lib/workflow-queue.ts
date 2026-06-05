@@ -782,9 +782,7 @@ const selectWorkspacesWithPendingCells = async (
         ? undefined
         : inArray(
             fields.workspaceId,
-            workspaceIdBatch.map((workspaceId) =>
-              brandPersistedWorkspaceId(workspaceId),
-            ),
+            workspaceIdBatch.map((id) => brandPersistedWorkspaceId(id)),
           );
     const rows = await rootDb
       .selectDistinct({ workspaceId: fields.workspaceId })
@@ -829,11 +827,11 @@ const readWorkflowRequestIds = async (
     LIMITS.workflowEntityBatchSize,
   )) {
     await Promise.all(
-      workspaceIdBatch.map(async (workspaceId) => {
+      workspaceIdBatch.map(async (id) => {
         const requestId = await redis.get(
-          workflowKey(brandPersistedWorkspaceId(workspaceId), "request-id"),
+          workflowKey(brandPersistedWorkspaceId(id), "request-id"),
         );
-        requestIds.set(workspaceId, requestId);
+        requestIds.set(id, requestId);
       }),
     );
   }
