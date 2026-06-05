@@ -19,6 +19,7 @@ import type { SafeId } from "@/lib/safe-id";
 type AuthenticatedCaseLawWorkspaceProps = {
   decision: ComponentProps<typeof DecisionWorkspace>["decision"];
   decisionId: SafeId<"caseLawDecision">;
+  initialSearchQuery?: string | undefined;
   user: AuthenticatedUser;
 };
 
@@ -28,6 +29,7 @@ const INSPECTOR_RAIL_WIDTH = 48;
 export function AuthenticatedCaseLawWorkspace({
   decision,
   decisionId,
+  initialSearchQuery,
   user,
 }: AuthenticatedCaseLawWorkspaceProps) {
   return (
@@ -38,6 +40,7 @@ export function AuthenticatedCaseLawWorkspace({
             <AuthenticatedDecisionWorkspace
               decision={decision}
               decisionId={decisionId}
+              initialSearchQuery={initialSearchQuery}
             />
             <CaseLawInspector decisionId={decisionId} />
           </ChatEditorProvider>
@@ -50,7 +53,11 @@ export function AuthenticatedCaseLawWorkspace({
 function AuthenticatedDecisionWorkspace({
   decision,
   decisionId,
-}: Pick<AuthenticatedCaseLawWorkspaceProps, "decision" | "decisionId">) {
+  initialSearchQuery,
+}: Pick<
+  AuthenticatedCaseLawWorkspaceProps,
+  "decision" | "decisionId" | "initialSearchQuery"
+>) {
   const { ensureAIAvailable } = useAIKeyGate();
 
   return (
@@ -59,6 +66,7 @@ function AuthenticatedDecisionWorkspace({
       decision={decision}
       decisionId={decisionId}
       ensureAIAvailable={ensureAIAvailable}
+      initialSearchQuery={initialSearchQuery}
     />
   );
 }

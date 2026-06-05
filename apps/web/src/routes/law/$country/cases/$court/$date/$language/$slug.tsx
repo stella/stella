@@ -4,11 +4,13 @@ import {
   createPublicCaseLawDecisionHead,
   loadPublicCaseLawDecisionRoute,
   PublicDecisionViewer,
+  publicDecisionSearchSchema,
 } from "@/routes/law/-case-detail";
 
 export const Route = createFileRoute(
   "/law/$country/cases/$court/$date/$language/$slug",
 )({
+  validateSearch: publicDecisionSearchSchema,
   loader: async ({ context: { queryClient }, params }) =>
     await loadPublicCaseLawDecisionRoute({ params, queryClient }),
   head: ({ loaderData, params }) => {
@@ -35,6 +37,13 @@ function PublicDecisionRoute() {
     }),
   });
   const decision = Route.useLoaderData();
+  const initialSearchQuery = Route.useSearch({ select: (search) => search.q });
 
-  return <PublicDecisionViewer decision={decision} params={params} />;
+  return (
+    <PublicDecisionViewer
+      decision={decision}
+      initialSearchQuery={initialSearchQuery}
+      params={params}
+    />
+  );
 }

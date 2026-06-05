@@ -2,6 +2,7 @@ import { lazy, Suspense, useState } from "react";
 
 import type { QueryClient } from "@tanstack/react-query";
 import { redirect } from "@tanstack/react-router";
+import * as v from "valibot";
 
 import { DecisionWorkspace } from "@/features/case-law/components/case-viewer/decision-workspace";
 import {
@@ -39,6 +40,19 @@ const SignInDialog = lazy(async () => {
   return { default: module.SignInDialog };
 });
 
+const optionalPublicDecisionSearchQuerySchema = v.optional(
+  v.pipe(
+    v.string(),
+    v.trim(),
+    v.maxLength(512),
+    v.transform((value) => (value.length > 0 ? value : undefined)),
+  ),
+);
+
+export const publicDecisionSearchSchema = v.object({
+  q: optionalPublicDecisionSearchQuerySchema,
+});
+
 type PublicDecisionRouteParams = CaseLawDecisionRouteParams;
 
 type PublicDecisionRouteLoaderOptions = {
@@ -53,6 +67,7 @@ type PublicDecisionHeadOptions = {
 
 type PublicDecisionViewerProps = {
   decision: PublicCaseLawDecision;
+  initialSearchQuery?: string | undefined;
   params: PublicDecisionRouteParams;
 };
 
@@ -250,6 +265,7 @@ export const createPublicCaseLawDecisionHead = ({
 
 export function PublicDecisionViewer({
   decision,
+  initialSearchQuery,
   params,
 }: PublicDecisionViewerProps) {
   const decisionId = extractId(decision.id);
@@ -269,6 +285,7 @@ export function PublicDecisionViewer({
               aiMode="locked"
               decision={decision}
               decisionId={decisionId}
+              initialSearchQuery={initialSearchQuery}
               publicPath={publicPath}
               requestAuth={requestAuth}
             />
@@ -277,6 +294,7 @@ export function PublicDecisionViewer({
           <AuthenticatedCaseLawWorkspace
             decision={decision}
             decisionId={decisionId}
+            initialSearchQuery={initialSearchQuery}
             user={authStatus.user}
           />
         </Suspense>
@@ -285,6 +303,7 @@ export function PublicDecisionViewer({
           aiMode="locked"
           decision={decision}
           decisionId={decisionId}
+          initialSearchQuery={initialSearchQuery}
           publicPath={publicPath}
           requestAuth={requestAuth}
         />

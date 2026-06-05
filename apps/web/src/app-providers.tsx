@@ -37,7 +37,7 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
   // the whole subtree on it would unmount the app (losing in-progress state
   // like onboarding) on every switch. loadedLang/messages are always a
   // consistent already-loaded pair, so the locale swaps in place instead.
-  if (!hasLoadedOnce) {
+  if (!hasLoadedOnce && typeof window !== "undefined") {
     return <DefaultPendingComponent />;
   }
 
