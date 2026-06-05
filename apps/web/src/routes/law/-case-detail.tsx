@@ -53,11 +53,16 @@ export const publicDecisionSearchSchema = v.object({
   q: optionalPublicDecisionSearchQuerySchema,
 });
 
+export type PublicDecisionSearch = v.InferOutput<
+  typeof publicDecisionSearchSchema
+>;
+
 type PublicDecisionRouteParams = CaseLawDecisionRouteParams;
 
 type PublicDecisionRouteLoaderOptions = {
   params: PublicDecisionRouteParams;
   queryClient: QueryClient;
+  search: PublicDecisionSearch;
 };
 
 type PublicDecisionHeadOptions = {
@@ -105,6 +110,11 @@ type PublicLawAlternateLink = {
   hreflang: string;
 };
 
+type RedirectToCanonicalDecisionPathOptions = {
+  canonicalParams: CaseLawDecisionRouteParams;
+  search: PublicDecisionSearch;
+};
+
 const extractId = (param: string): SafeId<"caseLawDecision"> =>
   toSafeId<"caseLawDecision">(param);
 
@@ -118,9 +128,13 @@ const buildDescription = (decision: {
     .filter(Boolean)
     .join(", ");
 
-const redirectToCanonicalDecisionPath = (
-  canonicalParams: CaseLawDecisionRouteParams,
-) => {
+const redirectToCanonicalDecisionPath = ({
+  canonicalParams,
+  search,
+}: RedirectToCanonicalDecisionPathOptions) => {
+  const redirectSearch: PublicDecisionSearch =
+    search.q === undefined ? {} : { q: search.q };
+
   if (canonicalParams.language) {
     throw redirect({
       to: "/law/$country/cases/$court/$date/$language/$slug",
@@ -132,6 +146,7 @@ const redirectToCanonicalDecisionPath = (
         slug: canonicalParams.slug,
       },
       replace: true,
+      search: redirectSearch,
     });
   }
 
@@ -144,6 +159,7 @@ const redirectToCanonicalDecisionPath = (
       slug: canonicalParams.slug,
     },
     replace: true,
+    search: redirectSearch,
   });
 };
 
@@ -171,6 +187,7 @@ const createDecisionAlternateLinks = (
 export const loadPublicCaseLawDecisionRoute = async ({
   params,
   queryClient,
+  search,
 }: PublicDecisionRouteLoaderOptions): Promise<PublicCaseLawDecision> => {
   const legacyDecisionId = extractLegacyCaseLawDecisionIdFromRouteParam(
     params.slug,
@@ -194,7 +211,7 @@ export const loadPublicCaseLawDecisionRoute = async ({
     const canonicalPath = createCaseLawDecisionPath(canonicalParams);
     const currentPath = createCaseLawDecisionPath(params);
     if (currentPath !== canonicalPath) {
-      redirectToCanonicalDecisionPath(canonicalParams);
+      redirectToCanonicalDecisionPath({ canonicalParams, search });
     }
 
     return decision;
@@ -228,7 +245,7 @@ export const loadPublicCaseLawDecisionRoute = async ({
   const canonicalPath = createCaseLawDecisionPath(canonicalParams);
   const currentPath = createCaseLawDecisionPath(params);
   if (currentPath !== canonicalPath) {
-    redirectToCanonicalDecisionPath(canonicalParams);
+    redirectToCanonicalDecisionPath({ canonicalParams, search });
   }
 
   return decision;

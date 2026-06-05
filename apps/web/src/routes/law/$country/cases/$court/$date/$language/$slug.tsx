@@ -11,8 +11,13 @@ export const Route = createFileRoute(
   "/law/$country/cases/$court/$date/$language/$slug",
 )({
   validateSearch: publicDecisionSearchSchema,
-  loader: async ({ context: { queryClient }, params }) =>
-    await loadPublicCaseLawDecisionRoute({ params, queryClient }),
+  loaderDeps: ({ search }) => search,
+  loader: async ({ context: { queryClient }, deps, params }) =>
+    await loadPublicCaseLawDecisionRoute({
+      params,
+      queryClient,
+      search: deps,
+    }),
   head: ({ loaderData, params }) => {
     if (!loaderData?.caseNumber) {
       return { meta: [] };
