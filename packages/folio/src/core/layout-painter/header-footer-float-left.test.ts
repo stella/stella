@@ -73,8 +73,8 @@ describe("resolveHeaderFooterFloatLeft", () => {
       ),
     ).toBe("312px");
     // outside in the content box: contentWidth 400 - 200 = 200
-    expect(resolveHeaderFooterFloatLeft(200, { align: "outside" }, layout)).toBe(
-      "200px",
-    );
+    expect(
+      resolveHeaderFooterFloatLeft(200, { align: "outside" }, layout),
+    ).toBe("200px");
   });
 });
