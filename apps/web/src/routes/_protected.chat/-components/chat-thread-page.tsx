@@ -268,8 +268,8 @@ export const ChatThreadPage = ({
           handleDeny,
         }}
       >
-        <div className="flex w-full max-w-5xl flex-1 flex-col overflow-hidden">
-          <div className="flex items-center justify-between gap-2 px-4 py-2">
+        <div className="flex w-full flex-1 flex-col overflow-hidden">
+          <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-2 px-4 py-2">
             <div className="flex min-w-0 items-center gap-2">
               <NewChatButton
                 hasMessages={messages.length > 0}
@@ -306,7 +306,7 @@ export const ChatThreadPage = ({
           </div>
 
           <Conversation>
-            <ConversationContent className="gap-3">
+            <ConversationContent className="mx-auto w-full max-w-5xl gap-3 px-4">
               {messages.length === 0 && !isGenerating && !error ? (
                 <div className="m-auto w-full max-w-md px-4">
                   <PromptSuggestions
@@ -343,7 +343,7 @@ export const ChatThreadPage = ({
             enabled={anonymized}
             workspaceId={workspaceId ?? threadRef.threadId}
           />
-          <div className="p-4">
+          <div className="mx-auto w-full max-w-5xl p-4">
             <ChatInputSurface
               anonymized={anonymized}
               autoFocus
