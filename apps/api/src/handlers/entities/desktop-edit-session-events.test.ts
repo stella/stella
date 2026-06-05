@@ -1,16 +1,19 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 
 const authorizeDesktopEditSessionMock = mock();
 const readDesktopEditSessionEventStateMock = mock();
+const refreshDesktopEditSessionLivenessMock = mock();
 
 void mock.module("@/api/lib/desktop-edit-sessions", () => ({
   authorizeDesktopEditSession: authorizeDesktopEditSessionMock,
+  DESKTOP_EDIT_SESSION_LIVENESS_REFRESH_INTERVAL_MS: 60_000,
   DESKTOP_EDIT_SESSION_TAKEN_OVER_CODE: "desktop_edit_session_taken_over",
   DESKTOP_EDIT_SESSION_TAKEN_OVER_MESSAGE:
     "Desktop editing moved to another device. This local copy is preserved.",
   readDesktopEditSessionEventState: readDesktopEditSessionEventStateMock,
+  refreshDesktopEditSessionLiveness: refreshDesktopEditSessionLivenessMock,
 }));
 
 const { desktopEditSessionEventsHandler } =
@@ -19,11 +22,18 @@ const { desktopEditSessionEventsHandler } =
 const sessionId = toSafeId<"desktopEditSession">(
   "019aa0bc-d957-7bb3-9234-9c2440377225",
 );
+const sessionToken = "a".repeat(64);
 
 describe("desktop edit session events", () => {
+  afterAll(() => {
+    mock.restore();
+  });
+
   beforeEach(() => {
     authorizeDesktopEditSessionMock.mockReset();
     readDesktopEditSessionEventStateMock.mockReset();
+    refreshDesktopEditSessionLivenessMock.mockReset();
+    refreshDesktopEditSessionLivenessMock.mockResolvedValue(true);
   });
 
   test("rejects missing tokens before reading session state", async () => {
@@ -40,5 +50,83 @@ describe("desktop edit session events", () => {
       "response.code",
       "desktop_edit_session_token_missing",
     );
+  });
+
+  test("refreshes liveness when an event stream connects", async () => {
+    authorizeDesktopEditSessionMock.mockResolvedValue({
+      status: "authorized",
+      value: { userId: "user-1" },
+    });
+    readDesktopEditSessionEventStateMock.mockResolvedValue({
+      pendingRequest: null,
+    });
+
+    const response = await desktopEditSessionEventsHandler({
+      headers: { authorization: `Bearer ${sessionToken}` },
+      query: {},
+      sessionId,
+    });
+
+    if (!(response instanceof Response)) {
+      throw new Error(
+        "Expected desktop edit events to return an SSE response.",
+      );
+    }
+
+    expect(refreshDesktopEditSessionLivenessMock).toHaveBeenCalledWith({
+      sessionId,
+      sessionToken,
+      userId: "user-1",
+    });
+
+    await response.body?.cancel();
+  });
+
+  test("awaits the first liveness refresh before returning the stream", async () => {
+    authorizeDesktopEditSessionMock.mockResolvedValue({
+      status: "authorized",
+      value: { userId: "user-1" },
+    });
+    readDesktopEditSessionEventStateMock.mockResolvedValue({
+      pendingRequest: null,
+    });
+
+    let resolveRefresh: (value: boolean) => void = () => {
+      throw new Error("Expected liveness refresh to start.");
+    };
+    const refreshPromise = new Promise<boolean>((resolve) => {
+      resolveRefresh = resolve;
+    });
+    refreshDesktopEditSessionLivenessMock.mockReturnValue(refreshPromise);
+
+    let settled = false;
+    const responsePromise = desktopEditSessionEventsHandler({
+      headers: { authorization: `Bearer ${sessionToken}` },
+      query: {},
+      sessionId,
+    }).then((response) => {
+      settled = true;
+      return response;
+    });
+
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    expect(refreshDesktopEditSessionLivenessMock).toHaveBeenCalledWith({
+      sessionId,
+      sessionToken,
+      userId: "user-1",
+    });
+    expect(settled).toBe(false);
+    resolveRefresh(true);
+
+    const response = await responsePromise;
+    if (!(response instanceof Response)) {
+      throw new Error(
+        "Expected desktop edit events to return an SSE response.",
+      );
+    }
+
+    await response.body?.cancel();
   });
 });

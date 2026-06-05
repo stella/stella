@@ -18,6 +18,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { issueFolioCollabToken } from "@/api/lib/folio-collab-sessions";
 
@@ -76,8 +77,8 @@ const openFolioCollabSessionHandler = async function* ({
           and(
             eq(desktopEditSessions.entityId, entityId),
             eq(desktopEditSessions.propertyId, propertyId),
-            eq(desktopEditSessions.status, "open"),
             eq(desktopEditSessions.workspaceId, workspaceId),
+            ...liveDesktopEditSessionPredicates(new Date()),
           ),
         )
         .limit(1);

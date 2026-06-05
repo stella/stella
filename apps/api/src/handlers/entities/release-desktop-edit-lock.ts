@@ -11,6 +11,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import { broadcast } from "@/api/lib/sse";
 
 const config = {
@@ -35,9 +36,10 @@ export default createSafeHandler(
               eq(desktopEditSessions.entityId, body.entityId),
               eq(desktopEditSessions.propertyId, body.propertyId),
               eq(desktopEditSessions.workspaceId, workspaceId),
-              eq(desktopEditSessions.status, "open"),
+              ...liveDesktopEditSessionPredicates(new Date()),
             ),
           )
+          .orderBy(desktopEditSessions.createdAt)
           .limit(1);
 
         const session = sessions.at(0);

@@ -27,6 +27,7 @@ import type {
   EntitiesWindowCursorValues,
 } from "@/api/handlers/entities/window-cursor";
 import type { SafeId } from "@/api/lib/branded-types";
+import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import {
   AGENDA_ITEM_KIND,
   AGENDA_ITEM_SOURCE,
@@ -878,7 +879,7 @@ const queryEntitiesGenerator = async function* ({
         .where(
           and(
             inArray(desktopEditSessions.entityId, pageIds),
-            eq(desktopEditSessions.status, "open"),
+            ...liveDesktopEditSessionPredicates(new Date()),
           ),
         )
         .orderBy(desktopEditSessions.createdAt);

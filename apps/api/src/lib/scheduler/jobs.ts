@@ -4,6 +4,7 @@ import { rootDb } from "@/api/db/root";
 import type { SchedulerPayload, SchedulerSchedule } from "@/api/db/schema";
 import { schedulerJobs } from "@/api/db/schema";
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
+import { EXPIRE_DESKTOP_EDIT_SESSIONS_TASK } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
 import { INFO_SOUD_SYNC_TRACKED_CASES_TASK } from "@/api/lib/scheduler/tasks/infosoud";
 
 type SchedulerJobDefinition = {
@@ -95,5 +96,15 @@ export const ensureDefaultSchedulerJobs = async (): Promise<void> => {
       timeZone: "Europe/Prague",
     },
     task: INFO_SOUD_SYNC_TRACKED_CASES_TASK,
+  });
+
+  await ensureSchedulerJob({
+    description: "Expire abandoned desktop edit sessions past their token TTL",
+    id: "desktopEditSessions.expire.hourly",
+    schedule: {
+      type: "interval",
+      everyMs: 60 * 60 * 1000,
+    },
+    task: EXPIRE_DESKTOP_EDIT_SESSIONS_TASK,
   });
 };

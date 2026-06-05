@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import {
   DESKTOP_EDIT_HANDOFF_TTL_MS,
+  DESKTOP_EDIT_SESSION_LIVENESS_REFRESH_INTERVAL_MS,
+  SESSION_TOKEN_TTL_MS,
   canUseDesktopEditSession,
   createDesktopEditHandoffToken,
   hashDesktopEditHandoffToken,
@@ -94,5 +96,13 @@ describe("desktop edit handoff tokens", () => {
 
   test("keeps browser-to-desktop handoffs short-lived", () => {
     expect(DESKTOP_EDIT_HANDOFF_TTL_MS).toBeLessThanOrEqual(2 * 60 * 1000);
+  });
+});
+
+describe("desktop edit session liveness", () => {
+  test("leaves retry margin before session token expiry", () => {
+    expect(
+      DESKTOP_EDIT_SESSION_LIVENESS_REFRESH_INTERVAL_MS,
+    ).toBeLessThanOrEqual(SESSION_TOKEN_TTL_MS / 4);
   });
 });

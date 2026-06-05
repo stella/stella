@@ -1,12 +1,19 @@
 import { status, t } from "elysia";
 
+import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import {
+  desktopEditSessionCloseSignal,
+  isDesktopEditSessionCloseSignal,
+} from "@/api/lib/desktop-edit-session-notifications";
+import {
   authorizeDesktopEditSession,
+  DESKTOP_EDIT_SESSION_LIVENESS_REFRESH_INTERVAL_MS,
   DESKTOP_EDIT_SESSION_TAKEN_OVER_CODE,
   DESKTOP_EDIT_SESSION_TAKEN_OVER_MESSAGE,
   readDesktopEditSessionEventState,
+  refreshDesktopEditSessionLiveness,
 } from "@/api/lib/desktop-edit-sessions";
 import { broadcastSessionEvent, registerSessionDelivery } from "@/api/lib/sse";
 import type { SSEEvent } from "@/api/lib/sse";
@@ -28,6 +35,7 @@ export const desktopEditSessionEventsQuerySchema = t.Object({
 });
 
 type SessionEventConnection = {
+  cleanup: () => void;
   controller: ReadableStreamDefaultController;
   sessionId: SafeId<"desktopEditSession">;
 };
@@ -46,12 +54,6 @@ const formatSSE = (event: { type: string; data: unknown }): Uint8Array => {
 };
 
 /**
- * Internal close signal carried over the SSE channel. Never enqueued
- * to clients — it tears down the streams instead.
- */
-const SESSION_CLOSE_SIGNAL = "__desktop_edit_session_closed__";
-
-/**
  * Deliver a session event to SSE connections held by THIS instance.
  * Invoked by the Redis pub/sub fan-out (and by the local fallback when
  * Redis is unavailable). The close signal tears the streams down
@@ -66,8 +68,9 @@ const deliverSessionEventLocal = (
     return;
   }
 
-  if (event.type === SESSION_CLOSE_SIGNAL) {
+  if (isDesktopEditSessionCloseSignal(event)) {
     for (const conn of conns) {
+      conn.cleanup();
       try {
         conn.controller.close();
       } catch {
@@ -83,6 +86,7 @@ const deliverSessionEventLocal = (
     try {
       conn.controller.enqueue(encoded);
     } catch {
+      conn.cleanup();
       conns.delete(conn);
     }
   }
@@ -114,7 +118,7 @@ export const pushSessionEvent = (
 export const closeSessionConnections = (
   sessionId: SafeId<"desktopEditSession">,
 ): void => {
-  broadcastSessionEvent(sessionId, { type: SESSION_CLOSE_SIGNAL, data: null });
+  broadcastSessionEvent(sessionId, desktopEditSessionCloseSignal());
 };
 
 type DesktopEditSessionEventsHandlerProps = {
@@ -176,12 +180,48 @@ export const desktopEditSessionEventsHandler = async ({
     });
   }
 
+  const userId = authorized.value.userId;
+
   // Declare conn in outer scope so cancel() can reference the exact instance.
   let conn: SessionEventConnection;
+  let livenessRefreshTimer: ReturnType<typeof setInterval> | null = null;
+
+  const cleanupLivenessRefresh = () => {
+    if (livenessRefreshTimer === null) {
+      return;
+    }
+    clearInterval(livenessRefreshTimer);
+    livenessRefreshTimer = null;
+  };
+
+  const refreshLiveness = async (): Promise<boolean> =>
+    await refreshDesktopEditSessionLiveness({
+      sessionId,
+      sessionToken,
+      userId,
+    });
+
+  const refreshed = await refreshLiveness();
+  if (!refreshed) {
+    return status(404, {
+      message: "Desktop edit session not found or closed.",
+    });
+  }
+
+  const refreshLivenessInBackground = () => {
+    void refreshLiveness().catch((error: unknown) => {
+      captureError(error, { sessionId });
+    });
+  };
 
   const stream = new ReadableStream({
     start(controller) {
-      conn = { controller, sessionId };
+      livenessRefreshTimer = setInterval(
+        refreshLivenessInBackground,
+        DESKTOP_EDIT_SESSION_LIVENESS_REFRESH_INTERVAL_MS,
+      );
+
+      conn = { cleanup: cleanupLivenessRefresh, controller, sessionId };
 
       let sessionConns = connections.get(sessionId);
       if (!sessionConns) {
@@ -210,6 +250,7 @@ export const desktopEditSessionEventsHandler = async ({
       }
     },
     cancel() {
+      cleanupLivenessRefresh();
       const sessionConns = connections.get(sessionId);
       if (sessionConns) {
         sessionConns.delete(conn);
