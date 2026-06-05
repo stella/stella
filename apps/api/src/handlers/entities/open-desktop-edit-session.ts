@@ -16,7 +16,11 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
-import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
+import {
+  expiredOwnDesktopEditSessionTargetPredicates,
+  liveDesktopEditSessionPredicates,
+  liveOwnDesktopEditSessionTargetPredicates,
+} from "@/api/lib/desktop-edit-session-predicates";
 import {
   computeTokenExpiresAt,
   createDesktopEditSessionToken,
@@ -73,12 +77,14 @@ type ExistingOpenDesktopEditSession = {
 
 const readExistingOpenDesktopEditSession = async ({
   entityId,
+  now,
   propertyId,
   tx,
   userId,
   workspaceId,
 }: {
   entityId: SafeId<"entity">;
+  now: Date;
   propertyId: SafeId<"property">;
   tx: Transaction;
   userId: SafeId<"user">;
@@ -95,17 +101,68 @@ const readExistingOpenDesktopEditSession = async ({
     .from(desktopEditSessions)
     .where(
       and(
-        eq(desktopEditSessions.createdBy, userId),
-        eq(desktopEditSessions.entityId, entityId),
-        eq(desktopEditSessions.propertyId, propertyId),
-        eq(desktopEditSessions.status, "open"),
-        eq(desktopEditSessions.workspaceId, workspaceId),
+        ...liveOwnDesktopEditSessionTargetPredicates({
+          entityId,
+          now,
+          propertyId,
+          userId,
+          workspaceId,
+        }),
       ),
     )
     .limit(1)
     .for("update");
 
   return existingSessions.at(0) ?? null;
+};
+
+const expireStaleOwnDesktopEditSessions = async ({
+  entityId,
+  now,
+  propertyId,
+  recordAuditEvent,
+  tx,
+  userId,
+  workspaceId,
+}: {
+  entityId: SafeId<"entity">;
+  now: Date;
+  propertyId: SafeId<"property">;
+  recordAuditEvent: AuditRecorder;
+  tx: Transaction;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace">;
+}) => {
+  const expiredSessions = await tx
+    .update(desktopEditSessions)
+    .set({ status: "expired", closedAt: now })
+    .where(
+      and(
+        ...expiredOwnDesktopEditSessionTargetPredicates({
+          entityId,
+          now,
+          propertyId,
+          userId,
+          workspaceId,
+        }),
+      ),
+    )
+    .returning({ id: desktopEditSessions.id });
+
+  if (expiredSessions.length === 0) {
+    return;
+  }
+
+  await recordAuditEvent(
+    tx,
+    expiredSessions.map((session) => ({
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
+      resourceId: session.id,
+      changes: { status: { old: "open", new: "expired" } },
+      metadata: { reason: "token_expired_on_open" },
+    })),
+  );
 };
 
 const buildExistingOpenDesktopEditSessionResponse = async ({
@@ -154,7 +211,7 @@ const buildExistingOpenDesktopEditSessionResponse = async ({
     .where(
       and(
         eq(desktopEditSessions.id, existingSession.id),
-        eq(desktopEditSessions.status, "open"),
+        ...liveDesktopEditSessionPredicates(new Date()),
       ),
     )
     .returning({ id: desktopEditSessions.id });
@@ -303,8 +360,20 @@ export const openDesktopEditSessionHandler = async function* ({
         workspaceId,
       });
 
+      const now = new Date();
+      await expireStaleOwnDesktopEditSessions({
+        entityId,
+        now,
+        propertyId,
+        recordAuditEvent,
+        tx,
+        userId,
+        workspaceId,
+      });
+
       const existingSession = await readExistingOpenDesktopEditSession({
         entityId,
+        now: new Date(),
         propertyId,
         tx,
         userId,
@@ -426,12 +495,11 @@ export const openDesktopEditSessionHandler = async function* ({
       if (Result.isError(retryResult)) {
         return Result.err(retryResult.error);
       }
-      if (retryResult.value === null) {
-        return Result.err(
-          new HandlerError({ status: 500, message: "Internal server error" }),
-        );
+      if (retryResult.value !== null) {
+        firstAttempt = retryResult;
+      } else {
+        firstAttempt = Result.ok(null);
       }
-      firstAttempt = retryResult;
     } else {
       return Result.err(error);
     }
