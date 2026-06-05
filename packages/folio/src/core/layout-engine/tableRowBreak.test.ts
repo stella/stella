@@ -8,7 +8,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { layoutDocument } from "./index";
-import { resetCanvasContext } from "./measure";
+import { clearAllCaches, resetCanvasContext } from "./measure";
 import { buildTableRowBreakInfo, snapRowBreak } from "./tableRowBreak";
 import type {
   FlowBlock,
@@ -45,6 +45,7 @@ beforeEach(() => {
       },
     },
   });
+  clearAllCaches();
   resetCanvasContext();
 });
 
@@ -53,6 +54,7 @@ afterEach(() => {
     configurable: true,
     value: originalDocument,
   });
+  clearAllCaches();
   resetCanvasContext();
 });
 
@@ -324,6 +326,73 @@ describe("buildTableRowBreakInfo / snapRowBreak", () => {
     const info = buildTableRowBreakInfo(block, measure);
 
     expect(info.breakOffsets[0]).toEqual([60]);
+  });
+
+  test("uses floating-aware paragraph measures for row split offsets", () => {
+    const block: TableBlock = {
+      kind: "table",
+      id: "t",
+      rows: [
+        {
+          id: "r0",
+          cells: [
+            {
+              id: "c0",
+              padding: { top: 0, right: 0, bottom: 0, left: 0 },
+              blocks: [
+                {
+                  kind: "paragraph",
+                  id: "p0",
+                  runs: [
+                    {
+                      kind: "image",
+                      src: "float.png",
+                      width: 168,
+                      height: 80,
+                      wrapType: "square",
+                      cssFloat: "left",
+                      displayMode: "float",
+                    },
+                    {
+                      kind: "text",
+                      text: "body text",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      columnWidths: [200],
+    };
+    const measure: TableMeasure = {
+      kind: "table",
+      rows: [
+        {
+          cells: [
+            {
+              blocks: [paraMeasure(6)],
+              width: 200,
+              height: 120,
+            },
+          ],
+          height: 120,
+        },
+      ],
+      columnWidths: [200],
+      totalWidth: 200,
+      totalHeight: 120,
+    };
+
+    const info = buildTableRowBreakInfo(block, measure);
+    const firstSlice = snapRowBreak(info, 0, 0, 60);
+    const floatedLineSlice = snapRowBreak(info, 0, 0, 110);
+
+    expect(info.breakOffsets[0]).not.toContain(LINE);
+    expect(firstSlice).toBe(0);
+    expect(floatedLineSlice).toBeGreaterThanOrEqual(80);
+    expect(floatedLineSlice).toBeLessThan(120);
   });
 
   test("shifts unsafe ranges for vertically aligned cells", () => {
