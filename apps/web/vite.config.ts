@@ -95,6 +95,48 @@ export default defineConfig(({ mode }) => {
       },
     },
     optimizeDeps: {
+      // Pre-bundle deps that are only reached behind lazy/runtime imports so
+      // Vite's dep optimizer handles them during the cold pass, before any
+      // navigation. Two graphs trip this:
+      //
+      //   1. better-auth: src/lib/auth.ts statically imports the public
+      //      entrypoints, but better-auth reaches these deep subpaths only at
+      //      runtime, so the crawler misses them until a protected route runs.
+      //   2. @stll/folio: the document route lazy-loads it via
+      //      `await import("@stll/folio")` ($viewId.document.tsx), dragging in
+      //      the prosemirror family + jszip + fast-xml-parser, none of which
+      //      apps/web imports statically anywhere else.
+      //
+      // When that discovery happens mid-session, Vite kicks off a second
+      // optimize pass and forces a full-page reload ("optimized dependencies
+      // changed. reloading"), and stalls in-flight module/data requests with
+      // net::ERR_EMPTY_RESPONSE. In the e2e suite the reload/stall lands
+      // mid-test and tears the page down before the viewer paints, producing a
+      // flaky upload-docx failure (api.log is empty on these runs — the API
+      // never crashes; it is purely the dev server re-optimizing). Listing the
+      // deps here makes the optimizer finish them up front. Dev-only:
+      // production uses Rollup and ignores optimizeDeps.
+      include: [
+        "@better-auth/core/env",
+        "@better-auth/core/error",
+        "@better-auth/core/utils/error-codes",
+        "@better-auth/core/utils/string",
+        "@better-fetch/fetch",
+        "defu",
+        "nanostores",
+        "prosemirror-commands",
+        "prosemirror-dropcursor",
+        "prosemirror-gapcursor",
+        "prosemirror-history",
+        "prosemirror-keymap",
+        "prosemirror-model",
+        "prosemirror-state",
+        "prosemirror-tables",
+        "prosemirror-transform",
+        "prosemirror-view",
+        "jszip",
+        "fast-xml-parser",
+      ],
       // @stll/*-wasm packages load their .wasm binaries via
       // `new URL("./foo.wasm32-wasi.wasm", import.meta.url)`. Vite's dep
       // optimizer would rewrite that URL into .vite/deps/, where the .wasm
