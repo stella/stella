@@ -542,6 +542,22 @@ jobs:
         if: steps.changed.outputs.run == 'true'
         run: bun --filter @stll/web test:e2e
 
+      # Flake guard: the dev server's dependency optimizer must finish during
+      # the cold pass. A second pass mid-session prints "optimized dependencies
+      # changed. reloading" and forces a full-page reload that can tear the page
+      # down mid-test (see optimizeDeps.include in apps/web/vite.config.ts).
+      # Fail loudly — even on a lucky pass — so a newly added lazy/runtime dep
+      # that escapes the cold scan is fixed at its source instead of flaking.
+      - name: Guard against mid-test Vite re-optimize
+        if: always() && steps.changed.outputs.run == 'true'
+        run: |
+          if grep -q "optimized dependencies changed. reloading" /tmp/web.log; then
+            echo "::error::Vite re-optimized dependencies mid-session and forced a reload. A dependency reachable only via a lazy/runtime import is missing from optimizeDeps.include in apps/web/vite.config.ts — add the dep(s) named below."
+            grep -nE "new dependencies optimized|optimized dependencies changed" /tmp/web.log || true
+            exit 1
+          fi
+          echo "No mid-session dep re-optimize detected."
+
       - name: Upload Playwright report
         if: failure() && steps.changed.outputs.run == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
