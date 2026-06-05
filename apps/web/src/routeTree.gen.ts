@@ -35,6 +35,7 @@ import { Route as ProtectedKnowledgeSkillsRouteImport } from './routes/_protecte
 import { Route as ProtectedKnowledgePromptsRouteImport } from './routes/_protected.knowledge/prompts'
 import { Route as ProtectedKnowledgeMcpRouteImport } from './routes/_protected.knowledge/mcp'
 import { Route as ProtectedKnowledgeClausesRouteImport } from './routes/_protected.knowledge/clauses'
+import { Route as ProtectedDevAutocompleteRouteImport } from './routes/_protected.dev_.autocomplete'
 import { Route as ProtectedContactsContactIdRouteImport } from './routes/_protected.contacts/$contactId'
 import { Route as ProtectedChatNewRouteImport } from './routes/_protected.chat/new'
 import { Route as ProtectedChatThreadIdRouteImport } from './routes/_protected.chat/$threadId'
@@ -197,6 +198,12 @@ const ProtectedKnowledgeClausesRoute =
     id: '/clauses',
     path: '/clauses',
     getParentRoute: () => ProtectedKnowledgeRouteRoute,
+  } as any)
+const ProtectedDevAutocompleteRoute =
+  ProtectedDevAutocompleteRouteImport.update({
+    id: '/dev_/autocomplete',
+    path: '/dev/autocomplete',
+    getParentRoute: () => ProtectedRoute,
   } as any)
 const ProtectedContactsContactIdRoute =
   ProtectedContactsContactIdRouteImport.update({
@@ -378,6 +385,7 @@ export interface FileRoutesByFullPath {
   '/chat/$threadId': typeof ProtectedChatThreadIdRoute
   '/chat/new': typeof ProtectedChatNewRoute
   '/contacts/$contactId': typeof ProtectedContactsContactIdRoute
+  '/dev/autocomplete': typeof ProtectedDevAutocompleteRoute
   '/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
   '/knowledge/mcp': typeof ProtectedKnowledgeMcpRoute
   '/knowledge/prompts': typeof ProtectedKnowledgePromptsRoute
@@ -425,6 +433,7 @@ export interface FileRoutesByTo {
   '/chat/$threadId': typeof ProtectedChatThreadIdRoute
   '/chat/new': typeof ProtectedChatNewRoute
   '/contacts/$contactId': typeof ProtectedContactsContactIdRoute
+  '/dev/autocomplete': typeof ProtectedDevAutocompleteRoute
   '/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
   '/knowledge/mcp': typeof ProtectedKnowledgeMcpRoute
   '/knowledge/prompts': typeof ProtectedKnowledgePromptsRoute
@@ -480,6 +489,7 @@ export interface FileRoutesById {
   '/_protected/chat/$threadId': typeof ProtectedChatThreadIdRoute
   '/_protected/chat/new': typeof ProtectedChatNewRoute
   '/_protected/contacts/$contactId': typeof ProtectedContactsContactIdRoute
+  '/_protected/dev_/autocomplete': typeof ProtectedDevAutocompleteRoute
   '/_protected/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
   '/_protected/knowledge/mcp': typeof ProtectedKnowledgeMcpRoute
   '/_protected/knowledge/prompts': typeof ProtectedKnowledgePromptsRoute
@@ -536,6 +546,7 @@ export interface FileRouteTypes {
     | '/chat/$threadId'
     | '/chat/new'
     | '/contacts/$contactId'
+    | '/dev/autocomplete'
     | '/knowledge/clauses'
     | '/knowledge/mcp'
     | '/knowledge/prompts'
@@ -583,6 +594,7 @@ export interface FileRouteTypes {
     | '/chat/$threadId'
     | '/chat/new'
     | '/contacts/$contactId'
+    | '/dev/autocomplete'
     | '/knowledge/clauses'
     | '/knowledge/mcp'
     | '/knowledge/prompts'
@@ -637,6 +649,7 @@ export interface FileRouteTypes {
     | '/_protected/chat/$threadId'
     | '/_protected/chat/new'
     | '/_protected/contacts/$contactId'
+    | '/_protected/dev_/autocomplete'
     | '/_protected/knowledge/clauses'
     | '/_protected/knowledge/mcp'
     | '/_protected/knowledge/prompts'
@@ -866,6 +879,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/knowledge/clauses'
       preLoaderRoute: typeof ProtectedKnowledgeClausesRouteImport
       parentRoute: typeof ProtectedKnowledgeRouteRoute
+    }
+    '/_protected/dev_/autocomplete': {
+      id: '/_protected/dev_/autocomplete'
+      path: '/dev/autocomplete'
+      fullPath: '/dev/autocomplete'
+      preLoaderRoute: typeof ProtectedDevAutocompleteRouteImport
+      parentRoute: typeof ProtectedRoute
     }
     '/_protected/contacts/$contactId': {
       id: '/_protected/contacts/$contactId'
@@ -1263,6 +1283,7 @@ interface ProtectedRouteChildren {
   ProtectedSettingsRouteRoute: typeof ProtectedSettingsRouteRouteWithChildren
   ProtectedWorkspacesWorkspaceIdRouteRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren
   ProtectedContactsContactIdRoute: typeof ProtectedContactsContactIdRoute
+  ProtectedDevAutocompleteRoute: typeof ProtectedDevAutocompleteRoute
   ProtectedContactsIndexRoute: typeof ProtectedContactsIndexRoute
   ProtectedTodosIndexRoute: typeof ProtectedTodosIndexRoute
   ProtectedWorkspacesIndexRoute: typeof ProtectedWorkspacesIndexRoute
@@ -1275,6 +1296,7 @@ const ProtectedRouteChildren: ProtectedRouteChildren = {
   ProtectedWorkspacesWorkspaceIdRouteRoute:
     ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren,
   ProtectedContactsContactIdRoute: ProtectedContactsContactIdRoute,
+  ProtectedDevAutocompleteRoute: ProtectedDevAutocompleteRoute,
   ProtectedContactsIndexRoute: ProtectedContactsIndexRoute,
   ProtectedTodosIndexRoute: ProtectedTodosIndexRoute,
   ProtectedWorkspacesIndexRoute: ProtectedWorkspacesIndexRoute,

@@ -10,6 +10,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 const MAX_PREFIX_CHARS = 8000;
 const MAX_SUFFIX_CHARS = 4000;
 const MAX_OUTPUT_TOKENS = 96;
+const AUTOCOMPLETE_TIMEOUT_MS = 10_000;
 
 const requestBody = t.Object({
   prefix: t.String({ maxLength: MAX_PREFIX_CHARS }),
@@ -59,11 +60,23 @@ const buildUserPrompt = (input: {
 
 const autocompleteStream = createSafeRootHandler(
   config,
-  async function* ({ body, orgAIConfig }) {
+  async function* ({
+    body,
+    orgAIConfig,
+    promptCachingEnabled,
+    session,
+    request,
+  }) {
     const model = yield* Result.await(
       Promise.resolve().then(() => {
         try {
-          return Result.ok(getModelForRole("fast", orgAIConfig ?? null));
+          return Result.ok(
+            getModelForRole("fast", orgAIConfig, {
+              promptCachingEnabled,
+              scopeKey: null,
+              organizationId: session.activeOrganizationId,
+            }),
+          );
         } catch (error) {
           if (error instanceof HandlerError) {
             return Result.err(error);
@@ -83,6 +96,10 @@ const autocompleteStream = createSafeRootHandler(
       model,
       maxOutputTokens: MAX_OUTPUT_TOKENS,
       temperature: 0.2,
+      abortSignal: AbortSignal.any([
+        request.signal,
+        AbortSignal.timeout(AUTOCOMPLETE_TIMEOUT_MS),
+      ]),
       system: SYSTEM_PROMPT,
       prompt: buildUserPrompt({
         prefix: body.prefix,
