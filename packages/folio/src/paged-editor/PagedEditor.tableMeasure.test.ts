@@ -7,8 +7,10 @@ import type {
   Measure,
   ParagraphBlock,
   ParagraphMeasure,
+  TextBoxBlock,
 } from "../core/layout-engine/types";
 import {
+  measureBlocks,
   measureTableBlock,
   measureTableCellBlockVisualHeight,
 } from "./PagedEditor";
@@ -220,6 +222,47 @@ describe("measureTableCellBlockVisualHeight", () => {
     };
 
     expect(measureTableCellBlockVisualHeight(block, measure)).toBe(22);
+  });
+});
+
+describe("measureBlocks floating text-box bands", () => {
+  test("activates a margin-pinned band at its real text-box anchor", () => {
+    withFakeTextMeasure(() => {
+      const before: ParagraphBlock = {
+        kind: "paragraph",
+        id: "before",
+        runs: [{ kind: "text", text: "before" }],
+      };
+      const band: TextBoxBlock = {
+        kind: "textBox",
+        id: "band",
+        width: 300,
+        height: 120,
+        content: [],
+        wrapType: "topAndBottom",
+        position: { vertical: { relativeTo: "margin", posOffset: 0 } },
+      };
+      const after: ParagraphBlock = {
+        kind: "paragraph",
+        id: "after",
+        runs: [{ kind: "text", text: "after" }],
+      };
+
+      const measures = measureBlocks([before, band, after], 500, 96);
+      const beforeMeasure = measures.at(0);
+      const afterMeasure = measures.at(2);
+
+      expect(beforeMeasure?.kind).toBe("paragraph");
+      expect(afterMeasure?.kind).toBe("paragraph");
+      if (beforeMeasure?.kind !== "paragraph") {
+        throw new Error("Expected first paragraph measure");
+      }
+      if (afterMeasure?.kind !== "paragraph") {
+        throw new Error("Expected second paragraph measure");
+      }
+      expect(beforeMeasure.totalHeight).toBeLessThan(50);
+      expect(afterMeasure.totalHeight).toBeGreaterThanOrEqual(120);
+    });
   });
 });
 

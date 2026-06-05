@@ -2366,7 +2366,7 @@ function measureBlock(
  * Then measures each block, passing the zones so paragraphs can calculate
  * per-line widths based on vertical overlap with floating images.
  */
-function measureBlocks(
+export function measureBlocks(
   blocks: FlowBlock[],
   contentWidth: number | number[],
   marginTop = 0,
@@ -2412,15 +2412,7 @@ function measureBlocks(
   // Group zones by effective anchor block index
   const zonesByAnchor = new Map<number, FloatingImageZone[]>();
   for (const z of adjustedZones) {
-    // A page/margin-pinned full-width band (e.g. a title banner at the top of
-    // the page) reserves space from the top of content, so it must reach the
-    // blocks that precede its own anchor paragraph. Anchor it at block 0 and
-    // keep its content-relative topY/bottomY. Exact for the common case (a
-    // banner near the document start); a band whose anchor lands on a later
-    // page can over-reach — matches upstream's documented caveat.
-    const anchor =
-      z.fullWidthBlock && z.isMarginRelative ? 0 : z.anchorBlockIndex;
-    const existing = zonesByAnchor.get(anchor) ?? [];
+    const existing = zonesByAnchor.get(z.anchorBlockIndex) ?? [];
     // Strip the anchor-tracking fields; the rest IS a FloatingImageZone. Spread
     // (rather than copying each field) so fullWidthBlock/segments can't be
     // dropped here.
@@ -2430,11 +2422,9 @@ function measureBlocks(
       ...zone
     } = z;
     existing.push(zone);
-    zonesByAnchor.set(anchor, existing);
+    zonesByAnchor.set(z.anchorBlockIndex, existing);
   }
 
-  // Derive from the map keys, not the raw zones — full-width bands are
-  // re-anchored to block 0 above, and the activation set must match.
   const anchorIndices = new Set(zonesByAnchor.keys());
 
   // Track cumulative Y position for floating zone overlap calculation

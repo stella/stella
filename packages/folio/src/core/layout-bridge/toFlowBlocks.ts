@@ -2265,6 +2265,9 @@ function convertTextBoxNode(
   if (attrs.distRight !== undefined) {
     textBox.distRight = attrs.distRight;
   }
+  if (attrs.position !== undefined) {
+    textBox.position = attrs.position;
+  }
   return textBox;
 }
 

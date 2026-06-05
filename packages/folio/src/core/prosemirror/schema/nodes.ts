@@ -468,7 +468,7 @@ export type TextBoxAttrs = {
   /** CSS float direction */
   cssFloat?: "left" | "right" | "none";
   /** Wrap type */
-  wrapType?: string;
+  wrapType?: ImageWrap["type"];
   /** OOXML wrapText direction for anchored text boxes (eigenpal #474). */
   wrapText?: "bothSides" | "left" | "right" | "largest";
   /** Wrap distance from top edge, in pixels (OOXML distT, EMU-converted). */
@@ -479,6 +479,8 @@ export type TextBoxAttrs = {
   distLeft?: number;
   /** Wrap distance from right edge, in pixels. */
   distRight?: number;
+  /** Position for floating/anchored text boxes */
+  position?: ImagePositionAttrs;
   /** Original DOCX placement hint for save-path reconstruction. */
   _docxPlacement?: "standalone" | "inlineWithPrevious";
   /** Original DOCX paragraph group for standalone text-box reconstruction. */

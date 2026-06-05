@@ -92,6 +92,8 @@ import type {
   TableAttrs,
   TableRowAttrs,
   TableCellAttrs,
+  ImagePositionAttrs,
+  TextBoxAttrs,
 } from "../schema/nodes";
 import { assertValidProseMirrorDocument } from "../validation";
 
@@ -137,6 +139,69 @@ function parseTransformAttr(
     return undefined;
   }
   return transform;
+}
+
+function imagePositionFromAttrs(
+  attrs: ImagePositionAttrs | undefined,
+): ImagePosition | undefined {
+  const horizontalPosition = attrs?.horizontal;
+  const verticalPosition = attrs?.vertical;
+  if (!horizontalPosition || !verticalPosition) {
+    return undefined;
+  }
+
+  const horizontal: ImagePosition["horizontal"] = {
+    relativeTo: horizontalPosition.relativeTo || "column",
+  };
+  if (horizontalPosition.align) {
+    horizontal.alignment = horizontalPosition.align;
+  }
+  if (horizontalPosition.posOffset !== undefined) {
+    horizontal.posOffset = horizontalPosition.posOffset;
+  }
+
+  const vertical: ImagePosition["vertical"] = {
+    relativeTo: verticalPosition.relativeTo || "paragraph",
+  };
+  if (verticalPosition.align) {
+    vertical.alignment = verticalPosition.align;
+  }
+  if (verticalPosition.posOffset !== undefined) {
+    vertical.posOffset = verticalPosition.posOffset;
+  }
+
+  return { horizontal, vertical };
+}
+
+function textBoxWrapFromAttrs(attrs: TextBoxAttrs): ImageWrap | undefined {
+  const hasWrapData =
+    (attrs.wrapType !== undefined && attrs.wrapType !== "inline") ||
+    attrs.wrapText !== undefined ||
+    attrs.distTop !== undefined ||
+    attrs.distBottom !== undefined ||
+    attrs.distLeft !== undefined ||
+    attrs.distRight !== undefined;
+  if (!hasWrapData) {
+    return undefined;
+  }
+
+  const wrap: ImageWrap = { type: attrs.wrapType ?? "inline" };
+  if (attrs.wrapText !== undefined) {
+    wrap.wrapText = attrs.wrapText;
+  }
+  if (attrs.distTop !== undefined) {
+    wrap.distT = pixelsToEmu(attrs.distTop);
+  }
+  if (attrs.distBottom !== undefined) {
+    wrap.distB = pixelsToEmu(attrs.distBottom);
+  }
+  if (attrs.distLeft !== undefined) {
+    wrap.distL = pixelsToEmu(attrs.distLeft);
+  }
+  if (attrs.distRight !== undefined) {
+    wrap.distR = pixelsToEmu(attrs.distRight);
+  }
+  return wrap;
 }
 
 /**
@@ -1483,32 +1548,9 @@ function createImageRun(node: PMNode): Run {
     image.opacity = attrs.opacity;
   }
 
-  // Round-trip floating image position (ImagePositionAttrs uses loose strings;
-  // cast to the strict OOXML union types for the Document model)
-  const horizontalPosition = attrs.position?.horizontal;
-  const verticalPosition = attrs.position?.vertical;
-  if (horizontalPosition && verticalPosition) {
-    const horizontal: ImagePosition["horizontal"] = {
-      relativeTo: horizontalPosition.relativeTo || "column",
-    };
-    if (horizontalPosition.align) {
-      horizontal.alignment = horizontalPosition.align;
-    }
-    if (horizontalPosition.posOffset !== undefined) {
-      horizontal.posOffset = horizontalPosition.posOffset;
-    }
-
-    const vertical: ImagePosition["vertical"] = {
-      relativeTo: verticalPosition.relativeTo || "paragraph",
-    };
-    if (verticalPosition.align) {
-      vertical.alignment = verticalPosition.align;
-    }
-    if (verticalPosition.posOffset !== undefined) {
-      vertical.posOffset = verticalPosition.posOffset;
-    }
-
-    image.position = { horizontal, vertical };
+  const imagePosition = imagePositionFromAttrs(attrs.position);
+  if (imagePosition) {
+    image.position = imagePosition;
   }
 
   // Round-trip border/outline
@@ -1632,30 +1674,9 @@ function createShapeRun(node: PMNode): Run {
   }
   shape.wrap = wrap;
 
-  const horizontalPosition = attrs.position?.horizontal;
-  const verticalPosition = attrs.position?.vertical;
-  if (horizontalPosition && verticalPosition) {
-    const horizontal: ImagePosition["horizontal"] = {
-      relativeTo: horizontalPosition.relativeTo || "column",
-    };
-    if (horizontalPosition.align) {
-      horizontal.alignment = horizontalPosition.align;
-    }
-    if (horizontalPosition.posOffset !== undefined) {
-      horizontal.posOffset = horizontalPosition.posOffset;
-    }
-
-    const vertical: ImagePosition["vertical"] = {
-      relativeTo: verticalPosition.relativeTo || "paragraph",
-    };
-    if (verticalPosition.align) {
-      vertical.alignment = verticalPosition.align;
-    }
-    if (verticalPosition.posOffset !== undefined) {
-      vertical.posOffset = verticalPosition.posOffset;
-    }
-
-    shape.position = { horizontal, vertical };
+  const shapePosition = imagePositionFromAttrs(attrs.position);
+  if (shapePosition) {
+    shape.position = shapePosition;
   }
 
   // Fill
@@ -2565,6 +2586,15 @@ function convertPMTextBox(node: PMNode): Paragraph {
       tbOutline.color = { rgb: attrs.outlineColor.replace("#", "") };
     }
     shape.outline = tbOutline;
+  }
+
+  const wrap = textBoxWrapFromAttrs(attrs);
+  if (wrap) {
+    shape.wrap = wrap;
+  }
+  const position = imagePositionFromAttrs(attrs.position);
+  if (position) {
+    shape.position = position;
   }
 
   // Wrap the shape in a paragraph with a run containing ShapeContent

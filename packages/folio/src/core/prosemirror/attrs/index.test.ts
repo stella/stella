@@ -382,6 +382,8 @@ describe("ProseMirror attr readers", () => {
     const textBox = schema.nodes.textBox.create({
       width: "wide",
       cssFloat: "center",
+      wrapType: "sideways",
+      position: { vertical: { relativeTo: "ceiling" } },
     });
 
     const shapeResult = readShapeAttrs(shape);
@@ -412,6 +414,12 @@ describe("ProseMirror attr readers", () => {
       );
       expect(textBoxResult.issues.map((issue) => issue.path)).toContain(
         "textBox.attrs.cssFloat",
+      );
+      expect(textBoxResult.issues.map((issue) => issue.path)).toContain(
+        "textBox.attrs.wrapType",
+      );
+      expect(textBoxResult.issues.map((issue) => issue.path)).toContain(
+        "textBox.attrs.position.vertical.relativeTo",
       );
     }
   });

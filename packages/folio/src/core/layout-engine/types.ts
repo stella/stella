@@ -636,7 +636,7 @@ export type TextBoxBlock = {
   wrapType?: string;
   /** OOXML wrapText direction for anchored text boxes. */
   wrapText?: "bothSides" | "left" | "right" | "largest";
-  /** Position for floating/anchored text boxes (pixel-converted EMU). */
+  /** Position for floating/anchored text boxes (OOXML EMU offsets). */
   position?: ImageRunPosition;
   /** Wrap distances in pixels. */
   distTop?: number;

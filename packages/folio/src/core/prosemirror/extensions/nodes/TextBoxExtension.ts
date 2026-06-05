@@ -6,7 +6,10 @@
  * Supports inline and floating positioning.
  */
 
+import type { ImageWrap } from "../../../types/document";
+import { IMAGE_WRAP_TYPE_VALUES } from "../../../types/documentEnumValues";
 import { expectTextBoxAttrs } from "../../attrs";
+import type { ImagePositionAttrs } from "../../schema/nodes";
 import { createNodeExtension } from "../create";
 
 export type TextBoxAttrs = {
@@ -39,7 +42,7 @@ export type TextBoxAttrs = {
   /** CSS float direction */
   cssFloat?: "left" | "right" | "none";
   /** Wrap type */
-  wrapType?: string;
+  wrapType?: ImageWrap["type"];
   /** OOXML wrapText direction for anchored text boxes (eigenpal #474). */
   wrapText?: "bothSides" | "left" | "right" | "largest";
   /** Wrap distance from top edge, in pixels (OOXML distT, EMU-converted). */
@@ -50,11 +53,41 @@ export type TextBoxAttrs = {
   distLeft?: number;
   /** Wrap distance from right edge, in pixels. */
   distRight?: number;
+  /** Position for floating/anchored text boxes. */
+  position?: ImagePositionAttrs;
   /** Original DOCX placement hint for save-path reconstruction. */
   _docxPlacement?: "standalone" | "inlineWithPrevious";
   /** Original DOCX paragraph group for standalone text-box reconstruction. */
   _docxGroupId?: string;
 };
+
+function parseTextBoxPosition(
+  raw: string | undefined,
+): ImagePositionAttrs | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (typeof parsed !== "object" || parsed === null) {
+      return undefined;
+    }
+    return parsed as ImagePositionAttrs;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseTextBoxWrapType(
+  raw: string | undefined,
+): ImageWrap["type"] | undefined {
+  for (const value of IMAGE_WRAP_TYPE_VALUES) {
+    if (value === raw) {
+      return value;
+    }
+  }
+  return undefined;
+}
 
 export const TextBoxExtension = createNodeExtension({
   name: "textBox",
@@ -85,6 +118,7 @@ export const TextBoxExtension = createNodeExtension({
       distBottom: { default: null },
       distLeft: { default: null },
       distRight: { default: null },
+      position: { default: null },
       _docxPlacement: { default: null },
       _docxGroupId: { default: null },
     },
@@ -97,6 +131,8 @@ export const TextBoxExtension = createNodeExtension({
           }
           const el = dom;
           const d = el.dataset;
+          const position = parseTextBoxPosition(d["position"]);
+          const wrapType = parseTextBoxWrapType(d["wrapType"]);
           return {
             ...(d["width"] ? { width: Number(d["width"]) } : {}),
             ...(d["height"] ? { height: Number(d["height"]) } : {}),
@@ -132,7 +168,7 @@ export const TextBoxExtension = createNodeExtension({
                   >,
                 }
               : {}),
-            ...(d["wrapType"] ? { wrapType: d["wrapType"] } : {}),
+            ...(wrapType ? { wrapType } : {}),
             ...(d["wrapText"]
               ? {
                   wrapText: d["wrapText"] as NonNullable<
@@ -144,6 +180,7 @@ export const TextBoxExtension = createNodeExtension({
             ...(d["distBottom"] ? { distBottom: Number(d["distBottom"]) } : {}),
             ...(d["distLeft"] ? { distLeft: Number(d["distLeft"]) } : {}),
             ...(d["distRight"] ? { distRight: Number(d["distRight"]) } : {}),
+            ...(position ? { position } : {}),
           };
         },
       },
@@ -214,6 +251,9 @@ export const TextBoxExtension = createNodeExtension({
       }
       if (typeof attrs.distRight === "number") {
         domAttrs["data-dist-right"] = String(attrs.distRight);
+      }
+      if (attrs.position) {
+        domAttrs["data-position"] = JSON.stringify(attrs.position);
       }
 
       // Build inline styles

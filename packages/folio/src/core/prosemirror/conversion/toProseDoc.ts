@@ -2813,6 +2813,29 @@ function convertTextBox(
   const wrapType = textBox.wrap?.type;
   const wrapText = textBox.wrap?.wrapText;
   const hAlign = textBox.position?.horizontal.alignment;
+  let position: ImagePositionAttrs | undefined;
+  if (textBox.position) {
+    position = {
+      horizontal: {
+        relativeTo: textBox.position.horizontal.relativeTo,
+        ...(textBox.position.horizontal.posOffset !== undefined
+          ? { posOffset: textBox.position.horizontal.posOffset }
+          : {}),
+        ...(textBox.position.horizontal.alignment
+          ? { align: textBox.position.horizontal.alignment }
+          : {}),
+      },
+      vertical: {
+        relativeTo: textBox.position.vertical.relativeTo,
+        ...(textBox.position.vertical.posOffset !== undefined
+          ? { posOffset: textBox.position.vertical.posOffset }
+          : {}),
+        ...(textBox.position.vertical.alignment
+          ? { align: textBox.position.vertical.alignment }
+          : {}),
+      },
+    };
+  }
 
   let cssFloat: "left" | "right" | "none" | undefined;
   if (wrapType === undefined || wrapType === "inline") {
@@ -2887,6 +2910,7 @@ function convertTextBox(
       distBottom,
       distLeft,
       distRight,
+      position,
       _docxPlacement: options.placement,
       _docxGroupId: options.groupId,
     },
