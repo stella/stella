@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import type { PropsWithChildren } from "react";
 
 import { HotkeysProvider } from "@tanstack/react-hotkeys";
@@ -10,9 +11,10 @@ import { TooltipProvider } from "@stll/ui/components/tooltip";
 
 import { DefaultPendingComponent } from "@/components/route-components";
 import { ThemeProvider } from "@/components/theme-provider";
+import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useI18nStore } from "@/i18n/i18n-store";
 import type Messages from "@/i18n/langs/messages.gen";
-import { AnalyticsProvider } from "@/lib/analytics/provider";
+import { AnalyticsProvider, useAnalytics } from "@/lib/analytics/provider";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
 
 const SERVER_I18N_TIME_ZONE = "UTC";
@@ -55,6 +57,32 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
   );
 };
 
+const AnalyticsAuthIdentity = () => {
+  const analytics = useAnalytics();
+  const authStatus = useClientAuthStatus();
+
+  useEffect(() => {
+    if (authStatus.status === "checking") {
+      return;
+    }
+
+    if (authStatus.status === "anonymous") {
+      analytics.reset({ onlyIfIdentified: true });
+      return;
+    }
+
+    analytics.identifyUser({
+      email: authStatus.user.email,
+      id: authStatus.user.id,
+      ...(authStatus.user.name === undefined
+        ? {}
+        : { name: authStatus.user.name }),
+    });
+  }, [analytics, authStatus]);
+
+  return null;
+};
+
 export const AppProviders = ({
   analyticsValue,
   children,
@@ -65,6 +93,7 @@ export const AppProviders = ({
 }>) => (
   <QueryClientProvider client={queryClient}>
     <AnalyticsProvider value={analyticsValue}>
+      <AnalyticsAuthIdentity />
       <I18nProvider>
         <HotkeysProvider
           defaultOptions={{

@@ -55,7 +55,7 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/sidebar";
-import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import {
   SIDE_RAIL_ICON_BUTTON_SIZE,
@@ -218,7 +218,6 @@ function ProtectedComponent() {
         <ChatMentionProviders>
           <AIAvailabilityProvider>
             <ChatEditorProvider>
-              <ProtectedAnalyticsIdentity user={analyticsUser} />
               <GlobalChatMentionRegistration />
               <AppSidebar />
               <CreateMatterDialog />
@@ -231,26 +230,6 @@ function ProtectedComponent() {
       </SidebarProvider>
     </AuthenticatedUserProvider>
   );
-}
-
-function ProtectedAnalyticsIdentity({
-  user,
-}: {
-  user: { email: string; id: string; name: string | undefined };
-}) {
-  const analytics = useAnalytics();
-
-  useEffect(() => {
-    const identity = {
-      email: user.email,
-      id: user.id,
-      ...(user.name === undefined ? {} : { name: user.name }),
-    };
-
-    analytics.identifyUser(identity);
-  }, [analytics, user.email, user.id, user.name]);
-
-  return null;
 }
 
 function GlobalChatMentionRegistration() {
