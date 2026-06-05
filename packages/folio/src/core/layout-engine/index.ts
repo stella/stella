@@ -750,7 +750,7 @@ function layoutTable(
         sliceFragment.y = sliceResult.y;
         consumed = sliceBottom;
         if (consumed < oversizedRow.height) {
-          paginator.forcePageBreak();
+          paginator.forceColumnBreak();
         }
       }
       currentRowIndex += 1;

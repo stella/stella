@@ -380,6 +380,24 @@ describe("oversized table row splits across pages (#570)", () => {
     expect(layout.pages[0]?.fragments.length).toBeGreaterThan(0);
   });
 
+  test("continues split rows into the next column before a new page", () => {
+    const { block, measure } = tallTable(15);
+    const layout = layoutDocument([block as FlowBlock], [measure as Measure], {
+      ...OPTIONS,
+      columns: { count: 2, gap: 20 },
+    });
+    const firstPageTableFragments =
+      layout.pages[0]?.fragments.filter(
+        (f): f is TableFragment => f.kind === "table",
+      ) ?? [];
+
+    expect(firstPageTableFragments.length).toBe(2);
+    expect(firstPageTableFragments[0]?.x).toBe(OPTIONS.margins.left);
+    expect(firstPageTableFragments[1]?.x).toBeGreaterThan(
+      firstPageTableFragments[0]?.x ?? 0,
+    );
+  });
+
   test("repeats header rows while splitting a tall body row", () => {
     const { block, measure } = tableWithHeaderAndTallBody(15);
     const frags = tableFragments(block, measure);
