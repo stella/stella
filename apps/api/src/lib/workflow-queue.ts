@@ -52,9 +52,11 @@ import {
   getPropertyExecutionPlan,
 } from "@/api/lib/workflow/get-execution-plan";
 import {
+  isCurrentWorkflowRequestState,
   parseRunningLockWorkspaceId,
   selectOrphanWorkspaceIds,
   selectRecoverableOrphanWorkspaceIds,
+  selectRunningLockReservation,
 } from "@/api/lib/workflow/orphan-recovery";
 import type { PartialAnswerUpdate } from "@/api/lib/workflow/streaming-answer";
 import { prepareBatch } from "@/api/lib/workflow/utils";
@@ -163,10 +165,12 @@ const isCurrentWorkflowRequest = async ({
     redis.get(workflowKey(workspaceId, "request-id")),
     redis.get(workflowKey(workspaceId, "running")),
   ]);
-  return (
-    currentRequestId === requestId &&
-    (runningValue === requestId || runningValue === "1")
-  );
+  return isCurrentWorkflowRequestState({
+    currentRequestId,
+    legacyRunningLockValue: LEGACY_RUNNING_LOCK_VALUE,
+    requestId,
+    runningValue,
+  });
 };
 
 // Self-heal levers. Tuned conservatively so the happy path is never
@@ -219,6 +223,7 @@ const computeJobTimeoutMs = (executionPlan: ExecutionLevel[]): number => {
 // keeps the TTL fresh regardless of this initial value.
 const RUNNING_LOCK_TTL_SEC = 60 * 60;
 const RECOVERY_LOCK_SETTLE_MS = 100;
+const LEGACY_RUNNING_LOCK_VALUE = "1";
 const RECOVERY_LOCK_VALUE = "recovery";
 const RESERVE_RECOVERY_LOCK_SCRIPT = `
 local current = redis.call("GET", KEYS[1])
@@ -911,16 +916,22 @@ const shouldRecoverWorkflow = async ({
     return false;
   }
 
-  if (runningValue === RECOVERY_LOCK_VALUE) {
-    return reserveExistingRunningLock(redis, runningKey, RECOVERY_LOCK_VALUE);
+  const reservation = selectRunningLockReservation({
+    expectedRequestId,
+    legacyRunningLockValue: LEGACY_RUNNING_LOCK_VALUE,
+    recoveryLockValue: RECOVERY_LOCK_VALUE,
+    requestId,
+    runningValue,
+  });
+  if (reservation.status === "reserve") {
+    return reserveExistingRunningLock(
+      redis,
+      runningKey,
+      reservation.expectedRunningValue,
+    );
   }
-
-  if (runningValue !== "1") {
-    if (runningValue !== expectedRequestId) {
-      return false;
-    }
-
-    return reserveExistingRunningLock(redis, runningKey, runningValue);
+  if (reservation.status === "skip") {
+    return false;
   }
 
   // Legacy locks used "1" as the running value and wrote request-id
@@ -931,11 +942,18 @@ const shouldRecoverWorkflow = async ({
     redis.get(runningKey),
     redis.get(requestIdKey),
   ]);
-  if (settledRunningValue !== "1" || settledRequestId !== expectedRequestId) {
+  if (
+    settledRunningValue !== LEGACY_RUNNING_LOCK_VALUE ||
+    settledRequestId !== expectedRequestId
+  ) {
     return false;
   }
 
-  return reserveExistingRunningLock(redis, runningKey, "1");
+  return reserveExistingRunningLock(
+    redis,
+    runningKey,
+    LEGACY_RUNNING_LOCK_VALUE,
+  );
 };
 
 type RecoverOrphanedWorkflowOptions = {

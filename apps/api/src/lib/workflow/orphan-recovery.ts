@@ -24,6 +24,26 @@ type RecoverableOrphanSelectionInput = OrphanSelectionInput & {
   pendingWorkspaceIds: ReadonlySet<string>;
 };
 
+type CurrentWorkflowRequestStateInput = {
+  currentRequestId: string | null;
+  legacyRunningLockValue: string;
+  requestId: string;
+  runningValue: string | null;
+};
+
+type RunningLockReservationInput = {
+  expectedRequestId: string | null;
+  legacyRunningLockValue: string;
+  recoveryLockValue: string;
+  requestId: string | null;
+  runningValue: string | null;
+};
+
+type RunningLockReservation =
+  | { status: "reserve"; expectedRunningValue: string }
+  | { status: "settle-legacy" }
+  | { status: "skip" };
+
 /**
  * A candidate workspace (one holding a `running` lock or owning `pending`
  * cells) is orphaned when no in-flight queue job belongs to it: the
@@ -86,4 +106,39 @@ export const selectRecoverableOrphanWorkspaceIds = ({
   }
 
   return recoverable;
+};
+
+export const isCurrentWorkflowRequestState = ({
+  currentRequestId,
+  legacyRunningLockValue,
+  requestId,
+  runningValue,
+}: CurrentWorkflowRequestStateInput): boolean =>
+  currentRequestId === requestId &&
+  (runningValue === requestId || runningValue === legacyRunningLockValue);
+
+export const selectRunningLockReservation = ({
+  expectedRequestId,
+  legacyRunningLockValue,
+  recoveryLockValue,
+  requestId,
+  runningValue,
+}: RunningLockReservationInput): RunningLockReservation => {
+  if (runningValue === null || requestId !== expectedRequestId) {
+    return { status: "skip" };
+  }
+
+  if (runningValue === recoveryLockValue) {
+    return { status: "reserve", expectedRunningValue: recoveryLockValue };
+  }
+
+  if (runningValue === legacyRunningLockValue) {
+    return { status: "settle-legacy" };
+  }
+
+  if (expectedRequestId === null || runningValue !== expectedRequestId) {
+    return { status: "skip" };
+  }
+
+  return { status: "reserve", expectedRunningValue: runningValue };
 };
