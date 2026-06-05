@@ -6,7 +6,7 @@ import {
   type CallToolResult,
 } from "@modelcontextprotocol/sdk/types.js";
 import { Result } from "better-result";
-import { and, asc, eq, or, sql } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db";
 import {
@@ -388,41 +388,16 @@ export const refreshCachedMcpToolsForConnection = async ({
         .set({
           cachedTools,
           cachedToolsRefreshedAt: new Date(),
+          // Server-reported metadata, captured with this user's
+          // credentials and kept on their own connection row.
+          serverVersion: server?.version ?? null,
+          instructions: server?.instructions ?? null,
           updatedAt: new Date(),
         })
         .where(eq(mcpUserConnections.id, connectionId));
     });
     if (Result.isError(updated)) {
       captureError(updated.error, { source: "mcp-upstream-cache-refresh" });
-    }
-
-    if (server) {
-      // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-      const updatedConnector = await safeDb((tx) => {
-        // audit: skip — server-reported MCP metadata mirrored from the upstream initialize handshake; not a user-facing config change
-        return tx
-          .update(mcpConnectors)
-          .set({
-            serverVersion: server.version,
-            instructions: server.instructions,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(mcpConnectors.id, row.connectorId),
-              // Skip the write (and updatedAt churn) when nothing changed.
-              or(
-                sql`${mcpConnectors.serverVersion} is distinct from ${server.version}`,
-                sql`${mcpConnectors.instructions} is distinct from ${server.instructions}`,
-              ),
-            ),
-          );
-      });
-      if (Result.isError(updatedConnector)) {
-        captureError(updatedConnector.error, {
-          source: "mcp-upstream-server-metadata",
-        });
-      }
     }
   } catch (error) {
     captureError(error, { source: "mcp-upstream-cache-refresh" });

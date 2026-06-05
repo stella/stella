@@ -9,7 +9,11 @@ import {
   type LoadedCatalogueEntry,
 } from "@stll/catalogue";
 
-import { agentSkills, mcpConnectors } from "@/api/db/schema";
+import {
+  agentSkills,
+  mcpConnectors,
+  mcpUserConnections,
+} from "@/api/db/schema";
 import {
   computeCatalogueInstallState,
   type CatalogueInstallState,
@@ -212,11 +216,21 @@ const listCatalogue = createSafeRootHandler(
             documentationUrl: mcpConnectors.documentationUrl,
             tokenHelpUrl: mcpConnectors.tokenHelpUrl,
             iconUrl: mcpConnectors.iconUrl,
-            instructions: mcpConnectors.instructions,
-            serverVersion: mcpConnectors.serverVersion,
             oauthIssuer: mcpConnectors.oauthIssuer,
+            // Server-reported metadata is per-user; read the caller's own
+            // connection so one member's account-specific text never leaks
+            // to another.
+            instructions: mcpUserConnections.instructions,
+            serverVersion: mcpUserConnections.serverVersion,
           })
           .from(mcpConnectors)
+          .leftJoin(
+            mcpUserConnections,
+            and(
+              eq(mcpUserConnections.connectorId, mcpConnectors.id),
+              eq(mcpUserConnections.userId, user.id),
+            ),
+          )
           .where(
             and(
               eq(mcpConnectors.organizationId, session.activeOrganizationId),
@@ -396,14 +410,14 @@ const appendCustomMcpEntries = ({
  * Vendor shown as the "author" of a custom MCP connector: the OAuth
  * issuer host for oauth2 servers, otherwise the server URL host. Both
  * the connector URL (normalized at create) and the issuer (an OAuth
- * metadata URL) are absolute, so `URL.parse` returns null only for
- * genuinely malformed data, where we fall back to the raw string.
+ * metadata URL) are absolute, so parsing fails only for genuinely
+ * malformed data, where we fall back to the raw string.
  */
 const connectorVendor = (
   connector: OrgCustomMcpRow,
 ): { label: string; url: string | undefined } => {
   const source = connector.oauthIssuer ?? connector.url;
-  const parsed = URL.parse(source);
+  const parsed = Result.try(() => new URL(source)).unwrapOr(null);
   if (!parsed) {
     return { label: source, url: undefined };
   }

@@ -3003,13 +3003,9 @@ export const mcpConnectors = p.pgTable(
     documentationUrl: p.text("documentation_url"),
     tokenHelpUrl: p.text("token_help_url"),
     iconUrl: p.text("icon_url"),
-    // Metadata the server itself reports during the MCP `initialize`
-    // handshake. Captured when we open an authenticated client; null
-    // until the first successful connect.
-    serverVersion: p.text("server_version"),
-    instructions: p.text(),
     // OAuth authorization-server issuer, captured at create time for
-    // oauth2 connectors. Surfaced as the connector's vendor.
+    // oauth2 connectors. Surfaced as the connector's vendor. Server-level
+    // and identical for every member, so it lives on the shared row.
     oauthIssuer: p.text("oauth_issuer"),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
     updatedAt: p
@@ -3111,6 +3107,11 @@ export const mcpUserConnections = p.pgTable(
     cachedTools:
       jsonb("cached_tools").$type<CachedMcpToolDefinition[] | null>(),
     cachedToolsRefreshedAt: p.timestamp("cached_tools_refreshed_at"),
+    // Metadata the server reports during the MCP `initialize` handshake,
+    // captured with this user's credentials. Stored per-connection (not on
+    // the shared connector) since a server may personalise it per account.
+    serverVersion: p.text("server_version"),
+    instructions: p.text(),
     status: p
       .text("status", { enum: MCP_CONNECTION_STATUSES })
       .notNull()

@@ -242,13 +242,18 @@ const ExpandableText = ({ text }: { text: string }) => {
   }, [text]);
 
   // Measure only while clamped, so overflow is detected against the
-  // line-clamp height rather than the fully expanded text.
+  // line-clamp height. A ResizeObserver keeps it correct across font
+  // loads, panel animation, and width changes.
   useEffect(() => {
     const el = ref.current;
     if (expanded || !el) {
       return;
     }
-    setOverflowing(el.scrollHeight > el.clientHeight + 1);
+    const observer = new ResizeObserver(() => {
+      setOverflowing(el.scrollHeight > el.clientHeight + 1);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [text, expanded]);
 
   return (
