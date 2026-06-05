@@ -403,6 +403,59 @@ describe("measureBlocks floating text-box bands", () => {
       expect(skip + beforeMeasure.totalHeight).toBeCloseTo(56, 5);
     });
   });
+
+  test("two bands sharing a topY each anchor to their own text box", () => {
+    withFakeTextMeasure(() => {
+      // Both bands are margin-pinned at offset 0 (same topY), but they pin to
+      // different text boxes. The second band must not be regrouped onto the
+      // first band's anchor, or `mid` (between them) would reserve the taller
+      // second band that is painted later. eigenpal #694.
+      const bandA: TextBoxBlock = {
+        kind: "textBox",
+        id: "band-a",
+        width: 300,
+        height: 60,
+        content: [],
+        wrapType: "topAndBottom",
+        position: { vertical: { relativeTo: "margin", posOffset: 0 } },
+      };
+      const mid: ParagraphBlock = {
+        kind: "paragraph",
+        id: "mid",
+        runs: [{ kind: "text", text: "mid" }],
+      };
+      const bandB: TextBoxBlock = {
+        kind: "textBox",
+        id: "band-b",
+        width: 300,
+        height: 200,
+        content: [],
+        wrapType: "topAndBottom",
+        position: { vertical: { relativeTo: "margin", posOffset: 0 } },
+      };
+      const after: ParagraphBlock = {
+        kind: "paragraph",
+        id: "after",
+        runs: [{ kind: "text", text: "after" }],
+      };
+
+      const measures = measureBlocks([bandA, mid, bandB, after], 500, 96);
+      const midMeasure = measures.at(1);
+      const afterMeasure = measures.at(3);
+
+      if (
+        midMeasure?.kind !== "paragraph" ||
+        afterMeasure?.kind !== "paragraph"
+      ) {
+        throw new Error("Expected paragraph measures around the bands");
+      }
+      // `mid` clears only the first band (60), not the second band's 200; the
+      // bug regrouped both onto bandA's anchor and reserved ~200 here.
+      expect(midMeasure.lines.at(0)?.floatSkipBefore).toBeCloseTo(60, 5);
+      // The second band still reserves space at its own anchor.
+      expect(afterMeasure.lines.at(0)?.floatSkipBefore ?? 0).toBeGreaterThan(0);
+    });
+  });
 });
 
 describe("measureTableBlock", () => {

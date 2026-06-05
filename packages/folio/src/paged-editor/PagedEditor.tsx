@@ -2406,11 +2406,15 @@ export function measureBlocks(
   // anchor so text wraps around ALL images from the first paragraph onward.
   // e.g. left-aligned and right-aligned images at margin top should both affect text
   // starting from the first anchor paragraph, not just the one containing each image.
+  // Full-width topAndBottom bands are excluded: each pins to its own text box, so a
+  // second band sharing the same topY (e.g. body banners in different sections) must
+  // not be rewritten to the earliest anchor, or earlier pages would reserve a band
+  // that is painted elsewhere. They keep their own anchor below. eigenpal #694.
   const marginRelative = floatingZonesWithAnchors.filter(
-    (z) => z.isMarginRelative,
+    (z) => z.isMarginRelative && !z.fullWidthBlock,
   );
-  const paragraphRelative = floatingZonesWithAnchors.filter(
-    (z) => !z.isMarginRelative,
+  const ownAnchorZones = floatingZonesWithAnchors.filter(
+    (z) => !z.isMarginRelative || z.fullWidthBlock,
   );
 
   // Group margin-relative zones by topY and move all to earliest anchor in group
@@ -2421,7 +2425,7 @@ export function measureBlocks(
     marginByTopY.set(z.topY, group);
   }
 
-  const adjustedZones: FloatingZoneWithAnchor[] = [...paragraphRelative];
+  const adjustedZones: FloatingZoneWithAnchor[] = [...ownAnchorZones];
   for (const group of marginByTopY.values()) {
     const minAnchor = Math.min(...group.map((z) => z.anchorBlockIndex));
     for (const z of group) {
