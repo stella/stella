@@ -8,8 +8,8 @@ import { TOAST_RIGHT_OFFSET_VAR } from "@stll/ui/components/toast";
 import { useInspectorStore } from "@/components/inspector/inspector-store";
 import type { InspectorTab } from "@/components/inspector/inspector-store";
 import {
+  SIDE_RAIL_CONTAINER_CLASS,
   SIDE_RAIL_ICON_BUTTON_SIZE,
-  SIDE_RAIL_WIDTH,
   TOOLBAR_ROW_HEIGHT,
 } from "@/lib/consts";
 
@@ -27,9 +27,7 @@ const LazyInspectorPanel = lazy(
 // real panel mounts.
 const InspectorRailFallback = () => (
   <div className="bg-background flex h-full border-s shadow-lg">
-    <div
-      className={`bg-muted/50 flex shrink-0 flex-col border-e ${SIDE_RAIL_WIDTH}`}
-    >
+    <div className={SIDE_RAIL_CONTAINER_CLASS}>
       <div
         aria-hidden="true"
         className={`text-muted-foreground flex w-full shrink-0 items-center justify-center border-b ${TOOLBAR_ROW_HEIGHT}`}
