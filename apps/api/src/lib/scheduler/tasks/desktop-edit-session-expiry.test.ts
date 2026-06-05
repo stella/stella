@@ -1,9 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import { buildExpiryAuditEvents } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry-audit";
+import {
+  buildExpiryAuditEvents,
+  selectTransitionedExpirableSessions,
+} from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry-audit";
 import {
   publishDesktopEditSessionExpiryNotifications,
+  publishDesktopEditSessionExpiryNotificationsWithRetry,
   type ExpiredDesktopEditSessionNotification,
 } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry-notifications";
 import type { SSEEvent } from "@/api/lib/sse-broadcast";
@@ -18,6 +22,17 @@ const session = (id: string, createdBy: string) => ({
 });
 
 describe("buildExpiryAuditEvents", () => {
+  test("selects only sessions the guarded UPDATE transitioned", () => {
+    const first = session("s1", "user-1");
+    const second = session("s2", "user-2");
+    const third = session("s3", "user-3");
+    const sessions = [first, second, third];
+
+    expect(
+      selectTransitionedExpirableSessions(sessions, new Set(["s1", "s3"])),
+    ).toEqual([first, third]);
+  });
+
   test("audits only sessions the UPDATE actually transitioned", () => {
     const sessions = [
       session("s1", "user-1"),
@@ -144,5 +159,71 @@ describe("publishDesktopEditSessionExpiryNotifications", () => {
         expect(error.message).toBe("publish failed");
       },
     );
+  });
+
+  test("retries transient publish failures immediately", async () => {
+    const retryDelays: number[] = [];
+    let closeEventAttempts = 0;
+
+    await publishDesktopEditSessionExpiryNotificationsWithRetry({
+      publisher: {
+        publishSessionEvent: async (_sessionId, event) => {
+          if (event.type !== "session-closed") {
+            return;
+          }
+
+          closeEventAttempts += 1;
+          if (closeEventAttempts === 1) {
+            throw new Error("publish failed");
+          }
+        },
+        publishWorkspaceEvent: async () => {},
+      },
+      retryDelaysMs: [250],
+      sessions: [notificationSession("session-1", "workspace-1")],
+      sleep: async (delayMs) => {
+        retryDelays.push(delayMs);
+      },
+    });
+
+    expect(closeEventAttempts).toBe(2);
+    expect(retryDelays).toEqual([250]);
+  });
+
+  test("propagates after retry delays are exhausted", async () => {
+    const retryDelays: number[] = [];
+    let closeEventAttempts = 0;
+
+    await publishDesktopEditSessionExpiryNotificationsWithRetry({
+      publisher: {
+        publishSessionEvent: async (_sessionId, event) => {
+          if (event.type !== "session-closed") {
+            return;
+          }
+
+          closeEventAttempts += 1;
+          throw new Error("publish failed");
+        },
+        publishWorkspaceEvent: async () => {},
+      },
+      retryDelaysMs: [250, 500],
+      sessions: [notificationSession("session-1", "workspace-1")],
+      sleep: async (delayMs) => {
+        retryDelays.push(delayMs);
+      },
+    }).then(
+      () => {
+        throw new Error("Expected publish to fail");
+      },
+      (error: unknown) => {
+        if (!(error instanceof Error)) {
+          throw new Error("Expected publish to reject with an Error");
+        }
+        expect(error.message).toBe("publish failed");
+      },
+    );
+
+    expect(closeEventAttempts).toBe(3);
+    expect(retryDelays).toEqual([250, 500]);
   });
 });

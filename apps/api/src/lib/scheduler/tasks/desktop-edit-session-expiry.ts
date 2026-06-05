@@ -3,10 +3,13 @@ import { and, asc, eq, inArray, isNull, lt } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import { auditLogs, desktopEditSessions, workspaces } from "@/api/db/schema";
-import { buildExpiryAuditEvents } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry-audit";
+import {
+  buildExpiryAuditEvents,
+  selectTransitionedExpirableSessions,
+} from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry-audit";
 import {
   type ExpiredDesktopEditSessionNotification,
-  publishDesktopEditSessionExpiryNotifications,
+  publishDesktopEditSessionExpiryNotificationsWithRetry,
 } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry-notifications";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 import {
@@ -82,12 +85,6 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
     }
 
     const batchIds = batch.map((session) => session.id);
-    const notificationPublishedAt = new Date();
-
-    await publishDesktopEditSessionExpiryNotifications({
-      publisher: { publishSessionEvent, publishWorkspaceEvent },
-      sessions: batch,
-    });
 
     const expiredSessions = await rootDb.transaction(async (tx) => {
       const transitioned = await tx
@@ -95,7 +92,6 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
         .set({
           status: "expired",
           closedAt: now,
-          expiryNotificationPublishedAt: notificationPublishedAt,
         })
         .where(
           and(
@@ -116,10 +112,11 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
         await tx.insert(auditLogs).values(auditEvents);
       }
 
-      return batch.filter((session) => expiredIds.has(session.id));
+      return selectTransitionedExpirableSessions(batch, expiredIds);
     });
 
     expired += expiredSessions.length;
+    await publishAndMarkExpiryNotifications(expiredSessions);
 
     if (batch.length < EXPIRE_SWEEP_BATCH_SIZE) {
       break;
@@ -142,7 +139,7 @@ const publishAndMarkExpiryNotifications = async (
     return;
   }
 
-  await publishDesktopEditSessionExpiryNotifications({
+  await publishDesktopEditSessionExpiryNotificationsWithRetry({
     publisher: { publishSessionEvent, publishWorkspaceEvent },
     sessions,
   });

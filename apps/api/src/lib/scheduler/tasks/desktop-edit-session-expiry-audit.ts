@@ -19,6 +19,13 @@ export type ExpiryAuditEvent = {
   metadata: { reason: "token_expired" };
 };
 
+export const selectTransitionedExpirableSessions = <
+  TSession extends { id: string },
+>(
+  sessions: readonly TSession[],
+  transitionedIds: ReadonlySet<string>,
+): TSession[] => sessions.filter((session) => transitionedIds.has(session.id));
+
 /**
  * A row selected as expirable can drop out before the UPDATE commits: a
  * concurrent finalize or takeover leaves "open", or a checkpoint/resume
@@ -29,15 +36,13 @@ export const buildExpiryAuditEvents = (
   sessions: readonly ExpirableSession[],
   expiredIds: ReadonlySet<string>,
 ): ExpiryAuditEvent[] =>
-  sessions
-    .filter((session) => expiredIds.has(session.id))
-    .map((session) => ({
-      organizationId: session.organizationId,
-      workspaceId: session.workspaceId,
-      userId: session.createdBy,
-      action: AUDIT_ACTION.UPDATE,
-      resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
-      resourceId: session.id,
-      changes: { status: { old: "open", new: "expired" } },
-      metadata: { reason: "token_expired" },
-    }));
+  selectTransitionedExpirableSessions(sessions, expiredIds).map((session) => ({
+    organizationId: session.organizationId,
+    workspaceId: session.workspaceId,
+    userId: session.createdBy,
+    action: AUDIT_ACTION.UPDATE,
+    resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
+    resourceId: session.id,
+    changes: { status: { old: "open", new: "expired" } },
+    metadata: { reason: "token_expired" },
+  }));

@@ -21,6 +21,8 @@ export type DesktopEditSessionExpiryNotificationPublisher = {
   ) => Promise<void>;
 };
 
+const EXPIRY_NOTIFICATION_RETRY_DELAYS_MS = [1000, 3000, 10_000] as const;
+
 export const publishDesktopEditSessionExpiryNotifications = async ({
   publisher,
   sessions,
@@ -50,4 +52,33 @@ export const publishDesktopEditSessionExpiryNotifications = async ({
   }
 
   await Promise.all([...sessionNotifications, ...workspaceNotifications]);
+};
+
+export const publishDesktopEditSessionExpiryNotificationsWithRetry = async ({
+  publisher,
+  sessions,
+  retryDelaysMs = EXPIRY_NOTIFICATION_RETRY_DELAYS_MS,
+  sleep = Bun.sleep,
+}: {
+  publisher: DesktopEditSessionExpiryNotificationPublisher;
+  sessions: ExpiredDesktopEditSessionNotification[];
+  retryDelaysMs?: readonly number[];
+  sleep?: (delayMs: number) => Promise<void>;
+}): Promise<void> => {
+  for (const retryDelayMs of retryDelaysMs) {
+    try {
+      await publishDesktopEditSessionExpiryNotifications({
+        publisher,
+        sessions,
+      });
+      return;
+    } catch {
+      await sleep(retryDelayMs);
+    }
+  }
+
+  await publishDesktopEditSessionExpiryNotifications({
+    publisher,
+    sessions,
+  });
 };
