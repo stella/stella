@@ -456,6 +456,138 @@ describe("measureBlocks floating text-box bands", () => {
       expect(afterMeasure.lines.at(0)?.floatSkipBefore ?? 0).toBeGreaterThan(0);
     });
   });
+
+  test("a hard page break before the band restarts the page frame", () => {
+    withFakeTextMeasure(() => {
+      // `before` fills the prior page past the band height, but a page break
+      // resets the cursor: layout paints the band at the new page top, so the
+      // measure pass must reserve the full band again from Y 0 — otherwise the
+      // band's prior-page Y skips the reservation and body text overlaps it.
+      // eigenpal #694.
+      const before: ParagraphBlock = {
+        kind: "paragraph",
+        id: "before",
+        runs: [{ kind: "text", text: "tall ".repeat(400).trim() }],
+      };
+      const pageBreak: FlowBlock = { kind: "pageBreak", id: "pb" };
+      const band: TextBoxBlock = {
+        kind: "textBox",
+        id: "band",
+        width: 300,
+        height: 60,
+        content: [],
+        wrapType: "topAndBottom",
+        position: { vertical: { relativeTo: "margin", posOffset: 0 } },
+      };
+      const after: ParagraphBlock = {
+        kind: "paragraph",
+        id: "after",
+        runs: [{ kind: "text", text: "after" }],
+      };
+
+      const measures = measureBlocks([before, pageBreak, band, after], 200, 96);
+      const beforeMeasure = measures.at(0);
+      const afterMeasure = measures.at(3);
+
+      if (
+        beforeMeasure?.kind !== "paragraph" ||
+        afterMeasure?.kind !== "paragraph"
+      ) {
+        throw new Error("Expected paragraph measures around the band");
+      }
+      expect(beforeMeasure.totalHeight).toBeGreaterThan(60);
+      // Full band reserved from the fresh page top despite the tall prior page.
+      expect(afterMeasure.lines.at(0)?.floatSkipBefore ?? 0).toBeCloseTo(60, 5);
+    });
+  });
+
+  test("a next-page section break before the band restarts the page frame", () => {
+    withFakeTextMeasure(() => {
+      const before: ParagraphBlock = {
+        kind: "paragraph",
+        id: "before",
+        runs: [{ kind: "text", text: "tall ".repeat(400).trim() }],
+      };
+      const sectionBreak: FlowBlock = {
+        kind: "sectionBreak",
+        id: "sb",
+        type: "nextPage",
+      };
+      const band: TextBoxBlock = {
+        kind: "textBox",
+        id: "band",
+        width: 300,
+        height: 60,
+        content: [],
+        wrapType: "topAndBottom",
+        position: { vertical: { relativeTo: "margin", posOffset: 0 } },
+      };
+      const after: ParagraphBlock = {
+        kind: "paragraph",
+        id: "after",
+        runs: [{ kind: "text", text: "after" }],
+      };
+
+      const measures = measureBlocks(
+        [before, sectionBreak, band, after],
+        200,
+        96,
+      );
+      const afterMeasure = measures.at(3);
+      if (afterMeasure?.kind !== "paragraph") {
+        throw new Error("Expected paragraph measure after the band");
+      }
+      expect(afterMeasure.lines.at(0)?.floatSkipBefore ?? 0).toBeCloseTo(60, 5);
+    });
+  });
+
+  test("a continuous section break does not restart the page frame", () => {
+    withFakeTextMeasure(() => {
+      // A continuous break stays on the same page, so the tall `before` still
+      // sits above the band: the cursor is already past it and `after` gets no
+      // skip, exactly as with no break. Guards `isNextPageSectionBreak`.
+      const before: ParagraphBlock = {
+        kind: "paragraph",
+        id: "before",
+        runs: [{ kind: "text", text: "tall ".repeat(400).trim() }],
+      };
+      const sectionBreak: FlowBlock = {
+        kind: "sectionBreak",
+        id: "sb",
+        type: "continuous",
+      };
+      const band: TextBoxBlock = {
+        kind: "textBox",
+        id: "band",
+        width: 300,
+        height: 60,
+        content: [],
+        wrapType: "topAndBottom",
+        position: { vertical: { relativeTo: "margin", posOffset: 0 } },
+      };
+      const after: ParagraphBlock = {
+        kind: "paragraph",
+        id: "after",
+        runs: [{ kind: "text", text: "after" }],
+      };
+
+      const measures = measureBlocks(
+        [before, sectionBreak, band, after],
+        200,
+        96,
+      );
+      const beforeMeasure = measures.at(0);
+      const afterMeasure = measures.at(3);
+      if (
+        beforeMeasure?.kind !== "paragraph" ||
+        afterMeasure?.kind !== "paragraph"
+      ) {
+        throw new Error("Expected paragraph measures around the band");
+      }
+      expect(beforeMeasure.totalHeight).toBeGreaterThan(60);
+      expect(afterMeasure.lines.at(0)?.floatSkipBefore ?? 0).toBe(0);
+    });
+  });
 });
 
 describe("measureTableBlock", () => {
