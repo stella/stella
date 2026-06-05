@@ -7,6 +7,8 @@ import type {
   ParagraphMeasure,
   TableBlock,
   TableMeasure,
+  TextBoxBlock,
+  TextBoxMeasure,
 } from "../layout-engine/types";
 import type { BlockLookup } from "./index";
 import {
@@ -22,6 +24,18 @@ class FakeElement {
   dataset: Record<string, string> = {};
   style: Record<string, string> = {};
   children: FakeElement[] = [];
+  parent: FakeElement | undefined;
+  readonly classList = {
+    add: (...classNames: string[]) => {
+      const current = this.className.split(" ").filter(Boolean);
+      for (const className of classNames) {
+        if (!current.includes(className)) {
+          current.push(className);
+        }
+      }
+      this.className = current.join(" ");
+    },
+  };
   private ownText = "";
   readonly tagName: string;
 
@@ -41,20 +55,103 @@ class FakeElement {
   }
 
   append(...children: FakeElement[]): void {
-    this.children.push(...children);
+    for (const child of children) {
+      this.addChild(child);
+    }
   }
 
   appendChild(child: FakeElement): FakeElement {
-    this.children.push(child);
+    this.addChild(child);
     return child;
+  }
+
+  prepend(...children: FakeElement[]): void {
+    for (let index = children.length - 1; index >= 0; index -= 1) {
+      const child = children[index];
+      if (!child) {
+        continue;
+      }
+      child.removeFromParent();
+      child.parent = this;
+      this.children.unshift(child);
+    }
   }
 
   getContext(): null {
     return null;
   }
 
-  querySelectorAll(): FakeElement[] {
-    return [];
+  querySelectorAll<T = FakeElement>(selector: string): T[] {
+    const selectors = selector.split(",").map((value) => value.trim());
+    const matches: FakeElement[] = [];
+    for (const child of this.children) {
+      matches.push(...child.querySelectorAllMatching(selectors));
+    }
+    return matches as T[];
+  }
+
+  querySelector(selector: string): FakeElement | null {
+    if (selector.startsWith(".")) {
+      return findByClass(this, selector.slice(1)) ?? null;
+    }
+    if (this.tagName.toLowerCase() === selector.toLowerCase()) {
+      return this;
+    }
+    for (const child of this.children) {
+      const match = child.querySelector(selector);
+      if (match) {
+        return match;
+      }
+    }
+    return null;
+  }
+
+  private querySelectorAllMatching(selectors: string[]): FakeElement[] {
+    const matches = selectors.some((selector) => this.matches(selector))
+      ? [this]
+      : [];
+    for (const child of this.children) {
+      matches.push(...child.querySelectorAllMatching(selectors));
+    }
+    return matches;
+  }
+
+  private matches(selector: string): boolean {
+    if (selector === 'img[style*="z-index"]') {
+      return (
+        this.tagName.toLowerCase() === "img" &&
+        this.style.zIndex !== undefined &&
+        this.style.zIndex !== ""
+      );
+    }
+    if (selector === '.layout-textbox[style*="z-index"]') {
+      return (
+        this.className.split(" ").includes("layout-textbox") &&
+        this.style.zIndex !== undefined &&
+        this.style.zIndex !== ""
+      );
+    }
+    if (selector.startsWith(".")) {
+      return this.className.split(" ").includes(selector.slice(1));
+    }
+    return this.tagName.toLowerCase() === selector.toLowerCase();
+  }
+
+  private removeFromParent(): void {
+    if (!this.parent) {
+      return;
+    }
+    const index = this.parent.children.indexOf(this);
+    if (index !== -1) {
+      this.parent.children.splice(index, 1);
+    }
+    this.parent = undefined;
+  }
+
+  private addChild(child: FakeElement): void {
+    child.removeFromParent();
+    child.parent = this;
+    this.children.push(child);
   }
 }
 
@@ -98,6 +195,21 @@ function findByClass(
   }
 
   return undefined;
+}
+
+function collectByClass(
+  element: FakeElement,
+  className: string,
+): FakeElement[] {
+  const matches = element.className.split(" ").includes(className)
+    ? [element]
+    : [];
+
+  for (const child of element.children) {
+    matches.push(...collectByClass(child, className));
+  }
+
+  return matches;
 }
 
 const page: Page = {
@@ -172,6 +284,10 @@ function headerFooterTextContent(text: string): HeaderFooterContent {
     measures: [measure],
     height: 12,
   };
+}
+
+function textBoxMeasure(width: number, height: number): TextBoxMeasure {
+  return { kind: "textBox", width, height, innerMeasures: [] };
 }
 
 describe("render page fingerprint", () => {
@@ -266,6 +382,98 @@ describe("header and footer rendering", () => {
     expect(pageOptions).toEqual({
       footerContent: headerFooterTextContent("Default footer"),
     });
+  });
+
+  test("keeps top-and-bottom text boxes in header flow", () => {
+    const textBoxBlock: TextBoxBlock = {
+      kind: "textBox",
+      id: "hf-box",
+      width: 160,
+      height: 40,
+      displayMode: "block",
+      wrapType: "topAndBottom",
+      content: [],
+    };
+    const afterBlock: ParagraphBlock = {
+      kind: "paragraph",
+      id: "hf-after",
+      runs: [{ kind: "text", text: "After box" }],
+    };
+
+    const pageElement = renderPage(
+      { ...page, fragments: [] },
+      { pageNumber: 1, totalPages: 1, section: "body" },
+      {
+        document: fakeDocument,
+        headerContent: {
+          blocks: [textBoxBlock, afterBlock],
+          measures: [
+            textBoxMeasure(textBoxBlock.width, textBoxBlock.height),
+            {
+              kind: "paragraph",
+              lines: [],
+              totalHeight: 12,
+            },
+          ],
+          height: 52,
+        },
+      },
+    );
+
+    const paragraphs = collectByClass(
+      pageElement as unknown as FakeElement,
+      "layout-paragraph",
+    );
+    const afterParagraph = paragraphs.find(
+      (element) => element.dataset["blockId"] === "hf-after",
+    );
+
+    expect(afterParagraph?.style.top).toBe("40px");
+  });
+
+  test("preserves footer content offset when moving behind images to the page layer", () => {
+    const footerNaturalTop = page.size.h - 48;
+    const footerImageBlock: ParagraphBlock = {
+      kind: "paragraph",
+      id: "footer-background",
+      runs: [
+        {
+          kind: "image",
+          src: "footer-bg.png",
+          width: 160,
+          height: 40,
+          wrapType: "behind",
+          position: {
+            vertical: { relativeTo: "page", posOffset: 0 },
+          },
+        },
+      ],
+    };
+
+    const pageElement = renderPage(
+      { ...page, fragments: [] },
+      { pageNumber: 1, totalPages: 1, section: "body" },
+      {
+        document: fakeDocument,
+        footerContent: {
+          rId: "rIdFooter",
+          blocks: [footerImageBlock],
+          measures: [{ kind: "paragraph", lines: [], totalHeight: 0 }],
+          height: 0,
+          visualTop: -footerNaturalTop,
+          visualBottom: -footerNaturalTop + 40,
+        },
+      },
+    );
+
+    const image = (pageElement as unknown as FakeElement).querySelector("img");
+
+    expect(image?.parent).toBe(pageElement);
+    expect(image?.style.top).toBe("0px");
+    expect(image?.style.left).toBe("72px");
+    expect(image?.style.zIndex).toBe("0");
+    expect(image?.dataset["hfSlotKind"]).toBe("footer");
+    expect(image?.dataset["hfRid"]).toBe("rIdFooter");
   });
 });
 

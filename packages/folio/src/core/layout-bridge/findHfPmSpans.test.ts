@@ -17,6 +17,18 @@ const footerSpan = {
   dataset: { pmStart: "11", pmEnd: "14" },
   textContent: "footer",
 };
+const associatedSpan = {
+  dataset: { pmStart: "21", pmEnd: "24" },
+  textContent: "moved",
+};
+const associatedImage = {
+  dataset: {
+    hfSlotKind: "header",
+    hfRid: "rIdH1",
+    pmStart: "31",
+    pmEnd: "32",
+  },
+};
 
 const createContainer = (): ParentNode =>
   ({
@@ -71,6 +83,60 @@ describe("HF slot-scoped PM DOM lookups", () => {
     expect(
       findHfPmAnchor(createContainer(), "header", "rIdH1", Number.NaN),
     ).toBeNull();
+  });
+
+  test("includes spans moved to the page layer with HF slot metadata", () => {
+    const container = {
+      querySelectorAll(selector: string) {
+        if (
+          selector ===
+          '[data-hf-slot-kind="header"][data-hf-rid="rIdH1"] span[data-pm-start][data-pm-end]'
+        ) {
+          return [associatedSpan];
+        }
+        return [];
+      },
+    } as unknown as ParentNode;
+
+    const spans = findHfPmSpans(container, "header", "rIdH1");
+
+    expect(spans).toEqual([associatedSpan]);
+  });
+
+  test("includes moved HF roots as PM anchors", () => {
+    const container = {
+      querySelectorAll(selector: string) {
+        if (
+          selector ===
+          '[data-hf-slot-kind="header"][data-hf-rid="rIdH1"][data-pm-start]'
+        ) {
+          return [associatedImage];
+        }
+        return [];
+      },
+    } as unknown as ParentNode;
+
+    const anchors = findHfPmAnchors(container, "header", "rIdH1");
+
+    expect(anchors).toEqual([associatedImage]);
+  });
+
+  test("findHfPmAnchor resolves a moved HF root by pm-start", () => {
+    const container = {
+      querySelector(selector: string) {
+        if (
+          selector ===
+          '[data-hf-slot-kind="header"][data-hf-rid="rIdH1"][data-pm-start="31"]'
+        ) {
+          return associatedImage;
+        }
+        return null;
+      },
+    } as unknown as ParentNode;
+
+    const anchor = findHfPmAnchor(container, "header", "rIdH1", 31);
+
+    expect(anchor).toBe(associatedImage as unknown as HTMLElement);
   });
 });
 
@@ -204,6 +270,28 @@ describe("findHfSlotForTarget", () => {
       kind: "footer",
       rId: "rIdFooter",
       element: footerEl,
+    });
+  });
+
+  test("resolves a moved page-layer HF element by associated slot metadata", () => {
+    const associatedEl = {
+      dataset: { hfSlotKind: "footer", hfRid: "rIdFooter" },
+    } as unknown as HTMLElement;
+    const target = {
+      closest(selector: string) {
+        if (selector === "[data-hf-slot-kind][data-hf-rid]") {
+          return associatedEl;
+        }
+        return null;
+      },
+    } as unknown as Element;
+
+    const slot = findHfSlotForTarget(target);
+
+    expect(slot).toEqual({
+      kind: "footer",
+      rId: "rIdFooter",
+      element: associatedEl,
     });
   });
 
