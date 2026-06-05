@@ -9,8 +9,14 @@
  */
 
 import { getHeaderRowsHeight } from "../layout-engine/index";
+import { measureParagraph } from "../layout-engine/measure";
 import { measureRun } from "../layout-engine/measure/measureContainer";
 import type { FontStyle } from "../layout-engine/measure/measureContainer";
+import {
+  buildTableCellFloatingZones,
+  getTableCellContentWidth,
+  getTableCellFloatingImages,
+} from "../layout-engine/measure/tableCellFloating";
 import type {
   Layout,
   FlowBlock,
@@ -331,7 +337,7 @@ function charOffsetToX(
 }
 
 /**
- * Calculate cumulative line height before a given line index.
+ * Calculate the rendered top of a line, including float-driven vertical skips.
  */
 function lineHeightBefore(
   measure: ParagraphMeasure,
@@ -340,8 +346,10 @@ function lineHeightBefore(
   let height = 0;
   for (let i = 0; i < lineIndex && i < measure.lines.length; i++) {
     // SAFETY: i < measure.lines.length in for loop
-    height += measure.lines[i]!.lineHeight;
+    const line = measure.lines[i]!;
+    height += (line.floatSkipBefore ?? 0) + line.lineHeight;
   }
+  height += measure.lines[lineIndex]?.floatSkipBefore ?? 0;
   return height;
 }
 
@@ -544,6 +552,16 @@ export function selectionToRects(
             if (!cell || !cellMeasure) {
               continue;
             }
+            const contentWidth = getTableCellContentWidth(cell, cellMeasure);
+            const floatingImages = getTableCellFloatingImages(
+              cell,
+              cellMeasure,
+              contentWidth,
+            );
+            const floatingZones = buildTableCellFloatingZones(
+              floatingImages,
+              contentWidth,
+            );
 
             // Check each paragraph in the cell
             let blockY = 0;
@@ -559,7 +577,17 @@ export function selectionToRects(
               }
 
               const paragraphBlock = cellBlock as ParagraphBlock;
-              const paragraphMeasure = cellBlockMeasure as ParagraphMeasure;
+              let paragraphMeasure = cellBlockMeasure as ParagraphMeasure;
+              if (floatingZones.length > 0) {
+                paragraphMeasure = measureParagraph(
+                  paragraphBlock,
+                  contentWidth,
+                  {
+                    floatingZones,
+                    paragraphYOffset: blockY,
+                  },
+                );
+              }
 
               // Find lines that intersect with selection
               const intersectingLines = findLinesInRange(
