@@ -1082,6 +1082,9 @@ export const DESKTOP_EDIT_SESSION_STATUSES = [
   "open",
   "finalized",
   "cancelled",
+  // Set by the scheduler sweep when a session's token TTL lapses while
+  // still "open"; treated as closed everywhere "open" is required.
+  "expired",
 ] as const;
 
 export const FOLIO_COLLAB_SESSION_STATUSES = [

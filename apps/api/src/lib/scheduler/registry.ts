@@ -1,5 +1,9 @@
 import { createBullMqDispatchTask } from "@/api/lib/scheduler/bullmq";
 import {
+  EXPIRE_DESKTOP_EDIT_SESSIONS_TASK,
+  expireDesktopEditSessions,
+} from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
+import {
   INFO_SOUD_SYNC_TRACKED_CASES_TASK,
   syncInfoSoudTrackedCases,
 } from "@/api/lib/scheduler/tasks/infosoud";
@@ -17,4 +21,5 @@ export const createSchedulerTaskRegistry = (): SchedulerTaskRegistry =>
     ["scheduler.noop", noopTask],
     ["scheduler.dispatchBullMq", createBullMqDispatchTask()],
     [INFO_SOUD_SYNC_TRACKED_CASES_TASK, syncInfoSoudTrackedCases],
+    [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK, expireDesktopEditSessions],
   ]);
