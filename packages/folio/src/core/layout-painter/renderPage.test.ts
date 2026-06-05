@@ -24,6 +24,7 @@ class FakeElement {
   dataset: Record<string, string> = {};
   style: Record<string, string> = {};
   children: FakeElement[] = [];
+  parent: FakeElement | undefined;
   private ownText = "";
   readonly tagName: string;
 
@@ -43,20 +44,41 @@ class FakeElement {
   }
 
   append(...children: FakeElement[]): void {
-    this.children.push(...children);
+    for (const child of children) {
+      this.appendChild(child);
+    }
   }
 
   appendChild(child: FakeElement): FakeElement {
+    child.removeFromParent();
+    child.parent = this;
     this.children.push(child);
     return child;
+  }
+
+  prepend(...children: FakeElement[]): void {
+    for (let index = children.length - 1; index >= 0; index -= 1) {
+      const child = children[index];
+      if (!child) {
+        continue;
+      }
+      child.removeFromParent();
+      child.parent = this;
+      this.children.unshift(child);
+    }
   }
 
   getContext(): null {
     return null;
   }
 
-  querySelectorAll(): FakeElement[] {
-    return [];
+  querySelectorAll<T = FakeElement>(selector: string): T[] {
+    const selectors = selector.split(",").map((value) => value.trim());
+    const matches: FakeElement[] = [];
+    for (const child of this.children) {
+      matches.push(...child.querySelectorAllMatching(selectors));
+    }
+    return matches as T[];
   }
 
   querySelector(selector: string): FakeElement | null {
@@ -73,6 +95,48 @@ class FakeElement {
       }
     }
     return null;
+  }
+
+  private querySelectorAllMatching(selectors: string[]): FakeElement[] {
+    const matches = selectors.some((selector) => this.matches(selector))
+      ? [this]
+      : [];
+    for (const child of this.children) {
+      matches.push(...child.querySelectorAllMatching(selectors));
+    }
+    return matches;
+  }
+
+  private matches(selector: string): boolean {
+    if (selector === 'img[style*="z-index"]') {
+      return (
+        this.tagName.toLowerCase() === "img" &&
+        this.style.zIndex !== undefined &&
+        this.style.zIndex !== ""
+      );
+    }
+    if (selector === '.layout-textbox[style*="z-index"]') {
+      return (
+        this.className.split(" ").includes("layout-textbox") &&
+        this.style.zIndex !== undefined &&
+        this.style.zIndex !== ""
+      );
+    }
+    if (selector.startsWith(".")) {
+      return this.className.split(" ").includes(selector.slice(1));
+    }
+    return this.tagName.toLowerCase() === selector.toLowerCase();
+  }
+
+  private removeFromParent(): void {
+    if (!this.parent) {
+      return;
+    }
+    const index = this.parent.children.indexOf(this);
+    if (index >= 0) {
+      this.parent.children.splice(index, 1);
+    }
+    this.parent = undefined;
   }
 }
 
@@ -350,6 +414,48 @@ describe("header and footer rendering", () => {
     );
 
     expect(afterParagraph?.style.top).toBe("40px");
+  });
+
+  test("preserves footer content offset when moving behind images to the page layer", () => {
+    const footerNaturalTop = page.size.h - 48;
+    const footerImageBlock: ParagraphBlock = {
+      kind: "paragraph",
+      id: "footer-background",
+      runs: [
+        {
+          kind: "image",
+          src: "footer-bg.png",
+          width: 160,
+          height: 40,
+          wrapType: "behind",
+          position: {
+            vertical: { relativeTo: "page", posOffset: 0 },
+          },
+        },
+      ],
+    };
+
+    const pageElement = renderPage(
+      { ...page, fragments: [] },
+      { pageNumber: 1, totalPages: 1, section: "body" },
+      {
+        document: fakeDocument,
+        footerContent: {
+          blocks: [footerImageBlock],
+          measures: [{ kind: "paragraph", lines: [], totalHeight: 0 }],
+          height: 0,
+          visualTop: -footerNaturalTop,
+          visualBottom: -footerNaturalTop + 40,
+        },
+      },
+    );
+
+    const image = (pageElement as unknown as FakeElement).querySelector("img");
+
+    expect(image?.parent).toBe(pageElement);
+    expect(image?.style.top).toBe("0px");
+    expect(image?.style.left).toBe("72px");
+    expect(image?.style.zIndex).toBe("0");
   });
 });
 

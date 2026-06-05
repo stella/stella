@@ -2201,7 +2201,7 @@ export function renderPage(
     moveBehindHeaderFooterElementsToPage(
       headerEl,
       pageEl,
-      headerDistance + headerVisualTop,
+      headerDistance,
       page.margins.left,
     );
   }
@@ -2279,7 +2279,7 @@ export function renderPage(
     moveBehindHeaderFooterElementsToPage(
       footerEl,
       pageEl,
-      footerContainerTop,
+      footerNaturalTop,
       page.margins.left,
     );
   }
@@ -2294,13 +2294,15 @@ export function renderPage(
 function moveBehindHeaderFooterElementsToPage(
   slotEl: HTMLElement,
   pageEl: HTMLElement,
-  slotTop: number,
-  slotLeft: number,
+  contentTop: number,
+  contentLeft: number,
 ): void {
   // behindDoc images and behind text boxes (full-page letterhead backgrounds)
   // must live on the page element, not inside the clipped HF container. Move
   // them out so they aren't constrained by HF bounds/overflow and so body
-  // content paints above them.
+  // content paints above them. Descendant positions are relative to the
+  // shifted content wrapper, so add the natural HF flow origin rather than the
+  // outer slot top.
   for (const element of Array.from(
     slotEl.querySelectorAll<HTMLElement>(
       'img[style*="z-index"], .layout-textbox[style*="z-index"]',
@@ -2311,8 +2313,8 @@ function moveBehindHeaderFooterElementsToPage(
     }
     const currentTop = Number.parseFloat(element.style.top) || 0;
     const currentLeft = Number.parseFloat(element.style.left) || 0;
-    element.style.top = `${currentTop + slotTop}px`;
-    element.style.left = `${currentLeft + slotLeft}px`;
+    element.style.top = `${currentTop + contentTop}px`;
+    element.style.left = `${currentLeft + contentLeft}px`;
     // Use z-index 0 instead of -1 so the element sits above the page
     // background but below body text content (which remains later in DOM).
     element.style.zIndex = "0";
