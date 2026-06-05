@@ -99,7 +99,7 @@ describe("selectRecoverableOrphanWorkspaceIds", () => {
     ).toEqual([]);
   });
 
-  test("recovers a bare lock with no request id", () => {
+  test("skips a bare lock with no pending-cell evidence", () => {
     expect(
       selectRecoverableOrphanWorkspaceIds({
         candidateWorkspaceIds: ["a"],
@@ -108,7 +108,7 @@ describe("selectRecoverableOrphanWorkspaceIds", () => {
         liveWorkspaceIds: new Set(),
         pendingWorkspaceIds: new Set(),
       }),
-    ).toEqual(["a"]);
+    ).toEqual([]);
   });
 });
 

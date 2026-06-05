@@ -71,9 +71,10 @@ export const selectOrphanWorkspaceIds = ({
 /**
  * Final recovery gate after the settle window. A candidate is recoverable only
  * when it still has no live job, its request id did not change during the
- * window, and it is either tied to pending cells or has no request id at all.
- * The last condition avoids reclaiming a healthy workflow that is still
- * planning before its first queue job exists.
+ * window, and it is tied to pending cells. The pending-cell requirement avoids
+ * reclaiming a healthy workflow that is still planning before its first queue
+ * job exists, including legacy starters that set the running lock before the
+ * request id.
  */
 export const selectRecoverableOrphanWorkspaceIds = ({
   candidateWorkspaceIds,
@@ -96,8 +97,7 @@ export const selectRecoverableOrphanWorkspaceIds = ({
       continue;
     }
 
-    const hasPendingCells = pendingWorkspaceIds.has(workspaceId);
-    if (!hasPendingCells && currentRequestId !== null) {
+    if (!pendingWorkspaceIds.has(workspaceId)) {
       continue;
     }
 
