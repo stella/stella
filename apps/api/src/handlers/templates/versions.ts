@@ -5,7 +5,7 @@ import type { ScopedDb } from "@/api/db";
 import { templateVersions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
-import { presignDownloadUrl } from "@/api/lib/s3";
+import { presignDownloadUrl } from "@/api/lib/s3-presign";
 
 /** Presigned download URLs expire after 15 minutes, matching every
  *  other read path (`templates/get.ts`, `files/read-by-id.ts`). */
@@ -117,9 +117,10 @@ export const getTemplateVersionHandler = async ({
     });
   }
 
-  const downloadUrl = presignDownloadUrl(version.s3Key, {
+  const downloadUrl = await presignDownloadUrl(version.s3Key, {
     expiresIn: PRESIGN_EXPIRES_IN,
     fileName: template.fileName,
+    scope: { organizationId },
   });
 
   return {

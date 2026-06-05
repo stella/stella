@@ -233,7 +233,7 @@ const buildExistingOpenDesktopEditSessionResponse = async ({
   if (existingSession.checkpointUpdatedAt) {
     return {
       baseVersionNumber: baseVersion.versionNumber,
-      downloadUrl: presignDocxDownloadFromFileId({
+      downloadUrl: await presignDocxDownloadFromFileId({
         fileId: existingSession.checkpointFileId,
         fileName: existingSession.fileName,
         organizationId,
@@ -266,7 +266,7 @@ const buildExistingOpenDesktopEditSessionResponse = async ({
 
   return {
     baseVersionNumber: baseVersion.versionNumber,
-    downloadUrl: presignDocxFieldDownload({
+    downloadUrl: await presignDocxFieldDownload({
       fileContent: baseVersionContent,
       organizationId,
       workspaceId,
@@ -471,7 +471,7 @@ export const openDesktopEditSessionHandler = async function* ({
 
       return {
         baseVersionNumber: currentTarget.baseVersionNumber,
-        downloadUrl: presignDocxFieldDownload({
+        downloadUrl: await presignDocxFieldDownload({
           fileContent: currentTarget.fileContent,
           organizationId,
           workspaceId,

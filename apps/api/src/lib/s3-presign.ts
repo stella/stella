@@ -13,21 +13,26 @@
  * 5-minute expiry window cannot be reused to upload a different
  * payload or a different size.
  *
- * Credential resolution is shared with the Bun client — both
+ * Base credential resolution is shared with the Bun client — both
  * routes call `resolveS3Credentials()`, so static env credentials,
  * ECS container credentials, and IMDSv2 fallback all behave
- * identically across the two SDKs.
+ * identically across the two SDKs. In AWS prod, client-visible
+ * presigned URLs can then be issued through an STS session policy
+ * scoped to one organization/workspace key prefix.
  */
 import {
   CopyObjectCommand,
+  GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
   S3Client as AwsS3Client,
 } from "@aws-sdk/client-s3";
+import { AssumeRoleCommand, STSClient } from "@aws-sdk/client-sts";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Result, TaggedError } from "better-result";
 
 import { envBase } from "@/api/env-base";
+import { contentDisposition } from "@/api/lib/content-disposition";
 import { resolveS3Credentials } from "@/api/lib/s3";
 
 export class S3PresignError extends TaggedError("S3PresignError")<{
@@ -49,7 +54,7 @@ export type PresignedUploadHeaders = {
 };
 
 export type PresignUploadOptions = {
-  /** Final S3 key the client will write to (caller chooses; usually `tmp/{uploadId}`). */
+  /** Final S3 key the client will write to. */
   key: string;
   /** Lifetime of the signed URL in seconds. Keep short — finalize is fast. */
   expiresIn: number;
@@ -59,6 +64,8 @@ export type PresignUploadOptions = {
   contentLength: number;
   /** SHA-256 of the bytes. Base64-encoded per the `x-amz-checksum-sha256` API. */
   sha256Base64: string;
+  scope?: S3SigningScope;
+  tagAsTemporaryUpload?: boolean;
 };
 
 export type PresignUploadResult = {
@@ -81,10 +88,33 @@ const isPathStyleRequired = (endpoint: string): boolean => {
   }
 };
 
+const isAwsS3Endpoint = (endpoint: string): boolean => {
+  try {
+    const host = new URL(endpoint).hostname.toLowerCase();
+    return host.includes("s3") && host.endsWith(".amazonaws.com");
+  } catch {
+    return false;
+  }
+};
+
 type CachedClient = { client: AwsS3Client; createdAt: number };
+type CachedScopedClient = { client: AwsS3Client; expiresAt: number };
+export type S3SigningScope = {
+  organizationId: string;
+  workspaceId?: string | null;
+};
+type S3SigningAction = "s3:GetObject" | "s3:PutObject" | "s3:PutObjectTagging";
+type KmsSigningAction = "kms:Decrypt" | "kms:GenerateDataKey";
 
 let _clientPromise: Promise<CachedClient> | null = null;
+let _stsClientPromise: Promise<STSClient> | null = null;
+let _scopedClientPromises = new Map<string, Promise<CachedScopedClient>>();
 const CLIENT_MAX_AGE_MS = 50 * 60 * 1000;
+const SCOPED_SESSION_SECONDS = 900;
+const SCOPED_CLIENT_REFRESH_SKEW_MS = 60 * 1000;
+const TEMP_UPLOAD_TAG_KEY = "stella-upload-stage";
+const TEMP_UPLOAD_TAG_VALUE = "tmp";
+const TEMP_UPLOAD_TAGGING = `${TEMP_UPLOAD_TAG_KEY}=${TEMP_UPLOAD_TAG_VALUE}`;
 
 const buildAwsS3Client = async (): Promise<CachedClient> => {
   const creds = await resolveS3Credentials();
@@ -103,6 +133,22 @@ const buildAwsS3Client = async (): Promise<CachedClient> => {
       : {}),
   });
   return { client, createdAt: Date.now() };
+};
+
+const buildStsClient = async (): Promise<STSClient> => {
+  const creds = await resolveS3Credentials();
+  return new STSClient({
+    region: envBase.S3_REGION,
+    ...(creds
+      ? {
+          credentials: {
+            accessKeyId: creds.accessKeyId,
+            secretAccessKey: creds.secretAccessKey,
+            ...(creds.sessionToken ? { sessionToken: creds.sessionToken } : {}),
+          },
+        }
+      : {}),
+  });
 };
 
 /**
@@ -125,9 +171,182 @@ const getAwsS3Client = async (): Promise<AwsS3Client> => {
   return built.client;
 };
 
+const getStsClient = async (): Promise<STSClient> => {
+  _stsClientPromise ??= buildStsClient();
+  return await _stsClientPromise;
+};
+
+const shouldUseScopedSigning = (): boolean =>
+  !!envBase.S3_SCOPED_SIGNING_ROLE_ARN && isAwsS3Endpoint(envBase.S3_ENDPOINT);
+
+const s3SigningScopePrefix = ({
+  organizationId,
+  workspaceId,
+}: S3SigningScope): string =>
+  workspaceId ? `${organizationId}/${workspaceId}/` : `${organizationId}/`;
+
+export const isS3KeyInSigningScope = (
+  key: string,
+  scope: S3SigningScope,
+): boolean => key.startsWith(s3SigningScopePrefix(scope));
+
+const roleSessionName = (scope: S3SigningScope): string => {
+  const scopeHash = new Bun.CryptoHasher("sha256")
+    .update(s3SigningScopePrefix(scope))
+    .digest("hex")
+    .slice(0, 24);
+  return `s3-scope-${scopeHash}`;
+};
+
+const scopedSessionPolicy = (
+  scope: S3SigningScope,
+  actions: readonly S3SigningAction[],
+): string => {
+  const kmsActions = kmsSigningActionsForS3Actions(actions);
+  return JSON.stringify({
+    Version: "2012-10-17",
+    Statement: [
+      {
+        Effect: "Allow",
+        Action: actions,
+        Resource: `arn:aws:s3:::${envBase.S3_BUCKET}/${s3SigningScopePrefix(scope)}*`,
+      },
+      ...(kmsActions.length > 0
+        ? [
+            {
+              Effect: "Allow",
+              Action: kmsActions,
+              Resource: "*",
+              Condition: {
+                StringEquals: {
+                  "kms:ViaService": `s3.${envBase.S3_REGION}.amazonaws.com`,
+                },
+              },
+            },
+          ]
+        : []),
+    ],
+  });
+};
+
+const kmsSigningActionsForS3Actions = (
+  actions: readonly S3SigningAction[],
+): KmsSigningAction[] => {
+  const kmsActions: KmsSigningAction[] = [];
+  if (actions.includes("s3:GetObject")) {
+    kmsActions.push("kms:Decrypt");
+  }
+  if (actions.includes("s3:PutObject")) {
+    kmsActions.push("kms:GenerateDataKey");
+  }
+  return kmsActions;
+};
+
+const scopedClientCacheKey = (
+  scope: S3SigningScope,
+  actions: readonly S3SigningAction[],
+): string => `${s3SigningScopePrefix(scope)}|${[...actions].sort().join(",")}`;
+
+const buildScopedAwsS3Client = async (
+  scope: S3SigningScope,
+  actions: readonly S3SigningAction[],
+): Promise<CachedScopedClient> => {
+  const roleArn = envBase.S3_SCOPED_SIGNING_ROLE_ARN;
+  if (!roleArn) {
+    throw new S3PresignError({
+      message: "Scoped S3 signing role ARN is not configured",
+    });
+  }
+
+  const sts = await getStsClient();
+  const assumed = await sts.send(
+    new AssumeRoleCommand({
+      RoleArn: roleArn,
+      RoleSessionName: roleSessionName(scope),
+      DurationSeconds: SCOPED_SESSION_SECONDS,
+      Policy: scopedSessionPolicy(scope, actions),
+    }),
+  );
+  const credentials = assumed.Credentials;
+  if (
+    !credentials?.AccessKeyId ||
+    !credentials.SecretAccessKey ||
+    !credentials.SessionToken
+  ) {
+    throw new S3PresignError({
+      message: "STS returned incomplete scoped S3 credentials",
+    });
+  }
+
+  const client = new AwsS3Client({
+    region: envBase.S3_REGION,
+    endpoint: envBase.S3_ENDPOINT,
+    forcePathStyle: isPathStyleRequired(envBase.S3_ENDPOINT),
+    credentials: {
+      accessKeyId: credentials.AccessKeyId,
+      secretAccessKey: credentials.SecretAccessKey,
+      sessionToken: credentials.SessionToken,
+    },
+  });
+
+  return {
+    client,
+    expiresAt:
+      credentials.Expiration?.getTime() ??
+      Date.now() + SCOPED_SESSION_SECONDS * 1000,
+  };
+};
+
+const getScopedAwsS3Client = async (
+  scope: S3SigningScope,
+  actions: readonly S3SigningAction[],
+): Promise<AwsS3Client> => {
+  const cacheKey = scopedClientCacheKey(scope, actions);
+  const existingPromise = _scopedClientPromises.get(cacheKey);
+  if (existingPromise) {
+    const cached = await existingPromise;
+    if (cached.expiresAt - Date.now() > SCOPED_CLIENT_REFRESH_SKEW_MS) {
+      return cached.client;
+    }
+  }
+
+  const nextPromise = buildScopedAwsS3Client(scope, actions);
+  _scopedClientPromises.set(cacheKey, nextPromise);
+  const built = await nextPromise;
+  return built.client;
+};
+
+const getPresignClient = async ({
+  actions,
+  key,
+  scope,
+}: {
+  actions: readonly S3SigningAction[];
+  key: string;
+  scope: S3SigningScope | undefined;
+}): Promise<AwsS3Client> => {
+  if (!shouldUseScopedSigning()) {
+    return await getAwsS3Client();
+  }
+
+  if (!scope) {
+    return await getAwsS3Client();
+  }
+
+  if (!isS3KeyInSigningScope(key, scope)) {
+    throw new S3PresignError({
+      message: "S3 key is outside the requested signing scope",
+    });
+  }
+
+  return await getScopedAwsS3Client(scope, actions);
+};
+
 /** Reset the cached client. Test seam; not used in prod. */
 export const resetAwsS3ClientForTesting = (): void => {
   _clientPromise = null;
+  _stsClientPromise = null;
+  _scopedClientPromises = new Map();
 };
 
 /**
@@ -142,12 +361,20 @@ export const presignUploadUrl = async ({
   contentType,
   contentLength,
   sha256Base64,
+  scope,
+  tagAsTemporaryUpload = false,
 }: PresignUploadOptions): Promise<
   Result<PresignUploadResult, S3PresignError>
 > =>
   await Result.tryPromise({
     try: async () => {
-      const client = await getAwsS3Client();
+      const client = await getPresignClient({
+        key,
+        scope,
+        actions: tagAsTemporaryUpload
+          ? ["s3:PutObject", "s3:PutObjectTagging"]
+          : ["s3:PutObject"],
+      });
       const command = new PutObjectCommand({
         Bucket: envBase.S3_BUCKET,
         Key: key,
@@ -155,6 +382,7 @@ export const presignUploadUrl = async ({
         ContentLength: contentLength,
         ChecksumSHA256: sha256Base64,
         ChecksumAlgorithm: "SHA256",
+        ...(tagAsTemporaryUpload ? { Tagging: TEMP_UPLOAD_TAGGING } : {}),
       });
 
       // SDK v3 hoists `x-amz-*` headers into the query string by
@@ -202,6 +430,49 @@ export const presignUploadUrl = async ({
       }),
   });
 
+export type PresignDownloadOptions = {
+  expiresIn: number;
+  fileName?: string;
+  scope?: S3SigningScope;
+};
+
+export const presignDownloadUrl = async (
+  key: string,
+  { expiresIn, fileName, scope }: PresignDownloadOptions,
+): Promise<string> => {
+  const result = await Result.tryPromise({
+    try: async () => {
+      const client = await getPresignClient({
+        key,
+        scope,
+        actions: ["s3:GetObject"],
+      });
+      return await getSignedUrl(
+        client,
+        new GetObjectCommand({
+          Bucket: envBase.S3_BUCKET,
+          Key: key,
+          ...(fileName
+            ? { ResponseContentDisposition: contentDisposition(fileName) }
+            : {}),
+        }),
+        { expiresIn },
+      );
+    },
+    catch: (cause) =>
+      new S3PresignError({
+        message: "Failed to generate presigned download URL",
+        cause,
+      }),
+  });
+
+  if (Result.isError(result)) {
+    throw result.error;
+  }
+
+  return result.value;
+};
+
 export type HeadObjectResult = {
   /** Size in bytes as reported by S3 (after the upload completed). */
   contentLength: number;
@@ -243,7 +514,7 @@ export const headObject = async (
 
 /**
  * Server-side CopyObject. Used by finalize to promote a scanned
- * `tmp/{uploadId}` object to its final workspace key without
+ * staged upload object to its final workspace key without
  * pulling bytes through the API task. We prefer this over Bun's
  * `write(target, file(source))` for promotion specifically
  * because the SDK v3 path is documented as a server-side copy;
@@ -262,6 +533,8 @@ export const copyObject = async (
           // CopySource needs the bucket prefix and URL-encoded key.
           CopySource: `${envBase.S3_BUCKET}/${encodeURIComponent(sourceKey)}`,
           Key: destKey,
+          // Staged uploads carry a lifecycle tag; durable objects must not.
+          TaggingDirective: "REPLACE",
         }),
       );
     },

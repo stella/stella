@@ -19,6 +19,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { injectStamp, isStampableDocx } from "@/api/lib/docx-stamp";
 import { getS3 } from "@/api/lib/s3";
+import { presignDownloadUrl } from "@/api/lib/s3-presign";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 type FilePurpose = "download" | "display" | "native-display";
@@ -98,6 +99,8 @@ export const readFileHandler = async ({
           s3Key: fileKey,
           expiresInSeconds: 900,
           fileName: content.fileName,
+          organizationId,
+          workspaceId,
           metadata: {
             fieldId,
             mimeType: content.mimeType,
@@ -126,21 +129,23 @@ export const readFileHandler = async ({
       return status(400);
     }
 
+    const nativeFileKey = createFileKey({
+      organizationId,
+      workspaceId,
+      fileId: content.id,
+      mimeType: content.mimeType,
+    });
+
     return {
       fileId: content.id,
       mimeType: content.mimeType,
       originalMimeType: content.mimeType,
       fileName: content.fileName,
       encrypted: content.encrypted,
-      presignedUrl: getS3().presign(
-        createFileKey({
-          organizationId,
-          workspaceId,
-          fileId: content.id,
-          mimeType: content.mimeType,
-        }),
-        { expiresIn: 900 },
-      ),
+      presignedUrl: await presignDownloadUrl(nativeFileKey, {
+        expiresIn: 900,
+        scope: { organizationId, workspaceId },
+      }),
       stampable: false,
     };
   }
@@ -150,21 +155,23 @@ export const readFileHandler = async ({
   // Gotenberg. PDFs serve themselves. Anything else needs a
   // PDF derivative on the field.
   if (isNativelyRenderableMimeType(content.mimeType)) {
+    const nativeFileKey = createFileKey({
+      organizationId,
+      workspaceId,
+      fileId: content.id,
+      mimeType: content.mimeType,
+    });
+
     return {
       fileId: content.id,
       mimeType: content.mimeType,
       originalMimeType: content.mimeType,
       fileName: content.fileName,
       encrypted: content.encrypted,
-      presignedUrl: getS3().presign(
-        createFileKey({
-          organizationId,
-          workspaceId,
-          fileId: content.id,
-          mimeType: content.mimeType,
-        }),
-        { expiresIn: 900 },
-      ),
+      presignedUrl: await presignDownloadUrl(nativeFileKey, {
+        expiresIn: 900,
+        scope: { organizationId, workspaceId },
+      }),
       stampable: false,
     };
   }
@@ -175,21 +182,23 @@ export const readFileHandler = async ({
 
   const displayFileId = content.pdfFileId ?? content.id;
 
+  const displayFileKey = createFileKey({
+    organizationId,
+    workspaceId,
+    fileId: displayFileId,
+    mimeType: PDF_MIME_TYPE,
+  });
+
   return {
     fileId: displayFileId,
     mimeType: PDF_MIME_TYPE,
     originalMimeType: content.mimeType,
     fileName: content.fileName,
     encrypted: content.encrypted,
-    presignedUrl: getS3().presign(
-      createFileKey({
-        organizationId,
-        workspaceId,
-        fileId: displayFileId,
-        mimeType: PDF_MIME_TYPE,
-      }),
-      { expiresIn: 900 },
-    ),
+    presignedUrl: await presignDownloadUrl(displayFileKey, {
+      expiresIn: 900,
+      scope: { organizationId, workspaceId },
+    }),
     stampable: false,
   };
 };

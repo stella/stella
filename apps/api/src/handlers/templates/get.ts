@@ -59,6 +59,7 @@ const getTemplate = createSafeRootHandler(
           s3Key: template.s3Key,
           expiresInSeconds: PRESIGN_EXPIRES_IN,
           fileName: template.fileName,
+          organizationId,
           metadata: { sizeBytes: template.sizeBytes },
         });
 

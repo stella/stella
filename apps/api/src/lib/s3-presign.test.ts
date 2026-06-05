@@ -5,6 +5,7 @@ import { getS3 } from "@/api/lib/s3";
 import {
   copyObject,
   headObject,
+  isS3KeyInSigningScope,
   presignUploadUrl,
   resetAwsS3ClientForTesting,
 } from "@/api/lib/s3-presign";
@@ -24,6 +25,51 @@ const parseSignedHeaders = (url: string): Set<string> => {
 const HELLO_BODY = "hello";
 const HELLO_SHA256_BASE64 = sha256Base64(HELLO_BODY);
 const HELLO_BYTES = new TextEncoder().encode(HELLO_BODY);
+
+describe("isS3KeyInSigningScope", () => {
+  test("accepts document keys under the requested workspace prefix", () => {
+    expect(
+      isS3KeyInSigningScope("org_1/ws_1/file_1.pdf", {
+        organizationId: "org_1",
+        workspaceId: "ws_1",
+      }),
+    ).toBe(true);
+    expect(
+      isS3KeyInSigningScope("org_1/ws_1/tmp/upload_1", {
+        organizationId: "org_1",
+        workspaceId: "ws_1",
+      }),
+    ).toBe(true);
+  });
+
+  test("rejects sibling organizations and workspaces", () => {
+    expect(
+      isS3KeyInSigningScope("org_2/ws_1/file_1.pdf", {
+        organizationId: "org_1",
+        workspaceId: "ws_1",
+      }),
+    ).toBe(false);
+    expect(
+      isS3KeyInSigningScope("org_1/ws_10/file_1.pdf", {
+        organizationId: "org_1",
+        workspaceId: "ws_1",
+      }),
+    ).toBe(false);
+  });
+
+  test("accepts organization-level template keys without workspace scope", () => {
+    expect(
+      isS3KeyInSigningScope("org_1/templates/template_1.docx", {
+        organizationId: "org_1",
+      }),
+    ).toBe(true);
+    expect(
+      isS3KeyInSigningScope("org_10/templates/template_1.docx", {
+        organizationId: "org_1",
+      }),
+    ).toBe(false);
+  });
+});
 
 describe("presignUploadUrl", () => {
   beforeAll(() => {
