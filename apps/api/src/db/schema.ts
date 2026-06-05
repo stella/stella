@@ -180,18 +180,44 @@ const tsvector = customType<{ data: string }>({
   dataType: () => "tsvector",
 });
 
-const bytea = customType<{ data: Buffer }>({
+type ByteaDriverValue = Buffer | string | null | undefined;
+
+const decodeBytea = (value: ByteaDriverValue): Buffer => {
+  if (Buffer.isBuffer(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const hex = value.startsWith("\\x") ? value.slice(2) : value;
+    return Buffer.from(hex, "hex");
+  }
+  return panic(`Unexpected bytea driver value: ${typeof value}`);
+};
+
+const decodeNullableBytea = (value: ByteaDriverValue): Buffer | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  return decodeBytea(value);
+};
+
+const bytea = customType<{
+  data: Buffer;
+  driverData: Buffer | string;
+  jsonData: Buffer | string;
+}>({
   dataType: () => "bytea",
-  fromDriver: (value) => {
-    if (Buffer.isBuffer(value)) {
-      return value;
-    }
-    if (typeof value === "string") {
-      const hex = value.startsWith("\\x") ? value.slice(2) : value;
-      return Buffer.from(hex, "hex");
-    }
-    return panic(`Unexpected bytea driver value: ${typeof value}`);
-  },
+  fromDriver: decodeBytea,
+  fromJson: decodeBytea,
+});
+
+const nullableBytea = customType<{
+  data: Buffer | null;
+  driverData: ByteaDriverValue;
+  jsonData: ByteaDriverValue;
+}>({
+  dataType: () => "bytea",
+  fromDriver: decodeNullableBytea,
+  fromJson: decodeNullableBytea,
 });
 
 const safeWorkspaceId = (name: string) =>
@@ -2099,13 +2125,13 @@ export const organizationSettings = p.pgTable(
       .notNull()
       .default([]),
     /** Encrypted OrgAIConfig JSON (AES-256-GCM). */
-    aiConfigEncrypted: bytea("ai_config_encrypted"),
+    aiConfigEncrypted: nullableBytea("ai_config_encrypted"),
     /** AES-GCM initialization vector for aiConfigEncrypted. */
-    aiConfigIv: bytea("ai_config_iv"),
+    aiConfigIv: nullableBytea("ai_config_iv"),
     /** Encrypted DeepL API key (single opaque string, AES-256-GCM). */
-    deeplApiKeyEncrypted: bytea("deepl_api_key_encrypted"),
+    deeplApiKeyEncrypted: nullableBytea("deepl_api_key_encrypted"),
     /** AES-GCM initialization vector for deeplApiKeyEncrypted. */
-    deeplApiKeyIv: bytea("deepl_api_key_iv"),
+    deeplApiKeyIv: nullableBytea("deepl_api_key_iv"),
     /**
      * Whether stella may annotate AI requests with prompt-cache
      * markers (Anthropic `cacheControl`, OpenAI `promptCacheKey`).
@@ -3038,8 +3064,8 @@ export const mcpOAuthClients = p.pgTable(
       .references(() => mcpConnectors.id, { onDelete: "cascade" }),
     authorizationServerUrl: p.text("authorization_server_url").notNull(),
     clientId: p.text("client_id").notNull(),
-    clientSecretEncrypted: bytea("client_secret_encrypted"),
-    clientSecretIv: bytea("client_secret_iv"),
+    clientSecretEncrypted: nullableBytea("client_secret_encrypted"),
+    clientSecretIv: nullableBytea("client_secret_iv"),
     registrationResponse: jsonb("registration_response")
       .$type<McpOAuthRegistrationResponse>()
       .notNull(),
@@ -3089,12 +3115,12 @@ export const mcpUserConnections = p.pgTable(
       .text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    accessTokenEncrypted: bytea("access_token_encrypted"),
-    accessTokenIv: bytea("access_token_iv"),
-    refreshTokenEncrypted: bytea("refresh_token_encrypted"),
-    refreshTokenIv: bytea("refresh_token_iv"),
-    staticTokenEncrypted: bytea("static_token_encrypted"),
-    staticTokenIv: bytea("static_token_iv"),
+    accessTokenEncrypted: nullableBytea("access_token_encrypted"),
+    accessTokenIv: nullableBytea("access_token_iv"),
+    refreshTokenEncrypted: nullableBytea("refresh_token_encrypted"),
+    refreshTokenIv: nullableBytea("refresh_token_iv"),
+    staticTokenEncrypted: nullableBytea("static_token_encrypted"),
+    staticTokenIv: nullableBytea("static_token_iv"),
     tokenType: p.varchar("token_type", { length: 40 }),
     scope: p.text(),
     resourceUrl: p.text("resource_url"),
