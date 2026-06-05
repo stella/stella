@@ -16,6 +16,16 @@
 
 import type { FlowBlock, Measure, TableBlock, TableMeasure } from "./types";
 
+type UnsafeBreakRange = {
+  top: number;
+  bottom: number;
+};
+
+type CellBreakGeometry = {
+  bottoms: number[];
+  unsafeRanges: UnsafeBreakRange[];
+};
+
 function getAtomicBlockHeight(measure: Measure): number {
   if ("totalHeight" in measure) {
     return measure.totalHeight;
@@ -26,17 +36,22 @@ function getAtomicBlockHeight(measure: Measure): number {
   return 0;
 }
 
-/** Cumulative y of each line bottom within a single cell's content. */
-function cellLineBottoms(
+function isInsideRange(offset: number, range: UnsafeBreakRange): boolean {
+  return offset > range.top && offset < range.bottom;
+}
+
+/** Cumulative break geometry within a single cell's content. */
+function cellBreakGeometry(
   cellBlocks: FlowBlock[] | undefined,
   blockMeasures: Measure[],
   padTop: number,
-): number[] {
+): CellBreakGeometry {
   // Mirror measureTableBlock's cell-height model: each block contributes
   // before + lines + after with no inter-paragraph collapse (the paragraph
   // measure's totalHeight already bundles before/after). Keeping the same model
   // means these line bottoms line up with the row height the paginator splits.
   const bottoms: number[] = [];
+  const unsafeRanges: UnsafeBreakRange[] = [];
   let y = padTop;
   for (let i = 0; i < blockMeasures.length; i++) {
     const measure = blockMeasures[i];
@@ -47,7 +62,9 @@ function cellLineBottoms(
       y += spacing?.before ?? 0;
       for (const line of measure.lines) {
         y += line.floatSkipBefore ?? 0;
+        const top = y;
         y += line.lineHeight;
+        unsafeRanges.push({ top, bottom: y });
         bottoms.push(y);
       }
       y += spacing?.after ?? 0;
@@ -55,12 +72,14 @@ function cellLineBottoms(
       // Nested table / non-paragraph: one atomic block (break only at its bottom).
       const blockHeight = getAtomicBlockHeight(measure);
       if (blockHeight > 0) {
+        const top = y;
         y += blockHeight;
+        unsafeRanges.push({ top, bottom: y });
         bottoms.push(y);
       }
     }
   }
-  return bottoms;
+  return { bottoms, unsafeRanges };
 }
 
 /** Precomputed break geometry for a table. */
@@ -96,6 +115,7 @@ export function buildTableRowBreakInfo(
     offsets.add(rowHeight); // a row boundary is always a clean break
     const sourceCells = block.rows[r]?.cells ?? [];
     const measuredCells = measure.rows[r]?.cells ?? [];
+    const cellGeometries: CellBreakGeometry[] = [];
     for (let c = 0; c < measuredCells.length; c++) {
       const measuredCell = measuredCells[c];
       if (!measuredCell) {
@@ -103,18 +123,26 @@ export function buildTableRowBreakInfo(
       }
       const sourceCell = sourceCells[c];
       const padTop = sourceCell?.padding?.top ?? 0;
-      const bottoms = cellLineBottoms(
+      const geometry = cellBreakGeometry(
         sourceCell?.blocks,
         measuredCell.blocks,
         padTop,
       );
-      for (const b of bottoms) {
+      cellGeometries.push(geometry);
+      for (const b of geometry.bottoms) {
         if (b > 0 && b < rowHeight) {
           offsets.add(b);
         }
       }
     }
-    breakOffsets.push([...offsets].sort((a, b) => a - b));
+    const safeOffsets = [...offsets].filter(
+      (offset) =>
+        offset === rowHeight ||
+        cellGeometries.every((geometry) =>
+          geometry.unsafeRanges.every((range) => !isInsideRange(offset, range)),
+        ),
+    );
+    breakOffsets.push(safeOffsets.sort((a, b) => a - b));
   }
 
   return { rowTops, breakOffsets };

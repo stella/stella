@@ -22,21 +22,32 @@ import type {
 
 const LINE = 20;
 
-function lines(n: number): MeasuredLine[] {
+function linesWithHeight(n: number, lineHeight: number): MeasuredLine[] {
   return Array.from({ length: n }, () => ({
     fromRun: 0,
     fromChar: 0,
     toRun: 0,
     toChar: 1,
     width: 10,
-    ascent: 16,
+    ascent: lineHeight - 4,
     descent: 4,
-    lineHeight: LINE,
+    lineHeight,
   }));
 }
 
+function paraMeasureWithLineHeight(
+  n: number,
+  lineHeight: number,
+): ParagraphMeasure {
+  return {
+    kind: "paragraph",
+    lines: linesWithHeight(n, lineHeight),
+    totalHeight: n * lineHeight,
+  };
+}
+
 function paraMeasure(n: number): ParagraphMeasure {
-  return { kind: "paragraph", lines: lines(n), totalHeight: n * LINE };
+  return paraMeasureWithLineHeight(n, LINE);
 }
 
 /** A single-cell, single-paragraph table whose one row is `n` lines tall. */
@@ -217,6 +228,68 @@ describe("buildTableRowBreakInfo / snapRowBreak", () => {
     const info = buildTableRowBreakInfo(block, measure);
 
     expect(info.breakOffsets[0]).toEqual([35, 85, 100]);
+  });
+
+  test("keeps only row break offsets that are safe for every cell", () => {
+    const block: TableBlock = {
+      kind: "table",
+      id: "t",
+      rows: [
+        {
+          id: "r0",
+          cells: [
+            {
+              id: "c0",
+              blocks: [
+                {
+                  kind: "paragraph",
+                  id: "p0",
+                  runs: [{ kind: "text", text: "a" }],
+                },
+              ],
+            },
+            {
+              id: "c1",
+              blocks: [
+                {
+                  kind: "paragraph",
+                  id: "p1",
+                  runs: [{ kind: "text", text: "b" }],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      columnWidths: [100, 100],
+    };
+    const measure: TableMeasure = {
+      kind: "table",
+      rows: [
+        {
+          cells: [
+            {
+              blocks: [paraMeasureWithLineHeight(3, 20)],
+              width: 100,
+              height: 60,
+            },
+            {
+              blocks: [paraMeasureWithLineHeight(4, 15)],
+              width: 100,
+              height: 60,
+            },
+          ],
+          height: 60,
+        },
+      ],
+      columnWidths: [100, 100],
+      totalWidth: 200,
+      totalHeight: 60,
+    };
+
+    const info = buildTableRowBreakInfo(block, measure);
+
+    expect(info.breakOffsets[0]).toEqual([60]);
   });
 
   test("snaps to the deepest whole line that fits", () => {
