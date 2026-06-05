@@ -138,6 +138,31 @@ describe("presignUploadUrl", () => {
       "presign-method-probe",
     );
   });
+
+  test("binds temporary upload tagging into a request header", async () => {
+    const result = await presignUploadUrl({
+      key: "org_1/ws_1/tmp/presign-tagging-probe",
+      expiresIn: 60,
+      contentType: "application/octet-stream",
+      contentLength: HELLO_BYTES.byteLength,
+      sha256Base64: HELLO_SHA256_BASE64,
+      tagAsTemporaryUpload: true,
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    if (!Result.isOk(result)) {
+      return;
+    }
+
+    const parsed = new URL(result.value.url);
+    const signed = parseSignedHeaders(result.value.url);
+
+    expect(signed.has("x-amz-tagging")).toBe(true);
+    expect(parsed.searchParams.has("x-amz-tagging")).toBe(false);
+    expect(result.value.headers["x-amz-tagging"]).toBe(
+      "stella-upload-stage=tmp",
+    );
+  });
 });
 
 // -----------------------------------------------------------------

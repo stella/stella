@@ -51,6 +51,7 @@ export type PresignedUploadHeaders = {
   "content-length": string;
   "x-amz-checksum-sha256": string;
   "x-amz-sdk-checksum-algorithm": "SHA256";
+  "x-amz-tagging"?: string;
 };
 
 export type PresignUploadOptions = {
@@ -304,13 +305,28 @@ const getScopedAwsS3Client = async (
   const cacheKey = scopedClientCacheKey(scope, actions);
   const existingPromise = _scopedClientPromises.get(cacheKey);
   if (existingPromise) {
-    const cached = await existingPromise;
+    let cached: CachedScopedClient;
+    try {
+      cached = await existingPromise;
+    } catch (error) {
+      if (_scopedClientPromises.get(cacheKey) === existingPromise) {
+        _scopedClientPromises.delete(cacheKey);
+      }
+      throw error;
+    }
     if (cached.expiresAt - Date.now() > SCOPED_CLIENT_REFRESH_SKEW_MS) {
       return cached.client;
     }
   }
 
-  const nextPromise = buildScopedAwsS3Client(scope, actions);
+  const nextPromise = buildScopedAwsS3Client(scope, actions).catch(
+    (error: unknown) => {
+      if (_scopedClientPromises.get(cacheKey) === nextPromise) {
+        _scopedClientPromises.delete(cacheKey);
+      }
+      throw error;
+    },
+  );
   _scopedClientPromises.set(cacheKey, nextPromise);
   const built = await nextPromise;
   return built.client;
@@ -407,10 +423,12 @@ export const presignUploadUrl = async ({
           "content-length",
           "x-amz-checksum-sha256",
           "x-amz-sdk-checksum-algorithm",
+          ...(tagAsTemporaryUpload ? ["x-amz-tagging"] : []),
         ]),
         unhoistableHeaders: new Set([
           "x-amz-checksum-sha256",
           "x-amz-sdk-checksum-algorithm",
+          ...(tagAsTemporaryUpload ? ["x-amz-tagging"] : []),
         ]),
       });
 
@@ -419,6 +437,9 @@ export const presignUploadUrl = async ({
         "content-length": String(contentLength),
         "x-amz-checksum-sha256": sha256Base64,
         "x-amz-sdk-checksum-algorithm": "SHA256",
+        ...(tagAsTemporaryUpload
+          ? { "x-amz-tagging": TEMP_UPLOAD_TAGGING }
+          : {}),
       };
 
       return { url, headers };
