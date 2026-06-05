@@ -19,6 +19,7 @@ import {
   MessageSquareIcon,
   Minimize2Icon,
   PinIcon,
+  PlusIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -31,6 +32,7 @@ import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
@@ -63,6 +65,7 @@ import {
 } from "@/routes/_protected.chat/-queries";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
+import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
 
 export const Route = createFileRoute("/_protected/chat/")({
   component: ChatIndex,
@@ -86,6 +89,8 @@ function ChatIndex() {
   const controller = useChatEditor({ threadRef });
   const prompts = useSavedPrompts();
   const pinnedOrder = usePinnedStore((s) => s.pinnedOrder);
+  const canCreateMatter = usePermissions({ workspace: ["create"] });
+  const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
@@ -256,6 +261,7 @@ function ChatIndex() {
     pinnedMatters.length > 0
       ? t("chat.landing.pinnedMatters")
       : t("chat.landing.lastAccessedMatters");
+  const MattersHeadingIcon = pinnedMatters.length > 0 ? PinIcon : LayersIcon;
 
   const recentChats = useMemo(() => {
     const threads: RecentChat[] = [];
@@ -333,7 +339,7 @@ function ChatIndex() {
               <StellaMark className="size-7" />
             </div>
             <p className="text-foreground max-w-md text-center text-lg font-medium">
-              {t("chat.greetingSubtitle")}
+              {t("chat.greeting")}
             </p>
           </div>
           <div className="w-full">
@@ -393,7 +399,7 @@ function ChatIndex() {
                 className="text-muted-foreground hover:text-foreground focus-visible:ring-ring flex items-center gap-2 rounded-md px-1 text-xs font-semibold tracking-widest uppercase transition-colors outline-none focus-visible:ring-2"
                 to="/workspaces"
               >
-                <PinIcon className="size-4" />
+                <MattersHeadingIcon className="size-4" />
                 {mattersHeading}
               </Link>
             }
@@ -423,7 +429,21 @@ function ChatIndex() {
                 );
               })
             ) : (
-              <LandingEmpty>{t("chat.landing.noMatters")}</LandingEmpty>
+              <LandingEmpty>
+                <div className="flex flex-col items-start gap-2.5">
+                  {t("chat.landing.noMatters")}
+                  {canCreateMatter && (
+                    <Button
+                      onClick={() => openCreateMatter()}
+                      size="sm"
+                      variant="outline"
+                    >
+                      <PlusIcon className="size-4" />
+                      {t("workspaces.createNewWorkspace")}
+                    </Button>
+                  )}
+                </div>
+              </LandingEmpty>
             )}
           </LandingSection>
           <LandingSection
