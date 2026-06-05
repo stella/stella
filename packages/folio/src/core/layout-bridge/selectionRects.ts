@@ -72,6 +72,9 @@ export type CaretPosition = {
   pageIndex: number;
 };
 
+const DEFAULT_TABLE_CELL_PADDING_LEFT = 7;
+const DEFAULT_TABLE_CELL_PADDING_TOP = 1;
+
 // =============================================================================
 // HELPER FUNCTIONS
 // =============================================================================
@@ -123,7 +126,7 @@ function getCellContentOffsetY(
   cellMeasure: TableCellMeasure,
   rowHeight: number,
 ): number {
-  const padTop = cell.padding?.top ?? 0;
+  const padTop = cell.padding?.top ?? DEFAULT_TABLE_CELL_PADDING_TOP;
   const spareHeight = Math.max(0, rowHeight - cellMeasure.height);
   if (cell.verticalAlign === "bottom") {
     return padTop + spareHeight;
@@ -132,6 +135,10 @@ function getCellContentOffsetY(
     return padTop + spareHeight / 2;
   }
   return padTop;
+}
+
+function getCellContentOffsetX(cell: TableCell): number {
+  return cell.padding?.left ?? DEFAULT_TABLE_CELL_PADDING_LEFT;
 }
 
 /**
@@ -580,7 +587,7 @@ export function selectionToRects(
               floatingImages,
               contentWidth,
             );
-            const contentOffsetX = cell.padding?.left ?? 0;
+            const contentOffsetX = getCellContentOffsetX(cell);
             const contentOffsetY = getCellContentOffsetY(
               cell,
               cellMeasure,

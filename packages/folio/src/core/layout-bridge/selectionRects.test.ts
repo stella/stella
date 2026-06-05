@@ -62,6 +62,7 @@ function clippedTableFixture(): {
         cells: [
           {
             id: "cell",
+            padding: { top: 0, right: 0, bottom: 0, left: 0 },
             blocks: [
               {
                 kind: "paragraph",
@@ -326,6 +327,24 @@ describe("selection rect geometry", () => {
     expect(rects).toHaveLength(1);
     expect(rects[0]?.y).toBe(0);
     expect(rects[0]?.height).toBe(20);
+  });
+
+  test("selection rects use rendered default table cell padding", () => {
+    const { layout, block, measure } = clippedTableFixture();
+    delete block.rows[0]!.cells[0]!.padding;
+    const fragment = layout.pages[0]?.fragments[0];
+    if (!fragment || fragment.kind !== "table") {
+      throw new Error("expected table fragment");
+    }
+    fragment.height = 100;
+    fragment.topClip = 0;
+    fragment.bottomClip = 100;
+
+    const rects = selectionToRects(layout, [block], [measure], 1, 2);
+
+    expect(rects).toHaveLength(1);
+    expect(rects[0]?.x).toBe(7);
+    expect(rects[0]?.y).toBe(1);
   });
 
   test("selection rect clipping accounts for cell top padding", () => {
