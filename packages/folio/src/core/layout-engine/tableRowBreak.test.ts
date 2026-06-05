@@ -687,6 +687,33 @@ describe("oversized table row splits across pages (#570)", () => {
     expect(frags[0]?.y).toBe(OPTIONS.margins.top);
   });
 
+  test("keeps page-fitting rows whole after footnote reservations", () => {
+    const spacer: FlowBlock = {
+      kind: "paragraph",
+      id: "spacer",
+      runs: [{ kind: "text", text: "spacer" }],
+    };
+    const spacerMeasure = paraMeasureWithLineHeight(1, 30);
+    const { block, measure } = tallTable(5);
+    const layout = layoutDocument(
+      [spacer, block as FlowBlock],
+      [spacerMeasure as Measure, measure as Measure],
+      {
+        ...OPTIONS,
+        footnoteReservedHeights: new Map([[1, 40]]),
+      },
+    );
+    const frags = layout.pages
+      .flatMap((page) => page.fragments)
+      .filter((f): f is TableFragment => f.kind === "table");
+
+    expect(frags.length).toBe(1);
+    expect(frags[0]?.topClip).toBeUndefined();
+    expect(frags[0]?.bottomClip).toBeUndefined();
+    expect(frags[0]?.height).toBe(100);
+    expect(frags[0]?.y).toBe(OPTIONS.margins.top);
+  });
+
   test("continues split rows into the next column before a new page", () => {
     const { block, measure } = tallTable(15);
     const layout = layoutDocument([block as FlowBlock], [measure as Measure], {

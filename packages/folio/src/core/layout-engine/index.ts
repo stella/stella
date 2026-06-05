@@ -673,7 +673,7 @@ function layoutTable(
   };
 
   const getCurrentRowCapacity = (state = paginator.getCurrentState()): number =>
-    state.contentBottom - state.topMargin;
+    state.rawContentBottom - state.topMargin;
 
   const getCurrentAvailableHeight = (
     state = paginator.getCurrentState(),
