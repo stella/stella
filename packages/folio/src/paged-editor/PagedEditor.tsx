@@ -258,6 +258,8 @@ export type PagedEditorProps = {
     to: number;
     text: string;
   }) => void;
+  /** Callback when the hidden body EditorView is created or destroyed. */
+  onEditorViewReady?: (view: EditorView | null) => void;
   /** External ProseMirror plugins. */
   externalPlugins?: Plugin[];
   /** Optional Yjs collaboration owner for the hidden ProseMirror state. */
@@ -2522,6 +2524,7 @@ export function PagedEditor(
     onReadOnlyEditAttempt,
     onSelectionChange,
     onSelectionTextChange,
+    onEditorViewReady,
     externalPlugins = EMPTY_PLUGINS,
     collaboration,
     extensionManager,
@@ -2570,6 +2573,7 @@ export function PagedEditor(
   // when parent passes unstable callback references
   const onSelectionChangeRef = useRef(onSelectionChange);
   const onSelectionTextChangeRef = useRef(onSelectionTextChange);
+  const onEditorViewReadyRef = useRef(onEditorViewReady);
   const onDocumentChangeRef = useRef(onDocumentChange);
   const onTotalPagesChangeRef = useRef(onTotalPagesChange);
   const lastTotalPagesRef = useRef<number | null>(null);
@@ -2577,6 +2581,7 @@ export function PagedEditor(
   // Keep refs in sync with latest props
   onSelectionChangeRef.current = onSelectionChange;
   onSelectionTextChangeRef.current = onSelectionTextChange;
+  onEditorViewReadyRef.current = onEditorViewReady;
   onDocumentChangeRef.current = onDocumentChange;
   onTotalPagesChangeRef.current = onTotalPagesChange;
 
@@ -6475,16 +6480,15 @@ export function PagedEditor(
         view = hiddenPMRef.current?.getView();
 
         if (view) {
-          applyPendingHiddenEditorInput(view);
           if (isPlainTextInputEvent(e)) {
             e.preventDefault();
-            dispatchEditorTextInput(view, e.key);
+            queueHiddenEditorTextInput(e.key);
             return;
           }
 
           if (isDeferredEditorKeyDown(e)) {
             e.preventDefault();
-            replayDeferredKeyDown(view, toDeferredKeyboardEventInit(e));
+            queueHiddenEditorKeyDown(e);
             return;
           }
         }
@@ -6689,6 +6693,7 @@ export function PagedEditor(
    */
   const handleEditorViewReady = useCallback(
     (view: EditorView) => {
+      onEditorViewReadyRef.current?.(view);
       anonymizationMatchesRef.current =
         anonymizationDecorationsKey.getState(view.state)?.matches ?? [];
       const initialSuggestion = autocompleteSuggestionKey.getState(
@@ -6768,6 +6773,10 @@ export function PagedEditor(
       readOnly,
     ],
   );
+
+  const handleEditorViewDestroy = useCallback(() => {
+    onEditorViewReadyRef.current?.(null);
+  }, []);
 
   // Re-paint anonymization overlay whenever a fresh layout lands;
   // selectionToRects needs the latest layout/blocks/measures to
@@ -7166,6 +7175,7 @@ export function PagedEditor(
         onSelectionChange={handleSelectionChange}
         onRemoteSelectionsChange={setRemoteSelections}
         onEditorViewReady={handleEditorViewReady}
+        onEditorViewDestroy={handleEditorViewDestroy}
         onKeyDown={handlePMKeyDown}
         {...(styles !== undefined ? { styles } : {})}
         externalPlugins={externalPlugins}

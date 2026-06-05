@@ -791,32 +791,38 @@ export function DocxEditor({
   );
 
   // Surface the live PM view to the host for AI overlay wiring.
-  // We watch `history.state` because the document re-loads (e.g.,
-  // unlocking from preview into editing) re-mount the PagedEditor
-  // and replace the view instance.
+  // PagedEditor reports the exact create/destroy lifecycle; the
+  // history-state pass catches document replacements that swap the
+  // view under the same host component.
   const lastReportedViewRef = useRef<EditorView | null>(null);
-  useEffect(() => {
+  const reportEditorViewReady = useCallback(
+    (view: EditorView | null) => {
+      if (!onEditorViewReady) {
+        return;
+      }
+      if (lastReportedViewRef.current === view) {
+        return;
+      }
+      lastReportedViewRef.current = view;
+      onEditorViewReady(view);
+    },
+    [onEditorViewReady],
+  );
+  useLayoutEffect(() => {
     if (!onEditorViewReady) {
       return;
     }
     const view = pagedEditorRef.current?.getView() ?? null;
-    if (lastReportedViewRef.current === view) {
-      return;
-    }
-    lastReportedViewRef.current = view;
-    onEditorViewReady(view);
-  }, [onEditorViewReady, history.state]);
+    reportEditorViewReady(view);
+  }, [onEditorViewReady, reportEditorViewReady, history.state]);
   useEffect(() => {
     if (!onEditorViewReady) {
       return;
     }
     return () => {
-      if (lastReportedViewRef.current !== null) {
-        lastReportedViewRef.current = null;
-        onEditorViewReady(null);
-      }
+      reportEditorViewReady(null);
     };
-  }, [onEditorViewReady]);
+  }, [onEditorViewReady, reportEditorViewReady]);
 
   // Refresh outline headings when the document loads or the outline is enabled.
   // handleDocumentChange keeps it in sync after subsequent edits. Page-number
@@ -3443,6 +3449,9 @@ export function DocxEditor({
                       }}
                       {...(onSelectionTextChange !== undefined
                         ? { onSelectionTextChange }
+                        : {})}
+                      {...(onEditorViewReady !== undefined
+                        ? { onEditorViewReady: reportEditorViewReady }
                         : {})}
                       externalPlugins={editorPlugins}
                       {...(collaboration !== undefined

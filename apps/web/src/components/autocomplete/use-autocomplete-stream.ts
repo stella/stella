@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 
 import type { Transaction } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
@@ -149,7 +149,7 @@ export const useAutocompleteStream = (
   const optionsRef = useRef(options);
   optionsRef.current = options;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const noop = () => {
       /* nothing to clean up */
     };
