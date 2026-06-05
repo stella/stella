@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import type { FlowBlock, ParagraphBlock } from "../core/layout-engine/types";
-import { computePerBlockWidths } from "./sectionBlockWidths";
+import {
+  computePerBlockMeasureInputs,
+  computePerBlockWidths,
+} from "./sectionBlockWidths";
 
 const BODY_CONFIG = {
   pageSize: { w: 1000, h: 1200 },
@@ -17,7 +20,7 @@ function paragraph(id: string): ParagraphBlock {
   };
 }
 
-describe("computePerBlockWidths", () => {
+describe("section block measurement inputs", () => {
   test("uses each section's page size and margins for measurement width", () => {
     const blocks: FlowBlock[] = [
       paragraph("first-section"),
@@ -37,5 +40,26 @@ describe("computePerBlockWidths", () => {
     });
 
     expect(widths).toEqual([500, 500, 800]);
+  });
+
+  test("returns each block's section top margin for band measurement", () => {
+    const blocks: FlowBlock[] = [
+      paragraph("first-section"),
+      {
+        kind: "sectionBreak",
+        id: "section-one",
+        pageSize: { w: 600, h: 1200 },
+        margins: { top: 64, right: 50, bottom: 50, left: 50 },
+      },
+      paragraph("final-section"),
+    ];
+
+    const inputs = computePerBlockMeasureInputs({
+      blocks,
+      bodyConfig: BODY_CONFIG,
+      finalConfig: BODY_CONFIG,
+    });
+
+    expect(inputs.marginTops).toEqual([64, 64, BODY_CONFIG.margins.top]);
   });
 });

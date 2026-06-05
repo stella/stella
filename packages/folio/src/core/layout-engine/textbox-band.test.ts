@@ -189,4 +189,35 @@ describe("topAndBottom band text box layout", () => {
     expect(box?.y).toBe(FIRST_PAGE_TOP - MARGINS.top);
     expect((box?.y ?? 0) - page.margins.top).toBe(-MARGINS.top);
   });
+
+  test("band uses the current section top margin after a section break", () => {
+    const nextSectionMargins: PageMargins = { ...MARGINS, top: 144 };
+    const sectionBreak: FlowBlock = {
+      kind: "sectionBreak",
+      id: "section-one",
+      type: "nextPage",
+      pageSize: OPTIONS.pageSize,
+      margins: MARGINS,
+    };
+    const layout = layoutDocument(
+      [sectionBreak, banner("page"), para("p")],
+      [{ kind: "sectionBreak" }, boxMeasure, paraMeasure],
+      {
+        ...OPTIONS,
+        finalMargins: nextSectionMargins,
+      },
+    );
+    const page = layout.pages.find((candidate) =>
+      candidate.fragments.some((fragment) => fragment.kind === "textBox"),
+    );
+    if (!page) {
+      throw new Error("Expected a page with the section text box");
+    }
+    const box = page.fragments.find((f) => f.kind === "textBox") as
+      | TextBoxFragment
+      | undefined;
+
+    expect(page.margins.top).toBe(nextSectionMargins.top);
+    expect(box?.y).toBe(0);
+  });
 });

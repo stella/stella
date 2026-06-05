@@ -306,6 +306,43 @@ describe("measureBlocks floating text-box bands", () => {
       );
     });
   });
+
+  test("uses the current section top margin for page-pinned bands", () => {
+    withFakeTextMeasure(() => {
+      const before: ParagraphBlock = {
+        kind: "paragraph",
+        id: "before",
+        runs: [{ kind: "text", text: "before" }],
+      };
+      const band: TextBoxBlock = {
+        kind: "textBox",
+        id: "band",
+        width: 300,
+        height: 200,
+        content: [],
+        wrapType: "topAndBottom",
+        position: { vertical: { relativeTo: "page", posOffset: 0 } },
+      };
+      const after: ParagraphBlock = {
+        kind: "paragraph",
+        id: "after",
+        runs: [{ kind: "text", text: "after" }],
+      };
+
+      const measures = measureBlocks(
+        [before, band, after],
+        [500, 500, 500],
+        [96, 144, 144],
+      );
+      const afterMeasure = measures.at(2);
+
+      expect(afterMeasure?.kind).toBe("paragraph");
+      if (afterMeasure?.kind !== "paragraph") {
+        throw new Error("Expected paragraph measure after band");
+      }
+      expect(afterMeasure.lines.at(0)?.floatSkipBefore).toBe(56);
+    });
+  });
 });
 
 describe("measureTableBlock", () => {

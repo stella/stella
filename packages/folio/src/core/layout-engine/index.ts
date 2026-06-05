@@ -280,6 +280,7 @@ export function layoutDocument(
 
   // Process each block, tracking section break index with a counter (O(1) per break)
   let sectionIdx = 0;
+  let activeSectionMarginTop = initialConfig.margins.top;
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i]!; // SAFETY: i < blocks.length
     const measure = measures[i]!; // SAFETY: measures.length === blocks.length (validated above)
@@ -343,7 +344,7 @@ export function layoutDocument(
           block as TextBoxBlock,
           measure as TextBoxMeasure,
           paginator,
-          margins.top,
+          activeSectionMarginTop,
         );
         break;
 
@@ -358,15 +359,18 @@ export function layoutDocument(
       case "sectionBreak": {
         // Use the NEXT section's columns; for break type, prefer next section's
         // type but fall back to current break's type (preserves explicit 'continuous')
+        const nextSectionConfig =
+          sectionConfigs[sectionIdx + 1] ?? initialConfig;
         const nextType =
           sectionBreakTypes[sectionIdx + 1] ?? sectionBreakTypes[sectionIdx];
         handleSectionBreak(
           block as SectionBreakBlock,
           paginator,
-          sectionConfigs[sectionIdx + 1] ?? initialConfig,
+          nextSectionConfig,
           nextType,
           sectionIdx + 1,
         );
+        activeSectionMarginTop = nextSectionConfig.margins.top;
         sectionIdx++;
         break;
       }

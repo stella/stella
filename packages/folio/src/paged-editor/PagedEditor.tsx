@@ -199,7 +199,7 @@ import {
   isValidPmScrollPosition,
   prefersReducedMotionBehavior,
 } from "./scrollNavigation";
-import { computePerBlockWidths } from "./sectionBlockWidths";
+import { computePerBlockMeasureInputs } from "./sectionBlockWidths";
 import { SelectionOverlay } from "./SelectionOverlay";
 import { getTransactionDirtyRange } from "./transactionDirtyRange";
 import { useDragAutoScroll } from "./useDragAutoScroll";
@@ -2071,12 +2071,26 @@ type FloatingZoneWithAnchor = {
   isMarginRelative?: boolean;
 } & FloatingImageZone;
 
+function perBlockNumberValue(
+  value: number | number[],
+  blockIndex: number,
+  fallback: number,
+): number {
+  if (Array.isArray(value)) {
+    return value[blockIndex] ?? fallback;
+  }
+  return value;
+}
+
 function extractFloatingZones(
   blocks: FlowBlock[],
   contentWidth: number,
-  marginTop = 0,
+  marginTop: number | number[] = 0,
 ): FloatingZoneWithAnchor[] {
   const zones: FloatingZoneWithAnchor[] = [];
+  const defaultMarginTop = Array.isArray(marginTop)
+    ? (marginTop[0] ?? 0)
+    : marginTop;
 
   for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
     const block = blocks[blockIndex]!; // SAFETY: blockIndex < blocks.length
@@ -2247,8 +2261,13 @@ function extractFloatingZones(
     const height = measureTextBoxBlock(tb).height;
     const distTop = tb.distTop ?? 0;
     const distBottom = tb.distBottom ?? 0;
+    const blockMarginTop = perBlockNumberValue(
+      marginTop,
+      blockIndex,
+      defaultMarginTop,
+    );
     // Shared with layoutTextBox so the reserved band and the painted box agree.
-    const rawTop = bandTopContentY(v, marginTop);
+    const rawTop = bandTopContentY(v, blockMarginTop);
     const bottomY = rawTop + height + distBottom;
     if (bottomY <= 0) {
       continue;
@@ -2370,7 +2389,7 @@ function measureTextBoxBlock(tb: TextBoxBlock): TextBoxMeasure {
 export function measureBlocks(
   blocks: FlowBlock[],
   contentWidth: number | number[],
-  marginTop = 0,
+  marginTop: number | number[] = 0,
 ): Measure[] {
   const defaultWidth = Array.isArray(contentWidth)
     ? (contentWidth[0] ?? 0)
@@ -3060,11 +3079,12 @@ export function PagedEditor(
         if (columns !== undefined) {
           bodyLayoutConfig.columns = columns;
         }
-        const blockWidths = computePerBlockWidths({
+        const blockMeasureInputs = computePerBlockMeasureInputs({
           blocks: newBlocks,
           bodyConfig: bodyLayoutConfig,
           finalConfig: bodyLayoutConfig,
         });
+        const blockWidths = blockMeasureInputs.widths;
         const incrementalResult =
           options.dirtyRange && !options.forceFull && layoutArtifactsRef.current
             ? tryBuildIncrementalMeasures({
@@ -3079,7 +3099,7 @@ export function PagedEditor(
             : null;
         const newMeasures =
           incrementalResult?.measures ??
-          measureBlocks(newBlocks, blockWidths, margins.top);
+          measureBlocks(newBlocks, blockWidths, blockMeasureInputs.marginTops);
         layoutArtifactsRef.current = {
           blocks: newBlocks,
           blockWidths,
