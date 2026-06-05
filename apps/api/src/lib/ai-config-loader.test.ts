@@ -1,15 +1,28 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { toSafeId } from "@/api/lib/branded-types";
+
+const decryptedAIConfig: OrgAIConfig = {
+  providers: [
+    {
+      apiKey: "org-google-secret",
+      provider: "google",
+    },
+  ],
+  overrideModels: {
+    chat: { provider: "google", modelId: "gemini-3.5-flash" },
+    fast: { provider: "google", modelId: "gemini-3.5-flash" },
+    pdf: { provider: "google", modelId: "gemini-3.5-flash" },
+    reasoning: { provider: "google", modelId: "gemini-3.1-pro-preview" },
+  },
+};
 
 const dbLimitMock = mock(async () => [] as Record<string, unknown>[]);
 const dbWhereMock = mock(() => ({ limit: dbLimitMock }));
 const dbFromMock = mock(() => ({ where: dbWhereMock }));
 const dbSelectMock = mock(() => ({ from: dbFromMock }));
-const decryptAIConfigMock = mock(async () => ({
-  overrideModels: {},
-  providers: [],
-}));
+const decryptAIConfigMock = mock(async () => decryptedAIConfig);
 
 void mock.module("@/api/db/root", () => ({
   rootDb: {
@@ -55,10 +68,7 @@ describe("loadOrgAIConfig", () => {
 
     const result = await loadOrgAIConfig(organizationId);
 
-    expect(result).toEqual({
-      overrideModels: {},
-      providers: [],
-    });
+    expect(result).toEqual(decryptedAIConfig);
     expect(decryptAIConfigMock).toHaveBeenCalledWith(
       organizationId,
       Buffer.from([10, 11]),
