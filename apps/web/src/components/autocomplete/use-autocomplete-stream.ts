@@ -24,6 +24,7 @@ export type UseAutocompleteStreamOptions = {
 
 const DEFAULT_DEBOUNCE_MS = 1500;
 const DEFAULT_MIN_PREFIX_CHARS = 8;
+const MAX_PREFIX_CHARS = 8000;
 
 type SSEEvent = { event: string; data: string };
 
@@ -68,7 +69,8 @@ const extractPrefix = (
 ): { prefix: string; anchor: number } => {
   const { state } = view;
   const anchor = state.selection.from;
-  const prefix = state.doc.textBetween(0, anchor, "\n", "\n");
+  const fullPrefix = state.doc.textBetween(0, anchor, "\n", "\n");
+  const prefix = fullPrefix.slice(-MAX_PREFIX_CHARS);
   return { prefix, anchor };
 };
 
@@ -257,10 +259,24 @@ export const useAutocompleteStream = (
     // hook, so we install a dispatch wrapper. Every user-driven
     // doc edit (no autocomplete meta) cancels the in-flight
     // request and (re)schedules a new trigger.
-    const originalDispatch = view.dispatch.bind(view);
+    const originalDispatchTransaction = view.props.dispatchTransaction;
+    const restoreDispatchTransaction = () => {
+      if (originalDispatchTransaction) {
+        view.setProps({ dispatchTransaction: originalDispatchTransaction });
+        return;
+      }
+
+      const nextProps = { ...view.props, state: view.state };
+      delete nextProps.dispatchTransaction;
+      view.update(nextProps);
+    };
     view.setProps({
       dispatchTransaction: (tr) => {
-        originalDispatch(tr);
+        if (originalDispatchTransaction) {
+          originalDispatchTransaction.call(view, tr);
+        } else {
+          view.updateState(view.state.apply(tr));
+        }
         if (
           tr.docChanged &&
           tr.getMeta(autocompleteSuggestionKey) === undefined
@@ -277,6 +293,7 @@ export const useAutocompleteStream = (
       if (debounceTimer !== null) {
         clearTimeout(debounceTimer);
       }
+      restoreDispatchTransaction();
     };
-  }, [view]);
+  }, [view, options.enabled]);
 };

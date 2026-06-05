@@ -124,6 +124,13 @@ describe("autocompleteSuggestion reducer", () => {
     expect(getAutocompleteSuggestion(state).status).toBe("shown");
   });
 
+  test("finish with no streamed text returns to idle", () => {
+    let state = mkState(blockDoc("paragraph", "Dear"));
+    state = state.apply(startAutocompleteSuggestion(state.tr, 5, "r1"));
+    state = state.apply(finishAutocompleteSuggestion(state.tr, "r1"));
+    expect(getAutocompleteSuggestion(state).status).toBe("idle");
+  });
+
   test("finish for a stale request does not change status", () => {
     let state = mkState(blockDoc("paragraph", "Dear"));
     state = state.apply(startAutocompleteSuggestion(state.tr, 5, "r1"));

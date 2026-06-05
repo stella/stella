@@ -67,30 +67,29 @@ const autocompleteStream = createSafeRootHandler(
     session,
     request,
   }) {
-    const model = yield* Result.await(
-      Promise.resolve().then(() => {
-        try {
-          return Result.ok(
-            getModelForRole("fast", orgAIConfig, {
-              promptCachingEnabled,
-              scopeKey: null,
-              organizationId: session.activeOrganizationId,
-            }),
-          );
-        } catch (error) {
-          if (error instanceof HandlerError) {
-            return Result.err(error);
-          }
-          return Result.err(
-            new HandlerError({
-              status: 500,
-              message: "Autocomplete is not available on this deployment.",
-              cause: error,
-            }),
-          );
+    const modelResult = (() => {
+      try {
+        return Result.ok(
+          getModelForRole("fast", orgAIConfig, {
+            promptCachingEnabled,
+            scopeKey: null,
+            organizationId: session.activeOrganizationId,
+          }),
+        );
+      } catch (error) {
+        if (error instanceof HandlerError) {
+          return Result.err(error);
         }
-      }),
-    );
+        return Result.err(
+          new HandlerError({
+            status: 500,
+            message: "Autocomplete is not available on this deployment.",
+            cause: error,
+          }),
+        );
+      }
+    })();
+    const model = yield* modelResult;
 
     const stream = streamText({
       model,
@@ -113,6 +112,9 @@ const autocompleteStream = createSafeRootHandler(
       async start(controller) {
         const encoder = new TextEncoder();
         const writeEvent = (event: string, data: unknown) => {
+          if (request.signal.aborted) {
+            return;
+          }
           controller.enqueue(
             encoder.encode(
               `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`,
@@ -127,12 +129,16 @@ const autocompleteStream = createSafeRootHandler(
           }
           writeEvent("done", {});
         } catch (error) {
-          writeEvent("error", {
-            message:
-              error instanceof Error ? error.message : "stream interrupted",
-          });
+          if (!request.signal.aborted) {
+            writeEvent("error", {
+              message:
+                error instanceof Error ? error.message : "stream interrupted",
+            });
+          }
         } finally {
-          controller.close();
+          if (!request.signal.aborted) {
+            controller.close();
+          }
         }
       },
     });

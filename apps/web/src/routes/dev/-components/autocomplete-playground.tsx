@@ -26,6 +26,7 @@ import { apiUrl } from "@/lib/api-url";
 
 const DEBOUNCE_MS = 1500;
 const MIN_PREFIX_CHARS = 8;
+const MAX_PREFIX_CHARS = 8000;
 
 const playgroundSchema = new Schema({
   nodes: {
@@ -66,7 +67,8 @@ const extractPrefix = (
 ): { prefix: string; anchor: number } => {
   const { state } = view;
   const anchor = state.selection.from;
-  const prefix = state.doc.textBetween(0, anchor, "\n", "\n");
+  const fullPrefix = state.doc.textBetween(0, anchor, "\n", "\n");
+  const prefix = fullPrefix.slice(-MAX_PREFIX_CHARS);
   return { prefix, anchor };
 };
 

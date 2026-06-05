@@ -1,5 +1,6 @@
 import Elysia from "elysia";
 
+import { env } from "@/api/env";
 import autocompleteStream from "@/api/handlers/ai-autocomplete/stream";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 
@@ -16,7 +17,15 @@ export const aiAutocompleteRoute = new Elysia({
 })
   .use(authMacro)
   .use(permissionMacro)
-  .guard({ validateAuth: true })
+  .guard({
+    validateAuth: true,
+    beforeHandle: () => {
+      if (env.isDev) {
+        return undefined;
+      }
+      return new Response("Not available", { status: 404 });
+    },
+  })
   .post("/stream", autocompleteStream.handler, {
     body: autocompleteStream.config.body,
     permissions: autocompleteStream.config.permissions,

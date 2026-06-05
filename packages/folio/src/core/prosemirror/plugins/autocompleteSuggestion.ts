@@ -186,6 +186,9 @@ const reduce = (
   if (prev.status === "idle" || prev.requestId !== meta.requestId) {
     return prev;
   }
+  if (prev.text.length === 0) {
+    return IDLE;
+  }
   return { ...prev, status: "shown" };
 };
 

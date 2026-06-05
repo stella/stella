@@ -2631,6 +2631,7 @@ export function PagedEditor(
     text: "",
     requestId: null,
   });
+  const autocompleteOverlayRequestSeqRef = useRef(0);
   const [autocompleteCaret, setAutocompleteCaret] =
     useState<AutocompleteCaretRect | null>(null);
   const [autocompleteText, setAutocompleteText] = useState<string>("");
@@ -4086,7 +4087,15 @@ export function PagedEditor(
   // ref so this can run from a transaction handler without
   // re-creating callbacks per render.
   const updateAutocompleteOverlay = useCallback(() => {
+    const requestSeq = autocompleteOverlayRequestSeqRef.current + 1;
+    autocompleteOverlayRequestSeqRef.current = requestSeq;
     const current = autocompleteSuggestionRef.current;
+    const isCurrentRequest = () =>
+      autocompleteOverlayRequestSeqRef.current === requestSeq &&
+      autocompleteSuggestionRef.current === current &&
+      current.status !== "idle" &&
+      current.text.length > 0;
+
     if (current.status === "idle" || current.text.length === 0) {
       setAutocompleteCaret(null);
       setAutocompleteText("");
@@ -4102,7 +4111,15 @@ export function PagedEditor(
     // and anchor-position overlays do.
     void loadSelectionGeometry().then(
       ({ getCaretPosition }) => {
+        if (!isCurrentRequest()) {
+          return undefined;
+        }
+
         const caret = getCaretPosition(layout, blocks, measures, anchor);
+        if (!isCurrentRequest()) {
+          return undefined;
+        }
+
         if (caret === null) {
           setAutocompleteCaret(null);
           return undefined;
@@ -4120,6 +4137,10 @@ export function PagedEditor(
         const pageRect = firstPage.getBoundingClientRect();
         const pageOffsetX = (pageRect.left - overlayRect.left) / zoom;
         const pageOffsetY = (pageRect.top - overlayRect.top) / zoom;
+        if (!isCurrentRequest()) {
+          return undefined;
+        }
+
         setAutocompleteCaret({
           x: caret.x + pageOffsetX,
           y: caret.y + pageOffsetY,
