@@ -461,7 +461,7 @@
     "placeholder": "Digite sua pergunta aqui, / para habilidades, @ para adicionar contexto",
     "prompts": {
       "noResults": "Sem habilidades correspondentes",
-      "noShortcuts": "Nenhuma habilidade ainda. Adicione alguns em Conhecimento → Habilidades.",
+      "noShortcuts": "Nenhuma habilidade ainda. Adicione algumas em Conhecimento → Habilidades.",
       "tryOne": "Experimente um destes para começar"
     },
     "queuedAttachmentCount": "{count, plural, one {# anexo} many {# anexos} other {# anexos}}",
@@ -1388,22 +1388,22 @@
       "connect": "Conectar",
       "connectedToast": "MCP conectado",
       "connectedWithLastUsed": "Conectado · último uso {time}",
-      "description": "Gerencie servidores MCP externos que podem adicionar ferramentas ao chat. Os tokens são armazenados por usuário.",
+      "description": "Gerencie integrações que podem adicionar ferramentas ao chat. Os tokens são armazenados por usuário.",
       "detected": "{authType} detectado",
       "disable": "Desativar",
       "disabled": "Conectado · desativado",
       "disconnect": "Desconectar",
-      "emptyDescription": "Conectores MCP jurídicos selecionados aparecerão aqui quando forem habilitados para seu espaço de trabalho.",
-      "emptyTitle": "Ainda não há conectores MCP",
+      "emptyDescription": "Integrações jurídicas selecionadas aparecerão aqui quando forem habilitadas para seu espaço de trabalho.",
+      "emptyTitle": "Ainda não há integrações",
       "enable": "Ativar",
-      "errorDescription": "Não foi possível atualizar o conector.",
+      "errorDescription": "Não foi possível atualizar a integração.",
       "errorTitle": "Falha MCP",
-      "mcpExplainer": "Os servidores MCP adicionam ao chat serviços externos com os quais a IA pode trabalhar.",
+      "mcpExplainer": "As integrações conectam serviços externos ao chat com os quais a IA pode trabalhar.",
       "namePlaceholder": "Nome de exibição",
       "needsReauth": "Precisa reconectar",
       "off": "Desligado",
       "on": "Ligado",
-      "otherTitle": "Outros conectores",
+      "otherTitle": "Outras integrações",
       "probe": "Verificar",
       "recommendedBadge": "Recomendado",
       "recommendedFor": "Recomendado para {jurisdictions}",
@@ -1433,8 +1433,8 @@
         "title": "MCP"
       },
       "prompts": {
-        "description": "Instruções reutilizáveis disponíveis com / no chat",
-        "title": "Prompts"
+        "description": "Habilidades reutilizáveis disponíveis com / no chat",
+        "title": "Habilidades"
       },
       "templates": {
         "description": "Modelos de documentos com espaços reservados",
@@ -1459,8 +1459,8 @@
       "deleteConfirmTitle": "Excluir habilidade?",
       "deleteShortcut": "Excluir habilidade",
       "editShortcut": "Editar habilidade",
-      "emptyDescription": "Crie prompts reutilizáveis para o trabalho que sua equipe repete, desde resumos até instruções de redação inicial.",
-      "emptyState": "Nenhuma habilidade ainda. Adicione o seu primeiro.",
+      "emptyDescription": "Crie habilidades reutilizáveis para o trabalho que sua equipe repete, de resumos a instruções para uma primeira versão.",
+      "emptyState": "Nenhuma habilidade ainda. Adicione a primeira.",
       "emptyTitle": "Crie sua primeira habilidade",
       "emptyVideoLabel": "Visão geral das habilidades",
       "errors": {
@@ -1469,23 +1469,23 @@
         "commandReserved": "\"/{command}\" é uma habilidade reservada"
       },
       "form": {
-        "command": "Habilidade",
-        "commandHint": "O nome da habilidade /: somente letras minúsculas, números, hifens e sublinhados",
+        "command": "Atalho de habilidade",
+        "commandHint": "O nome / da habilidade: somente letras minúsculas, números, hifens e sublinhados",
         "commandPlaceholder": "ex.: resumir",
         "commandPrefix": "/",
         "description": "Descrição",
         "descriptionPlaceholder": "Breve descrição mostrada no seletor",
         "name": "Nome",
         "namePlaceholder": "ex.: Resumir documento",
-        "prompt": "Prompt",
-        "promptPlaceholder": "O texto inserido no compositor do chat quando esta habilidade é usada",
+        "prompt": "Instruções",
+        "promptPlaceholder": "Instruções inseridas no compositor do chat quando esta habilidade é usada",
         "scope": "Visibilidade",
         "scopePrivate": "Só eu",
         "scopeTeam": "Todos na organização"
       },
-      "privateSection": "Seus atalhos",
-      "shadowed": "Substituída por atalho da equipe",
-      "teamSection": "Atalhos de equipe"
+      "privateSection": "Suas habilidades",
+      "shadowed": "Substituída por habilidade da equipe",
+      "teamSection": "Habilidades da equipe"
     }
   },
   "navigation": {

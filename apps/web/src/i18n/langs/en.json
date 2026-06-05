@@ -456,12 +456,12 @@
     "pastedText": {
       "expand": "Show full text",
       "fromClipboard": "Pasted {count, plural, one {# character} other {# characters}}",
-      "fromPromptFallback": "Prompt"
+      "fromPromptFallback": "Skill"
     },
     "placeholder": "Type your question here, / for skills, @ to add context",
     "prompts": {
       "noResults": "No matching skills",
-      "noShortcuts": "No prompts yet. Add some in Knowledge → Prompts.",
+      "noShortcuts": "No skills yet. Add some in Knowledge → Skills.",
       "tryOne": "Try one of these to start"
     },
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
@@ -1393,10 +1393,10 @@
       "disable": "Disable",
       "disabled": "Connected · disabled",
       "disconnect": "Disconnect",
-      "emptyDescription": "Curated legal MCP connectors will appear here as they are enabled for your workspace.",
+      "emptyDescription": "Curated legal integrations will appear here as they are enabled for your workspace.",
       "emptyTitle": "No integrations yet",
       "enable": "Enable",
-      "errorDescription": "The connector could not be updated.",
+      "errorDescription": "The integration could not be updated.",
       "errorTitle": "MCP failed",
       "mcpExplainer": "Integrations connect external services to the chat that the AI can work with.",
       "namePlaceholder": "Display name",
@@ -1433,8 +1433,8 @@
         "title": "MCP"
       },
       "prompts": {
-        "description": "Reusable instructions available from / in chat",
-        "title": "Prompts"
+        "description": "Reusable skills available from / in chat",
+        "title": "Skills"
       },
       "templates": {
         "description": "Document templates with placeholders",
@@ -1455,22 +1455,22 @@
       "commandPlaceholder": "e.g. summarize",
       "createTitle": "New skill",
       "defaultBadge": "Default",
-      "deleteConfirmDescription": "This prompt will be permanently removed.",
-      "deleteConfirmTitle": "Delete prompt?",
-      "deleteShortcut": "Delete prompt",
-      "editShortcut": "Edit prompt",
-      "emptyDescription": "Create reusable prompts for the work your team repeats, from summaries to first-pass drafting instructions.",
-      "emptyState": "No prompts yet. Add your first one.",
+      "deleteConfirmDescription": "This skill will be permanently removed.",
+      "deleteConfirmTitle": "Delete skill?",
+      "deleteShortcut": "Delete skill",
+      "editShortcut": "Edit skill",
+      "emptyDescription": "Create reusable skills for the work your team repeats, from summaries to first-pass drafting instructions.",
+      "emptyState": "No skills yet. Add your first one.",
       "emptyTitle": "Create your first skill",
-      "emptyVideoLabel": "Prompts overview",
+      "emptyVideoLabel": "Skills overview",
       "errors": {
-        "commandConflict": "A prompt with this / name already exists",
+        "commandConflict": "A skill with this / name already exists",
         "commandInvalid": "Use only lowercase letters, digits, hyphens and underscores",
-        "commandReserved": "\"/{command}\" is a reserved prompt"
+        "commandReserved": "\"/{command}\" is a reserved skill"
       },
       "form": {
-        "command": "Prompt shortcut",
-        "commandHint": "The / prompt name: lowercase letters, numbers, hyphens, and underscores only",
+        "command": "Skill shortcut",
+        "commandHint": "The / skill name: lowercase letters, numbers, hyphens, and underscores only",
         "commandPlaceholder": "e.g. summarize",
         "commandPrefix": "/",
         "description": "Description",
@@ -1478,13 +1478,13 @@
         "name": "Name",
         "namePlaceholder": "e.g. Summarise document",
         "prompt": "Instructions",
-        "promptPlaceholder": "The text inserted into the chat composer when this prompt is used",
+        "promptPlaceholder": "Instructions inserted into the chat composer when this skill is used",
         "scope": "Visibility",
         "scopePrivate": "Only me",
         "scopeTeam": "Everyone in the organisation"
       },
       "privateSection": "Your skills",
-      "shadowed": "Shadowed by team prompt",
+      "shadowed": "Shadowed by team skill",
       "teamSection": "Team skills"
     }
   },

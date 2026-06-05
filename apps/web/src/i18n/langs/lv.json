@@ -1388,22 +1388,22 @@
       "connect": "Pievienot",
       "connectedToast": "MCP pievienots",
       "connectedWithLastUsed": "Pievienots · pēdoreiz izmantots {time}",
-      "description": "Pārvaldiet ārējos MCP serverus, kas var pievienot rīkus čatam. Tokeni tiek glabāti katram lietotājam atsevišķi.",
+      "description": "Pārvaldiet integrācijas, kas var pievienot rīkus čatam. Tokeni tiek glabāti katram lietotājam atsevišķi.",
       "detected": "Noteikts: {authType}",
       "disable": "Izslēgt",
       "disabled": "Pievienots · izslēgts",
       "disconnect": "Atvienot",
-      "emptyDescription": "Atlasītie juridiskie MCP savienotāji parādīsies šeit, kad tie būs iespējoti jūsu darbvietai.",
-      "emptyTitle": "MCP savienotāju vēl nav",
+      "emptyDescription": "Atlasītās juridiskās integrācijas parādīsies šeit, kad tās būs iespējotas jūsu darbvietai.",
+      "emptyTitle": "Integrāciju vēl nav",
       "enable": "Ieslēgt",
-      "errorDescription": "Savienotāju neizdevās atjaunināt.",
+      "errorDescription": "Integrāciju neizdevās atjaunināt.",
       "errorTitle": "MCP neizdevās",
-      "mcpExplainer": "MCP serveri pievieno tērzēšanai ārējus pakalpojumus, ar kuriem var strādāt MI.",
+      "mcpExplainer": "Integrācijas pievieno čatam ārējus pakalpojumus, ar kuriem var strādāt MI.",
       "namePlaceholder": "Rādāmais nosaukums",
       "needsReauth": "Nepieciešama atkārtota pievienošana",
       "off": "Izslēgts",
       "on": "Ieslēgts",
-      "otherTitle": "Citi savienotāji",
+      "otherTitle": "Citas integrācijas",
       "probe": "Pārbaudīt",
       "recommendedBadge": "Ieteicams",
       "recommendedFor": "Ieteicams: {jurisdictions}",
@@ -1433,8 +1433,8 @@
         "title": "MCP"
       },
       "prompts": {
-        "description": "Atkārtoti izmantojamas instrukcijas, kas čatā pieejamas ar /",
-        "title": "Prompti"
+        "description": "Atkārtoti izmantojamas prasmes, kas čatā pieejamas ar /",
+        "title": "Prasmes"
       },
       "templates": {
         "description": "Dokumentu veidnes ar vietturiem",
@@ -1446,7 +1446,7 @@
       }
     },
     "skills": {
-      "addShortcut": "Pievienot promptu",
+      "addShortcut": "Pievienot prasmi",
       "autoInvokeHintLabel": "Padoms modelim",
       "autoInvokeHintPlaceholder": "Kad modelim šī prasme jāizvēlas automātiski?",
       "autoInvokeLabel": "Ļaut MI palaist automātiski",
@@ -1455,37 +1455,37 @@
       "commandPlaceholder": "piem. apkopot",
       "createTitle": "Jauna prasme",
       "defaultBadge": "Noklusējums",
-      "deleteConfirmDescription": "Šis prompts tiks neatgriezeniski noņemts.",
-      "deleteConfirmTitle": "Dzēst promptu?",
-      "deleteShortcut": "Dzēst promptu",
-      "editShortcut": "Rediģēt promptu",
-      "emptyDescription": "Izveidojiet atkārtoti izmantojamas uzvednes darbam, ko jūsu komanda atkārto, sākot no kopsavilkumiem līdz pirmā uzmetuma sagatavošanas norādījumiem.",
-      "emptyState": "Promptu vēl nav. Pievienojiet pirmo.",
-      "emptyTitle": "Izveidojiet pirmo promptu",
-      "emptyVideoLabel": "Promptu pārskats",
+      "deleteConfirmDescription": "Šī prasme tiks neatgriezeniski noņemta.",
+      "deleteConfirmTitle": "Dzēst prasmi?",
+      "deleteShortcut": "Dzēst prasmi",
+      "editShortcut": "Rediģēt prasmi",
+      "emptyDescription": "Izveidojiet atkārtoti izmantojamas prasmes darbam, ko jūsu komanda atkārto, sākot no kopsavilkumiem līdz pirmā uzmetuma sagatavošanas norādījumiem.",
+      "emptyState": "Prasmju vēl nav. Pievienojiet pirmo.",
+      "emptyTitle": "Izveidojiet pirmo prasmi",
+      "emptyVideoLabel": "Prasmju pārskats",
       "errors": {
-        "commandConflict": "Prompts ar šo / nosaukumu jau pastāv",
+        "commandConflict": "Prasme ar šo / nosaukumu jau pastāv",
         "commandInvalid": "Izmantojiet tikai mazos burtus, ciparus, defises un pasvītras",
-        "commandReserved": "\"/{command}\" ir rezervēts prompts"
+        "commandReserved": "\"/{command}\" ir rezervēta prasme"
       },
       "form": {
-        "command": "Prompta saīsne",
-        "commandHint": "/ prompta nosaukums: tikai mazie burti, cipari, defises un pasvītras",
+        "command": "Prasmes saīsne",
+        "commandHint": "/ prasmes nosaukums: tikai mazie burti, cipari, defises un pasvītras",
         "commandPlaceholder": "piem., summarize",
         "commandPrefix": "/",
         "description": "Apraksts",
         "descriptionPlaceholder": "Īss apraksts, kas redzams atlasītājā",
         "name": "Nosaukums",
         "namePlaceholder": "piem., Apkopot dokumentu",
-        "prompt": "Uzvedne",
-        "promptPlaceholder": "Teksts, kas tiek ievietots čata rakstīšanas laukā, izmantojot šo promptu",
+        "prompt": "Instrukcijas",
+        "promptPlaceholder": "Instrukcijas, kas tiek ievietotas čata rakstīšanas laukā, izmantojot šo prasmi",
         "scope": "Redzamība",
         "scopePrivate": "Tikai es",
         "scopeTeam": "Visi organizācijā"
       },
-      "privateSection": "Jūsu prompti",
-      "shadowed": "Aizstāts ar komandas promptu",
-      "teamSection": "Komandas prompti"
+      "privateSection": "Jūsu prasmes",
+      "shadowed": "Aizstāts ar komandas prasmi",
+      "teamSection": "Komandas prasmes"
     }
   },
   "navigation": {

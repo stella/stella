@@ -1388,22 +1388,22 @@
       "connect": "Pripojiť",
       "connectedToast": "MCP pripojené",
       "connectedWithLastUsed": "Pripojené · naposledy použité {time}",
-      "description": "Spravujte externé MCP servery, ktoré môžu pridať nástroje do chatu. Tokeny sa ukladajú pre každého používateľa zvlášť.",
+      "description": "Spravujte integrácie, ktoré môžu pridať nástroje do chatu. Tokeny sa ukladajú pre každého používateľa zvlášť.",
       "detected": "Rozpoznané: {authType}",
       "disable": "Vypnúť",
       "disabled": "Pripojené · vypnuté",
       "disconnect": "Odpojiť",
-      "emptyDescription": "Overené právne MCP konektory sa tu zobrazia po zapnutí pre váš pracovný priestor.",
-      "emptyTitle": "Zatiaľ žiadne MCP konektory",
+      "emptyDescription": "Overené právne integrácie sa tu zobrazia po zapnutí pre váš pracovný priestor.",
+      "emptyTitle": "Zatiaľ žiadne integrácie",
       "enable": "Zapnúť",
-      "errorDescription": "Konektor sa nepodarilo upraviť.",
+      "errorDescription": "Integráciu sa nepodarilo upraviť.",
       "errorTitle": "MCP zlyhalo",
-      "mcpExplainer": "MCP servery pridávajú do chatu externé služby, s ktorými môže AI pracovať.",
+      "mcpExplainer": "Integrácie pripájajú do chatu externé služby, s ktorými môže AI pracovať.",
       "namePlaceholder": "Zobrazovaný názov",
       "needsReauth": "Vyžaduje opätovné pripojenie",
       "off": "Vypnuté",
       "on": "Zapnuté",
-      "otherTitle": "Ostatné konektory",
+      "otherTitle": "Ostatné integrácie",
       "probe": "Overiť",
       "recommendedBadge": "Odporúčané",
       "recommendedFor": "Odporúčané pre {jurisdictions}",
@@ -1433,8 +1433,8 @@
         "title": "MCP"
       },
       "prompts": {
-        "description": "Opakovane použiteľné inštrukcie dostupné cez / v chate",
-        "title": "Prompty"
+        "description": "Opakovane použiteľné zručnosti dostupné cez / v chate",
+        "title": "Zručnosti"
       },
       "templates": {
         "description": "Šablóny dokumentov so zástupnými znakmi",
@@ -1446,7 +1446,7 @@
       }
     },
     "skills": {
-      "addShortcut": "Pridať prompt",
+      "addShortcut": "Pridať zručnosť",
       "autoInvokeHintLabel": "Pomôcka pre model",
       "autoInvokeHintPlaceholder": "Kedy má model túto zručnosť automaticky vybrať?",
       "autoInvokeLabel": "Nechať AI spustiť automaticky",
@@ -1455,37 +1455,37 @@
       "commandPlaceholder": "napr. zhrnúť",
       "createTitle": "Nová zručnosť",
       "defaultBadge": "Predvolené",
-      "deleteConfirmDescription": "Tento prompt bude natrvalo odstránený.",
-      "deleteConfirmTitle": "Vymazať prompt?",
-      "deleteShortcut": "Vymazať prompt",
-      "editShortcut": "Upraviť prompt",
-      "emptyDescription": "Vytvorte opakovane použiteľné prompty pre prácu, ktorú váš tím robí opakovane, od zhrnutí po pokyny na prvotné koncipovanie.",
-      "emptyState": "Žiadne prompty. Pridajte prvý.",
-      "emptyTitle": "Vytvorte prvý prompt",
-      "emptyVideoLabel": "Prehľad promptov",
+      "deleteConfirmDescription": "Táto zručnosť bude natrvalo odstránená.",
+      "deleteConfirmTitle": "Odstrániť zručnosť?",
+      "deleteShortcut": "Odstrániť zručnosť",
+      "editShortcut": "Upraviť zručnosť",
+      "emptyDescription": "Vytvorte opakovane použiteľné zručnosti pre prácu, ktorú váš tím robí opakovane, od zhrnutí po pokyny na prvotné koncipovanie.",
+      "emptyState": "Zatiaľ žiadne zručnosti. Pridajte prvú.",
+      "emptyTitle": "Vytvorte prvú zručnosť",
+      "emptyVideoLabel": "Prehľad zručností",
       "errors": {
-        "commandConflict": "Prompt s týmto / názvom už existuje",
+        "commandConflict": "Zručnosť s týmto / názvom už existuje",
         "commandInvalid": "Používajte iba malé písmená, číslice, spojovníky a podčiarkovníky",
-        "commandReserved": "\"/{command}\" je rezervovaný prompt"
+        "commandReserved": "\"/{command}\" je rezervovaná zručnosť"
       },
       "form": {
-        "command": "Skratka promptu",
-        "commandHint": "Názov / promptu: iba malé písmená, číslice, pomlčky a podčiarkovníky",
+        "command": "Skratka zručnosti",
+        "commandHint": "Názov / zručnosti: iba malé písmená, číslice, pomlčky a podčiarkovníky",
         "commandPlaceholder": "napr. summarize",
         "commandPrefix": "/",
         "description": "Popis",
         "descriptionPlaceholder": "Stručný popis zobrazený vo výbere",
         "name": "Názov",
         "namePlaceholder": "napr. Zhrnúť dokument",
-        "prompt": "Prompt",
-        "promptPlaceholder": "Text vložený do editora chatu pri použití tohto promptu",
+        "prompt": "Pokyny",
+        "promptPlaceholder": "Pokyny vložené do editora chatu pri použití tejto zručnosti",
         "scope": "Viditeľnosť",
         "scopePrivate": "Iba ja",
         "scopeTeam": "Všetci v organizácii"
       },
-      "privateSection": "Vaše prompty",
-      "shadowed": "Prekryté tímovým promptom",
-      "teamSection": "Tímové prompty"
+      "privateSection": "Vaše zručnosti",
+      "shadowed": "Prekryté tímovou zručnosťou",
+      "teamSection": "Tímové zručnosti"
     }
   },
   "navigation": {

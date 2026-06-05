@@ -1393,10 +1393,10 @@
       "disable": "Vypnout",
       "disabled": "Připojeno · vypnuto",
       "disconnect": "Odpojit",
-      "emptyDescription": "Ověřené právní MCP konektory se zde zobrazí po zapnutí pro váš workspace.",
+      "emptyDescription": "Ověřené právní integrace se zde zobrazí po zapnutí pro váš pracovní prostor.",
       "emptyTitle": "Zatím žádné integrace",
       "enable": "Zapnout",
-      "errorDescription": "Konektor se nepodařilo upravit.",
+      "errorDescription": "Integraci se nepodařilo upravit.",
       "errorTitle": "MCP selhalo",
       "mcpExplainer": "Integrace připojují do chatu externí služby, se kterými může AI pracovat.",
       "namePlaceholder": "Zobrazovaný název",
@@ -1433,8 +1433,8 @@
         "title": "MCP"
       },
       "prompts": {
-        "description": "Opakovaně použitelné instrukce dostupné přes / v chatu",
-        "title": "Prompty"
+        "description": "Opakovaně použitelné dovednosti dostupné přes / v chatu",
+        "title": "Dovednosti"
       },
       "templates": {
         "description": "Šablony dokumentů se zástupnými znaky",
@@ -1455,22 +1455,22 @@
       "commandPlaceholder": "např. shrnout",
       "createTitle": "Nová dovednost",
       "defaultBadge": "Výchozí",
-      "deleteConfirmDescription": "Tento prompt bude trvale odstraněn.",
-      "deleteConfirmTitle": "Smazat prompt?",
-      "deleteShortcut": "Smazat prompt",
-      "editShortcut": "Upravit prompt",
-      "emptyDescription": "Vytvářejte opakovaně použitelné prompty pro práci, kterou váš tým opakuje, od shrnutí po první návrhy pokynů.",
-      "emptyState": "Žádné prompty. Přidejte první.",
+      "deleteConfirmDescription": "Tato dovednost bude trvale odstraněna.",
+      "deleteConfirmTitle": "Smazat dovednost?",
+      "deleteShortcut": "Smazat dovednost",
+      "editShortcut": "Upravit dovednost",
+      "emptyDescription": "Vytvářejte opakovaně použitelné dovednosti pro práci, kterou váš tým opakuje, od shrnutí po první návrhy pokynů.",
+      "emptyState": "Zatím žádné dovednosti. Přidejte první.",
       "emptyTitle": "Vytvořte první dovednost",
-      "emptyVideoLabel": "Přehled promptů",
+      "emptyVideoLabel": "Přehled dovedností",
       "errors": {
-        "commandConflict": "Prompt s tímto / názvem již existuje",
+        "commandConflict": "Dovednost s tímto / názvem již existuje",
         "commandInvalid": "Používejte pouze malá písmena, číslice, pomlčky a podtržítka",
-        "commandReserved": "\"/{command}\" je rezervovaný prompt"
+        "commandReserved": "\"/{command}\" je rezervovaná dovednost"
       },
       "form": {
-        "command": "Zkratka promptu",
-        "commandHint": "Název / promptu: pouze malá písmena, číslice, pomlčky a podtržítka",
+        "command": "Zkratka dovednosti",
+        "commandHint": "Název / dovednosti: pouze malá písmena, číslice, pomlčky a podtržítka",
         "commandPlaceholder": "např. shrnout",
         "commandPrefix": "/",
         "description": "Popis",
@@ -1478,13 +1478,13 @@
         "name": "Název",
         "namePlaceholder": "např. Shrnout dokument",
         "prompt": "Pokyny",
-        "promptPlaceholder": "Text vložený do kompozéru chatu při použití tohoto promptu",
+        "promptPlaceholder": "Pokyny vložené do kompozéru chatu při použití této dovednosti",
         "scope": "Viditelnost",
         "scopePrivate": "Pouze já",
         "scopeTeam": "Všichni v organizaci"
       },
       "privateSection": "Vaše dovednosti",
-      "shadowed": "Překryto týmovým promptem",
+      "shadowed": "Překryto týmovou dovedností",
       "teamSection": "Týmové dovednosti"
     }
   },
