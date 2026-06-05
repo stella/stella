@@ -260,8 +260,55 @@ describe("measureBlocks floating text-box bands", () => {
       if (afterMeasure?.kind !== "paragraph") {
         throw new Error("Expected second paragraph measure");
       }
+      // The band activates at its real anchor: `before` (above the anchor) is
+      // not pushed down.
       expect(beforeMeasure.totalHeight).toBeLessThan(50);
-      expect(afterMeasure.totalHeight).toBeGreaterThanOrEqual(120);
+      // `after` clears the band from the real cursor, not from the page top: it
+      // is pushed only by the band remaining below `before`, landing exactly at
+      // the band bottom (floatSkipBefore + before height = band height = 120).
+      // A full-band skip here would open a blank gap. eigenpal #694.
+      const skip = afterMeasure.lines.at(0)?.floatSkipBefore ?? 0;
+      expect(skip).toBeGreaterThan(0);
+      expect(skip + beforeMeasure.totalHeight).toBeCloseTo(120, 5);
+    });
+  });
+
+  test("a tall block before the anchor leaves no band skip (no blank gap)", () => {
+    withFakeTextMeasure(() => {
+      // `before` is taller than the band bottom, so the cursor is already below
+      // the band when `after` is reached: it must not be pushed down again.
+      const before: ParagraphBlock = {
+        kind: "paragraph",
+        id: "before",
+        runs: [{ kind: "text", text: "tall ".repeat(400).trim() }],
+      };
+      const band: TextBoxBlock = {
+        kind: "textBox",
+        id: "band",
+        width: 300,
+        height: 60,
+        content: [],
+        wrapType: "topAndBottom",
+        position: { vertical: { relativeTo: "margin", posOffset: 0 } },
+      };
+      const after: ParagraphBlock = {
+        kind: "paragraph",
+        id: "after",
+        runs: [{ kind: "text", text: "after" }],
+      };
+
+      const measures = measureBlocks([before, band, after], 200, 96);
+      const beforeMeasure = measures.at(0);
+      const afterMeasure = measures.at(2);
+
+      if (
+        beforeMeasure?.kind !== "paragraph" ||
+        afterMeasure?.kind !== "paragraph"
+      ) {
+        throw new Error("Expected paragraph measures around the band");
+      }
+      expect(beforeMeasure.totalHeight).toBeGreaterThan(60);
+      expect(afterMeasure.lines.at(0)?.floatSkipBefore ?? 0).toBe(0);
     });
   });
 
@@ -334,13 +381,26 @@ describe("measureBlocks floating text-box bands", () => {
         [500, 500, 500],
         [96, 144, 144],
       );
+      const beforeMeasure = measures.at(0);
       const afterMeasure = measures.at(2);
 
+      expect(beforeMeasure?.kind).toBe("paragraph");
       expect(afterMeasure?.kind).toBe("paragraph");
+      if (beforeMeasure?.kind !== "paragraph") {
+        throw new Error("Expected paragraph measure before band");
+      }
       if (afterMeasure?.kind !== "paragraph") {
         throw new Error("Expected paragraph measure after band");
       }
-      expect(afterMeasure.lines.at(0)?.floatSkipBefore).toBe(56);
+      // The band bottom sits at 56 in content coords: page-relative offset 0
+      // resolves to `bandHeight - sectionMarginTop = 200 - 144`. The 96px first
+      // section margin must not leak in (that would yield 200 - 96 = 104).
+      // `before` already occupies the top of the page, so `after` is pushed down
+      // only by the remaining band below the cursor and lands exactly at the band
+      // bottom: floatSkipBefore + before height = 56. eigenpal #694.
+      const skip = afterMeasure.lines.at(0)?.floatSkipBefore ?? 0;
+      expect(skip).toBeGreaterThan(0);
+      expect(skip + beforeMeasure.totalHeight).toBeCloseTo(56, 5);
     });
   });
 });

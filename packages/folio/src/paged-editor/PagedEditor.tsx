@@ -2456,12 +2456,23 @@ export function measureBlocks(
     recordMeasureBlock(blockIndex, block);
 
     // Check if this block is an anchor for floating images
-    // If so, reset cumulative Y and replace active zones (old zones from previous
-    // anchors are invalid after the Y reset since their topY/bottomY are in the old
-    // coordinate system)
+    // If so, replace active zones (old zones from previous anchors are invalid
+    // after a Y reset since their topY/bottomY are in the old coordinate system).
     if (anchorIndices.has(blockIndex)) {
-      cumulativeY = 0;
       activeZones = zonesByAnchor.get(blockIndex) ?? [];
+      // Floating-image anchors establish a fresh local page frame, so the
+      // running Y resets to 0. Page/margin-pinned topAndBottom bands are
+      // different: they pin to the page top regardless of where their anchor
+      // sits in the flow, so resetting here would measure the following block as
+      // if it began at the page top and reserve the whole band even when in-flow
+      // content already precedes the anchor on the page, opening a blank gap.
+      // Keep the running Y for pure band anchors so the band is reserved from the
+      // real cursor down. eigenpal #694.
+      const bandOnlyAnchor =
+        activeZones.length > 0 && activeZones.every((z) => z.fullWidthBlock);
+      if (!bandOnlyAnchor) {
+        cumulativeY = 0;
+      }
     }
 
     const zones = activeZones.length > 0 ? activeZones : undefined;
