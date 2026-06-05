@@ -8,11 +8,12 @@
  * - Basic cell styling (borders, backgrounds)
  */
 
+import { measureParagraph } from "../layout-engine/measure";
 import {
-  clampFloatingWrapMargins,
-  measureParagraph,
-} from "../layout-engine/measure";
-import type { FloatingImageZone } from "../layout-engine/measure";
+  buildTableCellFloatingZones,
+  getTableCellContentWidth,
+  getTableCellFloatingImages,
+} from "../layout-engine/measure/tableCellFloating";
 import type {
   TableFragment,
   TableBlock,
@@ -22,11 +23,9 @@ import type {
   ParagraphBlock,
   ParagraphMeasure,
   ParagraphFragment,
-  ImageRun,
 } from "../layout-engine/types";
 import { getAutomaticTextColorForBackground } from "./documentColors";
 import { renderParagraphFragment } from "./renderParagraph";
-import { emuToPixels, isFloatingImageRun } from "./renderUtils";
 import type { RenderContext } from "./renderUtils";
 
 /**
@@ -50,146 +49,6 @@ export type RenderTableFragmentOptions = {
   document?: Document;
 };
 
-/** Info about a floating image extracted from a cell paragraph */
-type CellFloatingImage = {
-  src: string;
-  width: number;
-  height: number;
-  alt?: string;
-  transform?: string;
-  x: number;
-  y: number;
-  side: "left" | "right";
-  distTop: number;
-  distBottom: number;
-  distLeft: number;
-  distRight: number;
-  /** OOXML wrapText: which side(s) TEXT flows on */
-  wrapText?: "bothSides" | "left" | "right" | "largest";
-  pmStart?: number;
-  pmEnd?: number;
-};
-
-/**
- * Extract floating images from cell paragraphs and compute their positions
- * relative to the cell content area.
- *
- * NOTE: The horizontal/vertical position logic here mirrors
- * extractFloatingImagesFromParagraph() in renderPage.ts. Kept separate
- * because the coordinate systems differ (cell-relative vs page-relative).
- */
-function extractCellFloatingImages(
-  cell: TableCell,
-  cellMeasure: TableCellMeasure,
-  contentWidth: number,
-): CellFloatingImage[] {
-  const result: CellFloatingImage[] = [];
-  let paragraphY = 0;
-
-  for (let blockIndex = 0; blockIndex < cell.blocks.length; blockIndex++) {
-    const block = cell.blocks[blockIndex];
-    if (block?.kind !== "paragraph") {
-      // Use actual measured height for Y tracking
-      const blockMeasure = cellMeasure.blocks[blockIndex];
-      if (blockMeasure && blockMeasure.kind === "table") {
-        paragraphY += (blockMeasure as TableMeasure).totalHeight;
-      }
-      continue;
-    }
-    const pBlock = block as ParagraphBlock;
-
-    for (const run of pBlock.runs) {
-      if (run.kind !== "image") {
-        continue;
-      }
-      const imgRun = run as ImageRun;
-      if (!isFloatingImageRun(imgRun)) {
-        continue;
-      }
-
-      const position = imgRun.position;
-      const distTop = imgRun.distTop ?? 0;
-      const distBottom = imgRun.distBottom ?? 0;
-      const distLeft = imgRun.distLeft ?? 12;
-      const distRight = imgRun.distRight ?? 12;
-
-      // Horizontal position within cell
-      let side: "left" | "right" = "left";
-      let x = 0;
-
-      if (position?.horizontal) {
-        const h = position.horizontal;
-        if (h.align === "right") {
-          side = "right";
-          x = contentWidth - imgRun.width;
-        } else if (h.align === "left") {
-          x = 0;
-        } else if (h.align === "center") {
-          x = (contentWidth - imgRun.width) / 2;
-        } else if (h.posOffset !== undefined) {
-          x = emuToPixels(h.posOffset);
-          side = x > contentWidth / 2 ? "right" : "left";
-        }
-      } else if (imgRun.cssFloat === "right") {
-        side = "right";
-        x = contentWidth - imgRun.width;
-      }
-
-      // Vertical position within cell
-      let y = paragraphY;
-      if (position?.vertical) {
-        const v = position.vertical;
-        if (v.posOffset !== undefined) {
-          y = paragraphY + emuToPixels(v.posOffset);
-        } else if (v.align === "top") {
-          y = 0;
-        }
-      }
-
-      // Clamp within cell bounds
-      x = Math.max(0, Math.min(x, contentWidth - imgRun.width));
-
-      // Derive wrapText from cssFloat (same pattern as page-level):
-      // cssFloat='left' → image floats left → text on right → wrapText='right'
-      // cssFloat='right' → image floats right → text on left → wrapText='left'
-      let wrapText: "bothSides" | "left" | "right" | "largest" = "bothSides";
-      if (imgRun.cssFloat === "left") {
-        wrapText = "right";
-      } else if (imgRun.cssFloat === "right") {
-        wrapText = "left";
-      }
-
-      result.push({
-        src: imgRun.src,
-        width: imgRun.width,
-        height: imgRun.height,
-        ...(imgRun.alt !== undefined ? { alt: imgRun.alt } : {}),
-        ...(imgRun.transform !== undefined
-          ? { transform: imgRun.transform }
-          : {}),
-        x,
-        y,
-        side,
-        distTop,
-        distBottom,
-        distLeft,
-        distRight,
-        wrapText,
-        ...(imgRun.pmStart !== undefined ? { pmStart: imgRun.pmStart } : {}),
-        ...(imgRun.pmEnd !== undefined ? { pmEnd: imgRun.pmEnd } : {}),
-      });
-    }
-
-    // Use actual measured height for Y tracking
-    const blockMeasure = cellMeasure.blocks[blockIndex];
-    if (blockMeasure && blockMeasure.kind === "paragraph") {
-      paragraphY += (blockMeasure as ParagraphMeasure).totalHeight;
-    }
-  }
-
-  return result;
-}
-
 /**
  * Render cell content (paragraphs and nested tables)
  */
@@ -205,59 +64,22 @@ function renderCellContent(
   // Content width must account for cell padding since the cell uses border-box sizing.
   // Without this, content is wider than the available area, causing centering and
   // clipping issues (especially for nested tables).
-  const padLeft = cell.padding?.left ?? 7;
-  const padRight = cell.padding?.right ?? 7;
-  const contentWidth = Math.max(0, cellMeasure.width - padLeft - padRight);
+  const contentWidth = getTableCellContentWidth(cell, cellMeasure);
   contentEl.style.width = `${contentWidth}px`;
 
   // Extract floating images from cell paragraphs
-  const cellFloatingImages = extractCellFloatingImages(
+  const cellFloatingImages = getTableCellFloatingImages(
     cell,
     cellMeasure,
     contentWidth,
   );
 
   // Build floating zones for measurement and render floating layer
-  let floatingZones: FloatingImageZone[] | undefined;
+  const floatingZones = buildTableCellFloatingZones(
+    cellFloatingImages,
+    contentWidth,
+  );
   if (cellFloatingImages.length > 0) {
-    floatingZones = cellFloatingImages.map((img) => {
-      const rectRight = img.x + img.width + img.distRight;
-      const rectTop = img.y - img.distTop;
-      const rectBottom = img.y + img.height + img.distBottom;
-
-      let leftMargin = 0;
-      let rightMargin = 0;
-      // Use wrapText to determine which side text flows on (same as rectsToFloatingZones in renderPage.ts)
-      const wt = img.wrapText ?? "bothSides";
-      if (wt === "right") {
-        // Text flows on RIGHT only -> image blocks the left side
-        leftMargin = rectRight;
-      } else if (wt === "left") {
-        // Text flows on LEFT only -> image blocks the right side
-        rightMargin = contentWidth - (img.x - img.distLeft);
-      } else {
-        // bothSides / largest: use image position to determine which side it blocks
-        if (img.side === "left") {
-          leftMargin = rectRight;
-        } else {
-          rightMargin = contentWidth - (img.x - img.distLeft);
-        }
-      }
-      // See clampFloatingWrapMargins doc — near-full-width floats can compute
-      // a wrap margin >= contentWidth and collapse subsequent lines to ~1 glyph.
-      const clamped = clampFloatingWrapMargins(
-        leftMargin,
-        rightMargin,
-        contentWidth,
-      );
-      return {
-        leftMargin: clamped.leftMargin,
-        rightMargin: clamped.rightMargin,
-        topY: rectTop,
-        bottomY: rectBottom,
-      };
-    });
-
     // Render floating image layer within the cell
     const floatingLayer = doc.createElement("div");
     floatingLayer.className = "layout-cell-floating-images-layer";
@@ -312,7 +134,7 @@ function renderCellContent(
       let paragraphMeasure = measure as ParagraphMeasure;
 
       // Re-measure with floating zones if floating images exist in this cell
-      if (floatingZones && floatingZones.length > 0) {
+      if (floatingZones.length > 0) {
         paragraphMeasure = measureParagraph(paragraphBlock, contentWidth, {
           floatingZones,
           paragraphYOffset: cumulativeY,
@@ -826,7 +648,9 @@ export function renderTableFragment(
   // Track spanning cells across rows
   const spanningCells = new Map<string, SpanningCell>();
 
-  // Render repeated header rows for continuation fragments
+  // Render repeated header rows for continuation fragments. For a mid-content
+  // row break (eigenpal #698), keep repeated headers pinned to the fragment top
+  // and offset only the content row stack by topClip.
   const headerRowCount = fragment.headerRowCount ?? 0;
   let y = 0;
   if (headerRowCount > 0 && fragment.continuesFromPrev) {
@@ -854,6 +678,23 @@ export function renderTableFragment(
       tableEl.append(rowEl);
       y += hdrRowMeasure.height;
     }
+  }
+
+  const topClip = fragment.topClip ?? 0;
+  let contentParent: HTMLElement = tableEl;
+  if (headerRowCount > 0 && fragment.continuesFromPrev && topClip > 0) {
+    const contentClipEl = doc.createElement("div");
+    contentClipEl.style.position = "absolute";
+    contentClipEl.style.left = "0";
+    contentClipEl.style.top = `${y}px`;
+    contentClipEl.style.width = "100%";
+    contentClipEl.style.height = `${Math.max(0, fragment.height - y)}px`;
+    contentClipEl.style.overflow = "hidden";
+    tableEl.append(contentClipEl);
+    contentParent = contentClipEl;
+    y = -topClip;
+  } else {
+    y -= topClip;
   }
 
   // Render content rows from fragment.fromRow to fragment.toRow
@@ -885,7 +726,7 @@ export function renderTableFragment(
       isFirstRowInFragment,
     );
 
-    tableEl.append(rowEl);
+    contentParent.append(rowEl);
     y += rowMeasure.height;
   }
 

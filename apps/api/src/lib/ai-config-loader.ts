@@ -9,48 +9,45 @@
  * round-trip to RDS, well under a millisecond inside the VPC.
  */
 
+import { eq, sql } from "drizzle-orm";
+
 import { rootDb } from "@/api/db/root";
+import { organizationSettings } from "@/api/db/schema";
 import { decryptAIConfig } from "@/api/lib/ai-config-crypto";
+import {
+  decryptOrgAIConfigRow,
+  resolvePromptCachingPreference,
+} from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
-import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 
 export const loadOrgAIConfig = async (
   organizationId: SafeId<"organization">,
 ): Promise<OrgAIConfig | null> => {
-  const row = await rootDb.query.organizationSettings.findFirst({
-    where: { organizationId: { eq: organizationId } },
-    columns: {
-      aiConfigEncrypted: true,
-      aiConfigIv: true,
-    },
+  const rows = await rootDb
+    .select({
+      aiConfigEncrypted: sql<
+        string | null
+      >`${organizationSettings.aiConfigEncrypted}::text`,
+      aiConfigIv: sql<string | null>`${organizationSettings.aiConfigIv}::text`,
+    })
+    .from(organizationSettings)
+    .where(eq(organizationSettings.organizationId, organizationId))
+    .limit(1);
+  return await decryptOrgAIConfigRow({
+    decrypt: decryptAIConfig,
+    organizationId,
+    row: rows.at(0),
   });
-
-  if (!row?.aiConfigEncrypted || !row.aiConfigIv) {
-    return null;
-  }
-
-  try {
-    return await decryptAIConfig(
-      organizationId,
-      row.aiConfigEncrypted,
-      row.aiConfigIv,
-    );
-  } catch (error) {
-    captureError(error, {
-      organizationId,
-      source: "loadOrgAIConfig",
-    });
-    return null;
-  }
 };
 
 export const loadPromptCachingPreference = async (
   organizationId: SafeId<"organization">,
 ): Promise<boolean> => {
-  const row = await rootDb.query.organizationSettings.findFirst({
-    where: { organizationId: { eq: organizationId } },
-    columns: { promptCachingEnabled: true },
-  });
-  return row?.promptCachingEnabled ?? true;
+  const rows = await rootDb
+    .select({ promptCachingEnabled: organizationSettings.promptCachingEnabled })
+    .from(organizationSettings)
+    .where(eq(organizationSettings.organizationId, organizationId))
+    .limit(1);
+  return resolvePromptCachingPreference(rows.at(0));
 };

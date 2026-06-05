@@ -544,6 +544,8 @@ export function createPaginator(options: PaginatorOptions) {
     getCurrentState,
     /** Get available height in current column. */
     getAvailableHeight: () => getAvailableHeight(getCurrentState()),
+    /** Full content height of a fresh page in the active section. */
+    getContentHeight,
     /** Get content width for the active section. */
     getContentWidth,
     /** Check if height fits in current column. */

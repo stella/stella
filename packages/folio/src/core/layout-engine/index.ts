@@ -13,6 +13,7 @@ import {
   hasPageBreakBefore,
 } from "./keep-together";
 import { FOOTNOTE_SEPARATOR_HEIGHT, createPaginator } from "./paginator";
+import { buildTableRowBreakInfo, snapRowBreak } from "./tableRowBreak";
 import type {
   FlowBlock,
   Measure,
@@ -655,7 +656,160 @@ function layoutTable(
 
   let currentRowIndex = 0;
 
+  const breakInfo = buildTableRowBreakInfo(block, measure);
+
+  // X position from justification / indent, recomputed per fragment because the
+  // active column can change across section breaks.
+  const computeTableX = (columnIndex: number): number => {
+    let x = paginator.getColumnX(columnIndex);
+    if (block.justification === "center") {
+      x += (paginator.columnWidth - measure.totalWidth) / 2;
+    } else if (block.justification === "right") {
+      x = x + paginator.columnWidth - measure.totalWidth;
+    } else if (block.indent) {
+      x += block.indent;
+    }
+    return x;
+  };
+
+  const getCurrentRowCapacity = (state = paginator.getCurrentState()): number =>
+    state.rawContentBottom - state.topMargin;
+
+  const getCurrentAvailableHeight = (
+    state = paginator.getCurrentState(),
+  ): number => state.contentBottom - state.cursorY;
+
+  const hasAdjacentPriorTableRows = (
+    rowIndex: number,
+    state = paginator.getCurrentState(),
+  ): boolean => {
+    const previous = state.page.fragments.at(-1);
+    return (
+      previous?.kind === "table" &&
+      previous.blockId === block.id &&
+      previous.toRow === rowIndex &&
+      previous.y + previous.height === state.cursorY &&
+      previous.x === computeTableX(state.columnIndex)
+    );
+  };
+
+  const shouldRepeatHeaderRows = (
+    rowIndex: number,
+    consumed: number,
+    state = paginator.getCurrentState(),
+  ): boolean =>
+    headerRowCount > 0 &&
+    rowIndex >= headerRowCount &&
+    !(consumed === 0 && hasAdjacentPriorTableRows(rowIndex, state));
+
+  const canSplitRow = (
+    rowIndex: number,
+    state = paginator.getCurrentState(),
+  ): boolean => {
+    const row = rows[rowIndex];
+    if (!row) {
+      return false;
+    }
+    const repeatedHeaderOverhead = shouldRepeatHeaderRows(rowIndex, 0, state)
+      ? headerRowsHeight
+      : 0;
+    if ((breakInfo.breakOffsets[rowIndex]?.length ?? 0) <= 1) {
+      return false;
+    }
+    const requiredHeight = row.height + repeatedHeaderOverhead;
+    if (requiredHeight > getCurrentRowCapacity(state)) {
+      return true;
+    }
+    return (
+      hasAdjacentPriorTableRows(rowIndex, state) &&
+      requiredHeight > getCurrentAvailableHeight(state) - state.trailingSpacing
+    );
+  };
+
   while (currentRowIndex < rows.length) {
+    // A row taller than a whole page can't fit anywhere; break it between whole
+    // text lines across pages instead of overflowing the page and clipping the
+    // content. eigenpal/docx-editor#698 (fixes their #570).
+    const oversizedRow = rows[currentRowIndex]!; // SAFETY: currentRowIndex < rows.length
+    if (canSplitRow(currentRowIndex)) {
+      let consumed = 0;
+      while (consumed < oversizedRow.height) {
+        const sliceState = paginator.getCurrentState();
+        const repeatHeaderRows = shouldRepeatHeaderRows(
+          currentRowIndex,
+          consumed,
+          sliceState,
+        );
+        const headerOverhead = repeatHeaderRows ? headerRowsHeight : 0;
+        const sliceAvail =
+          paginator.getAvailableHeight() -
+          headerOverhead -
+          (consumed === 0 ? sliceState.trailingSpacing : 0);
+        let slice = snapRowBreak(
+          breakInfo,
+          currentRowIndex,
+          consumed,
+          sliceAvail,
+        );
+        if (slice <= 0) {
+          const isFreshPage =
+            sliceState.cursorY === sliceState.topMargin &&
+            sliceState.page.fragments.length === 0;
+          if (!isFreshPage) {
+            // Not even one line fits in the space left; continue in the next
+            // column, or on a fresh page when this is the last column.
+            paginator.forceColumnBreak();
+            continue;
+          }
+          // Fresh page and a single line still exceeds the page height: place
+          // the next whole line anyway so the loop always makes progress.
+          const from = consumed;
+          const next = breakInfo.breakOffsets[currentRowIndex]?.find(
+            (o) => o > from,
+          );
+          slice = (next ?? oversizedRow.height) - consumed;
+        }
+        const sliceBottom = consumed + slice;
+        const reachesRowEnd = sliceBottom >= oversizedRow.height;
+        const moreAfter = !reachesRowEnd || currentRowIndex + 1 < rows.length;
+        const fragmentHeight = headerOverhead + slice;
+        const sliceFragment: TableFragment = {
+          kind: "table",
+          blockId: block.id,
+          x: computeTableX(sliceState.columnIndex),
+          y: 0,
+          width: measure.totalWidth,
+          height: fragmentHeight,
+          fromRow: currentRowIndex,
+          toRow: currentRowIndex + 1,
+          ...(block.pmStart !== undefined ? { pmStart: block.pmStart } : {}),
+          ...(block.pmEnd !== undefined ? { pmEnd: block.pmEnd } : {}),
+          ...(consumed > 0 || currentRowIndex > 0
+            ? { continuesFromPrev: true }
+            : {}),
+          ...(moreAfter ? { continuesOnNext: true } : {}),
+          ...(repeatHeaderRows ? { headerRowCount } : {}),
+          ...(consumed > 0 ? { topClip: consumed } : {}),
+          ...(reachesRowEnd ? {} : { bottomClip: sliceBottom }),
+          ...(block.sdtGroups ? { sdtGroups: block.sdtGroups } : {}),
+        };
+        const sliceResult = paginator.addFragment(
+          sliceFragment,
+          fragmentHeight,
+          0,
+          0,
+        );
+        sliceFragment.y = sliceResult.y;
+        sliceFragment.x = computeTableX(sliceResult.state.columnIndex);
+        consumed = sliceBottom;
+        if (consumed < oversizedRow.height) {
+          paginator.forceColumnBreak();
+        }
+      }
+      currentRowIndex += 1;
+      continue;
+    }
+
     const state = paginator.getCurrentState();
     const rawAvailableHeight = paginator.getAvailableHeight();
     const isFirstFragment = currentRowIndex === 0;
@@ -667,9 +821,16 @@ function layoutTable(
     const pendingSpacing = isFirstFragment ? state.trailingSpacing : 0;
     const availableHeight = rawAvailableHeight - pendingSpacing;
 
-    // For continuation fragments, we need space for header rows + at least one content row
-    const headerOverhead =
-      !isFirstFragment && headerRowCount > 0 ? headerRowsHeight : 0;
+    const repeatHeaderRowsForNormalFragment = shouldRepeatHeaderRows(
+      currentRowIndex,
+      0,
+      state,
+    );
+
+    // For continuation fragments, we need space for header rows + at least one content row.
+    const normalHeaderOverhead = repeatHeaderRowsForNormalFragment
+      ? headerRowsHeight
+      : 0;
 
     // Calculate how many rows fit (excluding header rows which are prepended separately)
     let rowsHeight = 0;
@@ -677,7 +838,7 @@ function layoutTable(
 
     for (let j = currentRowIndex; j < rows.length; j++) {
       const rowHeight = rows[j]!.height; // SAFETY: j < rows.length
-      const totalWithRow = rowsHeight + rowHeight + headerOverhead;
+      const totalWithRow = rowsHeight + rowHeight + normalHeaderOverhead;
 
       if (totalWithRow <= availableHeight || fittingRows === 0) {
         rowsHeight += rowHeight;
@@ -688,20 +849,13 @@ function layoutTable(
     }
 
     // Total fragment height includes header rows for continuation fragments
-    const fragmentHeight = rowsHeight + headerOverhead;
+    const fragmentHeight = rowsHeight + normalHeaderOverhead;
 
     // Create fragment for these rows
     const isLastFragment = currentRowIndex + fittingRows >= rows.length;
 
     // Calculate x position based on table justification and indent
-    let desiredX = paginator.getColumnX(state.columnIndex);
-    if (block.justification === "center") {
-      desiredX += (paginator.columnWidth - measure.totalWidth) / 2;
-    } else if (block.justification === "right") {
-      desiredX = desiredX + paginator.columnWidth - measure.totalWidth;
-    } else if (block.indent) {
-      desiredX += block.indent;
-    }
+    const desiredX = computeTableX(state.columnIndex);
 
     const fragment: TableFragment = {
       kind: "table",
@@ -716,7 +870,7 @@ function layoutTable(
       ...(block.pmEnd !== undefined ? { pmEnd: block.pmEnd } : {}),
       ...(!isFirstFragment ? { continuesFromPrev: true } : {}),
       ...(!isLastFragment ? { continuesOnNext: true } : {}),
-      ...(!isFirstFragment && headerRowCount > 0 ? { headerRowCount } : {}),
+      ...(repeatHeaderRowsForNormalFragment ? { headerRowCount } : {}),
       ...(block.sdtGroups ? { sdtGroups: block.sdtGroups } : {}),
     };
 
@@ -728,10 +882,30 @@ function layoutTable(
 
     // If more rows remain, advance to next column/page
     if (currentRowIndex < rows.length) {
+      if (canSplitRow(currentRowIndex)) {
+        const nextState = paginator.getCurrentState();
+        const nextHeaderOverhead = shouldRepeatHeaderRows(
+          currentRowIndex,
+          0,
+          nextState,
+        )
+          ? headerRowsHeight
+          : 0;
+        const nextSliceAvail =
+          paginator.getAvailableHeight() -
+          nextHeaderOverhead -
+          nextState.trailingSpacing;
+        if (snapRowBreak(breakInfo, currentRowIndex, 0, nextSliceAvail) > 0) {
+          continue;
+        }
+      }
       // Need space for at least one content row plus repeated header rows
+      const nextState = paginator.getCurrentState();
       const nextRowHeight =
         rows[currentRowIndex]!.height + // SAFETY: guarded by length check
-        (headerRowCount > 0 ? headerRowsHeight : 0);
+        (shouldRepeatHeaderRows(currentRowIndex, 0, nextState)
+          ? headerRowsHeight
+          : 0);
       paginator.ensureFits(nextRowHeight);
     }
   }

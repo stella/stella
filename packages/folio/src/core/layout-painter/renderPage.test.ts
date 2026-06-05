@@ -6,6 +6,7 @@ import type {
   ParagraphBlock,
   ParagraphMeasure,
   TableBlock,
+  TableFragment,
   TableMeasure,
   TextBoxBlock,
   TextBoxMeasure,
@@ -326,6 +327,50 @@ describe("render page fingerprint", () => {
     };
     expect(computePageFingerprint(page, lookup(before))).not.toBe(
       computePageFingerprint(page, lookup(after)),
+    );
+  });
+
+  test("changes when split table fragment metadata changes", () => {
+    const fragment: TableFragment = {
+      kind: "table",
+      blockId: "t1",
+      x: 72,
+      y: 72,
+      width: 300,
+      height: 80,
+      fromRow: 1,
+      toRow: 2,
+      headerRowCount: 1,
+      continuesFromPrev: true,
+      continuesOnNext: true,
+      topClip: 40,
+      bottomClip: 120,
+    };
+    const tablePage: Page = { ...page, fragments: [fragment] };
+
+    expect(computePageFingerprint(tablePage)).not.toBe(
+      computePageFingerprint({
+        ...tablePage,
+        fragments: [{ ...fragment, topClip: 60 }],
+      }),
+    );
+    expect(computePageFingerprint(tablePage)).not.toBe(
+      computePageFingerprint({
+        ...tablePage,
+        fragments: [{ ...fragment, bottomClip: 100 }],
+      }),
+    );
+    expect(computePageFingerprint(tablePage)).not.toBe(
+      computePageFingerprint({
+        ...tablePage,
+        fragments: [{ ...fragment, headerRowCount: 2 }],
+      }),
+    );
+    expect(computePageFingerprint(tablePage)).not.toBe(
+      computePageFingerprint({
+        ...tablePage,
+        fragments: [{ ...fragment, continuesOnNext: false }],
+      }),
     );
   });
 });

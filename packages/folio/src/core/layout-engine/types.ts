@@ -898,6 +898,16 @@ export type TableFragment = FragmentBase & {
   continuesOnNext?: boolean;
   /** Number of header rows prepended to this continuation fragment (0 or undefined for first fragment). */
   headerRowCount?: number;
+  /**
+   * Mid-content row break (eigenpal #698): when a single row is taller than a
+   * whole page it is split across pages between whole text lines. The visible
+   * band of the broken row is `[topClip, bottomClip)` in the row's own
+   * coordinates. `topClip` is the px already shown on the previous page (the
+   * continuation fragment starts here); `bottomClip` is where this fragment
+   * cuts the row. Undefined on fragments that break only at row boundaries.
+   */
+  topClip?: number;
+  bottomClip?: number;
 };
 
 /**

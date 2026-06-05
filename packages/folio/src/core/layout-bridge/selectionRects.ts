@@ -9,8 +9,14 @@
  */
 
 import { getHeaderRowsHeight } from "../layout-engine/index";
+import { measureParagraph } from "../layout-engine/measure";
 import { measureRun } from "../layout-engine/measure/measureContainer";
 import type { FontStyle } from "../layout-engine/measure/measureContainer";
+import {
+  buildTableCellFloatingZones,
+  getTableCellContentWidth,
+  getTableCellFloatingImages,
+} from "../layout-engine/measure/tableCellFloating";
 import type {
   Layout,
   FlowBlock,
@@ -20,6 +26,8 @@ import type {
   ParagraphMeasure,
   MeasuredLine,
   TableBlock,
+  TableCell,
+  TableCellMeasure,
   TableFragment,
   TableMeasure,
   TextRun,
@@ -63,6 +71,9 @@ export type CaretPosition = {
   /** Page index (0-based). */
   pageIndex: number;
 };
+
+const DEFAULT_TABLE_CELL_PADDING_LEFT = 7;
+const DEFAULT_TABLE_CELL_PADDING_TOP = 1;
 
 // =============================================================================
 // HELPER FUNCTIONS
@@ -108,6 +119,39 @@ function mathRunToFontStyle(run: MathRun): FontStyle {
  */
 function findBlockById(blocks: FlowBlock[], blockId: BlockId): number {
   return blocks.findIndex((block) => block.id === blockId);
+}
+
+function getCellContentOffsetY(
+  cell: TableCell,
+  cellMeasure: TableCellMeasure,
+  rowHeight: number,
+): number {
+  const padTop = cell.padding?.top ?? DEFAULT_TABLE_CELL_PADDING_TOP;
+  const spareHeight = Math.max(0, rowHeight - cellMeasure.height);
+  if (cell.verticalAlign === "bottom") {
+    return padTop + spareHeight;
+  }
+  if (cell.verticalAlign === "center") {
+    return padTop + spareHeight / 2;
+  }
+  return padTop;
+}
+
+function getCellContentOffsetX(cell: TableCell): number {
+  return cell.padding?.left ?? DEFAULT_TABLE_CELL_PADDING_LEFT;
+}
+
+function getMeasuredBlockHeight(measure: Measure | undefined): number {
+  if (!measure) {
+    return 0;
+  }
+  if ("totalHeight" in measure) {
+    return measure.totalHeight;
+  }
+  if ("height" in measure) {
+    return measure.height;
+  }
+  return 0;
 }
 
 /**
@@ -331,7 +375,7 @@ function charOffsetToX(
 }
 
 /**
- * Calculate cumulative line height before a given line index.
+ * Calculate the rendered top of a line, including float-driven vertical skips.
  */
 function lineHeightBefore(
   measure: ParagraphMeasure,
@@ -340,8 +384,10 @@ function lineHeightBefore(
   let height = 0;
   for (let i = 0; i < lineIndex && i < measure.lines.length; i++) {
     // SAFETY: i < measure.lines.length in for loop
-    height += measure.lines[i]!.lineHeight;
+    const line = measure.lines[i]!;
+    height += (line.floatSkipBefore ?? 0) + line.lineHeight;
   }
+  height += measure.lines[lineIndex]?.floatSkipBefore ?? 0;
   return height;
 }
 
@@ -533,6 +579,8 @@ export function selectionToRects(
           if (!row || !rowMeasure) {
             continue;
           }
+          const clipTop = tableFragment.topClip ?? 0;
+          const clipBottom = tableFragment.bottomClip ?? rowMeasure.height;
 
           // Walk through cells
           let cellX = 0;
@@ -542,6 +590,22 @@ export function selectionToRects(
             if (!cell || !cellMeasure) {
               continue;
             }
+            const contentWidth = getTableCellContentWidth(cell, cellMeasure);
+            const floatingImages = getTableCellFloatingImages(
+              cell,
+              cellMeasure,
+              contentWidth,
+            );
+            const floatingZones = buildTableCellFloatingZones(
+              floatingImages,
+              contentWidth,
+            );
+            const contentOffsetX = getCellContentOffsetX(cell);
+            const contentOffsetY = getCellContentOffsetY(
+              cell,
+              cellMeasure,
+              rowMeasure.height,
+            );
 
             // Check each paragraph in the cell
             let blockY = 0;
@@ -550,14 +614,26 @@ export function selectionToRects(
               const cellBlockMeasure = cellMeasure.blocks[blockIdx];
 
               if (!cellBlock || cellBlock.kind !== "paragraph") {
+                blockY += getMeasuredBlockHeight(cellBlockMeasure);
                 continue;
               }
               if (!cellBlockMeasure || cellBlockMeasure.kind !== "paragraph") {
+                blockY += getMeasuredBlockHeight(cellBlockMeasure);
                 continue;
               }
 
               const paragraphBlock = cellBlock as ParagraphBlock;
-              const paragraphMeasure = cellBlockMeasure as ParagraphMeasure;
+              let paragraphMeasure = cellBlockMeasure as ParagraphMeasure;
+              if (floatingZones.length > 0) {
+                paragraphMeasure = measureParagraph(
+                  paragraphBlock,
+                  contentWidth,
+                  {
+                    floatingZones,
+                    paragraphYOffset: blockY,
+                  },
+                );
+              }
 
               // Find lines that intersect with selection
               const intersectingLines = findLinesInRange(
@@ -594,20 +670,31 @@ export function selectionToRects(
                   paragraphBlock,
                   line,
                   charOffsetFrom,
-                  cellMeasure.width,
+                  contentWidth,
                 );
                 const endX = charOffsetToX(
                   paragraphBlock,
                   line,
                   charOffsetTo,
-                  cellMeasure.width,
+                  contentWidth,
                 );
 
                 const lineY = lineHeightBefore(paragraphMeasure, index);
+                const clippedLineY = contentOffsetY + blockY + lineY;
+                if (
+                  clippedLineY + line.lineHeight <= clipTop ||
+                  clippedLineY >= clipBottom
+                ) {
+                  continue;
+                }
 
                 rects.push({
-                  x: tableFragment.x + cellX + Math.min(startX, endX),
-                  y: tableFragment.y + rowY + blockY + lineY + pageTopY,
+                  x:
+                    tableFragment.x +
+                    cellX +
+                    contentOffsetX +
+                    Math.min(startX, endX),
+                  y: tableFragment.y + rowY + clippedLineY - clipTop + pageTopY,
                   width: Math.max(1, Math.abs(endX - startX)),
                   height: line.lineHeight,
                   pageIndex,
