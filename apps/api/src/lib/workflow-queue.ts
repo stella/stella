@@ -789,9 +789,7 @@ const selectWorkspacesWithPendingCells = async (
     const rows = await rootDb
       .selectDistinct({ workspaceId: fields.workspaceId })
       .from(fields)
-      .where(
-        and(workspaceFilter, sql`${fields.content}->>'type' = 'pending'`),
-      );
+      .where(and(workspaceFilter, sql`${fields.content}->>'type' = 'pending'`));
     for (const row of rows) {
       pendingWorkspaceIds.push(row.workspaceId);
     }
@@ -999,7 +997,10 @@ export const reconcileOrphanedWorkflows = async ({
   }
 
   const pendingWorkspaceIdSet = new Set(pendingWorkspaceIds);
-  const initialRequestIds = await readWorkflowRequestIds(redis, orphanCandidates);
+  const initialRequestIds = await readWorkflowRequestIds(
+    redis,
+    orphanCandidates,
+  );
 
   // Re-confirm after a settle delay so a workflow that is mid-startup
   // (lock taken, first batch not yet enqueued) is not mistaken for an
@@ -1010,7 +1011,10 @@ export const reconcileOrphanedWorkflows = async ({
     return;
   }
 
-  const currentRequestIds = await readWorkflowRequestIds(redis, orphanCandidates);
+  const currentRequestIds = await readWorkflowRequestIds(
+    redis,
+    orphanCandidates,
+  );
   const recoverableOrphans = selectRecoverableOrphanWorkspaceIds({
     candidateWorkspaceIds: orphanCandidates,
     currentRequestIds,
