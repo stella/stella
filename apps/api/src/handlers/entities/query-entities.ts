@@ -27,6 +27,7 @@ import type {
   EntitiesWindowCursorValues,
 } from "@/api/handlers/entities/window-cursor";
 import type { SafeId } from "@/api/lib/branded-types";
+import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import {
   AGENDA_ITEM_KIND,
   AGENDA_ITEM_SOURCE,
@@ -35,7 +36,6 @@ import type {
   AgendaItemKind,
   AgendaItemSource,
 } from "@/api/lib/entity-constants";
-import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import { buildFilterConditions } from "@/api/lib/entity-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ViewFilterCondition, ViewSort } from "@/api/lib/views-schema";
