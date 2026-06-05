@@ -14,17 +14,12 @@ import { eq, sql } from "drizzle-orm";
 import { rootDb } from "@/api/db/root";
 import { organizationSettings } from "@/api/db/schema";
 import { decryptAIConfig } from "@/api/lib/ai-config-crypto";
+import {
+  decryptOrgAIConfigRow,
+  resolvePromptCachingPreference,
+} from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
-import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
-
-const decodeNullableByteaText = (value: string | null | undefined) => {
-  if (!value) {
-    return null;
-  }
-  const hex = value.startsWith("\\x") ? value.slice(2) : value;
-  return Buffer.from(hex, "hex");
-};
 
 export const loadOrgAIConfig = async (
   organizationId: SafeId<"organization">,
@@ -39,23 +34,11 @@ export const loadOrgAIConfig = async (
     .from(organizationSettings)
     .where(eq(organizationSettings.organizationId, organizationId))
     .limit(1);
-  const row = rows.at(0);
-  const ciphertext = decodeNullableByteaText(row?.aiConfigEncrypted);
-  const iv = decodeNullableByteaText(row?.aiConfigIv);
-
-  if (!ciphertext || !iv) {
-    return null;
-  }
-
-  try {
-    return await decryptAIConfig(organizationId, ciphertext, iv);
-  } catch (error) {
-    captureError(error, {
-      organizationId,
-      source: "loadOrgAIConfig",
-    });
-    return null;
-  }
+  return await decryptOrgAIConfigRow({
+    decrypt: decryptAIConfig,
+    organizationId,
+    row: rows.at(0),
+  });
 };
 
 export const loadPromptCachingPreference = async (
@@ -66,6 +49,5 @@ export const loadPromptCachingPreference = async (
     .from(organizationSettings)
     .where(eq(organizationSettings.organizationId, organizationId))
     .limit(1);
-  const row = rows.at(0);
-  return row?.promptCachingEnabled ?? true;
+  return resolvePromptCachingPreference(rows.at(0));
 };
