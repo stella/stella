@@ -336,6 +336,17 @@ function isBehindDocImageBlock(block: FlowBlock): boolean {
   return block.kind === "image" && block.anchor?.behindDoc === true;
 }
 
+type HeaderFooterTextBoxBlock = Extract<FlowBlock, { kind: "textBox" }>;
+
+function isPositionedHeaderFooterTextBoxBlock(
+  block: HeaderFooterTextBoxBlock,
+): boolean {
+  if (block.displayMode === "block" || block.displayMode === "inline") {
+    return false;
+  }
+  return isFloatingTextBoxBlock(block);
+}
+
 export function calculateHeaderFooterVisualBounds(
   blocks: FlowBlock[],
   measures: Measure[],
@@ -388,10 +399,10 @@ export function calculateHeaderFooterVisualBounds(
     } else {
       // Tables / images / textBoxes contribute their measured height as a
       // single block (they don't reflow within the HF area). Floating
-      // tables (`<w:tblpPr>`) anchor at (tblpX, tblpY) and don't
-      // participate in the cursorY flow — they're positioned absolutely by
-      // the renderer and can overlap surrounding HF content (Word
-      // semantics for unwrapped floating tables).
+      // tables (`<w:tblpPr>`) and floating text boxes anchor at page-level
+      // positions and don't participate in the cursorY flow — they're
+      // positioned absolutely by the renderer and can overlap surrounding
+      // HF content (Word semantics for unwrapped floating content).
       let blockHeight: number;
       let advancesCursor = true;
       if (block.kind === "table" && measure.kind === "table") {
@@ -403,6 +414,9 @@ export function calculateHeaderFooterVisualBounds(
         blockHeight = measure.height;
       } else if (block.kind === "textBox" && measure.kind === "textBox") {
         blockHeight = measure.height;
+        if (isPositionedHeaderFooterTextBoxBlock(block)) {
+          advancesCursor = false;
+        }
       } else {
         continue;
       }
@@ -425,6 +439,13 @@ export function calculateHeaderFooterVisualBounds(
         );
         visualTop = Math.min(visualTop, blockTop);
         visualBottom = Math.max(visualBottom, blockTop + blockHeight);
+      } else if (
+        block.kind === "textBox" &&
+        isPositionedHeaderFooterTextBoxBlock(block) &&
+        measure.kind === "textBox"
+      ) {
+        visualTop = Math.min(visualTop, cursorY);
+        visualBottom = Math.max(visualBottom, cursorY + measure.height);
       }
     }
   }
@@ -434,12 +455,12 @@ export function calculateHeaderFooterVisualBounds(
 
 /**
  * Compute the header/footer bounds used by `computeHeaderFooterMarginExtender`
- * to push body margins clear of HF overflow. Excludes `behindDoc` images
- * (full-page letterheads, watermarks): the renderer lifts them out of the HF
- * container onto the page root and paints them behind body content, so they
- * must not reserve body push-down. Keeping them in `visualBottom` is still
- * correct for the renderer (and for the page-hash invalidation signal), but
- * the margin extender needs the flow-only extent.
+ * to push body margins clear of HF overflow. Excludes anchored/floating objects
+ * (full-page letterheads, watermarks): Word positions them on the page instead
+ * of in the header/footer flow, so they must not reserve body push-down. Keeping
+ * them in `visualBottom` is still correct for the renderer (and for the
+ * page-hash invalidation signal), but the margin extender needs the flow-only
+ * extent.
  */
 export function calculateHeaderFooterMarginPushBounds(
   blocks: FlowBlock[],
@@ -448,7 +469,7 @@ export function calculateHeaderFooterMarginPushBounds(
   metrics: HeaderFooterMetrics,
 ): { top: number; bottom: number } {
   let top = 0;
-  let bottom = flowHeight;
+  let bottom = 0;
   let cursorY = 0;
 
   for (let i = 0; i < blocks.length; i++) {
@@ -493,7 +514,7 @@ export function calculateHeaderFooterMarginPushBounds(
         // positioned on the page and must not push the body margin, or a tall
         // letterhead inflates the top margin past the page and the paginator
         // throws "no content area" (blank document). eigenpal #709.
-        if (isFloatingTextBoxBlock(block)) {
+        if (isPositionedHeaderFooterTextBoxBlock(block)) {
           continue;
         }
         blockHeight = measure.height;
@@ -645,43 +666,33 @@ function finalizeHeaderFooterContent(
 
   const blocksForMeasure = normalizeHeaderFooterMeasureBlocks(blocks);
   const measures = options.measureBlocks(blocksForMeasure, contentWidth);
-  let totalHeight = 0;
+  let flowHeight = 0;
   for (let i = 0; i < measures.length; i++) {
     const m = measures[i];
     const b = blocks[i];
     if (!m || !b) {
       continue;
     }
-    if (m.kind === "paragraph") {
-      totalHeight += m.totalHeight;
-    } else if (m.kind === "table") {
-      if (!(b.kind === "table" && b.floating)) {
-        totalHeight += m.totalHeight;
-      }
-    } else if (m.kind === "image") {
-      totalHeight += m.height;
-    } else if (m.kind === "textBox") {
-      totalHeight += m.height;
-    }
+    flowHeight += getHeaderFooterFlowMeasureHeight(b, m);
   }
   const { visualTop, visualBottom } = calculateHeaderFooterVisualBounds(
     blocks,
     measures,
-    totalHeight,
+    flowHeight,
     metrics,
   );
   const { top: marginPushTop, bottom: marginPushBottom } =
     calculateHeaderFooterMarginPushBounds(
       blocks,
       measures,
-      totalHeight,
+      flowHeight,
       metrics,
     );
 
   return {
     blocks,
     measures,
-    height: totalHeight,
+    height: flowHeight,
     visualTop,
     visualBottom,
     marginPushTop,
@@ -689,6 +700,34 @@ function finalizeHeaderFooterContent(
     textSig: computeHeaderFooterTextSig(blocks),
     ...(options.rId ? { rId: options.rId } : {}),
   };
+}
+
+function getHeaderFooterFlowMeasureHeight(
+  block: FlowBlock,
+  measure: Measure,
+): number {
+  if (block.kind === "paragraph" && measure.kind === "paragraph") {
+    return measure.totalHeight;
+  }
+  if (block.kind === "table" && measure.kind === "table") {
+    if (block.floating) {
+      return 0;
+    }
+    return measure.totalHeight;
+  }
+  if (block.kind === "image" && measure.kind === "image") {
+    if (block.anchor?.isAnchored) {
+      return 0;
+    }
+    return measure.height;
+  }
+  if (block.kind === "textBox" && measure.kind === "textBox") {
+    if (isPositionedHeaderFooterTextBoxBlock(block)) {
+      return 0;
+    }
+    return measure.height;
+  }
+  return 0;
 }
 
 /**

@@ -7,6 +7,7 @@ import type {
   TableBlock,
 } from "../layout-engine/types";
 import { headerFooterToProseDoc } from "../prosemirror/conversion/toProseDoc";
+import { schema } from "../prosemirror/schema";
 import type { HeaderFooter } from "../types/document";
 import type { HeaderFooterMetrics } from "./headerFooterLayout";
 import {
@@ -80,6 +81,21 @@ function measureBlocks(blocks: FlowBlock[]): Measure[] {
         totalHeight: 24,
       };
     }
+    if (block.kind === "image") {
+      return {
+        kind: "image",
+        width: block.width,
+        height: block.height,
+      };
+    }
+    if (block.kind === "textBox") {
+      return {
+        kind: "textBox",
+        width: block.width,
+        height: block.height ?? 12,
+        innerMeasures: [],
+      };
+    }
 
     return {
       kind: "paragraph",
@@ -146,6 +162,36 @@ describe("calculateHeaderFooterVisualBounds", () => {
     );
 
     expect(bounds).toEqual({ visualTop: 0, visualBottom: 70 });
+  });
+
+  test("does not advance visual flow for floating text boxes before normal content", () => {
+    const blocks: FlowBlock[] = [
+      {
+        kind: "textBox",
+        id: "letterhead",
+        width: 560,
+        height: 1100,
+        displayMode: "float",
+        content: [],
+      },
+      {
+        kind: "paragraph",
+        id: "title",
+        runs: [{ kind: "text", text: "Header" }],
+      },
+    ];
+
+    const bounds = calculateHeaderFooterVisualBounds(
+      blocks,
+      [
+        { kind: "textBox", width: 560, height: 1100, innerMeasures: [] },
+        { kind: "paragraph", lines: [], totalHeight: 12 },
+      ],
+      12,
+      metrics,
+    );
+
+    expect(bounds).toEqual({ visualTop: 0, visualBottom: 1100 });
   });
 
   test("includes behindDoc images in visualBottom (render+hash signal)", () => {
@@ -291,11 +337,10 @@ describe("calculateHeaderFooterMarginPushBounds", () => {
       { kind: "textBox", width: 560, height: 1100, innerMeasures: [] },
     ];
 
-    // Push: only the in-flow paragraph (12) counts — not the 1100px letterhead,
-    // which would otherwise inflate the top margin past the page and blank the
-    // document.
+    // Simulate the pre-fix conversion path, where flowHeight was seeded with
+    // paragraph + floating box height. Push still derives from in-flow blocks.
     expect(
-      calculateHeaderFooterMarginPushBounds(blocks, measures, 12, metrics),
+      calculateHeaderFooterMarginPushBounds(blocks, measures, 1112, metrics),
     ).toEqual({ top: 0, bottom: 12 });
     // Visual: the letterhead is still part of the rendered extent.
     expect(
@@ -319,7 +364,7 @@ describe("calculateHeaderFooterMarginPushBounds", () => {
     const bounds = calculateHeaderFooterMarginPushBounds(
       blocks,
       [{ kind: "image", width: 560, height: 900 }],
-      0,
+      900,
       metrics,
     );
 
@@ -347,12 +392,12 @@ describe("calculateHeaderFooterMarginPushBounds", () => {
       },
     ];
 
-    // Only the paragraph's text height (12) pushes; the anchored image run is
-    // positioned on the page and does not.
+    // Simulate an inflated flowHeight from a paragraph measure plus anchored
+    // image extent; only the paragraph's text height pushes.
     const bounds = calculateHeaderFooterMarginPushBounds(
       blocks,
       [{ kind: "paragraph", lines: [], totalHeight: 12 }],
-      12,
+      912,
       metrics,
     );
 
@@ -361,6 +406,54 @@ describe("calculateHeaderFooterMarginPushBounds", () => {
 });
 
 describe("header/footer layout conversion", () => {
+  test("derives flow height before margin push so floating text boxes do not seed the body push", () => {
+    const pmDoc = schema.node("doc", null, [
+      schema.node("paragraph", null, [schema.text("Header")]),
+      schema.node(
+        "textBox",
+        {
+          width: 560,
+          height: 1100,
+          displayMode: "float",
+          wrapType: "behind",
+        },
+        [schema.node("paragraph", null, [])],
+      ),
+    ]);
+
+    const result = convertHeaderFooterPmDocToContent(pmDoc, 600, metrics, {
+      measureBlocks,
+    });
+
+    expect(result?.height).toBe(12);
+    expect(result?.marginPushBottom).toBe(12);
+    expect(result?.visualBottom).toBe(1112);
+  });
+
+  test("keeps topAndBottom text boxes in header/footer flow", () => {
+    const pmDoc = schema.node("doc", null, [
+      schema.node(
+        "textBox",
+        {
+          width: 560,
+          height: 1100,
+          displayMode: "block",
+          wrapType: "topAndBottom",
+        },
+        [schema.node("paragraph", null, [])],
+      ),
+      schema.node("paragraph", null, [schema.text("Header")]),
+    ]);
+
+    const result = convertHeaderFooterPmDocToContent(pmDoc, 600, metrics, {
+      measureBlocks,
+    });
+
+    expect(result?.height).toBe(1112);
+    expect(result?.marginPushBottom).toBe(1112);
+    expect(result?.visualBottom).toBe(1112);
+  });
+
   test("routes header/footer tables through the body FlowBlock pipeline", () => {
     const header: HeaderFooter = {
       type: "header",

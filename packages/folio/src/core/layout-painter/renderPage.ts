@@ -1269,7 +1269,7 @@ function renderHeaderFooterContent(
     } else if (block.kind === "textBox" && measure.kind === "textBox") {
       // The unified pipeline extracts top-level text boxes inside H/F as
       // their own block. `renderTextBoxFragment` sets `position: absolute`
-      // internally; we only supply top/left so it stacks at cursorY.
+      // internally; we only supply top/left so it anchors at cursorY.
       // Use the *measured* width (not contentWidth): measureBlocks computed
       // `measure.width` and the cached `innerMeasures` against the authored
       // text box width, so passing contentWidth would cause the outer box
@@ -1302,8 +1302,13 @@ function renderHeaderFooterContent(
         block.position?.horizontal,
         layout,
       );
+      if (block.wrapType === "behind") {
+        fragEl.style.zIndex = "-1";
+      }
       containerEl.append(fragEl);
-      cursorY += measure.height;
+      if (!isPositionedHeaderFooterTextBoxBlock(block)) {
+        cursorY += measure.height;
+      }
     }
   }
 
@@ -1355,6 +1360,13 @@ function renderHeaderFooterContent(
   }
 
   return containerEl;
+}
+
+function isPositionedHeaderFooterTextBoxBlock(block: TextBoxBlock): boolean {
+  if (block.displayMode === "block" || block.displayMode === "inline") {
+    return false;
+  }
+  return isFloatingTextBoxBlock(block);
 }
 
 /**
@@ -2186,29 +2198,12 @@ export function renderPage(
     }
     pageEl.append(headerEl);
 
-    // behindDoc images (full-page letterhead backgrounds) must live on the
-    // page element, not inside the clipped header container.  Move them out
-    // so they aren't constrained by the header's bounds/overflow.
-    // Prepend as first child so they paint below the page background layer;
-    // z-index alone doesn't work because the page's own background covers
-    // negative z-index children.
-    for (const img of Array.from(
-      headerEl.querySelectorAll<HTMLImageElement>('img[style*="z-index"]'),
-    )) {
-      if (img.style.zIndex !== "-1") {
-        continue;
-      }
-      // Adjust position: the image's top/left was relative to the header
-      // container origin.  Shift it so it's relative to the page origin.
-      const currentTop = Number.parseFloat(img.style.top) || 0;
-      const currentLeft = Number.parseFloat(img.style.left) || 0;
-      img.style.top = `${currentTop + headerDistance + headerVisualTop}px`;
-      img.style.left = `${currentLeft + page.margins.left}px`;
-      // Use z-index 0 instead of -1 so the image sits above the page
-      // background but below text content (which has higher stacking).
-      img.style.zIndex = "0";
-      pageEl.prepend(img);
-    }
+    moveBehindHeaderFooterElementsToPage(
+      headerEl,
+      pageEl,
+      headerDistance + headerVisualTop,
+      page.margins.left,
+    );
   }
 
   // Render footer area (always rendered for hover hint / double-click target)
@@ -2281,6 +2276,12 @@ export function renderPage(
       footerEl.style.overflow = "hidden";
     }
     pageEl.append(footerEl);
+    moveBehindHeaderFooterElementsToPage(
+      footerEl,
+      pageEl,
+      footerContainerTop,
+      page.margins.left,
+    );
   }
 
   if (pageBorderEl && options.pageBorders?.zOrder !== "back") {
@@ -2288,6 +2289,35 @@ export function renderPage(
   }
 
   return pageEl;
+}
+
+function moveBehindHeaderFooterElementsToPage(
+  slotEl: HTMLElement,
+  pageEl: HTMLElement,
+  slotTop: number,
+  slotLeft: number,
+): void {
+  // behindDoc images and behind text boxes (full-page letterhead backgrounds)
+  // must live on the page element, not inside the clipped HF container. Move
+  // them out so they aren't constrained by HF bounds/overflow and so body
+  // content paints above them.
+  for (const element of Array.from(
+    slotEl.querySelectorAll<HTMLElement>(
+      'img[style*="z-index"], .layout-textbox[style*="z-index"]',
+    ),
+  )) {
+    if (element.style.zIndex !== "-1") {
+      continue;
+    }
+    const currentTop = Number.parseFloat(element.style.top) || 0;
+    const currentLeft = Number.parseFloat(element.style.left) || 0;
+    element.style.top = `${currentTop + slotTop}px`;
+    element.style.left = `${currentLeft + slotLeft}px`;
+    // Use z-index 0 instead of -1 so the element sits above the page
+    // background but below body text content (which remains later in DOM).
+    element.style.zIndex = "0";
+    pageEl.prepend(element);
+  }
 }
 
 /**
