@@ -17,6 +17,7 @@ import type {
 // Re-export types and query helpers from extensions
 import type { ResolvedStyleAttrs } from "../extensions/core/ParagraphExtension";
 import { singletonManager } from "../schema";
+
 export type { ResolvedStyleAttrs } from "../extensions/core/ParagraphExtension";
 export {
   getParagraphAlignment,

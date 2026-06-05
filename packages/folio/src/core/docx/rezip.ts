@@ -600,7 +600,7 @@ export type RepackOptions = {
  * @param doc - Document with modified content
  * @param options - Optional repack options
  * @returns Promise resolving to DOCX as ArrayBuffer
- * @throws Error if document has no original buffer for round-trip
+ * @throws {Error} if document has no original buffer for round-trip
  */
 export async function repackDocx(
   doc: Document,
