@@ -31,7 +31,13 @@ const OPTIONS: LayoutOptions = {
 
 const BOX_HEIGHT = 100;
 
-function banner(relativeTo: "page" | undefined): TextBoxBlock {
+// 1 inch in EMU = 96px at 96 DPI; equals MARGINS.top, so offsets read cleanly.
+const EMU_PER_INCH = 914_400;
+
+function banner(
+  relativeTo: "page" | "margin" | undefined,
+  posOffset = 0,
+): TextBoxBlock {
   return {
     kind: "textBox",
     id: "banner",
@@ -40,7 +46,7 @@ function banner(relativeTo: "page" | undefined): TextBoxBlock {
     content: [],
     wrapType: "topAndBottom",
     ...(relativeTo
-      ? { position: { vertical: { relativeTo, posOffset: 0 } } }
+      ? { position: { vertical: { relativeTo, posOffset } } }
       : {}),
   };
 }
@@ -79,7 +85,7 @@ function textBoxFragments(blocks: FlowBlock[], measures: Measure[]) {
 }
 
 describe("topAndBottom band text box layout", () => {
-  test("page-pinned banner sits at the page top and does not consume flow", () => {
+  test("page-relative banner sits at the page top edge and does not consume flow", () => {
     const frags = textBoxFragments(
       [banner("page"), para("p")],
       [boxMeasure, paraMeasure],
@@ -90,11 +96,35 @@ describe("topAndBottom band text box layout", () => {
       | undefined;
     const paragraph = frags.find((f) => f.kind === "paragraph");
 
-    // Banner pinned flush to the page content top.
-    expect(box?.y).toBe(MARGINS.top);
+    // relativeTo=page, offset 0 → the very top of the page (y=0, in the margin).
+    expect(box?.y).toBe(0);
     // Flow not advanced by the banner: the paragraph still starts at the top
     // (the measure pass, not layout, reserves the band that pushes text down).
     expect(paragraph?.y).toBe(MARGINS.top);
+  });
+
+  test("margin-relative banner sits at the content top", () => {
+    const frags = textBoxFragments(
+      [banner("margin"), para("p")],
+      [boxMeasure, paraMeasure],
+    );
+    const box = frags.find((f) => f.kind === "textBox") as
+      | TextBoxFragment
+      | undefined;
+    expect(box?.y).toBe(MARGINS.top);
+  });
+
+  test("honors a non-zero vertical offset (layout matches the measure band)", () => {
+    // page-relative offset of 1 inch (= MARGINS.top px) → page Y = 96.
+    const frags = textBoxFragments(
+      [banner("page", EMU_PER_INCH), para("p")],
+      [boxMeasure, paraMeasure],
+    );
+    const box = frags.find((f) => f.kind === "textBox") as
+      | TextBoxFragment
+      | undefined;
+    // y = topMargin + (emuToPixels(offset) - topMargin) = emuToPixels(offset) = 96
+    expect(box?.y).toBe(96);
   });
 
   test("paragraph-anchored topAndBottom box stays in flow (unchanged)", () => {

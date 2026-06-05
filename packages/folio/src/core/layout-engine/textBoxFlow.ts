@@ -3,7 +3,8 @@
  */
 
 import { isFloatingWrapType, isWrapNone } from "../docx/wrapTypes";
-import type { TextBoxBlock } from "./types";
+import { emuToPixels } from "../utils/units";
+import type { ImageRunPosition, TextBoxBlock } from "./types";
 
 export type TextBoxFlowAttrs = Pick<TextBoxBlock, "displayMode" | "wrapType">;
 
@@ -37,4 +38,21 @@ export function floatingTextBoxWrapsText(block: TextBoxFlowAttrs): boolean {
  */
 export function floatingTextBoxReservesBand(block: TextBoxFlowAttrs): boolean {
   return isFloatingTextBoxBlock(block) && block.wrapType === "topAndBottom";
+}
+
+/**
+ * Content-area top Y (px) of a `topAndBottom` band box's reserved band, resolved
+ * from its OOXML vertical anchor. Shared by the measure pass
+ * (`extractFloatingZones`) and the layout pass (`layoutTextBox`) so the reserved
+ * band and the painted box land at the same Y — a page-relative offset is
+ * measured from the page edge (subtract the top margin); a margin-relative
+ * offset (or no offset) is already content-relative. Ported from eigenpal #694.
+ */
+export function bandTopContentY(
+  vertical: ImageRunPosition["vertical"],
+  marginTop: number,
+): number {
+  const offset =
+    vertical?.posOffset !== undefined ? emuToPixels(vertical.posOffset) : 0;
+  return vertical?.relativeTo === "page" ? offset - marginTop : offset;
 }

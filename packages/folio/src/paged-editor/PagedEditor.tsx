@@ -87,7 +87,10 @@ import type { ToFlowBlocksOptions } from "../core/layout-bridge/toFlowBlocks";
 // Layout engine
 import { layoutDocument } from "../core/layout-engine";
 import type { ColumnLayout, SectionLayoutConfig } from "../core/layout-engine";
-import { floatingTextBoxReservesBand } from "../core/layout-engine/textBoxFlow";
+import {
+  bandTopContentY,
+  floatingTextBoxReservesBand,
+} from "../core/layout-engine/textBoxFlow";
 import type {
   Layout,
   FlowBlock,
@@ -2243,16 +2246,8 @@ function extractFloatingZones(
     const height = tb.height ?? 0;
     const distTop = tb.distTop ?? 0;
     const distBottom = tb.distBottom ?? 0;
-    // Resolve the band top in content coordinates. A page-relative offset is
-    // measured from the page edge, so subtract the top margin; a margin-relative
-    // offset (or a top/align with no offset) sits at the content top (0).
-    let rawTop = 0;
-    if (v.posOffset !== undefined) {
-      rawTop =
-        v.relativeTo === "page"
-          ? emuToPixels(v.posOffset) - marginTop
-          : emuToPixels(v.posOffset);
-    }
+    // Shared with layoutTextBox so the reserved band and the painted box agree.
+    const rawTop = bandTopContentY(v, marginTop);
     const bottomY = rawTop + height + distBottom;
     if (bottomY <= 0) {
       continue;

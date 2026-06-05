@@ -14,7 +14,7 @@ import {
 } from "./keep-together";
 import { FOOTNOTE_SEPARATOR_HEIGHT, createPaginator } from "./paginator";
 import { buildTableRowBreakInfo, snapRowBreak } from "./tableRowBreak";
-import { floatingTextBoxReservesBand } from "./textBoxFlow";
+import { bandTopContentY, floatingTextBoxReservesBand } from "./textBoxFlow";
 import type {
   FlowBlock,
   Measure,
@@ -1093,11 +1093,16 @@ function layoutTextBox(
   // the page content top without advancing the cursor. eigenpal #694.
   if (isPagePinnedBandTextBox(block)) {
     const state = paginator.getCurrentState();
+    // Position the box at the same Y the measure pass reserved its band at
+    // (bandTopContentY is content-relative; fragment.y is page-absolute, so add
+    // the top margin). Honors the anchor's vertical offset instead of always
+    // pinning to the content top.
+    const bandTop = bandTopContentY(block.position?.vertical, state.topMargin);
     const fragment: TextBoxFragment = {
       kind: "textBox",
       blockId: block.id,
       x: paginator.getColumnX(state.columnIndex),
-      y: state.topMargin,
+      y: state.topMargin + bandTop,
       width: measure.width,
       height: measure.height,
       ...(block.pmStart !== undefined ? { pmStart: block.pmStart } : {}),
