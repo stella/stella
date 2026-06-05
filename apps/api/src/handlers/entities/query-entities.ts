@@ -1,5 +1,5 @@
 import { Result, panic } from "better-result";
-import { and, count, eq, inArray, notInArray, or, sql } from "drizzle-orm";
+import { and, count, eq, gt, inArray, notInArray, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
@@ -879,6 +879,10 @@ const queryEntitiesGenerator = async function* ({
           and(
             inArray(desktopEditSessions.entityId, pageIds),
             eq(desktopEditSessions.status, "open"),
+            // A session past its token TTL is no longer usable for edits
+            // (authorizeDesktopEditSession rejects it), so it must not
+            // render as an active lock even before the sweep closes it.
+            gt(desktopEditSessions.tokenExpiresAt, new Date()),
           ),
         )
         .orderBy(desktopEditSessions.createdAt);
