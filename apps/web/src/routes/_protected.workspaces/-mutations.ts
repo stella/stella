@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "@tanstack/react-router";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -75,6 +76,7 @@ export const workspaceUpdateInvalidationKeys = () => [workspacesKeys.all];
 export const useUpdateWorkspace = () => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: UpdateWorkspaceVars) => {
@@ -101,10 +103,17 @@ export const useUpdateWorkspace = () => {
         throw toAPIError(response.error);
       }
     },
-    onSuccess: () => {
-      for (const queryKey of workspaceUpdateInvalidationKeys()) {
-        void queryClient.invalidateQueries({ queryKey });
-      }
+    onSuccess: async () => {
+      await Promise.all(
+        workspaceUpdateInvalidationKeys().map(async (queryKey) => {
+          await queryClient.invalidateQueries({ queryKey });
+        }),
+      );
+      // Re-run route loaders so the document title (driven by the
+      // route `head` from loaderData) reflects the renamed matter
+      // without waiting for a navigation. Query invalidation alone
+      // refreshes components but not the cached loaderData.
+      await router.invalidate();
     },
     onError: (error) => {
       analytics.captureError(error);
