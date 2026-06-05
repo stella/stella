@@ -14,6 +14,9 @@ import { PG_ERROR } from "@/api/lib/pg-error";
 import type { ParsedSkillPackage } from "./skill-package";
 
 type InstallSkillProps = {
+  // Install as a draft (hidden until the user finishes). Defaults to true so
+  // existing upload/import callers keep installing enabled skills.
+  enabled?: boolean;
   memberRole: { role: string };
   onInstalled?: (
     tx: Transaction,
@@ -25,6 +28,10 @@ type InstallSkillProps = {
   safeDb: SafeDb;
   scope: AgentSkillScope;
   session: { activeOrganizationId: SafeId<"organization"> };
+  // Override the stored slug. Defaults to the parsed name (the package's own
+  // identifier). Callers that instantiate the same package repeatedly (e.g.
+  // blueprints) pass a unique slug to avoid (org, scope, slug) collisions.
+  slug?: string;
   user: { id: SafeId<"user"> };
 };
 
@@ -34,6 +41,7 @@ type InstallSkillTransactionResult =
   | { type: "limit-reached" };
 
 export const installSkill = async ({
+  enabled = true,
   memberRole,
   onInstalled,
   origin,
@@ -42,6 +50,7 @@ export const installSkill = async ({
   safeDb,
   scope,
   session,
+  slug,
   user,
 }: InstallSkillProps) => {
   const authorization = authorizeSkillInstallScope({ memberRole, scope });
@@ -71,7 +80,7 @@ export const installSkill = async ({
               userId: user.id,
               scope,
               origin,
-              slug: parsed.name,
+              slug: slug ?? parsed.name,
               name: parsed.name,
               description: parsed.description,
               version: parsed.version,
@@ -81,7 +90,7 @@ export const installSkill = async ({
               sourceUrl: parsed.sourceUrl,
               contentHash: parsed.contentHash,
               body: parsed.body,
-              enabled: true,
+              enabled,
             })
             .returning({ id: agentSkills.id });
 
@@ -115,7 +124,7 @@ export const installSkill = async ({
                   origin,
                   resourceCount: parsed.resources.length,
                   scope,
-                  slug: parsed.name,
+                  slug: slug ?? parsed.name,
                 },
               },
             },
@@ -139,7 +148,13 @@ export const installSkill = async ({
         }),
       );
     }
-    return Result.err(insertResult.error);
+    return Result.err(
+      new HandlerError({
+        status: 500,
+        message: "Failed to install skill",
+        cause: insertResult.error,
+      }),
+    );
   }
 
   if (insertResult.value.type === "limit-reached") {

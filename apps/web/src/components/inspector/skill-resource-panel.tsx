@@ -72,13 +72,17 @@ export const SkillResourcePanel = ({
     }
     setSaving(true);
     const nextContent = draft;
-    const response = await api
-      .skills({ skillId: toSafeId<"agentSkill">(tab.skillId) })
-      .resources.patch({
-        path: tab.resourcePath,
-        content: nextContent,
-        queryKey: ["skills"],
-      });
+    const skill = api.skills({ skillId: toSafeId<"agentSkill">(tab.skillId) });
+    // The SKILL.md body lives on the skill row; companion files are separate
+    // resource rows. Same panel, two save endpoints.
+    const response =
+      tab.target === "body"
+        ? await skill.patch({ body: nextContent, queryKey: ["skills"] })
+        : await skill.resources.patch({
+            path: tab.resourcePath,
+            content: nextContent,
+            queryKey: ["skills"],
+          });
     setSaving(false);
     if (response.error) {
       const apiError = toAPIError(response.error);

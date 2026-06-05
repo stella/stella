@@ -161,7 +161,13 @@ export type SkillResourceTab = {
   /** Resource source — built-in skills are immutable, the others
    *  can be edited in place. */
   origin: "built-in" | "upload" | "url";
-  /** Path inside the skill bundle (e.g. references/edpb-criteria.md). */
+  /** Which part of the skill this tab edits: a companion resource
+   *  (saved via /resources) or the SKILL.md body (saved via the skill
+   *  itself). Defaults to "resource" for callers that predate the body
+   *  editor (e.g. chat tool-call output). */
+  target: "body" | "resource";
+  /** Path inside the skill bundle (e.g. references/edpb-criteria.md).
+   *  For the body tab this is the display name "SKILL.md". */
   resourcePath: string;
   /** MIME type from the read-skill-resource tool output. */
   mimeType: string;
@@ -294,9 +300,10 @@ type Actions = {
     color?: string | null | undefined;
   }) => void;
   openSkillResourceTab: (
-    tab: Omit<SkillResourceTab, "type" | "id"> & {
+    tab: Omit<SkillResourceTab, "type" | "id" | "target"> & {
       skillName: string;
       resourcePath: string;
+      target?: SkillResourceTab["target"];
     },
   ) => void;
   /**
@@ -828,11 +835,13 @@ const isInspectorTab = (value: unknown): value is InspectorTab => {
   if (type === "skill-resource") {
     const skillId = value["skillId"];
     const origin = value["origin"];
+    const target = value["target"];
     return (
       typeof label === "string" &&
       typeof value["skillName"] === "string" &&
       (skillId === null || typeof skillId === "string") &&
       (origin === "built-in" || origin === "upload" || origin === "url") &&
+      (target === undefined || target === "body" || target === "resource") &&
       typeof value["resourcePath"] === "string" &&
       typeof value["mimeType"] === "string" &&
       typeof value["content"] === "string"
@@ -1141,6 +1150,7 @@ export const useInspectorStore = create<State & Actions>()(
       label,
       mimeType,
       content,
+      target = "resource",
     }) =>
       set((state) => {
         const id = buildSkillResourceTabId({ skillName, resourcePath });
@@ -1153,6 +1163,7 @@ export const useInspectorStore = create<State & Actions>()(
             skillName,
             skillId,
             origin,
+            target,
             resourcePath,
             mimeType,
             content,
@@ -1164,6 +1175,7 @@ export const useInspectorStore = create<State & Actions>()(
           existing.skillName = skillName;
           existing.skillId = skillId;
           existing.origin = origin;
+          existing.target = target;
           existing.resourcePath = resourcePath;
           existing.mimeType = mimeType;
           if (sourceChanged) {

@@ -11,6 +11,8 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
+import { isAiResourcePath } from "./ai-resource-path";
+
 const INTENT_MAX_CHARS = 2000;
 const EXAMPLES_MAX_CHARS = 2000;
 const FEEDBACK_MAX_CHARS = 2000;
@@ -21,8 +23,6 @@ const PREVIOUS_RESOURCE_CONTENT_MAX = LIMITS.agentSkillResourceMaxChars;
 const GENERATION_TIMEOUT_MS = 90_000;
 const GENERATION_MAX_OUTPUT_TOKENS = 8192;
 const AI_RESOURCES_MAX = 8;
-const AI_RESOURCE_PATH_PATTERN =
-  /^(references|prompts|knowledge)\/[a-z0-9][a-z0-9._-]*\.md$/u;
 
 const previousResourceSchema = t.Object({
   path: t.String({ minLength: 1, maxLength: PREVIOUS_RESOURCE_PATH_MAX }),
@@ -56,7 +56,7 @@ const aiResourceSchema = v.strictObject({
   path: v.pipe(
     v.string(),
     v.description(
-      "Relative path inside the skill folder. Must start with references/, prompts/, or knowledge/ and end in .md. Use lowercase letters, digits, hyphens, dots, or underscores.",
+      "Relative path inside the skill folder. Must start with references/, prompts/, or knowledge/ and end in .md. Subfolders are allowed to organise material (e.g. references/cz/act-110.md). Use lowercase letters, digits, hyphens, dots, or underscores in each segment.",
     ),
   ),
   content: v.pipe(
@@ -168,7 +168,7 @@ const sanitizeResources = (
       break;
     }
     const path = item.path.trim();
-    if (!AI_RESOURCE_PATH_PATTERN.test(path) || seen.has(path)) {
+    if (!isAiResourcePath(path) || seen.has(path)) {
       continue;
     }
     const content = item.content;
@@ -211,7 +211,7 @@ SKILL.md rules:
 - Keep the body under 2,000 words. No code fences around the whole file.
 
 Companion files (the "resources" array):
-- Each path must start with references/, prompts/, or knowledge/ and end in .md. Lowercase letters, digits, hyphens, dots, and underscores only. Examples: knowledge/01-foundations.md, prompts/draft-summary.prompt.md, references/checklists.md.
+- Each path must start with references/, prompts/, or knowledge/ and end in .md. Lowercase letters, digits, hyphens, dots, and underscores only. Subfolders are allowed to organise material by topic, jurisdiction, or source type. Examples: knowledge/01-foundations.md, prompts/draft-summary.prompt.md, references/checklists.md, references/cz/act-110.md, references/case-law/supreme.md.
 - knowledge/* — background material the agent reads (definitions, frameworks, examples).
 - prompts/* — reusable prompts the agent can run for sub-tasks.
 - references/* — checklists, lookup tables, format guides.

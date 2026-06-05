@@ -2,6 +2,7 @@ import Elysia from "elysia";
 
 import createSkill from "@/api/handlers/skills/create";
 import deleteSkill from "@/api/handlers/skills/delete";
+import fromBlueprint from "@/api/handlers/skills/from-blueprint";
 import generateSkillDraft from "@/api/handlers/skills/generate-draft";
 import getSkill from "@/api/handlers/skills/get";
 import importSkillFromUrl from "@/api/handlers/skills/import-url";
@@ -43,6 +44,11 @@ export const skillsRoute = new Elysia({ prefix: "/skills" })
   .post("/seed", seedSkills.handler, {
     invalidateQuery: true,
     permissions: seedSkills.config.permissions,
+  })
+  .post("/from-blueprint", fromBlueprint.handler, {
+    body: fromBlueprint.config.body,
+    invalidateQuery: true,
+    permissions: fromBlueprint.config.permissions,
   })
   .post("/upload", uploadSkill.handler, {
     body: uploadSkill.config.body,

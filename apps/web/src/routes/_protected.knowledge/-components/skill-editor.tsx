@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import {
+  CheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
+  CircleIcon,
   FileCodeIcon,
   FileIcon,
   FilePlusIcon,
@@ -14,20 +16,12 @@ import {
   PencilIcon,
   PlusIcon,
   PowerIcon,
-  SparklesIcon,
   Trash2Icon,
   UploadIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
-import {
-  Dialog,
-  DialogHeader,
-  DialogPanel,
-  DialogPopup,
-  DialogTitle,
-} from "@stll/ui/components/dialog";
 import { Input } from "@stll/ui/components/input";
 import {
   Popover,
@@ -38,20 +32,25 @@ import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { api } from "@/lib/api";
 import { APIError, toAPIError, userErrorFromThrown } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
-import { skillDetailOptions } from "@/routes/_protected.knowledge/-queries";
+import {
+  knowledgeKeys,
+  skillDetailOptions,
+} from "@/routes/_protected.knowledge/-queries";
+import { catalogueKeys } from "@/routes/_protected.knowledge/-queries/catalogue";
 
 const SKILL_BODY_FILE_NAME = "SKILL.md";
-const TEXT_RESOURCE_KINDS = new Set([
-  "asset",
-  "knowledge",
-  "prompt",
-  "reference",
-  "script",
-  "template",
-]);
+// Blueprints seed coaching notes as `<!-- guide: … -->` comments. The editor
+// counts the ones still left so the user can see how much scaffold remains.
+const GUIDE_MARKER_PATTERN = /<!--\s*guide:/gu;
+const countGuideMarkers = (text: string): number =>
+  text.match(GUIDE_MARKER_PATTERN)?.length ?? 0;
+// Editing/dirty state now lives in the inspector, so the tree never shows dirty
+// dots here. A module-level constant keeps the prop referentially stable.
+const NO_DIRTY_RESOURCES: string[] = [];
 
 // Mirrors apps/api/src/handlers/skills/resources/resource-path.ts.
 // Keep the two in sync.
@@ -72,20 +71,6 @@ const isBinaryUpload = (file: File) =>
   file.name.toLowerCase().endsWith(".docx") ||
   file.name.toLowerCase().endsWith(".pdf");
 
-type EditableSkill = {
-  id: string;
-  name: string;
-  scope: "team" | "private";
-  enabled: boolean;
-};
-
-type EditSkillSheetProps = {
-  onChanged: () => void;
-  onOpenChange: (open: boolean) => void;
-  open: boolean;
-  skill: EditableSkill | null;
-};
-
 type SkillResource = {
   id: string;
   path: string;
@@ -100,57 +85,41 @@ type SelectedFile =
 
 const protectedRouteApi = getRouteApi("/_protected");
 
-export function EditSkillSheet({
-  onChanged,
-  onOpenChange,
-  open,
-  skill,
-}: EditSkillSheetProps) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogPopup className="flex h-[min(900px,90vh)] w-[min(1100px,92vw)] max-w-none flex-col p-0">
-        {skill ? (
-          <EditSkillSheetBody
-            key={skill.id}
-            onChanged={onChanged}
-            skill={skill}
-          />
-        ) : null}
-      </DialogPopup>
-    </Dialog>
-  );
-}
-
-type EditSkillSheetBodyProps = {
-  onChanged: () => void;
-  skill: EditableSkill;
+type SkillEditorProps = {
+  skillId: string;
 };
 
-function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
+export function SkillEditor({ skillId }: SkillEditorProps) {
   const t = useTranslations();
   const tSkills = useTranslations("knowledge.agentSkills");
+  const queryClient = useQueryClient();
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
+  const openSkillResourceTab = useInspectorStore((s) => s.openSkillResourceTab);
 
-  const detail = useQuery(skillDetailOptions(activeOrganizationId, skill.id));
+  const detail = useQuery(skillDetailOptions(activeOrganizationId, skillId));
 
+  // Editing happens in the right-side inspector; the editor just invalidates so
+  // the catalogue + coaching reflect saves the inspector makes.
+  const onChanged = () => {
+    void queryClient.invalidateQueries({
+      queryKey: knowledgeKeys.skills.all(activeOrganizationId),
+    });
+    void queryClient.invalidateQueries({
+      queryKey: catalogueKeys.list(activeOrganizationId),
+    });
+  };
+
+  // Highlights the row whose file is open in the inspector.
   const [selected, setSelected] = useState<SelectedFile>({ type: "body" });
-  const [draftBody, setDraftBody] = useState<string | null>(null);
-  const [draftResources, setDraftResources] = useState<Record<string, string>>(
-    {},
-  );
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [version, setVersion] = useState("");
-  const [enabled, setEnabled] = useState(skill.enabled);
+  const [enabled, setEnabled] = useState(false);
   const [command, setCommand] = useState("");
   const [autoInvokeHint, setAutoInvokeHint] = useState("");
   const [commandError, setCommandError] = useState<string | null>(null);
-  const [confirmDiscardFor, setConfirmDiscardFor] =
-    useState<SelectedFile | null>(null);
-  const [rewritePrompt, setRewritePrompt] = useState("");
-  const [rewriteOpen, setRewriteOpen] = useState(false);
   const [renamingResourceId, setRenamingResourceId] = useState<string | null>(
     null,
   );
@@ -195,48 +164,44 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
     [resources],
   );
 
-  const bodyServerValue = detail.data?.body ?? "";
-  const bodyValue = draftBody ?? bodyServerValue;
-  const bodyDirty = draftBody !== null && draftBody !== bodyServerValue;
+  const safeSkillId = toSafeId<"agentSkill">(skillId);
+  const skillName = detail.data?.name ?? "";
+  const bodyContent = detail.data?.body ?? "";
 
-  const selectedResource =
-    selected.type === "resource"
-      ? (resources.find((entry) => entry.id === selected.resourceId) ?? null)
-      : null;
-  const resourceServerValue = selectedResource?.content ?? "";
-  const resourceDraft =
-    selected.type === "resource"
-      ? draftResources[selected.resourceId]
-      : undefined;
-  const resourceValue = resourceDraft ?? resourceServerValue;
-  const resourceDirty =
-    selected.type === "resource" &&
-    resourceDraft !== undefined &&
-    resourceDraft !== resourceServerValue;
-
-  const currentDirty = selected.type === "body" ? bodyDirty : resourceDirty;
-
-  const safeSkillId = toSafeId<"agentSkill">(skill.id);
+  // Open a file in the right-side inspector (the shared markdown editor).
+  // SKILL.md targets the skill body; everything else targets a resource row.
+  const openInInspector = (next: SelectedFile) => {
+    setSelected(next);
+    if (next.type === "body") {
+      openSkillResourceTab({
+        skillName,
+        skillId,
+        origin: "upload",
+        target: "body",
+        resourcePath: SKILL_BODY_FILE_NAME,
+        label: SKILL_BODY_FILE_NAME,
+        mimeType: "text/markdown",
+        content: bodyContent,
+      });
+      return;
+    }
+    const resource = resources.find((entry) => entry.id === next.resourceId);
+    if (!resource) {
+      return;
+    }
+    openSkillResourceTab({
+      skillName,
+      skillId,
+      origin: "upload",
+      target: "resource",
+      resourcePath: resource.path,
+      label: resource.path.split("/").at(-1) ?? resource.path,
+      mimeType: resource.path.endsWith(".md") ? "text/markdown" : "text/plain",
+      content: resource.content,
+    });
+  };
 
   // Mutations
-  const patchBody = useMutation({
-    mutationFn: async (nextBody: string) => {
-      const response = await api
-        .skills({ skillId: safeSkillId })
-        .patch({ body: nextBody, queryKey: ["skills"] });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
-    },
-    onSuccess: () => {
-      setDraftBody(null);
-      onChanged();
-      void detail.refetch();
-    },
-    onError: (error) => toastError(error, t("common.unexpectedError")),
-  });
-
   const patchMetadata = useMutation({
     mutationFn: async (payload: {
       name?: string;
@@ -267,33 +232,6 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
     },
   });
 
-  const patchResource = useMutation({
-    mutationFn: async (payload: { path: string; content: string }) => {
-      const response = await api
-        .skills({ skillId: safeSkillId })
-        .resources.patch({ ...payload, queryKey: ["skills"] });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
-    },
-    onSuccess: (_data, variables) => {
-      setDraftResources((current) => {
-        const matching = resources.find(
-          (entry) => entry.path === variables.path,
-        );
-        if (!matching) {
-          return current;
-        }
-        const { [matching.id]: _unused, ...rest } = current;
-        return rest;
-      });
-      onChanged();
-      void detail.refetch();
-    },
-    onError: (error) => toastError(error, t("common.unexpectedError")),
-  });
-
   const createResource = useMutation({
     mutationFn: async (payload: { path: string; content: string }) => {
       const response = await api
@@ -304,15 +242,21 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
       }
       return response.data;
     },
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       onChanged();
       void detail.refetch();
-      // Select the newly created file so the user can keep editing it.
-      setSelected({
-        type: "resource",
-        resourceId: data.id,
-        path: data.path,
+      // Open the new file in the inspector so the user can fill it in.
+      openSkillResourceTab({
+        skillName,
+        skillId,
+        origin: "upload",
+        target: "resource",
+        resourcePath: data.path,
+        label: data.path.split("/").at(-1) ?? data.path,
+        mimeType: data.path.endsWith(".md") ? "text/markdown" : "text/plain",
+        content: variables.content,
       });
+      setSelected({ type: "resource", resourceId: data.id, path: data.path });
     },
     onError: (error) => toastError(error, t("common.unexpectedError")),
   });
@@ -360,10 +304,6 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
       ) {
         setSelected({ type: "body" });
       }
-      setDraftResources((current) => {
-        const { [result.resourceId]: _unused, ...rest } = current;
-        return rest;
-      });
       onChanged();
       void detail.refetch();
     },
@@ -397,81 +337,28 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
     onError: (error) => toastError(error, t("common.unexpectedError")),
   });
 
-  const rewriteResource = useMutation({
-    mutationFn: async (payload: { path: string; prompt: string }) => {
-      const response = await api
-        .skills({ skillId: safeSkillId })
-        .resources.rewrite.post(payload);
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
-    },
-    onSuccess: (data) => {
-      // Load as a dirty draft on the resource that requested the rewrite so the
-      // user can review it before saving, even if selection changed mid-flight.
-      const target = resources.find((resource) => resource.path === data.path);
-      if (!target) {
-        return;
-      }
-      setDraftResources((current) => ({
-        ...current,
-        [target.id]: data.content,
-      }));
-      setRewriteOpen(false);
-      setRewritePrompt("");
-    },
-    onError: (error) => toastError(error, t("common.unexpectedError")),
-  });
-
   const tree = useMemo(() => buildTree(resources), [resources]);
 
-  const trySelect = (next: SelectedFile) => {
-    if (sameSelection(next, selected)) {
-      return;
+  // Quality coaching: how many `<!-- guide: … -->` notes are still unfilled
+  // across SKILL.md and every companion file (drafts included), and whether the
+  // skill has a way to be invoked.
+  const guideCount = useMemo(() => {
+    let total = countGuideMarkers(bodyContent);
+    for (const resource of resources) {
+      total += countGuideMarkers(resource.content);
     }
-    if (currentDirty) {
-      setConfirmDiscardFor(next);
-      return;
-    }
-    setSelected(next);
-  };
+    return total;
+  }, [bodyContent, resources]);
+  const triggerSet =
+    command.trim().length > 0 || autoInvokeHint.trim().length > 0;
 
-  const discardCurrentDraft = () => {
-    if (selected.type === "body") {
-      setDraftBody(null);
+  const onPublish = () => {
+    if (enabled) {
       return;
     }
-    setDraftResources((current) => {
-      const { [selected.resourceId]: _unused, ...rest } = current;
-      return rest;
-    });
+    setEnabled(true);
+    patchMetadata.mutate({ enabled: true });
   };
-
-  const onSave = () => {
-    if (selected.type === "body") {
-      if (draftBody === null || draftBody === bodyServerValue) {
-        return;
-      }
-      patchBody.mutate(draftBody);
-      return;
-    }
-    if (
-      !selectedResource ||
-      resourceDraft === undefined ||
-      resourceDraft === resourceServerValue
-    ) {
-      return;
-    }
-    patchResource.mutate({
-      path: selectedResource.path,
-      content: resourceDraft,
-    });
-  };
-
-  const isSaving =
-    patchBody.isPending || patchResource.isPending || patchMetadata.isPending;
-  const saveDisabled = !currentDirty || isSaving;
 
   // Metadata commit-on-blur helpers
   const commitName = () => {
@@ -542,10 +429,6 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
     }
     patchMetadata.mutate({ autoInvokeHint: next });
   };
-
-  const selectedKindIsText =
-    selected.type === "body" ||
-    (selectedResource ? TEXT_RESOURCE_KINDS.has(selectedResource.kind) : false);
 
   const handleUpload = async (file: File) => {
     const binary = isBinaryUpload(file);
@@ -634,10 +517,9 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
   };
 
   return (
-    <>
-      <DialogHeader className="border-b">
-        <DialogTitle>{tSkills("editTitle")}</DialogTitle>
-        <div className="mt-2 flex flex-col gap-3">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="border-b p-4">
+        <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <Input
               aria-label={tSkills("formName")}
@@ -646,11 +528,13 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
               onChange={(event) => setName(event.target.value)}
               value={name}
             />
-            <span className="text-muted-foreground rounded border px-1.5 py-0.5 text-xs">
-              {skill.scope === "team"
-                ? tSkills("scopeTeam")
-                : tSkills("scopePrivate")}
-            </span>
+            {detail.data && (
+              <span className="text-muted-foreground rounded border px-1.5 py-0.5 text-xs">
+                {detail.data.scope === "team"
+                  ? tSkills("scopeTeam")
+                  : tSkills("scopePrivate")}
+              </span>
+            )}
             <Button
               aria-label={
                 enabled ? tSkills("disableSkill") : tSkills("enableSkill")
@@ -729,7 +613,7 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
             </div>
           </div>
         </div>
-      </DialogHeader>
+      </div>
       <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
         <aside className="bg-muted/20 max-h-72 shrink-0 overflow-y-auto border-b sm:max-h-none sm:w-72 sm:border-e sm:border-b-0">
           <div className="p-3">
@@ -761,10 +645,10 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
             )}
             {detail.data && (
               <SkillFileTree
-                bodyDirty={bodyDirty}
+                bodyDirty={false}
                 createPending={createResource.isPending}
                 deletePending={deleteResource.isPending}
-                dirtyResourceIds={Object.keys(draftResources)}
+                dirtyResourceIds={NO_DIRTY_RESOURCES}
                 onCreateFile={onCreateFile}
                 onDeleteFile={(entry) =>
                   deleteResource.mutate({
@@ -772,7 +656,7 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
                     resourceId: entry.id,
                   })
                 }
-                onSelect={trySelect}
+                onSelect={openInInspector}
                 onStartRename={(entry) => {
                   setRenamingResourceId(entry.id);
                   setRenameValue(entry.path);
@@ -794,7 +678,7 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
             )}
           </div>
         </aside>
-        <DialogPanel className="flex min-h-0 flex-1 flex-col gap-3 p-4">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
           {detail.isLoading && (
             <p className="text-muted-foreground text-sm">
               {t("common.loading")}
@@ -807,128 +691,77 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
           )}
           {detail.data && (
             <>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-foreground font-mono text-sm">
-                  {selected.type === "body"
-                    ? SKILL_BODY_FILE_NAME
-                    : selected.path}
-                </span>
-                <div className="flex items-center gap-2">
-                  {selected.type === "resource" && (
-                    <Button
-                      aria-label={tSkills("aiRewrite")}
-                      disabled={rewriteResource.isPending}
-                      onClick={() => setRewriteOpen((open) => !open)}
-                      size="sm"
-                      variant="ghost"
-                    >
-                      <SparklesIcon className="size-4" />
-                      <span className="ms-1">{tSkills("aiRewrite")}</span>
-                    </Button>
-                  )}
-                  <Button disabled={saveDisabled} onClick={onSave} size="sm">
-                    {isSaving ? t("common.loading") : t("common.save")}
-                  </Button>
-                </div>
-              </div>
-              {confirmDiscardFor && (
-                <div className="bg-muted/40 border-border flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm">
-                  <span>{tSkills("unsavedChanges")}</span>
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={() => setConfirmDiscardFor(null)}
-                      size="sm"
-                      variant="ghost"
-                    >
-                      {t("common.cancel")}
-                    </Button>
-                    <Button
-                      onClick={() => {
-                        discardCurrentDraft();
-                        setSelected(confirmDiscardFor);
-                        setConfirmDiscardFor(null);
-                      }}
-                      size="sm"
-                      variant="destructive"
-                    >
-                      {tSkills("discardChanges")}
-                    </Button>
+              {(!enabled || guideCount > 0) && (
+                <div className="border-border bg-muted/20 flex flex-col gap-2 rounded-md border p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-foreground text-sm font-medium">
+                      {tSkills("coaching.title")}
+                    </p>
+                    {!enabled && (
+                      <Button
+                        disabled={patchMetadata.isPending}
+                        onClick={onPublish}
+                        size="sm"
+                      >
+                        {tSkills("coaching.publish")}
+                      </Button>
+                    )}
                   </div>
-                </div>
-              )}
-              {rewriteOpen && selected.type === "resource" && (
-                <div className="border-border bg-muted/30 flex flex-col gap-2 rounded-md border p-2">
-                  <label
-                    className="text-muted-foreground px-1 text-xs"
-                    htmlFor="ai-rewrite-prompt"
-                  >
-                    {tSkills("aiRewritePrompt")}
-                  </label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="ai-rewrite-prompt"
-                      className="flex-1"
-                      onChange={(event) => setRewritePrompt(event.target.value)}
-                      placeholder={tSkills("aiRewritePlaceholder")}
-                      value={rewritePrompt}
-                    />
-                    <Button
-                      disabled={
-                        rewriteResource.isPending ||
-                        rewritePrompt.trim().length === 0
+                  <ul className="flex flex-col gap-1 text-sm">
+                    <CoachingItem
+                      done={guideCount === 0}
+                      label={
+                        guideCount === 0
+                          ? tSkills("coaching.guidanceDone")
+                          : tSkills("coaching.guidanceRemaining", {
+                              count: guideCount,
+                            })
                       }
-                      onClick={() => {
-                        rewriteResource.mutate({
-                          path: selected.path,
-                          prompt: rewritePrompt.trim(),
-                        });
-                      }}
-                      size="sm"
-                    >
-                      {rewriteResource.isPending
-                        ? tSkills("aiRewriteRunning")
-                        : tSkills("aiRewrite")}
-                    </Button>
-                  </div>
+                    />
+                    <CoachingItem
+                      done={triggerSet}
+                      label={
+                        triggerSet
+                          ? tSkills("coaching.checkTriggerDone")
+                          : tSkills("coaching.checkTrigger")
+                      }
+                    />
+                  </ul>
+                  <p className="text-muted-foreground text-xs">
+                    {tSkills("coaching.hint")}
+                  </p>
                 </div>
               )}
-              {selectedKindIsText ? (
-                <Textarea
-                  className="min-h-96 flex-1 resize-none font-mono"
-                  onChange={(event) => {
-                    if (selected.type === "body") {
-                      setDraftBody(event.target.value);
-                      return;
-                    }
-                    setDraftResources((current) => ({
-                      ...current,
-                      [selected.resourceId]: event.target.value,
-                    }));
-                  }}
-                  value={selected.type === "body" ? bodyValue : resourceValue}
-                />
-              ) : (
-                <p className="text-muted-foreground text-sm">
-                  {tSkills("binaryPreviewUnsupported")}
+              <div className="border-border flex flex-1 items-center justify-center rounded-md border border-dashed p-8 text-center">
+                <p className="text-muted-foreground max-w-sm text-sm">
+                  {tSkills("selectFileHint")}
                 </p>
-              )}
+              </div>
             </>
           )}
-        </DialogPanel>
+        </div>
       </div>
-    </>
+    </div>
   );
 }
 
-const sameSelection = (a: SelectedFile, b: SelectedFile) => {
-  if (a.type === "body" && b.type === "body") {
-    return true;
-  }
-  if (a.type === "resource" && b.type === "resource") {
-    return a.resourceId === b.resourceId;
-  }
-  return false;
+type CoachingItemProps = {
+  done: boolean;
+  label: string;
 };
+
+function CoachingItem({ done, label }: CoachingItemProps) {
+  return (
+    <li className="flex items-center gap-2">
+      {done ? (
+        <CheckIcon className="text-foreground size-4 shrink-0" />
+      ) : (
+        <CircleIcon className="text-muted-foreground size-4 shrink-0" />
+      )}
+      <span className={cn(done && "text-muted-foreground")}>{label}</span>
+    </li>
+  );
+}
 
 type SkillFileTreeProps = {
   bodyDirty: boolean;

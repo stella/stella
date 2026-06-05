@@ -5,6 +5,7 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -49,8 +50,11 @@ import { McpIcon } from "@/components/mcp-icon";
 import type { TranslationKey } from "@/i18n/types";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import { roleOptions } from "@/routes/-queries";
+import {
+  BlueprintGallerySheet,
+  type BlueprintCreatedSkill,
+} from "@/routes/_protected.knowledge/-components/blueprint-gallery-sheet";
 import { CreateSkillSheet } from "@/routes/_protected.knowledge/-components/create-skill-sheet";
-import { EditSkillSheet } from "@/routes/_protected.knowledge/-components/edit-skill-sheet";
 import { knowledgeKeys } from "@/routes/_protected.knowledge/-queries";
 import {
   catalogueKeys,
@@ -91,13 +95,6 @@ type CatalogueBrowserProps = {
   practiceJurisdictions?: readonly PracticeJurisdiction[];
 };
 
-type EditableSkillRef = {
-  id: string;
-  name: string;
-  scope: "team" | "private";
-  enabled: boolean;
-};
-
 const toRowDisplay = (entry: CatalogueEntry): CatalogueRowDisplay => ({
   slug: entry.slug,
   displayName: entry.displayName,
@@ -117,6 +114,7 @@ export const CatalogueBrowser = ({
   practiceJurisdictions,
 }: CatalogueBrowserProps) => {
   const t = useTranslations();
+  const navigate = useNavigate();
   const { data } = useSuspenseQuery(catalogueOptions(organizationId));
   const { data: role } = useQuery(roleOptions);
   // Match the backend gate: only admins/owners can create MCP
@@ -167,7 +165,7 @@ export const CatalogueBrowser = ({
   const [jurisdictionQuery, setJurisdictionQuery] = useState("");
   const [addMcpOpen, setAddMcpOpen] = useState(false);
   const [createSkillOpen, setCreateSkillOpen] = useState(false);
-  const [editSkill, setEditSkill] = useState<EditableSkillRef | null>(null);
+  const [blueprintGalleryOpen, setBlueprintGalleryOpen] = useState(false);
   // Reuse `role` from the canAddCustom block above for team-skill gating.
   const canManageTeam = role === "admin" || role === "owner";
 
@@ -252,17 +250,23 @@ export const CatalogueBrowser = ({
     });
   };
 
+  // A blueprint instantiates a disabled draft; drop the user straight into the
+  // full-screen editor route to customise and publish it.
+  const onBlueprintCreated = (skill: BlueprintCreatedSkill) => {
+    onSkillSheetChanged();
+    void navigate({
+      to: "/knowledge/tools/$skillId",
+      params: { skillId: skill.id },
+    });
+  };
+
   const openEditInstalledSkill = (entry: CatalogueEntry) => {
     if (entry.kind !== "skill" || entry.installedSkillId === null) {
       return;
     }
-    setEditSkill({
-      id: entry.installedSkillId,
-      name: entry.displayName,
-      // Best-effort default for the edit sheet's header. The sheet
-      // re-fetches the real scope from `skillDetailOptions`.
-      scope: "team",
-      enabled: entry.enabled ?? true,
+    void navigate({
+      to: "/knowledge/tools/$skillId",
+      params: { skillId: entry.installedSkillId },
     });
   };
 
@@ -419,7 +423,7 @@ export const CatalogueBrowser = ({
                 <McpIcon className="size-4" />
                 {t("catalogue.addCustomMcp")}
               </MenuItem>
-              <MenuItem onClick={() => setCreateSkillOpen(true)}>
+              <MenuItem onClick={() => setBlueprintGalleryOpen(true)}>
                 <SparklesIcon className="size-4" />
                 {t("catalogue.addCustomSkill")}
               </MenuItem>
@@ -558,21 +562,18 @@ export const CatalogueBrowser = ({
         open={addMcpOpen}
         organizationId={organizationId}
       />
-      <EditSkillSheet
-        onChanged={onSkillSheetChanged}
-        onOpenChange={(open) => {
-          if (!open) {
-            setEditSkill(null);
-          }
-        }}
-        open={editSkill !== null && editSkill.id !== ""}
-        skill={editSkill !== null && editSkill.id !== "" ? editSkill : null}
-      />
       <CreateSkillSheet
         canManageTeam={canManageTeam}
         onCreated={onSkillSheetChanged}
         onOpenChange={setCreateSkillOpen}
         open={createSkillOpen}
+      />
+      <BlueprintGallerySheet
+        canManageTeam={canManageTeam}
+        onCreated={onBlueprintCreated}
+        onOpenChange={setBlueprintGalleryOpen}
+        onStartBlank={() => setCreateSkillOpen(true)}
+        open={blueprintGalleryOpen}
       />
     </div>
   );

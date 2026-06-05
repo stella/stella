@@ -1316,6 +1316,15 @@
       "builtInBadge": "Sisseehitatud",
       "builtInSection": "Sisseehitatud oskused",
       "chooseFile": "Vali fail või lohista see siia",
+      "coaching": {
+        "checkTrigger": "Set how it runs (a / command or an auto-run hint)",
+        "checkTriggerDone": "Run trigger set",
+        "guidanceDone": "All guidance notes filled in",
+        "guidanceRemaining": "{count, plural, one {# guidance note to fill in} other {# guidance notes to fill in}}",
+        "hint": "Replace each “e.g.” hint with your own, and delete the guidance notes as you go.",
+        "publish": "Publish skill",
+        "title": "Finish your skill"
+      },
       "deleteConfirmDescription": "„{name}” eemaldatakse sellest tööruumist.",
       "deleteConfirmTitle": "Kas kustutada oskus?",
       "deleteFile": "Kustuta fail",
@@ -1375,6 +1384,7 @@
       "scope": "Nähtavus",
       "scopePrivate": "Ainult mina",
       "scopeTeam": "Kõik organisatsioonis",
+      "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Valitud: {name}",
       "sourceUpload": "Üles laaditud",
       "sourceUrl": "Avalik URL",
@@ -1462,6 +1472,32 @@
       "autoInvokeHintLabel": "Vihje mudelile",
       "autoInvokeHintPlaceholder": "Millal peaks mudel selle oskuse automaatselt valima?",
       "autoInvokeLabel": "Lase tehisintellektil automaatselt käivitada",
+      "blueprintGallery": {
+        "cards": {
+          "answerFromSources": {
+            "blurb": "Answer a question grounded in authoritative sources.",
+            "inside": "a source hierarchy · a research prompt",
+            "title": "Answer from sources"
+          },
+          "checkAgainstRules": {
+            "blurb": "Review a document and flag what fails, with citations.",
+            "inside": "references by jurisdiction · a checklist · a review prompt",
+            "title": "Check against rules"
+          },
+          "intakeToDraft": {
+            "blurb": "Ask for the facts, then draft a document.",
+            "inside": "an interview · model documents · a draft prompt",
+            "title": "Intake to draft"
+          }
+        },
+        "createError": "Could not create the skill. Please try again.",
+        "creating": "Setting up…",
+        "insideLabel": "Inside",
+        "startBlank": "Start from blank",
+        "startBlankHint": "An empty skill, for when you know exactly what you want.",
+        "subtitle": "Pick a starting shape. We set up the folders and walk you through filling them in.",
+        "title": "How should your skill work?"
+      },
       "commandConflict": "Selle / käsuga oskus on juba olemas",
       "commandLabel": "Kaldkriipsu käsk (valikuline)",
       "commandPlaceholder": "nt kokku võtta",
