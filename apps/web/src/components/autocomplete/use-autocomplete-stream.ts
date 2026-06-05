@@ -25,6 +25,7 @@ export type UseAutocompleteStreamOptions = {
 const DEFAULT_DEBOUNCE_MS = 1500;
 const DEFAULT_MIN_PREFIX_CHARS = 8;
 const MAX_PREFIX_CHARS = 8000;
+const MAX_SUFFIX_CHARS = 4000;
 
 type SSEEvent = { event: string; data: string };
 
@@ -64,14 +65,21 @@ const readStringField = (data: string, field: string): string | null => {
   }
 };
 
-const extractPrefix = (
+const extractAutocompleteContext = (
   view: EditorView,
-): { prefix: string; anchor: number } => {
+): { prefix: string; suffix: string; anchor: number } => {
   const { state } = view;
   const anchor = state.selection.from;
   const fullPrefix = state.doc.textBetween(0, anchor, "\n", "\n");
+  const fullSuffix = state.doc.textBetween(
+    anchor,
+    state.doc.content.size,
+    "\n",
+    "\n",
+  );
   const prefix = fullPrefix.slice(-MAX_PREFIX_CHARS);
-  return { prefix, anchor };
+  const suffix = fullSuffix.slice(0, MAX_SUFFIX_CHARS);
+  return { prefix, suffix, anchor };
 };
 
 type StreamCallbacks = {
@@ -187,11 +195,11 @@ export const useAutocompleteStream = (
       if (!check.ok) {
         return;
       }
-      const { prefix, anchor } = extractPrefix(view);
+      const { prefix, suffix, anchor } = extractAutocompleteContext(view);
       if (prefix.length < minPrefixChars) {
         return;
       }
-      const signature = `${anchor}:${prefix.length}:${prefix.slice(-32)}`;
+      const signature = `${anchor}:${prefix.length}:${prefix.slice(-32)}:${suffix.length}:${suffix.slice(0, 32)}`;
       if (signature === lastSignature) {
         return;
       }
@@ -213,6 +221,7 @@ export const useAutocompleteStream = (
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             prefix,
+            suffix: suffix.length > 0 ? suffix : undefined,
             language: optionsRef.current.language,
           }),
           signal: controller.signal,

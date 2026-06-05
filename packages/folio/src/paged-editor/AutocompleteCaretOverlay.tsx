@@ -42,9 +42,14 @@ export type AutocompleteCaretOverlayProps = {
 
 const overlayStyles: React.CSSProperties = {
   position: "absolute",
-  inset: 0,
+  top: 0,
+  left: "50%",
+  width: "100vw",
+  bottom: 0,
+  transform: "translateX(-50%)",
   pointerEvents: "none",
   zIndex: 1,
+  overflow: "visible",
 };
 
 export const AutocompleteCaretOverlay = ({
