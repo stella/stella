@@ -141,6 +141,19 @@ function getCellContentOffsetX(cell: TableCell): number {
   return cell.padding?.left ?? DEFAULT_TABLE_CELL_PADDING_LEFT;
 }
 
+function getMeasuredBlockHeight(measure: Measure | undefined): number {
+  if (!measure) {
+    return 0;
+  }
+  if ("totalHeight" in measure) {
+    return measure.totalHeight;
+  }
+  if ("height" in measure) {
+    return measure.height;
+  }
+  return 0;
+}
+
 /**
  * Calculate the PM range for a line.
  * Note: ProseMirror positions include node boundaries:
@@ -601,9 +614,11 @@ export function selectionToRects(
               const cellBlockMeasure = cellMeasure.blocks[blockIdx];
 
               if (!cellBlock || cellBlock.kind !== "paragraph") {
+                blockY += getMeasuredBlockHeight(cellBlockMeasure);
                 continue;
               }
               if (!cellBlockMeasure || cellBlockMeasure.kind !== "paragraph") {
+                blockY += getMeasuredBlockHeight(cellBlockMeasure);
                 continue;
               }
 

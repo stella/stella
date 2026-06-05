@@ -329,6 +329,112 @@ describe("selection rect geometry", () => {
     expect(rects[0]?.height).toBe(20);
   });
 
+  test("selection rect clipping advances over nested cell blocks", () => {
+    const block: TableBlock = {
+      kind: "table",
+      id: "table",
+      rows: [
+        {
+          id: "row",
+          cells: [
+            {
+              id: "cell",
+              padding: { top: 0, right: 0, bottom: 0, left: 0 },
+              blocks: [
+                {
+                  kind: "table",
+                  id: "nested",
+                  rows: [],
+                  columnWidths: [80],
+                },
+                {
+                  kind: "paragraph",
+                  id: "p",
+                  pmStart: 0,
+                  pmEnd: 6,
+                  runs: [{ kind: "text", text: "abcde" }],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      columnWidths: [100],
+    };
+    const measure: TableMeasure = {
+      kind: "table",
+      rows: [
+        {
+          cells: [
+            {
+              blocks: [
+                {
+                  kind: "table",
+                  rows: [],
+                  columnWidths: [80],
+                  totalWidth: 80,
+                  totalHeight: 40,
+                },
+                {
+                  kind: "paragraph",
+                  lines: [
+                    {
+                      fromRun: 0,
+                      fromChar: 0,
+                      toRun: 0,
+                      toChar: 1,
+                      width: 10,
+                      ascent: 16,
+                      descent: 4,
+                      lineHeight: 20,
+                    },
+                  ],
+                  totalHeight: 20,
+                },
+              ],
+              width: 100,
+              height: 60,
+            },
+          ],
+          height: 60,
+        },
+      ],
+      columnWidths: [100],
+      totalWidth: 100,
+      totalHeight: 60,
+    };
+    const layout: Layout = {
+      pageGap: 0,
+      pages: [
+        {
+          number: 1,
+          size: { w: 200, h: 200 },
+          margins: { top: 0, right: 0, bottom: 0, left: 0 },
+          fragments: [
+            {
+              kind: "table",
+              blockId: "table",
+              x: 0,
+              y: 0,
+              width: 100,
+              height: 20,
+              fromRow: 0,
+              toRow: 1,
+              topClip: 40,
+              bottomClip: 60,
+            },
+          ],
+        },
+      ],
+    };
+
+    const rects = selectionToRects(layout, [block], [measure], 1, 2);
+
+    expect(rects).toHaveLength(1);
+    expect(rects[0]?.y).toBe(0);
+    expect(rects[0]?.height).toBe(20);
+  });
+
   test("selection rects use rendered default table cell padding", () => {
     const { layout, block, measure } = clippedTableFixture();
     delete block.rows[0]!.cells[0]!.padding;
