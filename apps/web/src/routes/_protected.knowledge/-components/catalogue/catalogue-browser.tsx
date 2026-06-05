@@ -270,6 +270,11 @@ export const CatalogueBrowser = ({
     (entry) => entry.isRecommendedForOrg,
   );
   const otherFiltered = filtered.filter((entry) => !entry.isRecommendedForOrg);
+  const hasMcpEntries = entries.some((entry) => entry.kind === "mcp");
+  // On a truly empty MCP catalogue, replace the generic "no entries" + reset
+  // line with a prominent add-MCP call to action. Gated to admins/owners
+  // like the add-custom menu, since members can't create connectors.
+  const showMcpEmptyCta = filter === "mcp" && !hasMcpEntries && canAddCustom;
 
   return (
     <div className="flex flex-col gap-6">
@@ -457,10 +462,19 @@ export const CatalogueBrowser = ({
       </div>
 
       <div className="flex flex-col gap-2">
-        {filtered.length === 0 && (
+        {filtered.length === 0 && !showMcpEmptyCta && (
           <p className="text-muted-foreground text-sm">
             {t("catalogue.empty")}
           </p>
+        )}
+        {showMcpEmptyCta && (
+          <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
+            <McpIcon className="text-muted-foreground size-8" />
+            <Button onClick={() => setAddMcpOpen(true)} type="button">
+              <PlusIcon className="size-4" />
+              {t("catalogue.addCustomMcp")}
+            </Button>
+          </div>
         )}
         {recommendedFiltered.length > 0 && (
           <>
@@ -521,7 +535,7 @@ export const CatalogueBrowser = ({
             filter is hiding entries. Always there, regardless of
             whether the filtered subset is empty or partial — the
             user's question is the same: "where's the rest?". */}
-        {entries.length - filtered.length > 0 && (
+        {entries.length - filtered.length > 0 && !showMcpEmptyCta && (
           <div className="flex justify-center pt-2">
             <Button
               onClick={() => {
