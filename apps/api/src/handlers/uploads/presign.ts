@@ -156,17 +156,27 @@ const presignUpload = createSafeHandler(
     }
 
     const uploadId = createSafeId<"pendingUpload">();
+    const tmpKey = tmpUploadKey({
+      organizationId: session.activeOrganizationId,
+      uploadId,
+      workspaceId,
+    });
     const now = new Date();
     const expiresAt = new Date(
       now.getTime() + PRESIGN_URL_EXPIRY_SECONDS * 1000,
     );
 
     const presign = await presignUploadUrl({
-      key: tmpUploadKey(uploadId),
+      key: tmpKey,
       expiresIn: PRESIGN_URL_EXPIRY_SECONDS,
       contentType: purposeBody.mimeType,
       contentLength: purposeBody.size,
       sha256Base64: sha256HexToBase64(purposeBody.sha256Hex),
+      scope: {
+        organizationId: session.activeOrganizationId,
+        workspaceId,
+      },
+      tagAsTemporaryUpload: true,
     });
     if (Result.isError(presign)) {
       return Result.err(

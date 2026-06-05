@@ -71,6 +71,7 @@ jobs:
           allow-dependencies-licenses: >-
             pkg:npm/@ai-sdk/provider,
             pkg:npm/@ai-sdk/provider-utils,
+            pkg:npm/@aws-sdk/client-sts,
             pkg:npm/@hocuspocus/provider,
             pkg:npm/@hocuspocus/server,
             pkg:npm/@stll/ai-catalog,

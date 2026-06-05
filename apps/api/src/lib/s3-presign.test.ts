@@ -4,7 +4,9 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { getS3 } from "@/api/lib/s3";
 import {
   copyObject,
+  hasScopedSessionTimeForPresign,
   headObject,
+  isS3KeyInSigningScope,
   presignUploadUrl,
   resetAwsS3ClientForTesting,
 } from "@/api/lib/s3-presign";
@@ -24,6 +26,51 @@ const parseSignedHeaders = (url: string): Set<string> => {
 const HELLO_BODY = "hello";
 const HELLO_SHA256_BASE64 = sha256Base64(HELLO_BODY);
 const HELLO_BYTES = new TextEncoder().encode(HELLO_BODY);
+
+describe("isS3KeyInSigningScope", () => {
+  test("accepts document keys under the requested workspace prefix", () => {
+    expect(
+      isS3KeyInSigningScope("org_1/ws_1/file_1.pdf", {
+        organizationId: "org_1",
+        workspaceId: "ws_1",
+      }),
+    ).toBe(true);
+    expect(
+      isS3KeyInSigningScope("org_1/ws_1/tmp/upload_1", {
+        organizationId: "org_1",
+        workspaceId: "ws_1",
+      }),
+    ).toBe(true);
+  });
+
+  test("rejects sibling organizations and workspaces", () => {
+    expect(
+      isS3KeyInSigningScope("org_2/ws_1/file_1.pdf", {
+        organizationId: "org_1",
+        workspaceId: "ws_1",
+      }),
+    ).toBe(false);
+    expect(
+      isS3KeyInSigningScope("org_1/ws_10/file_1.pdf", {
+        organizationId: "org_1",
+        workspaceId: "ws_1",
+      }),
+    ).toBe(false);
+  });
+
+  test("accepts organization-level template keys without workspace scope", () => {
+    expect(
+      isS3KeyInSigningScope("org_1/templates/template_1.docx", {
+        organizationId: "org_1",
+      }),
+    ).toBe(true);
+    expect(
+      isS3KeyInSigningScope("org_10/templates/template_1.docx", {
+        organizationId: "org_1",
+      }),
+    ).toBe(false);
+  });
+});
 
 describe("presignUploadUrl", () => {
   beforeAll(() => {
@@ -91,6 +138,50 @@ describe("presignUploadUrl", () => {
     expect(new URL(result.value.url).pathname).toContain(
       "presign-method-probe",
     );
+  });
+
+  test("binds temporary upload tagging into a request header", async () => {
+    const result = await presignUploadUrl({
+      key: "org_1/ws_1/tmp/presign-tagging-probe",
+      expiresIn: 60,
+      contentType: "application/octet-stream",
+      contentLength: HELLO_BYTES.byteLength,
+      sha256Base64: HELLO_SHA256_BASE64,
+      tagAsTemporaryUpload: true,
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    if (!Result.isOk(result)) {
+      return;
+    }
+
+    const parsed = new URL(result.value.url);
+    const signed = parseSignedHeaders(result.value.url);
+
+    expect(signed.has("x-amz-tagging")).toBe(true);
+    expect(parsed.searchParams.has("x-amz-tagging")).toBe(false);
+    expect(result.value.headers["x-amz-tagging"]).toBe(
+      "stella-upload-stage=tmp",
+    );
+  });
+});
+
+describe("hasScopedSessionTimeForPresign", () => {
+  test("requires scoped credentials to outlive the presigned URL plus refresh skew", () => {
+    expect(
+      hasScopedSessionTimeForPresign({
+        expiresAt: 961_000,
+        expiresIn: 900,
+        now: 0,
+      }),
+    ).toBe(true);
+    expect(
+      hasScopedSessionTimeForPresign({
+        expiresAt: 960_000,
+        expiresIn: 900,
+        now: 0,
+      }),
+    ).toBe(false);
   });
 });
 

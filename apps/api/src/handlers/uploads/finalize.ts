@@ -30,8 +30,10 @@ import { finalizeEntityCreate } from "@/api/handlers/uploads/entity-create";
 import { finalizeEntityVersion } from "@/api/handlers/uploads/entity-version";
 import {
   FINALIZE_CLAIM_TIMEOUT_MS,
+  legacyTmpUploadKey,
   sha256Base64ToHex,
   tmpUploadKey,
+  tmpUploadKeys,
   UploadFinalizeError,
 } from "@/api/handlers/uploads/lib";
 import {
@@ -47,6 +49,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { getS3 } from "@/api/lib/s3";
+import type { HeadObjectResult, S3PresignError } from "@/api/lib/s3-presign";
 import { copyObject, headObject } from "@/api/lib/s3-presign";
 
 const finalizeParamsSchema = t.Object({
@@ -255,14 +258,12 @@ const finalizeUpload = createSafeHandler(
       if (terminalStatus === "rejected") {
         // Best-effort tmp cleanup only for terminal rejections.
         // Transient failures keep tmp bytes so finalize can retry.
-        await getS3()
-          .delete(tmpUploadKey(uploadId))
-          .catch((deleteError: unknown) =>
-            captureError(deleteError, {
-              uploadId,
-              stage: "tmp-cleanup-after-reject",
-            }),
-          );
+        await deleteStagedUploadObjects({
+          organizationId: session.activeOrganizationId,
+          uploadId,
+          workspaceId,
+          stage: "tmp-cleanup-after-reject",
+        });
       }
       return Result.err(
         new HandlerError({ status: error.status, message: error.message }),
@@ -289,6 +290,54 @@ type RunFinalizeOk = {
   finalizedResult: PendingUploadFinalizedResult;
 };
 
+type StagedUploadKeyProps = {
+  organizationId: SafeId<"organization">;
+  uploadId: SafeId<"pendingUpload">;
+  workspaceId: SafeId<"workspace">;
+};
+
+type StagedUploadObject = {
+  head: HeadObjectResult;
+  tmpKey: string;
+};
+
+const resolveStagedUploadObject = async ({
+  organizationId,
+  uploadId,
+  workspaceId,
+}: StagedUploadKeyProps): Promise<
+  Result<StagedUploadObject, S3PresignError>
+> => {
+  const scopedTmpKey = tmpUploadKey({ organizationId, uploadId, workspaceId });
+  const scopedHead = await headObject(scopedTmpKey);
+  if (Result.isOk(scopedHead)) {
+    return Result.ok({ head: scopedHead.value, tmpKey: scopedTmpKey });
+  }
+
+  const legacyTmpKey = legacyTmpUploadKey(uploadId);
+  const legacyHead = await headObject(legacyTmpKey);
+  if (Result.isOk(legacyHead)) {
+    return Result.ok({ head: legacyHead.value, tmpKey: legacyTmpKey });
+  }
+
+  return Result.err(scopedHead.error);
+};
+
+const deleteStagedUploadObjects = async ({
+  organizationId,
+  stage,
+  uploadId,
+  workspaceId,
+}: StagedUploadKeyProps & { stage: string }) => {
+  for (const key of tmpUploadKeys({ organizationId, uploadId, workspaceId })) {
+    await getS3()
+      .delete(key)
+      .catch((deleteError: unknown) =>
+        captureError(deleteError, { key, stage, uploadId }),
+      );
+  }
+};
+
 /**
  * Generic finalize body. Verifies what S3 has against what the
  * pending row says, scans the bytes, dispatches into the
@@ -313,11 +362,13 @@ const runFinalize = async function* ({
   Result<RunFinalizeOk, UploadFinalizeError>,
   unknown
 > {
-  const tmpKey = tmpUploadKey(claimed.id);
-
   // 2. S3 HEAD — exists? size matches? checksum matches?
-  const head = await headObject(tmpKey);
-  if (Result.isError(head)) {
+  const stagedObject = await resolveStagedUploadObject({
+    organizationId,
+    uploadId: claimed.id,
+    workspaceId,
+  });
+  if (Result.isError(stagedObject)) {
     return Result.err(
       new UploadFinalizeError({
         status: 404,
@@ -326,18 +377,19 @@ const runFinalize = async function* ({
       }),
     );
   }
-  if (head.value.contentLength !== claimed.declaredSize) {
+  const { head, tmpKey } = stagedObject.value;
+  if (head.contentLength !== claimed.declaredSize) {
     return Result.err(
       new UploadFinalizeError({
         status: 422,
-        message: `Uploaded size ${head.value.contentLength} does not match declared ${claimed.declaredSize}`,
+        message: `Uploaded size ${head.contentLength} does not match declared ${claimed.declaredSize}`,
         rejectReason: "size-mismatch",
       }),
     );
   }
   if (
-    head.value.checksumSHA256 &&
-    sha256Base64ToHex(head.value.checksumSHA256) !== claimed.declaredSha256
+    head.checksumSHA256 &&
+    sha256Base64ToHex(head.checksumSHA256) !== claimed.declaredSha256
   ) {
     return Result.err(
       new UploadFinalizeError({
@@ -350,7 +402,7 @@ const runFinalize = async function* ({
 
   // 3. Download for scan.
   const fileBuffer = await getS3().file(tmpKey).arrayBuffer();
-  if (!head.value.checksumSHA256) {
+  if (!head.checksumSHA256) {
     const uploadedSha256 = new Bun.CryptoHasher("sha256")
       .update(fileBuffer)
       .digest("hex");

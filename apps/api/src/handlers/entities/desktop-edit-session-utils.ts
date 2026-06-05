@@ -5,7 +5,7 @@ import { fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { createFileKey } from "@/api/handlers/files/utils";
 import type { SafeId } from "@/api/lib/branded-types";
-import { presignDownloadUrl } from "@/api/lib/s3";
+import { presignDownloadUrl } from "@/api/lib/s3-presign";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 type DatabaseTransaction = Transaction;
@@ -160,7 +160,7 @@ export const readVersionDocxTarget = async ({
   return asDocxFieldContent(row.content);
 };
 
-export const presignDocxFieldDownload = ({
+export const presignDocxFieldDownload = async ({
   fileContent,
   organizationId,
   workspaceId,
@@ -169,7 +169,7 @@ export const presignDocxFieldDownload = ({
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
 }) =>
-  presignDownloadUrl(
+  await presignDownloadUrl(
     createFileKey({
       fileId: fileContent.id,
       mimeType: fileContent.mimeType,
@@ -179,10 +179,11 @@ export const presignDocxFieldDownload = ({
     {
       expiresIn: 900,
       fileName: fileContent.fileName,
+      scope: { organizationId, workspaceId },
     },
   );
 
-export const presignDocxDownloadFromFileId = ({
+export const presignDocxDownloadFromFileId = async ({
   fileId,
   fileName,
   organizationId,
@@ -193,7 +194,7 @@ export const presignDocxDownloadFromFileId = ({
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
 }) =>
-  presignDownloadUrl(
+  await presignDownloadUrl(
     createFileKey({
       fileId,
       mimeType: DOCX_MIME_TYPE,
@@ -203,5 +204,6 @@ export const presignDocxDownloadFromFileId = ({
     {
       expiresIn: 900,
       fileName,
+      scope: { organizationId, workspaceId },
     },
   );

@@ -45,6 +45,7 @@ export const envBase = createEnv({
     S3_ACCESS_KEY_ID: v.optional(v.string()),
     S3_SECRET_ACCESS_KEY: v.optional(v.string()),
     S3_REGION: v.string(),
+    S3_SCOPED_SIGNING_ROLE_ARN: v.optional(v.string()),
     POSTHOG_KEY: v.optional(v.string()),
     POSTHOG_HOST: v.optional(v.string()),
     POSTHOG_LOCAL_DEBUG: v.optional(

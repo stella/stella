@@ -168,7 +168,7 @@ const openFolioCollabSessionHandler = async function* ({
             baseVersionId: existingSession.baseVersionId,
             collabSessionId: existingSession.id,
             fileName: existingSession.fileName,
-            seedDownloadUrl: presignDocxFieldDownload({
+            seedDownloadUrl: await presignDocxFieldDownload({
               fileContent: baseContent,
               organizationId,
               workspaceId,
@@ -238,7 +238,7 @@ const openFolioCollabSessionHandler = async function* ({
         baseVersionId: currentTarget.baseVersionId,
         collabSessionId,
         fileName: currentTarget.fileContent.fileName,
-        seedDownloadUrl: presignDocxFieldDownload({
+        seedDownloadUrl: await presignDocxFieldDownload({
           fileContent: currentTarget.fileContent,
           organizationId,
           workspaceId,

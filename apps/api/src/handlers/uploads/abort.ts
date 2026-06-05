@@ -15,7 +15,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 
 import { pendingUploads } from "@/api/db/schema";
-import { tmpUploadKey } from "@/api/handlers/uploads/lib";
+import { tmpUploadKeys } from "@/api/handlers/uploads/lib";
 import {
   authorizeUploadPurpose,
   uploadRoutePermission,
@@ -39,7 +39,7 @@ const config = {
 
 const abortUpload = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, user, memberRole, params }) {
+  async function* ({ safeDb, session, workspaceId, user, memberRole, params }) {
     const uploadId = params.uploadId;
 
     const existing = yield* Result.await(
@@ -136,11 +136,21 @@ const abortUpload = createSafeHandler(
     // Best-effort tmp cleanup. The client may have never actually
     // PUT (so the object never existed) — `delete` on a missing key
     // is a no-op on S3 / MinIO.
-    await getS3()
-      .delete(tmpUploadKey(uploadId))
-      .catch((error: unknown) =>
-        captureError(error, { uploadId, stage: "tmp-cleanup-after-abort" }),
-      );
+    for (const key of tmpUploadKeys({
+      organizationId: session.activeOrganizationId,
+      uploadId,
+      workspaceId,
+    })) {
+      await getS3()
+        .delete(key)
+        .catch((error: unknown) =>
+          captureError(error, {
+            key,
+            uploadId,
+            stage: "tmp-cleanup-after-abort",
+          }),
+        );
+    }
 
     return Result.ok({ ok: true as const });
   },
