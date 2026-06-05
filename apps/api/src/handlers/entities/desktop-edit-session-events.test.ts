@@ -75,4 +75,50 @@ describe("desktop edit session events", () => {
 
     await response.body?.cancel();
   });
+
+  test("awaits the first liveness refresh before returning the stream", async () => {
+    authorizeDesktopEditSessionMock.mockResolvedValue({
+      status: "authorized",
+      value: { userId: "user-1" },
+    });
+    readDesktopEditSessionEventStateMock.mockResolvedValue({
+      pendingRequest: null,
+    });
+
+    let resolveRefresh: ((value: boolean) => void) | null = null;
+    const refreshPromise = new Promise<boolean>((resolve) => {
+      resolveRefresh = resolve;
+    });
+    refreshDesktopEditSessionLivenessMock.mockReturnValue(refreshPromise);
+
+    let settled = false;
+    const responsePromise = desktopEditSessionEventsHandler({
+      headers: { authorization: `Bearer ${"a".repeat(64)}` },
+      query: {},
+      sessionId,
+    }).then((response) => {
+      settled = true;
+      return response;
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(refreshDesktopEditSessionLivenessMock).toHaveBeenCalledWith({
+      sessionId,
+      userId: "user-1",
+    });
+    expect(settled).toBe(false);
+    if (resolveRefresh === null) {
+      throw new Error("Expected liveness refresh to start.");
+    }
+    resolveRefresh(true);
+
+    const response = await responsePromise;
+    if (!(response instanceof Response)) {
+      throw new Error(
+        "Expected desktop edit events to return an SSE response.",
+      );
+    }
+
+    await response.body?.cancel();
+  });
 });

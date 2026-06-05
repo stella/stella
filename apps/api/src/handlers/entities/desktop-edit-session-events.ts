@@ -194,19 +194,26 @@ export const desktopEditSessionEventsHandler = async ({
     livenessRefreshTimer = null;
   };
 
-  const refreshLiveness = () => {
-    void refreshDesktopEditSessionLiveness({ sessionId, userId }).catch(
-      (error: unknown) => {
-        captureError(error, { sessionId });
-      },
-    );
+  const refreshLiveness = async (): Promise<boolean> =>
+    refreshDesktopEditSessionLiveness({ sessionId, userId });
+
+  const refreshed = await refreshLiveness();
+  if (!refreshed) {
+    return status(404, {
+      message: "Desktop edit session not found or closed.",
+    });
+  }
+
+  const refreshLivenessInBackground = () => {
+    void refreshLiveness().catch((error: unknown) => {
+      captureError(error, { sessionId });
+    });
   };
 
   const stream = new ReadableStream({
     start(controller) {
-      refreshLiveness();
       livenessRefreshTimer = setInterval(
-        refreshLiveness,
+        refreshLivenessInBackground,
         DESKTOP_EDIT_SESSION_LIVENESS_REFRESH_INTERVAL_MS,
       );
 
