@@ -209,6 +209,8 @@ const computeJobTimeoutMs = (executionPlan: ExecutionLevel[]): number => {
 // extended on each entity completion below, so a long-running workflow
 // keeps the TTL fresh regardless of this initial value.
 const RUNNING_LOCK_TTL_SEC = 60 * 60;
+const RECOVERY_LOCK_SETTLE_MS = 100;
+const RECOVERY_LOCK_VALUE = "recovery";
 
 /**
  * Check if a workflow is currently running for a workspace.
@@ -217,7 +219,7 @@ export const isWorkflowRunning = async (
   workspaceId: SafeId<"workspace">,
 ): Promise<boolean> => {
   const val = await getRedis().get(workflowKey(workspaceId, "running"));
-  return val === "1";
+  return val !== null;
 };
 
 type StartWorkflowArgs = {
@@ -495,13 +497,14 @@ export const startWorkflow = async ({
   propertyIds: inputPropertyIds,
 }: StartWorkflowArgs): Promise<StartWorkflowResult> => {
   const redis = getRedis();
+  const requestId = Bun.randomUUIDv7();
 
   // Check if already running (atomic check-and-set). The TTL is the
   // safety net for an uncleanly-killed worker; tuned tight enough that
   // a recovered workspace doesn't sit blocked for hours.
   const wasSet = await redis.set(
     workflowKey(workspaceId, "running"),
-    "1",
+    requestId,
     "EX",
     String(RUNNING_LOCK_TTL_SEC),
     "NX",
@@ -510,7 +513,6 @@ export const startWorkflow = async ({
     return { status: "already-running" };
   }
 
-  const requestId = Bun.randomUUIDv7();
   await redis.set(
     workflowKey(workspaceId, "request-id"),
     requestId,
@@ -838,9 +840,93 @@ const readWorkflowRequestIds = async (
   return requestIds;
 };
 
-const recoverOrphanedWorkflow = async (
-  workspaceId: SafeId<"workspace">,
-): Promise<void> => {
+const getAndRefreshRunningLock = async (
+  redis: RedisClient,
+  runningKey: string,
+): Promise<string | null> => {
+  const reply: unknown = await redis.send("GETEX", [
+    runningKey,
+    "EX",
+    String(RUNNING_LOCK_TTL_SEC),
+  ]);
+  return typeof reply === "string" ? reply : null;
+};
+
+type ShouldRecoverWorkflowOptions = {
+  expectedRequestId: string | null;
+  redis: RedisClient;
+  workspaceId: SafeId<"workspace">;
+};
+
+const shouldRecoverWorkflow = async ({
+  expectedRequestId,
+  redis,
+  workspaceId,
+}: ShouldRecoverWorkflowOptions): Promise<boolean> => {
+  const runningKey = workflowKey(workspaceId, "running");
+  const requestIdKey = workflowKey(workspaceId, "request-id");
+  const recoveryLockValue = expectedRequestId ?? RECOVERY_LOCK_VALUE;
+  const wasSet = await redis.set(
+    runningKey,
+    recoveryLockValue,
+    "EX",
+    String(RUNNING_LOCK_TTL_SEC),
+    "NX",
+  );
+
+  if (wasSet) {
+    const requestId = await redis.get(requestIdKey);
+    if (requestId === expectedRequestId) {
+      return true;
+    }
+
+    await redis.del(runningKey);
+    return false;
+  }
+
+  const [runningValue, requestId] = await Promise.all([
+    getAndRefreshRunningLock(redis, runningKey),
+    redis.get(requestIdKey),
+  ]);
+
+  if (runningValue === null || requestId !== expectedRequestId) {
+    return false;
+  }
+
+  if (runningValue !== "1") {
+    return runningValue === expectedRequestId;
+  }
+
+  // Legacy locks used "1" as the running value and wrote request-id
+  // separately. Let that startup window settle before treating one as
+  // a stable orphan.
+  await sleep(RECOVERY_LOCK_SETTLE_MS);
+  const [settledRunningValue, settledRequestId] = await Promise.all([
+    getAndRefreshRunningLock(redis, runningKey),
+    redis.get(requestIdKey),
+  ]);
+  return settledRunningValue === "1" && settledRequestId === expectedRequestId;
+};
+
+type RecoverOrphanedWorkflowOptions = {
+  expectedRequestId: string | null;
+  workspaceId: SafeId<"workspace">;
+};
+
+const recoverOrphanedWorkflow = async ({
+  expectedRequestId,
+  workspaceId,
+}: RecoverOrphanedWorkflowOptions): Promise<void> => {
+  const redis = getRedis();
+  const shouldRecover = await shouldRecoverWorkflow({
+    expectedRequestId,
+    redis,
+    workspaceId,
+  });
+  if (!shouldRecover) {
+    return;
+  }
+
   // Error the stuck `pending` cells first, while the orphaned lock still
   // blocks any new run from re-populating them. `error` cells stay
   // eligible for re-extraction (see `prepareBatch`), so a retry or the
@@ -858,7 +944,7 @@ const recoverOrphanedWorkflow = async (
 
   // Then release the run-state so retries / new runs stop hitting the
   // "a workflow is already running" 409.
-  await clearWorkflowRunState(getRedis(), workspaceId);
+  await clearWorkflowRunState(redis, workspaceId);
 
   logger.warn("workflow.orphan_reconciled", {
     workspaceId,
@@ -934,7 +1020,10 @@ export const reconcileOrphanedWorkflows = async ({
   });
 
   for (const workspaceId of recoverableOrphans) {
-    await recoverOrphanedWorkflow(brandPersistedWorkspaceId(workspaceId));
+    await recoverOrphanedWorkflow({
+      expectedRequestId: currentRequestIds.get(workspaceId) ?? null,
+      workspaceId: brandPersistedWorkspaceId(workspaceId),
+    });
   }
 };
 
