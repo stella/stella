@@ -185,14 +185,14 @@ const Field = ({
 }) => (
   <div
     aria-label={ariaLabel}
-    className="flex items-center gap-2"
+    className="flex w-fit max-w-full min-w-0 items-center gap-2"
     title={ariaLabel}
   >
     <Icon
       aria-hidden="true"
       className="text-muted-foreground size-4 shrink-0"
     />
-    <span className="text-foreground truncate text-sm font-medium">
+    <span className="text-foreground min-w-0 truncate text-sm font-medium">
       {value}
     </span>
   </div>
@@ -215,7 +215,7 @@ const AuthorField = ({
         aria-hidden="true"
         className="text-muted-foreground size-4 shrink-0"
       />
-      <span className="text-foreground truncate text-sm font-medium">
+      <span className="text-foreground min-w-0 truncate text-sm font-medium">
         {value}
       </span>
       {safeAuthorUrl && (
@@ -231,7 +231,7 @@ const AuthorField = ({
     return (
       <a
         aria-label={ariaLabel}
-        className="hover:bg-muted -mx-1 flex items-center gap-2 rounded-md px-1 py-0.5 transition-colors"
+        className="hover:bg-muted -mx-1 flex w-fit max-w-full min-w-0 items-center gap-2 rounded-md px-1 py-0.5 transition-colors"
         href={safeAuthorUrl}
         onClick={(e) => e.stopPropagation()}
         rel="noreferrer"
@@ -246,7 +246,7 @@ const AuthorField = ({
   return (
     <div
       aria-label={ariaLabel}
-      className="flex items-center gap-2"
+      className="flex w-fit max-w-full min-w-0 items-center gap-2"
       title={ariaLabel}
     >
       {inner}

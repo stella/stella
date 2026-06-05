@@ -236,7 +236,10 @@ const Field = ({ icon: Icon, ariaLabel, value }: FieldProps) => (
   <Tooltip
     content={ariaLabel}
     render={
-      <div aria-label={ariaLabel} className="flex min-w-0 items-center gap-2">
+      <div
+        aria-label={ariaLabel}
+        className="flex w-fit max-w-full min-w-0 items-center gap-2"
+      >
         <Icon
           aria-hidden="true"
           className="text-muted-foreground size-4 shrink-0"
@@ -282,7 +285,7 @@ const AuthorField = ({ ariaLabel, authorUrl, value }: AuthorFieldProps) => {
         render={
           <a
             aria-label={ariaLabel}
-            className="hover:bg-muted -mx-1 flex min-w-0 items-center gap-2 rounded-md px-1 py-0.5 transition-colors"
+            className="hover:bg-muted -mx-1 flex w-fit max-w-full min-w-0 items-center gap-2 rounded-md px-1 py-0.5 transition-colors"
             href={safeAuthorUrl}
             onClick={(e) => e.stopPropagation()}
             rel="noreferrer"
@@ -299,7 +302,10 @@ const AuthorField = ({ ariaLabel, authorUrl, value }: AuthorFieldProps) => {
     <Tooltip
       content={ariaLabel}
       render={
-        <div aria-label={ariaLabel} className="flex min-w-0 items-center gap-2">
+        <div
+          aria-label={ariaLabel}
+          className="flex w-fit max-w-full min-w-0 items-center gap-2"
+        >
           {inner}
         </div>
       }
