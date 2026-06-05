@@ -308,7 +308,13 @@
             "location": "apps/api/src/handlers/chat/tools/external-mcp-tools.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/external-mcp-tools.ts#2"
+            "location": "apps/api/src/lib/mcp-upstream/cached-tools.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/mcp-upstream/connections.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/mcp-upstream/connections.ts#2"
           }
         ]
       },
@@ -480,7 +486,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/handlers/chat/tools/external-mcp-tools.ts#3"
+            "location": "apps/api/src/lib/mcp-upstream/connections.ts#3"
           }
         ]
       },
@@ -6542,10 +6548,13 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/mcp/server-core.ts#1"
+            "location": "apps/api/src/lib/mcp-upstream/connections.ts#7"
           },
           {
-            "location": "apps/api/src/mcp/server-core.ts#2"
+            "location": "apps/api/src/mcp/gateway/dispatch-call.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/gateway/list-tools.ts#1"
           },
           {
             "location": "apps/api/src/mcp/server-core.ts#6"
@@ -6564,6 +6573,12 @@
           },
           {
             "location": "apps/api/src/mcp/tools.ts#4"
+          },
+          {
+            "location": "apps/api/src/mcp/server-core.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/server-core.ts#2"
           }
         ]
       },
@@ -17282,7 +17297,7 @@
             "location": "apps/api/src/handlers/chat/tools/execute/chat-execution-tools.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/external-mcp-tools.ts#4"
+            "location": "apps/api/src/handlers/chat/tools/external-mcp-tools.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/infosoud-tools.ts#2"
@@ -17806,9 +17821,6 @@
           },
           {
             "location": "apps/api/src/handlers/chat/tools/execute/workspace-manifest.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/external-mcp-tools.ts#5"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#3"
@@ -18624,6 +18636,9 @@
             "location": "apps/api/src/lib/matter-reference.ts#1"
           },
           {
+            "location": "apps/api/src/lib/mcp-upstream/connections.ts#8"
+          },
+          {
             "location": "apps/api/src/lib/prompt-safety.ts#20"
           },
           {
@@ -18694,6 +18709,12 @@
           },
           {
             "location": "apps/api/src/mcp/field-markers.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/gateway/external-tools.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/gateway/skills.ts#1"
           },
           {
             "location": "apps/api/src/mcp/tool-utils.ts#3"
@@ -19951,9 +19972,6 @@
             "location": "apps/api/src/handlers/chat/tools/execute/org-function-registry.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/external-mcp-tools.ts#6"
-          },
-          {
             "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#4"
           },
           {
@@ -20542,6 +20560,9 @@
             "location": "apps/api/src/lib/infosoud/agenda-import.ts#1"
           },
           {
+            "location": "apps/api/src/lib/mcp-upstream/connections.ts#9"
+          },
+          {
             "location": "apps/api/src/lib/pg-error.ts#1"
           },
           {
@@ -20591,6 +20612,12 @@
           },
           {
             "location": "apps/api/src/mcp/context.ts#2"
+          },
+          {
+            "location": "apps/api/src/mcp/gateway/external-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/mcp/gateway/skills.ts#2"
           },
           {
             "location": "apps/api/src/scripts/adapter-health.ts#17"
