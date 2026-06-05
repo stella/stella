@@ -125,16 +125,24 @@ describe("publishDesktopEditSessionExpiryNotifications", () => {
   });
 
   test("propagates publish failures so callers can retry", async () => {
-    await expect(
-      publishDesktopEditSessionExpiryNotifications({
-        publisher: {
-          publishSessionEvent: async () => {
-            throw new Error("publish failed");
-          },
-          publishWorkspaceEvent: async () => undefined,
+    await publishDesktopEditSessionExpiryNotifications({
+      publisher: {
+        publishSessionEvent: async () => {
+          throw new Error("publish failed");
         },
-        sessions: [notificationSession("session-1", "workspace-1")],
-      }),
-    ).rejects.toThrow("publish failed");
+        publishWorkspaceEvent: async () => {},
+      },
+      sessions: [notificationSession("session-1", "workspace-1")],
+    }).then(
+      () => {
+        throw new Error("Expected publish to fail");
+      },
+      (error: unknown) => {
+        if (!(error instanceof Error)) {
+          throw new Error("Expected publish to reject with an Error");
+        }
+        expect(error.message).toBe("publish failed");
+      },
+    );
   });
 });
