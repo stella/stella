@@ -1,13 +1,12 @@
 import { Suspense, useState } from "react";
 
-import { useForm } from "@tanstack/react-form";
+import { useForm, useStore } from "@tanstack/react-form";
 import {
   useMutation,
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useSelector } from "@tanstack/react-store";
 import {
   ArrowLeftIcon,
   CheckIcon,
@@ -713,7 +712,7 @@ const EditInvoiceForm = ({
     },
   });
 
-  const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
+  const formErrors = useStore(form.store, (s) => toFormErrors(s.fieldMeta));
 
   return (
     <Form

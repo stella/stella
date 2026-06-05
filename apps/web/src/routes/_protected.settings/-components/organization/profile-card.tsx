@@ -1,8 +1,7 @@
 import { useState } from "react";
 
-import { useForm } from "@tanstack/react-form";
+import { useForm, useStore } from "@tanstack/react-form";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { useSelector } from "@tanstack/react-store";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -49,7 +48,7 @@ export const OrganizationProfileCard = () => {
     },
   });
 
-  const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
+  const formErrors = useStore(form.store, (s) => toFormErrors(s.fieldMeta));
 
   const performRename = async () => {
     if (!pendingName) {

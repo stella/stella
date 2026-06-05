@@ -1,9 +1,8 @@
 import { useEffect, useRef } from "react";
 
-import { useForm } from "@tanstack/react-form";
+import { useForm, useStore } from "@tanstack/react-form";
 import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
-import { useSelector } from "@tanstack/react-store";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
@@ -337,7 +336,7 @@ const CreateOrganizationForm = ({
     },
   });
 
-  const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
+  const formErrors = useStore(form.store, (s) => toFormErrors(s.fieldMeta));
 
   return (
     <Frame className="w-full max-w-sm">

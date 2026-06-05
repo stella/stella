@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useForm } from "@tanstack/react-form";
+import { useForm, useStore } from "@tanstack/react-form";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -8,7 +8,6 @@ import {
   Link,
   useNavigate,
 } from "@tanstack/react-router";
-import { useSelector } from "@tanstack/react-store";
 import {
   BuildingIcon,
   EllipsisVerticalIcon,
@@ -543,9 +542,9 @@ const CreateContactDialog = ({
     },
   });
 
-  const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
+  const formErrors = useStore(form.store, (s) => toFormErrors(s.fieldMeta));
 
-  const contactType = useSelector(form.store, (s) => s.values.type);
+  const contactType = useStore(form.store, (s) => s.values.type);
 
   const handleAresLookup = async () => {
     const ico = normalizeIcoInput(form.state.values.registrationNumber);

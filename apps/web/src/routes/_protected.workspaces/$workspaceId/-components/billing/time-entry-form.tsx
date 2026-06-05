@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 
-import { useForm } from "@tanstack/react-form";
+import { useForm, useStore } from "@tanstack/react-form";
 import { useQuery } from "@tanstack/react-query";
-import { useSelector } from "@tanstack/react-store";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
@@ -106,7 +105,7 @@ export const TimeEntryForm = ({
     },
   });
 
-  const dateWorked = useSelector(form.store, (s) => s.values.dateWorked);
+  const dateWorked = useStore(form.store, (s) => s.values.dateWorked);
 
   const { data: resolved } = useQuery(
     resolvedRateOptions(workspaceId, userId, dateWorked),
@@ -123,8 +122,8 @@ export const TimeEntryForm = ({
     }
   }, [resolved, rateOverride, form]);
 
-  const currentRate = useSelector(form.store, (s) => s.values.rateAtEntry);
-  const currentCurrency = useSelector(form.store, (s) => s.values.currency);
+  const currentRate = useStore(form.store, (s) => s.values.rateAtEntry);
+  const currentCurrency = useStore(form.store, (s) => s.values.currency);
 
   return (
     <form
