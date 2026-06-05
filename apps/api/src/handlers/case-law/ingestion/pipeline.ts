@@ -15,6 +15,7 @@ import {
 import {
   createAvailableCaseLawDecisionSlug,
   createCaseLawDecisionSlug,
+  createCaseLawDecisionSlugCollisionScanPrefix,
 } from "@/api/handlers/case-law/decisions/slug";
 import { isDocumentAst } from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
@@ -375,10 +376,14 @@ export const processDecision = async (
     }
 
     const baseSlug = createCaseLawDecisionSlug(result.caseNumber);
+    const slugScanPrefix = createCaseLawDecisionSlugCollisionScanPrefix({
+      baseSlug,
+      maxSuffix: LIMITS.caseLawSlugCollisionScanLimit + 1,
+    });
     const existingSlugRows = await tx
       .select({ slug: caseLawDecisions.slug })
       .from(caseLawDecisions)
-      .where(like(caseLawDecisions.slug, `${baseSlug}%`))
+      .where(like(caseLawDecisions.slug, `${slugScanPrefix}%`))
       .limit(LIMITS.caseLawSlugCollisionScanLimit);
     const slug = createAvailableCaseLawDecisionSlug(
       baseSlug,

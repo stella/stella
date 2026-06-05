@@ -2,20 +2,26 @@ WITH RECURSIVE prepared AS (
   SELECT
     "id",
     COALESCE(
-      left(
-        NULLIF(
-          btrim(
-            regexp_replace(
-              lower(unaccent(COALESCE(NULLIF(btrim("slug"), ''), "case_number"))),
-              '[^a-z0-9]+',
-              '-',
-              'g'
+      NULLIF(
+        btrim(
+          left(
+            NULLIF(
+              btrim(
+                regexp_replace(
+                  lower(unaccent(COALESCE(NULLIF(btrim("slug"), ''), "case_number"))),
+                  '[^a-z0-9]+',
+                  '-',
+                  'g'
+                ),
+                '-'
+              ),
+              ''
             ),
-            '-'
+            256
           ),
-          ''
+          '-'
         ),
-        256
+        ''
       ),
       'unknown'
     ) AS "preferred_slug",

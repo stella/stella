@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 const CASE_LAW_DECISION_SLUG_MAX_LENGTH = 256;
+const MIN_CASE_LAW_DECISION_SLUG_SUFFIX = 2;
 
 const trimSlugHyphens = (value: string): string => {
   let start = 0;
@@ -16,9 +17,14 @@ const trimSlugHyphens = (value: string): string => {
   return value.slice(start, end);
 };
 
+const toSuffixText = (suffix: number): string => `-${suffix}`;
+
 const fitSlug = (baseSlug: string, suffix?: number): string => {
-  const suffixText = suffix === undefined ? "" : `-${suffix}`;
-  const maxBaseLength = CASE_LAW_DECISION_SLUG_MAX_LENGTH - suffixText.length;
+  const suffixText = suffix === undefined ? "" : toSuffixText(suffix);
+  const maxBaseLength = Math.max(
+    0,
+    CASE_LAW_DECISION_SLUG_MAX_LENGTH - suffixText.length,
+  );
   const trimmed = trimSlugHyphens(baseSlug.slice(0, maxBaseLength));
   return `${trimmed || "unknown"}${suffixText}`;
 };
@@ -35,6 +41,25 @@ export const createCaseLawDecisionSlug = (caseNumber: string): string => {
   return fitSlug(slug || "unknown");
 };
 
+type CaseLawDecisionSlugCollisionScanPrefixOptions = {
+  baseSlug: string;
+  maxSuffix: number;
+};
+
+export const createCaseLawDecisionSlugCollisionScanPrefix = ({
+  baseSlug,
+  maxSuffix,
+}: CaseLawDecisionSlugCollisionScanPrefixOptions): string => {
+  const normalizedBase = fitSlug(baseSlug);
+  const suffix = Math.max(MIN_CASE_LAW_DECISION_SLUG_SUFFIX, maxSuffix);
+  const suffixText = toSuffixText(suffix);
+  const maxBaseLength = Math.max(
+    0,
+    CASE_LAW_DECISION_SLUG_MAX_LENGTH - suffixText.length,
+  );
+  return trimSlugHyphens(normalizedBase.slice(0, maxBaseLength)) || "unknown";
+};
+
 export const createAvailableCaseLawDecisionSlug = (
   baseSlug: string,
   existingSlugs: readonly (string | null)[],
@@ -46,7 +71,11 @@ export const createAvailableCaseLawDecisionSlug = (
     return normalizedBase;
   }
 
-  for (let suffix = 2; suffix < Number.MAX_SAFE_INTEGER; suffix += 1) {
+  for (
+    let suffix = MIN_CASE_LAW_DECISION_SLUG_SUFFIX;
+    suffix < Number.MAX_SAFE_INTEGER;
+    suffix += 1
+  ) {
     const candidate = fitSlug(normalizedBase, suffix);
     if (!used.has(candidate)) {
       return candidate;

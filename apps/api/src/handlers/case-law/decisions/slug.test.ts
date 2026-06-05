@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   createAvailableCaseLawDecisionSlug,
   createCaseLawDecisionSlug,
+  createCaseLawDecisionSlugCollisionScanPrefix,
 } from "@/api/handlers/case-law/decisions/slug";
 
 describe("case-law public slugs", () => {
@@ -37,5 +38,22 @@ describe("case-law public slugs", () => {
 
     expect(candidate).toHaveLength(256);
     expect(candidate.endsWith("-2")).toBe(true);
+  });
+
+  test("scans by the fitted collision prefix for max-length base slugs", () => {
+    const baseSlug = "a".repeat(256);
+    const suffixTwoSlug = `${"a".repeat(254)}-2`;
+    const largestScannedSuffixSlug = `${"a".repeat(251)}-1001`;
+    const scanPrefix = createCaseLawDecisionSlugCollisionScanPrefix({
+      baseSlug,
+      maxSuffix: 1001,
+    });
+
+    expect(baseSlug.startsWith(scanPrefix)).toBe(true);
+    expect(suffixTwoSlug.startsWith(scanPrefix)).toBe(true);
+    expect(largestScannedSuffixSlug.startsWith(scanPrefix)).toBe(true);
+    expect(
+      createAvailableCaseLawDecisionSlug(baseSlug, [baseSlug, suffixTwoSlug]),
+    ).toBe(`${"a".repeat(254)}-3`);
   });
 });
