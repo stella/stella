@@ -234,7 +234,8 @@ type FieldProps = {
 
 const Field = ({ icon: Icon, ariaLabel, value }: FieldProps) => (
   <Tooltip
-    content={ariaLabel}
+    className="max-w-80 whitespace-normal text-start"
+    content={<FieldTooltipContent label={ariaLabel} value={value} />}
     render={
       <div
         aria-label={ariaLabel}
@@ -260,6 +261,9 @@ type AuthorFieldProps = {
 
 const AuthorField = ({ ariaLabel, authorUrl, value }: AuthorFieldProps) => {
   const safeAuthorUrl = sanitizeHref(authorUrl);
+  const tooltipContent = (
+    <FieldTooltipContent label={ariaLabel} value={value} />
+  );
   const inner = (
     <>
       <UserIcon
@@ -281,7 +285,8 @@ const AuthorField = ({ ariaLabel, authorUrl, value }: AuthorFieldProps) => {
   if (safeAuthorUrl) {
     return (
       <Tooltip
-        content={ariaLabel}
+        className="max-w-80 whitespace-normal text-start"
+        content={tooltipContent}
         render={
           <a
             aria-label={ariaLabel}
@@ -300,7 +305,8 @@ const AuthorField = ({ ariaLabel, authorUrl, value }: AuthorFieldProps) => {
 
   return (
     <Tooltip
-      content={ariaLabel}
+      className="max-w-80 whitespace-normal text-start"
+      content={tooltipContent}
       render={
         <div
           aria-label={ariaLabel}
@@ -312,6 +318,18 @@ const AuthorField = ({ ariaLabel, authorUrl, value }: AuthorFieldProps) => {
     />
   );
 };
+
+type FieldTooltipContentProps = {
+  label: string;
+  value: string;
+};
+
+const FieldTooltipContent = ({ label, value }: FieldTooltipContentProps) => (
+  <span className="flex flex-col gap-1">
+    <span className="text-xs opacity-75">{label}</span>
+    <span className="break-all text-xs font-medium">{value}</span>
+  </span>
+);
 
 type ChipRowProps = {
   icon: LucideIcon;
