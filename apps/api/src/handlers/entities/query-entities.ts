@@ -1,5 +1,5 @@
 import { Result, panic } from "better-result";
-import { and, count, eq, gt, inArray, notInArray, or, sql } from "drizzle-orm";
+import { and, count, eq, inArray, notInArray, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
@@ -35,6 +35,7 @@ import type {
   AgendaItemKind,
   AgendaItemSource,
 } from "@/api/lib/entity-constants";
+import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import { buildFilterConditions } from "@/api/lib/entity-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ViewFilterCondition, ViewSort } from "@/api/lib/views-schema";
@@ -878,11 +879,7 @@ const queryEntitiesGenerator = async function* ({
         .where(
           and(
             inArray(desktopEditSessions.entityId, pageIds),
-            eq(desktopEditSessions.status, "open"),
-            // Live desktop event streams refresh tokenExpiresAt. Once the TTL
-            // lapses, no connected desktop has checked in recently enough for
-            // the row to keep rendering as an active lock.
-            gt(desktopEditSessions.tokenExpiresAt, new Date()),
+            ...liveDesktopEditSessionPredicates(new Date()),
           ),
         )
         .orderBy(desktopEditSessions.createdAt);
