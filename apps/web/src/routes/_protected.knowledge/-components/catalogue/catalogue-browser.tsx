@@ -270,11 +270,11 @@ export const CatalogueBrowser = ({
     (entry) => entry.isRecommendedForOrg,
   );
   const otherFiltered = filtered.filter((entry) => !entry.isRecommendedForOrg);
-  // On an empty MCP-only view, replace the generic "no entries" + reset
+  const hasMcpEntries = entries.some((entry) => entry.kind === "mcp");
+  // On a truly empty MCP catalogue, replace the generic "no entries" + reset
   // line with a prominent add-MCP call to action. Gated to admins/owners
   // like the add-custom menu, since members can't create connectors.
-  const showMcpEmptyCta =
-    filter === "mcp" && filtered.length === 0 && canAddCustom;
+  const showMcpEmptyCta = filter === "mcp" && !hasMcpEntries && canAddCustom;
 
   return (
     <div className="flex flex-col gap-6">
