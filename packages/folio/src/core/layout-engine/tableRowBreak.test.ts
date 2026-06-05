@@ -5,9 +5,10 @@
  * (their #570).
  */
 
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { layoutDocument } from "./index";
+import { resetCanvasContext } from "./measure";
 import { buildTableRowBreakInfo, snapRowBreak } from "./tableRowBreak";
 import type {
   FlowBlock,
@@ -21,6 +22,39 @@ import type {
 } from "./types";
 
 const LINE = 20;
+const originalDocument = globalThis.document;
+
+beforeEach(() => {
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: {
+      createElement(tagName: string) {
+        if (tagName !== "canvas") {
+          return {};
+        }
+        return {
+          getContext() {
+            return {
+              font: "",
+              measureText(text: string) {
+                return { width: text.length * 7 };
+              },
+            };
+          },
+        };
+      },
+    },
+  });
+  resetCanvasContext();
+});
+
+afterEach(() => {
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: originalDocument,
+  });
+  resetCanvasContext();
+});
 
 function linesWithHeight(n: number, lineHeight: number): MeasuredLine[] {
   return Array.from({ length: n }, () => ({
@@ -353,6 +387,75 @@ describe("buildTableRowBreakInfo / snapRowBreak", () => {
     const info = buildTableRowBreakInfo(block, measure);
 
     expect(info.breakOffsets[0]).toEqual([10, 20, 30, 40, 50, 60, 70, 80, 100]);
+  });
+
+  test("uses floating-aware paragraph lines for safe split offsets", () => {
+    const block: TableBlock = {
+      kind: "table",
+      id: "t",
+      rows: [
+        {
+          id: "r0",
+          cells: [
+            {
+              id: "c0",
+              blocks: [
+                {
+                  kind: "paragraph",
+                  id: "p0",
+                  runs: [
+                    {
+                      kind: "image",
+                      src: "float.png",
+                      width: 70,
+                      height: 80,
+                      wrapType: "square",
+                      cssFloat: "left",
+                    },
+                    {
+                      kind: "text",
+                      text: "floating images should reduce the line width while they overlap text",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      columnWidths: [114],
+    };
+    const measure: TableMeasure = {
+      kind: "table",
+      rows: [
+        {
+          cells: [
+            {
+              blocks: [
+                {
+                  kind: "paragraph",
+                  lines: linesWithHeight(1, 120),
+                  totalHeight: 120,
+                },
+              ],
+              width: 114,
+              height: 120,
+            },
+          ],
+          height: 120,
+        },
+      ],
+      columnWidths: [114],
+      totalWidth: 114,
+      totalHeight: 120,
+    };
+
+    const info = buildTableRowBreakInfo(block, measure);
+
+    expect(info.breakOffsets[0]?.at(-1)).toBe(120);
+    expect(
+      info.breakOffsets[0]?.some((offset) => offset > 0 && offset < 120),
+    ).toBe(true);
   });
 
   test("snaps to the deepest whole line that fits", () => {

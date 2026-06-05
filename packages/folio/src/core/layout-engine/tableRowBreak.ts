@@ -14,8 +14,13 @@
  * here yet (a separate follow-up); each row uses its own cells' content.
  */
 
+import { measureParagraph } from "./measure";
+import {
+  buildTableCellFloatingZones,
+  getTableCellContentWidth,
+  getTableCellFloatingImages,
+} from "./measure/tableCellFloating";
 import type {
-  FlowBlock,
   Measure,
   TableBlock,
   TableCell,
@@ -80,9 +85,8 @@ function shiftCellGeometry(
 
 /** Cumulative break geometry within a single cell's content. */
 function cellBreakGeometry(
-  cellBlocks: FlowBlock[] | undefined,
-  blockMeasures: Measure[],
-  padTop: number,
+  cell: TableCell | undefined,
+  measure: TableCellMeasure,
 ): CellBreakGeometry {
   // Mirror measureTableBlock's cell-height model: each block contributes
   // before + lines + after with no inter-paragraph collapse (the paragraph
@@ -90,15 +94,34 @@ function cellBreakGeometry(
   // means these line bottoms line up with the row height the paginator splits.
   const bottoms: number[] = [];
   const unsafeRanges: UnsafeBreakRange[] = [];
+  const cellBlocks = cell?.blocks;
+  const blockMeasures = measure.blocks;
+  const padTop = cell?.padding?.top ?? 0;
+  const contentWidth = getTableCellContentWidth(cell, measure);
+  const floatingImages =
+    cell !== undefined
+      ? getTableCellFloatingImages(cell, measure, contentWidth)
+      : [];
+  const floatingZones = buildTableCellFloatingZones(
+    floatingImages,
+    contentWidth,
+  );
   let y = padTop;
+  let paragraphY = 0;
   for (let i = 0; i < blockMeasures.length; i++) {
-    const measure = blockMeasures[i];
-    if (measure?.kind === "paragraph") {
+    let blockMeasure = blockMeasures[i];
+    if (blockMeasure?.kind === "paragraph") {
       const block = cellBlocks?.[i];
       const spacing =
         block?.kind === "paragraph" ? block.attrs?.spacing : undefined;
+      if (block?.kind === "paragraph" && floatingZones.length > 0) {
+        blockMeasure = measureParagraph(block, contentWidth, {
+          floatingZones,
+          paragraphYOffset: paragraphY,
+        });
+      }
       y += spacing?.before ?? 0;
-      for (const line of measure.lines) {
+      for (const line of blockMeasure.lines) {
         y += line.floatSkipBefore ?? 0;
         const top = y;
         y += line.lineHeight;
@@ -106,9 +129,10 @@ function cellBreakGeometry(
         bottoms.push(y);
       }
       y += spacing?.after ?? 0;
-    } else if (measure) {
+      paragraphY += blockMeasure.totalHeight;
+    } else if (blockMeasure) {
       // Nested table / non-paragraph: one atomic block (break only at its bottom).
-      const blockHeight = getAtomicBlockHeight(measure);
+      const blockHeight = getAtomicBlockHeight(blockMeasure);
       if (blockHeight > 0) {
         const top = y;
         y += blockHeight;
@@ -160,9 +184,8 @@ export function buildTableRowBreakInfo(
         continue;
       }
       const sourceCell = sourceCells[c];
-      const padTop = sourceCell?.padding?.top ?? 0;
       const geometry = shiftCellGeometry(
-        cellBreakGeometry(sourceCell?.blocks, measuredCell.blocks, padTop),
+        cellBreakGeometry(sourceCell, measuredCell),
         getVerticalAlignmentOffset(sourceCell, measuredCell, rowHeight),
       );
       cellGeometries.push(geometry);
