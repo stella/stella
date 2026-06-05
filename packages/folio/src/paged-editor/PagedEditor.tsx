@@ -106,6 +106,7 @@ import type {
   PageMargins,
   SectionBreakBlock,
   TextBoxBlock,
+  TextBoxMeasure,
   FootnoteContent,
   PageHeaderFooterRefs,
 } from "../core/layout-engine/types";
@@ -2243,7 +2244,7 @@ function extractFloatingZones(
       continue;
     }
 
-    const height = tb.height ?? 0;
+    const height = measureTextBoxBlock(tb).height;
     const distTop = tb.distTop ?? 0;
     const distBottom = tb.distBottom ?? 0;
     // Shared with layoutTextBox so the reserved band and the painted box agree.
@@ -2320,24 +2321,7 @@ function measureBlock(
     }
 
     case "textBox": {
-      const tb = block as TextBoxBlock;
-      const margins = tb.margins ?? DEFAULT_TEXTBOX_MARGINS;
-      const innerWidth = tb.width - margins.left - margins.right;
-      const innerMeasures = tb.content.map((p) =>
-        measureParagraph(p, innerWidth),
-      );
-      const contentHeight = innerMeasures.reduce(
-        (sum, m) => sum + m.totalHeight,
-        0,
-      );
-      const totalHeight =
-        tb.height ?? contentHeight + margins.top + margins.bottom;
-      return {
-        kind: "textBox" as const,
-        width: tb.width,
-        height: totalHeight,
-        innerMeasures,
-      };
+      return measureTextBoxBlock(block as TextBoxBlock);
     }
 
     case "pageBreak":
@@ -2357,6 +2341,23 @@ function measureBlock(
         totalHeight: 0,
       };
   }
+}
+
+function measureTextBoxBlock(tb: TextBoxBlock): TextBoxMeasure {
+  const margins = tb.margins ?? DEFAULT_TEXTBOX_MARGINS;
+  const innerWidth = tb.width - margins.left - margins.right;
+  const innerMeasures = tb.content.map((p) => measureParagraph(p, innerWidth));
+  const contentHeight = innerMeasures.reduce(
+    (sum, m) => sum + m.totalHeight,
+    0,
+  );
+  const totalHeight = tb.height ?? contentHeight + margins.top + margins.bottom;
+  return {
+    kind: "textBox",
+    width: tb.width,
+    height: totalHeight,
+    innerMeasures,
+  };
 }
 
 /**

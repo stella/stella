@@ -264,6 +264,48 @@ describe("measureBlocks floating text-box bands", () => {
       expect(afterMeasure.totalHeight).toBeGreaterThanOrEqual(120);
     });
   });
+
+  test("reserves measured height for auto-height bands", () => {
+    withFakeTextMeasure(() => {
+      const band: TextBoxBlock = {
+        kind: "textBox",
+        id: "band",
+        width: 300,
+        content: [
+          {
+            kind: "paragraph",
+            id: "band-content",
+            runs: [{ kind: "text", text: "banner" }],
+          },
+        ],
+        margins: { top: 0, right: 0, bottom: 0, left: 0 },
+        wrapType: "topAndBottom",
+        position: { vertical: { relativeTo: "margin", posOffset: 0 } },
+      };
+      const after: ParagraphBlock = {
+        kind: "paragraph",
+        id: "after",
+        runs: [{ kind: "text", text: "after" }],
+      };
+
+      const measures = measureBlocks([band, after], 500, 96);
+      const bandMeasure = measures.at(0);
+      const afterMeasure = measures.at(1);
+
+      expect(bandMeasure?.kind).toBe("textBox");
+      expect(afterMeasure?.kind).toBe("paragraph");
+      if (bandMeasure?.kind !== "textBox") {
+        throw new Error("Expected text box measure");
+      }
+      if (afterMeasure?.kind !== "paragraph") {
+        throw new Error("Expected paragraph measure");
+      }
+      expect(bandMeasure.height).toBeGreaterThan(0);
+      expect(afterMeasure.lines.at(0)?.floatSkipBefore).toBeGreaterThanOrEqual(
+        bandMeasure.height,
+      );
+    });
+  });
 });
 
 describe("measureTableBlock", () => {
