@@ -98,6 +98,7 @@ function tallTable(n: number): { block: TableBlock; measure: TableMeasure } {
         cells: [
           {
             id: "c0",
+            padding: { top: 0, right: 0, bottom: 0, left: 0 },
             blocks: [
               {
                 kind: "paragraph",
@@ -139,6 +140,7 @@ function tableWithHeaderAndTallBody(bodyLines: number): {
         cells: [
           {
             id: "c-header",
+            padding: { top: 0, right: 0, bottom: 0, left: 0 },
             blocks: [
               {
                 kind: "paragraph",
@@ -154,6 +156,7 @@ function tableWithHeaderAndTallBody(bodyLines: number): {
         cells: [
           {
             id: "c-body",
+            padding: { top: 0, right: 0, bottom: 0, left: 0 },
             blocks: [
               {
                 kind: "paragraph",
@@ -208,6 +211,7 @@ function tableWithHeaderTallBodyAndShortRow(bodyLines: number): {
     cells: [
       {
         id: "c-next",
+        padding: { top: 0, right: 0, bottom: 0, left: 0 },
         blocks: [
           {
             kind: "paragraph",
@@ -294,7 +298,7 @@ describe("buildTableRowBreakInfo / snapRowBreak", () => {
     expect(info.breakOffsets[0]).toEqual([35, 85, 100]);
   });
 
-  test("keeps only row break offsets that are safe for every cell", () => {
+  test("uses rendered default top padding for implicit cell offsets", () => {
     const block: TableBlock = {
       kind: "table",
       id: "t",
@@ -312,8 +316,57 @@ describe("buildTableRowBreakInfo / snapRowBreak", () => {
                 },
               ],
             },
+          ],
+        },
+      ],
+      columnWidths: [100],
+    };
+    const measure: TableMeasure = {
+      kind: "table",
+      rows: [
+        {
+          cells: [
+            {
+              blocks: [paraMeasure(2)],
+              width: 100,
+              height: 42,
+            },
+          ],
+          height: 42,
+        },
+      ],
+      columnWidths: [100],
+      totalWidth: 100,
+      totalHeight: 42,
+    };
+
+    const info = buildTableRowBreakInfo(block, measure);
+
+    expect(info.breakOffsets[0]).toEqual([21, 41, 42]);
+  });
+
+  test("keeps only row break offsets that are safe for every cell", () => {
+    const block: TableBlock = {
+      kind: "table",
+      id: "t",
+      rows: [
+        {
+          id: "r0",
+          cells: [
+            {
+              id: "c0",
+              padding: { top: 0, right: 0, bottom: 0, left: 0 },
+              blocks: [
+                {
+                  kind: "paragraph",
+                  id: "p0",
+                  runs: [{ kind: "text", text: "a" }],
+                },
+              ],
+            },
             {
               id: "c1",
+              padding: { top: 0, right: 0, bottom: 0, left: 0 },
               blocks: [
                 {
                   kind: "paragraph",
@@ -518,6 +571,7 @@ describe("buildTableRowBreakInfo / snapRowBreak", () => {
           cells: [
             {
               id: "c0",
+              padding: { top: 0, right: 0, bottom: 0, left: 0 },
               blocks: [
                 {
                   kind: "paragraph",
@@ -529,6 +583,7 @@ describe("buildTableRowBreakInfo / snapRowBreak", () => {
             {
               id: "c1",
               verticalAlign: "bottom",
+              padding: { top: 0, right: 0, bottom: 0, left: 0 },
               blocks: [
                 {
                   kind: "paragraph",
@@ -581,6 +636,7 @@ describe("buildTableRowBreakInfo / snapRowBreak", () => {
           cells: [
             {
               id: "c0",
+              padding: { top: 0, right: 0, bottom: 0, left: 0 },
               blocks: [
                 {
                   kind: "paragraph",

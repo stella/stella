@@ -38,6 +38,8 @@ type CellBreakGeometry = {
   unsafeRanges: UnsafeBreakRange[];
 };
 
+const DEFAULT_TABLE_CELL_PADDING_TOP = 1;
+
 function getAtomicBlockHeight(measure: Measure): number {
   if ("totalHeight" in measure) {
     return measure.totalHeight;
@@ -96,7 +98,7 @@ function cellBreakGeometry(
   const unsafeRanges: UnsafeBreakRange[] = [];
   const cellBlocks = cell?.blocks;
   const blockMeasures = measure.blocks;
-  const padTop = cell?.padding?.top ?? 0;
+  const padTop = cell?.padding?.top ?? DEFAULT_TABLE_CELL_PADDING_TOP;
   const contentWidth = getTableCellContentWidth(cell, measure);
   const floatingImages =
     cell !== undefined
