@@ -879,9 +879,9 @@ const queryEntitiesGenerator = async function* ({
           and(
             inArray(desktopEditSessions.entityId, pageIds),
             eq(desktopEditSessions.status, "open"),
-            // A session past its token TTL is no longer usable for edits
-            // (authorizeDesktopEditSession rejects it), so it must not
-            // render as an active lock even before the sweep closes it.
+            // Live desktop event streams refresh tokenExpiresAt. Once the TTL
+            // lapses, no connected desktop has checked in recently enough for
+            // the row to keep rendering as an active lock.
             gt(desktopEditSessions.tokenExpiresAt, new Date()),
           ),
         )

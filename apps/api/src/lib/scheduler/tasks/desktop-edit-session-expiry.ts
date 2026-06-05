@@ -18,12 +18,12 @@ export const EXPIRE_DESKTOP_EDIT_SESSIONS_TASK =
 const EXPIRE_SWEEP_BATCH_SIZE = 200;
 
 /**
- * Transition abandoned desktop edit sessions whose token TTL has lapsed
- * from "open" to "expired". The token already governs liveness
- * (`authorizeDesktopEditSession` rejects an expired token), but the row
- * stays "open" until something closes it: it keeps showing a lock in the
- * entities view and holds the partial unique index that blocks re-opening
- * the same file. This sweep is that "something".
+ * Transition abandoned desktop edit sessions whose liveness TTL has lapsed
+ * from "open" to "expired". Live desktop event streams refresh the TTL, and
+ * `authorizeDesktopEditSession` rejects expired tokens. Once nothing has
+ * refreshed a session within the TTL, the row still stays "open" until
+ * something closes it: it keeps holding the partial unique index that blocks
+ * re-opening the same file. This sweep is that "something".
  */
 export const expireDesktopEditSessions: SchedulerTask = async ({
   logger,
@@ -32,9 +32,8 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
   let expired = 0;
 
   while (!signal.aborted) {
-    // Mirror authorizeDesktopEditSession's liveness check
-    // (tokenExpiresAt < now): a session past its token TTL is already
-    // unusable for edits, so the lock it implies is stale.
+    // Mirror authorizeDesktopEditSession's liveness check: a session past
+    // tokenExpiresAt has no connected desktop stream refreshing it.
     const now = new Date();
     const batch = await rootDb
       .select({

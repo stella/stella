@@ -1,12 +1,15 @@
 import { status, t } from "elysia";
 
+import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import {
   authorizeDesktopEditSession,
+  DESKTOP_EDIT_SESSION_LIVENESS_REFRESH_INTERVAL_MS,
   DESKTOP_EDIT_SESSION_TAKEN_OVER_CODE,
   DESKTOP_EDIT_SESSION_TAKEN_OVER_MESSAGE,
   readDesktopEditSessionEventState,
+  refreshDesktopEditSessionLiveness,
 } from "@/api/lib/desktop-edit-sessions";
 import { broadcastSessionEvent, registerSessionDelivery } from "@/api/lib/sse";
 import type { SSEEvent } from "@/api/lib/sse";
@@ -28,6 +31,7 @@ export const desktopEditSessionEventsQuerySchema = t.Object({
 });
 
 type SessionEventConnection = {
+  cleanup: () => void;
   controller: ReadableStreamDefaultController;
   sessionId: SafeId<"desktopEditSession">;
 };
@@ -68,6 +72,7 @@ const deliverSessionEventLocal = (
 
   if (event.type === SESSION_CLOSE_SIGNAL) {
     for (const conn of conns) {
+      conn.cleanup();
       try {
         conn.controller.close();
       } catch {
@@ -83,6 +88,7 @@ const deliverSessionEventLocal = (
     try {
       conn.controller.enqueue(encoded);
     } catch {
+      conn.cleanup();
       conns.delete(conn);
     }
   }
@@ -176,12 +182,37 @@ export const desktopEditSessionEventsHandler = async ({
     });
   }
 
+  const userId = authorized.value.userId;
+
   // Declare conn in outer scope so cancel() can reference the exact instance.
   let conn: SessionEventConnection;
+  let livenessRefreshTimer: ReturnType<typeof setInterval> | null = null;
+
+  const cleanupLivenessRefresh = () => {
+    if (livenessRefreshTimer === null) {
+      return;
+    }
+    clearInterval(livenessRefreshTimer);
+    livenessRefreshTimer = null;
+  };
+
+  const refreshLiveness = () => {
+    void refreshDesktopEditSessionLiveness({ sessionId, userId }).catch(
+      (error: unknown) => {
+        captureError(error, { sessionId });
+      },
+    );
+  };
 
   const stream = new ReadableStream({
     start(controller) {
-      conn = { controller, sessionId };
+      refreshLiveness();
+      livenessRefreshTimer = setInterval(
+        refreshLiveness,
+        DESKTOP_EDIT_SESSION_LIVENESS_REFRESH_INTERVAL_MS,
+      );
+
+      conn = { cleanup: cleanupLivenessRefresh, controller, sessionId };
 
       let sessionConns = connections.get(sessionId);
       if (!sessionConns) {
@@ -210,6 +241,7 @@ export const desktopEditSessionEventsHandler = async ({
       }
     },
     cancel() {
+      cleanupLivenessRefresh();
       const sessionConns = connections.get(sessionId);
       if (sessionConns) {
         sessionConns.delete(conn);

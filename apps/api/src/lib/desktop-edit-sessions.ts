@@ -20,7 +20,7 @@ type AuthorizedDesktopEditSession = {
   fileName: string;
   organizationId: SafeId<"organization">;
   scopedDb: ScopedDb;
-  userId: string;
+  userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
 };
 
@@ -47,6 +47,31 @@ export const SESSION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 
 export const computeTokenExpiresAt = () =>
   new Date(Date.now() + SESSION_TOKEN_TTL_MS);
+
+export const DESKTOP_EDIT_SESSION_LIVENESS_REFRESH_INTERVAL_MS =
+  SESSION_TOKEN_TTL_MS / 2;
+
+export const refreshDesktopEditSessionLiveness = async ({
+  sessionId,
+  userId,
+}: {
+  sessionId: SafeId<"desktopEditSession">;
+  userId: SafeId<"user">;
+}): Promise<boolean> => {
+  const updatedSessions = await rootDb
+    .update(desktopEditSessions)
+    .set({ tokenExpiresAt: computeTokenExpiresAt() })
+    .where(
+      and(
+        eq(desktopEditSessions.id, sessionId),
+        eq(desktopEditSessions.createdBy, userId),
+        eq(desktopEditSessions.status, "open"),
+      ),
+    )
+    .returning({ id: desktopEditSessions.id });
+
+  return updatedSessions.at(0) !== undefined;
+};
 
 /** Handoff tokens are only for browser-to-desktop launch. */
 export const DESKTOP_EDIT_HANDOFF_TTL_MS = 2 * 60 * 1000;
@@ -164,6 +189,8 @@ export const authorizeDesktopEditSession = async ({
     };
   }
 
+  const userId = brandPersistedUserId(session.createdBy);
+
   return {
     status: "authorized",
     value: {
@@ -171,10 +198,10 @@ export const authorizeDesktopEditSession = async ({
       organizationId: session.organizationId,
       scopedDb: createRootScopedDb({
         organizationId: session.organizationId,
-        userId: brandPersistedUserId(session.createdBy),
+        userId,
         workspaceIds: [session.workspaceId],
       }),
-      userId: session.createdBy,
+      userId,
       workspaceId: session.workspaceId,
     },
   };
