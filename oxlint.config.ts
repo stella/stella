@@ -60,6 +60,14 @@ export default defineConfig({
     "react/jsx-no-script-url": "error",
     "react/button-has-type": "error",
     "react/no-object-type-as-default-prop": "error",
+    // Allow component creation in prop position: i18n rich-text render
+    // callbacks (`t.rich({ link: (chunks) => <a/> })`) and IIFE-as-prop
+    // element builders are idiomatic here and are not remounted components.
+    "react/no-unstable-nested-components": ["error", { allowAsProps: true }],
+    // Off: the Result.gen handler generators (`async function*` with
+    // `yield* Result.await(...)`) have no meaningful user-facing yield type
+    // to document, and the codebase's JSDoc style uses bare tags.
+    "jsdoc/require-yields-type": "off",
     "promise/always-return": "error",
     "promise/no-return-in-finally": "error",
     "no-useless-assignment": "error",

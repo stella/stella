@@ -108,7 +108,7 @@ export type ParseOptions = {
  * @param input - DOCX file as ArrayBuffer, Uint8Array, Blob, or File
  * @param options - Parsing options
  * @returns Promise resolving to Document
- * @throws Error if parsing fails
+ * @throws {Error} if parsing fails
  */
 export async function parseDocx(
   input: DocxInput,

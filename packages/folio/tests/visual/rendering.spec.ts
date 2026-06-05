@@ -14,6 +14,7 @@
 import { test, expect } from "@playwright/test";
 import * as fs from "node:fs";
 import * as path from "node:path";
+
 const __dirname = import.meta.dirname;
 const FIXTURES_DIR = path.join(__dirname, "fixtures");
 

@@ -1,6 +1,7 @@
 import { useCallback, useRef } from "react";
 
-import { useForm, useStore } from "@tanstack/react-form";
+import { useForm } from "@tanstack/react-form";
+import { useSelector } from "@tanstack/react-store";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -47,8 +48,8 @@ export const OrganizationStep = ({
     },
   });
 
-  const formErrors = useStore(form.store, (s) => toFormErrors(s.fieldMeta));
-  const currentName = useStore(form.store, (s) => s.values.name);
+  const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
+  const currentName = useSelector(form.store, (s) => s.values.name);
 
   const { isPulsing: isInputPulsing, pulse } = usePulse(600);
 
