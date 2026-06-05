@@ -16,6 +16,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import {
   computeTokenExpiresAt,
   createDesktopEditSessionToken,
@@ -260,9 +261,10 @@ export const openDesktopEditSessionHandler = async function* ({
               eq(desktopEditSessions.entityId, entityId),
               eq(desktopEditSessions.propertyId, propertyId),
               eq(desktopEditSessions.workspaceId, workspaceId),
-              eq(desktopEditSessions.status, "open"),
+              ...liveDesktopEditSessionPredicates(new Date()),
             ),
           )
+          .orderBy(desktopEditSessions.createdAt)
           .limit(1);
 
         const target = existing.at(0);
