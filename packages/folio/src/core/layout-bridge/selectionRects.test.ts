@@ -1,8 +1,15 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { resetCanvasContext } from "../layout-engine/measure/measureContainer";
-import type { Layout, Measure, ParagraphBlock } from "../layout-engine/types";
-import { getCaretPosition } from "./selectionRects";
+import type {
+  Layout,
+  Measure,
+  ParagraphBlock,
+  TableBlock,
+  TableMeasure,
+} from "../layout-engine/types";
+import { hitTestTableCell } from "./hitTest";
+import { getCaretPosition, selectionToRects } from "./selectionRects";
 
 const originalDocument = globalThis.document;
 
@@ -37,6 +44,95 @@ afterEach(() => {
   });
   resetCanvasContext();
 });
+
+function clippedTableFixture(): {
+  layout: Layout;
+  block: TableBlock;
+  measure: TableMeasure;
+} {
+  const block: TableBlock = {
+    kind: "table",
+    id: "table",
+    rows: [
+      {
+        id: "row",
+        cells: [
+          {
+            id: "cell",
+            blocks: [
+              {
+                kind: "paragraph",
+                id: "p",
+                pmStart: 0,
+                pmEnd: 6,
+                runs: [{ kind: "text", text: "abcde" }],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    columnWidths: [100],
+  };
+  const measure: TableMeasure = {
+    kind: "table",
+    rows: [
+      {
+        cells: [
+          {
+            blocks: [
+              {
+                kind: "paragraph",
+                lines: Array.from({ length: 5 }, (_, index) => ({
+                  fromRun: 0,
+                  fromChar: index,
+                  toRun: 0,
+                  toChar: index + 1,
+                  width: 10,
+                  ascent: 16,
+                  descent: 4,
+                  lineHeight: 20,
+                })),
+                totalHeight: 100,
+              },
+            ],
+            width: 100,
+            height: 100,
+          },
+        ],
+        height: 100,
+      },
+    ],
+    columnWidths: [100],
+    totalWidth: 100,
+    totalHeight: 100,
+  };
+  const layout: Layout = {
+    pageGap: 0,
+    pages: [
+      {
+        number: 1,
+        size: { w: 200, h: 200 },
+        margins: { top: 0, right: 0, bottom: 0, left: 0 },
+        fragments: [
+          {
+            kind: "table",
+            blockId: "table",
+            x: 0,
+            y: 0,
+            width: 100,
+            height: 20,
+            fromRow: 0,
+            toRow: 1,
+            topClip: 40,
+            bottomClip: 60,
+          },
+        ],
+      },
+    ],
+  };
+  return { layout, block, measure };
+}
 
 describe("selection rect geometry", () => {
   test("caret positions advance over atomic math runs", () => {
@@ -111,5 +207,29 @@ describe("selection rect geometry", () => {
     const caret = getCaretPosition(layout, [block], measures, 2);
 
     expect(caret?.x).toBe(14);
+  });
+
+  test("selection rects only include visible lines from clipped table rows", () => {
+    const { layout, block, measure } = clippedTableFixture();
+
+    const rects = selectionToRects(layout, [block], [measure], 1, 6);
+
+    expect(rects).toHaveLength(1);
+    expect(rects[0]?.y).toBe(0);
+    expect(rects[0]?.height).toBe(20);
+  });
+
+  test("table hit testing maps clipped continuations to row-local coordinates", () => {
+    const { layout, block, measure } = clippedTableFixture();
+    const page = layout.pages[0]!;
+
+    const hit = hitTestTableCell(
+      { pageIndex: 0, page, pageY: 10 },
+      [block],
+      [measure],
+      { x: 5, y: 10 },
+    );
+
+    expect(hit?.cellLocalY).toBe(50);
   });
 });

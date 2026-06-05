@@ -533,6 +533,8 @@ export function selectionToRects(
           if (!row || !rowMeasure) {
             continue;
           }
+          const clipTop = tableFragment.topClip ?? 0;
+          const clipBottom = tableFragment.bottomClip ?? rowMeasure.height;
 
           // Walk through cells
           let cellX = 0;
@@ -604,10 +606,17 @@ export function selectionToRects(
                 );
 
                 const lineY = lineHeightBefore(paragraphMeasure, index);
+                const clippedLineY = blockY + lineY;
+                if (
+                  clippedLineY + line.lineHeight <= clipTop ||
+                  clippedLineY >= clipBottom
+                ) {
+                  continue;
+                }
 
                 rects.push({
                   x: tableFragment.x + cellX + Math.min(startX, endX),
-                  y: tableFragment.y + rowY + blockY + lineY + pageTopY,
+                  y: tableFragment.y + rowY + clippedLineY - clipTop + pageTopY,
                   width: Math.max(1, Math.abs(endX - startX)),
                   height: line.lineHeight,
                   pageIndex,
