@@ -461,11 +461,7 @@
     "placeholder": "Írja ide a kérdését, / a skillekhez, @ kontextus hozzáadásához",
     "prompts": {
       "noResults": "Nincs egyező skill",
-      "noShortcuts": "Még nincsenek skillek. Adjon hozzá a Tudás → Skillek részen.",
-      "scope": {
-        "private": "Saját skillek",
-        "team": "Csapat skillek"
-      },
+      "noShortcuts": "Még nincsenek készségek. Adjon hozzá a Tudás → Készségek részen.",
       "tryOne": "Próbáld ki valamelyiket"
     },
     "queuedAttachmentCount": "{count, plural, one {# melléklet} other {# melléklet}}",
@@ -1392,22 +1388,22 @@
       "connect": "Csatlakoztatás",
       "connectedToast": "MCP csatlakoztatva",
       "connectedWithLastUsed": "Csatlakoztatva · legutóbbi használat: {time}",
-      "description": "Kezelje azokat a külső MCP-szervereket, amelyek eszközöket adhatnak a chathez. A tokeneket felhasználónként tároljuk.",
+      "description": "Kezelje azokat az integrációkat, amelyek eszközöket adhatnak a chathez. A tokeneket felhasználónként tároljuk.",
       "detected": "Felismerve: {authType}",
       "disable": "Kikapcsolás",
       "disabled": "Csatlakoztatva · kikapcsolva",
       "disconnect": "Leválasztás",
-      "emptyDescription": "A válogatott jogi MCP-konnektorok itt jelennek meg, miután engedélyezve lettek a munkaterületén.",
-      "emptyTitle": "Még nincsenek MCP-konnektorok",
+      "emptyDescription": "A válogatott jogi integrációk itt jelennek meg, miután engedélyezve lettek a munkaterületén.",
+      "emptyTitle": "Még nincsenek integrációk",
       "enable": "Bekapcsolás",
-      "errorDescription": "A konnektort nem sikerült frissíteni.",
+      "errorDescription": "Az integrációt nem sikerült frissíteni.",
       "errorTitle": "MCP sikertelen",
-      "mcpExplainer": "Az MCP-szerverek olyan külső szolgáltatásokat adnak a chathez, amelyekkel az MI dolgozhat.",
+      "mcpExplainer": "Az integrációk külső szolgáltatásokat kapcsolnak a chathez, amelyekkel az MI dolgozhat.",
       "namePlaceholder": "Megjelenítési név",
       "needsReauth": "Újracsatlakozás szükséges",
       "off": "Ki",
       "on": "Be",
-      "otherTitle": "További csatlakozók",
+      "otherTitle": "További integrációk",
       "probe": "Ellenőrzés",
       "recommendedBadge": "Ajánlott",
       "recommendedFor": "Ajánlott: {jurisdictions}",
@@ -1432,21 +1428,13 @@
       "clauses": {
         "description": "Újrafelhasználható mintakikötések"
       },
-      "connectors": {
-        "description": "A stella összekapcsolása külső eszközökkel",
-        "title": "MCP"
-      },
       "mcp": {
         "description": "A stella összekapcsolása külső eszközökkel",
         "title": "MCP"
       },
       "prompts": {
-        "description": "Újrahasználható utasítások, amelyek / paranccsal érhetők el a chatben",
-        "title": "Promptok"
-      },
-      "skills": {
-        "description": "Célzott AI-képességek speciális munkafolyamatokhoz",
-        "title": "Skillek"
+        "description": "A chatben / paranccsal elérhető, újrahasználható készségek",
+        "title": "Készségek"
       },
       "templates": {
         "description": "Dokumentumsablonok helyőrzőkkel",
@@ -1458,7 +1446,7 @@
       }
     },
     "skills": {
-      "addShortcut": "Prompt hozzáadása",
+      "addShortcut": "Készség hozzáadása",
       "autoInvokeHintLabel": "Tipp a modellnek",
       "autoInvokeHintPlaceholder": "Mikor válassza ki a modell automatikusan ezt a készséget?",
       "autoInvokeLabel": "Az MI futtassa automatikusan",
@@ -1467,37 +1455,37 @@
       "commandPlaceholder": "pl. összefoglalás",
       "createTitle": "Új készség",
       "defaultBadge": "Alapértelmezett",
-      "deleteConfirmDescription": "Ez a prompt véglegesen törlődik.",
-      "deleteConfirmTitle": "Prompt törlése?",
-      "deleteShortcut": "Prompt törlése",
-      "editShortcut": "Prompt szerkesztése",
-      "emptyDescription": "Hozzon létre újrahasználható promptokat a csapata ismétlődő munkáihoz, az összefoglalóktól az első fogalmazványok elkészítéséig.",
-      "emptyState": "Még nincsenek promptok. Adja hozzá az elsőt.",
-      "emptyTitle": "Első prompt létrehozása",
-      "emptyVideoLabel": "Promptok áttekintése",
+      "deleteConfirmDescription": "Ez a készség véglegesen törlődik.",
+      "deleteConfirmTitle": "Készség törlése?",
+      "deleteShortcut": "Készség törlése",
+      "editShortcut": "Készség szerkesztése",
+      "emptyDescription": "Hozzon létre újrahasználható készségeket a csapata ismétlődő munkáihoz, az összefoglalóktól az első fogalmazványok elkészítéséig.",
+      "emptyState": "Még nincsenek készségek. Adja hozzá az elsőt.",
+      "emptyTitle": "Első készség létrehozása",
+      "emptyVideoLabel": "Készségek áttekintése",
       "errors": {
-        "commandConflict": "Már létezik prompt ezzel a / névvel",
+        "commandConflict": "Már létezik készség ezzel a / névvel",
         "commandInvalid": "Csak kisbetűket, számjegyeket, kötőjeleket és aláhúzásjeleket használjon",
-        "commandReserved": "A(z) \"/{command}\" fenntartott prompt"
+        "commandReserved": "A(z) \"/{command}\" fenntartott készség"
       },
       "form": {
-        "command": "Prompt parancsikon",
-        "commandHint": "A / prompt neve: csak kisbetűk, számok, kötőjelek és aláhúzások",
+        "command": "Készség parancsikon",
+        "commandHint": "A / készség neve: csak kisbetűk, számok, kötőjelek és aláhúzások",
         "commandPlaceholder": "pl. osszefoglalas",
         "commandPrefix": "/",
         "description": "Leírás",
         "descriptionPlaceholder": "A választóban megjelenő rövid leírás",
         "name": "Név",
         "namePlaceholder": "pl. Dokumentum összefoglalása",
-        "prompt": "Prompt",
-        "promptPlaceholder": "A chat szerkesztőjébe beszúrt szöveg a prompt használatakor",
+        "prompt": "Utasítások",
+        "promptPlaceholder": "A chat szerkesztőjébe beszúrt utasítások a készség használatakor",
         "scope": "Láthatóság",
         "scopePrivate": "Csak én",
         "scopeTeam": "A szervezet minden tagja"
       },
-      "privateSection": "Saját promptok",
-      "shadowed": "A csapat promptja felülírja",
-      "teamSection": "Csapat promptjai"
+      "privateSection": "Saját készségek",
+      "shadowed": "A csapat készsége felülírja",
+      "teamSection": "Csapat készségei"
     }
   },
   "navigation": {
@@ -1823,8 +1811,6 @@
         "termAddedToast": "„{value}” hozzáadva az iroda tiltólistájához.",
         "title": "Anonimizálás"
       },
-      "catalogue": "Katalógus",
-      "catalogueDescription": "Böngésszen és telepítsen a joghatóságához illő skilleket, MCP-szervereket és saját eszközöket",
       "matterNumbering": "Ügyszámozás",
       "matterNumberingDescription": "Beállíthatja, hogyan generálódjanak az új ügyek hivatkozási számai",
       "membersDescription": "Manage who has access to this organization",

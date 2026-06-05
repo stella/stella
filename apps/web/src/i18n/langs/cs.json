@@ -299,7 +299,7 @@
   },
   "catalogue": {
     "addCustom": "Přidat vlastní",
-    "addCustomMcp": "Přidat MCP server",
+    "addCustomMcp": "Přidat integraci",
     "addCustomSkill": "Přidat dovednost",
     "by": "Od {author}",
     "configuration": "Konfigurace",
@@ -310,8 +310,8 @@
     "detailAuthMethod": "Autentizace",
     "empty": "Žádné položky neodpovídají aktuálnímu filtru.",
     "filter": {
-      "mcps": "MCP servery",
-      "nativeTools": "Vestavěné nástroje",
+      "mcps": "Integrace",
+      "nativeTools": "Vždy dostupné",
       "skills": "Dovednosti"
     },
     "filterHint": "Filtrováno: {codes}",
@@ -462,10 +462,6 @@
     "prompts": {
       "noResults": "Žádné odpovídající dovednosti",
       "noShortcuts": "Zatím žádné dovednosti. Přidejte je v části Znalosti → Dovednosti.",
-      "scope": {
-        "private": "Vaše dovednosti",
-        "team": "Týmové dovednosti"
-      },
       "tryOne": "Začni s jedním z těchto"
     },
     "queuedAttachmentCount": "{count, plural, one {# příloha} few {# přílohy} other {# příloh}}",
@@ -484,8 +480,8 @@
     "sendWithoutAnonymization": "Odeslat bez anonymizace",
     "skills": {
       "scope": {
-        "private": "Vaše AI dovednosti",
-        "team": "Týmové AI dovednosti"
+        "private": "Vaše dovednosti",
+        "team": "Týmové dovednosti"
       }
     },
     "sources": "Zdroje:",
@@ -824,7 +820,7 @@
     "error": "Něco se pokazilo. Zkuste to prosím znovu.",
     "missingJurisdictions": "Vaše organizace stella zatím nemá nastavené jurisdikce, ve kterých působí. Dokud nastavení nedokončíte, nebudou některé nástroje závislé na jurisdikci dostupné.",
     "permissions": "Tím aplikaci umožníte:",
-    "scopeExternalMcps": "Použití vašich připojených externích nástrojů",
+    "scopeExternalMcps": "Použití vašich připojených integrací",
     "scopeOnboarding": "Nastavit jurisdikce, ve kterých vaše organizace působí",
     "scopeProfile": "Přístup k informacím vašeho profilu",
     "scopeRead": "Čtení vašich dokumentů, spisů a kontaktů",
@@ -1382,7 +1378,7 @@
     "mcp": {
       "addAndConnect": "Přidat a připojit",
       "addServer": "Přidat server",
-      "addServerCardTitle": "Přidat nový MCP server",
+      "addServerCardTitle": "Přidat novou integraci",
       "auth": {
         "bearer": "Bearer token",
         "none": "Bez přihlášení",
@@ -1392,22 +1388,22 @@
       "connect": "Připojit",
       "connectedToast": "MCP připojeno",
       "connectedWithLastUsed": "Připojeno · naposledy použito {time}",
-      "description": "Správa externích MCP serverů, které mohou přidat nástroje do chatu. Tokeny se ukládají pro každého uživatele zvlášť.",
+      "description": "Správa integrací, které mohou přidat nástroje do chatu. Tokeny se ukládají pro každého uživatele zvlášť.",
       "detected": "Rozpoznáno: {authType}",
       "disable": "Vypnout",
       "disabled": "Připojeno · vypnuto",
       "disconnect": "Odpojit",
-      "emptyDescription": "Ověřené právní MCP konektory se zde zobrazí po zapnutí pro váš workspace.",
-      "emptyTitle": "Zatím žádné MCP konektory",
+      "emptyDescription": "Ověřené právní integrace se zde zobrazí po zapnutí pro váš pracovní prostor.",
+      "emptyTitle": "Zatím žádné integrace",
       "enable": "Zapnout",
-      "errorDescription": "Konektor se nepodařilo upravit.",
+      "errorDescription": "Integraci se nepodařilo upravit.",
       "errorTitle": "MCP selhalo",
-      "mcpExplainer": "MCP servery přidávají do chatu externí služby, se kterými může AI pracovat.",
+      "mcpExplainer": "Integrace připojují do chatu externí služby, se kterými může AI pracovat.",
       "namePlaceholder": "Zobrazovaný název",
       "needsReauth": "Vyžaduje opětovné připojení",
       "off": "Vypnuto",
       "on": "Zapnuto",
-      "otherTitle": "Ostatní konektory",
+      "otherTitle": "Ostatní integrace",
       "probe": "Ověřit",
       "recommendedBadge": "Doporučeno",
       "recommendedFor": "Doporučeno pro {jurisdictions}",
@@ -1432,20 +1428,12 @@
       "clauses": {
         "description": "Knihovna vzorových ustanovení"
       },
-      "connectors": {
-        "description": "Připojení stelly k externím nástrojům",
-        "title": "MCP"
-      },
       "mcp": {
         "description": "Připojení stelly k externím nástrojům",
         "title": "MCP"
       },
       "prompts": {
-        "description": "Opakovaně použitelné instrukce dostupné přes / v chatu",
-        "title": "Prompty"
-      },
-      "skills": {
-        "description": "Specializované AI schopnosti pro konkrétní pracovní postupy",
+        "description": "Opakovaně použitelné dovednosti dostupné přes / v chatu",
         "title": "Dovednosti"
       },
       "templates": {
@@ -1453,12 +1441,12 @@
         "title": "Šablony"
       },
       "tools": {
-        "description": "Dovednosti, MCP servery a vestavěné nástroje, které AI může použít v chatu",
+        "description": "Dovednosti, integrace a vždy dostupné nástroje, které AI může použít v chatu",
         "title": "Nástroje"
       }
     },
     "skills": {
-      "addShortcut": "Přidat prompt",
+      "addShortcut": "Přidat dovednost",
       "autoInvokeHintLabel": "Nápověda pro model",
       "autoInvokeHintPlaceholder": "Kdy má model tuto dovednost spustit?",
       "autoInvokeLabel": "Nechat AI spustit automaticky",
@@ -1467,37 +1455,37 @@
       "commandPlaceholder": "např. shrnout",
       "createTitle": "Nová dovednost",
       "defaultBadge": "Výchozí",
-      "deleteConfirmDescription": "Tento prompt bude trvale odstraněn.",
-      "deleteConfirmTitle": "Smazat prompt?",
-      "deleteShortcut": "Smazat prompt",
-      "editShortcut": "Upravit prompt",
-      "emptyDescription": "Vytvářejte opakovaně použitelné prompty pro práci, kterou váš tým opakuje, od shrnutí po první návrhy pokynů.",
-      "emptyState": "Žádné prompty. Přidejte první.",
-      "emptyTitle": "Vytvořte první prompt",
-      "emptyVideoLabel": "Přehled promptů",
+      "deleteConfirmDescription": "Tato dovednost bude trvale odstraněna.",
+      "deleteConfirmTitle": "Smazat dovednost?",
+      "deleteShortcut": "Smazat dovednost",
+      "editShortcut": "Upravit dovednost",
+      "emptyDescription": "Vytvářejte opakovaně použitelné dovednosti pro práci, kterou váš tým opakuje, od shrnutí po první návrhy pokynů.",
+      "emptyState": "Zatím žádné dovednosti. Přidejte první.",
+      "emptyTitle": "Vytvořte první dovednost",
+      "emptyVideoLabel": "Přehled dovedností",
       "errors": {
-        "commandConflict": "Prompt s tímto / názvem již existuje",
+        "commandConflict": "Dovednost s tímto / názvem již existuje",
         "commandInvalid": "Používejte pouze malá písmena, číslice, pomlčky a podtržítka",
-        "commandReserved": "\"/{command}\" je rezervovaný prompt"
+        "commandReserved": "\"/{command}\" je rezervovaná dovednost"
       },
       "form": {
-        "command": "Zkratka promptu",
-        "commandHint": "Název / promptu: pouze malá písmena, číslice, pomlčky a podtržítka",
+        "command": "Zkratka dovednosti",
+        "commandHint": "Název / dovednosti: pouze malá písmena, číslice, pomlčky a podtržítka",
         "commandPlaceholder": "např. shrnout",
         "commandPrefix": "/",
         "description": "Popis",
         "descriptionPlaceholder": "Stručný popis zobrazený ve výběru",
         "name": "Název",
         "namePlaceholder": "např. Shrnout dokument",
-        "prompt": "Prompt",
-        "promptPlaceholder": "Text vložený do kompozéru chatu při použití tohoto promptu",
+        "prompt": "Pokyny",
+        "promptPlaceholder": "Pokyny vložené do kompozéru chatu při použití této dovednosti",
         "scope": "Viditelnost",
         "scopePrivate": "Pouze já",
         "scopeTeam": "Všichni v organizaci"
       },
-      "privateSection": "Moje prompty",
-      "shadowed": "Překryto týmovým promptem",
-      "teamSection": "Týmové prompty"
+      "privateSection": "Vaše dovednosti",
+      "shadowed": "Překryto týmovou dovedností",
+      "teamSection": "Týmové dovednosti"
     }
   },
   "navigation": {
@@ -1823,8 +1811,6 @@
         "termAddedToast": "Pojem „{value}“ byl přidán do firemního seznamu.",
         "title": "Anonymizace"
       },
-      "catalogue": "Nástroje",
-      "catalogueDescription": "Připojte stella k veřejným rejstříkům, registrům DPH a dalším zdrojům. Doporučení podle vaší jurisdikce.",
       "matterNumbering": "Číslování spisů",
       "matterNumberingDescription": "Nastavte, jak se generují referenční čísla nových spisů",
       "membersDescription": "Spravujte, kdo má přístup k této organizaci, a čekající pozvánky",

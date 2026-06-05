@@ -8,62 +8,20 @@ import { Popover, PopoverPopup } from "@stll/ui/components/popover";
 import { cn } from "@stll/ui/lib/utils";
 
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
+import {
+  getSlashItemsInRenderOrder,
+  groupSlashItemsBySection,
+  type SlashSectionKey,
+} from "@/components/chat/prompt-slash-list.logic";
 import type { TranslationKey } from "@/i18n/types";
 
-type SectionKey =
-  | "prompt:private"
-  | "prompt:team"
-  | "skill:built-in"
-  | "skill:private"
-  | "skill:team";
-
-const SECTION_ORDER: SectionKey[] = [
-  "prompt:private",
-  "prompt:team",
-  "skill:built-in",
-  "skill:private",
-  "skill:team",
-];
-
+// Prompts and SKILL.md skills are one user-facing concept ("skills"), so
+// they share section headers grouped by scope rather than split by feed.
 const SECTION_LABEL_KEYS = {
-  "prompt:private": "chat.prompts.scope.private",
-  "prompt:team": "chat.prompts.scope.team",
-  "skill:built-in": "knowledge.agentSkills.builtInSection",
-  "skill:private": "chat.skills.scope.private",
-  "skill:team": "chat.skills.scope.team",
-} satisfies Record<SectionKey, TranslationKey>;
-
-const getSectionKey = (item: SlashItem): SectionKey => {
-  if (item.kind === "prompt") {
-    return `prompt:${item.prompt.scope}`;
-  }
-  return `skill:${item.skill.scope}`;
-};
-
-const groupItems = (
-  items: SlashItem[],
-): { section: SectionKey; items: SlashItem[] }[] => {
-  const groups = new Map<SectionKey, SlashItem[]>();
-
-  for (const item of items) {
-    const key = getSectionKey(item);
-    const list = groups.get(key);
-    if (list) {
-      list.push(item);
-    } else {
-      groups.set(key, [item]);
-    }
-  }
-
-  const result: { section: SectionKey; items: SlashItem[] }[] = [];
-  for (const section of SECTION_ORDER) {
-    const group = groups.get(section);
-    if (group && group.length > 0) {
-      result.push({ section, items: group });
-    }
-  }
-  return result;
-};
+  private: "chat.skills.scope.private",
+  team: "chat.skills.scope.team",
+  "built-in": "knowledge.agentSkills.builtInSection",
+} satisfies Record<SlashSectionKey, TranslationKey>;
 
 const getItemKey = (item: SlashItem): string =>
   item.kind === "prompt"
@@ -94,8 +52,11 @@ export const PromptSlashList = ({
   const [isOpen, setIsOpen] = useState(true);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
+  const groups = groupSlashItemsBySection(items);
+  const renderedItems = getSlashItemsInRenderOrder(groups);
+  const itemCount = renderedItems.length;
 
-  const safeIndex = Math.min(selectedIndex, Math.max(0, items.length - 1));
+  const safeIndex = Math.min(selectedIndex, Math.max(0, itemCount - 1));
 
   useEffect(() => {
     setSelectedIndex(0);
@@ -115,7 +76,7 @@ export const PromptSlashList = ({
   }, [safeIndex]);
 
   const select = (index: number) => {
-    const item = items[index];
+    const item = renderedItems.at(index);
     if (item) {
       command(item);
     }
@@ -123,17 +84,15 @@ export const PromptSlashList = ({
 
   useImperativeHandle(ref, () => ({
     onKeyDown: ({ event }) => {
-      if (items.length === 0) {
+      if (itemCount === 0) {
         return false;
       }
       if (event.key === "ArrowUp") {
-        setSelectedIndex(
-          (current) => (current + items.length - 1) % items.length,
-        );
+        setSelectedIndex((current) => (current + itemCount - 1) % itemCount);
         return true;
       }
       if (event.key === "ArrowDown") {
-        setSelectedIndex((current) => (current + 1) % items.length);
+        setSelectedIndex((current) => (current + 1) % itemCount);
         return true;
       }
       if (event.key === "Enter" || event.key === "Tab") {
@@ -150,7 +109,7 @@ export const PromptSlashList = ({
     },
   }));
 
-  if (items.length === 0) {
+  if (itemCount === 0) {
     return (
       <Popover modal={true} onOpenChange={setIsOpen} open={isOpen}>
         <PopoverPopup
@@ -169,7 +128,6 @@ export const PromptSlashList = ({
   }
 
   let runningIndex = 0;
-  const groups = groupItems(items);
 
   return (
     <Popover modal={true} onOpenChange={setIsOpen} open={isOpen}>

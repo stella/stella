@@ -432,7 +432,7 @@
       "noPrompts": "Noch keine Skills",
       "noRecentChats": "Keine letzten Chats",
       "pinnedMatters": "Angeheftete Sachen",
-      "prompts": "Skills",
+      "prompts": "Fähigkeiten",
       "recentChats": "Letzte Chats"
     },
     "maxAttachmentsReached": "Maximal {count} Dateien pro Nachricht",
@@ -456,16 +456,12 @@
     "pastedText": {
       "expand": "Vollständigen Text anzeigen",
       "fromClipboard": "{count, plural, one {# Zeichen eingefügt} other {# Zeichen eingefügt}}",
-      "fromPromptFallback": "Skill"
+      "fromPromptFallback": "Fähigkeit"
     },
     "placeholder": "Geben Sie hier Ihre Frage ein, / für Skills, @ für Kontext",
     "prompts": {
       "noResults": "Keine passenden Skills",
       "noShortcuts": "Noch keine Skills. Fügen Sie welche unter Wissen → Skills hinzu.",
-      "scope": {
-        "private": "Eigene Skills",
-        "team": "Team-Skills"
-      },
       "tryOne": "Probiere einen davon zum Start"
     },
     "queuedAttachmentCount": "{count, plural, one {# Anhang} other {# Anhänge}}",
@@ -1392,22 +1388,22 @@
       "connect": "Verbinden",
       "connectedToast": "MCP verbunden",
       "connectedWithLastUsed": "Verbunden · zuletzt verwendet {time}",
-      "description": "Verwalten Sie externe MCP-Server, die dem Chat Werkzeuge hinzufügen können. Tokens werden pro Benutzer gespeichert.",
+      "description": "Verwalten Sie Integrationen, die dem Chat Werkzeuge hinzufügen können. Tokens werden pro Benutzer gespeichert.",
       "detected": "{authType} erkannt",
       "disable": "Deaktivieren",
       "disabled": "Verbunden · deaktiviert",
       "disconnect": "Trennen",
-      "emptyDescription": "Kuratierte juristische MCP-Konnektoren erscheinen hier, sobald sie für Ihren Arbeitsbereich aktiviert sind.",
-      "emptyTitle": "Noch keine MCP-Konnektoren",
+      "emptyDescription": "Kuratierte juristische Integrationen erscheinen hier, sobald sie für Ihren Arbeitsbereich aktiviert sind.",
+      "emptyTitle": "Noch keine Integrationen",
       "enable": "Aktivieren",
-      "errorDescription": "Der Konnektor konnte nicht aktualisiert werden.",
+      "errorDescription": "Die Integration konnte nicht aktualisiert werden.",
       "errorTitle": "MCP fehlgeschlagen",
-      "mcpExplainer": "MCP-Server fügen dem Chat externe Dienste hinzu, mit denen die KI arbeiten kann.",
+      "mcpExplainer": "Integrationen verbinden externe Dienste mit dem Chat, mit denen die KI arbeiten kann.",
       "namePlaceholder": "Anzeigename",
       "needsReauth": "Erneute Verbindung erforderlich",
       "off": "Aus",
       "on": "Ein",
-      "otherTitle": "Weitere Konnektoren",
+      "otherTitle": "Weitere Integrationen",
       "probe": "Prüfen",
       "recommendedBadge": "Empfohlen",
       "recommendedFor": "Empfohlen für {jurisdictions}",
@@ -1432,20 +1428,12 @@
       "clauses": {
         "description": "Wiederverwendbare Klauselbibliothek"
       },
-      "connectors": {
-        "description": "stella mit externen Tools verbinden",
-        "title": "MCP"
-      },
       "mcp": {
         "description": "stella mit externen Tools verbinden",
         "title": "MCP"
       },
       "prompts": {
-        "description": "Wiederverwendbare Anweisungen, die im Chat über / verfügbar sind",
-        "title": "Prompts"
-      },
-      "skills": {
-        "description": "Fokussierte KI-Fähigkeiten für spezialisierte Arbeitsabläufe",
+        "description": "Wiederverwendbare Skills, die im Chat über / verfügbar sind",
         "title": "Skills"
       },
       "templates": {
@@ -1458,7 +1446,7 @@
       }
     },
     "skills": {
-      "addShortcut": "Prompt hinzufügen",
+      "addShortcut": "Skill hinzufügen",
       "autoInvokeHintLabel": "Hinweis für das Modell",
       "autoInvokeHintPlaceholder": "Wann soll das Modell diesen Skill automatisch wählen?",
       "autoInvokeLabel": "KI darf diesen Skill automatisch ausführen",
@@ -1467,37 +1455,37 @@
       "commandPlaceholder": "z. B. zusammenfassen",
       "createTitle": "Neuer Skill",
       "defaultBadge": "Standard",
-      "deleteConfirmDescription": "Dieser Prompt wird dauerhaft entfernt.",
-      "deleteConfirmTitle": "Prompt löschen?",
-      "deleteShortcut": "Prompt löschen",
-      "editShortcut": "Prompt bearbeiten",
-      "emptyDescription": "Erstellen Sie wiederverwendbare Prompts für die wiederkehrende Arbeit Ihres Teams, von Zusammenfassungen bis hin zu Anweisungen für erste Entwürfe.",
-      "emptyState": "Noch keine Prompts. Fügen Sie den ersten hinzu.",
-      "emptyTitle": "Ersten Prompt erstellen",
-      "emptyVideoLabel": "Prompts-Übersicht",
+      "deleteConfirmDescription": "Dieser Skill wird dauerhaft entfernt.",
+      "deleteConfirmTitle": "Skill löschen?",
+      "deleteShortcut": "Skill löschen",
+      "editShortcut": "Skill bearbeiten",
+      "emptyDescription": "Erstellen Sie wiederverwendbare Skills für die wiederkehrende Arbeit Ihres Teams, von Zusammenfassungen bis hin zu Anweisungen für erste Entwürfe.",
+      "emptyState": "Noch keine Skills. Fügen Sie den ersten hinzu.",
+      "emptyTitle": "Ersten Skill erstellen",
+      "emptyVideoLabel": "Skills-Übersicht",
       "errors": {
-        "commandConflict": "Ein Prompt mit diesem / Namen existiert bereits",
+        "commandConflict": "Ein Skill mit diesem / Namen existiert bereits",
         "commandInvalid": "Verwenden Sie nur Kleinbuchstaben, Ziffern, Bindestriche und Unterstriche",
-        "commandReserved": "\"/{command}\" ist ein reservierter Prompt"
+        "commandReserved": "\"/{command}\" ist ein reservierter Skill"
       },
       "form": {
-        "command": "Prompt-Kürzel",
-        "commandHint": "Der / Prompt-Name: nur Kleinbuchstaben, Zahlen, Bindestriche und Unterstriche",
+        "command": "Skill-Kürzel",
+        "commandHint": "Der / Skill-Name: nur Kleinbuchstaben, Zahlen, Bindestriche und Unterstriche",
         "commandPlaceholder": "z. B. zusammenfassen",
         "commandPrefix": "/",
         "description": "Beschreibung",
         "descriptionPlaceholder": "Kurze Beschreibung, die in der Auswahl angezeigt wird",
         "name": "Name",
         "namePlaceholder": "z. B. Dokument zusammenfassen",
-        "prompt": "Prompt",
-        "promptPlaceholder": "Der Text, der bei Verwendung dieses Prompts in den Chat-Composer eingefügt wird",
+        "prompt": "Anweisungen",
+        "promptPlaceholder": "Anweisungen, die bei Verwendung dieses Skills in den Chat-Composer eingefügt werden",
         "scope": "Sichtbarkeit",
         "scopePrivate": "Nur ich",
         "scopeTeam": "Alle in der Organisation"
       },
-      "privateSection": "Ihre Prompts",
-      "shadowed": "Durch Team-Prompt verdeckt",
-      "teamSection": "Team-Prompts"
+      "privateSection": "Ihre Skills",
+      "shadowed": "Durch Team-Skill verdeckt",
+      "teamSection": "Team-Skills"
     }
   },
   "navigation": {
@@ -1823,8 +1811,6 @@
         "termAddedToast": "„{value}“ wurde zur kanzleiweiten Sperrliste hinzugefügt.",
         "title": "Anonymisierung"
       },
-      "catalogue": "Katalog",
-      "catalogueDescription": "Skills, MCP-Server und Erstanbieter-Tools für Ihre Jurisdiktion durchsuchen und installieren",
       "matterNumbering": "Aktennummerierung",
       "matterNumberingDescription": "Konfigurieren Sie, wie neue Aktenzeichen erzeugt werden",
       "membersDescription": "Manage who has access to this organization",

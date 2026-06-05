@@ -462,10 +462,6 @@
     "prompts": {
       "noResults": "Sobivaid oskusi pole",
       "noShortcuts": "Oskusi veel pole. Lisage need jaotises Teadmised → Oskused.",
-      "scope": {
-        "private": "Sinu oskused",
-        "team": "Tiimi oskused"
-      },
       "tryOne": "Alusta ühe nendest"
     },
     "queuedAttachmentCount": "{count, plural, one {# manus} other {# manust}}",
@@ -1392,22 +1388,22 @@
       "connect": "Ühenda",
       "connectedToast": "MCP ühendatud",
       "connectedWithLastUsed": "Ühendatud · viimati kasutatud {time}",
-      "description": "Hallake väliseid MCP-servereid, mis saavad vestlusse tööriistu lisada. Tokenid salvestatakse kasutajapõhiselt.",
+      "description": "Hallake integratsioone, mis saavad vestlusse tööriistu lisada. Tokenid salvestatakse kasutajapõhiselt.",
       "detected": "Tuvastatud: {authType}",
       "disable": "Lülita välja",
       "disabled": "Ühendatud · välja lülitatud",
       "disconnect": "Katkesta ühendus",
-      "emptyDescription": "Kureeritud juriidilised MCP-konnektorid kuvatakse siin, kui need on teie tööruumis lubatud.",
-      "emptyTitle": "MCP-konnektoreid veel pole",
+      "emptyDescription": "Kureeritud juriidilised integratsioonid kuvatakse siin, kui need on teie tööruumis lubatud.",
+      "emptyTitle": "Integratsioone veel pole",
       "enable": "Lülita sisse",
-      "errorDescription": "Konnektorit ei saanud uuendada.",
+      "errorDescription": "Integratsiooni ei saanud uuendada.",
       "errorTitle": "MCP ebaõnnestus",
-      "mcpExplainer": "MCP serverid lisavad vestlusele väliseid teenuseid, millega tehisintellekt saab töötada.",
+      "mcpExplainer": "Integratsioonid ühendavad vestlusega väliseid teenuseid, millega tehisintellekt saab töötada.",
       "namePlaceholder": "Kuvatav nimi",
       "needsReauth": "Vajab taasühendamist",
       "off": "Väljas",
       "on": "Sees",
-      "otherTitle": "Muud konnektorid",
+      "otherTitle": "Muud integratsioonid",
       "probe": "Kontrolli",
       "recommendedBadge": "Soovitatud",
       "recommendedFor": "Soovitatud: {jurisdictions}",
@@ -1432,20 +1428,12 @@
       "clauses": {
         "description": "Korduvkasutatav klauslite kogu"
       },
-      "connectors": {
-        "description": "Ühendage stella väliste tööriistadega",
-        "title": "MCP"
-      },
       "mcp": {
         "description": "Ühendage stella väliste tööriistadega",
         "title": "MCP"
       },
       "prompts": {
-        "description": "Taaskasutatavad juhised, mis on vestluses saadaval / kaudu",
-        "title": "Promptid"
-      },
-      "skills": {
-        "description": "Fookustatud AI-võimekused erialaste töövoogude jaoks",
+        "description": "Taaskasutatavad oskused, mis on vestluses saadaval / kaudu",
         "title": "Oskused"
       },
       "templates": {
@@ -1458,7 +1446,7 @@
       }
     },
     "skills": {
-      "addShortcut": "Lisa prompt",
+      "addShortcut": "Lisa oskus",
       "autoInvokeHintLabel": "Vihje mudelile",
       "autoInvokeHintPlaceholder": "Millal peaks mudel selle oskuse automaatselt valima?",
       "autoInvokeLabel": "Lase tehisintellektil automaatselt käivitada",
@@ -1467,37 +1455,37 @@
       "commandPlaceholder": "nt kokku võtta",
       "createTitle": "Uus oskus",
       "defaultBadge": "Vaikimisi",
-      "deleteConfirmDescription": "See prompt eemaldatakse jäädavalt.",
-      "deleteConfirmTitle": "Kustutada prompt?",
-      "deleteShortcut": "Kustuta prompt",
-      "editShortcut": "Muuda prompti",
-      "emptyDescription": "Loo taaskasutatavad promptid tööks, mida su tiim kordab, alates kokkuvõtetest kuni esmase koostamise juhisteni.",
-      "emptyState": "Prompte veel pole. Lisage esimene.",
-      "emptyTitle": "Looge esimene prompt",
-      "emptyVideoLabel": "Promptide ülevaade",
+      "deleteConfirmDescription": "See oskus eemaldatakse jäädavalt.",
+      "deleteConfirmTitle": "Kustutada oskus?",
+      "deleteShortcut": "Kustuta oskus",
+      "editShortcut": "Muuda oskust",
+      "emptyDescription": "Loo taaskasutatavad oskused tööks, mida su tiim kordab, alates kokkuvõtetest kuni esmase koostamise juhisteni.",
+      "emptyState": "Oskusi veel pole. Lisage esimene.",
+      "emptyTitle": "Looge esimene oskus",
+      "emptyVideoLabel": "Oskuste ülevaade",
       "errors": {
-        "commandConflict": "Selle / nimega prompt on juba olemas",
+        "commandConflict": "Selle / nimega oskus on juba olemas",
         "commandInvalid": "Kasuta ainult väiketähti, numbreid, sidekriipse ja allkriipse",
-        "commandReserved": "\"/{command}\" on reserveeritud prompt"
+        "commandReserved": "\"/{command}\" on reserveeritud oskus"
       },
       "form": {
-        "command": "Prompti otsetee",
-        "commandHint": "/ prompti nimi: ainult väiketähed, numbrid, sidekriipsud ja allkriipsud",
+        "command": "Oskuse otsetee",
+        "commandHint": "/ oskuse nimi: ainult väiketähed, numbrid, sidekriipsud ja allkriipsud",
         "commandPlaceholder": "nt kokku-võtta",
         "commandPrefix": "/",
         "description": "Kirjeldus",
         "descriptionPlaceholder": "Lühikirjeldus, mis kuvatakse valijas",
         "name": "Nimi",
         "namePlaceholder": "nt Võta dokument kokku",
-        "prompt": "Prompt",
-        "promptPlaceholder": "Tekst, mis lisatakse vestluse koostajasse selle prompti kasutamisel",
+        "prompt": "Juhised",
+        "promptPlaceholder": "Juhised, mis lisatakse vestluse koostajasse selle oskuse kasutamisel",
         "scope": "Nähtavus",
         "scopePrivate": "Ainult mina",
         "scopeTeam": "Kõik organisatsioonis"
       },
-      "privateSection": "Teie promptid",
-      "shadowed": "Meeskonna prompt varjutab",
-      "teamSection": "Meeskonna promptid"
+      "privateSection": "Teie oskused",
+      "shadowed": "Meeskonna oskus varjutab",
+      "teamSection": "Meeskonna oskused"
     }
   },
   "navigation": {
@@ -1823,8 +1811,6 @@
         "termAddedToast": "„{value}“ lisati büroo keelduloendisse.",
         "title": "Anonüümistamine"
       },
-      "catalogue": "Kataloog",
-      "catalogueDescription": "Sirvige ja installige oma jurisdiktsiooni oskusi, MCP servereid ja stella tööriistu",
       "matterNumbering": "Toimikute nummerdamine",
       "matterNumberingDescription": "Seadistage, kuidas uute toimikute viitenumbreid genereeritakse",
       "membersDescription": "Manage who has access to this organization",

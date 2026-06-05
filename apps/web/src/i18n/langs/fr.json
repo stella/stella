@@ -432,7 +432,7 @@
       "noPrompts": "Aucun skill pour le moment",
       "noRecentChats": "Aucun chat récent",
       "pinnedMatters": "Dossiers épinglés",
-      "prompts": "Skills",
+      "prompts": "Compétences",
       "recentChats": "Chats récents"
     },
     "maxAttachmentsReached": "Maximum {count} fichiers par message",
@@ -461,11 +461,7 @@
     "placeholder": "Saisissez votre question ici, / pour les skills, @ pour ajouter du contexte",
     "prompts": {
       "noResults": "Aucun skill correspondant",
-      "noShortcuts": "Aucun skill pour le moment. Ajoutez-en dans Connaissances → Skills.",
-      "scope": {
-        "private": "Vos skills",
-        "team": "Skills d'équipe"
-      },
+      "noShortcuts": "Aucune compétence pour le moment. Ajoutez-en dans Connaissances → Compétences.",
       "tryOne": "Essaie l'un d'entre eux pour commencer"
     },
     "queuedAttachmentCount": "{count, plural, one {# pièce jointe} many {# pièces jointes} other {# pièces jointes}}",
@@ -1392,22 +1388,22 @@
       "connect": "Connecter",
       "connectedToast": "MCP connecté",
       "connectedWithLastUsed": "Connecté · dernière utilisation {time}",
-      "description": "Gérez les serveurs MCP externes qui peuvent ajouter des outils au chat. Les jetons sont stockés par utilisateur.",
+      "description": "Gérez les intégrations qui peuvent ajouter des outils au chat. Les jetons sont stockés par utilisateur.",
       "detected": "{authType} détecté",
       "disable": "Désactiver",
       "disabled": "Connecté · désactivé",
       "disconnect": "Déconnecter",
-      "emptyDescription": "Les connecteurs MCP juridiques sélectionnés apparaîtront ici lorsqu’ils seront activés pour votre espace de travail.",
-      "emptyTitle": "Aucun connecteur MCP pour le moment",
+      "emptyDescription": "Les intégrations juridiques sélectionnées apparaîtront ici lorsqu’elles seront activées pour votre espace de travail.",
+      "emptyTitle": "Aucune intégration pour le moment",
       "enable": "Activer",
-      "errorDescription": "Le connecteur n’a pas pu être mis à jour.",
+      "errorDescription": "L’intégration n’a pas pu être mise à jour.",
       "errorTitle": "Échec MCP",
-      "mcpExplainer": "Les serveurs MCP ajoutent au chat des services externes avec lesquels l'IA peut travailler.",
+      "mcpExplainer": "Les intégrations connectent au chat des services externes avec lesquels l’IA peut travailler.",
       "namePlaceholder": "Nom affiché",
       "needsReauth": "Reconnexion requise",
       "off": "Désactivé",
       "on": "Activé",
-      "otherTitle": "Autres connecteurs",
+      "otherTitle": "Autres intégrations",
       "probe": "Vérifier",
       "recommendedBadge": "Recommandé",
       "recommendedFor": "Recommandé pour {jurisdictions}",
@@ -1432,20 +1428,12 @@
       "clauses": {
         "description": "Bibliothèque de clauses réutilisables"
       },
-      "connectors": {
-        "description": "Connecter stella à des outils externes",
-        "title": "MCP"
-      },
       "mcp": {
         "description": "Connecter stella à des outils externes",
         "title": "MCP"
       },
       "prompts": {
-        "description": "Instructions réutilisables disponibles avec / dans le chat",
-        "title": "Prompts"
-      },
-      "skills": {
-        "description": "Capacités IA ciblées pour des flux de travail spécialisés",
+        "description": "Compétences réutilisables disponibles avec / dans le chat",
         "title": "Compétences"
       },
       "templates": {
@@ -1458,7 +1446,7 @@
       }
     },
     "skills": {
-      "addShortcut": "Ajouter un prompt",
+      "addShortcut": "Ajouter une compétence",
       "autoInvokeHintLabel": "Indication pour le modèle",
       "autoInvokeHintPlaceholder": "Quand le modèle doit-il choisir automatiquement cette compétence ?",
       "autoInvokeLabel": "Laisser l'IA l'exécuter automatiquement",
@@ -1467,37 +1455,37 @@
       "commandPlaceholder": "p. ex. résumer",
       "createTitle": "Nouvelle compétence",
       "defaultBadge": "Par défaut",
-      "deleteConfirmDescription": "Ce prompt sera supprimé définitivement.",
-      "deleteConfirmTitle": "Supprimer le prompt ?",
-      "deleteShortcut": "Supprimer le prompt",
-      "editShortcut": "Modifier le prompt",
-      "emptyDescription": "Créez des prompts réutilisables pour le travail que votre équipe répète, des synthèses aux instructions de premier jet.",
-      "emptyState": "Aucun prompt pour le moment. Ajoutez le premier.",
-      "emptyTitle": "Créer votre premier prompt",
-      "emptyVideoLabel": "Aperçu des prompts",
+      "deleteConfirmDescription": "Cette compétence sera supprimée définitivement.",
+      "deleteConfirmTitle": "Supprimer la compétence ?",
+      "deleteShortcut": "Supprimer la compétence",
+      "editShortcut": "Modifier la compétence",
+      "emptyDescription": "Créez des compétences réutilisables pour le travail que votre équipe répète, des synthèses aux instructions de premier jet.",
+      "emptyState": "Aucune compétence pour le moment. Ajoutez la première.",
+      "emptyTitle": "Créer votre première compétence",
+      "emptyVideoLabel": "Aperçu des compétences",
       "errors": {
-        "commandConflict": "Un prompt avec ce nom / existe déjà",
+        "commandConflict": "Une compétence avec ce nom / existe déjà",
         "commandInvalid": "Utilisez uniquement des lettres minuscules, des chiffres, des traits d'union et des tirets bas",
-        "commandReserved": "\"/{command}\" est un prompt réservé"
+        "commandReserved": "\"/{command}\" est une compétence réservée"
       },
       "form": {
-        "command": "Raccourci du prompt",
-        "commandHint": "Le nom / du prompt : lettres minuscules, chiffres, traits d’union et underscores uniquement",
+        "command": "Raccourci de compétence",
+        "commandHint": "Le nom / de la compétence : lettres minuscules, chiffres, traits d’union et underscores uniquement",
         "commandPlaceholder": "ex. resumer",
         "commandPrefix": "/",
         "description": "Description",
         "descriptionPlaceholder": "Brève description affichée dans le sélecteur",
         "name": "Nom",
         "namePlaceholder": "ex. Résumer le document",
-        "prompt": "Prompt",
-        "promptPlaceholder": "Le texte inséré dans le compositeur du chat lorsque ce prompt est utilisé",
+        "prompt": "Instructions",
+        "promptPlaceholder": "Instructions insérées dans le compositeur du chat lorsque cette compétence est utilisée",
         "scope": "Visibilité",
         "scopePrivate": "Moi uniquement",
         "scopeTeam": "Tout le monde dans l’organisation"
       },
-      "privateSection": "Vos prompts",
-      "shadowed": "Masqué par le prompt de l’équipe",
-      "teamSection": "Prompts d’équipe"
+      "privateSection": "Vos compétences",
+      "shadowed": "Masquée par la compétence d’équipe",
+      "teamSection": "Compétences d’équipe"
     }
   },
   "navigation": {
@@ -1823,8 +1811,6 @@
         "termAddedToast": "« {value} » a été ajouté à la liste de blocage du cabinet.",
         "title": "Anonymisation"
       },
-      "catalogue": "Catalogue d’outils",
-      "catalogueDescription": "Parcourez et installez des skills, serveurs MCP et outils internes adaptés à votre juridiction",
       "matterNumbering": "Numérotation des dossiers",
       "matterNumberingDescription": "Configurez la génération des nouveaux numéros de référence des dossiers",
       "membersDescription": "Manage who has access to this organization",

@@ -462,10 +462,6 @@
     "prompts": {
       "noResults": "Brak pasujących umiejętności",
       "noShortcuts": "Nie ma jeszcze umiejętności. Dodaj je w Wiedza → Umiejętności.",
-      "scope": {
-        "private": "Twoje umiejętności",
-        "team": "Umiejętności zespołu"
-      },
       "tryOne": "Zacznij od jednego z tych"
     },
     "queuedAttachmentCount": "{count, plural, one {# załącznik} few {# załączniki} many {# załączników} other {# załącznika}}",
@@ -1392,22 +1388,22 @@
       "connect": "Połącz",
       "connectedToast": "MCP połączone",
       "connectedWithLastUsed": "Połączono · ostatnio użyto {time}",
-      "description": "Zarządzaj zewnętrznymi serwerami MCP, które mogą dodawać narzędzia do czatu. Tokeny są przechowywane osobno dla każdego użytkownika.",
+      "description": "Zarządzaj integracjami, które mogą dodawać narzędzia do czatu. Tokeny są przechowywane osobno dla każdego użytkownika.",
       "detected": "Wykryto {authType}",
       "disable": "Wyłącz",
       "disabled": "Połączono · wyłączone",
       "disconnect": "Rozłącz",
-      "emptyDescription": "Wybrane prawnicze konektory MCP pojawią się tutaj po włączeniu ich dla Twojej przestrzeni roboczej.",
-      "emptyTitle": "Brak konektorów MCP",
+      "emptyDescription": "Wybrane prawnicze integracje pojawią się tutaj po włączeniu ich dla Twojego obszaru roboczego.",
+      "emptyTitle": "Brak integracji",
       "enable": "Włącz",
-      "errorDescription": "Nie udało się zaktualizować konektora.",
+      "errorDescription": "Nie udało się zaktualizować integracji.",
       "errorTitle": "MCP nieudane",
-      "mcpExplainer": "Serwery MCP dodają do czatu usługi zewnętrzne, z którymi może pracować AI.",
+      "mcpExplainer": "Integracje łączą z czatem usługi zewnętrzne, z którymi może pracować AI.",
       "namePlaceholder": "Nazwa wyświetlana",
       "needsReauth": "Wymaga ponownego połączenia",
       "off": "Wył.",
       "on": "Wł.",
-      "otherTitle": "Pozostałe konektory",
+      "otherTitle": "Pozostałe integracje",
       "probe": "Sprawdź",
       "recommendedBadge": "Rekomendowane",
       "recommendedFor": "Rekomendowane dla {jurisdictions}",
@@ -1432,20 +1428,12 @@
       "clauses": {
         "description": "Biblioteka klauzul wielokrotnego użytku"
       },
-      "connectors": {
-        "description": "Połącz stellę z zewnętrznymi narzędziami",
-        "title": "MCP"
-      },
       "mcp": {
         "description": "Połącz stellę z zewnętrznymi narzędziami",
         "title": "MCP"
       },
       "prompts": {
-        "description": "Instrukcje wielokrotnego użytku dostępne w czacie przez /",
-        "title": "Prompty"
-      },
-      "skills": {
-        "description": "Skupione możliwości AI dla specjalistycznych przepływów pracy",
+        "description": "Umiejętności wielokrotnego użytku dostępne w czacie przez /",
         "title": "Umiejętności"
       },
       "templates": {
@@ -1458,7 +1446,7 @@
       }
     },
     "skills": {
-      "addShortcut": "Dodaj prompt",
+      "addShortcut": "Dodaj umiejętność",
       "autoInvokeHintLabel": "Wskazówka dla modelu",
       "autoInvokeHintPlaceholder": "Kiedy model powinien automatycznie wybrać tę umiejętność?",
       "autoInvokeLabel": "Pozwól AI uruchamiać automatycznie",
@@ -1467,37 +1455,37 @@
       "commandPlaceholder": "np. podsumuj",
       "createTitle": "Nowa umiejętność",
       "defaultBadge": "Domyślny",
-      "deleteConfirmDescription": "Ten prompt zostanie trwale usunięty.",
-      "deleteConfirmTitle": "Usunąć prompt?",
-      "deleteShortcut": "Usuń prompt",
-      "editShortcut": "Edytuj prompt",
-      "emptyDescription": "Twórz wielokrotnego użytku prompty do powtarzalnej pracy zespołu, od streszczeń po wstępne instrukcje redakcyjne.",
-      "emptyState": "Brak promptów. Dodaj pierwszy.",
-      "emptyTitle": "Utwórz pierwszy prompt",
-      "emptyVideoLabel": "Przegląd promptów",
+      "deleteConfirmDescription": "Ta umiejętność zostanie trwale usunięta.",
+      "deleteConfirmTitle": "Usunąć umiejętność?",
+      "deleteShortcut": "Usuń umiejętność",
+      "editShortcut": "Edytuj umiejętność",
+      "emptyDescription": "Twórz umiejętności wielokrotnego użytku do powtarzalnej pracy zespołu, od streszczeń po wstępne instrukcje redakcyjne.",
+      "emptyState": "Nie ma jeszcze umiejętności. Dodaj pierwszą.",
+      "emptyTitle": "Utwórz pierwszą umiejętność",
+      "emptyVideoLabel": "Przegląd umiejętności",
       "errors": {
-        "commandConflict": "Prompt o tej nazwie / już istnieje",
+        "commandConflict": "Umiejętność o tej nazwie / już istnieje",
         "commandInvalid": "Używaj tylko małych liter, cyfr, łączników i podkreśleń",
-        "commandReserved": "\"/{command}\" to zarezerwowany prompt"
+        "commandReserved": "\"/{command}\" to zarezerwowana umiejętność"
       },
       "form": {
-        "command": "Skrót promptu",
-        "commandHint": "Nazwa / promptu: tylko małe litery, cyfry, łączniki i podkreślenia",
+        "command": "Skrót umiejętności",
+        "commandHint": "Nazwa / umiejętności: tylko małe litery, cyfry, łączniki i podkreślenia",
         "commandPlaceholder": "np. podsumuj",
         "commandPrefix": "/",
         "description": "Opis",
         "descriptionPlaceholder": "Krótki opis widoczny w selektorze",
         "name": "Nazwa",
         "namePlaceholder": "np. Streść dokument",
-        "prompt": "Prompt",
-        "promptPlaceholder": "Tekst wstawiany do pola czatu po użyciu tego promptu",
+        "prompt": "Instrukcje",
+        "promptPlaceholder": "Instrukcje wstawiane do pola czatu po użyciu tej umiejętności",
         "scope": "Widoczność",
         "scopePrivate": "Tylko ja",
         "scopeTeam": "Wszyscy w organizacji"
       },
-      "privateSection": "Twoje prompty",
-      "shadowed": "Przesłonięte przez prompt zespołu",
-      "teamSection": "Prompty zespołu"
+      "privateSection": "Twoje umiejętności",
+      "shadowed": "Przesłonięte przez umiejętność zespołu",
+      "teamSection": "Umiejętności zespołu"
     }
   },
   "navigation": {
@@ -1823,8 +1811,6 @@
         "termAddedToast": "Dodano „{value}” do firmowej listy.",
         "title": "Anonimizacja"
       },
-      "catalogue": "Katalog",
-      "catalogueDescription": "Przeglądaj i instaluj umiejętności, serwery MCP oraz narzędzia własne dla swojej jurysdykcji",
       "matterNumbering": "Numeracja spraw",
       "matterNumberingDescription": "Skonfiguruj sposób generowania numerów referencyjnych nowych spraw",
       "membersDescription": "Manage who has access to this organization",
