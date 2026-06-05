@@ -99,6 +99,7 @@ const isAwsS3Endpoint = (endpoint: string): boolean => {
 };
 
 type CachedClient = { client: AwsS3Client; createdAt: number };
+type CachedStsClient = { client: STSClient; createdAt: number };
 type CachedScopedClient = { client: AwsS3Client; expiresAt: number };
 export type S3SigningScope = {
   organizationId: string;
@@ -108,7 +109,7 @@ type S3SigningAction = "s3:GetObject" | "s3:PutObject" | "s3:PutObjectTagging";
 type KmsSigningAction = "kms:Decrypt" | "kms:GenerateDataKey";
 
 let _clientPromise: Promise<CachedClient> | null = null;
-let _stsClientPromise: Promise<STSClient> | null = null;
+let _stsClientPromise: Promise<CachedStsClient> | null = null;
 let _scopedClientPromises = new Map<string, Promise<CachedScopedClient>>();
 const CLIENT_MAX_AGE_MS = 50 * 60 * 1000;
 const SCOPED_SESSION_SECONDS = 3600;
@@ -136,9 +137,9 @@ const buildAwsS3Client = async (): Promise<CachedClient> => {
   return { client, createdAt: Date.now() };
 };
 
-const buildStsClient = async (): Promise<STSClient> => {
+const buildStsClient = async (): Promise<CachedStsClient> => {
   const creds = await resolveS3Credentials();
-  return new STSClient({
+  const client = new STSClient({
     region: envBase.S3_REGION,
     ...(creds
       ? {
@@ -150,6 +151,7 @@ const buildStsClient = async (): Promise<STSClient> => {
         }
       : {}),
   });
+  return { client, createdAt: Date.now() };
 };
 
 /**
@@ -173,8 +175,19 @@ const getAwsS3Client = async (): Promise<AwsS3Client> => {
 };
 
 const getStsClient = async (): Promise<STSClient> => {
-  _stsClientPromise ??= buildStsClient();
-  return await _stsClientPromise;
+  if (_stsClientPromise) {
+    const cached = await _stsClientPromise;
+    if (Date.now() - cached.createdAt < CLIENT_MAX_AGE_MS) {
+      return cached.client;
+    }
+  }
+
+  _stsClientPromise = buildStsClient().catch((error: unknown) => {
+    _stsClientPromise = null;
+    throw error;
+  });
+  const built = await _stsClientPromise;
+  return built.client;
 };
 
 const shouldUseScopedSigning = (): boolean =>
