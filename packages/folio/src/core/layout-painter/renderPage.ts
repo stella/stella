@@ -19,6 +19,7 @@ import {
   FOOTNOTE_ENTRY_MARGIN_BOTTOM,
   FOOTNOTE_FALLBACK_LINE_HEIGHT,
   FOOTNOTE_SEPARATOR_HEIGHT,
+  floatingTextBoxReservesBand,
   floatingTextBoxWrapsText,
   isFloatingTextBoxBlock,
 } from "../layout-engine/types";
@@ -1871,7 +1872,11 @@ export function renderPage(
       if (!isFloatingTextBoxBlock(textBoxBlock)) {
         continue;
       }
-      if (!floatingTextBoxWrapsText(textBoxBlock)) {
+      // topAndBottom reserves a full-width band (text flows above/below);
+      // side-wrap types reserve a side exclusion. Both push a rect — the band
+      // is distinguished by `wrapType` in rectsToFloatingZones. eigenpal #694.
+      const reservesBand = floatingTextBoxReservesBand(textBoxBlock);
+      if (!reservesBand && !floatingTextBoxWrapsText(textBoxBlock)) {
         continue;
       }
 

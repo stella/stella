@@ -5,6 +5,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  floatingTextBoxReservesBand,
   floatingTextBoxWrapsText,
   isFloatingTextBoxBlock,
 } from "./textBoxFlow";
@@ -55,5 +56,21 @@ describe("floatingTextBoxWrapsText", () => {
   test("does not wrap text for non-floating blocks", () => {
     expect(floatingTextBoxWrapsText({ displayMode: "inline" })).toBe(false);
     expect(floatingTextBoxWrapsText({})).toBe(false);
+  });
+});
+
+describe("floatingTextBoxReservesBand", () => {
+  test("topAndBottom reserves a full-width band, no side wrap (eigenpal #694)", () => {
+    const box = { wrapType: "topAndBottom" } as const;
+    expect(floatingTextBoxReservesBand(box)).toBe(true);
+    expect(floatingTextBoxWrapsText(box)).toBe(false);
+    expect(isFloatingTextBoxBlock(box)).toBe(true);
+  });
+
+  test("side-wrap and wrapNone types do not reserve a band", () => {
+    expect(floatingTextBoxReservesBand({ wrapType: "square" })).toBe(false);
+    expect(floatingTextBoxReservesBand({ wrapType: "behind" })).toBe(false);
+    expect(floatingTextBoxReservesBand({ displayMode: "float" })).toBe(false);
+    expect(floatingTextBoxReservesBand({})).toBe(false);
   });
 });

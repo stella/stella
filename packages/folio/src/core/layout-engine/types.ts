@@ -1263,4 +1263,5 @@ export type { TextBoxFlowAttrs } from "./textBoxFlow";
 export {
   isFloatingTextBoxBlock,
   floatingTextBoxWrapsText,
+  floatingTextBoxReservesBand,
 } from "./textBoxFlow";

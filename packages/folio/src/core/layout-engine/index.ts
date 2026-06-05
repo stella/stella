@@ -14,6 +14,7 @@ import {
 } from "./keep-together";
 import { FOOTNOTE_SEPARATOR_HEIGHT, createPaginator } from "./paginator";
 import { buildTableRowBreakInfo, snapRowBreak } from "./tableRowBreak";
+import { floatingTextBoxReservesBand } from "./textBoxFlow";
 import type {
   FlowBlock,
   Measure,
@@ -1085,6 +1086,27 @@ function layoutTextBox(
   measure: TextBoxMeasure,
   paginator: ReturnType<typeof createPaginator>,
 ): void {
+  // A page/margin-pinned topAndBottom band (e.g. a title banner) floats to the
+  // top of its page; the reserved band in the measure pass pushes body text
+  // below it (see extractFloatingZones in PagedEditor). It must not also consume
+  // flow at its anchor, or the box height would be reserved twice. Place it at
+  // the page content top without advancing the cursor. eigenpal #694.
+  if (isPagePinnedBandTextBox(block)) {
+    const state = paginator.getCurrentState();
+    const fragment: TextBoxFragment = {
+      kind: "textBox",
+      blockId: block.id,
+      x: paginator.getColumnX(state.columnIndex),
+      y: state.topMargin,
+      width: measure.width,
+      height: measure.height,
+      ...(block.pmStart !== undefined ? { pmStart: block.pmStart } : {}),
+      ...(block.pmEnd !== undefined ? { pmEnd: block.pmEnd } : {}),
+    };
+    state.page.fragments.push(fragment);
+    return;
+  }
+
   const state = paginator.ensureFits(measure.height);
 
   const fragment: TextBoxFragment = {
@@ -1100,6 +1122,18 @@ function layoutTextBox(
 
   const result = paginator.addFragment(fragment, measure.height, 0, 0);
   fragment.y = result.y;
+}
+
+/**
+ * A topAndBottom text box whose vertical anchor is page/margin-relative — it
+ * floats to the page top rather than flowing in document order.
+ */
+function isPagePinnedBandTextBox(block: TextBoxBlock): boolean {
+  if (!floatingTextBoxReservesBand(block)) {
+    return false;
+  }
+  const relativeTo = block.position?.vertical?.relativeTo;
+  return relativeTo === "page" || relativeTo === "margin";
 }
 
 /**

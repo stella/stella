@@ -87,6 +87,7 @@ import type { ToFlowBlocksOptions } from "../core/layout-bridge/toFlowBlocks";
 // Layout engine
 import { layoutDocument } from "../core/layout-engine";
 import type { ColumnLayout, SectionLayoutConfig } from "../core/layout-engine";
+import { floatingTextBoxReservesBand } from "../core/layout-engine/textBoxFlow";
 import type {
   Layout,
   FlowBlock,
@@ -2069,6 +2070,7 @@ type FloatingZoneWithAnchor = {
 function extractFloatingZones(
   blocks: FlowBlock[],
   contentWidth: number,
+  marginTop = 0,
 ): FloatingZoneWithAnchor[] {
   const zones: FloatingZoneWithAnchor[] = [];
 
@@ -2218,6 +2220,54 @@ function extractFloatingZones(
     });
   }
 
+  // Page/margin-anchored topAndBottom text boxes (e.g. a banner pinned to the
+  // page top) reserve a full-width band so body text flows above and below the
+  // box instead of the box dropping into the flow at its anchor paragraph.
+  // Paragraph-anchored topAndBottom boxes keep folio's in-flow handling (they
+  // already render on their own line at the anchor). eigenpal docx-editor #694.
+  for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
+    const block = blocks[blockIndex]!; // SAFETY: blockIndex < blocks.length
+    if (block.kind !== "textBox") {
+      continue;
+    }
+    const tb = block as TextBoxBlock;
+    if (!floatingTextBoxReservesBand(tb)) {
+      continue;
+    }
+    const v = tb.position?.vertical;
+    const pagePinned = v?.relativeTo === "page" || v?.relativeTo === "margin";
+    if (!pagePinned) {
+      continue;
+    }
+
+    const height = tb.height ?? 0;
+    const distTop = tb.distTop ?? 0;
+    const distBottom = tb.distBottom ?? 0;
+    // Resolve the band top in content coordinates. A page-relative offset is
+    // measured from the page edge, so subtract the top margin; a margin-relative
+    // offset (or a top/align with no offset) sits at the content top (0).
+    let rawTop = 0;
+    if (v.posOffset !== undefined) {
+      rawTop =
+        v.relativeTo === "page"
+          ? emuToPixels(v.posOffset) - marginTop
+          : emuToPixels(v.posOffset);
+    }
+    const bottomY = rawTop + height + distBottom;
+    if (bottomY <= 0) {
+      continue;
+    }
+    zones.push({
+      leftMargin: 0,
+      rightMargin: 0,
+      topY: Math.max(0, rawTop - distTop),
+      bottomY,
+      anchorBlockIndex: blockIndex,
+      isMarginRelative: true,
+      fullWidthBlock: true,
+    });
+  }
+
   return zones;
 }
 
@@ -2324,12 +2374,17 @@ function measureBlock(
 function measureBlocks(
   blocks: FlowBlock[],
   contentWidth: number | number[],
+  marginTop = 0,
 ): Measure[] {
   const defaultWidth = Array.isArray(contentWidth)
     ? (contentWidth[0] ?? 0)
     : contentWidth;
   // Pre-extract floating image exclusion zones with anchor block indices
-  const floatingZonesWithAnchors = extractFloatingZones(blocks, defaultWidth);
+  const floatingZonesWithAnchors = extractFloatingZones(
+    blocks,
+    defaultWidth,
+    marginTop,
+  );
 
   // Margin-relative zones (positioned relative to page/margin) on the same vertical
   // position are likely on the same page. Group them and activate all from the earliest
@@ -2362,17 +2417,30 @@ function measureBlocks(
   // Group zones by effective anchor block index
   const zonesByAnchor = new Map<number, FloatingImageZone[]>();
   for (const z of adjustedZones) {
-    const existing = zonesByAnchor.get(z.anchorBlockIndex) ?? [];
-    existing.push({
-      leftMargin: z.leftMargin,
-      rightMargin: z.rightMargin,
-      topY: z.topY,
-      bottomY: z.bottomY,
-    });
-    zonesByAnchor.set(z.anchorBlockIndex, existing);
+    // A page/margin-pinned full-width band (e.g. a title banner at the top of
+    // the page) reserves space from the top of content, so it must reach the
+    // blocks that precede its own anchor paragraph. Anchor it at block 0 and
+    // keep its content-relative topY/bottomY. Exact for the common case (a
+    // banner near the document start); a band whose anchor lands on a later
+    // page can over-reach — matches upstream's documented caveat.
+    const anchor =
+      z.fullWidthBlock && z.isMarginRelative ? 0 : z.anchorBlockIndex;
+    const existing = zonesByAnchor.get(anchor) ?? [];
+    // Strip the anchor-tracking fields; the rest IS a FloatingImageZone. Spread
+    // (rather than copying each field) so fullWidthBlock/segments can't be
+    // dropped here.
+    const {
+      anchorBlockIndex: _anchorBlockIndex,
+      isMarginRelative: _isMarginRelative,
+      ...zone
+    } = z;
+    existing.push(zone);
+    zonesByAnchor.set(anchor, existing);
   }
 
-  const anchorIndices = new Set(adjustedZones.map((z) => z.anchorBlockIndex));
+  // Derive from the map keys, not the raw zones — full-width bands are
+  // re-anchored to block 0 above, and the activation set must match.
+  const anchorIndices = new Set(zonesByAnchor.keys());
 
   // Track cumulative Y position for floating zone overlap calculation
   // Resets when we reach a block with floating images (establishing local page coords)
@@ -3024,7 +3092,8 @@ export function PagedEditor(
               })
             : null;
         const newMeasures =
-          incrementalResult?.measures ?? measureBlocks(newBlocks, blockWidths);
+          incrementalResult?.measures ??
+          measureBlocks(newBlocks, blockWidths, margins.top);
         layoutArtifactsRef.current = {
           blocks: newBlocks,
           blockWidths,
