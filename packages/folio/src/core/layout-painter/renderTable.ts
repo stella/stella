@@ -134,7 +134,7 @@ function renderCellContent(
       let paragraphMeasure = measure as ParagraphMeasure;
 
       // Re-measure with floating zones if floating images exist in this cell
-      if (floatingZones && floatingZones.length > 0) {
+      if (floatingZones.length > 0) {
         paragraphMeasure = measureParagraph(paragraphBlock, contentWidth, {
           floatingZones,
           paragraphYOffset: cumulativeY,
