@@ -275,10 +275,10 @@
       "unknown": "Ostatní"
     },
     "seo": {
-      "browse": "Browse case law",
-      "countries": "Countries",
-      "courts": "Courts",
-      "years": "Years"
+      "browse": "Procházet judikaturu",
+      "countries": "Země",
+      "courts": "Soudy",
+      "years": "Roky"
     },
     "sources": {
       "empty": "Žádné zdroje nejsou nakonfigurovány.",

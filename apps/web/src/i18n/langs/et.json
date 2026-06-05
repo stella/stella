@@ -275,10 +275,10 @@
       "unknown": "Muu"
     },
     "seo": {
-      "browse": "Browse case law",
-      "countries": "Countries",
-      "courts": "Courts",
-      "years": "Years"
+      "browse": "Sirvi kohtupraktikat",
+      "countries": "Riigid",
+      "courts": "Kohtud",
+      "years": "Aastad"
     },
     "sources": {
       "empty": "Allikaid pole seadistatud.",

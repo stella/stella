@@ -275,10 +275,10 @@
       "unknown": "Cits"
     },
     "seo": {
-      "browse": "Browse case law",
-      "countries": "Countries",
-      "courts": "Courts",
-      "years": "Years"
+      "browse": "Pārlūkot judikatūru",
+      "countries": "Valstis",
+      "courts": "Tiesas",
+      "years": "Gadi"
     },
     "sources": {
       "empty": "Nav konfigurētu avotu.",

@@ -275,10 +275,10 @@
       "unknown": "Autre"
     },
     "seo": {
-      "browse": "Browse case law",
-      "countries": "Countries",
-      "courts": "Courts",
-      "years": "Years"
+      "browse": "Parcourir la jurisprudence",
+      "countries": "Pays",
+      "courts": "Juridictions",
+      "years": "Années"
     },
     "sources": {
       "empty": "Aucune source configurée.",

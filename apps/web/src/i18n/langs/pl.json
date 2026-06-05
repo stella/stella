@@ -275,10 +275,10 @@
       "unknown": "Inne"
     },
     "seo": {
-      "browse": "Browse case law",
-      "countries": "Countries",
-      "courts": "Courts",
-      "years": "Years"
+      "browse": "Przeglądaj orzecznictwo",
+      "countries": "Kraje",
+      "courts": "Sądy",
+      "years": "Lata"
     },
     "sources": {
       "empty": "Brak skonfigurowanych źródeł.",

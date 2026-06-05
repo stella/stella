@@ -275,10 +275,10 @@
       "unknown": "Iné"
     },
     "seo": {
-      "browse": "Browse case law",
-      "countries": "Countries",
-      "courts": "Courts",
-      "years": "Years"
+      "browse": "Prehliadať judikatúru",
+      "countries": "Krajiny",
+      "courts": "Súdy",
+      "years": "Roky"
     },
     "sources": {
       "empty": "Žiadne nakonfigurované zdroje.",
