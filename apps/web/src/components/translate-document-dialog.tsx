@@ -123,18 +123,25 @@ export const TranslateDocumentDialog = ({
           fileName: data.fileName,
         }),
         type: "success",
+        // Give the user time to reach the action before it auto-dismisses.
+        timeout: 10_000,
+        action: {
+          label: t("common.open"),
+          onClick: () => {
+            void navigate({
+              to: "/workspaces/$workspaceId/$viewId/document",
+              params: { workspaceId, viewId: data.entityId },
+              // `field` is required by the route guard; without it
+              // `RouteComponent` bounces back to the workspace.
+              search: { entity: data.entityId, field: data.fieldId },
+            });
+          },
+        },
       });
       await queryClient.invalidateQueries({
         queryKey: entitiesKeys.all(workspaceId),
       });
       setOpen(false);
-      void navigate({
-        to: "/workspaces/$workspaceId/$viewId/document",
-        params: { workspaceId, viewId: data.entityId },
-        // `field` is required by the route guard; without it
-        // `RouteComponent` bounces back to the workspace.
-        search: { entity: data.entityId, field: data.fieldId },
-      });
     },
     onError: (error: unknown) => {
       analytics.captureError(error);
