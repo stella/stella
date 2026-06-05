@@ -306,7 +306,7 @@ export const ChatThreadPage = ({
           </div>
 
           <Conversation>
-            <ConversationContent className="mx-auto w-full max-w-5xl gap-3">
+            <ConversationContent className="mx-auto w-full max-w-5xl gap-3 px-4">
               {messages.length === 0 && !isGenerating && !error ? (
                 <div className="m-auto w-full max-w-md px-4">
                   <PromptSuggestions
