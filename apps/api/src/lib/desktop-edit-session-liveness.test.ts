@@ -48,7 +48,9 @@ describe("refreshDesktopEditSessionLiveness", () => {
     expect(compiled.sql).toContain("token_expires_at");
     expect(compiled.params).toContain(sessionId);
     expect(compiled.params).toContain(userId);
-    expect(compiled.params).toContain(hashDesktopEditSessionToken(sessionToken));
+    expect(compiled.params).toContain(
+      hashDesktopEditSessionToken(sessionToken),
+    );
     expect(compiled.params).toContain("open");
   });
 });
