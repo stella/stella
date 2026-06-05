@@ -30,7 +30,10 @@ import type {
   TableBlock,
   TableMeasure,
 } from "../layout-engine/types";
-import { isFloatingImageRun } from "../layout-engine/types";
+import {
+  isFloatingImageRun,
+  isFloatingTextBoxBlock,
+} from "../layout-engine/types";
 import { headerFooterToProseDoc } from "../prosemirror/conversion/toProseDoc";
 import type { HeaderFooter, StyleDefinitions, Theme } from "../types/document";
 import { emuToPixels } from "../utils/units";
@@ -329,15 +332,6 @@ function resolveHeaderFooterFloatingTableVisualTop(
   return sourceY;
 }
 
-/**
- * Image is rendered "behind" body content (full-page letterhead, watermark).
- * The renderer lifts these out of the HF container to the page root, so they
- * must not push body margins down because they paint underneath the body.
- */
-function isBehindDocImageRun(run: Run): boolean {
-  return run.kind === "image" && run.wrapType === "behind";
-}
-
 function isBehindDocImageBlock(block: FlowBlock): boolean {
   return block.kind === "image" && block.anchor?.behindDoc === true;
 }
@@ -465,31 +459,14 @@ export function calculateHeaderFooterMarginPushBounds(
     }
 
     if (block.kind === "paragraph" && measure.kind === "paragraph") {
-      const paragraphStartY = cursorY;
-      const paragraphBottomY = paragraphStartY + measure.totalHeight;
-      top = Math.min(top, paragraphStartY);
+      // Margin push is the in-flow extent only. The paragraph's measured
+      // height already covers its inline content; anchored image runs are
+      // positioned on the page (Word does not let them push the body down),
+      // so they extend only the visual bounds, never the push bounds.
+      // eigenpal/docx-editor#709.
+      const paragraphBottomY = cursorY + measure.totalHeight;
+      top = Math.min(top, cursorY);
       bottom = Math.max(bottom, paragraphBottomY);
-
-      for (const run of block.runs) {
-        if (run.kind !== "image") {
-          continue;
-        }
-        if (!run.position && !isFloatingImageRun(run)) {
-          continue;
-        }
-        if (isBehindDocImageRun(run)) {
-          continue;
-        }
-        const runTop = resolveHeaderFooterVisualTop(
-          run,
-          paragraphStartY,
-          flowHeight,
-          metrics,
-        );
-        top = Math.min(top, runTop);
-        bottom = Math.max(bottom, runTop + run.height);
-      }
-
       cursorY = paragraphBottomY;
     } else if (isBehindDocImageBlock(block)) {
       // ImageBlock with anchor.behindDoc: skip entirely for the same reason
@@ -505,8 +482,20 @@ export function calculateHeaderFooterMarginPushBounds(
           advancesCursor = false;
         }
       } else if (block.kind === "image" && measure.kind === "image") {
+        // Anchored images sit on the page (Word positions them there); they
+        // extend only the visual bounds, not the body push. eigenpal #709.
+        if (block.anchor?.isAnchored) {
+          continue;
+        }
         blockHeight = measure.height;
       } else if (block.kind === "textBox" && measure.kind === "textBox") {
+        // Floating/anchored text boxes — e.g. a page-anchored letterhead — are
+        // positioned on the page and must not push the body margin, or a tall
+        // letterhead inflates the top margin past the page and the paginator
+        // throws "no content area" (blank document). eigenpal #709.
+        if (isFloatingTextBoxBlock(block)) {
+          continue;
+        }
         blockHeight = measure.height;
       } else {
         continue;

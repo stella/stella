@@ -269,6 +269,95 @@ describe("calculateHeaderFooterMarginPushBounds", () => {
 
     expect(bounds).toEqual({ top: 0, bottom: 52 });
   });
+
+  test("excludes a floating text-box letterhead from the body push but keeps it in the visual bounds (eigenpal #709)", () => {
+    const blocks: FlowBlock[] = [
+      {
+        kind: "paragraph",
+        id: "title",
+        runs: [{ kind: "text", text: "Header" }],
+      },
+      {
+        kind: "textBox",
+        id: "letterhead",
+        width: 560,
+        height: 1100,
+        displayMode: "float",
+        content: [],
+      },
+    ];
+    const measures: Measure[] = [
+      { kind: "paragraph", lines: [], totalHeight: 12 },
+      { kind: "textBox", width: 560, height: 1100, innerMeasures: [] },
+    ];
+
+    // Push: only the in-flow paragraph (12) counts — not the 1100px letterhead,
+    // which would otherwise inflate the top margin past the page and blank the
+    // document.
+    expect(
+      calculateHeaderFooterMarginPushBounds(blocks, measures, 12, metrics),
+    ).toEqual({ top: 0, bottom: 12 });
+    // Visual: the letterhead is still part of the rendered extent.
+    expect(
+      calculateHeaderFooterVisualBounds(blocks, measures, 12, metrics)
+        .visualBottom,
+    ).toBeGreaterThanOrEqual(1100);
+  });
+
+  test("excludes a non-behindDoc anchored image block from the body push (eigenpal #709)", () => {
+    const blocks: FlowBlock[] = [
+      {
+        kind: "image",
+        id: "anchored-logo",
+        src: "logo.png",
+        width: 560,
+        height: 900,
+        anchor: { isAnchored: true },
+      },
+    ];
+
+    const bounds = calculateHeaderFooterMarginPushBounds(
+      blocks,
+      [{ kind: "image", width: 560, height: 900 }],
+      0,
+      metrics,
+    );
+
+    expect(bounds).toEqual({ top: 0, bottom: 0 });
+  });
+
+  test("excludes anchored (non-behindDoc) image runs from the body push (eigenpal #709)", () => {
+    const blocks: FlowBlock[] = [
+      {
+        kind: "paragraph",
+        id: "p",
+        runs: [
+          { kind: "text", text: "x" },
+          {
+            kind: "image",
+            src: "logo.png",
+            width: 560,
+            height: 900,
+            position: {
+              horizontal: { relativeTo: "page", posOffset: 0 },
+              vertical: { relativeTo: "page", posOffset: 0 },
+            },
+          },
+        ],
+      },
+    ];
+
+    // Only the paragraph's text height (12) pushes; the anchored image run is
+    // positioned on the page and does not.
+    const bounds = calculateHeaderFooterMarginPushBounds(
+      blocks,
+      [{ kind: "paragraph", lines: [], totalHeight: 12 }],
+      12,
+      metrics,
+    );
+
+    expect(bounds).toEqual({ top: 0, bottom: 12 });
+  });
 });
 
 describe("header/footer layout conversion", () => {
