@@ -78,7 +78,7 @@ describe("isAllowedBYOKModel", () => {
     expect(isAllowedBYOKModel("openai", "gpt-5.4")).toBe(true);
     expect(isAllowedBYOKModel("azure_foundry", "customer-gpt-5")).toBe(true);
     expect(isAllowedBYOKModel("huggingface", "customer-model")).toBe(true);
-    expect(isAllowedBYOKModel("openrouter", "anthropic/claude-opus-4.5")).toBe(
+    expect(isAllowedBYOKModel("openrouter", "anthropic/claude-opus-4.8")).toBe(
       true,
     );
   });
@@ -126,7 +126,7 @@ describe("BYOK model overrides", () => {
       ],
       overrideModels: {
         chat: { provider: "google", modelId: "gemini-3.5-flash" },
-        fast: { provider: "google", modelId: "gemini-3.1-flash-lite-preview" },
+        fast: { provider: "google", modelId: "gemini-3.1-flash-lite" },
         reasoning: { provider: "google", modelId: "gemini-3.1-pro-preview" },
         pdf: { provider: "google", modelId: "gemini-3.5-flash" },
       },
@@ -151,7 +151,7 @@ describe("BYOK model overrides", () => {
       ],
       overrideModels: {
         chat: { provider: "google", modelId: "gemini-3.5-flash" },
-        fast: { provider: "google", modelId: "gemini-3.1-flash-lite-preview" },
+        fast: { provider: "google", modelId: "gemini-3.1-flash-lite" },
         reasoning: { provider: "google", modelId: "gemini-3.1-pro-preview" },
         pdf: { provider: "google", modelId: "gemini-3.5-flash" },
       },
@@ -184,7 +184,7 @@ describe("BYOK model overrides", () => {
       ],
       overrideModels: {
         chat: { provider: "google", modelId: "gemini-3.5-flash" },
-        fast: { provider: "google", modelId: "gemini-3.1-flash-lite-preview" },
+        fast: { provider: "google", modelId: "gemini-3.1-flash-lite" },
         reasoning: { provider: "google", modelId: "gemini-3.1-pro-preview" },
         pdf: { provider: "google", modelId: "gemini-3.5-flash" },
       },
@@ -244,15 +244,15 @@ describe("BYOK model overrides", () => {
       overrideModels: {
         pdf: {
           provider: "google",
-          modelId: "gemini-3.1-flash-lite-preview",
+          modelId: "gemini-3.1-flash-lite",
         },
         chat: {
           provider: "google",
-          modelId: "gemini-3.1-flash-lite-preview",
+          modelId: "gemini-3.1-flash-lite",
         },
         fast: {
           provider: "google",
-          modelId: "gemini-3.1-flash-lite-preview",
+          modelId: "gemini-3.1-flash-lite",
         },
         reasoning: {
           provider: "google",
@@ -279,11 +279,11 @@ describe("BYOK model overrides", () => {
       overrideModels: {
         fast: {
           provider: "openrouter",
-          modelId: "google/gemini-3.1-flash-lite-preview",
+          modelId: "google/gemini-3.1-flash-lite",
         },
         chat: {
           provider: "openrouter",
-          modelId: "anthropic/claude-sonnet-4.5",
+          modelId: "anthropic/claude-sonnet-4.6",
         },
         reasoning: {
           provider: "openrouter",
@@ -291,7 +291,7 @@ describe("BYOK model overrides", () => {
         },
         pdf: {
           provider: "openrouter",
-          modelId: "google/gemini-3.1-flash-lite-preview",
+          modelId: "google/gemini-3.1-flash-lite",
         },
       },
     };

@@ -282,7 +282,7 @@ describe("BYOK provider and model configuration", () => {
   test("encodes OpenRouter model values without breaking model IDs that contain slashes", () => {
     const selection = {
       provider: "openrouter" as const,
-      modelId: "anthropic/claude-opus-4.5",
+      modelId: "anthropic/claude-opus-4.8",
     };
 
     expect(decodeModelSelection(encodeModelSelection(selection))).toEqual(
@@ -424,7 +424,7 @@ describe("BYOK provider and model configuration", () => {
     expect(
       isKnownModelSelection({
         provider: "openrouter",
-        modelId: "anthropic/claude-opus-4.5",
+        modelId: "anthropic/claude-opus-4.8",
       }),
     ).toBe(true);
     expect(

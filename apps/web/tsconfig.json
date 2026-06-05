@@ -5,6 +5,7 @@
     "paths": {
       "@/*": ["./src/*"],
       "@/api/*": ["../api/src/*"], // this is for eden to work https://elysiajs.com/eden/installation#path-alias-monorepo
+      "@stll/ai-catalog": ["../../packages/ai-catalog/src/index.ts"],
       "@stll/business-registries": [
         "../../packages/business-registries/src/index.ts"
       ],

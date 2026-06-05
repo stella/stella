@@ -1,0 +1,41 @@
+name: Model Catalog Upstream Check
+
+# Providers retire and rename models on their own schedules. This
+# nightly job validates every model ID stella offers (@stll/ai-catalog)
+# against live, public, keyless listings (OpenRouter + models.dev) and
+# fails when an offered model is deprecated or gone upstream — so a
+# retired model surfaces here instead of 400-ing a user at runtime.
+
+on:
+  schedule:
+    # 04:37 UTC daily (off-minute to avoid the :00 stampede)
+    - cron: "37 4 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  model-catalog-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Validate offered model IDs against upstream
+        run: bun run check:model-catalog
