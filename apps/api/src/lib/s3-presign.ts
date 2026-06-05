@@ -111,7 +111,7 @@ let _clientPromise: Promise<CachedClient> | null = null;
 let _stsClientPromise: Promise<STSClient> | null = null;
 let _scopedClientPromises = new Map<string, Promise<CachedScopedClient>>();
 const CLIENT_MAX_AGE_MS = 50 * 60 * 1000;
-const SCOPED_SESSION_SECONDS = 900;
+const SCOPED_SESSION_SECONDS = 3600;
 const SCOPED_CLIENT_REFRESH_SKEW_MS = 60 * 1000;
 const TEMP_UPLOAD_TAG_KEY = "stella-upload-stage";
 const TEMP_UPLOAD_TAG_VALUE = "tmp";
@@ -248,6 +248,17 @@ const scopedClientCacheKey = (
   actions: readonly S3SigningAction[],
 ): string => `${s3SigningScopePrefix(scope)}|${[...actions].sort().join(",")}`;
 
+export const hasScopedSessionTimeForPresign = ({
+  expiresAt,
+  expiresIn,
+  now = Date.now(),
+}: {
+  expiresAt: number;
+  expiresIn: number;
+  now?: number;
+}): boolean =>
+  expiresAt - now > expiresIn * 1000 + SCOPED_CLIENT_REFRESH_SKEW_MS;
+
 const buildScopedAwsS3Client = async (
   scope: S3SigningScope,
   actions: readonly S3SigningAction[],
@@ -301,6 +312,7 @@ const buildScopedAwsS3Client = async (
 const getScopedAwsS3Client = async (
   scope: S3SigningScope,
   actions: readonly S3SigningAction[],
+  expiresIn: number,
 ): Promise<AwsS3Client> => {
   const cacheKey = scopedClientCacheKey(scope, actions);
   const existingPromise = _scopedClientPromises.get(cacheKey);
@@ -314,7 +326,9 @@ const getScopedAwsS3Client = async (
       }
       throw error;
     }
-    if (cached.expiresAt - Date.now() > SCOPED_CLIENT_REFRESH_SKEW_MS) {
+    if (
+      hasScopedSessionTimeForPresign({ expiresAt: cached.expiresAt, expiresIn })
+    ) {
       return cached.client;
     }
   }
@@ -334,10 +348,12 @@ const getScopedAwsS3Client = async (
 
 const getPresignClient = async ({
   actions,
+  expiresIn,
   key,
   scope,
 }: {
   actions: readonly S3SigningAction[];
+  expiresIn: number;
   key: string;
   scope: S3SigningScope | undefined;
 }): Promise<AwsS3Client> => {
@@ -355,7 +371,7 @@ const getPresignClient = async ({
     });
   }
 
-  return await getScopedAwsS3Client(scope, actions);
+  return await getScopedAwsS3Client(scope, actions, expiresIn);
 };
 
 /** Reset the cached client. Test seam; not used in prod. */
@@ -385,6 +401,7 @@ export const presignUploadUrl = async ({
   await Result.tryPromise({
     try: async () => {
       const client = await getPresignClient({
+        expiresIn,
         key,
         scope,
         actions: tagAsTemporaryUpload
@@ -464,6 +481,7 @@ export const presignDownloadUrl = async (
   const result = await Result.tryPromise({
     try: async () => {
       const client = await getPresignClient({
+        expiresIn,
         key,
         scope,
         actions: ["s3:GetObject"],
@@ -556,6 +574,7 @@ export const copyObject = async (
           Key: destKey,
           // Staged uploads carry a lifecycle tag; durable objects must not.
           TaggingDirective: "REPLACE",
+          Tagging: "",
         }),
       );
     },
