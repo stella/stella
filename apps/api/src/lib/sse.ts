@@ -141,9 +141,6 @@ const handleMessage = (message: string) => {
     if (!parsed) {
       return;
     }
-    if (parsed.scope === "probe") {
-      return;
-    }
     if (parsed.scope === "workspace") {
       broadcastLocal(brandPersistedWorkspaceId(parsed.id), parsed.event);
     } else if (parsed.scope === "organization") {

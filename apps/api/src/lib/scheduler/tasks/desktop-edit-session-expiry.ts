@@ -1,13 +1,15 @@
 import { panic } from "better-result";
-import { and, asc, eq, inArray, lt } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lt } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import { auditLogs, desktopEditSessions, workspaces } from "@/api/db/schema";
 import { buildExpiryAuditEvents } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry-audit";
-import { publishDesktopEditSessionExpiryNotifications } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry-notifications";
+import {
+  type ExpiredDesktopEditSessionNotification,
+  publishDesktopEditSessionExpiryNotifications,
+} from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry-notifications";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 import {
-  ensureCrossInstanceBroadcastReady,
   publishSessionEvent,
   publishWorkspaceEvent,
 } from "@/api/lib/sse-broadcast";
@@ -33,6 +35,27 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
   let expired = 0;
 
   while (!signal.aborted) {
+    const unnotifiedExpiredSessions = await rootDb
+      .select({
+        id: desktopEditSessions.id,
+        workspaceId: desktopEditSessions.workspaceId,
+      })
+      .from(desktopEditSessions)
+      .where(
+        and(
+          eq(desktopEditSessions.status, "expired"),
+          isNull(desktopEditSessions.expiryNotificationPublishedAt),
+        ),
+      )
+      .orderBy(asc(desktopEditSessions.closedAt))
+      .limit(EXPIRE_SWEEP_BATCH_SIZE);
+
+    await publishAndMarkExpiryNotifications(unnotifiedExpiredSessions);
+
+    if (unnotifiedExpiredSessions.length === EXPIRE_SWEEP_BATCH_SIZE) {
+      continue;
+    }
+
     // Mirror authorizeDesktopEditSession's liveness check: a session past
     // tokenExpiresAt has no connected desktop stream refreshing it.
     const now = new Date();
@@ -60,10 +83,6 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
 
     const batchIds = batch.map((session) => session.id);
 
-    // The scheduler is a separate process from the API instances that hold
-    // desktop SSE streams, so its expiry side effects must go through Redis.
-    await ensureCrossInstanceBroadcastReady();
-
     const expiredSessions = await rootDb.transaction(async (tx) => {
       const transitioned = await tx
         .update(desktopEditSessions)
@@ -90,10 +109,7 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
       return batch.filter((session) => expiredIds.has(session.id));
     });
 
-    await publishDesktopEditSessionExpiryNotifications({
-      publisher: { publishSessionEvent, publishWorkspaceEvent },
-      sessions: expiredSessions,
-    });
+    await publishAndMarkExpiryNotifications(expiredSessions);
 
     expired += expiredSessions.length;
 
@@ -109,4 +125,31 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
   if (signal.aborted) {
     panic("SchedulerAborted");
   }
+};
+
+const publishAndMarkExpiryNotifications = async (
+  sessions: ExpiredDesktopEditSessionNotification[],
+): Promise<void> => {
+  if (sessions.length === 0) {
+    return;
+  }
+
+  await publishDesktopEditSessionExpiryNotifications({
+    publisher: { publishSessionEvent, publishWorkspaceEvent },
+    sessions,
+  });
+
+  await rootDb
+    .update(desktopEditSessions)
+    .set({ expiryNotificationPublishedAt: new Date() })
+    .where(
+      and(
+        inArray(
+          desktopEditSessions.id,
+          sessions.map((session) => session.id),
+        ),
+        eq(desktopEditSessions.status, "expired"),
+        isNull(desktopEditSessions.expiryNotificationPublishedAt),
+      ),
+    );
 };

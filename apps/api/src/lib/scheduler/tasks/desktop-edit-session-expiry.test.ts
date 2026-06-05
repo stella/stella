@@ -123,4 +123,18 @@ describe("publishDesktopEditSessionExpiryNotifications", () => {
       },
     ]);
   });
+
+  test("propagates publish failures so callers can retry", async () => {
+    await expect(
+      publishDesktopEditSessionExpiryNotifications({
+        publisher: {
+          publishSessionEvent: async () => {
+            throw new Error("publish failed");
+          },
+          publishWorkspaceEvent: async () => undefined,
+        },
+        sessions: [notificationSession("session-1", "workspace-1")],
+      }),
+    ).rejects.toThrow("publish failed");
+  });
 });

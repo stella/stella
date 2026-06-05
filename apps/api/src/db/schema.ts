@@ -1141,6 +1141,9 @@ export const desktopEditSessions = p.pgTable(
       .defaultNow()
       .$onUpdate(() => new Date()),
     closedAt: p.timestamp("closed_at"),
+    expiryNotificationPublishedAt: p.timestamp(
+      "expiry_notification_published_at",
+    ),
   },
   (table) => [
     p.index("desktop_edit_sessions_workspace_id_idx").on(table.workspaceId),
@@ -1161,6 +1164,12 @@ export const desktopEditSessions = p.pgTable(
       .index("desktop_edit_sessions_open_token_expires_idx")
       .on(table.tokenExpiresAt)
       .where(sql`${table.status} = 'open'`),
+    p
+      .index("desktop_edit_sessions_expired_unnotified_idx")
+      .on(table.closedAt)
+      .where(
+        sql`${table.status} = 'expired' AND ${table.expiryNotificationPublishedAt} IS NULL`,
+      ),
     p
       .foreignKey({
         columns: [table.entityId, table.workspaceId],

@@ -20,10 +20,6 @@ type RedisPayload =
       event: SSEEvent;
     }
   | {
-      scope: "probe";
-      originInstanceId: string;
-    }
-  | {
       scope: "session";
       id: string;
       event: SSEEvent;
@@ -51,17 +47,6 @@ export const parseRedisPayload = (raw: string): RedisPayload | null => {
   }
 
   const scope = parsed.scope;
-  if (scope === "probe") {
-    return {
-      scope,
-      originInstanceId:
-        "originInstanceId" in parsed &&
-        typeof parsed.originInstanceId === "string"
-          ? parsed.originInstanceId
-          : "",
-    };
-  }
-
   if (
     scope !== "workspace" &&
     scope !== "organization" &&
@@ -116,13 +101,6 @@ const publishRedisPayload = async (payload: RedisPayload): Promise<void> => {
       scope: payload.scope,
     });
   }
-};
-
-export const ensureCrossInstanceBroadcastReady = async (): Promise<void> => {
-  await publishRedisPayload({
-    scope: "probe",
-    originInstanceId: INSTANCE_ID,
-  });
 };
 
 export const publishWorkspaceEvent = async (
