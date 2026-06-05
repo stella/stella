@@ -22,6 +22,7 @@ const { desktopEditSessionEventsHandler } =
 const sessionId = toSafeId<"desktopEditSession">(
   "019aa0bc-d957-7bb3-9234-9c2440377225",
 );
+const sessionToken = "a".repeat(64);
 
 describe("desktop edit session events", () => {
   beforeEach(() => {
@@ -57,7 +58,7 @@ describe("desktop edit session events", () => {
     });
 
     const response = await desktopEditSessionEventsHandler({
-      headers: { authorization: `Bearer ${"a".repeat(64)}` },
+      headers: { authorization: `Bearer ${sessionToken}` },
       query: {},
       sessionId,
     });
@@ -70,6 +71,7 @@ describe("desktop edit session events", () => {
 
     expect(refreshDesktopEditSessionLivenessMock).toHaveBeenCalledWith({
       sessionId,
+      sessionToken,
       userId: "user-1",
     });
 
@@ -95,7 +97,7 @@ describe("desktop edit session events", () => {
 
     let settled = false;
     const responsePromise = desktopEditSessionEventsHandler({
-      headers: { authorization: `Bearer ${"a".repeat(64)}` },
+      headers: { authorization: `Bearer ${sessionToken}` },
       query: {},
       sessionId,
     }).then((response) => {
@@ -108,6 +110,7 @@ describe("desktop edit session events", () => {
     });
     expect(refreshDesktopEditSessionLivenessMock).toHaveBeenCalledWith({
       sessionId,
+      sessionToken,
       userId: "user-1",
     });
     expect(settled).toBe(false);

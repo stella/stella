@@ -11,6 +11,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
@@ -48,16 +49,29 @@ export const SESSION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 export const computeTokenExpiresAt = () =>
   new Date(Date.now() + SESSION_TOKEN_TTL_MS);
 
+const SESSION_TOKEN_PART_LENGTH = 32;
+
+export const createDesktopEditSessionToken = () =>
+  Bun.randomUUIDv7().replaceAll("-", "").slice(0, SESSION_TOKEN_PART_LENGTH) +
+  Bun.randomUUIDv7().replaceAll("-", "").slice(0, SESSION_TOKEN_PART_LENGTH);
+
+export const hashDesktopEditSessionToken = (sessionToken: string) =>
+  new Bun.CryptoHasher("sha256").update(sessionToken).digest("hex");
+
 export const DESKTOP_EDIT_SESSION_LIVENESS_REFRESH_INTERVAL_MS =
   SESSION_TOKEN_TTL_MS / 2;
 
 export const refreshDesktopEditSessionLiveness = async ({
   sessionId,
+  sessionToken,
   userId,
 }: {
   sessionId: SafeId<"desktopEditSession">;
+  sessionToken: string;
   userId: SafeId<"user">;
 }): Promise<boolean> => {
+  const sessionTokenHash = hashDesktopEditSessionToken(sessionToken);
+
   const updatedSessions = await rootDb
     .update(desktopEditSessions)
     .set({ tokenExpiresAt: computeTokenExpiresAt() })
@@ -65,7 +79,8 @@ export const refreshDesktopEditSessionLiveness = async ({
       and(
         eq(desktopEditSessions.id, sessionId),
         eq(desktopEditSessions.createdBy, userId),
-        eq(desktopEditSessions.status, "open"),
+        eq(desktopEditSessions.sessionTokenHash, sessionTokenHash),
+        ...liveDesktopEditSessionPredicates(new Date()),
       ),
     )
     .returning({ id: desktopEditSessions.id });
@@ -79,23 +94,14 @@ export const DESKTOP_EDIT_HANDOFF_TTL_MS = 2 * 60 * 1000;
 export const computeDesktopEditHandoffExpiresAt = () =>
   new Date(Date.now() + DESKTOP_EDIT_HANDOFF_TTL_MS);
 
-const SESSION_TOKEN_PART_LENGTH = 32;
+export const createDesktopEditHandoffToken = createDesktopEditSessionToken;
+
+export const hashDesktopEditHandoffToken = hashDesktopEditSessionToken;
 
 export const DESKTOP_EDIT_SESSION_TAKEN_OVER_CODE =
   "desktop_edit_session_taken_over";
 export const DESKTOP_EDIT_SESSION_TAKEN_OVER_MESSAGE =
   "Desktop editing moved to another device. This local copy is preserved.";
-
-export const createDesktopEditSessionToken = () =>
-  Bun.randomUUIDv7().replaceAll("-", "").slice(0, SESSION_TOKEN_PART_LENGTH) +
-  Bun.randomUUIDv7().replaceAll("-", "").slice(0, SESSION_TOKEN_PART_LENGTH);
-
-export const hashDesktopEditSessionToken = (sessionToken: string) =>
-  new Bun.CryptoHasher("sha256").update(sessionToken).digest("hex");
-
-export const createDesktopEditHandoffToken = createDesktopEditSessionToken;
-
-export const hashDesktopEditHandoffToken = hashDesktopEditSessionToken;
 
 const ADMIN_BYPASS_ROLES = new Set<MemberRole>(["owner", "admin"]);
 

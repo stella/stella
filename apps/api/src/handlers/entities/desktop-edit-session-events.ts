@@ -195,7 +195,11 @@ export const desktopEditSessionEventsHandler = async ({
   };
 
   const refreshLiveness = async (): Promise<boolean> =>
-    await refreshDesktopEditSessionLiveness({ sessionId, userId });
+    await refreshDesktopEditSessionLiveness({
+      sessionId,
+      sessionToken,
+      userId,
+    });
 
   const refreshed = await refreshLiveness();
   if (!refreshed) {
