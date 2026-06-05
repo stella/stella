@@ -460,12 +460,8 @@
     },
     "placeholder": "Type your question here, / for skills, @ to add context",
     "prompts": {
-      "noResults": "No matching prompts",
+      "noResults": "No matching skills",
       "noShortcuts": "No prompts yet. Add some in Knowledge → Prompts.",
-      "scope": {
-        "private": "Your prompts",
-        "team": "Team prompts"
-      },
       "tryOne": "Try one of these to start"
     },
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
@@ -484,8 +480,8 @@
     "sendWithoutAnonymization": "Send without anonymization",
     "skills": {
       "scope": {
-        "private": "Your AI skills",
-        "team": "Team AI skills"
+        "private": "Your skills",
+        "team": "Team skills"
       }
     },
     "sources": "Sources:",
@@ -1432,10 +1428,6 @@
       "clauses": {
         "description": "Reusable clause library"
       },
-      "connectors": {
-        "description": "Connect stella to external tools",
-        "title": "MCP"
-      },
       "mcp": {
         "description": "Connect stella to external tools",
         "title": "MCP"
@@ -1443,10 +1435,6 @@
       "prompts": {
         "description": "Reusable instructions available from / in chat",
         "title": "Prompts"
-      },
-      "skills": {
-        "description": "Focused AI capabilities for specialist workflows",
-        "title": "Skills"
       },
       "templates": {
         "description": "Document templates with placeholders",
@@ -1823,8 +1811,6 @@
         "termAddedToast": "Added \"{value}\" to the firm-wide deny list.",
         "title": "Anonymization"
       },
-      "catalogue": "Tools",
-      "catalogueDescription": "Connect stella to public registries, VAT lookups, and other sources. Recommendations follow your jurisdiction.",
       "matterNumbering": "Matter numbering",
       "matterNumberingDescription": "Configure how new matter reference numbers are generated",
       "membersDescription": "Manage who has access to this organization and any pending invitations",

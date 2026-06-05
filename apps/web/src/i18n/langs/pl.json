@@ -462,10 +462,6 @@
     "prompts": {
       "noResults": "Brak pasujących umiejętności",
       "noShortcuts": "Nie ma jeszcze umiejętności. Dodaj je w Wiedza → Umiejętności.",
-      "scope": {
-        "private": "Twoje umiejętności",
-        "team": "Umiejętności zespołu"
-      },
       "tryOne": "Zacznij od jednego z tych"
     },
     "queuedAttachmentCount": "{count, plural, one {# załącznik} few {# załączniki} many {# załączników} other {# załącznika}}",
@@ -1432,10 +1428,6 @@
       "clauses": {
         "description": "Biblioteka klauzul wielokrotnego użytku"
       },
-      "connectors": {
-        "description": "Połącz stellę z zewnętrznymi narzędziami",
-        "title": "MCP"
-      },
       "mcp": {
         "description": "Połącz stellę z zewnętrznymi narzędziami",
         "title": "MCP"
@@ -1443,10 +1435,6 @@
       "prompts": {
         "description": "Instrukcje wielokrotnego użytku dostępne w czacie przez /",
         "title": "Prompty"
-      },
-      "skills": {
-        "description": "Skupione możliwości AI dla specjalistycznych przepływów pracy",
-        "title": "Umiejętności"
       },
       "templates": {
         "description": "Szablony dokumentów z symbolami zastępczymi",
@@ -1823,8 +1811,6 @@
         "termAddedToast": "Dodano „{value}” do firmowej listy.",
         "title": "Anonimizacja"
       },
-      "catalogue": "Katalog",
-      "catalogueDescription": "Przeglądaj i instaluj umiejętności, serwery MCP oraz narzędzia własne dla swojej jurysdykcji",
       "matterNumbering": "Numeracja spraw",
       "matterNumberingDescription": "Skonfiguruj sposób generowania numerów referencyjnych nowych spraw",
       "membersDescription": "Manage who has access to this organization",

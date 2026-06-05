@@ -432,7 +432,7 @@
       "noPrompts": "Noch keine Skills",
       "noRecentChats": "Keine letzten Chats",
       "pinnedMatters": "Angeheftete Sachen",
-      "prompts": "Skills",
+      "prompts": "Fähigkeiten",
       "recentChats": "Letzte Chats"
     },
     "maxAttachmentsReached": "Maximal {count} Dateien pro Nachricht",
@@ -462,10 +462,6 @@
     "prompts": {
       "noResults": "Keine passenden Skills",
       "noShortcuts": "Noch keine Skills. Fügen Sie welche unter Wissen → Skills hinzu.",
-      "scope": {
-        "private": "Eigene Skills",
-        "team": "Team-Skills"
-      },
       "tryOne": "Probiere einen davon zum Start"
     },
     "queuedAttachmentCount": "{count, plural, one {# Anhang} other {# Anhänge}}",
@@ -1432,10 +1428,6 @@
       "clauses": {
         "description": "Wiederverwendbare Klauselbibliothek"
       },
-      "connectors": {
-        "description": "stella mit externen Tools verbinden",
-        "title": "MCP"
-      },
       "mcp": {
         "description": "stella mit externen Tools verbinden",
         "title": "MCP"
@@ -1443,10 +1435,6 @@
       "prompts": {
         "description": "Wiederverwendbare Anweisungen, die im Chat über / verfügbar sind",
         "title": "Prompts"
-      },
-      "skills": {
-        "description": "Fokussierte KI-Fähigkeiten für spezialisierte Arbeitsabläufe",
-        "title": "Skills"
       },
       "templates": {
         "description": "Dokumentvorlagen mit Platzhaltern",
@@ -1823,8 +1811,6 @@
         "termAddedToast": "„{value}“ wurde zur kanzleiweiten Sperrliste hinzugefügt.",
         "title": "Anonymisierung"
       },
-      "catalogue": "Katalog",
-      "catalogueDescription": "Skills, MCP-Server und Erstanbieter-Tools für Ihre Jurisdiktion durchsuchen und installieren",
       "matterNumbering": "Aktennummerierung",
       "matterNumberingDescription": "Konfigurieren Sie, wie neue Aktenzeichen erzeugt werden",
       "membersDescription": "Manage who has access to this organization",

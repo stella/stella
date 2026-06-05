@@ -462,10 +462,6 @@
     "prompts": {
       "noResults": "Nav atbilstošu prasmju",
       "noShortcuts": "Prasmju vēl nav. Pievienojiet tās sadaļā Zināšanas → Prasmes.",
-      "scope": {
-        "private": "Jūsu prasmes",
-        "team": "Komandas prasmes"
-      },
       "tryOne": "Izmēģini vienu no tiem"
     },
     "queuedAttachmentCount": "{count, plural, zero {# pielikumu} one {# pielikums} other {# pielikumi}}",
@@ -1432,10 +1428,6 @@
       "clauses": {
         "description": "Atkārtoti izmantojamu klauzulu bibliotēka"
       },
-      "connectors": {
-        "description": "Savienojiet stella ar ārējiem rīkiem",
-        "title": "MCP"
-      },
       "mcp": {
         "description": "Savienojiet stella ar ārējiem rīkiem",
         "title": "MCP"
@@ -1443,10 +1435,6 @@
       "prompts": {
         "description": "Atkārtoti izmantojamas instrukcijas, kas čatā pieejamas ar /",
         "title": "Prompti"
-      },
-      "skills": {
-        "description": "Mērķētas AI iespējas specializētām darbplūsmām",
-        "title": "Prasmes"
       },
       "templates": {
         "description": "Dokumentu veidnes ar vietturiem",
@@ -1823,8 +1811,6 @@
         "termAddedToast": "„{value}” pievienots biroja sarakstam.",
         "title": "Anonimizācija"
       },
-      "catalogue": "Katalogs",
-      "catalogueDescription": "Pārlūkojiet un instalējiet prasmes, MCP serverus un pirmās puses rīkus savai jurisdikcijai",
       "matterNumbering": "Lietu numerācija",
       "matterNumberingDescription": "Konfigurējiet, kā tiek ģenerēti jauno lietu atsauces numuri",
       "membersDescription": "Manage who has access to this organization",

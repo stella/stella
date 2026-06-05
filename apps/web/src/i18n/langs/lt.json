@@ -462,10 +462,6 @@
     "prompts": {
       "noResults": "Nėra atitinkančių įgūdžių",
       "noShortcuts": "Įgūdžių dar nėra. Pridėkite juos skiltyje Žinios → Įgūdžiai.",
-      "scope": {
-        "private": "Jūsų įgūdžiai",
-        "team": "Komandos įgūdžiai"
-      },
       "tryOne": "Pradėk vienu iš šių"
     },
     "queuedAttachmentCount": "{count, plural, one {# priedas} few {# priedai} many {# priedo} other {# priedų}}",
@@ -1432,10 +1428,6 @@
       "clauses": {
         "description": "Pakartotinai naudojamų sąlygų biblioteka"
       },
-      "connectors": {
-        "description": "Prijunkite stella prie išorinių įrankių",
-        "title": "MCP"
-      },
       "mcp": {
         "description": "Prijunkite stella prie išorinių įrankių",
         "title": "MCP"
@@ -1443,10 +1435,6 @@
       "prompts": {
         "description": "Pakartotinai naudojamos instrukcijos, pasiekiamos pokalbyje per /",
         "title": "Promptai"
-      },
-      "skills": {
-        "description": "Tikslinės AI galimybės specializuotiems darbo procesams",
-        "title": "Įgūdžiai"
       },
       "templates": {
         "description": "Dokumentų šablonai su vietos žymėmis",
@@ -1823,8 +1811,6 @@
         "termAddedToast": "„{value}“ pridėtas į kontoros sąrašą.",
         "title": "Anonimizavimas"
       },
-      "catalogue": "Katalogas",
-      "catalogueDescription": "Naršykite ir diekite jūsų jurisdikcijai skirtus įgūdžius, MCP serverius ir pirmosios šalies įrankius",
       "matterNumbering": "Bylų numeravimas",
       "matterNumberingDescription": "Nustatykite, kaip generuojami naujų bylų numeriai",
       "membersDescription": "Manage who has access to this organization",

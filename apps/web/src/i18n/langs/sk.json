@@ -462,10 +462,6 @@
     "prompts": {
       "noResults": "Žiadne zhodné zručnosti",
       "noShortcuts": "Zatiaľ žiadne zručnosti. Pridajte ich v časti Znalosti → Zručnosti.",
-      "scope": {
-        "private": "Vaše zručnosti",
-        "team": "Tímové zručnosti"
-      },
       "tryOne": "Začni s jedným z týchto"
     },
     "queuedAttachmentCount": "{count, plural, one {# príloha} few {# prílohy} other {# príloh}}",
@@ -1432,10 +1428,6 @@
       "clauses": {
         "description": "Knižnica vzorových ustanovení"
       },
-      "connectors": {
-        "description": "Pripojte stellu k externým nástrojom",
-        "title": "MCP"
-      },
       "mcp": {
         "description": "Pripojte stellu k externým nástrojom",
         "title": "MCP"
@@ -1443,10 +1435,6 @@
       "prompts": {
         "description": "Opakovane použiteľné inštrukcie dostupné cez / v chate",
         "title": "Prompty"
-      },
-      "skills": {
-        "description": "Špecializované AI schopnosti pre konkrétne pracovné postupy",
-        "title": "Zručnosti"
       },
       "templates": {
         "description": "Šablóny dokumentov so zástupnými znakmi",
@@ -1823,8 +1811,6 @@
         "termAddedToast": "Pojem „{value}“ bol pridaný do firemného zoznamu.",
         "title": "Anonymizácia"
       },
-      "catalogue": "Katalóg",
-      "catalogueDescription": "Prehliadajte a inštalujte zručnosti, MCP servery a nástroje prvej strany pre svoju jurisdikciu",
       "matterNumbering": "Číslovanie spisov",
       "matterNumberingDescription": "Nakonfigurujte, ako sa generujú referenčné čísla nových spisov",
       "membersDescription": "Spravujte, kto má prístup k tejto organizácii a všetky čakajúce pozvánky",

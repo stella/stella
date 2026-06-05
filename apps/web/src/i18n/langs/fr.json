@@ -432,7 +432,7 @@
       "noPrompts": "Aucun skill pour le moment",
       "noRecentChats": "Aucun chat récent",
       "pinnedMatters": "Dossiers épinglés",
-      "prompts": "Skills",
+      "prompts": "Compétences",
       "recentChats": "Chats récents"
     },
     "maxAttachmentsReached": "Maximum {count} fichiers par message",
@@ -462,10 +462,6 @@
     "prompts": {
       "noResults": "Aucun skill correspondant",
       "noShortcuts": "Aucun skill pour le moment. Ajoutez-en dans Connaissances → Skills.",
-      "scope": {
-        "private": "Vos skills",
-        "team": "Skills d'équipe"
-      },
       "tryOne": "Essaie l'un d'entre eux pour commencer"
     },
     "queuedAttachmentCount": "{count, plural, one {# pièce jointe} many {# pièces jointes} other {# pièces jointes}}",
@@ -1432,10 +1428,6 @@
       "clauses": {
         "description": "Bibliothèque de clauses réutilisables"
       },
-      "connectors": {
-        "description": "Connecter stella à des outils externes",
-        "title": "MCP"
-      },
       "mcp": {
         "description": "Connecter stella à des outils externes",
         "title": "MCP"
@@ -1443,10 +1435,6 @@
       "prompts": {
         "description": "Instructions réutilisables disponibles avec / dans le chat",
         "title": "Prompts"
-      },
-      "skills": {
-        "description": "Capacités IA ciblées pour des flux de travail spécialisés",
-        "title": "Compétences"
       },
       "templates": {
         "description": "Modèles de documents avec espaces réservés",
@@ -1823,8 +1811,6 @@
         "termAddedToast": "« {value} » a été ajouté à la liste de blocage du cabinet.",
         "title": "Anonymisation"
       },
-      "catalogue": "Catalogue d’outils",
-      "catalogueDescription": "Parcourez et installez des skills, serveurs MCP et outils internes adaptés à votre juridiction",
       "matterNumbering": "Numérotation des dossiers",
       "matterNumberingDescription": "Configurez la génération des nouveaux numéros de référence des dossiers",
       "membersDescription": "Manage who has access to this organization",

@@ -302,7 +302,7 @@ type Messages = {
   };
   "catalogue": {
     "addCustom": "Add custom";
-    "addCustomMcp": "Add MCP server";
+    "addCustomMcp": "Add integration";
     "addCustomSkill": "Add skill";
     "by": "By {author}";
     "configuration": "Configuration";
@@ -313,8 +313,8 @@ type Messages = {
     "detailAuthMethod": "Authentication";
     "empty": "No entries match the current filter.";
     "filter": {
-      "mcps": "MCP servers";
-      "nativeTools": "Built-in tools";
+      "mcps": "Integrations";
+      "nativeTools": "Always available";
       "skills": "Skills";
     };
     "filterHint": "Filtered to {codes}";
@@ -394,7 +394,7 @@ type Messages = {
     "cancelQueuedMessage": "Cancel queued message";
     "caseLawGreeting": "Ask about this decision — its full text is available here.";
     "chatAbout": "Chat about this";
-    "contextPlaceholder": "Chat about {context}, / for prompts, @ to add context";
+    "contextPlaceholder": "Chat about {context}, / for skills, @ to add context";
     "createDocument": {
       "continue": "Create document";
       "created": "Document created";
@@ -432,10 +432,10 @@ type Messages = {
     "landing": {
       "lastAccessedMatters": "Last accessed matters";
       "noMatters": "No matters yet";
-      "noPrompts": "No prompts yet";
+      "noPrompts": "No skills yet";
       "noRecentChats": "No recent chats";
       "pinnedMatters": "Pinned matters";
-      "prompts": "Prompts";
+      "prompts": "Skills";
       "recentChats": "Recent chats";
     };
     "maxAttachmentsReached": "Maximum {count} files per message";
@@ -461,14 +461,10 @@ type Messages = {
       "fromClipboard": "Pasted {count, plural, one {# character} other {# characters}}";
       "fromPromptFallback": "Prompt";
     };
-    "placeholder": "Type your question here, / for prompts, @ to add context";
+    "placeholder": "Type your question here, / for skills, @ to add context";
     "prompts": {
-      "noResults": "No matching prompts";
+      "noResults": "No matching skills";
       "noShortcuts": "No prompts yet. Add some in Knowledge → Prompts.";
-      "scope": {
-        "private": "Your prompts";
-        "team": "Team prompts";
-      };
       "tryOne": "Try one of these to start";
     };
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}";
@@ -487,8 +483,8 @@ type Messages = {
     "sendWithoutAnonymization": "Send without anonymization";
     "skills": {
       "scope": {
-        "private": "Your AI skills";
-        "team": "Team AI skills";
+        "private": "Your skills";
+        "team": "Team skills";
       };
     };
     "sources": "Sources:";
@@ -827,7 +823,7 @@ type Messages = {
     "error": "Something went wrong. Please try again.";
     "missingJurisdictions": "Your stella organization hasn't set up its practice jurisdictions yet. Some jurisdiction-aware tools will be unavailable until you complete setup.";
     "permissions": "This will allow the application to:";
-    "scopeExternalMcps": "Use your connected external tools";
+    "scopeExternalMcps": "Use your connected integrations";
     "scopeOnboarding": "Configure your organization's practice jurisdictions";
     "scopeProfile": "Access your profile information";
     "scopeRead": "Read your documents, matters, and contacts";
@@ -1385,7 +1381,7 @@ type Messages = {
     "mcp": {
       "addAndConnect": "Add and connect";
       "addServer": "Add server";
-      "addServerCardTitle": "Add new MCP server";
+      "addServerCardTitle": "Add new integration";
       "auth": {
         "bearer": "Bearer token";
         "none": "No auth";
@@ -1395,22 +1391,22 @@ type Messages = {
       "connect": "Connect";
       "connectedToast": "MCP connected";
       "connectedWithLastUsed": "Connected · last used {time}";
-      "description": "Manage the external MCP servers that can add tools to chat. Tokens are stored per user.";
+      "description": "Manage the integrations that can add tools to chat. Tokens are stored per user.";
       "detected": "Detected {authType}";
       "disable": "Disable";
       "disabled": "Connected · disabled";
       "disconnect": "Disconnect";
       "emptyDescription": "Curated legal MCP connectors will appear here as they are enabled for your workspace.";
-      "emptyTitle": "No MCP connectors yet";
+      "emptyTitle": "No integrations yet";
       "enable": "Enable";
       "errorDescription": "The connector could not be updated.";
       "errorTitle": "MCP failed";
-      "mcpExplainer": "MCP servers add external services to the chat that the AI can work with.";
+      "mcpExplainer": "Integrations connect external services to the chat that the AI can work with.";
       "namePlaceholder": "Display name";
       "needsReauth": "Needs reconnect";
       "off": "Off";
       "on": "On";
-      "otherTitle": "Other connectors";
+      "otherTitle": "Other integrations";
       "probe": "Probe";
       "recommendedBadge": "Recommended";
       "recommendedFor": "Recommended for {jurisdictions}";
@@ -1435,10 +1431,6 @@ type Messages = {
       "clauses": {
         "description": "Reusable clause library";
       };
-      "connectors": {
-        "description": "Connect stella to external tools";
-        "title": "MCP";
-      };
       "mcp": {
         "description": "Connect stella to external tools";
         "title": "MCP";
@@ -1447,21 +1439,17 @@ type Messages = {
         "description": "Reusable instructions available from / in chat";
         "title": "Prompts";
       };
-      "skills": {
-        "description": "Focused AI capabilities for specialist workflows";
-        "title": "Skills";
-      };
       "templates": {
         "description": "Document templates with placeholders";
         "title": "Templates";
       };
       "tools": {
-        "description": "Skills, MCP servers, and built-in tools the AI can use in chat";
+        "description": "Skills, integrations, and always-available tools the AI can use in chat";
         "title": "Tools";
       };
     };
     "skills": {
-      "addShortcut": "Add prompt";
+      "addShortcut": "Add skill";
       "autoInvokeHintLabel": "Hint for the model";
       "autoInvokeHintPlaceholder": "When should the model auto-pick this skill?";
       "autoInvokeLabel": "Let the AI run this automatically";
@@ -1476,7 +1464,7 @@ type Messages = {
       "editShortcut": "Edit prompt";
       "emptyDescription": "Create reusable prompts for the work your team repeats, from summaries to first-pass drafting instructions.";
       "emptyState": "No prompts yet. Add your first one.";
-      "emptyTitle": "Create your first prompt";
+      "emptyTitle": "Create your first skill";
       "emptyVideoLabel": "Prompts overview";
       "errors": {
         "commandConflict": "A prompt with this / name already exists";
@@ -1492,15 +1480,15 @@ type Messages = {
         "descriptionPlaceholder": "Short description shown in the picker";
         "name": "Name";
         "namePlaceholder": "e.g. Summarise document";
-        "prompt": "Prompt";
+        "prompt": "Instructions";
         "promptPlaceholder": "The text inserted into the chat composer when this prompt is used";
         "scope": "Visibility";
         "scopePrivate": "Only me";
         "scopeTeam": "Everyone in the organisation";
       };
-      "privateSection": "Your prompts";
+      "privateSection": "Your skills";
       "shadowed": "Shadowed by team prompt";
-      "teamSection": "Team prompts";
+      "teamSection": "Team skills";
     };
   };
   "navigation": {
@@ -1826,8 +1814,6 @@ type Messages = {
         "termAddedToast": "Added \"{value}\" to the firm-wide deny list.";
         "title": "Anonymization";
       };
-      "catalogue": "Tools";
-      "catalogueDescription": "Connect stella to public registries, VAT lookups, and other sources. Recommendations follow your jurisdiction.";
       "matterNumbering": "Matter numbering";
       "matterNumberingDescription": "Configure how new matter reference numbers are generated";
       "membersDescription": "Manage who has access to this organization and any pending invitations";

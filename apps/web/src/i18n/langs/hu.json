@@ -462,10 +462,6 @@
     "prompts": {
       "noResults": "Nincs egyező skill",
       "noShortcuts": "Még nincsenek skillek. Adjon hozzá a Tudás → Skillek részen.",
-      "scope": {
-        "private": "Saját skillek",
-        "team": "Csapat skillek"
-      },
       "tryOne": "Próbáld ki valamelyiket"
     },
     "queuedAttachmentCount": "{count, plural, one {# melléklet} other {# melléklet}}",
@@ -1432,10 +1428,6 @@
       "clauses": {
         "description": "Újrafelhasználható mintakikötések"
       },
-      "connectors": {
-        "description": "A stella összekapcsolása külső eszközökkel",
-        "title": "MCP"
-      },
       "mcp": {
         "description": "A stella összekapcsolása külső eszközökkel",
         "title": "MCP"
@@ -1443,10 +1435,6 @@
       "prompts": {
         "description": "Újrahasználható utasítások, amelyek / paranccsal érhetők el a chatben",
         "title": "Promptok"
-      },
-      "skills": {
-        "description": "Célzott AI-képességek speciális munkafolyamatokhoz",
-        "title": "Skillek"
       },
       "templates": {
         "description": "Dokumentumsablonok helyőrzőkkel",
@@ -1823,8 +1811,6 @@
         "termAddedToast": "„{value}” hozzáadva az iroda tiltólistájához.",
         "title": "Anonimizálás"
       },
-      "catalogue": "Katalógus",
-      "catalogueDescription": "Böngésszen és telepítsen a joghatóságához illő skilleket, MCP-szervereket és saját eszközöket",
       "matterNumbering": "Ügyszámozás",
       "matterNumberingDescription": "Beállíthatja, hogyan generálódjanak az új ügyek hivatkozási számai",
       "membersDescription": "Manage who has access to this organization",

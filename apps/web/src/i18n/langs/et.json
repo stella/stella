@@ -462,10 +462,6 @@
     "prompts": {
       "noResults": "Sobivaid oskusi pole",
       "noShortcuts": "Oskusi veel pole. Lisage need jaotises Teadmised → Oskused.",
-      "scope": {
-        "private": "Sinu oskused",
-        "team": "Tiimi oskused"
-      },
       "tryOne": "Alusta ühe nendest"
     },
     "queuedAttachmentCount": "{count, plural, one {# manus} other {# manust}}",
@@ -1432,10 +1428,6 @@
       "clauses": {
         "description": "Korduvkasutatav klauslite kogu"
       },
-      "connectors": {
-        "description": "Ühendage stella väliste tööriistadega",
-        "title": "MCP"
-      },
       "mcp": {
         "description": "Ühendage stella väliste tööriistadega",
         "title": "MCP"
@@ -1443,10 +1435,6 @@
       "prompts": {
         "description": "Taaskasutatavad juhised, mis on vestluses saadaval / kaudu",
         "title": "Promptid"
-      },
-      "skills": {
-        "description": "Fookustatud AI-võimekused erialaste töövoogude jaoks",
-        "title": "Oskused"
       },
       "templates": {
         "description": "Dokumendimallid kohatäitjatega",
@@ -1823,8 +1811,6 @@
         "termAddedToast": "„{value}“ lisati büroo keelduloendisse.",
         "title": "Anonüümistamine"
       },
-      "catalogue": "Kataloog",
-      "catalogueDescription": "Sirvige ja installige oma jurisdiktsiooni oskusi, MCP servereid ja stella tööriistu",
       "matterNumbering": "Toimikute nummerdamine",
       "matterNumberingDescription": "Seadistage, kuidas uute toimikute viitenumbreid genereeritakse",
       "membersDescription": "Manage who has access to this organization",

@@ -462,10 +462,6 @@
     "prompts": {
       "noResults": "Sem habilidades correspondentes",
       "noShortcuts": "Nenhuma habilidade ainda. Adicione alguns em Conhecimento → Habilidades.",
-      "scope": {
-        "private": "Suas habilidades",
-        "team": "Habilidades de equipe"
-      },
       "tryOne": "Experimente um destes para começar"
     },
     "queuedAttachmentCount": "{count, plural, one {# anexo} many {# anexos} other {# anexos}}",
@@ -1432,10 +1428,6 @@
       "clauses": {
         "description": "Biblioteca de cláusulas reutilizáveis"
       },
-      "connectors": {
-        "description": "Conecte a stella a ferramentas externas",
-        "title": "MCP"
-      },
       "mcp": {
         "description": "Conecte a stella a ferramentas externas",
         "title": "MCP"
@@ -1443,10 +1435,6 @@
       "prompts": {
         "description": "Instruções reutilizáveis disponíveis com / no chat",
         "title": "Prompts"
-      },
-      "skills": {
-        "description": "Habilidades de IA personalizadas",
-        "title": "Habilidades"
       },
       "templates": {
         "description": "Modelos de documentos com espaços reservados",
@@ -1823,8 +1811,6 @@
         "termAddedToast": "“{value}” foi adicionado à lista do escritório.",
         "title": "Anonimização"
       },
-      "catalogue": "Catálogo",
-      "catalogueDescription": "Explore e instale skills, servidores MCP e ferramentas próprias para sua jurisdição",
       "matterNumbering": "Numeração de casos",
       "matterNumberingDescription": "Configure como os novos números de referência de casos são gerados",
       "membersDescription": "Gerenciar quem tem acesso a esta organização e quaisquer convites pendentes",

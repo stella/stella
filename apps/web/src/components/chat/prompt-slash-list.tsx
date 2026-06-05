@@ -10,35 +10,20 @@ import { cn } from "@stll/ui/lib/utils";
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
 import type { TranslationKey } from "@/i18n/types";
 
-type SectionKey =
-  | "prompt:private"
-  | "prompt:team"
-  | "skill:built-in"
-  | "skill:private"
-  | "skill:team";
+// Prompts and SKILL.md skills are one user-facing concept ("skills"), so
+// they share section headers grouped by scope rather than split by feed.
+type SectionKey = "private" | "team" | "built-in";
 
-const SECTION_ORDER: SectionKey[] = [
-  "prompt:private",
-  "prompt:team",
-  "skill:built-in",
-  "skill:private",
-  "skill:team",
-];
+const SECTION_ORDER: SectionKey[] = ["private", "team", "built-in"];
 
 const SECTION_LABEL_KEYS = {
-  "prompt:private": "chat.prompts.scope.private",
-  "prompt:team": "chat.prompts.scope.team",
-  "skill:built-in": "knowledge.agentSkills.builtInSection",
-  "skill:private": "chat.skills.scope.private",
-  "skill:team": "chat.skills.scope.team",
+  private: "chat.skills.scope.private",
+  team: "chat.skills.scope.team",
+  "built-in": "knowledge.agentSkills.builtInSection",
 } satisfies Record<SectionKey, TranslationKey>;
 
-const getSectionKey = (item: SlashItem): SectionKey => {
-  if (item.kind === "prompt") {
-    return `prompt:${item.prompt.scope}`;
-  }
-  return `skill:${item.skill.scope}`;
-};
+const getSectionKey = (item: SlashItem): SectionKey =>
+  item.kind === "prompt" ? item.prompt.scope : item.skill.scope;
 
 const groupItems = (
   items: SlashItem[],

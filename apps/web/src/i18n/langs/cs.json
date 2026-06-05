@@ -462,10 +462,6 @@
     "prompts": {
       "noResults": "Žádné odpovídající dovednosti",
       "noShortcuts": "Zatím žádné dovednosti. Přidejte je v části Znalosti → Dovednosti.",
-      "scope": {
-        "private": "Vaše dovednosti",
-        "team": "Týmové dovednosti"
-      },
       "tryOne": "Začni s jedním z těchto"
     },
     "queuedAttachmentCount": "{count, plural, one {# příloha} few {# přílohy} other {# příloh}}",
@@ -484,8 +480,8 @@
     "sendWithoutAnonymization": "Odeslat bez anonymizace",
     "skills": {
       "scope": {
-        "private": "Vaše AI dovednosti",
-        "team": "Týmové AI dovednosti"
+        "private": "Vaše dovednosti",
+        "team": "Týmové dovednosti"
       }
     },
     "sources": "Zdroje:",
@@ -1432,10 +1428,6 @@
       "clauses": {
         "description": "Knihovna vzorových ustanovení"
       },
-      "connectors": {
-        "description": "Připojení stelly k externím nástrojům",
-        "title": "MCP"
-      },
       "mcp": {
         "description": "Připojení stelly k externím nástrojům",
         "title": "MCP"
@@ -1443,10 +1435,6 @@
       "prompts": {
         "description": "Opakovaně použitelné instrukce dostupné přes / v chatu",
         "title": "Prompty"
-      },
-      "skills": {
-        "description": "Specializované AI schopnosti pro konkrétní pracovní postupy",
-        "title": "Dovednosti"
       },
       "templates": {
         "description": "Šablony dokumentů se zástupnými znaky",
@@ -1823,8 +1811,6 @@
         "termAddedToast": "Pojem „{value}“ byl přidán do firemního seznamu.",
         "title": "Anonymizace"
       },
-      "catalogue": "Nástroje",
-      "catalogueDescription": "Připojte stella k veřejným rejstříkům, registrům DPH a dalším zdrojům. Doporučení podle vaší jurisdikce.",
       "matterNumbering": "Číslování spisů",
       "matterNumberingDescription": "Nastavte, jak se generují referenční čísla nových spisů",
       "membersDescription": "Spravujte, kdo má přístup k této organizaci, a čekající pozvánky",
