@@ -261,6 +261,7 @@ function ChatIndex() {
     pinnedMatters.length > 0
       ? t("chat.landing.pinnedMatters")
       : t("chat.landing.lastAccessedMatters");
+  const MattersHeadingIcon = pinnedMatters.length > 0 ? PinIcon : LayersIcon;
 
   const recentChats = useMemo(() => {
     const threads: RecentChat[] = [];
@@ -398,7 +399,7 @@ function ChatIndex() {
                 className="text-muted-foreground hover:text-foreground focus-visible:ring-ring flex items-center gap-2 rounded-md px-1 text-xs font-semibold tracking-widest uppercase transition-colors outline-none focus-visible:ring-2"
                 to="/workspaces"
               >
-                <PinIcon className="size-4" />
+                <MattersHeadingIcon className="size-4" />
                 {mattersHeading}
               </Link>
             }
