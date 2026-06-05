@@ -32,9 +32,10 @@ type ExpiryAuditEvent = {
 };
 
 /**
- * A row can leave "open" between the SELECT and the UPDATE (a concurrent
- * finalize or takeover), so the ids the UPDATE actually transitioned are
- * the source of truth for what to audit, not the originally selected batch.
+ * A row selected as expirable can drop out before the UPDATE commits: a
+ * concurrent finalize or takeover leaves "open", or a checkpoint/resume
+ * renews tokenExpiresAt. The ids the UPDATE actually transitioned are the
+ * source of truth for what to audit, not the originally selected batch.
  */
 export const buildExpiryAuditEvents = (
   sessions: readonly ExpirableSession[],
@@ -104,6 +105,11 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
           and(
             inArray(desktopEditSessions.id, batchIds),
             eq(desktopEditSessions.status, "open"),
+            // Re-check expiry inside the UPDATE: a checkpoint or resume can
+            // extend tokenExpiresAt between the SELECT and here, renewing the
+            // session. Without this guard we would expire a freshly-renewed
+            // active session and close the editor.
+            lt(desktopEditSessions.tokenExpiresAt, now),
           ),
         )
         .returning({ id: desktopEditSessions.id });

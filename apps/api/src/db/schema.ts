@@ -1156,6 +1156,11 @@ export const desktopEditSessions = p.pgTable(
       .uniqueIndex("desktop_edit_sessions_open_uidx")
       .on(table.createdBy, table.entityId, table.propertyId)
       .where(sql`${table.status} = 'open'`),
+    // Serves the hourly expiry sweep: scan open sessions ordered by token TTL.
+    p
+      .index("desktop_edit_sessions_open_token_expires_idx")
+      .on(table.tokenExpiresAt)
+      .where(sql`${table.status} = 'open'`),
     p
       .foreignKey({
         columns: [table.entityId, table.workspaceId],
