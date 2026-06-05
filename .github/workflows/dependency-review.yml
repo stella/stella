@@ -73,6 +73,7 @@ jobs:
             pkg:npm/@ai-sdk/provider-utils,
             pkg:npm/@hocuspocus/provider,
             pkg:npm/@hocuspocus/server,
+            pkg:npm/@stll/ai-catalog,
             pkg:npm/@stll/anonymize-chat,
             pkg:npm/@stll/anonymize-wasm,
             pkg:npm/@stll/docx-core,
