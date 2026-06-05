@@ -153,6 +153,7 @@ import { createStarterKit } from "../core/prosemirror/extensions/StarterKit";
 import { createAICitationDecorationsPlugin } from "../core/prosemirror/plugins/aiCitationDecorations";
 import { createAISuggestionDecorationsPlugin } from "../core/prosemirror/plugins/aiSuggestionDecorations";
 import { createAnonymizationDecorationsPlugin } from "../core/prosemirror/plugins/anonymizationDecorations";
+import { autocompleteSuggestionPlugin } from "../core/prosemirror/plugins/autocompleteSuggestion";
 import {
   createSuggestionModePlugin,
   setSuggestionMode,
@@ -760,8 +761,19 @@ export function DocxEditor({
       }),
     [],
   );
+  // Inline autocomplete. Always installed and idle by default;
+  // becomes active only when the host pushes a `start` meta via
+  // {@link startAutocompleteSuggestion}. The keymap option lets
+  // the plugin intercept Tab/⌘→/Esc; it sits early in the plugin
+  // array so it runs before list-indent Tab handlers in the
+  // extension chain.
+  const autocompletePlugin = useMemo(
+    () => autocompleteSuggestionPlugin({ keymap: true }),
+    [],
+  );
   const editorPlugins = useMemo(
     () => [
+      autocompletePlugin,
       ...(collaboration?.plugins ?? []),
       suggestionPlugin,
       aiSuggestionPlugin,
@@ -769,6 +781,7 @@ export function DocxEditor({
       anonymizationDecorationsPlugin,
     ],
     [
+      autocompletePlugin,
       collaboration?.plugins,
       suggestionPlugin,
       aiSuggestionPlugin,
@@ -778,32 +791,38 @@ export function DocxEditor({
   );
 
   // Surface the live PM view to the host for AI overlay wiring.
-  // We watch `history.state` because the document re-loads (e.g.,
-  // unlocking from preview into editing) re-mount the PagedEditor
-  // and replace the view instance.
+  // PagedEditor reports the exact create/destroy lifecycle; the
+  // history-state pass catches document replacements that swap the
+  // view under the same host component.
   const lastReportedViewRef = useRef<EditorView | null>(null);
-  useEffect(() => {
+  const reportEditorViewReady = useCallback(
+    (view: EditorView | null) => {
+      if (!onEditorViewReady) {
+        return;
+      }
+      if (lastReportedViewRef.current === view) {
+        return;
+      }
+      lastReportedViewRef.current = view;
+      onEditorViewReady(view);
+    },
+    [onEditorViewReady],
+  );
+  useLayoutEffect(() => {
     if (!onEditorViewReady) {
       return;
     }
     const view = pagedEditorRef.current?.getView() ?? null;
-    if (lastReportedViewRef.current === view) {
-      return;
-    }
-    lastReportedViewRef.current = view;
-    onEditorViewReady(view);
-  }, [onEditorViewReady, history.state]);
+    reportEditorViewReady(view);
+  }, [onEditorViewReady, reportEditorViewReady, history.state]);
   useEffect(() => {
     if (!onEditorViewReady) {
       return;
     }
     return () => {
-      if (lastReportedViewRef.current !== null) {
-        lastReportedViewRef.current = null;
-        onEditorViewReady(null);
-      }
+      reportEditorViewReady(null);
     };
-  }, [onEditorViewReady]);
+  }, [onEditorViewReady, reportEditorViewReady]);
 
   // Refresh outline headings when the document loads or the outline is enabled.
   // handleDocumentChange keeps it in sync after subsequent edits. Page-number
@@ -3430,6 +3449,9 @@ export function DocxEditor({
                       }}
                       {...(onSelectionTextChange !== undefined
                         ? { onSelectionTextChange }
+                        : {})}
+                      {...(onEditorViewReady !== undefined
+                        ? { onEditorViewReady: reportEditorViewReady }
                         : {})}
                       externalPlugins={editorPlugins}
                       {...(collaboration !== undefined

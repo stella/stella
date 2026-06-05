@@ -46,11 +46,13 @@ import {
   SelectValue as StSelectValue,
 } from "@stll/ui/components/select";
 import { stellaToast } from "@stll/ui/components/toast";
-import "@stll/folio/editor.css";
 
 import { useActiveDocxStore } from "@/components/ai-suggestions/active-docx-store";
+import "@stll/folio/editor.css";
+
 import type { ActiveDocxRegistrationToken } from "@/components/ai-suggestions/active-docx-store";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
+import { useAutocompleteStream } from "@/components/autocomplete/use-autocomplete-stream";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { StatusMessage } from "@/components/route-components";
 import Tooltip from "@/components/tooltip";
@@ -197,6 +199,16 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   // term list whenever it (or the view) changes.
   const [editorViewForAnonymization, setEditorViewForAnonymization] =
     useState<EditorView | null>(null);
+
+  // Inline autocomplete (ghost-text + "stella" caret). Behind a
+  // dev gate while the feature is shaking out; promotes to a real
+  // toggle once retrieval grounding is wired and the audit-log
+  // table exists. The hook installs a transaction wrapper on the
+  // view and tears down on unmount.
+  useAutocompleteStream(editorViewForAnonymization, {
+    enabled: import.meta.env.DEV,
+    language: "en",
+  });
   // True while the inspector's Anonymization facet is mounted.
   // We gate both the term feed *and* the detection heartbeat on
   // this so highlights paint only while the user is on that tab

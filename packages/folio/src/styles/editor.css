@@ -11,6 +11,7 @@
 
 @import "./fonts.css";
 @import "./font-aliases.css";
+@import "./autocomplete.css";
 
 /* ============================================================================
  * CSS CUSTOM PROPERTIES — adapts to .dark class on :root
