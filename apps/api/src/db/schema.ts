@@ -1506,6 +1506,10 @@ export const fields = p.pgTable(
       .index("fields_ws_entity_version_property_idx")
       .on(table.workspaceId, table.entityVersionId, table.propertyId),
     p
+      .index("fields_pending_workspace_idx")
+      .on(table.workspaceId)
+      .where(sql`${table.content}->>'type' = 'pending'`),
+    p
       .foreignKey({
         columns: [table.propertyId, table.workspaceId],
         foreignColumns: [properties.id, properties.workspaceId],

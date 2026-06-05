@@ -18,6 +18,12 @@ type OrphanSelectionInput = {
   liveWorkspaceIds: ReadonlySet<string>;
 };
 
+type RecoverableOrphanSelectionInput = OrphanSelectionInput & {
+  currentRequestIds: ReadonlyMap<string, string | null>;
+  initialRequestIds: ReadonlyMap<string, string | null>;
+  pendingWorkspaceIds: ReadonlySet<string>;
+};
+
 /**
  * A candidate workspace (one holding a `running` lock or owning `pending`
  * cells) is orphaned when no in-flight queue job belongs to it: the
@@ -40,4 +46,44 @@ export const selectOrphanWorkspaceIds = ({
     orphans.push(workspaceId);
   }
   return orphans;
+};
+
+/**
+ * Final recovery gate after the settle window. A candidate is recoverable only
+ * when it still has no live job, its request id did not change during the
+ * window, and it is either tied to pending cells or has no request id at all.
+ * The last condition avoids reclaiming a healthy workflow that is still
+ * planning before its first queue job exists.
+ */
+export const selectRecoverableOrphanWorkspaceIds = ({
+  candidateWorkspaceIds,
+  currentRequestIds,
+  initialRequestIds,
+  liveWorkspaceIds,
+  pendingWorkspaceIds,
+}: RecoverableOrphanSelectionInput): string[] => {
+  const recoverable: string[] = [];
+  const seen = new Set<string>();
+
+  for (const workspaceId of candidateWorkspaceIds) {
+    if (seen.has(workspaceId) || liveWorkspaceIds.has(workspaceId)) {
+      continue;
+    }
+
+    const initialRequestId = initialRequestIds.get(workspaceId) ?? null;
+    const currentRequestId = currentRequestIds.get(workspaceId) ?? null;
+    if (currentRequestId !== initialRequestId) {
+      continue;
+    }
+
+    const hasPendingCells = pendingWorkspaceIds.has(workspaceId);
+    if (!hasPendingCells && currentRequestId !== null) {
+      continue;
+    }
+
+    seen.add(workspaceId);
+    recoverable.push(workspaceId);
+  }
+
+  return recoverable;
 };

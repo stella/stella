@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   parseRunningLockWorkspaceId,
   selectOrphanWorkspaceIds,
+  selectRecoverableOrphanWorkspaceIds,
 } from "@/api/lib/workflow/orphan-recovery";
 
 describe("parseRunningLockWorkspaceId", () => {
@@ -53,5 +54,55 @@ describe("selectOrphanWorkspaceIds", () => {
         liveWorkspaceIds: new Set(),
       }),
     ).toEqual(["a", "b"]);
+  });
+});
+
+describe("selectRecoverableOrphanWorkspaceIds", () => {
+  test("recovers stable candidates with pending cells", () => {
+    expect(
+      selectRecoverableOrphanWorkspaceIds({
+        candidateWorkspaceIds: ["a"],
+        currentRequestIds: new Map([["a", "request-a"]]),
+        initialRequestIds: new Map([["a", "request-a"]]),
+        liveWorkspaceIds: new Set(),
+        pendingWorkspaceIds: new Set(["a"]),
+      }),
+    ).toEqual(["a"]);
+  });
+
+  test("skips candidates whose request id changed during the settle window", () => {
+    expect(
+      selectRecoverableOrphanWorkspaceIds({
+        candidateWorkspaceIds: ["a"],
+        currentRequestIds: new Map([["a", "request-b"]]),
+        initialRequestIds: new Map([["a", "request-a"]]),
+        liveWorkspaceIds: new Set(),
+        pendingWorkspaceIds: new Set(["a"]),
+      }),
+    ).toEqual([]);
+  });
+
+  test("does not recover a planning workflow with an established request id", () => {
+    expect(
+      selectRecoverableOrphanWorkspaceIds({
+        candidateWorkspaceIds: ["a"],
+        currentRequestIds: new Map([["a", "request-a"]]),
+        initialRequestIds: new Map([["a", "request-a"]]),
+        liveWorkspaceIds: new Set(),
+        pendingWorkspaceIds: new Set(),
+      }),
+    ).toEqual([]);
+  });
+
+  test("recovers a bare lock with no request id", () => {
+    expect(
+      selectRecoverableOrphanWorkspaceIds({
+        candidateWorkspaceIds: ["a"],
+        currentRequestIds: new Map([["a", null]]),
+        initialRequestIds: new Map([["a", null]]),
+        liveWorkspaceIds: new Set(),
+        pendingWorkspaceIds: new Set(),
+      }),
+    ).toEqual(["a"]);
   });
 });

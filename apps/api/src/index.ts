@@ -404,13 +404,14 @@ const workflowWorker = initWorkflowWorker();
 
 api.listen(getApiPort());
 
-// Graceful shutdown: drain the BullMQ workers on SIGTERM/SIGINT (deploy,
-// container stop, or a local `bun --watch` restart) so an in-flight job
-// is not abandoned mid-write. An abandoned job strands its workflow lock
-// and leaves cells stuck `pending` until the next boot reconciles them;
-// draining first avoids creating that orphan in the common case. Bounded
-// so a slow job can't hang shutdown — anything still in flight past the
-// timeout is reclaimed by the next boot's reconciler.
+// Graceful shutdown: stop accepting HTTP requests, then drain the BullMQ
+// workers on SIGTERM/SIGINT (deploy, container stop, or a local
+// `bun --watch` restart) so an in-flight job is not abandoned mid-write.
+// An abandoned job strands its workflow lock and leaves cells stuck
+// `pending` until the next boot reconciles them; draining avoids creating
+// that orphan in the common case. Worker draining is bounded so a slow job
+// can't hang shutdown; anything still in flight past the timeout is
+// reclaimed by the next boot's reconciler.
 let shuttingDown = false;
 const shutdownWorkers = async (signal: string): Promise<void> => {
   if (shuttingDown) {
@@ -418,6 +419,11 @@ const shutdownWorkers = async (signal: string): Promise<void> => {
   }
   shuttingDown = true;
   logger.info("api.shutdown_started", { signal });
+  await api.stop().catch((error: unknown) => {
+    logger.error("api.stop_failed", {
+      "error.type": errorTag(error),
+    });
+  });
   await Promise.race([
     Promise.allSettled([workflowWorker.close(), fileDerivativeWorker.close()]),
     Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),

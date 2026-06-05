@@ -54,6 +54,7 @@ import {
 import {
   parseRunningLockWorkspaceId,
   selectOrphanWorkspaceIds,
+  selectRecoverableOrphanWorkspaceIds,
 } from "@/api/lib/workflow/orphan-recovery";
 import type { PartialAnswerUpdate } from "@/api/lib/workflow/streaming-answer";
 import { prepareBatch } from "@/api/lib/workflow/utils";
@@ -509,6 +510,14 @@ export const startWorkflow = async ({
     return { status: "already-running" };
   }
 
+  const requestId = Bun.randomUUIDv7();
+  await redis.set(
+    workflowKey(workspaceId, "request-id"),
+    requestId,
+    "EX",
+    RUNNING_LOCK_TTL_SEC,
+  );
+
   try {
     const executionPlanData = await getExecutionPlanData(workspaceId, scopedDb);
 
@@ -582,15 +591,7 @@ export const startWorkflow = async ({
       return { status: "skipped" };
     }
 
-    const requestId = Bun.randomUUIDv7();
-
     // Store entity count for completion tracking
-    await redis.set(
-      workflowKey(workspaceId, "request-id"),
-      requestId,
-      "EX",
-      RUNNING_LOCK_TTL_SEC,
-    );
     await redis.set(workflowKey(workspaceId, "total"), String(targetCount));
     await redis.set(workflowKey(workspaceId, "completed"), "0");
 
@@ -762,23 +763,81 @@ const scanRunningLockWorkspaceIds = async (
   return workspaceIds;
 };
 
-const selectWorkspacesWithPendingCells = async (): Promise<string[]> => {
-  const rows = await rootDb
-    .selectDistinct({ workspaceId: fields.workspaceId })
-    .from(fields)
-    .where(sql`${fields.content}->>'type' = 'pending'`);
-  return rows.map((row) => row.workspaceId);
+const selectWorkspacesWithPendingCells = async (
+  workspaceIds?: readonly string[],
+): Promise<string[]> => {
+  if (workspaceIds?.length === 0) {
+    return [];
+  }
+
+  const pendingWorkspaceIds: string[] = [];
+  const workspaceIdBatches =
+    workspaceIds === undefined
+      ? [null]
+      : chunkItems(workspaceIds, LIMITS.workflowEntityBatchSize);
+
+  for (const workspaceIdBatch of workspaceIdBatches) {
+    const workspaceFilter =
+      workspaceIdBatch === null
+        ? undefined
+        : inArray(
+            fields.workspaceId,
+            workspaceIdBatch.map((workspaceId) =>
+              brandPersistedWorkspaceId(workspaceId),
+            ),
+          );
+    const rows = await rootDb
+      .selectDistinct({ workspaceId: fields.workspaceId })
+      .from(fields)
+      .where(
+        and(workspaceFilter, sql`${fields.content}->>'type' = 'pending'`),
+      );
+    for (const row of rows) {
+      pendingWorkspaceIds.push(row.workspaceId);
+    }
+  }
+
+  return pendingWorkspaceIds;
 };
 
 const snapshotLiveWorkspaceIds = async (
   q: Queue<EntityJobData>,
 ): Promise<LiveWorkspaceSnapshot> => {
-  const jobs = await q.getJobs([...LIVE_JOB_STATES], 0, LIVE_JOB_SCAN_LIMIT);
+  const jobs = await q.getJobs(
+    [...LIVE_JOB_STATES],
+    0,
+    LIVE_JOB_SCAN_LIMIT - 1,
+  );
   const workspaceIds = new Set<string>();
   for (const job of jobs) {
-    workspaceIds.add(job.data.workspaceId);
+    const workspaceId = job.data.workspaceId;
+    if (workspaceId.length === 0) {
+      continue;
+    }
+    workspaceIds.add(workspaceId);
   }
-  return { workspaceIds, truncated: jobs.length > LIVE_JOB_SCAN_LIMIT };
+  return { workspaceIds, truncated: jobs.length >= LIVE_JOB_SCAN_LIMIT };
+};
+
+const readWorkflowRequestIds = async (
+  redis: RedisClient,
+  workspaceIds: readonly string[],
+): Promise<Map<string, string | null>> => {
+  const requestIds = new Map<string, string | null>();
+  for (const workspaceIdBatch of chunkItems(
+    workspaceIds,
+    LIMITS.workflowEntityBatchSize,
+  )) {
+    await Promise.all(
+      workspaceIdBatch.map(async (workspaceId) => {
+        const requestId = await redis.get(
+          workflowKey(brandPersistedWorkspaceId(workspaceId), "request-id"),
+        );
+        requestIds.set(workspaceId, requestId);
+      }),
+    );
+  }
+  return requestIds;
 };
 
 const recoverOrphanedWorkflow = async (
@@ -831,7 +890,7 @@ export const reconcileOrphanedWorkflows = async ({
   const lockedWorkspaceIds = await scanRunningLockWorkspaceIds(redis);
   const pendingWorkspaceIds = scanPendingCells
     ? await selectWorkspacesWithPendingCells()
-    : [];
+    : await selectWorkspacesWithPendingCells(lockedWorkspaceIds);
 
   const candidateWorkspaceIds = [...lockedWorkspaceIds, ...pendingWorkspaceIds];
   if (candidateWorkspaceIds.length === 0) {
@@ -855,6 +914,9 @@ export const reconcileOrphanedWorkflows = async ({
     return;
   }
 
+  const pendingWorkspaceIdSet = new Set(pendingWorkspaceIds);
+  const initialRequestIds = await readWorkflowRequestIds(redis, orphanCandidates);
+
   // Re-confirm after a settle delay so a workflow that is mid-startup
   // (lock taken, first batch not yet enqueued) is not mistaken for an
   // orphan.
@@ -864,10 +926,16 @@ export const reconcileOrphanedWorkflows = async ({
     return;
   }
 
-  for (const workspaceId of orphanCandidates) {
-    if (confirmed.workspaceIds.has(workspaceId)) {
-      continue;
-    }
+  const currentRequestIds = await readWorkflowRequestIds(redis, orphanCandidates);
+  const recoverableOrphans = selectRecoverableOrphanWorkspaceIds({
+    candidateWorkspaceIds: orphanCandidates,
+    currentRequestIds,
+    initialRequestIds,
+    liveWorkspaceIds: confirmed.workspaceIds,
+    pendingWorkspaceIds: pendingWorkspaceIdSet,
+  });
+
+  for (const workspaceId of recoverableOrphans) {
     await recoverOrphanedWorkflow(brandPersistedWorkspaceId(workspaceId));
   }
 };
