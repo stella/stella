@@ -40,7 +40,9 @@ describe("loadOrgAIConfig", () => {
 
     const { loadOrgAIConfig } = await import("@/api/lib/ai-config-loader");
 
-    await expect(loadOrgAIConfig(organizationId)).resolves.toBeNull();
+    const result = await loadOrgAIConfig(organizationId);
+
+    expect(result).toBeNull();
     expect(decryptAIConfigMock).not.toHaveBeenCalled();
   });
 
@@ -51,7 +53,9 @@ describe("loadOrgAIConfig", () => {
 
     const { loadOrgAIConfig } = await import("@/api/lib/ai-config-loader");
 
-    await expect(loadOrgAIConfig(organizationId)).resolves.toEqual({
+    const result = await loadOrgAIConfig(organizationId);
+
+    expect(result).toEqual({
       overrideModels: {},
       providers: [],
     });
@@ -68,9 +72,9 @@ describe("loadPromptCachingPreference", () => {
     const { loadPromptCachingPreference } =
       await import("@/api/lib/ai-config-loader");
 
-    await expect(loadPromptCachingPreference(organizationId)).resolves.toBe(
-      true,
-    );
+    const result = await loadPromptCachingPreference(organizationId);
+
+    expect(result).toBe(true);
   });
 
   test("returns the stored preference", async () => {
@@ -78,8 +82,8 @@ describe("loadPromptCachingPreference", () => {
     const { loadPromptCachingPreference } =
       await import("@/api/lib/ai-config-loader");
 
-    await expect(loadPromptCachingPreference(organizationId)).resolves.toBe(
-      false,
-    );
+    const result = await loadPromptCachingPreference(organizationId);
+
+    expect(result).toBe(false);
   });
 });
