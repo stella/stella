@@ -16,6 +16,16 @@
 
 import type { FlowBlock, Measure, TableBlock, TableMeasure } from "./types";
 
+function getAtomicBlockHeight(measure: Measure): number {
+  if ("totalHeight" in measure) {
+    return measure.totalHeight;
+  }
+  if ("height" in measure) {
+    return measure.height;
+  }
+  return 0;
+}
+
 /** Cumulative y of each line bottom within a single cell's content. */
 function cellLineBottoms(
   cellBlocks: FlowBlock[] | undefined,
@@ -41,10 +51,13 @@ function cellLineBottoms(
         bottoms.push(y);
       }
       y += spacing?.after ?? 0;
-    } else if (measure && "totalHeight" in measure) {
+    } else if (measure) {
       // Nested table / non-paragraph: one atomic block (break only at its bottom).
-      y += measure.totalHeight;
-      bottoms.push(y);
+      const blockHeight = getAtomicBlockHeight(measure);
+      if (blockHeight > 0) {
+        y += blockHeight;
+        bottoms.push(y);
+      }
     }
   }
   return bottoms;

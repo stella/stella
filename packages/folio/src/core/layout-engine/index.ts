@@ -684,11 +684,15 @@ function layoutTable(
       oversizedRow.height > fullPageHeight &&
       (breakInfo.breakOffsets[currentRowIndex]?.length ?? 0) > 1
     ) {
+      const repeatHeaderRows =
+        headerRowCount > 0 && currentRowIndex >= headerRowCount;
+      const headerOverhead = repeatHeaderRows ? headerRowsHeight : 0;
       let consumed = 0;
       while (consumed < oversizedRow.height) {
         const sliceState = paginator.getCurrentState();
         const sliceAvail =
           paginator.getAvailableHeight() -
+          headerOverhead -
           (consumed === 0 ? sliceState.trailingSpacing : 0);
         let slice = snapRowBreak(
           breakInfo,
@@ -697,8 +701,11 @@ function layoutTable(
           sliceAvail,
         );
         if (slice <= 0) {
-          if (sliceAvail < fullPageHeight) {
-            // Not even one line fits in the space left — start a fresh page.
+          const isFreshPage =
+            sliceState.cursorY === sliceState.topMargin &&
+            sliceState.page.fragments.length === 0;
+          if (!isFreshPage) {
+            // Not even one line fits in the space left; start a fresh page.
             paginator.forcePageBreak();
             continue;
           }
@@ -713,13 +720,14 @@ function layoutTable(
         const sliceBottom = consumed + slice;
         const reachesRowEnd = sliceBottom >= oversizedRow.height;
         const moreAfter = !reachesRowEnd || currentRowIndex + 1 < rows.length;
+        const fragmentHeight = headerOverhead + slice;
         const sliceFragment: TableFragment = {
           kind: "table",
           blockId: block.id,
           x: computeTableX(sliceState.columnIndex),
           y: 0,
           width: measure.totalWidth,
-          height: slice,
+          height: fragmentHeight,
           fromRow: currentRowIndex,
           toRow: currentRowIndex + 1,
           ...(block.pmStart !== undefined ? { pmStart: block.pmStart } : {}),
@@ -728,11 +736,17 @@ function layoutTable(
             ? { continuesFromPrev: true }
             : {}),
           ...(moreAfter ? { continuesOnNext: true } : {}),
+          ...(repeatHeaderRows ? { headerRowCount } : {}),
           ...(consumed > 0 ? { topClip: consumed } : {}),
           ...(reachesRowEnd ? {} : { bottomClip: sliceBottom }),
           ...(block.sdtGroups ? { sdtGroups: block.sdtGroups } : {}),
         };
-        const sliceResult = paginator.addFragment(sliceFragment, slice, 0, 0);
+        const sliceResult = paginator.addFragment(
+          sliceFragment,
+          fragmentHeight,
+          0,
+          0,
+        );
         sliceFragment.y = sliceResult.y;
         consumed = sliceBottom;
         if (consumed < oversizedRow.height) {

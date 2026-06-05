@@ -826,13 +826,11 @@ export function renderTableFragment(
   // Track spanning cells across rows
   const spanningCells = new Map<string, SpanningCell>();
 
-  // Render repeated header rows for continuation fragments.
-  // For a mid-content row break (eigenpal #698) the fragment shows the band
-  // [topClip, bottomClip) of a single row: offset the row stack up by topClip
-  // so that band lands at the fragment top; the table's `overflow: hidden` plus
-  // `height` (the slice) clips the rest.
+  // Render repeated header rows for continuation fragments. For a mid-content
+  // row break (eigenpal #698), keep repeated headers pinned to the fragment top
+  // and offset only the content row stack by topClip.
   const headerRowCount = fragment.headerRowCount ?? 0;
-  let y = -(fragment.topClip ?? 0);
+  let y = 0;
   if (headerRowCount > 0 && fragment.continuesFromPrev) {
     for (let hdrIdx = 0; hdrIdx < headerRowCount; hdrIdx++) {
       const hdrRow = block.rows[hdrIdx];
@@ -858,6 +856,23 @@ export function renderTableFragment(
       tableEl.append(rowEl);
       y += hdrRowMeasure.height;
     }
+  }
+
+  const topClip = fragment.topClip ?? 0;
+  let contentParent: HTMLElement = tableEl;
+  if (headerRowCount > 0 && fragment.continuesFromPrev && topClip > 0) {
+    const contentClipEl = doc.createElement("div");
+    contentClipEl.style.position = "absolute";
+    contentClipEl.style.left = "0";
+    contentClipEl.style.top = `${y}px`;
+    contentClipEl.style.width = "100%";
+    contentClipEl.style.height = `${Math.max(0, fragment.height - y)}px`;
+    contentClipEl.style.overflow = "hidden";
+    tableEl.append(contentClipEl);
+    contentParent = contentClipEl;
+    y = -topClip;
+  } else {
+    y -= topClip;
   }
 
   // Render content rows from fragment.fromRow to fragment.toRow
@@ -889,7 +904,7 @@ export function renderTableFragment(
       isFirstRowInFragment,
     );
 
-    tableEl.append(rowEl);
+    contentParent.append(rowEl);
     y += rowMeasure.height;
   }
 
