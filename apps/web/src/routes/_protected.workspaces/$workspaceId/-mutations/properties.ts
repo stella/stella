@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import type { PropertyContentType } from "@stll/api/types";
 
@@ -30,6 +30,7 @@ type CreatePropertyVars = {
 
 export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
   const analytics = useAnalytics();
+  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({
@@ -69,6 +70,15 @@ export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
 
       return response.data;
     },
+    onSuccess: () => {
+      // Reflect the actor's own write immediately instead of waiting on
+      // the server-pushed SSE invalidation round-trip; SSE remains the
+      // path that propagates the change to other users' tabs.
+      // eslint-disable-next-line typescript/no-floating-promises
+      queryClient.invalidateQueries({
+        queryKey: propertiesKeys.all(workspaceId),
+      });
+    },
     onError: (error) => {
       analytics.captureError(error);
     },
@@ -91,6 +101,7 @@ export const useCreatePropertiesBatch = ({
   workspaceId: string;
 }) => {
   const analytics = useAnalytics();
+  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({ items }: { items: CreatePropertySpec[] }) => {
@@ -126,6 +137,12 @@ export const useCreatePropertiesBatch = ({
 
       return response.data;
     },
+    onSuccess: () => {
+      // eslint-disable-next-line typescript/no-floating-promises
+      queryClient.invalidateQueries({
+        queryKey: propertiesKeys.all(workspaceId),
+      });
+    },
     onError: (error) => {
       analytics.captureError(error);
     },
@@ -142,6 +159,7 @@ type UpdatePropertyVars = {
 
 export const useUpdateProperty = () => {
   const analytics = useAnalytics();
+  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({
@@ -175,6 +193,12 @@ export const useUpdateProperty = () => {
       if (response.error) {
         throw toAPIError(response.error);
       }
+    },
+    onSuccess: (_data, { workspaceId }) => {
+      // eslint-disable-next-line typescript/no-floating-promises
+      queryClient.invalidateQueries({
+        queryKey: propertiesKeys.all(workspaceId),
+      });
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -284,6 +308,7 @@ type DeletePropertyVars = {
 
 export const useDeleteProperty = () => {
   const analytics = useAnalytics();
+  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({ workspaceId, propertyId }: DeletePropertyVars) => {
@@ -297,6 +322,12 @@ export const useDeleteProperty = () => {
       if (response.error) {
         throw toAPIError(response.error);
       }
+    },
+    onSuccess: (_data, { workspaceId }) => {
+      // eslint-disable-next-line typescript/no-floating-promises
+      queryClient.invalidateQueries({
+        queryKey: propertiesKeys.all(workspaceId),
+      });
     },
     onError: (error) => {
       analytics.captureError(error);
