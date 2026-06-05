@@ -232,22 +232,30 @@ type FieldProps = {
   value: string;
 };
 
-const Field = ({ icon: Icon, ariaLabel, value }: FieldProps) => (
-  <Tooltip
-    content={ariaLabel}
-    render={
-      <div aria-label={ariaLabel} className="flex w-fit items-center gap-2">
-        <Icon
-          aria-hidden="true"
-          className="text-muted-foreground size-4 shrink-0"
-        />
-        <span className="text-foreground truncate text-sm font-medium">
-          {value}
-        </span>
-      </div>
-    }
-  />
-);
+const Field = ({ icon: Icon, ariaLabel, value }: FieldProps) => {
+  const fieldLabel = `${ariaLabel}: ${value}`;
+
+  return (
+    <Tooltip
+      className="max-w-80 text-start whitespace-normal"
+      content={<FieldTooltipContent label={ariaLabel} value={value} />}
+      render={
+        <div
+          aria-label={fieldLabel}
+          className="flex w-fit max-w-full min-w-0 items-center gap-2"
+        >
+          <Icon
+            aria-hidden="true"
+            className="text-muted-foreground size-4 shrink-0"
+          />
+          <span className="text-foreground min-w-0 truncate text-sm font-medium">
+            {value}
+          </span>
+        </div>
+      }
+    />
+  );
+};
 
 type AuthorFieldProps = {
   ariaLabel: string;
@@ -257,13 +265,17 @@ type AuthorFieldProps = {
 
 const AuthorField = ({ ariaLabel, authorUrl, value }: AuthorFieldProps) => {
   const safeAuthorUrl = sanitizeHref(authorUrl);
+  const fieldLabel = `${ariaLabel}: ${value}`;
+  const tooltipContent = (
+    <FieldTooltipContent label={ariaLabel} value={value} />
+  );
   const inner = (
     <>
       <UserIcon
         aria-hidden="true"
         className="text-muted-foreground size-4 shrink-0"
       />
-      <span className="text-foreground truncate text-sm font-medium">
+      <span className="text-foreground min-w-0 truncate text-sm font-medium">
         {value}
       </span>
       {safeAuthorUrl && (
@@ -278,11 +290,12 @@ const AuthorField = ({ ariaLabel, authorUrl, value }: AuthorFieldProps) => {
   if (safeAuthorUrl) {
     return (
       <Tooltip
-        content={ariaLabel}
+        className="max-w-80 text-start whitespace-normal"
+        content={tooltipContent}
         render={
           <a
-            aria-label={ariaLabel}
-            className="hover:bg-muted -mx-1 flex w-fit items-center gap-2 rounded-md px-1 py-0.5 transition-colors"
+            aria-label={fieldLabel}
+            className="hover:bg-muted -mx-1 flex w-fit max-w-full min-w-0 items-center gap-2 rounded-md px-1 py-0.5 transition-colors"
             href={safeAuthorUrl}
             onClick={(e) => e.stopPropagation()}
             rel="noreferrer"
@@ -297,15 +310,31 @@ const AuthorField = ({ ariaLabel, authorUrl, value }: AuthorFieldProps) => {
 
   return (
     <Tooltip
-      content={ariaLabel}
+      className="max-w-80 text-start whitespace-normal"
+      content={tooltipContent}
       render={
-        <div aria-label={ariaLabel} className="flex w-fit items-center gap-2">
+        <div
+          aria-label={fieldLabel}
+          className="flex w-fit max-w-full min-w-0 items-center gap-2"
+        >
           {inner}
         </div>
       }
     />
   );
 };
+
+type FieldTooltipContentProps = {
+  label: string;
+  value: string;
+};
+
+const FieldTooltipContent = ({ label, value }: FieldTooltipContentProps) => (
+  <span className="flex flex-col gap-1">
+    <span className="text-xs opacity-75">{label}</span>
+    <span className="text-xs font-medium break-all">{value}</span>
+  </span>
+);
 
 type ChipRowProps = {
   icon: LucideIcon;
