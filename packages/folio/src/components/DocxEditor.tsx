@@ -153,6 +153,7 @@ import { createStarterKit } from "../core/prosemirror/extensions/StarterKit";
 import { createAICitationDecorationsPlugin } from "../core/prosemirror/plugins/aiCitationDecorations";
 import { createAISuggestionDecorationsPlugin } from "../core/prosemirror/plugins/aiSuggestionDecorations";
 import { createAnonymizationDecorationsPlugin } from "../core/prosemirror/plugins/anonymizationDecorations";
+import { autocompleteSuggestionPlugin } from "../core/prosemirror/plugins/autocompleteSuggestion";
 import {
   createSuggestionModePlugin,
   setSuggestionMode,
@@ -760,8 +761,19 @@ export function DocxEditor({
       }),
     [],
   );
+  // Inline autocomplete. Always installed and idle by default;
+  // becomes active only when the host pushes a `start` meta via
+  // {@link startAutocompleteSuggestion}. The keymap option lets
+  // the plugin intercept Tab/⌘→/Esc; it sits early in the plugin
+  // array so it runs before list-indent Tab handlers in the
+  // extension chain.
+  const autocompletePlugin = useMemo(
+    () => autocompleteSuggestionPlugin({ keymap: true }),
+    [],
+  );
   const editorPlugins = useMemo(
     () => [
+      autocompletePlugin,
       ...(collaboration?.plugins ?? []),
       suggestionPlugin,
       aiSuggestionPlugin,
@@ -769,6 +781,7 @@ export function DocxEditor({
       anonymizationDecorationsPlugin,
     ],
     [
+      autocompletePlugin,
       collaboration?.plugins,
       suggestionPlugin,
       aiSuggestionPlugin,

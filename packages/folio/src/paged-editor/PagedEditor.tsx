@@ -134,6 +134,8 @@ import {
 import type { ExtensionManager } from "../core/prosemirror/extensions/ExtensionManager";
 import { anonymizationDecorationsKey } from "../core/prosemirror/plugins/anonymizationDecorations";
 import type { AnonymizationMatch } from "../core/prosemirror/plugins/anonymizationDecorations";
+import { autocompleteSuggestionKey } from "../core/prosemirror/plugins/autocompleteSuggestion";
+import type { AutocompleteSuggestionState } from "../core/prosemirror/plugins/autocompleteSuggestion";
 import type { ImagePositionAttrs } from "../core/prosemirror/schema/nodes";
 import type { Footnote } from "../core/types/content";
 // Types
@@ -155,6 +157,8 @@ import { getDocumentWatermark } from "../core/watermark";
 // Internal components
 import { AnonymizationRectsOverlay } from "./AnonymizationRectsOverlay";
 import type { AnonymizationRectGroup } from "./AnonymizationRectsOverlay";
+import { AutocompleteCaretOverlay } from "./AutocompleteCaretOverlay";
+import type { AutocompleteCaretRect } from "./AutocompleteCaretOverlay";
 import {
   computeFirstPageHeaderFooterMarginExtender,
   computeHeaderFooterMarginExtender,
@@ -2616,6 +2620,22 @@ export function PagedEditor(
   // its own re-run.
   const anonymizationMatchesRef = useRef<readonly AnonymizationMatch[]>([]);
   const anonymizationOverlayRequestSeqRef = useRef(0);
+  // Autocomplete (inline ghost-text) overlay state. Mirrors the
+  // anonymization pattern: a ref tracks the latest plugin
+  // suggestion, a derived caret-rect lives in state and drives
+  // the overlay. The plugin sits in the hidden editor; the
+  // visible ghost is painted on the paged canvas.
+  const autocompleteSuggestionRef = useRef<AutocompleteSuggestionState>({
+    status: "idle",
+    anchor: null,
+    text: "",
+    requestId: null,
+  });
+  const [autocompleteCaret, setAutocompleteCaret] =
+    useState<AutocompleteCaretRect | null>(null);
+  const [autocompleteText, setAutocompleteText] = useState<string>("");
+  const [autocompleteIsStreaming, setAutocompleteIsStreaming] =
+    useState<boolean>(false);
   const [remoteSelections, setRemoteSelections] = useState<
     HiddenProseMirrorRemoteSelection[]
   >([]);
@@ -4060,6 +4080,59 @@ export function PagedEditor(
     );
   }, [layout, blocks, measures, zoom]);
 
+  // Project the autocomplete suggestion's anchor onto container
+  // coordinates so {@link AutocompleteCaretOverlay} can paint the
+  // ghost text at the cursor's pixel position. Pulls from the
+  // ref so this can run from a transaction handler without
+  // re-creating callbacks per render.
+  const updateAutocompleteOverlay = useCallback(() => {
+    const current = autocompleteSuggestionRef.current;
+    if (current.status === "idle" || current.text.length === 0) {
+      setAutocompleteCaret(null);
+      setAutocompleteText("");
+      setAutocompleteIsStreaming(false);
+      return;
+    }
+    if (!layout || blocks.length === 0) {
+      return;
+    }
+    const anchor = current.anchor;
+    // Caret geometry is in the lazily-loaded selection-geometry chunk (kept out
+    // of the initial Folio bundle), so resolve it the same way the selection
+    // and anchor-position overlays do.
+    void loadSelectionGeometry().then(
+      ({ getCaretPosition }) => {
+        const caret = getCaretPosition(layout, blocks, measures, anchor);
+        if (caret === null) {
+          setAutocompleteCaret(null);
+          return undefined;
+        }
+        const pagesContainer = pagesContainerRef.current;
+        const overlay = pagesContainer?.parentElement?.querySelector(
+          '[data-testid="selection-overlay"]',
+        );
+        const firstPage = pagesContainer?.querySelector(".layout-page");
+        if (!overlay || !firstPage) {
+          setAutocompleteCaret(null);
+          return undefined;
+        }
+        const overlayRect = overlay.getBoundingClientRect();
+        const pageRect = firstPage.getBoundingClientRect();
+        const pageOffsetX = (pageRect.left - overlayRect.left) / zoom;
+        const pageOffsetY = (pageRect.top - overlayRect.top) / zoom;
+        setAutocompleteCaret({
+          x: caret.x + pageOffsetX,
+          y: caret.y + pageOffsetY,
+          lineHeight: caret.height,
+        });
+        setAutocompleteText(current.text);
+        setAutocompleteIsStreaming(current.status === "streaming");
+        return undefined;
+      },
+      () => undefined,
+    );
+  }, [layout, blocks, measures, zoom]);
+
   const hideSelectionOverlayDuringInput = useCallback(
     (state: EditorState) => {
       selectionOverlayRequestSeqRef.current += 1;
@@ -4112,6 +4185,18 @@ export function PagedEditor(
         updateAnonymizationOverlay();
       }
 
+      // Same pattern for the inline autocomplete suggestion: keep
+      // the ref in sync with every transaction, repaint the
+      // ghost-text overlay when the suggestion changes (token
+      // arrival, accept, dismiss, doc-edit invalidation).
+      const nextSuggestion =
+        autocompleteSuggestionKey.getState(newState)?.suggestion ??
+        autocompleteSuggestionRef.current;
+      if (nextSuggestion !== autocompleteSuggestionRef.current) {
+        autocompleteSuggestionRef.current = nextSuggestion;
+        updateAutocompleteOverlay();
+      }
+
       if (transaction.docChanged) {
         // Increment state sequence to signal document changed
         syncCoordinator.incrementStateSeq();
@@ -4142,6 +4227,7 @@ export function PagedEditor(
       hideSelectionOverlayDuringInput,
       updateSelectionOverlay,
       updateAnonymizationOverlay,
+      updateAutocompleteOverlay,
       syncCoordinator,
     ],
     // NOTE: onDocumentChange removed from dependencies - accessed via ref to prevent infinite loops
@@ -6584,6 +6670,13 @@ export function PagedEditor(
     (view: EditorView) => {
       anonymizationMatchesRef.current =
         anonymizationDecorationsKey.getState(view.state)?.matches ?? [];
+      const initialSuggestion = autocompleteSuggestionKey.getState(
+        view.state,
+      )?.suggestion;
+      if (initialSuggestion !== undefined) {
+        autocompleteSuggestionRef.current = initialSuggestion;
+      }
+      updateAutocompleteOverlay();
 
       const focusReadyView = () => {
         if (readOnly || !shouldFocusHiddenEditorOnReadyRef.current) {
@@ -6650,6 +6743,7 @@ export function PagedEditor(
       updateSelectionOverlay,
       updateAnonymizationOverlay,
       document,
+      updateAutocompleteOverlay,
       readOnly,
     ],
   );
@@ -6708,6 +6802,13 @@ export function PagedEditor(
     onAnchorPositionsChange,
     pageGap,
   ]);
+
+  // Same dependency on layout for the autocomplete caret — when
+  // pages re-flow (zoom, content edit), the anchor's pixel
+  // position changes and the ghost text needs to move with it.
+  useEffect(() => {
+    updateAutocompleteOverlay();
+  }, [updateAutocompleteOverlay]);
 
   // Re-layout when web fonts finish loading to fix measurements that were
   // computed against fallback fonts during initial render.
@@ -7084,6 +7185,17 @@ export function PagedEditor(
             onTermClick={onAnonymizationTermClick}
             selectedCanonical={selectedAnonymizationCanonical}
             selectionSeq={anonymizationSelectionSeq}
+          />
+
+          {/* Inline autocomplete ghost-text + "stella" caret. The
+              ProseMirror autocomplete plugin lives in the hidden
+              editor; this overlay paints its state on top of the
+              paged canvas at container coords from
+              {@link getCaretPosition}. */}
+          <AutocompleteCaretOverlay
+            caret={autocompleteCaret}
+            text={autocompleteText}
+            isStreaming={autocompleteIsStreaming}
           />
 
           {/* Selection overlay */}

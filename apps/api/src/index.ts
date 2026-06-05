@@ -3,6 +3,7 @@ import { Elysia } from "elysia";
 import { rateLimit } from "elysia-rate-limit";
 
 import { env } from "@/api/env";
+import { aiAutocompleteRoute } from "@/api/handlers/ai-autocomplete/routes";
 import { aiConfigPublicRoute } from "@/api/handlers/ai-config/routes";
 import { auditLogsRoute } from "@/api/handlers/audit-logs/routes";
 import { authMetadataRoute } from "@/api/handlers/auth/routes";
@@ -291,6 +292,7 @@ const api = new Elysia()
   .use(healthRoute)
   .use(verifyRoute)
   .use(mcpRoute)
+  .use(aiAutocompleteRoute)
   .use(devPublicRoute)
   .mount(getAuth().handler)
   .group("/v1", (app) =>

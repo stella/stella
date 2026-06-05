@@ -89,3 +89,28 @@ export {
   type AnonymizationMatch,
   type AnonymizationTerm,
 } from "./core/prosemirror/plugins/anonymizationDecorations";
+export {
+  acceptAutocompleteSuggestion,
+  acceptAutocompleteWord,
+  appendAutocompleteToken,
+  autocompleteSuggestionKey,
+  autocompleteSuggestionPlugin,
+  clearAutocompleteSuggestion,
+  DEFAULT_AUTOCOMPLETE_DEAD_ZONE_NODES,
+  finishAutocompleteSuggestion,
+  getAutocompleteSuggestion,
+  shouldTriggerAutocomplete,
+  startAutocompleteSuggestion,
+  type AcceptAutocompleteResult,
+  type AutocompleteSuggestionPluginOptions,
+  type AutocompleteSuggestionState,
+  type AutocompleteSuggestionStatus,
+  type AutocompleteTriggerCheck,
+  type AutocompleteTriggerOptions,
+  type AutocompleteTriggerSkipReason,
+} from "./core/prosemirror/plugins/autocompleteSuggestion";
+export {
+  AutocompleteCaretOverlay,
+  type AutocompleteCaretOverlayProps,
+  type AutocompleteCaretRect,
+} from "./paged-editor/AutocompleteCaretOverlay";
