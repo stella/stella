@@ -1743,6 +1743,7 @@
     "escKey": "ESC",
     "kinds": {
       "caseLaw": "Jurisprudência",
+      "chat": "Bate-papo",
       "contact": "Contato",
       "document": "Documento",
       "folder": "Pasta",

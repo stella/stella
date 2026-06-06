@@ -102,6 +102,30 @@ const fileChatThreadScopeCheck = sql`(
   ${workspaceCheck}
 )`;
 
+// The chat search-document table stores only `thread_id` and derives
+// all tenancy from its owning thread, so RLS joins `chat_threads` and
+// applies the same scope the thread enforces. This is defence in
+// depth: global search reads this table via the RLS-bypassing root
+// connection and filters by user explicitly, but any stella-role
+// reader is still held to the thread's own visibility.
+const chatThreadSearchDocumentScopeCheck = sql`(
+  EXISTS (
+    SELECT 1 FROM chat_threads ct
+    WHERE ct.id = chat_thread_search_documents.thread_id
+      AND ct.user_id = (SELECT current_setting(
+        '${sql.raw(SETTING_USER_ID)}', true
+      ))
+      AND ct.organization_id = (SELECT current_setting(
+        '${sql.raw(SETTING_ORGANIZATION_ID)}', true
+      ))
+      AND (ct.workspace_id IS NULL OR ct.workspace_id = ANY(${wsIdsArray}))
+      AND (
+        cardinality(ct.data_workspace_ids) = 0
+        OR ct.data_workspace_ids <@ ${wsIdsArray}
+      )
+  )
+)`;
+
 export const wsPolicies = () => [
   p.pgPolicy("workspace_select", {
     for: "select",
@@ -519,6 +543,29 @@ export const chatMessagePolicies = () => [
     for: "delete",
     to: stella,
     using: chatMessageScopeCheck,
+  }),
+];
+
+export const chatThreadSearchDocumentPolicies = () => [
+  p.pgPolicy("chat_thread_search_document_select", {
+    for: "select",
+    to: stella,
+    using: chatThreadSearchDocumentScopeCheck,
+  }),
+  p.pgPolicy("chat_thread_search_document_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: chatThreadSearchDocumentScopeCheck,
+  }),
+  p.pgPolicy("chat_thread_search_document_update", {
+    for: "update",
+    to: stella,
+    using: chatThreadSearchDocumentScopeCheck,
+  }),
+  p.pgPolicy("chat_thread_search_document_delete", {
+    for: "delete",
+    to: stella,
+    using: chatThreadSearchDocumentScopeCheck,
   }),
 ];
 

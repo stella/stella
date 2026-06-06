@@ -27,6 +27,7 @@ import {
 import { buildSearchTsQuery } from "@/api/lib/search/query";
 import { typedPgArray } from "@/api/lib/search/sql";
 import type {
+  ChatGlobalSearchHit,
   ContactGlobalSearchHit,
   FacetBucket,
   GlobalSearchHit,
@@ -52,6 +53,9 @@ type SearchPromise = Promise<RawRow[]>;
 export type GlobalSearchQuery = {
   query: string;
   organizationId: SafeId<"organization">;
+  /** The calling user. Chat threads are private per user, so the chat
+   *  source filters on this; the workspace-shared sources ignore it. */
+  userId: SafeId<"user">;
   /** All workspaces the caller is allowed to see. */
   accessibleWorkspaceIds: readonly SafeId<"workspace">[];
   /** User-selected subset to filter by; empty means no extra filter. */
@@ -148,11 +152,16 @@ const shouldSearchType = (
   type: GlobalSearchResultType,
 ) => selected.size === 0 || selected.has(type);
 
+const NON_ENTITY_TYPES: ReadonlySet<GlobalSearchResultType> = new Set([
+  "matter",
+  "contact",
+  "case-law",
+  "chat",
+]);
+
 const hasSelectedEntityType = (selected: ReadonlySet<GlobalSearchResultType>) =>
   selected.size === 0 ||
-  [...selected].some(
-    (type) => type !== "matter" && type !== "contact" && type !== "case-law",
-  );
+  [...selected].some((type) => !NON_ENTITY_TYPES.has(type));
 
 const fileFieldJoin = sql`
   LEFT JOIN LATERAL (
@@ -210,6 +219,46 @@ const workspaceAccessSql = ({
   return sql`AND ${column} = ANY(${typedPgArray(effective, "uuid")})`;
 };
 
+type ChatScopeArgs = {
+  userId: SafeId<"user">;
+  organizationId: SafeId<"organization">;
+  accessibleWorkspaceIds: readonly SafeId<"workspace">[];
+  selectedWorkspaceIds: readonly SafeId<"workspace">[];
+};
+
+// Chat threads are private to the calling user, and `searchGlobal`
+// runs on the RLS-bypassing root connection, so this predicate
+// reproduces the chat-thread RLS scope (db/rls.ts) explicitly. It
+// joins back to `chat_threads t`: the row is visible only to its
+// owner, in its organization, and only while every embedded
+// workspace (`data_workspace_ids`) stays within the caller's access.
+export const chatThreadScopeSql = ({
+  userId,
+  organizationId,
+  accessibleWorkspaceIds,
+  selectedWorkspaceIds,
+}: ChatScopeArgs): SQL => {
+  const accessArray = typedPgArray(accessibleWorkspaceIds, "uuid");
+  const selectedArray = typedPgArray(selectedWorkspaceIds, "uuid");
+  const selectedFilter =
+    selectedWorkspaceIds.length > 0
+      ? sql`AND (
+          t.workspace_id = ANY(${selectedArray})
+          OR t.data_workspace_ids && ${selectedArray}
+        )`
+      : sql``;
+  return sql`
+    t.user_id = ${userId}
+    AND t.organization_id = ${organizationId}
+    AND (t.workspace_id IS NULL OR t.workspace_id = ANY(${accessArray}))
+    AND (
+      cardinality(t.data_workspace_ids) = 0
+      OR t.data_workspace_ids <@ ${accessArray}
+    )
+    ${selectedFilter}
+  `;
+};
+
 const mapMatterHit = (row: RawRow): ScoredGlobalSearchHit => {
   const workspaceId = String(row["id"]);
   const hit: MatterGlobalSearchHit = {
@@ -253,6 +302,22 @@ const mapCaseLawHit = (row: RawRow): ScoredGlobalSearchHit => {
     country: String(row["country"]),
     decisionDate: toNullableString(row["decision_date"]),
     title: `${String(row["case_number"])} - ${String(row["court"])}`,
+    headline: toHeadline(row["headline"]),
+    updatedAt: toIso(row["updated_at"]),
+  };
+
+  return { hit, score: Number(row["score"]) };
+};
+
+const mapChatHit = (row: RawRow): ScoredGlobalSearchHit => {
+  const threadId = String(row["id"]);
+  const hit: ChatGlobalSearchHit = {
+    id: `chat:${threadId}`,
+    type: "chat",
+    threadId,
+    workspaceId: toNullableString(row["workspace_id"]),
+    workspaceName: toNullableString(row["workspace_name"]),
+    title: String(row["title"]),
     headline: toHeadline(row["headline"]),
     updatedAt: toIso(row["updated_at"]),
   };
@@ -407,7 +472,7 @@ const buildSearchFilterFragments = ({
   });
 
   const entityTypes = [...selected].filter(
-    (type) => type !== "matter" && type !== "contact" && type !== "case-law",
+    (type) => !NON_ENTITY_TYPES.has(type),
   );
   const entityEditorFilter = sqlWhen(
     hasEditorFilter,
@@ -432,6 +497,7 @@ const buildSearchFilterFragments = ({
   const matterUpdatedFilter = updatedRangeFilter(sql`wsd.updated_at`);
   const contactUpdatedFilter = updatedRangeFilter(sql`csd.updated_at`);
   const caseLawUpdatedFilter = updatedRangeFilter(sql`clsd.updated_at`);
+  const chatUpdatedFilter = updatedRangeFilter(sql`cst.updated_at`);
   const entityTypeFilter = sqlWhen(
     selected.size > 0,
     () => sql`AND sd.kind = ANY(${typedPgArray(entityTypes, "text")})`,
@@ -454,6 +520,7 @@ const buildSearchFilterFragments = ({
     matterUpdatedFilter,
     contactUpdatedFilter,
     caseLawUpdatedFilter,
+    chatUpdatedFilter,
     entityTypeFilter,
   };
 };
@@ -461,6 +528,7 @@ const buildSearchFilterFragments = ({
 export const searchGlobal = async ({
   query,
   organizationId,
+  userId,
   accessibleWorkspaceIds,
   selectedWorkspaceIds,
   types,
@@ -492,6 +560,7 @@ export const searchGlobal = async ({
     matterUpdatedFilter,
     contactUpdatedFilter,
     caseLawUpdatedFilter,
+    chatUpdatedFilter,
     entityTypeFilter,
   } = buildSearchFilterFragments({
     query,
@@ -626,6 +695,41 @@ export const searchGlobal = async ({
     `),
   );
 
+  const chatScope = chatThreadScopeSql({
+    userId,
+    organizationId,
+    accessibleWorkspaceIds,
+    selectedWorkspaceIds,
+  });
+
+  const chatPromise = rowsWhen(
+    !restrictToEntities && shouldSearchType(selected, "chat"),
+    () =>
+      rootDb.execute(sql`
+      SELECT
+        t.id AS id,
+        t.workspace_id,
+        w.name AS workspace_name,
+        cst.title,
+        ts_headline(
+          ${headlineRegconfig},
+          cst.title || ' ' || left(cst.searchable_text, 2000),
+          ${tsQuery},
+          ${TS_HEADLINE_CONFIG}
+        ) AS headline,
+        ts_rank(cst.tsv, ${tsQuery})::float8 AS score,
+        cst.updated_at
+      FROM chat_thread_search_documents cst
+      JOIN chat_threads t ON t.id = cst.thread_id
+      LEFT JOIN workspaces w ON w.id = t.workspace_id
+      WHERE ${chatScope}
+        ${chatUpdatedFilter}
+        AND cst.tsv @@ ${tsQuery}
+      ORDER BY score DESC, cst.thread_id DESC
+      LIMIT ${fetchLimit}
+    `),
+  );
+
   const countPromises = [
     countWhen(isFirstPage && hasSelectedEntityType(selected), () =>
       rootDb.execute(sql`
@@ -683,6 +787,18 @@ export const searchGlobal = async ({
         FROM case_law_search_documents clsd
         WHERE clsd.tsv @@ ${tsQuery}
           ${caseLawUpdatedFilter}
+      `),
+    ),
+    countWhen(
+      isFirstPage && !restrictToEntities && shouldSearchType(selected, "chat"),
+      () =>
+        rootDb.execute(sql`
+        SELECT count(*)::int AS total
+        FROM chat_thread_search_documents cst
+        JOIN chat_threads t ON t.id = cst.thread_id
+        WHERE ${chatScope}
+          ${chatUpdatedFilter}
+          AND cst.tsv @@ ${tsQuery}
       `),
     ),
   ] as const;
@@ -743,6 +859,19 @@ export const searchGlobal = async ({
       FROM case_law_search_documents clsd
       WHERE clsd.tsv @@ ${tsQuery}
         ${caseLawUpdatedFilter}
+    `),
+  );
+
+  const chatTypeFacetCountPromise = countWhen(
+    isFirstPage && !restrictToEntities,
+    () =>
+      rootDb.execute(sql`
+      SELECT count(*)::int AS total
+      FROM chat_thread_search_documents cst
+      JOIN chat_threads t ON t.id = cst.thread_id
+      WHERE ${chatScope}
+        ${chatUpdatedFilter}
+        AND cst.tsv @@ ${tsQuery}
     `),
   );
 
@@ -850,14 +979,17 @@ export const searchGlobal = async ({
     matterRows,
     contactRows,
     caseLawRows,
+    chatRows,
     entityCount,
     matterCount,
     contactCount,
     caseLawCount,
+    chatCount,
     entityTypeFacetRows,
     matterTypeFacetCount,
     contactTypeFacetCount,
     caseLawTypeFacetCount,
+    chatTypeFacetCount,
     workspaceFacetRows,
     editorFacetRows,
     mimeTypeFacetRows,
@@ -866,11 +998,13 @@ export const searchGlobal = async ({
     matterPromise,
     contactPromise,
     caseLawPromise,
+    chatPromise,
     ...countPromises,
     entityTypeFacetPromise,
     matterTypeFacetCountPromise,
     contactTypeFacetCountPromise,
     caseLawTypeFacetCountPromise,
+    chatTypeFacetCountPromise,
     workspaceFacetPromise,
     editorFacetPromise,
     mimeTypeFacetPromise,
@@ -881,6 +1015,7 @@ export const searchGlobal = async ({
     ...matterRows.map(mapMatterHit),
     ...contactRows.map(mapContactHit),
     ...caseLawRows.map(mapCaseLawHit),
+    ...chatRows.map(mapChatHit),
   ].sort((a, b) => b.score - a.score || b.hit.id.localeCompare(a.hit.id));
 
   const hits = scoredHits.slice(offset, offset + limit).map(({ hit }) => hit);
@@ -888,8 +1023,9 @@ export const searchGlobal = async ({
   const totalMatters = totalFrom(matterCount);
   const totalContacts = totalFrom(contactCount);
   const totalCaseLaw = totalFrom(caseLawCount);
+  const totalChat = totalFrom(chatCount);
   const totalCount =
-    totalEntities + totalMatters + totalContacts + totalCaseLaw;
+    totalEntities + totalMatters + totalContacts + totalCaseLaw + totalChat;
 
   const typeFacetMap = new Map<string, { count: number }>();
   for (const row of entityTypeFacetRows) {
@@ -898,6 +1034,7 @@ export const searchGlobal = async ({
   const matterFacetCount = totalFrom(matterTypeFacetCount);
   const contactFacetCount = totalFrom(contactTypeFacetCount);
   const caseLawFacetCount = totalFrom(caseLawTypeFacetCount);
+  const chatFacetCount = totalFrom(chatTypeFacetCount);
   if (matterFacetCount > 0) {
     typeFacetMap.set("matter", { count: matterFacetCount });
   }
@@ -906,6 +1043,9 @@ export const searchGlobal = async ({
   }
   if (caseLawFacetCount > 0) {
     typeFacetMap.set("case-law", { count: caseLawFacetCount });
+  }
+  if (chatFacetCount > 0) {
+    typeFacetMap.set("chat", { count: chatFacetCount });
   }
 
   const workspaceFacetMap = toStringFacetMap(workspaceFacetRows);

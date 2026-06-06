@@ -69,6 +69,11 @@ export const LIMITS = {
   searchQueryMaxLength: 500,
   searchPageSizeDefault: 20,
   searchPageSizeMax: 100,
+  /** Cap on the rolled-up message text indexed per chat thread for
+   *  global search. Bounds the stored tsv so a long conversation
+   *  cannot blow up the index; the headline only reads the first
+   *  2000 chars anyway. */
+  chatSearchTextMaxLength: 50_000,
   extractedContentMaxChars: 500_000,
   /** Hard timeout (ms) for the sandboxed extraction subprocess. */
   extractionTimeoutMs: 30_000,

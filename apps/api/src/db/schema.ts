@@ -14,6 +14,7 @@ import {
   agentSkillResourcePolicies,
   chatMessagePolicies,
   chatThreadPolicies,
+  chatThreadSearchDocumentPolicies,
   fileChatThreadPolicies,
   globalCaseLawPolicies,
   mcpConnectorPolicies,
@@ -1735,6 +1736,28 @@ export const workspaceSearchDocuments = p.pgTable(
     p.index("workspace_search_docs_org_idx").on(table.organizationId),
     p.index("workspace_search_docs_tsv_idx").using("gin", table.tsv),
     ...wsPolicies(),
+  ],
+);
+
+// One row per chat thread. Tenancy is intentionally not denormalised
+// here: the global-search query joins back to `chat_threads` and
+// filters by the owning thread's user/org/workspace scope, so this
+// table never drifts out of sync with thread ownership. Deletes
+// cascade from the thread.
+export const chatThreadSearchDocuments = p.pgTable(
+  "chat_thread_search_documents",
+  {
+    threadId: safeUuid<"chatThread">("thread_id")
+      .primaryKey()
+      .references(() => chatThreads.id, { onDelete: "cascade" }),
+    title: p.text().notNull().default(""),
+    searchableText: p.text("searchable_text").notNull().default(""),
+    tsv: tsvector(),
+    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.index("chat_thread_search_docs_tsv_idx").using("gin", table.tsv),
+    ...chatThreadSearchDocumentPolicies(),
   ],
 );
 

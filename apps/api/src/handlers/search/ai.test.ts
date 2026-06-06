@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import {
+  clearRootDbMocks,
+  rootDbSelectMock,
+} from "@/api/tests/helpers/mock-root-db";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 process.env["REDIS_URL"] ??= "redis://localhost:6379";
@@ -18,16 +22,13 @@ process.env["GOTENBERG_USERNAME"] ??= "test";
 process.env["GOTENBERG_PASSWORD"] ??= "test";
 
 const searchGlobalMock = mock();
-const dbLimitMock = mock(async () => [{ searchableText: "Document content" }]);
-const dbWhereMock = mock(() => ({ limit: dbLimitMock }));
-const dbFromMock = mock(() => ({ where: dbWhereMock }));
-const dbSelectMock = mock(() => ({ from: dbFromMock }));
 
+// The fire-and-forget chat reindex hook touches rootDb; stub it so the
+// summary-chat tests do not need a live database for the side effect.
 // eslint-disable-next-line typescript-eslint/no-floating-promises -- Bun mock.module is sync for registration
-mock.module("@/api/db/root", () => ({
-  rootDb: {
-    select: dbSelectMock,
-  },
+mock.module("@/api/lib/search/index-chat", () => ({
+  upsertChatThreadSearchDocument: mock(async () => undefined),
+  backfillChatThreadSearchIndex: mock(async () => 0),
 }));
 
 // Mock index-global directly to prevent transitive db/root imports that
@@ -46,10 +47,7 @@ mock.module("@/api/lib/search/index-global", () => ({
 
 beforeEach(() => {
   searchGlobalMock.mockReset();
-  dbSelectMock.mockClear();
-  dbFromMock.mockClear();
-  dbWhereMock.mockClear();
-  dbLimitMock.mockClear();
+  clearRootDbMocks();
 });
 
 const emptySearchSummaryFilters = () => ({
@@ -87,7 +85,7 @@ describe("search summary chat", () => {
           insertedValues.push(values);
         }),
       })),
-      select: dbSelectMock,
+      select: rootDbSelectMock,
     };
     const { safeDb, scopedDb } = createScopedDbMock(tx);
 
@@ -150,6 +148,69 @@ describe("search summary chat", () => {
     );
   });
 
+  test("does not let chat hits consume the summary search limit", async () => {
+    const organizationId = toSafeId<"organization">("org_1");
+    const workspaceId = toSafeId<"workspace">("ws_1");
+    const tx = {
+      query: {
+        workspaces: {
+          findMany: mock(async () => [{ id: workspaceId }]),
+        },
+      },
+      insert: mock((_table: unknown) => ({
+        values: mock(async (_values: unknown) => {}),
+      })),
+      select: rootDbSelectMock,
+    };
+    const { safeDb, scopedDb } = createScopedDbMock(tx);
+
+    searchGlobalMock.mockResolvedValueOnce({
+      facets: { editor: [], mimeType: [], type: [], workspace: [] },
+      hits: [
+        {
+          entityId: "entity_1",
+          headline: null,
+          id: "entity:entity_1",
+          lastEditedByImage: null,
+          lastEditedByName: null,
+          mimeType: "application/pdf",
+          title: "Motion.pdf",
+          type: "document",
+          updatedAt: "2026-04-30T08:00:00.000Z",
+          workspaceId,
+          workspaceName: "Motion matter",
+        },
+      ],
+      nextCursor: null,
+      totalCount: 1,
+    });
+
+    const { createSearchSummaryChatThread } =
+      await import("@/api/handlers/search/ai");
+    await createSearchSummaryChatThread({
+      accessibleWorkspaceIds: [workspaceId],
+      body: {
+        ...emptySearchSummaryFilters(),
+        citations: [{ number: 1 }],
+        limit: 1,
+        query: "motion",
+        summary: "Relevant document [1].",
+        title: "Search summary",
+        types: ["chat", "document"],
+        workspaceIds: [workspaceId],
+      },
+      organizationId,
+      safeDb,
+      search: searchGlobalMock,
+      scopedDb,
+      userId: toSafeId<"user">("user_1"),
+      recordAuditEvent: noopAuditRecorder,
+    });
+
+    const call = searchGlobalMock.mock.calls.at(0)?.[0];
+    expect(call).toMatchObject({ types: ["document"] });
+  });
+
   test("stores global summary chat thread for unfiltered summary chats", async () => {
     const organizationId = toSafeId<"organization">("org_1");
     const workspaceId = toSafeId<"workspace">("ws_1");
@@ -161,7 +222,7 @@ describe("search summary chat", () => {
           insertedValues.push(values);
         }),
       })),
-      select: dbSelectMock,
+      select: rootDbSelectMock,
     };
     const { safeDb, scopedDb } = createScopedDbMock(tx);
 
@@ -236,7 +297,7 @@ describe("search summary chat", () => {
     const tx = {
       query: { workspaces: {} },
       insert: insertMock,
-      select: dbSelectMock,
+      select: rootDbSelectMock,
     };
     const { safeDb, scopedDb } = createScopedDbMock(tx);
 
@@ -329,7 +390,7 @@ describe("search summary chat", () => {
           insertedValues.push(values);
         }),
       })),
-      select: dbSelectMock,
+      select: rootDbSelectMock,
     };
     const { safeDb, scopedDb } = createScopedDbMock(tx);
 

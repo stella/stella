@@ -1743,6 +1743,7 @@
     "escKey": "ESC",
     "kinds": {
       "caseLaw": "Teismų praktika",
+      "chat": "Pokalbis",
       "contact": "Kontaktas",
       "document": "Dokumentas",
       "folder": "Aplankas",
