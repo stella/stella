@@ -1,6 +1,7 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 import {
+  GaugeIcon,
   HashIcon,
   MonitorIcon,
   ShieldIcon,
@@ -31,7 +32,8 @@ type NavTo =
   | "/settings/organization/members"
   | "/settings/organization/matter-numbering"
   | "/settings/organization/ai"
-  | "/settings/organization/anonymization";
+  | "/settings/organization/anonymization"
+  | "/settings/organization/usage";
 
 type NavItem = {
   readonly to: NavTo;
@@ -85,6 +87,11 @@ const ORGANIZATION_SECTION = {
       to: "/settings/organization/anonymization",
       labelKey: "settings.organization.anonymization.title",
       icon: ShieldIcon,
+    },
+    {
+      to: "/settings/organization/usage",
+      labelKey: "settings.organization.usage",
+      icon: GaugeIcon,
     },
   ],
 } as const satisfies Section;

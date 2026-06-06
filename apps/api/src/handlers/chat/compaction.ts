@@ -5,6 +5,7 @@ import { Result } from "better-result";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { prepareTextForThirdParty } from "@/api/handlers/chat/third-party-boundary";
 import type { ChatMessage } from "@/api/handlers/chat/types";
+import type { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const ESTIMATED_CHARS_PER_TOKEN = 4;
@@ -24,6 +25,11 @@ const COMPACTION_SYSTEM_PROMPT = [
   "Preserve concrete facts, parties, dates, jurisdictions, source documents, cited law, tool findings, decisions already made, open tasks, user preferences, and unresolved questions.",
   "Do not invent facts. Keep placeholder tokens, IDs, citations, and quoted legal terms exactly as provided.",
 ].join("\n");
+
+type CompactionAIAnalytics = Pick<
+  ReturnType<typeof createAIAnalyticsCallbacks>,
+  "captureError" | "stepCallbacks"
+>;
 
 type ChatCompactionPlan =
   | {
@@ -271,6 +277,7 @@ export const compactModelMessages = async ({
 
 type CompactChatMessagesForModelOptions = PlanChatCompactionOptions & {
   abortSignal: AbortSignal;
+  aiAnalytics?: CompactionAIAnalytics | undefined;
   boundary: ChatThirdPartyBoundary;
   model: LanguageModel;
   onSummaryError?: ((error: HandlerError<500>) => void) | undefined;
@@ -278,13 +285,17 @@ type CompactChatMessagesForModelOptions = PlanChatCompactionOptions & {
 
 type CompactModelMessagesForModelOptions = {
   abortSignal: AbortSignal;
+  aiAnalytics?: CompactionAIAnalytics | undefined;
   messages: ModelMessage[];
   model: LanguageModel;
   onSummaryError?: ((error: HandlerError<500>) => void) | undefined;
+  preserveTokens?: number | undefined;
+  triggerTokens?: number | undefined;
 };
 
 export const compactChatMessagesForModel = async ({
   abortSignal,
+  aiAnalytics,
   boundary,
   messages,
   model,
@@ -302,52 +313,79 @@ export const compactChatMessagesForModel = async ({
     prepareTranscript: async (transcript) =>
       await prepareTextForThirdParty({ boundary, text: transcript }),
     summarizeTranscript: async (transcript) => {
-      const result = await generateText({
-        abortSignal,
-        maxOutputTokens: MAX_SUMMARY_OUTPUT_TOKENS,
-        model,
-        prompt: [
-          "Compact the earlier conversation transcript below.",
-          "Return only the checkpoint summary.",
-          "",
-          transcript,
-        ].join("\n"),
-        system: COMPACTION_SYSTEM_PROMPT,
-        temperature: 0,
+      const result = await Result.tryPromise({
+        try: async () =>
+          await generateText({
+            abortSignal,
+            maxOutputTokens: MAX_SUMMARY_OUTPUT_TOKENS,
+            model,
+            prompt: [
+              "Compact the earlier conversation transcript below.",
+              "Return only the checkpoint summary.",
+              "",
+              transcript,
+            ].join("\n"),
+            system: COMPACTION_SYSTEM_PROMPT,
+            temperature: 0,
+            ...aiAnalytics?.stepCallbacks,
+          }),
+        catch: (error) => {
+          aiAnalytics?.captureError(error);
+          return error;
+        },
       });
+      if (Result.isError(result)) {
+        throw result.error;
+      }
 
-      return result.text;
+      return result.value.text;
     },
   });
 
 export const compactModelMessagesForModel = async ({
   abortSignal,
+  aiAnalytics,
   messages,
   model,
   onSummaryError,
+  preserveTokens,
+  triggerTokens,
 }: CompactModelMessagesForModelOptions): Promise<
   Result<ModelMessage[], HandlerError<500>>
 > =>
   await compactModelMessages({
     messages,
     onSummaryError,
+    preserveTokens,
     summarizeTranscript: async (transcript) => {
-      const result = await generateText({
-        abortSignal,
-        maxOutputTokens: MAX_SUMMARY_OUTPUT_TOKENS,
-        model,
-        prompt: [
-          "Compact the earlier model-step transcript below.",
-          "Return only the checkpoint summary.",
-          "",
-          transcript,
-        ].join("\n"),
-        system: COMPACTION_SYSTEM_PROMPT,
-        temperature: 0,
+      const result = await Result.tryPromise({
+        try: async () =>
+          await generateText({
+            abortSignal,
+            maxOutputTokens: MAX_SUMMARY_OUTPUT_TOKENS,
+            model,
+            prompt: [
+              "Compact the earlier model-step transcript below.",
+              "Return only the checkpoint summary.",
+              "",
+              transcript,
+            ].join("\n"),
+            system: COMPACTION_SYSTEM_PROMPT,
+            temperature: 0,
+            ...aiAnalytics?.stepCallbacks,
+          }),
+        catch: (error) => {
+          aiAnalytics?.captureError(error);
+          return error;
+        },
       });
+      if (Result.isError(result)) {
+        throw result.error;
+      }
 
-      return result.text;
+      return result.value.text;
     },
+    triggerTokens,
   });
 
 export const renderChatMessagesForCompaction = (

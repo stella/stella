@@ -97,6 +97,7 @@ type OrganizeSuggestionsHandlerProps = {
   orgAIConfig: OrgAIConfig | null;
   promptCachingEnabled: boolean;
   body: OrganizeSuggestionsBody;
+  userId: SafeId<"user">;
 };
 
 type EntitySummaryContext = {
@@ -163,6 +164,7 @@ const organizeSuggestionsHandler = async function* ({
   orgAIConfig,
   promptCachingEnabled,
   body,
+  userId,
 }: OrganizeSuggestionsHandlerProps) {
   yield* requireAIAvailable(orgAIConfig);
 
@@ -193,6 +195,8 @@ const organizeSuggestionsHandler = async function* ({
       workspaceId,
       orgAIConfig,
       promptCachingEnabled,
+      safeDb,
+      userId,
     });
 
     if (Result.isError(summariesResult)) {
@@ -229,6 +233,14 @@ const organizeSuggestionsHandler = async function* ({
   }
 
   const aiAnalytics = createAIAnalyticsCallbacks({
+    usageMetering: {
+      actionType: "chat",
+      organizationId,
+      safeDb,
+      serviceTier: "flex",
+      userId,
+      workspaceId,
+    },
     feature: "entities.organize-suggestions",
     modelRole: "fast",
     orgAIConfig,
@@ -653,6 +665,8 @@ type GenerateMissingSummariesOptions = {
   workspaceId: SafeId<"workspace">;
   orgAIConfig: OrgAIConfig | null;
   promptCachingEnabled: boolean;
+  safeDb: SafeDb;
+  userId: SafeId<"user">;
 };
 
 const generateMissingSummaries = async ({
@@ -661,10 +675,20 @@ const generateMissingSummaries = async ({
   workspaceId,
   orgAIConfig,
   promptCachingEnabled,
+  safeDb,
+  userId,
 }: GenerateMissingSummariesOptions): Promise<
   Result<GeneratedSummary[], HandlerError>
 > => {
   const aiAnalytics = createAIAnalyticsCallbacks({
+    usageMetering: {
+      actionType: "chat",
+      organizationId,
+      safeDb,
+      serviceTier: "flex",
+      userId,
+      workspaceId,
+    },
     feature: "entities.version-summary",
     modelRole: "fast",
     orgAIConfig,
@@ -994,6 +1018,13 @@ const hashSummarySource = ({
 const config = {
   permissions: { workspace: ["read"] },
   body: organizeSuggestionsBodySchema,
+  // Folder-organisation is queued / "background"-shaped from the
+  // user's perspective; they kick it off and read results later.
+  requiresUsage: {
+    actionType: "chat",
+    serviceTier: "flex",
+    modelRole: "fast",
+  },
 } satisfies HandlerConfig;
 
 const organizeSuggestions = createSafeHandler(
@@ -1005,6 +1036,7 @@ const organizeSuggestions = createSafeHandler(
     orgAIConfig,
     promptCachingEnabled,
     body,
+    user,
   }) {
     return yield* organizeSuggestionsHandler({
       safeDb,
@@ -1013,6 +1045,7 @@ const organizeSuggestions = createSafeHandler(
       orgAIConfig,
       promptCachingEnabled,
       body,
+      userId: user.id,
     });
   },
 );

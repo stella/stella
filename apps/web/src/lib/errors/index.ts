@@ -5,6 +5,14 @@ export { FetchBoundaryError } from "@stll/errors";
 export class APIError extends TaggedError("ApiError")<{
   status: number;
   message: string;
+  /**
+   * Structured fields some 4xx responses include alongside the
+   * human-readable message. The 402 usage-limit path uses
+   * `reason` + `required` + `available` so the frontend can render
+   * a cap-warning UI without parsing the message text. Optional
+   * everywhere; callers should guard before reading.
+   */
+  details?: Record<string, unknown> | undefined;
 }>() {}
 
 export class ClientOperationError extends TaggedError("ClientOperationError")<{
@@ -61,10 +69,30 @@ export const toAPIError = ({ status, value }: ToAPIErrorProps) => {
     });
   }
 
+  // Keep all non-validation fields under `details` so consumers
+  // (e.g. the usage-limit modal hook) can read structured
+  // payload without re-fetching. `message` is hoisted for the
+  // simple toast path.
+  const details = pickDetails(value);
   return new APIError({
     status,
     message: value.message,
+    ...(details ? { details } : {}),
   });
+};
+
+const KNOWN_TEXT_KEYS: ReadonlySet<string> = new Set(["message", "code"]);
+
+const pickDetails = (
+  value: { message: string } & Record<string, unknown>,
+): Record<string, unknown> | undefined => {
+  const entries = Object.entries(value).filter(
+    ([key]) => !KNOWN_TEXT_KEYS.has(key),
+  );
+  if (entries.length === 0) {
+    return undefined;
+  }
+  return Object.fromEntries(entries);
 };
 
 const SERVER_ERROR_THRESHOLD = 500;

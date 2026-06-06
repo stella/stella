@@ -483,11 +483,11 @@ type Messages = {
     "send": "Send message";
     "sendError": "There was an issue sending your message. Contact support if the error persists.";
     "sendErrorAnonymizationBlocked": "stella could not anonymize one attachment, so nothing was sent. Remove the file or send this message without anonymization.";
-    "sendErrorInsufficientCredits": "The AI provider needs more credits. Contact your workspace admin to top up the account.";
     "sendErrorLoopDetected": "The AI response repeated too many times. Try again with a narrower request.";
     "sendErrorModelUnavailable": "The configured AI model is no longer available. Ask your workspace admin to update the model in organization settings.";
     "sendErrorProviderUnavailable": "The AI provider is temporarily unavailable. Please try again in a moment.";
-    "sendErrorQuotaExhausted": "The AI provider's quota is exhausted. Try again in a minute, or contact your workspace admin to upgrade the plan.";
+    "sendErrorQuotaExhausted": "The AI provider's quota is exhausted. Try again in a minute, or contact your workspace admin.";
+    "sendErrorUsageLimit": "AI usage limit reached. Contact your workspace admin.";
     "sendPrompt": "Send message";
     "sendWithoutAnonymization": "Send without anonymization";
     "skills": {
@@ -1840,6 +1840,18 @@ type Messages = {
       "renameDescription": "Members will see the new name immediately.";
       "renameTitle": "Rename organization";
       "renameTypeToConfirm": "Type the new name to confirm: {name}";
+      "usage": "Usage";
+      "usageDescription": "Usage limits and entitlement state for this organisation";
+      "usageEmptyDescription": "Configure a usage entitlement to enable metered AI features for this organisation.";
+      "usageEmptyTitle": "No usage entitlement";
+      "usageEndsOnTemplate": "Ends on {date}";
+      "usageLoading": "Loading…";
+      "usageManage": "Manage hosted usage";
+      "usageManageError": "Could not open hosted usage management";
+      "usageManuallyManaged": "Manually managed";
+      "usageSeats": "{count, plural, one {# seat} other {# seats}}";
+      "usageUnitsBalanceTemplate": "{remaining} units available";
+      "usageUnitsThisPeriod": "Usage units this period";
     };
   };
   "success": {

@@ -1594,7 +1594,7 @@ function ToolCallMock() {
 const CHAT_ERROR_VARIANTS = [
   { label: "Generic", message: "unknown" },
   { label: "Quota exhausted", message: "quota_exhausted" },
-  { label: "Insufficient credits", message: "insufficient_credits" },
+  { label: "Usage limit", message: "usage_limit" },
   { label: "Provider unavailable", message: "provider_unavailable" },
 ] as const;
 

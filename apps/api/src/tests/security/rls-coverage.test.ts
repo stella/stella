@@ -66,6 +66,13 @@ describe("policy coverage", () => {
     // pair until that lands.
     "anonymization_allowlist_entries",
     "anonymization_blacklist_entries",
+    // Usage governance rows are scoped at the organization level even
+    // when an event optionally records a workspace_id for attribution.
+    // The table-specific test below asserts the stricter app-role
+    // write boundaries for these system-owned ledger tables.
+    "usage_entitlements",
+    "usage_allocations",
+    "usage_events",
   ]);
   const APPEND_ONLY = new Set(["audit_logs"]);
   const GLOBAL_CASE_LAW_TABLES = [
@@ -203,6 +210,97 @@ describe("policy coverage", () => {
       expect(denyPolicy?.permissive).toBe(false);
       expect(denyPolicy?.using_expr).toBe("false");
     }
+  });
+
+  test("usage governance tables expose only intended app-role access", async () => {
+    const policies = await fetchStellaPolicies(testDb);
+    const tablePrivileges = await fetchStellaTablePrivileges(testDb);
+
+    for (const table of [
+      "usage_policies",
+      "usage_entitlements",
+      "usage_allocations",
+      "usage_events",
+      "usage_provider_webhook_events",
+    ]) {
+      expect(privilegesForTable(tablePrivileges, table)).toEqual([
+        "DELETE",
+        "INSERT",
+        "SELECT",
+        "UPDATE",
+      ]);
+    }
+
+    const policyConfig = policies.find(
+      (p) =>
+        p.table_name === "usage_policies" &&
+        p.policy_name === "usage_policies_select",
+    );
+    expect(policyConfig?.command).toBe("r");
+    expect(policyConfig?.using_expr).toBe("true");
+    expect(policyConfig?.check_expr).toBeNull();
+
+    for (const table of ["usage_entitlements", "usage_allocations"]) {
+      const selectPolicy = policies.find(
+        (p) => p.table_name === table && p.policy_name === `${table}_select`,
+      );
+      expect(selectPolicy?.command).toBe("r");
+      expect(selectPolicy?.using_expr).toContain("organization_id");
+      expect(selectPolicy?.using_expr).toContain(SETTING_ORGANIZATION_ID);
+
+      for (const [suffix, command, exprKey] of [
+        ["no_insert", "a", "check_expr"],
+        ["no_update", "w", "using_expr"],
+        ["no_delete", "d", "using_expr"],
+      ] as const) {
+        const denyPolicy = policies.find(
+          (p) =>
+            p.table_name === table && p.policy_name === `${table}_${suffix}`,
+        );
+        expect(denyPolicy?.command).toBe(command);
+        expect(denyPolicy?.permissive).toBe(false);
+        expect(denyPolicy?.[exprKey]).toBe("false");
+      }
+    }
+
+    const usageEventSelect = policies.find(
+      (p) =>
+        p.table_name === "usage_events" &&
+        p.policy_name === "usage_events_select",
+    );
+    expect(usageEventSelect?.command).toBe("r");
+    expect(usageEventSelect?.using_expr).toContain("organization_id");
+    expect(usageEventSelect?.using_expr).toContain(SETTING_ORGANIZATION_ID);
+
+    const usageEventInsert = policies.find(
+      (p) =>
+        p.table_name === "usage_events" &&
+        p.policy_name === "usage_events_insert",
+    );
+    expect(usageEventInsert?.command).toBe("a");
+    expect(usageEventInsert?.check_expr).toContain("organization_id");
+    expect(usageEventInsert?.check_expr).toContain(SETTING_ORGANIZATION_ID);
+
+    for (const [policyName, command] of [
+      ["usage_events_no_update", "w"],
+      ["usage_events_no_delete", "d"],
+    ] as const) {
+      const denyPolicy = policies.find(
+        (p) => p.table_name === "usage_events" && p.policy_name === policyName,
+      );
+      expect(denyPolicy?.command).toBe(command);
+      expect(denyPolicy?.permissive).toBe(false);
+      expect(denyPolicy?.using_expr).toBe("false");
+    }
+
+    const webhookPolicy = policies.find(
+      (p) =>
+        p.table_name === "usage_provider_webhook_events" &&
+        p.policy_name === "usage_provider_webhook_events_no_stella_access",
+    );
+    expect(webhookPolicy?.command).toBe("*");
+    expect(webhookPolicy?.using_expr).toBe("false");
+    expect(webhookPolicy?.check_expr).toBe("false");
   });
 
   test("auth and global case-law tables have explicit stella policy boundaries", async () => {

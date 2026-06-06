@@ -480,11 +480,11 @@
     "send": "Üzenet küldése",
     "sendError": "Probléma történt az üzenet elküldésekor. Ha a hiba továbbra is fennáll, vedd fel a kapcsolatot a támogatással.",
     "sendErrorAnonymizationBlocked": "A stella nem tudta anonimizálni az egyik mellékletet, ezért semmi sem lett elküldve. Távolítsd el a fájlt, vagy küldd el az üzenetet anonimizálás nélkül.",
-    "sendErrorInsufficientCredits": "Az AI-szolgáltatónak további kreditre van szüksége. Kérd a munkaterület adminisztrátorát, hogy töltse fel a fiókot.",
     "sendErrorLoopDetected": "Az AI-válasz túl sokszor ismétlődött. Próbáld újra szűkebb kéréssel.",
     "sendErrorModelUnavailable": "A beállított AI-modell már nem érhető el. Kérd a munkaterület adminisztrátorát, hogy frissítse a modellt a szervezet beállításaiban.",
     "sendErrorProviderUnavailable": "Az AI-szolgáltató átmenetileg nem elérhető. Próbáld újra egy pillanat múlva.",
-    "sendErrorQuotaExhausted": "Az AI-szolgáltató kvótája kimerült. Próbáld újra egy perc múlva, vagy kérd a munkaterület adminisztrátorát, hogy bővítse a csomagot.",
+    "sendErrorQuotaExhausted": "Az AI-szolgáltató kvótája kimerült. Próbáld újra egy perc múlva, vagy fordulj a munkaterület adminisztrátorához.",
+    "sendErrorUsageLimit": "Elérted az AI-használati limitet. Fordulj a munkaterület adminisztrátorához.",
     "sendPrompt": "Üzenet küldése",
     "sendWithoutAnonymization": "Küldés anonimizálás nélkül",
     "skills": {
@@ -1836,7 +1836,19 @@
       },
       "renameDescription": "A tagok azonnal látni fogják az új nevet.",
       "renameTitle": "Szervezet átnevezése",
-      "renameTypeToConfirm": "A megerősítéshez írja be az új nevet: {name}"
+      "renameTypeToConfirm": "A megerősítéshez írd be az új nevet: {name}",
+      "usage": "Használat",
+      "usageDescription": "Használati korlátok és jogosultsági állapot ehhez a szervezethez",
+      "usageEmptyDescription": "Állíts be használati jogosultságot, hogy a szervezet használhassa a mért AI-funkciókat.",
+      "usageEmptyTitle": "Nincs használati jogosultság",
+      "usageEndsOnTemplate": "Lejárat: {date}",
+      "usageLoading": "Betöltés…",
+      "usageManage": "Hosztolt használat kezelése",
+      "usageManageError": "Nem sikerült megnyitni a hosztolt használat kezelését",
+      "usageManuallyManaged": "Kézzel kezelt",
+      "usageSeats": "{count, plural, one {# hely} other {# hely}}",
+      "usageUnitsBalanceTemplate": "{remaining} egység elérhető",
+      "usageUnitsThisPeriod": "Használati egységek ebben az időszakban"
     }
   },
   "success": {

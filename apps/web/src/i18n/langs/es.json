@@ -480,11 +480,11 @@
     "send": "Enviar mensaje",
     "sendError": "Hubo un problema al enviar tu mensaje. Contacta con soporte si el error persiste.",
     "sendErrorAnonymizationBlocked": "stella no pudo anonimizar un archivo adjunto, así que no se envió nada. Quita el archivo o envía este mensaje sin anonimización.",
-    "sendErrorInsufficientCredits": "El proveedor de IA necesita más créditos. Pídele al administrador del espacio de trabajo que recargue la cuenta.",
     "sendErrorLoopDetected": "La respuesta de IA se repitió demasiadas veces. Inténtalo de nuevo con una solicitud más concreta.",
     "sendErrorModelUnavailable": "El modelo de IA configurado ya no está disponible. Pídele al administrador del espacio de trabajo que actualice el modelo en la configuración de la organización.",
     "sendErrorProviderUnavailable": "El proveedor de IA no está disponible temporalmente. Inténtalo de nuevo en un momento.",
-    "sendErrorQuotaExhausted": "Se ha agotado la cuota del proveedor de IA. Inténtalo de nuevo en un minuto o pídele al administrador del espacio de trabajo que mejore el plan.",
+    "sendErrorQuotaExhausted": "Se agotó la cuota del proveedor de IA. Inténtalo de nuevo en un minuto o contacta con el administrador del espacio de trabajo.",
+    "sendErrorUsageLimit": "Se alcanzó el límite de uso de IA. Contacta con el administrador del espacio de trabajo.",
     "sendPrompt": "Enviar mensaje",
     "sendWithoutAnonymization": "Enviar sin anonimización",
     "skills": {
@@ -1835,8 +1835,20 @@
         "toggleLabel": "Permitir caché de prompts con proveedores de IA"
       },
       "renameDescription": "Los miembros verán el nuevo nombre de inmediato.",
-      "renameTitle": "Renombrar organización",
-      "renameTypeToConfirm": "Escribe el nuevo nombre para confirmar: {name}"
+      "renameTitle": "Cambiar nombre de la organización",
+      "renameTypeToConfirm": "Escribe el nuevo nombre para confirmar: {name}",
+      "usage": "Uso",
+      "usageDescription": "Límites de uso y estado de la autorización de esta organización",
+      "usageEmptyDescription": "Configura una autorización de uso para habilitar funciones de IA medidas en esta organización.",
+      "usageEmptyTitle": "Sin autorización de uso",
+      "usageEndsOnTemplate": "Termina el {date}",
+      "usageLoading": "Cargando…",
+      "usageManage": "Gestionar uso alojado",
+      "usageManageError": "No se pudo abrir la gestión de uso alojado",
+      "usageManuallyManaged": "Gestionado manualmente",
+      "usageSeats": "{count, plural, one {# puesto} other {# puestos}}",
+      "usageUnitsBalanceTemplate": "{remaining} unidades disponibles",
+      "usageUnitsThisPeriod": "Unidades de uso de este periodo"
     }
   },
   "success": {

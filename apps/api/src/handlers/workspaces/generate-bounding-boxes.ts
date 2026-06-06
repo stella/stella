@@ -81,7 +81,7 @@ const generateBoundingBoxes = createSafeHandler(
         });
         // `WorkflowIntegrationError.cause` carries the underlying AI
         // provider failure (APICallError / RetryError) — classify
-        // against that so quota/credits map to 429/402 instead of
+        // against that so quota/usage-limit errors map to 429/402 instead of
         // bubbling up as an uncaught Panic and returning 500.
         return Result.err(
           aiHandlerError(pageBoxesResult.error.cause, {

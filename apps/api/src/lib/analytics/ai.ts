@@ -4,12 +4,19 @@ import type {
   OnToolCallFinishEvent,
   StreamTextOnErrorCallback,
 } from "ai";
+import { Result } from "better-result";
 
+import type { SafeDb } from "@/api/db";
+import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { ModelRole, OrgAIConfig } from "@/api/lib/ai-models";
 import { getModelInfoForRole } from "@/api/lib/ai-models";
+import { captureError as captureTelemetryError } from "@/api/lib/analytics";
+import type { SafeId } from "@/api/lib/branded-types";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
+import { recordUsageEvent } from "@/api/lib/usage";
+import { usageUnitsFromTokens } from "@/api/lib/usage/unit-model";
 
 import { getAnalytics } from "./client";
 import { SERVER_ANALYTICS_EVENTS } from "./types";
@@ -34,6 +41,15 @@ type AnalyticsStepState = {
   startedAt: number;
 };
 
+export type AIUsageMetering = {
+  actionType: UsageActionType;
+  organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
+  serviceTier: UsageServiceTier;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
+};
+
 type AIAnalyticsProps = {
   feature: string;
   traceId: string;
@@ -45,6 +61,7 @@ type AIAnalyticsProps = {
   forceEnabled?: boolean;
   modelRole?: ModelRole;
   orgAIConfig?: OrgAIConfig | null;
+  usageMetering?: AIUsageMetering;
 };
 
 const MAX_STRING_LENGTH = 2000;
@@ -138,6 +155,27 @@ const bucketCount = (count: number): CountBucket => {
     return "2_3";
   }
   return "4_plus";
+};
+
+const getUsageInputTokens = (usage: OnStepFinishEvent["usage"]): number => {
+  if (usage.inputTokens !== undefined) {
+    return usage.inputTokens;
+  }
+
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- AI SDK providers may omit this at runtime despite the type.
+  const noCacheTokens = usage.inputTokenDetails?.noCacheTokens ?? 0;
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- AI SDK providers may omit this at runtime despite the type.
+  const cacheReadTokens = usage.inputTokenDetails?.cacheReadTokens ?? 0;
+  return noCacheTokens + cacheReadTokens;
+};
+
+const getUsageCacheReadTokens = (
+  usage: OnStepFinishEvent["usage"],
+  inputTokens: number,
+): number => {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- AI SDK providers may omit this at runtime despite the type.
+  const cacheReadTokens = usage.inputTokenDetails?.cacheReadTokens ?? 0;
+  return Math.min(cacheReadTokens, inputTokens);
 };
 
 const getErrorStatusCode = (error: unknown): number | undefined => {
@@ -517,6 +555,76 @@ const buildBaseProperties = ({
   ...config.properties,
 });
 
+type RecordStepConsumptionInput = {
+  cacheReadTokens: number;
+  config: AIAnalyticsProps;
+  inputTokens: number;
+  modelId: string;
+  outputTokens: number;
+};
+
+const recordStepConsumption = ({
+  cacheReadTokens,
+  config,
+  inputTokens,
+  modelId,
+  outputTokens,
+}: RecordStepConsumptionInput): void => {
+  const metering = config.usageMetering;
+  if (!metering) {
+    return;
+  }
+
+  const modelRole = config.modelRole ?? "chat";
+  const isByok =
+    getModelInfoForRole(modelRole, config.orgAIConfig).keySource === "byok";
+  const { unitsConsumed, rawUsageMicroUnits } = usageUnitsFromTokens({
+    actionType: metering.actionType,
+    cacheReadTokens,
+    inputTokens,
+    isByok,
+    modelId,
+    outputTokens,
+    serviceTier: metering.serviceTier,
+  });
+
+  const consumption = metering.safeDb(
+    async (tx) =>
+      await recordUsageEvent({
+        tx,
+        actionType: metering.actionType,
+        unitsConsumed,
+        isByok,
+        modelRole,
+        organizationId: metering.organizationId,
+        rawUsageMicroUnits,
+        serviceTier: metering.serviceTier,
+        traceId: config.traceId,
+        userId: metering.userId,
+        workspaceId: metering.workspaceId,
+      }),
+  );
+
+  void consumption
+    .then((result) => {
+      if (Result.isError(result)) {
+        captureTelemetryError(result.error, {
+          organization_id: metering.organizationId,
+          source: "usage.ai_step_event",
+          trace_id: config.traceId,
+        });
+      }
+      return undefined;
+    })
+    .catch((error: unknown) => {
+      captureTelemetryError(error, {
+        organization_id: metering.organizationId,
+        source: "usage.ai_step_event.unhandled",
+        trace_id: config.traceId,
+      });
+    });
+};
+
 type AIAnalyticsStepCallbacks = {
   experimental_onStepStart?: (event: OnStepStartEvent) => void;
   onStepFinish?: (event: OnStepFinishEvent) => void;
@@ -583,6 +691,17 @@ export const createAIAnalyticsCallbacks = ({
     // runtime. Read defensively to avoid a TypeError in analytics.
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- runtime undefined diverges from type
     const cacheReadTokens = usage.inputTokenDetails?.cacheReadTokens;
+    const inputTokens = getUsageInputTokens(usage);
+    const outputTokens = usage.outputTokens ?? 0;
+    const meteredCacheReadTokens = getUsageCacheReadTokens(usage, inputTokens);
+
+    recordStepConsumption({
+      cacheReadTokens: meteredCacheReadTokens,
+      config,
+      inputTokens,
+      modelId: response.modelId || currentStep.modelId,
+      outputTokens,
+    });
 
     if (!debugEnabled) {
       analytics.capture({

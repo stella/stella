@@ -79,6 +79,24 @@ export class TelemetryError extends TaggedError("TelemetryError")<{
   cause?: unknown;
 }>() {}
 
+export const USAGE_LIMIT_EXCEEDED_REASONS = [
+  "no_entitlement",
+  "usage_limit_exceeded",
+  "entitlement_inactive",
+] as const;
+
+export type UsageLimitExceededReason =
+  (typeof USAGE_LIMIT_EXCEEDED_REASONS)[number];
+
+export class UsageLimitExceededError extends TaggedError(
+  "UsageLimitExceededError",
+)<{
+  message: string;
+  required: number;
+  available: number;
+  reason: UsageLimitExceededReason;
+}>() {}
+
 export class HealthCheckError extends TaggedError("HealthCheckError")<{
   message: string;
   cause?: unknown;

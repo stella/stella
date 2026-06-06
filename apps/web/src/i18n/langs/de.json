@@ -480,11 +480,11 @@
     "send": "Nachricht senden",
     "sendError": "Beim Senden deiner Nachricht ist ein Problem aufgetreten. Wende dich an den Support, wenn der Fehler weiterhin auftritt.",
     "sendErrorAnonymizationBlocked": "stella konnte einen Anhang nicht anonymisieren, daher wurde nichts gesendet. Entferne die Datei oder sende diese Nachricht ohne Anonymisierung.",
-    "sendErrorInsufficientCredits": "Der KI-Provider benötigt mehr Guthaben. Bitte deinen Workspace-Admin, das Konto aufzuladen.",
     "sendErrorLoopDetected": "Die KI-Antwort hat sich zu oft wiederholt. Versuche es mit einer enger gefassten Anfrage erneut.",
     "sendErrorModelUnavailable": "Das konfigurierte KI-Modell ist nicht mehr verfügbar. Bitte deinen Workspace-Admin, das Modell in den Organisationseinstellungen zu aktualisieren.",
     "sendErrorProviderUnavailable": "Der KI-Provider ist vorübergehend nicht verfügbar. Bitte versuche es gleich noch einmal.",
-    "sendErrorQuotaExhausted": "Das Kontingent des KI-Providers ist aufgebraucht. Versuche es gleich noch einmal oder bitte deinen Workspace-Admin, das Paket zu erweitern.",
+    "sendErrorQuotaExhausted": "Das Kontingent des KI-Providers ist ausgeschöpft. Versuche es in einer Minute erneut oder wende dich an deinen Workspace-Admin.",
+    "sendErrorUsageLimit": "Das KI-Nutzungslimit ist erreicht. Wende dich an deinen Workspace-Admin.",
     "sendPrompt": "Nachricht senden",
     "sendWithoutAnonymization": "Ohne Anonymisierung senden",
     "skills": {
@@ -1836,7 +1836,19 @@
       },
       "renameDescription": "Mitglieder sehen den neuen Namen sofort.",
       "renameTitle": "Organisation umbenennen",
-      "renameTypeToConfirm": "Geben Sie zur Bestätigung den neuen Namen ein: {name}"
+      "renameTypeToConfirm": "Gib zur Bestätigung den neuen Namen ein: {name}",
+      "usage": "Nutzung",
+      "usageDescription": "Nutzungslimits und Berechtigungsstatus für diese Organisation",
+      "usageEmptyDescription": "Konfiguriere eine Nutzungsberechtigung, um gemessene KI-Funktionen für diese Organisation zu aktivieren.",
+      "usageEmptyTitle": "Keine Nutzungsberechtigung",
+      "usageEndsOnTemplate": "Endet am {date}",
+      "usageLoading": "Wird geladen…",
+      "usageManage": "Gehostete Nutzung verwalten",
+      "usageManageError": "Gehostete Nutzungsverwaltung konnte nicht geöffnet werden",
+      "usageManuallyManaged": "Manuell verwaltet",
+      "usageSeats": "{count, plural, one {# Platz} other {# Plätze}}",
+      "usageUnitsBalanceTemplate": "{remaining} Einheiten verfügbar",
+      "usageUnitsThisPeriod": "Nutzungseinheiten in diesem Zeitraum"
     }
   },
   "success": {

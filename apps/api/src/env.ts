@@ -145,7 +145,7 @@ const envApi = createEnv({
 
     // Launch feature flags. Keep default-off; deployment must opt in.
     FEATURE_CHAT: featureFlagSchema,
-    FEATURE_BILLING: featureFlagSchema,
+    FEATURE_USAGE: featureFlagSchema,
     FEATURE_KNOWLEDGE_TEMPLATES: featureFlagSchema,
     FEATURE_CASE_LAW: featureFlagSchema,
     FEATURE_PUBLIC_LAW: featureFlagSchema,
@@ -211,6 +211,35 @@ const envApi = createEnv({
         ),
       ),
     ),
+
+    /** Optional hosted usage integration settings. */
+    HOSTED_USAGE_WEBHOOK_SECRET: v.optional(
+      v.pipe(v.string(), v.minLength(16)),
+    ),
+    /**
+     * Previous webhook secret kept active during a rotation
+     * window. When set, both this and the current secret are
+     * accepted for HMAC verification so in-flight deliveries keep
+     * working while the rotation propagates.
+     */
+    HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS: v.optional(
+      v.pipe(v.string(), v.minLength(16)),
+    ),
+    HOSTED_USAGE_PROVIDER_API_KEY: v.optional(
+      v.pipe(v.string(), v.minLength(8)),
+    ),
+    HOSTED_USAGE_PROVIDER_BASE_URL: v.optional(v.pipe(v.string(), v.url())),
+
+    /** Enables pre-flight usage-limit enforcement when true. */
+    USAGE_ENFORCEMENT_ENABLED: featureFlagSchema,
+
+    /**
+     * Deployment-owned usage-policy seed list. JSON array of
+     * { key, displayName, monthlyUsageUnits, hostedPolicyRef? }.
+     * Default is intentionally empty so public source does not
+     * encode an operator policy.
+     */
+    STELLA_USAGE_POLICY_SEEDS: v.optional(v.string(), "[]"),
   },
   emptyStringAsUndefined: true,
   runtimeEnv: process.env,

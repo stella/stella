@@ -216,7 +216,7 @@ const previewProperty = createSafeHandler(
       }
       // WorkflowIntegrationError carries the underlying AI provider
       // failure (if any) on its `cause` — classify against that so
-      // quota/credits errors propagate the right status to the UI.
+      // quota/usage-limit errors propagate the right status to the UI.
       return Result.err(
         aiHandlerError(generateResult.error.cause, {
           status: 502,

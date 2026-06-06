@@ -203,4 +203,12 @@ export const API_RATE_LIMITS = {
    *  consumes the org's paid character quota, so this stays well
    *  below the upload budget. */
   translate: { duration: 60_000, max: 30 },
+  /** Hosted usage webhook ingest: 300 req/min per IP. Each request
+   *  triggers HMAC verification over up to ~64 KB and a database
+   *  transaction; the cap protects the route from an
+   *  unauthenticated attacker driving CPU/DB cost. Legitimate
+   *  provider traffic peaks well below 5 req/sec for any single
+   *  source IP, so this is loose enough for production while
+   *  still bounding the worst case. */
+  hostedUsageWebhook: { duration: 60_000, max: 300 },
 } as const;

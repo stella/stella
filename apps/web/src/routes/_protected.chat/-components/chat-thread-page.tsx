@@ -2,6 +2,7 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
 import {
   useMutation,
+  useQuery,
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
@@ -27,6 +28,8 @@ import { getUserMessageHtmlHistory } from "@/components/chat/chat-ui-tools";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import Tooltip from "@/components/tooltip";
+import { UsageLimitModal } from "@/components/usage/usage-limit-modal";
+import { useUsageLimit } from "@/components/usage/use-usage-limit";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import { api } from "@/lib/api";
@@ -53,6 +56,7 @@ import {
   chatThreadOptions,
   invalidateChatThreadAcrossScopes,
 } from "@/routes/_protected.chat/-queries";
+import { usageEntitlementOptions } from "@/routes/_protected.settings/-queries/usage";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 
 type ChatThreadPageProps = {
@@ -147,6 +151,33 @@ export const ChatThreadPage = ({
     getSendMode,
     workspaceId,
   });
+
+  // Surface a 402 usage-limit response from the metered
+  // chat handler as a usage-state modal instead of an inline
+  // stack trace. `useQuery` (not Suspense) keeps the chat shell
+  // rendering while the entitlement state loads.
+  const { data: usageEntitlementData } = useQuery(usageEntitlementOptions);
+  const usageLimit = useUsageLimit({
+    hasHostedEntitlement: usageEntitlementData?.entitlement.source === "hosted",
+  });
+  const handleUsageLimit = usageLimit.handle;
+  // Fire only on the *transition* into a new error. Without this,
+  // dismissing the modal would re-trigger the open on the next
+  // render (the error reference persists in useChat until the
+  // user retries).
+  const lastHandledErrorRef = useRef<unknown>(null);
+  useEffect(() => {
+    if (!error) {
+      lastHandledErrorRef.current = null;
+      return;
+    }
+    if (lastHandledErrorRef.current === error) {
+      return;
+    }
+    lastHandledErrorRef.current = error;
+    handleUsageLimit(error);
+  }, [error, handleUsageLimit]);
+
   const sentMessageHistoryHtml = useMemo(
     () => getUserMessageHtmlHistory(messages),
     [messages],
@@ -375,6 +406,10 @@ export const ChatThreadPage = ({
           </div>
         </div>
       </ChatApprovalContext>
+      <UsageLimitModal
+        {...usageLimit.modalProps}
+        hasHostedEntitlement={usageLimit.hasHostedEntitlement}
+      />
     </ChatMattersContext>
   );
 };

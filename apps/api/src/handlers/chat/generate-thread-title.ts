@@ -28,6 +28,7 @@ type GenerateThreadTitleProps = {
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
   threadWorkspaceId: SafeId<"workspace"> | null;
+  userId: SafeId<"user">;
 };
 
 export const generateThreadTitle = async ({
@@ -39,8 +40,17 @@ export const generateThreadTitle = async ({
   safeDb,
   threadId,
   threadWorkspaceId,
+  userId,
 }: GenerateThreadTitleProps): Promise<void> => {
   const aiAnalytics = createAIAnalyticsCallbacks({
+    usageMetering: {
+      actionType: "background",
+      organizationId,
+      safeDb,
+      serviceTier: "batch",
+      userId,
+      workspaceId: threadWorkspaceId,
+    },
     feature: "chat.thread_title",
     modelRole: "fast",
     orgAIConfig,

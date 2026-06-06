@@ -42,6 +42,14 @@ const generateDraftBodySchema = t.Object({
 const config = {
   permissions: { agentSkill: ["create"] },
   body: generateDraftBodySchema,
+  // Queued / "flex" tier — the draft generator is asynchronous from
+  // the user's perspective and tolerates higher latency, so we
+  // charge the discounted rate.
+  requiresUsage: {
+    actionType: "chat",
+    serviceTier: "flex",
+    modelRole: "fast",
+  },
 } satisfies HandlerConfig;
 
 const aiResourceSchema = v.strictObject({
@@ -76,10 +84,25 @@ type GeneratedResource = { content: string; path: string };
 
 const generateSkillDraft = createSafeRootHandler(
   config,
-  async function* ({ body, orgAIConfig, promptCachingEnabled, session }) {
+  async function* ({
+    body,
+    orgAIConfig,
+    promptCachingEnabled,
+    safeDb,
+    session,
+    user,
+  }) {
     yield* requireAIAvailable(orgAIConfig);
 
     const aiAnalytics = createAIAnalyticsCallbacks({
+      usageMetering: {
+        actionType: "chat",
+        organizationId: session.activeOrganizationId,
+        safeDb,
+        serviceTier: "flex",
+        userId: user.id,
+        workspaceId: null,
+      },
       feature: "skills.generate_draft",
       modelRole: "fast",
       orgAIConfig,

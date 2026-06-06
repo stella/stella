@@ -1,11 +1,18 @@
 import type { ModelMessage } from "ai";
+import { MockLanguageModelV3 } from "ai/test";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import type { ChatMessage } from "@/api/handlers/chat/types";
+import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import type { Analytics } from "@/api/lib/analytics/types";
+import { toSafeId } from "@/api/lib/branded-types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import {
   compactChatMessages,
+  compactModelMessagesForModel,
   compactModelMessages,
   planChatCompaction,
   planModelCompaction,
@@ -26,6 +33,12 @@ const textMessage = ({
   role,
   parts: [{ type: "text", text }],
 });
+
+const waitForAsyncSideEffects = async () => {
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, 0);
+  });
+};
 
 describe("chat history compaction", () => {
   test("keeps full history below the token trigger", () => {
@@ -228,6 +241,111 @@ describe("chat history compaction", () => {
       },
       { role: "user", content: "latest request" },
     ]);
+  });
+
+  test("records usage for model compaction summaries", async () => {
+    const periodStart = new Date("2026-06-01T00:00:00.000Z");
+    const periodEnd = new Date("2026-07-01T00:00:00.000Z");
+    const insertedRows: unknown[] = [];
+    const tx = {
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => [
+              {
+                currentPeriodEnd: periodEnd,
+                currentPeriodStart: periodStart,
+                status: "active",
+              },
+            ],
+          }),
+        }),
+      }),
+      insert: () => ({
+        values: async (values: unknown) => {
+          insertedRows.push(values);
+        },
+      }),
+    };
+    const { safeDb } = createScopedDbMock(tx);
+    const analytics: Analytics = {
+      capture: () => undefined,
+      flush: async () => undefined,
+    };
+    const aiAnalytics = createAIAnalyticsCallbacks({
+      analytics,
+      usageMetering: {
+        actionType: "chat",
+        organizationId: toSafeId<"organization">("org_compaction"),
+        safeDb,
+        serviceTier: "standard",
+        userId: toSafeId<"user">("user_compaction"),
+        workspaceId: toSafeId<"workspace">("workspace_compaction"),
+      },
+      feature: "chat.step_compaction",
+      modelRole: "chat",
+      traceId: "trace_compaction",
+    });
+    const model = new MockLanguageModelV3({
+      modelId: "gpt-4o-mini",
+      provider: "openai",
+      doGenerate: {
+        content: [{ type: "text", text: "metered summary" }],
+        finishReason: { raw: "stop", unified: "stop" },
+        usage: {
+          inputTokens: {
+            cacheRead: 0,
+            cacheWrite: 0,
+            noCache: 1_000_000,
+            total: 1_000_000,
+          },
+          outputTokens: {
+            reasoning: 0,
+            text: 0,
+            total: 0,
+          },
+        },
+        warnings: [],
+      },
+    });
+
+    const compacted = await compactModelMessagesForModel({
+      abortSignal: AbortSignal.timeout(1000),
+      aiAnalytics,
+      messages: [
+        { role: "user", content: "old request ".repeat(80) },
+        { role: "assistant", content: "old response ".repeat(80) },
+        { role: "user", content: "latest request" },
+      ],
+      model,
+      preserveTokens: 20,
+      triggerTokens: 50,
+    });
+
+    await waitForAsyncSideEffects();
+
+    expect(Result.isOk(compacted)).toBe(true);
+    expect(insertedRows).toHaveLength(1);
+    const row = asTestRaw<{
+      actionType: string;
+      unitsConsumed: number;
+      modelRole: string;
+      organizationId: string;
+      rawUsageMicroUnits: number;
+      serviceTier: string;
+      traceId: string;
+      workspaceId: string;
+    }>(insertedRows.at(0));
+    expect(row).toMatchObject({
+      actionType: "chat",
+      unitsConsumed: 225,
+      modelRole: "chat",
+      organizationId: "org_compaction",
+      rawUsageMicroUnits: 15_000,
+      serviceTier: "standard",
+      traceId: "trace_compaction",
+      workspaceId: "workspace_compaction",
+    });
   });
 
   test("preserves model history from the latest user turn boundary", () => {

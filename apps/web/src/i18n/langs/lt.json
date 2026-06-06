@@ -480,11 +480,11 @@
     "send": "Siųsti žinutę",
     "sendError": "Siunčiant žinutę kilo problema. Jei klaida kartojasi, susisiekite su palaikymo komanda.",
     "sendErrorAnonymizationBlocked": "stella nepavyko anonimizuoti vieno priedo, todėl niekas nebuvo išsiųsta. Pašalinkite failą arba siųskite šią žinutę be anonimizavimo.",
-    "sendErrorInsufficientCredits": "AI teikėjui reikia daugiau kreditų. Paprašykite darbo srities administratoriaus papildyti sąskaitą.",
     "sendErrorLoopDetected": "AI atsakymas kartojosi per daug kartų. Bandykite dar kartą su siauresne užklausa.",
     "sendErrorModelUnavailable": "Sukonfigūruotas AI modelis nebepasiekiamas. Paprašykite darbo srities administratoriaus atnaujinti modelį organizacijos nustatymuose.",
     "sendErrorProviderUnavailable": "AI teikėjas laikinai nepasiekiamas. Pabandykite po akimirkos dar kartą.",
-    "sendErrorQuotaExhausted": "AI teikėjo kvota išnaudota. Pabandykite po minutės dar kartą arba paprašykite darbo srities administratoriaus atnaujinti planą.",
+    "sendErrorQuotaExhausted": "AI teikėjo kvota išnaudota. Pabandykite dar kartą po minutės arba susisiekite su darbo srities administratoriumi.",
+    "sendErrorUsageLimit": "Pasiektas AI naudojimo limitas. Susisiekite su darbo srities administratoriumi.",
     "sendPrompt": "Siųsti pranešimą",
     "sendWithoutAnonymization": "Siųsti be anonimizavimo",
     "skills": {
@@ -1834,9 +1834,21 @@
         "title": "Užklausų talpyklavimas",
         "toggleLabel": "Leisti užklausų talpyklavimą su AI tiekėjais"
       },
-      "renameDescription": "Nariai naują pavadinimą pamatys iš karto.",
-      "renameTitle": "Pervardyti organizaciją",
-      "renameTypeToConfirm": "Įveskite naują pavadinimą, kad patvirtintumėte: {name}"
+      "renameDescription": "Nariai naują pavadinimą matys iš karto.",
+      "renameTitle": "Pervadinti organizaciją",
+      "renameTypeToConfirm": "Norėdami patvirtinti, įveskite naują pavadinimą: {name}",
+      "usage": "Naudojimas",
+      "usageDescription": "Šios organizacijos naudojimo limitai ir teisės būsena",
+      "usageEmptyDescription": "Sukonfigūruokite naudojimo teisę, kad šiai organizacijai būtų įjungtos matuojamos AI funkcijos.",
+      "usageEmptyTitle": "Nėra naudojimo teisės",
+      "usageEndsOnTemplate": "Baigiasi {date}",
+      "usageLoading": "Įkeliama…",
+      "usageManage": "Tvarkyti prieglobos naudojimą",
+      "usageManageError": "Nepavyko atidaryti prieglobos naudojimo valdymo",
+      "usageManuallyManaged": "Valdoma rankiniu būdu",
+      "usageSeats": "{count, plural, one {# vieta} few {# vietos} other {# vietų}}",
+      "usageUnitsBalanceTemplate": "Pasiekiama {remaining} vienetų",
+      "usageUnitsThisPeriod": "Šio laikotarpio naudojimo vienetai"
     }
   },
   "success": {

@@ -28,6 +28,7 @@ import { filesRoute } from "@/api/handlers/files/routes";
 import { isFolioCollabRateLimitedPath } from "@/api/handlers/folio-collab/rate-limit";
 import { folioCollabRoute } from "@/api/handlers/folio-collab/routes";
 import { healthRoute } from "@/api/handlers/health/routes";
+import { hostedUsageWebhookRoute } from "@/api/handlers/hosted-usage-webhook/routes";
 import { invoicesRoute } from "@/api/handlers/invoices/routes";
 import { legislationRoute } from "@/api/handlers/legislation/routes";
 import { mcpConnectorsRoute } from "@/api/handlers/mcp-connectors/routes";
@@ -46,6 +47,7 @@ import {
 } from "@/api/handlers/templates/routes";
 import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
 import { uploadsRoute } from "@/api/handlers/uploads/routes";
+import { usageRoute } from "@/api/handlers/usage/routes";
 import { userFilesRoute } from "@/api/handlers/user-files/routes";
 import { verifyAuthRoute, verifyRoute } from "@/api/handlers/verify/routes";
 import { viewTemplatesRoute } from "@/api/handlers/view-templates/routes";
@@ -294,6 +296,7 @@ const api = new Elysia()
   .use(authMetadataRoute)
   .use(healthRoute)
   .use(verifyRoute)
+  .use(hostedUsageWebhookRoute)
   .use(mcpRoute)
   .use(aiAutocompleteRoute)
   .use(devPublicRoute)
@@ -366,6 +369,7 @@ const api = new Elysia()
       .use(chatRoute)
       .use(userFilesRoute)
       .use(skillsRoute)
+      .use(usageRoute)
       .use(shortcutsRoute)
       .use(viewTemplatesRoute)
       .use(viewsRoute)

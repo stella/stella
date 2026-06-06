@@ -54,7 +54,7 @@ describe("classifyAIError", () => {
 
   test("still maps other status codes to their existing kinds", () => {
     expect(classifyAIError(apiCallError(429))).toBe("quota_exhausted");
-    expect(classifyAIError(apiCallError(402))).toBe("insufficient_credits");
+    expect(classifyAIError(apiCallError(402))).toBe("usage_limit");
     expect(classifyAIError(apiCallError(503))).toBe("provider_unavailable");
   });
 });
