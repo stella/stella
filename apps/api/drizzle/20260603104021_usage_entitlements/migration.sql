@@ -41,8 +41,6 @@ CREATE TABLE "usage_entitlements" (
 	"source" text NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "usage_entitlements_status_check" CHECK ("status" IN ('trialing','active','past_due','cancelled','paused')),
-	CONSTRAINT "usage_entitlements_source_check" CHECK ("source" IN ('hosted','manual')),
 	CONSTRAINT "usage_entitlements_seats_positive" CHECK (seats > 0),
 	CONSTRAINT "usage_entitlements_period_order" CHECK (current_period_end > current_period_start)
 );
@@ -80,8 +78,6 @@ CREATE TABLE "usage_allocations" (
 	"seat_scope_user_id" text,
 	"allocated_by_user_id" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "usage_allocations_reason_check" CHECK ("reason" IN ('periodic','addon','manual','promo')),
-	CONSTRAINT "usage_allocations_source_check" CHECK ("source_type" IN ('hosted_entitlement','hosted_allocation','admin','scheduler')),
 	CONSTRAINT "usage_allocations_units_positive" CHECK (units > 0),
 	CONSTRAINT "usage_allocations_period_order" CHECK (period_end > period_start)
 );
@@ -120,8 +116,6 @@ CREATE TABLE "usage_events" (
 	"is_byok" boolean DEFAULT false NOT NULL,
 	"trace_id" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "usage_events_action_check" CHECK ("action_type" IN ('chat','anonymise','doc_review','case_law','background')),
-	CONSTRAINT "usage_events_tier_check" CHECK ("service_tier" IN ('standard','flex','batch')),
 	CONSTRAINT "usage_events_units_nonneg" CHECK (units_consumed >= 0),
 	CONSTRAINT "usage_events_period_order" CHECK (period_end > period_start)
 );
@@ -153,8 +147,7 @@ CREATE TABLE "usage_provider_webhook_events" (
 	"payload" jsonb NOT NULL,
 	"processed_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"result" text NOT NULL,
-	"error_message" text,
-	CONSTRAINT "usage_provider_webhook_events_result_check" CHECK ("result" IN ('ok','ignored','error'))
+	"error_message" text
 );
 --> statement-breakpoint
 ALTER TABLE "usage_provider_webhook_events" ENABLE ROW LEVEL SECURITY;
