@@ -37,6 +37,7 @@ import type { DispatchOutcome } from "@/api/handlers/hosted-usage-webhook/dispat
 import {
   hostedUsageUnknownEventEnvelopeSchema,
   hostedUsageWebhookEventSchema,
+  isHostedUsageHandledEventType,
 } from "@/api/handlers/hosted-usage-webhook/event-schemas";
 import { captureError } from "@/api/lib/analytics";
 import { getWebhookSecret } from "@/api/lib/hosted-usage-provider/config";
@@ -130,6 +131,9 @@ export const receiveHostedUsageWebhook = async (
   // and acknowledged so the provider stops retrying.
   const strict = v.safeParse(hostedUsageWebhookEventSchema, parsedJson);
   if (!strict.success) {
+    if (isHostedUsageHandledEventType(envelope.type)) {
+      return respond(400, "Malformed payload for handled event type");
+    }
     await persistUnknownEventType({
       eventId,
       eventType: envelope.type,

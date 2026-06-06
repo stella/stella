@@ -255,6 +255,55 @@ describe("dispatch — handleHostedEntitlementUpsert", () => {
     });
   });
 
+  test("updates hosted entitlement matched by account reference when external id changes", async () => {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+      const first = await handleHostedEntitlementUpsert({
+        tx,
+        payload: buildEntitlementPayload(fx),
+        eventId: "evt_external_ref_seed",
+      });
+      expect(first.kind).toBe("applied");
+
+      const nextExternalId = `provider_ent_${Bun.randomUUIDv7()}`;
+      const second = await handleHostedEntitlementUpsert({
+        tx,
+        payload: buildEntitlementPayload(fx, {
+          id: nextExternalId,
+          quantity: 5,
+          status: "trialing",
+        }),
+        eventId: "evt_external_ref_change",
+      });
+      expect(second.kind).toBe("applied");
+
+      const entitlementRows = await tx
+        .select({
+          id: usageEntitlements.id,
+          hostedEntitlementExternalId:
+            usageEntitlements.hostedEntitlementExternalId,
+          seats: usageEntitlements.seats,
+          status: usageEntitlements.status,
+        })
+        .from(usageEntitlements)
+        .where(eq(usageEntitlements.organizationId, fx.organizationId));
+      expect(entitlementRows).toHaveLength(1);
+      expect(entitlementRows.at(0)?.hostedEntitlementExternalId).toBe(
+        nextExternalId,
+      );
+      expect(entitlementRows.at(0)?.seats).toBe(5);
+      expect(entitlementRows.at(0)?.status).toBe("trialing");
+
+      const balance = await getRemainingUsageUnits({
+        tx,
+        organizationId: fx.organizationId,
+        asOf: new Date(PERIOD_START.getTime() + 1000),
+      });
+      // Still one periodic allocation for this local entitlement and period.
+      expect(balance).toBe(3000);
+    });
+  });
+
   test("different event ids in the same period do not double-allocate", async () => {
     await withRolledBackTx(async (tx) => {
       const fx = await setupFixture(tx);

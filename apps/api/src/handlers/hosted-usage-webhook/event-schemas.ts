@@ -13,6 +13,29 @@
 
 import * as v from "valibot";
 
+const ENTITLEMENT_CREATED_EVENT_TYPE = "entitlement.created";
+const ENTITLEMENT_UPDATED_EVENT_TYPE = "entitlement.updated";
+const ENTITLEMENT_ACTIVE_EVENT_TYPE = "entitlement.active";
+const ENTITLEMENT_CANCELED_EVENT_TYPE = "entitlement.canceled";
+const ENTITLEMENT_REVOKED_EVENT_TYPE = "entitlement.revoked";
+const ALLOCATION_CREATED_EVENT_TYPE = "allocation.created";
+
+export const HOSTED_USAGE_HANDLED_EVENT_TYPES = [
+  ENTITLEMENT_CREATED_EVENT_TYPE,
+  ENTITLEMENT_UPDATED_EVENT_TYPE,
+  ENTITLEMENT_ACTIVE_EVENT_TYPE,
+  ENTITLEMENT_CANCELED_EVENT_TYPE,
+  ENTITLEMENT_REVOKED_EVENT_TYPE,
+  ALLOCATION_CREATED_EVENT_TYPE,
+] as const;
+
+const HOSTED_USAGE_HANDLED_EVENT_TYPE_SET: ReadonlySet<string> = new Set(
+  HOSTED_USAGE_HANDLED_EVENT_TYPES,
+);
+
+export const isHostedUsageHandledEventType = (eventType: string): boolean =>
+  HOSTED_USAGE_HANDLED_EVENT_TYPE_SET.has(eventType);
+
 const positiveIntSchema = v.pipe(v.number(), v.integer(), v.minValue(1));
 const optionalStringSchema = v.optional(v.string());
 
@@ -64,32 +87,32 @@ const providerAllocationSchema = v.object({
 });
 
 export const entitlementCreatedEventSchema = v.looseObject({
-  type: v.literal("entitlement.created"),
+  type: v.literal(ENTITLEMENT_CREATED_EVENT_TYPE),
   data: providerEntitlementSchema,
 });
 
 export const entitlementUpdatedEventSchema = v.looseObject({
-  type: v.literal("entitlement.updated"),
+  type: v.literal(ENTITLEMENT_UPDATED_EVENT_TYPE),
   data: providerEntitlementSchema,
 });
 
 export const entitlementActiveEventSchema = v.looseObject({
-  type: v.literal("entitlement.active"),
+  type: v.literal(ENTITLEMENT_ACTIVE_EVENT_TYPE),
   data: providerEntitlementSchema,
 });
 
 export const entitlementCanceledEventSchema = v.looseObject({
-  type: v.literal("entitlement.canceled"),
+  type: v.literal(ENTITLEMENT_CANCELED_EVENT_TYPE),
   data: providerEntitlementSchema,
 });
 
 export const entitlementRevokedEventSchema = v.looseObject({
-  type: v.literal("entitlement.revoked"),
+  type: v.literal(ENTITLEMENT_REVOKED_EVENT_TYPE),
   data: providerEntitlementSchema,
 });
 
 export const allocationCreatedEventSchema = v.looseObject({
-  type: v.literal("allocation.created"),
+  type: v.literal(ALLOCATION_CREATED_EVENT_TYPE),
   data: providerAllocationSchema,
 });
 

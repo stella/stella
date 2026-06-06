@@ -221,6 +221,19 @@ export const handleHostedEntitlementUpsert = async ({
       };
     }
     ownerOrganizationId = existingByProvider.organizationId;
+    const existingByAccountRef = await findEntitlementByHostedAccountRef(
+      tx,
+      payload.account_ref,
+    );
+    if (
+      existingByAccountRef &&
+      existingByAccountRef.id !== existingByProvider.id
+    ) {
+      return {
+        kind: "ignored",
+        reason: "hosted account reference already maps to another entitlement",
+      };
+    }
     await tx
       .update(usageEntitlements)
       .set({
@@ -230,6 +243,7 @@ export const handleHostedEntitlementUpsert = async ({
         currentPeriodStart: periodStart,
         currentPeriodEnd: periodEnd,
         hostedAccountRef: payload.account_ref,
+        hostedEntitlementExternalId: payload.id,
         cancelAtPeriodEnd: payload.cancel_at_period_end ?? false,
       })
       .where(eq(usageEntitlements.id, existingByProvider.id));
@@ -246,50 +260,82 @@ export const handleHostedEntitlementUpsert = async ({
   } else {
     // Fresh entitlement. Refuse if the org already has a manual
     // entitlement; an operator must resolve the conflict explicitly.
-    const existingByOrg = await findEntitlementByHostedAccountRef(
+    const existingByAccountRef = await findEntitlementByHostedAccountRef(
       tx,
       payload.account_ref,
     );
-    if (existingByOrg && existingByOrg.source === "manual") {
-      return {
-        kind: "ignored",
-        reason: "org has manual entitlement; refuse hosted overwrite",
-      };
-    }
+    if (existingByAccountRef) {
+      if (existingByAccountRef.source === "manual") {
+        return {
+          kind: "ignored",
+          reason: "org has manual entitlement; refuse hosted overwrite",
+        };
+      }
+      if (existingByAccountRef.organizationId !== organizationId) {
+        return {
+          kind: "ignored",
+          reason: "metadata organization_id mismatches local account mapping",
+        };
+      }
+      ownerOrganizationId = existingByAccountRef.organizationId;
+      await tx
+        .update(usageEntitlements)
+        .set({
+          usagePolicyId: policy.id,
+          status,
+          seats,
+          currentPeriodStart: periodStart,
+          currentPeriodEnd: periodEnd,
+          hostedAccountRef: payload.account_ref,
+          hostedEntitlementExternalId: payload.id,
+          cancelAtPeriodEnd: payload.cancel_at_period_end ?? false,
+        })
+        .where(eq(usageEntitlements.id, existingByAccountRef.id));
+      await recordWebhookAuditEvent({
+        tx,
+        organizationId: ownerOrganizationId,
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.USAGE_ENTITLEMENT,
+        resourceId: existingByAccountRef.id,
+        eventId,
+        changes: { provider_event: { new: eventId } },
+      });
+      entitlementId = existingByAccountRef.id;
+    } else {
+      const inserted = await tx
+        .insert(usageEntitlements)
+        .values({
+          organizationId,
+          usagePolicyId: policy.id,
+          status,
+          seats,
+          currentPeriodStart: periodStart,
+          currentPeriodEnd: periodEnd,
+          hostedAccountRef: payload.account_ref,
+          hostedEntitlementExternalId: payload.id,
+          cancelAtPeriodEnd: payload.cancel_at_period_end ?? false,
+          source: "hosted",
+        })
+        .returning({ id: usageEntitlements.id });
 
-    const inserted = await tx
-      .insert(usageEntitlements)
-      .values({
-        organizationId,
-        usagePolicyId: policy.id,
-        status,
-        seats,
-        currentPeriodStart: periodStart,
-        currentPeriodEnd: periodEnd,
-        hostedAccountRef: payload.account_ref,
-        hostedEntitlementExternalId: payload.id,
-        cancelAtPeriodEnd: payload.cancel_at_period_end ?? false,
-        source: "hosted",
-      })
-      .returning({ id: usageEntitlements.id });
-
-    const insertedId = inserted.at(0)?.id;
-    if (!insertedId) {
-      panic("usageEntitlements insert returned no rows");
+      const insertedId = inserted.at(0)?.id;
+      if (!insertedId) {
+        panic("usageEntitlements insert returned no rows");
+      }
+      await recordWebhookAuditEvent({
+        tx,
+        organizationId: ownerOrganizationId,
+        action: AUDIT_ACTION.CREATE,
+        resourceType: AUDIT_RESOURCE_TYPE.USAGE_ENTITLEMENT,
+        resourceId: insertedId,
+        eventId,
+      });
+      entitlementId = insertedId;
+      // No local mapping existed before this insert, so the row we
+      // just wrote IS now the source of truth. ownerOrganizationId
+      // remains the metadata-derived value (it's the same id we
+      // stored on the row above).
     }
-    await recordWebhookAuditEvent({
-      tx,
-      organizationId: ownerOrganizationId,
-      action: AUDIT_ACTION.CREATE,
-      resourceType: AUDIT_RESOURCE_TYPE.USAGE_ENTITLEMENT,
-      resourceId: insertedId,
-      eventId,
-    });
-    entitlementId = insertedId;
-    // No local mapping existed before this insert, so the row we
-    // just wrote IS now the source of truth. ownerOrganizationId
-    // remains the metadata-derived value (it's the same id we
-    // stored on the row above).
   }
 
   // Allocate the period's usage units. Idempotent per entitlement period,
@@ -297,9 +343,10 @@ export const handleHostedEntitlementUpsert = async ({
   // a single period (status flips, seat changes), each with a
   // fresh event id, and keying idempotency on the event id would
   // mint a second periodic allocation on every one. Keying on the
-  // provider entitlement id + period start collapses all of those
-  // re-emits into a single allocation for the period.
-  const periodicAllocationSourceRef = `${payload.id}:${periodStart.toISOString()}`;
+  // local entitlement id + period start collapses all of those
+  // re-emits into a single allocation for the period, even if the
+  // hosted external entitlement reference changes during reconfiguration.
+  const periodicAllocationSourceRef = `${entitlementId}:${periodStart.toISOString()}`;
   const allocation = await allocateUsage({
     tx,
     organizationId: ownerOrganizationId,
