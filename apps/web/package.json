@@ -89,7 +89,7 @@
     "jszip": "catalog:",
     "lucide-react": "catalog:",
     "pdfjs-dist": "^5.7.284",
-    "posthog-js": "^1.376.4",
+    "posthog-js": "^1.376.6",
     "prosemirror-commands": "^1.7.1",
     "prosemirror-history": "^1.5.0",
     "prosemirror-keymap": "^1.2.3",
