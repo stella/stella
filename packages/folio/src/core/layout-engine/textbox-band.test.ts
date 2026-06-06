@@ -12,6 +12,8 @@ import { describe, expect, test } from "bun:test";
 import { layoutDocument } from "./index";
 import type {
   FlowBlock,
+  ImageBlock,
+  ImageMeasure,
   LayoutOptions,
   Measure,
   ParagraphBlock,
@@ -326,5 +328,30 @@ describe("topAndBottom band text box layout", () => {
       | undefined;
     // page frame left 0 + 96px offset = 96.
     expect(box?.x).toBe(96);
+  });
+
+  test("a non-paragraph block reserves its measured band skip before layout", () => {
+    // The measure pass records `bandSkipBefore` on tables/images that follow a
+    // page band; layout applies it as leading space so the block lands below the
+    // band. eigenpal #694.
+    const imageBlock: ImageBlock = {
+      kind: "image",
+      id: "img",
+      src: "data:,",
+      width: 80,
+      height: 40,
+    };
+    const imageMeasure: ImageMeasure = {
+      kind: "image",
+      width: 80,
+      height: 40,
+      bandSkipBefore: BOX_HEIGHT,
+    };
+
+    const layout = layoutDocument([imageBlock], [imageMeasure], OPTIONS);
+    const imgFrag = layout.pages[0]?.fragments.find((f) => f.kind === "image");
+
+    // Content top is MARGINS.top; the band skip pushes the image down by it.
+    expect(imgFrag?.y).toBe(MARGINS.top + BOX_HEIGHT);
   });
 });

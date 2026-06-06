@@ -834,11 +834,16 @@ function layoutTable(
     const rawAvailableHeight = paginator.getAvailableHeight();
     const isFirstFragment = currentRowIndex === 0;
 
-    // Account for trailing spacing from previous block that addFragment will consume.
-    // addFragment computes effectiveSpaceBefore = max(spaceBefore, trailingSpacing)
-    // and adds it to the fragment height before calling ensureFits.
-    // We pass spaceBefore=0 for tables, so the overhead is just trailingSpacing.
-    const pendingSpacing = isFirstFragment ? state.trailingSpacing : 0;
+    // Leading skip past a page-pinned band, applied only to the table's first
+    // fragment (a band sits on one page). eigenpal #694.
+    const bandSkip = isFirstFragment ? (measure.bandSkipBefore ?? 0) : 0;
+
+    // Account for the space addFragment will consume before the fragment, which
+    // is max(spaceBefore, trailingSpacing). We pass bandSkip as spaceBefore, so
+    // the overhead is the larger of that and the previous block's trailing space.
+    const pendingSpacing = isFirstFragment
+      ? Math.max(bandSkip, state.trailingSpacing)
+      : 0;
     const availableHeight = rawAvailableHeight - pendingSpacing;
 
     const repeatHeaderRowsForNormalFragment = shouldRepeatHeaderRows(
@@ -894,7 +899,7 @@ function layoutTable(
       ...(block.sdtGroups ? { sdtGroups: block.sdtGroups } : {}),
     };
 
-    const result = paginator.addFragment(fragment, fragmentHeight, 0, 0);
+    const result = paginator.addFragment(fragment, fragmentHeight, bandSkip, 0);
     fragment.y = result.y;
     fragment.x = desiredX;
 
@@ -1044,8 +1049,9 @@ function layoutImage(
     return;
   }
 
-  // Inline image - ensure it fits
-  const state = paginator.ensureFits(measure.height);
+  // Inline image - ensure it fits (plus any leading skip past a page band)
+  const bandSkip = measure.bandSkipBefore ?? 0;
+  const state = paginator.ensureFits(bandSkip + measure.height);
 
   const fragment: ImageFragment = {
     kind: "image",
@@ -1058,7 +1064,7 @@ function layoutImage(
     ...(block.pmEnd !== undefined ? { pmEnd: block.pmEnd } : {}),
   };
 
-  const result = paginator.addFragment(fragment, measure.height, 0, 0);
+  const result = paginator.addFragment(fragment, measure.height, bandSkip, 0);
   fragment.y = result.y;
 }
 

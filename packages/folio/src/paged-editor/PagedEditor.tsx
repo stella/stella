@@ -74,6 +74,8 @@ import {
   clearAllCaches,
   getCachedParagraphMeasure,
   setCachedParagraphMeasure,
+  findClearLineY,
+  MIN_WRAP_SEGMENT_WIDTH,
 } from "../core/layout-bridge/measuring";
 import type { FloatingImageZone } from "../core/layout-bridge/measuring";
 import type {
@@ -2545,6 +2547,33 @@ export function measureBlocks(
         ? (contentWidth[blockIndex] ?? defaultWidth)
         : contentWidth;
       const measure = measureBlock(block, blockWidth, zones, cumulativeY);
+
+      // Paragraphs clear a full-width band internally (findClearLineY inside
+      // measureParagraph). An in-flow table or inline image does not, so reserve
+      // a leading skip here that layout applies before the block, pushing it
+      // below the band rather than under it. eigenpal #694.
+      const bandZones = zones?.filter((zone) => zone.fullWidthBlock);
+      if (
+        bandZones?.length &&
+        (measure.kind === "image" ||
+          (measure.kind === "table" && !(block as TableBlock).floating))
+      ) {
+        const blockHeight =
+          measure.kind === "image" ? measure.height : measure.totalHeight;
+        const skip =
+          findClearLineY(
+            cumulativeY,
+            blockHeight,
+            bandZones,
+            blockWidth,
+            MIN_WRAP_SEGMENT_WIDTH,
+          ) - cumulativeY;
+        if (skip > 0) {
+          measure.bandSkipBefore = skip;
+          cumulativeY += skip;
+          pageRelativeY += skip;
+        }
+      }
 
       // Advance both cursors for the next block.
       if (

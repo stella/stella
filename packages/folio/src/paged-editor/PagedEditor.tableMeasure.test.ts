@@ -4,9 +4,11 @@ import { clearAllCaches } from "../core/layout-engine/measure/cache";
 import { resetCanvasContext } from "../core/layout-engine/measure/measureContainer";
 import type {
   FlowBlock,
+  ImageBlock,
   Measure,
   ParagraphBlock,
   ParagraphMeasure,
+  TableBlock,
   TextBoxBlock,
 } from "../core/layout-engine/types";
 import {
@@ -682,6 +684,66 @@ describe("measureBlocks floating text-box bands", () => {
       // above the cursor and `after` is not pushed down.
       expect(beforeMeasure.totalHeight).toBeGreaterThan(60);
       expect(afterMeasure.lines.at(0)?.floatSkipBefore ?? 0).toBe(0);
+    });
+  });
+
+  test("reserves a leading skip for a table or image following a band", () => {
+    withFakeTextMeasure(() => {
+      // A table or inline image right after a page-pinned band has no per-line
+      // skip mechanism, so the measure pass records a block-level skip that
+      // pushes it below the band instead of under it. eigenpal #694.
+      const band: TextBoxBlock = {
+        kind: "textBox",
+        id: "band",
+        width: 300,
+        height: 60,
+        content: [],
+        wrapType: "topAndBottom",
+        position: { vertical: { relativeTo: "margin", posOffset: 0 } },
+      };
+      const table: TableBlock = {
+        kind: "table",
+        id: "tbl",
+        rows: [
+          {
+            id: "r",
+            cells: [
+              {
+                id: "c",
+                blocks: [
+                  {
+                    kind: "paragraph",
+                    id: "tp",
+                    runs: [{ kind: "text", text: "cell" }],
+                  },
+                ],
+                padding: { top: 0, right: 0, bottom: 0, left: 0 },
+              },
+            ],
+          },
+        ],
+      };
+      const image: ImageBlock = {
+        kind: "image",
+        id: "img",
+        src: "data:,",
+        width: 80,
+        height: 40,
+      };
+
+      const tableMeasure = measureBlocks([band, table], 200, 96).at(1);
+      const imageMeasure = measureBlocks([band, image], 200, 96).at(1);
+
+      // The band bottom sits at 60 (margin-relative offset 0, height 60), so the
+      // follower is pushed down by the full band height.
+      expect(tableMeasure?.kind).toBe("table");
+      if (tableMeasure?.kind === "table") {
+        expect(tableMeasure.bandSkipBefore).toBeCloseTo(60, 5);
+      }
+      expect(imageMeasure?.kind).toBe("image");
+      if (imageMeasure?.kind === "image") {
+        expect(imageMeasure.bandSkipBefore).toBeCloseTo(60, 5);
+      }
     });
   });
 });

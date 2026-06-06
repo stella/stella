@@ -763,6 +763,12 @@ export type ImageMeasure = {
   kind: "image";
   width: number;
   height: number;
+  /**
+   * Leading space (px) layout inserts before the block to clear a page-pinned
+   * topAndBottom band on the same page. Paragraphs absorb this per line via
+   * `floatSkipBefore`; non-paragraph blocks reserve it here. eigenpal #694.
+   */
+  bandSkipBefore?: number;
 };
 
 /**
@@ -793,6 +799,9 @@ export type TableMeasure = {
   columnWidths: number[];
   totalWidth: number;
   totalHeight: number;
+  /** Leading space (px) before the table to clear a page-pinned band on the
+   * same page; applied to the table's first fragment. See {@link ImageMeasure}. */
+  bandSkipBefore?: number;
 };
 
 /**
