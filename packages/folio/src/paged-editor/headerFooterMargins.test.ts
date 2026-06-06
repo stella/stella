@@ -187,6 +187,30 @@ describe("HF margin extender across multiple section margins (issue #400)", () =
       24,
     );
   });
+
+  test("clamp: margins that already clear the HF content but exceed the page are still clamped", () => {
+    // bottom 648 already clears a 600 px footer, so no extension is needed —
+    // but on a 500 px page it leaves no content area. The fast 'already fits'
+    // path must still apply the page clamp.
+    const margins = {
+      top: 96,
+      right: 72,
+      bottom: 648,
+      left: 72,
+      header: 48,
+      footer: 48,
+    };
+
+    const extend = computeHeaderFooterMarginExtender({
+      footerContent: content(600),
+      pageSize: { w: 816, h: 500 },
+    });
+
+    const extended = extend(margins);
+    // 500 - 24 = 476 total; with top 96 the bottom shrinks to 380.
+    expect(extended.top + extended.bottom).toBeLessThanOrEqual(476);
+    expect(extended.bottom).toBe(380);
+  });
 });
 
 describe("extendSectionBreakMargins extends each section against its own page", () => {
@@ -279,6 +303,29 @@ describe("extendSectionBreakMargins extends each section against its own page", 
 
     expect(first.margins?.bottom).toBe(648);
     expect(second.margins?.bottom).toBe(648);
+  });
+
+  test("a smaller page-size-only section clamps the taller section's inherited margins", () => {
+    // Section 1 expands the bottom to 648 on its own 1000 px page; section 2
+    // omits margins and switches to a 500 px page. It inherits 648 — which
+    // already clears the footer — so the clamp must still fire for the smaller
+    // page rather than leave body text with no content area.
+    const tall: SectionBreakBlock = {
+      kind: "sectionBreak",
+      id: "tall",
+      pageSize: { w: 816, h: 1000 },
+      margins: { ...rawMargins },
+    };
+    const smaller: SectionBreakBlock = {
+      kind: "sectionBreak",
+      id: "smaller",
+      pageSize: { w: 816, h: 500 },
+    };
+
+    run([tall, smaller]);
+
+    expect(tall.margins?.bottom).toBe(648);
+    expect(smaller.margins?.bottom).toBe(380);
   });
 
   test("a pure continuation break (no page size or margins) is left untouched", () => {

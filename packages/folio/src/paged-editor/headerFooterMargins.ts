@@ -112,10 +112,18 @@ function buildExtender({
     const availableHeaderSpace = margins.top - headerDistance;
     const availableFooterSpace = margins.bottom - footerDistance;
 
-    if (
+    const maxMargins = pageSize
+      ? Math.max(0, pageSize.h - MIN_CONTENT_HEIGHT_PX)
+      : undefined;
+    const fitsContent =
       headerContentHeight <= availableHeaderSpace &&
-      footerContentHeight <= availableFooterSpace
-    ) {
+      footerContentHeight <= availableFooterSpace;
+    // Margins inherited from a taller section can already exceed a smaller
+    // section's page even when nothing here needs extending, so the page
+    // clamp must still run on this fast path.
+    const fitsPage =
+      maxMargins === undefined || margins.top + margins.bottom <= maxMargins;
+    if (fitsContent && fitsPage) {
       return margins;
     }
 
@@ -130,20 +138,21 @@ function buildExtender({
       );
     }
 
-    if (pageSize) {
-      const maxMargins = Math.max(0, pageSize.h - MIN_CONTENT_HEIGHT_PX);
+    if (
+      pageSize &&
+      maxMargins !== undefined &&
+      out.top + out.bottom > maxMargins
+    ) {
+      if (warn) {
+        warn(
+          `header/footer content exceeds page height; clamping margins to preserve a content area. pageHeight=${Math.round(
+            pageSize.h,
+          )} top=${Math.round(out.top)} bottom=${Math.round(out.bottom)}`,
+        );
+      }
+      out.bottom = Math.max(0, Math.min(out.bottom, maxMargins - out.top));
       if (out.top + out.bottom > maxMargins) {
-        if (warn) {
-          warn(
-            `header/footer content exceeds page height; clamping margins to preserve a content area. pageHeight=${Math.round(
-              pageSize.h,
-            )} top=${Math.round(out.top)} bottom=${Math.round(out.bottom)}`,
-          );
-        }
-        out.bottom = Math.max(0, Math.min(out.bottom, maxMargins - out.top));
-        if (out.top + out.bottom > maxMargins) {
-          out.top = Math.max(0, maxMargins - out.bottom);
-        }
+        out.top = Math.max(0, maxMargins - out.bottom);
       }
     }
 
