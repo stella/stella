@@ -9,6 +9,7 @@
  */
 
 import { getHeaderRowsHeight } from "../layout-engine/index";
+import { measuredLineContentOffset } from "../layout-engine/lineFlow";
 import { measureParagraph } from "../layout-engine/measure";
 import { measureRun } from "../layout-engine/measure/measureContainer";
 import type { FontStyle } from "../layout-engine/measure/measureContainer";
@@ -374,23 +375,6 @@ function charOffsetToX(
   return x;
 }
 
-/**
- * Calculate the rendered top of a line, including float-driven vertical skips.
- */
-function lineHeightBefore(
-  measure: ParagraphMeasure,
-  lineIndex: number,
-): number {
-  let height = 0;
-  for (let i = 0; i < lineIndex && i < measure.lines.length; i++) {
-    // SAFETY: i < measure.lines.length in for loop
-    const line = measure.lines[i]!;
-    height += (line.floatSkipBefore ?? 0) + line.lineHeight;
-  }
-  height += measure.lines[lineIndex]?.floatSkipBefore ?? 0;
-  return height;
-}
-
 // =============================================================================
 // MAIN FUNCTIONS
 // =============================================================================
@@ -520,9 +504,11 @@ export function selectionToRects(
           }
 
           // Calculate line Y offset within fragment
-          const lineOffset =
-            lineHeightBefore(paragraphMeasure, index) -
-            lineHeightBefore(paragraphMeasure, paragraphFragment.fromLine);
+          const lineOffset = measuredLineContentOffset(
+            paragraphMeasure.lines,
+            paragraphFragment.fromLine,
+            index,
+          );
 
           // Create selection rectangle
           const rectX =
@@ -679,7 +665,11 @@ export function selectionToRects(
                   contentWidth,
                 );
 
-                const lineY = lineHeightBefore(paragraphMeasure, index);
+                const lineY = measuredLineContentOffset(
+                  paragraphMeasure.lines,
+                  0,
+                  index,
+                );
                 const clippedLineY = contentOffsetY + blockY + lineY;
                 if (
                   clippedLineY + line.lineHeight <= clipTop ||
@@ -832,9 +822,11 @@ export function getCaretPosition(
             }
 
             // Calculate Y offset
-            const lineOffset =
-              lineHeightBefore(paragraphMeasure, lineIndex) -
-              lineHeightBefore(paragraphMeasure, paragraphFragment.fromLine);
+            const lineOffset = measuredLineContentOffset(
+              paragraphMeasure.lines,
+              paragraphFragment.fromLine,
+              lineIndex,
+            );
 
             return {
               x: fragment.x + indentLeft + alignmentOffset + x,

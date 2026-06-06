@@ -5,6 +5,8 @@
  * Converts document blocks + measurements into positioned fragments on pages.
  */
 
+import type { ImagePosition } from "@stll/docx-core/model";
+
 /**
  * Unique identifier for a block in the document.
  * Format: typically `${index}-${type}` or just the block index.
@@ -135,16 +137,21 @@ export type TabRun = RunFormatting & {
 /**
  * Position data for floating/anchored images.
  */
+// OOXML drawing anchors (`ST_RelFromH`/`ST_RelFromV`, `ST_AlignH`/`ST_AlignV`).
+// Mirrors the typed `ImagePositionAttrs` (schema/nodes.ts) rather than widening
+// to `string`, so band/anchor resolution can switch exhaustively over the
+// finite value set. The DOCX parser already narrows raw XML to these unions via
+// `narrowEnum`, so no runtime validation is needed here.
 export type ImageRunPosition = {
   horizontal?: {
-    relativeTo?: string;
+    relativeTo?: NonNullable<ImagePosition["horizontal"]["relativeTo"]>;
     posOffset?: number;
-    align?: string;
+    align?: NonNullable<ImagePosition["horizontal"]["alignment"]>;
   };
   vertical?: {
-    relativeTo?: string;
+    relativeTo?: NonNullable<ImagePosition["vertical"]["relativeTo"]>;
     posOffset?: number;
-    align?: string;
+    align?: NonNullable<ImagePosition["vertical"]["alignment"]>;
   };
 };
 
@@ -636,7 +643,7 @@ export type TextBoxBlock = {
   wrapType?: string;
   /** OOXML wrapText direction for anchored text boxes. */
   wrapText?: "bothSides" | "left" | "right" | "largest";
-  /** Position for floating/anchored text boxes (pixel-converted EMU). */
+  /** Position for floating/anchored text boxes (OOXML EMU offsets). */
   position?: ImageRunPosition;
   /** Wrap distances in pixels. */
   distTop?: number;
@@ -756,6 +763,12 @@ export type ImageMeasure = {
   kind: "image";
   width: number;
   height: number;
+  /**
+   * Leading space (px) layout inserts before the block to clear a page-pinned
+   * topAndBottom band on the same page. Paragraphs absorb this per line via
+   * `floatSkipBefore`; non-paragraph blocks reserve it here. eigenpal #694.
+   */
+  bandSkipBefore?: number;
 };
 
 /**
@@ -786,6 +799,9 @@ export type TableMeasure = {
   columnWidths: number[];
   totalWidth: number;
   totalHeight: number;
+  /** Leading space (px) before the table to clear a page-pinned band on the
+   * same page; applied to the table's first fragment. See {@link ImageMeasure}. */
+  bandSkipBefore?: number;
 };
 
 /**
@@ -1263,4 +1279,5 @@ export type { TextBoxFlowAttrs } from "./textBoxFlow";
 export {
   isFloatingTextBoxBlock,
   floatingTextBoxWrapsText,
+  floatingTextBoxReservesBand,
 } from "./textBoxFlow";

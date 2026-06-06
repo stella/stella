@@ -19,6 +19,7 @@ import {
   FOOTNOTE_ENTRY_MARGIN_BOTTOM,
   FOOTNOTE_FALLBACK_LINE_HEIGHT,
   FOOTNOTE_SEPARATOR_HEIGHT,
+  floatingTextBoxReservesBand,
   floatingTextBoxWrapsText,
   isFloatingTextBoxBlock,
 } from "../layout-engine/types";
@@ -114,6 +115,16 @@ export type PageFloatingImage = {
    * above-text layer so wrapNone semantics survive in the DOM.
    */
   behindDoc: boolean;
+};
+
+type ScopedFloatingRect = {
+  startsAtFragmentIndex: number;
+  rect: FloatingExclusionRect;
+};
+
+type ScopedFloatingZone = {
+  startsAtFragmentIndex: number;
+  zone: FloatingImageZone;
 };
 
 /**
@@ -463,6 +474,27 @@ function syncPageWatermarkOverlay(
   }
 
   pageEl.append(overlay);
+}
+
+function floatingZonesForFragment(
+  pageWideZones: FloatingImageZone[],
+  scopedZones: ScopedFloatingZone[],
+  fragmentIndex: number,
+): FloatingImageZone[] {
+  if (scopedZones.length === 0) {
+    return pageWideZones;
+  }
+
+  let activeZones: FloatingImageZone[] | undefined;
+  for (const scopedZone of scopedZones) {
+    if (scopedZone.startsAtFragmentIndex > fragmentIndex) {
+      continue;
+    }
+    activeZones ??= [...pageWideZones];
+    activeZones.push(scopedZone.zone);
+  }
+
+  return activeZones ?? pageWideZones;
 }
 
 /**
@@ -1760,6 +1792,7 @@ export function renderPage(
   // PHASE 1: Extract all floating images from paragraphs on this page
   const allFloatingImages: PageFloatingImage[] = [];
   const floatingRects: FloatingExclusionRect[] = [];
+  const scopedFloatingRects: ScopedFloatingRect[] = [];
   const pageGeometry: PageGeometry = {
     pageWidth: page.size.w,
     pageHeight: page.size.h,
@@ -1859,7 +1892,12 @@ export function renderPage(
   // contribution so body text wraps around anchored boxes instead of
   // running underneath them.
   if (options.blockLookup) {
-    for (const fragment of page.fragments) {
+    for (
+      let fragmentIndex = 0;
+      fragmentIndex < page.fragments.length;
+      fragmentIndex++
+    ) {
+      const fragment = page.fragments[fragmentIndex]!; // SAFETY: fragmentIndex < page.fragments.length
       if (fragment.kind !== "textBox") {
         continue;
       }
@@ -1871,7 +1909,11 @@ export function renderPage(
       if (!isFloatingTextBoxBlock(textBoxBlock)) {
         continue;
       }
-      if (!floatingTextBoxWrapsText(textBoxBlock)) {
+      // topAndBottom reserves a full-width band (text flows above/below);
+      // side-wrap types reserve a side exclusion. Both push a rect — the band
+      // is distinguished by `wrapType` in rectsToFloatingZones. eigenpal #694.
+      const reservesBand = floatingTextBoxReservesBand(textBoxBlock);
+      if (!reservesBand && !floatingTextBoxWrapsText(textBoxBlock)) {
         continue;
       }
 
@@ -1911,7 +1953,14 @@ export function renderPage(
       if (textBoxBlock.wrapType !== undefined) {
         rect.wrapType = textBoxBlock.wrapType;
       }
-      floatingRects.push(rect);
+      if (reservesBand) {
+        scopedFloatingRects.push({
+          startsAtFragmentIndex: fragmentIndex,
+          rect,
+        });
+      } else {
+        floatingRects.push(rect);
+      }
     }
   }
 
@@ -1920,6 +1969,13 @@ export function renderPage(
     floatingRects.length > 0
       ? rectsToFloatingZones(floatingRects, contentWidth)
       : [];
+  const scopedFloatingZones: ScopedFloatingZone[] = scopedFloatingRects.flatMap(
+    ({ startsAtFragmentIndex, rect }) =>
+      rectsToFloatingZones([rect], contentWidth).map((zone) => ({
+        startsAtFragmentIndex,
+        zone,
+      })),
+  );
 
   // PHASE 3a: Render behindDoc images first so they paint below body text.
   // Front-layer images (everything else) are appended after fragments below
@@ -1988,9 +2044,14 @@ export function renderPage(
 
         // Re-measure paragraph with floating zones for text wrapping
         let paragraphMeasure = blockData.measure as ParagraphMeasure;
-        if (floatingZones.length > 0) {
+        const fragmentFloatingZones = floatingZonesForFragment(
+          floatingZones,
+          scopedFloatingZones,
+          i,
+        );
+        if (fragmentFloatingZones.length > 0) {
           paragraphMeasure = measureParagraph(paragraphBlock, contentWidth, {
-            floatingZones,
+            floatingZones: fragmentFloatingZones,
             paragraphYOffset: fragmentContentY,
           });
         }

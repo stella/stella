@@ -74,6 +74,8 @@ import {
   clearAllCaches,
   getCachedParagraphMeasure,
   setCachedParagraphMeasure,
+  findClearLineY,
+  MIN_WRAP_SEGMENT_WIDTH,
 } from "../core/layout-bridge/measuring";
 import type { FloatingImageZone } from "../core/layout-bridge/measuring";
 import type {
@@ -87,6 +89,11 @@ import type { ToFlowBlocksOptions } from "../core/layout-bridge/toFlowBlocks";
 // Layout engine
 import { layoutDocument } from "../core/layout-engine";
 import type { ColumnLayout, SectionLayoutConfig } from "../core/layout-engine";
+import {
+  bandTopContentY,
+  floatingTextBoxReservesBand,
+  isPageFrameRelativeAnchor,
+} from "../core/layout-engine/textBoxFlow";
 import type {
   Layout,
   FlowBlock,
@@ -102,6 +109,7 @@ import type {
   PageMargins,
   SectionBreakBlock,
   TextBoxBlock,
+  TextBoxMeasure,
   FootnoteContent,
   PageHeaderFooterRefs,
 } from "../core/layout-engine/types";
@@ -194,7 +202,7 @@ import {
   isValidPmScrollPosition,
   prefersReducedMotionBehavior,
 } from "./scrollNavigation";
-import { computePerBlockWidths } from "./sectionBlockWidths";
+import { computePerBlockMeasureInputs } from "./sectionBlockWidths";
 import { SelectionOverlay } from "./SelectionOverlay";
 import { getTransactionDirtyRange } from "./transactionDirtyRange";
 import { useDragAutoScroll } from "./useDragAutoScroll";
@@ -2066,11 +2074,43 @@ type FloatingZoneWithAnchor = {
   isMarginRelative?: boolean;
 } & FloatingImageZone;
 
+function perBlockNumberValue(
+  value: number | number[],
+  blockIndex: number,
+  fallback: number,
+): number {
+  if (Array.isArray(value)) {
+    return value[blockIndex] ?? fallback;
+  }
+  return value;
+}
+
+// Page geometry the band extraction needs to resolve page/margin-pinned
+// topAndBottom anchors (bottom-strip frames, centered/bottom align). Per-block
+// because sections can vary page size and margins. eigenpal #694.
+type BandPageGeometry = {
+  pageHeight: number | number[];
+  marginBottom: number | number[];
+};
+
 function extractFloatingZones(
   blocks: FlowBlock[],
   contentWidth: number,
+  marginTop: number | number[] = 0,
+  pageGeometry?: BandPageGeometry,
 ): FloatingZoneWithAnchor[] {
   const zones: FloatingZoneWithAnchor[] = [];
+  const defaultMarginTop = Array.isArray(marginTop)
+    ? (marginTop[0] ?? 0)
+    : marginTop;
+  const pageHeightInput = pageGeometry?.pageHeight ?? 0;
+  const marginBottomInput = pageGeometry?.marginBottom ?? 0;
+  const defaultPageHeight = Array.isArray(pageHeightInput)
+    ? (pageHeightInput[0] ?? 0)
+    : pageHeightInput;
+  const defaultMarginBottom = Array.isArray(marginBottomInput)
+    ? (marginBottomInput[0] ?? 0)
+    : marginBottomInput;
 
   for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
     const block = blocks[blockIndex]!; // SAFETY: blockIndex < blocks.length
@@ -2218,6 +2258,63 @@ function extractFloatingZones(
     });
   }
 
+  // Page/margin-anchored topAndBottom text boxes (e.g. a banner pinned to the
+  // page top) reserve a full-width band so body text flows above and below the
+  // box instead of the box dropping into the flow at its anchor paragraph.
+  // Paragraph-anchored topAndBottom boxes keep folio's in-flow handling (they
+  // already render on their own line at the anchor). eigenpal docx-editor #694.
+  for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
+    const block = blocks[blockIndex]!; // SAFETY: blockIndex < blocks.length
+    if (block.kind !== "textBox") {
+      continue;
+    }
+    const tb = block as TextBoxBlock;
+    if (!floatingTextBoxReservesBand(tb)) {
+      continue;
+    }
+    const v = tb.position?.vertical;
+    if (!isPageFrameRelativeAnchor(v?.relativeTo)) {
+      continue;
+    }
+
+    const height = measureTextBoxBlock(tb).height;
+    const distTop = tb.distTop ?? 0;
+    const distBottom = tb.distBottom ?? 0;
+    const blockMarginTop = perBlockNumberValue(
+      marginTop,
+      blockIndex,
+      defaultMarginTop,
+    );
+    // Shared with layoutTextBox so the reserved band and the painted box agree.
+    const rawTop = bandTopContentY(v, {
+      pageHeight: perBlockNumberValue(
+        pageHeightInput,
+        blockIndex,
+        defaultPageHeight,
+      ),
+      marginTop: blockMarginTop,
+      marginBottom: perBlockNumberValue(
+        marginBottomInput,
+        blockIndex,
+        defaultMarginBottom,
+      ),
+      boxHeight: height,
+    });
+    const bottomY = rawTop + height + distBottom;
+    if (bottomY <= 0) {
+      continue;
+    }
+    zones.push({
+      leftMargin: 0,
+      rightMargin: 0,
+      topY: Math.max(0, rawTop - distTop),
+      bottomY,
+      anchorBlockIndex: blockIndex,
+      isMarginRelative: true,
+      fullWidthBlock: true,
+    });
+  }
+
   return zones;
 }
 
@@ -2275,24 +2372,7 @@ function measureBlock(
     }
 
     case "textBox": {
-      const tb = block as TextBoxBlock;
-      const margins = tb.margins ?? DEFAULT_TEXTBOX_MARGINS;
-      const innerWidth = tb.width - margins.left - margins.right;
-      const innerMeasures = tb.content.map((p) =>
-        measureParagraph(p, innerWidth),
-      );
-      const contentHeight = innerMeasures.reduce(
-        (sum, m) => sum + m.totalHeight,
-        0,
-      );
-      const totalHeight =
-        tb.height ?? contentHeight + margins.top + margins.bottom;
-      return {
-        kind: "textBox" as const,
-        width: tb.width,
-        height: totalHeight,
-        innerMeasures,
-      };
+      return measureTextBoxBlock(block as TextBoxBlock);
     }
 
     case "pageBreak":
@@ -2314,6 +2394,34 @@ function measureBlock(
   }
 }
 
+function measureTextBoxBlock(tb: TextBoxBlock): TextBoxMeasure {
+  const margins = tb.margins ?? DEFAULT_TEXTBOX_MARGINS;
+  const innerWidth = tb.width - margins.left - margins.right;
+  const innerMeasures = tb.content.map((p) => measureParagraph(p, innerWidth));
+  const contentHeight = innerMeasures.reduce(
+    (sum, m) => sum + m.totalHeight,
+    0,
+  );
+  const totalHeight = tb.height ?? contentHeight + margins.top + margins.bottom;
+  return {
+    kind: "textBox",
+    width: tb.width,
+    height: totalHeight,
+    innerMeasures,
+  };
+}
+
+/**
+ * `true` for a section break that starts a new page (`nextPage`/`evenPage`/
+ * `oddPage`, or an unspecified type, which the layout treats as `nextPage`).
+ * A `continuous` break stays on the current page, so it does not open a fresh
+ * page frame. Used by `measureBlocks` to reset the running Y for a page-pinned
+ * band that lands right after the break. eigenpal #694.
+ */
+function isNextPageSectionBreak(block: FlowBlock): boolean {
+  return block.kind === "sectionBreak" && block.type !== "continuous";
+}
+
 /**
  * Measure all blocks with floating image support.
  *
@@ -2321,26 +2429,37 @@ function measureBlock(
  * Then measures each block, passing the zones so paragraphs can calculate
  * per-line widths based on vertical overlap with floating images.
  */
-function measureBlocks(
+export function measureBlocks(
   blocks: FlowBlock[],
   contentWidth: number | number[],
+  marginTop: number | number[] = 0,
+  pageGeometry?: BandPageGeometry,
 ): Measure[] {
   const defaultWidth = Array.isArray(contentWidth)
     ? (contentWidth[0] ?? 0)
     : contentWidth;
   // Pre-extract floating image exclusion zones with anchor block indices
-  const floatingZonesWithAnchors = extractFloatingZones(blocks, defaultWidth);
+  const floatingZonesWithAnchors = extractFloatingZones(
+    blocks,
+    defaultWidth,
+    marginTop,
+    pageGeometry,
+  );
 
   // Margin-relative zones (positioned relative to page/margin) on the same vertical
   // position are likely on the same page. Group them and activate all from the earliest
   // anchor so text wraps around ALL images from the first paragraph onward.
   // e.g. left-aligned and right-aligned images at margin top should both affect text
   // starting from the first anchor paragraph, not just the one containing each image.
+  // Full-width topAndBottom bands are excluded: each pins to its own text box, so a
+  // second band sharing the same topY (e.g. body banners in different sections) must
+  // not be rewritten to the earliest anchor, or earlier pages would reserve a band
+  // that is painted elsewhere. They keep their own anchor below. eigenpal #694.
   const marginRelative = floatingZonesWithAnchors.filter(
-    (z) => z.isMarginRelative,
+    (z) => z.isMarginRelative && !z.fullWidthBlock,
   );
-  const paragraphRelative = floatingZonesWithAnchors.filter(
-    (z) => !z.isMarginRelative,
+  const ownAnchorZones = floatingZonesWithAnchors.filter(
+    (z) => !z.isMarginRelative || z.fullWidthBlock,
   );
 
   // Group margin-relative zones by topY and move all to earliest anchor in group
@@ -2351,7 +2470,7 @@ function measureBlocks(
     marginByTopY.set(z.topY, group);
   }
 
-  const adjustedZones: FloatingZoneWithAnchor[] = [...paragraphRelative];
+  const adjustedZones: FloatingZoneWithAnchor[] = [...ownAnchorZones];
   for (const group of marginByTopY.values()) {
     const minAnchor = Math.min(...group.map((z) => z.anchorBlockIndex));
     for (const z of group) {
@@ -2363,32 +2482,62 @@ function measureBlocks(
   const zonesByAnchor = new Map<number, FloatingImageZone[]>();
   for (const z of adjustedZones) {
     const existing = zonesByAnchor.get(z.anchorBlockIndex) ?? [];
-    existing.push({
-      leftMargin: z.leftMargin,
-      rightMargin: z.rightMargin,
-      topY: z.topY,
-      bottomY: z.bottomY,
-    });
+    // Strip the anchor-tracking fields; the rest IS a FloatingImageZone. Spread
+    // (rather than copying each field) so fullWidthBlock/segments can't be
+    // dropped here.
+    const {
+      anchorBlockIndex: _anchorBlockIndex,
+      isMarginRelative: _isMarginRelative,
+      ...zone
+    } = z;
+    existing.push(zone);
     zonesByAnchor.set(z.anchorBlockIndex, existing);
   }
 
-  const anchorIndices = new Set(adjustedZones.map((z) => z.anchorBlockIndex));
+  const anchorIndices = new Set(zonesByAnchor.keys());
 
-  // Track cumulative Y position for floating zone overlap calculation
-  // Resets when we reach a block with floating images (establishing local page coords)
+  // Two running Y cursors for floating-zone overlap:
+  //  - cumulativeY resets to 0 at each floating-image/table anchor, giving that
+  //    object a local frame for its side-wrap zone.
+  //  - pageRelativeY is the real page cursor; it resets only at hard page breaks
+  //    (never at a float anchor), so a page-pinned topAndBottom band always
+  //    measures from a true page-relative position even when a float was
+  //    anchored earlier on the same page. eigenpal #694.
   let cumulativeY = 0;
+  let pageRelativeY = 0;
   let activeZones: FloatingImageZone[] = [];
 
   return blocks.map((block, blockIndex) => {
     recordMeasureBlock(blockIndex, block);
 
-    // Check if this block is an anchor for floating images
-    // If so, reset cumulative Y and replace active zones (old zones from previous
-    // anchors are invalid after the Y reset since their topY/bottomY are in the old
-    // coordinate system)
-    if (anchorIndices.has(blockIndex)) {
+    // A hard page/section break starts a fresh page. Any active zone — including
+    // a page-pinned topAndBottom band — belongs to the page it was anchored on,
+    // so drop the active zones and restart both cursors at the new page top. A
+    // band anchor on the new page re-establishes its own zone below; without
+    // this, the first block after the break would be measured against a stale
+    // band (a phantom float-skip) while layout paints no band there, opening a
+    // gap. eigenpal #694.
+    if (block.kind === "pageBreak" || isNextPageSectionBreak(block)) {
+      activeZones = [];
       cumulativeY = 0;
+      pageRelativeY = 0;
+    }
+
+    // Check if this block is an anchor for floating images
+    // If so, replace active zones (old zones from previous anchors are invalid
+    // after a Y reset since their topY/bottomY are in the old coordinate system).
+    if (anchorIndices.has(blockIndex)) {
       activeZones = zonesByAnchor.get(blockIndex) ?? [];
+      // Floating-image anchors open a fresh local frame (cumulativeY → 0). A
+      // page/margin-pinned band instead reserves against the page, so it
+      // measures from pageRelativeY — the real page cursor, which a prior float
+      // anchor has not reset. This is a no-op when no float precedes the band on
+      // the page (the two cursors agree) and 0 right after a hard break, so the
+      // band still reserves from the real cursor down rather than re-reserving
+      // the whole band over content that already precedes its anchor. eigenpal #694.
+      const bandOnlyAnchor =
+        activeZones.length > 0 && activeZones.every((z) => z.fullWidthBlock);
+      cumulativeY = bandOnlyAnchor ? pageRelativeY : 0;
     }
 
     const zones = activeZones.length > 0 ? activeZones : undefined;
@@ -2399,12 +2548,40 @@ function measureBlocks(
         : contentWidth;
       const measure = measureBlock(block, blockWidth, zones, cumulativeY);
 
-      // Update cumulative Y for next block
+      // Paragraphs clear a full-width band internally (findClearLineY inside
+      // measureParagraph). An in-flow table or inline image does not, so reserve
+      // a leading skip here that layout applies before the block, pushing it
+      // below the band rather than under it. eigenpal #694.
+      const bandZones = zones?.filter((zone) => zone.fullWidthBlock);
+      if (
+        bandZones?.length &&
+        (measure.kind === "image" ||
+          (measure.kind === "table" && !(block as TableBlock).floating))
+      ) {
+        const blockHeight =
+          measure.kind === "image" ? measure.height : measure.totalHeight;
+        const skip =
+          findClearLineY(
+            cumulativeY,
+            blockHeight,
+            bandZones,
+            blockWidth,
+            MIN_WRAP_SEGMENT_WIDTH,
+          ) - cumulativeY;
+        if (skip > 0) {
+          measure.bandSkipBefore = skip;
+          cumulativeY += skip;
+          pageRelativeY += skip;
+        }
+      }
+
+      // Advance both cursors for the next block.
       if (
         "totalHeight" in measure &&
         !(block.kind === "table" && (block as TableBlock).floating)
       ) {
         cumulativeY += measure.totalHeight;
+        pageRelativeY += measure.totalHeight;
       }
 
       return measure;
@@ -2997,42 +3174,6 @@ export function PagedEditor(
         setBlocks(newBlocks);
         recordPhaseDuration("flow-blocks", phaseStartedAt);
 
-        // Compute per-block widths accounting for section breaks with different column configs
-        phaseStartedAt = performance.now();
-        const bodyLayoutConfig: SectionLayoutConfig = {
-          pageSize,
-          margins,
-        };
-        if (columns !== undefined) {
-          bodyLayoutConfig.columns = columns;
-        }
-        const blockWidths = computePerBlockWidths({
-          blocks: newBlocks,
-          bodyConfig: bodyLayoutConfig,
-          finalConfig: bodyLayoutConfig,
-        });
-        const incrementalResult =
-          options.dirtyRange && !options.forceFull && layoutArtifactsRef.current
-            ? tryBuildIncrementalMeasures({
-                previousBlocks: layoutArtifactsRef.current.blocks,
-                previousMeasures: layoutArtifactsRef.current.measures,
-                previousBlockWidths: layoutArtifactsRef.current.blockWidths,
-                nextBlocks: newBlocks,
-                nextBlockWidths: blockWidths,
-                dirtyRange: options.dirtyRange,
-                measureBlock: measureSingleBlockWithoutFloatingZones,
-              })
-            : null;
-        const newMeasures =
-          incrementalResult?.measures ?? measureBlocks(newBlocks, blockWidths);
-        layoutArtifactsRef.current = {
-          blocks: newBlocks,
-          blockWidths,
-          measures: newMeasures,
-        };
-        setMeasures(newMeasures);
-        recordPhaseDuration("measure-blocks", phaseStartedAt);
-
         // Step 2.5: Collect footnote references from blocks
         phaseStartedAt = performance.now();
         const footnoteRefs = collectFootnoteRefs(newBlocks);
@@ -3149,6 +3290,52 @@ export function PagedEditor(
           }
         }
         recordPhaseDuration("header-footer", phaseStartedAt);
+
+        // Compute per-block widths + band geometry from the EFFECTIVE margins
+        // layout uses (header/footer overflow extension + section-break margin
+        // extension applied above), so a page/margin-pinned topAndBottom band
+        // reserves its band at the same Y the box is painted. Measuring with the
+        // raw margins would mis-place the reserved band when a tall header/footer
+        // extends the margins. eigenpal #694.
+        phaseStartedAt = performance.now();
+        const bodyLayoutConfig: SectionLayoutConfig = {
+          pageSize,
+          margins: effectiveMargins,
+        };
+        if (columns !== undefined) {
+          bodyLayoutConfig.columns = columns;
+        }
+        const blockMeasureInputs = computePerBlockMeasureInputs({
+          blocks: newBlocks,
+          bodyConfig: bodyLayoutConfig,
+          finalConfig: bodyLayoutConfig,
+        });
+        const blockWidths = blockMeasureInputs.widths;
+        const incrementalResult =
+          options.dirtyRange && !options.forceFull && layoutArtifactsRef.current
+            ? tryBuildIncrementalMeasures({
+                previousBlocks: layoutArtifactsRef.current.blocks,
+                previousMeasures: layoutArtifactsRef.current.measures,
+                previousBlockWidths: layoutArtifactsRef.current.blockWidths,
+                nextBlocks: newBlocks,
+                nextBlockWidths: blockWidths,
+                dirtyRange: options.dirtyRange,
+                measureBlock: measureSingleBlockWithoutFloatingZones,
+              })
+            : null;
+        const newMeasures =
+          incrementalResult?.measures ??
+          measureBlocks(newBlocks, blockWidths, blockMeasureInputs.marginTops, {
+            pageHeight: blockMeasureInputs.pageHeights,
+            marginBottom: blockMeasureInputs.marginBottoms,
+          });
+        layoutArtifactsRef.current = {
+          blocks: newBlocks,
+          blockWidths,
+          measures: newMeasures,
+        };
+        setMeasures(newMeasures);
+        recordPhaseDuration("measure-blocks", phaseStartedAt);
 
         // Step 3: Layout blocks onto pages (two-pass if footnotes exist)
         phaseStartedAt = performance.now();

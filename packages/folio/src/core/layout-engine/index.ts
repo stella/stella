@@ -12,8 +12,15 @@ import {
   getMidChainIndices,
   hasPageBreakBefore,
 } from "./keep-together";
+import { measuredLineAdvance } from "./lineFlow";
 import { FOOTNOTE_SEPARATOR_HEIGHT, createPaginator } from "./paginator";
 import { buildTableRowBreakInfo, snapRowBreak } from "./tableRowBreak";
+import {
+  bandFragmentX,
+  bandTopContentY,
+  floatingTextBoxReservesBand,
+  isPageFrameRelativeAnchor,
+} from "./textBoxFlow";
 import type {
   FlowBlock,
   Measure,
@@ -278,6 +285,13 @@ export function layoutDocument(
 
   // Process each block, tracking section break index with a counter (O(1) per break)
   let sectionIdx = 0;
+  // Section page geometry for resolving page/margin-pinned topAndBottom bands.
+  // The measure pass (extractFloatingZones) uses the section config, not the
+  // page's possibly-different first-page margins, so layout must too or the
+  // reserved band and painted box desync. eigenpal #694.
+  let activeSectionMarginTop = initialConfig.margins.top;
+  let activeSectionPageHeight = initialConfig.pageSize.h;
+  let activeSectionMarginBottom = initialConfig.margins.bottom;
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i]!; // SAFETY: i < blocks.length
     const measure = measures[i]!; // SAFETY: measures.length === blocks.length (validated above)
@@ -337,11 +351,12 @@ export function layoutDocument(
         break;
 
       case "textBox":
-        layoutTextBox(
-          block as TextBoxBlock,
-          measure as TextBoxMeasure,
+        layoutTextBox(block as TextBoxBlock, measure as TextBoxMeasure, {
           paginator,
-        );
+          sectionMarginTop: activeSectionMarginTop,
+          sectionPageHeight: activeSectionPageHeight,
+          sectionMarginBottom: activeSectionMarginBottom,
+        });
         break;
 
       case "pageBreak":
@@ -355,15 +370,20 @@ export function layoutDocument(
       case "sectionBreak": {
         // Use the NEXT section's columns; for break type, prefer next section's
         // type but fall back to current break's type (preserves explicit 'continuous')
+        const nextSectionConfig =
+          sectionConfigs[sectionIdx + 1] ?? initialConfig;
         const nextType =
           sectionBreakTypes[sectionIdx + 1] ?? sectionBreakTypes[sectionIdx];
         handleSectionBreak(
           block as SectionBreakBlock,
           paginator,
-          sectionConfigs[sectionIdx + 1] ?? initialConfig,
+          nextSectionConfig,
           nextType,
           sectionIdx + 1,
         );
+        activeSectionMarginTop = nextSectionConfig.margins.top;
+        activeSectionPageHeight = nextSectionConfig.pageSize.h;
+        activeSectionMarginBottom = nextSectionConfig.margins.bottom;
         sectionIdx++;
         break;
       }
@@ -497,14 +517,14 @@ function layoutParagraph(
 
     for (let j = currentLineIndex; j < lines.length; j++) {
       const line = lines[j]!; // SAFETY: j < lines.length
-      const lineHeight = line.lineHeight;
+      const lineAdvance = measuredLineAdvance(line);
       const lineRefs = getLineFootnoteRefs(
         block,
         line.fromRun,
         line.toRun,
         footnoteHeightById,
       );
-      const totalWithLine = linesHeight + lineHeight;
+      const totalWithLine = linesHeight + lineAdvance;
       const withSpacing =
         totalWithLine +
         firstFragmentSpaceBefore +
@@ -602,7 +622,7 @@ function layoutParagraph(
 
     // If more lines remain, advance to next column/page
     if (currentLineIndex < lines.length) {
-      paginator.ensureFits(lines[currentLineIndex]!.lineHeight); // SAFETY: guarded by length check
+      paginator.ensureFits(measuredLineAdvance(lines[currentLineIndex]!)); // SAFETY: guarded by length check
     }
   }
 }
@@ -814,11 +834,16 @@ function layoutTable(
     const rawAvailableHeight = paginator.getAvailableHeight();
     const isFirstFragment = currentRowIndex === 0;
 
-    // Account for trailing spacing from previous block that addFragment will consume.
-    // addFragment computes effectiveSpaceBefore = max(spaceBefore, trailingSpacing)
-    // and adds it to the fragment height before calling ensureFits.
-    // We pass spaceBefore=0 for tables, so the overhead is just trailingSpacing.
-    const pendingSpacing = isFirstFragment ? state.trailingSpacing : 0;
+    // Leading skip past a page-pinned band, applied only to the table's first
+    // fragment (a band sits on one page). eigenpal #694.
+    const bandSkip = isFirstFragment ? (measure.bandSkipBefore ?? 0) : 0;
+
+    // Account for the space addFragment will consume before the fragment, which
+    // is max(spaceBefore, trailingSpacing). We pass bandSkip as spaceBefore, so
+    // the overhead is the larger of that and the previous block's trailing space.
+    const pendingSpacing = isFirstFragment
+      ? Math.max(bandSkip, state.trailingSpacing)
+      : 0;
     const availableHeight = rawAvailableHeight - pendingSpacing;
 
     const repeatHeaderRowsForNormalFragment = shouldRepeatHeaderRows(
@@ -874,7 +899,7 @@ function layoutTable(
       ...(block.sdtGroups ? { sdtGroups: block.sdtGroups } : {}),
     };
 
-    const result = paginator.addFragment(fragment, fragmentHeight, 0, 0);
+    const result = paginator.addFragment(fragment, fragmentHeight, bandSkip, 0);
     fragment.y = result.y;
     fragment.x = desiredX;
 
@@ -1024,8 +1049,9 @@ function layoutImage(
     return;
   }
 
-  // Inline image - ensure it fits
-  const state = paginator.ensureFits(measure.height);
+  // Inline image - ensure it fits (plus any leading skip past a page band)
+  const bandSkip = measure.bandSkipBefore ?? 0;
+  const state = paginator.ensureFits(bandSkip + measure.height);
 
   const fragment: ImageFragment = {
     kind: "image",
@@ -1038,7 +1064,7 @@ function layoutImage(
     ...(block.pmEnd !== undefined ? { pmEnd: block.pmEnd } : {}),
   };
 
-  const result = paginator.addFragment(fragment, measure.height, 0, 0);
+  const result = paginator.addFragment(fragment, measure.height, bandSkip, 0);
   fragment.y = result.y;
 }
 
@@ -1077,14 +1103,72 @@ function layoutAnchoredImage(
   state.page.fragments.push(fragment);
 }
 
+type LayoutTextBoxOptions = {
+  paginator: ReturnType<typeof createPaginator>;
+  sectionMarginTop: number;
+  sectionPageHeight: number;
+  sectionMarginBottom: number;
+};
+
 /**
  * Layout a text box block onto pages.
  */
 function layoutTextBox(
   block: TextBoxBlock,
   measure: TextBoxMeasure,
-  paginator: ReturnType<typeof createPaginator>,
+  {
+    paginator,
+    sectionMarginTop,
+    sectionPageHeight,
+    sectionMarginBottom,
+  }: LayoutTextBoxOptions,
 ): void {
+  // A page/margin-pinned topAndBottom band (e.g. a title banner) floats to the
+  // top of its page; the reserved band in the measure pass pushes body text
+  // below it (see extractFloatingZones in PagedEditor). It must not also consume
+  // flow at its anchor, or the box height would be reserved twice. Place it at
+  // the page content top without advancing the cursor. eigenpal #694.
+  if (isPagePinnedBandTextBox(block)) {
+    const state = paginator.getCurrentState();
+    // Position the box at the same content-Y the measure pass reserved its band
+    // at. The measure pass uses the section top margin (not a page's
+    // first-page margin), so use the same value here; `bandTopContentY` is
+    // content-relative, and `fragment.y` is page-absolute, so add the page's
+    // own top margin (`state.topMargin`) to convert. Using `state.topMargin`
+    // inside the resolver instead would desync the box from its band on a
+    // title page whose first-page top margin differs from the section margin.
+    const bandTop = bandTopContentY(block.position?.vertical, {
+      pageHeight: sectionPageHeight,
+      marginTop: sectionMarginTop,
+      marginBottom: sectionMarginBottom,
+      boxHeight: measure.height,
+    });
+    // Honor the box's horizontal anchor (align center/right, page-relative
+    // offset) instead of always pinning to the column's left edge. The band is
+    // full-width regardless, so this only moves where the box paints.
+    const horizontal = block.position?.horizontal;
+    const x = horizontal
+      ? bandFragmentX(horizontal, {
+          pageWidth: state.page.size.w,
+          marginLeft: state.page.margins.left,
+          marginRight: state.page.margins.right,
+          boxWidth: measure.width,
+        })
+      : paginator.getColumnX(state.columnIndex);
+    const fragment: TextBoxFragment = {
+      kind: "textBox",
+      blockId: block.id,
+      x,
+      y: state.topMargin + bandTop,
+      width: measure.width,
+      height: measure.height,
+      ...(block.pmStart !== undefined ? { pmStart: block.pmStart } : {}),
+      ...(block.pmEnd !== undefined ? { pmEnd: block.pmEnd } : {}),
+    };
+    state.page.fragments.push(fragment);
+    return;
+  }
+
   const state = paginator.ensureFits(measure.height);
 
   const fragment: TextBoxFragment = {
@@ -1100,6 +1184,19 @@ function layoutTextBox(
 
   const result = paginator.addFragment(fragment, measure.height, 0, 0);
   fragment.y = result.y;
+}
+
+/**
+ * A topAndBottom text box whose vertical anchor pins it to the page frame
+ * (page/margin/margin-strip) — it floats to a fixed page position rather than
+ * flowing in document order. Must agree with the measure pass's band extraction
+ * (extractFloatingZones), which uses the same predicate. eigenpal #694.
+ */
+function isPagePinnedBandTextBox(block: TextBoxBlock): boolean {
+  if (!floatingTextBoxReservesBand(block)) {
+    return false;
+  }
+  return isPageFrameRelativeAnchor(block.position?.vertical?.relativeTo);
 }
 
 /**

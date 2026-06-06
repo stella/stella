@@ -744,6 +744,36 @@ describe("toFlowBlocks list numbering", () => {
     expect(textBox.content.at(0)?.attrs?.listMarker).toBe("2.");
   });
 
+  test("carries anchored text-box position into flow blocks", () => {
+    const textBoxNode = schema.nodes.textBox;
+    if (!textBoxNode) {
+      throw new Error("Expected textBox node in schema");
+    }
+
+    const position = {
+      horizontal: { relativeTo: "margin", align: "center" },
+      vertical: { relativeTo: "page", posOffset: 123_456 },
+    } as const;
+    const doc = schema.node("doc", null, [
+      textBoxNode.create(
+        {
+          wrapType: "topAndBottom",
+          position,
+        },
+        [schema.node("paragraph", null, [schema.text("Inside")])],
+      ),
+    ]);
+
+    const textBox = toFlowBlocks(doc).at(0);
+
+    expect(textBox?.kind).toBe("textBox");
+    if (textBox?.kind !== "textBox") {
+      throw new Error("Expected textBox block");
+    }
+    expect(textBox.wrapType).toBe("topAndBottom");
+    expect(textBox.position).toEqual(position);
+  });
+
   test("substitutes style-inherited marker templates without paragraph numPr", () => {
     const doc = schema.node("doc", null, [
       schema.node(

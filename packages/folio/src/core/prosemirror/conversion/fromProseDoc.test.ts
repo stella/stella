@@ -8,6 +8,7 @@ import type {
   Table,
   TableCell,
 } from "../../types/document";
+import { pixelsToEmu } from "../../utils/units";
 import { expectHardBreakAttrs, expectParagraphAttrs } from "../attrs";
 import { schema } from "../schema";
 import { fromProseDoc } from "./fromProseDoc";
@@ -733,6 +734,45 @@ describe("fromProseDoc", () => {
     }
     expect(firstRunContent.shape.shapeType).toBe("textBox");
     expect(firstRunContent.shape.textBody?.content).toHaveLength(1);
+  });
+
+  test("preserves textBox wrap and position attrs on save", () => {
+    const pmDoc = schema.node("doc", null, [
+      schema.node(
+        "textBox",
+        {
+          width: 120,
+          height: 60,
+          wrapType: "topAndBottom",
+          distTop: 3,
+          distBottom: 4,
+          position: {
+            horizontal: { relativeTo: "margin", align: "center" },
+            vertical: { relativeTo: "page", posOffset: 123_456 },
+          },
+        },
+        [schema.node("paragraph", null, [schema.text("Inside")])],
+      ),
+    ]);
+
+    const document = fromProseDoc(pmDoc);
+    const block = document.package.document.content.at(0);
+
+    expect(block?.type).toBe("paragraph");
+    if (block?.type !== "paragraph") {
+      return;
+    }
+    const shape = firstShapeContent(block)?.shape;
+    expect(shape?.shapeType).toBe("textBox");
+    expect(shape?.wrap).toEqual({
+      type: "topAndBottom",
+      distT: pixelsToEmu(3),
+      distB: pixelsToEmu(4),
+    });
+    expect(shape?.position).toEqual({
+      horizontal: { relativeTo: "margin", alignment: "center" },
+      vertical: { relativeTo: "page", posOffset: 123_456 },
+    });
   });
 
   test("preserves OOXML outline dash tokens on shape nodes", () => {

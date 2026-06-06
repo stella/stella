@@ -24,6 +24,10 @@ function textBoxAttrsFromImport(args: {
     | "inFront";
   wrapText?: "bothSides" | "left" | "right" | "largest";
   hAlign?: "left" | "right" | "center";
+  hRelativeTo?: "column" | "margin" | "page";
+  hPosOffsetEmu?: number;
+  vRelativeTo?: "paragraph" | "margin" | "page";
+  vPosOffsetEmu?: number;
   distTEmu?: number;
   distBEmu?: number;
   distLEmu?: number;
@@ -47,10 +51,18 @@ function textBoxAttrsFromImport(args: {
                       size: { width: 914_400, height: 457_200 },
                       position: {
                         horizontal: {
-                          relativeTo: "column",
+                          relativeTo: args.hRelativeTo ?? "column",
+                          ...(args.hPosOffsetEmu !== undefined
+                            ? { posOffset: args.hPosOffsetEmu }
+                            : {}),
                           ...(args.hAlign ? { alignment: args.hAlign } : {}),
                         },
-                        vertical: { relativeTo: "paragraph" },
+                        vertical: {
+                          relativeTo: args.vRelativeTo ?? "paragraph",
+                          ...(args.vPosOffsetEmu !== undefined
+                            ? { posOffset: args.vPosOffsetEmu }
+                            : {}),
+                        },
                       },
                       wrap: {
                         type: args.wrapType,
@@ -139,6 +151,21 @@ describe("toProseDoc propagates text-box wrap attributes", () => {
     expect(attrs["wrapType"]).toBe("topAndBottom");
     expect(attrs["displayMode"]).toBe("block");
     expect(attrs["cssFloat"]).toBe("none");
+  });
+
+  test("preserves anchored position for imported topAndBottom text boxes", () => {
+    const attrs = textBoxAttrsFromImport({
+      wrapType: "topAndBottom",
+      hRelativeTo: "margin",
+      hAlign: "center",
+      vRelativeTo: "page",
+      vPosOffsetEmu: 123_456,
+    });
+
+    expect(attrs["position"]).toEqual({
+      horizontal: { relativeTo: "margin", align: "center" },
+      vertical: { relativeTo: "page", posOffset: 123_456 },
+    });
   });
 
   test("wrap='behind' becomes a float (anchored, paints over text)", () => {

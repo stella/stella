@@ -38,6 +38,8 @@ export {
   measureParagraphs,
   getRunCharWidths,
   clampFloatingWrapMargins,
+  findClearLineY,
+  MIN_WRAP_SEGMENT_WIDTH,
   type FloatingImageZone,
   type MeasureParagraphOptions,
 } from "../../layout-engine/measure/measureParagraph";

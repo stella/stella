@@ -2,11 +2,23 @@ import { collectSectionConfigs } from "../core/layout-engine";
 import type { SectionLayoutConfig } from "../core/layout-engine";
 import type { ColumnLayout, FlowBlock } from "../core/layout-engine/types";
 
-type ComputePerBlockWidthsInput = {
+type ComputePerBlockMeasureInput = {
   blocks: FlowBlock[];
   bodyConfig: SectionLayoutConfig;
   finalConfig: SectionLayoutConfig;
 };
+
+type PerBlockMeasureInputs = {
+  widths: number[];
+  marginTops: number[];
+  // Page geometry per block, used to resolve page/margin-pinned topAndBottom
+  // bands (`bandTopContentY`) in the measure pass. Sections can vary page size
+  // and margins, so these are per-block like `widths`/`marginTops`.
+  pageHeights: number[];
+  marginBottoms: number[];
+};
+
+const SINGLE_COLUMN_LAYOUT: ColumnLayout = { count: 1, gap: 0 };
 
 /**
  * Compute per-block measurement widths by scanning for section breaks.
@@ -20,7 +32,19 @@ export function computePerBlockWidths({
   blocks,
   bodyConfig,
   finalConfig,
-}: ComputePerBlockWidthsInput): number[] {
+}: ComputePerBlockMeasureInput): number[] {
+  return computePerBlockMeasureInputs({
+    blocks,
+    bodyConfig,
+    finalConfig,
+  }).widths;
+}
+
+export function computePerBlockMeasureInputs({
+  blocks,
+  bodyConfig,
+  finalConfig,
+}: ComputePerBlockMeasureInput): PerBlockMeasureInputs {
   function colWidth(cw: number, cols: ColumnLayout): number {
     if (cols.count <= 1) {
       return cw;
@@ -40,17 +64,23 @@ export function computePerBlockWidths({
 
   let sectionIdx = 0;
   const widths: number[] = [];
+  const marginTops: number[] = [];
+  const pageHeights: number[] = [];
+  const marginBottoms: number[] = [];
 
   for (let i = 0; i < blocks.length; i++) {
     const config = sectionConfigs[sectionIdx] ?? finalConfig;
     widths.push(
-      colWidth(contentWidth(config), config.columns ?? { count: 1, gap: 0 }),
+      colWidth(contentWidth(config), config.columns ?? SINGLE_COLUMN_LAYOUT),
     );
+    marginTops.push(config.margins.top);
+    pageHeights.push(config.pageSize.h);
+    marginBottoms.push(config.margins.bottom);
 
     if (sectionIdx < breakIndices.length && i === breakIndices[sectionIdx]) {
       sectionIdx++;
     }
   }
 
-  return widths;
+  return { widths, marginTops, pageHeights, marginBottoms };
 }

@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { clearAllCaches } from "../layout-engine/measure/cache";
+import { resetCanvasContext } from "../layout-engine/measure/measureContainer";
 import type {
   Page,
   HeaderFooterContent,
@@ -78,8 +80,17 @@ class FakeElement {
     }
   }
 
-  getContext(): null {
-    return null;
+  getContext() {
+    return {
+      font: "",
+      measureText(text: string) {
+        return {
+          width: text.length * 5,
+          actualBoundingBoxAscent: 8,
+          actualBoundingBoxDescent: 2,
+        };
+      },
+    };
   }
 
   querySelectorAll<T = FakeElement>(selector: string): T[] {
@@ -211,6 +222,27 @@ function collectByClass(
   }
 
   return matches;
+}
+
+function withFakeTextMeasure(runTest: () => void): void {
+  const originalDocument = globalThis.document;
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: fakeDocument,
+  });
+  clearAllCaches();
+  resetCanvasContext();
+
+  try {
+    runTest();
+  } finally {
+    resetCanvasContext();
+    clearAllCaches();
+    Object.defineProperty(globalThis, "document", {
+      configurable: true,
+      value: originalDocument,
+    });
+  }
 }
 
 const page: Page = {
@@ -380,6 +412,111 @@ describe("page font fallback", () => {
     expect(getDefaultPageFontFamily()).toBe(
       "Calibri, Carlito, Arial, Helvetica, sans-serif",
     );
+  });
+});
+
+describe("floating text box render zones", () => {
+  test("does not apply a page-pinned band to earlier fragments", () => {
+    withFakeTextMeasure(() => {
+      const before: ParagraphBlock = {
+        kind: "paragraph",
+        id: "before",
+        runs: [{ kind: "text", text: "before" }],
+      };
+      const after: ParagraphBlock = {
+        kind: "paragraph",
+        id: "after",
+        runs: [{ kind: "text", text: "after" }],
+      };
+      const band: TextBoxBlock = {
+        kind: "textBox",
+        id: "band",
+        width: 300,
+        height: 80,
+        content: [],
+        wrapType: "topAndBottom",
+        position: { vertical: { relativeTo: "margin", posOffset: 0 } },
+      };
+      const paragraphMeasure: ParagraphMeasure = {
+        kind: "paragraph",
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 6,
+            width: 30,
+            ascent: 8,
+            descent: 2,
+            lineHeight: 10,
+          },
+        ],
+        totalHeight: 10,
+      };
+      const bandMeasure: TextBoxMeasure = {
+        kind: "textBox",
+        width: 300,
+        height: 80,
+        innerMeasures: [],
+      };
+      const rendered = renderPage(
+        {
+          ...page,
+          fragments: [
+            {
+              kind: "paragraph",
+              blockId: "before",
+              x: 72,
+              y: 72,
+              width: 672,
+              height: 10,
+              fromLine: 0,
+              toLine: 1,
+            },
+            {
+              kind: "textBox",
+              blockId: "band",
+              x: 72,
+              y: 72,
+              width: 300,
+              height: 80,
+            },
+            {
+              kind: "paragraph",
+              blockId: "after",
+              x: 72,
+              y: 72,
+              width: 672,
+              height: 10,
+              fromLine: 0,
+              toLine: 1,
+            },
+          ],
+        },
+        { pageNumber: 1, totalPages: 1, section: "body" },
+        {
+          document: fakeDocument,
+          blockLookup: new Map([
+            ["before", { block: before, measure: paragraphMeasure }],
+            ["band", { block: band, measure: bandMeasure }],
+            ["after", { block: after, measure: paragraphMeasure }],
+          ]),
+        },
+      ) as unknown as FakeElement;
+
+      const paragraphs = collectByClass(rendered, "layout-paragraph");
+      const beforeLine = findByClass(
+        paragraphs.find((el) => el.dataset["blockId"] === "before")!,
+        "layout-line",
+      );
+      const afterLine = findByClass(
+        paragraphs.find((el) => el.dataset["blockId"] === "after")!,
+        "layout-line",
+      );
+
+      expect(beforeLine?.style.marginTop).toBeUndefined();
+      expect(afterLine?.style.marginTop).toBe("80px");
+    });
   });
 });
 
