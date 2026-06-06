@@ -50,12 +50,12 @@
     "@stll/typescript-config": "workspace:^0.0.0",
     "@tanstack/eslint-plugin-query": "catalog:",
     "@tanstack/eslint-plugin-router": "catalog:",
-    "@typescript/native-preview": "7.0.0-dev.20260604.1",
+    "@typescript/native-preview": "7.0.0-dev.20260605.1",
     "eslint": "catalog:",
     "eslint-plugin-drizzle": "catalog:",
     "eslint-plugin-sonarjs": "catalog:",
     "i18n-unused": "^0.19.0",
-    "knip": "^6.14.2",
+    "knip": "^6.15.0",
     "lefthook": "^2.1.9",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
@@ -68,13 +68,13 @@
     "vite": "catalog:"
   },
   "optionalDependencies": {
-    "@typescript/native-preview-darwin-arm64": "7.0.0-dev.20260604.1",
-    "@typescript/native-preview-darwin-x64": "7.0.0-dev.20260604.1",
-    "@typescript/native-preview-linux-arm": "7.0.0-dev.20260604.1",
-    "@typescript/native-preview-linux-arm64": "7.0.0-dev.20260604.1",
-    "@typescript/native-preview-linux-x64": "7.0.0-dev.20260604.1",
-    "@typescript/native-preview-win32-arm64": "7.0.0-dev.20260604.1",
-    "@typescript/native-preview-win32-x64": "7.0.0-dev.20260604.1"
+    "@typescript/native-preview-darwin-arm64": "7.0.0-dev.20260605.1",
+    "@typescript/native-preview-darwin-x64": "7.0.0-dev.20260605.1",
+    "@typescript/native-preview-linux-arm": "7.0.0-dev.20260605.1",
+    "@typescript/native-preview-linux-arm64": "7.0.0-dev.20260605.1",
+    "@typescript/native-preview-linux-x64": "7.0.0-dev.20260605.1",
+    "@typescript/native-preview-win32-arm64": "7.0.0-dev.20260605.1",
+    "@typescript/native-preview-win32-x64": "7.0.0-dev.20260605.1"
   },
   "resolutions": {
     "@emnapi/core": "1.9.1",
@@ -114,7 +114,7 @@
     "sherif": "1.11.1",
     "tailwindcss": "4.3.0",
     "typescript": "6.0.3",
-    "ultracite": "7.8.0",
+    "ultracite": "7.8.1",
     "use-intl": "4.13.0",
     "valibot": "1.4.1",
     "vite": "8.0.14"

@@ -122,7 +122,7 @@
     "@vitejs/plugin-react": "catalog:",
     "babel-plugin-react-compiler": "^1.0.0",
     "elysia": "catalog:",
-    "react-grab": "0.1.39",
+    "react-grab": "0.1.44",
     "rollup-plugin-visualizer": "^7.0.1",
     "typescript": "catalog:",
     "unified": "^11.0.5"
