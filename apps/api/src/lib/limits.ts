@@ -78,6 +78,13 @@ export const LIMITS = {
   caseLawMatterLinksPerWorkspace: 1000,
   caseLawSearchPageSizeDefault: 20,
   caseLawSearchPageSizeMax: 100,
+  caseLawSlugCollisionScanLimit: 1000,
+  /** Max URL entries in one sitemap file by protocol. */
+  caseLawSitemapUrlLimit: 50_000,
+  /** Conservative per-shard case-law sitemap cap; leaves room for hreflang alternates under the XML byte limit. */
+  caseLawSitemapShardUrlLimit: 5000,
+  /** Max child sitemap entries in one sitemap index by protocol. */
+  caseLawSitemapIndexEntryLimit: 50_000,
   caseLawFacetLimit: 20,
   caseLawPolarityRulesPerLanguage: 500,
   infoSoudEventsMax: 200,

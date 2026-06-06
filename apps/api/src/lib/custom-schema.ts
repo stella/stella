@@ -13,6 +13,8 @@ import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 const UUID_REGEX: RegExp =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/u;
 
+export const isUuid = (value: string): boolean => UUID_REGEX.test(value);
+
 /**
  * Elysia schema for UUID string validation.
  *

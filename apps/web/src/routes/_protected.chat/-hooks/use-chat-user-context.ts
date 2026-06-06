@@ -1,5 +1,6 @@
-import { useRouteContext } from "@tanstack/react-router";
 import { useLocale } from "use-intl";
+
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 
 export type ChatUserContext = {
   userName: string;
@@ -31,10 +32,7 @@ export const getWordEditShortcut = (user: WordEditUser): string =>
 
 /** Collect user context for the chat transport. */
 export const useChatUserContext = (): ChatUserContext => {
-  const user = useRouteContext({
-    from: "/_protected",
-    select: (ctx) => ctx.user,
-  });
+  const user = useAuthenticatedUser();
   const locale = useLocale();
   return {
     userName: user.name ?? "",

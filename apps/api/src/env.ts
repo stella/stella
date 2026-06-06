@@ -148,6 +148,7 @@ const envApi = createEnv({
     FEATURE_BILLING: featureFlagSchema,
     FEATURE_KNOWLEDGE_TEMPLATES: featureFlagSchema,
     FEATURE_CASE_LAW: featureFlagSchema,
+    FEATURE_PUBLIC_LAW: featureFlagSchema,
     FEATURE_CONTACTS: featureFlagSchema,
     FEATURE_CALENDAR: featureFlagSchema,
     FEATURE_TODOS: featureFlagSchema,

@@ -14,6 +14,7 @@
     }
   },
   "ai": {
+    "analyzeWithAI": "Analyzovat pomocí AI",
     "editWithAI": "Upravit pomocí AI",
     "keyRequired": {
       "cta": "Otevřít nastavení AI",
@@ -272,6 +273,12 @@
       "header": "Záhlaví",
       "ruling": "Výrok",
       "unknown": "Ostatní"
+    },
+    "seo": {
+      "browse": "Procházet judikaturu",
+      "countries": "Země",
+      "courts": "Soudy",
+      "years": "Roky"
     },
     "sources": {
       "empty": "Žádné zdroje nejsou nakonfigurovány.",

@@ -1,20 +1,24 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense } from "react";
+import type { ReactNode } from "react";
 
-import { useQuery } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import {
+  ClientOnly,
   createRootRouteWithContext,
   HeadContent,
   Outlet,
+  Scripts,
 } from "@tanstack/react-router";
 
+import { AppProviders } from "@/app-providers";
 import {
   DefaultErrorComponent,
   DefaultPendingComponent,
 } from "@/components/route-components";
-import { useAnalytics } from "@/lib/analytics/provider";
-import { ensureCriticalQueryData } from "@/lib/react-query";
-import { sessionOptions } from "@/routes/-queries";
+import type { AnalyticsValue } from "@/lib/analytics/provider";
+import "@/fonts.css";
+import { isPublicSsrPath } from "@/lib/public-ssr-paths";
+import "@stll/ui/globals.css";
 
 const isDev = import.meta.env.DEV;
 const DevRoot = isDev
@@ -23,24 +27,24 @@ const DevRoot = isDev
   : null;
 
 export const Route = createRootRouteWithContext<{
+  analyticsValue: AnalyticsValue;
   queryClient: QueryClient;
 }>()({
+  ssr: ({ location }) => isPublicSsrPath(location.pathname),
+  shellComponent: RootDocument,
   component: RootComponent,
-  beforeLoad: async ({ context }) => {
-    const sessionData = await ensureCriticalQueryData(
-      context.queryClient,
-      sessionOptions,
-    ).catch(() => null);
-
-    return {
-      session: sessionData?.session ?? null,
-      user: sessionData?.user ?? null,
-    };
-  },
   // Document head management via route `head` option.
   // https://tanstack.com/router/latest/docs/framework/react/guide/document-head-management
   head: () => ({
-    meta: [{ title: "stella" }],
+    meta: [
+      { charSet: "utf-8" },
+      { name: "viewport", content: "width=device-width, initial-scale=1.0" },
+      { title: "stella" },
+    ],
+    links: [
+      { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
+      { rel: "alternate icon", href: "/favicon.ico" },
+    ],
   }),
   pendingComponent: () => <DefaultPendingComponent className="h-dvh" />,
   errorComponent: (props) => (
@@ -49,39 +53,49 @@ export const Route = createRootRouteWithContext<{
 });
 
 function RootComponent() {
-  useQuery(sessionOptions);
+  const appContext = Route.useRouteContext({
+    select: (context) => ({
+      analyticsValue: context.analyticsValue,
+      queryClient: context.queryClient,
+    }),
+  });
 
   return (
-    <>
-      <HeadContent />
-      <RootAnalyticsIdentity />
-      <div className="flex h-dvh w-full flex-col">
-        <Outlet />
-        {DevRoot ? (
-          <Suspense fallback={null}>
-            <DevRoot />
-          </Suspense>
-        ) : null}
-      </div>
-    </>
+    <AppProviders
+      analyticsValue={appContext.analyticsValue}
+      queryClient={appContext.queryClient}
+    >
+      <RootApp />
+    </AppProviders>
   );
 }
 
-const RootAnalyticsIdentity = () => {
-  const analytics = useAnalytics();
-  const user = Route.useRouteContext({ select: (context) => context.user });
+function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
+  return (
+    <html lang="en">
+      <head>
+        <HeadContent />
+        <script src="/dark-mode-init.js" />
+      </head>
+      <body>
+        {children}
+        <Scripts />
+      </body>
+    </html>
+  );
+}
 
-  useEffect(() => {
-    if (user === null) {
-      analytics.reset({ onlyIfIdentified: true });
-      return;
-    }
-    analytics.identifyUser({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-    });
-  }, [analytics, user]);
-
-  return null;
-};
+function RootApp() {
+  return (
+    <div className="flex h-dvh w-full flex-col" id="app">
+      <Outlet />
+      {DevRoot ? (
+        <ClientOnly>
+          <Suspense fallback={null}>
+            <DevRoot />
+          </Suspense>
+        </ClientOnly>
+      ) : null}
+    </div>
+  );
+}

@@ -11,7 +11,6 @@ import {
   BreadcrumbSeparator,
 } from "@stll/ui/components/breadcrumb";
 
-import { CaseLawBreadcrumb } from "@/components/breadcrumbs/case-law-breadcrumb";
 import { ContactBreadcrumb } from "@/components/breadcrumbs/contact-breadcrumb";
 import { PdfBreadcrumb } from "@/components/breadcrumbs/pdf-breadcrumb";
 import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
@@ -44,13 +43,6 @@ const renderContactBreadcrumb = (params: ResolveParams<RouterFullPath>) => (
   <ContactBreadcrumb
     // SAFETY: this renderer is only registered for /contacts/$contactId.
     {...(params as ResolveParams<"/contacts/$contactId">)}
-  />
-);
-
-const renderCaseLawBreadcrumb = (params: ResolveParams<RouterFullPath>) => (
-  <CaseLawBreadcrumb
-    // SAFETY: this renderer is only registered for /knowledge/case/$decisionId.
-    {...(params as ResolveParams<"/knowledge/case/$decisionId">)}
   />
 );
 
@@ -112,12 +104,6 @@ export const AppBreadcrumbs = () => {
       [serializeKey(["/knowledge/tools"])]: (
         <BreadcrumbItem>{t("knowledge.sections.tools.title")}</BreadcrumbItem>
       ),
-      [serializeKey(["/knowledge/case/"])]: (
-        <BreadcrumbLink to="/knowledge/case">
-          {t("common.caseLaw")}
-        </BreadcrumbLink>
-      ),
-      [serializeKey(["/knowledge/case/$decisionId"])]: renderCaseLawBreadcrumb,
       [serializeKey(["/settings"])]: (
         <BreadcrumbLink to="/settings">{t("common.settings")}</BreadcrumbLink>
       ),

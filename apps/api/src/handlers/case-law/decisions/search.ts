@@ -1,10 +1,14 @@
-import { sql } from "drizzle-orm";
-import { status, t } from "elysia";
+import { inArray, sql } from "drizzle-orm";
+import { status } from "elysia";
 import type { Static } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
+import { caseLawDecisions } from "@/api/db/schema";
 import { courtWeightSql } from "@/api/handlers/case-law/citation-score";
+import { validCaseLawLanguageAlternateCountSql } from "@/api/handlers/case-law/decisions/language";
+import type { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
 import { bodyPreviewJoin } from "@/api/handlers/case-law/decisions/search-sql";
+import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { isUuid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 import {
@@ -12,39 +16,35 @@ import {
   TS_HEADLINE_CONFIG,
 } from "@/api/lib/search/highlight";
 
-const toNullableString = (x: unknown): string | null =>
-  x === null ? null : JSON.stringify(x);
+const toNullableString = (x: unknown): string | null => {
+  if (x === null || x === undefined) {
+    return null;
+  }
+
+  if (typeof x === "string") {
+    return x;
+  }
+
+  if (typeof x === "number" || typeof x === "boolean") {
+    return x.toString();
+  }
+
+  if (x instanceof Date) {
+    return x.toISOString();
+  }
+
+  return JSON.stringify(x);
+};
 
 const headlineRegconfig = sql`
   'public.stella_unaccent'::regconfig
 `;
 
-export const searchDecisionsBodySchema = t.Object({
-  query: t.String({
-    minLength: 1,
-    maxLength: LIMITS.searchQueryMaxLength,
-  }),
-  limit: t.Optional(
-    t.Number({
-      minimum: 1,
-      maximum: LIMITS.caseLawSearchPageSizeMax,
-    }),
-  ),
-  cursor: t.Optional(t.String()),
-  court: t.Optional(t.String({ maxLength: 512 })),
-  country: t.Optional(t.String({ maxLength: 3 })),
-  dateFrom: t.Optional(t.String({ format: "date" })),
-  dateTo: t.Optional(t.String({ format: "date" })),
-  decisionType: t.Optional(t.String({ maxLength: 128 })),
-  sourceId: t.Optional(t.String({ maxLength: 36 })),
-  language: t.Optional(t.String({ maxLength: 8 })),
-});
-
 type SearchDecisionsBody = Static<typeof searchDecisionsBodySchema>;
 
 export const searchDecisionsHandler = async (
   body: SearchDecisionsBody,
-  scopedDb: ScopedDb,
+  caseLawDb: CaseLawPublicReadDb,
 ) => {
   const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
   const tsQuery = sql`plainto_tsquery('simple', unaccent(${body.query}))`;
@@ -53,7 +53,7 @@ export const searchDecisionsHandler = async (
   let parsedCursor: { score: number; id: string } | null = null;
   if (body.cursor) {
     parsedCursor = decodeCursor(body.cursor);
-    if (!parsedCursor) {
+    if (!parsedCursor || !isUuid(parsedCursor.id)) {
       return status(400, { message: "Invalid cursor" });
     }
   }
@@ -126,10 +126,12 @@ export const searchDecisionsHandler = async (
     SELECT
       sd.decision_id,
       d.case_number,
+      d.slug,
       d.ecli,
       d.court,
       d.country,
       d.language,
+      d.language_group_key,
       d.decision_date,
       d.decision_type,
       d.source_url,
@@ -225,11 +227,13 @@ export const searchDecisionsHandler = async (
   // Skip expensive COUNT(*) and facet queries on paginated
   // requests; these values don't change between pages.
   const queries: Promise<RawRows>[] = [
-    scopedDb((tx) => tx.execute(hitsQuery)),
-    parsedCursor ? emptyRows : scopedDb((tx) => tx.execute(countQuery)),
-    parsedCursor ? emptyRows : scopedDb((tx) => tx.execute(courtFacetQuery)),
-    parsedCursor ? emptyRows : scopedDb((tx) => tx.execute(countryFacetQuery)),
-    parsedCursor ? emptyRows : scopedDb((tx) => tx.execute(languageFacetQuery)),
+    caseLawDb((tx) => tx.execute(hitsQuery)),
+    parsedCursor ? emptyRows : caseLawDb((tx) => tx.execute(countQuery)),
+    parsedCursor ? emptyRows : caseLawDb((tx) => tx.execute(courtFacetQuery)),
+    parsedCursor ? emptyRows : caseLawDb((tx) => tx.execute(countryFacetQuery)),
+    parsedCursor
+      ? emptyRows
+      : caseLawDb((tx) => tx.execute(languageFacetQuery)),
   ];
 
   const [
@@ -248,6 +252,40 @@ export const searchDecisionsHandler = async (
 
   const hasMore = hitsResult.length > limit;
   const resultRows = hasMore ? hitsResult.slice(0, limit) : hitsResult;
+  const languageGroupKeys = [
+    ...new Set(
+      resultRows
+        .map((row) => toNullableString(row["language_group_key"]))
+        .filter((value): value is string => value !== null),
+    ),
+  ];
+  const languageAlternateCounts =
+    languageGroupKeys.length > 0
+      ? await caseLawDb((tx) =>
+          tx
+            .select({
+              languageGroupKey: caseLawDecisions.languageGroupKey,
+              count: validCaseLawLanguageAlternateCountSql,
+            })
+            .from(caseLawDecisions)
+            .where(
+              inArray(caseLawDecisions.languageGroupKey, languageGroupKeys),
+            )
+            .groupBy(caseLawDecisions.languageGroupKey),
+        )
+      : [];
+  const languageAlternateCountByGroupKey = new Map(
+    languageAlternateCounts
+      .filter(
+        (
+          row,
+        ): row is {
+          count: number;
+          languageGroupKey: string;
+        } => row.languageGroupKey !== null,
+      )
+      .map((row) => [row.languageGroupKey, row.count]),
+  );
 
   const lastRaw = resultRows.at(-1);
   const nextCursor =
@@ -255,26 +293,36 @@ export const searchDecisionsHandler = async (
       ? encodeCursor(Number(lastRaw["score"]), String(lastRaw["decision_id"]))
       : null;
 
-  const hits = resultRows.map((row) => ({
-    decisionId: String(row["decision_id"]),
-    caseNumber: String(row["case_number"]),
-    ecli: toNullableString(row["ecli"]),
-    court: String(row["court"]),
-    country: String(row["country"]),
-    language: String(row["language"]),
-    decisionDate: toNullableString(row["decision_date"]),
-    decisionType: toNullableString(row["decision_type"]),
-    sourceUrl: toNullableString(row["source_url"]),
-    // oxlint-disable-next-line typescript/strict-boolean-expressions -- row.headline from DB (any)
-    headline: row["headline"]
-      ? escapeAndHighlight(JSON.stringify(row["headline"]))
-      : null,
-    citationCount: Number(row["citation_count"]) || 0,
-    createdAt:
-      row["created_at"] instanceof Date
-        ? row["created_at"].toISOString()
-        : String(row["created_at"]),
-  }));
+  const hits = resultRows.map((row) => {
+    const languageGroupKey = toNullableString(row["language_group_key"]);
+
+    return {
+      decisionId: String(row["decision_id"]),
+      caseNumber: String(row["case_number"]),
+      slug: toNullableString(row["slug"]),
+      ecli: toNullableString(row["ecli"]),
+      court: String(row["court"]),
+      country: String(row["country"]),
+      language: String(row["language"]),
+      languageAlternateCount:
+        languageGroupKey === null
+          ? 0
+          : (languageAlternateCountByGroupKey.get(languageGroupKey) ?? 1),
+      languageGroupKey,
+      decisionDate: toNullableString(row["decision_date"]),
+      decisionType: toNullableString(row["decision_type"]),
+      sourceUrl: toNullableString(row["source_url"]),
+      // oxlint-disable-next-line typescript/strict-boolean-expressions -- row.headline from DB (any)
+      headline: row["headline"]
+        ? escapeAndHighlight(toNullableString(row["headline"]) ?? "")
+        : null,
+      citationCount: Number(row["citation_count"]) || 0,
+      createdAt:
+        row["created_at"] instanceof Date
+          ? row["created_at"].toISOString()
+          : String(row["created_at"]),
+    };
+  });
 
   const totalCount = parsedCursor
     ? null

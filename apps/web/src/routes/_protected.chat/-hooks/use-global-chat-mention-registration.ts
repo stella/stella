@@ -6,7 +6,9 @@ import type {
   MentionCategory,
 } from "@/components/chat-mention-extension";
 import { useMentionProviders } from "@/components/chat-mention-providers";
+import { usePublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
 import { api } from "@/lib/api";
+import { assertPublicLawApiData } from "@/lib/public-law-api";
 
 const GLOBAL_CHAT_MENTION_EXTENSION_ID = "global-chat:org-mentions";
 
@@ -33,8 +35,10 @@ const searchCaseLawMentions = async (
   if (response.error) {
     return [];
   }
+  const data = response.data;
+  assertPublicLawApiData(data, "searchPublicCaseLawMentions");
 
-  return response.data.hits.map((hit) => ({
+  return data.hits.map((hit) => ({
     id: hit.decisionId,
     label: hit.caseNumber,
     category: "decision",
@@ -46,6 +50,7 @@ const searchCaseLawMentions = async (
 export const useGlobalChatMentionRegistration = () => {
   const { registerExtension } = useChatEditorExtensions();
   const mentionProviders = useMentionProviders();
+  const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
 
   useEffect(() => {
     const unregister = registerExtension(GLOBAL_CHAT_MENTION_EXTENSION_ID, {
@@ -54,7 +59,9 @@ export const useGlobalChatMentionRegistration = () => {
           id: GLOBAL_CHAT_MENTION_EXTENSION_ID,
           getItems: () =>
             mentionProviders.getItems(GLOBAL_CHAT_MENTION_CATEGORIES),
-          searchItems: searchCaseLawMentions,
+          searchItems: publicLawPreviewEnabled
+            ? searchCaseLawMentions
+            : undefined,
         },
       ],
     });
@@ -62,5 +69,5 @@ export const useGlobalChatMentionRegistration = () => {
     return () => {
       unregister();
     };
-  }, [mentionProviders, registerExtension]);
+  }, [mentionProviders, publicLawPreviewEnabled, registerExtension]);
 };

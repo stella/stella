@@ -14,6 +14,7 @@
     }
   },
   "ai": {
+    "analyzeWithAI": "Elemzés AI-val",
     "editWithAI": "Szerkesztés AI-val",
     "keyRequired": {
       "cta": "AI-beállítások megnyitása",
@@ -272,6 +273,12 @@
       "header": "Fejléc",
       "ruling": "Rendelkező rész",
       "unknown": "Egyéb"
+    },
+    "seo": {
+      "browse": "Jogesetek böngészése",
+      "countries": "Országok",
+      "courts": "Bíróságok",
+      "years": "Évek"
     },
     "sources": {
       "empty": "Nincs konfigurált forrás.",

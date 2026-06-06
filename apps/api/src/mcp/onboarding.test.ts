@@ -29,6 +29,7 @@ void mock.module("@/api/handlers/case-law/decisions/search", () => ({
 }));
 
 void mock.module("@/api/handlers/case-law/decisions/read-by-id", () => ({
+  readDecisionBySlugHandler: mock(),
   readDecisionHandler: readDecisionHandlerMock,
 }));
 

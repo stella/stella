@@ -31,6 +31,7 @@ import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queri
 import { workspaceMembersOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace-members";
 import {
   getWeekStart,
+  isWorkspaceDocumentRoutePath,
   resolveKanbanGroupBy,
   toISODate,
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
@@ -67,9 +68,10 @@ export const Route = createFileRoute(
       });
     }
   },
-  loader: async ({ context, params }) => {
+  loader: async ({ context, location, params }) => {
     const { workspaceId, viewId } = params;
     const { queryClient } = context;
+    const isDocumentRoute = isWorkspaceDocumentRoutePath(location.pathname);
 
     const views = await ensureCriticalQueryData(
       queryClient,
@@ -82,6 +84,10 @@ export const Route = createFileRoute(
     }
 
     if (activeView.layout.type === "overview") {
+      if (isDocumentRoute) {
+        return;
+      }
+
       const weekStart = getWeekStart();
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekEnd.getDate() + 6);

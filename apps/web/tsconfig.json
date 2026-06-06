@@ -2,6 +2,7 @@
   "extends": "@stll/typescript-config/react-library.json",
   "compilerOptions": {
     "types": ["vite/client"],
+    "verbatimModuleSyntax": false,
     "paths": {
       "@/*": ["./src/*"],
       "@/api/*": ["../api/src/*"], // this is for eden to work https://elysiajs.com/eden/installation#path-alias-monorepo

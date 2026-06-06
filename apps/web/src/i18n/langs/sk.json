@@ -14,6 +14,7 @@
     }
   },
   "ai": {
+    "analyzeWithAI": "Analyzovať pomocou AI",
     "editWithAI": "Upraviť pomocou AI",
     "keyRequired": {
       "cta": "Otvoriť nastavenia AI",
@@ -272,6 +273,12 @@
       "header": "Hlavička",
       "ruling": "Výrok",
       "unknown": "Iné"
+    },
+    "seo": {
+      "browse": "Prehliadať judikatúru",
+      "countries": "Krajiny",
+      "courts": "Súdy",
+      "years": "Roky"
     },
     "sources": {
       "empty": "Žiadne nakonfigurované zdroje.",

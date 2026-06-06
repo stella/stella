@@ -1,32 +1,61 @@
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { isPublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
 import { getTranslator } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import {
-  createCaseLawDecisionRouteParam,
+  createCaseLawDecisionRouteParams,
   decodeCaseLawDecisionRef,
   isCaseLawDecisionId,
   pickCaseLawDecisionHit,
 } from "@/lib/case-law-route";
 import { toAPIError } from "@/lib/errors";
+import { assertPublicLawApiData } from "@/lib/public-law-api";
+import { toSafeId } from "@/lib/safe-id";
 
 type NavigateToCaseLawDecision = (options: {
-  params: { decisionId: string };
-  to: "/knowledge/case/$decisionId";
+  params: {
+    country: string;
+    court: string;
+    date: string;
+    slug: string;
+  };
+  to: "/law/$country/cases/$court/$date/$slug";
 }) => Promise<void> | void;
 
 const CASE_LAW_LINK_SEARCH_LIMIT = 5;
 
-const resolveCaseLawDecisionRouteParam = async (
+type CaseLawDecisionRouteParams = Parameters<
+  typeof createCaseLawDecisionRouteParams
+>[0];
+
+const resolveCaseLawDecisionRouteParams = async (
   rawDecisionRef: string,
-): Promise<string | null> => {
+): Promise<ReturnType<typeof createCaseLawDecisionRouteParams> | null> => {
   const decisionRef = decodeCaseLawDecisionRef(rawDecisionRef);
   if (!decisionRef) {
     return null;
   }
 
   if (isCaseLawDecisionId(decisionRef)) {
-    return decisionRef;
+    const response = await api.case
+      .decisions({ decisionId: toSafeId<"caseLawDecision">(decisionRef) })
+      .get();
+
+    if (response.error) {
+      throw toAPIError(response.error);
+    }
+    const data = response.data;
+    assertPublicLawApiData(data, "resolvePublicCaseLawDecision");
+
+    return createCaseLawDecisionRouteParams({
+      caseNumber: data.caseNumber,
+      country: data.country,
+      court: data.court,
+      decisionDate: data.decisionDate,
+      decisionId: data.id,
+      slug: data.slug,
+    });
   }
 
   const response = await api.case.decisions.search.post({
@@ -37,16 +66,24 @@ const resolveCaseLawDecisionRouteParam = async (
   if (response.error) {
     throw toAPIError(response.error);
   }
+  const data = response.data;
+  assertPublicLawApiData(data, "searchPublicCaseLawDecisionLinks");
 
-  const hit = pickCaseLawDecisionHit(decisionRef, response.data.hits);
+  const hit = pickCaseLawDecisionHit(decisionRef, data.hits);
   if (!hit) {
     return null;
   }
 
-  return createCaseLawDecisionRouteParam({
+  const routeParams: CaseLawDecisionRouteParams = {
     caseNumber: hit.caseNumber,
+    country: hit.country,
+    court: hit.court,
+    decisionDate: hit.decisionDate,
     decisionId: hit.decisionId,
-  });
+    slug: hit.slug,
+  };
+
+  return createCaseLawDecisionRouteParams(routeParams);
 };
 
 export const openCaseLawDecision = async (
@@ -54,8 +91,17 @@ export const openCaseLawDecision = async (
   navigate: NavigateToCaseLawDecision,
 ) => {
   try {
-    const decisionId = await resolveCaseLawDecisionRouteParam(rawDecisionRef);
-    if (!decisionId) {
+    if (!isPublicLawPreviewEnabled()) {
+      const t = getTranslator();
+      stellaToast.add({
+        title: t("common.comingSoon"),
+        type: "neutral",
+      });
+      return;
+    }
+
+    const params = await resolveCaseLawDecisionRouteParams(rawDecisionRef);
+    if (!params) {
       const t = getTranslator();
       stellaToast.add({
         title: t("errors.actionFailed"),
@@ -65,8 +111,8 @@ export const openCaseLawDecision = async (
     }
 
     await navigate({
-      to: "/knowledge/case/$decisionId",
-      params: { decisionId },
+      to: "/law/$country/cases/$court/$date/$slug",
+      params,
     });
   } catch (error) {
     const t = getTranslator();

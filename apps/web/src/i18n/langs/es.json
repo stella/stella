@@ -14,6 +14,7 @@
     }
   },
   "ai": {
+    "analyzeWithAI": "Analizar con IA",
     "editWithAI": "Editar con IA",
     "keyRequired": {
       "cta": "Abrir ajustes de IA",
@@ -272,6 +273,12 @@
       "header": "Encabezado",
       "ruling": "Fallo",
       "unknown": "Otro"
+    },
+    "seo": {
+      "browse": "Explorar jurisprudencia",
+      "countries": "Países",
+      "courts": "Tribunales",
+      "years": "Años"
     },
     "sources": {
       "empty": "No hay fuentes configuradas.",

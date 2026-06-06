@@ -14,6 +14,7 @@
     }
   },
   "ai": {
+    "analyzeWithAI": "Analüüsi AI-ga",
     "editWithAI": "Muuda AI-ga",
     "keyRequired": {
       "cta": "Ava AI seaded",
@@ -272,6 +273,12 @@
       "header": "Päis",
       "ruling": "Resolutsioon",
       "unknown": "Muu"
+    },
+    "seo": {
+      "browse": "Sirvi kohtupraktikat",
+      "countries": "Riigid",
+      "courts": "Kohtud",
+      "years": "Aastad"
     },
     "sources": {
       "empty": "Allikaid pole seadistatud.",

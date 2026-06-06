@@ -14,6 +14,7 @@
     }
   },
   "ai": {
+    "analyzeWithAI": "Analizuoti su DI",
     "editWithAI": "Redaguoti su DI",
     "keyRequired": {
       "cta": "Atidaryti AI nustatymus",
@@ -272,6 +273,12 @@
       "header": "Antraštė",
       "ruling": "Rezoliucinė dalis",
       "unknown": "Kita"
+    },
+    "seo": {
+      "browse": "Naršyti teismų praktiką",
+      "countries": "Šalys",
+      "courts": "Teismai",
+      "years": "Metai"
     },
     "sources": {
       "empty": "Šaltinių nesukonfigūruota.",

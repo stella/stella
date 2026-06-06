@@ -110,6 +110,9 @@ export default defineConfig({
     "no-any-casts/no-any-casts": "error",
     "no-dangerous-type-assertions/no-dangerous-type-assertions": "error",
     "no-prompt-boundary-casts/no-prompt-boundary-casts": "error",
+    "no-public-law-browser-globals/no-public-law-browser-globals": "off",
+    "no-raw-public-law-seo/no-raw-public-law-seo": "off",
+    "public-case-law-db-boundary/public-case-law-db-boundary": "off",
     "require-contained-handler/require-contained-handler": "error",
     "no-void": ["error", { allowAsStatement: true }],
 
@@ -299,6 +302,9 @@ export default defineConfig({
     "./.oxlint-plugins/no-any-casts.ts",
     "./.oxlint-plugins/no-dangerous-type-assertions.ts",
     "./.oxlint-plugins/no-prompt-boundary-casts.ts",
+    "./.oxlint-plugins/no-public-law-browser-globals.ts",
+    "./.oxlint-plugins/no-raw-public-law-seo.ts",
+    "./.oxlint-plugins/public-case-law-db-boundary.ts",
     "./.oxlint-plugins/folio-layer-boundaries.ts",
     "./.oxlint-plugins/require-contained-handler.ts",
   ],
@@ -567,6 +573,134 @@ export default defineConfig({
               {
                 name: "zod",
                 message: "Use 'valibot' instead of 'zod'.",
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
+      files: [
+        "apps/web/src/routes/law/**/*.{ts,tsx}",
+        "apps/web/src/features/case-law/**/*.{ts,tsx}",
+      ],
+      rules: {
+        "no-public-law-browser-globals/no-public-law-browser-globals": "error",
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              {
+                name: "zod",
+                message: "Use 'valibot' instead of 'zod'.",
+              },
+            ],
+            patterns: [
+              {
+                group: [
+                  "@/routes/_protected",
+                  "@/routes/_protected/**",
+                  "@/routes/_protected.*",
+                  "@/routes/_protected.*/**",
+                ],
+                message:
+                  "Public law routes and shared case-law modules must not import protected route code. Move public-safe code to '@/features/case-law' instead.",
+              },
+              {
+                group: ["@/api/*", "@/api/**/*"],
+                message: "Use '@stll/api/types' instead of '@/api/'.",
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
+      files: ["apps/web/src/routes/law/**/*.{ts,tsx}"],
+      rules: {
+        "no-raw-public-law-seo/no-raw-public-law-seo": "error",
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              {
+                name: "zod",
+                message: "Use 'valibot' instead of 'zod'.",
+              },
+              {
+                name: "@/lib/api",
+                importNames: ["api"],
+                message:
+                  "Public law route files must use approved public case-law query modules instead of importing the Eden API client directly.",
+              },
+            ],
+            patterns: [
+              {
+                group: [
+                  "@/routes/_protected",
+                  "@/routes/_protected/**",
+                  "@/routes/_protected.*",
+                  "@/routes/_protected.*/**",
+                ],
+                message:
+                  "Public law routes and shared case-law modules must not import protected route code. Move public-safe code to '@/features/case-law' instead.",
+              },
+              {
+                group: ["@/api/*", "@/api/**/*"],
+                message: "Use '@stll/api/types' instead of '@/api/'.",
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
+      files: [
+        "apps/web/src/routes/robots[.]txt.ts",
+        "apps/web/src/routes/sitemap[.]xml.ts",
+        "apps/web/src/routes/sitemaps/**/*.{ts,tsx}",
+        "apps/web/src/lib/public-law-sitemap.ts",
+      ],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              {
+                name: "zod",
+                message: "Use 'valibot' instead of 'zod'.",
+              },
+              {
+                name: "@/routes/-auth-context",
+                message:
+                  "Public SEO endpoints must not load auth/session context.",
+              },
+              {
+                name: "@/routes/-queries",
+                importNames: ["sessionOptions", "roleOptions"],
+                message:
+                  "Public SEO endpoints must not import authenticated query options.",
+              },
+              {
+                name: "@/lib/auth",
+                message: "Public SEO endpoints must not import auth clients.",
+              },
+            ],
+            patterns: [
+              {
+                group: [
+                  "@/routes/_protected",
+                  "@/routes/_protected/**",
+                  "@/routes/_protected.*",
+                  "@/routes/_protected.*/**",
+                ],
+                message:
+                  "Public SEO endpoints must not import protected route code.",
+              },
+              {
+                group: ["@/api/*", "@/api/**/*"],
+                message:
+                  "Public SEO endpoints must use the public case-law API response, not web-local API internals.",
               },
             ],
           },
@@ -1092,6 +1226,55 @@ export default defineConfig({
       ],
       rules: {
         "require-safe-route-handlers/require-safe-route-handlers": "error",
+      },
+    },
+    {
+      files: ["apps/api/src/handlers/**/public-routes.ts"],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              {
+                name: "zod",
+                message: "Use 'valibot' instead of 'zod'.",
+              },
+              {
+                name: "@/api/lib/api-handlers",
+                importNames: ["createSafeHandler", "createSafeRootHandler"],
+                message:
+                  "Public route files must use createSafePublicHandler and must not receive authenticated handler context.",
+              },
+              {
+                name: "@/api/lib/auth",
+                message:
+                  "Public route files must not import auth macros or permission helpers.",
+              },
+              {
+                name: "@/api/db",
+                message:
+                  "Public route files must not import DB primitives. Use a narrow public-read helper.",
+              },
+              {
+                name: "@/api/db/root",
+                message:
+                  "Public route files must not import root DB. Use a narrow public-read helper.",
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
+      files: [
+        "apps/api/src/handlers/case-law/decisions/list.ts",
+        "apps/api/src/handlers/case-law/decisions/read-by-id.ts",
+        "apps/api/src/handlers/case-law/decisions/search.ts",
+        "apps/api/src/handlers/case-law/decisions/sitemap.ts",
+        "apps/api/src/lib/case-law-public-read-db.ts",
+      ],
+      rules: {
+        "public-case-law-db-boundary/public-case-law-db-boundary": "error",
       },
     },
     {

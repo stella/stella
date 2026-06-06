@@ -26,7 +26,7 @@ export const supportedLanguages = [
 ] as const;
 
 export type SupportedLanguage = (typeof supportedLanguages)[number];
-type LocaleMessages = LocalizedMessages<Messages>;
+export type LocaleMessages = LocalizedMessages<Messages>;
 type MessageLoader = () => LocaleMessages | Promise<LocaleMessages>;
 
 const supportedLanguageSet: ReadonlySet<string> = new Set(supportedLanguages);
@@ -61,12 +61,15 @@ export const LANG_ENDONYMS = {
   sk: "Slovenčina",
 } as const satisfies Record<SupportedLanguage, string>;
 
-const isSupportedLanguage = (value: string): value is SupportedLanguage =>
-  supportedLanguageSet.has(value);
+export const isSupportedLanguage = (
+  value: string,
+): value is SupportedLanguage => supportedLanguageSet.has(value);
 
 const normalizeLocale = (value: string): string => value.replace("_", "-");
 
-const resolveSupportedLanguage = (value: string): SupportedLanguage | null => {
+export const resolveSupportedLanguage = (
+  value: string,
+): SupportedLanguage | null => {
   const normalized = normalizeLocale(value);
   if (isSupportedLanguage(normalized)) {
     return normalized;
@@ -106,6 +109,10 @@ const detectLang = (): SupportedLanguage => {
 
 const defaultLanguage = detectLang();
 const defaultMessages = en;
+
+export const loadLocaleMessages = async (
+  lang: SupportedLanguage,
+): Promise<LocaleMessages> => await messageLoaders[lang]();
 
 let translator = createTranslator({
   locale: "en",

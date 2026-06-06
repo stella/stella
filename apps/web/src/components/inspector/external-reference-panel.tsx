@@ -9,7 +9,6 @@ import {
 import type { RefObject } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -44,6 +43,7 @@ import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header"
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { createChatThreadId, toChatThreadId } from "@/lib/chat-thread-ref";
 import { APIError, FetchBoundaryError, toAPIError } from "@/lib/errors";
 import { PDFPage } from "@/lib/pdf/pdf-page";
@@ -55,8 +55,6 @@ import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
 const SERVER_PREVIEW_ERROR_THRESHOLD = 500;
 
 const toastedPreviewFailures = new Set<string>();
-
-const protectedRouteApi = getRouteApi("/_protected");
 
 export type ExternalReferencePanelProps = {
   onClose: () => void;
@@ -580,9 +578,7 @@ export const ExternalReferencePanel = ({
   workspaceId,
 }: ExternalReferencePanelProps) => {
   const t = useTranslations();
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const fallbackChatThreadIdRef = useRef(createChatThreadId());
   const safeHref = sanitizeHref(tab.url);
   const [confirmHref, setConfirmHref] = useState<string | undefined>();

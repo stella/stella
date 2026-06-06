@@ -162,6 +162,7 @@ void mock.module("@/api/handlers/case-law/decisions/search", () => ({
 }));
 
 void mock.module("@/api/handlers/case-law/decisions/read-by-id", () => ({
+  readDecisionBySlugHandler: mock(),
   readDecisionHandler: readDecisionHandlerMock,
 }));
 
@@ -183,6 +184,8 @@ const {
   handleMcpToolCall,
   listMcpTools,
 } = await import("@/api/mcp/tools");
+const { caseLawPublicReadDb } =
+  await import("@/api/lib/case-law-public-read-db");
 
 const parseToolPayload = (
   result: Awaited<ReturnType<typeof handleMcpToolCall>>,
@@ -254,6 +257,7 @@ const createReadDecisionResult = () => ({
   id: "dec_123",
   language: "cs",
   metadata: { panel: "29 Cdo" },
+  slug: "stable-official-slug",
   source: {
     adapterKey: "cz-ns",
     id: "src_1",
@@ -649,6 +653,8 @@ describe("OpenAI-compatible MCP tools", () => {
           ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
           headline: "Relevant <mark>holding</mark>",
           language: "cs",
+          languageAlternateCount: 2,
+          slug: "stable-official-slug",
           sourceUrl: "https://example.test/decision",
         },
       ],
@@ -665,6 +671,7 @@ describe("OpenAI-compatible MCP tools", () => {
         decision_type: "judgment",
         limit: 5,
         query: "shareholder dispute",
+        source_id: "11111111-1111-4111-8111-111111111111",
       },
       context,
       toolName: "search_case_law",
@@ -678,8 +685,9 @@ describe("OpenAI-compatible MCP tools", () => {
         decisionType: "judgment",
         limit: 5,
         query: "shareholder dispute",
+        sourceId: "11111111-1111-4111-8111-111111111111",
       },
-      context.scopedDb,
+      caseLawPublicReadDb,
     );
 
     expect(parseToolPayload(result)).toEqual({
@@ -691,7 +699,7 @@ describe("OpenAI-compatible MCP tools", () => {
       nextCursor: "cursor_2",
       results: [
         {
-          appUrl: `${APP_BASE_URL}/knowledge/case/29-cdo-123-2024--dec_123`,
+          appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/2024-02-01/cs/stable-official-slug`,
           caseNumber: "29 Cdo 123/2024",
           citationCount: 7,
           country: "CZE",
@@ -726,6 +734,7 @@ describe("OpenAI-compatible MCP tools", () => {
           ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
           headline: "Relevant <mark>holding</mark>",
           language: "cs",
+          slug: "stable-official-slug",
           sourceUrl: "https://example.test/decision",
         },
       ],
@@ -747,7 +756,7 @@ describe("OpenAI-compatible MCP tools", () => {
       nextCursor: null,
       results: [
         {
-          appUrl: `${APP_BASE_URL}/knowledge/case/29-cdo-123-2024--dec_123`,
+          appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/2024-02-01/stable-official-slug`,
           caseNumber: "29 Cdo 123/2024",
           citationCount: 7,
           country: "CZE",
@@ -764,6 +773,68 @@ describe("OpenAI-compatible MCP tools", () => {
       totalCount: 1,
     });
     expect(anonymizeTextFieldsMock).not.toHaveBeenCalled();
+  });
+
+  test("search_case_law omits app URLs while public law routes are disabled", async () => {
+    const previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
+    const previousIsDev = env.isDev;
+    env.FEATURE_PUBLIC_LAW = false;
+    env.isDev = false;
+
+    try {
+      searchDecisionsHandlerMock.mockResolvedValue({
+        facets: null,
+        hits: [
+          {
+            caseNumber: "29 Cdo 123/2024",
+            citationCount: 7,
+            country: "CZE",
+            court: "Nejvyšší soud",
+            decisionDate: "2024-02-01",
+            decisionId: "dec_123",
+            decisionType: "judgment",
+            ecli: null,
+            headline: null,
+            language: "cs",
+            slug: "stable-official-slug",
+            sourceUrl: "https://example.test/decision",
+          },
+        ],
+        nextCursor: null,
+        totalCount: null,
+      });
+
+      const result = await handleMcpToolCall({
+        args: { query: "shareholder dispute" },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+
+      expect(parseToolPayload(result)).toEqual({
+        facets: null,
+        nextCursor: null,
+        results: [
+          {
+            appUrl: null,
+            caseNumber: "29 Cdo 123/2024",
+            citationCount: 7,
+            country: "CZE",
+            court: "Nejvyšší soud",
+            decisionDate: "2024-02-01",
+            decisionId: "dec_123",
+            decisionType: "judgment",
+            ecli: null,
+            language: "cs",
+            snippet: null,
+            sourceUrl: "https://example.test/decision",
+          },
+        ],
+        totalCount: null,
+      });
+    } finally {
+      env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
+      env.isDev = previousIsDev;
+    }
   });
 
   test("search_case_law rejects invalid ISO dates", async () => {
@@ -788,6 +859,28 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
   });
 
+  test("search_case_law rejects invalid source IDs", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        query: "shareholder dispute",
+        source_id: "not-a-uuid",
+      },
+      context: createContext(),
+      toolName: "search_case_law",
+    });
+
+    expect(result).toEqual({
+      content: [
+        {
+          type: "text",
+          text: "Invalid parameter: source_id. Expected a UUID",
+        },
+      ],
+      isError: true,
+    });
+    expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
+  });
+
   test("read_case_law_decision derives plain text from the AST fallback", async () => {
     readDecisionHandlerMock.mockResolvedValue(createReadDecisionResult());
 
@@ -800,13 +893,12 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(readDecisionHandlerMock).toHaveBeenCalledWith(
       "dec_123",
-      context.scopedDb,
+      caseLawPublicReadDb,
     );
 
     expect(parseToolPayload(result)).toEqual({
       decision: {
-        analysis: null,
-        appUrl: `${APP_BASE_URL}/knowledge/case/29-cdo-123-2024--dec_123`,
+        appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/2024-02-01/stable-official-slug`,
         caseNumber: "29 Cdo 123/2024",
         citationsFrom: [{ citationText: "29 Odo 1/2001", id: "c_1" }],
         citationsFromTotal: 1,
@@ -844,8 +936,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(parseToolPayload(result)).toEqual({
       decision: {
-        analysis: null,
-        appUrl: `${APP_BASE_URL}/knowledge/case/29-cdo-123-2024--dec_123`,
+        appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/2024-02-01/stable-official-slug`,
         caseNumber: "29 Cdo 123/2024",
         citationsFrom: [{ citationText: "29 Odo 1/2001", id: "c_1" }],
         citationsFromTotal: 1,

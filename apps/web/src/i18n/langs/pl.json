@@ -14,6 +14,7 @@
     }
   },
   "ai": {
+    "analyzeWithAI": "Analizuj z AI",
     "editWithAI": "Edytuj z AI",
     "keyRequired": {
       "cta": "Otwórz ustawienia AI",
@@ -272,6 +273,12 @@
       "header": "Nagłówek",
       "ruling": "Sentencja",
       "unknown": "Inne"
+    },
+    "seo": {
+      "browse": "Przeglądaj orzecznictwo",
+      "countries": "Kraje",
+      "courts": "Sądy",
+      "years": "Lata"
     },
     "sources": {
       "empty": "Brak skonfigurowanych źródeł.",

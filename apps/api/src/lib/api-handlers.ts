@@ -334,6 +334,26 @@ export const createSafeTokenHandler = <
 ): SafeHandlerDefinition<TConfig, TokenHandlerContext<TConfig>, TResult> =>
   createSafeDirectHandler(config, handler);
 
+export type PublicHandlerConfig = InputSchema;
+
+type PublicHandlerContext<
+  TConfig extends PublicHandlerConfig = PublicHandlerConfig,
+> = Context<UnwrapRoute<TConfig>>;
+
+/**
+ * For unauthenticated routes that intentionally expose public data.
+ * The handler still gets structured error capture and sanitized
+ * responses, but no user, org, workspace, or permission context.
+ */
+export const createSafePublicHandler = <
+  TConfig extends PublicHandlerConfig,
+  TResult,
+>(
+  config: TConfig,
+  handler: SafeHandlerFn<PublicHandlerContext<TConfig>, TResult>,
+): SafeHandlerDefinition<TConfig, PublicHandlerContext<TConfig>, TResult> =>
+  createSafeDirectHandler(config, handler);
+
 type LogAndCaptureSafeErrorProps = {
   request: Request;
   route: string;

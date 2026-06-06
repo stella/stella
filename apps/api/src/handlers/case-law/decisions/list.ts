@@ -1,11 +1,12 @@
-import { and, desc, eq, lt, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
 import { caseLawDecisions } from "@/api/db/schema";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { validCaseLawLanguageAlternateCountSql } from "@/api/handlers/case-law/decisions/language";
+import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { isUuid, tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 
@@ -30,7 +31,7 @@ type ListDecisionsQuery = Static<typeof listDecisionsQuerySchema>;
 
 export const listDecisionsHandler = async (
   query: ListDecisionsQuery,
-  scopedDb: ScopedDb,
+  caseLawDb: CaseLawPublicReadDb,
 ) => {
   const limit = query.limit ?? LIMITS.caseLawSearchPageSizeDefault;
   const conditions: SQL[] = [];
@@ -41,7 +42,7 @@ export const listDecisionsHandler = async (
       const ts = query.cursor.slice(0, separatorIdx);
       const id = query.cursor.slice(separatorIdx + 1);
       const date = new Date(ts);
-      if (Number.isNaN(date.getTime())) {
+      if (Number.isNaN(date.getTime()) || !isUuid(id)) {
         return status(400, { message: "Invalid cursor" });
       }
       conditions.push(
@@ -84,11 +85,12 @@ export const listDecisionsHandler = async (
     conditions.push(eq(caseLawDecisions.language, query.language));
   }
 
-  const decisions = await scopedDb((tx) =>
+  const decisions = await caseLawDb((tx) =>
     tx
       .select({
         id: caseLawDecisions.id,
         caseNumber: caseLawDecisions.caseNumber,
+        slug: caseLawDecisions.slug,
         ecli: caseLawDecisions.ecli,
         court: caseLawDecisions.court,
         country: caseLawDecisions.country,
@@ -105,8 +107,61 @@ export const listDecisionsHandler = async (
       .limit(limit + 1),
   );
 
+  const languageGroupKeys = [
+    ...new Set(
+      decisions
+        .map((decision) => decision.languageGroupKey)
+        .filter((value): value is string => value !== null),
+    ),
+  ];
+  const languageAlternateCounts =
+    languageGroupKeys.length > 0
+      ? await caseLawDb((tx) =>
+          tx
+            .select({
+              languageGroupKey: caseLawDecisions.languageGroupKey,
+              count: validCaseLawLanguageAlternateCountSql,
+            })
+            .from(caseLawDecisions)
+            .where(
+              inArray(caseLawDecisions.languageGroupKey, languageGroupKeys),
+            )
+            .groupBy(caseLawDecisions.languageGroupKey),
+        )
+      : [];
+  const languageAlternateCountByGroupKey = new Map(
+    languageAlternateCounts
+      .filter(
+        (
+          row,
+        ): row is {
+          count: number;
+          languageGroupKey: string;
+        } => row.languageGroupKey !== null,
+      )
+      .map((row) => [row.languageGroupKey, row.count]),
+  );
+
   return createCursorPage({
-    rows: decisions,
+    rows: decisions.map((decision) => ({
+      id: decision.id,
+      caseNumber: decision.caseNumber,
+      slug: decision.slug,
+      ecli: decision.ecli,
+      court: decision.court,
+      country: decision.country,
+      language: decision.language,
+      languageAlternateCount:
+        decision.languageGroupKey === null
+          ? 0
+          : (languageAlternateCountByGroupKey.get(decision.languageGroupKey) ??
+            1),
+      languageGroupKey: decision.languageGroupKey,
+      decisionDate: decision.decisionDate,
+      decisionType: decision.decisionType,
+      sourceUrl: decision.sourceUrl,
+      createdAt: decision.createdAt,
+    })),
     limit,
     cursorForItem: (item) => `${item.createdAt.toISOString()}_${item.id}`,
   });

@@ -99,8 +99,11 @@ test.describe("DOCX upload + inspector", () => {
       )
       .toBe(200);
 
+    // Do not wait for the full load event here; the assertions below prove
+    // the route and viewer finished the work that matters for this test.
     await page.goto(
       `/workspaces/${testWorkspace.id}/${testWorkspace.viewId}/document?entity=${uploaded.entityId}&field=${fileField!.id}`,
+      { waitUntil: "domcontentloaded" },
     );
 
     // The route stays mounted (didn't redirect to /auth or the workspace

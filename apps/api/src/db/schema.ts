@@ -2558,6 +2558,10 @@ export const caseLawDecisions = p.pgTable(
     p
       .uniqueIndex("case_law_decisions_source_case_lang_idx")
       .on(t.sourceId, t.caseNumber, t.language),
+    p
+      .uniqueIndex("case_law_decisions_slug_uidx")
+      .on(t.slug)
+      .where(isNotNull(t.slug)),
     p.index("case_law_decisions_case_number_idx").on(t.caseNumber),
     p.index("case_law_decisions_court_idx").on(t.court),
     p.index("case_law_decisions_country_idx").on(t.country),

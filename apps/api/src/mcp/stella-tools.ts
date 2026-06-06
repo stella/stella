@@ -15,10 +15,13 @@ import {
 import { readWorkspaceHandler } from "@/api/handlers/workspaces/read-by-id";
 import { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
+import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { decryptContent } from "@/api/lib/content-encryption";
+import { isUuid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import {
   brandPersistedCaseLawDecisionId,
+  brandPersistedCaseLawSourceId,
   brandPersistedContactId,
   brandPersistedEntityId,
 } from "@/api/lib/safe-id-boundaries";
@@ -26,7 +29,7 @@ import { getSearchProvider } from "@/api/lib/search/provider";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
 import {
-  buildCaseLawDecisionUrl,
+  buildCaseLawDecisionAppUrl,
   DEFAULT_LIST_LIMIT,
   DEFAULT_SEARCH_LIMIT,
   ensureWorkspaceAccess,
@@ -44,7 +47,6 @@ import {
 } from "@/api/mcp/tool-utils";
 
 const MCP_CONTENT_MAX_CHARS = 8000;
-
 type StellaToolName =
   | "get_matter_overview"
   | "list_matters"
@@ -700,6 +702,9 @@ const handleSearchCaseLawTool: McpToolHandler = async ({ args, context }) => {
   if (isToolErrorResult(sourceId)) {
     return sourceId;
   }
+  if (sourceId !== undefined && !isUuid(sourceId)) {
+    return errorResult("Invalid parameter: source_id. Expected a UUID");
+  }
   const dateFrom = parseOptionalDateArg({ args, key: "date_from" });
   if (isToolErrorResult(dateFrom)) {
     return dateFrom;
@@ -718,11 +723,13 @@ const handleSearchCaseLawTool: McpToolHandler = async ({ args, context }) => {
       ...(country === undefined ? {} : { country }),
       ...(language === undefined ? {} : { language }),
       ...(decisionType === undefined ? {} : { decisionType }),
-      ...(sourceId === undefined ? {} : { sourceId }),
+      ...(sourceId === undefined
+        ? {}
+        : { sourceId: brandPersistedCaseLawSourceId(sourceId) }),
       ...(dateFrom === undefined ? {} : { dateFrom }),
       ...(dateTo === undefined ? {} : { dateTo }),
     },
-    context.scopedDb,
+    caseLawPublicReadDb,
   );
 
   const resultMessage = getResultMessage(result);
@@ -737,9 +744,14 @@ const handleSearchCaseLawTool: McpToolHandler = async ({ args, context }) => {
     facets: result.facets,
     nextCursor: result.nextCursor,
     results: result.hits.map((hit) => ({
-      appUrl: buildCaseLawDecisionUrl({
+      appUrl: buildCaseLawDecisionAppUrl({
         caseNumber: hit.caseNumber,
-        decisionId: hit.decisionId,
+        country: hit.country,
+        court: hit.court,
+        decisionDate: hit.decisionDate,
+        language: hit.language,
+        languageAlternateCount: hit.languageAlternateCount,
+        slug: hit.slug,
       }),
       caseNumber: hit.caseNumber,
       citationCount: hit.citationCount,
@@ -763,10 +775,7 @@ const handleSearchCaseLawTool: McpToolHandler = async ({ args, context }) => {
   });
 };
 
-const handleReadCaseLawDecisionTool: McpToolHandler = async ({
-  args,
-  context,
-}) => {
+const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
   const decisionId = parseRequiredString(args, "decision_id");
   if (typeof decisionId !== "string") {
     return decisionId;
@@ -774,7 +783,7 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({
 
   const result = await readDecisionHandler(
     brandPersistedCaseLawDecisionId(decisionId),
-    context.scopedDb,
+    caseLawPublicReadDb,
   );
   const resultMessage = getResultMessage(result);
   if (resultMessage) {
@@ -786,10 +795,14 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({
 
   return textResult({
     decision: {
-      analysis: result.analysis,
-      appUrl: buildCaseLawDecisionUrl({
+      appUrl: buildCaseLawDecisionAppUrl({
         caseNumber: result.caseNumber,
-        decisionId: result.id,
+        country: result.country,
+        court: result.court,
+        decisionDate: result.decisionDate,
+        language: result.language,
+        languageAlternates: result.languageAlternates,
+        slug: result.slug,
       }),
       caseNumber: result.caseNumber,
       citationsFrom: result.citationsFrom.slice(0, 50),

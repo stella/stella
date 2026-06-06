@@ -14,6 +14,7 @@
     }
   },
   "ai": {
+    "analyzeWithAI": "Analizēt ar AI",
     "editWithAI": "Rediģēt ar AI",
     "keyRequired": {
       "cta": "Atvērt AI iestatījumus",
@@ -272,6 +273,12 @@
       "header": "Galvene",
       "ruling": "Rezolutīvā daļa",
       "unknown": "Cits"
+    },
+    "seo": {
+      "browse": "Pārlūkot judikatūru",
+      "countries": "Valstis",
+      "courts": "Tiesas",
+      "years": "Gadi"
     },
     "sources": {
       "empty": "Nav konfigurētu avotu.",

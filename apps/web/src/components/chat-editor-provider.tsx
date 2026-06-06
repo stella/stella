@@ -16,7 +16,6 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import type { QueryKey } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
 import HardBreak from "@tiptap/extension-hard-break";
 import History from "@tiptap/extension-history";
 import Paragraph from "@tiptap/extension-paragraph";
@@ -53,6 +52,7 @@ import {
 } from "@/components/chat/prompt-slash-extension";
 import { createPromptEditorDocument } from "@/components/prompt-editor";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import {
   createChatDraftState,
   createEmptyChatDraftDoc,
@@ -220,8 +220,6 @@ const isSelectionAtStart = ({ selection }: EditorState) =>
 
 const isSelectionAtEnd = ({ doc, selection }: EditorState) =>
   selection.empty && selection.to >= doc.content.size - 1;
-
-const protectedRouteApi = getRouteApi("/_protected");
 
 export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
   const registrationsRef = useRef(new Map<string, RegisteredExtension>());
@@ -482,9 +480,7 @@ export const useChatEditor = ({
   const placeholderRef = useRef(resolvedPlaceholder);
   placeholderRef.current = resolvedPlaceholder;
   const queryClient = useQueryClient();
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const submitHandlerRef = useRef<(() => Promise<void>) | null>(null);
   const fileIdCounterRef = useRef(0);

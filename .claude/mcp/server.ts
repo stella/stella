@@ -12,6 +12,8 @@ const SOURCES: Record<string, string> = {
   Elysia: "https://elysiajs.com/llms.txt",
   Drizzle: "https://orm.drizzle.team/llms.txt",
   TanStack: "https://tanstack.com/llms.txt",
+  TanStackStart:
+    "https://tanstack.com/start/latest/docs/framework/react/overview.md",
   React: "https://react.dev/llms.txt",
   BaseUI: "https://base-ui.com/llms.txt",
   AISDK: "https://ai-sdk.dev/llms.txt",
@@ -42,7 +44,7 @@ const DEFAULT_HEADING = "Introduction";
 
 const server = new McpServer({
   name: "stella-docs",
-  version: "1.2.0",
+  version: "1.2.1",
 });
 
 type SourceEntry = {
@@ -86,7 +88,7 @@ server.tool(
 const ALLOWED_HOSTS = new Set(
   Object.values(SOURCES).flatMap((u) => {
     const host = new URL(u).hostname;
-    return [host, ...(HOST_ALIASES[host] ?? [])];
+    return [host].concat(HOST_ALIASES[host] ?? []);
   }),
 );
 
@@ -94,7 +96,7 @@ const normalizeText = (value: string) =>
   value.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
 
 const escapeRegExp = (value: string) =>
-  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 
 const GENERIC_TITLE_TERMS = new Set([
   "overview",
@@ -122,20 +124,67 @@ const countMatches = (value: string, term: string) => {
   return matches?.length ?? 0;
 };
 
-const stripMarkdownFormatting = (value: string) =>
-  value
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/\*\*([^*]+)\*\*/g, "$1")
-    .replace(/\*([^*]+)\*/g, "$1")
-    .replace(/_([^_]+)_/g, "$1")
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1");
+type MarkdownLink = {
+  title: string;
+  rawUrl: string;
+  matchedText: string;
+};
+
+const parseMarkdownLinks = (line: string) => {
+  const links: MarkdownLink[] = [];
+  let cursor = 0;
+
+  while (cursor < line.length) {
+    const titleStart = line.indexOf("[", cursor);
+    if (titleStart === -1) {
+      break;
+    }
+
+    const titleEnd = line.indexOf("]", titleStart + 1);
+    if (titleEnd === -1 || line[titleEnd + 1] !== "(") {
+      cursor = titleStart + 1;
+      continue;
+    }
+
+    const urlStart = titleEnd + 2;
+    const urlEnd = line.indexOf(")", urlStart);
+    if (urlEnd === -1) {
+      break;
+    }
+
+    const title = line.slice(titleStart + 1, titleEnd).trim();
+    const rawUrl = line.slice(urlStart, urlEnd).trim();
+    const matchedText = line.slice(titleStart, urlEnd + 1);
+
+    if (title.length > 0 && rawUrl.length > 0 && !rawUrl.includes(" ")) {
+      links.push({ title, rawUrl, matchedText });
+    }
+
+    cursor = urlEnd + 1;
+  }
+
+  return links;
+};
+
+const stripMarkdownFormatting = (value: string) => {
+  let text = value;
+  for (const { title, matchedText } of parseMarkdownLinks(value)) {
+    text = text.replaceAll(matchedText, title);
+  }
+
+  return text
+    .replace(/`([^`]+)`/gu, "$1")
+    .replace(/\*\*([^*]+)\*\*/gu, "$1")
+    .replace(/\*([^*]+)\*/gu, "$1")
+    .replace(/_([^_]+)_/gu, "$1");
+};
 
 const getUrlSlug = (url: string) => {
   const pathname = new URL(url).pathname
-    .replace(/\/+/g, "/")
-    .replace(/\/$/, "");
+    .replace(/\/+/gu, "/")
+    .replace(/\/$/u, "");
   const lastSegment = pathname.split("/").at(-1) ?? pathname;
-  return lastSegment.replace(/\.md$/i, "");
+  return lastSegment.replace(/\.md$/iu, "");
 };
 
 const extractInlineDescription = ({
@@ -160,6 +209,31 @@ const extractInlineDescription = ({
 
 const getHeadingPath = (headings: string[]) =>
   headings.filter((heading) => heading.length > 0).join(" > ");
+
+const parseMarkdownHeading = (
+  line: string,
+  minLevel: number,
+  maxLevel: number,
+) => {
+  let level = 0;
+  while (line[level] === "#") {
+    level += 1;
+  }
+
+  if (
+    level < minLevel ||
+    level > maxLevel ||
+    line[level] !== " " ||
+    line.length <= level + 1
+  ) {
+    return undefined;
+  }
+
+  return {
+    level,
+    text: line.slice(level + 1),
+  };
+};
 
 const scoreTextField = ({
   value,
@@ -251,8 +325,9 @@ const scoreDocEntry = ({
     exactWeight: 10,
     termWeight: 4,
   });
+  const slugText = slug.replace(/[-_/]+/gu, " ");
   const slugScore = scoreTextField({
-    value: slug.replace(/[-_/]+/g, " "),
+    value: slugText,
     query: normalizedQuery,
     queryTerms,
     exactWeight: 24,
@@ -270,8 +345,7 @@ const scoreDocEntry = ({
   const titleTokens = new Set(tokenize(title));
   const slugTokens = new Set(tokenize(slug));
   const exactTitle = title.toLowerCase() === normalizedQuery;
-  const exactSlug =
-    slug.replace(/[-_/]+/g, " ").toLowerCase() === normalizedQuery;
+  const exactSlug = slugText.toLowerCase() === normalizedQuery;
   const allTermsInTitle =
     queryTerms.length > 0 && queryTerms.every((term) => titleTokens.has(term));
   const allTermsInSlug =
@@ -348,11 +422,11 @@ const parseIndexEntries = ({
       continue;
     }
 
-    const headingMatch = /^(#{2,6})\s+(.*)$/u.exec(trimmedLine);
+    const headingMatch = parseMarkdownHeading(trimmedLine, 2, 6);
     if (headingMatch) {
-      const level = headingMatch[1]?.length ?? 1;
+      const { level } = headingMatch;
       const heading = stripMarkdownFormatting(
-        headingMatch[2]?.trim() ?? DEFAULT_HEADING,
+        headingMatch.text.trim() || DEFAULT_HEADING,
       );
       headingStack[level - 2] = heading;
       headingStack.length = level - 1;
@@ -360,9 +434,7 @@ const parseIndexEntries = ({
       continue;
     }
 
-    const markdownLinks = [
-      ...trimmedLine.matchAll(/\[([^\]]+)\]\(([^)\s]+)\)/g),
-    ];
+    const markdownLinks = parseMarkdownLinks(trimmedLine);
 
     if (markdownLinks.length === 0) {
       if (!trimmedLine.startsWith(">")) {
@@ -372,12 +444,7 @@ const parseIndexEntries = ({
     }
 
     for (const match of markdownLinks) {
-      const title = match[1]?.trim();
-      const rawUrl = match[2]?.trim();
-      const matchedText = match[0]?.trim() ?? "";
-      if (!title || !rawUrl) {
-        continue;
-      }
+      const { title, rawUrl, matchedText } = match;
 
       const url = new URL(rawUrl, indexUrl).toString();
       if (!isAllowedDocUrl(url) || seenUrls.has(url)) {
@@ -419,7 +486,7 @@ const splitIntoChunks = (pageText: string) => {
     }
 
     let currentChunk = "";
-    for (const paragraph of sectionText.split(/\n{2,}/)) {
+    for (const paragraph of sectionText.split(/\n{2,}/u)) {
       const trimmedParagraph = paragraph.trim();
       if (trimmedParagraph.length === 0) {
         continue;
@@ -461,14 +528,14 @@ const splitIntoChunks = (pageText: string) => {
   };
 
   for (const line of lines) {
-    const headingMatch = /^#{1,6}\s+(.*)$/.exec(line);
+    const headingMatch = parseMarkdownHeading(line, 1, 6);
     if (!headingMatch) {
       sectionLines.push(line);
       continue;
     }
 
     flushSection();
-    heading = headingMatch[1]?.trim() || DEFAULT_HEADING;
+    heading = headingMatch.text.trim() || DEFAULT_HEADING;
   }
 
   flushSection();

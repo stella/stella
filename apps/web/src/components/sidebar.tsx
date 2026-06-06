@@ -33,6 +33,7 @@ const SIDEBAR_LS_NAME = "sidebar_state";
 const SIDEBAR_WIDTH = "16rem";
 const SIDEBAR_WIDTH_MOBILE = "18rem";
 const SIDEBAR_WIDTH_ICON = "3rem";
+const DEFAULT_SIDEBAR_OPEN = true;
 
 type SidebarContextProps = {
   state: "expanded" | "collapsed";
@@ -78,7 +79,14 @@ function SidebarProvider({
       return defaultOpen;
     }
 
-    return window.localStorage.getItem(SIDEBAR_LS_NAME) === "expanded";
+    if (typeof localStorage === "undefined") {
+      return DEFAULT_SIDEBAR_OPEN;
+    }
+
+    const storedState = localStorage.getItem(SIDEBAR_LS_NAME);
+    return storedState === null
+      ? DEFAULT_SIDEBAR_OPEN
+      : storedState === "expanded";
   });
   const open = openProp ?? _open;
   const setOpen = useCallback(
@@ -93,7 +101,9 @@ function SidebarProvider({
       const state: SidebarContextProps["state"] = openState
         ? "expanded"
         : "collapsed";
-      localStorage.setItem(SIDEBAR_LS_NAME, state);
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem(SIDEBAR_LS_NAME, state);
+      }
     },
     [setOpenProp, open],
   );
