@@ -22,7 +22,12 @@ export const Route = createFileRoute("/_protected/settings/organization/usage")(
 
 function UsageSettingsPage() {
   const t = useTranslations();
-  const { data, isLoading } = useQuery(usageEntitlementOptions);
+  const activeOrganizationId = Route.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const { data, isLoading } = useQuery(
+    usageEntitlementOptions({ organizationId: activeOrganizationId }),
+  );
 
   return (
     <>

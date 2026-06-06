@@ -156,7 +156,9 @@ export const ChatThreadPage = ({
   // chat handler as a usage-state modal instead of an inline
   // stack trace. `useQuery` (not Suspense) keeps the chat shell
   // rendering while the entitlement state loads.
-  const { data: usageEntitlementData } = useQuery(usageEntitlementOptions);
+  const { data: usageEntitlementData } = useQuery(
+    usageEntitlementOptions({ organizationId: activeOrganizationId }),
+  );
   const usageLimit = useUsageLimit({
     hasHostedEntitlement: usageEntitlementData?.entitlement.source === "hosted",
   });
