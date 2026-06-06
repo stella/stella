@@ -7,6 +7,8 @@ type EffectiveHeaderFooterMarginsInput = {
   footerContent?: HeaderFooterContent | undefined;
   firstPageHeaderContent?: HeaderFooterContent | undefined;
   firstPageFooterContent?: HeaderFooterContent | undefined;
+  pageSize?: { w: number; h: number } | undefined;
+  warn?: ((message: string) => void) | undefined;
 };
 
 /**
@@ -73,6 +75,8 @@ function buildExtender({
   footerContent,
   firstPageHeaderContent,
   firstPageFooterContent,
+  pageSize,
+  warn,
   mode,
 }: Omit<EffectiveHeaderFooterMarginsInput, "margins"> & {
   mode: "default" | "firstPage";
@@ -115,6 +119,24 @@ function buildExtender({
         footerDistance + footerContentHeight,
       );
     }
+
+    if (pageSize) {
+      const maxMargins = Math.max(0, pageSize.h - 24);
+      if (out.top + out.bottom > maxMargins) {
+        if (warn) {
+          warn(
+            `header/footer content exceeds page height; clamping margins to preserve a content area. pageHeight=${Math.round(
+              pageSize.h,
+            )} top=${Math.round(out.top)} bottom=${Math.round(out.bottom)}`,
+          );
+        }
+        out.bottom = Math.max(0, Math.min(out.bottom, maxMargins - out.top));
+        if (out.top + out.bottom > maxMargins) {
+          out.top = Math.max(0, maxMargins - out.bottom);
+        }
+      }
+    }
+
     return out;
   };
 }
@@ -142,11 +164,15 @@ export function computeEffectiveHeaderFooterMargins({
   footerContent,
   firstPageHeaderContent,
   firstPageFooterContent,
+  pageSize,
+  warn,
 }: EffectiveHeaderFooterMarginsInput): PageMargins {
   return computeHeaderFooterMarginExtender({
     headerContent,
     footerContent,
     firstPageHeaderContent,
     firstPageFooterContent,
+    pageSize,
+    warn,
   })(margins);
 }

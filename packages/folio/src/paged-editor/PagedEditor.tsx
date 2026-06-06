@@ -3261,6 +3261,9 @@ export function PagedEditor(
           footerContent: footerContentForRender,
           firstPageHeaderContent: firstPageHeaderForRender,
           firstPageFooterContent: firstPageFooterForRender,
+          pageSize,
+          // eslint-disable-next-line no-console
+          warn: (msg) => console.warn(`[PagedEditor] ${msg}`),
         });
         // First-page extender — used only for page 1 of a titlePg
         // section so the title page's larger header reservation is
@@ -3270,6 +3273,9 @@ export function PagedEditor(
           footerContent: footerContentForRender,
           firstPageHeaderContent: firstPageHeaderForRender,
           firstPageFooterContent: firstPageFooterForRender,
+          pageSize,
+          // eslint-disable-next-line no-console
+          warn: (msg) => console.warn(`[PagedEditor] ${msg}`),
         });
         const effectiveMargins = extendForHfOverflow(margins);
         const effectiveFirstPageMargins = hasTitlePg

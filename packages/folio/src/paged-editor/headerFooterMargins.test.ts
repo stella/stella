@@ -157,4 +157,31 @@ describe("HF margin extender across multiple section margins (issue #400)", () =
     // available = 80 - 48 = 32 < 60, must extend to 48 + 60 = 108.
     expect(extend(looseHeaderDistance).top).toBe(108);
   });
+
+  test("clamp: an absurdly tall header is clamped so margins never consume the entire page height", () => {
+    const margins = {
+      top: 96,
+      right: 72,
+      bottom: 96,
+      left: 72,
+      header: 48,
+      footer: 48,
+    };
+    const pageSize = { w: 816, h: 500 };
+
+    const extend = computeHeaderFooterMarginExtender({
+      headerContent: content(1000), // Height 1000 on page height 500
+      pageSize,
+    });
+
+    const extended = extend(margins);
+    // Page height is 500, MIN_CONTENT_HEIGHT_PX is 24, so max margins is 476.
+    expect(extended.top + extended.bottom).toBeLessThanOrEqual(476);
+    expect(extended.top).toBeGreaterThanOrEqual(0);
+    expect(extended.bottom).toBeGreaterThanOrEqual(0);
+    // Content area is at least MIN_CONTENT_HEIGHT_PX (24)
+    expect(pageSize.h - extended.top - extended.bottom).toBeGreaterThanOrEqual(
+      24,
+    );
+  });
 });

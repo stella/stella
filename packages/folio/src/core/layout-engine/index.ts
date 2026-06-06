@@ -14,6 +14,7 @@ import {
 } from "./keep-together";
 import { measuredLineAdvance } from "./lineFlow";
 import { FOOTNOTE_SEPARATOR_HEIGHT, createPaginator } from "./paginator";
+import { getParagraphFragmentPmRange } from "./paragraphFragmentRange";
 import { buildTableRowBreakInfo, snapRowBreak } from "./tableRowBreak";
 import {
   bandFragmentX,
@@ -549,6 +550,13 @@ function layoutParagraph(
     const effectiveSpaceBefore = isFirstFragment ? spaceBefore : 0;
     const effectiveSpaceAfter = isLastFragment ? spaceAfter : 0;
 
+    const pmRange = getParagraphFragmentPmRange(
+      block,
+      measure,
+      currentLineIndex,
+      currentLineIndex + fittingLines,
+    );
+
     const fragment: ParagraphFragment = {
       kind: "paragraph",
       blockId: block.id,
@@ -558,8 +566,8 @@ function layoutParagraph(
       height: linesHeight,
       fromLine: currentLineIndex,
       toLine: currentLineIndex + fittingLines,
-      ...(block.pmStart !== undefined ? { pmStart: block.pmStart } : {}),
-      ...(block.pmEnd !== undefined ? { pmEnd: block.pmEnd } : {}),
+      ...(pmRange.pmStart !== undefined ? { pmStart: pmRange.pmStart } : {}),
+      ...(pmRange.pmEnd !== undefined ? { pmEnd: pmRange.pmEnd } : {}),
       ...(!isFirstFragment ? { continuesFromPrev: true } : {}),
       ...(!isLastFragment ? { continuesOnNext: true } : {}),
       ...(block.sdtGroups ? { sdtGroups: block.sdtGroups } : {}),
