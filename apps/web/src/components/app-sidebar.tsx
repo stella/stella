@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
+import { useShallow } from "zustand/react/shallow";
 
 import {
   Avatar,
@@ -603,10 +604,14 @@ export function AppSidebar(props: AppSidebarProps) {
   });
 
   const [searchOpen, setSearchOpen] = useState(false);
-  const pinnedOrder = usePinnedStore((s) => s.pinnedOrder);
-  const pinnedIds = usePinnedStore((s) => s.pinnedIds);
-  const togglePin = usePinnedStore((s) => s.togglePin);
-  const reorderPinned = usePinnedStore((s) => s.reorder);
+  const { pinnedOrder, pinnedIds, togglePin, reorderPinned } = usePinnedStore(
+    useShallow((s) => ({
+      pinnedOrder: s.pinnedOrder,
+      pinnedIds: s.pinnedIds,
+      togglePin: s.togglePin,
+      reorderPinned: s.reorder,
+    })),
+  );
   const { data: workspacesData } = useQuery(
     workspacesNavigationOptions(user.activeOrganizationId),
   );

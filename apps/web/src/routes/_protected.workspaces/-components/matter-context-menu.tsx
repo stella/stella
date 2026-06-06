@@ -187,8 +187,8 @@ export const MatterContextMenu = ({
   children,
 }: MatterContextMenuProps) => {
   const t = useTranslations();
-  const { togglePin, isPinned } = usePinnedStore();
-  const pinned = isPinned(workspaceId);
+  const togglePin = usePinnedStore((s) => s.togglePin);
+  const pinned = usePinnedStore((s) => s.pinnedIds.has(workspaceId));
 
   const queryClient = useQueryClient();
   const updateWorkspace = useUpdateWorkspace();
