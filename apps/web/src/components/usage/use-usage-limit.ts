@@ -93,13 +93,12 @@ const extractStructured = (
  *    import the SDK's error class would couple this hook to the
  *    chat surface; the structural check is enough.
  *
- * For the AI SDK shape we additionally require that the parsed
+ * For both shapes we additionally require that the parsed
  * response body carries one of OUR `UsageLimitExceededReason`
  * markers — an upstream provider (OpenAI, Anthropic, etc.) that
  * surfaces a generic 402 through the AI SDK would otherwise pop
- * the usage-limit modal misleadingly. The `APIError`
- * branch is already trusted because it can only originate from
- * our own Eden treaty client talking to our own backend.
+ * the usage-limit modal misleadingly, and a backend route can
+ * also map provider failures into a 402 without usage details.
  *
  * Returns null when the error is not a 402 from our system.
  */
@@ -110,9 +109,12 @@ export const extractFromError = (
     if (error.status !== 402) {
       return null;
     }
+    if (!error.details || !isReason(error.details["reason"])) {
+      return null;
+    }
     return {
       message: error.message,
-      ...(error.details ? { details: error.details } : {}),
+      details: error.details,
     };
   }
   if (typeof error === "object" && error !== null) {

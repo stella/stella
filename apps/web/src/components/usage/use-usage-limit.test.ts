@@ -67,6 +67,15 @@ describe("extractFromError", () => {
     expect(extractFromError(error)).toBeNull();
   });
 
+  test("returns null for an APIError 402 without our reason marker", () => {
+    const error = new APIError({
+      status: 402,
+      message: "provider quota exceeded",
+      details: { error: "upstream provider quota" },
+    });
+    expect(extractFromError(error)).toBeNull();
+  });
+
   test("recognises AI SDK errors via numeric statusCode === 402", () => {
     const sdkError = {
       name: "AI_APICallError",
