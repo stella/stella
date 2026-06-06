@@ -23,6 +23,71 @@ export const errorTag = (error: unknown): string => {
 };
 
 /**
+ * Non-PII connection/system fields for infra observability.
+ *
+ * Network, socket, TLS and DNS failures carry structured fields —
+ * `code` (ECONNRESET, ETIMEDOUT, EAI_AGAIN…), `errno`, `syscall` —
+ * that pinpoint the failure without any client data. Unlike
+ * `error.message`, these are safe to ship to analytics dashboards,
+ * so this extends `errorTag` rather than replacing it.
+ */
+export const errorSystemFields = (error: unknown): Record<string, string> => {
+  const fields: Record<string, string> = { "error.type": errorTag(error) };
+  if (!(error instanceof Error)) {
+    return fields;
+  }
+  if ("code" in error && typeof error.code === "string") {
+    fields["error.code"] = error.code;
+  }
+  if ("errno" in error && typeof error.errno === "number") {
+    fields["error.errno"] = String(error.errno);
+  }
+  if ("syscall" in error && typeof error.syscall === "string") {
+    fields["error.syscall"] = error.syscall;
+  }
+  if (error.cause !== undefined) {
+    fields["error.cause.type"] = errorTag(error.cause);
+    if (
+      error.cause instanceof Error &&
+      "code" in error.cause &&
+      typeof error.cause.code === "string"
+    ) {
+      fields["error.cause.code"] = error.cause.code;
+    }
+  }
+  return fields;
+};
+
+/**
+ * `errorSystemFields` plus the raw error message under `error.msg`.
+ *
+ * ONLY for infra sinks that exclusively observe connection-level
+ * failures — Redis/BullMQ `worker.on("error")` and the SSE pub/sub
+ * subscriber. Those errors are socket/TLS/Redis-protocol messages
+ * ("Connection is closed", "read ECONNRESET"), never document
+ * content or client data, so surfacing the message stays non-PII
+ * while making the failure diagnosable. Do NOT use at sinks that
+ * can observe handler or user-data errors; keep those on `errorTag`
+ * or `errorSystemFields`.
+ *
+ * The key is `error.msg`, not `error.message`: the logger's
+ * `sanitizeLogAttributes` drops any attribute key matching /message/i
+ * as a blanket PII guard, which would silently strip the value.
+ * `msg` sidesteps that drop; the connection-only scope above is what
+ * keeps surfacing the message safe. See utils.test.ts for the
+ * sanitizer-survival guard.
+ */
+export const connectionErrorFields = (
+  error: unknown,
+): Record<string, string> => {
+  const fields = errorSystemFields(error);
+  if (error instanceof Error && error.message) {
+    fields["error.msg"] = error.message;
+  }
+  return fields;
+};
+
+/**
  * Surface an error in dev. Two sinks:
  *  1) `console.error` — the interactive dev terminal sees it now.
  *  2) `apps/api/.dev-logs/errors.jsonl` — headless tools (CI repro

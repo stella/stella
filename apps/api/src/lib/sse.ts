@@ -1,5 +1,5 @@
 import type { SafeId } from "@/api/lib/branded-types";
-import { errorTag } from "@/api/lib/errors/utils";
+import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { createRedisClient } from "@/api/lib/redis-client";
 import {
@@ -170,9 +170,7 @@ const initRedis = async () => {
     });
     logger.info("sse.redis_connected", { channel: REDIS_CHANNEL });
   } catch (error: unknown) {
-    logger.error("sse.redis_connection_failed", {
-      "error.type": errorTag(error),
-    });
+    logger.error("sse.redis_connection_failed", connectionErrorFields(error));
   }
 };
 
