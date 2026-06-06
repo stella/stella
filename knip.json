@@ -4,7 +4,6 @@
     ".": {
       "entry": ["scripts/*.ts", "i18n-unused.config.js", "oxlint.config.ts"],
       "ignoreDependencies": [
-        "@fontsource-variable/source-serif-4",
         "@tanstack/eslint-plugin-query",
         "@tanstack/eslint-plugin-router",
         "eslint",

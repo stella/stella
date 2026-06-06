@@ -12,7 +12,8 @@ name: Dependency Review
 # Allowed: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, 0BSD,
 #          BlueOak-1.0.0, Unlicense, CC0-1.0, CC-BY-4.0, MIT-0,
 #          MPL-2.0 (file-level copyleft, acceptable for unmodified use),
-#          Python-2.0, Zlib, Unicode-3.0 (permissive Unicode data license)
+#          Python-2.0, Zlib, Unicode-3.0 (permissive Unicode data license),
+#          OFL-1.1 (font assets)
 #
 # Blocked: GPL-2.0, GPL-3.0, AGPL-3.0, LGPL-2.1, LGPL-3.0, SSPL-1.0,
 #          BUSL-1.1, Elastic-2.0, Commons-Clause, CPAL-1.0
@@ -58,7 +59,8 @@ jobs:
             MPL-2.0,
             Python-2.0,
             Zlib,
-            Unicode-3.0
+            Unicode-3.0,
+            OFL-1.1
           # GitHub's dependency snapshot currently reports some Bun
           # workspace/catalog entries and Bun-locked npm packages as license
           # "Null" in PR summaries even though package manifests declare
@@ -72,6 +74,7 @@ jobs:
             pkg:npm/@ai-sdk/provider,
             pkg:npm/@ai-sdk/provider-utils,
             pkg:npm/@aws-sdk/client-sts,
+            pkg:npm/@fontsource-variable/source-serif-4,
             pkg:npm/@hocuspocus/provider,
             pkg:npm/@hocuspocus/server,
             pkg:npm/@stll/ai-catalog,

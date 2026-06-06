@@ -1,8 +1,27 @@
 #!/usr/bin/env bun
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 
 export const WORKSPACE_PARENT_DIRS = ["apps", "packages"] as const;
+const DEPENDENCY_FIELDS = [
+  "dependencies",
+  "devDependencies",
+  "peerDependencies",
+  "optionalDependencies",
+] as const;
+const SKIPPED_SCAN_DIRS = new Set([
+  ".cache",
+  ".turbo",
+  "build",
+  "coverage",
+  "dist",
+  "node_modules",
+  "out",
+  "target",
+]);
+const CSS_IMPORT_PATTERN =
+  /@import\s+(?:url\(\s*)?["'](?<specifier>[^"']+)["']/gu;
+const CSS_COMMENT_PATTERN = /\/\*[\s\S]*?\*\//gu;
 
 export type WorkspaceParentDir = (typeof WORKSPACE_PARENT_DIRS)[number];
 
@@ -13,10 +32,12 @@ export type WorkspaceIssue = {
 
 type WorkspacePackageReadResult =
   | {
+      dependencyNames: Set<string>;
       name: string | undefined;
       parseFailed: false;
     }
   | {
+      dependencyNames: Set<string>;
       name: undefined;
       parseFailed: true;
     };
@@ -32,6 +53,7 @@ const readWorkspacePackage = (
     packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
   } catch {
     return {
+      dependencyNames: new Set(),
       name: undefined,
       parseFailed: true,
     };
@@ -39,6 +61,7 @@ const readWorkspacePackage = (
 
   if (!isRecord(packageJson)) {
     return {
+      dependencyNames: new Set(),
       name: undefined,
       parseFailed: false,
     };
@@ -46,13 +69,118 @@ const readWorkspacePackage = (
 
   const maybeName = packageJson["name"];
   return {
+    dependencyNames: readDependencyNames(packageJson),
     name: typeof maybeName === "string" ? maybeName : undefined,
     parseFailed: false,
   };
 };
 
+const readDependencyNames = (packageJson: Record<string, unknown>) => {
+  const dependencyNames = new Set<string>();
+
+  for (const field of DEPENDENCY_FIELDS) {
+    const maybeDependencies = packageJson[field];
+    if (!isRecord(maybeDependencies)) {
+      continue;
+    }
+
+    for (const dependencyName of Object.keys(maybeDependencies)) {
+      dependencyNames.add(dependencyName);
+    }
+  }
+
+  return dependencyNames;
+};
+
 export const expectedWorkspaceName = (directoryName: string) =>
   `@stll/${directoryName}`;
+
+const toPackageSpecifier = (specifier: string): string | null => {
+  if (
+    specifier.startsWith(".") ||
+    specifier.startsWith("/") ||
+    /^[a-z][a-z0-9+.-]*:/iu.test(specifier)
+  ) {
+    return null;
+  }
+
+  const segments = specifier.split("/");
+  const firstSegment = segments.at(0);
+  if (!firstSegment) {
+    return null;
+  }
+
+  if (!firstSegment.startsWith("@")) {
+    return firstSegment;
+  }
+
+  const secondSegment = segments.at(1);
+  if (!secondSegment) {
+    return null;
+  }
+
+  return `${firstSegment}/${secondSegment}`;
+};
+
+const findCssFiles = (directoryPath: string): string[] => {
+  const cssFiles: string[] = [];
+
+  for (const entry of readdirSync(directoryPath, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      if (entry.name.startsWith(".") || SKIPPED_SCAN_DIRS.has(entry.name)) {
+        continue;
+      }
+
+      cssFiles.push(...findCssFiles(join(directoryPath, entry.name)));
+      continue;
+    }
+
+    if (entry.isFile() && entry.name.endsWith(".css")) {
+      cssFiles.push(join(directoryPath, entry.name));
+    }
+  }
+
+  return cssFiles;
+};
+
+const lineNumberForIndex = (content: string, index: number) =>
+  content.slice(0, index).split("\n").length;
+
+const stripCssComments = (content: string) =>
+  content.replaceAll(CSS_COMMENT_PATTERN, (comment) =>
+    comment.replaceAll(/[^\r\n]/gu, " "),
+  );
+
+const validateCssImportOwnership = (
+  workspacePath: string,
+  relativeWorkspacePath: string,
+  dependencyNames: ReadonlySet<string>,
+): WorkspaceIssue[] => {
+  const issues: WorkspaceIssue[] = [];
+
+  for (const cssFilePath of findCssFiles(workspacePath)) {
+    const content = stripCssComments(readFileSync(cssFilePath, "utf-8"));
+
+    for (const match of content.matchAll(CSS_IMPORT_PATTERN)) {
+      const specifier = match.groups?.["specifier"];
+      if (!specifier) {
+        continue;
+      }
+
+      const packageSpecifier = toPackageSpecifier(specifier);
+      if (!packageSpecifier || dependencyNames.has(packageSpecifier)) {
+        continue;
+      }
+
+      issues.push({
+        message: `CSS import ${specifier} resolves to package ${packageSpecifier}, but ${packageSpecifier} is not declared in this workspace package.json`,
+        path: `${relativeWorkspacePath}/${cssFilePath.slice(workspacePath.length + 1)}:${lineNumberForIndex(content, match.index)}`,
+      });
+    }
+  }
+
+  return issues;
+};
 
 export const validateWorkspaceRoot = (rootDir: string): WorkspaceIssue[] => {
   const issues: WorkspaceIssue[] = [];
@@ -75,8 +203,11 @@ export const validateWorkspaceRoot = (rootDir: string): WorkspaceIssue[] => {
         continue;
       }
 
-      const { name: workspaceName, parseFailed } =
-        readWorkspacePackage(packageJsonPath);
+      const {
+        dependencyNames,
+        name: workspaceName,
+        parseFailed,
+      } = readWorkspacePackage(packageJsonPath);
       const expectedName = expectedWorkspaceName(entry.name);
 
       if (parseFailed) {
@@ -101,6 +232,14 @@ export const validateWorkspaceRoot = (rootDir: string): WorkspaceIssue[] => {
           path: relativePath,
         });
       }
+
+      issues.push(
+        ...validateCssImportOwnership(
+          resolve(parentPath, entry.name),
+          relativePath,
+          dependencyNames,
+        ),
+      );
     }
   }
 

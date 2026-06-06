@@ -45,7 +45,6 @@
     "postinstall": "bun run lint:ws"
   },
   "devDependencies": {
-    "@fontsource-variable/source-serif-4": "^5.2.9",
     "@stll/oxlint-config": "0.3.0",
     "@stll/typescript-config": "workspace:^0.0.0",
     "@tanstack/eslint-plugin-query": "catalog:",
