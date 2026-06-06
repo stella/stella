@@ -8,6 +8,7 @@ import { validCaseLawLanguageAlternateCountSql } from "@/api/handlers/case-law/d
 import type { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
 import { bodyPreviewJoin } from "@/api/handlers/case-law/decisions/search-sql";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { isUuid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 import {
@@ -52,7 +53,7 @@ export const searchDecisionsHandler = async (
   let parsedCursor: { score: number; id: string } | null = null;
   if (body.cursor) {
     parsedCursor = decodeCursor(body.cursor);
-    if (!parsedCursor) {
+    if (!parsedCursor || !isUuid(parsedCursor.id)) {
       return status(400, { message: "Invalid cursor" });
     }
   }

@@ -17,4 +17,14 @@ describe("public case-law routes", () => {
 
     expect(response.status).toBe(422);
   });
+
+  test("rejects invalid list cursor IDs before handler execution", async () => {
+    const cursor = encodeURIComponent("2026-06-06T00:00:00.000Z_not-a-uuid");
+    const response = await publicCaseLawRoute.handle(
+      new Request(`http://localhost/case/decisions?cursor=${cursor}`),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ message: "Invalid cursor" });
+  });
 });

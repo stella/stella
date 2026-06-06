@@ -187,6 +187,16 @@ describe("public case-law route boundary", () => {
     expect(source).toContain('sourceId: t.Optional(tSafeId("caseLawSource"))');
   });
 
+  test("public cursors validate IDs before SQL filters", async () => {
+    const [listSource, searchSource] = await Promise.all([
+      readListSource(),
+      readSearchSource(),
+    ]);
+
+    expect(listSource).toContain("!isUuid(id)");
+    expect(searchSource).toContain("!isUuid(parsedCursor.id)");
+  });
+
   test("public language alternate counts only include route-safe languages", async () => {
     const [listSource, searchSource, languageSource] = await Promise.all([
       readListSource(),

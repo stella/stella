@@ -283,16 +283,7 @@ const getCaseLawLanguageAlternateCount = ({
   return languages.size;
 };
 
-export const buildCaseLawDecisionUrl = ({
-  caseNumber,
-  country,
-  court,
-  decisionDate,
-  language,
-  languageAlternateCount,
-  languageAlternates,
-  slug,
-}: {
+type CaseLawDecisionUrlInput = {
   caseNumber: string;
   country: string;
   court: string;
@@ -301,7 +292,26 @@ export const buildCaseLawDecisionUrl = ({
   languageAlternateCount?: number | null | undefined;
   languageAlternates?: readonly unknown[] | null | undefined;
   slug?: string | null | undefined;
-}) => {
+};
+
+export const isPublicLawAppUrlEnabled = (): boolean =>
+  env.isDev || env.FEATURE_PUBLIC_LAW;
+
+export const buildCaseLawDecisionAppUrl = (
+  input: CaseLawDecisionUrlInput,
+): string | null =>
+  isPublicLawAppUrlEnabled() ? buildCaseLawDecisionUrl(input) : null;
+
+const buildCaseLawDecisionUrl = ({
+  caseNumber,
+  country,
+  court,
+  decisionDate,
+  language,
+  languageAlternateCount,
+  languageAlternates,
+  slug,
+}: CaseLawDecisionUrlInput) => {
   const languageSegment = normalizeCaseLawLanguageSegment(language);
   const courtSegment =
     court.trim().length > 0

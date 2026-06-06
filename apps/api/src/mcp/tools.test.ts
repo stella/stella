@@ -775,6 +775,68 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(anonymizeTextFieldsMock).not.toHaveBeenCalled();
   });
 
+  test("search_case_law omits app URLs while public law routes are disabled", async () => {
+    const previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
+    const previousIsDev = env.isDev;
+    env.FEATURE_PUBLIC_LAW = false;
+    env.isDev = false;
+
+    try {
+      searchDecisionsHandlerMock.mockResolvedValue({
+        facets: null,
+        hits: [
+          {
+            caseNumber: "29 Cdo 123/2024",
+            citationCount: 7,
+            country: "CZE",
+            court: "Nejvyšší soud",
+            decisionDate: "2024-02-01",
+            decisionId: "dec_123",
+            decisionType: "judgment",
+            ecli: null,
+            headline: null,
+            language: "cs",
+            slug: "stable-official-slug",
+            sourceUrl: "https://example.test/decision",
+          },
+        ],
+        nextCursor: null,
+        totalCount: null,
+      });
+
+      const result = await handleMcpToolCall({
+        args: { query: "shareholder dispute" },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+
+      expect(parseToolPayload(result)).toEqual({
+        facets: null,
+        nextCursor: null,
+        results: [
+          {
+            appUrl: null,
+            caseNumber: "29 Cdo 123/2024",
+            citationCount: 7,
+            country: "CZE",
+            court: "Nejvyšší soud",
+            decisionDate: "2024-02-01",
+            decisionId: "dec_123",
+            decisionType: "judgment",
+            ecli: null,
+            language: "cs",
+            snippet: null,
+            sourceUrl: "https://example.test/decision",
+          },
+        ],
+        totalCount: null,
+      });
+    } finally {
+      env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
+      env.isDev = previousIsDev;
+    }
+  });
+
   test("search_case_law rejects invalid ISO dates", async () => {
     const result = await handleMcpToolCall({
       args: {

@@ -17,6 +17,7 @@ import { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { decryptContent } from "@/api/lib/content-encryption";
+import { isUuid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import {
   brandPersistedCaseLawDecisionId,
@@ -28,7 +29,7 @@ import { getSearchProvider } from "@/api/lib/search/provider";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
 import {
-  buildCaseLawDecisionUrl,
+  buildCaseLawDecisionAppUrl,
   DEFAULT_LIST_LIMIT,
   DEFAULT_SEARCH_LIMIT,
   ensureWorkspaceAccess,
@@ -46,9 +47,6 @@ import {
 } from "@/api/mcp/tool-utils";
 
 const MCP_CONTENT_MAX_CHARS = 8000;
-const UUID_PATTERN =
-  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/u;
-
 type StellaToolName =
   | "get_matter_overview"
   | "list_matters"
@@ -704,7 +702,7 @@ const handleSearchCaseLawTool: McpToolHandler = async ({ args, context }) => {
   if (isToolErrorResult(sourceId)) {
     return sourceId;
   }
-  if (sourceId !== undefined && !UUID_PATTERN.test(sourceId)) {
+  if (sourceId !== undefined && !isUuid(sourceId)) {
     return errorResult("Invalid parameter: source_id. Expected a UUID");
   }
   const dateFrom = parseOptionalDateArg({ args, key: "date_from" });
@@ -746,7 +744,7 @@ const handleSearchCaseLawTool: McpToolHandler = async ({ args, context }) => {
     facets: result.facets,
     nextCursor: result.nextCursor,
     results: result.hits.map((hit) => ({
-      appUrl: buildCaseLawDecisionUrl({
+      appUrl: buildCaseLawDecisionAppUrl({
         caseNumber: hit.caseNumber,
         country: hit.country,
         court: hit.court,
@@ -797,7 +795,7 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
 
   return textResult({
     decision: {
-      appUrl: buildCaseLawDecisionUrl({
+      appUrl: buildCaseLawDecisionAppUrl({
         caseNumber: result.caseNumber,
         country: result.country,
         court: result.court,

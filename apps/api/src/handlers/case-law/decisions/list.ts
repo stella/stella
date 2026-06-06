@@ -6,7 +6,7 @@ import type { Static } from "elysia";
 import { caseLawDecisions } from "@/api/db/schema";
 import { validCaseLawLanguageAlternateCountSql } from "@/api/handlers/case-law/decisions/language";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { isUuid, tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 
@@ -42,7 +42,7 @@ export const listDecisionsHandler = async (
       const ts = query.cursor.slice(0, separatorIdx);
       const id = query.cursor.slice(separatorIdx + 1);
       const date = new Date(ts);
-      if (Number.isNaN(date.getTime())) {
+      if (Number.isNaN(date.getTime()) || !isUuid(id)) {
         return status(400, { message: "Invalid cursor" });
       }
       conditions.push(
