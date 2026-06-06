@@ -1037,7 +1037,20 @@ export function DocxEditor({
           clearTimeout(collectHeadingsTimerRef.current);
           collectHeadingsTimerRef.current = null;
         }
-      }, [findReplace, setHfEditPosition]),
+      }, [
+        commentsDirtyRef,
+        commentsLoadedRef,
+        findReplace,
+        setActiveCommentId,
+        setAddCommentYPosition,
+        setCommentSelectionRange,
+        setComments,
+        setFloatingCommentBtn,
+        setHfEditPosition,
+        setIsAddingComment,
+        setShowCommentsSidebar,
+        setVisibleCommentAuthors,
+      ]),
       setDocumentLoadState: useCallback((documentLoad: DocumentLoadState) => {
         setState((prev) => ({ ...prev, documentLoad }));
       }, []),
@@ -1069,6 +1082,7 @@ export function DocxEditor({
     history.state,
     extractTrackedChanges,
     autoOpenReviewSidebar,
+    setShowCommentsSidebar,
   ]);
 
   const initialScrollAppliedRef = useRef(false);
@@ -1165,6 +1179,7 @@ export function DocxEditor({
       pushDocument,
       extractTrackedChanges,
       refreshBodyHistoryAvailability,
+      commentsRef,
     ],
   );
 
@@ -1230,7 +1245,7 @@ export function DocxEditor({
       referencedCommentIds,
     );
     return doc;
-  }, [history.state]);
+  }, [history.state, commentsRef]);
 
   const replaceComments = useCallback(
     (nextComments: Comment[]) => {
@@ -1245,14 +1260,20 @@ export function DocxEditor({
 
       onChange?.(currentDocument);
     },
-    [buildCurrentDocument, onChange],
+    [
+      buildCurrentDocument,
+      commentsDirtyRef,
+      commentsRef,
+      onChange,
+      setComments,
+    ],
   );
 
   const updateComments = useCallback(
     (updater: (comments: Comment[]) => Comment[]) => {
       replaceComments(updater(commentsRef.current));
     },
-    [replaceComments],
+    [commentsRef, replaceComments],
   );
 
   const selectFindMatch = useCallback((match: FindMatch): boolean => {
@@ -1510,8 +1531,15 @@ export function DocxEditor({
       // Notify parent
       onSelectionChange?.(selectionState);
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
-    [onSelectionChange, isAddingComment, readOnly],
+    [
+      getActiveEditorView,
+      getCachedStyleResolver,
+      isAddingComment,
+      onSelectionChange,
+      readOnly,
+      setFloatingCommentBtn,
+      theme,
+    ],
   );
 
   // Table selection hook
@@ -2407,6 +2435,11 @@ export function DocxEditor({
       readOnly,
       contextMenu.selectionRange.from,
       contextMenu.selectionRange.to,
+      setAddCommentYPosition,
+      setCommentSelectionRange,
+      setFloatingCommentBtn,
+      setIsAddingComment,
+      setShowCommentsSidebar,
     ],
   );
 
@@ -2545,6 +2578,7 @@ export function DocxEditor({
       originalBufferRef,
       featureFlags,
       onSelectiveSaveTripwire,
+      commentsDirtyRef,
     ],
   );
 
@@ -2793,6 +2827,7 @@ export function DocxEditor({
       loadParsedDocument,
       loadBuffer,
       updateComments,
+      commentsDirtyRef,
     ],
   );
 

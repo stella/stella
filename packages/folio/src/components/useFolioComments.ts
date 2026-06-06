@@ -7,6 +7,7 @@
  * depend on its document-build pipeline.
  */
 import {
+  type RefObject,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -30,7 +31,7 @@ type UseFolioCommentsOptions = {
   /** Anchor offsets from layout; re-triggers highlight sync when they shift. */
   anchorPositions: Map<string, number>;
   /** Editor content root used to locate comment-marked run nodes. */
-  editorContentRef: { readonly current: HTMLElement | null };
+  editorContentRef: RefObject<HTMLElement | null>;
 };
 
 export function useFolioComments({
@@ -193,16 +194,20 @@ export function useFolioComments({
 
   useEffect(() => {
     syncCommentHighlightStyles();
+    let secondFrame: number | null = null;
     const firstFrame = requestAnimationFrame(() => {
       syncCommentHighlightStyles();
-      requestAnimationFrame(syncCommentHighlightStyles);
+      secondFrame = requestAnimationFrame(syncCommentHighlightStyles);
     });
     const timeout = setTimeout(syncCommentHighlightStyles, 120);
     return () => {
       cancelAnimationFrame(firstFrame);
+      if (secondFrame !== null) {
+        cancelAnimationFrame(secondFrame);
+      }
       clearTimeout(timeout);
     };
-  }, [comments.length, syncCommentHighlightStyles]);
+  }, [comments, syncCommentHighlightStyles]);
 
   return {
     comments,
