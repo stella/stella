@@ -280,12 +280,14 @@ export const TextBoxExtension = createNodeExtension({
         styles.push(`background-color: ${attrs.fillColor}`);
       }
 
-      // Border/outline
+      // Border/outline. `outlineStyle === "none"` is the explicit no-outline
+      // sentinel: skip even the default editor border so it stays border-free
+      // like its export.
       if (attrs.outlineWidth && attrs.outlineWidth > 0) {
         const style = attrs.outlineStyle || "solid";
         const color = attrs.outlineColor || "#000000";
         styles.push(`border: ${attrs.outlineWidth}px ${style} ${color}`);
-      } else {
+      } else if (attrs.outlineStyle !== "none") {
         // Default thin border for text boxes
         styles.push("border: 1px solid var(--doc-border, #d1d5db)");
       }
