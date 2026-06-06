@@ -88,7 +88,7 @@ export const ChatThreadRecap = ({
 
   if (isFetching) {
     return (
-      <div className="text-muted-foreground/70 flex animate-pulse items-center gap-2 px-1 text-sm italic">
+      <div className="text-foreground-muted flex animate-pulse items-center gap-2 px-1 text-sm italic">
         <ClockIcon aria-hidden className="size-3.5 shrink-0" />
         <span>{t("chat.recapLoading")}</span>
       </div>

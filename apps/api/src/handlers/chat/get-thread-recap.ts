@@ -159,6 +159,7 @@ const getThreadRecap = createSafeRootHandler(
     // the recap still reaches the user (it just regenerates next time).
     const persistResult = await safeDb((tx) =>
       tx
+        // audit: skip — derived recap cache maintenance; no user-authored state change
         .update(chatThreads)
         .set({
           recapText: recap,

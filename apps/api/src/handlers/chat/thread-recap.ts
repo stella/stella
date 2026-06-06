@@ -1,6 +1,9 @@
 import { generateText } from "ai";
 
-import type { ChatMessage } from "@/api/handlers/chat/types";
+import {
+  buildRecapTranscript,
+  type RecapMessage,
+} from "@/api/handlers/chat/thread-recap-transcript";
 import { getModelForRole } from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
@@ -27,7 +30,6 @@ export const RECAP_MIN_MESSAGE_COUNT = 2;
 
 const RECAP_MAX_OUTPUT_TOKENS = 256;
 const RECAP_GENERATION_TIMEOUT_MS = 20_000;
-const RECAP_TRANSCRIPT_MAX_CHARS = 8_000;
 const RECAP_MAX_LENGTH = 700;
 
 const RECAP_SYSTEM_PROMPT = `You write a brief "where you left off" recap for someone returning to an earlier conversation with a legal assistant after a break.
@@ -39,8 +41,6 @@ Write in the same language as the conversation. Be specific: name the actual top
 /** Whether the latest message is old enough to count as a revisit. */
 export const isThreadStaleForRecap = (lastMessageCreatedAt: Date): boolean =>
   Date.now() - lastMessageCreatedAt.getTime() > RECAP_STALENESS_THRESHOLD_MS;
-
-type RecapMessage = Pick<ChatMessage, "role" | "parts">;
 
 /**
  * Whether any turn in the thread was sent in anonymized mode.
@@ -57,55 +57,34 @@ export const threadUsedAnonymization = (
     message.parts.some((part) => part.type === "data-stella-anon-restorations"),
   );
 
-const messageText = (message: RecapMessage): string => {
-  const segments: string[] = [];
-  for (const part of message.parts) {
-    if (part.type === "text" && part.text.trim()) {
-      segments.push(part.text);
-    }
+const stripRecapPrefix = (value: string): string => {
+  const prefix = "recap:";
+  if (value.slice(0, prefix.length).toLowerCase() !== prefix) {
+    return value;
   }
-  return segments.join("\n").replaceAll(/\s+/gu, " ").trim();
+
+  return value.slice(prefix.length).trimStart();
 };
 
-/**
- * Flatten the transcript to plain `User:`/`Assistant:` lines, capped
- * to a char budget filled from the most recent end. When the budget
- * truncates the head, the original ask (first user line) is preserved
- * so the model can still tell what the thread set out to do — which
- * is what "what remains" is measured against.
- */
-const buildRecapTranscript = (messages: readonly RecapMessage[]): string => {
-  const lines: string[] = [];
-  for (const message of messages) {
-    if (message.role !== "user" && message.role !== "assistant") {
-      continue;
-    }
-    const text = messageText(message);
-    if (!text) {
-      continue;
-    }
-    lines.push(`${message.role === "user" ? "User" : "Assistant"}: ${text}`);
+const isWrappingQuote = (char: string): boolean => char === '"' || char === "'";
+
+const trimWrappingQuotes = (value: string): string => {
+  let start = 0;
+  let end = value.length;
+
+  while (start < end && isWrappingQuote(value.charAt(start))) {
+    start += 1;
+  }
+  while (end > start && isWrappingQuote(value.charAt(end - 1))) {
+    end -= 1;
   }
 
-  if (lines.length === 0) {
-    return "";
-  }
-
-  const full = lines.join("\n\n");
-  if (full.length <= RECAP_TRANSCRIPT_MAX_CHARS) {
-    return full;
-  }
-
-  const firstUserLine = lines.find((line) => line.startsWith("User: "));
-  const tail = full.slice(full.length - RECAP_TRANSCRIPT_MAX_CHARS);
-  return firstUserLine && !tail.includes(firstUserLine)
-    ? `${firstUserLine}\n\n[…]\n\n${tail}`
-    : tail;
+  return value.slice(start, end);
 };
 
 const cleanRecapText = (text: string): string | null => {
-  const withoutLabel = text.trim().replace(/^recap:\s*/iu, "");
-  const unquoted = withoutLabel.replace(/^["']+|["']+$/gu, "").trim();
+  const withoutLabel = stripRecapPrefix(text.trim());
+  const unquoted = trimWrappingQuotes(withoutLabel).trim();
   const capped = unquoted.slice(0, RECAP_MAX_LENGTH).trim();
   return capped.length > 0 ? capped : null;
 };
