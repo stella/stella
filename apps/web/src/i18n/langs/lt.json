@@ -473,6 +473,7 @@
     },
     "queuedAttachmentCount": "{count, plural, one {# priedas} few {# priedai} many {# priedo} other {# priedų}}",
     "queuedNotice": "Eilėje — bus išsiųsta, kai baigsis dabartinis atsakymas",
+    "recapLoading": "Apibendrinamas pokalbis…",
     "removeSuggestion": "(pašalinti)",
     "resend": "Siųsti dar kartą",
     "resizeThread": "Keisti pokalbio dydį",

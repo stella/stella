@@ -50,6 +50,7 @@ import {
 } from "@/api/handlers/chat/persist-message";
 import { hydrateMessages, streamChat } from "@/api/handlers/chat/stream-chat";
 import { createChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
+import { shouldMarkThreadUsedAnonymization } from "@/api/handlers/chat/thread-anonymization";
 import { shouldRefreshEmptyThreadTitle } from "@/api/handlers/chat/thread-title";
 import {
   intersectAccessibleWorkspaceIds,
@@ -459,6 +460,7 @@ const sendMessage = createSafeRootHandler(
 
     yield* Result.await(
       persistMessage({
+        acceptedSendMode: body.sendMode,
         recordAuditEvent,
         safeDb,
         threadId: body.threadId,
@@ -1474,6 +1476,7 @@ const getPdfFileRefForModel = (
 };
 
 type InsertMessagesProps = {
+  acceptedSendMode: ChatSendMode | null;
   messages: ChatMessage[];
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
@@ -1539,6 +1542,7 @@ const hydrateAssistantMessageRefs = ({
 };
 
 const insertMessages = async ({
+  acceptedSendMode,
   messages,
   recordAuditEvent,
   safeDb,
@@ -1566,7 +1570,15 @@ const insertMessages = async ({
     );
     await tx
       .update(chatThreads)
-      .set({ updatedAt: new Date() })
+      .set({
+        updatedAt: new Date(),
+        ...(shouldMarkThreadUsedAnonymization({
+          messages,
+          sendMode: acceptedSendMode,
+        })
+          ? { usedAnonymization: true }
+          : {}),
+      })
       .where(eq(chatThreads.id, threadId));
 
     await recordAuditEvent(
@@ -1585,6 +1597,7 @@ const insertMessages = async ({
 };
 
 type PersistMessageProps = {
+  acceptedSendMode?: ChatSendMode | null;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
@@ -1601,6 +1614,7 @@ type PersistMessageProps = {
 };
 
 const persistMessage = async ({
+  acceptedSendMode = null,
   recordAuditEvent,
   safeDb,
   threadId,
@@ -1612,6 +1626,7 @@ const persistMessage = async ({
 }: PersistMessageProps) => {
   if (persistencePlan.type === "insert") {
     return await insertMessages({
+      acceptedSendMode,
       messages: [persistencePlan.message],
       recordAuditEvent,
       safeDb,
@@ -1659,14 +1674,18 @@ const persistMessage = async ({
         .where(eq(chatMessages.id, updatedMessageId));
       await tx
         .update(chatThreads)
-        .set(
-          dataWorkspaceIdsChange === undefined
-            ? { updatedAt: new Date() }
-            : {
-                updatedAt: new Date(),
-                dataWorkspaceIds: dataWorkspaceIdsChange.newDataWorkspaceIds,
-              },
-        )
+        .set({
+          updatedAt: new Date(),
+          ...(dataWorkspaceIdsChange === undefined
+            ? {}
+            : { dataWorkspaceIds: dataWorkspaceIdsChange.newDataWorkspaceIds }),
+          ...(shouldMarkThreadUsedAnonymization({
+            messages: [persistencePlan.message],
+            sendMode: acceptedSendMode,
+          })
+            ? { usedAnonymization: true }
+            : {}),
+        })
         .where(eq(chatThreads.id, threadId));
 
       if (
@@ -1728,6 +1747,7 @@ const persistMessage = async ({
 
     yield* Result.await(
       insertMessages({
+        acceptedSendMode,
         messages: [persistencePlan.insertMessage],
         recordAuditEvent,
         safeDb,

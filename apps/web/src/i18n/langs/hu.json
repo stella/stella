@@ -473,6 +473,7 @@
     },
     "queuedAttachmentCount": "{count, plural, one {# melléklet} other {# melléklet}}",
     "queuedNotice": "Sorba állítva – a jelenlegi válasz befejeztével küldjük el",
+    "recapLoading": "A beszélgetés összefoglalása…",
     "removeSuggestion": "(eltávolítás)",
     "resend": "Újraküldés",
     "resizeThread": "Beszélgetés méretezése",

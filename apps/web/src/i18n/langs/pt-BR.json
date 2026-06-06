@@ -473,6 +473,7 @@
     },
     "queuedAttachmentCount": "{count, plural, one {# anexo} many {# anexos} other {# anexos}}",
     "queuedNotice": "Na fila: será enviada quando a resposta atual terminar",
+    "recapLoading": "Resumindo a conversa…",
     "removeSuggestion": "(remover)",
     "resend": "Reenviar",
     "resizeThread": "Redimensionar conversa",

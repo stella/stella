@@ -473,6 +473,7 @@
     },
     "queuedAttachmentCount": "{count, plural, one {# Anhang} other {# Anhänge}}",
     "queuedNotice": "Eingereiht – wird gesendet, sobald die aktuelle Antwort abgeschlossen ist",
+    "recapLoading": "Unterhaltung wird zusammengefasst…",
     "removeSuggestion": "(entfernen)",
     "resend": "Erneut senden",
     "resizeThread": "Konversation vergrößern oder verkleinern",
