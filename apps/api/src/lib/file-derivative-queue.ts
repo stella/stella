@@ -11,7 +11,7 @@ import {
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
-import { errorTag } from "@/api/lib/errors/utils";
+import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
@@ -169,9 +169,7 @@ export const initFileDerivativeWorker = () => {
   });
 
   worker.on("error", (error) => {
-    logger.error("file_derivative.worker_error", {
-      "error.type": errorTag(error),
-    });
+    logger.error("file_derivative.worker_error", connectionErrorFields(error));
   });
 
   logger.info("file_derivative.worker_started", {

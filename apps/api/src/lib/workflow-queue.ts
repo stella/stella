@@ -24,7 +24,11 @@ import { captureError } from "@/api/lib/analytics";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { acquireCellLocks } from "@/api/lib/cell-lock";
-import { errorTag } from "@/api/lib/errors/utils";
+import {
+  connectionErrorFields,
+  errorSystemFields,
+  errorTag,
+} from "@/api/lib/errors/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import {
@@ -1230,7 +1234,7 @@ export const initWorkflowWorker = () => {
   });
 
   worker.on("error", (error) => {
-    logger.error("workflow.worker_error", { "error.type": errorTag(error) });
+    logger.error("workflow.worker_error", connectionErrorFields(error));
   });
 
   logger.info("workflow.worker_started", {
@@ -1246,9 +1250,7 @@ export const initWorkflowWorker = () => {
     void reconcileOrphanedWorkflows({ scanPendingCells }).catch(
       (error: unknown) => {
         captureError(error);
-        logger.error("workflow.reconcile_failed", {
-          "error.type": errorTag(error),
-        });
+        logger.error("workflow.reconcile_failed", errorSystemFields(error));
       },
     );
   };
