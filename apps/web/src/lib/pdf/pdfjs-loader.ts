@@ -18,4 +18,9 @@ export const loadPdfjs = async (): Promise<typeof PDFJS> => {
   return pdfjs;
 };
 
-export type { PDFDocumentProxy, PDFPageProxy, PageViewport } from "pdfjs-dist";
+export type {
+  PDFDocumentLoadingTask,
+  PDFDocumentProxy,
+  PDFPageProxy,
+  PageViewport,
+} from "pdfjs-dist";

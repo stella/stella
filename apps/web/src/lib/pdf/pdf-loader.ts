@@ -4,18 +4,24 @@ import type * as PDFJS from "pdfjs-dist";
 import { DEFAULT_PDF_WIDTH } from "@/lib/pdf/consts";
 import { parseAttachments } from "@/lib/pdf/parse-attachments";
 import type { PDFAttachment } from "@/lib/pdf/parse-attachments";
+import { destroyPDFDocument } from "@/lib/pdf/pdf-cleanup";
 import type { PageInfo } from "@/lib/pdf/pdf-context";
 import { PDFViewerError } from "@/lib/pdf/pdf-errors";
 import type { PDFViewerCode } from "@/lib/pdf/pdf-errors";
 import { loadPdfjs } from "@/lib/pdf/pdfjs-loader";
-import type { PDFDocumentProxy, PDFPageProxy } from "@/lib/pdf/pdfjs-loader";
+import type {
+  PDFDocumentLoadingTask,
+  PDFDocumentProxy,
+  PDFPageProxy,
+} from "@/lib/pdf/pdfjs-loader";
 import { getPageId } from "@/lib/pdf/utils";
 
 type PasswordResponses = typeof PDFJS.PasswordResponses;
 
 export type PDFDocument = {
+  loadingTask: PDFDocumentLoadingTask;
   document: PDFDocumentProxy;
-  attachmentDocuments: PDFDocumentProxy[];
+  attachmentLoadingTasks: PDFDocumentLoadingTask[];
   pages: Map<string, PageInfo>;
   attachmentLabels: Map<string, string>;
   isXfa: boolean;
@@ -62,9 +68,11 @@ const parsePasswordException = (
 const loadPortfolioPages = async (
   instanceId: string,
   pdfAttachments: PDFAttachment[],
+  // Accumulator owned by the caller: tasks are pushed before awaiting so a
+  // mid-loop failure still lets loadPDF's catch destroy every started task.
+  attachmentLoadingTasks: PDFDocumentLoadingTask[],
 ): Promise<{
   documentPages: Promise<{ id: string; proxy: PDFPageProxy }>[];
-  attachmentDocuments: PDFDocumentProxy[];
   attachmentLabels: Map<string, string>;
 }> => {
   const { getDocument } = await loadPdfjs();
@@ -72,17 +80,17 @@ const loadPortfolioPages = async (
     id: string;
     proxy: PDFPageProxy;
   }>[] = [];
-  const attachmentDocuments: PDFDocumentProxy[] = [];
   const attachmentLabels = new Map<string, string>();
 
   let pageCounter = 1;
   let attIndex = 1;
   for (const att of pdfAttachments) {
-    const attDoc = await getDocument({
+    const attLoadingTask = getDocument({
       data: att.content,
       enableXfa: true,
-    }).promise;
-    attachmentDocuments.push(attDoc);
+    });
+    attachmentLoadingTasks.push(attLoadingTask);
+    const attDoc = await attLoadingTask.promise;
 
     const firstPageId = getPageId(instanceId, pageCounter);
     attachmentLabels.set(firstPageId, `${attIndex}. ${att.filename}`);
@@ -97,7 +105,7 @@ const loadPortfolioPages = async (
     attIndex++;
   }
 
-  return { documentPages, attachmentDocuments, attachmentLabels };
+  return { documentPages, attachmentLabels };
 };
 
 type LoadPDFProps = {
@@ -129,7 +137,8 @@ export const loadPDF = async ({
         ...(password && { password }),
       });
 
-      return await loadingTask.promise;
+      const document = await loadingTask.promise;
+      return { loadingTask, document };
     },
     catch: (error) => {
       const passwordException = parsePasswordException(
@@ -157,8 +166,8 @@ export const loadPDF = async ({
     return Result.err(documentResult.error);
   }
 
-  const document = documentResult.value;
-  const attachmentDocuments: PDFDocumentProxy[] = [];
+  const { loadingTask, document } = documentResult.value;
+  const attachmentLoadingTasks: PDFDocumentLoadingTask[] = [];
 
   return Result.tryPromise({
     try: async () => {
@@ -174,9 +183,12 @@ export const loadPDF = async ({
       let attachmentLabels: Map<string, string> = new Map<string, string>();
 
       if (isPortfolio) {
-        const portfolio = await loadPortfolioPages(fileId, pdfAttachments);
+        const portfolio = await loadPortfolioPages(
+          fileId,
+          pdfAttachments,
+          attachmentLoadingTasks,
+        );
         documentPages = portfolio.documentPages;
-        attachmentDocuments.push(...portfolio.attachmentDocuments);
         attachmentLabels = portfolio.attachmentLabels;
       } else {
         for (let i = 1; i <= document.numPages; i++) {
@@ -192,7 +204,7 @@ export const loadPDF = async ({
       const firstPage = pagesResult.at(0);
 
       if (!firstPage) {
-        await destroyPDFDocument({ document, attachmentDocuments });
+        await destroyPDFDocument({ loadingTask, attachmentLoadingTasks });
         return Result.err(
           new PDFViewerError({
             code: "NO_RENDERABLE_PAGES",
@@ -230,14 +242,15 @@ export const loadPDF = async ({
       );
 
       return Result.ok({
+        loadingTask,
         document,
-        attachmentDocuments,
+        attachmentLoadingTasks,
         pages,
         attachmentLabels,
         isXfa,
         baseScale,
         toJSON: () => ({
-          attachmentCount: attachmentDocuments.length,
+          attachmentCount: attachmentLoadingTasks.length,
           attachmentLabelCount: attachmentLabels.size,
           baseScale,
           isXfa,
@@ -246,7 +259,7 @@ export const loadPDF = async ({
       });
     },
     catch: async (error) => {
-      await destroyPDFDocument({ document, attachmentDocuments });
+      await destroyPDFDocument({ loadingTask, attachmentLoadingTasks });
       return new PDFViewerError({
         code: "LOAD_FAILED",
         message: error instanceof Error ? error.message : "Failed to load PDF",
@@ -254,14 +267,4 @@ export const loadPDF = async ({
       });
     },
   }).then(Result.flatten);
-};
-
-export const destroyPDFDocument = async (data: {
-  document: PDFDocumentProxy;
-  attachmentDocuments: PDFDocumentProxy[];
-}) => {
-  await Promise.all([
-    data.document.destroy(),
-    ...data.attachmentDocuments.map(async (d) => await d.destroy()),
-  ]);
 };

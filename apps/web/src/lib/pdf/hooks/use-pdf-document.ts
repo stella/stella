@@ -5,9 +5,10 @@ import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { Result } from "better-result";
 
 import { STALE_TIME } from "@/lib/consts";
+import { destroyPDFDocument } from "@/lib/pdf/pdf-cleanup";
 import type { PDFViewerError } from "@/lib/pdf/pdf-errors";
 import type { PDFDocument } from "@/lib/pdf/pdf-loader";
-import { destroyPDFDocument, loadPDF } from "@/lib/pdf/pdf-loader";
+import { loadPDF } from "@/lib/pdf/pdf-loader";
 import type { QueryOptionsInput } from "@/lib/react-query";
 
 type PDFDocumentPageKey = {
