@@ -19,6 +19,7 @@ import {
   bandFragmentX,
   bandTopContentY,
   floatingTextBoxReservesBand,
+  isPageFrameRelativeAnchor,
 } from "./textBoxFlow";
 import type {
   FlowBlock,
@@ -284,7 +285,13 @@ export function layoutDocument(
 
   // Process each block, tracking section break index with a counter (O(1) per break)
   let sectionIdx = 0;
+  // Section page geometry for resolving page/margin-pinned topAndBottom bands.
+  // The measure pass (extractFloatingZones) uses the section config, not the
+  // page's possibly-different first-page margins, so layout must too or the
+  // reserved band and painted box desync. eigenpal #694.
   let activeSectionMarginTop = initialConfig.margins.top;
+  let activeSectionPageHeight = initialConfig.pageSize.h;
+  let activeSectionMarginBottom = initialConfig.margins.bottom;
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i]!; // SAFETY: i < blocks.length
     const measure = measures[i]!; // SAFETY: measures.length === blocks.length (validated above)
@@ -344,12 +351,12 @@ export function layoutDocument(
         break;
 
       case "textBox":
-        layoutTextBox(
-          block as TextBoxBlock,
-          measure as TextBoxMeasure,
+        layoutTextBox(block as TextBoxBlock, measure as TextBoxMeasure, {
           paginator,
-          activeSectionMarginTop,
-        );
+          sectionMarginTop: activeSectionMarginTop,
+          sectionPageHeight: activeSectionPageHeight,
+          sectionMarginBottom: activeSectionMarginBottom,
+        });
         break;
 
       case "pageBreak":
@@ -375,6 +382,8 @@ export function layoutDocument(
           sectionIdx + 1,
         );
         activeSectionMarginTop = nextSectionConfig.margins.top;
+        activeSectionPageHeight = nextSectionConfig.pageSize.h;
+        activeSectionMarginBottom = nextSectionConfig.margins.bottom;
         sectionIdx++;
         break;
       }
@@ -1088,14 +1097,25 @@ function layoutAnchoredImage(
   state.page.fragments.push(fragment);
 }
 
+type LayoutTextBoxOptions = {
+  paginator: ReturnType<typeof createPaginator>;
+  sectionMarginTop: number;
+  sectionPageHeight: number;
+  sectionMarginBottom: number;
+};
+
 /**
  * Layout a text box block onto pages.
  */
 function layoutTextBox(
   block: TextBoxBlock,
   measure: TextBoxMeasure,
-  paginator: ReturnType<typeof createPaginator>,
-  sectionMarginTop: number,
+  {
+    paginator,
+    sectionMarginTop,
+    sectionPageHeight,
+    sectionMarginBottom,
+  }: LayoutTextBoxOptions,
 ): void {
   // A page/margin-pinned topAndBottom band (e.g. a title banner) floats to the
   // top of its page; the reserved band in the measure pass pushes body text
@@ -1111,7 +1131,12 @@ function layoutTextBox(
     // own top margin (`state.topMargin`) to convert. Using `state.topMargin`
     // inside the resolver instead would desync the box from its band on a
     // title page whose first-page top margin differs from the section margin.
-    const bandTop = bandTopContentY(block.position?.vertical, sectionMarginTop);
+    const bandTop = bandTopContentY(block.position?.vertical, {
+      pageHeight: sectionPageHeight,
+      marginTop: sectionMarginTop,
+      marginBottom: sectionMarginBottom,
+      boxHeight: measure.height,
+    });
     // Honor the box's horizontal anchor (align center/right, page-relative
     // offset) instead of always pinning to the column's left edge. The band is
     // full-width regardless, so this only moves where the box paints.
@@ -1156,15 +1181,16 @@ function layoutTextBox(
 }
 
 /**
- * A topAndBottom text box whose vertical anchor is page/margin-relative — it
- * floats to the page top rather than flowing in document order.
+ * A topAndBottom text box whose vertical anchor pins it to the page frame
+ * (page/margin/margin-strip) — it floats to a fixed page position rather than
+ * flowing in document order. Must agree with the measure pass's band extraction
+ * (extractFloatingZones), which uses the same predicate. eigenpal #694.
  */
 function isPagePinnedBandTextBox(block: TextBoxBlock): boolean {
   if (!floatingTextBoxReservesBand(block)) {
     return false;
   }
-  const relativeTo = block.position?.vertical?.relativeTo;
-  return relativeTo === "page" || relativeTo === "margin";
+  return isPageFrameRelativeAnchor(block.position?.vertical?.relativeTo);
 }
 
 /**

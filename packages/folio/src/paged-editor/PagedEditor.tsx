@@ -90,6 +90,7 @@ import type { ColumnLayout, SectionLayoutConfig } from "../core/layout-engine";
 import {
   bandTopContentY,
   floatingTextBoxReservesBand,
+  isPageFrameRelativeAnchor,
 } from "../core/layout-engine/textBoxFlow";
 import type {
   Layout,
@@ -2082,15 +2083,30 @@ function perBlockNumberValue(
   return value;
 }
 
+// Page geometry the band extraction needs to resolve page/margin-pinned
+// topAndBottom anchors (bottom-strip frames, centered/bottom align). Per-block
+// because sections can vary page size and margins. eigenpal #694.
+type BandPageGeometry = {
+  pageHeight: number | number[];
+  marginBottom: number | number[];
+};
+
 function extractFloatingZones(
   blocks: FlowBlock[],
   contentWidth: number,
   marginTop: number | number[] = 0,
+  pageGeometry: BandPageGeometry = { pageHeight: 0, marginBottom: 0 },
 ): FloatingZoneWithAnchor[] {
   const zones: FloatingZoneWithAnchor[] = [];
   const defaultMarginTop = Array.isArray(marginTop)
     ? (marginTop[0] ?? 0)
     : marginTop;
+  const defaultPageHeight = Array.isArray(pageGeometry.pageHeight)
+    ? (pageGeometry.pageHeight[0] ?? 0)
+    : pageGeometry.pageHeight;
+  const defaultMarginBottom = Array.isArray(pageGeometry.marginBottom)
+    ? (pageGeometry.marginBottom[0] ?? 0)
+    : pageGeometry.marginBottom;
 
   for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
     const block = blocks[blockIndex]!; // SAFETY: blockIndex < blocks.length
@@ -2253,8 +2269,7 @@ function extractFloatingZones(
       continue;
     }
     const v = tb.position?.vertical;
-    const pagePinned = v?.relativeTo === "page" || v?.relativeTo === "margin";
-    if (!pagePinned) {
+    if (!isPageFrameRelativeAnchor(v?.relativeTo)) {
       continue;
     }
 
@@ -2267,7 +2282,20 @@ function extractFloatingZones(
       defaultMarginTop,
     );
     // Shared with layoutTextBox so the reserved band and the painted box agree.
-    const rawTop = bandTopContentY(v, blockMarginTop);
+    const rawTop = bandTopContentY(v, {
+      pageHeight: perBlockNumberValue(
+        pageGeometry.pageHeight,
+        blockIndex,
+        defaultPageHeight,
+      ),
+      marginTop: blockMarginTop,
+      marginBottom: perBlockNumberValue(
+        pageGeometry.marginBottom,
+        blockIndex,
+        defaultMarginBottom,
+      ),
+      boxHeight: height,
+    });
     const bottomY = rawTop + height + distBottom;
     if (bottomY <= 0) {
       continue;
@@ -2401,6 +2429,7 @@ export function measureBlocks(
   blocks: FlowBlock[],
   contentWidth: number | number[],
   marginTop: number | number[] = 0,
+  pageGeometry: BandPageGeometry = { pageHeight: 0, marginBottom: 0 },
 ): Measure[] {
   const defaultWidth = Array.isArray(contentWidth)
     ? (contentWidth[0] ?? 0)
@@ -2410,6 +2439,7 @@ export function measureBlocks(
     blocks,
     defaultWidth,
     marginTop,
+    pageGeometry,
   );
 
   // Margin-relative zones (positioned relative to page/margin) on the same vertical
@@ -3144,7 +3174,10 @@ export function PagedEditor(
             : null;
         const newMeasures =
           incrementalResult?.measures ??
-          measureBlocks(newBlocks, blockWidths, blockMeasureInputs.marginTops);
+          measureBlocks(newBlocks, blockWidths, blockMeasureInputs.marginTops, {
+            pageHeight: blockMeasureInputs.pageHeights,
+            marginBottom: blockMeasureInputs.marginBottoms,
+          });
         layoutArtifactsRef.current = {
           blocks: newBlocks,
           blockWidths,

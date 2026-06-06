@@ -5,6 +5,8 @@
  * Converts document blocks + measurements into positioned fragments on pages.
  */
 
+import type { ImagePosition } from "@stll/docx-core/model";
+
 /**
  * Unique identifier for a block in the document.
  * Format: typically `${index}-${type}` or just the block index.
@@ -135,16 +137,21 @@ export type TabRun = RunFormatting & {
 /**
  * Position data for floating/anchored images.
  */
+// OOXML drawing anchors (`ST_RelFromH`/`ST_RelFromV`, `ST_AlignH`/`ST_AlignV`).
+// Mirrors the typed `ImagePositionAttrs` (schema/nodes.ts) rather than widening
+// to `string`, so band/anchor resolution can switch exhaustively over the
+// finite value set. The DOCX parser already narrows raw XML to these unions via
+// `narrowEnum`, so no runtime validation is needed here.
 export type ImageRunPosition = {
   horizontal?: {
-    relativeTo?: string;
+    relativeTo?: NonNullable<ImagePosition["horizontal"]["relativeTo"]>;
     posOffset?: number;
-    align?: string;
+    align?: NonNullable<ImagePosition["horizontal"]["alignment"]>;
   };
   vertical?: {
-    relativeTo?: string;
+    relativeTo?: NonNullable<ImagePosition["vertical"]["relativeTo"]>;
     posOffset?: number;
-    align?: string;
+    align?: NonNullable<ImagePosition["vertical"]["alignment"]>;
   };
 };
 

@@ -11,6 +11,11 @@ type ComputePerBlockMeasureInput = {
 type PerBlockMeasureInputs = {
   widths: number[];
   marginTops: number[];
+  // Page geometry per block, used to resolve page/margin-pinned topAndBottom
+  // bands (`bandTopContentY`) in the measure pass. Sections can vary page size
+  // and margins, so these are per-block like `widths`/`marginTops`.
+  pageHeights: number[];
+  marginBottoms: number[];
 };
 
 const SINGLE_COLUMN_LAYOUT: ColumnLayout = { count: 1, gap: 0 };
@@ -60,6 +65,8 @@ export function computePerBlockMeasureInputs({
   let sectionIdx = 0;
   const widths: number[] = [];
   const marginTops: number[] = [];
+  const pageHeights: number[] = [];
+  const marginBottoms: number[] = [];
 
   for (let i = 0; i < blocks.length; i++) {
     const config = sectionConfigs[sectionIdx] ?? finalConfig;
@@ -67,11 +74,13 @@ export function computePerBlockMeasureInputs({
       colWidth(contentWidth(config), config.columns ?? SINGLE_COLUMN_LAYOUT),
     );
     marginTops.push(config.margins.top);
+    pageHeights.push(config.pageSize.h);
+    marginBottoms.push(config.margins.bottom);
 
     if (sectionIdx < breakIndices.length && i === breakIndices[sectionIdx]) {
       sectionIdx++;
     }
   }
 
-  return { widths, marginTops };
+  return { widths, marginTops, pageHeights, marginBottoms };
 }

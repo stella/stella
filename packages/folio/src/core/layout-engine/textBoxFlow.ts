@@ -40,21 +40,122 @@ export function floatingTextBoxReservesBand(block: TextBoxFlowAttrs): boolean {
   return isFloatingTextBoxBlock(block) && block.wrapType === "topAndBottom";
 }
 
+type VerticalRelativeTo = NonNullable<
+  ImageRunPosition["vertical"]
+>["relativeTo"];
+type VerticalAlign = NonNullable<ImageRunPosition["vertical"]>["align"];
+
+/**
+ * `true` when a vertical anchor pins the box to a fixed position on the page
+ * (page body, text margin, or a margin strip) rather than to the surrounding
+ * text flow. A `topAndBottom` box with such an anchor reserves a full-width
+ * band; `paragraph`/`line` anchors keep folio's in-flow handling. Exhaustive
+ * over the OOXML `ST_RelFromV` set so a new relativeFrom value forces a decision
+ * here instead of silently falling through. eigenpal #694.
+ */
+export function isPageFrameRelativeAnchor(
+  relativeTo: VerticalRelativeTo,
+): boolean {
+  switch (relativeTo) {
+    case "page":
+    case "margin":
+    case "topMargin":
+    case "bottomMargin":
+    case "insideMargin":
+    case "outsideMargin":
+      return true;
+    case "paragraph":
+    case "line":
+    case undefined:
+      return false;
+    default:
+      relativeTo satisfies never;
+      return false;
+  }
+}
+
+/** Page geometry needed to resolve a band box's vertical anchor. */
+export type BandVerticalGeometry = {
+  pageHeight: number;
+  marginTop: number;
+  marginBottom: number;
+  boxHeight: number;
+};
+
+/**
+ * Page-absolute `[top, bottom]` (px) of the frame a vertical anchor positions
+ * within. `insideMargin`/`outsideMargin` map to the top/bottom margin strips
+ * (vertical page parity is not modelled); flow-relative anchors fall back to the
+ * content box, which is also where a page-pinned band with no usable anchor
+ * sits. eigenpal #694.
+ */
+function bandVerticalFrame(
+  relativeTo: VerticalRelativeTo,
+  geometry: BandVerticalGeometry,
+): { top: number; bottom: number } {
+  const { pageHeight, marginTop, marginBottom } = geometry;
+  switch (relativeTo) {
+    case "page":
+      return { top: 0, bottom: pageHeight };
+    case "topMargin":
+    case "insideMargin":
+      return { top: 0, bottom: marginTop };
+    case "bottomMargin":
+    case "outsideMargin":
+      return { top: pageHeight - marginBottom, bottom: pageHeight };
+    case "margin":
+    case "paragraph":
+    case "line":
+    case undefined:
+      return { top: marginTop, bottom: pageHeight - marginBottom };
+    default:
+      relativeTo satisfies never;
+      return { top: marginTop, bottom: pageHeight - marginBottom };
+  }
+}
+
+/** Page-absolute top Y (px) of the box within its frame for a bare `align`. */
+function alignedFrameTop(
+  align: VerticalAlign,
+  frame: { top: number; bottom: number },
+  boxHeight: number,
+): number {
+  switch (align) {
+    case "center":
+      return frame.top + (frame.bottom - frame.top - boxHeight) / 2;
+    case "bottom":
+    case "outside":
+      return frame.bottom - boxHeight;
+    case "top":
+    case "inside":
+    case undefined:
+      return frame.top;
+    default:
+      align satisfies never;
+      return frame.top;
+  }
+}
+
 /**
  * Content-area top Y (px) of a `topAndBottom` band box's reserved band, resolved
  * from its OOXML vertical anchor. Shared by the measure pass
  * (`extractFloatingZones`) and the layout pass (`layoutTextBox`) so the reserved
- * band and the painted box land at the same Y — a page-relative offset is
- * measured from the page edge (subtract the top margin); a margin-relative
- * offset (or no offset) is already content-relative. Ported from eigenpal #694.
+ * band and the painted box land at the same Y. Within the anchor's frame an
+ * explicit `posOffset` wins, then `align` (top/center/bottom/inside/outside);
+ * otherwise the box sits at the frame top. The result is content-relative
+ * (0 = content top), so a page/margin-strip frame is converted by subtracting
+ * the top margin. Ported from eigenpal #694.
  */
 export function bandTopContentY(
   vertical: ImageRunPosition["vertical"],
-  marginTop: number,
+  geometry: BandVerticalGeometry,
 ): number {
-  const offset =
-    vertical?.posOffset !== undefined ? emuToPixels(vertical.posOffset) : 0;
-  return vertical?.relativeTo === "page" ? offset - marginTop : offset;
+  const frame = bandVerticalFrame(vertical?.relativeTo, geometry);
+  const pageTop =
+    vertical?.posOffset !== undefined
+      ? frame.top + emuToPixels(vertical.posOffset)
+      : alignedFrameTop(vertical?.align, frame, geometry.boxHeight);
+  return pageTop - geometry.marginTop;
 }
 
 /** Page geometry needed to resolve a band box's horizontal anchor. */

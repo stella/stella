@@ -58,6 +58,12 @@ function withHorizontal(
   return { ...block, position: { ...block.position, horizontal } };
 }
 
+function verticalBanner(
+  vertical: NonNullable<NonNullable<TextBoxBlock["position"]>["vertical"]>,
+): TextBoxBlock {
+  return { ...banner(undefined), position: { vertical } };
+}
+
 const boxMeasure: TextBoxMeasure = {
   kind: "textBox",
   width: 600,
@@ -154,6 +160,42 @@ describe("topAndBottom band text box layout", () => {
       | undefined;
     // y = topMargin + (emuToPixels(offset) - topMargin) = emuToPixels(offset) = 96
     expect(box?.y).toBe(96);
+  });
+
+  test("centers a page-aligned banner within the page frame", () => {
+    const frags = textBoxFragments(
+      [verticalBanner({ relativeTo: "page", align: "center" }), para("p")],
+      [boxMeasure, paraMeasure],
+    );
+    const box = frags.find((f) => f.kind === "textBox") as
+      | TextBoxFragment
+      | undefined;
+    // page frame [0, 1056], 100px box → (1056 - 100) / 2 = 478.
+    expect(box?.y).toBe(478);
+  });
+
+  test("pins a bottom-aligned margin banner to the content bottom", () => {
+    const frags = textBoxFragments(
+      [verticalBanner({ relativeTo: "margin", align: "bottom" }), para("p")],
+      [boxMeasure, paraMeasure],
+    );
+    const box = frags.find((f) => f.kind === "textBox") as
+      | TextBoxFragment
+      | undefined;
+    // content frame [96, 960], 100px box → 960 - 100 = 860.
+    expect(box?.y).toBe(860);
+  });
+
+  test("places a bottomMargin banner in the bottom margin strip", () => {
+    const frags = textBoxFragments(
+      [verticalBanner({ relativeTo: "bottomMargin" }), para("p")],
+      [boxMeasure, paraMeasure],
+    );
+    const box = frags.find((f) => f.kind === "textBox") as
+      | TextBoxFragment
+      | undefined;
+    // bottom margin strip [960, 1056] top → 960.
+    expect(box?.y).toBe(960);
   });
 
   test("paragraph-anchored topAndBottom box stays in flow (unchanged)", () => {
