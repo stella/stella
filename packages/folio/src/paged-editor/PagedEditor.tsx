@@ -170,6 +170,7 @@ import type { AutocompleteCaretRect } from "./AutocompleteCaretOverlay";
 import {
   computeFirstPageHeaderFooterMarginExtender,
   computeHeaderFooterMarginExtender,
+  extendSectionBreakMargins,
 } from "./headerFooterMargins";
 import {
   createHiddenEditorState,
@@ -3252,43 +3253,57 @@ export function PagedEditor(
           hfOptions,
         );
 
+        // Rendered H/F content is shared across every extender; only the
+        // page size (body vs. a section's own) and the mode (default vs.
+        // first-page) vary.
+        const hfExtenderContent = {
+          headerContent: headerContentForRender,
+          footerContent: footerContentForRender,
+          firstPageHeaderContent: firstPageHeaderForRender,
+          firstPageFooterContent: firstPageFooterForRender,
+        };
+        const hfWarn = (msg: string): void => {
+          // eslint-disable-next-line no-console
+          console.warn(`[PagedEditor] ${msg}`);
+        };
         // Default extender — applied to pages 2+ of every section. It
         // ignores firstPage H/F so a `<w:titlePg/>` section's
         // overflowing first-page header doesn't push body content down
         // on every subsequent page.
         const extendForHfOverflow = computeHeaderFooterMarginExtender({
-          headerContent: headerContentForRender,
-          footerContent: footerContentForRender,
-          firstPageHeaderContent: firstPageHeaderForRender,
-          firstPageFooterContent: firstPageFooterForRender,
+          ...hfExtenderContent,
+          pageSize,
+          warn: hfWarn,
         });
         // First-page extender — used only for page 1 of a titlePg
         // section so the title page's larger header reservation is
         // honored without leaking onto pages 2+.
         const extendForFirstPage = computeFirstPageHeaderFooterMarginExtender({
-          headerContent: headerContentForRender,
-          footerContent: footerContentForRender,
-          firstPageHeaderContent: firstPageHeaderForRender,
-          firstPageFooterContent: firstPageFooterForRender,
+          ...hfExtenderContent,
+          pageSize,
+          warn: hfWarn,
         });
         const effectiveMargins = extendForHfOverflow(margins);
         const effectiveFirstPageMargins = hasTitlePg
           ? extendForFirstPage(margins)
           : undefined;
-        // Section-break blocks carry their own `sb.margins` from
+        // Section-break blocks carry their own `pageSize`/`margins` from
         // `<w:sectPr>` and the layout engine prefers those over the
-        // body-level fallback. Apply the extension to each one too,
-        // otherwise a footer that overflows on one section silently
-        // re-overlaps body text on the next. (Eigenpal #400.)
-        for (const block of newBlocks) {
-          if (block.kind !== "sectionBreak") {
-            continue;
-          }
-          const sb = block as SectionBreakBlock;
-          if (sb.margins) {
-            sb.margins = extendForHfOverflow(sb.margins);
-          }
-        }
+        // body-level fallback. Extend each against its own resolved page
+        // so an overflowing footer never re-overlaps body text on the next
+        // section. (Eigenpal #400.)
+        extendSectionBreakMargins(
+          newBlocks.filter(
+            (block): block is SectionBreakBlock =>
+              block.kind === "sectionBreak",
+          ),
+          {
+            content: hfExtenderContent,
+            bodyPageSize: pageSize,
+            bodyMargins: effectiveMargins,
+            warn: hfWarn,
+          },
+        );
         recordPhaseDuration("header-footer", phaseStartedAt);
 
         // Compute per-block widths + band geometry from the EFFECTIVE margins
