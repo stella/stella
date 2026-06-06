@@ -12,6 +12,7 @@ import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 
 const TITLE_MAX_LENGTH = 60;
 const TITLE_CONTEXT_MAX_LENGTH = 500;
@@ -84,7 +85,7 @@ Assistant: ${assistantText}`,
       });
 
       if (!currentThread || currentThread.titleSource !== "user") {
-        return;
+        return false;
       }
 
       const updatedRows = await tx
@@ -99,7 +100,7 @@ Assistant: ${assistantText}`,
         .returning({ id: chatThreads.id });
 
       if (updatedRows.length === 0) {
-        return;
+        return false;
       }
 
       await recordAuditEvent(tx, {
@@ -112,10 +113,19 @@ Assistant: ${assistantText}`,
           titleSource: { old: currentThread.titleSource, new: "ai" },
         },
       });
+
+      return true;
     });
 
     if (Result.isError(updateResult)) {
       captureError(updateResult.error, { threadId });
+      return;
+    }
+
+    // Re-index so the new AI-generated title is searchable. Fire-and-
+    // forget: title generation is already a best-effort side path.
+    if (updateResult.value) {
+      upsertChatThreadSearchDocument(threadId).catch(captureError);
     }
   } catch (error) {
     aiAnalytics.captureError(error);

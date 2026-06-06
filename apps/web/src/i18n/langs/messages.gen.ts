@@ -1746,6 +1746,7 @@ type Messages = {
     "escKey": "ESC";
     "kinds": {
       "caseLaw": "Case law";
+      "chat": "Chat";
       "contact": "Contact";
       "document": "Document";
       "folder": "Folder";

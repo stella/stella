@@ -13,6 +13,7 @@ import {
   LinkIcon,
   LoaderIcon,
   MessageSquareIcon,
+  MessagesSquareIcon,
   SquareCheckIcon,
   UserIcon,
   WandSparklesIcon,
@@ -109,6 +110,7 @@ const KIND_ICONS = {
   task: SquareCheckIcon,
   message: MessageSquareIcon,
   link: LinkIcon,
+  chat: MessagesSquareIcon,
 } as const satisfies Record<GlobalSearchResultType, typeof FileTextIcon>;
 
 const KIND_TRANSLATION_KEYS = {
@@ -120,6 +122,7 @@ const KIND_TRANSLATION_KEYS = {
   task: "search.kinds.task",
   message: "search.kinds.message",
   link: "search.kinds.link",
+  chat: "search.kinds.chat",
 } as const satisfies Record<GlobalSearchResultType, TranslationKey>;
 
 const SEARCH_KIND_TYPES = [
@@ -131,6 +134,7 @@ const SEARCH_KIND_TYPES = [
   "task",
   "message",
   "link",
+  "chat",
 ] as const satisfies readonly GlobalSearchResultType[];
 
 const TIME_PRESET_TRANSLATION_KEYS = {
@@ -152,6 +156,7 @@ const isSearchKindOption = (
     case "task":
     case "message":
     case "link":
+    case "chat":
       return true;
     default:
       return false;
@@ -712,6 +717,14 @@ export const SearchDialog = ({
       await navigate({
         to: "/workspaces/$workspaceId",
         params: { workspaceId: hit.workspaceId },
+      });
+      return;
+    }
+
+    if (hit.type === "chat") {
+      await navigate({
+        to: "/chat/$threadId",
+        params: { threadId: hit.threadId },
       });
       return;
     }
@@ -1649,6 +1662,8 @@ const SearchResultItem = ({
   } else if (hit.type === "case-law") {
     meta = "";
   } else if (hit.type === "matter") {
+    meta = compactMeta([hit.workspaceName, formatted]);
+  } else if (hit.type === "chat") {
     meta = compactMeta([hit.workspaceName, formatted]);
   } else {
     const lastEditedByName =

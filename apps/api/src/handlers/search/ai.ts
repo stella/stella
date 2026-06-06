@@ -33,6 +33,7 @@ import {
   brandPersistedEntityId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
+import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import { searchGlobal } from "@/api/lib/search/index-global";
 import {
   buildSearchTsQuery,
@@ -141,7 +142,14 @@ type SearchAIContext = {
 
 type SearchSummaryContext = SearchAIContext & {
   accessibleWorkspaceIds: SafeId<"workspace">[];
+  userId: SafeId<"user">;
 };
+
+// Chat threads are searchable but are not citable summary sources:
+// a conversation is not a document to excerpt. They are dropped from
+// the AI summary context, so everything downstream sees only the
+// citable hit variants.
+type CitableSearchHit = Exclude<GlobalSearchHit, { type: "chat" }>;
 
 type SearchResultContext = {
   id: string;
@@ -150,7 +158,7 @@ type SearchResultContext = {
   type: string;
   headline: string | null;
   content: string;
-  hit: GlobalSearchHit;
+  hit: CitableSearchHit;
 };
 
 type SearchSummaryCitation = {
@@ -357,6 +365,7 @@ export const refineSearchQuery = async ({
 export const summarizeSearchResults = async ({
   body,
   organizationId,
+  userId,
   accessibleWorkspaceIds,
   orgAIConfig,
   promptCachingEnabled,
@@ -383,6 +392,7 @@ export const summarizeSearchResults = async ({
     accessibleWorkspaceIds,
     filters: body,
     organizationId,
+    userId,
     selectedWorkspaceIds: resolved.ids,
     scopedDb,
   });
@@ -541,6 +551,7 @@ export const createSearchSummaryChatThread = async ({
     accessibleWorkspaceIds,
     filters: body,
     organizationId,
+    userId,
     selectedWorkspaceIds: resolved.ids,
     scopedDb,
     search,
@@ -670,6 +681,10 @@ export const createSearchSummaryChatThread = async ({
     return status(500, { message: "Failed to create chat thread" });
   }
 
+  // Index the freshly seeded summary thread so it is findable in
+  // global search. Fire-and-forget: indexing must not fail the create.
+  upsertChatThreadSearchDocument(threadId).catch(captureError);
+
   return { threadId };
 };
 
@@ -677,6 +692,7 @@ const loadSummaryContexts = async ({
   accessibleWorkspaceIds,
   filters,
   organizationId,
+  userId,
   search = searchGlobal,
   selectedWorkspaceIds,
   scopedDb,
@@ -693,6 +709,7 @@ const loadSummaryContexts = async ({
     | "updatedTo"
   >;
   organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
   search?: typeof searchGlobal;
   selectedWorkspaceIds: readonly SafeId<"workspace">[];
   scopedDb: ScopedDb;
@@ -700,6 +717,7 @@ const loadSummaryContexts = async ({
   const searchResult = await search({
     query: filters.query,
     organizationId,
+    userId,
     accessibleWorkspaceIds,
     selectedWorkspaceIds,
     types: filters.types,
@@ -768,7 +786,7 @@ const buildChatSummaryText = ({
 };
 
 const extractHitWorkspaceId = (
-  hit: GlobalSearchHit,
+  hit: CitableSearchHit,
 ): SafeId<"workspace"> | null => {
   if (hit.type === "case-law" || hit.type === "contact") {
     return null;
@@ -826,6 +844,12 @@ const buildSearchResultContexts = async ({
       break;
     }
 
+    // Chat threads are not citable summary sources; skip them so the
+    // remaining work narrows to the citable variants.
+    if (hit.type === "chat") {
+      continue;
+    }
+
     const content = await loadSearchHitContent({
       hit,
       organizationId,
@@ -857,7 +881,7 @@ const buildSearchResultContexts = async ({
 };
 
 type LoadSearchHitContentOptions = {
-  hit: GlobalSearchHit;
+  hit: CitableSearchHit;
   organizationId: SafeId<"organization">;
   accessibleWorkspaceIds: SafeId<"workspace">[];
   scopedDb: ScopedDb;

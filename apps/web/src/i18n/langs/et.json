@@ -1743,6 +1743,7 @@
     "escKey": "ESC",
     "kinds": {
       "caseLaw": "Kohtupraktika",
+      "chat": "Vestlus",
       "contact": "Kontakt",
       "document": "Dokument",
       "folder": "Kaust",

@@ -10,6 +10,7 @@ const searchMock = mock();
 const realDateNow = Date.now;
 
 const organizationId = toSafeId<"organization">("org_1");
+const userId = toSafeId<"user">("user_1");
 const accessibleWorkspaceIds = [
   toSafeId<"workspace">("ws_1"),
   toSafeId<"workspace">("ws_2"),
@@ -65,6 +66,7 @@ describe("search handler workspace scoping", () => {
         query: "closing memo",
       },
       organizationId,
+      userId,
       search: searchMock,
       scopedDb: unusedScopedDb,
     });
@@ -73,6 +75,7 @@ describe("search handler workspace scoping", () => {
       cursor: undefined,
       limit: LIMITS.searchPageSizeDefault,
       organizationId: "org_1",
+      userId: "user_1",
       query: "closing memo",
       types: [],
       editedByUserIds: [],
@@ -96,6 +99,7 @@ describe("search handler workspace scoping", () => {
         workspaceIds: [workspaceId],
       },
       organizationId,
+      userId,
       search: searchMock,
       scopedDb: createWorkspaceLookupScopedDb(findManyMock),
     });
@@ -130,6 +134,7 @@ describe("search handler workspace scoping", () => {
         workspaceIds: [workspaceId, workspaceId, workspaceId],
       },
       organizationId,
+      userId,
       search: searchMock,
       scopedDb: createWorkspaceLookupScopedDb(findManyMock),
     });
@@ -158,6 +163,7 @@ describe("search handler workspace scoping", () => {
         workspaceIds: [toSafeId<"workspace">("ws_other")],
       },
       organizationId,
+      userId,
       search: searchMock,
       scopedDb: unusedScopedDb,
     });
@@ -181,6 +187,7 @@ describe("search handler workspace scoping", () => {
         updatedTo: "2026-04-30T12:00:00.000Z",
       },
       organizationId,
+      userId,
       search: searchMock,
       scopedDb: unusedScopedDb,
     });

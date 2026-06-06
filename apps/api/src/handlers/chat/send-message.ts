@@ -92,6 +92,7 @@ import { FILE_SIZE_LIMIT_BYTES, FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { getS3 } from "@/api/lib/s3";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
+import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
@@ -1613,7 +1614,18 @@ type PersistMessageProps = {
     | undefined;
 };
 
-const persistMessage = async ({
+const persistMessage = async (props: PersistMessageProps) => {
+  const result = await runPersistMessage(props);
+  // Refresh the thread's global-search document whenever its messages
+  // actually changed. Fire-and-forget: indexing must never block or
+  // fail a chat turn.
+  if (Result.isOk(result) && props.persistencePlan.type !== "none") {
+    upsertChatThreadSearchDocument(props.threadId).catch(captureError);
+  }
+  return result;
+};
+
+const runPersistMessage = async ({
   acceptedSendMode = null,
   recordAuditEvent,
   safeDb,

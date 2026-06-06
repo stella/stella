@@ -483,6 +483,13 @@
       "pt-BR",
       "sk"
     ],
+    "search.kinds.chat": [
+      "cs",
+      "de",
+      "es",
+      "fr",
+      "sk"
+    ],
     "search.kinds.contact": [
       "fr"
     ],

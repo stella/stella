@@ -1743,6 +1743,7 @@
     "escKey": "ESC",
     "kinds": {
       "caseLaw": "Ítélkezési gyakorlat",
+      "chat": "Csevegés",
       "contact": "Kapcsolat",
       "document": "Dokumentum",
       "folder": "Mappa",

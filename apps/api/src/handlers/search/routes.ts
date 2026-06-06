@@ -23,12 +23,13 @@ const searchEndpoint = createSafeRootHandler(
     permissions: { workspace: ["read"] },
     body: searchBodySchema,
   } satisfies HandlerConfig,
-  async function* ({ activeWorkspaceIds, body, scopedDb, session }) {
+  async function* ({ activeWorkspaceIds, body, scopedDb, session, user }) {
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
           await searchHandler({
             organizationId: session.activeOrganizationId,
+            userId: user.id,
             accessibleWorkspaceIds: activeWorkspaceIds,
             body,
             scopedDb,
@@ -103,12 +104,14 @@ const summarizeSearchEndpoint = createSafeRootHandler(
     promptCachingEnabled,
     scopedDb,
     session,
+    user,
   }) {
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
           await summarizeSearchResults({
             organizationId: session.activeOrganizationId,
+            userId: user.id,
             accessibleWorkspaceIds: activeWorkspaceIds,
             body,
             orgAIConfig,

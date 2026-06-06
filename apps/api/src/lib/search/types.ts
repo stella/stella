@@ -115,6 +115,9 @@ export const GLOBAL_SEARCH_RESULT_TYPES = [
   "contact",
   "case-law",
   ...ENTITY_KINDS,
+  // Appended last on purpose: Elysia coerces an absent optional
+  // UnionEnum to the FIRST element, so new types must never take slot 0.
+  "chat",
 ] as const;
 
 export type GlobalSearchResultType =
@@ -172,11 +175,20 @@ export type CaseLawGlobalSearchHit = GlobalSearchHitBase & {
   decisionDate: string | null;
 };
 
+export type ChatGlobalSearchHit = GlobalSearchHitBase & {
+  type: "chat";
+  threadId: string;
+  /** Null for cross-workspace (global) threads. */
+  workspaceId: string | null;
+  workspaceName: string | null;
+};
+
 export type GlobalSearchHit =
   | EntityGlobalSearchHit
   | MatterGlobalSearchHit
   | ContactGlobalSearchHit
-  | CaseLawGlobalSearchHit;
+  | CaseLawGlobalSearchHit
+  | ChatGlobalSearchHit;
 
 export type GlobalSearchFacets = {
   type: FacetBucket[];
