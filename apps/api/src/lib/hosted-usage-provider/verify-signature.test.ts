@@ -4,12 +4,20 @@ import { verifyWebhookSignature } from "@/api/lib/hosted-usage-provider/verify-s
 
 const SECRET = "test-secret-please-rotate-in-prod-deadbeefcafe";
 
-const sign = (id: string, timestamp: string, body: string): string => {
+const signWithKey = (
+  key: string | Buffer,
+  id: string,
+  timestamp: string,
+  body: string,
+): string => {
   const payload = `${id}.${timestamp}.${body}`;
-  const hasher = new Bun.CryptoHasher("sha256", SECRET);
+  const hasher = new Bun.CryptoHasher("sha256", key);
   hasher.update(payload);
   return hasher.digest("base64");
 };
+
+const sign = (id: string, timestamp: string, body: string): string =>
+  signWithKey(SECRET, id, timestamp, body);
 
 const validHeaders = ({
   id = "evt_test_001",
@@ -31,6 +39,31 @@ describe("verifyWebhookSignature", () => {
       headers,
       nowSeconds: 1_717_400_000,
     });
+    expect(result.ok).toBe(true);
+  });
+
+  test("accepts a Standard Webhooks serialized symmetric secret", () => {
+    const secretBytes = Buffer.from(
+      "serialized-webhook-secret-32-bytes",
+      "utf-8",
+    );
+    const serializedSecret = `whsec_${secretBytes.toString("base64")}`;
+    const id = "evt_serialized_secret_001";
+    const timestamp = "1717400000";
+    const body = `{"type":"entitlement.created","id":"sub_serialized"}`;
+    const signature = signWithKey(secretBytes, id, timestamp, body);
+
+    const result = verifyWebhookSignature({
+      secrets: [serializedSecret],
+      rawBody: body,
+      headers: {
+        id,
+        timestamp,
+        signature: `v1,${signature}`,
+      },
+      nowSeconds: 1_717_400_000,
+    });
+
     expect(result.ok).toBe(true);
   });
 
@@ -57,6 +90,30 @@ describe("verifyWebhookSignature", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.reason).toBe("missing_headers");
+    }
+  });
+
+  test("rejects malformed serialized secrets instead of treating them as raw strings", () => {
+    const malformedSecret = "whsec_not-valid-base64!";
+    const id = "evt_malformed_secret_001";
+    const timestamp = "1717400000";
+    const body = `{"type":"entitlement.created"}`;
+    const signature = signWithKey(malformedSecret, id, timestamp, body);
+
+    const result = verifyWebhookSignature({
+      secrets: [malformedSecret],
+      rawBody: body,
+      headers: {
+        id,
+        timestamp,
+        signature: `v1,${signature}`,
+      },
+      nowSeconds: 1_717_400_000,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe("no_matching_signature");
     }
   });
 

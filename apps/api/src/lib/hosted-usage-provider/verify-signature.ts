@@ -14,7 +14,10 @@
  *
  *   `${id}.${timestamp}.${rawBody}`
  *
- * with the webhook secret as the key, base64-encoded.
+ * with the webhook secret as the key, base64-encoded. Standard
+ * Webhooks presents symmetric secrets as `whsec_` + base64; those
+ * values are decoded to key bytes before verification. Raw string
+ * secrets remain supported for internal/self-hosted senders.
  *
  * This module exposes a single `verifyWebhookSignature()` that
  * returns a discriminated result. The caller (the receive handler)
@@ -25,7 +28,9 @@
 import { timingSafeEqual } from "node:crypto";
 
 const SIGNATURE_SCHEME = "v1";
+const STANDARD_WEBHOOK_SECRET_PREFIX = "whsec_";
 const TOLERANCE_SECONDS = 5 * 60;
+const BASE64_PADDING_CODE_POINT = 61;
 
 export type VerifyResult =
   | { ok: true }
@@ -82,7 +87,11 @@ export const verifyWebhookSignature = ({
   const candidates = parseSignatureHeader(headers.signature);
 
   for (const secret of secrets) {
-    const expected = hmacBase64(secret, payload);
+    const key = parseWebhookSecret(secret);
+    if (key === null) {
+      continue;
+    }
+    const expected = hmacBase64(key, payload);
     for (const candidate of candidates) {
       if (constantTimeEqualBase64(expected, candidate)) {
         return { ok: true };
@@ -92,8 +101,81 @@ export const verifyWebhookSignature = ({
   return { ok: false, reason: "no_matching_signature" };
 };
 
-const hmacBase64 = (secret: string, payload: string): string => {
-  const hasher = new Bun.CryptoHasher("sha256", secret);
+type HmacKey = string | Buffer;
+
+const parseWebhookSecret = (secret: string): HmacKey | null => {
+  const trimmed = secret.trim();
+  if (!trimmed.startsWith(STANDARD_WEBHOOK_SECRET_PREFIX)) {
+    return secret;
+  }
+
+  const encoded = trimmed.slice(STANDARD_WEBHOOK_SECRET_PREFIX.length);
+  if (!isBase64Secret(encoded)) {
+    return null;
+  }
+
+  const key = Buffer.from(encoded, "base64");
+  if (key.length === 0) {
+    return null;
+  }
+  return key;
+};
+
+const isBase64Secret = (encoded: string): boolean => {
+  if (encoded.length === 0 || encoded.length % 4 === 1) {
+    return false;
+  }
+
+  let paddingStart = encoded.length;
+  for (let index = 0; index < encoded.length; index += 1) {
+    const codePoint = encoded.codePointAt(index);
+    if (codePoint === BASE64_PADDING_CODE_POINT) {
+      paddingStart = index;
+      break;
+    }
+    if (!isBase64CodePoint(codePoint)) {
+      return false;
+    }
+  }
+
+  const paddingCount = encoded.length - paddingStart;
+  if (paddingCount > 2) {
+    return false;
+  }
+  if (paddingCount > 0 && encoded.length % 4 !== 0) {
+    return false;
+  }
+  for (let index = paddingStart; index < encoded.length; index += 1) {
+    if (encoded.codePointAt(index) !== BASE64_PADDING_CODE_POINT) {
+      return false;
+    }
+  }
+
+  const normalized = trimBase64Padding(encoded);
+  const canonical = trimBase64Padding(
+    Buffer.from(encoded, "base64").toString("base64"),
+  );
+  return canonical === normalized;
+};
+
+const isBase64CodePoint = (codePoint: number | undefined): boolean =>
+  codePoint !== undefined &&
+  ((codePoint >= 65 && codePoint <= 90) ||
+    (codePoint >= 97 && codePoint <= 122) ||
+    (codePoint >= 48 && codePoint <= 57) ||
+    codePoint === 43 ||
+    codePoint === 47);
+
+const trimBase64Padding = (value: string): string => {
+  let end = value.length;
+  while (end > 0 && value.codePointAt(end - 1) === BASE64_PADDING_CODE_POINT) {
+    end -= 1;
+  }
+  return value.slice(0, end);
+};
+
+const hmacBase64 = (key: HmacKey, payload: string): string => {
+  const hasher = new Bun.CryptoHasher("sha256", key);
   hasher.update(payload);
   return hasher.digest("base64");
 };
