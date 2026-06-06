@@ -9,6 +9,6 @@ export const destroyPDFDocument = async (data: {
 }) => {
   await Promise.all([
     data.loadingTask.destroy(),
-    ...data.attachmentLoadingTasks.map(async (task) => await task.destroy()),
+    ...data.attachmentLoadingTasks.map((task) => task.destroy()),
   ]);
 };

@@ -11,6 +11,7 @@ import type { PDFViewerCode } from "@/lib/pdf/pdf-errors";
 import { loadPdfjs } from "@/lib/pdf/pdfjs-loader";
 import type {
   PDFDocumentLoadingTask,
+  PDFDocumentProxy,
   PDFPageProxy,
 } from "@/lib/pdf/pdfjs-loader";
 import { getPageId } from "@/lib/pdf/utils";
@@ -19,6 +20,7 @@ type PasswordResponses = typeof PDFJS.PasswordResponses;
 
 export type PDFDocument = {
   loadingTask: PDFDocumentLoadingTask;
+  document: PDFDocumentProxy;
   attachmentLoadingTasks: PDFDocumentLoadingTask[];
   pages: Map<string, PageInfo>;
   attachmentLabels: Map<string, string>;
@@ -66,9 +68,11 @@ const parsePasswordException = (
 const loadPortfolioPages = async (
   instanceId: string,
   pdfAttachments: PDFAttachment[],
+  // Accumulator owned by the caller: tasks are pushed before awaiting so a
+  // mid-loop failure still lets loadPDF's catch destroy every started task.
+  attachmentLoadingTasks: PDFDocumentLoadingTask[],
 ): Promise<{
   documentPages: Promise<{ id: string; proxy: PDFPageProxy }>[];
-  attachmentLoadingTasks: PDFDocumentLoadingTask[];
   attachmentLabels: Map<string, string>;
 }> => {
   const { getDocument } = await loadPdfjs();
@@ -76,7 +80,6 @@ const loadPortfolioPages = async (
     id: string;
     proxy: PDFPageProxy;
   }>[] = [];
-  const attachmentLoadingTasks: PDFDocumentLoadingTask[] = [];
   const attachmentLabels = new Map<string, string>();
 
   let pageCounter = 1;
@@ -86,8 +89,8 @@ const loadPortfolioPages = async (
       data: att.content,
       enableXfa: true,
     });
-    const attDoc = await attLoadingTask.promise;
     attachmentLoadingTasks.push(attLoadingTask);
+    const attDoc = await attLoadingTask.promise;
 
     const firstPageId = getPageId(instanceId, pageCounter);
     attachmentLabels.set(firstPageId, `${attIndex}. ${att.filename}`);
@@ -102,7 +105,7 @@ const loadPortfolioPages = async (
     attIndex++;
   }
 
-  return { documentPages, attachmentLoadingTasks, attachmentLabels };
+  return { documentPages, attachmentLabels };
 };
 
 type LoadPDFProps = {
@@ -180,9 +183,12 @@ export const loadPDF = async ({
       let attachmentLabels: Map<string, string> = new Map<string, string>();
 
       if (isPortfolio) {
-        const portfolio = await loadPortfolioPages(fileId, pdfAttachments);
+        const portfolio = await loadPortfolioPages(
+          fileId,
+          pdfAttachments,
+          attachmentLoadingTasks,
+        );
         documentPages = portfolio.documentPages;
-        attachmentLoadingTasks.push(...portfolio.attachmentLoadingTasks);
         attachmentLabels = portfolio.attachmentLabels;
       } else {
         for (let i = 1; i <= document.numPages; i++) {
@@ -237,6 +243,7 @@ export const loadPDF = async ({
 
       return Result.ok({
         loadingTask,
+        document,
         attachmentLoadingTasks,
         pages,
         attachmentLabels,
