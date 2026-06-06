@@ -2,7 +2,7 @@ version: 1
 output_dir: provenance
 notice:
   internal_scopes:
-    - "@stella"
+    - "@stll"
 sbom:
   exclude_regexes:
     - '(^|/)dist(/.*)?$'
