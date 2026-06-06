@@ -41,6 +41,7 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import { getChatHitRoute } from "@/components/search-dialog.logic";
 import { UserAvatar } from "@/components/user-avatar";
 import {
   isPublicLawPreviewEnabled,
@@ -722,10 +723,7 @@ export const SearchDialog = ({
     }
 
     if (hit.type === "chat") {
-      await navigate({
-        to: "/chat/$threadId",
-        params: { threadId: hit.threadId },
-      });
+      await navigate(getChatHitRoute(hit));
       return;
     }
 
