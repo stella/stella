@@ -2494,9 +2494,15 @@ export function measureBlocks(
 
   const anchorIndices = new Set(zonesByAnchor.keys());
 
-  // Track cumulative Y position for floating zone overlap calculation
-  // Resets when we reach a block with floating images (establishing local page coords)
+  // Two running Y cursors for floating-zone overlap:
+  //  - cumulativeY resets to 0 at each floating-image/table anchor, giving that
+  //    object a local frame for its side-wrap zone.
+  //  - pageRelativeY is the real page cursor; it resets only at hard page breaks
+  //    (never at a float anchor), so a page-pinned topAndBottom band always
+  //    measures from a true page-relative position even when a float was
+  //    anchored earlier on the same page. eigenpal #694.
   let cumulativeY = 0;
+  let pageRelativeY = 0;
   let activeZones: FloatingImageZone[] = [];
 
   return blocks.map((block, blockIndex) => {
@@ -2504,15 +2510,15 @@ export function measureBlocks(
 
     // A hard page/section break starts a fresh page. Any active zone — including
     // a page-pinned topAndBottom band — belongs to the page it was anchored on,
-    // so drop the active zones and restart the running Y at the new page top. A
+    // so drop the active zones and restart both cursors at the new page top. A
     // band anchor on the new page re-establishes its own zone below; without
     // this, the first block after the break would be measured against a stale
     // band (a phantom float-skip) while layout paints no band there, opening a
-    // gap. This also resets the running Y so a band anchor that opens the new
-    // page reserves from content-Y 0, not the prior page's cursor. eigenpal #694.
+    // gap. eigenpal #694.
     if (block.kind === "pageBreak" || isNextPageSectionBreak(block)) {
       activeZones = [];
       cumulativeY = 0;
+      pageRelativeY = 0;
     }
 
     // Check if this block is an anchor for floating images
@@ -2520,20 +2526,16 @@ export function measureBlocks(
     // after a Y reset since their topY/bottomY are in the old coordinate system).
     if (anchorIndices.has(blockIndex)) {
       activeZones = zonesByAnchor.get(blockIndex) ?? [];
-      // Floating-image anchors establish a fresh local page frame, so the
-      // running Y resets to 0. Page/margin-pinned topAndBottom bands are
-      // different: they pin to the page top regardless of where their anchor
-      // sits in the flow, so resetting here would measure the following block as
-      // if it began at the page top and reserve the whole band even when in-flow
-      // content already precedes the anchor on the page, opening a blank gap.
-      // Keep the running Y for pure band anchors so the band is reserved from the
-      // real cursor down. (A band anchor that opens a fresh page already had its
-      // running Y reset to 0 by the hard-break handling above.) eigenpal #694.
+      // Floating-image anchors open a fresh local frame (cumulativeY → 0). A
+      // page/margin-pinned band instead reserves against the page, so it
+      // measures from pageRelativeY — the real page cursor, which a prior float
+      // anchor has not reset. This is a no-op when no float precedes the band on
+      // the page (the two cursors agree) and 0 right after a hard break, so the
+      // band still reserves from the real cursor down rather than re-reserving
+      // the whole band over content that already precedes its anchor. eigenpal #694.
       const bandOnlyAnchor =
         activeZones.length > 0 && activeZones.every((z) => z.fullWidthBlock);
-      if (!bandOnlyAnchor) {
-        cumulativeY = 0;
-      }
+      cumulativeY = bandOnlyAnchor ? pageRelativeY : 0;
     }
 
     const zones = activeZones.length > 0 ? activeZones : undefined;
@@ -2544,12 +2546,13 @@ export function measureBlocks(
         : contentWidth;
       const measure = measureBlock(block, blockWidth, zones, cumulativeY);
 
-      // Update cumulative Y for next block
+      // Advance both cursors for the next block.
       if (
         "totalHeight" in measure &&
         !(block.kind === "table" && (block as TableBlock).floating)
       ) {
         cumulativeY += measure.totalHeight;
+        pageRelativeY += measure.totalHeight;
       }
 
       return measure;

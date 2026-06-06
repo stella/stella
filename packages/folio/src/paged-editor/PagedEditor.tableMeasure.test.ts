@@ -620,6 +620,70 @@ describe("measureBlocks floating text-box bands", () => {
       expect(afterMeasure.lines.at(0)?.floatSkipBefore ?? 0).toBe(0);
     });
   });
+
+  test("a band after a float anchor reserves from the page cursor, not the float frame", () => {
+    withFakeTextMeasure(() => {
+      // A floating image earlier on the page resets the local float cursor to 0;
+      // the page-pinned band must still measure from the real page position
+      // (below the tall `before`), so `after` — already past the band — gets no
+      // skip. Measuring from the float frame would add a phantom one. eigenpal #694.
+      const before: ParagraphBlock = {
+        kind: "paragraph",
+        id: "before",
+        runs: [{ kind: "text", text: "tall ".repeat(400).trim() }],
+      };
+      const floatImagePara: ParagraphBlock = {
+        kind: "paragraph",
+        id: "float",
+        runs: [
+          { kind: "text", text: "x" },
+          {
+            kind: "image",
+            src: "data:,",
+            width: 40,
+            height: 40,
+            wrapType: "square",
+            position: {
+              horizontal: { align: "left" },
+              vertical: { relativeTo: "margin" },
+            },
+          },
+        ],
+      };
+      const band: TextBoxBlock = {
+        kind: "textBox",
+        id: "band",
+        width: 300,
+        height: 60,
+        content: [],
+        wrapType: "topAndBottom",
+        position: { vertical: { relativeTo: "margin", posOffset: 0 } },
+      };
+      const after: ParagraphBlock = {
+        kind: "paragraph",
+        id: "after",
+        runs: [{ kind: "text", text: "after" }],
+      };
+
+      const measures = measureBlocks(
+        [before, floatImagePara, band, after],
+        200,
+        96,
+      );
+      const beforeMeasure = measures.at(0);
+      const afterMeasure = measures.at(3);
+      if (
+        beforeMeasure?.kind !== "paragraph" ||
+        afterMeasure?.kind !== "paragraph"
+      ) {
+        throw new Error("Expected paragraph measures");
+      }
+      // `before` alone already exceeds the 60px band, so the band sits entirely
+      // above the cursor and `after` is not pushed down.
+      expect(beforeMeasure.totalHeight).toBeGreaterThan(60);
+      expect(afterMeasure.lines.at(0)?.floatSkipBefore ?? 0).toBe(0);
+    });
+  });
 });
 
 describe("measureTableBlock", () => {
