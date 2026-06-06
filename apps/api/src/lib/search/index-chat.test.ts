@@ -1,41 +1,36 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
-import type { SQL } from "drizzle-orm";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { toSafeId } from "@/api/lib/branded-types";
-
-const rootDbExecuteMock = mock(async (_query: SQL) => []);
-const rootDbChatThreadFindFirstMock = mock(async () => ({
-  id: toSafeId<"chatThread">("thread_1"),
-  title: "Contract review",
-  updatedAt: new Date("2026-06-06T08:00:00.000Z"),
-  messages: [
-    {
-      content: {
-        version: 1 as const,
-        data: [
-          { type: "text" as const, text: "Review the termination clause." },
-        ],
-      },
-    },
-  ],
-}));
-
-// eslint-disable-next-line typescript-eslint/no-floating-promises -- Bun mock.module is sync for registration
-mock.module("@/api/db/root", () => ({
-  rootDb: {
-    execute: rootDbExecuteMock,
-    query: {
-      chatThreads: {
-        findFirst: rootDbChatThreadFindFirstMock,
-      },
-    },
-  },
-}));
+import {
+  clearRootDbMocks,
+  rootDbChatThreadFindFirstMock,
+  rootDbExecuteMock,
+} from "@/api/tests/helpers/mock-root-db";
 
 beforeEach(() => {
-  rootDbExecuteMock.mockClear();
-  rootDbChatThreadFindFirstMock.mockClear();
+  clearRootDbMocks();
+  rootDbChatThreadFindFirstMock.mockImplementation(
+    async () =>
+      await Promise.resolve({
+        id: toSafeId<"chatThread">("thread_1"),
+        title: "Contract review",
+        updatedAt: new Date("2026-06-06T08:00:00.000Z"),
+        messages: [
+          {
+            content: {
+              version: 1 as const,
+              data: [
+                {
+                  type: "text" as const,
+                  text: "Review the termination clause.",
+                },
+              ],
+            },
+          },
+        ],
+      }),
+  );
 });
 
 describe("chat search indexing", () => {
