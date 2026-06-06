@@ -1,5 +1,15 @@
-import type { PageMargins } from "../core/layout-engine/types";
+import type {
+  PageMargins,
+  SectionBreakBlock,
+} from "../core/layout-engine/types";
 import type { HeaderFooterContent } from "../core/layout-painter/renderPage";
+
+/**
+ * Floor on the body content area, in pixels. Header/footer overflow can
+ * never shrink the content band below this, so a degenerate document
+ * (a header taller than the page) still renders some body text.
+ */
+const MIN_CONTENT_HEIGHT_PX = 24;
 
 type EffectiveHeaderFooterMarginsInput = {
   margins: PageMargins;
@@ -121,7 +131,7 @@ function buildExtender({
     }
 
     if (pageSize) {
-      const maxMargins = Math.max(0, pageSize.h - 24);
+      const maxMargins = Math.max(0, pageSize.h - MIN_CONTENT_HEIGHT_PX);
       if (out.top + out.bottom > maxMargins) {
         if (warn) {
           warn(
@@ -175,4 +185,48 @@ export function computeEffectiveHeaderFooterMargins({
     pageSize,
     warn,
   })(margins);
+}
+
+/** Rendered header/footer content shared by every extender on a page. */
+export type HeaderFooterExtenderContent = Omit<
+  EffectiveHeaderFooterMarginsInput,
+  "margins" | "pageSize" | "warn"
+>;
+
+type ExtendSectionBreakMarginsInput = {
+  content: HeaderFooterExtenderContent;
+  /** Body page size and effective margins — the inheritance seed. */
+  bodyPageSize: { w: number; h: number };
+  bodyMargins: PageMargins;
+  warn?: ((message: string) => void) | undefined;
+};
+
+/**
+ * Extend every section break's margins to clear the same header/footer
+ * overflow the body margins do (eigenpal #400), so an overflowing footer
+ * never re-overlaps body text on a later section.
+ *
+ * The walk mirrors `collectSectionConfigs`: a break that omits its own
+ * `pageSize` or `margins` inherits the previous section's. Each break's
+ * authored-or-inherited margins are extended against the section's *own*
+ * resolved page height, so a taller page never keeps a smaller page's
+ * clamped reservation (and vice versa). Materializes `margins` on every
+ * non-inheriting break in place.
+ */
+export function extendSectionBreakMargins(
+  sectionBreaks: SectionBreakBlock[],
+  { content, bodyPageSize, bodyMargins, warn }: ExtendSectionBreakMarginsInput,
+): void {
+  let pageSize = bodyPageSize;
+  let margins = bodyMargins;
+  for (const sb of sectionBreaks) {
+    if (!sb.pageSize && !sb.margins) {
+      continue;
+    }
+    pageSize = sb.pageSize ?? pageSize;
+    margins = computeHeaderFooterMarginExtender({ ...content, pageSize, warn })(
+      sb.margins ?? margins,
+    );
+    sb.margins = margins;
+  }
 }

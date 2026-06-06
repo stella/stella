@@ -1,10 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
+import type { SectionBreakBlock } from "../core/layout-engine/types";
 import type { HeaderFooterContent } from "../core/layout-painter/renderPage";
 import {
   computeEffectiveHeaderFooterMargins,
   computeFirstPageHeaderFooterMarginExtender,
   computeHeaderFooterMarginExtender,
+  type HeaderFooterExtenderContent,
+  extendSectionBreakMargins,
 } from "./headerFooterMargins";
 
 const content = (height: number): HeaderFooterContent => ({
@@ -183,5 +186,106 @@ describe("HF margin extender across multiple section margins (issue #400)", () =
     expect(pageSize.h - extended.top - extended.bottom).toBeGreaterThanOrEqual(
       24,
     );
+  });
+});
+
+describe("extendSectionBreakMargins extends each section against its own page", () => {
+  // A 600 px footer overflows the 48 px footer slot, pushing bottom to
+  // 48 + 600 = 648. That fits a 1000 px page but exceeds a 500 px one's
+  // content floor (500 - 24 = 476), where it is clamped to a 380 bottom.
+  const tallFooter: HeaderFooterExtenderContent = {
+    footerContent: content(600),
+  };
+  const bodyPageSize = { w: 816, h: 500 };
+  const rawMargins = {
+    top: 96,
+    right: 72,
+    bottom: 96,
+    left: 72,
+    header: 48,
+    footer: 48,
+  };
+  // Body margins after the small-page clamp: the bottom shrinks to 380.
+  const bodyMargins = computeHeaderFooterMarginExtender({
+    ...tallFooter,
+    pageSize: bodyPageSize,
+  })(rawMargins);
+
+  const run = (sectionBreaks: SectionBreakBlock[]): void =>
+    extendSectionBreakMargins(sectionBreaks, {
+      content: tallFooter,
+      bodyPageSize,
+      bodyMargins,
+    });
+
+  test("a section authoring its own taller page keeps the full footer reservation", () => {
+    const tall: SectionBreakBlock = {
+      kind: "sectionBreak",
+      id: "tall",
+      pageSize: { w: 816, h: 1000 },
+      margins: { ...rawMargins },
+    };
+
+    run([tall]);
+
+    // 48 + 600 = 648 fits within 1000 - 24, so nothing is clamped.
+    expect(tall.margins?.bottom).toBe(648);
+  });
+
+  test("a section inheriting the body page is clamped to it", () => {
+    const inherit: SectionBreakBlock = {
+      kind: "sectionBreak",
+      id: "inherit",
+      margins: { ...rawMargins },
+    };
+
+    run([inherit]);
+
+    // Clamped to 500 - 24 = 476 total; with top 96 the bottom shrinks to 380.
+    expect(inherit.margins?.bottom).toBe(380);
+  });
+
+  test("a page-size-only section re-extends inherited margins for its own page", () => {
+    // Inherits the body's clamped bottom (380) but renders on a 1000 px
+    // page, so the footer reservation must grow back to 648 rather than
+    // keep the small page's clamp.
+    const biggerPage: SectionBreakBlock = {
+      kind: "sectionBreak",
+      id: "bigger",
+      pageSize: { w: 816, h: 1000 },
+    };
+
+    run([biggerPage]);
+
+    expect(biggerPage.margins?.bottom).toBe(648);
+  });
+
+  test("a no-page-size section inherits an earlier section's page, not the body's", () => {
+    // Section 1 switches to a 1000 px page; section 2 omits its page size,
+    // so it inherits 1000 (not the 500 px body) and is not clamped.
+    const first: SectionBreakBlock = {
+      kind: "sectionBreak",
+      id: "first",
+      pageSize: { w: 816, h: 1000 },
+      margins: { ...rawMargins },
+    };
+    const second: SectionBreakBlock = {
+      kind: "sectionBreak",
+      id: "second",
+      margins: { ...rawMargins },
+    };
+
+    run([first, second]);
+
+    expect(first.margins?.bottom).toBe(648);
+    expect(second.margins?.bottom).toBe(648);
+  });
+
+  test("a pure continuation break (no page size or margins) is left untouched", () => {
+    const cont: SectionBreakBlock = { kind: "sectionBreak", id: "cont" };
+
+    run([cont]);
+
+    expect(cont.margins).toBeUndefined();
   });
 });
