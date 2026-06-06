@@ -4,6 +4,7 @@ import type * as PDFJS from "pdfjs-dist";
 import { DEFAULT_PDF_WIDTH } from "@/lib/pdf/consts";
 import { parseAttachments } from "@/lib/pdf/parse-attachments";
 import type { PDFAttachment } from "@/lib/pdf/parse-attachments";
+import { destroyPDFDocument } from "@/lib/pdf/pdf-cleanup";
 import type { PageInfo } from "@/lib/pdf/pdf-context";
 import { PDFViewerError } from "@/lib/pdf/pdf-errors";
 import type { PDFViewerCode } from "@/lib/pdf/pdf-errors";
@@ -259,14 +260,4 @@ export const loadPDF = async ({
       });
     },
   }).then(Result.flatten);
-};
-
-export const destroyPDFDocument = async (data: {
-  loadingTask: PDFDocumentLoadingTask;
-  attachmentLoadingTasks: PDFDocumentLoadingTask[];
-}) => {
-  await Promise.all([
-    data.loadingTask.destroy(),
-    ...data.attachmentLoadingTasks.map(async (task) => await task.destroy()),
-  ]);
 };
