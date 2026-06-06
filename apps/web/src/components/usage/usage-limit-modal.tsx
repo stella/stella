@@ -1,4 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import {
@@ -12,6 +13,7 @@ import {
 } from "@stll/ui/components/dialog";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 
@@ -43,6 +45,7 @@ export const UsageLimitModal = ({
   reason,
   hasHostedEntitlement,
 }: UsageLimitModalProps) => {
+  const t = useTranslations();
   const managementMutation = useMutation({
     mutationFn: async () => {
       const response = await api.usage.hosted.management.post();
@@ -56,7 +59,7 @@ export const UsageLimitModal = ({
     },
     onError: (error: unknown) => {
       stellaToast.add({
-        title: "Could not open hosted usage management",
+        title: t("settings.organization.usageManageError"),
         description: error instanceof Error ? error.message : undefined,
         type: "error",
       });
@@ -67,35 +70,41 @@ export const UsageLimitModal = ({
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{titleFor(reason)}</DialogTitle>
-          <DialogDescription>{descriptionFor(reason)}</DialogDescription>
+          <DialogTitle>{t(TITLE_KEYS[reason])}</DialogTitle>
+          <DialogDescription>{t(DESCRIPTION_KEYS[reason])}</DialogDescription>
         </DialogHeader>
 
         <div className="bg-muted/40 rounded-md p-3 text-sm">
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Needed</span>
+            <span className="text-muted-foreground">
+              {t("settings.organization.usageLimitNeeded")}
+            </span>
             <span className="font-medium">
-              {required.toLocaleString()} units
+              {t("settings.organization.usageUnitCount", { count: required })}
             </span>
           </div>
           <div className="mt-1 flex justify-between">
-            <span className="text-muted-foreground">Available</span>
+            <span className="text-muted-foreground">
+              {t("settings.organization.usageLimitAvailable")}
+            </span>
             <span className="font-medium">
-              {available.toLocaleString()} units
+              {t("settings.organization.usageUnitCount", { count: available })}
             </span>
           </div>
         </div>
 
         <DialogFooter>
           <DialogClose>
-            <Button variant="ghost">Not now</Button>
+            <Button variant="ghost">
+              {t("settings.organization.usageLimitNotNow")}
+            </Button>
           </DialogClose>
           {hasHostedEntitlement ? (
             <Button
               disabled={managementMutation.isPending}
               onClick={() => managementMutation.mutate()}
             >
-              Manage hosted usage
+              {t("settings.organization.usageManage")}
             </Button>
           ) : null}
         </DialogFooter>
@@ -104,28 +113,18 @@ export const UsageLimitModal = ({
   );
 };
 
-const titleFor = (reason: UsageLimitExceededReason): string => {
-  switch (reason) {
-    case "no_entitlement":
-      return "Usage entitlement required";
-    case "entitlement_inactive":
-      return "Usage entitlement is not active";
-    case "usage_limit_exceeded":
-      return "AI usage limit reached";
-  }
-  const exhaustive: never = reason;
-  return exhaustive;
-};
+const TITLE_KEYS = {
+  entitlement_inactive:
+    "settings.organization.usageLimitTitleEntitlementInactive",
+  no_entitlement: "settings.organization.usageLimitTitleNoEntitlement",
+  usage_limit_exceeded:
+    "settings.organization.usageLimitTitleUsageLimitExceeded",
+} as const satisfies Record<UsageLimitExceededReason, TranslationKey>;
 
-const descriptionFor = (reason: UsageLimitExceededReason): string => {
-  switch (reason) {
-    case "no_entitlement":
-      return "AI features need an active usage entitlement for this organisation.";
-    case "entitlement_inactive":
-      return "The organisation's usage entitlement is paused or inactive. Review hosted usage management or contact an operator.";
-    case "usage_limit_exceeded":
-      return "This action cannot run with the organisation's current usage state.";
-  }
-  const exhaustive: never = reason;
-  return exhaustive;
-};
+const DESCRIPTION_KEYS = {
+  entitlement_inactive:
+    "settings.organization.usageLimitDescriptionEntitlementInactive",
+  no_entitlement: "settings.organization.usageLimitDescriptionNoEntitlement",
+  usage_limit_exceeded:
+    "settings.organization.usageLimitDescriptionUsageLimitExceeded",
+} as const satisfies Record<UsageLimitExceededReason, TranslationKey>;
