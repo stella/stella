@@ -1,4 +1,7 @@
+import { fileURLToPath } from "node:url";
+
 const WEB_ROOT_URL = new URL("../", import.meta.url);
+const WEB_ROOT_PATH = fileURLToPath(WEB_ROOT_URL);
 
 const requiredFiles = [
   "dist/server/server.js",
@@ -17,7 +20,7 @@ for (const path of requiredFiles) {
 const clientAssetGlob = new Bun.Glob("dist/client/assets/*");
 let hasClientAsset = false;
 for await (const clientAssetPath of clientAssetGlob.scan({
-  cwd: WEB_ROOT_URL.pathname,
+  cwd: WEB_ROOT_PATH,
 })) {
   hasClientAsset = clientAssetPath.length > 0;
   break;

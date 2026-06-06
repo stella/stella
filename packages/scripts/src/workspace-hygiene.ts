@@ -21,6 +21,7 @@ const SKIPPED_SCAN_DIRS = new Set([
 ]);
 const CSS_IMPORT_PATTERN =
   /@import\s+(?:url\(\s*)?["'](?<specifier>[^"']+)["']/gu;
+const CSS_COMMENT_PATTERN = /\/\*[\s\S]*?\*\//gu;
 
 export type WorkspaceParentDir = (typeof WORKSPACE_PARENT_DIRS)[number];
 
@@ -145,6 +146,11 @@ const findCssFiles = (directoryPath: string): string[] => {
 const lineNumberForIndex = (content: string, index: number) =>
   content.slice(0, index).split("\n").length;
 
+const stripCssComments = (content: string) =>
+  content.replaceAll(CSS_COMMENT_PATTERN, (comment) =>
+    comment.replaceAll(/[^\r\n]/gu, " "),
+  );
+
 const validateCssImportOwnership = (
   workspacePath: string,
   relativeWorkspacePath: string,
@@ -153,7 +159,7 @@ const validateCssImportOwnership = (
   const issues: WorkspaceIssue[] = [];
 
   for (const cssFilePath of findCssFiles(workspacePath)) {
-    const content = readFileSync(cssFilePath, "utf-8");
+    const content = stripCssComments(readFileSync(cssFilePath, "utf-8"));
 
     for (const match of content.matchAll(CSS_IMPORT_PATTERN)) {
       const specifier = match.groups?.["specifier"];

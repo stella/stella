@@ -55,6 +55,22 @@ describe("workspace hygiene", () => {
 
     expect(validateWorkspaceRoot(rootDir)).toEqual([]);
   });
+
+  test("ignores package imports inside CSS comments", () => {
+    const rootDir = createWorkspaceRoot({
+      webPackageJson: {
+        dependencies: {},
+        name: "@stll/web",
+      },
+    });
+
+    writeFileSync(
+      join(rootDir, "apps/web/src/reader.css"),
+      '/*\n@import "@fontsource-variable/source-serif-4";\n*/\n',
+    );
+
+    expect(validateWorkspaceRoot(rootDir)).toEqual([]);
+  });
 });
 
 type CreateWorkspaceRootOptions = {
