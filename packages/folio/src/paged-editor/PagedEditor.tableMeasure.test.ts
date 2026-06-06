@@ -588,6 +588,38 @@ describe("measureBlocks floating text-box bands", () => {
       expect(afterMeasure.lines.at(0)?.floatSkipBefore ?? 0).toBe(0);
     });
   });
+
+  test("a hard break after a band clears it for the next page", () => {
+    withFakeTextMeasure(() => {
+      // band, then a page break, then a paragraph with no new anchor: the band
+      // belongs to the previous page, so `after` must NOT inherit its
+      // float-skip (layout paints no band on the new page). Without clearing the
+      // active zones at the break, `after` would get a phantom ~60px skip.
+      // eigenpal #694.
+      const band: TextBoxBlock = {
+        kind: "textBox",
+        id: "band",
+        width: 300,
+        height: 60,
+        content: [],
+        wrapType: "topAndBottom",
+        position: { vertical: { relativeTo: "margin", posOffset: 0 } },
+      };
+      const pageBreak: FlowBlock = { kind: "pageBreak", id: "pb" };
+      const after: ParagraphBlock = {
+        kind: "paragraph",
+        id: "after",
+        runs: [{ kind: "text", text: "after" }],
+      };
+
+      const measures = measureBlocks([band, pageBreak, after], 200, 96);
+      const afterMeasure = measures.at(2);
+      if (afterMeasure?.kind !== "paragraph") {
+        throw new Error("Expected paragraph measure after the break");
+      }
+      expect(afterMeasure.lines.at(0)?.floatSkipBefore ?? 0).toBe(0);
+    });
+  });
 });
 
 describe("measureTableBlock", () => {

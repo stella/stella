@@ -2498,16 +2498,21 @@ export function measureBlocks(
   // Resets when we reach a block with floating images (establishing local page coords)
   let cumulativeY = 0;
   let activeZones: FloatingImageZone[] = [];
-  // Set by a hard page/section break; cleared once height-consuming flow lands
-  // or any anchor claims the frame. While set, the next page-pinned band anchor
-  // opens a fresh page at content-Y 0 (see the band reset below). eigenpal #694.
-  let freshPageFramePending = false;
 
   return blocks.map((block, blockIndex) => {
     recordMeasureBlock(blockIndex, block);
 
+    // A hard page/section break starts a fresh page. Any active zone — including
+    // a page-pinned topAndBottom band — belongs to the page it was anchored on,
+    // so drop the active zones and restart the running Y at the new page top. A
+    // band anchor on the new page re-establishes its own zone below; without
+    // this, the first block after the break would be measured against a stale
+    // band (a phantom float-skip) while layout paints no band there, opening a
+    // gap. This also resets the running Y so a band anchor that opens the new
+    // page reserves from content-Y 0, not the prior page's cursor. eigenpal #694.
     if (block.kind === "pageBreak" || isNextPageSectionBreak(block)) {
-      freshPageFramePending = true;
+      activeZones = [];
+      cumulativeY = 0;
     }
 
     // Check if this block is an anchor for floating images
@@ -2522,17 +2527,13 @@ export function measureBlocks(
       // if it began at the page top and reserve the whole band even when in-flow
       // content already precedes the anchor on the page, opening a blank gap.
       // Keep the running Y for pure band anchors so the band is reserved from the
-      // real cursor down — unless the band anchor opens a fresh page (directly
-      // after a hard page/section break). There the new page restarts at Y 0 and
-      // layout paints the band at that page top, so keeping the prior page's Y
-      // would skip the reservation and let body text overlap the band. eigenpal
-      // #694.
+      // real cursor down. (A band anchor that opens a fresh page already had its
+      // running Y reset to 0 by the hard-break handling above.) eigenpal #694.
       const bandOnlyAnchor =
         activeZones.length > 0 && activeZones.every((z) => z.fullWidthBlock);
-      if (!bandOnlyAnchor || freshPageFramePending) {
+      if (!bandOnlyAnchor) {
         cumulativeY = 0;
       }
-      freshPageFramePending = false;
     }
 
     const zones = activeZones.length > 0 ? activeZones : undefined;
@@ -2549,12 +2550,6 @@ export function measureBlocks(
         !(block.kind === "table" && (block as TableBlock).floating)
       ) {
         cumulativeY += measure.totalHeight;
-        // Real flow content on the new page means a later band no longer sits at
-        // the fresh page top; a zero-height (suppressed) block leaves Y at 0, so
-        // the frame is still fresh and the flag must persist.
-        if (measure.totalHeight > 0) {
-          freshPageFramePending = false;
-        }
       }
 
       return measure;

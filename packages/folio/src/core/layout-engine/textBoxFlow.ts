@@ -166,32 +166,80 @@ export type BandHorizontalGeometry = {
   boxWidth: number;
 };
 
+type HorizontalRelativeTo = NonNullable<
+  ImageRunPosition["horizontal"]
+>["relativeTo"];
+type HorizontalAlign = NonNullable<ImageRunPosition["horizontal"]>["align"];
+
+/**
+ * Page-absolute `[left, right]` (px) of the frame a horizontal anchor positions
+ * within. `inside`/`outsideMargin` map to the left/right margin strips (page
+ * parity is not modelled); `column`/`character` fall back to the content box
+ * (folio has no per-column/character X here). eigenpal #694.
+ */
+function bandHorizontalFrame(
+  relativeTo: HorizontalRelativeTo,
+  geometry: BandHorizontalGeometry,
+): { left: number; right: number } {
+  const { pageWidth, marginLeft, marginRight } = geometry;
+  switch (relativeTo) {
+    case "page":
+      return { left: 0, right: pageWidth };
+    case "leftMargin":
+    case "insideMargin":
+      return { left: 0, right: marginLeft };
+    case "rightMargin":
+    case "outsideMargin":
+      return { left: pageWidth - marginRight, right: pageWidth };
+    case "margin":
+    case "column":
+    case "character":
+    case undefined:
+      return { left: marginLeft, right: pageWidth - marginRight };
+    default:
+      relativeTo satisfies never;
+      return { left: marginLeft, right: pageWidth - marginRight };
+  }
+}
+
+/** Page-absolute left X (px) of the box within its frame for a bare `align`. */
+function alignedFrameLeft(
+  align: HorizontalAlign,
+  frame: { left: number; right: number },
+  boxWidth: number,
+): number {
+  switch (align) {
+    case "center":
+      return frame.left + (frame.right - frame.left - boxWidth) / 2;
+    case "right":
+    case "outside":
+      return frame.right - boxWidth;
+    case "left":
+    case "inside":
+    case undefined:
+      return frame.left;
+    default:
+      align satisfies never;
+      return frame.left;
+  }
+}
+
 /**
  * Page-absolute left X (px) of a `topAndBottom` band box, resolved from its
- * OOXML horizontal anchor. A page-relative anchor measures from the page edge;
- * a margin/column anchor measures from the content box. Within that frame an
- * explicit `posOffset` wins, then `align` (center/right); otherwise the box sits
- * at the frame's left edge. The band itself is always full-width, so this only
- * shifts where the box paints, not the reserved vertical space. Ported from
- * eigenpal #694.
+ * OOXML horizontal anchor. Picks the anchor's frame (page, content box, or a
+ * left/right margin strip), then within it an explicit `posOffset` wins, else
+ * `align` (left/center/right/inside/outside); otherwise the box sits at the
+ * frame's left edge. The band itself is always full-width, so this only shifts
+ * where the box paints, not the reserved vertical space. Ported from eigenpal
+ * #694.
  */
 export function bandFragmentX(
   horizontal: ImageRunPosition["horizontal"],
   geometry: BandHorizontalGeometry,
 ): number {
-  const { pageWidth, marginLeft, marginRight, boxWidth } = geometry;
-  const usesPageFrame = horizontal?.relativeTo === "page";
-  const frameLeft = usesPageFrame ? 0 : marginLeft;
-  const frameRight = usesPageFrame ? pageWidth : pageWidth - marginRight;
-
+  const frame = bandHorizontalFrame(horizontal?.relativeTo, geometry);
   if (horizontal?.posOffset !== undefined) {
-    return frameLeft + emuToPixels(horizontal.posOffset);
+    return frame.left + emuToPixels(horizontal.posOffset);
   }
-  if (horizontal?.align === "center") {
-    return frameLeft + (frameRight - frameLeft - boxWidth) / 2;
-  }
-  if (horizontal?.align === "right" || horizontal?.align === "outside") {
-    return frameRight - boxWidth;
-  }
-  return frameLeft;
+  return alignedFrameLeft(horizontal?.align, frame, geometry.boxWidth);
 }

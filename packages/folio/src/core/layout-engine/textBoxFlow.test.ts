@@ -145,6 +145,22 @@ describe("bandFragmentX (eigenpal #694)", () => {
       ),
     ).toBe(192);
   });
+
+  test("resolves left/right margin-strip frames", () => {
+    // leftMargin/insideMargin → left strip [0, 96]; rightMargin/outsideMargin →
+    // right strip [720, 816]. The box's left edge sits at the strip's left.
+    expect(bandFragmentX({ relativeTo: "leftMargin" }, geometry)).toBe(0);
+    expect(bandFragmentX({ relativeTo: "insideMargin" }, geometry)).toBe(0);
+    expect(bandFragmentX({ relativeTo: "rightMargin" }, geometry)).toBe(720);
+    expect(bandFragmentX({ relativeTo: "outsideMargin" }, geometry)).toBe(720);
+    // posOffset is measured from the strip's left edge, not the content box.
+    expect(
+      bandFragmentX(
+        { relativeTo: "leftMargin", posOffset: EMU_PER_INCH },
+        geometry,
+      ),
+    ).toBe(96);
+  });
 });
 
 describe("isPageFrameRelativeAnchor (eigenpal #694)", () => {
