@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import type { PersistedChatMessageContent } from "@/api/handlers/chat/types";
+import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
@@ -77,6 +78,7 @@ export const upsertChatThreadSearchDocument = async (
       searchable_text = EXCLUDED.searchable_text,
       updated_at = EXCLUDED.updated_at,
       tsv = EXCLUDED.tsv
+    WHERE EXCLUDED.updated_at >= chat_thread_search_documents.updated_at
   `);
 };
 
@@ -105,7 +107,15 @@ export const backfillChatThreadSearchIndex = async (): Promise<number> => {
     }
 
     for (const row of batch) {
-      await upsertChatThreadSearchDocument(row.id);
+      try {
+        await upsertChatThreadSearchDocument(row.id);
+      } catch (error) {
+        captureError(error, {
+          feature: "chat_search.backfill",
+          threadId: row.id,
+        });
+        logger.error("chat_search.backfill_failed", { threadId: row.id });
+      }
     }
 
     cursor = String(last.id);

@@ -158,6 +158,69 @@ describe("search summary chat", () => {
     );
   });
 
+  test("does not let chat hits consume the summary search limit", async () => {
+    const organizationId = toSafeId<"organization">("org_1");
+    const workspaceId = toSafeId<"workspace">("ws_1");
+    const tx = {
+      query: {
+        workspaces: {
+          findMany: mock(async () => [{ id: workspaceId }]),
+        },
+      },
+      insert: mock((_table: unknown) => ({
+        values: mock(async (_values: unknown) => {}),
+      })),
+      select: dbSelectMock,
+    };
+    const { safeDb, scopedDb } = createScopedDbMock(tx);
+
+    searchGlobalMock.mockResolvedValueOnce({
+      facets: { editor: [], mimeType: [], type: [], workspace: [] },
+      hits: [
+        {
+          entityId: "entity_1",
+          headline: null,
+          id: "entity:entity_1",
+          lastEditedByImage: null,
+          lastEditedByName: null,
+          mimeType: "application/pdf",
+          title: "Motion.pdf",
+          type: "document",
+          updatedAt: "2026-04-30T08:00:00.000Z",
+          workspaceId,
+          workspaceName: "Motion matter",
+        },
+      ],
+      nextCursor: null,
+      totalCount: 1,
+    });
+
+    const { createSearchSummaryChatThread } =
+      await import("@/api/handlers/search/ai");
+    await createSearchSummaryChatThread({
+      accessibleWorkspaceIds: [workspaceId],
+      body: {
+        ...emptySearchSummaryFilters(),
+        citations: [{ number: 1 }],
+        limit: 1,
+        query: "motion",
+        summary: "Relevant document [1].",
+        title: "Search summary",
+        types: ["chat", "document"],
+        workspaceIds: [workspaceId],
+      },
+      organizationId,
+      safeDb,
+      search: searchGlobalMock,
+      scopedDb,
+      userId: toSafeId<"user">("user_1"),
+      recordAuditEvent: noopAuditRecorder,
+    });
+
+    const call = searchGlobalMock.mock.calls.at(0)?.[0];
+    expect(call).toMatchObject({ types: ["document"] });
+  });
+
   test("stores global summary chat thread for unfiltered summary chats", async () => {
     const organizationId = toSafeId<"organization">("org_1");
     const workspaceId = toSafeId<"workspace">("ws_1");

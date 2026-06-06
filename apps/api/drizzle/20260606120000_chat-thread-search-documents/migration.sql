@@ -7,6 +7,7 @@ CREATE TABLE "chat_thread_search_documents" (
 );
 --> statement-breakpoint
 ALTER TABLE "chat_thread_search_documents" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "chat_thread_search_documents" TO stella;--> statement-breakpoint
 CREATE INDEX "chat_thread_search_docs_tsv_idx" ON "chat_thread_search_documents" USING gin ("tsv");--> statement-breakpoint
 ALTER TABLE "chat_thread_search_documents" ADD CONSTRAINT "chat_thread_search_documents_thread_id_chat_threads_id_fkey" FOREIGN KEY ("thread_id") REFERENCES "chat_threads"("id") ON DELETE CASCADE;--> statement-breakpoint
 CREATE POLICY "chat_thread_search_document_select" ON "chat_thread_search_documents" AS PERMISSIVE FOR SELECT TO "stella" USING (EXISTS (

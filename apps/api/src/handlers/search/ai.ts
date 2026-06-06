@@ -12,6 +12,7 @@ import {
   chatMessages,
   chatThreads,
   contactSearchDocuments,
+  ENTITY_KINDS,
   searchDocuments,
   workspaceSearchDocuments,
 } from "@/api/db/schema";
@@ -39,14 +40,23 @@ import {
   buildSearchTsQuery,
   validateStellaSearchQuery,
 } from "@/api/lib/search/query";
-import type { GlobalSearchHit } from "@/api/lib/search/types";
-import { GLOBAL_SEARCH_RESULT_TYPES } from "@/api/lib/search/types";
+import {
+  GLOBAL_SEARCH_RESULT_TYPES,
+  type GlobalSearchHit,
+  type GlobalSearchResultType,
+} from "@/api/lib/search/types";
 
 const SEARCH_SUMMARY_RESULT_LIMIT = 5;
 const SEARCH_CONTEXT_CHARS_PER_RESULT = 3000;
 const SEARCH_CONTEXT_TOTAL_CHARS = 14_000;
 const SEARCH_REFINE_MAX_ATTEMPTS = 3;
 const SEARCH_SUMMARY_CITATION_LIMIT = 5;
+const CITABLE_SEARCH_RESULT_TYPES = [
+  "matter",
+  "contact",
+  "case-law",
+  ...ENTITY_KINDS,
+] as const satisfies readonly GlobalSearchResultType[];
 
 export const refineSearchOutputSchema = v.strictObject({
   query: v.pipe(
@@ -168,6 +178,16 @@ type SearchSummaryCitation = {
   title: string;
   type: string;
   reason: string;
+};
+
+const citableSummaryTypes = (
+  types: readonly GlobalSearchResultType[],
+): readonly GlobalSearchResultType[] => {
+  if (types.length === 0) {
+    return CITABLE_SEARCH_RESULT_TYPES;
+  }
+
+  return types.filter((type) => type !== "chat");
 };
 
 type SearchSummaryChatContext = {
@@ -714,13 +734,18 @@ const loadSummaryContexts = async ({
   selectedWorkspaceIds: readonly SafeId<"workspace">[];
   scopedDb: ScopedDb;
 }) => {
+  const types = citableSummaryTypes(filters.types);
+  if (filters.types.length > 0 && types.length === 0) {
+    return [];
+  }
+
   const searchResult = await search({
     query: filters.query,
     organizationId,
     userId,
     accessibleWorkspaceIds,
     selectedWorkspaceIds,
-    types: filters.types,
+    types,
     editedByUserIds: filters.editedByUserIds,
     mimeTypes: filters.mimeTypes,
     updatedFrom: filters.updatedFrom,
