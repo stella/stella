@@ -1,10 +1,11 @@
 import { inArray, sql } from "drizzle-orm";
-import { status, t } from "elysia";
+import { status } from "elysia";
 import type { Static } from "elysia";
 
 import { caseLawDecisions } from "@/api/db/schema";
 import { courtWeightSql } from "@/api/handlers/case-law/citation-score";
 import { validCaseLawLanguageAlternateCountSql } from "@/api/handlers/case-law/decisions/language";
+import type { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
 import { bodyPreviewJoin } from "@/api/handlers/case-law/decisions/search-sql";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
@@ -37,27 +38,6 @@ const toNullableString = (x: unknown): string | null => {
 const headlineRegconfig = sql`
   'public.stella_unaccent'::regconfig
 `;
-
-export const searchDecisionsBodySchema = t.Object({
-  query: t.String({
-    minLength: 1,
-    maxLength: LIMITS.searchQueryMaxLength,
-  }),
-  limit: t.Optional(
-    t.Number({
-      minimum: 1,
-      maximum: LIMITS.caseLawSearchPageSizeMax,
-    }),
-  ),
-  cursor: t.Optional(t.String()),
-  court: t.Optional(t.String({ maxLength: 512 })),
-  country: t.Optional(t.String({ maxLength: 3 })),
-  dateFrom: t.Optional(t.String({ format: "date" })),
-  dateTo: t.Optional(t.String({ format: "date" })),
-  decisionType: t.Optional(t.String({ maxLength: 128 })),
-  sourceId: t.Optional(t.String({ maxLength: 36 })),
-  language: t.Optional(t.String({ maxLength: 8 })),
-});
 
 type SearchDecisionsBody = Static<typeof searchDecisionsBodySchema>;
 

@@ -20,6 +20,7 @@ import { decryptContent } from "@/api/lib/content-encryption";
 import { LIMITS } from "@/api/lib/limits";
 import {
   brandPersistedCaseLawDecisionId,
+  brandPersistedCaseLawSourceId,
   brandPersistedContactId,
   brandPersistedEntityId,
 } from "@/api/lib/safe-id-boundaries";
@@ -45,6 +46,8 @@ import {
 } from "@/api/mcp/tool-utils";
 
 const MCP_CONTENT_MAX_CHARS = 8000;
+const UUID_PATTERN =
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/u;
 
 type StellaToolName =
   | "get_matter_overview"
@@ -701,6 +704,9 @@ const handleSearchCaseLawTool: McpToolHandler = async ({ args, context }) => {
   if (isToolErrorResult(sourceId)) {
     return sourceId;
   }
+  if (sourceId !== undefined && !UUID_PATTERN.test(sourceId)) {
+    return errorResult("Invalid parameter: source_id. Expected a UUID");
+  }
   const dateFrom = parseOptionalDateArg({ args, key: "date_from" });
   if (isToolErrorResult(dateFrom)) {
     return dateFrom;
@@ -719,7 +725,9 @@ const handleSearchCaseLawTool: McpToolHandler = async ({ args, context }) => {
       ...(country === undefined ? {} : { country }),
       ...(language === undefined ? {} : { language }),
       ...(decisionType === undefined ? {} : { decisionType }),
-      ...(sourceId === undefined ? {} : { sourceId }),
+      ...(sourceId === undefined
+        ? {}
+        : { sourceId: brandPersistedCaseLawSourceId(sourceId) }),
       ...(dateFrom === undefined ? {} : { dateFrom }),
       ...(dateTo === undefined ? {} : { dateTo }),
     },
@@ -740,7 +748,12 @@ const handleSearchCaseLawTool: McpToolHandler = async ({ args, context }) => {
     results: result.hits.map((hit) => ({
       appUrl: buildCaseLawDecisionUrl({
         caseNumber: hit.caseNumber,
-        decisionId: hit.decisionId,
+        country: hit.country,
+        court: hit.court,
+        decisionDate: hit.decisionDate,
+        language: hit.language,
+        languageAlternateCount: hit.languageAlternateCount,
+        slug: hit.slug,
       }),
       caseNumber: hit.caseNumber,
       citationCount: hit.citationCount,
@@ -786,7 +799,12 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
     decision: {
       appUrl: buildCaseLawDecisionUrl({
         caseNumber: result.caseNumber,
-        decisionId: result.id,
+        country: result.country,
+        court: result.court,
+        decisionDate: result.decisionDate,
+        language: result.language,
+        languageAlternates: result.languageAlternates,
+        slug: result.slug,
       }),
       caseNumber: result.caseNumber,
       citationsFrom: result.citationsFrom.slice(0, 50),

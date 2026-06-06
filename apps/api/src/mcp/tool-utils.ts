@@ -170,22 +170,159 @@ export const buildDocumentUrl = ({
   `${getAppBaseUrl()}/workspaces/${workspaceId}/all/pdf?entity=${encodeURIComponent(entityId)}&field=${encodeURIComponent(fieldId)}`;
 
 const slugifyCaseNumber = (caseNumber: string) =>
-  caseNumber
-    .toLowerCase()
-    .replace(/\//gu, "-")
-    .replace(/\s+/gu, "-")
-    .replace(/[^a-z0-9-]/gu, "");
+  slugifyCaseLawPathSegment(caseNumber);
+
+const UNKNOWN_DATE_SEGMENT = "unknown-date";
+const UNKNOWN_COURT_SEGMENT = "unknown-court";
+const LANGUAGE_SEGMENT_REGEX = /^(?=.{2,8}$)[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/u;
+
+const trimSlugHyphens = (value: string): string => {
+  let start = 0;
+  while (value.at(start) === "-") {
+    start += 1;
+  }
+
+  let end = value.length;
+  while (end > start && value.at(end - 1) === "-") {
+    end -= 1;
+  }
+
+  return value.slice(start, end);
+};
+
+const slugifyCaseLawPathSegment = (value: string): string => {
+  const slug = trimSlugHyphens(
+    value
+      .normalize("NFKD")
+      .toLowerCase()
+      .replace(/\p{Diacritic}/gu, "")
+      .replace(/[^a-z0-9]+/gu, "-"),
+  );
+
+  return slug.length > 0 ? slug : "unknown";
+};
+
+const normalizeCaseLawStoredSlug = (
+  slug: string | null | undefined,
+): string | null => {
+  if (!slug?.trim()) {
+    return null;
+  }
+
+  return slugifyCaseLawPathSegment(slug);
+};
+
+const normalizeCaseLawLanguageSegment = (
+  language: string | null | undefined,
+): string | null => {
+  const normalized = language?.trim().toLowerCase().replace(/_/gu, "-");
+  if (!normalized || !LANGUAGE_SEGMENT_REGEX.test(normalized)) {
+    return null;
+  }
+
+  return normalized;
+};
+
+const formatDecisionDateSegment = (value: Date | string | null): string => {
+  if (value === null) {
+    return UNKNOWN_DATE_SEGMENT;
+  }
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime())
+      ? UNKNOWN_DATE_SEGMENT
+      : value.toISOString().slice(0, 10);
+  }
+
+  const rawDate = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/u.test(rawDate)) {
+    return rawDate;
+  }
+
+  const date = new Date(rawDate);
+  return Number.isNaN(date.getTime())
+    ? UNKNOWN_DATE_SEGMENT
+    : date.toISOString().slice(0, 10);
+};
+
+const isCaseLawLanguageAlternate = (
+  alternate: unknown,
+): alternate is { language: string } =>
+  typeof alternate === "object" &&
+  alternate !== null &&
+  "language" in alternate &&
+  typeof alternate.language === "string";
+
+const getCaseLawLanguageAlternateCount = ({
+  languageAlternateCount,
+  languageAlternates,
+}: {
+  languageAlternateCount?: number | null | undefined;
+  languageAlternates?: readonly unknown[] | null | undefined;
+}): number => {
+  if (languageAlternateCount !== null && languageAlternateCount !== undefined) {
+    return languageAlternateCount;
+  }
+
+  if (!languageAlternates) {
+    return 0;
+  }
+
+  const languages = new Set<string>();
+  for (const alternate of languageAlternates) {
+    if (!isCaseLawLanguageAlternate(alternate)) {
+      continue;
+    }
+
+    const normalized = normalizeCaseLawLanguageSegment(alternate.language);
+    if (normalized !== null) {
+      languages.add(normalized);
+    }
+  }
+
+  return languages.size;
+};
 
 export const buildCaseLawDecisionUrl = ({
   caseNumber,
-  decisionId,
+  country,
+  court,
+  decisionDate,
+  language,
+  languageAlternateCount,
+  languageAlternates,
+  slug,
 }: {
   caseNumber: string;
-  decisionId: string;
-}) =>
-  `${getAppBaseUrl()}/knowledge/case/${encodeURIComponent(
-    `${slugifyCaseNumber(caseNumber)}--${decisionId}`,
-  )}`;
+  country: string;
+  court: string;
+  decisionDate: Date | string | null;
+  language?: string | null | undefined;
+  languageAlternateCount?: number | null | undefined;
+  languageAlternates?: readonly unknown[] | null | undefined;
+  slug?: string | null | undefined;
+}) => {
+  const languageSegment = normalizeCaseLawLanguageSegment(language);
+  const courtSegment =
+    court.trim().length > 0
+      ? slugifyCaseLawPathSegment(court)
+      : UNKNOWN_COURT_SEGMENT;
+  const basePath = `${getAppBaseUrl()}/law/${country.toLowerCase()}/cases/${courtSegment}/${formatDecisionDateSegment(decisionDate)}`;
+  const decisionSlug =
+    normalizeCaseLawStoredSlug(slug) ?? slugifyCaseNumber(caseNumber);
+
+  if (
+    languageSegment !== null &&
+    getCaseLawLanguageAlternateCount({
+      languageAlternateCount,
+      languageAlternates,
+    }) > 1
+  ) {
+    return `${basePath}/${languageSegment}/${decisionSlug}`;
+  }
+
+  return `${basePath}/${decisionSlug}`;
+};
 
 export const getOrgTools = (context: McpRequestContext) =>
   createOrgTools({

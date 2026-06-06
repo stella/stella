@@ -11,10 +11,8 @@ import {
   readDecisionBySlugHandler,
   readDecisionHandler,
 } from "@/api/handlers/case-law/decisions/read-by-id";
-import {
-  searchDecisionsBodySchema,
-  searchDecisionsHandler,
-} from "@/api/handlers/case-law/decisions/search";
+import { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
+import { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
 import {
   listSitemapShardDecisionsHandler,
   listSitemapShardsHandler,

@@ -23,6 +23,8 @@ const FACETS_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/facets.ts";
 const SEARCH_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/search.ts";
+const SEARCH_DECISIONS_SCHEMA_FILE =
+  "apps/api/src/handlers/case-law/decisions/search-schema.ts";
 const LANGUAGE_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/language.ts";
 const SITEMAP_DECISIONS_FILE =
@@ -38,6 +40,8 @@ const readListSource = async () => await readSource(LIST_DECISIONS_FILE);
 const readDecisionSource = async () => await readSource(READ_DECISION_FILE);
 const readFacetsSource = async () => await readSource(FACETS_DECISIONS_FILE);
 const readSearchSource = async () => await readSource(SEARCH_DECISIONS_FILE);
+const readSearchSchemaSource = async () =>
+  await readSource(SEARCH_DECISIONS_SCHEMA_FILE);
 const readLanguageSource = async () =>
   await readSource(LANGUAGE_DECISIONS_FILE);
 const readSitemapSource = async () => await readSource(SITEMAP_DECISIONS_FILE);
@@ -175,6 +179,12 @@ describe("public case-law route boundary", () => {
     expect(source).toContain("validCaseLawLanguageAlternateCountSql");
     expect(source).toContain("languageAlternateCount:");
     expect(source).toContain("languageGroupKey,");
+  });
+
+  test("public search validates source IDs before SQL filters", async () => {
+    const source = await readSearchSchemaSource();
+
+    expect(source).toContain('sourceId: t.Optional(tSafeId("caseLawSource"))');
   });
 
   test("public language alternate counts only include route-safe languages", async () => {
