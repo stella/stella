@@ -512,7 +512,13 @@ export const ShapeExtension = createNodeExtension({
               ? { outlineWidth: Number(d["outlineWidth"]) }
               : {}),
             ...(d["outlineColor"] ? { outlineColor: d["outlineColor"] } : {}),
-            ...(d["outlineStyle"] ? { outlineStyle: d["outlineStyle"] } : {}),
+            ...(d["outlineStyle"]
+              ? {
+                  outlineStyle: d["outlineStyle"] as NonNullable<
+                    ShapeAttrs["outlineStyle"]
+                  >,
+                }
+              : {}),
             ...(d["outlineCap"]
               ? {
                   outlineCap: d["outlineCap"] as NonNullable<

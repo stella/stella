@@ -394,7 +394,7 @@ export type ShapeAttrs = {
   /** Outline color as CSS color */
   outlineColor?: string;
   /** Outline style */
-  outlineStyle?: string;
+  outlineStyle?: NonNullable<ShapeOutline["style"]>;
   /** Line cap */
   outlineCap?: NonNullable<ShapeOutline["cap"]>;
   /** Head arrow/end marker */
@@ -452,7 +452,7 @@ export type TextBoxAttrs = {
   /** Outline color as CSS color */
   outlineColor?: string;
   /** Outline style */
-  outlineStyle?: string;
+  outlineStyle?: NonNullable<ShapeOutline["style"]>;
   /** Internal margin top in pixels */
   marginTop?: number;
   /** Internal margin bottom in pixels */

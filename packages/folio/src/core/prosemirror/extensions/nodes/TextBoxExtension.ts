@@ -6,7 +6,7 @@
  * Supports inline and floating positioning.
  */
 
-import type { ImageWrap } from "../../../types/document";
+import type { ImageWrap, ShapeOutline } from "../../../types/document";
 import { IMAGE_WRAP_TYPE_VALUES } from "../../../types/documentEnumValues";
 import { expectTextBoxAttrs } from "../../attrs";
 import type { ImagePositionAttrs } from "../../schema/nodes";
@@ -26,7 +26,7 @@ export type TextBoxAttrs = {
   /** Outline color as CSS color */
   outlineColor?: string;
   /** Outline style */
-  outlineStyle?: string;
+  outlineStyle?: NonNullable<ShapeOutline["style"]>;
   /** Internal margin top in pixels */
   marginTop?: number;
   /** Internal margin bottom in pixels */
@@ -142,7 +142,13 @@ export const TextBoxExtension = createNodeExtension({
               ? { outlineWidth: Number(d["outlineWidth"]) }
               : {}),
             ...(d["outlineColor"] ? { outlineColor: d["outlineColor"] } : {}),
-            ...(d["outlineStyle"] ? { outlineStyle: d["outlineStyle"] } : {}),
+            ...(d["outlineStyle"]
+              ? {
+                  outlineStyle: d["outlineStyle"] as NonNullable<
+                    TextBoxAttrs["outlineStyle"]
+                  >,
+                }
+              : {}),
             ...(d["marginTop"] ? { marginTop: Number(d["marginTop"]) } : {}),
             ...(d["marginBottom"]
               ? { marginBottom: Number(d["marginBottom"]) }

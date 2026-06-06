@@ -1719,13 +1719,12 @@ function createShapeRun(node: PMNode): Run {
 
   // Outline
   if (
-    attrs.outlineStyle !== "none" &&
-    ((attrs.outlineWidth !== undefined && attrs.outlineWidth > 0) ||
-      attrs.outlineColor ||
-      attrs.outlineStyle ||
-      attrs.outlineCap ||
-      attrs.outlineHeadEnd ||
-      attrs.outlineTailEnd)
+    (attrs.outlineWidth !== undefined && attrs.outlineWidth > 0) ||
+    attrs.outlineColor ||
+    attrs.outlineStyle ||
+    attrs.outlineCap ||
+    attrs.outlineHeadEnd ||
+    attrs.outlineTailEnd
   ) {
     const shapeOutline: ShapeOutline = {};
     if (attrs.outlineWidth !== undefined && attrs.outlineWidth > 0) {
