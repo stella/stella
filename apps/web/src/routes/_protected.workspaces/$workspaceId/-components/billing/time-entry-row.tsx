@@ -10,6 +10,7 @@ import {
 import { useTranslations } from "use-intl";
 
 import { prorateHourlyCents } from "@stll/money";
+import type { CentsAmount } from "@stll/money";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import { cn } from "@stll/ui/lib/utils";
@@ -26,7 +27,7 @@ type TimeEntry = {
   dateWorked: string;
   durationMinutes: number;
   billedMinutes: number;
-  rateAtEntry: number;
+  rateAtEntry: CentsAmount;
   currency: string;
   narrative: string;
   invoiceNarrative: string | null;
