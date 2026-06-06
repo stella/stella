@@ -2095,18 +2095,20 @@ function extractFloatingZones(
   blocks: FlowBlock[],
   contentWidth: number,
   marginTop: number | number[] = 0,
-  pageGeometry: BandPageGeometry = { pageHeight: 0, marginBottom: 0 },
+  pageGeometry?: BandPageGeometry,
 ): FloatingZoneWithAnchor[] {
   const zones: FloatingZoneWithAnchor[] = [];
   const defaultMarginTop = Array.isArray(marginTop)
     ? (marginTop[0] ?? 0)
     : marginTop;
-  const defaultPageHeight = Array.isArray(pageGeometry.pageHeight)
-    ? (pageGeometry.pageHeight[0] ?? 0)
-    : pageGeometry.pageHeight;
-  const defaultMarginBottom = Array.isArray(pageGeometry.marginBottom)
-    ? (pageGeometry.marginBottom[0] ?? 0)
-    : pageGeometry.marginBottom;
+  const pageHeightInput = pageGeometry?.pageHeight ?? 0;
+  const marginBottomInput = pageGeometry?.marginBottom ?? 0;
+  const defaultPageHeight = Array.isArray(pageHeightInput)
+    ? (pageHeightInput[0] ?? 0)
+    : pageHeightInput;
+  const defaultMarginBottom = Array.isArray(marginBottomInput)
+    ? (marginBottomInput[0] ?? 0)
+    : marginBottomInput;
 
   for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
     const block = blocks[blockIndex]!; // SAFETY: blockIndex < blocks.length
@@ -2284,13 +2286,13 @@ function extractFloatingZones(
     // Shared with layoutTextBox so the reserved band and the painted box agree.
     const rawTop = bandTopContentY(v, {
       pageHeight: perBlockNumberValue(
-        pageGeometry.pageHeight,
+        pageHeightInput,
         blockIndex,
         defaultPageHeight,
       ),
       marginTop: blockMarginTop,
       marginBottom: perBlockNumberValue(
-        pageGeometry.marginBottom,
+        marginBottomInput,
         blockIndex,
         defaultMarginBottom,
       ),
@@ -2429,7 +2431,7 @@ export function measureBlocks(
   blocks: FlowBlock[],
   contentWidth: number | number[],
   marginTop: number | number[] = 0,
-  pageGeometry: BandPageGeometry = { pageHeight: 0, marginBottom: 0 },
+  pageGeometry?: BandPageGeometry,
 ): Measure[] {
   const defaultWidth = Array.isArray(contentWidth)
     ? (contentWidth[0] ?? 0)
