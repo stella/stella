@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build",
+    "build": "vite build && bun scripts/assert-start-runtime-build.ts",
     "build:analyze": "vite build --mode analyze",
     "clean": "git clean -xdf .cache .turbo node_modules",
     "typegen": "bun ../../packages/scripts/src/i18n-typegen.ts src/i18n/langs",
@@ -28,6 +28,7 @@
     "@base-ui/react": "catalog:",
     "@better-auth/oauth-provider": "catalog:",
     "@elysiajs/eden": "^1.4.9",
+    "@fontsource-variable/source-serif-4": "^5.2.9",
     "@hocuspocus/provider": "^4.1.0",
     "@libpdf/core": "catalog:",
     "@posthog/react": "^1.9.1",

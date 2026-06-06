@@ -5,7 +5,6 @@
     "": {
       "name": "stella",
       "devDependencies": {
-        "@fontsource-variable/source-serif-4": "^5.2.9",
         "@stll/oxlint-config": "0.3.0",
         "@stll/typescript-config": "workspace:^0.0.0",
         "@tanstack/eslint-plugin-query": "catalog:",
@@ -222,6 +221,7 @@
         "@base-ui/react": "catalog:",
         "@better-auth/oauth-provider": "catalog:",
         "@elysiajs/eden": "^1.4.9",
+        "@fontsource-variable/source-serif-4": "^5.2.9",
         "@hocuspocus/provider": "^4.1.0",
         "@libpdf/core": "catalog:",
         "@posthog/react": "^1.9.1",
