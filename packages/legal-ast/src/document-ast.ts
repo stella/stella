@@ -1,28 +1,20 @@
 /**
- * Canonical legal-document AST shared by the case-law API and web viewer.
+ * Canonical legal-document AST shared by legal corpus readers and parsers.
  */
+
+import type { Inline } from "./inline.js";
+
+export type {
+  Inline,
+  InlineBold,
+  InlineItalic,
+  InlineLineBreak,
+  InlineLink,
+  InlineText,
+} from "./inline.js";
 
 const isRecord = (val: unknown): val is Record<string, unknown> =>
   typeof val === "object" && val !== null;
-
-export type InlineText = {
-  type: "text";
-  text: string;
-  /** True when this text was anonymized by the court. */
-  anonymized?: true;
-};
-
-export type InlineBold = { type: "bold"; children: Inline[] };
-export type InlineItalic = { type: "italic"; children: Inline[] };
-export type InlineLink = { type: "link"; href: string; children: Inline[] };
-export type InlineLineBreak = { type: "line-break" };
-
-export type Inline =
-  | InlineText
-  | InlineBold
-  | InlineItalic
-  | InlineLink
-  | InlineLineBreak;
 
 export type HeadingBlock = {
   id: string;

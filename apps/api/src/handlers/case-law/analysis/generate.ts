@@ -15,16 +15,16 @@ import type {
   AnalysisInProgress,
   DecisionAnalysis,
   PersistedDecisionAnalysis,
-} from "@stll/case-law/analysis";
+} from "@stll/legal-ast/analysis";
 import {
   analysisHeadingSchema,
   isAnalysisInProgress,
   isAnalysisGenerating,
   isDecisionAnalysis,
   parsePersistedDecisionAnalysis,
-} from "@stll/case-law/analysis";
-import type { DocumentAst } from "@stll/case-law/document-ast";
-import { hasUsableAst } from "@stll/case-law/document-ast";
+} from "@stll/legal-ast/analysis";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import type { ScopedDb } from "@/api/db";
 // SAFETY: rootDb is used only inside runGeneration, which runs in

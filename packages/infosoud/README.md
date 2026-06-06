@@ -1,7 +1,14 @@
+<p align="center">
+  <img src=".github/assets/banner.png" alt="stll/infosoud" width="100%" />
+</p>
+
 # @stll/infosoud
 
 TypeScript SDK and Bun-first CLI for the public
 [InfoSoud](https://infosoud.gov.cz) endpoints used for Czech court case lookup.
+
+Look up Czech court files, hearings, timeline events, and event detail payloads
+from the command line or a typed SDK.
 
 The package name is `@stll/infosoud`; the CLI binary remains `infosoud`.
 

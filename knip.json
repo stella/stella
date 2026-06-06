@@ -63,8 +63,14 @@
       "entry": ["src/**/*.astro", "astro.config.*", "postcss.config.mjs"],
       "ignoreDependencies": ["@tailwindcss/postcss"]
     },
-    "packages/case-law": {
-      "entry": ["src/*.ts", "src/**/*.test.ts"]
+    "apps/legal-atlas-runner": {
+      "entry": ["src/**/*.test.ts"]
+    },
+    "packages/legal-atlas": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"]
+    },
+    "packages/legal-ast": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"]
     },
     "packages/permissions": {
       "entry": ["src/index.ts"]

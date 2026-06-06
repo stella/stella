@@ -1,0 +1,17 @@
+{
+  "extends": "@stll/typescript-config/base.json",
+  "compilerOptions": {
+    "target": "ES2024",
+    "lib": ["ESNext"],
+    "module": "ESNext",
+    "paths": {
+      "@stll/legal-ast": ["../../packages/legal-ast/src/index.ts"],
+      "@stll/legal-ast/*": ["../../packages/legal-ast/src/*.ts"],
+      "@stll/legal-atlas": ["../../packages/legal-atlas/src/index.ts"],
+      "@stll/legal-atlas/*": ["../../packages/legal-atlas/src/*.ts"]
+    },
+    "types": ["bun"]
+  },
+  "include": ["src"],
+  "exclude": ["node_modules"]
+}

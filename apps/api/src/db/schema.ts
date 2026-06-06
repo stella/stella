@@ -1,5 +1,5 @@
-import type { PersistedDecisionAnalysis } from "@stll/case-law/analysis";
-import type { DocumentAst } from "@stll/case-law/document-ast";
+import type { PersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { CountryCode } from "@stll/country-codes";
 import { panic } from "better-result";
 import { defineRelations, isNotNull, isNull, sql } from "drizzle-orm";

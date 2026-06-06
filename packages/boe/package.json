@@ -21,6 +21,7 @@
     "directory": "packages/boe"
   },
   "files": [
+    ".github/assets/banner.png",
     "dist",
     "src",
     "README.md"

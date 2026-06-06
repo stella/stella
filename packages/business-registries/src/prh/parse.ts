@@ -23,7 +23,7 @@ const PRH_AVOINDATA_URL =
   "https://avoindata.prh.fi/opendata-ytj-api/v3/companies?businessId=";
 
 // PRH language codes: "1" = Finnish, "2" = Swedish, "3" = English.
-// Stella's product UI is English-first with Finnish as the most
+// stella's product UI is English-first with Finnish as the most
 // likely fallback for a Finnish entity.
 const DESCRIPTION_LANGUAGE_PRIORITY = ["3", "1", "2"] as const;
 const ADDRESS_CITY_LANGUAGE_PRIORITY = ["3", "1", "2"] as const;

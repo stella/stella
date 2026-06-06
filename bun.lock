@@ -70,7 +70,6 @@
         "@stll/anonymize-wasm": "catalog:",
         "@stll/boe": "workspace:*",
         "@stll/business-registries": "workspace:*",
-        "@stll/case-law": "workspace:*",
         "@stll/catalogue": "workspace:*",
         "@stll/country-codes": "workspace:*",
         "@stll/docx-core": "workspace:*",
@@ -78,6 +77,7 @@
         "@stll/errors": "workspace:*",
         "@stll/folio": "workspace:*",
         "@stll/infosoud": "workspace:*",
+        "@stll/legal-ast": "workspace:*",
         "@stll/money": "workspace:*",
         "@stll/permissions": "workspace:*",
         "@stll/skills": "workspace:*",
@@ -189,6 +189,18 @@
         "typescript": "catalog:",
       },
     },
+    "apps/legal-atlas-runner": {
+      "name": "@stll/legal-atlas-runner",
+      "version": "0.0.0",
+      "dependencies": {
+        "@stll/legal-atlas": "workspace:*",
+      },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "@types/bun": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "apps/playground": {
       "name": "@stll/playground",
       "version": "0.1.0",
@@ -231,11 +243,11 @@
         "@stll/anonymize-data": "catalog:",
         "@stll/anonymize-wasm": "catalog:",
         "@stll/api": "workspace:*",
-        "@stll/case-law": "workspace:*",
         "@stll/catalogue": "workspace:*",
         "@stll/country-codes": "workspace:*",
         "@stll/errors": "workspace:*",
         "@stll/folio": "workspace:*",
+        "@stll/legal-ast": "workspace:*",
         "@stll/money": "workspace:*",
         "@stll/permissions": "workspace:*",
         "@stll/template-conditions": "workspace:*",
@@ -367,18 +379,6 @@
         "typescript": "catalog:",
       },
     },
-    "packages/case-law": {
-      "name": "@stll/case-law",
-      "version": "0.0.0",
-      "dependencies": {
-        "valibot": "catalog:",
-      },
-      "devDependencies": {
-        "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
-        "typescript": "catalog:",
-      },
-    },
     "packages/catalogue": {
       "name": "@stll/catalogue",
       "version": "0.0.0",
@@ -491,6 +491,31 @@
         "infosoud": "./dist/cli.js",
       },
       "dependencies": {
+        "better-result": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "@types/bun": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/legal-ast": {
+      "name": "@stll/legal-ast",
+      "version": "0.0.0",
+      "dependencies": {
+        "valibot": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "@types/bun": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/legal-atlas": {
+      "name": "@stll/legal-atlas",
+      "version": "0.0.0",
+      "dependencies": {
+        "@stll/legal-ast": "workspace:*",
         "better-result": "catalog:",
       },
       "devDependencies": {
@@ -1669,8 +1694,6 @@
 
     "@stll/business-registries": ["@stll/business-registries@workspace:packages/business-registries"],
 
-    "@stll/case-law": ["@stll/case-law@workspace:packages/case-law"],
-
     "@stll/catalogue": ["@stll/catalogue@workspace:packages/catalogue"],
 
     "@stll/collab": ["@stll/collab@workspace:apps/collab"],
@@ -1694,6 +1717,12 @@
     "@stll/infosoud": ["@stll/infosoud@workspace:packages/infosoud"],
 
     "@stll/landing": ["@stll/landing@workspace:apps/landing"],
+
+    "@stll/legal-ast": ["@stll/legal-ast@workspace:packages/legal-ast"],
+
+    "@stll/legal-atlas": ["@stll/legal-atlas@workspace:packages/legal-atlas"],
+
+    "@stll/legal-atlas-runner": ["@stll/legal-atlas-runner@workspace:apps/legal-atlas-runner"],
 
     "@stll/money": ["@stll/money@workspace:packages/money"],
 

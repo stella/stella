@@ -1,3 +1,7 @@
+<p align="center">
+  <img src=".github/assets/banner.png" alt="stll/country-codes" width="100%" />
+</p>
+
 # @stll/country-codes
 
 The canonical ISO 3166-1 alpha-2 country code list used across the stella
