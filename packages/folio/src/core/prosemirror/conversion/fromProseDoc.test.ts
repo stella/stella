@@ -797,6 +797,28 @@ describe("fromProseDoc", () => {
     expect(firstShapeContent(block)?.shape.outline?.style).toBe("dash");
   });
 
+  test("drops a text-box outline for the 'none' sentinel even with a lingering width", () => {
+    const exportTextBox = (outlineStyle: string) => {
+      const document = fromProseDoc(
+        schema.node("doc", null, [
+          schema.node(
+            "textBox",
+            { width: 120, height: 60, outlineWidth: 2, outlineStyle },
+            [schema.node("paragraph", null, [schema.text("x")])],
+          ),
+        ]),
+      );
+      const block = document.package.document.content.at(0);
+      const run = block?.type === "paragraph" ? block.content.at(0) : undefined;
+      const content = run?.type === "run" ? run.content.at(0) : undefined;
+      return content?.type === "shape" ? content.shape : undefined;
+    };
+
+    // "none" suppresses the outline; a real style with the same width keeps it.
+    expect(exportTextBox("none")?.outline).toBeUndefined();
+    expect(exportTextBox("solid")?.outline?.width).toBeGreaterThan(0);
+  });
+
   test("preserves imported shape transform attrs on save", () => {
     const pmDoc = schema.node("doc", null, [
       schema.node("paragraph", null, [

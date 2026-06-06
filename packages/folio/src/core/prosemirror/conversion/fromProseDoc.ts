@@ -2585,8 +2585,13 @@ function convertPMTextBox(node: PMNode): Paragraph {
     };
   }
 
-  // Convert outline back
-  if (attrs.outlineWidth && attrs.outlineWidth > 0) {
+  // Convert outline back. `outlineStyle === "none"` is the explicit no-outline
+  // sentinel: drop the `<a:ln>` even if a width lingers, matching the shape path.
+  if (
+    attrs.outlineStyle !== "none" &&
+    attrs.outlineWidth &&
+    attrs.outlineWidth > 0
+  ) {
     const tbOutline: ShapeOutline = {
       width: pixelsToEmu(attrs.outlineWidth),
       style: normalizeShapeOutlineStyle(attrs.outlineStyle) ?? "solid",
