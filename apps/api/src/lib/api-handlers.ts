@@ -14,7 +14,8 @@ import { roles } from "@stll/permissions";
 import type { SafeDb, ScopedDb } from "@/api/db";
 import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
 import { env } from "@/api/env";
-import type { OrgAIConfig } from "@/api/lib/ai-models";
+import { getModelInfoForRole } from "@/api/lib/ai-models";
+import type { ModelRole, OrgAIConfig } from "@/api/lib/ai-models";
 import { captureRequestError } from "@/api/lib/analytics";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
@@ -59,7 +60,7 @@ export type UsageMeteringConfig = {
    * to `getModelForRole(...)` so cross-cutting analytics match
    * the actual model.
    */
-  modelRole?: string;
+  modelRole?: ModelRole;
 };
 
 export type HandlerConfig = InputSchema & {
@@ -324,6 +325,7 @@ const createSafeScopedHandler = <
       ? resolveMeteringContext({
           metering,
           organizationId: ctx.session.activeOrganizationId,
+          orgAIConfig: ctx.orgAIConfig,
           workspaceId: hasWorkspaceId(ctx) ? ctx.workspaceId : null,
           userId: ctx.user.id,
         })
@@ -355,21 +357,21 @@ type ResolvedMeteringContext = {
 const resolveMeteringContext = ({
   metering,
   organizationId,
+  orgAIConfig,
   workspaceId,
   userId,
 }: {
   metering: UsageMeteringConfig;
   organizationId: SafeId<"organization">;
+  orgAIConfig: OrgAIConfig | null;
   workspaceId: SafeId<"workspace"> | null;
   userId: SafeId<"user">;
 }): ResolvedMeteringContext => {
   const serviceTier = metering.serviceTier ?? "standard";
-  // BYOK resolution requires reading the org's AI config. In
-  // observation mode (and for v1) we record false; future work
-  // can plumb the real org-level BYOK status into the pre-flight
-  // estimate. Post-flight step metering already records the actual
-  // source from the resolved model info.
-  const isByok = false;
+  const modelRole = metering.modelRole ?? "chat";
+  const isByok =
+    orgAIConfig !== null &&
+    getModelInfoForRole(modelRole, orgAIConfig).keySource === "byok";
   const cost = computeUsageUnitCost({
     actionType: metering.actionType,
     serviceTier,
