@@ -10,9 +10,10 @@ import type {
   ImageWrap,
   SdtProperties,
   SdtType,
-  ShapeOutline,
   TableWidthType,
 } from "@stll/docx-core/model";
+
+import type { OutlineStyleAttr } from "../types/documentEnumValues";
 
 /**
  * Unique identifier for a block in the document.
@@ -649,8 +650,8 @@ export type TextBoxBlock = {
   outlineWidth?: number;
   /** Border color */
   outlineColor?: string;
-  /** Border style */
-  outlineStyle?: NonNullable<ShapeOutline["style"]>;
+  /** Outline dash style, or `"none"` for an explicit no-outline. */
+  outlineStyle?: OutlineStyleAttr;
   /** Internal padding */
   margins?: { top: number; bottom: number; left: number; right: number };
   /** Paragraph blocks inside the text box */

@@ -6,8 +6,11 @@
  * Supports inline and floating positioning.
  */
 
-import type { ImageWrap, ShapeOutline } from "../../../types/document";
-import { IMAGE_WRAP_TYPE_VALUES } from "../../../types/documentEnumValues";
+import type { ImageWrap } from "../../../types/document";
+import {
+  IMAGE_WRAP_TYPE_VALUES,
+  type OutlineStyleAttr,
+} from "../../../types/documentEnumValues";
 import { expectTextBoxAttrs } from "../../attrs";
 import type { ImagePositionAttrs } from "../../schema/nodes";
 import { createNodeExtension } from "../create";
@@ -25,8 +28,8 @@ export type TextBoxAttrs = {
   outlineWidth?: number;
   /** Outline color as CSS color */
   outlineColor?: string;
-  /** Outline style */
-  outlineStyle?: NonNullable<ShapeOutline["style"]>;
+  /** Outline dash style, or `"none"` for an explicit no-outline. */
+  outlineStyle?: OutlineStyleAttr;
   /** Internal margin top in pixels */
   marginTop?: number;
   /** Internal margin bottom in pixels */

@@ -11,11 +11,11 @@ import {
   IMAGE_WRAP_TEXT_VALUES,
   IMAGE_WRAP_TYPE_VALUES,
   LINE_SPACING_RULE_VALUES,
+  OUTLINE_STYLE_ATTR_VALUES,
   PARAGRAPH_ALIGNMENT_VALUES,
   SDT_LOCK_VALUES,
   SDT_TYPE_VALUES,
   SHADING_PATTERN_VALUES,
-  SHAPE_OUTLINE_STYLE_VALUES,
   TABLE_CELL_TEXT_DIRECTION_VALUES,
   TABLE_CELL_VERTICAL_ALIGNMENT_VALUES,
   TABLE_JUSTIFICATION_VALUES,
@@ -882,7 +882,7 @@ export const readShapeAttrs = (
     "outlineStyle",
     "shape.attrs.outlineStyle",
     issues,
-    SHAPE_OUTLINE_STYLE_VALUES,
+    OUTLINE_STYLE_ATTR_VALUES,
   );
   optionalOneOf(
     attrs,
@@ -968,7 +968,7 @@ export const readTextBoxAttrs = (
     "outlineStyle",
     "textBox.attrs.outlineStyle",
     issues,
-    SHAPE_OUTLINE_STYLE_VALUES,
+    OUTLINE_STYLE_ATTR_VALUES,
   );
   optionalNumber(attrs, "marginTop", "textBox.attrs.marginTop", issues);
   optionalNumber(attrs, "marginBottom", "textBox.attrs.marginBottom", issues);

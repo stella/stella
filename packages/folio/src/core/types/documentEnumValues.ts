@@ -674,6 +674,25 @@ export const SHAPE_OUTLINE_STYLE_VALUES = [
   "sysDashDotDot",
 ] as const satisfies readonly NonNullable<ShapeOutline["style"]>[];
 
+/**
+ * Outline-style values for the shape / text-box ProseMirror attribute. Extends
+ * the OOXML dash styles ({@link SHAPE_OUTLINE_STYLE_VALUES}) with the folio
+ * sentinel `"none"`: an explicit "no outline" the author can choose, distinct
+ * from an unset style (which falls back to the node's default). The DOCX
+ * serializer (`createShapeRun`) suppresses the `<a:ln>` element when the style
+ * is `"none"`, and `data-outline-style="none"` carries that intent through the
+ * editor DOM, so a border-free shape round-trips border-free. Kept as a valid
+ * value (not stripped) so loading a document that persisted `"none"` does not
+ * fail validation. eigenpal #694.
+ */
+export const OUTLINE_STYLE_ATTR_VALUES = [
+  ...SHAPE_OUTLINE_STYLE_VALUES,
+  "none",
+] as const;
+
+/** A shape/text-box outline dash style, or `"none"` for an explicit no-outline. */
+export type OutlineStyleAttr = (typeof OUTLINE_STYLE_ATTR_VALUES)[number];
+
 export const NUMBER_FORMAT_VALUES = [
   "decimal",
   "upperRoman",

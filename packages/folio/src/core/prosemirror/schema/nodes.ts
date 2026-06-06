@@ -33,6 +33,7 @@ import type {
   SdtProperties,
   SdtType,
 } from "../../types/document";
+import type { OutlineStyleAttr } from "../../types/documentEnumValues";
 import type { SpacingExplicit } from "../../types/formatting";
 
 export type HardBreakAttrs = {
@@ -393,8 +394,8 @@ export type ShapeAttrs = {
   outlineWidth?: number;
   /** Outline color as CSS color */
   outlineColor?: string;
-  /** Outline style */
-  outlineStyle?: NonNullable<ShapeOutline["style"]>;
+  /** Outline dash style, or `"none"` for an explicit no-outline. */
+  outlineStyle?: OutlineStyleAttr;
   /** Line cap */
   outlineCap?: NonNullable<ShapeOutline["cap"]>;
   /** Head arrow/end marker */
@@ -451,8 +452,8 @@ export type TextBoxAttrs = {
   outlineWidth?: number;
   /** Outline color as CSS color */
   outlineColor?: string;
-  /** Outline style */
-  outlineStyle?: NonNullable<ShapeOutline["style"]>;
+  /** Outline dash style, or `"none"` for an explicit no-outline. */
+  outlineStyle?: OutlineStyleAttr;
   /** Internal margin top in pixels */
   marginTop?: number;
   /** Internal margin bottom in pixels */

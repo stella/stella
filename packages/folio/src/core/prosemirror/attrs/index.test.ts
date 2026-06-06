@@ -424,6 +424,26 @@ describe("ProseMirror attr readers", () => {
     }
   });
 
+  test("accepts the explicit 'none' outline style (legacy round-trip)", () => {
+    // "none" is the no-outline sentinel persisted in existing documents (see
+    // OUTLINE_STYLE_ATTR_VALUES). It must validate rather than panic, and stay
+    // unchanged, even though it is not an OOXML dash style. eigenpal #694.
+    const shape = schema.nodes.shape.create({ outlineStyle: "none" });
+    const textBox = schema.nodes.textBox.create({ outlineStyle: "none" });
+
+    const shapeResult = readShapeAttrs(shape);
+    const textBoxResult = readTextBoxAttrs(textBox);
+
+    expect(shapeResult.ok).toBe(true);
+    if (shapeResult.ok) {
+      expect(shapeResult.value.outlineStyle).toBe("none");
+    }
+    expect(textBoxResult.ok).toBe(true);
+    if (textBoxResult.ok) {
+      expect(textBoxResult.value.outlineStyle).toBe("none");
+    }
+  });
+
   test("rejects malformed hyperlink mark attrs", () => {
     const mark = schema.marks.hyperlink.create({ href: 42 });
 

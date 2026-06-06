@@ -1717,14 +1717,18 @@ function createShapeRun(node: PMNode): Run {
     shape.fill = { type: "none" };
   }
 
-  // Outline
+  // Outline. `outlineStyle === "none"` is the explicit "no outline" sentinel
+  // (see OUTLINE_STYLE_ATTR_VALUES): suppress the `<a:ln>` element entirely so a
+  // border-free shape round-trips border-free, even if other outline attrs (a
+  // leftover colour/width) linger on the node.
   if (
-    (attrs.outlineWidth !== undefined && attrs.outlineWidth > 0) ||
-    attrs.outlineColor ||
-    attrs.outlineStyle ||
-    attrs.outlineCap ||
-    attrs.outlineHeadEnd ||
-    attrs.outlineTailEnd
+    attrs.outlineStyle !== "none" &&
+    ((attrs.outlineWidth !== undefined && attrs.outlineWidth > 0) ||
+      attrs.outlineColor ||
+      attrs.outlineStyle ||
+      attrs.outlineCap ||
+      attrs.outlineHeadEnd ||
+      attrs.outlineTailEnd)
   ) {
     const shapeOutline: ShapeOutline = {};
     if (attrs.outlineWidth !== undefined && attrs.outlineWidth > 0) {
