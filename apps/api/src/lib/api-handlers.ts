@@ -397,7 +397,7 @@ const runUsagePreflight = async ({
 }: {
   ctx: PreflightCtx;
   meteringContext: ResolvedMeteringContext;
-}): Promise<SafeStatusResponse<402> | null> => {
+}): Promise<SafeStatusResponse<402 | 500> | null> => {
   if (meteringContext.cost <= 0) {
     return null;
   }
@@ -419,7 +419,7 @@ const runUsagePreflight = async ({
       error: checkResult.error,
       statusCode: 500,
     });
-    return null;
+    return toSafeStatusResponse(500, { message: "Internal server error" });
   }
   const check = checkResult.value;
   if (check.ok) {
