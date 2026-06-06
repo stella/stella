@@ -10,6 +10,32 @@ const hostname = Bun.env.HOST ?? DEFAULT_HOST;
 
 /** @typedef {{ fetch(request: Request): Response | Promise<Response> }} StartHandler */
 
+/**
+ * @param {unknown} candidate Imported TanStack Start handler candidate.
+ * @returns {candidate is StartHandler} Whether the candidate exposes the Start fetch API.
+ */
+const isStartHandler = (candidate) =>
+  typeof candidate === "object" &&
+  candidate !== null &&
+  "fetch" in candidate &&
+  typeof candidate.fetch === "function";
+
+/**
+ * @param {unknown} candidate Imported TanStack Start handler candidate.
+ * @returns {StartHandler} Validated TanStack Start request handler.
+ */
+const createStartHandler = (candidate) => {
+  if (!isStartHandler(candidate)) {
+    throw new TypeError(
+      "TanStack Start server bundle must export a fetch handler.",
+    );
+  }
+
+  return candidate;
+};
+
+const startHandler = createStartHandler(handler);
+
 /** @param {URL} requestUrl Parsed incoming request URL. */
 const toClientAssetUrl = (requestUrl) => {
   let pathname;
@@ -95,7 +121,6 @@ Bun.serve({
       return assetResponse;
     }
 
-    const startHandler = /** @type {StartHandler} */ (handler);
     return await startHandler.fetch(request);
   },
 });
