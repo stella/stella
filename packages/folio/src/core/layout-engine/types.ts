@@ -5,7 +5,15 @@
  * Converts document blocks + measurements into positioned fragments on pages.
  */
 
-import type { ImagePosition } from "@stll/docx-core/model";
+import type {
+  ImagePosition,
+  ImageWrap,
+  SdtProperties,
+  SdtType,
+  TableWidthType,
+} from "@stll/docx-core/model";
+
+import type { OutlineStyleAttr } from "../types/documentEnumValues";
 
 /**
  * Unique identifier for a block in the document.
@@ -27,6 +35,11 @@ export type RunFormatting = {
   strike?: boolean;
   color?: string;
   textColorSource?: "direct" | "paragraphDefault";
+  // TODO: cannot tighten to NonNullable<TextFormatting["highlight"]> (the OOXML
+  // named-color union). The bridge stores a *resolved CSS* color here via
+  // `resolveHighlightToCss` (named color → hex, or raw `#hex`), so values like
+  // `#FFFF00` are not union members. Either keep a separate CSS field or move
+  // resolution to the painter before this can become the named-color union.
   highlight?: string;
   fontFamily?: string;
   fontSize?: number;
@@ -175,7 +188,7 @@ export type ImageRun = {
   /** Position for floating/anchored images */
   position?: ImageRunPosition;
   /** Wrap type from DOCX (inline, square, tight, through, topAndBottom, etc.) */
-  wrapType?: string;
+  wrapType?: ImageWrap["type"];
   /** Display mode for CSS rendering */
   displayMode?: "inline" | "block" | "float";
   /** CSS float direction */
@@ -308,7 +321,12 @@ export type TabStop = {
  * Border specification for paragraphs.
  */
 export type BorderStyle = {
-  style?: string;
+  // TODO: this holds a *CSS* border-style (solid, double, ridge, groove, …),
+  // mapped from OOXML by `OOXML_TO_CSS_BORDER` in the bridge. It is NOT the
+  // OOXML `KnownBorderStyle` union (single/thinThickSmallGap/…), and includes
+  // CSS-only values (ridge/groove) that have no union member. Move the OOXML→CSS
+  // mapping to the painter to make this the `KnownBorderStyle` union.
+  style?: string; // CSS border-style
   width?: number; // in pixels
   color?: string; // CSS color
   space?: number; // spacing from text in pixels (from w:space, converted from pt)
@@ -440,6 +458,9 @@ export type ParagraphBlock = {
 export type CellBorderSpec = {
   width?: number; // pixels
   color?: string; // CSS color
+  // TODO: CSS border-style mapped from OOXML by the bridge, not the OOXML
+  // `KnownBorderStyle` union (see BorderStyle.style). Includes CSS-only values
+  // (ridge/groove) with no union member.
   style?: string; // CSS border-style (solid, dashed, dotted, double)
 };
 
@@ -513,7 +534,7 @@ export type TableBlock = {
   /** Table width value (twips for dxa, 50ths of percent for pct). */
   width?: number;
   /** Table width type ('auto', 'pct', 'dxa', 'nil'). */
-  widthType?: string;
+  widthType?: TableWidthType;
   /** Table horizontal alignment */
   justification?: "left" | "center" | "right";
   /** Table indent from left margin (in pixels, from w:tblInd) */
@@ -629,8 +650,8 @@ export type TextBoxBlock = {
   outlineWidth?: number;
   /** Border color */
   outlineColor?: string;
-  /** Border style */
-  outlineStyle?: string;
+  /** Outline dash style, or `"none"` for an explicit no-outline. */
+  outlineStyle?: OutlineStyleAttr;
   /** Internal padding */
   margins?: { top: number; bottom: number; left: number; right: number };
   /** Paragraph blocks inside the text box */
@@ -640,7 +661,7 @@ export type TextBoxBlock = {
   /** CSS float direction copied from the ProseMirror text box node. */
   cssFloat?: "left" | "right" | "none";
   /** OOXML wrap type for anchored text boxes. */
-  wrapType?: string;
+  wrapType?: ImageWrap["type"];
   /** OOXML wrapText direction for anchored text boxes. */
   wrapText?: "bothSides" | "left" | "right" | "largest";
   /** Position for floating/anchored text boxes (OOXML EMU offsets). */
@@ -671,7 +692,7 @@ export type SdtGroup = {
    * the addressing API uses this to disambiguate SDTs that share a tag.
    */
   pmPos: number;
-  sdtType: string;
+  sdtType: SdtType;
   /** OOXML `w:alias` (friendly display name). */
   alias?: string;
   /** OOXML `w:tag` (developer identifier — anchor for addressing API). */
@@ -679,7 +700,7 @@ export type SdtGroup = {
   /** OOXML numeric `w:id`. */
   sdtId?: number;
   /** OOXML `w:lock` setting. */
-  lock?: string;
+  lock?: NonNullable<SdtProperties["lock"]>;
   /** True if `w:showingPlcHdr` is set. */
   showingPlaceholder?: boolean;
   /** Modeled checkbox state, when the control is `w14:checkbox`. */

@@ -512,7 +512,13 @@ export const ShapeExtension = createNodeExtension({
               ? { outlineWidth: Number(d["outlineWidth"]) }
               : {}),
             ...(d["outlineColor"] ? { outlineColor: d["outlineColor"] } : {}),
-            ...(d["outlineStyle"] ? { outlineStyle: d["outlineStyle"] } : {}),
+            ...(d["outlineStyle"]
+              ? {
+                  outlineStyle: d["outlineStyle"] as NonNullable<
+                    ShapeAttrs["outlineStyle"]
+                  >,
+                }
+              : {}),
             ...(d["outlineCap"]
               ? {
                   outlineCap: d["outlineCap"] as NonNullable<
@@ -752,9 +758,13 @@ export const ShapeExtension = createNodeExtension({
         fillAttr = attrs.fillType === "none" ? "none" : safeFillColor;
       }
 
+      // `outlineStyle === "none"` is the explicit no-outline sentinel: draw no
+      // stroke even if a width/colour lingers (mirrors `fillType === "none"`).
+      const strokeAttr =
+        attrs.outlineStyle === "none" ? "none" : safeStrokeColor;
       svg.setAttribute(
         "style",
-        `fill:${fillAttr};stroke:${safeStrokeColor};stroke-width:${strokeWidth}`,
+        `fill:${fillAttr};stroke:${strokeAttr};stroke-width:${strokeWidth}`,
       );
 
       if (gradient) {

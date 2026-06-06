@@ -11,6 +11,7 @@ import {
   IMAGE_WRAP_TEXT_VALUES,
   IMAGE_WRAP_TYPE_VALUES,
   LINE_SPACING_RULE_VALUES,
+  OUTLINE_STYLE_ATTR_VALUES,
   PARAGRAPH_ALIGNMENT_VALUES,
   SDT_LOCK_VALUES,
   SDT_TYPE_VALUES,
@@ -876,7 +877,13 @@ export const readShapeAttrs = (
   );
   optionalNumber(attrs, "outlineWidth", "shape.attrs.outlineWidth", issues);
   optionalString(attrs, "outlineColor", "shape.attrs.outlineColor", issues);
-  optionalString(attrs, "outlineStyle", "shape.attrs.outlineStyle", issues);
+  optionalOneOf(
+    attrs,
+    "outlineStyle",
+    "shape.attrs.outlineStyle",
+    issues,
+    OUTLINE_STYLE_ATTR_VALUES,
+  );
   optionalOneOf(
     attrs,
     "outlineCap",
@@ -956,7 +963,13 @@ export const readTextBoxAttrs = (
   optionalString(attrs, "fillColor", "textBox.attrs.fillColor", issues);
   optionalNumber(attrs, "outlineWidth", "textBox.attrs.outlineWidth", issues);
   optionalString(attrs, "outlineColor", "textBox.attrs.outlineColor", issues);
-  optionalString(attrs, "outlineStyle", "textBox.attrs.outlineStyle", issues);
+  optionalOneOf(
+    attrs,
+    "outlineStyle",
+    "textBox.attrs.outlineStyle",
+    issues,
+    OUTLINE_STYLE_ATTR_VALUES,
+  );
   optionalNumber(attrs, "marginTop", "textBox.attrs.marginTop", issues);
   optionalNumber(attrs, "marginBottom", "textBox.attrs.marginBottom", issues);
   optionalNumber(attrs, "marginLeft", "textBox.attrs.marginLeft", issues);

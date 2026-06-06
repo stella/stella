@@ -424,6 +424,30 @@ describe("ProseMirror attr readers", () => {
     }
   });
 
+  test("accepts non-OOXML outline styles persisted in existing docs", () => {
+    // The folio attr also holds values outside ST_PresetLineDashVal: the CSS
+    // aliases `dashed`/`dotted` (mapped to OOXML on export) and the `"none"`
+    // no-outline sentinel. All must validate rather than panic, and stay
+    // unchanged. See OUTLINE_STYLE_ATTR_VALUES. eigenpal #694.
+    for (const outlineStyle of ["none", "dashed", "dotted"] as const) {
+      const shapeResult = readShapeAttrs(
+        schema.nodes.shape.create({ outlineStyle }),
+      );
+      const textBoxResult = readTextBoxAttrs(
+        schema.nodes.textBox.create({ outlineStyle }),
+      );
+
+      expect(shapeResult.ok).toBe(true);
+      if (shapeResult.ok) {
+        expect(shapeResult.value.outlineStyle).toBe(outlineStyle);
+      }
+      expect(textBoxResult.ok).toBe(true);
+      if (textBoxResult.ok) {
+        expect(textBoxResult.value.outlineStyle).toBe(outlineStyle);
+      }
+    }
+  });
+
   test("rejects malformed hyperlink mark attrs", () => {
     const mark = schema.marks.hyperlink.create({ href: 42 });
 

@@ -7,7 +7,10 @@
  */
 
 import type { ImageWrap } from "../../../types/document";
-import { IMAGE_WRAP_TYPE_VALUES } from "../../../types/documentEnumValues";
+import {
+  IMAGE_WRAP_TYPE_VALUES,
+  type OutlineStyleAttr,
+} from "../../../types/documentEnumValues";
 import { expectTextBoxAttrs } from "../../attrs";
 import type { ImagePositionAttrs } from "../../schema/nodes";
 import { createNodeExtension } from "../create";
@@ -25,8 +28,8 @@ export type TextBoxAttrs = {
   outlineWidth?: number;
   /** Outline color as CSS color */
   outlineColor?: string;
-  /** Outline style */
-  outlineStyle?: string;
+  /** Outline dash style, or `"none"` for an explicit no-outline. */
+  outlineStyle?: OutlineStyleAttr;
   /** Internal margin top in pixels */
   marginTop?: number;
   /** Internal margin bottom in pixels */
@@ -142,7 +145,13 @@ export const TextBoxExtension = createNodeExtension({
               ? { outlineWidth: Number(d["outlineWidth"]) }
               : {}),
             ...(d["outlineColor"] ? { outlineColor: d["outlineColor"] } : {}),
-            ...(d["outlineStyle"] ? { outlineStyle: d["outlineStyle"] } : {}),
+            ...(d["outlineStyle"]
+              ? {
+                  outlineStyle: d["outlineStyle"] as NonNullable<
+                    TextBoxAttrs["outlineStyle"]
+                  >,
+                }
+              : {}),
             ...(d["marginTop"] ? { marginTop: Number(d["marginTop"]) } : {}),
             ...(d["marginBottom"]
               ? { marginBottom: Number(d["marginBottom"]) }
@@ -271,12 +280,14 @@ export const TextBoxExtension = createNodeExtension({
         styles.push(`background-color: ${attrs.fillColor}`);
       }
 
-      // Border/outline
+      // Border/outline. `outlineStyle === "none"` is the explicit no-outline
+      // sentinel: skip even the default editor border so it stays border-free
+      // like its export.
       if (attrs.outlineWidth && attrs.outlineWidth > 0) {
         const style = attrs.outlineStyle || "solid";
         const color = attrs.outlineColor || "#000000";
         styles.push(`border: ${attrs.outlineWidth}px ${style} ${color}`);
-      } else {
+      } else if (attrs.outlineStyle !== "none") {
         // Default thin border for text boxes
         styles.push("border: 1px solid var(--doc-border, #d1d5db)");
       }
