@@ -3147,47 +3147,6 @@ export function PagedEditor(
         setBlocks(newBlocks);
         recordPhaseDuration("flow-blocks", phaseStartedAt);
 
-        // Compute per-block widths accounting for section breaks with different column configs
-        phaseStartedAt = performance.now();
-        const bodyLayoutConfig: SectionLayoutConfig = {
-          pageSize,
-          margins,
-        };
-        if (columns !== undefined) {
-          bodyLayoutConfig.columns = columns;
-        }
-        const blockMeasureInputs = computePerBlockMeasureInputs({
-          blocks: newBlocks,
-          bodyConfig: bodyLayoutConfig,
-          finalConfig: bodyLayoutConfig,
-        });
-        const blockWidths = blockMeasureInputs.widths;
-        const incrementalResult =
-          options.dirtyRange && !options.forceFull && layoutArtifactsRef.current
-            ? tryBuildIncrementalMeasures({
-                previousBlocks: layoutArtifactsRef.current.blocks,
-                previousMeasures: layoutArtifactsRef.current.measures,
-                previousBlockWidths: layoutArtifactsRef.current.blockWidths,
-                nextBlocks: newBlocks,
-                nextBlockWidths: blockWidths,
-                dirtyRange: options.dirtyRange,
-                measureBlock: measureSingleBlockWithoutFloatingZones,
-              })
-            : null;
-        const newMeasures =
-          incrementalResult?.measures ??
-          measureBlocks(newBlocks, blockWidths, blockMeasureInputs.marginTops, {
-            pageHeight: blockMeasureInputs.pageHeights,
-            marginBottom: blockMeasureInputs.marginBottoms,
-          });
-        layoutArtifactsRef.current = {
-          blocks: newBlocks,
-          blockWidths,
-          measures: newMeasures,
-        };
-        setMeasures(newMeasures);
-        recordPhaseDuration("measure-blocks", phaseStartedAt);
-
         // Step 2.5: Collect footnote references from blocks
         phaseStartedAt = performance.now();
         const footnoteRefs = collectFootnoteRefs(newBlocks);
@@ -3304,6 +3263,52 @@ export function PagedEditor(
           }
         }
         recordPhaseDuration("header-footer", phaseStartedAt);
+
+        // Compute per-block widths + band geometry from the EFFECTIVE margins
+        // layout uses (header/footer overflow extension + section-break margin
+        // extension applied above), so a page/margin-pinned topAndBottom band
+        // reserves its band at the same Y the box is painted. Measuring with the
+        // raw margins would mis-place the reserved band when a tall header/footer
+        // extends the margins. eigenpal #694.
+        phaseStartedAt = performance.now();
+        const bodyLayoutConfig: SectionLayoutConfig = {
+          pageSize,
+          margins: effectiveMargins,
+        };
+        if (columns !== undefined) {
+          bodyLayoutConfig.columns = columns;
+        }
+        const blockMeasureInputs = computePerBlockMeasureInputs({
+          blocks: newBlocks,
+          bodyConfig: bodyLayoutConfig,
+          finalConfig: bodyLayoutConfig,
+        });
+        const blockWidths = blockMeasureInputs.widths;
+        const incrementalResult =
+          options.dirtyRange && !options.forceFull && layoutArtifactsRef.current
+            ? tryBuildIncrementalMeasures({
+                previousBlocks: layoutArtifactsRef.current.blocks,
+                previousMeasures: layoutArtifactsRef.current.measures,
+                previousBlockWidths: layoutArtifactsRef.current.blockWidths,
+                nextBlocks: newBlocks,
+                nextBlockWidths: blockWidths,
+                dirtyRange: options.dirtyRange,
+                measureBlock: measureSingleBlockWithoutFloatingZones,
+              })
+            : null;
+        const newMeasures =
+          incrementalResult?.measures ??
+          measureBlocks(newBlocks, blockWidths, blockMeasureInputs.marginTops, {
+            pageHeight: blockMeasureInputs.pageHeights,
+            marginBottom: blockMeasureInputs.marginBottoms,
+          });
+        layoutArtifactsRef.current = {
+          blocks: newBlocks,
+          blockWidths,
+          measures: newMeasures,
+        };
+        setMeasures(newMeasures);
+        recordPhaseDuration("measure-blocks", phaseStartedAt);
 
         // Step 3: Layout blocks onto pages (two-pass if footnotes exist)
         phaseStartedAt = performance.now();
