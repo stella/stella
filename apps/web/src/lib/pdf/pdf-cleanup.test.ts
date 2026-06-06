@@ -2,10 +2,12 @@ import { describe, expect, it } from "bun:test";
 
 import { destroyPDFDocument } from "@/lib/pdf/pdf-cleanup";
 
-const makeTask = (sink: string[], id: string) => ({
-  destroy: () => {
-    sink.push(id);
-    return Promise.resolve();
+// Defers the side effect to a microtask so a non-awaiting destroyPDFDocument
+// would resolve before any onDestroy ran.
+const makeTask = (onDestroy: () => void) => ({
+  destroy: async () => {
+    await Promise.resolve();
+    onDestroy();
   },
 });
 
@@ -14,10 +16,16 @@ describe("destroyPDFDocument", () => {
     const destroyed: string[] = [];
 
     await destroyPDFDocument({
-      loadingTask: makeTask(destroyed, "main"),
+      loadingTask: makeTask(() => {
+        destroyed.push("main");
+      }),
       attachmentLoadingTasks: [
-        makeTask(destroyed, "att-1"),
-        makeTask(destroyed, "att-2"),
+        makeTask(() => {
+          destroyed.push("att-1");
+        }),
+        makeTask(() => {
+          destroyed.push("att-2");
+        }),
       ],
     });
 
@@ -28,7 +36,9 @@ describe("destroyPDFDocument", () => {
     const destroyed: string[] = [];
 
     await destroyPDFDocument({
-      loadingTask: makeTask(destroyed, "main"),
+      loadingTask: makeTask(() => {
+        destroyed.push("main");
+      }),
       attachmentLoadingTasks: [],
     });
 
@@ -36,30 +46,16 @@ describe("destroyPDFDocument", () => {
   });
 
   it("awaits every task's destroy() before resolving", async () => {
-    let settled = 0;
-    const deferred = () => {
-      let release = () => {};
-      const destroy = () =>
-        new Promise<void>((resolve) => {
-          release = () => {
-            settled++;
-            resolve();
-          };
-        });
-      return { destroy, release: () => release() };
+    let completed = 0;
+    const bump = () => {
+      completed++;
     };
 
-    const main = deferred();
-    const att = deferred();
-    const done = destroyPDFDocument({
-      loadingTask: { destroy: main.destroy },
-      attachmentLoadingTasks: [{ destroy: att.destroy }],
+    await destroyPDFDocument({
+      loadingTask: makeTask(bump),
+      attachmentLoadingTasks: [makeTask(bump), makeTask(bump)],
     });
 
-    main.release();
-    att.release();
-    await done;
-
-    expect(settled).toBe(2);
+    expect(completed).toBe(3);
   });
 });
