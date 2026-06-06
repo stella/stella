@@ -57,6 +57,10 @@ import type {
   ColorValue,
   CellMargins,
 } from "../../types/document";
+import {
+  OUTLINE_STYLE_CSS_ALIASES,
+  type OutlineStyleCssAlias,
+} from "../../types/documentEnumValues";
 import { pixelsToEmu } from "../../utils/units";
 import {
   expectCharacterSpacingMarkAttrs,
@@ -103,12 +107,14 @@ function normalizeShapeOutlineStyle(
   if (!style) {
     return undefined;
   }
-  const cssToOoxml: Record<string, NonNullable<ShapeOutline["style"]>> = {
-    solid: "solid",
-    dotted: "dot",
-    dashed: "dash",
-  };
-  return narrowEnum(cssToOoxml[style] ?? style, ShapeOutlineStyleSchema);
+  // Map a folio CSS alias to its OOXML dash style; OOXML values pass through.
+  // `"none"` is not an OOXML dash style, so it narrows to undefined here — the
+  // serializer's no-outline guard must drop the `<a:ln>` before calling this.
+  if (style in OUTLINE_STYLE_CSS_ALIASES) {
+    // SAFETY: the `in` check narrows `style` to a CSS-alias key.
+    return OUTLINE_STYLE_CSS_ALIASES[style as OutlineStyleCssAlias];
+  }
+  return narrowEnum(style, ShapeOutlineStyleSchema);
 }
 
 function parseTransformAttr(

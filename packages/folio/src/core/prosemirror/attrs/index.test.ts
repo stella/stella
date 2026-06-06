@@ -424,23 +424,27 @@ describe("ProseMirror attr readers", () => {
     }
   });
 
-  test("accepts the explicit 'none' outline style (legacy round-trip)", () => {
-    // "none" is the no-outline sentinel persisted in existing documents (see
-    // OUTLINE_STYLE_ATTR_VALUES). It must validate rather than panic, and stay
-    // unchanged, even though it is not an OOXML dash style. eigenpal #694.
-    const shape = schema.nodes.shape.create({ outlineStyle: "none" });
-    const textBox = schema.nodes.textBox.create({ outlineStyle: "none" });
+  test("accepts non-OOXML outline styles persisted in existing docs", () => {
+    // The folio attr also holds values outside ST_PresetLineDashVal: the CSS
+    // aliases `dashed`/`dotted` (mapped to OOXML on export) and the `"none"`
+    // no-outline sentinel. All must validate rather than panic, and stay
+    // unchanged. See OUTLINE_STYLE_ATTR_VALUES. eigenpal #694.
+    for (const outlineStyle of ["none", "dashed", "dotted"] as const) {
+      const shapeResult = readShapeAttrs(
+        schema.nodes.shape.create({ outlineStyle }),
+      );
+      const textBoxResult = readTextBoxAttrs(
+        schema.nodes.textBox.create({ outlineStyle }),
+      );
 
-    const shapeResult = readShapeAttrs(shape);
-    const textBoxResult = readTextBoxAttrs(textBox);
-
-    expect(shapeResult.ok).toBe(true);
-    if (shapeResult.ok) {
-      expect(shapeResult.value.outlineStyle).toBe("none");
-    }
-    expect(textBoxResult.ok).toBe(true);
-    if (textBoxResult.ok) {
-      expect(textBoxResult.value.outlineStyle).toBe("none");
+      expect(shapeResult.ok).toBe(true);
+      if (shapeResult.ok) {
+        expect(shapeResult.value.outlineStyle).toBe(outlineStyle);
+      }
+      expect(textBoxResult.ok).toBe(true);
+      if (textBoxResult.ok) {
+        expect(textBoxResult.value.outlineStyle).toBe(outlineStyle);
+      }
     }
   });
 

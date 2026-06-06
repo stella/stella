@@ -675,22 +675,54 @@ export const SHAPE_OUTLINE_STYLE_VALUES = [
 ] as const satisfies readonly NonNullable<ShapeOutline["style"]>[];
 
 /**
- * Outline-style values for the shape / text-box ProseMirror attribute. Extends
- * the OOXML dash styles ({@link SHAPE_OUTLINE_STYLE_VALUES}) with the folio
- * sentinel `"none"`: an explicit "no outline" the author can choose, distinct
- * from an unset style (which falls back to the node's default). The DOCX
- * serializer (`createShapeRun`) suppresses the `<a:ln>` element when the style
- * is `"none"`, and `data-outline-style="none"` carries that intent through the
- * editor DOM, so a border-free shape round-trips border-free. Kept as a valid
- * value (not stripped) so loading a document that persisted `"none"` does not
- * fail validation. eigenpal #694.
+ * CSS border-style names folio historically stored on `outlineStyle`. They are
+ * NOT part of OOXML `ST_PresetLineDashVal`; they exist only because the node
+ * kept CSS values. This tuple is the single source of truth for which aliases
+ * are accepted — both the serializer (`normalizeShapeOutlineStyle`) and the
+ * attr allow-list ({@link OUTLINE_STYLE_ATTR_VALUES}) derive from it, so they
+ * cannot drift apart. eigenpal #694.
+ */
+export const OUTLINE_STYLE_CSS_ALIAS_VALUES = ["dashed", "dotted"] as const;
+
+export type OutlineStyleCssAlias =
+  (typeof OUTLINE_STYLE_CSS_ALIAS_VALUES)[number];
+
+/**
+ * Each folio CSS alias and the OOXML dash style it serializes to. The
+ * `satisfies` keeps every alias key (from {@link OUTLINE_STYLE_CSS_ALIAS_VALUES})
+ * present and pointed at a real `ShapeOutline["style"]`, so an alias can never
+ * be listed without a mapping.
+ */
+export const OUTLINE_STYLE_CSS_ALIASES = {
+  dashed: "dash",
+  dotted: "dot",
+} as const satisfies Record<
+  OutlineStyleCssAlias,
+  NonNullable<ShapeOutline["style"]>
+>;
+
+/**
+ * Allowed `outlineStyle` values for the shape / text-box ProseMirror attribute:
+ * the complete OOXML `ST_PresetLineDashVal` set ({@link
+ * SHAPE_OUTLINE_STYLE_VALUES}, single-sourced from the docx-core model), the
+ * folio CSS aliases ({@link OUTLINE_STYLE_CSS_ALIAS_VALUES}), and the `"none"`
+ * sentinel — an explicit "no outline" the author can choose, distinct from an
+ * unset style (which falls back to the node default). The DOCX serializer
+ * suppresses the `<a:ln>` element for `"none"` and maps the aliases to OOXML, so
+ * every accepted value round-trips. All three groups are kept valid (not
+ * stripped) so loading a document that persisted any of them does not fail
+ * validation. eigenpal #694.
  */
 export const OUTLINE_STYLE_ATTR_VALUES = [
   ...SHAPE_OUTLINE_STYLE_VALUES,
+  ...OUTLINE_STYLE_CSS_ALIAS_VALUES,
   "none",
 ] as const;
 
-/** A shape/text-box outline dash style, or `"none"` for an explicit no-outline. */
+/**
+ * A shape/text-box outline dash style, a folio CSS alias, or `"none"` for an
+ * explicit no-outline.
+ */
 export type OutlineStyleAttr = (typeof OUTLINE_STYLE_ATTR_VALUES)[number];
 
 export const NUMBER_FORMAT_VALUES = [
