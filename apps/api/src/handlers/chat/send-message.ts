@@ -50,6 +50,7 @@ import {
 } from "@/api/handlers/chat/persist-message";
 import { hydrateMessages, streamChat } from "@/api/handlers/chat/stream-chat";
 import { createChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
+import { shouldMarkThreadUsedAnonymization } from "@/api/handlers/chat/thread-anonymization";
 import { shouldRefreshEmptyThreadTitle } from "@/api/handlers/chat/thread-title";
 import {
   intersectAccessibleWorkspaceIds,
@@ -459,6 +460,7 @@ const sendMessage = createSafeRootHandler(
 
     yield* Result.await(
       persistMessage({
+        acceptedSendMode: body.sendMode,
         recordAuditEvent,
         safeDb,
         threadId: body.threadId,
@@ -1474,6 +1476,7 @@ const getPdfFileRefForModel = (
 };
 
 type InsertMessagesProps = {
+  acceptedSendMode: ChatSendMode | null;
   messages: ChatMessage[];
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
@@ -1481,11 +1484,6 @@ type InsertMessagesProps = {
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
 };
-
-const messagesUsedAnonymization = (messages: readonly ChatMessage[]): boolean =>
-  messages.some((message) =>
-    message.parts.some((part) => part.type === "data-stella-anon-restorations"),
-  );
 
 type ResolveAssistantMessageRefsProps = {
   messages: ChatMessage[];
@@ -1544,6 +1542,7 @@ const hydrateAssistantMessageRefs = ({
 };
 
 const insertMessages = async ({
+  acceptedSendMode,
   messages,
   recordAuditEvent,
   safeDb,
@@ -1573,7 +1572,10 @@ const insertMessages = async ({
       .update(chatThreads)
       .set({
         updatedAt: new Date(),
-        ...(messagesUsedAnonymization(messages)
+        ...(shouldMarkThreadUsedAnonymization({
+          messages,
+          sendMode: acceptedSendMode,
+        })
           ? { usedAnonymization: true }
           : {}),
       })
@@ -1595,6 +1597,7 @@ const insertMessages = async ({
 };
 
 type PersistMessageProps = {
+  acceptedSendMode?: ChatSendMode | null;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
@@ -1611,6 +1614,7 @@ type PersistMessageProps = {
 };
 
 const persistMessage = async ({
+  acceptedSendMode = null,
   recordAuditEvent,
   safeDb,
   threadId,
@@ -1622,6 +1626,7 @@ const persistMessage = async ({
 }: PersistMessageProps) => {
   if (persistencePlan.type === "insert") {
     return await insertMessages({
+      acceptedSendMode,
       messages: [persistencePlan.message],
       recordAuditEvent,
       safeDb,
@@ -1674,7 +1679,10 @@ const persistMessage = async ({
           ...(dataWorkspaceIdsChange === undefined
             ? {}
             : { dataWorkspaceIds: dataWorkspaceIdsChange.newDataWorkspaceIds }),
-          ...(messagesUsedAnonymization([persistencePlan.message])
+          ...(shouldMarkThreadUsedAnonymization({
+            messages: [persistencePlan.message],
+            sendMode: acceptedSendMode,
+          })
             ? { usedAnonymization: true }
             : {}),
         })
@@ -1739,6 +1747,7 @@ const persistMessage = async ({
 
     yield* Result.await(
       insertMessages({
+        acceptedSendMode,
         messages: [persistencePlan.insertMessage],
         recordAuditEvent,
         safeDb,
