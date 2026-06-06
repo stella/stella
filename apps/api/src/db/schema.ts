@@ -2868,6 +2868,10 @@ export const chatThreads = p.pgTable(
     recapMessageId: safeUuid<"chatMessage">("recap_message_id"),
     recapPromptVersion: p.smallint("recap_prompt_version"),
     recapGeneratedAt: p.timestamp("recap_generated_at"),
+    usedAnonymization: p
+      .boolean("used_anonymization")
+      .notNull()
+      .default(false),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
     updatedAt: p
       .timestamp("updated_at")

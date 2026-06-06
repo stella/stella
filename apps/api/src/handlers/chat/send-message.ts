@@ -1482,6 +1482,11 @@ type InsertMessagesProps = {
   workspaceId: SafeId<"workspace"> | null;
 };
 
+const messagesUsedAnonymization = (messages: readonly ChatMessage[]): boolean =>
+  messages.some((message) =>
+    message.parts.some((part) => part.type === "data-stella-anon-restorations"),
+  );
+
 type ResolveAssistantMessageRefsProps = {
   messages: ChatMessage[];
   refRegistry: ReturnType<typeof createChatRefRegistry>;
@@ -1566,7 +1571,12 @@ const insertMessages = async ({
     );
     await tx
       .update(chatThreads)
-      .set({ updatedAt: new Date() })
+      .set({
+        updatedAt: new Date(),
+        ...(messagesUsedAnonymization(messages)
+          ? { usedAnonymization: true }
+          : {}),
+      })
       .where(eq(chatThreads.id, threadId));
 
     await recordAuditEvent(
@@ -1659,14 +1669,15 @@ const persistMessage = async ({
         .where(eq(chatMessages.id, updatedMessageId));
       await tx
         .update(chatThreads)
-        .set(
-          dataWorkspaceIdsChange === undefined
-            ? { updatedAt: new Date() }
-            : {
-                updatedAt: new Date(),
-                dataWorkspaceIds: dataWorkspaceIdsChange.newDataWorkspaceIds,
-              },
-        )
+        .set({
+          updatedAt: new Date(),
+          ...(dataWorkspaceIdsChange === undefined
+            ? {}
+            : { dataWorkspaceIds: dataWorkspaceIdsChange.newDataWorkspaceIds }),
+          ...(messagesUsedAnonymization([persistencePlan.message])
+            ? { usedAnonymization: true }
+            : {}),
+        })
         .where(eq(chatThreads.id, threadId));
 
       if (

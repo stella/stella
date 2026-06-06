@@ -5,6 +5,7 @@ import {
   buildRecapTranscript,
   RECAP_TRANSCRIPT_MAX_CHARS,
 } from "./thread-recap-transcript";
+import { buildRecapMessageWindow } from "./thread-recap-window";
 
 const textMessage = ({
   role,
@@ -44,5 +45,37 @@ describe("chat thread recap transcript", () => {
     expect(transcript).toContain("[...]");
     expect(transcript).toContain("Assistant: ");
     expect(transcript).toContain("Recent analysis");
+  });
+});
+
+describe("chat thread recap message window", () => {
+  test("preserves the first user turn before the recent tail", () => {
+    const messages = buildRecapMessageWindow({
+      firstUserMessage: { id: "first-user" },
+      recentMessagesDesc: [
+        { id: "latest-assistant" },
+        { id: "recent-user" },
+        { id: "older-assistant" },
+      ],
+    });
+
+    expect(messages.map((message) => message.id)).toEqual([
+      "first-user",
+      "older-assistant",
+      "recent-user",
+      "latest-assistant",
+    ]);
+  });
+
+  test("does not duplicate the first user turn when it is already recent", () => {
+    const messages = buildRecapMessageWindow({
+      firstUserMessage: { id: "first-user" },
+      recentMessagesDesc: [{ id: "latest-assistant" }, { id: "first-user" }],
+    });
+
+    expect(messages.map((message) => message.id)).toEqual([
+      "first-user",
+      "latest-assistant",
+    ]);
   });
 });

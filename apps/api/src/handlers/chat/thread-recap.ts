@@ -42,21 +42,6 @@ Write in the same language as the conversation. Be specific: name the actual top
 export const isThreadStaleForRecap = (lastMessageCreatedAt: Date): boolean =>
   Date.now() - lastMessageCreatedAt.getTime() > RECAP_STALENESS_THRESHOLD_MS;
 
-/**
- * Whether any turn in the thread was sent in anonymized mode.
- * Persisted messages store originals (the anonymization boundary only
- * swaps placeholders in-transit to the model), and anonymized turns
- * leave a `data-stella-anon-restorations` part behind. A recap built
- * from stored content and sent to the model would leak those
- * originals, so callers skip the recap when this is true.
- */
-export const threadUsedAnonymization = (
-  messages: readonly RecapMessage[],
-): boolean =>
-  messages.some((message) =>
-    message.parts.some((part) => part.type === "data-stella-anon-restorations"),
-  );
-
 const stripRecapPrefix = (value: string): string => {
   const prefix = "recap:";
   if (value.slice(0, prefix.length).toLowerCase() !== prefix) {

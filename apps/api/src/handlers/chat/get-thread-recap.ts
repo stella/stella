@@ -9,8 +9,11 @@ import {
   isThreadStaleForRecap,
   RECAP_MIN_MESSAGE_COUNT,
   RECAP_PROMPT_VERSION,
-  threadUsedAnonymization,
 } from "@/api/handlers/chat/thread-recap";
+import {
+  buildRecapMessageWindow,
+  RECAP_RECENT_MESSAGE_LIMIT,
+} from "@/api/handlers/chat/thread-recap-window";
 import { requireAIAvailable } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -61,17 +64,7 @@ const getThreadRecap = createSafeRootHandler(
             recapText: true,
             recapMessageId: true,
             recapPromptVersion: true,
-          },
-          with: {
-            messages: {
-              columns: {
-                id: true,
-                role: true,
-                content: true,
-                createdAt: true,
-              },
-              orderBy: { createdAt: "asc" },
-            },
+            usedAnonymization: true,
           },
         }),
       ),
@@ -101,31 +94,69 @@ const getThreadRecap = createSafeRootHandler(
       );
     }
 
+    if (thread.usedAnonymization) {
+      return Result.ok<ThreadRecapResult>({ recap: null });
+    }
+
+    const messageWindow = yield* Result.await(
+      safeDb(async (tx) => {
+        const firstUserMessages = await tx.query.chatMessages.findMany({
+          where: {
+            threadId: { eq: threadId },
+            userId: { eq: user.id },
+            role: { eq: "user" },
+          },
+          columns: {
+            id: true,
+            role: true,
+            content: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: "asc" },
+          limit: 1,
+        });
+        const recentMessagesDesc = await tx.query.chatMessages.findMany({
+          where: {
+            threadId: { eq: threadId },
+            userId: { eq: user.id },
+          },
+          columns: {
+            id: true,
+            role: true,
+            content: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: "desc" },
+          limit: RECAP_RECENT_MESSAGE_LIMIT,
+        });
+
+        return {
+          recentCount: recentMessagesDesc.length,
+          messages: buildRecapMessageWindow({
+            firstUserMessage: firstUserMessages.at(0) ?? null,
+            recentMessagesDesc,
+          }),
+        };
+      }),
+    );
+
     // Only recap a completed exchange the user is returning to after a
     // gap: the latest persisted turn must be an assistant message and
     // old enough to count as a revisit.
-    const lastMessage = thread.messages.at(-1);
+    const lastMessage = messageWindow.messages.at(-1);
     if (
       !lastMessage ||
       lastMessage.role !== "assistant" ||
-      thread.messages.length < RECAP_MIN_MESSAGE_COUNT ||
+      messageWindow.recentCount < RECAP_MIN_MESSAGE_COUNT ||
       !isThreadStaleForRecap(lastMessage.createdAt)
     ) {
       return Result.ok<ThreadRecapResult>({ recap: null });
     }
 
-    const recapMessages = thread.messages.map((row) => ({
+    const recapMessages = messageWindow.messages.map((row) => ({
       role: row.role,
       parts: row.content.data,
     }));
-
-    // Stored content holds originals; anonymized turns only ever sent
-    // placeholders to the model. Building a recap from this content
-    // and sending it to the model would bypass that boundary, so skip
-    // the recap entirely for any thread that used anonymization.
-    if (threadUsedAnonymization(recapMessages)) {
-      return Result.ok<ThreadRecapResult>({ recap: null });
-    }
 
     // Cache hit: the stored recap already covers this exact message
     // tail and prompt version, so no model call is needed.
