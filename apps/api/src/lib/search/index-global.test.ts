@@ -87,7 +87,7 @@ describe("global search SQL scope", () => {
     ]);
   });
 
-  test("narrows chat search to the selected workspaces", () => {
+  test("narrows chat search to selected thread or data workspaces", () => {
     const dialect = new PgDialect();
     const compiled = dialect.sqlToQuery(
       chatThreadScopeSql({
@@ -102,6 +102,7 @@ describe("global search SQL scope", () => {
     );
 
     expect(compiled.sql).toContain("t.workspace_id = ANY");
+    expect(compiled.sql).toContain("t.data_workspace_ids &&");
     expect(compiled.params).toEqual([
       "user_1",
       "org_1",
@@ -109,6 +110,7 @@ describe("global search SQL scope", () => {
       "ws_2",
       "ws_1",
       "ws_2",
+      "ws_1",
       "ws_1",
     ]);
   });

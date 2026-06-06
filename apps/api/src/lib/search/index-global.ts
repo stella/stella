@@ -239,9 +239,13 @@ export const chatThreadScopeSql = ({
   selectedWorkspaceIds,
 }: ChatScopeArgs): SQL => {
   const accessArray = typedPgArray(accessibleWorkspaceIds, "uuid");
+  const selectedArray = typedPgArray(selectedWorkspaceIds, "uuid");
   const selectedFilter =
     selectedWorkspaceIds.length > 0
-      ? sql`AND t.workspace_id = ANY(${typedPgArray(selectedWorkspaceIds, "uuid")})`
+      ? sql`AND (
+          t.workspace_id = ANY(${selectedArray})
+          OR t.data_workspace_ids && ${selectedArray}
+        )`
       : sql``;
   return sql`
     t.user_id = ${userId}
