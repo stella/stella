@@ -11,6 +11,13 @@ FROM base AS deps
 COPY --from=pruner /app/out/json/ .
 RUN bun install --filter @stll/web --frozen-lockfile --ignore-scripts --network-concurrency=8
 
+# Runtime install: the SSR server bundle (dist/server/server.js) externalises
+# its imports, so they must resolve from `dependencies` alone with
+# devDependencies stripped. The web-build CI job boot-smokes this same install.
+FROM base AS deps-prod
+COPY --from=pruner /app/out/json/ .
+RUN bun install --filter @stll/web --production --frozen-lockfile --ignore-scripts --network-concurrency=8
+
 FROM deps AS builder
 ARG STELLA_VERSION=dev
 ARG STELLA_COMMIT_SHA=dev
@@ -77,7 +84,7 @@ RUN VITE_API_URL="${PUBLIC_API_URL}" \
     VITE_TERMS_URL="${VITE_TERMS_URL}" \
     bun --filter @stll/web build
 
-FROM deps AS runner
+FROM deps-prod AS runner
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=3002

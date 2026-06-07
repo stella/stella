@@ -336,6 +336,41 @@ jobs:
         if: steps.changed.outputs.run == 'true'
         run: bun --filter @stll/web build
 
+      - name: Prod-deps web boot smoke
+        if: steps.changed.outputs.run == 'true'
+        # apps/web/Dockerfile's runner installs --production (deps-prod stage).
+        # Reproduce that clean production tree and boot start-runtime.js: a
+        # devDependency reached by the SSR server bundle (dist/server/server.js)
+        # fails to resolve here rather than at deploy time. /health is served by
+        # the runtime wrapper, so a clean boot proves the production module graph
+        # resolves.
+        env:
+          NPM_TOKEN: ""
+        run: |
+          set -euo pipefail
+          # `bun install --production` only skips ADDING devDependencies; it does
+          # not prune ones the build install above already placed in node_modules.
+          # Wipe node_modules first so the boot runs against the same clean
+          # production tree the Docker runner does (dist/ and .env are untouched).
+          rm -rf node_modules
+          bun install --production --frozen-lockfile --ignore-scripts
+          cd apps/web
+          PORT=3199 HOST=127.0.0.1 bun start-runtime.js &
+          server_pid=$!
+          ready=
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3199/health >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          kill "$server_pid" 2>/dev/null || true
+          if [[ "$ready" != "1" ]]; then
+            echo "web SSR runtime failed to boot under --production deps" >&2
+            exit 1
+          fi
+
   # Astro landing build. The existing ci-checks job runs lint,
   # typecheck, and test, but no `astro build`, so plugin/runtime
   # incompatibilities surface only at deploy time. Catch those
