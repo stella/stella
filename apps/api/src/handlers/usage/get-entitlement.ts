@@ -9,7 +9,11 @@ import { getRemainingUsageUnits } from "@/api/lib/usage";
 /** Read the caller organisation's usage entitlement and current state. */
 
 const config = {
-  permissions: { workspace: ["read"] },
+  // Entitlement state (plan, seats, period, remaining units) is
+  // organization billing data, so it is gated to managers — matching the
+  // hosted setup/management endpoints and the other organization-settings
+  // reads. Non-managers have no settings UI for it and cannot manage it.
+  permissions: { organizationSettings: ["update"] },
 } satisfies HandlerConfig;
 
 const getEntitlement = createSafeRootHandler(

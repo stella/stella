@@ -45,6 +45,7 @@ import { toAPIError } from "@/lib/errors";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
 import { toSafeId } from "@/lib/safe-id";
+import { roleOptions } from "@/routes/-queries";
 import { ChatAnonymizedToggle } from "@/routes/_protected.chat/-components/chat-anonymized-toggle";
 import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-thread-recap";
 import { ChatWebSearchToggle } from "@/routes/_protected.chat/-components/chat-web-search-toggle";
@@ -56,6 +57,7 @@ import {
   chatThreadOptions,
   invalidateChatThreadAcrossScopes,
 } from "@/routes/_protected.chat/-queries";
+import { managementRoles } from "@/routes/_protected.organization/-consts";
 import { usageEntitlementOptions } from "@/routes/_protected.settings/-queries/usage";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 
@@ -79,6 +81,15 @@ export const ChatThreadPage = ({
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
+  // Entitlement state is manager-only on the server. Skip the query
+  // for non-managers so the chat shell doesn't fire a request they
+  // can't read; the limit modal's "Manage" CTA is admin-only anyway.
+  const { data: currentUserRole } = useQuery({
+    ...roleOptions,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+  const canManageOrganization =
+    currentUserRole !== undefined && managementRoles.includes(currentUserRole);
 
   // Local copy of the persisted contextMatterIds, seeded from the
   // server and re-seeded whenever the page navigates to a different
@@ -156,9 +167,10 @@ export const ChatThreadPage = ({
   // chat handler as a usage-state modal instead of an inline
   // stack trace. `useQuery` (not Suspense) keeps the chat shell
   // rendering while the entitlement state loads.
-  const { data: usageEntitlementData } = useQuery(
-    usageEntitlementOptions({ organizationId: activeOrganizationId }),
-  );
+  const { data: usageEntitlementData } = useQuery({
+    ...usageEntitlementOptions({ organizationId: activeOrganizationId }),
+    enabled: canManageOrganization,
+  });
   const usageLimit = useUsageLimit({
     hasHostedEntitlement: usageEntitlementData?.entitlement.source === "hosted",
   });
