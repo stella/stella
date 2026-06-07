@@ -6,7 +6,8 @@ import { useShallow } from "zustand/react/shallow";
 
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { Button } from "@stll/ui/components/button";
-import { ScrollMarkers } from "@stll/ui/components/scroll-markers";
+import { OutlineRail } from "@stll/ui/components/outline-rail";
+import type { OutlineItem } from "@stll/ui/components/outline-rail";
 
 import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import {
@@ -141,6 +142,22 @@ export function DecisionWorkspace(props: DecisionWorkspaceProps) {
     [analysisTree],
   );
 
+  // Analysis outline for the shared rail: category colours + display anchors.
+  const analysisOutline = useMemo(() => {
+    const items: OutlineItem[] = [];
+    const anchorById = new Map<string, string>();
+    for (const heading of flatAnalysisHeadings) {
+      items.push({
+        id: heading.id,
+        label: heading.label,
+        level: heading.depth,
+        color: getCategoryVar(heading.category),
+      });
+      anchorById.set(heading.id, getHeadingDisplayAnchorId(heading));
+    }
+    return { items, anchorById };
+  }, [flatAnalysisHeadings]);
+
   const marginItems = useMemo(
     () =>
       flatAnalysisHeadings.flatMap((heading) => {
@@ -228,40 +245,48 @@ export function DecisionWorkspace(props: DecisionWorkspaceProps) {
       </header>
       <div className="relative min-h-0 flex-1">
         {hasAnalysis && analysisTree.length > 0 && (
-          <ScrollMarkers
-            markers={flatAnalysisHeadings.map((heading) => ({
-              id: heading.id,
-              label: heading.label,
-              cssVar: getCategoryVar(heading.category),
-              anchorId: getHeadingDisplayAnchorId(heading),
-            }))}
-            onMarkerClick={(marker, container) => {
+          <OutlineRail
+            items={analysisOutline.items}
+            onJump={(id, container) => {
+              const anchorId = analysisOutline.anchorById.get(id);
+              if (anchorId === undefined) {
+                return;
+              }
               const el = container.querySelector<HTMLElement>(
-                `#${CSS.escape(marker.anchorId)}`,
+                `#${CSS.escape(anchorId)}`,
               );
               if (!el) {
                 return;
               }
-              const offset =
-                el.getBoundingClientRect().top -
-                container.getBoundingClientRect().top +
-                container.scrollTop;
-              container.scrollTo({ top: offset, behavior: "instant" });
+              container.scrollTo({
+                top:
+                  el.getBoundingClientRect().top -
+                  container.getBoundingClientRect().top +
+                  container.scrollTop,
+                behavior: "instant",
+              });
               delete el.dataset["highlight"];
               void el.offsetWidth;
               el.dataset["highlight"] = "";
             }}
-            resolveTop={(marker, container) => {
+            resolvePct={(id, container) => {
+              const anchorId = analysisOutline.anchorById.get(id);
+              if (anchorId === undefined || container.scrollHeight <= 0) {
+                return null;
+              }
               const el = container.querySelector<HTMLElement>(
-                `#${CSS.escape(marker.anchorId)}`,
+                `#${CSS.escape(anchorId)}`,
               );
               if (!el) {
                 return null;
               }
-              return (
+              const top =
                 el.getBoundingClientRect().top -
                 container.getBoundingClientRect().top +
-                container.scrollTop
+                container.scrollTop;
+              return Math.min(
+                99,
+                Math.max(1, (top / container.scrollHeight) * 100),
               );
             }}
             scrollContainerRef={mainRef}
