@@ -240,7 +240,7 @@ export const useMatterActions = (
     }
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (deleteWorkspace.isPending) {
       return;
     }
@@ -251,7 +251,7 @@ export const useMatterActions = (
       timeout: Number.POSITIVE_INFINITY,
     });
 
-    deleteWorkspace.mutate(
+    await deleteWorkspace.mutateAsync(
       { workspaceId: target.id },
       {
         onSuccess: () => {
