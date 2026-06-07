@@ -55,7 +55,7 @@ import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { captureRequestError, getAnalytics } from "@/api/lib/analytics";
 import { getAuth } from "@/api/lib/auth";
 import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied";
-import { DEV_INSPECTOR_ORIGINS } from "@/api/lib/dev-origins";
+import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { httpError } from "@/api/lib/errors/http-error";
 import { errorTag } from "@/api/lib/errors/utils";
 import { initFileDerivativeWorker } from "@/api/lib/file-derivative-queue";
@@ -180,7 +180,10 @@ const api = new Elysia()
   .use(
     cors({
       origin: (() => {
-        const origins: (string | RegExp)[] = [env.FRONTEND_URL];
+        const origins: (string | RegExp)[] = frontendOrigins({
+          frontendUrl: env.FRONTEND_URL,
+          isDev: env.isDev,
+        });
         if (env.isDev) {
           origins.push(/^chrome-extension:\/\//u);
           origins.push(...DEV_INSPECTOR_ORIGINS);
