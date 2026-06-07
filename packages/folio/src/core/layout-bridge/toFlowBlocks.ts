@@ -100,6 +100,19 @@ export type ToFlowBlocksOptions = {
   /** Shared startOverride state for nested containers. */
   listSeenNumIds?: Set<string>;
   /**
+   * Parallel counter state for the "original" (pre-revision) document, used to
+   * number tracked-deletion list items. Word numbers inserted and deleted list
+   * runs as if they never coexist: insertions get final-document numbering,
+   * deletions keep their original numbering. Without a separate stream a deleted
+   * item continues the counter of the inserted item before it (a, b → c, d, e
+   * instead of a, b and a, b, c). Normal items advance both streams.
+   */
+  originalListCounters?: Map<number, number[]>;
+  /** Latest concrete original-stream counters by abstract numbering definition. */
+  originalListAbstractCounters?: Map<number, number[]>;
+  /** Original-stream startOverride state. */
+  originalListSeenNumIds?: Set<string>;
+  /**
    * Document-wide `w:defaultTabStop` (§17.6.13) in twips. Stamped onto
    * every paragraph block so paragraph-local layout helpers (list marker
    * tab-stop math) can read it without taking a `Document` reference.
@@ -1266,16 +1279,6 @@ function toPreviousListAttrs(
   return attrs;
 }
 
-function cloneListCounterMap(
-  counters: Map<number, number[]>,
-): Map<number, number[]> {
-  const cloned = new Map<number, number[]>();
-  for (const [key, value] of counters) {
-    cloned.set(key, [...value]);
-  }
-  return cloned;
-}
-
 function resolveDeletedListMarker(
   previousListAttrs: PMParagraphAttrs,
   listCounters: Map<number, number[]> | undefined,
@@ -1283,11 +1286,15 @@ function resolveDeletedListMarker(
   listSeenNumIds: Set<string> | undefined,
 ): string | null {
   if (listCounters && previousListAttrs.numPr) {
+    // Advance the original counter stream in place (no clone): a
+    // removed-numbering deletion occupied a number in the pre-revision
+    // document, so it must progress the counter exactly like a deleted list
+    // item — otherwise a following deletion on the same numId reuses it.
     const marker = computeListMarker(
       previousListAttrs,
-      cloneListCounterMap(listCounters),
-      cloneListCounterMap(listAbstractCounters ?? new Map<number, number[]>()),
-      new Set(listSeenNumIds),
+      listCounters,
+      listAbstractCounters ?? new Map<number, number[]>(),
+      listSeenNumIds ?? new Set<string>(),
     );
     if (marker) {
       return marker;
@@ -1353,6 +1360,9 @@ function convertParagraphAttrs(
   listAbstractCounters?: Map<number, number[]>,
   listSeenNumIds?: Set<string>,
   defaultTabStopTwips?: number,
+  originalListCounters?: Map<number, number[]>,
+  originalListAbstractCounters?: Map<number, number[]>,
+  originalListSeenNumIds?: Set<string>,
 ): ParagraphAttrs {
   const attrs: ParagraphAttrs = {};
 
@@ -1580,6 +1590,9 @@ function convertParagraphAttrs(
   // List properties
   const pPrChange = pmAttrs._propertyChanges as ListPropertyChange[] | null;
   const propertyChanges = Array.isArray(pPrChange) ? pPrChange : [];
+  let changedNumberingChange:
+    | (ListPropertyChange & { previousFormatting: Record<string, unknown> })
+    | undefined;
   if (pmAttrs.numPr) {
     const numPr: ParagraphAttrs["numPr"] & object = {};
     if (pmAttrs.numPr.numId !== undefined) {
@@ -1603,11 +1616,15 @@ function convertParagraphAttrs(
     } else {
       const numberingAddedChange = propertyChanges.find(isAddedNumberingChange);
       const currentNumPr = pmAttrs.numPr;
-      const numberingChangedChange = propertyChanges.find((change) =>
-        isChangedNumberingChange(currentNumPr, change),
+      changedNumberingChange = propertyChanges.find(
+        (
+          change,
+        ): change is ListPropertyChange & {
+          previousFormatting: Record<string, unknown>;
+        } => isChangedNumberingChange(currentNumPr, change),
       );
       const numberingInsertionChange =
-        numberingAddedChange ?? numberingChangedChange;
+        numberingAddedChange ?? changedNumberingChange;
       if (numberingInsertionChange) {
         attrs.listMarkerRevision = toListMarkerRevision(
           "ins",
@@ -1616,17 +1633,68 @@ function convertParagraphAttrs(
       }
     }
   }
+  // Tracked-deletion list items number off a separate "original" stream so the
+  // inserted list (a, b) and the deleted list (a, b, c) restart independently
+  // instead of running one shared counter (a, b, c, d, e). Insertions and normal
+  // items use the final stream; normal items also advance the original stream so
+  // a later deleted sibling continues from the surviving count (Word parity).
+  const useOriginalStream =
+    attrs.listMarkerRevision?.kind === "del" &&
+    originalListCounters !== undefined;
+  const streamCounters = useOriginalStream
+    ? originalListCounters
+    : listCounters;
+  const streamAbstractCounters = useOriginalStream
+    ? originalListAbstractCounters
+    : listAbstractCounters;
+  const streamSeenNumIds = useOriginalStream
+    ? originalListSeenNumIds
+    : listSeenNumIds;
   const resolvedMarker = applyMarkerAllCaps(
-    listCounters
+    streamCounters
       ? computeListMarker(
           pmAttrs,
-          listCounters,
-          listAbstractCounters ?? new Map(),
-          listSeenNumIds ?? new Set(),
+          streamCounters,
+          streamAbstractCounters ?? new Map(),
+          streamSeenNumIds ?? new Set(),
         )
       : null,
     pmAttrs.listMarkerAllCaps,
   );
+  const numberedNumId = pmAttrs.numPr?.numId;
+  if (
+    attrs.listMarkerRevision === undefined &&
+    !pmAttrs.listIsBullet &&
+    originalListCounters !== undefined &&
+    numberedNumId !== undefined &&
+    numberedNumId !== 0
+  ) {
+    computeListMarker(
+      pmAttrs,
+      originalListCounters,
+      originalListAbstractCounters ?? new Map(),
+      originalListSeenNumIds ?? new Set(),
+    );
+  } else if (
+    changedNumberingChange !== undefined &&
+    originalListCounters !== undefined
+  ) {
+    // Changed numbering is shown as an insertion of the new numId, but in the
+    // pre-revision document the paragraph sat under its PREVIOUS numId. Advance
+    // that original stream so a later deletion on the old numId continues from
+    // the right count instead of reusing this item's number.
+    const previousListAttrs = toPreviousListAttrs(
+      changedNumberingChange.previousFormatting,
+    );
+    if (previousListAttrs.numPr && !previousListAttrs.listIsBullet) {
+      computeListMarker(
+        previousListAttrs,
+        originalListCounters,
+        originalListAbstractCounters ?? new Map(),
+        originalListSeenNumIds ?? new Set(),
+      );
+    }
+  }
   if (resolvedMarker !== null) {
     attrs.listMarker = resolvedMarker;
   } else if (pmAttrs.listMarker) {
@@ -1658,12 +1726,15 @@ function convertParagraphAttrs(
       isRemovedNumberingChange,
     );
     if (numberingRemovedChange) {
+      // Number removed-numbering deletions off the original stream too (like
+      // deleted list items): the struck-through marker must reflect the
+      // pre-revision number, not the final counter that insertions advanced.
       applyDeletedListMarkerAttrs(
         attrs,
         numberingRemovedChange,
-        listCounters,
-        listAbstractCounters,
-        listSeenNumIds,
+        originalListCounters,
+        originalListAbstractCounters,
+        originalListSeenNumIds,
       );
     }
   }
@@ -1734,6 +1805,9 @@ function convertParagraph(
     options.listAbstractCounters,
     options.listSeenNumIds,
     options.defaultTabStopTwips,
+    options.originalListCounters,
+    options.originalListAbstractCounters,
+    options.originalListSeenNumIds,
   );
 
   return {
@@ -2296,6 +2370,11 @@ export function toFlowBlocks(
     listAbstractCounters:
       options.listAbstractCounters ?? new Map<number, number[]>(),
     listSeenNumIds: options.listSeenNumIds ?? new Set<string>(),
+    originalListCounters:
+      options.originalListCounters ?? new Map<number, number[]>(),
+    originalListAbstractCounters:
+      options.originalListAbstractCounters ?? new Map<number, number[]>(),
+    originalListSeenNumIds: options.originalListSeenNumIds ?? new Set<string>(),
   };
 
   const blocks: FlowBlock[] = [];

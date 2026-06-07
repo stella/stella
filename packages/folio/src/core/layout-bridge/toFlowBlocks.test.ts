@@ -502,6 +502,151 @@ describe("toFlowBlocks list numbering", () => {
     });
   });
 
+  test("removed-numbering deletion numbers off the original stream", () => {
+    // An inserted list item (numId 6) advances the final stream to (1). The
+    // next item shares that numId but had its numbering removed; in the
+    // pre-revision document the inserted item did not exist, so the deleted
+    // marker restarts at 1 rather than continuing to 2 off the insertion.
+    const doc = schema.node("doc", null, [
+      schema.node(
+        "paragraph",
+        {
+          numPr: { numId: 6, ilvl: 0 },
+          listMarker: "%1.",
+          _propertyChanges: [
+            {
+              type: "paragraphPropertyChange",
+              info: { id: 21, author: "Reviewer", date: "2026-01-01" },
+              previousFormatting: { numPr: null },
+            },
+          ],
+        },
+        [schema.text("Inserted list item")],
+      ),
+      schema.node(
+        "paragraph",
+        {
+          _propertyChanges: [
+            {
+              type: "paragraphPropertyChange",
+              info: { id: 22, author: "Reviewer", date: "2026-01-02" },
+              previousFormatting: {
+                numPr: { numId: 6, ilvl: 0 },
+                listIsBullet: false,
+                listNumFmt: "decimal",
+                listMarker: "%1.",
+              },
+            },
+          ],
+        },
+        [schema.text("Numbering removed")],
+      ),
+    ]);
+
+    const blocks = toFlowBlocks(doc);
+    const inserted = blocks.at(0);
+    const removed = blocks.at(1);
+    if (inserted?.kind !== "paragraph" || removed?.kind !== "paragraph") {
+      throw new Error("Expected paragraph blocks");
+    }
+
+    expect(inserted.attrs?.listMarkerRevision?.kind).toBe("ins");
+    expect(removed.attrs?.listMarker).toBe("1.");
+    expect(removed.attrs?.listMarkerRevision?.kind).toBe("del");
+  });
+
+  test("consecutive removed-numbering deletions advance the original stream", () => {
+    // Two adjacent items (numId 6) whose numbering was removed keep their
+    // original 1, 2 ordering: the deletion stream advances between them.
+    const removedItem = (id: number, text: string) =>
+      schema.node(
+        "paragraph",
+        {
+          _propertyChanges: [
+            {
+              type: "paragraphPropertyChange",
+              info: { id, author: "Reviewer", date: "2026-01-02" },
+              previousFormatting: {
+                numPr: { numId: 6, ilvl: 0 },
+                listIsBullet: false,
+                listNumFmt: "decimal",
+                listMarker: "%1.",
+              },
+            },
+          ],
+        },
+        [schema.text(text)],
+      );
+    const doc = schema.node("doc", null, [
+      removedItem(31, "first"),
+      removedItem(32, "second"),
+    ]);
+
+    const blocks = toFlowBlocks(doc);
+    const first = blocks.at(0);
+    const second = blocks.at(1);
+    if (first?.kind !== "paragraph" || second?.kind !== "paragraph") {
+      throw new Error("Expected paragraph blocks");
+    }
+
+    expect(first.attrs?.listMarker).toBe("1.");
+    expect(second.attrs?.listMarker).toBe("2.");
+  });
+
+  test("changed numbering advances the original stream for the previous numId", () => {
+    // Item 2's numbering changed from numId 7 to 8 (tracked) — shown as an
+    // insertion of the new numId, but in the original document it sat under
+    // numId 7. A later numId-7 deletion must continue from that consumed
+    // count: a=1, [7->8 changed], deleted=3 — not 2.
+    const renumbered = {
+      type: "paragraphPropertyChange",
+      info: { id: 41, author: "Reviewer", date: "2026-01-01" },
+      previousFormatting: {
+        numPr: { numId: 7, ilvl: 0 },
+        listIsBullet: false,
+        listNumFmt: "decimal",
+        listMarker: "%1.",
+      },
+    };
+    const doc = schema.node("doc", null, [
+      schema.node(
+        "paragraph",
+        { numPr: { numId: 7, ilvl: 0 }, listMarker: "%1." },
+        [schema.text("a")],
+      ),
+      schema.node(
+        "paragraph",
+        {
+          numPr: { numId: 8, ilvl: 0 },
+          listMarker: "%1.",
+          _propertyChanges: [renumbered],
+        },
+        [schema.text("renumbered")],
+      ),
+      schema.node(
+        "paragraph",
+        {
+          numPr: { numId: 7, ilvl: 0 },
+          listMarker: "%1.",
+          pPrMark: {
+            kind: "del",
+            info: { id: 42, author: "Reviewer", date: "2026-01-02" },
+          },
+        },
+        [schema.text("deleted")],
+      ),
+    ]);
+
+    const blocks = toFlowBlocks(doc);
+    const deleted = blocks.at(2);
+    if (deleted?.kind !== "paragraph") {
+      throw new Error("Expected paragraph block");
+    }
+
+    expect(deleted.attrs?.listMarker).toBe("3.");
+    expect(deleted.attrs?.listMarkerRevision?.kind).toBe("del");
+  });
+
   test("marks changed numbering as a tracked insertion marker", () => {
     const doc = schema.node("doc", null, [
       schema.node(

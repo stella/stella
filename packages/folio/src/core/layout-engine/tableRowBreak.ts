@@ -90,10 +90,11 @@ function cellBreakGeometry(
   cell: TableCell | undefined,
   measure: TableCellMeasure,
 ): CellBreakGeometry {
-  // Mirror measureTableBlock's cell-height model: each block contributes
-  // before + lines + after with no inter-paragraph collapse (the paragraph
-  // measure's totalHeight already bundles before/after). Keeping the same model
-  // means these line bottoms line up with the row height the paginator splits.
+  // Mirror the PAINTER's cell-content stacking (renderCellContent), not just the
+  // cell-height model: each block advances by its `totalHeight` (which bundles
+  // space-before/after), but its lines paint from the block top with no leading
+  // space-before. Seating line bottoms this way keeps them on the painted line
+  // boundaries so an oversized-row break never cuts through a glyph row.
   const bottoms: number[] = [];
   const unsafeRanges: UnsafeBreakRange[] = [];
   const cellBlocks = cell?.blocks;
@@ -114,15 +115,21 @@ function cellBreakGeometry(
     let blockMeasure = blockMeasures[i];
     if (blockMeasure?.kind === "paragraph") {
       const block = cellBlocks?.[i];
-      const spacing =
-        block?.kind === "paragraph" ? block.attrs?.spacing : undefined;
       if (block?.kind === "paragraph" && floatingZones.length > 0) {
         blockMeasure = measureParagraph(block, contentWidth, {
           floatingZones,
           paragraphYOffset: paragraphY,
         });
       }
-      y += spacing?.before ?? 0;
+      // The painter (renderCellContent) stacks each cell paragraph by its full
+      // measured height (`totalHeight`, which bundles space-before/after) yet
+      // paints the lines from the fragment top with NO leading space-before; the
+      // before/after surface as trailing space. Mirror that exactly: seat line
+      // bottoms from the block top and advance by `totalHeight`. Offsetting the
+      // lines by `spacing.before` (as the cell-height model does) shifted every
+      // break offset off the painted line boundary, so an oversized row split
+      // through the middle of a glyph row across the page break.
+      const blockTop = y;
       for (const line of blockMeasure.lines) {
         y += line.floatSkipBefore ?? 0;
         const top = y;
@@ -130,7 +137,7 @@ function cellBreakGeometry(
         unsafeRanges.push({ top, bottom: y });
         bottoms.push(y);
       }
-      y += spacing?.after ?? 0;
+      y = blockTop + blockMeasure.totalHeight;
       paragraphY += blockMeasure.totalHeight;
     } else if (blockMeasure) {
       // Nested table / non-paragraph: one atomic block (break only at its bottom).
