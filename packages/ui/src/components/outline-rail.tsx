@@ -160,8 +160,11 @@ export const OutlineRail = ({
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const manualLockUntil = useRef(0);
   const panelRef = useRef<HTMLElement>(null);
-  // Hold the caller callbacks in refs so the scroll/resize effects don't depend
-  // on their identity — callers can pass inline arrows without churning effects.
+  // Hold onJump and the scroll-time resolver in refs so the active-tracking
+  // scroll listener reads the latest without re-subscribing. recalc instead
+  // depends on resolvePct directly, so ticks recompute when the resolver's
+  // output changes (e.g. Folio's docSize); React Compiler keeps the adapters'
+  // inline resolvers referentially stable between unrelated renders.
   const resolvePctRef = useRef(resolvePct);
   resolvePctRef.current = resolvePct;
   const onJumpRef = useRef(onJump);
@@ -205,13 +208,13 @@ export const OutlineRail = ({
     }
     const next: Record<string, number> = {};
     for (const item of items) {
-      const pct = resolvePctRef.current(item.id, container);
+      const pct = resolvePct(item.id, container);
       if (pct !== null) {
         next[item.id] = pct;
       }
     }
     setPctById(next);
-  }, [items, scrollContainerRef]);
+  }, [items, scrollContainerRef, resolvePct]);
 
   const recalcRef = useRef(recalc);
   recalcRef.current = recalc;
