@@ -215,16 +215,16 @@ jobs:
           [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
           bun run typecheck -- "${args[@]}"
 
-      - name: Knip production dependency check (apps/api)
+      - name: Knip production dependency checks
         if: steps.changed-files.outputs.package_checks_required == 'true'
-        # Static gate paired with the api-image-deps compile smoke:
-        # knip catches `apps/api` prod code that imports devDeps or
-        # transitively-resolved (unlisted) packages at PR time; the
-        # compile catches dynamic imports the linter misses. Scoped
-        # to apps/api because that's the workspace the Dockerfile
-        # installs with --production. apps/web is bundled by Vite
-        # and does not go through a --production install.
-        run: bun run knip --production --no-progress --include unlisted,unresolved --workspace apps/api
+        # Static gate paired with the image compile smokes: knip
+        # catches prod code that imports devDeps or transitively
+        # resolved (unlisted) packages at PR time; the compile
+        # catches dynamic imports the linter misses. Scoped to
+        # Bun/Docker apps that install with --production.
+        run: |
+          bun run knip --production --no-progress --include unlisted,unresolved --workspace apps/api
+          bun run knip --production --no-progress --include unlisted,unresolved --workspace apps/legal-atlas-runner
 
       - name: Test
         if: steps.changed-files.outputs.package_checks_required == 'true'
@@ -612,7 +612,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Check whether API-image-affecting paths changed
+      - name: Check whether API/runner-image-affecting paths changed
         id: changed
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
@@ -627,7 +627,7 @@ jobs:
           run=false
           for file in "${changed_files[@]}"; do
             case "$file" in
-              apps/api/*|packages/*|bun.lock|package.json|turbo.json|.github/workflows/ci.yml)
+              apps/api/*|apps/legal-atlas-runner/*|packages/*|bun.lock|package.json|turbo.json|.github/workflows/ci.yml)
                 run=true
                 break
                 ;;
@@ -635,7 +635,7 @@ jobs:
           done
           echo "run=$run" >> "$GITHUB_OUTPUT"
           if [[ "$run" != "true" ]]; then
-            echo "::notice::No API-image-affecting paths changed; skipping pruned-lockfile guard."
+            echo "::notice::No API/runner-image-affecting paths changed; skipping pruned-lockfile guard."
           fi
 
       - name: Setup Bun

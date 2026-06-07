@@ -41,7 +41,7 @@ RUN mkdir -p /app/runtime-workers && \
       apps/api/src/lib/search/extraction-worker.ts
 
 # Run the compiled API as non-root.
-FROM base AS runner
+FROM deps AS runner
 # Stamp the running container with the release version so the API can
 # return it from /health and tag PostHog events with build metadata.
 # Defaults to "dev" for local `docker build` outside the release flow.
@@ -53,6 +53,9 @@ ENV STELLA_WORKER_DIR=/\$bunfs/root/workers
 RUN groupadd --system --gid 1001 stella && \
     useradd --system --uid 1001 --gid stella --no-create-home stella
 COPY --chown=stella:stella --from=builder /app/server /app/server
+COPY --chown=stella:stella --from=builder /app/apps/api/drizzle.config.ts /app/apps/api/drizzle.config.ts
+COPY --chown=stella:stella --from=builder /app/apps/api/src/db-url.ts /app/apps/api/src/db-url.ts
+COPY --chown=stella:stella --from=builder /app/apps/api/drizzle /app/apps/api/drizzle
 RUN mkdir -p '/$bunfs/root'
 COPY --chown=stella:stella --from=builder /app/runtime-workers /\$bunfs/root/workers
 COPY --chown=stella:stella --from=builder /app/apps/api/src/lib/file-scan/yara /\$bunfs/root/yara

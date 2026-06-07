@@ -12,11 +12,16 @@ export const PROVISION_KINDS = [
   "chapter",
   "subdivision",
   "article",
+  "section",
   "paragraph",
   "subsection",
   "point",
   "letter",
   "indent",
+  "preamble",
+  "recital",
+  "annex",
+  "schedule",
 ] as const;
 
 export type ProvisionKind = (typeof PROVISION_KINDS)[number];
@@ -122,7 +127,7 @@ export type StatuteAst = {
   version: 1;
   source: StatuteSource;
   metadata: StatuteMetadata;
-  body: ProvisionNode[];
+  body: StatuteBlock[];
 };
 
 export const isProvisionKind = (val: unknown): val is ProvisionKind =>
@@ -137,7 +142,7 @@ export const isStatuteAst = (val: unknown): val is StatuteAst =>
   isStatuteSource(val["source"]) &&
   isStatuteMetadata(val["metadata"]) &&
   Array.isArray(val["body"]) &&
-  val["body"].every(isProvisionNode);
+  val["body"].every(isStatuteBlock);
 
 export const parseStatuteAst = (raw: unknown): StatuteAst | null => {
   if (raw === null || raw === undefined) {

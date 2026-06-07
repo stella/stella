@@ -1,5 +1,5 @@
 import { isStatuteStatus } from "@stll/legal-ast";
-import type { StatuteAst } from "@stll/legal-ast";
+import type { DocumentAst, StatuteAst } from "@stll/legal-ast";
 
 export const CORPUS_DOCUMENT_KINDS = [
   "case-law-decision",
@@ -30,6 +30,13 @@ export type CorpusAst =
       ast: StatuteAst;
     }
   | {
-      type: Exclude<CorpusDocumentKind, "statute-expression">;
+      type: "case-law-decision";
+      ast: DocumentAst;
+    }
+  | {
+      type: Exclude<
+        CorpusDocumentKind,
+        "case-law-decision" | "statute-expression"
+      >;
       ast: unknown;
     };

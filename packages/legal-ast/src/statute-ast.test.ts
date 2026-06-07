@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { isStatuteAst, parseStatuteAst } from "./statute-ast";
+import { isProvisionKind, isStatuteAst, parseStatuteAst } from "./statute-ast";
 import type { StatuteAst } from "./statute-ast";
 
 const statuteAst = {
@@ -54,5 +54,26 @@ describe("statute AST", () => {
     };
 
     expect(isStatuteAst(invalid)).toBe(false);
+  });
+
+  test("allows top-level non-provision blocks and worldwide provision kinds", () => {
+    const statuteWithIntro = {
+      ...statuteAst,
+      body: [
+        {
+          type: "paragraph",
+          eId: "intro",
+          anchorId: "intro",
+          inlines: [{ type: "text", text: "Introductory text." }],
+          plainText: "Introductory text.",
+        },
+        ...statuteAst.body,
+      ],
+    } satisfies StatuteAst;
+
+    expect(isStatuteAst(statuteWithIntro)).toBe(true);
+    expect(isProvisionKind("section")).toBe(true);
+    expect(isProvisionKind("preamble")).toBe(true);
+    expect(isProvisionKind("schedule")).toBe(true);
   });
 });

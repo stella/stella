@@ -195,6 +195,7 @@
       "dependencies": {
         "@stll/api": "workspace:*",
         "@stll/legal-atlas": "workspace:*",
+        "better-result": "catalog:",
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
