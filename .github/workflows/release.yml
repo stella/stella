@@ -190,7 +190,8 @@ jobs:
 
           # Satisfies the staging/production boot guard in
           # apps/api/src/env.ts; the smoke never persists data.
-          export CONTENT_ENCRYPTION_KEY="$(openssl rand -hex 32)"
+          CONTENT_ENCRYPTION_KEY="$(openssl rand -hex 32)"
+          export CONTENT_ENCRYPTION_KEY
 
           docker run --detach --network host \
             --name stella-api-smoke \
@@ -342,6 +343,8 @@ jobs:
     permissions:
       contents: write
       packages: write
+      id-token: write
+      attestations: write
 
     steps:
       - name: Checkout
@@ -378,6 +381,13 @@ jobs:
 
           digest="$(docker buildx imagetools inspect "${IMAGE}:${RELEASE_REF}" --format '{{.Manifest.Digest}}')"
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Attest release image index provenance
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.manifest.outputs.digest }}
+          push-to-registry: true
 
       - name: Create release manifest
         env:
