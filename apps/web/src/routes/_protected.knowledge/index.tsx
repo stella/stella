@@ -1,11 +1,18 @@
 import type { ComponentType, SVGProps } from "react";
 
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { BotIcon, PackageIcon } from "lucide-react";
+import {
+  BotIcon,
+  LayoutTemplateIcon,
+  PackageIcon,
+  TextQuoteIcon,
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
+
+import type { TranslationKey } from "@/i18n/types";
 
 export const Route = createFileRoute("/_protected/knowledge/")({
   component: KnowledgeLanding,
@@ -16,14 +23,40 @@ export const Route = createFileRoute("/_protected/knowledge/")({
 // on the Tools page. The sidebar entry was removed so the landing
 // doesn't advertise a deleted destination.
 type KnowledgeSection = {
-  key: "agents" | "tools";
+  key: "templates" | "clauses" | "tools" | "agents";
   icon: ComponentType<SVGProps<SVGSVGElement>>;
-  to?: "/knowledge/tools";
+  to?: "/knowledge/templates" | "/knowledge/clauses" | "/knowledge/tools";
+  // "clauses" reuses the shared common.clauses label instead of a
+  // feature-scoped duplicate; other sections use their own section title.
+  titleKey: Extract<
+    TranslationKey,
+    | "knowledge.sections.templates.title"
+    | "knowledge.sections.tools.title"
+    | "knowledge.sections.agents.title"
+    | "common.clauses"
+  >;
 };
 
 export const knowledgeSections: readonly KnowledgeSection[] = [
-  { key: "tools", icon: PackageIcon, to: "/knowledge/tools" },
-  { key: "agents", icon: BotIcon },
+  {
+    key: "templates",
+    icon: LayoutTemplateIcon,
+    to: "/knowledge/templates",
+    titleKey: "knowledge.sections.templates.title",
+  },
+  {
+    key: "clauses",
+    icon: TextQuoteIcon,
+    to: "/knowledge/clauses",
+    titleKey: "common.clauses",
+  },
+  {
+    key: "tools",
+    icon: PackageIcon,
+    to: "/knowledge/tools",
+    titleKey: "knowledge.sections.tools.title",
+  },
+  { key: "agents", icon: BotIcon, titleKey: "knowledge.sections.agents.title" },
 ];
 
 function KnowledgeLanding() {
@@ -34,7 +67,7 @@ function KnowledgeLanding() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {knowledgeSections.map((section) => {
           const Icon = section.icon;
-          const title = t(`knowledge.sections.${section.key}.title`);
+          const title = t(section.titleKey);
           const description = t(
             `knowledge.sections.${section.key}.description`,
           );

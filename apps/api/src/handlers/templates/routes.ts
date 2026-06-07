@@ -18,6 +18,7 @@ import getTemplate from "@/api/handlers/templates/get";
 import listTemplates from "@/api/handlers/templates/list";
 import manifestTemplate from "@/api/handlers/templates/manifest";
 import previewTemplate from "@/api/handlers/templates/preview";
+import saveTemplateDocument from "@/api/handlers/templates/save-document";
 import updateTemplate from "@/api/handlers/templates/update";
 import getTemplateVersion from "@/api/handlers/templates/versions-get";
 import listTemplateVersions from "@/api/handlers/templates/versions-list";
@@ -77,6 +78,11 @@ export const templatesRoute = new Elysia({
     body: updateTemplate.config.body,
     params: updateTemplate.config.params,
     permissions: updateTemplate.config.permissions,
+  })
+  .post("/:templateId/document", saveTemplateDocument.handler, {
+    body: saveTemplateDocument.config.body,
+    params: saveTemplateDocument.config.params,
+    permissions: saveTemplateDocument.config.permissions,
   })
   .delete("/:templateId", deleteTemplate.handler, {
     params: deleteTemplate.config.params,

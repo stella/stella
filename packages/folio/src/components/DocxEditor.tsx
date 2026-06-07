@@ -159,6 +159,7 @@ import {
   createSuggestionModePlugin,
   setSuggestionMode,
 } from "../core/prosemirror/plugins/suggestionMode";
+import { createTemplateDirectivesPlugin } from "../core/prosemirror/plugins/templateDirectives";
 import type { Comment } from "../core/types/content";
 import type {
   Document,
@@ -470,6 +471,7 @@ export function DocxEditor({
   onAnonymizationTermClick,
   selectedAnonymizationCanonical = null,
   anonymizationSelectionSeq,
+  showTemplateDirectives = false,
   collaboration,
   featureFlags,
   onSelectiveSaveTripwire,
@@ -675,6 +677,13 @@ export function DocxEditor({
     () => autocompleteSuggestionPlugin({ keymap: true }),
     [],
   );
+  // Template-directive widgets. Installed only for the template
+  // editor (`showTemplateDirectives`); scans the doc for {{...}}
+  // markers and exposes their ranges for the paged overlay.
+  const templateDirectivesPlugin = useMemo(
+    () => createTemplateDirectivesPlugin(),
+    [],
+  );
   const editorPlugins = useMemo(
     () => [
       autocompletePlugin,
@@ -683,6 +692,7 @@ export function DocxEditor({
       aiSuggestionPlugin,
       aiCitationPlugin,
       anonymizationDecorationsPlugin,
+      ...(showTemplateDirectives ? [templateDirectivesPlugin] : []),
     ],
     [
       autocompletePlugin,
@@ -691,6 +701,8 @@ export function DocxEditor({
       aiSuggestionPlugin,
       aiCitationPlugin,
       anonymizationDecorationsPlugin,
+      showTemplateDirectives,
+      templateDirectivesPlugin,
     ],
   );
 
