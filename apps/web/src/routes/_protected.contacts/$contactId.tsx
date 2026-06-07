@@ -4,7 +4,6 @@ import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
   getRouteApi,
-  Link,
   useNavigate,
 } from "@tanstack/react-router";
 import { ArrowLeftIcon, BuildingIcon, PlusIcon, UserIcon } from "lucide-react";
@@ -31,6 +30,7 @@ import {
   contactOptions,
   contactsKeys,
 } from "@/routes/_protected.contacts/-queries";
+import { MatterRefLink } from "@/routes/_protected.workspaces/-components/matter-ref-link";
 import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
 
 export const Route = createFileRoute("/_protected/contacts/$contactId")({
@@ -377,10 +377,9 @@ function ContactDetailPage() {
             <ul className="space-y-2">
               {activeClientMatters.map((matter) => (
                 <li key={matter.id}>
-                  <Link
+                  <MatterRefLink
                     className="hover:bg-muted flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors"
-                    params={{ workspaceId: matter.id }}
-                    to="/workspaces/$workspaceId"
+                    workspaceId={matter.id}
                   >
                     <MatterIcon matter={matter} />
                     <span className="font-medium">{matter.name}</span>
@@ -389,7 +388,7 @@ function ContactDetailPage() {
                         date: new Date(matter.createdAt).toLocaleDateString(),
                       })}
                     </span>
-                  </Link>
+                  </MatterRefLink>
                 </li>
               ))}
             </ul>

@@ -282,6 +282,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-nanoid.ts",
     "./.oxlint-plugins/no-crypto-random-uuid.ts",
     "./.oxlint-plugins/require-router-select.ts",
+    "./.oxlint-plugins/require-matter-affordance.ts",
     "./.oxlint-plugins/no-raw-route-query-client.ts",
     "./.oxlint-plugins/require-safe-route-handlers.ts",
     "./.oxlint-plugins/security-guards.ts",
@@ -557,10 +558,19 @@ export default defineConfig({
           { requireTranslationUsage: true },
         ],
         "require-router-select/require-router-select": "error",
+        "require-matter-affordance/require-matter-affordance": "error",
         "security-guards/no-unsanitized-href": "error",
         "sonarjs/jsx-no-leaked-render": "error",
         "sonarjs/no-hook-setter-in-body": "error",
         "stella-toast/stella-toast": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/require-matter-affordance.fixture.tsx",
+      ],
+      rules: {
+        "require-matter-affordance/require-matter-affordance": "error",
       },
     },
     {

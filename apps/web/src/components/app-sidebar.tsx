@@ -11,7 +11,7 @@ import {
   useHotkey,
   useKeyHold,
 } from "@tanstack/react-hotkeys";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link, useMatch } from "@tanstack/react-router";
 import {
   ChevronsUpDownIcon,
@@ -101,17 +101,12 @@ import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { knowledgeSections } from "@/routes/_protected.knowledge/index";
 import { organizationOptions } from "@/routes/_protected.organization/-queries";
 import {
-  AddMemberDialog,
+  MatterMenuHeader,
   MatterMenuItems,
+  useMatterActions,
 } from "@/routes/_protected.workspaces/-components/matter-context-menu";
-import {
-  useDeleteWorkspace,
-  useUpdateWorkspace,
-} from "@/routes/_protected.workspaces/-mutations";
-import {
-  workspacesKeys,
-  workspacesNavigationOptions,
-} from "@/routes/_protected.workspaces/-queries";
+import { useUpdateWorkspace } from "@/routes/_protected.workspaces/-mutations";
+import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
 import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
 
 const isDev = import.meta.env.DEV;
@@ -249,7 +244,9 @@ type MatterItemProps = {
   };
   isPinned?: boolean;
   onTogglePin: (id: string) => void;
-  onDelete: (id: string) => void;
+  /** Navigate-away (or other cleanup) after the matter is deleted; the
+   *  delete itself is owned by the shared menu via useMatterActions. */
+  onDeleted: (id: string) => void;
   onReorder?: (draggedId: string, targetId: string) => void;
   navBadge?: number | undefined;
 };
@@ -260,7 +257,7 @@ const MatterItem = ({
   workspace: ws,
   isPinned: _isPinnedProp,
   onTogglePin,
-  onDelete,
+  onDeleted,
   onReorder,
   navBadge,
 }: MatterItemProps) => {
@@ -272,7 +269,6 @@ const MatterItem = ({
   const lang = useI18nStore((s) => s.lang);
   const { state, setOpen, isMobile } = useSidebar();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [ctxAnchor, setCtxAnchor] = useState<{
     getBoundingClientRect: () => DOMRect;
   } | null>(null);
@@ -353,6 +349,16 @@ const MatterItem = ({
 
     rename.startEditing();
   };
+
+  const { callbacks, dialogs } = useMatterActions(
+    {
+      id: ws.id,
+      name: ws.name,
+      color: ws.color,
+      client: ws.client ?? null,
+    },
+    { onRename: startRename, onDeleted: () => onDeleted(ws.id) },
+  );
 
   if (rename.state.mode === "edit") {
     return (
@@ -470,64 +476,21 @@ const MatterItem = ({
                 side="right"
                 sideOffset={4}
               >
-                <div
-                  className="max-w-48 border-s-2 px-2 py-1.5"
-                  style={{
-                    borderColor: resolveMatterColor(ws.id, ws.color),
-                  }}
-                >
-                  <div className="truncate text-xs font-medium">{ws.name}</div>
-                  <div className="text-muted-foreground truncate text-xs">
-                    {ws.client
-                      ? ws.client.displayName
-                      : t("workspaces.parties.personalLabel")}
-                  </div>
-                </div>
-                <MenuSeparator />
-                <MatterMenuItems
-                  isArchived={false}
-                  isPersonal={!ws.client}
-                  isPinned={isPinned}
-                  onAddMember={() => setAddMemberOpen(true)}
-                  onCopyLink={() => {
-                    void (async () => {
-                      try {
-                        const url = `${window.location.origin}/workspaces/${ws.id}`;
-                        await navigator.clipboard.writeText(url);
-                        stellaToast.add({
-                          title: t("common.copied"),
-                          type: "success",
-                        });
-                      } catch {
-                        stellaToast.add({
-                          title: t("errors.actionFailed"),
-                          type: "error",
-                        });
-                      }
-                    })();
-                  }}
-                  onDelete={() => onDelete(ws.id)}
-                  onOpenInNewTab={() => {
-                    void window.open(`/workspaces/${ws.id}`, "_blank");
-                  }}
-                  onRename={() => {
-                    startRename();
-                  }}
-                  onTogglePin={() => onTogglePin(ws.id)}
+                <MatterMenuHeader
+                  clientName={ws.client?.displayName ?? null}
+                  color={ws.color}
+                  id={ws.id}
+                  name={ws.name}
                 />
+                <MenuSeparator />
+                <MatterMenuItems {...callbacks} />
               </MenuPopup>
             </Menu>
           </div>
         )}
       </SidebarMenuItem>
 
-      {addMemberOpen && (
-        <AddMemberDialog
-          onOpenChange={setAddMemberOpen}
-          open={addMemberOpen}
-          workspaceId={ws.id}
-        />
-      )}
+      {dialogs}
     </>
   );
 };
@@ -592,9 +555,7 @@ const routeApi = getRouteApi("/_protected");
 export function AppSidebar(props: AppSidebarProps) {
   const signOut = useSignOut();
   const t = useTranslations();
-  const queryClient = useQueryClient();
   const navigate = routeApi.useNavigate();
-  const deleteWorkspace = useDeleteWorkspace();
   const canCreateMatter = usePermissions({ workspace: ["create"] });
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
   const { state, toggleSidebar, isMobile } = useSidebar();
@@ -651,42 +612,13 @@ export function AppSidebar(props: AppSidebarProps) {
     openCreateMatter();
   };
 
-  const handleDeleteWorkspace = (workspaceId: string) => {
-    if (deleteWorkspace.isPending) {
-      return;
+  // The delete + toast + cache invalidation are owned by the shared
+  // matter menu (useMatterActions). The sidebar only needs to leave the
+  // matter route when the matter the user is viewing is the one deleted.
+  const handleMatterDeleted = (workspaceId: string) => {
+    if (workspaceMatch?.params.workspaceId === workspaceId) {
+      void navigate({ to: "/workspaces" });
     }
-
-    const toastId = stellaToast.add({
-      title: t("workspaces.deletingWorkspace"),
-      type: "loading",
-      timeout: Number.POSITIVE_INFINITY,
-    });
-
-    deleteWorkspace.mutate(
-      { workspaceId },
-      {
-        onSuccess: () => {
-          stellaToast.update(toastId, {
-            title: t("success.workspaceDeletedSuccessfully"),
-            type: "success",
-          });
-          void (async () => {
-            await queryClient.invalidateQueries({
-              queryKey: workspacesKeys.all,
-            });
-            if (workspaceMatch?.params.workspaceId === workspaceId) {
-              await navigate({ to: "/workspaces" });
-            }
-          })();
-        },
-        onError: () => {
-          stellaToast.update(toastId, {
-            title: t("errors.failedToDeleteWorkspace"),
-            type: "error",
-          });
-        },
-      },
-    );
   };
 
   useHotkey(HOTKEYS.SEARCH, () => {
@@ -1016,7 +948,7 @@ export function AppSidebar(props: AppSidebarProps) {
                           ? primaryNavItems.length + 1 + i
                           : undefined
                       }
-                      onDelete={handleDeleteWorkspace}
+                      onDeleted={handleMatterDeleted}
                       onReorder={reorderPinned}
                       onTogglePin={togglePin}
                       workspace={ws}
@@ -1036,7 +968,7 @@ export function AppSidebar(props: AppSidebarProps) {
                   {recents.map((ws) => (
                     <MatterItem
                       key={ws.id}
-                      onDelete={handleDeleteWorkspace}
+                      onDeleted={handleMatterDeleted}
                       onTogglePin={togglePin}
                       workspace={ws}
                     />

@@ -64,6 +64,7 @@ import {
   mergeGroupedChatThreadPages,
 } from "@/routes/_protected.chat/-queries";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import { MatterContextMenu } from "@/routes/_protected.workspaces/-components/matter-context-menu";
 import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
 import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
 
@@ -225,6 +226,7 @@ function ChatIndex() {
         id: workspace.id,
         lastActivityAt: workspace.lastActivityAt,
         name: workspace.name,
+        client: workspace.client,
       });
     }
     const matters: PinnedMatter[] = [];
@@ -251,6 +253,7 @@ function ChatIndex() {
           id: workspace.id,
           lastActivityAt: workspace.lastActivityAt,
           name: workspace.name,
+          client: workspace.client,
         })),
     [workspaces],
   );
@@ -408,24 +411,34 @@ function ChatIndex() {
               visibleMatters.map((matter) => {
                 const matterColor = resolveMatterColor(matter.id, matter.color);
                 return (
-                  <Link
-                    className="group hover:bg-accent/50 focus-visible:ring-ring rounded-md px-2 py-1.5 text-start transition-colors outline-none focus-visible:ring-2"
+                  <MatterContextMenu
+                    className="contents"
                     key={matter.id}
-                    params={{ workspaceId: matter.id }}
-                    to="/workspaces/$workspaceId"
+                    target={{
+                      id: matter.id,
+                      name: matter.name,
+                      color: matter.color,
+                      client: matter.client,
+                    }}
                   >
-                    <LandingItemText
-                      icon={
-                        <LayersIcon
-                          className="size-4"
-                          style={{ color: matterColor }}
-                        />
-                      }
-                      iconTone="matter"
-                      meta={formatRelativeTime(matter.lastActivityAt, lang)}
-                      title={matter.name}
-                    />
-                  </Link>
+                    <Link
+                      className="group hover:bg-accent/50 focus-visible:ring-ring rounded-md px-2 py-1.5 text-start transition-colors outline-none focus-visible:ring-2"
+                      params={{ workspaceId: matter.id }}
+                      to="/workspaces/$workspaceId"
+                    >
+                      <LandingItemText
+                        icon={
+                          <LayersIcon
+                            className="size-4"
+                            style={{ color: matterColor }}
+                          />
+                        }
+                        iconTone="matter"
+                        meta={formatRelativeTime(matter.lastActivityAt, lang)}
+                        title={matter.name}
+                      />
+                    </Link>
+                  </MatterContextMenu>
                 );
               })
             ) : (
@@ -528,6 +541,8 @@ type PinnedMatter = {
   id: string;
   lastActivityAt: string | Date;
   name: string;
+  /** Drives the right-click menu's add-member affordance and header. */
+  client: { displayName: string } | null;
 };
 
 type RecentChat =

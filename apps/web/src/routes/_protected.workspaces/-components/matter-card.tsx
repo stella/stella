@@ -70,9 +70,12 @@ export const MatterCard = ({
 
   return (
     <MatterContextMenu
-      isPersonal={!workspace.client}
-      workspaceId={workspace.id}
-      workspaceName={workspace.name}
+      target={{
+        id: workspace.id,
+        name: workspace.name,
+        color: workspace.color,
+        client: workspace.client,
+      }}
     >
       {({ rename, menuOpen }) => (
         <PreviewCard

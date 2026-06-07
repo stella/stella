@@ -219,6 +219,21 @@ describe("custom oxlint guardrails", () => {
     expect(pluginSource).toContain('"matchMedia"');
   });
 
+  test("matter links must declare their listing or reference affordance", () => {
+    const configSource = readRootFixture("oxlint.config.ts");
+    const pluginSource = readRootFixture(
+      ".oxlint-plugins/require-matter-affordance.ts",
+    );
+
+    expect(configSource).toContain(
+      "require-matter-affordance/require-matter-affordance",
+    );
+    expect(pluginSource).toContain("/workspaces/$workspaceId");
+    expect(pluginSource).toContain("MatterContextMenu");
+    expect(pluginSource).toContain("MatterRefLink");
+    expect(pluginSource).toContain("Navigate");
+  });
+
   test("public SEO endpoints cannot import auth or protected code", () => {
     const configSource = readRootFixture("oxlint.config.ts");
 

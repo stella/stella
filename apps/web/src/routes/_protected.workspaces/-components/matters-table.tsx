@@ -18,6 +18,8 @@ import { cn } from "@stll/ui/lib/utils";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { getMatterColor } from "@/lib/matter-colors";
 import { formatRelativeTime } from "@/lib/relative-time";
+import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
+import { useMatterContextMenu } from "@/routes/_protected.workspaces/-components/matter-context-menu";
 import {
   getInitials,
   TeamAvatars,
@@ -38,6 +40,7 @@ import {
 import { useConfigStore } from "@/stores/config-store";
 
 const MAX_VISIBLE_AVATARS = 3;
+const MATTER_INLINE_EDIT_SELECTOR = "[data-matter-inline-edit]";
 
 type MattersTableProps = {
   workspaces: Workspace[];
@@ -282,7 +285,21 @@ const MattersTableRow = ({
   focusIndex,
 }: MattersTableRowProps) => {
   const navigate = useNavigate();
+  const ctx = useMatterContextMenu({
+    id: workspace.id,
+    name: workspace.name,
+    color: workspace.color,
+    client: workspace.client,
+  });
+  const isEditing = ctx.rename.status === "editing";
+  const isInlineEditEvent = (target: EventTarget | null) =>
+    target instanceof Element &&
+    target.closest(MATTER_INLINE_EDIT_SELECTOR) !== null;
+
   const openMatter = () => {
+    if (isEditing) {
+      return;
+    }
     // eslint-disable-next-line @typescript-eslint/no-floating-promises
     navigate({
       to: "/workspaces/$workspaceId",
@@ -297,18 +314,53 @@ const MattersTableRow = ({
         "focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-inset",
         focusIndex === globalIndex && "bg-accent/50",
       )}
-      onClick={openMatter}
+      onClick={(event) => {
+        if (isInlineEditEvent(event.target)) {
+          return;
+        }
+        openMatter();
+      }}
+      onContextMenu={ctx.onContextMenu}
       onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
+        if (isInlineEditEvent(event.target)) {
+          return;
+        }
+        if (!isEditing && (event.key === "Enter" || event.key === " ")) {
           event.preventDefault();
           openMatter();
         }
       }}
       tabIndex={0}
     >
-      {columns.map((col) => (
+      {columns.map((col, i) => (
         <TableCell key={col.id}>
-          <col.Cell workspace={workspace} />
+          {col.id === "name" && ctx.rename.status === "editing" ? (
+            <div
+              data-matter-inline-edit
+              className="flex min-w-0 items-center gap-2"
+            >
+              <span
+                className="size-2 shrink-0 rounded-full"
+                style={{ backgroundColor: getMatterColor(workspace.id) }}
+              />
+              <InlineEdit
+                onCancel={ctx.rename.cancel}
+                onChange={ctx.rename.setDraft}
+                onCommit={ctx.rename.commit}
+                value={ctx.rename.draft}
+              />
+            </div>
+          ) : (
+            <col.Cell workspace={workspace} />
+          )}
+          {/* Menu + dialogs live inside a cell so the trigger span stays
+              valid inside the row; the popups portal out regardless. */}
+          {i === 0 && (
+            <>
+              {ctx.menu}
+              {ctx.dialogs}
+            </>
+          )}
         </TableCell>
       ))}
     </TableRow>
