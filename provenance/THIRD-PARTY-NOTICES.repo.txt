@@ -50,28 +50,6 @@ Project: root
 - @react-email/render 2.0.8 — MIT
 - @resvg/resvg-js 2.6.2 — MPL-2.0
 - @sinclair/typebox 0.34.49 — MIT
-- @stll/ai-catalog 0.0.0 — Apache-2.0
-- @stll/anonymize-chat 0.0.0 — Apache-2.0
-- @stll/anonymize-data 0.0.6 — MIT
-- @stll/anonymize-wasm 1.4.8 — MIT
-- @stll/api 0.0.0 — Apache-2.0
-- @stll/boe 0.1.0 — Apache-2.0
-- @stll/business-registries 0.1.0 — Apache-2.0
-- @stll/case-law 0.0.0 — Apache-2.0
-- @stll/catalogue 0.0.0 — Apache-2.0
-- @stll/country-codes 0.1.0 — Apache-2.0
-- @stll/docx-core 0.1.0 — Apache-2.0
-- @stll/docx-utils 0.1.0 — Apache-2.0
-- @stll/errors 0.0.0 — Apache-2.0
-- @stll/folio 0.1.0 — Apache-2.0
-- @stll/infosoud 0.1.0 — Apache-2.0
-- @stll/money 0.0.0 — Apache-2.0
-- @stll/permissions 0.0.0 — Apache-2.0
-- @stll/skills 0.0.0 — Apache-2.0
-- @stll/stdnum 2.0.1 — MIT
-- @stll/template-conditions 0.0.0 — Apache-2.0
-- @stll/transactional 0.0.0 — Apache-2.0
-- @stll/ui 0.0.0 — Apache-2.0
 - @streamdown/cjk 1.0.3 — Apache-2.0
 - @streamdown/math 1.0.2 — Apache-2.0
 - @streamdown/mermaid 1.0.2 — Apache-2.0
@@ -84,6 +62,7 @@ Project: root
 - @tanstack/react-router 1.170.10 — MIT
 - @tanstack/react-router-devtools 1.167.0 — MIT
 - @tanstack/react-router-ssr-query 1.167.1 — MIT
+- @tanstack/react-start 1.168.18 — MIT
 - @tanstack/react-store 0.11.0 — MIT
 - @tanstack/react-store 0.9.3 — MIT
 - @tanstack/react-table 8.21.3 — MIT
@@ -109,7 +88,7 @@ Project: root
 - astro 6.4.2 — MIT
 - better-auth 1.6.12 — MIT
 - better-result 2.9.2 — MIT
-- bullmq 5.77.6 — MIT
+- bullmq 5.77.7 — MIT
 - cheerio 1.2.0 — MIT
 - class-variance-authority 0.7.1 — Apache-2.0
 - client-zip 2.5.0 — MIT
@@ -134,9 +113,9 @@ Project: root
 - jszip 3.10.1 — (MIT OR GPL-3.0-or-later)
 - lucide-react 1.17.0 — ISC
 - nodemailer 8.0.10 — MIT-0
-- pdfjs-dist 5.7.284 — Apache-2.0
-- posthog-js 1.376.4 — SEE LICENSE IN LICENSE
-- posthog-node 5.35.6 — MIT
+- pdfjs-dist 6.0.227 — Apache-2.0
+- posthog-js 1.376.6 — SEE LICENSE IN LICENSE
+- posthog-node 5.35.8 — MIT
 - prosemirror-commands 1.7.1 — MIT
 - prosemirror-dropcursor 1.8.2 — MIT
 - prosemirror-gapcursor 1.4.1 — MIT
