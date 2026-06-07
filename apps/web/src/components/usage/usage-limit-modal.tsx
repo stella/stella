@@ -94,10 +94,8 @@ export const UsageLimitModal = ({
         </div>
 
         <DialogFooter>
-          <DialogClose>
-            <Button variant="ghost">
-              {t("settings.organization.usageLimitNotNow")}
-            </Button>
+          <DialogClose render={<Button variant="ghost" />}>
+            {t("settings.organization.usageLimitNotNow")}
           </DialogClose>
           {hasHostedEntitlement ? (
             <Button
