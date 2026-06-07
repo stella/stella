@@ -482,9 +482,9 @@
     "sendErrorAnonymizationBlocked": "stella no pudo anonimizar un archivo adjunto, así que no se envió nada. Quita el archivo o envía este mensaje sin anonimización.",
     "sendErrorLoopDetected": "La respuesta de IA se repitió demasiadas veces. Inténtalo de nuevo con una solicitud más concreta.",
     "sendErrorModelUnavailable": "El modelo de IA configurado ya no está disponible. Pídele al administrador del espacio de trabajo que actualice el modelo en la configuración de la organización.",
+    "sendErrorProviderBilling": "El proveedor de IA informó de un problema de facturación. Contacta con el administrador del espacio de trabajo.",
     "sendErrorProviderUnavailable": "El proveedor de IA no está disponible temporalmente. Inténtalo de nuevo en un momento.",
     "sendErrorQuotaExhausted": "Se agotó la cuota del proveedor de IA. Inténtalo de nuevo en un minuto o contacta con el administrador del espacio de trabajo.",
-    "sendErrorUsageLimit": "Se alcanzó el límite de uso de IA. Contacta con el administrador del espacio de trabajo.",
     "sendPrompt": "Enviar mensaje",
     "sendWithoutAnonymization": "Enviar sin anonimización",
     "skills": {

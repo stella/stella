@@ -485,9 +485,9 @@ type Messages = {
     "sendErrorAnonymizationBlocked": "stella could not anonymize one attachment, so nothing was sent. Remove the file or send this message without anonymization.";
     "sendErrorLoopDetected": "The AI response repeated too many times. Try again with a narrower request.";
     "sendErrorModelUnavailable": "The configured AI model is no longer available. Ask your workspace admin to update the model in organization settings.";
+    "sendErrorProviderBilling": "The AI provider reported a billing problem. Contact your workspace admin.";
     "sendErrorProviderUnavailable": "The AI provider is temporarily unavailable. Please try again in a moment.";
     "sendErrorQuotaExhausted": "The AI provider's quota is exhausted. Try again in a minute, or contact your workspace admin.";
-    "sendErrorUsageLimit": "AI usage limit reached. Contact your workspace admin.";
     "sendPrompt": "Send message";
     "sendWithoutAnonymization": "Send without anonymization";
     "skills": {

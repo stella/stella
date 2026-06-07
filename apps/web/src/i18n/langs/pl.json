@@ -482,9 +482,9 @@
     "sendErrorAnonymizationBlocked": "stella nie mogła zanonimizować jednego załącznika, więc nic nie wysłano. Usuń plik albo wyślij tę wiadomość bez anonimizacji.",
     "sendErrorLoopDetected": "Odpowiedź AI powtórzyła się zbyt wiele razy. Spróbuj ponownie z węższą prośbą.",
     "sendErrorModelUnavailable": "Skonfigurowany model AI nie jest już dostępny. Poproś administratora obszaru roboczego o zaktualizowanie modelu w ustawieniach organizacji.",
+    "sendErrorProviderBilling": "Dostawca AI zgłosił problem z płatnością. Skontaktuj się z administratorem obszaru roboczego.",
     "sendErrorProviderUnavailable": "Dostawca AI jest tymczasowo niedostępny. Spróbuj ponownie za chwilę.",
     "sendErrorQuotaExhausted": "Limit dostawcy AI został wyczerpany. Spróbuj ponownie za minutę albo skontaktuj się z administratorem obszaru roboczego.",
-    "sendErrorUsageLimit": "Osiągnięto limit użycia AI. Skontaktuj się z administratorem obszaru roboczego.",
     "sendPrompt": "Wyślij wiadomość",
     "sendWithoutAnonymization": "Wyślij bez anonimizacji",
     "skills": {

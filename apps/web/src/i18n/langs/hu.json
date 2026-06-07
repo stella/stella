@@ -482,9 +482,9 @@
     "sendErrorAnonymizationBlocked": "A stella nem tudta anonimizálni az egyik mellékletet, ezért semmi sem lett elküldve. Távolítsd el a fájlt, vagy küldd el az üzenetet anonimizálás nélkül.",
     "sendErrorLoopDetected": "Az AI-válasz túl sokszor ismétlődött. Próbáld újra szűkebb kéréssel.",
     "sendErrorModelUnavailable": "A beállított AI-modell már nem érhető el. Kérd a munkaterület adminisztrátorát, hogy frissítse a modellt a szervezet beállításaiban.",
+    "sendErrorProviderBilling": "Az AI-szolgáltató számlázási problémát jelzett. Fordulj a munkaterület adminisztrátorához.",
     "sendErrorProviderUnavailable": "Az AI-szolgáltató átmenetileg nem elérhető. Próbáld újra egy pillanat múlva.",
     "sendErrorQuotaExhausted": "Az AI-szolgáltató kvótája kimerült. Próbáld újra egy perc múlva, vagy fordulj a munkaterület adminisztrátorához.",
-    "sendErrorUsageLimit": "Elérted az AI-használati limitet. Fordulj a munkaterület adminisztrátorához.",
     "sendPrompt": "Üzenet küldése",
     "sendWithoutAnonymization": "Küldés anonimizálás nélkül",
     "skills": {

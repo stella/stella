@@ -16,7 +16,7 @@ import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
 
 export const AI_ERROR_KINDS = [
   "quota_exhausted",
-  "usage_limit",
+  "provider_billing",
   "model_unavailable",
   "provider_unavailable",
   "loop_detected",
@@ -48,8 +48,12 @@ export const classifyAIError = (error: unknown): AIErrorKind => {
     if (error.statusCode === 429) {
       return "quota_exhausted";
     }
+    // A provider 402 is the upstream account's billing/credit problem,
+    // distinct from Stella's own usage preflight, which returns a
+    // structured 402 before the model call and never reaches this
+    // classifier.
     if (error.statusCode === 402) {
-      return "usage_limit";
+      return "provider_billing";
     }
     // A 404 on a generate/stream call means the provider no longer
     // serves the configured model (retired or renamed upstream) — a
@@ -103,10 +107,11 @@ export const aiHandlerError = (
           "The AI provider's quota is exhausted. Try again shortly, or contact your workspace admin.",
         cause: error,
       });
-    case "usage_limit":
+    case "provider_billing":
       return new HandlerError({
         status: 402,
-        message: "AI usage limit reached. Contact your workspace admin.",
+        message:
+          "The AI provider reported a billing or credit problem. An administrator should check the provider account.",
         cause: error,
       });
     case "model_unavailable":

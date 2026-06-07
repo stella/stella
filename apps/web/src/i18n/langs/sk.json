@@ -482,9 +482,9 @@
     "sendErrorAnonymizationBlocked": "stella nedokázala anonymizovať jednu prílohu, takže sa nič neodoslalo. Odstráňte súbor alebo odošlite správu bez anonymizácie.",
     "sendErrorLoopDetected": "Odpoveď AI sa príliš opakovala. Skúste to znova s užšou požiadavkou.",
     "sendErrorModelUnavailable": "Nastavený AI model už nie je dostupný. Požiadajte správcu pracovného priestoru, aby model aktualizoval v nastaveniach organizácie.",
+    "sendErrorProviderBilling": "Poskytovateľ AI nahlásil problém s fakturáciou. Obráťte sa na správcu pracovného priestoru.",
     "sendErrorProviderUnavailable": "AI poskytovateľ je dočasne nedostupný. Skúste to prosím o chvíľu znova.",
     "sendErrorQuotaExhausted": "Kvóta poskytovateľa AI je vyčerpaná. Skúste to o minútu znova alebo sa obráťte na správcu pracovného priestoru.",
-    "sendErrorUsageLimit": "Limit využitia AI bol dosiahnutý. Obráťte sa na správcu pracovného priestoru.",
     "sendPrompt": "Odoslať správu",
     "sendWithoutAnonymization": "Odoslať bez anonymizácie",
     "skills": {

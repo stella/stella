@@ -482,9 +482,9 @@
     "sendErrorAnonymizationBlocked": "stella nepavyko anonimizuoti vieno priedo, todėl niekas nebuvo išsiųsta. Pašalinkite failą arba siųskite šią žinutę be anonimizavimo.",
     "sendErrorLoopDetected": "AI atsakymas kartojosi per daug kartų. Bandykite dar kartą su siauresne užklausa.",
     "sendErrorModelUnavailable": "Sukonfigūruotas AI modelis nebepasiekiamas. Paprašykite darbo srities administratoriaus atnaujinti modelį organizacijos nustatymuose.",
+    "sendErrorProviderBilling": "AI tiekėjas pranešė apie atsiskaitymo problemą. Susisiekite su darbo srities administratoriumi.",
     "sendErrorProviderUnavailable": "AI teikėjas laikinai nepasiekiamas. Pabandykite po akimirkos dar kartą.",
     "sendErrorQuotaExhausted": "AI teikėjo kvota išnaudota. Pabandykite dar kartą po minutės arba susisiekite su darbo srities administratoriumi.",
-    "sendErrorUsageLimit": "Pasiektas AI naudojimo limitas. Susisiekite su darbo srities administratoriumi.",
     "sendPrompt": "Siųsti pranešimą",
     "sendWithoutAnonymization": "Siųsti be anonimizavimo",
     "skills": {

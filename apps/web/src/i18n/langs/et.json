@@ -482,9 +482,9 @@
     "sendErrorAnonymizationBlocked": "stella ei saanud üht manust anonüümida, seega midagi ei saadetud. Eemalda fail või saada see sõnum anonüümimiseta.",
     "sendErrorLoopDetected": "AI vastus kordus liiga palju. Proovi uuesti kitsama päringuga.",
     "sendErrorModelUnavailable": "Seadistatud AI-mudel pole enam saadaval. Palu töökoha administraatoril mudelit organisatsiooni seadetes uuendada.",
+    "sendErrorProviderBilling": "AI-teenusepakkuja teatas arveldusprobleemist. Võta ühendust tööruumi administraatoriga.",
     "sendErrorProviderUnavailable": "AI-teenusepakkuja pole hetkel saadaval. Proovi hetke pärast uuesti.",
     "sendErrorQuotaExhausted": "AI teenusepakkuja kvoot on täis. Proovi minuti pärast uuesti või võta ühendust tööruumi administraatoriga.",
-    "sendErrorUsageLimit": "AI kasutuslimiit on täis. Võta ühendust tööruumi administraatoriga.",
     "sendPrompt": "Saada sõnum",
     "sendWithoutAnonymization": "Saada anonüümimiseta",
     "skills": {
