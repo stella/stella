@@ -898,3 +898,33 @@
 .ProseMirror-focused .ProseMirror-gapcursor {
   display: block;
 }
+
+/* ============================================================================
+ * TEMPLATE DIRECTIVE MARKERS
+ * Subtle in-flow highlight behind the *visible* {{...}} marker text (not a
+ * cover), so markers stay readable + editable and the faint translucent
+ * highlight tolerates reflow without flicker. Block directives additionally get
+ * a thin left gutter rail spanning opener→closer. Monochrome --doc-* tokens.
+ * ============================================================================ */
+.folio-template-directive {
+  position: absolute;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--doc-text) 8%, transparent);
+}
+
+/* Clause slots and block-directive lines sit a touch softer than fields. */
+.folio-template-directive--clause,
+.folio-template-directive--if,
+.folio-template-directive--elseif,
+.folio-template-directive--else,
+.folio-template-directive--endif,
+.folio-template-directive--each,
+.folio-template-directive--endeach {
+  background: color-mix(in srgb, var(--doc-text) 5%, transparent);
+}
+
+.folio-template-band-rail {
+  position: absolute;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--doc-text) 20%, transparent);
+}
