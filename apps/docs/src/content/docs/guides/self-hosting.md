@@ -220,7 +220,7 @@ for every version. Three ways to keep up with it:
   in your reader of choice, or wire it into your release tooling.
   Registry watchers like [Diun](https://crazymax.dev/diun/) can also
   monitor the published image at `ghcr.io/stella/stella-api`.
-- **In-app banner** — when you set `VITE_SELFHOST="true"` in
+- **In-app banner**: when you set `VITE_SELFHOST="true"` in
   `apps/web/.env` and rebuild the web app, stella checks the GitHub Releases
   API once a day and surfaces newer versions to logged-in users with a
   one-click link to the release notes. Off by default; the public
