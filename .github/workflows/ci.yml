@@ -348,12 +348,14 @@ jobs:
           NPM_TOKEN: ""
         run: |
           set -euo pipefail
-          # `bun install --production` only skips ADDING devDependencies; it does
-          # not prune ones the build install above already placed in node_modules.
-          # Wipe node_modules first so the boot runs against the same clean
-          # production tree the Docker runner does (dist/ and .env are untouched).
+          # Reproduce apps/web/Dockerfile's deps-prod stage exactly. Wipe
+          # node_modules first (a plain --production reinstall only skips ADDING
+          # devDeps; it does not prune ones the build install already placed),
+          # and scope to @stll/web — an unfiltered install pulls other apps' deps
+          # and could mask a package the web runtime reaches but @stll/web never
+          # declared. dist/ and .env are untouched.
           rm -rf node_modules
-          bun install --production --frozen-lockfile --ignore-scripts
+          bun install --filter @stll/web --production --frozen-lockfile --ignore-scripts
           cd apps/web
           PORT=3199 HOST=127.0.0.1 bun start-runtime.js &
           server_pid=$!
