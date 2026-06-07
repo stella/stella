@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 
 import {
   emailToHtml,
+  parsedEmailToText,
+  parseEmail,
   type ParsedEmail,
   renderEmailHtml,
   resolveEmailMimeType,
@@ -68,6 +70,7 @@ describe("renderEmailHtml", () => {
     inlineImages: [
       { cid: "logo", mimeType: "image/png", dataBase64: PNG_BASE64 },
     ],
+    attachments: [],
     ...overrides,
   });
 
@@ -175,6 +178,25 @@ describe("renderEmailHtml", () => {
     expect(html).toContain("<pre");
     expect(html).toContain("&lt;not a tag&gt;");
   });
+
+  test("formats sanitized headers and body text for extraction", () => {
+    const text = parsedEmailToText(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: '<p>First line</p><script>alert(1)</script><a href="https://example.com">visible link text</a>',
+        },
+      }),
+    );
+
+    expect(text).toContain("From: Jane Lawyer <jane@example.com>");
+    expect(text).toContain("To: client@example.org");
+    expect(text).toContain("Subject: Contract draft");
+    expect(text).toContain("First line");
+    expect(text).toContain("visible link text");
+    expect(text).not.toContain("alert(1)");
+    expect(text).not.toContain("https://example.com");
+  });
 });
 
 describe("emailToHtml (.eml)", () => {
@@ -201,6 +223,11 @@ describe("emailToHtml (.eml)", () => {
     'Content-Disposition: inline; filename="logo.png"',
     "",
     PNG_BASE64,
+    "--BND",
+    "Content-Type: text/plain; charset=utf-8",
+    'Content-Disposition: attachment; filename="notes.txt"',
+    "",
+    "Attachment text",
     "--BND--",
     "",
   ].join("\r\n");
@@ -220,5 +247,21 @@ describe("emailToHtml (.eml)", () => {
     expect(html).not.toContain("cid:logo123");
     expect(html).toContain(`data:image/png;base64,${PNG_BASE64}`);
     expect(html).not.toContain("https://example.com/remote.png");
+  });
+
+  test("keeps ordinary attachment bytes for extraction", async () => {
+    const parsed = await parseEmail(toArrayBuffer(eml), "message/rfc822");
+    const attachment = parsed.attachments.find(
+      (item) => item.fileName === "notes.txt",
+    );
+
+    expect(attachment?.mimeType).toBe("text/plain");
+    expect(attachment).toBeDefined();
+    if (!attachment) {
+      return;
+    }
+    expect(new TextDecoder().decode(attachment.bytes).trim()).toBe(
+      "Attachment text",
+    );
   });
 });

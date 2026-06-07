@@ -18,8 +18,8 @@ import PostalMime, { type Address } from "postal-mime";
 
 import { parseOutlookMsg } from "@/api/handlers/files/outlook-msg";
 
-const EML_MIME_TYPE = "message/rfc822";
-const MSG_MIME_TYPE = "application/vnd.ms-outlook";
+export const EML_MIME_TYPE = "message/rfc822";
+export const MSG_MIME_TYPE = "application/vnd.ms-outlook";
 
 export const EMAIL_MIME_TYPES = {
   [EML_MIME_TYPE]: null,
@@ -61,6 +61,13 @@ export class EmailParseError extends TaggedError("EmailParseError")<{
 
 type InlineImage = { cid: string; mimeType: string; dataBase64: string };
 
+export type EmailAttachment = {
+  contentId: string | null;
+  fileName: string | null;
+  mimeType: string | null;
+  bytes: Uint8Array;
+};
+
 type EmailBody =
   | { type: "html"; html: string }
   | { type: "text"; text: string };
@@ -73,6 +80,7 @@ export type ParsedEmail = {
   date: string | null;
   body: EmailBody;
   inlineImages: InlineImage[];
+  attachments: EmailAttachment[];
 };
 
 /**
@@ -86,10 +94,7 @@ export const emailToHtml = async (
 ): Promise<Result<string, EmailParseError>> =>
   await Result.tryPromise({
     try: async () => {
-      const parsed =
-        mimeType === MSG_MIME_TYPE
-          ? parseMsg(fileBuffer)
-          : await parseEml(fileBuffer);
+      const parsed = await parseEmail(fileBuffer, mimeType);
       return renderEmailHtml(parsed);
     },
     catch: (cause) =>
@@ -100,26 +105,71 @@ export const emailToHtml = async (
       }),
   });
 
+export const parseEmail = async (
+  fileBuffer: ArrayBuffer,
+  mimeType: string,
+): Promise<ParsedEmail> => {
+  if (mimeType === MSG_MIME_TYPE) {
+    return parseMsg(fileBuffer);
+  }
+  return await parseEml(fileBuffer);
+};
+
+export const parsedEmailToText = (parsed: ParsedEmail): string => {
+  const parts: string[] = [];
+  const rows = [
+    ["From", parsed.from],
+    ["To", parsed.to.join(", ")],
+    ["Cc", parsed.cc.join(", ")],
+    ["Date", parsed.date],
+    ["Subject", parsed.subject],
+  ] as const;
+
+  for (const [label, value] of rows) {
+    if (value && value.trim().length > 0) {
+      parts.push(`${label}: ${value}`);
+    }
+  }
+
+  const body = emailBodyToText(parsed.body);
+  if (body) {
+    parts.push(body);
+  }
+
+  return normalizeExtractedText(parts.join("\n"));
+};
+
 // ── .eml parsing (postal-mime) ──────────────────────────
 
 const parseEml = async (fileBuffer: ArrayBuffer): Promise<ParsedEmail> => {
   const email = await PostalMime.parse(fileBuffer, {
-    attachmentEncoding: "base64",
+    attachmentEncoding: "arraybuffer",
   });
 
   const inlineImages: InlineImage[] = [];
+  const attachments: EmailAttachment[] = [];
   for (const attachment of email.attachments) {
-    if (!attachment.contentId || typeof attachment.content !== "string") {
+    const bytes = attachmentContentToBytes(attachment.content);
+    if (!bytes) {
       continue;
     }
-    if (!attachment.mimeType.startsWith("image/")) {
-      continue;
-    }
-    inlineImages.push({
-      cid: stripAngleBrackets(attachment.contentId),
+
+    attachments.push({
+      contentId: attachment.contentId
+        ? stripAngleBrackets(attachment.contentId)
+        : null,
+      fileName: attachment.filename,
       mimeType: attachment.mimeType,
-      dataBase64: attachment.content,
+      bytes,
     });
+
+    if (attachment.contentId && attachment.mimeType.startsWith("image/")) {
+      inlineImages.push({
+        cid: stripAngleBrackets(attachment.contentId),
+        mimeType: attachment.mimeType,
+        dataBase64: Buffer.from(bytes).toString("base64"),
+      });
+    }
   }
 
   return {
@@ -132,6 +182,7 @@ const parseEml = async (fileBuffer: ArrayBuffer): Promise<ParsedEmail> => {
       ? { type: "html", html: email.html }
       : { type: "text", text: email.text ?? "" },
     inlineImages,
+    attachments,
   };
 };
 
@@ -162,8 +213,22 @@ const parseMsg = (fileBuffer: ArrayBuffer): ParsedEmail => {
   const data = parseOutlookMsg(fileBuffer);
 
   const inlineImages: InlineImage[] = [];
+  const attachments: EmailAttachment[] = [];
   for (const attachment of data.attachments) {
-    if (!attachment.contentId || !attachment.bytes) {
+    if (!attachment.bytes) {
+      continue;
+    }
+
+    attachments.push({
+      contentId: attachment.contentId
+        ? stripAngleBrackets(attachment.contentId)
+        : null,
+      fileName: attachment.fileName,
+      mimeType: attachment.mimeType,
+      bytes: attachment.bytes,
+    });
+
+    if (!attachment.contentId) {
       continue;
     }
     if (!isImageMimeType(attachment.mimeType, attachment.fileName)) {
@@ -191,6 +256,7 @@ const parseMsg = (fileBuffer: ArrayBuffer): ParsedEmail => {
       ? { type: "html", html: data.html }
       : { type: "text", text: data.text ?? "" },
     inlineImages,
+    attachments,
   };
 };
 
@@ -302,6 +368,19 @@ export const renderEmailHtml = (parsed: ParsedEmail): string => {
   $("body").prepend(`${header}<hr style="${HR_STYLE}">`);
 
   return $.html();
+};
+
+const emailBodyToText = (body: EmailBody): string => {
+  if (body.type === "text") {
+    return normalizeExtractedText(body.text);
+  }
+
+  const $ = load(body.html);
+  sanitizeDom($);
+  stripDuplicateNestedMessageHeaders($);
+  $("br").replaceWith("\n");
+  $("p, div, tr, li, blockquote, h1, h2, h3, h4, h5, h6").append("\n");
+  return normalizeExtractedText($.root().text());
 };
 
 const STRIP_TAGS = [
@@ -513,6 +592,27 @@ const stripAngleBrackets = (value: string): string =>
 
 const nonEmpty = (value: string | null | undefined): value is string =>
   value !== null && value !== undefined && value.trim().length > 0;
+
+const attachmentContentToBytes = (
+  content: ArrayBuffer | Uint8Array | string,
+): Uint8Array | null => {
+  if (typeof content === "string") {
+    return Buffer.from(content);
+  }
+  if (content instanceof ArrayBuffer) {
+    return new Uint8Array(content);
+  }
+  return content;
+};
+
+const normalizeExtractedText = (value: string): string =>
+  value
+    .replace(/\u00a0/gu, " ")
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .join("\n")
+    .replace(/\n{3,}/gu, "\n\n")
+    .trim();
 
 const HTML_ESCAPES: Record<string, string> = {
   "&": "&amp;",
