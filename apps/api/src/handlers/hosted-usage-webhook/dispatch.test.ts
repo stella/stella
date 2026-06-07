@@ -164,7 +164,7 @@ describe("dispatch — handleHostedEntitlementUpsert", () => {
     });
   });
 
-  test("ignores event without metadata.organization_id", async () => {
+  test("ignores a fresh event without metadata.organization_id", async () => {
     await withRolledBackTx(async (tx) => {
       const fx = await setupFixture(tx);
       const outcome = await handleHostedEntitlementUpsert({
@@ -176,6 +176,46 @@ describe("dispatch — handleHostedEntitlementUpsert", () => {
       if (outcome.kind === "ignored") {
         expect(outcome.reason).toContain("organization_id");
       }
+    });
+  });
+
+  test("applies a mapped entitlement update that arrives without metadata", async () => {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+      // Seed a clean hosted entitlement so a local mapping exists.
+      const seed = await handleHostedEntitlementUpsert({
+        tx,
+        payload: buildEntitlementPayload(fx),
+        eventId: "evt_no_meta_seed",
+      });
+      expect(seed.kind).toBe("applied");
+
+      // A renewal for the next period arrives WITHOUT metadata. The local
+      // row owns the org id, so it must still apply: advance the period and
+      // create the next period's allocation rather than drop the event.
+      const renewal = await handleHostedEntitlementUpsert({
+        tx,
+        payload: buildEntitlementPayload(fx, {
+          metadata: undefined,
+          current_period_start: NEXT_PERIOD_START.toISOString(),
+          current_period_end: NEXT_PERIOD_END.toISOString(),
+        }),
+        eventId: "evt_no_meta_renewal",
+      });
+      expect(renewal.kind).toBe("applied");
+
+      const entitlementRows = await tx
+        .select({ id: usageEntitlements.id })
+        .from(usageEntitlements)
+        .where(eq(usageEntitlements.organizationId, fx.organizationId));
+      expect(entitlementRows).toHaveLength(1);
+
+      const nextPeriodBalance = await getRemainingUsageUnits({
+        tx,
+        organizationId: fx.organizationId,
+        asOf: new Date(NEXT_PERIOD_START.getTime() + 1000),
+      });
+      expect(nextPeriodBalance).toBe(3000);
     });
   });
 

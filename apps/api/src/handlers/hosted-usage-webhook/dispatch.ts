@@ -148,26 +148,12 @@ export const handleHostedEntitlementUpsert = async ({
   payload,
   eventId,
 }: HostedEntitlementUpsertParams): Promise<DispatchOutcome> => {
-  // We only honour the Stella organisation reference the provider gives us
-  // through metadata.organization_id (set at hosted setup creation).
-  // Without it we cannot safely attach the entitlement to an org.
-  const organizationIdRaw = payload.metadata?.organization_id;
-  if (!organizationIdRaw) {
-    return {
-      kind: "ignored",
-      reason: "missing metadata.organization_id",
-    };
-  }
-  // SAFETY: organization_id reaches us via provider metadata that we
-  // ourselves set at hosted setup creation (create-hosted-setup.ts pulls it
-  // from ctx.session.activeOrganizationId). The webhook signature
-  // we verified covers the whole body including metadata, so this
-  // value is what we wrote. The FK
-  // on usage_allocations.organization_id is the last line of defence:
-  // a malformed value rejects on insert rather than silently
-  // attributing units to a non-existent org.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
-  const organizationId = organizationIdRaw as SafeId<"organization">;
+  // metadata.organization_id (which we set at hosted setup creation) is
+  // authoritative only before a local mapping exists. Once an entitlement is
+  // mapped, the local row owns the org id, so a renewal/update that arrives
+  // without metadata must still apply — requiring it up front would silently
+  // drop the new period and skip the periodic allocation.
+  const metadataOrganizationId = payload.metadata?.organization_id ?? null;
 
   const policy = await resolvePolicyByHostedPolicyRef(tx, payload.policy_ref);
   if (!policy) {
@@ -201,7 +187,7 @@ export const handleHostedEntitlementUpsert = async ({
   // and the docstring at the top of this file). Only the fresh
   // insert path is allowed to trust metadata, because that's the
   // only signal we have before a local mapping exists.
-  let ownerOrganizationId: SafeId<"organization"> = organizationId;
+  let ownerOrganizationId: SafeId<"organization">;
 
   if (existingByProvider) {
     if (existingByProvider.source !== "hosted") {
@@ -210,11 +196,15 @@ export const handleHostedEntitlementUpsert = async ({
         reason: "matching entitlement is manually managed",
       };
     }
-    if (existingByProvider.organizationId !== organizationId) {
+    if (
+      metadataOrganizationId !== null &&
+      existingByProvider.organizationId !== metadataOrganizationId
+    ) {
       // Metadata claims a different org than the row we already have
       // mapped to this provider entitlement. Either hosted setup
       // attached the wrong metadata or the event is otherwise
       // inconsistent. We must not silently move units between orgs.
+      // Absent metadata is fine: the local row is authoritative.
       return {
         kind: "ignored",
         reason: "metadata organization_id mismatches local mapping",
@@ -271,7 +261,10 @@ export const handleHostedEntitlementUpsert = async ({
           reason: "org has manual entitlement; refuse hosted overwrite",
         };
       }
-      if (existingByAccountRef.organizationId !== organizationId) {
+      if (
+        metadataOrganizationId !== null &&
+        existingByAccountRef.organizationId !== metadataOrganizationId
+      ) {
         return {
           kind: "ignored",
           reason: "metadata organization_id mismatches local account mapping",
@@ -302,6 +295,20 @@ export const handleHostedEntitlementUpsert = async ({
       });
       entitlementId = existingByAccountRef.id;
     } else {
+      // Truly fresh: no local mapping exists, so metadata is the only
+      // ownership signal we have.
+      if (metadataOrganizationId === null) {
+        return { kind: "ignored", reason: "missing metadata.organization_id" };
+      }
+      // SAFETY: organization_id reaches us via provider metadata that we
+      // ourselves set at hosted setup creation (create-hosted-setup.ts pulls
+      // it from ctx.session.activeOrganizationId). The webhook signature we
+      // verified covers the whole body including metadata, so this value is
+      // what we wrote. The FK on usage_entitlements.organization_id rejects a
+      // malformed value on insert rather than attaching to a non-existent org.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      const organizationId = metadataOrganizationId as SafeId<"organization">;
+      ownerOrganizationId = organizationId;
       const inserted = await tx
         .insert(usageEntitlements)
         .values({
@@ -331,10 +338,6 @@ export const handleHostedEntitlementUpsert = async ({
         eventId,
       });
       entitlementId = insertedId;
-      // No local mapping existed before this insert, so the row we
-      // just wrote IS now the source of truth. ownerOrganizationId
-      // remains the metadata-derived value (it's the same id we
-      // stored on the row above).
     }
   }
 
