@@ -179,12 +179,19 @@ export const OutlineRail = ({
   // Prune deeper levels from the rail (not the panel) when it would be too dense.
   const railLevelCap = useMemo(() => {
     const counts: number[] = [];
+    let minLevel = maxLevel;
     for (const item of items) {
       counts[item.level] = (counts[item.level] ?? 0) + 1;
+      if (item.level < minLevel) {
+        minLevel = item.level;
+      }
     }
+    // Drop the deepest levels until the rail fits, but never below the
+    // shallowest present level: the top headings must stay as ticks so a
+    // document that is mostly (or entirely) deep headings keeps a usable rail.
     let cap = maxLevel;
     let running = items.length;
-    while (cap > 0 && running > RAIL_MAX_TICKS) {
+    while (cap > minLevel && running > RAIL_MAX_TICKS) {
       running -= counts[cap] ?? 0;
       cap -= 1;
     }
@@ -420,7 +427,10 @@ export const OutlineRail = ({
     (item) => item.id in pctById && item.level <= railLevelCap,
   );
 
-  if (visibleTicks.length < 2) {
+  // Gate on the panel content (every heading), not the pruned tick count. An
+  // outline with one shallow heading and many deeper ones leaves <2 ticks but
+  // still has a full, navigable popover, so only hide when there is no outline.
+  if (items.length < 2) {
     return null;
   }
 
