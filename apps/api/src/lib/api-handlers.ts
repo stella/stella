@@ -320,22 +320,20 @@ const createSafeScopedHandler = <
       return toSafeStatusResponse(403, { message: "Forbidden" });
     }
 
-    const metering = config.requiresUsage;
-    const meteringContext = metering
-      ? resolveMeteringContext({
-          metering,
-          organizationId: ctx.session.activeOrganizationId,
-          orgAIConfig: ctx.orgAIConfig,
-          workspaceId: hasWorkspaceId(ctx) ? ctx.workspaceId : null,
-          userId: ctx.user.id,
-        })
-      : null;
-
-    if (meteringContext && env.USAGE_ENFORCEMENT_ENABLED) {
-      const preflight = await runUsagePreflight({
-        ctx,
-        meteringContext,
+    // Resolve the metering context only when enforcement is on. It reads
+    // the org AI provider config to detect BYOK, which panics when no
+    // provider is configured; doing it unconditionally — before the
+    // handler's own requireAIAvailable check — would turn a missing-AI
+    // 403 into a 500, and would be wasted work while enforcement is off.
+    if (config.requiresUsage && env.USAGE_ENFORCEMENT_ENABLED) {
+      const meteringContext = resolveMeteringContext({
+        metering: config.requiresUsage,
+        organizationId: ctx.session.activeOrganizationId,
+        orgAIConfig: ctx.orgAIConfig,
+        workspaceId: hasWorkspaceId(ctx) ? ctx.workspaceId : null,
+        userId: ctx.user.id,
       });
+      const preflight = await runUsagePreflight({ ctx, meteringContext });
       if (preflight !== null) {
         return preflight;
       }

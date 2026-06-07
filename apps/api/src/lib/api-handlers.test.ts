@@ -45,6 +45,39 @@ describe("createSafeRootHandler usage preflight", () => {
     }
   });
 
+  test("skips metering entirely when enforcement is disabled", async () => {
+    const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
+    env.USAGE_ENFORCEMENT_ENABLED = false;
+    try {
+      let meteredHandlerCalled = false;
+      let safeDbCalled = false;
+      const endpoint = createSafeRootHandler(
+        {
+          permissions: { workspace: ["read"] },
+          requiresUsage: { actionType: "chat" },
+        },
+        async function* () {
+          meteredHandlerCalled = true;
+          return Result.ok({ ok: true });
+        },
+      );
+      const safeDb: SafeDb = async <T>() => {
+        safeDbCalled = true;
+        return Result.err<T, SafeDbError>(
+          new DatabaseError({ message: "ledger should not be read" }),
+        );
+      };
+
+      const result = await endpoint.handler(createContext(endpoint, safeDb));
+
+      expect(safeDbCalled).toBe(false);
+      expect(meteredHandlerCalled).toBe(true);
+      expect(result).toEqual({ ok: true });
+    } finally {
+      env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
+    }
+  });
+
   test("does not run usage preflight when the metered role uses BYOK", async () => {
     const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
     env.USAGE_ENFORCEMENT_ENABLED = true;
