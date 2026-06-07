@@ -8,10 +8,12 @@ import {
   caseLawIngestionFailures,
   caseLawSources,
 } from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
 import {
   ADAPTER_TIMEOUT,
   MAX_SYNC_PAGES,
 } from "@/api/handlers/case-law/consts";
+import { writeCorpusDocument } from "@/api/handlers/case-law/corpus-storage";
 import {
   createAvailableCaseLawDecisionSlug,
   createCaseLawDecisionSlug,
@@ -327,7 +329,7 @@ export const processDecision = async (
 
   const languageGroupKey = result.ecli || `${sourceId}:${result.caseNumber}`;
 
-  await scopedDb(async (tx) => {
+  const decisionId = await scopedDb(async (tx) => {
     // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
     if (existing) {
       await tx
@@ -372,7 +374,7 @@ export const processDecision = async (
         );
       }
 
-      return;
+      return existing.id;
     }
 
     const baseSlug = createCaseLawDecisionSlug(result.caseNumber);
@@ -430,7 +432,40 @@ export const processDecision = async (
         })),
       );
     }
+
+    return decisionRow.id;
   });
+
+  // Persist canonical text/sections/AST to object storage when enabled,
+  // then record the keys + content hash. Done outside the DB transaction
+  // (S3 I/O must not hold a transaction open) and best-effort: a failure
+  // leaves the row fully readable from its Postgres columns.
+  if (envBase.CORPUS_STORAGE_ENABLED) {
+    try {
+      const written = await writeCorpusDocument({
+        documentId: decisionId,
+        jurisdiction: result.country,
+        text: result.fulltext ?? null,
+        sections: sections.length > 0 ? sections : null,
+        ast: result.documentAst,
+      });
+      // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+      await scopedDb((tx) => {
+        // audit: skip — background corpus storage; derived state, not user actions
+        return tx
+          .update(caseLawDecisions)
+          .set({
+            textS3Key: written.textKey,
+            normalizedS3Key: written.sectionsKey,
+            astS3Key: written.astKey,
+            contentHash: written.contentHash,
+          })
+          .where(eq(caseLawDecisions.id, decisionId));
+      });
+    } catch (error) {
+      captureError(error, { decisionId, step: "processDecision.corpusWrite" });
+    }
+  }
 
   // Search indexing (tsvector) is handled by a background
   // backfill loop so the slow to_tsvector + unaccent computation

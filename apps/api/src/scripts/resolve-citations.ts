@@ -23,6 +23,7 @@ import {
   caseLawDecisions,
   caseLawPolarityRules,
 } from "@/api/db/schema";
+import { recomputeCitationAuthorityForAll } from "@/api/handlers/case-law/citation-authority";
 import { extractContext } from "@/api/handlers/case-law/polarity/context";
 import { SEED_RULES } from "@/api/handlers/case-law/polarity/seed-rules";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -677,6 +678,17 @@ if (!REPORT_ONLY) {
 
   if (stats.resolved > 0) {
     await classifyWithRules();
+  }
+
+  // Citation links are now settled; refresh the materialized
+  // citation-authority ranking signal so search reads it instead of
+  // recomputing the citation-graph aggregate per query.
+  if (!DRY_RUN) {
+    console.log("\n=== RECOMPUTING CITATION AUTHORITY ===");
+    const updated = await rootDb.transaction((tx) =>
+      recomputeCitationAuthorityForAll(tx),
+    );
+    console.log(`Citation authority refreshed for ${updated} cited decisions.`);
   }
 }
 

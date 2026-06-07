@@ -100,6 +100,11 @@ export const LIMITS = {
   caseLawSitemapIndexEntryLimit: 50_000,
   caseLawFacetLimit: 20,
   caseLawPolarityRulesPerLanguage: 500,
+  // Quickwit two-stage search: lexical candidates over-fetched before
+  // the citation-authority rerank (pagination depth is capped at this).
+  quickwitSearchCandidateLimit: 300,
+  // Decisions pushed to Quickwit per indexer batch.
+  quickwitIndexBatchSize: 50,
   infoSoudEventsMax: 200,
   infoSoudHearingsMax: 50,
   infoSoudRelatedCasesMax: 50,

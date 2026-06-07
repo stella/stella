@@ -8,6 +8,7 @@
  * from here to avoid requiring the full API env.
  */
 import { createEnv } from "@t3-oss/env-core";
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import { resolveDatabaseUrl } from "@/api/db-url";
@@ -56,6 +57,29 @@ export const envBase = createEnv({
       v.pipe(v.string(), v.parseBoolean()),
       "false",
     ),
+    // Legal corpus + Quickwit. Defaults keep the shipped pg-fts /
+    // Postgres-text path active; flipping to Quickwit is a config change.
+    LEGAL_SEARCH_PROVIDER: v.optional(
+      v.picklist(["pg-fts", "quickwit"]),
+      "pg-fts",
+    ),
+    // Blue-green generation prefix. Each jurisdiction gets its own index
+    // (`<generation>_<country>`, e.g. case_law_v1_svk); bump the prefix to
+    // rebuild all jurisdictions and flip to it.
+    LEGAL_SEARCH_INDEX_GENERATION: v.optional(v.string(), "case_law_v1"),
+    QUICKWIT_ENDPOINT: v.optional(v.pipe(v.string(), v.url())),
+    QUICKWIT_S3_BUCKET: v.optional(v.string()),
+    // Falls back to S3_BUCKET when unset (dev). Required when
+    // CORPUS_STORAGE_ENABLED is true (enforced post-validation).
+    LEGAL_CORPUS_S3_BUCKET: v.optional(v.string()),
+    CORPUS_STORAGE_ENABLED: v.optional(
+      v.pipe(v.string(), v.parseBoolean()),
+      "false",
+    ),
+    QUICKWIT_INDEXING_ENABLED: v.optional(
+      v.pipe(v.string(), v.parseBoolean()),
+      "false",
+    ),
     isDev: v.optional(
       v.boolean(),
       !DEPLOYED_NODE_ENVS.has(process.env.NODE_ENV ?? ""),
@@ -64,3 +88,23 @@ export const envBase = createEnv({
   emptyStringAsUndefined: true,
   runtimeEnv: { ...process.env, DATABASE_URL: resolveDatabaseUrl() },
 });
+
+// Cross-field invariants the per-field schema can't express.
+if (
+  envBase.LEGAL_SEARCH_PROVIDER === "quickwit" &&
+  envBase.QUICKWIT_ENDPOINT === undefined
+) {
+  panic("LEGAL_SEARCH_PROVIDER=quickwit requires QUICKWIT_ENDPOINT to be set");
+}
+
+// In deployed envs the corpus must use its own bucket, not the default
+// document bucket (it falls back to S3_BUCKET only for local dev).
+if (
+  envBase.CORPUS_STORAGE_ENABLED &&
+  !envBase.isDev &&
+  envBase.LEGAL_CORPUS_S3_BUCKET === undefined
+) {
+  panic(
+    "CORPUS_STORAGE_ENABLED requires LEGAL_CORPUS_S3_BUCKET in deployed environments",
+  );
+}

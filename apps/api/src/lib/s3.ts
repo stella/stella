@@ -198,10 +198,13 @@ type OptionalS3Credentials = {
   sessionToken?: string;
 };
 
-const buildS3Client = (creds?: OptionalS3Credentials | null): S3Client =>
+const buildS3Client = (
+  bucket: string,
+  creds?: OptionalS3Credentials | null,
+): S3Client =>
   new S3Client({
     acl: "private",
-    bucket: envBase.S3_BUCKET,
+    bucket,
     endpoint: envBase.S3_ENDPOINT,
     region: envBase.S3_REGION,
     ...(creds
@@ -212,6 +215,10 @@ const buildS3Client = (creds?: OptionalS3Credentials | null): S3Client =>
         }
       : {}),
   });
+
+/** The legal-corpus bucket; falls back to the default bucket in dev. */
+const corpusBucket = (): string =>
+  envBase.LEGAL_CORPUS_S3_BUCKET ?? envBase.S3_BUCKET;
 
 type ResolveS3CredentialsOptions = {
   endpoint?: string;
@@ -326,7 +333,7 @@ export const resolveS3Credentials = async ({
  * processes to prevent STS credential expiry.
  */
 export const refreshS3 = async (): Promise<void> => {
-  _client = buildS3Client(await resolveS3Credentials());
+  _client = buildS3Client(envBase.S3_BUCKET, await resolveS3Credentials());
   _clientCreatedAt = Date.now();
 };
 
@@ -346,13 +353,32 @@ let _clientCreatedAt = 0;
  * any request, so the lazy build here is only a fallback.
  */
 export const getS3 = (): S3Client => {
-  _client ??= buildS3Client(staticCredentialsFromEnv());
+  _client ??= buildS3Client(envBase.S3_BUCKET, staticCredentialsFromEnv());
   return _client;
 };
 
 /** True when credentials are older than 50 minutes (or not yet built). */
 export const isS3Stale = (): boolean =>
   !_client || Date.now() - _clientCreatedAt > CREDENTIAL_MAX_AGE_MS;
+
+// Separate client for the legal-corpus bucket. Shares the credential
+// resolver but targets a different bucket, with its own staleness clock
+// so the long-running ingestion daemon refreshes both before STS expiry.
+let _corpusClient: S3Client | null = null;
+let _corpusClientCreatedAt = 0;
+
+export const refreshCorpusS3 = async (): Promise<void> => {
+  _corpusClient = buildS3Client(corpusBucket(), await resolveS3Credentials());
+  _corpusClientCreatedAt = Date.now();
+};
+
+export const getCorpusS3 = (): S3Client => {
+  _corpusClient ??= buildS3Client(corpusBucket(), staticCredentialsFromEnv());
+  return _corpusClient;
+};
+
+export const isCorpusS3Stale = (): boolean =>
+  !_corpusClient || Date.now() - _corpusClientCreatedAt > CREDENTIAL_MAX_AGE_MS;
 
 /**
  * Generate a presigned GET URL that forces the browser to

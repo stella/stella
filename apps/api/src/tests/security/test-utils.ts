@@ -112,7 +112,8 @@ const createTestDb = async (): Promise<TestDatabase> => {
         "case_law_fts_configs",
         "case_law_search_documents",
         "case_law_ingestion_events",
-        "case_law_ingestion_failures"
+        "case_law_ingestion_failures",
+        "case_law_index_jobs"
       FROM stella
     `),
   );
@@ -127,7 +128,8 @@ const createTestDb = async (): Promise<TestDatabase> => {
         "case_law_fts_configs",
         "case_law_search_documents",
         "case_law_ingestion_events",
-        "case_law_ingestion_failures"
+        "case_law_ingestion_failures",
+        "case_law_index_jobs"
       TO stella_ingestion
     `),
   );
@@ -150,6 +152,54 @@ const createTestDb = async (): Promise<TestDatabase> => {
       GRANT UPDATE (sync_cursor, last_sync_at, updated_at)
         ON TABLE "case_law_sources"
         TO stella_ingestion
+    `),
+  );
+  // case_law_index_jobs is append-only: ingestion appends audit rows
+  // but never updates or deletes them.
+  await testDb.execute(
+    sql.raw(`
+      GRANT INSERT ON TABLE "case_law_index_jobs" TO stella_ingestion
+    `),
+  );
+  // Legislation corpus — same global model as case law.
+  await testDb.execute(
+    sql.raw(`
+      REVOKE INSERT, UPDATE, DELETE ON TABLE
+        "legislation_sources",
+        "legislation_documents",
+        "legislation_search_documents",
+        "legislation_index_jobs"
+      FROM stella
+    `),
+  );
+  await testDb.execute(
+    sql.raw(`
+      GRANT SELECT ON TABLE
+        "legislation_sources",
+        "legislation_documents",
+        "legislation_search_documents",
+        "legislation_index_jobs"
+      TO stella_ingestion
+    `),
+  );
+  await testDb.execute(
+    sql.raw(`
+      GRANT INSERT, UPDATE, DELETE ON TABLE
+        "legislation_documents",
+        "legislation_search_documents"
+      TO stella_ingestion
+    `),
+  );
+  await testDb.execute(
+    sql.raw(`
+      GRANT UPDATE (sync_cursor, last_sync_at, updated_at)
+        ON TABLE "legislation_sources"
+        TO stella_ingestion
+    `),
+  );
+  await testDb.execute(
+    sql.raw(`
+      GRANT INSERT ON TABLE "legislation_index_jobs" TO stella_ingestion
     `),
   );
 

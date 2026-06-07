@@ -80,14 +80,27 @@ describe("policy coverage", () => {
     "case_law_court_weights",
     "case_law_decisions",
     "case_law_fts_configs",
+    "case_law_index_jobs",
     "case_law_ingestion_events",
     "case_law_ingestion_failures",
     "case_law_polarity_rules",
     "case_law_search_documents",
     "case_law_sources",
+    "legislation_sources",
+    "legislation_documents",
+    "legislation_search_documents",
+    "legislation_index_jobs",
   ];
+  // *_sources are config (column-restricted writes); *_index_jobs are
+  // append-only audit trails (SELECT + INSERT).
+  const CONFIG_OR_APPEND_ONLY = new Set([
+    "case_law_sources",
+    "case_law_index_jobs",
+    "legislation_sources",
+    "legislation_index_jobs",
+  ]);
   const INGESTION_MUTABLE_CASE_LAW_TABLES = GLOBAL_CASE_LAW_TABLES.filter(
-    (table) => table !== "case_law_sources",
+    (table) => !CONFIG_OR_APPEND_ONLY.has(table),
   );
 
   test("every table with workspace_id has workspace policies", async () => {
@@ -401,5 +414,27 @@ describe("policy coverage", () => {
         .map((p) => p.column_name)
         .sort(),
     ).toEqual(["last_sync_at", "sync_cursor", "updated_at"]);
+
+    // Append-only audit trail: ingestion may read and append, never
+    // mutate or delete prior rows.
+    expect(privilegesForTable(tablePrivileges, "case_law_index_jobs")).toEqual([
+      "INSERT",
+      "SELECT",
+    ]);
+
+    // Legislation mirrors case law: config source (column writes only) +
+    // append-only audit trail.
+    expect(privilegesForTable(tablePrivileges, "legislation_sources")).toEqual([
+      "SELECT",
+    ]);
+    expect(
+      columnPrivileges
+        .filter((p) => p.table_name === "legislation_sources")
+        .map((p) => p.column_name)
+        .sort(),
+    ).toEqual(["last_sync_at", "sync_cursor", "updated_at"]);
+    expect(
+      privilegesForTable(tablePrivileges, "legislation_index_jobs"),
+    ).toEqual(["INSERT", "SELECT"]);
   });
 });

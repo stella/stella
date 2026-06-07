@@ -1,8 +1,17 @@
 import { and, asc, eq, sql } from "drizzle-orm";
 import { status } from "elysia";
 
+import type { DocumentAst } from "@stll/case-law/document-ast";
+
 import { caseLawDecisions } from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
+import {
+  readCorpusAst,
+  readCorpusText,
+} from "@/api/handlers/case-law/corpus-storage";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
+import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
+import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 
@@ -83,6 +92,8 @@ const listPublicDecisionLanguageAlternates = async ({
   return dedupedAlternates.length > 1 ? dedupedAlternates : [];
 };
 
+const corpusReadEnabled = (): boolean => envBase.CORPUS_STORAGE_ENABLED;
+
 export const readDecisionHandler = async (
   decisionId: SafeId<"caseLawDecision">,
   caseLawDb: CaseLawPublicReadDb,
@@ -107,6 +118,10 @@ export const readDecisionHandler = async (
         metadata: true,
         createdAt: true,
         updatedAt: true,
+        // Object-storage keys: never returned to the client, only used
+        // to fetch canonical payloads when corpus storage is enabled.
+        astS3Key: true,
+        textS3Key: true,
         // fulltext: only as fallback when no AST
         // sections: frontend doesn't use these
       },
@@ -143,18 +158,23 @@ export const readDecisionHandler = async (
     languageGroupKey: decision.languageGroupKey,
   });
 
+  // Prefer canonical AST from object storage when corpus storage is
+  // enabled; fall back to the Postgres column so a read is never harder
+  // than today.
+  const documentAst = await resolveAst({
+    astS3Key: decision.astS3Key,
+    pgAst: decision.documentAst,
+    decisionId,
+  });
+
   // Only fetch fulltext if no usable documentAst (fallback).
-  // Empty `{}` is stored by adapters without AST parsers;
-  // treat it the same as null.
   let fulltext: string | null = null;
-  if (!hasUsableAst(decision.documentAst)) {
-    const fallback = await caseLawDb((tx) =>
-      tx.query.caseLawDecisions.findFirst({
-        where: { id: { eq: decisionId } },
-        columns: { fulltext: true },
-      }),
-    );
-    fulltext = fallback?.fulltext ?? null;
+  if (!hasUsableAst(documentAst)) {
+    fulltext = await resolveFulltext({
+      textS3Key: decision.textS3Key,
+      decisionId,
+      caseLawDb,
+    });
   }
 
   return {
@@ -168,7 +188,7 @@ export const readDecisionHandler = async (
     languageGroupKey: decision.languageGroupKey,
     decisionDate: decision.decisionDate,
     decisionType: decision.decisionType,
-    documentAst: decision.documentAst,
+    documentAst,
     sourceUrl: decision.sourceUrl,
     documentUrl: decision.documentUrl,
     metadata: decision.metadata,
@@ -213,4 +233,53 @@ export const readDecisionBySlugHandler = async (
   }
 
   return await readDecisionHandler(firstDecision.id, caseLawDb);
+};
+
+type ResolveAstInput = {
+  astS3Key: string | null;
+  pgAst: DocumentAst | EmptyAst | null;
+  decisionId: SafeId<"caseLawDecision">;
+};
+
+const resolveAst = async ({
+  astS3Key,
+  pgAst,
+  decisionId,
+}: ResolveAstInput): Promise<DocumentAst | EmptyAst | null> => {
+  if (!corpusReadEnabled() || astS3Key === null) {
+    return pgAst;
+  }
+  try {
+    return await readCorpusAst(astS3Key);
+  } catch (error) {
+    captureError(error, { decisionId, step: "readDecision.corpusAst" });
+    return pgAst;
+  }
+};
+
+type ResolveFulltextInput = {
+  textS3Key: string | null;
+  decisionId: SafeId<"caseLawDecision">;
+  caseLawDb: CaseLawPublicReadDb;
+};
+
+const resolveFulltext = async ({
+  textS3Key,
+  decisionId,
+  caseLawDb,
+}: ResolveFulltextInput): Promise<string | null> => {
+  if (corpusReadEnabled() && textS3Key !== null) {
+    try {
+      return await readCorpusText(textS3Key);
+    } catch (error) {
+      captureError(error, { decisionId, step: "readDecision.corpusText" });
+    }
+  }
+  const fallback = await caseLawDb((tx) =>
+    tx.query.caseLawDecisions.findFirst({
+      where: { id: { eq: decisionId } },
+      columns: { fulltext: true },
+    }),
+  );
+  return fallback?.fulltext ?? null;
 };

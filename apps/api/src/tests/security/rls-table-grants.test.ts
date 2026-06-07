@@ -36,6 +36,17 @@ const BOOTSTRAP_COVERED_RLS_MIGRATIONS = new Set([
   "20260509220000_disabled-native-tools",
 ]);
 
+// Post-bootstrap RLS tables that are global and read-only for `stella`
+// (like the other case_law_* tables, which predate the bootstrap). These
+// correctly grant stella SELECT only, not full DML.
+const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
+  "case_law_index_jobs",
+  "legislation_sources",
+  "legislation_documents",
+  "legislation_search_documents",
+  "legislation_index_jobs",
+]);
+
 const SQL_IDENTIFIER_PATTERN = /"([^"]+)"|([a-z_][a-z0-9_]*)/giu;
 
 type RlsTableIntroduction = {
@@ -128,11 +139,18 @@ const explicitStellaGrantTables = (statement: string): string[] => {
     privileges.has("insert") &&
     privileges.has("update") &&
     privileges.has("delete");
-  if (!grantsTableDml) {
-    return [];
-  }
 
-  return identifierNamesFromSql(tablesSql).filter((name) => name !== "public");
+  const tables = identifierNamesFromSql(tablesSql).filter(
+    (name) => name !== "public",
+  );
+
+  // Normal post-bootstrap tables must grant stella full DML; explicit
+  // read-only global tables only need SELECT.
+  return tables.filter((table) =>
+    POST_BOOTSTRAP_SELECT_ONLY_TABLES.has(table)
+      ? privileges.has("select")
+      : grantsTableDml,
+  );
 };
 
 const collectRlsGrantState = () => {

@@ -22,13 +22,25 @@ import { panic } from "better-result";
 import { createIngestionDb } from "@/api/db";
 import { rootDb, rlsDb } from "@/api/db/root";
 import { caseLawIngestionEvents, caseLawSources } from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
+import { recomputeCitationAuthorityForAll } from "@/api/handlers/case-law/citation-authority";
 import { ADAPTER_KEYS, MAX_CYCLE_MS } from "@/api/handlers/case-law/consts";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
+import { backfillQuickwitIndex } from "@/api/handlers/case-law/quickwit-index";
 import { backfillSearchIndex } from "@/api/handlers/case-law/search-index";
+import { backfillLegislationQuickwitIndex } from "@/api/handlers/legislation/quickwit-index";
+import { backfillLegislationSearchIndex } from "@/api/handlers/legislation/search-index";
 import { errorTag } from "@/api/lib/errors/utils";
+import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
+import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
-import { isS3Stale, refreshS3 } from "@/api/lib/s3";
+import {
+  isCorpusS3Stale,
+  isS3Stale,
+  refreshCorpusS3,
+  refreshS3,
+} from "@/api/lib/s3";
 
 import { LEGAL_ATLAS_RUNNER_ENV } from "../env";
 
@@ -110,6 +122,10 @@ const HEALTH_INTERVAL_MS = 30_000;
 const SUSTAINED_FAILURE_THRESHOLD = 5;
 const SEARCH_INDEX_INTERVAL_MS = 10_000;
 const SEARCH_INDEX_BATCH_SIZE = 20;
+const QUICKWIT_INDEX_INTERVAL_MS = 15_000;
+// Citation authority decays slowly; a periodic full recompute keeps the
+// materialized ranking signal fresh without per-cycle cost.
+const CITATION_AUTHORITY_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 // Idle backoff: once an adapter is caught up (no new decisions
 // for IDLE_THRESHOLD consecutive cycles), poll once a day instead
@@ -462,6 +478,7 @@ export const runCaseLawIngest = async (
       return 1;
     }
     await refreshS3();
+    await refreshCorpusS3();
     const { outcome } = await runOneCycle(match.adapterKey, match.name);
     return outcome === "completed" ? 0 : 1;
   }
@@ -475,6 +492,7 @@ export const runCaseLawIngest = async (
   daemonMode = true;
   logInfo("Ingestion daemon started.");
   await refreshS3();
+  await refreshCorpusS3();
   writeHeartbeat();
 
   const adapterLoops: Promise<void>[] = [];
@@ -490,6 +508,9 @@ export const runCaseLawIngest = async (
       try {
         if (isS3Stale()) {
           await refreshS3();
+        }
+        if (isCorpusS3Stale()) {
+          await refreshCorpusS3();
         }
       } catch (error) {
         logError("S3 credential refresh failed:", error);
@@ -524,6 +545,128 @@ export const runCaseLawIngest = async (
     }
   })();
 
-  await Promise.all([...adapterLoops, healthLoop, searchIndexLoop]);
+  // Citation-authority refresh loop: keeps the materialized ranking
+  // signal current (also runs in the post-citation pass; this covers the
+  // continuous daemon). Runs via the ingestion role outside the DB slot.
+  const citationAuthorityLoop = (async () => {
+    while (true) {
+      await Bun.sleep(CITATION_AUTHORITY_INTERVAL_MS);
+      try {
+        const updated = await ingestionDb((tx) =>
+          recomputeCitationAuthorityForAll(tx),
+        );
+        logInfo(`[citation-authority] Recomputed (${updated} cited decisions)`);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        if (isTransientConnectionError(msg)) {
+          logError(
+            `[citation-authority] DB connection error (will retry): ${msg}`,
+          );
+        } else {
+          logError("[citation-authority] Recompute error:", error);
+        }
+      }
+    }
+  })();
+
+  // Quickwit index backfill loop: pushes corpus-backed decisions into the
+  // active generation. Gated so the index can warm up (and be benchmarked)
+  // while search still reads pg-fts; runs outside the DB slot semaphore.
+  const quickwitIndexLoop = (async () => {
+    if (!envBase.QUICKWIT_INDEXING_ENABLED) {
+      return;
+    }
+    const generation = envBase.LEGAL_SEARCH_INDEX_GENERATION;
+    logInfo(`[quickwit-index] Enabled for generation ${generation}`);
+    while (true) {
+      await Bun.sleep(QUICKWIT_INDEX_INTERVAL_MS);
+      try {
+        const indexed = await backfillQuickwitIndex(
+          ingestionDb,
+          LIMITS.quickwitIndexBatchSize,
+          generation,
+        );
+        if (indexed > 0) {
+          logInfo(`[quickwit-index] Indexed ${indexed} decisions`);
+        }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        if (isTransientConnectionError(msg)) {
+          logError(`[quickwit-index] DB connection error (will retry): ${msg}`);
+        } else {
+          logError("[quickwit-index] Backfill error:", error);
+        }
+      }
+    }
+  })();
+
+  // Legislation pg-fts projection loop (mirrors searchIndexLoop). The
+  // corpus daemon maintains both families' search projections.
+  const legislationSearchIndexLoop = (async () => {
+    while (true) {
+      await Bun.sleep(SEARCH_INDEX_INTERVAL_MS);
+      try {
+        const indexed = await backfillLegislationSearchIndex(
+          ingestionDb,
+          SEARCH_INDEX_BATCH_SIZE,
+        );
+        if (indexed > 0) {
+          logInfo(`[legislation-search-index] Indexed ${indexed} documents`);
+        }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        if (isTransientConnectionError(msg)) {
+          logError(
+            `[legislation-search-index] DB connection error (will retry): ${msg}`,
+          );
+        } else {
+          logError("[legislation-search-index] Backfill error:", error);
+        }
+      }
+    }
+  })();
+
+  // Legislation Quickwit index loop (mirrors quickwitIndexLoop), gated.
+  const legislationQuickwitIndexLoop = (async () => {
+    if (!envBase.QUICKWIT_INDEXING_ENABLED) {
+      return;
+    }
+    const generation = corpusGeneration("legislation");
+    logInfo(
+      `[legislation-quickwit-index] Enabled for generation ${generation}`,
+    );
+    while (true) {
+      await Bun.sleep(QUICKWIT_INDEX_INTERVAL_MS);
+      try {
+        const indexed = await backfillLegislationQuickwitIndex(
+          ingestionDb,
+          LIMITS.quickwitIndexBatchSize,
+          generation,
+        );
+        if (indexed > 0) {
+          logInfo(`[legislation-quickwit-index] Indexed ${indexed} documents`);
+        }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        if (isTransientConnectionError(msg)) {
+          logError(
+            `[legislation-quickwit-index] DB connection error (will retry): ${msg}`,
+          );
+        } else {
+          logError("[legislation-quickwit-index] Backfill error:", error);
+        }
+      }
+    }
+  })();
+
+  await Promise.all([
+    ...adapterLoops,
+    healthLoop,
+    searchIndexLoop,
+    citationAuthorityLoop,
+    quickwitIndexLoop,
+    legislationSearchIndexLoop,
+    legislationQuickwitIndexLoop,
+  ]);
   return 0;
 };
