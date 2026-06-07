@@ -1279,16 +1279,6 @@ function toPreviousListAttrs(
   return attrs;
 }
 
-function cloneListCounterMap(
-  counters: Map<number, number[]>,
-): Map<number, number[]> {
-  const cloned = new Map<number, number[]>();
-  for (const [key, value] of counters) {
-    cloned.set(key, [...value]);
-  }
-  return cloned;
-}
-
 function resolveDeletedListMarker(
   previousListAttrs: PMParagraphAttrs,
   listCounters: Map<number, number[]> | undefined,
@@ -1296,11 +1286,15 @@ function resolveDeletedListMarker(
   listSeenNumIds: Set<string> | undefined,
 ): string | null {
   if (listCounters && previousListAttrs.numPr) {
+    // Advance the original counter stream in place (no clone): a
+    // removed-numbering deletion occupied a number in the pre-revision
+    // document, so it must progress the counter exactly like a deleted list
+    // item — otherwise a following deletion on the same numId reuses it.
     const marker = computeListMarker(
       previousListAttrs,
-      cloneListCounterMap(listCounters),
-      cloneListCounterMap(listAbstractCounters ?? new Map<number, number[]>()),
-      new Set(listSeenNumIds),
+      listCounters,
+      listAbstractCounters ?? new Map<number, number[]>(),
+      listSeenNumIds ?? new Set<string>(),
     );
     if (marker) {
       return marker;
@@ -1706,12 +1700,15 @@ function convertParagraphAttrs(
       isRemovedNumberingChange,
     );
     if (numberingRemovedChange) {
+      // Number removed-numbering deletions off the original stream too (like
+      // deleted list items): the struck-through marker must reflect the
+      // pre-revision number, not the final counter that insertions advanced.
       applyDeletedListMarkerAttrs(
         attrs,
         numberingRemovedChange,
-        listCounters,
-        listAbstractCounters,
-        listSeenNumIds,
+        originalListCounters,
+        originalListAbstractCounters,
+        originalListSeenNumIds,
       );
     }
   }
