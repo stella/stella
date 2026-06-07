@@ -27,7 +27,7 @@
 stella is an open-source legal workspace and data stack for legal teams,
 currently in beta.
 
-## Data infrastructure
+### Data infrastructure
 
 **Case law and public legal sources.** [Legal Atlas](packages/legal-atlas)
 collects and parses official legal material with source adapters, structure
@@ -41,7 +41,7 @@ ARES, Companies House, SEC EDGAR, KRS, PRH, VIES and more.
 provides WASM-backed anonymization tooling for legal AI workflows, with app
 integration through chat and document review.
 
-## Legal intelligence
+### Legal intelligence
 
 **Tabular Review.** Extract structured answers from document sets into
 matter-scoped review tables for due diligence, discovery and research.
@@ -52,7 +52,7 @@ approvals and source previews.
 **Skills and external connectors.** Reusable prompts, tool definitions and
 MCP-compatible tools that extend the agent.
 
-## Workspace
+### Workspace
 
 **Web app.** Matters, documents, Word .docx editing, review, research, chat and
 knowledge tools in one workspace.
