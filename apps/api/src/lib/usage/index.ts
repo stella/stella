@@ -270,7 +270,8 @@ type AllocateUsageInput = {
 
 type AllocateUsageResult =
   | { status: "allocated"; id: SafeId<"usageAllocation"> }
-  | { status: "duplicate" };
+  | { status: "duplicate" }
+  | { status: "skipped" };
 
 /**
  * Append an allocation. Idempotent against duplicate `sourceRef` —
@@ -290,6 +291,14 @@ export const allocateUsage = async ({
   allocatedByUserId = null,
   period,
 }: AllocateUsageInput): Promise<AllocateUsageResult> => {
+  // A zero-unit policy (e.g. a BYOK-only tier) grants no platform
+  // capacity. usage_allocations_units_positive forbids a 0-unit row, so
+  // there is nothing to allocate — skip rather than fail the insert and
+  // roll back the caller's transaction.
+  if (units <= 0) {
+    return { status: "skipped" };
+  }
+
   const values = {
     organizationId,
     periodStart: period.start,

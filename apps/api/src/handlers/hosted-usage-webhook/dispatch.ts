@@ -548,6 +548,9 @@ export const handleHostedAllocation = async ({
   if (allocationResult.status === "duplicate") {
     return { kind: "duplicate_allocation" };
   }
+  if (allocationResult.status === "skipped") {
+    return { kind: "ignored", reason: "policy grants zero add-on units" };
+  }
 
   await recordWebhookAuditEvent({
     tx,

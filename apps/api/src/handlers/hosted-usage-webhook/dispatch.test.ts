@@ -442,6 +442,40 @@ describe("dispatch — handleHostedEntitlementUpsert", () => {
       expect(balance).toBe(3000);
     });
   });
+  test("creates entitlement without allocation for a zero-unit policy", async () => {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+      // A zero-unit (e.g. BYOK-only) hosted policy. usage_allocations
+      // forbids a 0-unit row, so the periodic allocation must be skipped
+      // rather than roll back the whole webhook transaction.
+      const zeroPolicyRef = `provider_policy_${Bun.randomUUIDv7()}`;
+      await tx.insert(usagePolicies).values({
+        policyKey: `hosted-zero-${Bun.randomUUIDv7()}`,
+        displayName: "BYOK",
+        monthlyUsageUnits: 0,
+        hostedPolicyRef: zeroPolicyRef,
+      });
+      const outcome = await handleHostedEntitlementUpsert({
+        tx,
+        payload: buildEntitlementPayload(fx, { policy_ref: zeroPolicyRef }),
+        eventId: "evt_zero_units",
+      });
+      expect(outcome.kind).toBe("applied");
+
+      const entitlementRows = await tx
+        .select({ id: usageEntitlements.id })
+        .from(usageEntitlements)
+        .where(eq(usageEntitlements.organizationId, fx.organizationId));
+      expect(entitlementRows).toHaveLength(1);
+
+      const balance = await getRemainingUsageUnits({
+        tx,
+        organizationId: fx.organizationId,
+        asOf: new Date(PERIOD_START.getTime() + 1000),
+      });
+      expect(balance).toBe(0);
+    });
+  });
 });
 
 describe("dispatch — handleUsageEntitlementStatusChange", () => {
