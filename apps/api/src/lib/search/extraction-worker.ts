@@ -126,12 +126,12 @@ const extractEmailPlaintext = async ({
       continue;
     }
 
-    const text = await extract(
-      attachment.bytes,
-      attachmentMimeType,
+    const text = await extractAttachmentPlaintext({
+      bytes: attachment.bytes,
       maxChars,
-      nestingDepth + 1,
-    );
+      mimeType: attachmentMimeType,
+      nestingDepth: nestingDepth + 1,
+    });
     if (!text) {
       continue;
     }
@@ -145,6 +145,24 @@ const extractEmailPlaintext = async ({
   }
 
   return joinExtractedParts(parts, maxChars);
+};
+
+const extractAttachmentPlaintext = async ({
+  bytes,
+  maxChars,
+  mimeType,
+  nestingDepth,
+}: {
+  bytes: Uint8Array;
+  maxChars: number;
+  mimeType: string;
+  nestingDepth: number;
+}): Promise<string | null> => {
+  try {
+    return await extract(bytes, mimeType, maxChars, nestingDepth);
+  } catch {
+    return null;
+  }
 };
 
 const extract = async (

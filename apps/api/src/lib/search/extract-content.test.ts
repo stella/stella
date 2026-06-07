@@ -82,4 +82,32 @@ describe("extractFileText", () => {
     expect(text).toContain("Attachment: notes.txt (text/plain)");
     expect(text).toContain("Attachment text.");
   });
+
+  test("keeps email body when a supported attachment is malformed", async () => {
+    const email = [
+      "From: Jane Lawyer <jane@example.com>",
+      "To: client@example.org",
+      "Subject: Contract draft",
+      "MIME-Version: 1.0",
+      'Content-Type: multipart/mixed; boundary="BND"',
+      "",
+      "--BND",
+      "Content-Type: text/plain; charset=utf-8",
+      "",
+      "Email body survives.",
+      "--BND",
+      "Content-Type: application/pdf",
+      'Content-Disposition: attachment; filename="broken.pdf"',
+      "",
+      "not a pdf",
+      "--BND--",
+      "",
+    ].join("\r\n");
+
+    const text = await extractFileText(toArrayBuffer(email), "message/rfc822");
+
+    expect(text).toContain("Subject: Contract draft");
+    expect(text).toContain("Email body survives.");
+    expect(text).not.toContain("Attachment: broken.pdf");
+  });
 });
