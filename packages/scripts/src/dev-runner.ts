@@ -923,7 +923,11 @@ export const ensureWorktreeEnvLinks = ({
     const mainEnvPath = pathResolve(mainRoot, spec.path);
     if (isWorktree && existsSync(mainEnvPath)) {
       mkdirSync(dirname(targetPath), { recursive: true });
-      symlinkSync(mainEnvPath, targetPath);
+      try {
+        symlinkSync(mainEnvPath, targetPath);
+      } catch {
+        copyFileSync(mainEnvPath, targetPath);
+      }
       preparedFiles++;
       continue;
     }
