@@ -143,6 +143,7 @@ export const KanbanCard = ({
   const icon = (
     <EntityKindIcon
       className="size-4 shrink-0"
+      fileName={file?.fileName}
       kind={entity.kind}
       mimeType={file?.mimeType}
       status={entity.status}

@@ -47,8 +47,6 @@
     "@aws-sdk/s3-request-presigner": "^3.1057.0",
     "@better-auth/oauth-provider": "catalog:",
     "@elysiajs/cors": "^1.4.2",
-    "@kenjiuno/decompressrtf": "^0.1.4",
-    "@kenjiuno/msgreader": "^1.28.0",
     "@libpdf/core": "catalog:",
     "@litko/yara-x": "0.5.2",
     "@modelcontextprotocol/sdk": "1.29.0",
@@ -95,7 +93,6 @@
     "posthog-node": "^5.35.8",
     "quickjs-emscripten": "^0.32.0",
     "quickjs-emscripten-core": "^0.32.0",
-    "rtf-stream-parser": "^3.8.1",
     "slimdom": "^4.3.5",
     "valibot": "catalog:"
   },

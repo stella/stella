@@ -60,15 +60,18 @@ export const useVersionOrNewFileDrop = ({
     enabled: canAcceptDrop,
     externalRef: rowRef,
     onDrop: (files) => {
-      if (files.length === 1) {
-        const next = files[0];
+      createFileEntities({ files, parentId: entity.parentId ?? null });
+    },
+    onDropTree: (tree) => {
+      if (tree.directoryPaths.length === 0 && tree.files.length === 1) {
+        const next = tree.files.at(0)?.file;
         if (next) {
           setDroppedFile(next);
           setIsOpen(true);
         }
         return;
       }
-      createFileEntities(files);
+      createFileEntities({ tree, parentId: entity.parentId ?? null });
     },
   });
 
@@ -93,7 +96,10 @@ export const useVersionOrNewFileDrop = ({
             );
           },
           onCreateNewFile: () => {
-            createFileEntities([droppedFile]);
+            createFileEntities({
+              files: [droppedFile],
+              parentId: entity.parentId ?? null,
+            });
             closeDialog();
           },
           onOpenChange: setIsOpen,

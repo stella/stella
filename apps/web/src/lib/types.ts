@@ -10,7 +10,7 @@ import type {
 } from "@stll/api/types";
 
 import { PDF_MIME_TYPE } from "@/consts";
-import { DOCX_MIME } from "@/lib/consts";
+import { DOCX_MIME, isEmailFile, isMarkdownFile } from "@/lib/consts";
 import type { FileRouteTypes } from "@/routeTree.gen";
 
 export type {
@@ -28,6 +28,7 @@ export type RouterFullPath = FileRouteTypes["fullPaths"];
 
 export const isFileDisplayable = (file: {
   mimeType: string;
+  fileName?: string | null | undefined;
   pdfFileId: string | null;
   encrypted: boolean;
 }) => {
@@ -41,6 +42,14 @@ export const isFileDisplayable = (file: {
 
   // DOCX files are rendered natively via Folio
   if (file.mimeType === DOCX_MIME) {
+    return true;
+  }
+
+  if (!file.encrypted && isEmailFile(file)) {
+    return true;
+  }
+
+  if (!file.encrypted && isMarkdownFile(file)) {
     return true;
   }
 

@@ -8,18 +8,15 @@ import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 
-import { MessageResponse } from "@/components/ai-elements/message";
+import { MarkdownPreview } from "@/components/markdown-preview";
 import { api } from "@/lib/api";
+import { PDF_MIME, isMarkdownFile } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 
 import type { SkillResourceTab } from "./inspector-store";
 import { useInspectorStore } from "./inspector-store";
 import { InspectorTabHeader } from "./inspector-tab-header";
-
-const MARKDOWN_MIME_PREFIX = "text/markdown";
-const PDF_MIME = "application/pdf";
-const MARKDOWN_EXTENSIONS = [".md", ".markdown"] as const;
 
 type RenderMode = "markdown" | "text" | "pdf";
 
@@ -31,11 +28,7 @@ const detectRenderMode = (
   if (mime === PDF_MIME || resourcePath.toLowerCase().endsWith(".pdf")) {
     return "pdf";
   }
-  if (mime.startsWith(MARKDOWN_MIME_PREFIX)) {
-    return "markdown";
-  }
-  const lowered = resourcePath.toLowerCase();
-  if (MARKDOWN_EXTENSIONS.some((ext) => lowered.endsWith(ext))) {
+  if (isMarkdownFile({ fileName: resourcePath, mimeType })) {
     return "markdown";
   }
   return "text";
@@ -224,9 +217,7 @@ const SkillResourceBody = ({
     <ScrollArea className="min-h-0 flex-1">
       <article className="px-4 py-3 text-sm">
         {renderMode === "markdown" ? (
-          <MessageResponse className="text-sm" components={{}}>
-            {content}
-          </MessageResponse>
+          <MarkdownPreview>{content}</MarkdownPreview>
         ) : (
           <pre className="text-foreground font-mono text-xs whitespace-pre-wrap">
             {content}

@@ -16,6 +16,12 @@ import { api } from "@/lib/api";
 import { ClientOperationError, toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { UploadQueue } from "@/lib/upload-queue";
+import {
+  buildDroppedFolderUploadPlan,
+  type DroppedFolderUploadPlan,
+} from "@/routes/_protected.workspaces/$workspaceId/-hooks/create-file-tree-upload.logic";
+import { buildEntityCreatePresignPayload } from "@/routes/_protected.workspaces/$workspaceId/-hooks/create-file-upload-payload.logic";
+import type { DroppedFileTree } from "@/routes/_protected.workspaces/$workspaceId/-hooks/external-file-drop.logic";
 import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import {
@@ -41,6 +47,92 @@ type UploadResult = {
   fileId: string;
   fileName: string;
   renamed: boolean;
+};
+
+type CreateFolderEntityOptions = {
+  workspaceId: string;
+  parentId: string | null;
+  name: string;
+};
+
+const createFolderEntity = async ({
+  workspaceId,
+  parentId,
+  name,
+}: CreateFolderEntityOptions): Promise<string> => {
+  const response = await api
+    .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+    .put({
+      queryKey: entitiesKeys.all(workspaceId),
+      kind: "folder",
+      parentId: parentId === null ? null : toSafeId<"entity">(parentId),
+      name,
+    });
+
+  if (response.error) {
+    throw toAPIError(response.error);
+  }
+
+  return response.data.entityId;
+};
+
+const requireCreatedDirectoryId = (
+  createdDirectoryIds: ReadonlyMap<string, string>,
+  key: string,
+): string => {
+  const entityId = createdDirectoryIds.get(key);
+  if (entityId) {
+    return entityId;
+  }
+
+  throw new ClientOperationError({
+    action: "create-dropped-folder-tree",
+    message: "Folder upload plan referenced a missing parent folder",
+  });
+};
+
+type CreateFolderTreeForUploadOptions = {
+  workspaceId: string;
+  parentId: string | null;
+  plan: DroppedFolderUploadPlan;
+};
+
+type CreatedFolderTreeForUpload = {
+  files: File[];
+  parentIdByFile: Map<File, string | null>;
+};
+
+const createFolderTreeForUpload = async ({
+  workspaceId,
+  parentId,
+  plan,
+}: CreateFolderTreeForUploadOptions): Promise<CreatedFolderTreeForUpload> => {
+  const createdDirectoryIds = new Map<string, string>();
+
+  for (const directory of plan.directories) {
+    const directoryParentId = directory.parentKey
+      ? requireCreatedDirectoryId(createdDirectoryIds, directory.parentKey)
+      : parentId;
+
+    const entityId = await createFolderEntity({
+      workspaceId,
+      parentId: directoryParentId,
+      name: directory.name,
+    });
+    createdDirectoryIds.set(directory.key, entityId);
+  }
+
+  const files: File[] = [];
+  const parentIdByFile = new Map<File, string | null>();
+  for (const placement of plan.files) {
+    const fileParentId = placement.parentKey
+      ? requireCreatedDirectoryId(createdDirectoryIds, placement.parentKey)
+      : parentId;
+    files.push(placement.file);
+    parentIdByFile.set(placement.file, fileParentId);
+  }
+
+  return { files, parentIdByFile };
 };
 
 /**
@@ -103,12 +195,21 @@ const abortUpload = async (
  *      pending row as rejected. Re-entry to step 2 returns the
  *      cached result so accidental double-finalizes are safe.
  */
-const uploadSingleFile = async (
-  file: File,
-  workspaceId: string,
-  propertyId: string,
-  signal: AbortSignal,
-): Promise<UploadResult> => {
+type UploadSingleFileOptions = {
+  file: File;
+  workspaceId: string;
+  propertyId: string;
+  parentId?: string | null | undefined;
+  signal: AbortSignal;
+};
+
+const uploadSingleFile = async ({
+  file,
+  workspaceId,
+  propertyId,
+  parentId,
+  signal,
+}: UploadSingleFileOptions): Promise<UploadResult> => {
   signal.throwIfAborted();
 
   // 1. SHA-256 of file bytes.
@@ -123,14 +224,14 @@ const uploadSingleFile = async (
     workspaceId: toSafeId<"workspace">(workspaceId),
   });
   const presign = await wsClient.presign.post(
-    {
-      purpose: "entity_create",
-      propertyId: toSafeId<"property">(propertyId),
+    buildEntityCreatePresignPayload({
+      propertyId,
+      parentId,
       name: file.name,
       mimeType: file.type || "application/octet-stream",
       size: file.size,
       sha256Hex,
-    },
+    }),
     { fetch: { signal } },
   );
   if (presign.error) {
@@ -250,6 +351,8 @@ type BatchUploadOptions = {
   files: File[];
   workspaceId: string;
   propertyId: string;
+  parentId?: string | null | undefined;
+  parentIdForFile?: (file: File) => string | null | undefined;
   labels: BatchUploadLabels;
   onError?: (error: Error) => void;
 };
@@ -264,18 +367,31 @@ type BatchUploadOptions = {
 export const uploadFileEntitiesBatched = async (
   options: BatchUploadOptions,
 ): Promise<UploadResult[]> => {
-  const { files, workspaceId, propertyId, labels, onError } = options;
+  const {
+    files,
+    workspaceId,
+    propertyId,
+    parentId,
+    parentIdForFile,
+    labels,
+    onError,
+  } = options;
 
   if (files.length === 0) {
     return [];
   }
 
   return await new Promise<UploadResult[]>((resolve) => {
-    const queue = new UploadQueue<UploadResult>(
-      async (file, signal) =>
-        await uploadSingleFile(file, workspaceId, propertyId, signal),
-      MAX_PARALLEL_FILE_UPLOADS,
-    );
+    const queue = new UploadQueue<UploadResult>(async (file, signal) => {
+      const fileParentId = parentIdForFile?.(file);
+      return await uploadSingleFile({
+        file,
+        workspaceId,
+        propertyId,
+        parentId: fileParentId === undefined ? parentId : fileParentId,
+        signal,
+      });
+    }, MAX_PARALLEL_FILE_UPLOADS);
 
     const initialTotal = files.length;
     const showProgress = initialTotal > 1;
@@ -389,6 +505,24 @@ export const uploadFileEntitiesBatched = async (
   });
 };
 
+export type CreateFileEntitiesInput =
+  | {
+      files: File[];
+      parentId?: string | null | undefined;
+    }
+  | {
+      tree: DroppedFileTree;
+      parentId?: string | null | undefined;
+    };
+
+const hasUploadInputItems = (input: CreateFileEntitiesInput): boolean => {
+  if ("tree" in input) {
+    return input.tree.files.length > 0 || input.tree.directoryPaths.length > 0;
+  }
+
+  return input.files.length > 0;
+};
+
 export const useCreateFileEntities = (workspaceId: string) => {
   const t = useTranslations();
   const labels = useBatchUploadLabels();
@@ -397,40 +531,78 @@ export const useCreateFileEntities = (workspaceId: string) => {
   const analytics = useAnalytics();
   const startWorkflow = useStartWorkflow(workspaceId);
 
-  const { isPending, mutate } = useMutation({
-    mutationFn: async (files: File[]) => {
-      let propertyId = properties.find((p) => p.content.type === "file")?.id;
+  const ensureFileProperty = async (): Promise<string> => {
+    let propertyId = properties.find((p) => p.content.type === "file")?.id;
 
-      if (!propertyId) {
-        const response = await api.properties({ workspaceId }).put({
-          queryKey: propertiesKeys.all(workspaceId),
-          name: t("workspaces.files.defaultPropertyName"),
-          contentType: "file",
+    if (propertyId) {
+      return propertyId;
+    }
+
+    const response = await api.properties({ workspaceId }).put({
+      queryKey: propertiesKeys.all(workspaceId),
+      name: t("workspaces.files.defaultPropertyName"),
+      contentType: "file",
+    });
+    if (response.error) {
+      throw toAPIError(response.error);
+    }
+    propertyId = response.data.id;
+    return propertyId;
+  };
+
+  const startWorkflowForUploadedFiles = (uploaded: UploadResult[]) => {
+    // Backfill AI extraction columns on the newly-uploaded entities.
+    // Without this they sit blank until something else triggers a
+    // workflow run; the user expects values to populate as soon as
+    // the file lands. Scope to the new entities so unrelated rows
+    // aren't recomputed. A workspace with no AI properties safely
+    // no-ops (startWorkflow returns `skipped`).
+    const newEntityIds = uploaded.map((result) => result.entityId);
+    if (newEntityIds.length > 0) {
+      void startWorkflow({ entityIds: newEntityIds });
+    }
+  };
+
+  const { isPending, mutate } = useMutation({
+    mutationFn: async (input: CreateFileEntitiesInput) => {
+      const parentId = input.parentId ?? null;
+
+      if ("tree" in input) {
+        const plan = buildDroppedFolderUploadPlan(input.tree);
+        const propertyId =
+          plan.files.length > 0 ? await ensureFileProperty() : null;
+        const createdTree = await createFolderTreeForUpload({
+          workspaceId,
+          parentId,
+          plan,
         });
-        if (response.error) {
-          throw toAPIError(response.error);
+
+        if (createdTree.files.length === 0 || propertyId === null) {
+          return;
         }
-        propertyId = response.data.id;
+
+        const uploaded = await uploadFileEntitiesBatched({
+          files: createdTree.files,
+          workspaceId,
+          propertyId,
+          parentId,
+          parentIdForFile: (file) => createdTree.parentIdByFile.get(file),
+          labels,
+          onError: (error) => analytics.captureError(error),
+        });
+        startWorkflowForUploadedFiles(uploaded);
+        return;
       }
 
       const uploaded = await uploadFileEntitiesBatched({
-        files,
+        files: input.files,
         workspaceId,
-        propertyId,
+        propertyId: await ensureFileProperty(),
+        parentId,
         labels,
         onError: (error) => analytics.captureError(error),
       });
-
-      // Backfill AI extraction columns on the newly-uploaded entities.
-      // Without this they sit blank until something else triggers a
-      // workflow run; the user expects values to populate as soon as
-      // the file lands. Scope to the new entities so unrelated rows
-      // aren't recomputed. A workspace with no AI properties safely
-      // no-ops (startWorkflow returns `skipped`).
-      const newEntityIds = uploaded.map((result) => result.entityId);
-      if (newEntityIds.length > 0) {
-        void startWorkflow({ entityIds: newEntityIds });
-      }
+      startWorkflowForUploadedFiles(uploaded);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -446,11 +618,11 @@ export const useCreateFileEntities = (workspaceId: string) => {
   });
 
   const handleCreateFileEntities = useCallback(
-    (files: File[]) => {
-      if (isPending || files.length === 0) {
+    (input: CreateFileEntitiesInput) => {
+      if (isPending || !hasUploadInputItems(input)) {
         return;
       }
-      mutate(files);
+      mutate(input);
     },
     [isPending, mutate],
   );

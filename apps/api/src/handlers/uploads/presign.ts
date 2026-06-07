@@ -64,6 +64,7 @@ const skillPackFileMetadataSchema = {
 const entityCreatePresignBodySchema = t.Object({
   purpose: t.Literal("entity_create"),
   propertyId: tSafeId("property"),
+  parentId: t.Optional(t.Nullable(tSafeId("entity"))),
   ...baseFileMetadataSchema,
 });
 
@@ -94,6 +95,7 @@ const toPurposeData = (purposeBody: PresignBody): PendingUploadPurposeData => {
     return {
       type: "entity_create",
       propertyId: purposeBody.propertyId,
+      parentId: purposeBody.parentId ?? null,
     };
   }
   if (purposeBody.purpose === "entity_version") {
@@ -133,6 +135,7 @@ const presignUpload = createSafeHandler(
         safeDb,
         workspaceId,
         propertyId: purposeBody.propertyId,
+        parentId: purposeBody.parentId ?? null,
       });
       if (Result.isError(validation)) {
         return validation;

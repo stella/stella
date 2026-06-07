@@ -13,6 +13,7 @@ import {
 type EntityKindIconProps = {
   kind: EntityKind;
   className?: string | undefined;
+  fileName?: string | null | undefined;
   mimeType?: string | null | undefined;
   status?: string | null | undefined;
 };
@@ -20,6 +21,7 @@ type EntityKindIconProps = {
 export const EntityKindIcon = ({
   kind,
   className,
+  fileName,
   mimeType,
   status,
 }: EntityKindIconProps) => {
@@ -45,7 +47,13 @@ export const EntityKindIcon = ({
 
   // document / file
   if (mimeType) {
-    return <DocumentIcon className={className} mimeType={mimeType} />;
+    return (
+      <DocumentIcon
+        className={className}
+        fileName={fileName}
+        mimeType={mimeType}
+      />
+    );
   }
 
   return <FileIcon className={className} />;

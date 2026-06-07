@@ -19,7 +19,7 @@
  *   + extraction enqueues.
  */
 import { Result, panic } from "better-result";
-import { and, eq, like } from "drizzle-orm";
+import { and, count, eq, isNull, like } from "drizzle-orm";
 
 import type { SafeDb, Transaction } from "@/api/db";
 import { jsonField } from "@/api/db/json-utils";
@@ -60,13 +60,17 @@ const MAX_FILENAME_LENGTH = 255;
 
 type ResolveFileNameProps = {
   tx: Transaction;
+  workspaceId: SafeId<"workspace">;
   propertyId: SafeId<"property">;
+  parentId: SafeId<"entity"> | null;
   name: SanitizedFileName;
 };
 
-const resolveFileName = async ({
+export const resolveEntityCreateFileName = async ({
   tx,
+  workspaceId,
   propertyId,
+  parentId,
   name,
 }: ResolveFileNameProps) => {
   const lastDot = name.lastIndexOf(".");
@@ -74,13 +78,32 @@ const resolveFileName = async ({
   const ext = lastDot === -1 ? "" : name.slice(lastDot);
   const pattern = `${escapeLike(base)}%${escapeLike(ext)}`;
 
-  const fieldsCount = await tx.$count(
-    fields,
-    and(
-      eq(fields.propertyId, propertyId),
-      like(jsonField(fields.content, "v1")("fileName"), pattern),
-    ),
-  );
+  const siblingParentFilter =
+    parentId === null
+      ? isNull(entities.parentId)
+      : eq(entities.parentId, parentId);
+
+  const countRows = await tx
+    .select({ total: count() })
+    .from(fields)
+    .innerJoin(entityVersions, eq(fields.entityVersionId, entityVersions.id))
+    .innerJoin(
+      entities,
+      and(
+        eq(entityVersions.entityId, entities.id),
+        eq(entities.currentVersionId, entityVersions.id),
+      ),
+    )
+    .where(
+      and(
+        eq(fields.workspaceId, workspaceId),
+        eq(fields.propertyId, propertyId),
+        eq(entities.workspaceId, workspaceId),
+        siblingParentFilter,
+        like(jsonField(fields.content, "v1")("fileName"), pattern),
+      ),
+    );
+  const fieldsCount = countRows.at(0)?.total ?? 0;
 
   if (fieldsCount === 0) {
     return { renamed: false as const, value: name };
@@ -101,6 +124,7 @@ export type ValidateEntityCreateProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   propertyId: SafeId<"property">;
+  parentId: SafeId<"entity"> | null;
 };
 
 /**
@@ -114,19 +138,34 @@ export const validateEntityCreate = async function* ({
   safeDb,
   workspaceId,
   propertyId,
+  parentId,
 }: ValidateEntityCreateProps) {
-  const [entityCountResult, propertyResult] = await Promise.all([
-    safeDb((tx) => tx.$count(entities, eq(entities.workspaceId, workspaceId))),
-    safeDb((tx) =>
-      tx.query.properties.findFirst({
-        columns: { id: true, content: true },
-        where: { id: { eq: propertyId }, workspaceId: { eq: workspaceId } },
-      }),
-    ),
-  ]);
+  const parentResult = parentId
+    ? safeDb((tx) =>
+        tx.query.entities.findFirst({
+          columns: { id: true, kind: true },
+          where: { id: { eq: parentId }, workspaceId: { eq: workspaceId } },
+        }),
+      )
+    : Promise.resolve(Result.ok(null));
+
+  const [entityCountResult, propertyResult, resolvedParentResult] =
+    await Promise.all([
+      safeDb((tx) =>
+        tx.$count(entities, eq(entities.workspaceId, workspaceId)),
+      ),
+      safeDb((tx) =>
+        tx.query.properties.findFirst({
+          columns: { id: true, content: true },
+          where: { id: { eq: propertyId }, workspaceId: { eq: workspaceId } },
+        }),
+      ),
+      parentResult,
+    ]);
 
   const entityCount = yield* entityCountResult;
   const property = yield* propertyResult;
+  const parent = yield* resolvedParentResult;
 
   if (entityCount >= LIMITS.entitiesCount) {
     return Result.err(
@@ -144,6 +183,22 @@ export const validateEntityCreate = async function* ({
   if (property.content.type !== "file") {
     return Result.err(
       new HandlerError({ status: 400, message: "Property isn't of type file" }),
+    );
+  }
+  if (parentId && !parent) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Parent entity not found in this workspace",
+      }),
+    );
+  }
+  if (parent && parent.kind !== "folder") {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Parent entity must be a folder",
+      }),
     );
   }
 
@@ -236,6 +291,12 @@ export const finalizeEntityCreate = async function* ({
     return promoteResult;
   }
 
+  type WriteFailureStatus =
+    | "property-not-found"
+    | "property-type-mismatch"
+    | "parent-not-found"
+    | "parent-type-mismatch";
+
   type WriteResult =
     | {
         status: "ok";
@@ -244,7 +305,20 @@ export const finalizeEntityCreate = async function* ({
           { type: "entity_create" }
         >;
       }
-    | { status: "property-not-found" | "property-type-mismatch" };
+    | { status: WriteFailureStatus };
+
+  const writeErrorMessage = (status: WriteFailureStatus): string => {
+    if (status === "property-not-found") {
+      return "Property not found in workspace";
+    }
+    if (status === "property-type-mismatch") {
+      return "Property isn't of type file";
+    }
+    if (status === "parent-not-found") {
+      return "Parent entity not found in this workspace";
+    }
+    return "Parent entity must be a folder";
+  };
 
   const cleanupFinalObject = async (stage: string) => {
     await getS3()
@@ -257,6 +331,8 @@ export const finalizeEntityCreate = async function* ({
         }),
       );
   };
+
+  const parentId = purposeData.parentId ?? null;
 
   const writeResultResult = await safeDb(async (tx): Promise<WriteResult> => {
     const propertyRows = await tx
@@ -278,10 +354,30 @@ export const finalizeEntityCreate = async function* ({
     if (property.content.type !== "file") {
       return { status: "property-type-mismatch" };
     }
+    if (parentId) {
+      const parentRows = await tx
+        .select({ id: entities.id, kind: entities.kind })
+        .from(entities)
+        .where(
+          and(eq(entities.id, parentId), eq(entities.workspaceId, workspaceId)),
+        )
+        .limit(1)
+        .for("update");
+      const parent = parentRows.at(0);
 
-    const renamed = await resolveFileName({
+      if (!parent) {
+        return { status: "parent-not-found" };
+      }
+      if (parent.kind !== "folder") {
+        return { status: "parent-type-mismatch" };
+      }
+    }
+
+    const renamed = await resolveEntityCreateFileName({
       tx,
+      workspaceId,
       propertyId: property.id,
+      parentId,
       name: sanitizedName,
     });
     const entityStamp = await allocateEntityStamp(tx, workspaceId);
@@ -289,6 +385,7 @@ export const finalizeEntityCreate = async function* ({
     await tx.insert(entities).values({
       id: entityId,
       workspaceId,
+      parentId,
       name: renamed.value,
       createdBy: userId,
       docSequence: entityStamp.docSequence,
@@ -345,6 +442,7 @@ export const finalizeEntityCreate = async function* ({
             mimeType: declaredMime,
             sizeBytes: declaredSize,
             propertyId: property.id,
+            parentId,
           },
         },
       },
@@ -394,10 +492,7 @@ export const finalizeEntityCreate = async function* ({
     await cleanupFinalObject("final-cleanup-after-business-error");
     return finalizeErr({
       status: 400,
-      message:
-        writeResult.status === "property-not-found"
-          ? "Property not found in workspace"
-          : "Property isn't of type file",
+      message: writeErrorMessage(writeResult.status),
       rejectReason: writeResult.status,
     });
   }

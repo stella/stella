@@ -16,7 +16,7 @@ import {
  * Workspace-scoped presigned-upload coordination:
  *
  *   POST /uploads/:workspaceId/presign
- *        body: { purpose, propertyId, name, mimeType, size, sha256Hex }
+ *        body: { purpose, propertyId, parentId, name, mimeType, size, sha256Hex }
  *        → { uploadId, url, expiresAt, headers }
  *
  *   POST /uploads/:workspaceId/:uploadId/finalize
