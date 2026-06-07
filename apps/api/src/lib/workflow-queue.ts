@@ -4,7 +4,6 @@ import type { RedisClient } from "bun";
 import { sleep } from "bun";
 import { and, asc, eq, gt, inArray, or, sql } from "drizzle-orm";
 
-import { isMockAI } from "@/api/consts";
 import type { ScopedDb } from "@/api/db";
 import { jsonField } from "@/api/db/json-utils";
 import { rootDb } from "@/api/db/root";
@@ -45,8 +44,7 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { broadcast } from "@/api/lib/sse";
 import { resolveWorkflowTargetEntityIds } from "@/api/lib/workflow-targets";
-import { generateBatch } from "@/api/lib/workflow/generate-batch";
-import { generateBatchMock } from "@/api/lib/workflow/generate-batch-mock";
+import { getBatchGenerator } from "@/api/lib/workflow/generate-batch-provider";
 import type {
   ExecutionLevel,
   PropertyBatch,
@@ -1610,7 +1608,7 @@ const processOneBatch = async ({
       loadOrgAIConfig(organizationId),
       loadPromptCachingPreference(organizationId),
     ]);
-    const generateFn = isMockAI() ? generateBatchMock : generateBatch;
+    const generateFn = getBatchGenerator();
 
     let batchResult: Awaited<ReturnType<typeof generateFn>> | undefined;
     for (let attempt = 1; attempt <= INTEGRATION_ERROR_ATTEMPTS; attempt++) {

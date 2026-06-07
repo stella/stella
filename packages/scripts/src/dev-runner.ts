@@ -1396,7 +1396,16 @@ const buildPersistentSteps = ({
 
   if (modeIncludesApi(mode)) {
     primary.push({
-      cmd: [resolveCommandPath("bun"), "--watch", "src/index.ts"],
+      // Preload the dev/test-only mock-AI registration so USE_MOCK_AI routes
+      // workflow generation through the faker-backed mock. The compiled
+      // production binary never loads it, keeping @faker-js/faker a devDependency.
+      cmd: [
+        resolveCommandPath("bun"),
+        "--preload",
+        "./src/dev/register-mock-ai.ts",
+        "--watch",
+        "src/index.ts",
+      ],
       cwd: pathResolve(rootDir, "apps/api"),
       env: apiEnv,
       label: "API server",

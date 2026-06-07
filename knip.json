@@ -24,6 +24,7 @@
         "src/lib/search/extraction-worker.ts!",
         "scripts/*.ts",
         "src/scripts/*.ts",
+        "src/dev/register-mock-ai.ts",
         "src/lib/__fixtures__/*.ts",
         "src/handlers/case-law/seed-court-weights.ts",
         "src/handlers/case-law/ingestion/adapters/health-check.ts",
@@ -38,7 +39,7 @@
       "ignoreDependencies": ["@electric-sql/pglite"]
     },
     "apps/web": {
-      "entry": ["src/main.tsx", "vite.config.ts"],
+      "entry": ["src/main.tsx", "src/server.ts!", "vite.config.ts"],
       "ignore": [
         "public/dark-mode-init.js",
         "src/routeTree.gen.ts",
@@ -59,7 +60,13 @@
       ]
     },
     "apps/landing": {
-      "entry": ["src/**/*.astro", "astro.config.*", "postcss.config.mjs"],
+      "entry": [
+        "src/**/*.astro",
+        "src/content.config.ts",
+        "src/pages/**/*.ts",
+        "astro.config.*",
+        "postcss.config.mjs"
+      ],
       "ignoreDependencies": ["@tailwindcss/postcss"]
     },
     "apps/legal-atlas-runner": {

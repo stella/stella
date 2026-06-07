@@ -2,7 +2,6 @@ import { Value } from "@sinclair/typebox/value";
 import { matchError, Result } from "better-result";
 import { t } from "elysia";
 
-import { isMockAI } from "@/api/consts";
 import { propertyContentSchema } from "@/api/db/schema-validators";
 import {
   loadOrgAIConfig,
@@ -15,8 +14,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { serializeAITool } from "@/api/lib/markdown/ai-tool";
-import { generateBatch } from "@/api/lib/workflow/generate-batch";
-import { generateBatchMock } from "@/api/lib/workflow/generate-batch-mock";
+import { getBatchGenerator } from "@/api/lib/workflow/generate-batch-provider";
 import type { AIResult } from "@/api/lib/workflow/generate-batch-shared";
 import type {
   BatchProperty,
@@ -189,7 +187,7 @@ const previewProperty = createSafeHandler(
       loadOrgAIConfig(session.activeOrganizationId),
       loadPromptCachingPreference(session.activeOrganizationId),
     ]);
-    const generateFn = isMockAI() ? generateBatchMock : generateBatch;
+    const generateFn = getBatchGenerator();
 
     const generateResult = await generateFn({
       abortSignal: AbortSignal.any([

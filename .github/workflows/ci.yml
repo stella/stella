@@ -217,14 +217,18 @@ jobs:
 
       - name: Knip production dependency checks
         if: steps.changed-files.outputs.package_checks_required == 'true'
-        # Static gate paired with the image compile smokes: knip
-        # catches prod code that imports devDeps or transitively
-        # resolved (unlisted) packages at PR time; the compile
-        # catches dynamic imports the linter misses. Scoped to
-        # Bun/Docker apps that install with --production.
+        # Static gate paired with the image compile/boot smokes
+        # (api-image-deps): knip --strict verifies production code imports
+        # only `dependencies` (never a devDependency) and flags transitively
+        # resolved (phantom) packages a `turbo prune` would drop. Scoped to
+        # the apps that ship a pruned runtime; each declares its real
+        # production entry (a `!` entry, a start script, or the SSR server
+        # entry). New runtimes are enrolled here deliberately, alongside a
+        # boot/compile smoke.
         run: |
-          bun run knip --production --no-progress --include unlisted,unresolved --workspace apps/api
-          bun run knip --production --no-progress --include unlisted,unresolved --workspace apps/legal-atlas-runner
+          for workspace in apps/api apps/legal-atlas-runner apps/web; do
+            bun run knip --production --strict --no-progress --include unlisted,unresolved --workspace "$workspace"
+          done
 
       - name: Test
         if: steps.changed-files.outputs.package_checks_required == 'true'
@@ -331,6 +335,43 @@ jobs:
       - name: Build web
         if: steps.changed.outputs.run == 'true'
         run: bun --filter @stll/web build
+
+      - name: Prod-deps web boot smoke
+        if: steps.changed.outputs.run == 'true'
+        # apps/web/Dockerfile's runner installs --production (deps-prod stage).
+        # Reproduce that clean production tree and boot start-runtime.js: a
+        # devDependency reached by the SSR server bundle (dist/server/server.js)
+        # fails to resolve here rather than at deploy time. /health is served by
+        # the runtime wrapper, so a clean boot proves the production module graph
+        # resolves.
+        env:
+          NPM_TOKEN: ""
+        run: |
+          set -euo pipefail
+          # Reproduce apps/web/Dockerfile's deps-prod stage exactly. Wipe
+          # node_modules first (a plain --production reinstall only skips ADDING
+          # devDeps; it does not prune ones the build install already placed),
+          # and scope to @stll/web — an unfiltered install pulls other apps' deps
+          # and could mask a package the web runtime reaches but @stll/web never
+          # declared. dist/ and .env are untouched.
+          rm -rf node_modules
+          bun install --filter @stll/web --production --frozen-lockfile --ignore-scripts
+          cd apps/web
+          PORT=3199 HOST=127.0.0.1 bun start-runtime.js &
+          server_pid=$!
+          ready=
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3199/health >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          kill "$server_pid" 2>/dev/null || true
+          if [[ "$ready" != "1" ]]; then
+            echo "web SSR runtime failed to boot under --production deps" >&2
+            exit 1
+          fi
 
   # Astro landing build. The existing ci-checks job runs lint,
   # typecheck, and test, but no `astro build`, so plugin/runtime
@@ -496,7 +537,10 @@ jobs:
         # failure for debugging.
         run: |
           cd apps/api
-          NODE_ENV=development nohup bun --port 3001 src/index.ts > /tmp/api.log 2>&1 &
+          # --preload registers the dev/test-only mock-AI generator; .env.example
+          # sets USE_MOCK_AI=true, so e2e must route through the mock rather than
+          # the real provider (which would fail on the placeholder API key).
+          NODE_ENV=development nohup bun --port 3001 --preload ./src/dev/register-mock-ai.ts src/index.ts > /tmp/api.log 2>&1 &
           echo $! > /tmp/api.pid
 
       - name: Wait for API
