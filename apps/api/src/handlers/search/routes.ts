@@ -67,13 +67,16 @@ const refineSearchEndpoint = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
     body: refineSearchBodySchema,
+    requiresUsage: { actionType: "chat", modelRole: "fast" },
   } satisfies HandlerConfig,
   async function* ({
     body,
     orgAIConfig,
     promptCachingEnabled,
+    safeDb,
     scopedDb,
     session,
+    user,
   }) {
     const response = yield* Result.await(
       Result.tryPromise(
@@ -83,7 +86,9 @@ const refineSearchEndpoint = createSafeRootHandler(
             body,
             orgAIConfig,
             promptCachingEnabled,
+            safeDb,
             scopedDb,
+            userId: user.id,
           }),
       ),
     );
@@ -96,12 +101,14 @@ const summarizeSearchEndpoint = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
     body: summarizeSearchBodySchema,
+    requiresUsage: { actionType: "chat", modelRole: "fast" },
   } satisfies HandlerConfig,
   async function* ({
     activeWorkspaceIds,
     body,
     orgAIConfig,
     promptCachingEnabled,
+    safeDb,
     scopedDb,
     session,
     user,
@@ -116,6 +123,7 @@ const summarizeSearchEndpoint = createSafeRootHandler(
             body,
             orgAIConfig,
             promptCachingEnabled,
+            safeDb,
             scopedDb,
           }),
       ),

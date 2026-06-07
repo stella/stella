@@ -147,12 +147,13 @@ type SearchAIContext = {
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   promptCachingEnabled: boolean;
+  safeDb: SafeDb;
   scopedDb: ScopedDb;
+  userId: SafeId<"user">;
 };
 
 type SearchSummaryContext = SearchAIContext & {
   accessibleWorkspaceIds: SafeId<"workspace">[];
-  userId: SafeId<"user">;
 };
 
 // Chat threads are searchable but are not citable summary sources:
@@ -306,7 +307,9 @@ export const refineSearchQuery = async ({
   organizationId,
   orgAIConfig,
   promptCachingEnabled,
+  safeDb,
   scopedDb,
+  userId,
 }: SearchAIContext & {
   body: RefineSearchBody;
 }) => {
@@ -316,6 +319,14 @@ export const refineSearchQuery = async ({
   }
 
   const aiAnalytics = createAIAnalyticsCallbacks({
+    usageMetering: {
+      actionType: "chat",
+      organizationId,
+      safeDb,
+      serviceTier: "standard",
+      userId,
+      workspaceId: null,
+    },
     feature: "search.refine",
     modelRole: "fast",
     orgAIConfig,
@@ -389,6 +400,7 @@ export const summarizeSearchResults = async ({
   accessibleWorkspaceIds,
   orgAIConfig,
   promptCachingEnabled,
+  safeDb,
   scopedDb,
 }: SearchSummaryContext & {
   body: SummarizeSearchBody;
@@ -426,6 +438,14 @@ export const summarizeSearchResults = async ({
   }
 
   const aiAnalytics = createAIAnalyticsCallbacks({
+    usageMetering: {
+      actionType: "chat",
+      organizationId,
+      safeDb,
+      serviceTier: "standard",
+      userId,
+      workspaceId: null,
+    },
     feature: "search.summary",
     modelRole: "fast",
     orgAIConfig,

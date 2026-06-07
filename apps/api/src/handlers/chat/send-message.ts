@@ -82,6 +82,7 @@ import {
 } from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
+import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -98,6 +99,7 @@ import { PDF_MIME_TYPE } from "@/api/mime-types";
 const config = {
   permissions: { chat: ["create"] },
   body: sendMessageBodySchema,
+  requiresUsage: { actionType: "chat" },
 } satisfies HandlerConfig;
 
 const sendMessage = createSafeRootHandler(
@@ -375,7 +377,10 @@ const sendMessage = createSafeRootHandler(
       messages: latestMessagePlan.messages,
       organizationId: session.activeOrganizationId,
       orgAIConfig,
+      safeDb,
       threadId: body.threadId,
+      userId: user.id,
+      workspaceId,
     });
     if (Result.isError(messagesForContextResult)) {
       const rollbackResult = await rollbackUnpersistedChatSideEffects({
@@ -637,6 +642,7 @@ const sendMessage = createSafeRootHandler(
                       safeDb,
                       threadId: body.threadId,
                       threadWorkspaceId: workspaceId,
+                      userId: user.id,
                     });
                   }
                 } finally {
@@ -650,11 +656,14 @@ const sendMessage = createSafeRootHandler(
               promptCachingEnabled,
               resolveAssistantTextRefs: refRegistry.resolveAssistantTextRefs,
               resolveAssistantValueRefs: refRegistry.resolveAssistantValueRefs,
+              safeDb,
               thirdPartyBoundary,
               threadId: body.threadId,
               tools: chatTools,
               systemSafe,
               systemUntrusted,
+              userId: user.id,
+              workspaceId,
             });
 
             if (!isChatStreamResponse(chatResponse)) {
@@ -692,7 +701,10 @@ type CompactMessagesForContextProps = ResolveChatCompactionModelProps & {
   abortSignal: AbortSignal;
   boundary: ReturnType<typeof createChatThirdPartyBoundary>;
   messages: ChatMessage[];
+  safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
 };
 
 const compactMessagesForContext = async ({
@@ -702,7 +714,10 @@ const compactMessagesForContext = async ({
   messages,
   organizationId,
   orgAIConfig,
+  safeDb,
   threadId,
+  userId,
+  workspaceId,
 }: CompactMessagesForContextProps): Promise<
   Result<ChatMessage[], HandlerError>
 > => {
@@ -715,8 +730,29 @@ const compactMessagesForContext = async ({
     return Result.err(modelResult.error);
   }
 
+  const aiAnalytics = createAIAnalyticsCallbacks({
+    usageMetering: {
+      actionType: "chat",
+      organizationId,
+      safeDb,
+      serviceTier: "standard",
+      userId,
+      workspaceId,
+    },
+    feature: "chat.context_compaction",
+    modelRole: "chat",
+    orgAIConfig,
+    properties: {
+      organization_id: organizationId,
+      ...(workspaceId ? { workspace_id: workspaceId } : {}),
+    },
+    sessionId: threadId,
+    traceId: Bun.randomUUIDv7(),
+  });
+
   return await compactChatMessagesForModel({
     abortSignal,
+    aiAnalytics,
     boundary,
     messages,
     model: modelResult.value,

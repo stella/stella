@@ -29,6 +29,7 @@ const config = {
   permissions: { agentSkill: ["update"] },
   params: rewriteSkillResourceParamsSchema,
   body: rewriteSkillResourceBodySchema,
+  requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;
 
 const rewriteSkillResource = createSafeRootHandler(
@@ -113,6 +114,14 @@ const rewriteSkillResource = createSafeRootHandler(
     }
 
     const aiAnalytics = createAIAnalyticsCallbacks({
+      usageMetering: {
+        actionType: "chat",
+        organizationId: session.activeOrganizationId,
+        safeDb,
+        serviceTier: "standard",
+        userId: user.id,
+        workspaceId: null,
+      },
       feature: "skills.rewrite_resource",
       modelRole: "fast",
       orgAIConfig,

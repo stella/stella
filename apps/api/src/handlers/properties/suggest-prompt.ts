@@ -40,6 +40,7 @@ const suggestPromptBodySchema = t.Object({
 const config = {
   permissions: { property: ["create"] },
   body: suggestPromptBodySchema,
+  requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;
 
 const SUGGEST_TIMEOUT_MS = 20_000;
@@ -118,7 +119,7 @@ const suggestPrompt = createSafeHandler(
   config,
   // `createSafeHandler` requires an AsyncGenerator. No DB ops to yield* over.
   // eslint-disable-next-line require-yield
-  async function* ({ session, request, body }) {
+  async function* ({ session, request, body, safeDb, user, workspaceId }) {
     const trimmedName = body.name.trim();
     if (trimmedName.length === 0) {
       return Result.err(
@@ -132,6 +133,14 @@ const suggestPrompt = createSafeHandler(
     ]);
 
     const aiAnalytics = createAIAnalyticsCallbacks({
+      usageMetering: {
+        actionType: "chat",
+        organizationId: session.activeOrganizationId,
+        safeDb,
+        serviceTier: "standard",
+        userId: user.id,
+        workspaceId,
+      },
       feature: "properties.suggest-prompt",
       modelRole: "fast",
       orgAIConfig,

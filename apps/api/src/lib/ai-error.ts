@@ -16,7 +16,7 @@ import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
 
 export const AI_ERROR_KINDS = [
   "quota_exhausted",
-  "insufficient_credits",
+  "provider_billing",
   "model_unavailable",
   "provider_unavailable",
   "loop_detected",
@@ -48,8 +48,12 @@ export const classifyAIError = (error: unknown): AIErrorKind => {
     if (error.statusCode === 429) {
       return "quota_exhausted";
     }
+    // A provider 402 is the upstream account's billing/credit problem,
+    // distinct from Stella's own usage preflight, which returns a
+    // structured 402 before the model call and never reaches this
+    // classifier.
     if (error.statusCode === 402) {
-      return "insufficient_credits";
+      return "provider_billing";
     }
     // A 404 on a generate/stream call means the provider no longer
     // serves the configured model (retired or renamed upstream) — a
@@ -85,7 +89,7 @@ type AIHandlerErrorFallback = {
 /**
  * Build a `HandlerError` for an AI provider failure.
  *
- * For known AI failure modes (quota, credits, transient
+ * For known AI failure modes (quota, usage limits, transient
  * upstream outage) returns a typed error with an actionable
  * status + message. For everything else, returns the caller's
  * fallback so unrelated bugs aren't masked as "AI unavailable".
@@ -100,14 +104,14 @@ export const aiHandlerError = (
       return new HandlerError({
         status: 429,
         message:
-          "The AI provider's quota is exhausted. Try again shortly, or contact your workspace admin to upgrade the plan.",
+          "The AI provider's quota is exhausted. Try again shortly, or contact your workspace admin.",
         cause: error,
       });
-    case "insufficient_credits":
+    case "provider_billing":
       return new HandlerError({
         status: 402,
         message:
-          "The AI provider needs more credits. Contact your workspace admin to top up the account.",
+          "The AI provider reported a billing or credit problem. An administrator should check the provider account.",
         cause: error,
       });
     case "model_unavailable":

@@ -57,6 +57,7 @@ import {
   getModelInfoForRole,
 } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
+import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   ChatEmptyCompletionError,
@@ -131,6 +132,8 @@ type RunChatStreamArgs = {
       Parameters<typeof createUIMessageStream<ChatMessage>>[0]["execute"]
     >
   >[0]["writer"];
+  aiAnalytics: ReturnType<typeof createAIAnalyticsCallbacks>;
+  compactionAIAnalytics: ReturnType<typeof createAIAnalyticsCallbacks>;
   model: LanguageModel;
   modelInfo: ResolvedModelInfo;
   /**
@@ -163,6 +166,8 @@ type RunChatStreamArgs = {
  */
 const runChatStream = async ({
   writer,
+  aiAnalytics,
+  compactionAIAnalytics,
   model,
   modelInfo,
   emitErrorOnEmpty,
@@ -214,6 +219,7 @@ const runChatStream = async ({
 
       const compactedMessages = await compactModelMessagesForModel({
         abortSignal,
+        aiAnalytics: compactionAIAnalytics,
         messages,
         model,
         onSummaryError: (error) => {
@@ -239,7 +245,10 @@ const runChatStream = async ({
     },
     stopWhen: [stepCountIs(MAX_TOOL_STEPS), hasToolCall("ask-user")],
     messages: modelMessages,
-    onStepFinish: ({ response, toolCalls }) => {
+    ...aiAnalytics.stepCallbacks,
+    onStepFinish: (event) => {
+      aiAnalytics.stepCallbacks.onStepFinish?.(event);
+      const { response, toolCalls } = event;
       if (toolCalls.length > 0) {
         return;
       }
@@ -356,8 +365,11 @@ type StreamChatProps = {
   systemUntrusted: ChatUntrustedPromptSuffix;
   thirdPartyBoundary: ChatThirdPartyBoundary;
   latestMessageId: string;
+  safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
   tools: ToolSet;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
 };
 
 export const streamChat = async ({
@@ -371,12 +383,15 @@ export const streamChat = async ({
   promptCachingEnabled,
   resolveAssistantTextRefs,
   resolveAssistantValueRefs,
+  safeDb,
   systemSafe,
   systemUntrusted,
   thirdPartyBoundary,
   latestMessageId,
   threadId,
   tools,
+  userId,
+  workspaceId,
 }: StreamChatProps) => {
   // Strip persisted tool-call parts that never received a result
   // (process killed mid-stream, provider threw before the result was
@@ -445,7 +460,7 @@ export const streamChat = async ({
   // `execute`, and the inner `result.toUIMessageStream({ onError })`
   // for errors emitted by the model stream itself. The inner one
   // defaults to `() => "An error occurred."` and *that* is the path a
-  // Gemini-quota / OpenRouter-credits failure actually takes — without
+  // Gemini-quota / provider-quota failure actually takes — without
   // wiring the same classifier on both, the chat client sees the
   // generic string and our frontend kind-mapping never fires.
   const onAiError = (error: unknown): string => {
@@ -491,9 +506,49 @@ export const streamChat = async ({
           : null;
       const fallbackEligible =
         fallbackInfo !== null && fallbackInfo.modelId !== primaryInfo.modelId;
+      const primaryAnalytics = createAIAnalyticsCallbacks({
+        usageMetering: {
+          actionType: "chat",
+          organizationId,
+          safeDb,
+          serviceTier: "standard",
+          userId,
+          workspaceId,
+        },
+        feature: "chat.stream",
+        modelRole: "chat",
+        orgAIConfig,
+        properties: {
+          organization_id: organizationId,
+          ...(workspaceId ? { workspace_id: workspaceId } : {}),
+        },
+        sessionId: threadId,
+        traceId: Bun.randomUUIDv7(),
+      });
+      const primaryCompactionAnalytics = createAIAnalyticsCallbacks({
+        usageMetering: {
+          actionType: "chat",
+          organizationId,
+          safeDb,
+          serviceTier: "standard",
+          userId,
+          workspaceId,
+        },
+        feature: "chat.step_compaction",
+        modelRole: "chat",
+        orgAIConfig,
+        properties: {
+          organization_id: organizationId,
+          ...(workspaceId ? { workspace_id: workspaceId } : {}),
+        },
+        sessionId: threadId,
+        traceId: Bun.randomUUIDv7(),
+      });
 
       const primaryEmpty = await runChatStream({
         writer,
+        aiAnalytics: primaryAnalytics,
+        compactionAIAnalytics: primaryCompactionAnalytics,
         model: primaryModel,
         modelInfo: primaryInfo,
         // Primary finalises on empty only when there's no fallback
@@ -521,8 +576,48 @@ export const streamChat = async ({
           scopeKey: promptCacheKey,
           organizationId,
         });
+        const fallbackAnalytics = createAIAnalyticsCallbacks({
+          usageMetering: {
+            actionType: "chat",
+            organizationId,
+            safeDb,
+            serviceTier: "standard",
+            userId,
+            workspaceId,
+          },
+          feature: "chat.stream_fallback",
+          modelRole: "reasoning",
+          orgAIConfig,
+          properties: {
+            organization_id: organizationId,
+            ...(workspaceId ? { workspace_id: workspaceId } : {}),
+          },
+          sessionId: threadId,
+          traceId: Bun.randomUUIDv7(),
+        });
+        const fallbackCompactionAnalytics = createAIAnalyticsCallbacks({
+          usageMetering: {
+            actionType: "chat",
+            organizationId,
+            safeDb,
+            serviceTier: "standard",
+            userId,
+            workspaceId,
+          },
+          feature: "chat.step_compaction_fallback",
+          modelRole: "reasoning",
+          orgAIConfig,
+          properties: {
+            organization_id: organizationId,
+            ...(workspaceId ? { workspace_id: workspaceId } : {}),
+          },
+          sessionId: threadId,
+          traceId: Bun.randomUUIDv7(),
+        });
         await runChatStream({
           writer,
+          aiAnalytics: fallbackAnalytics,
+          compactionAIAnalytics: fallbackCompactionAnalytics,
           model: fallbackModel,
           modelInfo: fallbackInfo,
           emitErrorOnEmpty: true,

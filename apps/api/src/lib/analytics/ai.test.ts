@@ -6,7 +6,9 @@ import type {
 import { describe, expect, test } from "bun:test";
 
 import type { OrgAIConfig } from "@/api/lib/ai-models";
-import { asSdkEvent } from "@/api/tests/helpers/test-tool-set";
+import { toSafeId } from "@/api/lib/branded-types";
+import { asSdkEvent, asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { SERVER_ANALYTICS_EVENTS } from "./types";
 import type { Analytics } from "./types";
@@ -21,6 +23,12 @@ process.env["SMTP_HOST"] ??= "localhost";
 process.env["SMTP_PORT"] ??= "1025";
 
 const loadAIAnalytics = async () => await import("./ai");
+
+const waitForAsyncSideEffects = async () => {
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, 0);
+  });
+};
 
 const setErrorCause = (error: Error, cause: unknown): Error => {
   Object.defineProperty(error, "cause", {
@@ -97,6 +105,128 @@ describe("sanitizeForAIAnalytics", () => {
 });
 
 describe("createAIAnalyticsCallbacks", () => {
+  test("records per-step usage from actual token usage", async () => {
+    const aiAnalyticsModule = await loadAIAnalytics();
+    const periodStart = new Date("2026-06-01T00:00:00.000Z");
+    const periodEnd = new Date("2026-07-01T00:00:00.000Z");
+    const insertedRows: unknown[] = [];
+    const tx = {
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => [
+              {
+                currentPeriodEnd: periodEnd,
+                currentPeriodStart: periodStart,
+                status: "active",
+              },
+            ],
+          }),
+        }),
+      }),
+      insert: () => ({
+        values: async (values: unknown) => {
+          insertedRows.push(values);
+        },
+      }),
+    };
+    const { safeDb } = createScopedDbMock(tx);
+
+    const analytics: Analytics = {
+      capture: () => undefined,
+      flush: async () => undefined,
+    };
+
+    const callbacks = aiAnalyticsModule.createAIAnalyticsCallbacks({
+      analytics,
+      usageMetering: {
+        actionType: "chat",
+        organizationId: toSafeId<"organization">("org_usage"),
+        safeDb,
+        serviceTier: "standard",
+        userId: toSafeId<"user">("user_usage"),
+        workspaceId: toSafeId<"workspace">("workspace_usage"),
+      },
+      feature: "chat.stream",
+      modelRole: "chat",
+      traceId: "trace_usage",
+    });
+
+    callbacks.stepCallbacks.onStepFinish?.(
+      asSdkEvent<OnStepFinishEvent>({
+        content: [],
+        dynamicToolCalls: [],
+        dynamicToolResults: [],
+        experimental_context: undefined,
+        files: [],
+        finishReason: "stop",
+        functionId: undefined,
+        metadata: undefined,
+        model: { modelId: "gpt-4o-mini", provider: "openai" },
+        providerMetadata: undefined,
+        rawFinishReason: "stop",
+        reasoning: [],
+        reasoningText: undefined,
+        request: {},
+        response: {
+          body: undefined,
+          headers: undefined,
+          id: "resp_usage",
+          messages: [],
+          modelId: "gpt-4o-mini",
+          timestamp: new Date(),
+        },
+        sources: [],
+        staticToolCalls: [],
+        staticToolResults: [],
+        stepNumber: 0,
+        text: "",
+        toolCalls: [],
+        toolResults: [],
+        usage: {
+          inputTokenDetails: undefined,
+          inputTokens: 1_000_000,
+          outputTokenDetails: undefined,
+          outputTokens: 0,
+          totalTokens: 1_000_000,
+        },
+        warnings: undefined,
+      }),
+    );
+
+    await waitForAsyncSideEffects();
+
+    expect(insertedRows).toHaveLength(1);
+    const row = asTestRaw<{
+      actionType: string;
+      unitsConsumed: number;
+      isByok: boolean;
+      modelRole: string;
+      organizationId: string;
+      periodEnd: Date;
+      periodStart: Date;
+      rawUsageMicroUnits: number;
+      serviceTier: string;
+      traceId: string;
+      userId: string;
+      workspaceId: string;
+    }>(insertedRows.at(0));
+    expect(row).toMatchObject({
+      actionType: "chat",
+      unitsConsumed: 225,
+      isByok: false,
+      modelRole: "chat",
+      organizationId: "org_usage",
+      periodEnd,
+      periodStart,
+      rawUsageMicroUnits: 15_000,
+      serviceTier: "standard",
+      traceId: "trace_usage",
+      userId: "user_usage",
+      workspaceId: "workspace_usage",
+    });
+  });
+
   test("captures generation and tool span events with sanitized content", async () => {
     const aiAnalyticsModule = await loadAIAnalytics();
 

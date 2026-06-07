@@ -1289,6 +1289,7 @@ export default defineConfig({
         "apps/api/src/handlers/folio-collab/routes.ts",
         "apps/api/src/handlers/health/routes.ts",
         "apps/api/src/handlers/mcp/routes.ts",
+        "apps/api/src/handlers/hosted-usage-webhook/routes.ts",
         "apps/api/src/handlers/verify/routes.ts",
         "apps/api/src/handlers/workspaces/events.ts",
       ],

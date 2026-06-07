@@ -242,7 +242,7 @@ const ThinkingIndicator = () => {
 // the error message; anything else falls through to the generic
 // copy.
 const CHAT_ERROR_TRANSLATION_KEYS = {
-  insufficient_credits: "chat.sendErrorInsufficientCredits",
+  provider_billing: "chat.sendErrorProviderBilling",
   loop_detected: "chat.sendErrorLoopDetected",
   model_unavailable: "chat.sendErrorModelUnavailable",
   provider_unavailable: "chat.sendErrorProviderUnavailable",

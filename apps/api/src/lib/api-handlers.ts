@@ -12,7 +12,10 @@ import type { PermissionInput } from "@stll/permissions";
 import { roles } from "@stll/permissions";
 
 import type { SafeDb, ScopedDb } from "@/api/db";
-import type { OrgAIConfig } from "@/api/lib/ai-models";
+import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
+import { env } from "@/api/env";
+import { getModelInfoForRole } from "@/api/lib/ai-models";
+import type { ModelRole, OrgAIConfig } from "@/api/lib/ai-models";
 import { captureRequestError } from "@/api/lib/analytics";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
@@ -29,9 +32,40 @@ import type {
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { getRequestContext } from "@/api/lib/observability/request-context";
+import { assertUsageAvailable } from "@/api/lib/usage";
+import { computeUsageUnitCost } from "@/api/lib/usage/action-weights";
+
+/**
+ * Per-handler usage metering opt-in. When set, the framework:
+ *  - runs `assertUsageAvailable` pre-flight with a fixed
+ *    action-cost estimate (only when `USAGE_ENFORCEMENT_ENABLED=true`;
+ *    otherwise the check is a no-op so observation-mode runs
+ *    always pass through).
+ *
+ * Post-flight ledger writes happen from AI SDK step callbacks,
+ * where the actual model usage is available. Keeping writes out
+ * of the generic handler layer prevents fixed-estimate rows and
+ * usage-based rows from double-counting the same action.
+ *
+ * `serviceTier` defaults to "standard" — that's the user-clicked
+ * "Run now" path. Queue-mode handlers pass `"flex"` (or `"batch"`
+ * for cron-driven enrichment).
+ */
+export type UsageMeteringConfig = {
+  actionType: UsageActionType;
+  serviceTier?: UsageServiceTier;
+  /**
+   * Logical model role recorded on the consumption ledger row.
+   * Defaults to `"chat"`. Set to the role the handler will pass
+   * to `getModelForRole(...)` so cross-cutting analytics match
+   * the actual model.
+   */
+  modelRole?: ModelRole;
+};
 
 export type HandlerConfig = InputSchema & {
   permissions: PermissionInput;
+  requiresUsage?: UsageMeteringConfig;
 };
 
 export type SessionHandlerConfig = InputSchema;
@@ -111,7 +145,20 @@ type SafeHandlerError =
   | HandlerError
   | UnhandledException;
 
-type SafeErrorBody = { code?: HandlerErrorCode | undefined; message: string };
+type SafeErrorBody = {
+  code?: HandlerErrorCode | undefined;
+  message: string;
+  /**
+   * Structured fields surfaced on specific error responses. Today
+   * only the 402 UsageLimitExceeded path uses them so the
+   * frontend can render an "x of y units left" modal without
+   * parsing the human-readable message. Optional everywhere so
+   * other handlers don't have to populate them.
+   */
+  reason?: string;
+  required?: number;
+  available?: number;
+};
 
 // The conditional form is intentional: it keeps status unions distributive so
 // Eden sees distinct error codes instead of a single widened response.
@@ -140,6 +187,11 @@ type SafeHandlerDefinition<
   config: TConfig;
   handler: (ctx: TContext) => Promise<SafeHandlerResult<TResult>>;
 };
+
+const hasWorkspaceId = <TContext extends object>(
+  ctx: TContext,
+): ctx is TContext & { workspaceId: SafeId<"workspace"> } =>
+  "workspaceId" in ctx;
 
 // This needs function overloads. A generic arrow returning `status(statusCode)`
 // widens too much, and the casted version trips oxlint's unsafe assertion rule.
@@ -268,9 +320,118 @@ const createSafeScopedHandler = <
       return toSafeStatusResponse(403, { message: "Forbidden" });
     }
 
+    // Resolve the metering context only when enforcement is on. It reads
+    // the org AI provider config to detect BYOK, which panics when no
+    // provider is configured; doing it unconditionally — before the
+    // handler's own requireAIAvailable check — would turn a missing-AI
+    // 403 into a 500, and would be wasted work while enforcement is off.
+    if (config.requiresUsage && env.USAGE_ENFORCEMENT_ENABLED) {
+      const meteringContext = resolveMeteringContext({
+        metering: config.requiresUsage,
+        organizationId: ctx.session.activeOrganizationId,
+        orgAIConfig: ctx.orgAIConfig,
+        workspaceId: hasWorkspaceId(ctx) ? ctx.workspaceId : null,
+        userId: ctx.user.id,
+      });
+      const preflight = await runUsagePreflight({ ctx, meteringContext });
+      if (preflight !== null) {
+        return preflight;
+      }
+    }
+
     return await runSafeHandler(ctx, handler);
   },
 });
+
+type ResolvedMeteringContext = {
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace"> | null;
+  userId: SafeId<"user">;
+  actionType: UsageActionType;
+  serviceTier: UsageServiceTier;
+  cost: number;
+};
+
+const resolveMeteringContext = ({
+  metering,
+  organizationId,
+  orgAIConfig,
+  workspaceId,
+  userId,
+}: {
+  metering: UsageMeteringConfig;
+  organizationId: SafeId<"organization">;
+  orgAIConfig: OrgAIConfig | null;
+  workspaceId: SafeId<"workspace"> | null;
+  userId: SafeId<"user">;
+}): ResolvedMeteringContext => {
+  const serviceTier = metering.serviceTier ?? "standard";
+  const modelRole = metering.modelRole ?? "chat";
+  const isByok =
+    orgAIConfig !== null &&
+    getModelInfoForRole(modelRole, orgAIConfig).keySource === "byok";
+  const cost = computeUsageUnitCost({
+    actionType: metering.actionType,
+    serviceTier,
+    isByok,
+  });
+  return {
+    organizationId,
+    workspaceId,
+    userId,
+    actionType: metering.actionType,
+    serviceTier,
+    cost,
+  };
+};
+
+type PreflightCtx = {
+  request: Request;
+  route: string;
+  safeDb: SafeDb;
+};
+
+const runUsagePreflight = async ({
+  ctx,
+  meteringContext,
+}: {
+  ctx: PreflightCtx;
+  meteringContext: ResolvedMeteringContext;
+}): Promise<SafeStatusResponse<402 | 500> | null> => {
+  if (meteringContext.cost <= 0) {
+    return null;
+  }
+  const checkResult = await ctx.safeDb(
+    async (tx) =>
+      await assertUsageAvailable({
+        tx,
+        organizationId: meteringContext.organizationId,
+        required: meteringContext.cost,
+      }),
+  );
+  if (Result.isError(checkResult)) {
+    // DB error during pre-flight — surface generic 500 so the
+    // user retries; we don't let it look like an over-limit
+    // situation when it's our infrastructure that failed.
+    logAndCaptureSafeError({
+      request: ctx.request,
+      route: ctx.route,
+      error: checkResult.error,
+      statusCode: 500,
+    });
+    return toSafeStatusResponse(500, { message: "Internal server error" });
+  }
+  const check = checkResult.value;
+  if (check.ok) {
+    return null;
+  }
+  return toSafeStatusResponse(402, {
+    message: check.error.message,
+    reason: check.error.reason,
+    required: check.error.required,
+    available: check.error.available,
+  });
+};
 
 const createSafeDirectHandler = <
   TConfig extends InputSchema,
