@@ -217,11 +217,19 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
     element.style.fontStyle = "italic";
   }
 
-  // Color — skip black/auto so the CSS variable --doc-canvas-text can adapt to dark mode
+  // Color — black/auto are skipped so --doc-canvas-text can adapt to dark mode.
+  // Explicit colors are exposed as a custom property (--doc-run-color) and read
+  // back via var(); dark mode then inverts their lightness with relative-color
+  // CSS (hue/chroma preserved), matching Word's dark-mode rendering instead of
+  // leaving authored colors dim on the dark canvas.
   let hasExplicitTextColor = false;
   const textColor = getRenderableTextColor(run);
   if (textColor) {
     element.style.color = textColor;
+    // Also expose the authored color so dark mode can invert its lightness
+    // (hue/chroma preserved) via relative-color CSS. The dark rule overrides
+    // this inline color with !important; light mode keeps it verbatim.
+    element.style.setProperty("--doc-run-color", textColor);
     hasExplicitTextColor = true;
   }
 

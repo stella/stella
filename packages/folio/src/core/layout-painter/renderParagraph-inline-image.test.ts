@@ -12,11 +12,36 @@ import type {
 import { AUTHOR_COLORS, resetAuthorColors } from "../utils/authorColors";
 import { renderLine, renderParagraphFragment } from "./renderParagraph";
 
+// Runtime shim: prod code calls element.style.setProperty("--doc-run-color", …)
+// (real CSSStyleDeclaration has it); the mock stores it like any other prop so
+// direct `style.color` access and `setProperty` both work. Typed as a plain
+// Record so existing dot-access assertions stay valid.
+function createFakeStyle(): Record<string, string> {
+  const store: Record<string, string> = {};
+  return new Proxy(store, {
+    get(target, prop: string) {
+      if (prop === "setProperty") {
+        return (key: string, value: string) => {
+          target[key] = value;
+        };
+      }
+      if (prop === "getPropertyValue") {
+        return (key: string) => target[key] ?? "";
+      }
+      return target[prop];
+    },
+    set(target, prop: string, value: string) {
+      target[prop] = value;
+      return true;
+    },
+  }) as unknown as Record<string, string>;
+}
+
 class FakeElement {
   className = "";
   dataset: Record<string, string> = {};
   innerHTML = "";
-  style: Record<string, string> = {};
+  style: Record<string, string> = createFakeStyle();
   children: FakeElement[] = [];
   classList = {
     add: (...tokens: string[]) => {
@@ -690,6 +715,36 @@ describe("renderLine text styling", () => {
 
     expect(textEl?.style.backgroundColor).toBe(TEST_HIGHLIGHT_COLOR);
     expect(textEl?.style.color).toBe(TEST_EXPLICIT_TEXT_COLOR);
+  });
+
+  test("exposes explicit run color as --doc-run-color for dark-mode inversion", () => {
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [
+        { kind: "text", text: "Colored", color: TEST_EXPLICIT_TEXT_COLOR },
+      ],
+    };
+    const line: MeasuredLine = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 7,
+      width: 50,
+      ascent: 10,
+      descent: 2,
+      lineHeight: 12,
+    };
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const textEl = lineEl.children[0] as HTMLElement | undefined;
+
+    // Inline color is kept verbatim (light mode); the custom property lets the
+    // dark-mode CSS invert lightness while preserving hue/chroma.
+    expect(textEl?.style.color).toBe(TEST_EXPLICIT_TEXT_COLOR);
+    expect(textEl?.style.getPropertyValue("--doc-run-color")).toBe(
+      TEST_EXPLICIT_TEXT_COLOR,
+    );
   });
 
   test("preserves explicit black text colors on DOCX highlights", () => {

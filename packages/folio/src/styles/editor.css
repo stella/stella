@@ -319,9 +319,31 @@
 .dark .ProseMirror {
   color: var(--doc-canvas-text) !important;
 }
-/* Preserve explicit non-black colors set by the layout painter */
-.dark .layout-page [style*="color:"] {
-  /* inline styles with explicit color win — no override needed */
+/* Dark mode: invert the LIGHTNESS of explicit run colors while preserving hue
+ * and chroma, matching Word's dark-mode rendering. Plain runs expose their
+ * authored color as --doc-run-color (see renderParagraph.ts); black/auto runs
+ * have no var and keep --doc-canvas-text above. Relative-color syntax computes
+ * the inverted OKLCH lightness, so e.g. #575757 reads near-#B2B2B2, amber
+ * darkens to brown, and saturated hues stay on-hue. */
+.dark
+  .layout-page
+  [style*="--doc-run-color"]:not(.docx-insertion):not(.docx-deletion) {
+  color: oklch(
+    from var(--doc-run-color) clamp(0, 1.22 - 0.95 * l, 1) calc(c * 0.6) h
+  ) !important;
+}
+
+/* Tracked-change spans color from --tc-color (author colour), not
+ * --doc-run-color, so invert that channel instead — otherwise the broad rule
+ * above would repaint the red insertions/deletions as inverted body grey.
+ * Decoration (underline/strike) follows the same inverted colour. */
+.dark .layout-page .docx-insertion,
+.dark .layout-page .docx-deletion {
+  --tc-inverted: oklch(
+    from var(--tc-color, #c00000) clamp(0, 1.22 - 0.95 * l, 1) calc(c * 0.6) h
+  );
+  color: var(--tc-inverted) !important;
+  text-decoration-color: var(--tc-inverted) !important;
 }
 
 /* ============================================================================
