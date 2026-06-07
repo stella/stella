@@ -56,21 +56,46 @@ type JSXAttribute = {
   parent?: { type: string; name?: { type: string; name?: string } };
 };
 
-const getStringValue = (value: JSXAttribute["value"]): string | undefined => {
+type MaybeExpr =
+  | {
+      type: string;
+      value?: unknown;
+      consequent?: MaybeExpr;
+      alternate?: MaybeExpr;
+    }
+  | null
+  | undefined;
+
+// Collect the string literals an expression can evaluate to. Covers a bare
+// literal plus both branches of a ternary (recursing for nested ones), so a
+// dynamic `type={isDate ? "date" : "text"}` is caught the same as a static
+// `type="date"`. Deliberately conservative: only literal branches are read, so
+// genuinely runtime-computed values are left alone.
+const literalStringsOf = (expr: MaybeExpr): string[] => {
+  if (!expr) {
+    return [];
+  }
+  if (expr.type === "Literal" && typeof expr.value === "string") {
+    return [expr.value];
+  }
+  if (expr.type === "ConditionalExpression") {
+    return [
+      ...literalStringsOf(expr.consequent),
+      ...literalStringsOf(expr.alternate),
+    ];
+  }
+  return [];
+};
+
+const getBannedKind = (value: JSXAttribute["value"]): string | undefined => {
   if (!value) {
     return undefined;
   }
-  if (value.type === "Literal" && typeof value.value === "string") {
-    return value.value;
-  }
-  if (
-    value.type === "JSXExpressionContainer" &&
-    value.expression.type === "Literal" &&
-    typeof value.expression.value === "string"
-  ) {
-    return value.expression.value;
-  }
-  return undefined;
+  const candidates =
+    value.type === "JSXExpressionContainer"
+      ? literalStringsOf(value.expression as MaybeExpr)
+      : literalStringsOf(value as MaybeExpr);
+  return candidates.find((candidate) => BANNED_TYPES.has(candidate));
 };
 
 export default {
@@ -96,8 +121,8 @@ export default {
             ) {
               return;
             }
-            const kind = getStringValue(node.value);
-            if (!kind || !BANNED_TYPES.has(kind)) {
+            const kind = getBannedKind(node.value);
+            if (!kind) {
               return;
             }
             const opening = node.parent;
