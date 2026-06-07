@@ -1856,6 +1856,11 @@
       "usageManageError": "Neizdevās atvērt mitinātā lietojuma pārvaldību",
       "usageManuallyManaged": "Pārvaldīts manuāli",
       "usageSeats": "{count, plural, one {# vieta} other {# vietas}}",
+      "usageStatusActive": "Aktīvs",
+      "usageStatusCancelled": "Atcelts",
+      "usageStatusPastDue": "Nokavēts maksājums",
+      "usageStatusPaused": "Apturēts",
+      "usageStatusTrialing": "Izmēģinājuma periods",
       "usageUnitCount": "{count, plural, zero {# vienību} one {# vienība} other {# vienības}}",
       "usageUnitsBalanceTemplate": "Pieejamas {remaining} vienības",
       "usageUnitsThisPeriod": "Šī perioda lietojuma vienības"

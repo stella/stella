@@ -1859,6 +1859,11 @@ type Messages = {
       "usageManageError": "Could not open hosted usage management";
       "usageManuallyManaged": "Manually managed";
       "usageSeats": "{count, plural, one {# seat} other {# seats}}";
+      "usageStatusActive": "Active";
+      "usageStatusCancelled": "Cancelled";
+      "usageStatusPastDue": "Past due";
+      "usageStatusPaused": "Paused";
+      "usageStatusTrialing": "Trialing";
       "usageUnitCount": "{count, plural, one {# unit} other {# units}}";
       "usageUnitsBalanceTemplate": "{remaining} units available";
       "usageUnitsThisPeriod": "Usage units this period";

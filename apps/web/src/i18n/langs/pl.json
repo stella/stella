@@ -1856,6 +1856,11 @@
       "usageManageError": "Nie udało się otworzyć zarządzania użyciem hostowanym",
       "usageManuallyManaged": "Zarządzane ręcznie",
       "usageSeats": "{count, plural, one {# miejsce} few {# miejsca} many {# miejsc} other {# miejsca}}",
+      "usageStatusActive": "Aktywny",
+      "usageStatusCancelled": "Anulowano",
+      "usageStatusPastDue": "Po terminie",
+      "usageStatusPaused": "Wstrzymano",
+      "usageStatusTrialing": "Okres próbny",
       "usageUnitCount": "{count, plural, one {# jednostka} few {# jednostki} many {# jednostek} other {# jednostki}}",
       "usageUnitsBalanceTemplate": "Dostępne jednostki: {remaining}",
       "usageUnitsThisPeriod": "Jednostki użycia w tym okresie"

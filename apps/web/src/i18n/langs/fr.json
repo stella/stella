@@ -1856,6 +1856,11 @@
       "usageManageError": "Impossible d’ouvrir la gestion de l’utilisation hébergée",
       "usageManuallyManaged": "Géré manuellement",
       "usageSeats": "{count, plural, one {# siège} other {# sièges}}",
+      "usageStatusActive": "Actif",
+      "usageStatusCancelled": "Annulé",
+      "usageStatusPastDue": "En retard de paiement",
+      "usageStatusPaused": "En pause",
+      "usageStatusTrialing": "Période d'essai",
       "usageUnitCount": "{count, plural, one {# unité} many {# unités} other {# unités}}",
       "usageUnitsBalanceTemplate": "{remaining} unités disponibles",
       "usageUnitsThisPeriod": "Unités d’utilisation sur cette période"

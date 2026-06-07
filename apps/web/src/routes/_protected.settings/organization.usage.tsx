@@ -8,6 +8,7 @@ import { Button } from "@stll/ui/components/button";
 import { Frame, FramePanel } from "@stll/ui/components/frame";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
@@ -87,7 +88,7 @@ function ActiveEntitlementCard({ data }: { data: UsageEntitlement }) {
                 ? t("settings.organization.usageEndsOnTemplate", {
                     date: formatShortDate(data.entitlement.currentPeriodEnd),
                   })
-                : capitaliseStatus(data.entitlement.status)}{" "}
+                : t(USAGE_STATUS_KEYS[data.entitlement.status])}{" "}
               ·{" "}
               {t("settings.organization.usageSeats", {
                 count: data.entitlement.seats,
@@ -216,13 +217,13 @@ const formatPeriod = (start: string, end: string): string => {
   return `${fmt.format(s)} - ${fmt.format(e)}`;
 };
 
-// snake_case -> "Title Case" ("past_due" -> "Past Due"). Per-locale
-// status labels via a TranslationKey map are a follow-up.
-const capitaliseStatus = (status: string): string =>
-  status
-    .split("_")
-    .map((word) => {
-      const head = word.at(0);
-      return head ? head.toUpperCase() + word.slice(1) : word;
-    })
-    .join(" ");
+const USAGE_STATUS_KEYS = {
+  trialing: "settings.organization.usageStatusTrialing",
+  active: "settings.organization.usageStatusActive",
+  past_due: "settings.organization.usageStatusPastDue",
+  cancelled: "settings.organization.usageStatusCancelled",
+  paused: "settings.organization.usageStatusPaused",
+} as const satisfies Record<
+  UsageEntitlement["entitlement"]["status"],
+  TranslationKey
+>;

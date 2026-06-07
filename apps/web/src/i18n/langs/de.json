@@ -1856,6 +1856,11 @@
       "usageManageError": "Gehostete Nutzungsverwaltung konnte nicht geöffnet werden",
       "usageManuallyManaged": "Manuell verwaltet",
       "usageSeats": "{count, plural, one {# Platz} other {# Plätze}}",
+      "usageStatusActive": "Aktiv",
+      "usageStatusCancelled": "Gekündigt",
+      "usageStatusPastDue": "Überfällig",
+      "usageStatusPaused": "Pausiert",
+      "usageStatusTrialing": "Testphase",
       "usageUnitCount": "{count, plural, one {# Einheit} other {# Einheiten}}",
       "usageUnitsBalanceTemplate": "{remaining} Einheiten verfügbar",
       "usageUnitsThisPeriod": "Nutzungseinheiten in diesem Zeitraum"

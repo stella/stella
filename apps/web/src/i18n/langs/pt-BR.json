@@ -1856,6 +1856,11 @@
       "usageManageError": "Não foi possível abrir o gerenciamento de uso hospedado",
       "usageManuallyManaged": "Gerenciado manualmente",
       "usageSeats": "{count, plural, one {# assento} other {# assentos}}",
+      "usageStatusActive": "Ativo",
+      "usageStatusCancelled": "Cancelado",
+      "usageStatusPastDue": "Vencido",
+      "usageStatusPaused": "Pausado",
+      "usageStatusTrialing": "Em avaliação",
       "usageUnitCount": "{count, plural, one {# unidade} many {# unidades} other {# unidades}}",
       "usageUnitsBalanceTemplate": "{remaining} unidades disponíveis",
       "usageUnitsThisPeriod": "Unidades de uso neste período"

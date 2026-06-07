@@ -1856,6 +1856,11 @@
       "usageManageError": "Nepavyko atidaryti prieglobos naudojimo valdymo",
       "usageManuallyManaged": "Valdoma rankiniu būdu",
       "usageSeats": "{count, plural, one {# vieta} few {# vietos} other {# vietų}}",
+      "usageStatusActive": "Aktyvus",
+      "usageStatusCancelled": "Atšaukta",
+      "usageStatusPastDue": "Pradelsta",
+      "usageStatusPaused": "Pristabdyta",
+      "usageStatusTrialing": "Bandomasis laikotarpis",
       "usageUnitCount": "{count, plural, one {# vienetas} few {# vienetai} many {# vienetų} other {# vieneto}}",
       "usageUnitsBalanceTemplate": "Pasiekiama {remaining} vienetų",
       "usageUnitsThisPeriod": "Šio laikotarpio naudojimo vienetai"

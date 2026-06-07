@@ -1856,6 +1856,11 @@
       "usageManageError": "Majutatud kasutuse haldust ei saanud avada",
       "usageManuallyManaged": "Käsitsi hallatud",
       "usageSeats": "{count, plural, one {# koht} other {# kohta}}",
+      "usageStatusActive": "Aktiivne",
+      "usageStatusCancelled": "Tühistatud",
+      "usageStatusPastDue": "Tasumata",
+      "usageStatusPaused": "Peatatud",
+      "usageStatusTrialing": "Prooviperiood",
       "usageUnitCount": "{count, plural, one {# ühik} other {# ühikut}}",
       "usageUnitsBalanceTemplate": "Saadaval on {remaining} ühikut",
       "usageUnitsThisPeriod": "Selle perioodi kasutusühikud"
