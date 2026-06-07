@@ -148,6 +148,8 @@ import { anonymizationDecorationsKey } from "../core/prosemirror/plugins/anonymi
 import type { AnonymizationMatch } from "../core/prosemirror/plugins/anonymizationDecorations";
 import { autocompleteSuggestionKey } from "../core/prosemirror/plugins/autocompleteSuggestion";
 import type { AutocompleteSuggestionState } from "../core/prosemirror/plugins/autocompleteSuggestion";
+import { templateDirectivesKey } from "../core/prosemirror/plugins/templateDirectives";
+import type { DirectiveRange } from "../core/prosemirror/plugins/templateDirectives";
 import type { ImagePositionAttrs } from "../core/prosemirror/schema/nodes";
 import type { Footnote } from "../core/types/content";
 // Types
@@ -194,6 +196,7 @@ import {
 import type { DirtyRange } from "./incrementalMeasure";
 // Selection sync
 import { LayoutSelectionGate } from "./LayoutSelectionGate";
+import { measureContentLeft, projectRangesToRects } from "./rangeProjection";
 import { isReadOnlyEditKey } from "./readOnlyEditAttempt";
 import {
   getPageScrollTarget,
@@ -208,6 +211,8 @@ import {
   twipsToPixels,
 } from "./sectionGeometry";
 import { SelectionOverlay } from "./SelectionOverlay";
+import { TemplateDirectivesOverlay } from "./TemplateDirectivesOverlay";
+import type { DirectiveRectGroup } from "./TemplateDirectivesOverlay";
 import { getTransactionDirtyRange } from "./transactionDirtyRange";
 import { useDragAutoScroll } from "./useDragAutoScroll";
 // Visual line navigation hook
@@ -1884,6 +1889,14 @@ export function PagedEditor(
   const [autocompleteText, setAutocompleteText] = useState<string>("");
   const [autocompleteIsStreaming, setAutocompleteIsStreaming] =
     useState<boolean>(false);
+  const [directiveRectGroups, setDirectiveRectGroups] = useState<
+    DirectiveRectGroup[]
+  >([]);
+  const [directiveContentLeft, setDirectiveContentLeft] = useState<
+    number | null
+  >(null);
+  const directivesRef = useRef<readonly DirectiveRange[]>([]);
+  const directivesOverlayRequestSeqRef = useRef(0);
   const [remoteSelections, setRemoteSelections] = useState<
     HiddenProseMirrorRemoteSelection[]
   >([]);
@@ -3754,6 +3767,34 @@ export function PagedEditor(
     );
   }, [layout, blocks, measures, zoom]);
 
+  // Project template-directive ranges (kept in sync by the
+  // templateDirectives plugin) onto container-space rects. Shares
+  // the projection pipeline with anonymization via
+  // `projectRangesToRects`.
+  const updateDirectivesOverlay = useCallback(() => {
+    const requestSeq = directivesOverlayRequestSeqRef.current + 1;
+    directivesOverlayRequestSeqRef.current = requestSeq;
+    const ranges = directivesRef.current;
+    const pagesContainer = pagesContainerRef.current;
+    if (ranges.length === 0 || !pagesContainer) {
+      setDirectiveRectGroups([]);
+      setDirectiveContentLeft(null);
+      return;
+    }
+    setDirectiveContentLeft(measureContentLeft(pagesContainer, zoom));
+    void projectRangesToRects(ranges, {
+      pagesContainer,
+      zoom,
+      layout,
+      blocks,
+      measures,
+    }).then((projected) => {
+      if (directivesOverlayRequestSeqRef.current === requestSeq) {
+        setDirectiveRectGroups(projected);
+      }
+    });
+  }, [layout, blocks, measures, zoom]);
+
   const hideSelectionOverlayDuringInput = useCallback(
     (state: EditorState) => {
       selectionOverlayRequestSeqRef.current += 1;
@@ -3818,6 +3859,13 @@ export function PagedEditor(
         updateAutocompleteOverlay();
       }
 
+      const nextDirectives =
+        templateDirectivesKey.getState(newState)?.ranges ?? [];
+      if (nextDirectives !== directivesRef.current) {
+        directivesRef.current = nextDirectives;
+        updateDirectivesOverlay();
+      }
+
       if (transaction.docChanged) {
         // Increment state sequence to signal document changed
         syncCoordinator.incrementStateSeq();
@@ -3849,6 +3897,7 @@ export function PagedEditor(
       updateSelectionOverlay,
       updateAnonymizationOverlay,
       updateAutocompleteOverlay,
+      updateDirectivesOverlay,
       syncCoordinator,
     ],
     // NOTE: onDocumentChange removed from dependencies - accessed via ref to prevent infinite loops
@@ -6233,6 +6282,8 @@ export function PagedEditor(
     setPrecomputedInitialState(initialState);
     anonymizationMatchesRef.current =
       anonymizationDecorationsKey.getState(initialState)?.matches ?? [];
+    directivesRef.current =
+      templateDirectivesKey.getState(initialState)?.ranges ?? [];
 
     let cancelled = false;
     pendingInitialFontReadyLayoutRef.current = true;
@@ -6254,6 +6305,7 @@ export function PagedEditor(
       runLayoutPipeline(initialState, { reason: "initial" });
       updateSelectionOverlay(initialState);
       updateAnonymizationOverlay();
+      updateDirectivesOverlay();
       if (fontsLoaded) {
         lastLayoutUsedLoadedFontsRef.current = true;
         suppressFontReadyUntilRef.current =
@@ -6280,6 +6332,7 @@ export function PagedEditor(
     shouldCreateHiddenEditorView,
     styles,
     updateAnonymizationOverlay,
+    updateDirectivesOverlay,
     updateSelectionOverlay,
   ]);
 
@@ -6298,6 +6351,8 @@ export function PagedEditor(
         autocompleteSuggestionRef.current = initialSuggestion;
       }
       updateAutocompleteOverlay();
+      directivesRef.current =
+        templateDirectivesKey.getState(view.state)?.ranges ?? [];
 
       const focusReadyView = () => {
         if (readOnly || !shouldFocusHiddenEditorOnReadyRef.current) {
@@ -6318,6 +6373,7 @@ export function PagedEditor(
       if (lastLaidOutPmDocRef.current?.eq(view.state.doc)) {
         updateSelectionOverlay(view.state);
         updateAnonymizationOverlay();
+        updateDirectivesOverlay();
         focusReadyView();
         return;
       }
@@ -6326,6 +6382,7 @@ export function PagedEditor(
         runLayoutPipeline(currentView.state, { reason: "initial" });
         updateSelectionOverlay(currentView.state);
         updateAnonymizationOverlay();
+        updateDirectivesOverlay();
       };
 
       pendingInitialFontReadyLayoutRef.current = true;
@@ -6363,6 +6420,7 @@ export function PagedEditor(
       runLayoutPipeline,
       updateSelectionOverlay,
       updateAnonymizationOverlay,
+      updateDirectivesOverlay,
       document,
       updateAutocompleteOverlay,
       readOnly,
@@ -6379,6 +6437,12 @@ export function PagedEditor(
   useEffect(() => {
     updateAnonymizationOverlay();
   }, [updateAnonymizationOverlay]);
+
+  // Re-paint the template-directive overlay on every fresh layout
+  // (initial paint, doc edit, zoom) so chips track the markers.
+  useEffect(() => {
+    updateDirectivesOverlay();
+  }, [updateDirectivesOverlay]);
 
   // Compute anchor Y positions for comments/revisions sidebar from the current
   // layout artifacts. Opening the sidebar or switching anchor modes does not
@@ -6829,6 +6893,14 @@ export function PagedEditor(
             caret={autocompleteCaret}
             text={autocompleteText}
             isStreaming={autocompleteIsStreaming}
+          />
+
+          {/* Template-directive widgets — rich chips over {{...}}
+              markers in the template editor. Renders nothing when
+              the directives plugin isn't installed. */}
+          <TemplateDirectivesOverlay
+            contentLeft={directiveContentLeft}
+            groups={directiveRectGroups}
           />
 
           {/* Selection overlay */}

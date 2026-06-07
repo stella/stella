@@ -745,7 +745,7 @@ export function AppSidebar(props: AppSidebarProps) {
         recents: knowledgeSections.map((s) => {
           const Icon = s.icon;
           return {
-            label: t(`knowledge.sections.${s.key}.title`),
+            label: t(s.titleKey),
             icon: <Icon />,
             onClick: () => {
               if (s.to) {

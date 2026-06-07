@@ -191,6 +191,12 @@ export type DocxEditorProps = {
   /** Monotonic counter from the bridge store; drives the re-scroll. */
   anonymizationSelectionSeq?: number | undefined;
   /**
+   * Render legal-template markers ({{field}}, {{@clause:..}},
+   * {{#if}}/{{#each}}) as rich widgets on the page instead of raw
+   * text. Off for ordinary documents; on for the template editor.
+   */
+  showTemplateDirectives?: boolean | undefined;
+  /**
    * Operational flags for save-path features. Selective save and its tripwire
    * mode are OFF by default; hosts opt in once their rollout pipeline is ready.
    */

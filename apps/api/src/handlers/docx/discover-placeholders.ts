@@ -13,7 +13,10 @@ import * as slimdom from "slimdom";
 import { HEADER_FOOTER_RE, paragraphText, W_NS } from "./ooxml";
 import type { DiscoveredPlaceholder } from "./types";
 
-export const PLACEHOLDER_RE = /\{\{([\p{L}\p{N}_.@:-]+)\}\}/gu;
+// `\s*` inside the braces tolerates surrounding whitespace (`{{ name }}`); it
+// sits outside the capture, so the discovered name stays clean. Mirrored in
+// rich-patch.ts (replacement) and folio's templateDirectives.ts (highlighting).
+export const PLACEHOLDER_RE = /\{\{\s*([\p{L}\p{N}_.@:-]+)\s*\}\}/gu;
 
 /**
  * Scan all `w:p` paragraphs in a parsed XML document and

@@ -12,7 +12,10 @@ import * as slimdom from "slimdom";
 import { isElement, paragraphText, W_NS } from "./ooxml";
 import type { RichPatchValue } from "./types";
 
-export const PLACEHOLDER_RE = /\{\{([\p{L}\p{N}_.@:-]+)\}\}/gu;
+// `\s*` tolerates surrounding whitespace (`{{ name }}`) while keeping the
+// captured key clean; the whole match (`match[0]`) is replaced, so the inner
+// spaces vanish with it. Mirrors discover-placeholders.ts and folio's scanner.
+export const PLACEHOLDER_RE = /\{\{\s*([\p{L}\p{N}_.@:-]+)\s*\}\}/gu;
 
 const XML_NS = "http://www.w3.org/XML/1998/namespace";
 

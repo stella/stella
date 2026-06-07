@@ -30,6 +30,28 @@ describe("owned OOXML placeholder patching", () => {
     expect(result).toEqual({ text: "Hello Alpha Ltd", changed: true });
   });
 
+  test("replaces placeholders padded with whitespace", () => {
+    // The discovered key is unpadded, so the same key fills `{{ amount }}` —
+    // discovery and replacement must agree on whitespace handling.
+    const result = replacePlaceholdersInText("Rent is {{ amount }} EUR", {
+      amount: "1000",
+    });
+
+    expect(result).toEqual({ text: "Rent is 1000 EUR", changed: true });
+  });
+
+  test("patches a whitespace-padded standalone placeholder", () => {
+    const xml = WRAP(
+      '<w:p><w:r><w:t xml:space="preserve">{{ name }}</w:t></w:r></w:p>',
+    );
+
+    const result = patchXmlPart(xml, { name: "world" });
+
+    expect(result.changed).toBe(true);
+    expect(result.xml).toContain("world");
+    expect(result.xml).not.toContain("{{");
+  });
+
   test("patches placeholders split across runs", () => {
     const xml = WRAP(
       [

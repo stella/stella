@@ -24,7 +24,10 @@ export type ClauseSlot = {
 
 // ── Regex ────────────────────────────────────────────
 
-const CLAUSE_SLOT_RE = /\{\{@clause:([^:}]+)(?::([^}]+))?\}\}/gu;
+// `\s*` tolerates surrounding whitespace (`{{ @clause:Name }}`); the name and
+// modifier captures exclude whitespace so the rebuilt patch key matches what
+// rich-patch's PLACEHOLDER_RE captures during replacement (they must agree).
+const CLAUSE_SLOT_RE = /\{\{\s*@clause:([^:}\s]+)(?::([^}\s]+))?\s*\}\}/gu;
 
 // ── Scanning ─────────────────────────────────────────
 

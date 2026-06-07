@@ -22,9 +22,9 @@ import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { TemplateClausesTab } from "@/routes/_protected.knowledge/-components/template-clauses-tab";
+import { TemplateDocxEditor } from "@/routes/_protected.knowledge/-components/template-docx-editor";
 import { TemplateForm } from "@/routes/_protected.knowledge/-components/template-form";
 import { TemplateList } from "@/routes/_protected.knowledge/-components/template-list";
-import { TemplatePreview } from "@/routes/_protected.knowledge/-components/template-preview";
 import { TemplateVersionsTab } from "@/routes/_protected.knowledge/-components/template-versions-tab";
 import {
   buildEditableFields,
@@ -700,7 +700,7 @@ const TemplateDetail = ({
       )}
 
       {state === "ready" && (
-        <div className="mx-auto w-full max-w-2xl overflow-y-auto p-6">
+        <div className="mx-auto w-full max-w-4xl overflow-y-auto p-6">
           <div className="mb-6 flex items-start justify-between">
             <div>
               {rename.status === "editing" ? (
@@ -754,7 +754,7 @@ const TemplateDetail = ({
           <Tabs defaultValue="fields">
             <TabsList variant="underline">
               <TabsTab value="fields">{t("templates.fields")}</TabsTab>
-              <TabsTab value="preview">{t("common.preview")}</TabsTab>
+              <TabsTab value="preview">{t("common.edit")}</TabsTab>
               <TabsTab value="clauses">{t("common.clauses")}</TabsTab>
               <TabsTab value="history">{t("common.history")}</TabsTab>
             </TabsList>
@@ -889,7 +889,15 @@ const TemplateDetail = ({
             </TabsPanel>
 
             <TabsPanel value="preview">
-              <TemplatePreview templateId={template.id} />
+              {detail && (
+                <div className="h-[78vh]">
+                  <TemplateDocxEditor
+                    fileName={detail.fileName}
+                    presignedUrl={detail.presignedUrl}
+                    templateId={template.id}
+                  />
+                </div>
+              )}
             </TabsPanel>
 
             <TabsPanel value="clauses">
