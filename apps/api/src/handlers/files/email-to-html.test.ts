@@ -83,6 +83,31 @@ describe("renderEmailHtml", () => {
     expect(html).not.toContain("javascript:");
   });
 
+  test("strips obfuscated active URLs and base tags", () => {
+    const html = renderEmailHtml(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: [
+            '<base href="https://attacker.example/">',
+            '<a href="java\tscript:alert(1)">link text</a>',
+            '<img src="java\nscript:alert(2)">',
+            '<button formaction="vbscript:msgbox(1)">x</button>',
+            '<svg><a xlink:href="javascript:alert(3)">x</a></svg>',
+          ].join(""),
+        },
+      }),
+    );
+
+    expect(html).toContain(">link text</a>");
+    expect(html).not.toContain("<base");
+    expect(html).not.toContain("attacker.example");
+    // eslint-disable-next-line no-script-url -- asserting the scheme was stripped
+    expect(html).not.toContain("javascript:");
+    expect(html).not.toContain("vbscript:");
+    expect(html).not.toContain("<svg");
+  });
+
   test("keeps benign body markup", () => {
     const html = renderEmailHtml(htmlEmail());
     expect(html).toContain("Hello <b>world</b>");
@@ -90,6 +115,20 @@ describe("renderEmailHtml", () => {
 
   test("inlines cid: images and drops the cid reference", () => {
     const html = renderEmailHtml(htmlEmail());
+    expect(html).toContain(`data:image/png;base64,${PNG_BASE64}`);
+    expect(html).not.toContain("cid:logo");
+  });
+
+  test("inlines cid: images with padded src values", () => {
+    const html = renderEmailHtml(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: '<html><body><img src=" cid:logo "></body></html>',
+        },
+      }),
+    );
+
     expect(html).toContain(`data:image/png;base64,${PNG_BASE64}`);
     expect(html).not.toContain("cid:logo");
   });

@@ -539,7 +539,7 @@ const inlineCidImages = ($: CheerioApi, images: InlineImage[]): void => {
 
   $("img").each((_, element) => {
     const image: Cheerio<Element> = $(element);
-    const src = image.attr("src");
+    const src = image.attr("src")?.trim();
     if (!src || !src.toLowerCase().startsWith("cid:")) {
       return;
     }
