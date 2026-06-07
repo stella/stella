@@ -622,6 +622,9 @@ describe("renderLine text styling", () => {
 
     expect(textEl?.style.color).toBe("#0563c1");
     expect(anchorEl?.style.color).toBe("#0563c1");
+    // The anchor paints over the span, so it must carry --doc-run-color for the
+    // dark-mode inversion rule to reach it (otherwise links stay dim on dark).
+    expect(anchorEl?.style.getPropertyValue("--doc-run-color")).toBe("#0563c1");
   });
 
   test("uses the higher-contrast text color on mid-tone DOCX highlights", () => {
