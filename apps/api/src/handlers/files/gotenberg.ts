@@ -1,6 +1,10 @@
 import { Result, TaggedError } from "better-result";
 
 import { env } from "@/api/env";
+import {
+  emailToHtml,
+  isEmailMimeType,
+} from "@/api/handlers/files/email-to-html";
 import { applyFitToPage } from "@/api/handlers/files/xlsx-preprocess";
 
 /**
@@ -41,6 +45,11 @@ const CONVERTIBLE_MIME_TYPES = {
   // Web
   "text/html": null,
   "application/xhtml+xml": null,
+
+  // Email — parsed to HTML in `email-to-html.ts`, then rendered via
+  // the Chromium route (LibreOffice cannot read either format).
+  "message/rfc822": null,
+  "application/vnd.ms-outlook": null,
 } as const satisfies Record<string, null>;
 
 export const isConvertibleMimeType = (mimeType: string): boolean =>
@@ -119,6 +128,50 @@ const gotenbergAuth = (): string => {
     `${env.GOTENBERG_USERNAME}:${env.GOTENBERG_PASSWORD}`,
   ).toString("base64");
   return `Basic ${credentials}`;
+};
+
+const GOTENBERG_RETRY = {
+  times: 2,
+  delayMs: 2000,
+  backoff: "exponential",
+  shouldRetry: (error: GotenbergError) =>
+    error.statusCode === undefined || error.statusCode >= 500,
+} as const;
+
+/** Post an HTML document to Gotenberg's Chromium route. */
+const chromiumHtmlToPdf = async (
+  html: string,
+  formFields: Record<string, string>,
+): Promise<ConvertToPdfResult> => {
+  const formData = new FormData();
+  formData.append(
+    "files",
+    new Blob([html], { type: "text/html" }),
+    "index.html",
+  );
+  for (const [key, value] of Object.entries(formFields)) {
+    formData.append(key, value);
+  }
+
+  const response = await fetch(
+    `${env.GOTENBERG_URL}/forms/chromium/convert/html`,
+    {
+      method: "POST",
+      headers: { Authorization: gotenbergAuth() },
+      body: formData,
+      signal: AbortSignal.timeout(30_000),
+    },
+  );
+
+  if (!response.ok) {
+    throw new GotenbergError({
+      message: `Gotenberg returned ${response.status}`,
+      statusCode: response.status,
+    });
+  }
+
+  const result = await response.arrayBuffer();
+  return { buffer: result, sizeBytes: result.byteLength };
 };
 
 // ── Image dimension parsing ──────────────────────────────
@@ -221,46 +274,61 @@ img { display: block; width: ${size.width}px; height: ${size.height}px; }
 <body><img src="${dataUri}"></body>
 </html>`;
 
-  const formData = new FormData();
-  formData.append(
-    "files",
-    new Blob([html], { type: "text/html" }),
-    "index.html",
-  );
-  formData.append("paperWidth", String(pxToIn(size.width)));
-  formData.append("paperHeight", String(pxToIn(size.height)));
-  formData.append("marginTop", "0");
-  formData.append("marginBottom", "0");
-  formData.append("marginLeft", "0");
-  formData.append("marginRight", "0");
-  formData.append("preferCssPageSize", "true");
-
-  const response = await fetch(
-    `${env.GOTENBERG_URL}/forms/chromium/convert/html`,
-    {
-      method: "POST",
-      headers: { Authorization: gotenbergAuth() },
-      body: formData,
-      signal: AbortSignal.timeout(30_000),
-    },
-  );
-
-  if (!response.ok) {
-    throw new GotenbergError({
-      message: `Gotenberg returned ${response.status}`,
-      statusCode: response.status,
-    });
-  }
-
-  const result = await response.arrayBuffer();
-  return { buffer: result, sizeBytes: result.byteLength };
+  return await chromiumHtmlToPdf(html, {
+    paperWidth: String(pxToIn(size.width)),
+    paperHeight: String(pxToIn(size.height)),
+    marginTop: "0",
+    marginBottom: "0",
+    marginLeft: "0",
+    marginRight: "0",
+    preferCssPageSize: "true",
+  });
 };
+
+/**
+ * A4 page settings for rendered email bodies. Gotenberg defaults to
+ * US Letter; A4 suits the international audience.
+ */
+const EMAIL_PAGE_FIELDS = {
+  paperWidth: "8.27",
+  paperHeight: "11.69",
+  marginTop: "0.4",
+  marginBottom: "0.4",
+  marginLeft: "0.4",
+  marginRight: "0.4",
+} as const;
 
 export const convertToPdf = async (
   fileBuffer: ArrayBuffer,
   fileName: string,
   mimeType: string,
 ): Promise<Result<ConvertToPdfResult, GotenbergError>> => {
+  if (isEmailMimeType(mimeType)) {
+    const htmlResult = await emailToHtml(fileBuffer, mimeType);
+    if (Result.isError(htmlResult)) {
+      return Result.err(
+        new GotenbergError({
+          message: "Failed to parse email for conversion",
+          cause: htmlResult.error,
+        }),
+      );
+    }
+    return await Result.tryPromise(
+      {
+        try: async () =>
+          await chromiumHtmlToPdf(htmlResult.value, EMAIL_PAGE_FIELDS),
+        catch: (cause) =>
+          cause instanceof GotenbergError
+            ? cause
+            : new GotenbergError({
+                message: "Failed to convert email",
+                cause,
+              }),
+      },
+      { retry: GOTENBERG_RETRY },
+    );
+  }
+
   const imageSize = IMAGE_MIME_TYPES.has(mimeType)
     ? getImageSize(fileBuffer, mimeType)
     : null;
@@ -278,15 +346,7 @@ export const convertToPdf = async (
                 cause,
               }),
       },
-      {
-        retry: {
-          times: 2,
-          delayMs: 2000,
-          backoff: "exponential",
-          shouldRetry: (error) =>
-            error.statusCode === undefined || error.statusCode >= 500,
-        },
-      },
+      { retry: GOTENBERG_RETRY },
     );
   }
 
@@ -337,14 +397,6 @@ export const convertToPdf = async (
         });
       },
     },
-    {
-      retry: {
-        times: 2,
-        delayMs: 2000,
-        backoff: "exponential",
-        shouldRetry: (error) =>
-          error.statusCode === undefined || error.statusCode >= 500,
-      },
-    },
+    { retry: GOTENBERG_RETRY },
   );
 };
