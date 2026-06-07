@@ -15,6 +15,7 @@ import {
   infraPortsForOffset,
   isWorktreeCheckout,
   parseDockerComposePsJson,
+  loadEnvFile,
   parseArgs,
   parseForeignPortOwners,
   portsForOffset,
@@ -844,5 +845,29 @@ describe("browser behavior", () => {
         noBrowser: true,
       }),
     ).toBe(false);
+  });
+});
+
+describe("loadEnvFile", () => {
+  test("correctly parses single and double quoted variables, and expands variables", () => {
+    const rootDir = createTempDir();
+    const envFilePath = resolve(rootDir, ".env");
+    writeFileSync(
+      envFilePath,
+      [
+        "PORT=3000",
+        'DB_USER="postgres"',
+        "DB_PASS='secret'",
+        "DATABASE_URL=postgres://$DB_USER:$DB_PASS@localhost:$PORT/stella",
+      ].join("\n"),
+    );
+
+    const parsed = loadEnvFile(envFilePath);
+    expect(parsed).toEqual({
+      PORT: "3000",
+      DB_USER: "postgres",
+      DB_PASS: "secret",
+      DATABASE_URL: "postgres://postgres:secret@localhost:3000/stella",
+    });
   });
 });

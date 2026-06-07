@@ -1146,7 +1146,7 @@ const stripAppEnvKeys = ({
   );
 };
 
-const loadEnvFile = (envFilePath: string): Record<string, string> => {
+export const loadEnvFile = (envFilePath: string): Record<string, string> => {
   if (!existsSync(envFilePath)) {
     return {};
   }
@@ -1194,6 +1194,21 @@ const loadEnvFile = (envFilePath: string): Record<string, string> => {
     }
     env[key] = value;
   }
+
+  // Second pass: expand environment variable placeholders ($VAR or ${VAR})
+  for (const key of Object.keys(env)) {
+    const rawVal = env[key];
+    if (rawVal !== undefined) {
+      env[key] = rawVal.replace(
+        /\$(?:\{([^}]+)\}|([a-zA-Z_][a-zA-Z0-9_]*))/gu,
+        (_, p1, p2) => {
+          const varName = p1 || p2;
+          return env[varName] ?? process.env[varName] ?? "";
+        },
+      );
+    }
+  }
+
   return env;
 };
 
