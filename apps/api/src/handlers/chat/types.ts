@@ -70,6 +70,23 @@ export type ChatPart = ChatMessage["parts"][number];
 
 export type ChatMessageRole = UIMessage["role"];
 
+export type ChatCompactionSummary = {
+  version: 1;
+  blocked: string[];
+  constraints: string[];
+  criticalContext: string[];
+  done: string[];
+  goal: string | null;
+  inProgress: string[];
+  keyDecisions: {
+    decision: string;
+    rationale: string | null;
+  }[];
+  modifiedFiles: string[];
+  nextSteps: string[];
+  readFiles: string[];
+};
+
 /** Versioned envelope for the chatMessages JSONB column.
  *  Bump the version and add a new variant when the parts
  *  shape changes; migrate in-place by reading the version

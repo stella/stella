@@ -7,7 +7,11 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, SafeDbError } from "@/api/db";
-import { chatMessages, chatThreads } from "@/api/db/schema";
+import {
+  chatMessages,
+  chatThreadCompactions,
+  chatThreads,
+} from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { env } from "@/api/env";
 import {
@@ -48,6 +52,11 @@ import {
   planAssistantFinishPersistence,
   planMessagePersistence,
 } from "@/api/handlers/chat/persist-message";
+import {
+  applyChatCompactionCheckpoint,
+  persistChatCompactionCheckpoint,
+  readLatestChatCompaction,
+} from "@/api/handlers/chat/persistent-compaction";
 import { hydrateMessages, streamChat } from "@/api/handlers/chat/stream-chat";
 import { createChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { shouldMarkThreadUsedAnonymization } from "@/api/handlers/chat/thread-anonymization";
@@ -95,6 +104,8 @@ import { getS3 } from "@/api/lib/s3";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
+
+const CHAT_COMPACTION_CHECKPOINT_TIMEOUT_MS = 120_000;
 
 const config = {
   permissions: { chat: ["create"] },
@@ -208,6 +219,7 @@ const sendMessage = createSafeRootHandler(
       refRegistry,
       safeDb,
       scopedDb,
+      threadId: body.threadId,
       userId: user.id,
       // Schema validation runs against the user's full accessible
       // set; per-tool scope checks happen at execute time below.
@@ -370,11 +382,18 @@ const sendMessage = createSafeRootHandler(
           })
         : null;
 
+    const messagesForContextInput = await selectMessagesForContextInput({
+      messages: latestMessagePlan.messages,
+      safeDb,
+      skipCheckpoint: body.truncateAfterMessageId !== undefined,
+      threadId: body.threadId,
+    });
+
     const messagesForContextResult = await compactMessagesForContext({
       abortSignal: request.signal,
       boundary: thirdPartyBoundary,
       devModelId: body.devModelId,
-      messages: latestMessagePlan.messages,
+      messages: messagesForContextInput,
       organizationId: session.activeOrganizationId,
       orgAIConfig,
       safeDb,
@@ -500,6 +519,7 @@ const sendMessage = createSafeRootHandler(
       refRegistry,
       safeDb,
       scopedDb,
+      threadId: body.threadId,
       userId: user.id,
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: effectiveContextMatterIds,
@@ -626,24 +646,49 @@ const sendMessage = createSafeRootHandler(
                     captureError(persistResult.error, {
                       threadId: body.threadId,
                     });
-                  } else if (
-                    thread.type === "created" &&
-                    body.sendMode !== CHAT_SEND_MODE.anonymized
-                  ) {
-                    void generateThreadTitle({
-                      messages: [
-                        parsedMessage.message,
-                        resolvedResponseMessage,
-                      ],
-                      organizationId: session.activeOrganizationId,
-                      orgAIConfig,
-                      promptCachingEnabled,
-                      recordAuditEvent,
-                      safeDb,
-                      threadId: body.threadId,
-                      threadWorkspaceId: workspaceId,
-                      userId: user.id,
-                    });
+                  } else {
+                    const messagesAfterAssistantPersist =
+                      applyAssistantPersistencePlan({
+                        messages: latestMessagePlan.messages,
+                        persistencePlan,
+                      });
+                    if (
+                      messagesAfterAssistantPersist !== null &&
+                      body.sendMode !== CHAT_SEND_MODE.anonymized
+                    ) {
+                      scheduleChatCompactionCheckpoint({
+                        abortSignal: AbortSignal.timeout(
+                          CHAT_COMPACTION_CHECKPOINT_TIMEOUT_MS,
+                        ),
+                        boundary: thirdPartyBoundary,
+                        devModelId: body.devModelId,
+                        messages: messagesAfterAssistantPersist,
+                        organizationId: session.activeOrganizationId,
+                        orgAIConfig,
+                        safeDb,
+                        threadId: body.threadId,
+                      });
+                    }
+
+                    if (
+                      thread.type === "created" &&
+                      body.sendMode !== CHAT_SEND_MODE.anonymized
+                    ) {
+                      void generateThreadTitle({
+                        messages: [
+                          parsedMessage.message,
+                          resolvedResponseMessage,
+                        ],
+                        organizationId: session.activeOrganizationId,
+                        orgAIConfig,
+                        promptCachingEnabled,
+                        recordAuditEvent,
+                        safeDb,
+                        threadId: body.threadId,
+                        threadWorkspaceId: workspaceId,
+                        userId: user.id,
+                      });
+                    }
                   }
                 } finally {
                   await closeExternalMcpTools();
@@ -705,6 +750,47 @@ type CompactMessagesForContextProps = ResolveChatCompactionModelProps & {
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
+};
+
+type SelectMessagesForContextInputProps = {
+  messages: ChatMessage[];
+  safeDb: SafeDb;
+  skipCheckpoint: boolean;
+  threadId: SafeId<"chatThread">;
+};
+
+const selectMessagesForContextInput = async ({
+  messages,
+  safeDb,
+  skipCheckpoint,
+  threadId,
+}: SelectMessagesForContextInputProps): Promise<ChatMessage[]> => {
+  if (skipCheckpoint) {
+    return messages;
+  }
+
+  const checkpointResult = await readLatestChatCompaction({
+    safeDb,
+    threadId,
+  });
+  if (Result.isError(checkpointResult)) {
+    captureError(checkpointResult.error, {
+      threadId,
+      feature: "chat.compaction_checkpoint_read",
+    });
+    return messages;
+  }
+
+  if (checkpointResult.value === null) {
+    return messages;
+  }
+
+  return (
+    applyChatCompactionCheckpoint({
+      checkpoint: checkpointResult.value,
+      messages,
+    }) ?? messages
+  );
 };
 
 const compactMessagesForContext = async ({
@@ -793,6 +879,102 @@ const resolveChatCompactionModel = ({
             cause,
           }),
   });
+
+type ApplyAssistantPersistencePlanProps = {
+  messages: ChatMessage[];
+  persistencePlan: MessagePersistencePlan;
+};
+
+const applyAssistantPersistencePlan = ({
+  messages,
+  persistencePlan,
+}: ApplyAssistantPersistencePlanProps): ChatMessage[] | null => {
+  switch (persistencePlan.type) {
+    case "none":
+      return null;
+    case "insert":
+      return [...messages, persistencePlan.message];
+    case "update":
+      return messages.map((message) =>
+        message.id === persistencePlan.messageId
+          ? persistencePlan.message
+          : message,
+      );
+    case "replace-last-assistant":
+      return [
+        ...messages.filter(
+          (message) => message.id !== persistencePlan.deleteMessageId,
+        ),
+        persistencePlan.insertMessage,
+      ];
+    default: {
+      const exhaustive: never = persistencePlan;
+      return exhaustive;
+    }
+  }
+};
+
+type ScheduleChatCompactionCheckpointProps = ResolveChatCompactionModelProps & {
+  abortSignal: AbortSignal;
+  boundary: ReturnType<typeof createChatThirdPartyBoundary>;
+  messages: ChatMessage[];
+  safeDb: SafeDb;
+  threadId: SafeId<"chatThread">;
+};
+
+const scheduleChatCompactionCheckpoint = ({
+  abortSignal,
+  boundary,
+  devModelId,
+  messages,
+  organizationId,
+  orgAIConfig,
+  safeDb,
+  threadId,
+}: ScheduleChatCompactionCheckpointProps): void => {
+  const modelResult = resolveChatCompactionModel({
+    devModelId,
+    organizationId,
+    orgAIConfig,
+  });
+  if (Result.isError(modelResult)) {
+    captureError(modelResult.error, {
+      threadId,
+      feature: "chat.compaction_checkpoint_model",
+    });
+    return;
+  }
+
+  void persistChatCompactionCheckpoint({
+    abortSignal,
+    boundary,
+    messages,
+    model: modelResult.value,
+    onSummaryError: (error) => {
+      captureError(error, {
+        threadId,
+        feature: "chat.compaction_checkpoint_summary",
+      });
+    },
+    safeDb,
+    threadId,
+  })
+    .then((result) => {
+      if (Result.isError(result)) {
+        captureError(result.error, {
+          threadId,
+          feature: "chat.compaction_checkpoint_persist",
+        });
+      }
+      return undefined;
+    })
+    .catch((error: unknown) => {
+      captureError(error, {
+        threadId,
+        feature: "chat.compaction_checkpoint_persist",
+      });
+    });
+};
 
 const isChatStreamResponse = (response: Response): boolean => {
   const contentType = response.headers.get("content-type");
@@ -1696,6 +1878,16 @@ const runPersistMessage = async ({
             ),
           );
 
+        await tx
+          .update(chatThreadCompactions)
+          .set({ status: "stale" })
+          .where(
+            and(
+              eq(chatThreadCompactions.threadId, threadId),
+              eq(chatThreadCompactions.status, "active"),
+            ),
+          );
+
         for (const deletedMessageId of deleteMessageIds) {
           await recordAuditEvent(tx, {
             action: AUDIT_ACTION.DELETE,
@@ -1782,6 +1974,16 @@ const runPersistMessage = async ({
         await tx
           .delete(chatMessages)
           .where(and(eq(chatMessages.id, deletedMessageId)));
+
+        await tx
+          .update(chatThreadCompactions)
+          .set({ status: "stale" })
+          .where(
+            and(
+              eq(chatThreadCompactions.threadId, threadId),
+              eq(chatThreadCompactions.status, "active"),
+            ),
+          );
 
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.DELETE,

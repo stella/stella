@@ -14,10 +14,12 @@ import {
   compactChatMessages,
   compactModelMessagesForModel,
   compactModelMessages,
+  parseChatCompactionSummary,
   planChatCompaction,
   planModelCompaction,
   renderChatMessagesForCompaction,
   renderModelMessagesForCompaction,
+  summarizeChatCompaction,
 } from "./compaction";
 
 const textMessage = ({
@@ -208,6 +210,118 @@ describe("chat history compaction", () => {
 
     expect(observedSummaryError).toBe(true);
     expect(compacted.value.map((message) => message.id)).toEqual(["msg_2"]);
+  });
+
+  test("parses structured chat compaction summaries", () => {
+    const summary = parseChatCompactionSummary(`
+## Goal
+Continue drafting the termination analysis.
+
+## Constraints
+- Czech governing law
+- Preserve party placeholders
+
+## Progress
+### Done
+- Reviewed clause 12
+### In Progress
+- Comparing notice periods
+### Blocked
+- Need signed amendment
+
+## Key Decisions
+- Use conservative interpretation - clause text is ambiguous
+
+## Next Steps
+- Pull amendment file
+
+## Critical Context
+- User prefers concise answers
+
+<read-files>
+- contracts/main-agreement.pdf
+</read-files>
+<modified-files>
+- drafts/termination.md
+</modified-files>
+`);
+
+    expect(summary).toEqual({
+      version: 1,
+      blocked: ["Need signed amendment"],
+      constraints: ["Czech governing law", "Preserve party placeholders"],
+      criticalContext: ["User prefers concise answers"],
+      done: ["Reviewed clause 12"],
+      goal: "Continue drafting the termination analysis.",
+      inProgress: ["Comparing notice periods"],
+      keyDecisions: [
+        {
+          decision: "Use conservative interpretation",
+          rationale: "clause text is ambiguous",
+        },
+      ],
+      modifiedFiles: ["drafts/termination.md"],
+      nextSteps: ["Pull amendment file"],
+      readFiles: ["contracts/main-agreement.pdf"],
+    });
+  });
+
+  test("returns a structured checkpoint for persistent compaction", async () => {
+    const messages = [
+      textMessage({ id: "msg_1", role: "user", text: "old fact ".repeat(80) }),
+      textMessage({ id: "msg_2", role: "assistant", text: "old answer" }),
+      textMessage({ id: "msg_3", role: "user", text: "latest question" }),
+    ];
+
+    const checkpoint = await summarizeChatCompaction({
+      messages,
+      preserveTokens: 20,
+      summarizeTranscript: async () => `
+## Goal
+Answer the latest question.
+
+## Constraints
+- None
+
+## Progress
+### Done
+- Captured old fact
+### In Progress
+- None
+### Blocked
+- None
+
+## Key Decisions
+- None
+
+## Next Steps
+- Answer user
+
+## Critical Context
+- old fact matters
+
+<read-files>
+</read-files>
+<modified-files>
+</modified-files>
+`,
+      triggerTokens: 50,
+    });
+
+    expect(Result.isOk(checkpoint)).toBe(true);
+    if (Result.isError(checkpoint) || checkpoint.value === null) {
+      return;
+    }
+
+    expect(checkpoint.value.plan.messagesToSummarize.map((m) => m.id)).toEqual([
+      "msg_1",
+      "msg_2",
+    ]);
+    expect(checkpoint.value.summary.goal).toBe("Answer the latest question.");
+    expect(checkpoint.value.summary.done).toEqual(["Captured old fact"]);
+    expect(checkpoint.value.plan.recentMessages.map((m) => m.id)).toEqual([
+      "msg_3",
+    ]);
   });
 
   test("compacts model messages for step-level tool loops", async () => {

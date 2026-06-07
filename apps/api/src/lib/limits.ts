@@ -74,6 +74,14 @@ export const LIMITS = {
    *  cannot blow up the index; the headline only reads the first
    *  2000 chars anyway. */
   chatSearchTextMaxLength: 50_000,
+  /** Cap on searchable text indexed for one chat message. */
+  chatMessageSearchTextMaxLength: 8000,
+  /** Default result count for the internal chat-history search tool. */
+  chatHistorySearchPageSizeDefault: 6,
+  /** Max result count for the internal chat-history search tool. */
+  chatHistorySearchPageSizeMax: 10,
+  /** Max messages returned before or after a history expansion target. */
+  chatHistoryExpansionSideMax: 5,
   extractedContentMaxChars: 500_000,
   /** Hard timeout (ms) for the sandboxed extraction subprocess. */
   extractionTimeoutMs: 30_000,

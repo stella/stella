@@ -531,6 +531,7 @@
       "docxReplaceSummary": "Remplacer « {find} » par « {replace} »",
       "docxSignatureTableSummary": "Insérer un bloc de signature près de {blockId}",
       "execute-typescript": "Lecture des données du dossier",
+      "expand-chat-history": "Lecture de l’historique du chat",
       "fetch_url": "Lecture de la page",
       "infosoud_lookup_case": "Recherche d'affaire InfoSoud",
       "load-skill": "Lecture des consignes",
@@ -539,6 +540,7 @@
       "read-skill-resource": "Lecture des consignes",
       "run-stella-query": "Lecture des données du dossier",
       "search-across-matters": "Recherche dans tous les dossiers",
+      "search-chat-history": "Recherche dans l’historique du chat",
       "unknown": "Utilisation d’un outil",
       "update-entity-fields": "Mise à jour des métadonnées",
       "web_search": "Recherche web"

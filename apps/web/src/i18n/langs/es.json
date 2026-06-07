@@ -531,6 +531,7 @@
       "docxReplaceSummary": "Reemplazar «{find}» por «{replace}»",
       "docxSignatureTableSummary": "Insertar una tabla de firmas cerca de {blockId}",
       "execute-typescript": "Leyendo datos del asunto",
+      "expand-chat-history": "Leyendo el historial del chat",
       "fetch_url": "Leyendo página",
       "infosoud_lookup_case": "Búsqueda de expediente InfoSoud",
       "load-skill": "Leyendo instrucciones",
@@ -539,6 +540,7 @@
       "read-skill-resource": "Leyendo instrucciones",
       "run-stella-query": "Leyendo datos del asunto",
       "search-across-matters": "Buscando entre asuntos",
+      "search-chat-history": "Buscando en el historial del chat",
       "unknown": "Usando herramienta",
       "update-entity-fields": "Actualizando metadatos",
       "web_search": "Buscando en la web"
