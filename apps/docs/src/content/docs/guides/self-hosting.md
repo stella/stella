@@ -21,10 +21,9 @@ services, existing self-hosted services, or a platform such as
 to deploy common dependencies such as Postgres, Valkey or Redis, and MinIO.
 
 Deploy the API and Gotenberg with `docker-compose.selfhost.yml` (see below).
-Deploy the web app as a static Vite build: follow [Vite's static deployment
-guide](https://vite.dev/guide/static-deploy). On Dokploy, see [Vite
-React](https://docs.dokploy.com/docs/core/vite-react): build to `./dist` and
-serve that output.
+Deploy the web app as its own long-running server process. The web app is a
+TanStack Start SSR app, so serving `apps/web/dist` as static files is not
+enough.
 
 ```bash
 cp apps/web/.env.example apps/web/.env
@@ -35,20 +34,60 @@ bun install
 
 ## Frontend (web app)
 
-The web app under `apps/web` is a Vite React SPA. From the repository root,
-after `cp` / `bun install` as above, produce a production bundle with:
+The web app under `apps/web` is a TanStack Start SSR app built by Vite. For a
+production self-hosted build, set these web build variables in `apps/web/.env`
+before building from source:
+
+```bash
+VITE_API_URL="https://api.stella.example.com"
+VITE_PUBLIC_APP_URL="https://stella.example.com"
+VITE_SELFHOST="true"
+```
+
+`VITE_API_URL` must point at the public API, aligned with `BETTER_AUTH_URL` on
+the API. `VITE_PUBLIC_APP_URL` should match the public web origin, aligned with
+`FRONTEND_URL` on the API. These values are baked into the web build.
+
+From the repository root, after `cp` / `bun install` as above, produce a
+production bundle with:
 
 ```bash
 bun --filter @stll/web build
 ```
 
-At minimum, `VITE_API_URL` must point at your public API (aligned with
-`FRONTEND_URL` / `BETTER_AUTH_URL` on the API).
+The build writes both server and client artifacts:
 
-By default Vite writes static assets to `apps/web/dist`. Upload or serve that
-folder using the steps in [Vite's static deployment
-guide](https://vite.dev/guide/static-deploy). If the site is not hosted at the
-domain root, set Vite `base` as described there.
+- `apps/web/dist/server/server.js`: the SSR fetch handler.
+- `apps/web/dist/client/`: client assets served by the web runtime.
+
+Do not upload `apps/web/dist` to a static host. Run the web runtime instead:
+
+```bash
+cd apps/web
+HOST=0.0.0.0 PORT=3002 bun start-runtime.js
+```
+
+`HOST` defaults to `0.0.0.0`, `PORT` defaults to `3002`, and `/health` returns
+`ok` for load balancer checks.
+
+You can also build the web container from source:
+
+```bash
+docker build -f apps/web/Dockerfile \
+  --build-arg PUBLIC_API_URL=https://api.stella.example.com \
+  --build-arg PUBLIC_APP_URL=https://stella.example.com \
+  --build-arg VITE_SELFHOST=true \
+  -t stella-web:local .
+
+docker run --detach \
+  --name stella-web \
+  --publish 3002:3002 \
+  stella-web:local
+```
+
+`PUBLIC_API_URL` maps to `VITE_API_URL`; `PUBLIC_APP_URL` maps to
+`VITE_PUBLIC_APP_URL`. Other optional web build arguments are listed in
+`apps/web/Dockerfile` and mirror `apps/web/.env.example`.
 
 ## Required Services
 
@@ -125,19 +164,25 @@ cd apps/api
 bun drizzle-kit migrate
 ```
 
-## Prebuilt API image
+## Container images
 
-Releases publish a multi-architecture image to GitHub Container Registry. You
-can run that tag instead of building from source:
+Releases publish a multi-architecture API image to GitHub Container Registry.
+You can run a release tag instead of building the API from source:
 
 ```bash
-docker pull ghcr.io/stella/stella-api:latest
+docker pull ghcr.io/stella/stella-api:vX.Y.Z
 ```
+
+Only the API image is published by the release workflow today. Build the web
+image from `apps/web/Dockerfile`, or run `apps/web/start-runtime.js` from a
+source checkout after `bun --filter @stll/web build`.
 
 ## Run With Docker Compose
 
 From the repository root, pass `--env-file apps/api/.env` so Compose can read
 the API environment. The API service also reads `apps/api/.env` by default.
+This Compose file starts the API and Gotenberg only; run the web SSR server
+separately as described above.
 
 ```bash
 docker compose --env-file apps/api/.env -f docker-compose.selfhost.yml up -d --build
@@ -176,7 +221,7 @@ for every version. Three ways to keep up with it:
   Registry watchers like [Diun](https://crazymax.dev/diun/) can also
   monitor the published image at `ghcr.io/stella/stella-api`.
 - **In-app banner** — when you set `VITE_SELFHOST="true"` in
-  `apps/web/.env` and rebuild the SPA, stella checks the GitHub Releases
+  `apps/web/.env` and rebuild the web app, stella checks the GitHub Releases
   API once a day and surfaces newer versions to logged-in users with a
   one-click link to the release notes. Off by default; the public
   hosted app on stll.app does not enable it.
