@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import type { Dispatch, MouseEvent, RefObject, SetStateAction } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -33,6 +33,7 @@ import {
   MetadataPanelSkeleton,
   TabFacetBar,
 } from "@/components/inspector/file-facets";
+import { getMarkdownDraftSyncDecision } from "@/components/inspector/file-tab-panel.logic";
 import { InspectorPdfErrorFallback } from "@/components/inspector/inspector-pdf-error-fallback";
 import { useInspectorStore } from "@/components/inspector/inspector-store";
 import type { FileTab } from "@/components/inspector/inspector-store";
@@ -191,6 +192,7 @@ export const FileTabPanel = ({
   });
   const [markdownMode, setMarkdownMode] = useState<MarkdownMode>("preview");
   const [markdownDraft, setMarkdownDraft] = useState("");
+  const markdownDraftSourceFieldIdRef = useRef<string | null>(null);
   const markdownText = markdownTextQuery.data?.text ?? "";
   const markdownIsDirty = markdownDraft !== markdownText;
   const markdownSaveMutation = useMutation({
@@ -253,12 +255,33 @@ export const FileTabPanel = ({
   });
 
   useEffect(() => {
-    if (!isMarkdownDisplay || !markdownTextQuery.data) {
+    if (!isMarkdownDisplay) {
+      markdownDraftSourceFieldIdRef.current = null;
       return;
     }
-    setMarkdownDraft(markdownTextQuery.data.text);
-    setMarkdownMode("preview");
-  }, [isMarkdownDisplay, markdownTextQuery.data, tab.id]);
+
+    const decision = getMarkdownDraftSyncDecision({
+      fieldId: tab.id,
+      isDirty: markdownIsDirty,
+      isMarkdownDisplay,
+      lastSyncedFieldId: markdownDraftSourceFieldIdRef.current,
+      serverText: markdownTextQuery.data?.text,
+    });
+    if (decision.type === "skip") {
+      return;
+    }
+
+    markdownDraftSourceFieldIdRef.current = decision.fieldId;
+    setMarkdownDraft(decision.text);
+    if (decision.resetMode) {
+      setMarkdownMode("preview");
+    }
+  }, [
+    isMarkdownDisplay,
+    markdownIsDirty,
+    markdownTextQuery.data?.text,
+    tab.id,
+  ]);
 
   if (minimized) {
     return null;
