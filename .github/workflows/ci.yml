@@ -217,15 +217,17 @@ jobs:
 
       - name: Knip production dependency checks
         if: steps.changed-files.outputs.package_checks_required == 'true'
-        # Static gate paired with the image compile smokes: knip
-        # catches prod code that imports devDeps or transitively
-        # resolved (unlisted) packages at PR time; the compile
-        # catches dynamic imports the linter misses. Run every app
-        # workspace so new runtimes inherit the dependency boundary.
+        # Static gate paired with the image compile/boot smokes
+        # (api-image-deps): knip --strict verifies production code imports
+        # only `dependencies` (never a devDependency) and flags transitively
+        # resolved (phantom) packages a `turbo prune` would drop. Scoped to
+        # the apps that ship a pruned runtime; each declares its real
+        # production entry (a `!` entry, a start script, or the SSR server
+        # entry). New runtimes are enrolled here deliberately, alongside a
+        # boot/compile smoke.
         run: |
-          for package_json in apps/*/package.json; do
-            workspace="${package_json%/package.json}"
-            bun run knip --production --no-progress --include unlisted,unresolved --workspace "$workspace"
+          for workspace in apps/api apps/legal-atlas-runner apps/web; do
+            bun run knip --production --strict --no-progress --include unlisted,unresolved --workspace "$workspace"
           done
 
       - name: Test
