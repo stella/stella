@@ -11,6 +11,7 @@ import {
   getFolderSubtree,
 } from "@/api/handlers/entities/copy-utils";
 import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
+import { thumbnailDerivativeStateForFile } from "@/api/handlers/files/image-derivative";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -20,7 +21,10 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
+import {
+  enqueueImageThumbnailOrMarkFailed,
+  enqueuePdfDerivativeOrMarkFailed,
+} from "@/api/lib/file-derivative-queue";
 import { broadcastQueryInvalidationToTargetWorkspace } from "@/api/lib/invalidate-query-macro";
 import { LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
@@ -157,6 +161,11 @@ const remapFileIds = (
           id: newFileId,
           pdfFileId: null,
           pdfDerivative: pdfDerivativeStateForFile({
+            encrypted: field.content.encrypted,
+            mimeType: field.content.mimeType,
+          }),
+          thumbnailFileId: null,
+          thumbnailDerivative: thumbnailDerivativeStateForFile({
             encrypted: field.content.encrypted,
             mimeType: field.content.mimeType,
           }),
@@ -496,6 +505,15 @@ const copyToWorkspaceHandler = async function* ({
   // Enqueue PDF derivative generation for copied file fields
   for (const fileField of txResult.fileFields) {
     enqueuePdfDerivativeOrMarkFailed({
+      entityId: fileField.entityId,
+      fieldId: fileField.fieldId,
+      mimeType: fileField.mimeType,
+      encrypted: fileField.encrypted,
+      organizationId,
+      userId,
+      workspaceId: targetWorkspaceId,
+    }).catch(captureError);
+    enqueueImageThumbnailOrMarkFailed({
       entityId: fileField.entityId,
       fieldId: fileField.fieldId,
       mimeType: fileField.mimeType,

@@ -3,6 +3,7 @@ import { and, desc, eq, ne } from "drizzle-orm";
 
 import { entities, entityVersions } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
+import { THUMBNAIL_MIME_TYPE } from "@/api/handlers/files/image-derivative";
 import { deleteS3Objects } from "@/api/handlers/files/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -32,6 +33,12 @@ const extractFileRefs = (content: FieldContent): FileRef[] => {
   const refs: FileRef[] = [{ fileId: content.id, mimeType: content.mimeType }];
   if (content.pdfFileId) {
     refs.push({ fileId: content.pdfFileId, mimeType: PDF_MIME_TYPE });
+  }
+  if (content.thumbnailFileId) {
+    refs.push({
+      fileId: content.thumbnailFileId,
+      mimeType: THUMBNAIL_MIME_TYPE,
+    });
   }
   return refs;
 };

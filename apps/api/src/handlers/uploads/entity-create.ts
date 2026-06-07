@@ -36,6 +36,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
+import { thumbnailDerivativeStateForFile } from "@/api/handlers/files/image-derivative";
 import { isEncryptedPdf } from "@/api/handlers/files/pdf-utils";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
@@ -46,7 +47,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
-import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
+import {
+  enqueueImageThumbnailOrMarkFailed,
+  enqueuePdfDerivativeOrMarkFailed,
+} from "@/api/lib/file-derivative-queue";
 import { LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
 import type { SanitizedFileName } from "@/api/lib/sanitize-filename";
@@ -324,6 +328,11 @@ export const finalizeEntityCreate = async function* ({
           encrypted,
           mimeType: declaredMime,
         }),
+        thumbnailFileId: null,
+        thumbnailDerivative: thumbnailDerivativeStateForFile({
+          encrypted,
+          mimeType: declaredMime,
+        }),
         ...(scanWarnings !== undefined && { scanWarnings }),
       },
     });
@@ -411,6 +420,17 @@ export const finalizeEntityCreate = async function* ({
       captureError(error, { entityId, mimeType: declaredMime });
     });
     enqueuePdfDerivativeOrMarkFailed({
+      encrypted,
+      entityId,
+      fieldId,
+      mimeType: declaredMime,
+      organizationId,
+      userId,
+      workspaceId,
+    }).catch((error: unknown) => {
+      captureError(error, { entityId, fieldId, mimeType: declaredMime });
+    });
+    enqueueImageThumbnailOrMarkFailed({
       encrypted,
       entityId,
       fieldId,

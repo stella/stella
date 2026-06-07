@@ -5,10 +5,33 @@ import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import { normalizeLegacyToolInputs } from "@/api/handlers/chat/legacy-tool-compat";
 import { isWebSearchAvailable } from "@/api/handlers/chat/tools/chat-tools";
 import { getDisabledNativeToolSlugs } from "@/api/handlers/mcp-connectors/catalog-metadata";
+import { parseUserFileId } from "@/api/handlers/user-files/types";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+
+type ChatPart = ReturnType<typeof normalizeLegacyToolInputs>[number];
+
+/**
+ * Attach the stored blur placeholder to image file parts so the client can
+ * render a blur-up while the thumbnail loads. The thumbnail URL itself is
+ * derived client-side from the user-file id, so only the DB-sourced
+ * placeholder needs to travel with the message.
+ */
+const attachPlaceholders = (
+  parts: ChatPart[],
+  placeholderById: Map<string, string>,
+): ChatPart[] =>
+  parts.map((part) => {
+    if (part.type !== "file") {
+      return part;
+    }
+    const fileId = parseUserFileId(part.url);
+    const placeholder = fileId ? placeholderById.get(fileId) : undefined;
+    return placeholder ? { ...part, placeholder } : part;
+  });
 
 const config = {
   permissions: { chat: ["create"] },
@@ -120,11 +143,47 @@ const getMessages = createSafeRootHandler(
     const lastActivityAt =
       thread.messages.at(-1)?.createdAt.toISOString() ?? null;
 
+    const referencedFileIds = new Set<SafeId<"userFile">>();
+    for (const row of thread.messages) {
+      for (const part of row.content.data) {
+        if (part.type !== "file") {
+          continue;
+        }
+        const fileId = parseUserFileId(part.url);
+        if (fileId) {
+          referencedFileIds.add(fileId);
+        }
+      }
+    }
+
+    const placeholderById = new Map<string, string>();
+    if (referencedFileIds.size > 0) {
+      const fileRows = yield* Result.await(
+        safeDb((tx) =>
+          tx.query.userFiles.findMany({
+            where: {
+              id: { in: [...referencedFileIds] },
+              userId: { eq: user.id },
+            },
+            columns: { id: true, placeholder: true },
+          }),
+        ),
+      );
+      for (const fileRow of fileRows) {
+        if (fileRow.placeholder !== null) {
+          placeholderById.set(fileRow.id, fileRow.placeholder);
+        }
+      }
+    }
+
     return Result.ok({
       messages: thread.messages.map((row) => ({
         id: row.id,
         role: row.role,
-        parts: normalizeLegacyToolInputs(row.content.data),
+        parts: attachPlaceholders(
+          normalizeLegacyToolInputs(row.content.data),
+          placeholderById,
+        ),
       })),
       contextMatterIds: thread.contextMatterIds,
       lastActivityAt,

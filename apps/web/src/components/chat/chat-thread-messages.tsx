@@ -43,7 +43,10 @@ import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
 import type { TranslationKey } from "@/i18n/types";
-import { getUserFileContentUrl } from "@/lib/user-files";
+import {
+  getUserFileContentUrl,
+  getUserFileThumbnailUrl,
+} from "@/lib/user-files";
 import type { QueuedChatMessage } from "@/routes/_protected.chat/-hooks/use-chat-session";
 
 const USER_STREAMDOWN_COMPONENTS = {
@@ -186,13 +189,32 @@ const UserAttachments = ({ parts }: { parts: readonly FileUIPart[] }) => {
         const contentUrl = getUserFileContentUrl(part.url) ?? part.url;
         const fallbackLabel = t("chat.attachment");
         if (IMAGE_MEDIA_TYPES.has(part.mediaType)) {
+          // The backend sets `placeholder` (a blur data URL) only when a
+          // thumbnail was generated, so its presence doubles as "serve the
+          // smaller thumbnail instead of the full original."
+          const placeholder =
+            "placeholder" in part && typeof part.placeholder === "string"
+              ? part.placeholder
+              : undefined;
+          const imageSrc = placeholder
+            ? (getUserFileThumbnailUrl(part.url) ?? contentUrl)
+            : contentUrl;
           return (
             <a href={contentUrl} key={key} rel="noreferrer" target="_blank">
               <img
                 alt={part.filename ?? t("chat.attachedImage")}
                 className="max-h-32 rounded-md object-cover"
                 height={128}
-                src={contentUrl}
+                src={imageSrc}
+                style={
+                  placeholder
+                    ? {
+                        backgroundImage: `url("${placeholder}")`,
+                        backgroundSize: "cover",
+                        backgroundPosition: "center",
+                      }
+                    : undefined
+                }
                 width={128}
               />
             </a>

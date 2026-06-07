@@ -14,6 +14,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
+import { THUMBNAIL_MIME_TYPE } from "@/api/handlers/files/image-derivative";
 import { deleteS3Keys, deleteS3Objects } from "@/api/handlers/files/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -50,6 +51,13 @@ const extractFileRefs = (content: FieldContent): FileRef[] => {
     refs.push({
       fileId: content.pdfFileId,
       mimeType: PDF_MIME_TYPE,
+    });
+  }
+
+  if (content.thumbnailFileId) {
+    refs.push({
+      fileId: content.thumbnailFileId,
+      mimeType: THUMBNAIL_MIME_TYPE,
     });
   }
 

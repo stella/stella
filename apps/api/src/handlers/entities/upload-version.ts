@@ -15,6 +15,7 @@ import {
   cloneFieldsForRevision,
 } from "@/api/handlers/entities/version-utils";
 import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
+import { thumbnailDerivativeStateForFile } from "@/api/handlers/files/image-derivative";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -22,7 +23,10 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
+import {
+  enqueueImageThumbnailOrMarkFailed,
+  enqueuePdfDerivativeOrMarkFailed,
+} from "@/api/lib/file-derivative-queue";
 import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { getS3 } from "@/api/lib/s3";
@@ -266,6 +270,11 @@ export default createSafeHandler(
                 encrypted: false,
                 mimeType: file.type,
               }),
+              thumbnailFileId: null,
+              thumbnailDerivative: thumbnailDerivativeStateForFile({
+                encrypted: false,
+                mimeType: file.type,
+              }),
               ...(scanWarnings !== undefined && { scanWarnings }),
             },
             workspaceId,
@@ -404,6 +413,22 @@ export default createSafeHandler(
     });
 
     enqueuePdfDerivativeOrMarkFailed({
+      encrypted: false,
+      entityId,
+      fieldId: fileFieldId,
+      mimeType: file.type,
+      organizationId,
+      userId,
+      workspaceId,
+    }).catch((error: unknown) => {
+      captureError(error, {
+        entityId,
+        fieldId: fileFieldId,
+        mimeType: file.type,
+      });
+    });
+
+    enqueueImageThumbnailOrMarkFailed({
       encrypted: false,
       entityId,
       fieldId: fileFieldId,

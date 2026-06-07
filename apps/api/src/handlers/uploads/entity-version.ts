@@ -31,6 +31,7 @@ import {
   cloneFieldsForRevision,
 } from "@/api/handlers/entities/version-utils";
 import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
+import { thumbnailDerivativeStateForFile } from "@/api/handlers/files/image-derivative";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -38,7 +39,10 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
+import {
+  enqueueImageThumbnailOrMarkFailed,
+  enqueuePdfDerivativeOrMarkFailed,
+} from "@/api/lib/file-derivative-queue";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { getS3 } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -272,6 +276,11 @@ export const finalizeEntityVersion = async function* ({
             encrypted: false,
             mimeType: declaredMime,
           }),
+          thumbnailFileId: null,
+          thumbnailDerivative: thumbnailDerivativeStateForFile({
+            encrypted: false,
+            mimeType: declaredMime,
+          }),
           ...(scanWarnings !== undefined && { scanWarnings }),
         },
         workspaceId,
@@ -454,6 +463,21 @@ export const finalizeEntityVersion = async function* ({
       captureError(error, { entityId });
     });
     enqueuePdfDerivativeOrMarkFailed({
+      encrypted: false,
+      entityId,
+      fieldId: fileFieldId,
+      mimeType: declaredMime,
+      organizationId,
+      userId,
+      workspaceId,
+    }).catch((error: unknown) => {
+      captureError(error, {
+        entityId,
+        fieldId: fileFieldId,
+        mimeType: declaredMime,
+      });
+    });
+    enqueueImageThumbnailOrMarkFailed({
       encrypted: false,
       entityId,
       fieldId: fileFieldId,

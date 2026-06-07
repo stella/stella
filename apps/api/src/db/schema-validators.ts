@@ -154,6 +154,26 @@ export const fieldContentSchema = t.Union([
         }),
       ]),
     ),
+    thumbnailFileId: t.Optional(t.Nullable(t.String({ format: "uuid" }))),
+    // ThumbHash-rendered `data:image/png;base64,...` blur of the source
+    // image (~400-700 bytes); rendered directly in an <img src>.
+    placeholder: t.Optional(t.String({ maxLength: 2048 })),
+    thumbnailDerivative: t.Optional(
+      t.Union([
+        t.Object({
+          status: t.Literal("not-required"),
+        }),
+        t.Object({
+          status: t.Literal("pending"),
+        }),
+        t.Object({
+          status: t.Literal("ready"),
+        }),
+        t.Object({
+          status: t.Literal("failed"),
+        }),
+      ]),
+    ),
     scanWarnings: t.Optional(t.Array(t.String({ maxLength: 256 }))),
   }),
   t.Object({

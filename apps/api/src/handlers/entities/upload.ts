@@ -7,6 +7,7 @@ import type { SafeDb, Transaction } from "@/api/db";
 import { jsonField } from "@/api/db/json-utils";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
+import { thumbnailDerivativeStateForFile } from "@/api/handlers/files/image-derivative";
 import { isEncryptedPdf } from "@/api/handlers/files/pdf-utils";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
@@ -20,7 +21,10 @@ import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
-import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
+import {
+  enqueueImageThumbnailOrMarkFailed,
+  enqueuePdfDerivativeOrMarkFailed,
+} from "@/api/lib/file-derivative-queue";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
@@ -253,6 +257,11 @@ const uploadEntityHandler = async function* ({
               encrypted,
               mimeType: file.type,
             }),
+            thumbnailFileId: null,
+            thumbnailDerivative: thumbnailDerivativeStateForFile({
+              encrypted,
+              mimeType: file.type,
+            }),
             ...(scanWarnings !== undefined && { scanWarnings }),
           },
         });
@@ -289,6 +298,22 @@ const uploadEntityHandler = async function* ({
     );
 
     enqueuePdfDerivativeOrMarkFailed({
+      encrypted,
+      entityId,
+      fieldId,
+      mimeType: file.type,
+      organizationId,
+      userId,
+      workspaceId,
+    }).catch((error: unknown) => {
+      captureError(error, {
+        entityId,
+        fieldId,
+        mimeType: file.type,
+      });
+    });
+
+    enqueueImageThumbnailOrMarkFailed({
       encrypted,
       entityId,
       fieldId,

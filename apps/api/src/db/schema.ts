@@ -3238,6 +3238,10 @@ export const userFiles = p.pgTable(
       .references(() => chatThreads.id, {
         onDelete: "restrict",
       }),
+    thumbnailFileId: p.text("thumbnail_file_id"),
+    // ThumbHash-rendered `data:image/png;base64,...` blur of the source
+    // image; rendered directly in an <img src> with no client decoder.
+    placeholder: p.text("placeholder"),
     scanWarnings: p.text("scan_warnings").array(),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
     updatedAt: p

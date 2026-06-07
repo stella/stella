@@ -5,7 +5,8 @@ import { t } from "elysia";
 import { defaultDatabaseRetry } from "@/api/db";
 import { chatThreads, userFiles } from "@/api/db/schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
-import { deleteS3Keys } from "@/api/handlers/files/utils";
+import { THUMBNAIL_MIME_TYPE } from "@/api/handlers/files/image-derivative";
+import { createUserFileKey, deleteS3Keys } from "@/api/handlers/files/utils";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -45,13 +46,26 @@ const deleteThread = createSafeRootHandler(
           columns: {
             id: true,
             s3Key: true,
+            thumbnailFileId: true,
           },
         }),
       ),
     );
 
     if (files.length > 0) {
-      const deleteResult = await deleteS3Keys(files.map((file) => file.s3Key));
+      const s3Keys = files.flatMap((file) =>
+        file.thumbnailFileId
+          ? [
+              file.s3Key,
+              createUserFileKey({
+                fileId: file.thumbnailFileId,
+                mimeType: THUMBNAIL_MIME_TYPE,
+                userId: user.id,
+              }),
+            ]
+          : [file.s3Key],
+      );
+      const deleteResult = await deleteS3Keys(s3Keys);
       if (Result.isError(deleteResult)) {
         yield* Result.err(
           new HandlerError({
