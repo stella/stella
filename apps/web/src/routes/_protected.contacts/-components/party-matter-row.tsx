@@ -1,4 +1,3 @@
-import { Link } from "@tanstack/react-router";
 import { LayersIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -8,15 +7,15 @@ import {
   PARTY_ROLE_LABEL_KEYS,
   toPartyRole,
 } from "@/routes/_protected.workspaces/$workspaceId/-party-roles";
+import { MatterRefLink } from "@/routes/_protected.workspaces/-components/matter-ref-link";
 
 export const PartyMatterRow = ({ matter }: { matter: PartyMatter }) => {
   const t = useTranslations();
 
   return (
-    <Link
+    <MatterRefLink
       className="hover:bg-muted flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors"
-      params={{ workspaceId: matter.id }}
-      to="/workspaces/$workspaceId"
+      workspaceId={matter.id}
     >
       <MatterIcon matter={matter} />
       <span className="font-medium">{matter.name}</span>
@@ -37,7 +36,7 @@ export const PartyMatterRow = ({ matter }: { matter: PartyMatter }) => {
           );
         })}
       </div>
-    </Link>
+    </MatterRefLink>
   );
 };
 

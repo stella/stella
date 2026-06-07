@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
   getRouteApi,
-  Link,
   useNavigate,
 } from "@tanstack/react-router";
 import {
@@ -34,6 +33,7 @@ import type { TaskItem } from "@/routes/_protected.todos/-queries";
 import { myTasksOptions } from "@/routes/_protected.todos/-queries";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { MatterRefLink } from "@/routes/_protected.workspaces/-components/matter-ref-link";
 import { workspacesOptions } from "@/routes/_protected.workspaces/-queries";
 
 const protectedRouteApi = getRouteApi("/_protected");
@@ -279,7 +279,7 @@ const TaskRow = ({ task }: { task: ValidTask }) => {
     task.dueDate < new Date().toISOString().slice(0, 10);
 
   return (
-    <Link
+    <MatterRefLink
       className="group hover:bg-muted/50 flex items-center gap-3 rounded-md px-2 py-1.5 text-sm transition-colors"
       onClick={() => {
         useInspectorStore.getState().openTask({
@@ -288,8 +288,7 @@ const TaskRow = ({ task }: { task: ValidTask }) => {
           label: task.name,
         });
       }}
-      params={{ workspaceId: task.workspaceId }}
-      to="/workspaces/$workspaceId"
+      workspaceId={task.workspaceId}
     >
       <span className={cn("size-2 shrink-0 rounded-full", statusColor)} />
       <span className="min-w-0 flex-1 truncate">{task.name}</span>
@@ -312,6 +311,6 @@ const TaskRow = ({ task }: { task: ValidTask }) => {
           })}
         </span>
       )}
-    </Link>
+    </MatterRefLink>
   );
 };
