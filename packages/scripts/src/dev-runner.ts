@@ -36,7 +36,7 @@ const DEFAULT_PORTS = {
   web: 3000,
 } as const;
 const DEFAULT_HTTP_PROBE_TIMEOUT_MS = 1500;
-const DEFAULT_HTTP_READY_TIMEOUT_MS = 60_000;
+const DEFAULT_HTTP_READY_TIMEOUT_MS = 120_000;
 const DEFAULT_OPEN_BROWSER_TIMEOUT_MS = 5000;
 const DEFAULT_INFRA_PORTS = {
   gotenberg: 3003,
@@ -1162,10 +1162,15 @@ const loadEnvFile = (envFilePath: string): Record<string, string> => {
     }
     const key = withoutExport.slice(0, eqIndex).trim();
     const rawValue = withoutExport.slice(eqIndex + 1).trimStart();
-    const isQuoted = rawValue.startsWith('"');
+    let quoteChar: string | null = null;
+    if (rawValue.startsWith('"')) {
+      quoteChar = '"';
+    } else if (rawValue.startsWith("'")) {
+      quoteChar = "'";
+    }
     let endIndex = rawValue.length;
-    if (isQuoted) {
-      const closingQuote = rawValue.indexOf('"', 1);
+    if (quoteChar !== null) {
+      const closingQuote = rawValue.indexOf(quoteChar, 1);
       if (closingQuote !== -1) {
         endIndex = closingQuote + 1;
       }
@@ -1175,7 +1180,14 @@ const loadEnvFile = (envFilePath: string): Record<string, string> => {
         endIndex = hashIndex;
       }
     }
-    const value = rawValue.slice(0, endIndex).trim().replace(/^"|"$/gu, "");
+    let value = rawValue.slice(0, endIndex).trim();
+    if (
+      quoteChar !== null &&
+      value.startsWith(quoteChar) &&
+      value.endsWith(quoteChar)
+    ) {
+      value = value.slice(1, -1);
+    }
     env[key] = value;
   }
   return env;
