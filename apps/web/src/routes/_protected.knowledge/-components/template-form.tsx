@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from "react";
 
 import { panic } from "better-result";
 import { AlertTriangleIcon, EyeIcon, PlusIcon, TrashIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useLocale, useTranslations } from "use-intl";
 
 import { evaluateCondition } from "@stll/template-conditions";
 import { Button } from "@stll/ui/components/button";
@@ -29,6 +29,7 @@ import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { DatePickerPopover } from "@/components/date-picker-popover";
 import { api } from "@/lib/api";
 import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
 import { userErrorMessage } from "@/lib/errors";
@@ -230,6 +231,7 @@ const FieldRenderer = ({
   onBlur?: ((path: string) => void) | undefined;
   error?: string | undefined;
 }) => {
+  const locale = useLocale();
   const inputType =
     field.inputType ?? (field.kind === "boolean" ? "boolean" : "text");
   const label = field.label ?? field.path;
@@ -333,6 +335,23 @@ const FieldRenderer = ({
     );
   }
 
+  if (inputType === "date") {
+    return (
+      <Field>
+        <FieldLabel>
+          {label}
+          {required && <RequiredIndicator />}
+        </FieldLabel>
+        <DatePickerPopover
+          locale={locale}
+          onChange={(v) => onChange(field.path, v ?? "")}
+          value={typeof value === "string" ? value : ""}
+        />
+        <FieldError message={error} />
+      </Field>
+    );
+  }
+
   return (
     <Field>
       <FieldLabel>
@@ -345,7 +364,7 @@ const FieldRenderer = ({
             name={field.path}
             onBlur={handleBlur}
             onChange={(e) => onChange(field.path, e.target.value)}
-            type={inputType === "date" ? "date" : "text"}
+            type="text"
             value={typeof value === "string" ? value : ""}
           />
         }
