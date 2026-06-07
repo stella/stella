@@ -1380,12 +1380,9 @@ const TEMPLATES: TemplateSeed[] = [
         "The Buyer shall procure warranty and indemnity insurance in respect of the Seller's warranties, on terms reasonably satisfactory to both Parties.",
       ) +
       xmlP("{{/if}}") +
-      xmlHeading("{{Confidentiality}}", 2) +
-      xmlP("[Clause slot: Confidentiality]") +
-      xmlHeading("{{GoverningLaw}}", 2) +
-      xmlP("[Clause slot: GoverningLaw]") +
-      xmlHeading("{{IndemnificationProvision}}", 2) +
-      xmlP("[Clause slot: IndemnificationProvision]"),
+      xmlP("{{@clause:Confidentiality}}") +
+      xmlP("{{@clause:GoverningLaw}}") +
+      xmlP("{{@clause:IndemnificationProvision}}"),
     fields: [
       { path: "date", label: "Date", inputType: "date", required: true },
       {
@@ -1566,8 +1563,7 @@ const TEMPLATES: TemplateSeed[] = [
       xmlP(
         "The Board shall comprise {{boardSize}} directors, appointed in accordance with Schedule 3.",
       ) +
-      xmlHeading("{{DisputeResolution}}", 2) +
-      xmlP("[Clause slot: DisputeResolution]"),
+      xmlP("{{@clause:DisputeResolution}}"),
     fields: [
       { path: "date", label: "Date", inputType: "date", required: true },
       {
@@ -1661,10 +1657,8 @@ const TEMPLATES: TemplateSeed[] = [
         "The Employee shall be eligible for a discretionary annual bonus of up to {{bonusPercentage}}% of annual salary, subject to the achievement of performance targets set by the Employer.",
       ) +
       xmlP("{{/if}}") +
-      xmlHeading("{{NonCompete}}", 2) +
-      xmlP("[Clause slot: NonCompete]") +
-      xmlHeading("{{Confidentiality}}", 2) +
-      xmlP("[Clause slot: Confidentiality]"),
+      xmlP("{{@clause:NonCompete}}") +
+      xmlP("{{@clause:Confidentiality}}"),
     fields: [
       { path: "date", label: "Date", inputType: "date", required: true },
       {
@@ -1862,12 +1856,9 @@ const TEMPLATES: TemplateSeed[] = [
         "Upon expiry of the initial term, this Agreement shall automatically renew for successive periods of twelve (12) months, unless either Party gives not less than ninety (90) days' written notice of non-renewal prior to the end of the then-current term.",
       ) +
       xmlP("{{/if}}") +
-      xmlHeading("{{LimitationOfLiability}}", 2) +
-      xmlP("[Clause slot: LimitationOfLiability]") +
-      xmlHeading("{{ForceMajeure}}", 2) +
-      xmlP("[Clause slot: ForceMajeure]") +
-      xmlHeading("{{GoverningLaw}}", 2) +
-      xmlP("[Clause slot: GoverningLaw]"),
+      xmlP("{{@clause:LimitationOfLiability}}") +
+      xmlP("{{@clause:ForceMajeure}}") +
+      xmlP("{{@clause:GoverningLaw}}"),
     fields: [
       { path: "date", label: "Date", inputType: "date", required: true },
       {
