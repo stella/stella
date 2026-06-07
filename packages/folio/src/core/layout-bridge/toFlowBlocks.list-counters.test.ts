@@ -11,6 +11,7 @@ function listParagraph(options: {
   abstractNumId?: number;
   startOverride?: number;
   marker?: string;
+  pPrMark?: Paragraph["pPrMark"];
 }): Paragraph {
   const ilvl = options.ilvl ?? 0;
   return {
@@ -24,11 +25,25 @@ function listParagraph(options: {
       isBullet: false,
       numFmt: "decimal",
       levelNumFmts: ["decimal"],
-      abstractNumId: options.abstractNumId,
-      startOverride: options.startOverride,
+      ...(options.abstractNumId !== undefined
+        ? { abstractNumId: options.abstractNumId }
+        : {}),
+      ...(options.startOverride !== undefined
+        ? { startOverride: options.startOverride }
+        : {}),
     },
+    ...(options.pPrMark ? { pPrMark: options.pPrMark } : {}),
   };
 }
+
+const INS_MARK = {
+  kind: "ins",
+  info: { id: 1, author: "A", date: "2026-01-01T00:00:00Z" },
+} as const;
+const DEL_MARK = {
+  kind: "del",
+  info: { id: 2, author: "A", date: "2026-01-01T00:00:00Z" },
+} as const;
 
 function documentWith(content: Paragraph[]): Document {
   return { package: { document: { content } } };
@@ -83,6 +98,45 @@ describe("toFlowBlocks counter sharing by abstractNumId", () => {
       "(2)",
       "(1)",
       "(3)",
+      "(2)",
+    ]);
+  });
+
+  test("tracked insertions and deletions number on independent streams", () => {
+    // An inserted list (a, b) followed by a deleted list (c, d, e) sharing one
+    // numId must restart for the deletion: Word numbers inserted vs deleted runs
+    // as if they never coexist. Regression for the a,b,c,d,e bug.
+    const doc = documentWith([
+      listParagraph({ numId: 6, text: "a", pPrMark: INS_MARK }),
+      listParagraph({ numId: 6, text: "b", pPrMark: INS_MARK }),
+      listParagraph({ numId: 6, text: "c", pPrMark: DEL_MARK }),
+      listParagraph({ numId: 6, text: "d", pPrMark: DEL_MARK }),
+      listParagraph({ numId: 6, text: "e", pPrMark: DEL_MARK }),
+    ]);
+
+    expect(markersOf(toFlowBlocks(toProseDoc(doc), {}))).toEqual([
+      "(1)",
+      "(2)",
+      "(1)",
+      "(2)",
+      "(3)",
+    ]);
+  });
+
+  test("normal items advance both streams so a deleted sibling continues from survivors", () => {
+    // final doc: a=1, c=2 ; original doc: a=1, (deleted)=2, c=3.
+    // The surviving normal items show final numbering; the deletion keeps its
+    // original number (2), which requires the preceding normal item to have
+    // advanced the original stream too.
+    const doc = documentWith([
+      listParagraph({ numId: 6, text: "a" }),
+      listParagraph({ numId: 6, text: "b", pPrMark: DEL_MARK }),
+      listParagraph({ numId: 6, text: "c" }),
+    ]);
+
+    expect(markersOf(toFlowBlocks(toProseDoc(doc), {}))).toEqual([
+      "(1)",
+      "(2)",
       "(2)",
     ]);
   });
