@@ -16,6 +16,7 @@ import {
   isWorktreeCheckout,
   parseDockerComposePsJson,
   loadEnvFile,
+  expandEnvMap,
   parseArgs,
   parseForeignPortOwners,
   portsForOffset,
@@ -848,7 +849,7 @@ describe("browser behavior", () => {
   });
 });
 
-describe("loadEnvFile", () => {
+describe("loadEnvFile and expandEnvMap", () => {
   test("correctly parses single and double quoted variables, and expands variables", () => {
     const rootDir = createTempDir();
     const envFilePath = resolve(rootDir, ".env");
@@ -868,8 +869,52 @@ describe("loadEnvFile", () => {
       PORT: "3000",
       DB_USER: "postgres",
       DB_PASS: "secret",
+      DATABASE_URL: "postgres://$DB_USER:$DB_PASS@localhost:$PORT/stella",
+      ESC_TEST: "literal\\$value",
+    });
+
+    const expanded = expandEnvMap(parsed);
+    expect(expanded).toEqual({
+      PORT: "3000",
+      DB_USER: "postgres",
+      DB_PASS: "secret",
       DATABASE_URL: "postgres://postgres:secret@localhost:3000/stella",
       ESC_TEST: "literal$value",
+    });
+  });
+
+  test("handles nested dependencies recursively and respects overrides", () => {
+    const parsed = {
+      PUBLIC_URL: "$BETTER_AUTH_URL",
+      BETTER_AUTH_URL: "http://localhost:$PORT",
+      PORT: "3001",
+    };
+
+    // If PORT and BETTER_AUTH_URL are overwritten, expandEnvMap should resolve
+    // using the overwritten values.
+    const mergedWithOverrides = {
+      ...parsed,
+      PORT: "3005",
+      BETTER_AUTH_URL: "http://127.0.0.1:3005",
+    };
+
+    const expanded = expandEnvMap(mergedWithOverrides);
+    expect(expanded).toEqual({
+      PUBLIC_URL: "http://127.0.0.1:3005",
+      BETTER_AUTH_URL: "http://127.0.0.1:3005",
+      PORT: "3005",
+    });
+
+    // Test recursive expansion of nested vars:
+    const nested = {
+      A: "$B",
+      B: "$C",
+      C: "nested-value",
+    };
+    expect(expandEnvMap(nested)).toEqual({
+      A: "nested-value",
+      B: "nested-value",
+      C: "nested-value",
     });
   });
 });

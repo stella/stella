@@ -1195,23 +1195,46 @@ export const loadEnvFile = (envFilePath: string): Record<string, string> => {
     env[key] = value;
   }
 
-  // Second pass: expand environment variable placeholders ($VAR or ${VAR})
-  for (const key of Object.keys(env)) {
-    const rawVal = env[key];
-    if (rawVal !== undefined) {
-      env[key] = rawVal
-        .replace(
-          /(?<!\\)\$(?:\{([^}]+)\}|([a-zA-Z_][a-zA-Z0-9_]*))/gu,
-          (_, p1, p2) => {
-            const varName = p1 || p2;
-            return env[varName] ?? process.env[varName] ?? "";
-          },
-        )
-        .replace(/\\(\$)/gu, "$1");
-    }
-  }
-
   return env;
+};
+
+export const expandEnvMap = (
+  env: Record<string, string>,
+): Record<string, string> => {
+  const expanded = { ...env };
+  const cache: Record<string, string> = {};
+  const visiting = new Set<string>();
+
+  const resolveKey = (key: string): string => {
+    if (cache[key] !== undefined) {
+      return cache[key];
+    }
+    const rawVal = expanded[key] ?? process.env[key];
+    if (rawVal === undefined) {
+      return "";
+    }
+    if (visiting.has(key)) {
+      return rawVal;
+    }
+    visiting.add(key);
+    const resolved = rawVal
+      .replace(
+        /(?<!\\)\$(?:\{([^}]+)\}|([a-zA-Z_][a-zA-Z0-9_]*))/gu,
+        (_, p1, p2) => {
+          const varName = p1 || p2;
+          return resolveKey(varName);
+        },
+      )
+      .replace(/\\(\$)/gu, "$1");
+    visiting.delete(key);
+    cache[key] = resolved;
+    return resolved;
+  };
+
+  for (const key of Object.keys(expanded)) {
+    expanded[key] = resolveKey(key);
+  }
+  return expanded;
 };
 
 const runCommandText = ({
@@ -1408,7 +1431,7 @@ export const buildPreparationSteps = ({
     steps.push({
       cmd: [resolveCommandPath("bun"), "run", "db:migrate"],
       cwd: pathResolve(rootDir, "apps/api"),
-      env: {
+      env: expandEnvMap({
         ...loadEnvFile(pathResolve(rootDir, "apps/api/.env")),
         ...createApiEnv({
           baseEnv: apiBaseEnv,
@@ -1416,7 +1439,7 @@ export const buildPreparationSteps = ({
           infraPorts,
           ports,
         }),
-      },
+      }),
       label: "Applying database migrations",
     });
   }
@@ -1451,7 +1474,7 @@ const buildPersistentSteps = ({
     baseEnv: process.env,
     envFilePath: pathResolve(rootDir, "apps/desktop/.env"),
   });
-  const apiEnv = {
+  const apiEnv = expandEnvMap({
     ...loadEnvFile(pathResolve(rootDir, "apps/api/.env")),
     ...createApiEnv({
       baseEnv: apiBaseEnv,
@@ -1459,22 +1482,22 @@ const buildPersistentSteps = ({
       infraPorts,
       ports,
     }),
-  };
-  const webEnv = {
+  });
+  const webEnv = expandEnvMap({
     ...loadEnvFile(pathResolve(rootDir, "apps/web/.env")),
     ...createWebEnv({
       aiDevtoolsEnabled,
       baseEnv: webBaseEnv,
       ports,
     }),
-  };
-  const desktopEnv = {
+  });
+  const desktopEnv = expandEnvMap({
     ...loadEnvFile(pathResolve(rootDir, "apps/desktop/.env")),
     ...createDesktopEnv({
       baseEnv: desktopBaseEnv,
       ports,
     }),
-  };
+  });
   const primary: Step[] = [];
   const secondary: Step[] = [];
 
