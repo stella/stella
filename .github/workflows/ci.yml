@@ -220,11 +220,13 @@ jobs:
         # Static gate paired with the image compile smokes: knip
         # catches prod code that imports devDeps or transitively
         # resolved (unlisted) packages at PR time; the compile
-        # catches dynamic imports the linter misses. Scoped to
-        # Bun/Docker apps that install with --production.
+        # catches dynamic imports the linter misses. Run every app
+        # workspace so new runtimes inherit the dependency boundary.
         run: |
-          bun run knip --production --no-progress --include unlisted,unresolved --workspace apps/api
-          bun run knip --production --no-progress --include unlisted,unresolved --workspace apps/legal-atlas-runner
+          for package_json in apps/*/package.json; do
+            workspace="${package_json%/package.json}"
+            bun run knip --production --no-progress --include unlisted,unresolved --workspace "$workspace"
+          done
 
       - name: Test
         if: steps.changed-files.outputs.package_checks_required == 'true'

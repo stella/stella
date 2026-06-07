@@ -59,7 +59,13 @@
       ]
     },
     "apps/landing": {
-      "entry": ["src/**/*.astro", "astro.config.*", "postcss.config.mjs"],
+      "entry": [
+        "src/**/*.astro",
+        "src/content.config.ts",
+        "src/pages/**/*.ts",
+        "astro.config.*",
+        "postcss.config.mjs"
+      ],
       "ignoreDependencies": ["@tailwindcss/postcss"]
     },
     "apps/legal-atlas-runner": {
