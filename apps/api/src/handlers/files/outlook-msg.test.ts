@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { parsedEmailToText, parseEmail } from "./email-to-html";
 import { parseOutlookMsg } from "./outlook-msg";
 
 const SECTOR_SIZE = 512;
@@ -18,7 +19,7 @@ const PNG_BYTES = Buffer.from(
 );
 
 describe("parseOutlookMsg", () => {
-  test("reads common message, recipient, and inline attachment properties", () => {
+  test("reads common message, recipient, and inline attachment properties", async () => {
     const file = buildMsgFile([
       rootProperty("0037", "001f", utf16Property("Contract draft")),
       rootProperty("0c1a", "001f", utf16Property("Jane Lawyer")),
@@ -95,6 +96,16 @@ describe("parseOutlookMsg", () => {
       mimeType: "image/png",
     });
     expect(message.attachments.at(0)?.bytes).toEqual(PNG_BYTES);
+
+    const parsedEmail = await parseEmail(
+      toArrayBuffer(file),
+      "application/vnd.ms-outlook",
+    );
+    const text = parsedEmailToText(parsedEmail);
+    expect(text).toContain("From: Jane Lawyer <jane@example.com>");
+    expect(text).toContain("To: Client One <client@example.org>");
+    expect(text).toContain("Subject: Contract draft");
+    expect(text).toContain("Hello world");
   });
 });
 

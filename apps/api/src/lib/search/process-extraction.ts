@@ -17,7 +17,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
 import { getS3 } from "@/api/lib/s3";
-import { extractFileText } from "@/api/lib/search/extract-content";
+import {
+  extractFileText,
+  resolveExtractionMimeType,
+} from "@/api/lib/search/extract-content";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -40,14 +43,22 @@ const findFileField = (
  */
 const pickExtractionSource = (
   fileField: Extract<FieldContent, { type: "file" }>,
-): { fileId: string; mimeType: string } => {
+): { fileId: string; storageMimeType: string; extractionMimeType: string } => {
   if (fileField.mimeType !== PDF_MIME_TYPE && fileField.pdfFileId) {
     return {
       fileId: fileField.pdfFileId,
-      mimeType: PDF_MIME_TYPE,
+      storageMimeType: PDF_MIME_TYPE,
+      extractionMimeType: PDF_MIME_TYPE,
     };
   }
-  return { fileId: fileField.id, mimeType: fileField.mimeType };
+  return {
+    fileId: fileField.id,
+    storageMimeType: fileField.mimeType,
+    extractionMimeType: resolveExtractionMimeType({
+      fileName: fileField.fileName,
+      mimeType: fileField.mimeType,
+    }),
+  };
 };
 
 /**
@@ -98,13 +109,13 @@ export const processExtraction = async (
         organizationId: orgId,
         workspaceId: wsId,
         fileId: source.fileId,
-        mimeType: source.mimeType,
+        mimeType: source.storageMimeType,
       });
 
       const s3File = getS3().file(key);
       const buffer = await s3File.arrayBuffer();
 
-      const text = await extractFileText(buffer, source.mimeType, {
+      const text = await extractFileText(buffer, source.extractionMimeType, {
         entityId,
         fileId: source.fileId,
       });
