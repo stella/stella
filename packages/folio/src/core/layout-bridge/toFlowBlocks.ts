@@ -1590,6 +1590,9 @@ function convertParagraphAttrs(
   // List properties
   const pPrChange = pmAttrs._propertyChanges as ListPropertyChange[] | null;
   const propertyChanges = Array.isArray(pPrChange) ? pPrChange : [];
+  let changedNumberingChange:
+    | (ListPropertyChange & { previousFormatting: Record<string, unknown> })
+    | undefined;
   if (pmAttrs.numPr) {
     const numPr: ParagraphAttrs["numPr"] & object = {};
     if (pmAttrs.numPr.numId !== undefined) {
@@ -1613,11 +1616,15 @@ function convertParagraphAttrs(
     } else {
       const numberingAddedChange = propertyChanges.find(isAddedNumberingChange);
       const currentNumPr = pmAttrs.numPr;
-      const numberingChangedChange = propertyChanges.find((change) =>
-        isChangedNumberingChange(currentNumPr, change),
+      changedNumberingChange = propertyChanges.find(
+        (
+          change,
+        ): change is ListPropertyChange & {
+          previousFormatting: Record<string, unknown>;
+        } => isChangedNumberingChange(currentNumPr, change),
       );
       const numberingInsertionChange =
-        numberingAddedChange ?? numberingChangedChange;
+        numberingAddedChange ?? changedNumberingChange;
       if (numberingInsertionChange) {
         attrs.listMarkerRevision = toListMarkerRevision(
           "ins",
@@ -1668,6 +1675,25 @@ function convertParagraphAttrs(
       originalListAbstractCounters ?? new Map(),
       originalListSeenNumIds ?? new Set(),
     );
+  } else if (
+    changedNumberingChange !== undefined &&
+    originalListCounters !== undefined
+  ) {
+    // Changed numbering is shown as an insertion of the new numId, but in the
+    // pre-revision document the paragraph sat under its PREVIOUS numId. Advance
+    // that original stream so a later deletion on the old numId continues from
+    // the right count instead of reusing this item's number.
+    const previousListAttrs = toPreviousListAttrs(
+      changedNumberingChange.previousFormatting,
+    );
+    if (previousListAttrs.numPr && !previousListAttrs.listIsBullet) {
+      computeListMarker(
+        previousListAttrs,
+        originalListCounters,
+        originalListAbstractCounters ?? new Map(),
+        originalListSeenNumIds ?? new Set(),
+      );
+    }
   }
   if (resolvedMarker !== null) {
     attrs.listMarker = resolvedMarker;
