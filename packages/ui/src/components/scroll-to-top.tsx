@@ -1,6 +1,7 @@
 /**
  * Scroll-to-top affordance — a subtle floating button that fades in once a
- * scroll container is scrolled past a threshold and smooth-scrolls back to top.
+ * scroll container is scrolled past a threshold and jumps back to the top
+ * (instant, not animated, so it stays snappy on very long documents).
  */
 
 "use client";

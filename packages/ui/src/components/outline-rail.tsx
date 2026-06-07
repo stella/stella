@@ -160,6 +160,12 @@ export const OutlineRail = ({
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const manualLockUntil = useRef(0);
   const panelRef = useRef<HTMLElement>(null);
+  // Hold the caller callbacks in refs so the scroll/resize effects don't depend
+  // on their identity — callers can pass inline arrows without churning effects.
+  const resolvePctRef = useRef(resolvePct);
+  resolvePctRef.current = resolvePct;
+  const onJumpRef = useRef(onJump);
+  onJumpRef.current = onJump;
 
   const tree = useMemo(() => buildTree(items), [items]);
   const maxLevel = useMemo(() => {
@@ -192,13 +198,13 @@ export const OutlineRail = ({
     }
     const next: Record<string, number> = {};
     for (const item of items) {
-      const pct = resolvePct(item.id, container);
+      const pct = resolvePctRef.current(item.id, container);
       if (pct !== null) {
         next[item.id] = pct;
       }
     }
     setPctById(next);
-  }, [items, resolvePct, scrollContainerRef]);
+  }, [items, scrollContainerRef]);
 
   const recalcRef = useRef(recalc);
   recalcRef.current = recalc;
@@ -237,7 +243,7 @@ export const OutlineRail = ({
         100;
       let next: string | null = null;
       for (const item of items) {
-        const pct = resolvePct(item.id, container);
+        const pct = resolvePctRef.current(item.id, container);
         if (pct !== null && pct <= centrePct) {
           next = item.id;
         }
@@ -254,7 +260,7 @@ export const OutlineRail = ({
       cancelAnimationFrame(raf);
       container.removeEventListener("scroll", onScroll);
     };
-  }, [activeId, items, resolvePct, scrollContainerRef]);
+  }, [activeId, items, scrollContainerRef]);
 
   const active = activeId === undefined ? derivedActive : activeId;
 
@@ -268,9 +274,9 @@ export const OutlineRail = ({
         setDerivedActive(id);
         manualLockUntil.current = Date.now() + 900;
       }
-      onJump(id, container);
+      onJumpRef.current(id, container);
     },
-    [activeId, onJump, scrollContainerRef],
+    [activeId, scrollContainerRef],
   );
 
   const toggleCollapse = useCallback(
@@ -490,6 +496,7 @@ export const OutlineRail = ({
 
       <nav
         aria-hidden={!hovered}
+        inert={hovered ? undefined : true}
         className={cn(
           "border-border bg-popover text-popover-foreground absolute overflow-y-auto rounded-xl border pb-2 shadow-lg transition-[opacity,transform] duration-150",
           hovered
