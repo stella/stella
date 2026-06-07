@@ -1,9 +1,32 @@
+import type { ComponentProps } from "react";
+
 import { cn } from "@stll/ui/lib/utils";
 
 import { MessageResponse } from "@/components/ai-elements/message";
 import type { MessageResponseProps } from "@/components/ai-elements/message-response";
 
-const MARKDOWN_PREVIEW_COMPONENTS: MessageResponseProps["components"] = {};
+// Markdown previews render untrusted document content. A remote image
+// source would be fetched the moment the inspector opens, leaking
+// document-open activity to an attacker-controlled URL (tracking pixel /
+// SSRF). Only render images whose data is embedded in the document; for
+// anything else, fall back to the alt text so nothing hits the network.
+const SafePreviewImage = ({
+  alt,
+  node: _node,
+  src,
+  ...props
+}: ComponentProps<"img"> & { node?: unknown }) => {
+  if (typeof src === "string" && src.startsWith("data:")) {
+    return <img alt={alt} src={src} {...props} />;
+  }
+  return alt ? (
+    <span className="text-muted-foreground italic">{alt}</span>
+  ) : null;
+};
+
+const MARKDOWN_PREVIEW_COMPONENTS = {
+  img: SafePreviewImage,
+} satisfies MessageResponseProps["components"];
 
 type MarkdownPreviewProps = Omit<MessageResponseProps, "components"> & {
   components?: MessageResponseProps["components"];
@@ -11,7 +34,7 @@ type MarkdownPreviewProps = Omit<MessageResponseProps, "components"> & {
 
 export const MarkdownPreview = ({
   className,
-  components = MARKDOWN_PREVIEW_COMPONENTS,
+  components,
   ...props
 }: MarkdownPreviewProps) => (
   <MessageResponse
@@ -28,7 +51,11 @@ export const MarkdownPreview = ({
       "[&_:not(pre)>code]:px-1 [&_:not(pre)>code]:py-0.5",
       className,
     )}
-    components={components}
+    components={
+      components
+        ? { ...MARKDOWN_PREVIEW_COMPONENTS, ...components }
+        : MARKDOWN_PREVIEW_COMPONENTS
+    }
     {...props}
   />
 );
