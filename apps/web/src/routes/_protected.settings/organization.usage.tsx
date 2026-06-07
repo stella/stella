@@ -119,7 +119,14 @@ function ActiveEntitlementCard({ data }: { data: UsageEntitlement }) {
               })}
             </span>
           </div>
-          <div className="bg-muted h-2 w-full overflow-hidden rounded-full">
+          <div
+            aria-label={t("settings.organization.usageUnitsThisPeriod")}
+            aria-valuemax={100}
+            aria-valuemin={0}
+            aria-valuenow={usedPct}
+            className="bg-muted h-2 w-full overflow-hidden rounded-full"
+            role="progressbar"
+          >
             <div
               className="bg-foreground h-full transition-all"
               style={{ width: `${usedPct}%` }}
@@ -209,10 +216,13 @@ const formatPeriod = (start: string, end: string): string => {
   return `${fmt.format(s)} - ${fmt.format(e)}`;
 };
 
-const capitaliseStatus = (status: string): string => {
-  const head = status.at(0);
-  if (!head) {
-    return status;
-  }
-  return head.toUpperCase() + status.slice(1);
-};
+// snake_case -> "Title Case" ("past_due" -> "Past Due"). Per-locale
+// status labels via a TranslationKey map are a follow-up.
+const capitaliseStatus = (status: string): string =>
+  status
+    .split("_")
+    .map((word) => {
+      const head = word.at(0);
+      return head ? head.toUpperCase() + word.slice(1) : word;
+    })
+    .join(" ");

@@ -42,5 +42,3 @@ export const getApiCredentials =
       baseUrl: env.HOSTED_USAGE_PROVIDER_BASE_URL,
     };
   };
-
-export const isFeatureEnabled = (): boolean => env.FEATURE_USAGE;
