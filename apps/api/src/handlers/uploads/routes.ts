@@ -3,6 +3,7 @@ import { rateLimit } from "elysia-rate-limit";
 
 import abortUpload from "@/api/handlers/uploads/abort";
 import finalizeUpload from "@/api/handlers/uploads/finalize";
+import preflightEntityCreate from "@/api/handlers/uploads/preflight-entity-create";
 import presignUpload from "@/api/handlers/uploads/presign";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
@@ -19,13 +20,17 @@ import {
  *        body: { purpose, propertyId, parentId, name, mimeType, size, sha256Hex }
  *        → { uploadId, url, expiresAt, headers }
  *
+ *   POST /uploads/:workspaceId/entity-create/preflight
+ *        body: { entityCount, propertyId?, parentId? }
+ *        → { ok: true }
+ *
  *   POST /uploads/:workspaceId/:uploadId/finalize
  *        → { finalizedResult }   // see PendingUploadFinalizedResult
  *
  *   POST /uploads/:workspaceId/:uploadId/abort
  *        → { ok: true }
  *
- * All three share the legacy `upload` rate-limit budget — they
+ * All four share the legacy `upload` rate-limit budget — they
  * collectively represent one "upload" worth of API capacity.
  * `invalidateQuery` runs on finalize so the entities list cache
  * refreshes after a successful entity_create finalize, matching the
@@ -52,6 +57,10 @@ export const uploadsRoute = new Elysia({
   .post("/presign", presignUpload.handler, {
     body: presignUpload.config.body,
     permissions: presignUpload.config.permissions,
+  })
+  .post("/entity-create/preflight", preflightEntityCreate.handler, {
+    body: preflightEntityCreate.config.body,
+    permissions: preflightEntityCreate.config.permissions,
   })
   .post("/:uploadId/finalize", finalizeUpload.handler, {
     params: finalizeUpload.config.params,

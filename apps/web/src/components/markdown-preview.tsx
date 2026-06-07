@@ -4,6 +4,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { MessageResponse } from "@/components/ai-elements/message";
 import type { MessageResponseProps } from "@/components/ai-elements/message-response";
+import { isSafeMarkdownPreviewImageSrc } from "@/components/markdown-preview.logic";
 
 // Markdown previews render untrusted document content. A remote image
 // source would be fetched the moment the inspector opens, leaking
@@ -16,7 +17,7 @@ const SafePreviewImage = ({
   src,
   ...props
 }: ComponentProps<"img"> & { node?: unknown }) => {
-  if (typeof src === "string" && src.startsWith("data:")) {
+  if (isSafeMarkdownPreviewImageSrc(src)) {
     return <img alt={alt} src={src} {...props} />;
   }
   return alt ? (
@@ -53,7 +54,7 @@ export const MarkdownPreview = ({
     )}
     components={
       components
-        ? { ...MARKDOWN_PREVIEW_COMPONENTS, ...components }
+        ? { ...components, ...MARKDOWN_PREVIEW_COMPONENTS }
         : MARKDOWN_PREVIEW_COMPONENTS
     }
     {...props}

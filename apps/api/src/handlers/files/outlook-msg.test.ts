@@ -23,6 +23,18 @@ const PNG_BYTES = Buffer.from(
 );
 
 describe("parseOutlookMsg", () => {
+  test("rejects unsupported CFB sector sizes before reading chains", () => {
+    const file = new Uint8Array(SECTOR_SIZE);
+    const view = new DataView(file.buffer);
+    file.set(new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]));
+    view.setUint16(30, 15, true);
+    view.setUint16(32, 6, true);
+
+    expect(() => parseOutlookMsg(toArrayBuffer(file))).toThrow(
+      "unsupported CFB sector size",
+    );
+  });
+
   test("reads common message, recipient, and inline attachment properties", async () => {
     const file = buildMsgFile([
       rootProperty("0037", "001f", utf16Property("Contract draft")),

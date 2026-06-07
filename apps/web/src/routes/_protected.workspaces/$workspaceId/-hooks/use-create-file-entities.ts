@@ -102,6 +102,37 @@ type CreatedFolderTreeForUpload = {
   parentIdByFile: Map<File, string | null>;
 };
 
+type PreflightFolderTreeUploadCapacityOptions = {
+  workspaceId: string;
+  parentId: string | null;
+  propertyId: string | null;
+  plan: DroppedFolderUploadPlan;
+};
+
+const preflightFolderTreeUploadCapacity = async ({
+  workspaceId,
+  parentId,
+  propertyId,
+  plan,
+}: PreflightFolderTreeUploadCapacityOptions): Promise<void> => {
+  const entityCount = plan.directories.length + plan.files.length;
+  if (entityCount === 0) {
+    return;
+  }
+
+  const response = await api
+    .uploads({ workspaceId: toSafeId<"workspace">(workspaceId) })
+    ["entity-create"].preflight.post({
+      entityCount,
+      propertyId: propertyId ? toSafeId<"property">(propertyId) : null,
+      parentId: parentId === null ? null : toSafeId<"entity">(parentId),
+    });
+
+  if (response.error) {
+    throw toAPIError(response.error);
+  }
+};
+
 const createFolderTreeForUpload = async ({
   workspaceId,
   parentId,
@@ -571,6 +602,12 @@ export const useCreateFileEntities = (workspaceId: string) => {
         const plan = buildDroppedFolderUploadPlan(input.tree);
         const propertyId =
           plan.files.length > 0 ? await ensureFileProperty() : null;
+        await preflightFolderTreeUploadCapacity({
+          workspaceId,
+          parentId,
+          propertyId,
+          plan,
+        });
         const createdTree = await createFolderTreeForUpload({
           workspaceId,
           parentId,

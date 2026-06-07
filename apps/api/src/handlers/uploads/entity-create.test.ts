@@ -13,6 +13,7 @@ import {
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -24,6 +25,7 @@ import type {
 import {
   resolveEntityCreateFileName,
   validateEntityCreate,
+  validateEntityCreateCapacity,
 } from "./entity-create";
 
 const workspaceId = toSafeId<"workspace">("workspace_upload");
@@ -48,11 +50,13 @@ const fileProperty = {
 };
 
 const createValidationTx = ({
+  entityCount = 0,
   parent,
 }: {
+  entityCount?: number;
   parent?: { id: string; kind: string } | null;
 }) => ({
-  $count: mock(async () => 0),
+  $count: mock(async () => entityCount),
   query: {
     properties: {
       findFirst: mock(async () => fileProperty),
@@ -76,6 +80,25 @@ const runValidation = async ({
       workspaceId,
       propertyId,
       parentId: parentIdInput,
+    }),
+  );
+
+const runCapacityValidation = async ({
+  entityCount,
+  safeDb,
+  parentIdInput,
+}: {
+  entityCount: number;
+  safeDb: SafeDb;
+  parentIdInput: typeof parentId | null;
+}) =>
+  await Result.gen(() =>
+    validateEntityCreateCapacity({
+      safeDb,
+      workspaceId,
+      propertyId,
+      parentId: parentIdInput,
+      entityCount,
     }),
   );
 
@@ -286,6 +309,41 @@ describe("entity-create presigned upload validation", () => {
 
     expect(Result.isOk(result)).toBe(true);
     expect(tx.query.entities.findFirst).not.toHaveBeenCalled();
+  });
+
+  test("rejects planned folder trees that exceed remaining entity capacity", async () => {
+    const tx = createValidationTx({
+      entityCount: LIMITS.entitiesCount - 2,
+      parent: { id: parentId, kind: "folder" },
+    });
+    const { safeDb } = createScopedDbMock(tx);
+
+    const result = await runCapacityValidation({
+      entityCount: 3,
+      safeDb,
+      parentIdInput: parentId,
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.message).toBe("Entities limit reached");
+    }
+  });
+
+  test("accepts planned folder trees that exactly fit remaining capacity", async () => {
+    const tx = createValidationTx({
+      entityCount: LIMITS.entitiesCount - 2,
+      parent: { id: parentId, kind: "folder" },
+    });
+    const { safeDb } = createScopedDbMock(tx);
+
+    const result = await runCapacityValidation({
+      entityCount: 2,
+      safeDb,
+      parentIdInput: parentId,
+    });
+
+    expect(Result.isOk(result)).toBe(true);
   });
 });
 

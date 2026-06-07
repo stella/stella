@@ -131,19 +131,38 @@ export type ValidateEntityCreateProps = {
   parentId: SafeId<"entity"> | null;
 };
 
+export type ValidateEntityCreateCapacityProps = {
+  safeDb: SafeDb;
+  workspaceId: SafeId<"workspace">;
+  propertyId?: SafeId<"property"> | null;
+  parentId: SafeId<"entity"> | null;
+  entityCount: number;
+};
+
 /**
- * Cheap pre-flight: entity-count limit + property exists + property
- * is of `file` type. Mirrors the gating the legacy upload handler
- * runs at the top of its body.
+ * Cheap pre-flight: entity-count capacity + optional property
+ * existence/type + parent existence/type. Recursive folder uploads
+ * use `entityCount` to validate the whole planned tree before any
+ * folders are committed.
  *
  * @yields safeDb errors out to the parent safe-handler.
  */
-export const validateEntityCreate = async function* ({
+export const validateEntityCreateCapacity = async function* ({
   safeDb,
   workspaceId,
   propertyId,
   parentId,
-}: ValidateEntityCreateProps) {
+  entityCount,
+}: ValidateEntityCreateCapacityProps) {
+  if (!Number.isInteger(entityCount) || entityCount < 1) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Entity create count must be a positive integer",
+      }),
+    );
+  }
+
   const parentResult = parentId
     ? safeDb((tx) =>
         tx.query.entities.findFirst({
@@ -152,31 +171,34 @@ export const validateEntityCreate = async function* ({
         }),
       )
     : Promise.resolve(Result.ok(null));
-
-  const [entityCountResult, propertyResult, resolvedParentResult] =
-    await Promise.all([
-      safeDb((tx) =>
-        tx.$count(entities, eq(entities.workspaceId, workspaceId)),
-      ),
-      safeDb((tx) =>
+  const propertyResult = propertyId
+    ? safeDb((tx) =>
         tx.query.properties.findFirst({
           columns: { id: true, content: true },
           where: { id: { eq: propertyId }, workspaceId: { eq: workspaceId } },
         }),
+      )
+    : Promise.resolve(Result.ok(null));
+
+  const [existingEntityCountResult, resolvedPropertyResult, parentResultValue] =
+    await Promise.all([
+      safeDb((tx) =>
+        tx.$count(entities, eq(entities.workspaceId, workspaceId)),
       ),
+      propertyResult,
       parentResult,
     ]);
 
-  const entityCount = yield* entityCountResult;
-  const property = yield* propertyResult;
-  const parent = yield* resolvedParentResult;
+  const existingEntityCount = yield* existingEntityCountResult;
+  const property = yield* resolvedPropertyResult;
+  const parent = yield* parentResultValue;
 
-  if (entityCount >= LIMITS.entitiesCount) {
+  if (existingEntityCount + entityCount > LIMITS.entitiesCount) {
     return Result.err(
       new HandlerError({ status: 400, message: "Entities limit reached" }),
     );
   }
-  if (!property) {
+  if (propertyId && !property) {
     return Result.err(
       new HandlerError({
         status: 400,
@@ -184,7 +206,7 @@ export const validateEntityCreate = async function* ({
       }),
     );
   }
-  if (property.content.type !== "file") {
+  if (property && property.content.type !== "file") {
     return Result.err(
       new HandlerError({ status: 400, message: "Property isn't of type file" }),
     );
@@ -207,6 +229,15 @@ export const validateEntityCreate = async function* ({
   }
 
   return Result.ok(undefined);
+};
+
+export const validateEntityCreate = async function* (
+  props: ValidateEntityCreateProps,
+) {
+  return yield* validateEntityCreateCapacity({
+    ...props,
+    entityCount: 1,
+  });
 };
 
 export type FinalizeEntityCreateProps = {

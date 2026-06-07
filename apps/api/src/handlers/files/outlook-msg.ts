@@ -13,6 +13,8 @@ const DIRECTORY_ENTRY_BYTES = 128;
 const HEADER_DIFAT_ENTRIES = 109;
 const MINI_STREAM_CUTOFF_DEFAULT = 4096;
 const UINT32_RANGE = 4_294_967_296n;
+const SUPPORTED_SECTOR_SHIFTS = new Set([9, 12]);
+const SUPPORTED_MINI_SECTOR_SHIFT = 6;
 
 const CFB_OBJECT_TYPE = {
   storage: 1,
@@ -151,8 +153,19 @@ class CompoundFile {
     this.view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     this.assertHeader();
 
-    this.sectorSize = 2 ** this.readUint16(30);
-    this.miniSectorSize = 2 ** this.readUint16(32);
+    const sectorShift = this.readUint16(30);
+    const miniSectorShift = this.readUint16(32);
+    if (
+      !SUPPORTED_SECTOR_SHIFTS.has(sectorShift) ||
+      miniSectorShift !== SUPPORTED_MINI_SECTOR_SHIFT
+    ) {
+      throw new OutlookMsgParseError({
+        message: "Outlook .msg file uses an unsupported CFB sector size",
+      });
+    }
+
+    this.sectorSize = 2 ** sectorShift;
+    this.miniSectorSize = 2 ** miniSectorShift;
     this.miniStreamCutoff = this.readUint32(56) || MINI_STREAM_CUTOFF_DEFAULT;
 
     const fatSectorIds = this.readDifatSectorIds();
