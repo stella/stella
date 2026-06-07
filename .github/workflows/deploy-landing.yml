@@ -26,7 +26,8 @@ jobs:
     # The private workflow refuses non-main refs as well.
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Allows for the single retry below (a 3-minute wait plus a second deploy).
+    timeout-minutes: 30
     steps:
       - name: Mint App token for the private workflows repo
         id: app-token
@@ -48,59 +49,72 @@ jobs:
           SOURCE_SHA: ${{ github.sha }}
           AWS_ROLE_ARN_DEPLOY: ${{ secrets.AWS_ROLE_ARN_DEPLOY }}
         run: |
-          dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          # Must match the `run-name:` template in
-          # stella/private-workflows/.github/workflows/deploy-landing.yml.
-          expected_title="Deploy landing ${SOURCE_SHA}"
-          if ! dispatch_output="$(
-            gh workflow run deploy-landing.yml \
-              --repo "$PRIVATE_WORKFLOWS_REPO" \
-              --field source_repository="$SOURCE_REPOSITORY" \
-              --field source_ref="$SOURCE_REF" \
-              --field source_sha="$SOURCE_SHA" \
-              --field aws_role_arn_deploy="$AWS_ROLE_ARN_DEPLOY" 2>&1
-          )"; then
-            printf '%s\n' "$dispatch_output" >&2
-            exit 1
-          fi
-          printf '%s\n' "$dispatch_output"
-
-          run_id="$(
-            printf '%s\n' "$dispatch_output" \
-              | sed -nE 's#.*https://github.com/[^/]+/[^/]+/actions/runs/([0-9]+).*#\1#p' \
-              | head -n 1
-          )"
-
-          for _ in {1..30}; do
-            if [[ -n "$run_id" ]]; then
-              break
+          # The dispatched private deploy occasionally fails on a transient
+          # install/registry blip even though the lockfile is unchanged. Wrap a
+          # single dispatch+watch in a function so it can be retried once before
+          # the deploy is failed.
+          attempt_deploy() {
+            dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            # Must match the `run-name:` template in
+            # stella/private-workflows/.github/workflows/deploy-landing.yml.
+            expected_title="Deploy landing ${SOURCE_SHA}"
+            if ! dispatch_output="$(
+              gh workflow run deploy-landing.yml \
+                --repo "$PRIVATE_WORKFLOWS_REPO" \
+                --field source_repository="$SOURCE_REPOSITORY" \
+                --field source_ref="$SOURCE_REF" \
+                --field source_sha="$SOURCE_SHA" \
+                --field aws_role_arn_deploy="$AWS_ROLE_ARN_DEPLOY" 2>&1
+            )"; then
+              printf '%s\n' "$dispatch_output" >&2
+              return 1
             fi
+            printf '%s\n' "$dispatch_output"
 
             run_id="$(
-              gh run list \
-                --repo "$PRIVATE_WORKFLOWS_REPO" \
-                --workflow deploy-landing.yml \
-                --event workflow_dispatch \
-                --json databaseId,createdAt,displayTitle \
-                --jq ".[] | select(.createdAt >= \"$dispatched_at\") | select(.displayTitle == \"$expected_title\") | .databaseId" \
-                --limit 10 \
+              printf '%s\n' "$dispatch_output" \
+                | sed -nE 's#.*https://github.com/[^/]+/[^/]+/actions/runs/([0-9]+).*#\1#p' \
                 | head -n 1
             )"
 
+            for _ in {1..30}; do
+              if [[ -n "$run_id" ]]; then
+                break
+              fi
+
+              run_id="$(
+                gh run list \
+                  --repo "$PRIVATE_WORKFLOWS_REPO" \
+                  --workflow deploy-landing.yml \
+                  --event workflow_dispatch \
+                  --json databaseId,createdAt,displayTitle \
+                  --jq ".[] | select(.createdAt >= \"$dispatched_at\") | select(.displayTitle == \"$expected_title\") | .databaseId" \
+                  --limit 10 \
+                  | head -n 1
+              )"
+
+              if [[ -z "$run_id" ]]; then
+                sleep 2
+              fi
+            done
+
             if [[ -z "$run_id" ]]; then
-              sleep 2
+              echo "Could not find the dispatched landing deploy workflow run." >&2
+              return 1
             fi
-          done
 
-          if [[ -z "$run_id" ]]; then
-            echo "Could not find the dispatched landing deploy workflow run." >&2
-            exit 1
+            gh run watch "$run_id" \
+              --repo "$PRIVATE_WORKFLOWS_REPO" \
+              --compact \
+              --exit-status
+          }
+
+          if attempt_deploy; then
+            exit 0
           fi
-
-          gh run watch "$run_id" \
-            --repo "$PRIVATE_WORKFLOWS_REPO" \
-            --compact \
-            --exit-status
+          echo "::warning::Landing deploy failed; retrying once in 3 minutes." >&2
+          sleep 180
+          attempt_deploy
 
       - name: Ping IndexNow with sitemap URLs
         # The key file is hosted at apps/landing/public/<key>.txt so
