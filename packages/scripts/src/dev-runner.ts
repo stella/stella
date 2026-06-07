@@ -36,7 +36,7 @@ const DEFAULT_PORTS = {
   web: 3000,
 } as const;
 const DEFAULT_HTTP_PROBE_TIMEOUT_MS = 1500;
-const DEFAULT_HTTP_READY_TIMEOUT_MS = 30_000;
+const DEFAULT_HTTP_READY_TIMEOUT_MS = 60_000;
 const DEFAULT_OPEN_BROWSER_TIMEOUT_MS = 5000;
 const DEFAULT_INFRA_PORTS = {
   gotenberg: 3003,
@@ -941,8 +941,8 @@ export const ensureWorktreeEnvLinks = ({
   return preparedFiles;
 };
 
-const apiUrlForPort = (port: number) => `http://localhost:${String(port)}`;
-const webUrlForPort = (port: number) => `http://localhost:${String(port)}`;
+const apiUrlForPort = (port: number) => `http://127.0.0.1:${String(port)}`;
+const webUrlForPort = (port: number) => `http://127.0.0.1:${String(port)}`;
 const desktopBridgeUrlForPort = (port: number) =>
   `http://127.0.0.1:${String(port)}`;
 const desktopViewUrlForPort = (port: number) =>
@@ -1142,6 +1142,45 @@ const stripAppEnvKeys = ({
   );
 };
 
+const loadEnvFile = (envFilePath: string): Record<string, string> => {
+  if (!existsSync(envFilePath)) {
+    return {};
+  }
+  const env: Record<string, string> = {};
+  const envFile = readFileSync(envFilePath, "utf-8");
+  for (const line of envFile.split(/\r?\n/u)) {
+    const trimmed = line.trim();
+    if (trimmed.length === 0 || trimmed.startsWith("#")) {
+      continue;
+    }
+    const withoutExport = trimmed.startsWith("export ")
+      ? trimmed.slice("export ".length)
+      : trimmed;
+    const eqIndex = withoutExport.indexOf("=");
+    if (eqIndex === -1) {
+      continue;
+    }
+    const key = withoutExport.slice(0, eqIndex).trim();
+    const rawValue = withoutExport.slice(eqIndex + 1).trimStart();
+    const isQuoted = rawValue.startsWith('"');
+    let endIndex = rawValue.length;
+    if (isQuoted) {
+      const closingQuote = rawValue.indexOf('"', 1);
+      if (closingQuote !== -1) {
+        endIndex = closingQuote + 1;
+      }
+    } else {
+      const hashIndex = rawValue.indexOf("#");
+      if (hashIndex !== -1) {
+        endIndex = hashIndex;
+      }
+    }
+    const value = rawValue.slice(0, endIndex).trim().replace(/^"|"$/gu, "");
+    env[key] = value;
+  }
+  return env;
+};
+
 const runCommandText = ({
   cmd,
   cwd,
@@ -1336,12 +1375,15 @@ export const buildPreparationSteps = ({
     steps.push({
       cmd: [resolveCommandPath("bun"), "run", "db:migrate"],
       cwd: pathResolve(rootDir, "apps/api"),
-      env: createApiEnv({
-        baseEnv: apiBaseEnv,
-        infraOffset,
-        infraPorts,
-        ports,
-      }),
+      env: {
+        ...loadEnvFile(pathResolve(rootDir, "apps/api/.env")),
+        ...createApiEnv({
+          baseEnv: apiBaseEnv,
+          infraOffset,
+          infraPorts,
+          ports,
+        }),
+      },
       label: "Applying database migrations",
     });
   }
@@ -1376,33 +1418,41 @@ const buildPersistentSteps = ({
     baseEnv: process.env,
     envFilePath: pathResolve(rootDir, "apps/desktop/.env"),
   });
-  const apiEnv = createApiEnv({
-    baseEnv: apiBaseEnv,
-    infraOffset,
-    infraPorts,
-    ports,
-  });
-  const webEnv = createWebEnv({
-    aiDevtoolsEnabled,
-    baseEnv: webBaseEnv,
-    ports,
-  });
-  const desktopEnv = createDesktopEnv({
-    baseEnv: desktopBaseEnv,
-    ports,
-  });
+  const apiEnv = {
+    ...loadEnvFile(pathResolve(rootDir, "apps/api/.env")),
+    ...createApiEnv({
+      baseEnv: apiBaseEnv,
+      infraOffset,
+      infraPorts,
+      ports,
+    }),
+  };
+  const webEnv = {
+    ...loadEnvFile(pathResolve(rootDir, "apps/web/.env")),
+    ...createWebEnv({
+      aiDevtoolsEnabled,
+      baseEnv: webBaseEnv,
+      ports,
+    }),
+  };
+  const desktopEnv = {
+    ...loadEnvFile(pathResolve(rootDir, "apps/desktop/.env")),
+    ...createDesktopEnv({
+      baseEnv: desktopBaseEnv,
+      ports,
+    }),
+  };
   const primary: Step[] = [];
   const secondary: Step[] = [];
 
   if (modeIncludesApi(mode)) {
     primary.push({
-      // Preload the dev/test-only mock-AI registration so USE_MOCK_AI routes
-      // workflow generation through the faker-backed mock. The compiled
-      // production binary never loads it, keeping @faker-js/faker a devDependency.
       cmd: [
         resolveCommandPath("bun"),
         "--preload",
         "./src/dev/register-mock-ai.ts",
+        "--port",
+        String(ports.api),
         "--watch",
         "src/index.ts",
       ],
@@ -1434,6 +1484,8 @@ const buildPersistentSteps = ({
         "--",
         "--port",
         String(ports.web),
+        "--host",
+        "127.0.0.1",
         "--strictPort",
       ],
       cwd: pathResolve(rootDir, "apps/web"),

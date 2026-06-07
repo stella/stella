@@ -189,6 +189,11 @@ const api = new Elysia()
         if (env.isDev) {
           origins.push(/^chrome-extension:\/\//u);
           origins.push(...DEV_INSPECTOR_ORIGINS);
+          if (env.FRONTEND_URL.includes("127.0.0.1")) {
+            origins.push(env.FRONTEND_URL.replace("127.0.0.1", "localhost"));
+          } else if (env.FRONTEND_URL.includes("localhost")) {
+            origins.push(env.FRONTEND_URL.replace("localhost", "127.0.0.1"));
+          }
         }
         if (env.EXTENSION_ORIGIN) {
           origins.push(env.EXTENSION_ORIGIN);
