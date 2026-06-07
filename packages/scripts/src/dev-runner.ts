@@ -1029,7 +1029,37 @@ const TRUTHY_ENV_VALUES: ReadonlySet<string> = new Set([
   "on",
 ]);
 
-const readEnvFlag = ({
+const stripEnvValueCommentsAndQuotes = (rawValue: string) => {
+  const value = rawValue.trimStart();
+  let quoteChar: '"' | "'" | undefined;
+  if (value.startsWith('"')) {
+    quoteChar = '"';
+  }
+  if (value.startsWith("'")) {
+    quoteChar = "'";
+  }
+  let endIndex = value.length;
+
+  if (quoteChar) {
+    const closingQuote = value.indexOf(quoteChar, 1);
+    if (closingQuote !== -1) {
+      endIndex = closingQuote + 1;
+    }
+  } else {
+    const hashIndex = value.indexOf("#");
+    if (hashIndex !== -1) {
+      endIndex = hashIndex;
+    }
+  }
+
+  const trimmedValue = value.slice(0, endIndex).trim();
+  if (quoteChar && trimmedValue.endsWith(quoteChar)) {
+    return trimmedValue.slice(1, -1);
+  }
+  return trimmedValue;
+};
+
+export const readEnvFlag = ({
   envFilePath,
   key,
   processEnv,
@@ -1041,7 +1071,7 @@ const readEnvFlag = ({
   const raw = processEnv[key];
   if (raw !== undefined) {
     return TRUTHY_ENV_VALUES.has(
-      raw.trim().toLowerCase().replace(/^"|"$/gu, ""),
+      stripEnvValueCommentsAndQuotes(raw).toLowerCase(),
     );
   }
   if (!existsSync(envFilePath)) {
@@ -1062,28 +1092,9 @@ const readEnvFlag = ({
     if (withoutExport.slice(0, eqIndex).trim() !== key) {
       continue;
     }
-    const rawValue = withoutExport.slice(eqIndex + 1).trimStart();
-    // Strip trailing comments. A `#` inside double quotes is part of
-    // the value, so only honor `#` once the opening quote has closed
-    // (or when no quotes were used at all).
-    const isQuoted = rawValue.startsWith('"');
-    let endIndex = rawValue.length;
-    if (isQuoted) {
-      const closingQuote = rawValue.indexOf('"', 1);
-      if (closingQuote !== -1) {
-        endIndex = closingQuote + 1;
-      }
-    } else {
-      const hashIndex = rawValue.indexOf("#");
-      if (hashIndex !== -1) {
-        endIndex = hashIndex;
-      }
-    }
-    const value = rawValue
-      .slice(0, endIndex)
-      .trim()
-      .replace(/^"|"$/gu, "")
-      .toLowerCase();
+    const value = stripEnvValueCommentsAndQuotes(
+      withoutExport.slice(eqIndex + 1),
+    ).toLowerCase();
     return TRUTHY_ENV_VALUES.has(value);
   }
   return false;

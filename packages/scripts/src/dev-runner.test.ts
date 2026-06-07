@@ -18,6 +18,7 @@ import {
   parseArgs,
   parseForeignPortOwners,
   portsForOffset,
+  readEnvFlag,
   requiredPortsForMode,
   resolveMainRootFromCommonDir,
   resolveOffset,
@@ -621,6 +622,60 @@ describe("worktree helpers", () => {
     expect(Bun.file(resolve(worktreeRoot, "apps/api/.env")).size).toBe(
       "LOCAL=1\n".length,
     );
+  });
+});
+
+describe("env flag parsing", () => {
+  test("accepts single-quoted truthy values from env files", () => {
+    const rootDir = createTempDir();
+    const envFilePath = resolve(rootDir, ".env");
+    writeFileSync(envFilePath, "AI_DEVTOOLS_ENABLED='true'\n");
+
+    expect(
+      readEnvFlag({
+        envFilePath,
+        key: "AI_DEVTOOLS_ENABLED",
+        processEnv: {},
+      }),
+    ).toBe(true);
+  });
+
+  test("keeps hash characters inside quoted env file values", () => {
+    const rootDir = createTempDir();
+    const envFilePath = resolve(rootDir, ".env");
+    writeFileSync(envFilePath, 'AI_DEVTOOLS_ENABLED="true#still-value"\n');
+
+    expect(
+      readEnvFlag({
+        envFilePath,
+        key: "AI_DEVTOOLS_ENABLED",
+        processEnv: {},
+      }),
+    ).toBe(false);
+  });
+
+  test("strips comments from unquoted env file values", () => {
+    const rootDir = createTempDir();
+    const envFilePath = resolve(rootDir, ".env");
+    writeFileSync(envFilePath, "AI_DEVTOOLS_ENABLED=true # local devtools\n");
+
+    expect(
+      readEnvFlag({
+        envFilePath,
+        key: "AI_DEVTOOLS_ENABLED",
+        processEnv: {},
+      }),
+    ).toBe(true);
+  });
+
+  test("parses quoted process env values consistently", () => {
+    expect(
+      readEnvFlag({
+        envFilePath: resolve(createTempDir(), ".env"),
+        key: "AI_DEVTOOLS_ENABLED",
+        processEnv: { AI_DEVTOOLS_ENABLED: "'yes'" },
+      }),
+    ).toBe(true);
   });
 });
 
