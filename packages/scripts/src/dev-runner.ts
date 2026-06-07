@@ -1541,7 +1541,7 @@ const buildPersistentSteps = ({
         "--port",
         String(ports.web),
         "--host",
-        "127.0.0.1",
+        "localhost",
         "--strictPort",
       ],
       cwd: pathResolve(rootDir, "apps/web"),
