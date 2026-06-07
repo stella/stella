@@ -133,6 +133,21 @@ describe("renderEmailHtml", () => {
     expect(html).not.toContain("cid:logo");
   });
 
+  test("strips srcset candidates before preview rendering", () => {
+    const html = renderEmailHtml(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: '<html><body><img src="cid:logo" srcset="cid:logo 1x, https://tracker.example/p.gif 2x"></body></html>',
+        },
+      }),
+    );
+
+    expect(html).toContain(`data:image/png;base64,${PNG_BASE64}`);
+    expect(html).not.toContain("srcset=");
+    expect(html).not.toContain("https://tracker.example/p.gif");
+  });
+
   test("strips remote images before preview rendering", () => {
     const html = renderEmailHtml(htmlEmail());
     expect(html).not.toContain("https://tracker.example/p.gif");

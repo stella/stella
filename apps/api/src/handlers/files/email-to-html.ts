@@ -472,6 +472,10 @@ const sanitizeDom = ($: CheerioApi): void => {
         $(node).removeAttr(attribute);
         continue;
       }
+      if (name === "srcset") {
+        $(node).removeAttr(attribute);
+        continue;
+      }
       if (FETCHING_URL_ATTRIBUTES.has(name) && !isSafeInlineResource(value)) {
         $(node).removeAttr(attribute);
       }
