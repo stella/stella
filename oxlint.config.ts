@@ -566,6 +566,14 @@ export default defineConfig({
       },
     },
     {
+      files: [
+        ".oxlint-plugins/__fixtures__/require-matter-affordance.fixture.tsx",
+      ],
+      rules: {
+        "require-matter-affordance/require-matter-affordance": "error",
+      },
+    },
+    {
       files: ["apps/web/src/components/date-picker-popover.tsx"],
       rules: {
         "no-restricted-imports": [

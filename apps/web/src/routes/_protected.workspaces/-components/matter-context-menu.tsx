@@ -240,7 +240,7 @@ export const useMatterActions = (
     }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (deleteWorkspace.isPending) {
       return;
     }
@@ -251,7 +251,7 @@ export const useMatterActions = (
       timeout: Number.POSITIVE_INFINITY,
     });
 
-    await deleteWorkspace.mutateAsync(
+    deleteWorkspace.mutate(
       { workspaceId: target.id },
       {
         onSuccess: () => {
@@ -453,6 +453,7 @@ export const useMatterContextMenu = (
 
 type MatterContextMenuProps = {
   target: MatterTarget;
+  className?: string;
   children:
     | React.ReactNode
     | ((args: MatterContextMenuChildArgs) => React.ReactNode);
@@ -460,13 +461,14 @@ type MatterContextMenuProps = {
 
 export const MatterContextMenu = ({
   target,
+  className,
   children,
 }: MatterContextMenuProps) => {
   const { onContextMenu, menu, dialogs, rename, menuOpen } =
     useMatterContextMenu(target);
 
   return (
-    <div onContextMenu={onContextMenu}>
+    <div className={className} onContextMenu={onContextMenu}>
       {typeof children === "function"
         ? children({ rename, menuOpen })
         : children}

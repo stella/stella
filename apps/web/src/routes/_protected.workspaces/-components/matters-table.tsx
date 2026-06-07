@@ -40,6 +40,7 @@ import {
 import { useConfigStore } from "@/stores/config-store";
 
 const MAX_VISIBLE_AVATARS = 3;
+const MATTER_INLINE_EDIT_SELECTOR = "[data-matter-inline-edit]";
 
 type MattersTableProps = {
   workspaces: Workspace[];
@@ -291,6 +292,9 @@ const MattersTableRow = ({
     client: workspace.client,
   });
   const isEditing = ctx.rename.status === "editing";
+  const isInlineEditEvent = (target: EventTarget | null) =>
+    target instanceof Element &&
+    target.closest(MATTER_INLINE_EDIT_SELECTOR) !== null;
 
   const openMatter = () => {
     if (isEditing) {
@@ -310,9 +314,17 @@ const MattersTableRow = ({
         "focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-inset",
         focusIndex === globalIndex && "bg-accent/50",
       )}
-      onClick={openMatter}
+      onClick={(event) => {
+        if (isInlineEditEvent(event.target)) {
+          return;
+        }
+        openMatter();
+      }}
       onContextMenu={ctx.onContextMenu}
       onKeyDown={(event) => {
+        if (isInlineEditEvent(event.target)) {
+          return;
+        }
         if (!isEditing && (event.key === "Enter" || event.key === " ")) {
           event.preventDefault();
           openMatter();
@@ -323,7 +335,10 @@ const MattersTableRow = ({
       {columns.map((col, i) => (
         <TableCell key={col.id}>
           {col.id === "name" && ctx.rename.status === "editing" ? (
-            <div className="flex min-w-0 items-center gap-2">
+            <div
+              data-matter-inline-edit
+              className="flex min-w-0 items-center gap-2"
+            >
               <span
                 className="size-2 shrink-0 rounded-full"
                 style={{ backgroundColor: getMatterColor(workspace.id) }}

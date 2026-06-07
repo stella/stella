@@ -412,6 +412,7 @@ function ChatIndex() {
                 const matterColor = resolveMatterColor(matter.id, matter.color);
                 return (
                   <MatterContextMenu
+                    className="contents"
                     key={matter.id}
                     target={{
                       id: matter.id,
