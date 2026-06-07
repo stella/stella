@@ -35,24 +35,37 @@ const extractMessageSearchText = (
   content: PersistedChatMessageContent,
 ): string => {
   const parts: string[] = [];
-  for (const part of content.data) {
-    if (part.type === "text") {
-      const trimmed = part.text.trim();
+  const messageParts: readonly unknown[] = content.data;
+  for (const part of messageParts) {
+    if (!isRecord(part) || typeof part["type"] !== "string") {
+      continue;
+    }
+
+    if (part["type"] === "text" && typeof part["text"] === "string") {
+      const trimmed = part["text"].trim();
       if (trimmed) {
         parts.push(trimmed);
       }
       continue;
     }
 
-    if (part.type === "data-stella-source-document") {
+    const sourceDocumentData = part["data"];
+    if (
+      part["type"] === "data-stella-source-document" &&
+      isRecord(sourceDocumentData)
+    ) {
       for (const value of [
-        part.data.title,
-        part.data.mention,
-        part.data.entityRef,
-        part.data.matterRef,
-        part.data.kind,
+        sourceDocumentData["title"],
+        sourceDocumentData["mention"],
+        sourceDocumentData["entityRef"],
+        sourceDocumentData["matterRef"],
+        sourceDocumentData["kind"],
       ]) {
-        const trimmed = value?.trim();
+        if (typeof value !== "string") {
+          continue;
+        }
+
+        const trimmed = value.trim();
         if (trimmed) {
           parts.push(trimmed);
         }
@@ -62,6 +75,9 @@ const extractMessageSearchText = (
 
   return parts.join(" ").slice(0, LIMITS.chatMessageSearchTextMaxLength);
 };
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
 
 type ChatSearchMessageRow = {
   content: PersistedChatMessageContent;
@@ -172,10 +188,11 @@ const upsertChatMessageSearchDocuments = async ({
   `);
 };
 
-/** One-time backfill: index every thread that has no search document
- *  yet. Idempotent and resumable. Keyset-paginates by thread id so a
- *  thread that cannot be indexed (e.g. deleted mid-run) advances the
- *  cursor instead of looping. */
+/** One-time backfill: index every thread missing either a thread-level
+ *  search document or per-message search documents. Idempotent and
+ *  resumable. Keyset-paginates by thread id so a thread that cannot
+ *  be indexed (e.g. deleted mid-run) advances the cursor instead of
+ *  looping. */
 export const backfillChatThreadSearchIndex = async (): Promise<number> => {
   let cursor = ZERO_UUID;
   let total = 0;
@@ -185,7 +202,17 @@ export const backfillChatThreadSearchIndex = async (): Promise<number> => {
       SELECT t.id
       FROM chat_threads t
       LEFT JOIN chat_thread_search_documents d ON d.thread_id = t.id
-      WHERE d.thread_id IS NULL
+      WHERE (
+          d.thread_id IS NULL
+          OR EXISTS (
+            SELECT 1
+            FROM chat_messages m
+            LEFT JOIN chat_message_search_documents md
+              ON md.message_id = m.id
+            WHERE m.thread_id = t.id
+              AND md.message_id IS NULL
+          )
+        )
         AND t.id > ${cursor}::uuid
       ORDER BY t.id
       LIMIT ${BACKFILL_BATCH_SIZE}

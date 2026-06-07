@@ -71,4 +71,50 @@ describe("chat search indexing", () => {
       "WHERE EXCLUDED.updated_at >= chat_message_search_documents.updated_at",
     );
   });
+
+  test("indexes malformed source-document parts without throwing", async () => {
+    rootDbChatThreadFindFirstMock.mockImplementation(
+      async () =>
+        await Promise.resolve({
+          id: toSafeId<"chatThread">("thread_1"),
+          title: "Contract review",
+          updatedAt: new Date("2026-06-06T08:00:00.000Z"),
+          messages: [
+            {
+              id: toSafeId<"chatMessage">(
+                "11111111-1111-4111-8111-111111111111",
+              ),
+              role: "assistant",
+              createdAt: new Date("2026-06-06T07:55:00.000Z"),
+              content: {
+                version: 1 as const,
+                data: [{ type: "data-stella-source-document" }],
+              },
+            },
+          ],
+        }),
+    );
+    const { upsertChatThreadSearchDocument } = await import("./index-chat");
+
+    await upsertChatThreadSearchDocument(toSafeId<"chatThread">("thread_1"));
+
+    expect(rootDbExecuteMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("backfills threads missing per-message search documents", async () => {
+    const { backfillChatThreadSearchIndex } = await import("./index-chat");
+
+    await backfillChatThreadSearchIndex();
+
+    const query = rootDbExecuteMock.mock.calls.at(0)?.[0];
+    expect(query).toBeDefined();
+    if (query === undefined) {
+      return;
+    }
+
+    const compiled = new PgDialect().sqlToQuery(query);
+    expect(compiled.sql).toContain("LEFT JOIN chat_thread_search_documents");
+    expect(compiled.sql).toContain("LEFT JOIN chat_message_search_documents");
+    expect(compiled.sql).toContain("md.message_id IS NULL");
+  });
 });
