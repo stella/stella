@@ -1,10 +1,15 @@
 import type { PropsWithChildren } from "react";
 
+import { useQuery } from "@tanstack/react-query";
+import { useMatch } from "@tanstack/react-router";
 import { UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
 import { useExternalFileDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-external-file-drop";
+import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
+
+import { resolveWorkspaceDropUploadParentId } from "./workspace-drop-zone.logic";
 
 type WorkspaceDropZoneProps = PropsWithChildren<{
   workspaceId: string;
@@ -16,12 +21,31 @@ export const WorkspaceDropZone = ({
 }: WorkspaceDropZoneProps) => {
   const t = useTranslations();
   const [isPending, createFileEntities] = useCreateFileEntities(workspaceId);
+  const viewMatch = useMatch({
+    from: "/_protected/workspaces/$workspaceId/$viewId",
+    shouldThrow: false,
+  });
+  const { data: views } = useQuery(viewsOptions(workspaceId));
+  const activeViewId = viewMatch?.params.viewId;
+  const activeView = activeViewId
+    ? views?.find((view) => view.id === activeViewId)
+    : undefined;
+  const uploadParentId = resolveWorkspaceDropUploadParentId({
+    activeViewLayoutType: activeView?.layout.type,
+    currentFolderId: viewMatch?.search.folder,
+  });
   const { ref, isDropTarget, isInnerActive } = useExternalFileDrop({
     onDrop: (files) => {
       if (isPending) {
         return;
       }
-      createFileEntities(files);
+      createFileEntities({ files, parentId: uploadParentId });
+    },
+    onDropTree: (tree) => {
+      if (isPending) {
+        return;
+      }
+      createFileEntities({ tree, parentId: uploadParentId });
     },
   });
 

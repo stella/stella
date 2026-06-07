@@ -1,13 +1,16 @@
-import { Suspense } from "react";
+import { Suspense, useEffect, useState } from "react";
 import type { Dispatch, MouseEvent, RefObject, SetStateAction } from "react";
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
   CheckIcon,
   DownloadIcon,
+  EyeIcon,
   LockOpenIcon,
   Maximize2Icon,
   Minimize2Icon,
+  XIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -20,6 +23,7 @@ import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import { AnonymizationFacet } from "@/components/inspector/anonymization-facet";
 import { DocumentAiSourceBar } from "@/components/inspector/document-ai-source-bar";
 import { DocxDesktopOpenButton } from "@/components/inspector/docx-desktop-open-button";
+import { EmailHtmlViewer } from "@/components/inspector/email-html-viewer";
 import { EntityMetadataPanel } from "@/components/inspector/entity-metadata-panel";
 import { downloadTabOriginalFile } from "@/components/inspector/file-download-service";
 import {
@@ -36,19 +40,36 @@ import {
   InspectorTabHeader,
   MatterOriginLink,
 } from "@/components/inspector/inspector-tab-header";
+import { MarkdownFileViewer } from "@/components/inspector/markdown-file-viewer";
+import type { MarkdownMode } from "@/components/inspector/markdown-file-viewer";
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
 import { SuggestionsFacet } from "@/components/inspector/suggestions-facet";
 import { VersionsFacet } from "@/components/inspector/versions-facet";
 import Tooltip from "@/components/tooltip";
-import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { useAnalytics } from "@/lib/analytics/provider";
+import { api } from "@/lib/api";
+import {
+  DOCX_MIME,
+  MARKDOWN_MIME,
+  isEmailFile,
+  isMarkdownFile,
+  TOOLBAR_ROW_HEIGHT,
+} from "@/lib/consts";
+import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import { DocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
 import type { DocxBrowserEditorActions } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
 import { getDocxEditBlockReason } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.logic";
+import {
+  filesKeys,
+  textFileOptions,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import {
   PeekPdfControls,
   PeekPdfViewer,
   PeekSuspenseFallback,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer";
+import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
 type MatterOrigin = {
   color: string | null;
@@ -148,10 +169,96 @@ export const FileTabPanel = ({
   tab,
 }: FileTabPanelProps) => {
   const t = useTranslations();
+  const analytics = useAnalytics();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const openFile = useInspectorStore((s) => s.openFile);
+  const replaceFileFieldId = useInspectorStore((s) => s.replaceFileFieldId);
   const setFileFacet = useInspectorStore((s) => s.setFileFacet);
   const requestDocxEdit = useInspectorStore((s) => s.requestDocxEdit);
+  const isNativeDocxDisplay = tab.mimeType === DOCX_MIME;
+  const isEmailDisplay = isEmailFile({
+    fileName: tab.label,
+    mimeType: tab.mimeType,
+  });
+  const isMarkdownDisplay = isMarkdownFile({
+    fileName: tab.label,
+    mimeType: tab.mimeType,
+  });
+  const markdownTextQuery = useQuery({
+    ...textFileOptions({ workspaceId: tab.workspaceId, fieldId: tab.id }),
+    enabled: isMarkdownDisplay,
+  });
+  const [markdownMode, setMarkdownMode] = useState<MarkdownMode>("preview");
+  const [markdownDraft, setMarkdownDraft] = useState("");
+  const markdownText = markdownTextQuery.data?.text ?? "";
+  const markdownIsDirty = markdownDraft !== markdownText;
+  const markdownSaveMutation = useMutation({
+    mutationFn: async ({
+      entityId,
+      fileName,
+      text,
+      workspaceId,
+    }: {
+      entityId: string;
+      fieldId: string;
+      fileName: string;
+      propertyId?: string | undefined;
+      text: string;
+      workspaceId: string;
+    }) => {
+      const file = new File([text], fileName, { type: MARKDOWN_MIME });
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        ["upload-version"].post({
+          queryKey: entitiesKeys.all(workspaceId),
+          entityId: toSafeId<"entity">(entityId),
+          file,
+        });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    onSuccess: async (response, variables) => {
+      replaceFileFieldId(variables.fieldId, {
+        id: response.fieldId,
+        label: variables.fileName,
+        mimeType: MARKDOWN_MIME,
+        pdfFileId: null,
+        ...(variables.propertyId ? { propertyId: variables.propertyId } : {}),
+      });
+      setMarkdownMode("preview");
+      stellaToast.add({
+        title: t("workspaces.files.versionUploaded"),
+        type: "success",
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: filesKeys.all() }),
+        queryClient.invalidateQueries({
+          queryKey: entitiesKeys.all(variables.workspaceId),
+        }),
+      ]);
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+      stellaToast.add({
+        title: t("workspaces.files.versionUploadFailed"),
+        description: error instanceof Error ? error.message : undefined,
+        type: "error",
+      });
+    },
+  });
+
+  useEffect(() => {
+    if (!isMarkdownDisplay || !markdownTextQuery.data) {
+      return;
+    }
+    setMarkdownDraft(markdownTextQuery.data.text);
+    setMarkdownMode("preview");
+  }, [isMarkdownDisplay, markdownTextQuery.data, tab.id]);
 
   if (minimized) {
     return null;
@@ -168,7 +275,6 @@ export const FileTabPanel = ({
   // Justification bbox highlighting on Folio is a separate
   // follow-up; until then the bbox overlay is omitted on
   // DOCX, but the doc itself remains editable.
-  const isNativeDocxDisplay = tab.mimeType === DOCX_MIME;
   const isEditingNativeDocx =
     isNativeDocxDisplay &&
     editingDocxTabId === tab.id &&
@@ -405,6 +511,76 @@ export const FileTabPanel = ({
   // preview facet, we hide the toggle entirely (Full view
   // alone) rather than show a button that would no-op.
   const isPreviewFacet = (tab.facet ?? "preview") === "preview";
+  const markdownActions = (() => {
+    if (!isMarkdownDisplay) {
+      return null;
+    }
+
+    const canEnterMarkdownEdit =
+      canUpdateEntity &&
+      !markdownTextQuery.isPending &&
+      !markdownTextQuery.error;
+    return (
+      <>
+        <Button
+          aria-pressed={markdownMode === "preview"}
+          disabled={markdownTextQuery.isPending}
+          onClick={() => setMarkdownMode("preview")}
+          size="xs"
+          variant={markdownMode === "preview" ? "secondary" : "ghost"}
+        >
+          <EyeIcon className="size-3.5" />
+          {t("common.preview")}
+        </Button>
+        <Button
+          aria-pressed={markdownMode === "edit"}
+          disabled={!canEnterMarkdownEdit}
+          onClick={() => {
+            setMarkdownMode("edit");
+          }}
+          size="xs"
+          variant={markdownMode === "edit" ? "secondary" : "ghost"}
+        >
+          <LockOpenIcon className="size-3.5" />
+          {t("common.edit")}
+        </Button>
+        {markdownIsDirty && (
+          <>
+            <Button
+              disabled={markdownSaveMutation.isPending}
+              onClick={() => {
+                setMarkdownDraft(markdownText);
+                setMarkdownMode("preview");
+              }}
+              size="xs"
+              variant="ghost"
+            >
+              <XIcon className="size-3.5" />
+              {t("common.cancel")}
+            </Button>
+            <Button
+              disabled={markdownSaveMutation.isPending}
+              onClick={() => {
+                markdownSaveMutation.mutate({
+                  entityId: tab.entityId,
+                  fieldId: tab.id,
+                  fileName: tab.label,
+                  propertyId: tab.propertyId,
+                  text: markdownDraft,
+                  workspaceId: tab.workspaceId,
+                });
+              }}
+              size="xs"
+            >
+              <CheckIcon className="size-3.5" />
+              {t("common.save")}
+            </Button>
+          </>
+        )}
+      </>
+    );
+  })();
+
   const editToggle = (() => {
     if (isEditingNativeDocx) {
       return (
@@ -461,8 +637,8 @@ export const FileTabPanel = ({
     <>
       {downloadButton}
       {desktopOpenButton}
-      {isPreviewFacet && editToggle}
-      {fullViewButton}
+      {isPreviewFacet && (markdownActions ?? editToggle)}
+      {!isEmailDisplay && !isMarkdownDisplay && fullViewButton}
     </>
   );
 
@@ -471,7 +647,10 @@ export const FileTabPanel = ({
   // toggle lives in the tab header (`fileActions` above) so
   // primary state changes have one stable location.
   const previewOverlay =
-    (tab.facet ?? "preview") === "preview" && !isEditingNativeDocx ? (
+    (tab.facet ?? "preview") === "preview" &&
+    !isEditingNativeDocx &&
+    !isEmailDisplay &&
+    !isMarkdownDisplay ? (
       <div className="bg-background/80 supports-[backdrop-filter]:bg-background/65 absolute end-2 top-2 z-10 flex items-center gap-1 rounded-md border p-0.5 shadow-sm backdrop-blur">
         <PeekPdfControls
           canResetZoom={scaleOffsets.get(tab.id) !== 0}
@@ -536,6 +715,24 @@ export const FileTabPanel = ({
   };
 
   const fileViewer = (() => {
+    if (isEmailDisplay) {
+      return <EmailHtmlViewer fieldId={tab.id} workspaceId={tab.workspaceId} />;
+    }
+    if (isMarkdownDisplay) {
+      return (
+        <MarkdownFileViewer
+          draft={markdownDraft}
+          error={markdownTextQuery.error}
+          isLoading={markdownTextQuery.isPending}
+          mode={markdownMode}
+          onDraftChange={setMarkdownDraft}
+          onRetry={() => {
+            void markdownTextQuery.refetch();
+          }}
+          text={markdownDraft}
+        />
+      );
+    }
     if (isNativeDocxDisplay && tab.propertyId !== undefined) {
       return (
         <DocxBrowserEditor
@@ -618,7 +815,7 @@ export const FileTabPanel = ({
 
   const viewerPane = (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      {tab.justificationFieldId && (
+      {tab.justificationFieldId && !isEmailDisplay && !isMarkdownDisplay && (
         <Suspense
           fallback={
             <div

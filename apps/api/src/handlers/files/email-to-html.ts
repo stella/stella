@@ -1,23 +1,22 @@
 /**
- * Email (.eml / .msg) to self-contained HTML for PDF rendering.
+ * Email (.eml / .msg) to self-contained HTML for preview rendering.
  *
  * LibreOffice cannot read either format, so we parse the message
  * ourselves into a normalized {@link ParsedEmail}, then render a
- * single HTML document (header block + body) that the Chromium
- * route in `gotenberg.ts` turns into a PDF derivative.
+ * single HTML document (header block + body) that the inspector can
+ * render in a sandboxed iframe.
  *
  * `cid:` inline images are embedded as data URIs. Remote resources
- * are left intact (the renderer fetches them) but all active
- * content (scripts, event handlers, plugin embeds, meta-refresh,
- * javascript: URLs) is stripped: email HTML is untrusted input.
+ * and all active content (scripts, event handlers, plugin embeds,
+ * meta-refresh, javascript: URLs) are stripped before the browser sees
+ * the document: email HTML is untrusted input.
  */
-import { decompressRTF } from "@kenjiuno/decompressrtf";
-import MsgReader from "@kenjiuno/msgreader";
 import { Result, TaggedError } from "better-result";
 import { type Cheerio, load } from "cheerio";
 import { type Element, isTag } from "domhandler";
 import PostalMime, { type Address } from "postal-mime";
-import { deEncapsulateSync } from "rtf-stream-parser";
+
+import { parseOutlookMsg } from "@/api/handlers/files/outlook-msg";
 
 const EML_MIME_TYPE = "message/rfc822";
 const MSG_MIME_TYPE = "application/vnd.ms-outlook";
@@ -27,8 +26,32 @@ export const EMAIL_MIME_TYPES = {
   [MSG_MIME_TYPE]: null,
 } as const satisfies Record<string, null>;
 
+const EMAIL_EXTENSION_MIME_TYPES: Record<string, string> = {
+  eml: EML_MIME_TYPE,
+  msg: MSG_MIME_TYPE,
+};
+
 export const isEmailMimeType = (mimeType: string): boolean =>
   mimeType in EMAIL_MIME_TYPES;
+
+export const resolveEmailMimeType = ({
+  fileName,
+  mimeType,
+}: {
+  fileName: string;
+  mimeType: string;
+}): string | null => {
+  if (isEmailMimeType(mimeType)) {
+    return mimeType;
+  }
+
+  const dotIndex = fileName.lastIndexOf(".");
+  if (dotIndex === -1) {
+    return null;
+  }
+  const extension = fileName.slice(dotIndex + 1).toLowerCase();
+  return EMAIL_EXTENSION_MIME_TYPES[extension] ?? null;
+};
 
 export class EmailParseError extends TaggedError("EmailParseError")<{
   message: string;
@@ -122,7 +145,7 @@ const formatAddress = (address: Address): string => {
   return formatNameAddress(address.name, address.address) ?? "";
 };
 
-// ── .msg parsing (msgreader + RTF de-encapsulation) ─────
+// ── .msg parsing (narrow in-repo CFB/MAPI reader) ───────
 
 const IMAGE_EXTENSION_MIME: Record<string, string> = {
   png: "image/png",
@@ -136,108 +159,39 @@ const IMAGE_EXTENSION_MIME: Record<string, string> = {
 };
 
 const parseMsg = (fileBuffer: ArrayBuffer): ParsedEmail => {
-  const reader = new MsgReader(fileBuffer);
-  const data = reader.getFileData();
+  const data = parseOutlookMsg(fileBuffer);
 
   const inlineImages: InlineImage[] = [];
-  for (const attachment of data.attachments ?? []) {
-    if (!attachment.pidContentId) {
+  for (const attachment of data.attachments) {
+    if (!attachment.contentId || !attachment.bytes) {
       continue;
     }
-    const bytes = Result.try({
-      try: () => reader.getAttachment(attachment).content,
-      catch: (cause) => cause,
-    });
-    if (Result.isError(bytes)) {
+    if (!isImageMimeType(attachment.mimeType, attachment.fileName)) {
       continue;
     }
     inlineImages.push({
-      cid: stripAngleBrackets(attachment.pidContentId),
-      mimeType: attachment.attachMimeTag ?? guessImageMime(attachment.fileName),
-      dataBase64: Buffer.from(bytes.value).toString("base64"),
+      cid: stripAngleBrackets(attachment.contentId),
+      mimeType:
+        attachment.mimeType ?? guessImageMime(attachment.fileName ?? undefined),
+      dataBase64: Buffer.from(attachment.bytes).toString("base64"),
     });
   }
 
   return {
     subject: data.subject ?? null,
-    from: formatNameAddress(
-      data.senderName,
-      data.senderSmtpAddress ?? data.senderEmail,
-    ),
-    to: msgRecipients(data.recipients, "to"),
-    cc: msgRecipients(data.recipients, "cc"),
-    date: data.messageDeliveryTime ?? data.clientSubmitTime ?? null,
-    body: msgBody(data),
+    from: formatNameAddress(data.fromName, data.fromEmail),
+    to: data.to
+      .map((recipient) => formatNameAddress(recipient.name, recipient.email))
+      .filter(nonEmpty),
+    cc: data.cc
+      .map((recipient) => formatNameAddress(recipient.name, recipient.email))
+      .filter(nonEmpty),
+    date: data.date,
+    body: data.html
+      ? { type: "html", html: data.html }
+      : { type: "text", text: data.text ?? "" },
     inlineImages,
   };
-};
-
-type MsgRecipient = {
-  name?: string;
-  email?: string;
-  smtpAddress?: string;
-  recipType?: "to" | "cc" | "bcc";
-};
-
-const msgRecipients = (
-  recipients: MsgRecipient[] | undefined,
-  kind: "to" | "cc",
-): string[] =>
-  (recipients ?? [])
-    .filter((recipient) => (recipient.recipType ?? "to") === kind)
-    .map((recipient) =>
-      formatNameAddress(
-        recipient.name,
-        recipient.smtpAddress ?? recipient.email,
-      ),
-    )
-    .filter(nonEmpty);
-
-type MsgBodyFields = {
-  bodyHtml?: string;
-  html?: Uint8Array;
-  compressedRtf?: Uint8Array;
-  body?: string;
-};
-
-const msgBody = (data: MsgBodyFields): EmailBody => {
-  if (data.bodyHtml) {
-    return { type: "html", html: data.bodyHtml };
-  }
-  if (data.html) {
-    return { type: "html", html: new TextDecoder().decode(data.html) };
-  }
-  if (data.compressedRtf) {
-    const fromRtf = deEncapsulateRtf(data.compressedRtf);
-    if (fromRtf) {
-      return fromRtf;
-    }
-  }
-  return { type: "text", text: data.body ?? "" };
-};
-
-/**
- * Outlook stores HTML/text bodies as "encapsulated" content inside
- * compressed RTF. `deEncapsulateSync` recovers the original HTML;
- * for genuine (non-encapsulated) RTF it throws, and we fall back to
- * the plain-text body.
- */
-const deEncapsulateRtf = (compressedRtf: Uint8Array): EmailBody | null => {
-  const rtf = Buffer.from(decompressRTF(Array.from(compressedRtf)));
-  const result = Result.try({
-    try: () => deEncapsulateSync(rtf, { mode: "either" }),
-    catch: (cause) => cause,
-  });
-  if (Result.isError(result)) {
-    return null;
-  }
-  const text =
-    typeof result.value.text === "string"
-      ? result.value.text
-      : result.value.text.toString("utf-8");
-  return result.value.mode === "html"
-    ? { type: "html", html: text }
-    : { type: "text", text };
 };
 
 const guessImageMime = (fileName: string | undefined): string => {
@@ -245,26 +199,106 @@ const guessImageMime = (fileName: string | undefined): string => {
   return IMAGE_EXTENSION_MIME[extension] ?? "application/octet-stream";
 };
 
+const isImageMimeType = (
+  mimeType: string | null,
+  fileName: string | null,
+): boolean =>
+  (mimeType ?? guessImageMime(fileName ?? undefined)).startsWith("image/");
+
 // ── HTML rendering + sanitization ───────────────────────
 
 const HR_STYLE = "border: none; border-top: 1px solid #d4d4d8; margin: 12px 0;";
 const PRE_STYLE =
   "white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, monospace; font-size: 13px; margin: 0;";
+const EMAIL_PREVIEW_CSS = `
+:root {
+  color-scheme: light;
+}
+html {
+  background: #fff;
+  color: #18181b;
+}
+body {
+  background: #fff;
+  color: #18181b;
+  color-scheme: light;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  margin: 12px;
+}
+body, table, td, div, p, span {
+  color-scheme: light;
+}
+.primary-text {
+  color: #3c4043;
+}
+.secondary-text, .grey-button-text {
+  color: #70757a;
+}
+.accent-text {
+  color: #1a73e8;
+}
+.primary-button {
+  background: #1a73e8;
+  border-radius: 4px;
+  color: #fff;
+}
+.primary-button-text {
+  color: #fff;
+}
+.postal-email-header {
+  background: #fafafa;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px 8px 0 0;
+  font-size: 13px;
+  margin: 16px 0 0;
+  padding: 10px 12px;
+}
+.postal-email-header-row {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(48px, max-content) minmax(0, 1fr);
+  padding: 2px 0;
+}
+.postal-email-header-key {
+  color: #71717a;
+  white-space: nowrap;
+}
+.postal-email-header-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.postal-email-header + div {
+  border: 1px solid #e4e4e7;
+  border-radius: 0 0 8px 8px;
+  border-top: 0;
+  margin: 0 0 14px;
+  padding: 12px;
+}
+.postal-email-address {
+  color: inherit;
+  text-decoration: none;
+}
+`;
 
 export const renderEmailHtml = (parsed: ParsedEmail): string => {
   const header = buildHeaderHtml(parsed);
 
   if (parsed.body.type === "text") {
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>${header}<hr style="${HR_STYLE}"><pre style="${PRE_STYLE}">${escapeHtml(parsed.body.text)}</pre></body></html>`;
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light"><style>${EMAIL_PREVIEW_CSS}</style></head><body>${header}<hr style="${HR_STYLE}"><pre style="${PRE_STYLE}">${escapeHtml(parsed.body.text)}</pre></body></html>`;
   }
 
   const $ = load(parsed.body.html);
   sanitizeDom($);
+  stripDuplicateNestedMessageHeaders($);
   inlineCidImages($, parsed.inlineImages);
 
   if ($("meta[charset]").length === 0) {
     $("head").prepend('<meta charset="utf-8">');
   }
+  $("head").append('<meta name="color-scheme" content="light">');
+  $("head").append(`<style>${EMAIL_PREVIEW_CSS}</style>`);
   $("body").prepend(`${header}<hr style="${HR_STYLE}">`);
 
   return $.html();
@@ -272,23 +306,66 @@ export const renderEmailHtml = (parsed: ParsedEmail): string => {
 
 const STRIP_TAGS = [
   "script",
+  "style",
   "iframe",
   "frame",
   "frameset",
   "object",
   "embed",
   "applet",
+  "base",
+  "link",
+  "form",
+  "input",
+  "button",
+  "textarea",
+  "select",
+  "svg",
+  "math",
 ];
 
 // eslint-disable-next-line no-script-url -- listing the schemes we strip from untrusted HTML
 const ACTIVE_URL_SCHEMES = ["javascript:", "vbscript:"];
-const URL_ATTRIBUTES = new Set(["href", "src", "action", "background"]);
+const URL_ATTRIBUTES = new Set([
+  "href",
+  "src",
+  "action",
+  "background",
+  "formaction",
+  "poster",
+  "srcset",
+  "xlink:href",
+]);
+const FETCHING_URL_ATTRIBUTES = new Set([
+  "src",
+  "background",
+  "poster",
+  "srcset",
+  "xlink:href",
+]);
+const PRESENTATION_COLOR_ATTRIBUTES = new Set([
+  "alink",
+  "bgcolor",
+  "link",
+  "text",
+  "vlink",
+]);
+const SAFE_DATA_IMAGE_RE =
+  /^data:image\/(?:png|jpe?g|gif|webp|bmp|tiff);base64,/iu;
+const BR_TAG_RE = /<br\s*\/?>/iu;
+const RFC822_HEADER_LINE_RE = /^[A-Za-z0-9-]+:/u;
 
 type CheerioApi = ReturnType<typeof load>;
 
 const sanitizeDom = ($: CheerioApi): void => {
   $(STRIP_TAGS.join(",")).remove();
   $("meta[http-equiv]").remove();
+  $("meta[name]").each((_, node) => {
+    const name = $(node).attr("name")?.toLowerCase();
+    if (name === "color-scheme" || name === "supported-color-schemes") {
+      $(node).remove();
+    }
+  });
 
   $("*").each((_, node) => {
     if (!isTag(node)) {
@@ -296,20 +373,82 @@ const sanitizeDom = ($: CheerioApi): void => {
     }
     for (const attribute of Object.keys(node.attribs)) {
       const name = attribute.toLowerCase();
-      if (name.startsWith("on")) {
+      if (PRESENTATION_COLOR_ATTRIBUTES.has(name)) {
+        $(node).removeAttr(attribute);
+        continue;
+      }
+      if (name.startsWith("on") || name === "style") {
         $(node).removeAttr(attribute);
         continue;
       }
       if (!URL_ATTRIBUTES.has(name)) {
         continue;
       }
-      const value = (node.attribs[attribute] ?? "").trim().toLowerCase();
+      const value = normalizeUrlAttribute(node.attribs[attribute] ?? "");
       if (ACTIVE_URL_SCHEMES.some((scheme) => value.startsWith(scheme))) {
+        $(node).removeAttr(attribute);
+        continue;
+      }
+      if (name === "href" && !isSafeLocalHref(value)) {
+        $(node).removeAttr(attribute);
+        continue;
+      }
+      if (FETCHING_URL_ATTRIBUTES.has(name) && !isSafeInlineResource(value)) {
         $(node).removeAttr(attribute);
       }
     }
   });
 };
+
+const stripDuplicateNestedMessageHeaders = ($: CheerioApi): void => {
+  $(".postal-email-header").each((_, header) => {
+    const body = $(header).next();
+    const bodyNode = body.get(0);
+    if (!bodyNode || !isTag(bodyNode)) {
+      return;
+    }
+
+    const html = body.html();
+    if (!html) {
+      return;
+    }
+
+    const parts = html.split(BR_TAG_RE);
+    const blankIndex = parts.findIndex((part) => part.trim() === "");
+    if (blankIndex <= 0) {
+      return;
+    }
+
+    const headerLines = parts.slice(0, blankIndex);
+    if (!headerLines.every((part) => RFC822_HEADER_LINE_RE.test(part.trim()))) {
+      return;
+    }
+
+    body.html(parts.slice(blankIndex + 1).join("<br>"));
+  });
+};
+
+const normalizeUrlAttribute = (value: string): string => {
+  let normalized = "";
+  for (const char of value) {
+    const codePoint = char.codePointAt(0);
+    if (
+      codePoint === undefined ||
+      codePoint <= 0x1f ||
+      (codePoint >= 0x7f && codePoint <= 0x9f) ||
+      char.trim() === ""
+    ) {
+      continue;
+    }
+    normalized += char;
+  }
+  return normalized.toLowerCase();
+};
+
+const isSafeInlineResource = (value: string): boolean =>
+  value.startsWith("cid:") || SAFE_DATA_IMAGE_RE.test(value);
+
+const isSafeLocalHref = (value: string): boolean => value.startsWith("#");
 
 const inlineCidImages = ($: CheerioApi, images: InlineImage[]): void => {
   if (images.length === 0) {

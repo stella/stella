@@ -102,7 +102,10 @@ import type { InternalPropertyId } from "@/routes/_protected.workspaces/$workspa
 const FILESYSTEM_ROW_HEIGHT_PX = 36;
 const FILESYSTEM_ROW_OVERSCAN = 16;
 const FILESYSTEM_INDENT_PX = 20;
-const FILESYSTEM_GUIDE_OFFSET_PX = 10;
+const FILESYSTEM_DISCLOSURE_SLOT_PX = 14;
+const FILESYSTEM_NAME_GAP_PX = 6;
+const FILESYSTEM_ICON_SIZE_PX = 16;
+const FILESYSTEM_GUIDE_COLUMN_OFFSET_PX = FILESYSTEM_DISCLOSURE_SLOT_PX / 2;
 const FILESYSTEM_GUIDE_LINE_COLOR_CLASS = "bg-muted-foreground/30";
 const FILESYSTEM_CREATED_BY_ID = "_created-by" satisfies InternalPropertyId;
 const FILESYSTEM_UPDATED_AT_ID = "_updated-at" satisfies InternalPropertyId;
@@ -1186,7 +1189,7 @@ const FilesystemRow = ({
   // Drag + drop support via pragmatic-drag-and-drop.
   const rowRef = useRef<HTMLDivElement>(null);
 
-  useInspectorFlash(node.entityId, rowRef);
+  useInspectorFlash(node.entityId, rowRef, { enabled: false });
 
   const moveEntity = useMoveEntity();
   const [isFolderDropTarget, setIsFolderDropTarget] = useState(false);
@@ -1364,7 +1367,12 @@ const FilesystemRow = ({
       className="relative flex h-full min-w-0 items-center gap-1.5 self-stretch"
       style={{ paddingLeft: `${depth * FILESYSTEM_INDENT_PX}px` }}
     >
-      <TreeGuideLines depth={depth} guideDepths={guideDepths} isLast={isLast} />
+      <TreeGuideLines
+        depth={depth}
+        guideDepths={guideDepths}
+        isFolder={isFolder}
+        isLast={isLast}
+      />
       {isFolder ? (
         <ChevronRightIcon
           className={cn(
@@ -1390,6 +1398,7 @@ const FilesystemRow = ({
           return (
             <DocumentIcon
               className="size-4 shrink-0"
+              fileName={file.fileName}
               mimeType={file.mimeType}
             />
           );
@@ -1440,6 +1449,8 @@ const FilesystemRow = ({
     (isFolderDropTarget || isExternalDropTarget) && "bg-accent",
     isSelected && "bg-accent",
   );
+  const rowButtonCls =
+    "min-w-0 rounded text-start outline-none focus-visible:bg-muted/70";
 
   // Content area: Name + Type + extras (interactive, clickable)
   // gridColumn spans all content columns (excluding the actions column)
@@ -1566,7 +1577,7 @@ const FilesystemRow = ({
             style={{ gridTemplateColumns: gridTemplate }}
           >
             <button
-              className="text-start"
+              className={rowButtonCls}
               onClick={(e) => {
                 const intent = getFolderClickIntent({
                   currentFolderId,
@@ -1599,6 +1610,7 @@ const FilesystemRow = ({
             style={{ gridTemplateColumns: gridTemplate }}
           >
             <button
+              className={rowButtonCls}
               onClick={(e) => onSelect(node.entityId, e.metaKey || e.ctrlKey)}
               onDoubleClick={() => openInInspector?.()}
               style={contentSpanStyle}
@@ -1629,20 +1641,31 @@ const FilesystemRow = ({
 type TreeGuideLinesProps = {
   depth: number;
   guideDepths: readonly number[];
+  isFolder: boolean;
   isLast: boolean;
 };
 
 const TreeGuideLines = ({
   depth,
   guideDepths,
+  isFolder,
   isLast,
 }: TreeGuideLinesProps) => {
   if (depth === 0) {
     return null;
   }
 
-  const currentLineLeft =
-    depth * FILESYSTEM_INDENT_PX - FILESYSTEM_GUIDE_OFFSET_PX;
+  const parentGuideLeft =
+    (depth - 1) * FILESYSTEM_INDENT_PX + FILESYSTEM_GUIDE_COLUMN_OFFSET_PX;
+  const disclosureCenterLeft =
+    depth * FILESYSTEM_INDENT_PX + FILESYSTEM_GUIDE_COLUMN_OFFSET_PX;
+  const iconCenterLeft =
+    depth * FILESYSTEM_INDENT_PX +
+    FILESYSTEM_DISCLOSURE_SLOT_PX +
+    FILESYSTEM_NAME_GAP_PX +
+    FILESYSTEM_ICON_SIZE_PX / 2;
+  const horizontalTargetLeft = isFolder ? disclosureCenterLeft : iconCenterLeft;
+  const horizontalWidth = horizontalTargetLeft - parentGuideLeft;
   // The immediate parent's column is the same x as this row's own
   // current line; rendering a full-height guide there would mask the
   // half-height "L" stop on the last child.
@@ -1651,7 +1674,10 @@ const TreeGuideLines = ({
   );
 
   return (
-    <span aria-hidden="true" className="pointer-events-none absolute inset-y-0">
+    <span
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-y-0 start-0"
+    >
       {continuationGuideDepths.map((guideDepth) => (
         <span
           className={cn(
@@ -1661,7 +1687,8 @@ const TreeGuideLines = ({
           key={guideDepth}
           style={{
             left:
-              guideDepth * FILESYSTEM_INDENT_PX + FILESYSTEM_GUIDE_OFFSET_PX,
+              guideDepth * FILESYSTEM_INDENT_PX +
+              FILESYSTEM_GUIDE_COLUMN_OFFSET_PX,
           }}
         />
       ))}
@@ -1671,14 +1698,14 @@ const TreeGuideLines = ({
           "absolute top-0 w-px",
           isLast ? "h-1/2" : "bottom-0",
         )}
-        style={{ left: currentLineLeft }}
+        style={{ left: parentGuideLeft }}
       />
       <span
         className={cn(
           FILESYSTEM_GUIDE_LINE_COLOR_CLASS,
-          "absolute top-1/2 h-px w-2.5",
+          "absolute top-1/2 h-px",
         )}
-        style={{ left: currentLineLeft }}
+        style={{ left: parentGuideLeft, width: horizontalWidth }}
       />
     </span>
   );

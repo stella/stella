@@ -939,7 +939,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         onChange={(e) => {
           const files = e.target.files;
           if (files && files.length > 0) {
-            handleCreateFileEntities([...files]);
+            handleCreateFileEntities({ files: [...files], parentId: null });
           }
           e.target.value = "";
         }}
@@ -1108,6 +1108,7 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
     entity.mimeType !== null &&
     entity.fieldId !== null &&
     isFileDisplayable({
+      fileName: entity.name,
       mimeType: entity.mimeType,
       pdfFileId: entity.pdfFileId,
       encrypted: entity.encrypted,
@@ -1116,6 +1117,7 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
   const icon = (
     <EntityKindIcon
       className="size-4 shrink-0"
+      fileName={entity.name}
       kind={entity.kind}
       mimeType={entity.mimeType}
       status={entity.status}

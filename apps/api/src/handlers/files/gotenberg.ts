@@ -1,10 +1,6 @@
 import { Result, TaggedError } from "better-result";
 
 import { env } from "@/api/env";
-import {
-  emailToHtml,
-  isEmailMimeType,
-} from "@/api/handlers/files/email-to-html";
 import { applyFitToPage } from "@/api/handlers/files/xlsx-preprocess";
 
 /**
@@ -45,11 +41,6 @@ const CONVERTIBLE_MIME_TYPES = {
   // Web
   "text/html": null,
   "application/xhtml+xml": null,
-
-  // Email — parsed to HTML in `email-to-html.ts`, then rendered via
-  // the Chromium route (LibreOffice cannot read either format).
-  "message/rfc822": null,
-  "application/vnd.ms-outlook": null,
 } as const satisfies Record<string, null>;
 
 export const isConvertibleMimeType = (mimeType: string): boolean =>
@@ -285,50 +276,11 @@ img { display: block; width: ${size.width}px; height: ${size.height}px; }
   });
 };
 
-/**
- * A4 page settings for rendered email bodies. Gotenberg defaults to
- * US Letter; A4 suits the international audience.
- */
-const EMAIL_PAGE_FIELDS = {
-  paperWidth: "8.27",
-  paperHeight: "11.69",
-  marginTop: "0.4",
-  marginBottom: "0.4",
-  marginLeft: "0.4",
-  marginRight: "0.4",
-} as const;
-
 export const convertToPdf = async (
   fileBuffer: ArrayBuffer,
   fileName: string,
   mimeType: string,
 ): Promise<Result<ConvertToPdfResult, GotenbergError>> => {
-  if (isEmailMimeType(mimeType)) {
-    const htmlResult = await emailToHtml(fileBuffer, mimeType);
-    if (Result.isError(htmlResult)) {
-      return Result.err(
-        new GotenbergError({
-          message: "Failed to parse email for conversion",
-          cause: htmlResult.error,
-        }),
-      );
-    }
-    return await Result.tryPromise(
-      {
-        try: async () =>
-          await chromiumHtmlToPdf(htmlResult.value, EMAIL_PAGE_FIELDS),
-        catch: (cause) =>
-          cause instanceof GotenbergError
-            ? cause
-            : new GotenbergError({
-                message: "Failed to convert email",
-                cause,
-              }),
-      },
-      { retry: GOTENBERG_RETRY },
-    );
-  }
-
   const imageSize = IMAGE_MIME_TYPES.has(mimeType)
     ? getImageSize(fileBuffer, mimeType)
     : null;

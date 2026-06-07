@@ -52,6 +52,8 @@ const GENERIC_UPLOAD_MIME_TYPES = new Set([
  */
 const EXTENSION_MIME_OVERRIDES: Record<string, string> = {
   eml: "message/rfc822",
+  markdown: "text/markdown",
+  md: "text/markdown",
   msg: "application/vnd.ms-outlook",
 };
 

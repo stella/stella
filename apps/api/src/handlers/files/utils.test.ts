@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { resolveUploadMime } from "./utils";
+import { getFileExtension, resolveUploadMime } from "./utils";
 
 describe("resolveUploadMime", () => {
   test("recovers .msg reported as octet-stream", () => {
@@ -16,6 +16,15 @@ describe("resolveUploadMime", () => {
     expect(
       resolveUploadMime({ declaredMime: "", fileName: "thread.EML" }),
     ).toBe("message/rfc822");
+  });
+
+  test("recovers markdown reported as octet-stream", () => {
+    expect(
+      resolveUploadMime({
+        declaredMime: "application/octet-stream",
+        fileName: "notes.MD",
+      }),
+    ).toBe("text/markdown");
   });
 
   test("leaves a well-typed MIME unchanged", () => {
@@ -43,5 +52,11 @@ describe("resolveUploadMime", () => {
         fileName: "msg",
       }),
     ).toBe("application/octet-stream");
+  });
+});
+
+describe("getFileExtension", () => {
+  test("keeps text/markdown on the legacy fallback storage extension", () => {
+    expect(getFileExtension("text/markdown")).toBe("bin");
   });
 });

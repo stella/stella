@@ -1,13 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 
 import { dropTargetForExternal } from "@atlaskit/pragmatic-drag-and-drop/external/adapter";
+import { containsFiles } from "@atlaskit/pragmatic-drag-and-drop/external/file";
+import { useTranslations } from "use-intl";
+
+import { stellaToast } from "@stll/ui/components/toast";
+
+import { ClientOperationError } from "@/lib/errors";
 import {
-  containsFiles,
-  getFiles,
-} from "@atlaskit/pragmatic-drag-and-drop/external/file";
+  collectDroppedFileTree,
+  type DroppedFileTree,
+} from "@/routes/_protected.workspaces/$workspaceId/-hooks/external-file-drop.logic";
 
 type ExternalFileDropOptions = {
   onDrop: (files: File[]) => void;
+  onDropTree?: (tree: DroppedFileTree) => void;
+  onError?: (error: Error) => void;
   enabled?: boolean;
   /**
    * Optional caller-provided DOM ref; can be used when the target element
@@ -38,9 +46,12 @@ type ExternalFileDropResult = {
  */
 export const useExternalFileDrop = ({
   onDrop,
+  onDropTree,
+  onError,
   enabled = true,
   externalRef,
 }: ExternalFileDropOptions): ExternalFileDropResult => {
+  const t = useTranslations();
   const internalRef = useRef<HTMLDivElement>(null);
   const ref = externalRef ?? internalRef;
   const [isDropTarget, setIsDropTarget] = useState(false);
@@ -49,6 +60,10 @@ export const useExternalFileDrop = ({
   // Store callback in a ref to avoid re-registering the drop target
   const onDropRef = useRef(onDrop);
   onDropRef.current = onDrop;
+  const onDropTreeRef = useRef(onDropTree);
+  onDropTreeRef.current = onDropTree;
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
 
   useEffect(() => {
     const el = ref.current;
@@ -74,13 +89,41 @@ export const useExternalFileDrop = ({
         if (location.current.dropTargets[0]?.element !== self.element) {
           return;
         }
-        const files = getFiles({ source });
-        if (files.length > 0) {
-          onDropRef.current(files);
-        }
+        void collectDroppedFileTree(source)
+          .then((tree) => {
+            if (tree.files.length === 0 && tree.directoryPaths.length === 0) {
+              return undefined;
+            }
+
+            if (onDropTreeRef.current) {
+              onDropTreeRef.current(tree);
+              return undefined;
+            }
+
+            const files = tree.files.map(({ file }) => file);
+            if (files.length > 0) {
+              onDropRef.current(files);
+            }
+            return undefined;
+          })
+          .catch((error: unknown) => {
+            const normalized =
+              error instanceof Error
+                ? error
+                : new ClientOperationError({
+                    action: "read-dropped-files",
+                    message: "Failed to read dropped files",
+                    cause: error,
+                  });
+            onErrorRef.current?.(normalized);
+            stellaToast.add({
+              title: t("errors.uploadFailed"),
+              type: "error",
+            });
+          });
       },
     });
-  }, [enabled, ref]);
+  }, [enabled, ref, t]);
 
   return { ref, isDropTarget, isInnerActive };
 };

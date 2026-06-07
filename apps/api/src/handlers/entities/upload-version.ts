@@ -464,6 +464,7 @@ export default createSafeHandler(
     });
 
     return Result.ok({
+      fieldId: fileFieldId,
       versionId: nextVersionId,
       versionNumber: nextVersionNumber,
     });

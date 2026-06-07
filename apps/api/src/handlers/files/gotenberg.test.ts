@@ -48,4 +48,20 @@ describe("PDF derivative policy", () => {
       }),
     ).toBe(false);
   });
+
+  test("does not generate PDF derivatives for email files", () => {
+    expect(
+      shouldGeneratePdfDerivative({
+        encrypted: false,
+        mimeType: "message/rfc822",
+      }),
+    ).toBe(false);
+
+    expect(
+      shouldGeneratePdfDerivative({
+        encrypted: false,
+        mimeType: "application/vnd.ms-outlook",
+      }),
+    ).toBe(false);
+  });
 });
