@@ -238,6 +238,67 @@ describe("buildTableRowBreakInfo / snapRowBreak", () => {
     expect(info.breakOffsets[0]).toEqual([LINE, 2 * LINE, 3 * LINE]);
   });
 
+  test("seats break offsets on painted line boundaries despite paragraph space-before", () => {
+    // The painter stacks the cell paragraph by its full height (before + lines +
+    // after = 8 + 80 + 8 = 96) but paints lines from the cell top with no
+    // leading space-before, so painted line bottoms are 20/40/60/80. The break
+    // offsets must match those, not the +8-shifted 28/48/68/88 — otherwise an
+    // oversized-row split lands mid-line and a glyph row straddles the page
+    // boundary. Regression for the table-cell space-before drift.
+    const block: TableBlock = {
+      kind: "table",
+      id: "t",
+      rows: [
+        {
+          id: "r0",
+          cells: [
+            {
+              id: "c0",
+              padding: { top: 0, right: 0, bottom: 0, left: 0 },
+              blocks: [
+                {
+                  kind: "paragraph",
+                  id: "p0",
+                  attrs: { spacing: { before: 8, after: 8 } },
+                  runs: [{ kind: "text", text: "x" }],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      columnWidths: [220],
+    };
+    const measure: TableMeasure = {
+      kind: "table",
+      rows: [
+        {
+          cells: [
+            {
+              blocks: [
+                {
+                  kind: "paragraph",
+                  lines: linesWithHeight(4, LINE),
+                  totalHeight: 8 + 4 * LINE + 8,
+                },
+              ],
+              width: 220,
+              height: 8 + 4 * LINE + 8,
+            },
+          ],
+          height: 8 + 4 * LINE + 8,
+        },
+      ],
+      columnWidths: [220],
+      totalWidth: 220,
+      totalHeight: 8 + 4 * LINE + 8,
+    };
+
+    const info = buildTableRowBreakInfo(block, measure);
+
+    expect(info.breakOffsets[0]).toEqual([20, 40, 60, 80, 96]);
+  });
+
   test("treats height-based cell blocks as atomic break offsets", () => {
     const block: TableBlock = {
       kind: "table",
