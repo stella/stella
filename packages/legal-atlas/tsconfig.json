@@ -1,0 +1,12 @@
+{
+  "extends": "@stll/typescript-config/base.json",
+  "compilerOptions": {
+    "paths": {
+      "@stll/legal-ast": ["../legal-ast/src/index.ts"],
+      "@stll/legal-ast/*": ["../legal-ast/src/*.ts"]
+    },
+    "types": ["bun"]
+  },
+  "include": ["src"],
+  "exclude": ["node_modules"]
+}

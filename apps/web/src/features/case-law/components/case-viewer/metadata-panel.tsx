@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
-import { getDocumentAstMetadata } from "@stll/case-law/document-ast";
+import { getDocumentAstMetadata } from "@stll/legal-ast/document-ast";
 import { Button } from "@stll/ui/components/button";
 
 import type { TranslationKey } from "@/i18n/types";

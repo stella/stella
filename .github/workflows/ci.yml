@@ -215,16 +215,16 @@ jobs:
           [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
           bun run typecheck -- "${args[@]}"
 
-      - name: Knip production dependency check (apps/api)
+      - name: Knip production dependency checks
         if: steps.changed-files.outputs.package_checks_required == 'true'
-        # Static gate paired with the api-image-deps compile smoke:
-        # knip catches `apps/api` prod code that imports devDeps or
-        # transitively-resolved (unlisted) packages at PR time; the
-        # compile catches dynamic imports the linter misses. Scoped
-        # to apps/api because that's the workspace the Dockerfile
-        # installs with --production. apps/web is bundled by Vite
-        # and does not go through a --production install.
-        run: bun run knip --production --no-progress --include unlisted,unresolved --workspace apps/api
+        # Static gate paired with the image compile smokes: knip
+        # catches prod code that imports devDeps or transitively
+        # resolved (unlisted) packages at PR time; the compile
+        # catches dynamic imports the linter misses. Scoped to
+        # Bun/Docker apps that install with --production.
+        run: |
+          bun run knip --production --no-progress --include unlisted,unresolved --workspace apps/api
+          bun run knip --production --no-progress --include unlisted,unresolved --workspace apps/legal-atlas-runner
 
       - name: Test
         if: steps.changed-files.outputs.package_checks_required == 'true'
@@ -612,7 +612,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Check whether API-image-affecting paths changed
+      - name: Check whether API/runner-image-affecting paths changed
         id: changed
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
@@ -627,7 +627,7 @@ jobs:
           run=false
           for file in "${changed_files[@]}"; do
             case "$file" in
-              apps/api/*|packages/*|bun.lock|package.json|turbo.json|.github/workflows/ci.yml)
+              apps/api/*|apps/legal-atlas-runner/*|packages/*|bun.lock|package.json|turbo.json|.github/workflows/ci.yml)
                 run=true
                 break
                 ;;
@@ -635,7 +635,7 @@ jobs:
           done
           echo "run=$run" >> "$GITHUB_OUTPUT"
           if [[ "$run" != "true" ]]; then
-            echo "::notice::No API-image-affecting paths changed; skipping pruned-lockfile guard."
+            echo "::notice::No API/runner-image-affecting paths changed; skipping pruned-lockfile guard."
           fi
 
       - name: Setup Bun
@@ -668,18 +668,16 @@ jobs:
         env:
           NPM_TOKEN: ""
 
-      - name: Prod-deps compile + ingest smoke
+      - name: Prod-deps API compile smoke
         if: steps.changed.outputs.run == 'true'
         # Empirically prove the pruned API tree builds and its
-        # ingestion entrypoint resolves with devDependencies
+        # runtime worker entrypoints resolve with devDependencies
         # stripped. Runs a fresh `bun install --production` in a
         # parallel dir (so the lockfile-drift install above stays
         # unchanged), overlays the full pruned source via
         # `cp -a ../full/. .` (mirrors `COPY --from=pruner
-        # /app/out/full/ .` in `apps/api/Dockerfile`), compiles the
-        # API binary plus runtime workers, and exercises the ingestion
-        # script with a fake adapter key — the same smoke the
-        # Dockerfile's `runner` stage runs at build time.
+        # /app/out/full/ .` in `apps/api/Dockerfile`), and compiles the
+        # API binary plus runtime workers.
         run: |
           set -euo pipefail
           rm -rf out-prod
@@ -704,19 +702,31 @@ jobs:
             --target bun \
             --outfile /tmp/runtime-workers/extraction-worker.js \
             apps/api/src/lib/search/extraction-worker.ts
-          unset NODE_ENV
-          cd apps/api
+        env:
+          NPM_TOKEN: ""
+
+      - name: Prod-deps legal atlas runner smoke
+        if: steps.changed.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          rm -rf out-runner
+          turbo prune @stll/legal-atlas-runner --docker --out-dir out-runner
+          cd out-runner/json
+          bun install --production --frozen-lockfile --ignore-scripts
+          cp -a ../full/. .
+          bun --filter @stll/legal-atlas-runner build
+          bun apps/legal-atlas-runner/dist/index.js smoke
           set +e
           out=$(DATABASE_URL=postgres://smoke:smoke@localhost:5432/smoke \
                 S3_ENDPOINT=http://localhost \
                 S3_BUCKET=smoke \
                 S3_REGION=eu-central-1 \
-                bun scripts/ingest-case-law.ts __smoke__ 2>&1)
+                bun apps/legal-atlas-runner/dist/index.js run case-law-ingest __smoke__ 2>&1)
           status=$?
           set -e
           echo "$out"
           if ! echo "$out" | grep -q 'Unknown adapter: __smoke__'; then
-            echo "ERROR: ingestion entrypoint smoke failed under --production (exit=$status)" >&2
+            echo "ERROR: legal-atlas runner smoke failed under --production (exit=$status)" >&2
             exit 1
           fi
         env:

@@ -3,14 +3,14 @@ import type React from "react";
 import type {
   AnalysisAnnotation,
   AnalysisHeading,
-} from "@stll/case-law/analysis";
+} from "@stll/legal-ast/analysis";
 
 import type { TranslationKey } from "@/i18n/types";
 
 export type {
   AnalysisAnnotation,
   AnalysisHeading,
-} from "@stll/case-law/analysis";
+} from "@stll/legal-ast/analysis";
 
 // ── Color system ──────────────────────────────────────────
 //

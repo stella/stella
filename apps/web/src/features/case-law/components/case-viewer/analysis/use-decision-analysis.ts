@@ -9,11 +9,11 @@ import { useCallback, useEffect, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { DecisionAnalysis } from "@stll/case-law/analysis";
+import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import {
   isAnalysisInProgress,
   isDecisionAnalysis,
-} from "@stll/case-law/analysis";
+} from "@stll/legal-ast/analysis";
 
 import { apiUrl } from "@/lib/api-url";
 

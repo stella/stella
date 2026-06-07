@@ -1,0 +1,46 @@
+{
+  "name": "@stll/legal-atlas-runner",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Bun CLI and Docker runtime for Legal Atlas corpus jobs",
+  "keywords": [
+    "case-law",
+    "corpus",
+    "legal",
+    "legislation",
+    "parser"
+  ],
+  "homepage": "https://github.com/stella/stella/tree/main/apps/legal-atlas-runner",
+  "bugs": {
+    "url": "https://github.com/stella/stella/issues"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stella/stella.git",
+    "directory": "apps/legal-atlas-runner"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "rm -rf dist && bun build --target=bun --outfile dist/index.js src/index.ts",
+    "clean": "git clean -xdf dist .cache .turbo node_modules",
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "smoke": "bun src/index.ts smoke",
+    "test": "bun test src --pass-with-no-tests",
+    "typecheck": "tsgo --noEmit",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware apps/legal-atlas-runner",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/legal-atlas-runner",
+    "format": "oxfmt ."
+  },
+  "dependencies": {
+    "@stll/api": "workspace:*",
+    "@stll/legal-atlas": "workspace:*",
+    "better-result": "catalog:"
+  },
+  "devDependencies": {
+    "@stll/typescript-config": "workspace:*",
+    "@types/bun": "catalog:",
+    "typescript": "catalog:"
+  }
+}

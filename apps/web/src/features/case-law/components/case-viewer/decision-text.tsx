@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
-import type { Block, DocumentAst, Inline } from "@stll/case-law/document-ast";
-import { parseDocumentAst } from "@stll/case-law/document-ast";
+import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
+import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { sanitizeHref } from "@/lib/sanitize-href";

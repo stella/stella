@@ -1,6 +1,13 @@
+<p align="center">
+  <img src=".github/assets/banner.png" alt="stll/business-registries" width="100%" />
+</p>
+
 # @stll/business-registries
 
 Typed clients for national business and commercial registries.
+
+Find companies, normalize registry identifiers, and reuse public business data
+without writing a different scraper for every jurisdiction.
 
 Each jurisdiction lives in its own subpath so consumers import only what they
 need:

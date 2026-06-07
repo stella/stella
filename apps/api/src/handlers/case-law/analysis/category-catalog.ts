@@ -1,4 +1,4 @@
-import type { AnalysisHeading } from "@stll/case-law/analysis";
+import type { AnalysisHeading } from "@stll/legal-ast/analysis";
 
 const CORE_CATEGORIES = [
   "facts",

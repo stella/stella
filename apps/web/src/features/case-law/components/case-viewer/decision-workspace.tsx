@@ -4,7 +4,7 @@ import { Loader2Icon, SparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
-import { parseDocumentAst } from "@stll/case-law/document-ast";
+import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { Button } from "@stll/ui/components/button";
 import { ScrollMarkers } from "@stll/ui/components/scroll-markers";
 

@@ -1,0 +1,63 @@
+{
+  "name": "@stll/legal-ast",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Typed AST shapes for legal documents, statutes, and shared inline legal text",
+  "keywords": [
+    "ast",
+    "case-law",
+    "legal",
+    "legislation",
+    "parser"
+  ],
+  "homepage": "https://github.com/stella/stella/tree/main/packages/legal-ast",
+  "bugs": {
+    "url": "https://github.com/stella/stella/issues"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stella/stella.git",
+    "directory": "packages/legal-ast"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./analysis": {
+      "types": "./src/analysis.ts",
+      "import": "./src/analysis.ts"
+    },
+    "./document-ast": {
+      "types": "./src/document-ast.ts",
+      "import": "./src/document-ast.ts"
+    },
+    "./inline": {
+      "types": "./src/inline.ts",
+      "import": "./src/inline.ts"
+    },
+    "./statute-ast": {
+      "types": "./src/statute-ast.ts",
+      "import": "./src/statute-ast.ts"
+    }
+  },
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo node_modules",
+    "test": "bun test src",
+    "typecheck": "tsgo --noEmit",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/legal-ast",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/legal-ast",
+    "format": "oxfmt ."
+  },
+  "dependencies": {
+    "valibot": "catalog:"
+  },
+  "devDependencies": {
+    "@stll/typescript-config": "workspace:*",
+    "@types/bun": "catalog:",
+    "typescript": "catalog:"
+  }
+}

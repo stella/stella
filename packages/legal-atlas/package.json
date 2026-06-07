@@ -1,0 +1,56 @@
+{
+  "name": "@stll/legal-atlas",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Public legal corpus adapters, parsers, and ingestion primitives",
+  "keywords": [
+    "case-law",
+    "corpus",
+    "legal",
+    "legislation",
+    "parser"
+  ],
+  "homepage": "https://github.com/stella/stella/tree/main/packages/legal-atlas",
+  "bugs": {
+    "url": "https://github.com/stella/stella/issues"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stella/stella.git",
+    "directory": "packages/legal-atlas"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./corpus": {
+      "types": "./src/corpus.ts",
+      "import": "./src/corpus.ts"
+    },
+    "./runners/registry": {
+      "types": "./src/runners/registry.ts",
+      "import": "./src/runners/registry.ts"
+    }
+  },
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo node_modules",
+    "test": "bun test src",
+    "typecheck": "tsgo --noEmit",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/legal-atlas",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/legal-atlas",
+    "format": "oxfmt ."
+  },
+  "dependencies": {
+    "@stll/legal-ast": "workspace:*",
+    "better-result": "catalog:"
+  },
+  "devDependencies": {
+    "@stll/typescript-config": "workspace:*",
+    "@types/bun": "catalog:",
+    "typescript": "catalog:"
+  }
+}

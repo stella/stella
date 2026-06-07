@@ -20,7 +20,6 @@
     "apps/api": {
       "entry": [
         "src/index.ts!",
-        "scripts/ingest-case-law.ts!",
         "src/handlers/files/pdf-worker.ts!",
         "src/lib/search/extraction-worker.ts!",
         "scripts/*.ts",
@@ -63,8 +62,15 @@
       "entry": ["src/**/*.astro", "astro.config.*", "postcss.config.mjs"],
       "ignoreDependencies": ["@tailwindcss/postcss"]
     },
-    "packages/case-law": {
-      "entry": ["src/*.ts", "src/**/*.test.ts"]
+    "apps/legal-atlas-runner": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"],
+      "ignoreDependencies": ["@stll/api"]
+    },
+    "packages/legal-atlas": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"]
+    },
+    "packages/legal-ast": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"]
     },
     "packages/permissions": {
       "entry": ["src/index.ts"]

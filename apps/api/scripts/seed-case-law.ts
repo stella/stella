@@ -22,8 +22,8 @@ import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import * as v from "valibot";
 
-import type { PersistedDecisionAnalysis } from "@stll/case-law/analysis";
-import type { DocumentAst } from "@stll/case-law/document-ast";
+import type { PersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { createScopedDb } from "@/api/db";
 import { rootDb, rlsDb } from "@/api/db/root";

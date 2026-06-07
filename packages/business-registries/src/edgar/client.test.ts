@@ -11,7 +11,7 @@ const MISSING_FIXTURE_PATH = path.join(
   "cik-missing.xml",
 );
 
-const TEST_USER_AGENT = "Stella stella@example.com";
+const TEST_USER_AGENT = "stella stella@example.com";
 
 const LIVE_USER_AGENT = process.env["EDGAR_USER_AGENT"];
 const SKIP_LIVE = process.env["SMOKE_TEST"] !== "1" || !LIVE_USER_AGENT;

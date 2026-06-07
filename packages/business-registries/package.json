@@ -33,6 +33,7 @@
     "directory": "packages/business-registries"
   },
   "files": [
+    ".github/assets/banner.png",
     "dist",
     "src",
     "README.md"
