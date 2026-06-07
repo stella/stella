@@ -30,6 +30,15 @@ describe("frontend origins", () => {
     ).toEqual(["http://127.0.0.1:3000", "http://localhost:3000"]);
   });
 
+  test("normalizes a trailing slash on a loopback origin", () => {
+    expect(
+      frontendOrigins({
+        frontendUrl: "http://localhost:3000/",
+        isDev: true,
+      }),
+    ).toEqual(["http://localhost:3000", "http://127.0.0.1:3000"]);
+  });
+
   test("only swaps exact loopback hostnames", () => {
     expect(
       frontendOrigins({

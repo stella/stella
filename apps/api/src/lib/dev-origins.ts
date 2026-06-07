@@ -18,21 +18,30 @@ export const frontendOrigins = ({
 
 const expandLoopbackOrigin = (origin: string) => {
   const parsed = safeParseUrl(origin);
-  if (!parsed) {
+  // Only http(s) URLs carry a comparable origin; others (e.g. "localhost:3000",
+  // parsed with scheme "localhost") have a "null" origin, so keep them raw.
+  if (
+    !parsed ||
+    (parsed.protocol !== "http:" && parsed.protocol !== "https:")
+  ) {
     return [origin];
   }
 
+  // Normalize to the URL origin (scheme://host:port) so a trailing slash or
+  // path on FRONTEND_URL can't make one loopback alias match the browser's
+  // Origin header while the other does not.
+  const normalizedOrigin = parsed.origin;
   const hostname = alternateLoopbackHostname(parsed.hostname);
   if (!hostname) {
-    return [origin];
+    return [normalizedOrigin];
   }
 
   parsed.hostname = hostname;
   const alternateOrigin = parsed.origin;
-  if (alternateOrigin === origin) {
-    return [origin];
+  if (alternateOrigin === normalizedOrigin) {
+    return [normalizedOrigin];
   }
-  return [origin, alternateOrigin];
+  return [normalizedOrigin, alternateOrigin];
 };
 
 const alternateLoopbackHostname = (hostname: string) => {
