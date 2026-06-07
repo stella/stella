@@ -163,10 +163,16 @@ const parseEml = async (fileBuffer: ArrayBuffer): Promise<ParsedEmail> => {
       bytes,
     });
 
-    if (attachment.contentId && attachment.mimeType.startsWith("image/")) {
+    if (
+      attachment.contentId &&
+      isImageMimeType(attachment.mimeType, attachment.filename)
+    ) {
       inlineImages.push({
         cid: stripAngleBrackets(attachment.contentId),
-        mimeType: attachment.mimeType,
+        mimeType: resolveAttachmentMimeType(
+          attachment.mimeType,
+          attachment.filename,
+        ),
         dataBase64: Buffer.from(bytes).toString("base64"),
       });
     }
@@ -209,6 +215,12 @@ const IMAGE_EXTENSION_MIME: Record<string, string> = {
   tiff: "image/tiff",
 };
 
+const GENERIC_ATTACHMENT_MIME_TYPES = new Set([
+  "",
+  "application/octet-stream",
+  "binary/octet-stream",
+]);
+
 const parseMsg = (fileBuffer: ArrayBuffer): ParsedEmail => {
   const data = parseOutlookMsg(fileBuffer);
 
@@ -236,8 +248,10 @@ const parseMsg = (fileBuffer: ArrayBuffer): ParsedEmail => {
     }
     inlineImages.push({
       cid: stripAngleBrackets(attachment.contentId),
-      mimeType:
-        attachment.mimeType ?? guessImageMime(attachment.fileName ?? undefined),
+      mimeType: resolveAttachmentMimeType(
+        attachment.mimeType,
+        attachment.fileName,
+      ),
       dataBase64: Buffer.from(attachment.bytes).toString("base64"),
     });
   }
@@ -265,11 +279,22 @@ const guessImageMime = (fileName: string | undefined): string => {
   return IMAGE_EXTENSION_MIME[extension] ?? "application/octet-stream";
 };
 
+const resolveAttachmentMimeType = (
+  mimeType: string | null,
+  fileName: string | null,
+): string => {
+  const normalized = mimeType?.trim().toLowerCase() ?? "";
+  if (GENERIC_ATTACHMENT_MIME_TYPES.has(normalized)) {
+    return guessImageMime(fileName ?? undefined);
+  }
+  return normalized;
+};
+
 const isImageMimeType = (
   mimeType: string | null,
   fileName: string | null,
 ): boolean =>
-  (mimeType ?? guessImageMime(fileName ?? undefined)).startsWith("image/");
+  resolveAttachmentMimeType(mimeType, fileName).startsWith("image/");
 
 // ── HTML rendering + sanitization ───────────────────────
 

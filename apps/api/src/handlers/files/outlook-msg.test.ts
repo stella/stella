@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { parsedEmailToText, parseEmail } from "./email-to-html";
+import {
+  parsedEmailToText,
+  parseEmail,
+  renderEmailHtml,
+} from "./email-to-html";
 import { parseOutlookMsg } from "./outlook-msg";
 
 const SECTOR_SIZE = 512;
@@ -28,7 +32,9 @@ describe("parseOutlookMsg", () => {
       rootProperty(
         "1013",
         "001f",
-        utf16Property('<p>Hello <b>world</b></p><img src="cid:logo">'),
+        utf16Property(
+          '<p>Hello <b>world</b></p><img src="cid:logo"><img src="cid:generic-logo">',
+        ),
       ),
       storageProperty("__recip_version1.0_00000000", "0c15", "0003", int32(1)),
       storageProperty(
@@ -74,6 +80,30 @@ describe("parseOutlookMsg", () => {
         "0102",
         PNG_BYTES,
       ),
+      storageProperty(
+        "__attach_version1.0_00000001",
+        "3712",
+        "001f",
+        utf16Property("generic-logo"),
+      ),
+      storageProperty(
+        "__attach_version1.0_00000001",
+        "370e",
+        "001f",
+        utf16Property("application/octet-stream"),
+      ),
+      storageProperty(
+        "__attach_version1.0_00000001",
+        "3707",
+        "001f",
+        utf16Property("generic-logo.png"),
+      ),
+      storageProperty(
+        "__attach_version1.0_00000001",
+        "3701",
+        "0102",
+        PNG_BYTES,
+      ),
     ]);
 
     const message = parseOutlookMsg(toArrayBuffer(file));
@@ -89,13 +119,18 @@ describe("parseOutlookMsg", () => {
     expect(message.cc).toEqual([
       { name: null, email: "copy@example.org", type: "cc" },
     ]);
-    expect(message.attachments).toHaveLength(1);
+    expect(message.attachments).toHaveLength(2);
     expect(message.attachments.at(0)).toMatchObject({
       contentId: "logo",
       fileName: "logo.png",
       mimeType: "image/png",
     });
     expect(message.attachments.at(0)?.bytes).toEqual(PNG_BYTES);
+    expect(message.attachments.at(1)).toMatchObject({
+      contentId: "generic-logo",
+      fileName: "generic-logo.png",
+      mimeType: "application/octet-stream",
+    });
 
     const parsedEmail = await parseEmail(
       toArrayBuffer(file),
@@ -106,6 +141,10 @@ describe("parseOutlookMsg", () => {
     expect(text).toContain("To: Client One <client@example.org>");
     expect(text).toContain("Subject: Contract draft");
     expect(text).toContain("Hello world");
+
+    const html = renderEmailHtml(parsedEmail);
+    expect(html).toContain("data:image/png;base64");
+    expect(html).not.toContain("cid:generic-logo");
   });
 });
 
