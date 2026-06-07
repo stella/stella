@@ -6,7 +6,6 @@
  * empty so the public repo does not encode an operator policy.
  */
 
-import { eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { rootDb } from "@/api/db/root";
@@ -37,21 +36,25 @@ const seed = async (): Promise<void> => {
   }
 
   for (const seedPolicy of seeds) {
-    const existing = await rootDb
-      .select({ id: usagePolicies.id })
-      .from(usagePolicies)
-      .where(eq(usagePolicies.policyKey, seedPolicy.key))
-      .limit(1);
-    if (existing.length > 0) {
-      console.log(`skip ${seedPolicy.key}: already present`);
-      continue;
-    }
-    await rootDb.insert(usagePolicies).values({
-      policyKey: seedPolicy.key,
-      displayName: seedPolicy.displayName,
-      monthlyUsageUnits: seedPolicy.monthlyUsageUnits,
-      hostedPolicyRef: seedPolicy.hostedPolicyRef,
-    });
+    // Upsert by policyKey so edits to the config (display name, units,
+    // or a newly created hostedPolicyRef) propagate to the existing row
+    // instead of being skipped.
+    await rootDb
+      .insert(usagePolicies)
+      .values({
+        policyKey: seedPolicy.key,
+        displayName: seedPolicy.displayName,
+        monthlyUsageUnits: seedPolicy.monthlyUsageUnits,
+        hostedPolicyRef: seedPolicy.hostedPolicyRef,
+      })
+      .onConflictDoUpdate({
+        target: usagePolicies.policyKey,
+        set: {
+          displayName: seedPolicy.displayName,
+          monthlyUsageUnits: seedPolicy.monthlyUsageUnits,
+          hostedPolicyRef: seedPolicy.hostedPolicyRef,
+        },
+      });
     console.log(
       `seeded ${seedPolicy.key}: ${seedPolicy.monthlyUsageUnits} units/seat${
         seedPolicy.hostedPolicyRef
