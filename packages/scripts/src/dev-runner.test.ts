@@ -859,6 +859,7 @@ describe("loadEnvFile", () => {
         'DB_USER="postgres"',
         "DB_PASS='secret'",
         "DATABASE_URL=postgres://$DB_USER:$DB_PASS@localhost:$PORT/stella",
+        "ESC_TEST=literal\\$value",
       ].join("\n"),
     );
 
@@ -868,6 +869,7 @@ describe("loadEnvFile", () => {
       DB_USER: "postgres",
       DB_PASS: "secret",
       DATABASE_URL: "postgres://postgres:secret@localhost:3000/stella",
+      ESC_TEST: "literal$value",
     });
   });
 });

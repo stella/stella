@@ -1199,13 +1199,15 @@ export const loadEnvFile = (envFilePath: string): Record<string, string> => {
   for (const key of Object.keys(env)) {
     const rawVal = env[key];
     if (rawVal !== undefined) {
-      env[key] = rawVal.replace(
-        /\$(?:\{([^}]+)\}|([a-zA-Z_][a-zA-Z0-9_]*))/gu,
-        (_, p1, p2) => {
-          const varName = p1 || p2;
-          return env[varName] ?? process.env[varName] ?? "";
-        },
-      );
+      env[key] = rawVal
+        .replace(
+          /(?<!\\)\$(?:\{([^}]+)\}|([a-zA-Z_][a-zA-Z0-9_]*))/gu,
+          (_, p1, p2) => {
+            const varName = p1 || p2;
+            return env[varName] ?? process.env[varName] ?? "";
+          },
+        )
+        .replace(/\\(\$)/gu, "$1");
     }
   }
 
