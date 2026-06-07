@@ -31,7 +31,7 @@ import {
 } from "@/api/handlers/uploads/permissions";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeId } from "@/api/lib/branded-types";
+import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
@@ -90,13 +90,19 @@ const presignBodySchema = t.Union([
 
 type PresignBody = Static<typeof presignBodySchema>;
 
+type EntityCreatePurposeDataWithParent = Extract<
+  PendingUploadPurposeData,
+  { type: "entity_create" }
+> & { parentId: SafeId<"entity"> | null };
+
 const toPurposeData = (purposeBody: PresignBody): PendingUploadPurposeData => {
   if (purposeBody.purpose === "entity_create") {
-    return {
+    const purposeData: EntityCreatePurposeDataWithParent = {
       type: "entity_create",
       propertyId: purposeBody.propertyId,
       parentId: purposeBody.parentId ?? null,
     };
+    return purposeData;
   }
   if (purposeBody.purpose === "entity_version") {
     return {

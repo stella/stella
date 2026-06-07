@@ -1399,12 +1399,6 @@ export type PendingUploadPurposeData =
   | {
       type: "entity_create";
       propertyId: SafeId<"property">;
-      /**
-       * Optional for compatibility with pending rows created before
-       * folder-aware presigned uploads. New presigns always write an
-       * explicit `null` for root uploads.
-       */
-      parentId?: SafeId<"entity"> | null;
     }
   | {
       type: "entity_version";

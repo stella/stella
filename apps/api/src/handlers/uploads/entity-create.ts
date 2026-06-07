@@ -221,13 +221,25 @@ export type FinalizeEntityCreateProps = {
   declaredMime: string;
   declaredSize: number;
   declaredSha256Hex: string;
-  purposeData: Extract<PendingUploadPurposeData, { type: "entity_create" }>;
+  purposeData: EntityCreatePurposeData;
   scanWarnings: string[] | undefined;
   uploadId: SafeId<"pendingUpload">;
   claimRequestId: string;
   promoteTmpObject: (
     finalKey: string,
   ) => Promise<Result<void, UploadFinalizeError>>;
+};
+
+type EntityCreatePurposeData = Extract<
+  PendingUploadPurposeData,
+  { type: "entity_create" }
+> & {
+  /**
+   * Optional for compatibility with pending rows created before
+   * folder-aware presigned uploads. New presigns always write an
+   * explicit `null` for root uploads.
+   */
+  parentId?: SafeId<"entity"> | null;
 };
 
 /**
