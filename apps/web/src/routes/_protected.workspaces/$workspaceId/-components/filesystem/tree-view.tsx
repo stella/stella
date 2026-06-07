@@ -102,10 +102,7 @@ import type { InternalPropertyId } from "@/routes/_protected.workspaces/$workspa
 const FILESYSTEM_ROW_HEIGHT_PX = 36;
 const FILESYSTEM_ROW_OVERSCAN = 16;
 const FILESYSTEM_INDENT_PX = 20;
-const FILESYSTEM_DISCLOSURE_SLOT_PX = 14;
-const FILESYSTEM_NAME_GAP_PX = 6;
-const FILESYSTEM_ICON_SIZE_PX = 16;
-const FILESYSTEM_GUIDE_COLUMN_OFFSET_PX = FILESYSTEM_DISCLOSURE_SLOT_PX / 2;
+const FILESYSTEM_GUIDE_COLUMN_OFFSET_PX = 7;
 const FILESYSTEM_GUIDE_LINE_COLOR_CLASS = "bg-muted-foreground/30";
 const FILESYSTEM_CREATED_BY_ID = "_created-by" satisfies InternalPropertyId;
 const FILESYSTEM_UPDATED_AT_ID = "_updated-at" satisfies InternalPropertyId;
@@ -1367,12 +1364,7 @@ const FilesystemRow = ({
       className="relative flex h-full min-w-0 items-center gap-1.5 self-stretch"
       style={{ paddingLeft: `${depth * FILESYSTEM_INDENT_PX}px` }}
     >
-      <TreeGuideLines
-        depth={depth}
-        guideDepths={guideDepths}
-        isFolder={isFolder}
-        isLast={isLast}
-      />
+      <TreeGuideLines depth={depth} guideDepths={guideDepths} isLast={isLast} />
       {isFolder ? (
         <ChevronRightIcon
           className={cn(
@@ -1641,14 +1633,12 @@ const FilesystemRow = ({
 type TreeGuideLinesProps = {
   depth: number;
   guideDepths: readonly number[];
-  isFolder: boolean;
   isLast: boolean;
 };
 
 const TreeGuideLines = ({
   depth,
   guideDepths,
-  isFolder,
   isLast,
 }: TreeGuideLinesProps) => {
   if (depth === 0) {
@@ -1657,15 +1647,9 @@ const TreeGuideLines = ({
 
   const parentGuideLeft =
     (depth - 1) * FILESYSTEM_INDENT_PX + FILESYSTEM_GUIDE_COLUMN_OFFSET_PX;
-  const disclosureCenterLeft =
+  const currentGuideLeft =
     depth * FILESYSTEM_INDENT_PX + FILESYSTEM_GUIDE_COLUMN_OFFSET_PX;
-  const iconCenterLeft =
-    depth * FILESYSTEM_INDENT_PX +
-    FILESYSTEM_DISCLOSURE_SLOT_PX +
-    FILESYSTEM_NAME_GAP_PX +
-    FILESYSTEM_ICON_SIZE_PX / 2;
-  const horizontalTargetLeft = isFolder ? disclosureCenterLeft : iconCenterLeft;
-  const horizontalWidth = horizontalTargetLeft - parentGuideLeft;
+  const horizontalWidth = currentGuideLeft - parentGuideLeft;
   // The immediate parent's column is the same x as this row's own
   // current line; rendering a full-height guide there would mask the
   // half-height "L" stop on the last child.
