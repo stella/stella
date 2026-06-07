@@ -16,7 +16,6 @@ import { getApiCredentials } from "@/api/lib/hosted-usage-provider/config";
 
 const createHostedSetupBodySchema = t.Object({
   usagePolicyId: tSafeId("usagePolicy"),
-  successUrl: t.Optional(t.String({ format: "uri", maxLength: 1024 })),
 });
 
 const config = {
@@ -115,8 +114,10 @@ const createHostedSetup = createSafeRootHandler(
     const baseUrl = env.FRONTEND_URL.endsWith("/")
       ? env.FRONTEND_URL.slice(0, -1)
       : env.FRONTEND_URL;
-    const successUrl =
-      body.successUrl ?? `${baseUrl}/settings/organization/usage`;
+    // Build the post-setup destination server-side: accepting a
+    // client-supplied success URL would turn the trusted hosted-setup
+    // flow into an open redirect toward an arbitrary origin.
+    const usageSettingsUrl = `${baseUrl}/settings/organization/usage`;
     const externalAccountRef = dbResult.accountRef
       ? undefined
       : hostedExternalAccountRef(session.activeOrganizationId);
@@ -126,8 +127,8 @@ const createHostedSetup = createSafeRootHandler(
       policyRef: dbResult.policyRef,
       accountRef: dbResult.accountRef ?? undefined,
       externalAccountRef,
-      returnUrl: `${baseUrl}/settings/organization/usage`,
-      successUrl,
+      returnUrl: usageSettingsUrl,
+      successUrl: usageSettingsUrl,
       metadata: {
         organization_id: session.activeOrganizationId,
         usage_policy_id: body.usagePolicyId,
