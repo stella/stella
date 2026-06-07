@@ -16,6 +16,7 @@ import {
   pendingUploads,
   type PendingUploadPurposeData,
 } from "@/api/db/schema";
+import { resolveUploadMime } from "@/api/handlers/files/utils";
 import { validateAgentSkill } from "@/api/handlers/uploads/agent-skill";
 import { validateEntityCreate } from "@/api/handlers/uploads/entity-create";
 import { validateEntityVersion } from "@/api/handlers/uploads/entity-version";
@@ -155,6 +156,15 @@ const presignUpload = createSafeHandler(
       }
     }
 
+    // Recover a usable MIME type for extensions browsers mistype
+    // (e.g. .msg → octet-stream). The frontend PUTs with the exact
+    // headers we sign below, so the resolved type is what reaches S3
+    // and the pending-upload row — no client-side normalization.
+    const resolvedMime = resolveUploadMime({
+      declaredMime: purposeBody.mimeType,
+      fileName: purposeBody.name,
+    });
+
     const uploadId = createSafeId<"pendingUpload">();
     const tmpKey = tmpUploadKey({
       organizationId: session.activeOrganizationId,
@@ -169,7 +179,7 @@ const presignUpload = createSafeHandler(
     const presign = await presignUploadUrl({
       key: tmpKey,
       expiresIn: PRESIGN_URL_EXPIRY_SECONDS,
-      contentType: purposeBody.mimeType,
+      contentType: resolvedMime,
       contentLength: purposeBody.size,
       sha256Base64: sha256HexToBase64(purposeBody.sha256Hex),
       scope: {
@@ -204,7 +214,7 @@ const presignUpload = createSafeHandler(
           purpose: purposeBody.purpose,
           purposeData: toPurposeData(purposeBody),
           declaredName: purposeBody.name,
-          declaredMime: purposeBody.mimeType,
+          declaredMime: resolvedMime,
           declaredSize: purposeBody.size,
           declaredSha256: purposeBody.sha256Hex,
           status: "pending",
