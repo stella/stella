@@ -2,7 +2,7 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { STALE_TIME } from "@/lib/consts";
-import { toAPIError } from "@/lib/errors";
+import { APIError, toAPIError } from "@/lib/errors";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -75,6 +75,11 @@ export const knowledgeKeys = {
       ...knowledgeKeys.templates.all(organizationId),
       templateId,
       "clauses",
+    ],
+    docxBuffer: (organizationId: string, templateId: string) => [
+      ...knowledgeKeys.templates.all(organizationId),
+      templateId,
+      "docx-buffer",
     ],
   },
   templateCategories: {
@@ -179,6 +184,32 @@ export const templatePreviewOptions = (
       }
 
       return response.data;
+    },
+    staleTime: STALE_TIME.FIVE.MINUTES,
+  });
+
+// Fetches the template's source .docx bytes via the presigned download URL
+// from templateDetailOptions, for a full-fidelity Folio preview. Keyed on the
+// template (not the rotating presigned URL) so it caches with the template and
+// is cleared by templates-subtree invalidation on update.
+export const templateDocxBufferOptions = (
+  organizationId: string,
+  templateId: string,
+  presignedUrl: string,
+) =>
+  queryOptions({
+    queryKey: knowledgeKeys.templates.docxBuffer(organizationId, templateId),
+    queryFn: async ({ signal }) => {
+      const response = await fetch(presignedUrl, { signal });
+
+      if (!response.ok) {
+        throw new APIError({
+          status: response.status,
+          message: "Failed to fetch template document from storage",
+        });
+      }
+
+      return response.arrayBuffer();
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });

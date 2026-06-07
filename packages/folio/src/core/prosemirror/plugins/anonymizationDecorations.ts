@@ -21,6 +21,8 @@ import type { Node as PMNode } from "prosemirror-model";
 import { Plugin, PluginKey } from "prosemirror-state";
 import type { EditorState, PluginSpec } from "prosemirror-state";
 
+import { collectBlockChunks, joinChunks, offsetToDocPos } from "./pmTextScan";
+
 export type AnonymizationTerm = {
   /** Canonical surface form, displayed in tooltips. */
   canonical: string;
@@ -115,58 +117,6 @@ const buildMatcher = (terms: readonly AnonymizationTerm[]): CompiledTerm[] => {
   return compiled;
 };
 
-type TextChunk = {
-  text: string;
-  /** PM doc position where this chunk's first char lives. */
-  start: number;
-};
-
-/**
- * Collect every block-level node's text content as a single joined
- * string plus a mapping from joined-string offsets back to PM doc
- * positions. We need this because PM splits text across nodes at
- * every formatting boundary (e.g. a bold-only prefix produces a
- * separate text node), and a regex run per text node misses any
- * surface form that straddles that boundary.
- */
-const collectBlockChunks = (doc: PMNode): TextChunk[][] => {
-  const blocks: TextChunk[][] = [];
-  doc.descendants((node, pos) => {
-    if (node.isTextblock) {
-      const chunks: TextChunk[] = [];
-      node.descendants((child, offset) => {
-        if (child.isText && child.text !== undefined) {
-          // pos is the textblock's PM position; +1 accounts for the
-          // textblock's opening token, +offset is the position of
-          // this text node inside the textblock.
-          chunks.push({ text: child.text, start: pos + 1 + offset });
-        }
-        return true;
-      });
-      if (chunks.length > 0) {
-        blocks.push(chunks);
-      }
-      return false;
-    }
-    return true;
-  });
-  return blocks;
-};
-
-/** Map a joined-string offset back to its PM doc position. */
-const offsetToDocPos = (chunks: TextChunk[], offset: number): number => {
-  let consumed = 0;
-  for (const chunk of chunks) {
-    if (offset <= consumed + chunk.text.length) {
-      return chunk.start + (offset - consumed);
-    }
-    consumed += chunk.text.length;
-  }
-  // Past the end: clamp to the final chunk's last position.
-  const last = chunks.at(-1);
-  return last ? last.start + last.text.length : 0;
-};
-
 const buildMatches = (
   doc: PMNode,
   terms: readonly AnonymizationTerm[],
@@ -177,7 +127,7 @@ const buildMatches = (
   }
   const matches: AnonymizationMatch[] = [];
   for (const chunks of collectBlockChunks(doc)) {
-    const joined = chunks.map((c) => c.text).join("");
+    const joined = joinChunks(chunks);
     for (const { regex, term } of compiled) {
       regex.lastIndex = 0;
       let match: RegExpExecArray | null = regex.exec(joined);
