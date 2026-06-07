@@ -33,7 +33,7 @@ import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts"
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tUuid } from "@/api/lib/custom-schema";
-import { DEV_INSPECTOR_ORIGINS } from "@/api/lib/dev-origins";
+import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { stashDevOtp } from "@/api/lib/dev-otp-store";
 import {
   sendNewDeviceLoginEmail,
@@ -187,7 +187,10 @@ const isMcpResourceScope = (
 const createAuth = () => {
   const auth = betterAuth({
     trustedOrigins: [
-      env.FRONTEND_URL,
+      ...frontendOrigins({
+        frontendUrl: env.FRONTEND_URL,
+        isDev: env.isDev,
+      }),
       ...(env.isDev ? ["chrome-extension://*"] : []),
       ...(env.isDev ? DEV_INSPECTOR_ORIGINS : []),
       ...(env.EXTENSION_ORIGIN ? [env.EXTENSION_ORIGIN] : []),

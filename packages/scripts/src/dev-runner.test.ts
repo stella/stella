@@ -545,7 +545,11 @@ describe("worktree helpers", () => {
   });
 
   test("resolves the main root from the common git dir", () => {
-    expect(resolveMainRootFromCommonDir("/repo/.git")).toBe("/repo");
+    const mainRoot = createTempDir();
+
+    expect(resolveMainRootFromCommonDir(resolve(mainRoot, ".git"))).toBe(
+      mainRoot,
+    );
   });
 
   test("symlinks missing env files from the main worktree", () => {

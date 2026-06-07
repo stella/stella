@@ -732,6 +732,69 @@ jobs:
         env:
           NPM_TOKEN: ""
 
+  # Narrow Windows smoke for the dev runner. Full app CI stays on Linux,
+  # but this catches path and shell assumptions in the scripts package
+  # before Windows contributors hit them locally.
+  windows-scripts:
+    needs: trust-check
+    if: >-
+      needs.trust-check.outputs.trusted == 'true'
+      || github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check whether scripts-affecting paths changed
+        id: changed
+        shell: bash
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          base_ref="origin/$BASE_REF"
+          mapfile -t changed_files < <(git diff --name-only "$base_ref"...HEAD)
+          run=false
+          for file in "${changed_files[@]}"; do
+            case "$file" in
+              packages/scripts/*|package.json|bun.lock|.github/workflows/ci.yml)
+                run=true
+                break
+                ;;
+            esac
+          done
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          if [[ "$run" != "true" ]]; then
+            echo "::notice::No scripts-affecting paths changed; skipping Windows scripts smoke."
+          fi
+
+      - name: Setup Bun
+        if: steps.changed.outputs.run == 'true'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install scripts workspace dependencies
+        if: steps.changed.outputs.run == 'true'
+        run: bun install --frozen-lockfile --ignore-scripts --filter @stll/scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Test dev runner
+        if: steps.changed.outputs.run == 'true'
+        run: bun test packages/scripts/src/dev-runner.test.ts
+
   # Aggregation job for branch protection. The ruleset requires
   # this check to pass, which ensures untrusted PRs cannot be
   # merged without CI and trusted PRs must pass all checks.
@@ -746,7 +809,15 @@ jobs:
       }}
     if: always()
     needs:
-      [trust-check, ci-checks, web-build, landing-build, e2e, api-image-deps]
+      [
+        trust-check,
+        ci-checks,
+        web-build,
+        landing-build,
+        e2e,
+        api-image-deps,
+        windows-scripts,
+      ]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -761,6 +832,7 @@ jobs:
           TRUSTED: ${{ needs.trust-check.outputs.trusted }}
           TRUST_RESULT: ${{ needs.trust-check.result }}
           WEB_RESULT: ${{ needs.web-build.result }}
+          WINDOWS_SCRIPTS_RESULT: ${{ needs.windows-scripts.result }}
         run: |
           # When the trust-check job was skipped (draft PR or
           # irrelevant label event), all downstream jobs are also
@@ -775,7 +847,8 @@ jobs:
                   || "$WEB_RESULT" == "failure" || "$WEB_RESULT" == "cancelled" \
                   || "$LANDING_RESULT" == "failure" || "$LANDING_RESULT" == "cancelled" \
                   || "$E2E_RESULT" == "failure" || "$E2E_RESULT" == "cancelled" \
-                  || "$API_IMAGE_DEPS_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "cancelled" ]]; then
+                  || "$API_IMAGE_DEPS_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "cancelled" \
+                  || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" ]]; then
               echo "::error::CI checks failed."
               exit 1
             fi
@@ -789,12 +862,12 @@ jobs:
 
           # "cancelled" means cancel-in-progress replaced this
           # run with a newer one; the newer run is authoritative.
-          if [[ "$CI_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" ]]; then
+          if [[ "$CI_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" ]]; then
             echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
             exit 0
           fi
 
-          if [[ "$CI_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" ]]; then
+          if [[ "$CI_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" ]]; then
             echo "::error::CI checks failed."
             exit 1
           fi
