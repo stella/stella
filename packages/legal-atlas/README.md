@@ -54,12 +54,12 @@ docker build -f apps/legal-atlas-runner/Dockerfile -t stella-legal-atlas .
 docker run --rm stella-legal-atlas list
 ```
 
-Reserved runner slots:
+Runner slots:
 
 ```text
-case-law-ingest
-statute-ingest
-search-index
+case-law-ingest  implemented
+statute-ingest   reserved
+search-index     reserved
 ```
 
 Each runner can become its own service, scheduled task, or local job while
@@ -74,9 +74,9 @@ bun --filter @stll/legal-atlas-runner start -- list
 bun --filter @stll/legal-atlas-runner start -- run case-law-ingest
 ```
 
-The runner slots are reserved first. The existing case-law ingestion daemon still
-lives under `apps/api` until its DB/search/API dependencies are extracted behind
-shared corpus modules.
+The case-law ingestion daemon is wired through `@stll/legal-atlas-runner`.
+Some persistence and search dependencies still live behind API modules while
+the corpus internals are extracted into this package.
 
 ## Package Boundaries
 

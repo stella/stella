@@ -18,8 +18,8 @@ export type RunnerDefinition = {
 const RUNNER_DEFINITIONS: readonly RunnerDefinition[] = [
   {
     name: "case-law-ingest",
-    status: "reserved",
-    description: "migrated case-law source ingestion daemon",
+    status: "implemented",
+    description: "case-law source ingestion daemon",
   },
   {
     name: "statute-ingest",

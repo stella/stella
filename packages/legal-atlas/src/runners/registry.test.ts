@@ -17,6 +17,6 @@ describe("runner registry", () => {
   test("narrows known runner names", () => {
     expect(isRunnerName("case-law-ingest")).toBe(true);
     expect(isRunnerName("api-server")).toBe(false);
-    expect(getRunnerDefinition("search-index").status).toBe("reserved");
+    expect(getRunnerDefinition("case-law-ingest").status).toBe("implemented");
   });
 });

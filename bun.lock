@@ -193,6 +193,7 @@
       "name": "@stll/legal-atlas-runner",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/api": "workspace:*",
         "@stll/legal-atlas": "workspace:*",
       },
       "devDependencies": {

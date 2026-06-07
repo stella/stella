@@ -16,6 +16,14 @@ ENV NODE_ENV=production
 COPY --from=pruner /app/out/full/ .
 RUN bun --filter @stll/legal-atlas-runner build
 RUN bun apps/legal-atlas-runner/dist/index.js smoke
+RUN out=$(DATABASE_URL=postgres://smoke:smoke@localhost:5432/smoke \
+            S3_ENDPOINT=http://localhost \
+            S3_BUCKET=smoke \
+            S3_REGION=eu-central-1 \
+            bun apps/legal-atlas-runner/dist/index.js run case-law-ingest __smoke__ 2>&1 || true); \
+    echo "$out"; \
+    echo "$out" | grep -q 'Unknown adapter: __smoke__' \
+      || { echo "ERROR: case-law ingestion entrypoint smoke failed" >&2; exit 1; }
 
 FROM base AS runner
 ENV NODE_ENV=production

@@ -4,14 +4,33 @@
     "target": "ES2024",
     "lib": ["ESNext"],
     "module": "ESNext",
+    "jsx": "react-jsx",
     "paths": {
+      "@stll/ai-catalog": ["../../packages/ai-catalog/src/index.ts"],
+      "@stll/boe": ["../../packages/boe/src/index.ts"],
+      "@stll/business-registries": [
+        "../../packages/business-registries/src/index.ts"
+      ],
+      "@stll/business-registries/*": [
+        "../../packages/business-registries/src/*/index.ts"
+      ],
+      "@stll/country-codes": ["../../packages/country-codes/src/index.ts"],
+      "@stll/docx-core": ["../../packages/docx-core/src/index.ts"],
+      "@stll/errors": ["../../packages/errors/src/index.ts"],
+      "@stll/infosoud": ["../../packages/infosoud/src/index.ts"],
       "@stll/legal-ast": ["../../packages/legal-ast/src/index.ts"],
       "@stll/legal-ast/*": ["../../packages/legal-ast/src/*.ts"],
       "@stll/legal-atlas": ["../../packages/legal-atlas/src/index.ts"],
-      "@stll/legal-atlas/*": ["../../packages/legal-atlas/src/*.ts"]
+      "@stll/legal-atlas/*": ["../../packages/legal-atlas/src/*.ts"],
+      "@stll/money": ["../../packages/money/src/index.ts"],
+      "@stll/permissions": ["../../packages/permissions/src/index.ts"],
+      "@stll/skills": ["../../packages/skills/src/index.ts"],
+      "@stll/transactional": ["../../packages/transactional/src/index.ts"],
+      "@stll/transactional/*": ["../../packages/transactional/*"],
+      "@/api/*": ["../api/src/*"]
     },
     "types": ["bun"]
   },
-  "include": ["src"],
+  "include": ["src", "../api/src", "../../types"],
   "exclude": ["node_modules"]
 }

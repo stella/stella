@@ -10,7 +10,7 @@ describe("legal-atlas CLI", () => {
   });
 
   test("reserved runners fail closed instead of silently no-oping", async () => {
-    const exitCode = await runCli(["run", "case-law-ingest"]);
+    const exitCode = await runCli(["run", "statute-ingest"]);
 
     expect(exitCode).toBe(78);
   });

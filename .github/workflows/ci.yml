@@ -668,18 +668,16 @@ jobs:
         env:
           NPM_TOKEN: ""
 
-      - name: Prod-deps compile + ingest smoke
+      - name: Prod-deps API compile smoke
         if: steps.changed.outputs.run == 'true'
         # Empirically prove the pruned API tree builds and its
-        # ingestion entrypoint resolves with devDependencies
+        # runtime worker entrypoints resolve with devDependencies
         # stripped. Runs a fresh `bun install --production` in a
         # parallel dir (so the lockfile-drift install above stays
         # unchanged), overlays the full pruned source via
         # `cp -a ../full/. .` (mirrors `COPY --from=pruner
-        # /app/out/full/ .` in `apps/api/Dockerfile`), compiles the
-        # API binary plus runtime workers, and exercises the ingestion
-        # script with a fake adapter key — the same smoke the
-        # Dockerfile's `runner` stage runs at build time.
+        # /app/out/full/ .` in `apps/api/Dockerfile`), and compiles the
+        # API binary plus runtime workers.
         run: |
           set -euo pipefail
           rm -rf out-prod
@@ -704,19 +702,31 @@ jobs:
             --target bun \
             --outfile /tmp/runtime-workers/extraction-worker.js \
             apps/api/src/lib/search/extraction-worker.ts
-          unset NODE_ENV
-          cd apps/api
+        env:
+          NPM_TOKEN: ""
+
+      - name: Prod-deps legal atlas runner smoke
+        if: steps.changed.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          rm -rf out-runner
+          turbo prune @stll/legal-atlas-runner --docker --out-dir out-runner
+          cd out-runner/json
+          bun install --production --frozen-lockfile --ignore-scripts
+          cp -a ../full/. .
+          bun --filter @stll/legal-atlas-runner build
+          bun apps/legal-atlas-runner/dist/index.js smoke
           set +e
           out=$(DATABASE_URL=postgres://smoke:smoke@localhost:5432/smoke \
                 S3_ENDPOINT=http://localhost \
                 S3_BUCKET=smoke \
                 S3_REGION=eu-central-1 \
-                bun scripts/ingest-case-law.ts __smoke__ 2>&1)
+                bun apps/legal-atlas-runner/dist/index.js run case-law-ingest __smoke__ 2>&1)
           status=$?
           set -e
           echo "$out"
           if ! echo "$out" | grep -q 'Unknown adapter: __smoke__'; then
-            echo "ERROR: ingestion entrypoint smoke failed under --production (exit=$status)" >&2
+            echo "ERROR: legal-atlas runner smoke failed under --production (exit=$status)" >&2
             exit 1
           fi
         env:

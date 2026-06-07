@@ -22,6 +22,19 @@ const writeOut = async (text: string): Promise<number> =>
 const writeErr = async (text: string): Promise<number> =>
   await Bun.write(Bun.stderr, `${text}\n`);
 
+const runImplementedRunner = async (
+  runnerName: string,
+  argv: readonly string[],
+): Promise<number> => {
+  if (runnerName === "case-law-ingest") {
+    const { runCaseLawIngest } = await import("./runners/case-law-ingest.js");
+    return await runCaseLawIngest(argv);
+  }
+
+  await writeErr(`Runner ${runnerName} is registered without an entrypoint.`);
+  return 70;
+};
+
 export const runCli = async (argv: readonly string[]): Promise<number> => {
   const command = argv.at(0) ?? "--help";
 
@@ -75,8 +88,7 @@ export const runCli = async (argv: readonly string[]): Promise<number> => {
     return 78;
   }
 
-  await writeErr(`Runner ${runner.name} is registered without an entrypoint.`);
-  return 70;
+  return await runImplementedRunner(runner.name, argv.slice(2));
 };
 
 if (import.meta.main) {

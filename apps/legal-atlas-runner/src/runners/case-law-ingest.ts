@@ -11,7 +11,7 @@
  * persists the cursor, and retries next cycle.
  *
  * Usage:
- *   bun apps/api/scripts/ingest-case-law.ts [adapter-key]
+ *   bun --filter @stll/legal-atlas-runner start -- run case-law-ingest [adapter-key]
  *
  * Without arguments, runs all sources in independent loops.
  * With an adapter key, runs only that source once and exits.
@@ -29,6 +29,38 @@ import { backfillSearchIndex } from "@/api/handlers/case-law/search-index";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { isS3Stale, refreshS3 } from "@/api/lib/s3";
+
+import { LEGAL_ATLAS_RUNNER_ENV } from "../env";
+
+const formatLogDetail = (detail: unknown): string => {
+  if (detail === undefined) {
+    return "";
+  }
+
+  if (detail instanceof Error) {
+    return detail.stack ?? detail.message;
+  }
+
+  if (typeof detail === "string") {
+    return detail;
+  }
+
+  try {
+    return JSON.stringify(detail);
+  } catch {
+    return "[unserializable log detail]";
+  }
+};
+
+const logInfo = (message: string): void => {
+  void Bun.write(Bun.stdout, `${message}\n`);
+};
+
+const logError = (message: string, detail?: unknown): void => {
+  const formattedDetail = formatLogDetail(detail);
+  const line = formattedDetail ? `${message} ${formattedDetail}` : message;
+  void Bun.write(Bun.stderr, `${line}\n`);
+};
 
 // Case-law ingestion writes the global corpus. The customer-scoped
 // `stella` role is read-only on case_law_* (see migration
@@ -60,10 +92,10 @@ let daemonMode = false;
 process.on("unhandledRejection", (reason) => {
   const message = reason instanceof Error ? reason.message : String(reason);
   if (daemonMode && isTransientConnectionError(message)) {
-    console.error(`[daemon] DB connection lost (will retry): ${message}`);
+    logError(`[daemon] DB connection lost (will retry): ${message}`);
     return;
   }
-  console.error("[daemon] Unhandled rejection:", reason);
+  logError("[daemon] Unhandled rejection:", reason);
   process.exit(1);
 });
 
@@ -96,7 +128,7 @@ const IDLE_DELAY_MS = 24 * 60 * 60 * 1000;
  */
 const MAX_CONCURRENT_DB_WRITES = Math.max(
   1,
-  Number.parseInt(process.env.MAX_CONCURRENT_DB_WRITES ?? "2", 10) || 2,
+  LEGAL_ATLAS_RUNNER_ENV.maxConcurrentDbWrites,
 );
 
 let activeDbSlots = 0;
@@ -146,7 +178,7 @@ const writeHeartbeat = () => {
 // Adapters to skip. Set DISABLED_ADAPTERS env var to a
 // comma-separated list of adapter keys (e.g. "sk-courts,pl-courts").
 const DISABLED_ADAPTER_KEYS = new Set(
-  (process.env.DISABLED_ADAPTERS ?? "")
+  LEGAL_ATLAS_RUNNER_ENV.disabledAdapters
     .split(",")
     .map((k) => k.trim())
     .filter(Boolean),
@@ -194,7 +226,7 @@ const SOURCES = ALL_SOURCES.filter(
 );
 
 if (DISABLED_ADAPTER_KEYS.size > 0) {
-  console.log(`Disabled adapters: ${[...DISABLED_ADAPTER_KEYS].join(", ")}`);
+  logInfo(`Disabled adapters: ${[...DISABLED_ADAPTER_KEYS].join(", ")}`);
 }
 
 const ensureSource = async (
@@ -259,7 +291,7 @@ const runOneCycle = async (
   const source = await ensureSource(adapterKey, name, initialCursor);
   const cursorBefore = source.syncCursor;
 
-  console.log(`[${adapterKey}] Ingesting (cursor: ${cursorBefore ?? "start"})`);
+  logInfo(`[${adapterKey}] Ingesting (cursor: ${cursorBefore ?? "start"})`);
 
   const startedAt = new Date();
   const t0 = performance.now();
@@ -315,26 +347,23 @@ const runOneCycle = async (
       });
     });
   } catch (eventError) {
-    console.error(
-      `[${adapterKey}] Failed to write ingestion event:`,
-      eventError,
-    );
+    logError(`[${adapterKey}] Failed to write ingestion event:`, eventError);
   }
 
   if (outcome === "completed") {
-    console.log(
+    logInfo(
       `[${adapterKey}] Inserted: ${result?.inserted ?? 0}, ` +
         `Skipped: ${result?.skipped ?? 0}, ` +
         `Pages: ${result?.pagesProcessed ?? 0}, ` +
         `Duration: ${durationMs}ms`,
     );
   } else if (outcome === "timeout") {
-    console.log(
+    logInfo(
       `[${adapterKey}] Timed out after ${durationMs}ms ` +
         `(inserted: ${result?.inserted ?? 0}, pages: ${result?.pagesProcessed ?? 0})`,
     );
   } else {
-    console.error(`[${adapterKey}] Failed: ${errorMessage}`);
+    logError(`[${adapterKey}] Failed: ${errorMessage}`);
   }
 
   return { outcome, inserted: result?.inserted ?? 0 };
@@ -344,6 +373,7 @@ const runOneCycle = async (
  * Independent loop for a single adapter. Runs forever,
  * catching all errors so it never crashes.
  */
+// eslint-disable-next-line sonarjs/cognitive-complexity -- preserves the daemon's existing retry, alert, and idle-backoff state machine.
 const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
   let consecutiveFailures = 0;
   /** Separate counter for backoff; not reset by alert threshold. */
@@ -367,7 +397,7 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
         if (outcome === "completed") {
           if (inserted > 0) {
             if (idleCycles >= IDLE_THRESHOLD) {
-              console.log(
+              logInfo(
                 `[${adapterKey}] New decisions found; resuming fast cadence`,
               );
             }
@@ -375,9 +405,7 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
           } else {
             idleCycles++;
             if (idleCycles === IDLE_THRESHOLD) {
-              console.log(
-                `[${adapterKey}] Caught up; switching to daily polling`,
-              );
+              logInfo(`[${adapterKey}] Caught up; switching to daily polling`);
             }
           }
         }
@@ -387,11 +415,9 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
       backoffFailures++;
       const msg = error instanceof Error ? error.message : String(error);
       if (isTransientConnectionError(msg)) {
-        console.error(
-          `[${adapterKey}] DB connection error (will retry): ${msg}`,
-        );
+        logError(`[${adapterKey}] DB connection error (will retry): ${msg}`);
       } else {
-        console.error(`[${adapterKey}] Unexpected error:`, error);
+        logError(`[${adapterKey}] Unexpected error:`, error);
       }
     }
 
@@ -420,83 +446,84 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
   }
 };
 
-// ── Entry point ─────────────────────────────────────────
+export const runCaseLawIngest = async (
+  argv: readonly string[],
+): Promise<number> => {
+  const filterKey = argv.at(0);
 
-const filterKey = process.argv[2];
-
-// Single adapter: run once and exit (useful for debugging).
-if (filterKey) {
-  const match = SOURCES.find((s) => s.adapterKey === filterKey);
-  if (!match) {
-    console.error(
-      `Unknown adapter: ${filterKey}. ` +
-        `Valid keys: ${SOURCES.map((s) => s.adapterKey).join(", ")}`,
-    );
-    process.exit(1);
-  }
-  await refreshS3();
-  const { outcome } = await runOneCycle(match.adapterKey, match.name);
-  process.exit(outcome === "completed" ? 0 : 1);
-}
-
-if (SOURCES.length === 0) {
-  console.error("No adapters enabled. Check DISABLED_ADAPTERS env var.");
-  process.exit(1);
-}
-
-// All adapters: independent concurrent loops.
-daemonMode = true;
-console.log("Ingestion daemon started.");
-await refreshS3();
-writeHeartbeat();
-
-const adapterLoops: Promise<void>[] = [];
-for (const source of SOURCES) {
-  adapterLoops.push(runAdapterLoop(source));
-}
-
-// Health loop: heartbeat + S3 credential refresh.
-const healthLoop = (async () => {
-  while (true) {
-    await Bun.sleep(HEALTH_INTERVAL_MS);
-    writeHeartbeat();
-    try {
-      if (isS3Stale()) {
-        await refreshS3();
-      }
-    } catch (error) {
-      console.error("S3 credential refresh failed:", error);
-    }
-  }
-})();
-
-// Search index backfill loop: indexes decisions that were
-// inserted without a tsvector (the pipeline no longer computes
-// tsvectors inline). Runs at low priority outside the DB slot
-// semaphore with bounded concurrency and a generous statement
-// timeout so long texts don't block other work.
-const searchIndexLoop = (async () => {
-  while (true) {
-    await Bun.sleep(SEARCH_INDEX_INTERVAL_MS);
-    try {
-      const indexed = await backfillSearchIndex(
-        ingestionDb,
-        SEARCH_INDEX_BATCH_SIZE,
+  // Single adapter: run once and exit (useful for debugging).
+  if (filterKey) {
+    const match = SOURCES.find((s) => s.adapterKey === filterKey);
+    if (!match) {
+      logError(
+        `Unknown adapter: ${filterKey}. ` +
+          `Valid keys: ${SOURCES.map((s) => s.adapterKey).join(", ")}`,
       );
-      if (indexed > 0) {
-        console.log(`[search-index] Indexed ${indexed} decisions (backfill)`);
-      }
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      if (isTransientConnectionError(msg)) {
-        console.error(
-          `[search-index] DB connection error (will retry): ${msg}`,
-        );
-      } else {
-        console.error("[search-index] Backfill error:", error);
+      return 1;
+    }
+    await refreshS3();
+    const { outcome } = await runOneCycle(match.adapterKey, match.name);
+    return outcome === "completed" ? 0 : 1;
+  }
+
+  if (SOURCES.length === 0) {
+    logError("No adapters enabled. Check DISABLED_ADAPTERS env var.");
+    return 1;
+  }
+
+  // All adapters: independent concurrent loops.
+  daemonMode = true;
+  logInfo("Ingestion daemon started.");
+  await refreshS3();
+  writeHeartbeat();
+
+  const adapterLoops: Promise<void>[] = [];
+  for (const source of SOURCES) {
+    adapterLoops.push(runAdapterLoop(source));
+  }
+
+  // Health loop: heartbeat + S3 credential refresh.
+  const healthLoop = (async () => {
+    while (true) {
+      await Bun.sleep(HEALTH_INTERVAL_MS);
+      writeHeartbeat();
+      try {
+        if (isS3Stale()) {
+          await refreshS3();
+        }
+      } catch (error) {
+        logError("S3 credential refresh failed:", error);
       }
     }
-  }
-})();
+  })();
 
-await Promise.all([...adapterLoops, healthLoop, searchIndexLoop]);
+  // Search index backfill loop: indexes decisions that were
+  // inserted without a tsvector (the pipeline no longer computes
+  // tsvectors inline). Runs at low priority outside the DB slot
+  // semaphore with bounded concurrency and a generous statement
+  // timeout so long texts don't block other work.
+  const searchIndexLoop = (async () => {
+    while (true) {
+      await Bun.sleep(SEARCH_INDEX_INTERVAL_MS);
+      try {
+        const indexed = await backfillSearchIndex(
+          ingestionDb,
+          SEARCH_INDEX_BATCH_SIZE,
+        );
+        if (indexed > 0) {
+          logInfo(`[search-index] Indexed ${indexed} decisions (backfill)`);
+        }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        if (isTransientConnectionError(msg)) {
+          logError(`[search-index] DB connection error (will retry): ${msg}`);
+        } else {
+          logError("[search-index] Backfill error:", error);
+        }
+      }
+    }
+  })();
+
+  await Promise.all([...adapterLoops, healthLoop, searchIndexLoop]);
+  return 0;
+};

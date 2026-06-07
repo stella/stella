@@ -34,6 +34,7 @@
     "format": "oxfmt ."
   },
   "dependencies": {
+    "@stll/api": "workspace:*",
     "@stll/legal-atlas": "workspace:*"
   },
   "devDependencies": {
