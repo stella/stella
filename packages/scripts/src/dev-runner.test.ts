@@ -725,8 +725,8 @@ describe("dev env factories", () => {
 
     expect(result).toMatchObject({
       BETTER_AUTH_COOKIE_PREFIX: "stella-dev-3101",
-      BETTER_AUTH_URL: "http://127.0.0.1:3101",
-      FRONTEND_URL: "http://127.0.0.1:3100",
+      BETTER_AUTH_URL: "http://localhost:3101",
+      FRONTEND_URL: "http://localhost:3100",
       KEEP_ME: "1",
       STELLA_API_PORT: "3101",
       STELLA_WEB_PORT: "3100",
@@ -776,7 +776,7 @@ describe("dev env factories", () => {
       STELLA_WEB_PORT: "3100",
       VITE_AI_DEVTOOLS_ENABLED: "false",
       VITE_AI_SDK_DEVTOOLS_PORT: "5083",
-      VITE_API_URL: "http://127.0.0.1:3101",
+      VITE_API_URL: "http://localhost:3101",
       VITE_DESKTOP_BRIDGE_PORT: "45999",
     });
     expect(

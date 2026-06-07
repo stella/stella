@@ -946,7 +946,7 @@ export const ensureWorktreeEnvLinks = ({
 };
 
 const apiUrlForPort = (port: number) => `http://127.0.0.1:${String(port)}`;
-const webUrlForPort = (port: number) => `http://127.0.0.1:${String(port)}`;
+const webUrlForPort = (port: number) => `http://localhost:${String(port)}`;
 const desktopBridgeUrlForPort = (port: number) =>
   `http://127.0.0.1:${String(port)}`;
 const desktopViewUrlForPort = (port: number) =>
@@ -966,8 +966,8 @@ export const createApiEnv = ({
   ...baseEnv,
   AI_SDK_DEVTOOLS_PORT: String(ports.aiSdkDevtools),
   BETTER_AUTH_COOKIE_PREFIX: `stella-dev-${String(ports.api)}`,
-  BETTER_AUTH_URL: apiUrlForPort(ports.api),
-  FRONTEND_URL: webUrlForPort(ports.web),
+  BETTER_AUTH_URL: `http://localhost:${String(ports.api)}`,
+  FRONTEND_URL: `http://localhost:${String(ports.web)}`,
   NODE_ENV: "development",
   STELLA_API_PORT: String(ports.api),
   STELLA_WEB_PORT: String(ports.web),
@@ -993,7 +993,7 @@ export const createWebEnv = ({
   STELLA_WEB_PORT: String(ports.web),
   VITE_AI_DEVTOOLS_ENABLED: aiDevtoolsEnabled ? "true" : "false",
   VITE_AI_SDK_DEVTOOLS_PORT: String(ports.aiSdkDevtools),
-  VITE_API_URL: apiUrlForPort(ports.api),
+  VITE_API_URL: `http://localhost:${String(ports.api)}`,
   VITE_DESKTOP_BRIDGE_PORT: String(ports.desktopBridge),
 });
 
@@ -1431,15 +1431,15 @@ export const buildPreparationSteps = ({
     steps.push({
       cmd: [resolveCommandPath("bun"), "run", "db:migrate"],
       cwd: pathResolve(rootDir, "apps/api"),
-      env: expandEnvMap({
-        ...loadEnvFile(pathResolve(rootDir, "apps/api/.env")),
+      env: {
+        ...expandEnvMap(loadEnvFile(pathResolve(rootDir, "apps/api/.env"))),
         ...createApiEnv({
           baseEnv: apiBaseEnv,
           infraOffset,
           infraPorts,
           ports,
         }),
-      }),
+      },
       label: "Applying database migrations",
     });
   }
@@ -1474,30 +1474,30 @@ const buildPersistentSteps = ({
     baseEnv: process.env,
     envFilePath: pathResolve(rootDir, "apps/desktop/.env"),
   });
-  const apiEnv = expandEnvMap({
-    ...loadEnvFile(pathResolve(rootDir, "apps/api/.env")),
+  const apiEnv = {
+    ...expandEnvMap(loadEnvFile(pathResolve(rootDir, "apps/api/.env"))),
     ...createApiEnv({
       baseEnv: apiBaseEnv,
       infraOffset,
       infraPorts,
       ports,
     }),
-  });
-  const webEnv = expandEnvMap({
-    ...loadEnvFile(pathResolve(rootDir, "apps/web/.env")),
+  };
+  const webEnv = {
+    ...expandEnvMap(loadEnvFile(pathResolve(rootDir, "apps/web/.env"))),
     ...createWebEnv({
       aiDevtoolsEnabled,
       baseEnv: webBaseEnv,
       ports,
     }),
-  });
-  const desktopEnv = expandEnvMap({
-    ...loadEnvFile(pathResolve(rootDir, "apps/desktop/.env")),
+  };
+  const desktopEnv = {
+    ...expandEnvMap(loadEnvFile(pathResolve(rootDir, "apps/desktop/.env"))),
     ...createDesktopEnv({
       baseEnv: desktopBaseEnv,
       ports,
     }),
-  });
+  };
   const primary: Step[] = [];
   const secondary: Step[] = [];
 
