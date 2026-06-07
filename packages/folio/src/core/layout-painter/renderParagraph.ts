@@ -217,11 +217,19 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
     element.style.fontStyle = "italic";
   }
 
-  // Color — skip black/auto so the CSS variable --doc-canvas-text can adapt to dark mode
+  // Color — black/auto are skipped so --doc-canvas-text can adapt to dark mode.
+  // Explicit colors are exposed as a custom property (--doc-run-color) and read
+  // back via var(); dark mode then inverts their lightness with relative-color
+  // CSS (hue/chroma preserved), matching Word's dark-mode rendering instead of
+  // leaving authored colors dim on the dark canvas.
   let hasExplicitTextColor = false;
   const textColor = getRenderableTextColor(run);
   if (textColor) {
     element.style.color = textColor;
+    // Also expose the authored color so dark mode can invert its lightness
+    // (hue/chroma preserved) via relative-color CSS. The dark rule overrides
+    // this inline color with !important; light mode keeps it verbatim.
+    element.style.setProperty("--doc-run-color", textColor);
     hasExplicitTextColor = true;
   }
 
@@ -519,6 +527,12 @@ function renderTextRun(run: TextRun, doc: Document): HTMLElement {
       anchor.style.textDecoration = "underline";
       // Override span color to match anchor (prevents color mismatch in selection)
       span.style.color = hyperlinkColor;
+      // Expose the link colour on the anchor (which paints over the span) so
+      // dark mode inverts its lightness via the same --doc-run-color rule.
+      // `noDefaultStyle` (e.g. TOC) anchors set no colour and keep inheriting
+      // the paragraph's inverted colour.
+      anchor.style.setProperty("--doc-run-color", hyperlinkColor);
+      span.style.setProperty("--doc-run-color", hyperlinkColor);
     }
     span.append(anchor);
   } else {
