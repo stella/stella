@@ -17,6 +17,7 @@ import { WorkflowValidationError } from "@/api/lib/errors/tagged-errors";
 
 import { isElement } from "./ooxml";
 import type {
+  ComputedField,
   DiscoveredField,
   DiscoveredTemplate,
   FieldMeta,
@@ -129,9 +130,21 @@ const buildConditionXml = (condition: NamedCondition): string => {
   return `<st:condition ${attrs.join(" ")}/>`;
 };
 
+const buildComputedXml = (computed: ComputedField): string => {
+  const attrs: string[] = [
+    `name="${escapeXml(computed.name)}"`,
+    `expression="${escapeXml(computed.expression)}"`,
+  ];
+  if (computed.label !== undefined) {
+    attrs.push(`label="${escapeXml(computed.label)}"`);
+  }
+  return `<st:computed ${attrs.join(" ")}/>`;
+};
+
 const buildManifestXml = (manifest: TemplateManifest): string => {
   const fields = manifest.fields.map(buildFieldXml).join("");
   const conditions = manifest.conditions.map(buildConditionXml).join("");
+  const computed = (manifest.computed ?? []).map(buildComputedXml).join("");
 
   return [
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -139,6 +152,7 @@ const buildManifestXml = (manifest: TemplateManifest): string => {
     ` version="${manifest.version}">`,
     fields ? `<st:fields>${fields}</st:fields>` : "",
     conditions ? `<st:conditions>${conditions}</st:conditions>` : "",
+    computed ? `<st:computed-fields>${computed}</st:computed-fields>` : "",
     "</st:template>",
   ].join("");
 };
@@ -272,6 +286,18 @@ const parseCondition = (el: slimdom.Element): NamedCondition => {
   return condition;
 };
 
+const parseComputed = (el: slimdom.Element): ComputedField => {
+  const name = el.getAttribute("name") ?? "";
+  const expression = el.getAttribute("expression") ?? "";
+  const label = el.getAttribute("label") ?? undefined;
+
+  const computed: ComputedField = { name, expression };
+  if (label !== undefined) {
+    computed.label = label;
+  }
+  return computed;
+};
+
 const parseManifestXml = (xml: string): TemplateManifest | null => {
   let doc: slimdom.Document;
   try {
@@ -299,6 +325,7 @@ const parseManifestXml = (xml: string): TemplateManifest | null => {
 
   const fields: FieldMeta[] = [];
   const conditions: NamedCondition[] = [];
+  const computed: ComputedField[] = [];
 
   const fieldsEl = getFirstElementChild(root, "fields");
   if (fieldsEl) {
@@ -316,7 +343,15 @@ const parseManifestXml = (xml: string): TemplateManifest | null => {
     }
   }
 
-  return { version, fields, conditions };
+  const computedEl = getFirstElementChild(root, "computed-fields");
+  if (computedEl) {
+    const computedEls = getElementChildren(computedEl, "computed");
+    for (const c of computedEls) {
+      computed.push(parseComputed(c));
+    }
+  }
+
+  return { version, fields, conditions, computed };
 };
 
 // ── Public API ───────────────────────────────────────────
