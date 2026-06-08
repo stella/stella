@@ -1969,6 +1969,7 @@ type Messages = {
     "untitled": "Untitled task";
   };
   "templates": {
+    "addCondition": "Add condition";
     "addItem": "Add item";
     "allTemplates": "All templates";
     "backToList": "Back to templates";
@@ -1977,6 +1978,16 @@ type Messages = {
     "categoryDeleteFailed": "Failed to delete category";
     "categoryName": "Category name";
     "categorySaveFailed": "Failed to save category";
+    "conditionAddRule": "Add rule";
+    "conditionField": "Field";
+    "conditionMatch": "Match";
+    "conditionMatchAll": "All";
+    "conditionMatchAny": "Any";
+    "conditionMatchSuffix": "of the following are true";
+    "conditionNamePlaceholder": "Condition name (e.g. NPF)";
+    "conditionOperator": "Operator";
+    "conditionValue": "Value";
+    "conditionsTitle": "Conditions";
     "configureFields": "Configure fields";
     "confirmDelete": "This will permanently delete the template.";
     "createCategory": "New category";
