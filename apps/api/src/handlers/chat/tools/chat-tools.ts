@@ -157,6 +157,7 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   "create-document": CHAT_TOOL_POLICY_KIND.internal,
   "create-current-skill-resource": CHAT_TOOL_POLICY_KIND.mutation,
   "describe-stella-api": CHAT_TOOL_POLICY_KIND.internal,
+  describe_template: CHAT_TOOL_POLICY_KIND.internal,
   [EXPAND_CHAT_HISTORY_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
   // Per-thread `webSearchEnabled` already gates the tools; an
   // additional per-call approval would double-gate and block
@@ -164,6 +165,7 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   // official-registry lookups so the model executes immediately
   // once the toggle is on.
   [FETCH_URL_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.publicOfficial,
+  fill_template: CHAT_TOOL_POLICY_KIND.internal,
   infosoud_lookup_case: CHAT_TOOL_POLICY_KIND.publicOfficial,
   list_templates: CHAT_TOOL_POLICY_KIND.internal,
   "load-skill": CHAT_TOOL_POLICY_KIND.internal,
@@ -262,8 +264,8 @@ export const getChatTools = ({
     scopedDb,
   });
 
-  // Template library tools (list templates; describe/fill to follow).
-  const templateTools = createTemplateTools({ scopedDb });
+  // Template library tools: list, describe, and fill templates.
+  const templateTools = createTemplateTools({ scopedDb, organizationId });
 
   // create-document is client-executed (no server `execute`) — the
   // chat client picks the destination matter and posts the result
