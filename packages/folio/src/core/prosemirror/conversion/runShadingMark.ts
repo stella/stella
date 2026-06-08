@@ -49,7 +49,9 @@ export function shadingToRunShadingAttrs(
     attrs.themeShade = fill.themeShade;
   }
   // Carry a genuine pattern overlay for export fidelity, but not the default
-  // `clear`/`nil`, nor the `solid` we just flattened into a plain fill.
+  // `clear`/`nil`, nor the `solid` we just flattened into a plain fill. Keep the
+  // pattern foreground color (`w:color`) too, so a pct*/stripe pattern's color
+  // round-trips.
   if (
     !isSolid &&
     shading.pattern &&
@@ -57,6 +59,9 @@ export function shadingToRunShadingAttrs(
     shading.pattern !== "nil"
   ) {
     attrs.pattern = shading.pattern;
+    if (shading.color?.rgb) {
+      attrs.patternColor = shading.color.rgb;
+    }
   }
   return attrs;
 }
@@ -87,6 +92,9 @@ export function runShadingAttrsToShading(
   }
   if (attrs.pattern) {
     shading.pattern = attrs.pattern;
+  }
+  if (attrs.patternColor) {
+    shading.color = { rgb: attrs.patternColor };
   }
   return shading;
 }

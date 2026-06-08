@@ -1139,6 +1139,12 @@ export const readRunShadingMarkAttrs = (
     issues,
     SHADING_PATTERN_VALUES,
   );
+  optionalString(
+    attrs,
+    "patternColor",
+    "runShading.attrs.patternColor",
+    issues,
+  );
 
   return attrsResult(attrs, issues);
 };

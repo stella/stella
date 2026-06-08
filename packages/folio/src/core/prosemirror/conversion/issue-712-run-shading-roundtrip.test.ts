@@ -94,6 +94,18 @@ describe("Issue #712 — run shading round-trips and renders", () => {
     expect(roundTripShading({ shading })?.pattern).toBe("pct25");
   });
 
+  test("a non-clear pattern's foreground color round-trips", () => {
+    const shading = {
+      pattern: "pct25" as const,
+      color: { rgb: "FF0000" },
+      fill: { rgb: "DDDDDD" },
+    };
+    const out = roundTripShading({ shading });
+    expect(out?.pattern).toBe("pct25");
+    expect(out?.color?.rgb).toBe("FF0000");
+    expect(out?.fill?.rgb).toBe("DDDDDD");
+  });
+
   test("a solid pattern with a color but no fill renders and round-trips", () => {
     // `<w:shd w:val="solid" w:color="FF0000"/>` paints the color as a solid
     // background; flatten it into the fill so it isn't dropped.

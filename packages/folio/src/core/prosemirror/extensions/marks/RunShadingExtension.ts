@@ -28,6 +28,7 @@ export const RunShadingExtension = createMarkExtension({
       themeTint: { default: null },
       themeShade: { default: null },
       pattern: { default: null },
+      patternColor: { default: null },
     },
     parseDOM: [
       {
