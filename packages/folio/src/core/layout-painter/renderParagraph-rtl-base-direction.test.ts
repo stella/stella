@@ -136,6 +136,12 @@ describe("Issue #719 — RTL base direction detection", () => {
     expect(render([text("hello")], { bidi: true }).dir).toBe("rtl");
   });
 
+  test("explicit w:bidi=false wins over rtl runs (stays LTR)", () => {
+    // `<w:bidi w:val="0"/>` is an explicit LTR override; first-strong detection
+    // must not re-enable RTL for a Hebrew run inside it.
+    expect(render([text("בדיקה", true)], { bidi: false }).dir).toBe("");
+  });
+
   test("English-led paragraph with an embedded rtl word stays LTR (no dir)", () => {
     expect(render([text("Hello "), text("שלום", true)]).dir).toBe("");
   });

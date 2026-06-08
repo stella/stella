@@ -1982,14 +1982,15 @@ export function renderParagraphFragment(
     fragmentEl.dataset["styleId"] = block.attrs.styleId;
   }
 
-  // Apply RTL direction. An explicit `w:bidi` paragraph is always RTL. When
-  // there's no `w:bidi` but the paragraph carries right-to-left runs (`w:rtl`),
-  // fall back to first-strong base-direction detection: Word/UBA order the runs
-  // by the paragraph's base direction, but the painter lays them out as
-  // independently `dir`-marked spans (each an isolate), so without a base `dir`
-  // on the fragment the runs stay in logical LTR order and reversed Hebrew/
-  // Arabic reads backwards. eigenpal #723 (#719).
-  const isRtl = Boolean(block.attrs?.bidi) || paragraphBaseIsRtl(block);
+  // Apply RTL direction. An explicit `w:bidi` flag wins: `true` ⇒ RTL, and an
+  // explicit `w:val="0"` (parsed as `false`) ⇒ LTR even when the paragraph
+  // carries `w:rtl` runs. Only when the flag is absent do we fall back to
+  // first-strong base-direction detection: Word/UBA order the runs by the
+  // paragraph's base direction, but the painter lays them out as independently
+  // `dir`-marked spans (each an isolate), so without a base `dir` on the
+  // fragment the runs stay in logical LTR order and reversed Hebrew/Arabic
+  // reads backwards. eigenpal #723 (#719).
+  const isRtl = block.attrs?.bidi ?? paragraphBaseIsRtl(block);
   if (isRtl) {
     fragmentEl.dir = "rtl";
   }
