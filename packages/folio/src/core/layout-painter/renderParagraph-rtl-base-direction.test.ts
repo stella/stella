@@ -165,6 +165,13 @@ describe("Issue #719 — RTL base direction detection", () => {
     expect(el.style.textAlign).toBe("right");
   });
 
+  test("explicit bidi marks (RLM/ALM/LRM) decide before letters", () => {
+    // U+200F RLM and U+061C ALM are strong RTL; U+200E LRM is strong LTR.
+    expect(render([text("‏Hello", true)]).dir).toBe("rtl"); // RLM-led
+    expect(render([text("؜Hello", true)]).dir).toBe("rtl"); // ALM-led
+    expect(render([text("‎שלום", true)]).dir).toBe(""); // LRM overrides
+  });
+
   test("rtl runs with only digits/punctuation honour w:rtl (no strong char)", () => {
     expect(render([text("123 .", true)]).dir).toBe("rtl");
   });

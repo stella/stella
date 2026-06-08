@@ -1452,7 +1452,10 @@ export function renderLine(
     onlyRun &&
     isMathRun(onlyRun) &&
     onlyRun.display === "block" &&
-    alignment !== "right"
+    // Only an EXPLICIT right alignment suppresses display-math centering; a
+    // right default synthesized from RTL base direction must not (the equation
+    // still centres in an RTL paragraph). (#723)
+    block.attrs?.alignment !== "right"
   ) {
     lineEl.style.textAlign = "center";
   }
@@ -1929,14 +1932,22 @@ function paragraphBaseIsRtl(block: ParagraphBlock): boolean {
       return isFieldRun(r) ? (r.fallback ?? "") : "";
     })
     .join("");
-  // The first strong char is the first *letter* (`\p{L}`); digits, combining
-  // marks, punctuation and spaces are weak/neutral and skipped in one native
-  // scan. The first letter's script decides; no letter at all => honor w:rtl.
-  const firstLetter = /\p{L}/u.exec(text)?.[0];
-  if (firstLetter === undefined) {
+  // The first strong directional signal, in one native scan: an explicit bidi
+  // mark (RLM U+200F / ALM U+061C => RTL, LRM U+200E => LTR) or the first
+  // letter (`\p{L}`). Digits, combining marks, punctuation and spaces are
+  // weak/neutral and skipped. The first letter's script decides; nothing
+  // strong => honor w:rtl.
+  const match = /(\u200F|\u061C)|(\u200E)|(\p{L})/u.exec(text);
+  if (!match) {
     return true;
   }
-  return RTL_STRONG_LETTER.test(firstLetter);
+  if (match[1] !== undefined) {
+    return true; // RLM or ALM
+  }
+  if (match[2] !== undefined) {
+    return false; // LRM
+  }
+  return match[3] !== undefined && RTL_STRONG_LETTER.test(match[3]);
 }
 
 /**
