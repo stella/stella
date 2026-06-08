@@ -9,6 +9,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type {
+  FieldRun,
   ParagraphAttrs,
   ParagraphBlock,
   ParagraphFragment,
@@ -83,9 +84,15 @@ const fakeDocument = {
   },
 } as unknown as Document;
 
-function render(runs: TextRun[], attrs?: ParagraphAttrs): HTMLElement {
+function render(
+  runs: (TextRun | FieldRun)[],
+  attrs?: ParagraphAttrs,
+): HTMLElement {
   const block: ParagraphBlock = { kind: "paragraph", id: "p1", runs, attrs };
-  const totalChars = runs.reduce((n, r) => n + r.text.length, 0);
+  const totalChars = runs.reduce(
+    (n, r) => n + ("text" in r ? r.text.length : 0),
+    0,
+  );
   const measure: ParagraphMeasure = {
     kind: "paragraph",
     lines: [
@@ -168,6 +175,18 @@ describe("Issue #719 — RTL base direction detection", () => {
 
   test("RTL scripts outside the BMP (Adlam) are detected", () => {
     expect(render([text("\u{1E900}\u{1E921}", true)]).dir).toBe("rtl");
+  });
+
+  test("a field-result run contributes to base-direction detection", () => {
+    // A field result (e.g. a cross-reference) renders as text, so its first
+    // strong letter counts.
+    const field: FieldRun = {
+      kind: "field",
+      fieldType: "OTHER",
+      fallback: "שלום",
+      rtl: true,
+    };
+    expect(render([field]).dir).toBe("rtl");
   });
 
   test("a CJK-only rtl run resolves LTR (CJK is strong left-to-right)", () => {

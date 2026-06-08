@@ -1912,14 +1912,24 @@ const RTL_STRONG_LETTER =
  * eigenpal #723 (#719).
  */
 function paragraphBaseIsRtl(block: ParagraphBlock): boolean {
-  const textRuns = block.runs.filter(isTextRun);
-  if (!textRuns.some((r) => r.rtl)) {
+  // Text runs plus field runs (a field result like a cross-reference renders as
+  // text, so it can be the paragraph's first strong character).
+  const runs = block.runs.filter((r) => isTextRun(r) || isFieldRun(r));
+  if (!runs.some((r) => r.rtl)) {
     return false;
   }
+  const text = runs
+    .map((r) => {
+      if (isTextRun(r)) {
+        return r.text;
+      }
+      return isFieldRun(r) ? (r.fallback ?? "") : "";
+    })
+    .join("");
   // The first strong char is the first *letter* (`\p{L}`); digits, combining
   // marks, punctuation and spaces are weak/neutral and skipped in one native
   // scan. The first letter's script decides; no letter at all => honor w:rtl.
-  const firstLetter = /\p{L}/u.exec(textRuns.map((r) => r.text).join(""))?.[0];
+  const firstLetter = /\p{L}/u.exec(text)?.[0];
   if (firstLetter === undefined) {
     return true;
   }
