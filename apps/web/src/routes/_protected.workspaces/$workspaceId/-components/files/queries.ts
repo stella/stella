@@ -1,13 +1,17 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { APIError, toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors";
 import type { QueryOptionsInput } from "@/lib/react-query";
+import {
+  fetchStorageArrayBuffer,
+  type StorageFetchPurpose,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/files/storage-fetch";
 
 type FileByFieldIdKey = {
   workspaceId: string;
   fieldId: string;
-  purpose?: "display" | "download" | "native-display";
+  purpose?: StorageFetchPurpose;
 };
 
 type FileData = {
@@ -108,21 +112,17 @@ export const fileOptions = (props: FileOptionsProps) =>
         throw toAPIError(response.error);
       }
 
-      const file = await fetch(response.data.presignedUrl, { signal });
-
-      if (!file.ok) {
-        throw new APIError({
-          status: file.status,
-          message: "Failed to fetch file from storage",
-        });
-      }
+      const buffer = await fetchStorageArrayBuffer(response.data.presignedUrl, {
+        signal,
+        purpose: props.purpose ?? "display",
+      });
 
       return {
         fileId: response.data.fileId,
         fileName: response.data.fileName,
         mimeType: response.data.mimeType,
         originalMimeType: response.data.originalMimeType,
-        buffer: await file.arrayBuffer(),
+        buffer,
       } satisfies FileData;
     },
   });
@@ -166,21 +166,17 @@ export const textFileOptions = (props: FileOptionsProps) =>
         throw toAPIError(response.error);
       }
 
-      const file = await fetch(response.data.presignedUrl, { signal });
-
-      if (!file.ok) {
-        throw new APIError({
-          status: file.status,
-          message: "Failed to fetch file from storage",
-        });
-      }
+      const buffer = await fetchStorageArrayBuffer(response.data.presignedUrl, {
+        signal,
+        purpose: "download",
+      });
 
       return {
         fileId: response.data.fileId,
         fileName: response.data.fileName,
         mimeType: response.data.mimeType,
         originalMimeType: response.data.originalMimeType,
-        text: new TextDecoder().decode(await file.arrayBuffer()),
+        text: new TextDecoder().decode(buffer),
       } satisfies TextFileData;
     },
   });
