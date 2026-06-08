@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
-import type { Layout } from "../../src/core/layout-engine/types";
 import type {
   HiddenEditorStateReason,
   LayoutInstrumentation,
-} from "../../src/paged-editor/layoutInstrumentation";
+} from "../../src/core/layout-engine/layoutInstrumentation";
+import type { Layout } from "../../src/core/layout-engine/types";
 
 const PARAGRAPH_COUNT = 1500;
 const TYPING_TEXT = "abc";

@@ -162,8 +162,9 @@ describe("measureBlocks error instrumentation", () => {
     const events: MeasureBlockErrorEvent[] = [];
     const previous = globalThis.__folioLayoutInstrumentation;
     globalThis.__folioLayoutInstrumentation = {
-      onMeasureBlockError: (event: MeasureBlockErrorEvent) =>
-        events.push(event),
+      onMeasureBlockError: (event: MeasureBlockErrorEvent) => {
+        events.push(event);
+      },
     };
 
     try {

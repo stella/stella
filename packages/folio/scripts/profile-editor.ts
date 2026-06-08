@@ -10,7 +10,7 @@ import type {
   LayoutInstrumentation,
   LayoutPhase,
   LayoutRunReason,
-} from "../src/paged-editor/layoutInstrumentation";
+} from "../src/core/layout-engine/layoutInstrumentation";
 
 type CounterBucket = {
   count: number;
