@@ -7,6 +7,7 @@
  */
 
 import type { Comment, Document, Endnote, Footnote } from "../types/document";
+import { escapeLinkUrl } from "./escape";
 import { renderBlocks } from "./renderBlock";
 import type { RenderContext } from "./types";
 
@@ -37,7 +38,7 @@ export function appendTrailers(
   if (ctx.opts.hyperlinks === "reference" && ctx.hyperlinkRefs.length > 0) {
     sections.push(
       ctx.hyperlinkRefs
-        .map(({ href, refNumber }) => `[${refNumber}]: ${href}`)
+        .map(({ href, refNumber }) => `[${refNumber}]: ${escapeLinkUrl(href)}`)
         .join("\n"),
     );
   }

@@ -162,6 +162,18 @@ describe("toMarkdown — inline marks", () => {
       "[here](https://example.com)",
     );
   });
+
+  test("reference-mode link destinations are escaped", () => {
+    const link: Hyperlink = {
+      type: "hyperlink",
+      href: "https://x.com/a b(c)",
+      children: [run("t")],
+    };
+    const out = toMarkdown(doc([{ type: "paragraph", content: [link] }]), {
+      hyperlinks: "reference",
+    });
+    expect(out).toBe("[t][1]\n\n[1]: https://x.com/a%20b(c)");
+  });
 });
 
 describe("toMarkdown — tables", () => {
