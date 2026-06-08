@@ -514,6 +514,7 @@ const sendMessage = createSafeRootHandler(
     // DOCX edit tool or the model can chase an impossible path.
     const chatTools = getChatTools({
       organizationId: session.activeOrganizationId,
+      orgAIConfig,
       refRegistry,
       safeDb,
       scopedDb,
