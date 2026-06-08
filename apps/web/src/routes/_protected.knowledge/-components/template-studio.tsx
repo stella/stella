@@ -127,6 +127,26 @@ export const TemplateStudio = ({
     }
   }, [loadedBuffer, docBuffer]);
 
+  // Folio defers creating the ProseMirror view until first interaction, so
+  // onEditorViewReady never fires and the selection->inspector binding can't
+  // read directives. Force the view once the document is loaded (the editor
+  // mounts lazily, so poll the ref until it's available).
+  useEffect(() => {
+    if (!docBuffer) {
+      return;
+    }
+    let raf = 0;
+    const ensure = () => {
+      if (editorRef.current) {
+        editorRef.current.ensureEditorView({ focus: false });
+      } else {
+        raf = requestAnimationFrame(ensure);
+      }
+    };
+    ensure();
+    return () => cancelAnimationFrame(raf);
+  }, [docBuffer]);
+
   // Map the editor's caret to the directive it sits in, so the Inspector knows
   // which face to show. Reads the live plugin state via the captured view.
   const syncSelection = useCallback(() => {
@@ -193,27 +213,19 @@ export const TemplateStudio = ({
         stellaToast.add({ title: t("templates.saveFailed"), type: "error" });
         return;
       }
-      const base = new File([bytes], fileName, { type: DOCX_MIME });
+      const file = new File([bytes], fileName, { type: DOCX_MIME });
 
-      // Re-embed the edited manifest, then store the result as a new version.
-      const embedded = await api.templates.manifest.post({
-        file: base,
-        manifest: JSON.stringify(
-          buildManifest(manifest, fields, conditions, computed),
-        ),
-      });
-      if (embedded.error) {
-        stellaToast.add({ title: t("templates.saveFailed"), type: "error" });
-        return;
-      }
-      // The endpoint returns the docx bytes (Blob/ArrayBuffer) with the
-      // manifest embedded; wrap them straight back into a File to store.
-      const withManifest = new File([embedded.data as BlobPart], fileName, {
-        type: DOCX_MIME,
-      });
+      // Persist the edited manifest alongside the bytes in one call; the server
+      // re-embeds it (avoids a binary re-embed round-trip that Eden would parse
+      // as text and corrupt).
       const stored = await api
         .templates({ templateId: toSafeId<"template">(templateId) })
-        .document.post({ file: withManifest });
+        .document.post({
+          file,
+          manifest: JSON.stringify(
+            buildManifest(manifest, fields, conditions, computed),
+          ),
+        });
       if (stored.error) {
         stellaToast.add({ title: t("templates.saveFailed"), type: "error" });
         return;
@@ -261,7 +273,11 @@ export const TemplateStudio = ({
             loadingIndicator={null}
             onChange={() => setIsDirty(true)}
             onEditorViewReady={(view) => {
-              editorViewRef.current = view;
+              // Folio re-reports null on some re-renders; keep the last live
+              // view so selection syncing doesn't lose its reference.
+              if (view) {
+                editorViewRef.current = view;
+              }
             }}
             onSelectionChange={(state) => {
               setHasSelection(state?.hasSelection ?? false);
