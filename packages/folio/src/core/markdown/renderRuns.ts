@@ -204,6 +204,11 @@ function renderRun(
   run: Run,
   paraId: string | undefined,
 ): string {
+  // Hidden text (`w:vanish`) is suppressed in Word's normal view; drop it from
+  // the markdown so hidden clauses / drafting notes don't leak into the export.
+  if (run.formatting?.hidden) {
+    return "";
+  }
   const inner = renderRunContent(ctx, pkg, run.content, paraId);
   if (!inner) {
     return "";

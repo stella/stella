@@ -105,6 +105,12 @@ describe("toMarkdown — inline marks", () => {
     );
   });
 
+  test("hidden runs (w:vanish) are dropped", () => {
+    expect(md([para([run("Keep"), run("Hidden", { hidden: true })])])).toBe(
+      "Keep",
+    );
+  });
+
   test("strikethrough", () => {
     expect(md([para([run("x", { strike: true })])])).toBe("~~x~~");
   });

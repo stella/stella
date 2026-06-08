@@ -337,6 +337,10 @@ function renderHtmlRun(
   run: Run,
   paraId: string | undefined,
 ): string {
+  // Hidden text (`w:vanish`) is suppressed in Word's normal view; drop it.
+  if (run.formatting?.hidden) {
+    return "";
+  }
   let text = "";
   for (const item of run.content) {
     switch (item.type) {

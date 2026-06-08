@@ -19,7 +19,11 @@ export function renderBlocks(
 
   for (const block of blocks) {
     if (block.type === "paragraph") {
-      const isListItem = !!block.listRendering;
+      // A hidden-marker (`w:vanish`) list paragraph renders as plain prose, so
+      // treat it as prose here too (it must not suppress the blank line after a
+      // real list item).
+      const isListItem =
+        !!block.listRendering && !block.listRendering.markerHidden;
       const md = renderParagraph(ctx, pkg, block);
       if (!md) {
         prevWasListItem = false;
