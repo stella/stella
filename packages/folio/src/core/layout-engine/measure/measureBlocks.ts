@@ -1,4 +1,7 @@
-import { recordMeasureBlock } from "../layoutInstrumentation";
+import {
+  recordMeasureBlock,
+  recordMeasureBlockError,
+} from "../layoutInstrumentation";
 import {
   bandTopContentY,
   floatingTextBoxReservesBand,
@@ -305,8 +308,13 @@ export function measureTableBlock(
   for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
     const row = rows[rowIdx]!; // SAFETY: rowIdx < rows.length
     const sourceRowCells = tableBlock.rows[rowIdx]?.cells;
-    let maxHeight = 0;
-    let maxVerticalBorderHeight = 0;
+    // Take the max over per-cell totals (content + padding + vertical borders),
+    // not the sum of an independent content-max and border-max: those two maxes
+    // can come from different cells, which over-allocates the row when the
+    // tallest-content cell is not also the tallest-border cell. `cell.height`
+    // stays content + padding (the painter lays cell content out within it); the
+    // border only contributes to the row total here.
+    let maxCellHeightWithBorders = 0;
     for (let cellIdx = 0; cellIdx < row.cells.length; cellIdx++) {
       const cell = row.cells[cellIdx]!; // SAFETY: cellIdx < row.cells.length
       const sourceCell = sourceRowCells?.[cellIdx];
@@ -325,10 +333,9 @@ export function measureTableBlock(
       const padTop = sourceCell?.padding?.top ?? DEFAULT_CELL_PADDING_Y;
       const padBottom = sourceCell?.padding?.bottom ?? DEFAULT_CELL_PADDING_Y;
       cell.height += padTop + padBottom;
-      maxHeight = Math.max(maxHeight, cell.height);
-      maxVerticalBorderHeight = Math.max(
-        maxVerticalBorderHeight,
-        getTableCellVerticalBorderHeight(sourceCell),
+      maxCellHeightWithBorders = Math.max(
+        maxCellHeightWithBorders,
+        cell.height + getTableCellVerticalBorderHeight(sourceCell),
       );
     }
 
@@ -342,13 +349,10 @@ export function measureTableBlock(
     } else if (explicitHeight) {
       // Both 'atLeast' and 'auto' (OOXML default) treat the value as minimum height.
       // ECMA-376 §17.4.81: when hRule is absent or "auto", val is the minimum row height.
-      row.height = Math.max(
-        maxHeight + maxVerticalBorderHeight,
-        explicitHeight,
-      );
+      row.height = Math.max(maxCellHeightWithBorders, explicitHeight);
     } else {
       // No explicit height — use content height directly.
-      row.height = maxHeight + maxVerticalBorderHeight;
+      row.height = maxCellHeightWithBorders;
     }
   }
 
@@ -895,10 +899,12 @@ export function measureBlocks(
       }
 
       return measure;
-    } catch {
-      // Return a minimal real measure so layout doesn't crash; the original
-      // measureBlock failure is swallowed here (downstream layout treats this
-      // as a single-line paragraph of fixed height).
+    } catch (error) {
+      // A single bad block must not crash pagination, so fall back to a minimal
+      // real measure (downstream layout treats it as a single-line paragraph of
+      // fixed height). Route the failure through the layout instrumentation hook
+      // so it stays traceable instead of vanishing silently.
+      recordMeasureBlockError(blockIndex, block, error);
       const fallback: ParagraphMeasure = {
         kind: "paragraph",
         lines: [],

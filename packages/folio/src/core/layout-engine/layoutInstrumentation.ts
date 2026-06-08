@@ -43,6 +43,11 @@ export type LayoutInstrumentation = {
     blockIndex: number;
     blockKind: FlowBlock["kind"];
   }) => void;
+  onMeasureBlockError?: (event: {
+    blockIndex: number;
+    blockKind: FlowBlock["kind"];
+    message: string;
+  }) => void;
 };
 
 declare global {
@@ -55,6 +60,18 @@ export function recordMeasureBlock(blockIndex: number, block: FlowBlock): void {
   globalThis.__folioLayoutInstrumentation?.onMeasureBlock?.({
     blockIndex,
     blockKind: block.kind,
+  });
+}
+
+export function recordMeasureBlockError(
+  blockIndex: number,
+  block: FlowBlock,
+  error: unknown,
+): void {
+  globalThis.__folioLayoutInstrumentation?.onMeasureBlockError?.({
+    blockIndex,
+    blockKind: block.kind,
+    message: error instanceof Error ? error.message : String(error),
   });
 }
 

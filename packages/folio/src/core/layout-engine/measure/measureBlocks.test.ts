@@ -1,13 +1,28 @@
 import { describe, expect, test } from "bun:test";
 
-import type { FlowBlock, ImageBlock, ParagraphBlock } from "../types";
+import type {
+  FlowBlock,
+  ImageBlock,
+  ParagraphBlock,
+  TableBlock,
+} from "../types";
 import {
   fixedCharWidth,
   withFakeTextMeasure,
 } from "./__tests__/fakeTextMeasure";
-import { measureBlock, measureBlocks } from "./measureBlocks";
+import {
+  measureBlock,
+  measureBlocks,
+  measureTableBlock,
+} from "./measureBlocks";
 
 const fakeMeasure = { charWidth: fixedCharWidth(5) };
+
+const para = (id: string, text: string): ParagraphBlock => ({
+  kind: "paragraph",
+  id,
+  runs: [{ kind: "text", text }],
+});
 
 const imageBlock: ImageBlock = {
   kind: "image",
@@ -83,5 +98,101 @@ describe("measureBlocks", () => {
       // dispatch still produces a measure for each block.
       expect(measures.every((m) => m.kind === "paragraph")).toBe(true);
     }, fakeMeasure);
+  });
+});
+
+describe("measureTableBlock row height", () => {
+  test("maxes per-cell content+border, not summed independent maxes", () => {
+    withFakeTextMeasure(() => {
+      // Cell A: more content (two paragraphs), thin border.
+      // Cell B: less content (one paragraph), thick border.
+      // The buggy formula (maxContent + maxBorder) takes A's content and B's
+      // border from different cells and over-allocates; the correct one maxes
+      // each cell's own content+padding+border.
+      const table: TableBlock = {
+        kind: "table",
+        id: "t",
+        columnWidths: [120, 120],
+        rows: [
+          {
+            id: "r0",
+            cells: [
+              {
+                id: "a",
+                blocks: [para("a1", "Tall cell line one."), para("a2", "two")],
+                padding: { top: 0, right: 0, bottom: 0, left: 0 },
+                borders: { top: { width: 1 }, bottom: { width: 1 } }, // 2
+              },
+              {
+                id: "b",
+                blocks: [para("b1", "Short.")],
+                padding: { top: 0, right: 0, bottom: 0, left: 0 },
+                borders: { top: { width: 20 }, bottom: { width: 20 } }, // 40
+              },
+            ],
+          },
+        ],
+      };
+
+      const measure = measureTableBlock(table, 240);
+      const row = measure.rows[0]!;
+      const cellA = row.cells[0]!;
+      const cellB = row.cells[1]!;
+
+      // The tallest-content cell (A) is not the tallest-border cell (B).
+      expect(cellA.height).toBeGreaterThan(cellB.height);
+
+      const correct = Math.max(cellA.height + 2, cellB.height + 40);
+      const summedMaxes = Math.max(cellA.height, cellB.height) + 40;
+
+      expect(row.height).toBe(correct);
+      // The fix avoids the over-allocation the old summed-maxes formula produced.
+      expect(row.height).toBeLessThan(summedMaxes);
+    }, fakeMeasure);
+  });
+});
+
+describe("measureBlocks error instrumentation", () => {
+  test("routes a block-measurement failure through the instrumentation hook", () => {
+    type MeasureBlockErrorEvent = {
+      blockIndex: number;
+      blockKind: FlowBlock["kind"];
+      message: string;
+    };
+    const events: MeasureBlockErrorEvent[] = [];
+    const previous = globalThis.__folioLayoutInstrumentation;
+    globalThis.__folioLayoutInstrumentation = {
+      onMeasureBlockError: (event: MeasureBlockErrorEvent) =>
+        events.push(event),
+    };
+
+    try {
+      withFakeTextMeasure(
+        () => {
+          const measures = measureBlocks([para("p", "will throw")], 600);
+
+          // Pagination still gets a usable fallback measure instead of crashing.
+          expect(measures).toHaveLength(1);
+          const measure = measures[0]!;
+          expect(measure.kind).toBe("paragraph");
+          if (measure.kind === "paragraph") {
+            expect(measure.totalHeight).toBe(20);
+            expect(measure.lines).toEqual([]);
+          }
+        },
+        {
+          charWidth: () => {
+            throw new Error("measure boom");
+          },
+        },
+      );
+    } finally {
+      globalThis.__folioLayoutInstrumentation = previous;
+    }
+
+    // The swallowed failure is now traceable, not silent.
+    expect(events).toEqual([
+      { blockIndex: 0, blockKind: "paragraph", message: "measure boom" },
+    ]);
   });
 });
