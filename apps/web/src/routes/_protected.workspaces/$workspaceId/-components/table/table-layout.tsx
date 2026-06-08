@@ -47,14 +47,15 @@ const addPropertyColId = getInternalColId("add-property");
 const DEFAULT_COLUMN_MIN_SIZE = 64;
 const ADD_PROPERTY_COLUMN_SIZE = 48;
 
-// Dev-only: the lazy import keeps the devtools (and its Solid deps) out of
-// the production client and SSR bundles, mirroring the `DevRoot` pattern.
-const TableDevtools = import.meta.env.DEV
-  ? lazy(
-      () =>
-        import("@/routes/_protected.workspaces/$workspaceId/-components/table/table-devtools"),
-    )
-  : null;
+const loadTableDevtools = async () => {
+  const tableDevtoolsModule =
+    await import("@/routes/_protected.workspaces/$workspaceId/-components/table/table-devtools");
+
+  return tableDevtoolsModule;
+};
+
+// Keeps the devtools package out of production bundles.
+const TableDevtools = import.meta.env.DEV ? lazy(loadTableDevtools) : null;
 
 type MetadataHeaderOptions = {
   icon: LucideIcon;

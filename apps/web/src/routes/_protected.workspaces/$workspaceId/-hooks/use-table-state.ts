@@ -15,12 +15,18 @@ import { useShallow } from "zustand/shallow";
 import type { WorkspaceView } from "@/lib/types";
 import type { TableContentMode } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
+import {
+  createColumnOrderState,
+  createColumnPinningState,
+  createColumnVisibilityState,
+  getPersistedColumnOrder,
+  getPersistedColumnPinning,
+  getPersistedHiddenColumnIds,
+  omitUtilityColumnSizing,
+} from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state.logic";
 import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
-import { getInternalColId } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const EMPTY_ROW_SELECTION: RowSelectionState = {};
-const selectColId = getInternalColId("select");
-const addPropertyColId = getInternalColId("add-property");
 const COLUMN_SIZING_DEBOUNCE_MS = 100;
 
 type UseTableStateProps = {
@@ -35,12 +41,7 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
   const storedColumnSizing = useTableStore(
     useShallow((s) => {
       const sizing = s.columnSizing.get(viewId) ?? {};
-      const {
-        [selectColId]: _selectSize,
-        [addPropertyColId]: _addPropertySize,
-        ...propertySizing
-      } = sizing;
-      return propertySizing;
+      return omitUtilityColumnSizing(sizing);
     }),
   );
   const setStoredColumnSizing = useTableStore((s) => s.setColumnSizing);
@@ -85,20 +86,15 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
     });
   };
 
-  const columnPinning: ColumnPinningState = {
-    left: [
-      selectColId,
-      ...view.layout.columnPinning.filter((id) => id !== addPropertyColId),
-    ],
-    right: [],
-  };
+  const columnPinning = useMemo<ColumnPinningState>(
+    () => createColumnPinningState(view.layout.columnPinning),
+    [view.layout.columnPinning],
+  );
 
   const onColumnPinningChange: OnChangeFn<ColumnPinningState> = (updater) => {
     const data =
       typeof updater === "function" ? updater(columnPinning) : updater;
-    const pinned = (data.left ?? []).filter(
-      (id) => id !== selectColId && id !== addPropertyColId,
-    );
+    const pinned = getPersistedColumnPinning(data);
     updateView.mutate({
       viewId,
       layout: { ...view.layout, columnPinning: pinned },
@@ -106,30 +102,23 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
   };
 
   const columnOrder = useMemo<ColumnOrderState>(
-    () => [selectColId, ...view.layout.columnOrder],
+    () => createColumnOrderState(view.layout.columnOrder),
     [view.layout.columnOrder],
   );
 
   const onColumnOrderChange: OnChangeFn<ColumnOrderState> = (updater) => {
     const data = typeof updater === "function" ? updater(columnOrder) : updater;
-    const order = data.filter(
-      (id) => id !== selectColId && id !== addPropertyColId,
-    );
+    const order = getPersistedColumnOrder(data);
     updateView.mutate({
       viewId,
       layout: { ...view.layout, columnOrder: order },
     });
   };
 
-  const columnVisibility = useMemo<ColumnVisibilityState>(() => {
-    const visibility: Record<string, boolean> = {};
-
-    for (const id of view.layout.hiddenProperties) {
-      visibility[id] = false;
-    }
-
-    return visibility;
-  }, [view.layout.hiddenProperties]);
+  const columnVisibility = useMemo<ColumnVisibilityState>(
+    () => createColumnVisibilityState(view.layout.hiddenProperties),
+    [view.layout.hiddenProperties],
+  );
 
   const onColumnVisibilityChange: OnChangeFn<ColumnVisibilityState> = (
     updater,
@@ -137,9 +126,7 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
     const data =
       typeof updater === "function" ? updater(columnVisibility) : updater;
 
-    const hiddenProperties = Object.entries(data)
-      .filter(([, visible]) => !visible)
-      .map(([id]) => id);
+    const hiddenProperties = getPersistedHiddenColumnIds(data);
 
     updateView.mutate({
       viewId,

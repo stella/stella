@@ -16,12 +16,8 @@ export type TableTreeNode = WorkspaceEntity & {
   children: TableTreeNode[];
 };
 
-// v9 core types are generic over the registered feature set. Baking
-// `WorkspaceTableFeatures` in once here keeps every consumer free of the
-// `<features, data, value>` boilerplate and guarantees the types track
-// whatever `table-features.ts` registers.
-// The `useTable` return type (core `Table` plus `.state`, `.Subscribe`,
-// `.FlexRender`), so consumers can read `table.state` directly.
+// Keep the feature-set generic centralized so table consumers cannot drift from
+// the capabilities registered in `table-features.ts`.
 export type WorkspaceTable = ReactTable<WorkspaceTableFeatures, TableTreeNode>;
 export type TableColumnDef = ColumnDef<WorkspaceTableFeatures, TableTreeNode>;
 export type TableColumn = Column<WorkspaceTableFeatures, TableTreeNode>;

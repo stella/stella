@@ -10,11 +10,8 @@ import {
   tableFeatures,
 } from "@tanstack/react-table";
 
-// v9 features are tree-shakable: only the slices the workspace table
-// actually uses are registered, so column filtering, faceting, grouping,
-// pagination, global filtering, and row pinning never reach the bundle.
-// Adding a capability here is the single switch that turns it on across
-// the table instance and the derived `Table*` types in `./types`.
+// The registered feature set is both the runtime capability list and the
+// source for the workspace table aliases in `./types`.
 export const workspaceTableFeatures = tableFeatures({
   rowSortingFeature,
   rowSelectionFeature,

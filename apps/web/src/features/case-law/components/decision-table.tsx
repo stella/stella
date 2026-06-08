@@ -35,9 +35,7 @@ type DecisionTableProps = {
   isLoading: boolean;
 };
 
-// Core-only feature set: the case-law table renders a static list and does
-// not sort, filter, paginate, or select, so no optional features are
-// registered (keeping them out of the bundle).
+// Static table: no optional sorting, filtering, pagination, or selection APIs.
 const decisionTableFeatures = tableFeatures({});
 type DecisionFeatures = typeof decisionTableFeatures;
 type DecisionCellContext<TValue> = CellContext<
@@ -122,8 +120,7 @@ export const DecisionTable = ({ decisions, isLoading }: DecisionTableProps) => {
 
   const columns = useMemo(
     () =>
-      // `columns()` preserves each column's individual value type while
-      // widening the array to the union v9's `useTable` expects.
+      // Preserve each column's inferred value type while returning one column array.
       columnHelper.columns([
         columnHelper.accessor("caseNumber", {
           header: t("caseLaw.columns.caseNumber"),

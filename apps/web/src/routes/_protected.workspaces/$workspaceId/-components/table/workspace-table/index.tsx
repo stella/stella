@@ -272,7 +272,7 @@ export const WorkspaceTable = ({
         table.setColumnPinning((prev) => ({
           ...prev,
           [pinning]: reorderColumnIds({
-            ids: prev[pinning] ?? [],
+            ids: prev[pinning],
             sourceId,
             targetId,
             edge,
