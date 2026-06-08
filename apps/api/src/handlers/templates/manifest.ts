@@ -3,7 +3,11 @@ import { t } from "elysia";
 
 import { writeManifest } from "@/api/handlers/docx/template-manifest";
 import type { TemplateManifest } from "@/api/handlers/docx/types";
-import { isFieldMeta, isNamedCondition } from "@/api/handlers/docx/types";
+import {
+  isComputedField,
+  isFieldMeta,
+  isNamedCondition,
+} from "@/api/handlers/docx/types";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -113,10 +117,25 @@ export const manifestHandler = async ({
     );
   }
 
+  // `computed` is optional (older manifests omit it) but must round-trip when
+  // present — otherwise re-saving a template silently drops its computed fields.
+  const computed = "computed" in parsed ? parsed["computed"] : [];
+  if (!Array.isArray(computed) || !computed.every(isComputedField)) {
+    return new Response(
+      JSON.stringify({
+        error:
+          "'manifest.computed', when present, must be an array of objects " +
+          "with string 'name' and 'expression' properties.",
+      }),
+      { status: 400, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
   const manifest: TemplateManifest = {
     version: parsed["version"],
     fields,
     conditions,
+    ...(computed.length > 0 ? { computed } : {}),
   };
 
   const buffer = Buffer.from(await file.arrayBuffer());

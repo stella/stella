@@ -90,6 +90,12 @@ export {
   type AnonymizationTerm,
 } from "./core/prosemirror/plugins/anonymizationDecorations";
 export {
+  getTemplateDirectives,
+  scanDirectives,
+  type DirectiveKind,
+  type DirectiveRange,
+} from "./core/prosemirror/plugins/templateDirectives";
+export {
   acceptAutocompleteSuggestion,
   acceptAutocompleteWord,
   appendAutocompleteToken,
