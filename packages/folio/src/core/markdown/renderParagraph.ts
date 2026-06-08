@@ -57,10 +57,14 @@ export function renderParagraph(
  * style/list metadata. Escape the leading marker so literal text round-trips.
  */
 function escapeLeadingBlockMarker(text: string): string {
+  // Escape at the start of every line (`m` flag), not just the paragraph: an
+  // inline break (soft break / page break) can put block syntax at the start of
+  // a later line. Only horizontal whitespace `[ \t]` leads the marker so the
+  // anchor doesn't cross the newline.
   return text
-    .replace(/^(\s*)([#>])/u, "$1\\$2")
-    .replace(/^(\s*)([-+*])(\s)/u, "$1\\$2$3")
-    .replace(/^(\s*)(\d{1,9})([.)])(\s)/u, "$1$2\\$3$4");
+    .replace(/^([ \t]*)([#>])/gmu, "$1\\$2")
+    .replace(/^([ \t]*)([-+*])([ \t])/gmu, "$1\\$2$3")
+    .replace(/^([ \t]*)(\d{1,9})([.)])([ \t])/gmu, "$1$2\\$3$4");
 }
 
 function renderListItem(list: ListRendering, inline: string): string {

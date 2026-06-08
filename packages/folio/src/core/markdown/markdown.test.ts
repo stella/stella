@@ -68,6 +68,23 @@ describe("toMarkdown — block structure", () => {
     expect(md([para([run("Cited")], { styleId: "Quote" })])).toBe("> Cited");
   });
 
+  test("block markers after an inline break are escaped", () => {
+    const para1: Paragraph = {
+      type: "paragraph",
+      content: [
+        {
+          type: "run",
+          content: [
+            { type: "text", text: "Intro" },
+            { type: "break" },
+            { type: "text", text: "# Clause" },
+          ],
+        },
+      ],
+    };
+    expect(md([para1])).toBe("Intro  \n\\# Clause");
+  });
+
   test("a plain paragraph that begins with block syntax is escaped", () => {
     // Literal legal text must not be reclassified as a heading/list/quote.
     expect(md([para([run("# Not a heading")])])).toBe("\\# Not a heading");
