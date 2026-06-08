@@ -2615,6 +2615,11 @@
       "allManualInputsDescription": "Please add at least one AI property to start the workflow",
       "allManualInputsTitle": "All properties are manual inputs",
       "generate": "Generate",
+      "largeRunPrompt": {
+        "description": "This will queue AI extraction for {count} entities. Start it only if you want to process this many files now.",
+        "start": "Start extraction",
+        "title": "Start AI extraction?"
+      },
       "noFieldsToProcess": "No fields to process",
       "someFieldsOutdatedDescription": "Please update Single and Multi Select fields to match their property options",
       "someFieldsOutdatedTitle": "Some fields are outdated",

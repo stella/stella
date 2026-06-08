@@ -2615,6 +2615,11 @@
       "allManualInputsDescription": "Pro spuštění pracovního postupu přidejte alespoň jednu AI vlastnost",
       "allManualInputsTitle": "Všechny vlastnosti jsou ruční vstupy",
       "generate": "Generovat",
+      "largeRunPrompt": {
+        "description": "Do fronty se zařadí extrakce AI pro {count} entit. Spusťte ji jen tehdy, pokud chcete nyní zpracovat tolik souborů.",
+        "start": "Spustit extrakci",
+        "title": "Spustit extrakci AI?"
+      },
       "noFieldsToProcess": "Žádná pole ke zpracování",
       "someFieldsOutdatedDescription": "Aktualizujte pole jednoduchého a vícenásobného výběru tak, aby odpovídala možnostem vlastností",
       "someFieldsOutdatedTitle": "Některá pole jsou zastaralá",

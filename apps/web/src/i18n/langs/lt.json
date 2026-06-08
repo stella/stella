@@ -2615,6 +2615,11 @@
       "allManualInputsDescription": "Norėdami paleisti darbo eigą, pridėkite bent vieną AI savybę",
       "allManualInputsTitle": "Visos savybės yra rankinis įvedimas",
       "generate": "Generuoti",
+      "largeRunPrompt": {
+        "description": "Į eilę bus įtrauktas DI išgavimas {count} objektams. Pradėkite tik jei dabar norite apdoroti tiek failų.",
+        "start": "Pradėti išgavimą",
+        "title": "Pradėti DI išgavimą?"
+      },
       "noFieldsToProcess": "Nėra laukų apdorojimui",
       "someFieldsOutdatedDescription": "Atnaujinkite vieno ir kelių pasirinkimų laukus, kad atitiktų savybių parinktis",
       "someFieldsOutdatedTitle": "Kai kurie laukai yra pasenę",

@@ -25,6 +25,7 @@ import {
 import { useWorkspaceSSE } from "@/lib/sse";
 import { useWorkspaceChatMentionRegistration } from "@/routes/_protected.chat/-hooks/use-workspace-chat-mention-registration";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import { WorkflowStartConfirmationPromptProvider } from "@/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt";
 import { WorkspaceDropZone } from "@/routes/_protected.workspaces/$workspaceId/-components/workspace-drop-zone";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
@@ -271,13 +272,18 @@ function RouteComponent() {
   // Timesheets, invoices, and entity detail bypass the
   // WorkspaceDropZone (they have their own layouts), but the inspector
   // pane is still available everywhere inside a workspace.
-  if (timesheetsMatch || invoicesMatch || entityDetailMatch) {
-    return <Outlet />;
-  }
+  const content =
+    timesheetsMatch || invoicesMatch || entityDetailMatch ? (
+      <Outlet />
+    ) : (
+      <WorkspaceDropZone workspaceId={workspaceId}>
+        <Outlet />
+      </WorkspaceDropZone>
+    );
 
   return (
-    <WorkspaceDropZone workspaceId={workspaceId}>
-      <Outlet />
-    </WorkspaceDropZone>
+    <WorkflowStartConfirmationPromptProvider>
+      {content}
+    </WorkflowStartConfirmationPromptProvider>
   );
 }

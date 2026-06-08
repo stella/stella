@@ -2615,6 +2615,11 @@
       "allManualInputsDescription": "Adicione pelo menos uma propriedade de IA para iniciar o fluxo de trabalho",
       "allManualInputsTitle": "Todas as propriedades são entradas manuais",
       "generate": "Gerar",
+      "largeRunPrompt": {
+        "description": "Isso colocará na fila a extração com IA para {count} entidades. Inicie apenas se quiser processar essa quantidade de arquivos agora.",
+        "start": "Iniciar extração",
+        "title": "Iniciar extração com IA?"
+      },
       "noFieldsToProcess": "Nenhum campo para processar",
       "someFieldsOutdatedDescription": "Atualize os campos de seleção única e múltipla para corresponder às opções de propriedade",
       "someFieldsOutdatedTitle": "Alguns campos estão desatualizados",

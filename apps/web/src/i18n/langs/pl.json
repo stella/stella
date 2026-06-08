@@ -2615,6 +2615,11 @@
       "allManualInputsDescription": "Dodaj co najmniej jedną właściwość AI, aby uruchomić proces",
       "allManualInputsTitle": "Wszystkie właściwości to ręczne wprowadzanie",
       "generate": "Generuj",
+      "largeRunPrompt": {
+        "description": "Spowoduje to dodanie ekstrakcji AI dla {count} encji do kolejki. Uruchom ją tylko wtedy, gdy chcesz teraz przetworzyć tyle plików.",
+        "start": "Uruchom ekstrakcję",
+        "title": "Uruchomić ekstrakcję AI?"
+      },
       "noFieldsToProcess": "Brak pól do przetworzenia",
       "someFieldsOutdatedDescription": "Zaktualizuj pola jednokrotnego i wielokrotnego wyboru, aby odpowiadały opcjom właściwości",
       "someFieldsOutdatedTitle": "Niektóre pola są nieaktualne",

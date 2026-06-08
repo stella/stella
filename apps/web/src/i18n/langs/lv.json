@@ -2615,6 +2615,11 @@
       "allManualInputsDescription": "Lai palaistu darbplūsmu, pievienojiet vismaz vienu AI rekvizītu",
       "allManualInputsTitle": "Visi rekvizīti ir manuālās ievades",
       "generate": "Ģenerēt",
+      "largeRunPrompt": {
+        "description": "Tiks ieplānota MI izgūšana {count} entītijām. Sāciet to tikai tad, ja tagad vēlaties apstrādāt tik daudz failu.",
+        "start": "Sākt izgūšanu",
+        "title": "Sākt MI izgūšanu?"
+      },
       "noFieldsToProcess": "Nav lauku apstrādei",
       "someFieldsOutdatedDescription": "Atjauniniet vienas un vairāku izvēļu laukus, lai tie atbilstu rekvizītu opcijām",
       "someFieldsOutdatedTitle": "Daži lauki ir novecojuši",
