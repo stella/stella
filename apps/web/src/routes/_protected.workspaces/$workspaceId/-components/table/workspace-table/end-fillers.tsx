@@ -1,9 +1,11 @@
 import { flexRender } from "@tanstack/react-table";
-import type { Cell, Column } from "@tanstack/react-table";
 
 import { cn } from "@stll/ui/lib/utils";
 
-import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
+import type {
+  TableCell,
+  TableColumn,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import {
   WorkspaceGridCell,
   WorkspaceGridRow,
@@ -18,8 +20,8 @@ import {
 import type { EndFillerInput } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
 
 type TableEndFillerProps = {
-  renderColumns: Column<TableTreeNode>[];
-  addPropertyColumn: Column<TableTreeNode> | null;
+  renderColumns: TableColumn[];
+  addPropertyColumn: TableColumn | null;
 };
 
 export const TableEndFiller = ({
@@ -92,7 +94,7 @@ export const RowEndFillerCell = ({
 );
 
 type AddPropertyCellProps = {
-  cell: Cell<TableTreeNode, unknown> | undefined;
+  cell: TableCell | undefined;
   columnIndex: number;
   selected: boolean;
 };

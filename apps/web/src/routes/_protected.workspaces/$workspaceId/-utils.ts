@@ -1,8 +1,3 @@
-import type { CSSProperties } from "react";
-
-import type { Column } from "@tanstack/react-table";
-import type { RowData } from "@tanstack/table-core";
-
 import { useI18nStore } from "@/i18n/i18n-store";
 import type {
   WorkspaceEntity,
@@ -39,62 +34,6 @@ export type InternalPropertyId = `_${InternalProperty}`;
 export const getInternalPropertyId = (
   p: InternalProperty,
 ): InternalPropertyId => `_${p}`;
-
-export const getPinningStyles = <T = WorkspaceEntity>(
-  column: Column<T>,
-): CSSProperties => {
-  const width = column.getSize();
-  const canPin = column.getCanPin();
-
-  // The add-property column is sticky on the right so the "+"
-  // button stays visible during horizontal scroll.
-  if (column.id === getInternalColId("add-property")) {
-    return {
-      boxShadow: "2px 0 0px 0px var(--color-border) inset",
-      minWidth: width,
-      position: "sticky",
-      right: 0,
-      zIndex: 2,
-    };
-  }
-
-  if (!canPin) {
-    return { width };
-  }
-
-  const isPinned = column.getIsPinned() === "left";
-  const isSelectColumn = column.id === getInternalColId("select");
-  const isLastPinnedColumn =
-    !isSelectColumn && isPinned && column.getIsLastColumn("left");
-
-  return {
-    boxShadow: isLastPinnedColumn
-      ? "-2px 0 0px 0px var(--color-border) inset"
-      : undefined,
-    left: isPinned ? `${column.getStart("left")}px` : undefined,
-    position: isPinned ? "sticky" : undefined,
-    width,
-    zIndex: (() => {
-      if (isPinned) {
-        return (() => {
-          if (isSelectColumn) {
-            return 3;
-          }
-          return 2;
-        })();
-      }
-      return undefined;
-    })(),
-  };
-};
-
-declare module "@tanstack/table-core" {
-  // oxlint-disable-next-line consistent-type-definitions
-  interface ColumnMeta<TData extends RowData, TValue> {
-    /** Render cell text in muted-foreground. */
-    muted?: boolean;
-  }
-}
 
 export const getFieldValue = (field: WorkspaceField | undefined) => {
   if (!field) {

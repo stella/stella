@@ -1,11 +1,11 @@
-import { useEffect, useMemo } from "react";
+import { lazy, Suspense, useEffect, useMemo } from "react";
 
 import {
   useSuspenseInfiniteQuery,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
-import type { CellContext, HeaderContext } from "@tanstack/react-table";
+import { ClientOnly } from "@tanstack/react-router";
+import { createCoreRowModel, useTable } from "@tanstack/react-table";
 import { ClockIcon, HashIcon, TableIcon, UserIcon } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -21,9 +21,11 @@ import {
 import { MetadataPopover } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-popover";
 import type { SortHint } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/sort-property";
 import { getPropertyColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/table-column";
+import { workspaceTableFeatures } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-features";
 import type {
+  TableCellContext,
   TableColumnDef,
-  TableTreeNode,
+  TableHeaderContext,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import { WorkspaceTable } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table";
 import { useSyncJustificationChunks } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
@@ -45,6 +47,16 @@ const addPropertyColId = getInternalColId("add-property");
 const DEFAULT_COLUMN_MIN_SIZE = 64;
 const ADD_PROPERTY_COLUMN_SIZE = 48;
 
+const loadTableDevtools = async () => {
+  const tableDevtoolsModule =
+    await import("@/routes/_protected.workspaces/$workspaceId/-components/table/table-devtools");
+
+  return tableDevtoolsModule;
+};
+
+// Keeps the devtools package out of production bundles.
+const TableDevtools = import.meta.env.DEV ? lazy(loadTableDevtools) : null;
+
 type MetadataHeaderOptions = {
   icon: LucideIcon;
   label: string;
@@ -53,7 +65,7 @@ type MetadataHeaderOptions = {
 
 const createMetadataHeader =
   ({ icon, label, sortHint }: MetadataHeaderOptions) =>
-  ({ header }: HeaderContext<TableTreeNode, unknown>) => (
+  ({ header }: TableHeaderContext) => (
     <MetadataPopover
       column={header.column}
       icon={icon}
@@ -62,17 +74,15 @@ const createMetadataHeader =
     />
   );
 
-const renderAuthorCell = ({ row }: CellContext<TableTreeNode, unknown>) => (
+const renderAuthorCell = ({ row }: TableCellContext) => (
   <AuthorCell entity={row.original} />
 );
 
-const renderLastUpdatedCell = ({
-  row,
-}: CellContext<TableTreeNode, unknown>) => (
+const renderLastUpdatedCell = ({ row }: TableCellContext) => (
   <LastUpdatedCell entity={row.original} />
 );
 
-const renderVersionCell = ({ row }: CellContext<TableTreeNode, unknown>) => (
+const renderVersionCell = ({ row }: TableCellContext) => (
   <VersionCell entity={row.original} />
 );
 
@@ -211,14 +221,15 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
     return columnDefs;
   }, [properties, t, view.layout.filters]);
 
-  const table = useReactTable({
+  const table = useTable({
+    features: workspaceTableFeatures,
+    rowModels: { coreRowModel: createCoreRowModel() },
     columnResizeMode: "onChange",
     data: treeData,
     columns,
     defaultColumn: {
       minSize: DEFAULT_COLUMN_MIN_SIZE,
     },
-    getCoreRowModel: getCoreRowModel(),
     manualSorting: true,
     enableSortingRemoval: false,
     enableSubRowSelection: true,
@@ -238,16 +249,25 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
   }
 
   return (
-    <WorkspaceTable
-      hasNextPage={hasNextPage}
-      isFetchingNextPage={isFetchingNextPage}
-      onLoadMore={() => {
-        // eslint-disable-next-line typescript/no-floating-promises
-        fetchNextPage();
-      }}
-      table={table}
-      contentMode={tableState.contentMode}
-      workspaceId={workspaceId}
-    />
+    <>
+      <WorkspaceTable
+        hasNextPage={hasNextPage}
+        isFetchingNextPage={isFetchingNextPage}
+        onLoadMore={() => {
+          // eslint-disable-next-line typescript/no-floating-promises
+          fetchNextPage();
+        }}
+        table={table}
+        contentMode={tableState.contentMode}
+        workspaceId={workspaceId}
+      />
+      {TableDevtools ? (
+        <ClientOnly>
+          <Suspense fallback={null}>
+            <TableDevtools table={table} />
+          </Suspense>
+        </ClientOnly>
+      ) : null}
+    </>
   );
 };

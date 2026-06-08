@@ -35,7 +35,6 @@ export const getPropertyColumn = ({
   property: WorkspaceProperty;
 }): TableColumnDef => ({
   id: property.id,
-  accessorKey: property.id,
   accessorFn: (row) => row.fields[property.id],
   header: (ctx) => (
     <PropertyPopover

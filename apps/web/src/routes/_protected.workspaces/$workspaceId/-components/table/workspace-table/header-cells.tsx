@@ -11,7 +11,6 @@ import {
   dropTargetForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { flexRender } from "@tanstack/react-table";
-import type { Column } from "@tanstack/react-table";
 import { panic } from "better-result";
 import { CheckIcon, GripVerticalIcon, MinusIcon } from "lucide-react";
 
@@ -19,8 +18,8 @@ import { cn } from "@stll/ui/lib/utils";
 
 import type { SelectAllState } from "@/routes/_protected.workspaces/$workspaceId/-components/table/select-all.logic";
 import type {
+  TableColumn,
   TableHeader,
-  TableTreeNode,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import { WorkspaceGridHead } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid";
 import type { ColumnDropEdge } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid-order";
@@ -269,7 +268,7 @@ export const HeaderEndFillerCell = ({
 
 export const getOrderedHeaders = (
   headers: TableHeader[],
-  columns: Column<TableTreeNode>[],
+  columns: TableColumn[],
 ) => {
   const headersByColumnId = new Map(
     headers.map((header) => [header.column.id, header]),

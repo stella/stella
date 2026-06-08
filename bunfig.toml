@@ -16,6 +16,14 @@ minimumReleaseAgeExcludes = [
   "@stll/regex-set-wasm",
   "@stll/stdnum",
   "@stll/text-search-wasm",
+  # TanStack Table v9 beta: opted in ahead of stable to adopt the
+  # tree-shakable feature/plugin model, granular re-render control,
+  # and table devtools. Remove once v9 ships stable and clears the
+  # 5-day quarantine on its own.
+  "@tanstack/react-table",
+  "@tanstack/table-core",
+  "@tanstack/react-table-devtools",
+  "@tanstack/table-devtools",
   "@typescript/native-preview",
   "@typescript/native-preview-darwin-arm64",
   "@typescript/native-preview-darwin-x64",

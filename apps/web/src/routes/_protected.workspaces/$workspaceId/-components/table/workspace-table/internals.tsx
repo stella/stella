@@ -1,10 +1,9 @@
 import type { CSSProperties } from "react";
 
 import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
-import type { Column } from "@tanstack/react-table";
 
 import { TOOLBAR_ROW_HEIGHT_PX } from "@/lib/consts";
-import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
+import type { TableColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import { getGridTemplateColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid-order";
 import type { ColumnDropEdge } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid-order";
 import { getInternalColId } from "@/routes/_protected.workspaces/$workspaceId/-utils";
@@ -31,8 +30,8 @@ export type WorkspaceGridStyle = CSSProperties & {
 };
 
 export type EndFillerInput = {
-  renderColumns: Column<TableTreeNode>[];
-  addPropertyColumn: Column<TableTreeNode> | null;
+  renderColumns: TableColumn[];
+  addPropertyColumn: TableColumn | null;
 };
 
 export const tableEndFillerCellStyle: CSSProperties = {
@@ -80,9 +79,7 @@ export function getEndFillerGridColumn({
   return `${renderColumns.length + 1} / ${addPropertyColumn ? "-2" : "-1"}`;
 }
 
-export const getGridPinningStyles = (
-  column: Column<TableTreeNode>,
-): CSSProperties => {
+export const getGridPinningStyles = (column: TableColumn): CSSProperties => {
   if (column.id === addPropertyColId) {
     return {
       gridColumn: "-2 / -1",
@@ -104,10 +101,10 @@ export const getGridPinningStyles = (
 };
 
 type PinnedBoundaryProps = {
-  column: Column<TableTreeNode>;
+  column: TableColumn;
 };
 
-export const isPinnedBoundaryColumn = (column: Column<TableTreeNode>) =>
+export const isPinnedBoundaryColumn = (column: TableColumn) =>
   column.getIsPinned() === "left" && column.getIsLastColumn("left");
 
 export const PinnedBoundary = ({ column }: PinnedBoundaryProps) => {
@@ -124,7 +121,7 @@ export const PinnedBoundary = ({ column }: PinnedBoundaryProps) => {
 };
 
 export const getColumnPinningGroup = (
-  column: Column<TableTreeNode>,
+  column: TableColumn,
 ): ColumnDragPinning => {
   const pinning = column.getIsPinned();
   if (pinning === "left" || pinning === "right") {
