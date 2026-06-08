@@ -61,11 +61,27 @@ export type KrsRawSiedzibaIAdres = {
   adresDoDoreczenElektronicznychWpisanyDoBAE?: string;
 };
 
+/**
+ * `kapital` (dzial1) carries the entity's capital figures. We surface
+ * only the share capital (kapitał zakładowy) today — present for both
+ * sp. z o.o. and S.A. The remaining sub-fields (kapitał docelowy /
+ * zapasowy, akcje, aporty, …) are typed lazily as we promote them.
+ */
+export type KrsRawMonetaryValue = {
+  wartosc?: string;
+  waluta?: string;
+};
+
+export type KrsRawKapital = {
+  wysokoscKapitaluZakladowego?: KrsRawMonetaryValue;
+};
+
 export type KrsRawDzial1 = {
   danePodmiotu?: KrsRawDanePodmiotu;
   siedzibaIAdres?: KrsRawSiedzibaIAdres;
-  // Many additional optional sub-objects (umowaStatut, kapital,
-  // emisjeAkcji, …); not surfaced yet.
+  kapital?: KrsRawKapital;
+  // Further optional sub-objects (umowaStatut, emisjeAkcji, …) not
+  // surfaced yet.
 };
 
 // Each entry in the combined restructuring/liquidation dzial6 array
@@ -217,6 +233,16 @@ export type KrsEntity = {
   name: string;
   legalForm: string | null;
   identifiers: KrsIdentifiers;
+  /**
+   * Share capital (kapitał zakładowy) as filed: `amount` is the raw KRS
+   * decimal string (Polish comma decimal, e.g. "99910510,00") and
+   * `currency` the ISO code (e.g. "PLN"). Present for sp. z o.o. and
+   * S.A.; `null` for entities the register files without a capital
+   * figure (e.g. RejS associations) or incomplete records. Surfaced
+   * verbatim — the caller converts to a branded minor-unit amount at
+   * the app boundary, mirroring how KRS dates are left unparsed here.
+   */
+  shareCapital: { amount: string; currency: string } | null;
   address: KrsAddress | null;
   /**
    * Registered seat (siedziba) — administrative coordinates
