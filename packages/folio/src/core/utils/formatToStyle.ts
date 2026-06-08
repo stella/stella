@@ -415,17 +415,20 @@ export function paragraphToStyle(
   // PAGE BREAK
   // ============================================================================
 
+  // Use the CSS Fragmentation `break-*` properties, not the deprecated
+  // `page-break-*` aliases. `page-break-before: always` maps to
+  // `break-before: page` (force a page break); `avoid` carries over unchanged.
   if (formatting.pageBreakBefore) {
-    style.pageBreakBefore = "always";
+    style.breakBefore = "page";
   }
 
   // Keep with next / keep lines together
   if (formatting.keepNext) {
-    style.pageBreakAfter = "avoid";
+    style.breakAfter = "avoid";
   }
 
   if (formatting.keepLines) {
-    style.pageBreakInside = "avoid";
+    style.breakInside = "avoid";
   }
 
   return style;
