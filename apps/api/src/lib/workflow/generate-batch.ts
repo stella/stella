@@ -187,6 +187,7 @@ export const generateBatch = async ({
   orgAIConfig,
   promptCachingEnabled,
   serviceTier,
+  usageMetering,
   onPartialAnswer,
 }: GenerateBatchProps): Promise<GenerateBatchResult> =>
   await Result.gen(async function* () {
@@ -240,6 +241,7 @@ export const generateBatch = async ({
         orgAIConfig: orgAIConfig ?? null,
         promptCachingEnabled,
         serviceTier,
+        usageMetering,
         onPartialAnswer,
         workspaceId,
       }),

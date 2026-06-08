@@ -4,7 +4,10 @@ import { describe, expect, test } from "bun:test";
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  createSafeRootHandler,
+  resolveMeteringContext,
+} from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
@@ -12,6 +15,35 @@ import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 const noopAuditRecorder: AuditRecorder = async () => undefined;
 
 describe("createSafeRootHandler usage preflight", () => {
+  test("uses effective provider tier for preflight cost", () => {
+    const previousProvider = env.AI_PROVIDER;
+    const previousAnthropicKey = env.ANTHROPIC_API_KEY;
+    try {
+      env.AI_PROVIDER = "anthropic";
+      env.ANTHROPIC_API_KEY = "sk-test";
+
+      const context = resolveMeteringContext({
+        metering: {
+          actionType: "chat",
+          modelRole: "fast",
+          serviceTier: "flex",
+        },
+        organizationId: toSafeId<"organization">(
+          "019e7000-0000-7000-8000-000000000002",
+        ),
+        orgAIConfig: null,
+        workspaceId: null,
+        userId: toSafeId<"user">("019e7000-0000-7000-8000-000000000001"),
+      });
+
+      expect(context.serviceTier).toBe("standard");
+      expect(context.cost).toBe(2);
+    } finally {
+      env.AI_PROVIDER = previousProvider;
+      env.ANTHROPIC_API_KEY = previousAnthropicKey;
+    }
+  });
+
   test("fails closed when enforced usage preflight cannot read the ledger", async () => {
     const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
     env.USAGE_ENFORCEMENT_ENABLED = true;

@@ -5,8 +5,8 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toSafeId } from "@/lib/safe-id";
 import { aiAvailabilityOptions } from "@/routes/_protected.organization/-ai-config-queries";
-import { useWorkflowStartConfirmationPrompt } from "@/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt";
 import { useWorkflowServiceTierPrompt } from "@/routes/_protected.workspaces/$workspaceId/-components/workflow-service-tier-prompt";
+import { useWorkflowStartConfirmationPrompt } from "@/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt";
 import {
   estimateWorkflowTargetCount,
   resolveWorkflowStartDecision,
@@ -45,7 +45,7 @@ export const useStartWorkflow = (workspaceId: string) => {
       });
       const decision = await resolveWorkflowStartDecision({
         confirmLargeRun,
-        estimateEntityCount: async () => entityCount,
+        estimateEntityCount: async () => await Promise.resolve(entityCount),
       });
       if (decision.type === "cancel") {
         return undefined;
@@ -54,7 +54,7 @@ export const useStartWorkflow = (workspaceId: string) => {
       const serviceTier = await resolveWorkflowServiceTier({
         args,
         deferredServiceTierAvailable:
-          aiAvailability.deferredServiceTierAvailable ?? false,
+          aiAvailability.deferredServiceTierAvailable,
         entityCount,
         promptForServiceTier,
       });

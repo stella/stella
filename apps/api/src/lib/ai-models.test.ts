@@ -610,7 +610,7 @@ describe("resolveServiceTierProviderOptions", () => {
         serviceTier: "flex",
       }),
     ).toEqual({
-      google: {
+      vertex: {
         sharedRequestType: "flex",
         requestType: "shared",
       },
@@ -751,6 +751,38 @@ describe("service tier fallback middleware", () => {
     expect(fallbackCount).toBe(0);
   });
 
+  test("does not fallback retryable errors when standard fallback is disabled", async () => {
+    const middleware = createServiceTierMiddleware("openai", "flex", {
+      allowFallbackToStandard: false,
+    });
+    const apiError = createAPIError({ statusCode: 429 });
+    let fallbackCount = 0;
+
+    const result = middleware.wrapGenerate?.({
+      doGenerate: async () => {
+        throw apiError;
+      },
+      doStream: async () => TEST_STREAM_RESULT,
+      model: createRecordingModel(() => {
+        fallbackCount++;
+      }),
+      params: TEST_PARAMS,
+    });
+    if (!result) {
+      throw new Error("Expected service tier middleware to wrap generate");
+    }
+
+    let caughtError: unknown;
+    try {
+      await result;
+    } catch (error) {
+      caughtError = error;
+    }
+
+    expect(caughtError).toBe(apiError);
+    expect(fallbackCount).toBe(0);
+  });
+
   test("removes Vertex Flex shared-request options for standard fallback", async () => {
     const middleware = createServiceTierMiddleware("google_vertex", "flex");
     const flexParams = await middleware.transformParams?.({
@@ -758,7 +790,7 @@ describe("service tier fallback middleware", () => {
       params: {
         ...TEST_PARAMS,
         providerOptions: {
-          google: {
+          vertex: {
             thinkingConfig: { thinkingLevel: "minimal" },
           },
         },
@@ -781,7 +813,7 @@ describe("service tier fallback middleware", () => {
       params: flexParams,
     });
 
-    expect(fallbackParams?.providerOptions?.["google"]).toEqual({
+    expect(fallbackParams?.providerOptions?.["vertex"]).toEqual({
       thinkingConfig: { thinkingLevel: "minimal" },
     });
   });

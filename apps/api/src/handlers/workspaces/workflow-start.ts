@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { isDeferredServiceTierAvailableForRole } from "@/api/lib/ai-models";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -21,7 +22,27 @@ const config = {
 
 const workflowStart = createSafeHandler(
   config,
-  async function* ({ workspaceId, session, user, scopedDb, body }) {
+  async function* ({
+    workspaceId,
+    session,
+    user,
+    scopedDb,
+    body,
+    orgAIConfig,
+  }) {
+    if (
+      body.serviceTier === "flex" &&
+      !isDeferredServiceTierAvailableForRole("pdf", orgAIConfig)
+    ) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message:
+            "Reduced-credit workflow extraction is not available for the configured AI provider.",
+        }),
+      );
+    }
+
     const result = yield* Result.await(
       Result.tryPromise({
         try: async () =>

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { resolveWorkflowTargetEntityIds } from "@/api/lib/workflow-targets";
+import { parseStoredWorkflowServiceTier } from "@/api/lib/workflow/service-tier-state";
 
 const entityId = (value: string) => toSafeId<"entity">(value);
 
@@ -55,5 +56,15 @@ describe("workflow entity targeting", () => {
         inputOrder: [task, task, documentB],
       }),
     ).toEqual([task, documentB, documentA, link]);
+  });
+});
+
+describe("workflow service tier state", () => {
+  test("parses stored workflow service tiers conservatively", () => {
+    expect(parseStoredWorkflowServiceTier("standard")).toBe("standard");
+    expect(parseStoredWorkflowServiceTier("flex")).toBe("flex");
+    expect(parseStoredWorkflowServiceTier("batch")).toBe("batch");
+    expect(parseStoredWorkflowServiceTier(null)).toBe("standard");
+    expect(parseStoredWorkflowServiceTier("unknown")).toBe("standard");
   });
 });

@@ -918,15 +918,17 @@ type OpenAIServiceTierOptions = Pick<
 const providerTargetForConfig = (
   config: OrgAIProviderConfig,
 ): ServiceTierProviderTarget => {
-  if (config.provider === "google") {
-    return config.region && config.region !== "global"
-      ? "google_vertex"
-      : "google_gemini_api";
+  if (
+    config.provider === "azure_foundry" ||
+    config.provider === "huggingface"
+  ) {
+    return providerTargetForProvider({ provider: config.provider });
   }
-  if (config.provider === "openai") {
-    return "openai";
-  }
-  return "none";
+
+  return providerTargetForProvider({
+    provider: config.provider,
+    region: config.region,
+  });
 };
 
 const providerTargetForProvider = ({
@@ -1009,13 +1011,13 @@ export const resolveServiceTierProviderOptions = ({
     if (!isDeferredServiceTier(serviceTier)) {
       return undefined;
     }
-    const googleOptions = {
+    const vertexOptions = {
       sharedRequestType: GOOGLE_VERTEX_FLEX_SHARED_REQUEST_TYPE,
       requestType: GOOGLE_VERTEX_SHARED_REQUEST_TYPE,
     } satisfies GoogleVertexServiceTierOptions;
 
     return {
-      google: googleOptions,
+      vertex: vertexOptions,
     };
   }
 
@@ -1067,18 +1069,21 @@ const computeStandardFallbackServiceTierParams = (
   target: ServiceTierProviderTarget,
 ): CallOptions => {
   if (target === "google_vertex") {
-    const googleOptions = params.providerOptions?.["google"];
-    if (googleOptions === undefined) {
+    const vertexOptions = params.providerOptions?.["vertex"];
+    if (vertexOptions === undefined) {
       return params;
     }
 
-    const { requestType, sharedRequestType, ...standardGoogleOptions } =
-      googleOptions;
+    const {
+      sharedRequestType: _sharedRequestType,
+      requestType: _requestType,
+      ...standardVertexOptions
+    } = vertexOptions;
     return {
       ...params,
       providerOptions: {
         ...params.providerOptions,
-        google: standardGoogleOptions,
+        vertex: standardVertexOptions,
       },
     };
   }
@@ -1168,6 +1173,9 @@ const markServiceTierFallbackStreamResult = (
 export const createServiceTierMiddleware = (
   target: ServiceTierProviderTarget,
   serviceTier: AIRequestServiceTier,
+  {
+    allowFallbackToStandard = true,
+  }: { allowFallbackToStandard?: boolean } = {},
 ): SingleMiddleware => ({
   specificationVersion: "v3",
   transformParams: async ({ params }) =>
@@ -1178,7 +1186,10 @@ export const createServiceTierMiddleware = (
     try {
       return await doGenerate();
     } catch (error) {
-      if (!shouldRetryWithStandardServiceTier({ error, serviceTier, target })) {
+      if (
+        !allowFallbackToStandard ||
+        !shouldRetryWithStandardServiceTier({ error, serviceTier, target })
+      ) {
         throw error;
       }
 
@@ -1194,7 +1205,10 @@ export const createServiceTierMiddleware = (
     try {
       return await doStream();
     } catch (error) {
-      if (!shouldRetryWithStandardServiceTier({ error, serviceTier, target })) {
+      if (
+        !allowFallbackToStandard ||
+        !shouldRetryWithStandardServiceTier({ error, serviceTier, target })
+      ) {
         throw error;
       }
 
@@ -1373,6 +1387,7 @@ const withInstrumentation = (
     organizationId: SafeId<"organization"> | null;
     serviceTier: AIRequestServiceTier;
     serviceTierTarget: ServiceTierProviderTarget;
+    allowServiceTierFallback: boolean;
   },
 ): LanguageModel => {
   const middlewares: SingleMiddleware[] = [
@@ -1385,7 +1400,9 @@ const withInstrumentation = (
       }),
     }),
     cachingMiddleware(ctx.provider, ctx.decision),
-    createServiceTierMiddleware(ctx.serviceTierTarget, ctx.serviceTier),
+    createServiceTierMiddleware(ctx.serviceTierTarget, ctx.serviceTier, {
+      allowFallbackToStandard: ctx.allowServiceTierFallback,
+    }),
   ];
   if (isAIDevToolsEnabled()) {
     middlewares.push(devToolsMiddleware());
@@ -1447,6 +1464,7 @@ type AIModelRequestOptions = {
   scopeKey: string | null;
   organizationId: SafeId<"organization"> | null;
   serviceTier: AIRequestServiceTier;
+  allowServiceTierFallback?: boolean;
 };
 
 export const validateDevModelOverride = (
@@ -1502,8 +1520,13 @@ export const getModelForRole = (
   orgConfig: OrgAIConfig | null | undefined,
   options: AIModelRequestOptions,
 ): LanguageModel => {
-  const { promptCachingEnabled, scopeKey, organizationId, serviceTier } =
-    options;
+  const {
+    promptCachingEnabled,
+    scopeKey,
+    organizationId,
+    serviceTier,
+    allowServiceTierFallback = true,
+  } = options;
   // BYOK path: org selects a model for each role through
   // one of its configured provider credentials.
   if (orgConfig) {
@@ -1519,6 +1542,7 @@ export const getModelForRole = (
       organizationId,
       serviceTier,
       serviceTierTarget: providerTargetForConfig(providerConfig),
+      allowServiceTierFallback,
     });
   }
 
@@ -1545,6 +1569,7 @@ export const getModelForRole = (
     organizationId,
     serviceTier,
     serviceTierTarget: providerTargetForInstanceProvider(provider),
+    allowServiceTierFallback,
   });
 };
 
@@ -1618,8 +1643,14 @@ export const getModelById = (
   options: AIModelRequestOptions & { role: ModelRole },
 ): LanguageModel => {
   const override = decodeModelOverride(modelId);
-  const { promptCachingEnabled, scopeKey, role, organizationId, serviceTier } =
-    options;
+  const {
+    promptCachingEnabled,
+    scopeKey,
+    role,
+    organizationId,
+    serviceTier,
+    allowServiceTierFallback = true,
+  } = options;
   const decision = resolveCaching({ promptCachingEnabled, role, scopeKey });
   if (orgConfig) {
     const providerConfig = override.provider
@@ -1635,6 +1666,7 @@ export const getModelById = (
         organizationId,
         serviceTier,
         serviceTierTarget: providerTargetForConfig(providerConfig),
+        allowServiceTierFallback,
       },
     );
   }
@@ -1649,6 +1681,7 @@ export const getModelById = (
         organizationId,
         serviceTier,
         serviceTierTarget: providerTargetForInstanceProvider(override.provider),
+        allowServiceTierFallback,
       },
     );
   }
@@ -1661,5 +1694,6 @@ export const getModelById = (
     organizationId,
     serviceTier,
     serviceTierTarget: providerTargetForInstanceProvider(provider),
+    allowServiceTierFallback,
   });
 };
