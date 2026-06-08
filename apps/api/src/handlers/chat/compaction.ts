@@ -4,7 +4,10 @@ import { Result } from "better-result";
 
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { prepareTextForThirdParty } from "@/api/handlers/chat/third-party-boundary";
-import type { ChatMessage } from "@/api/handlers/chat/types";
+import type {
+  ChatCompactionSummary,
+  ChatMessage,
+} from "@/api/handlers/chat/types";
 import type { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -18,6 +21,7 @@ const MAX_STRUCTURED_PART_CHARS = 4000;
 const MAX_SUMMARY_OUTPUT_TOKENS = 1800;
 
 const COMPACTION_SUMMARY_MESSAGE_ID = "stella-chat-compaction-summary";
+export const CHAT_COMPACTION_PROMPT_VERSION = 1;
 
 const COMPACTION_SYSTEM_PROMPT = [
   "You compact chat history for stella, a legal workspace.",
@@ -31,7 +35,30 @@ type CompactionAIAnalytics = Pick<
   "captureError" | "stepCallbacks"
 >;
 
-type ChatCompactionPlan =
+const CHAT_COMPACTION_FORMAT_PROMPT = [
+  "Return markdown with exactly this structure:",
+  "## Goal",
+  "## Constraints",
+  "## Progress",
+  "### Done",
+  "### In Progress",
+  "### Blocked",
+  "## Key Decisions",
+  "## Next Steps",
+  "## Critical Context",
+  "<read-files>",
+  "</read-files>",
+  "<modified-files>",
+  "</modified-files>",
+  "Use bullet lists for every list section. Put one path per line inside read-files and modified-files. Write 'None' for empty sections.",
+].join("\n");
+
+const CHAT_COMPACTION_SYSTEM_PROMPT = [
+  COMPACTION_SYSTEM_PROMPT,
+  CHAT_COMPACTION_FORMAT_PROMPT,
+].join("\n\n");
+
+export type ChatCompactionPlan =
   | {
       totalTokens: number;
       type: "none";
@@ -173,6 +200,14 @@ type CompactChatMessagesOptions = PlanChatCompactionOptions & {
   summarizeTranscript: (transcript: string) => Promise<string>;
 };
 
+export type ChatCompactionCheckpoint = {
+  plan: Extract<ChatCompactionPlan, { type: "compact" }>;
+  summary: ChatCompactionSummary;
+  summaryMarkdown: string;
+};
+
+type SummarizeChatCompactionOptions = CompactChatMessagesOptions;
+
 type CompactModelMessagesOptions = {
   messages: ModelMessage[];
   onSummaryError?: ((error: HandlerError<500>) => void) | undefined;
@@ -181,19 +216,19 @@ type CompactModelMessagesOptions = {
   triggerTokens?: number | undefined;
 };
 
-export const compactChatMessages = async ({
+export const summarizeChatCompaction = async ({
   messages,
   onSummaryError,
   prepareTranscript,
   preserveTokens,
   summarizeTranscript,
   triggerTokens,
-}: CompactChatMessagesOptions): Promise<
-  Result<ChatMessage[], HandlerError<422 | 500>>
+}: SummarizeChatCompactionOptions): Promise<
+  Result<ChatCompactionCheckpoint | null, HandlerError<422 | 500>>
 > => {
   const plan = planChatCompaction({ messages, preserveTokens, triggerTokens });
   if (plan.type === "none") {
-    return Result.ok(messages);
+    return Result.ok(null);
   }
 
   const transcript = renderChatMessagesForCompaction(plan.messagesToSummarize);
@@ -215,20 +250,59 @@ export const compactChatMessages = async ({
   });
   if (Result.isError(summaryResult)) {
     onSummaryError?.(summaryResult.error);
-    return Result.ok(plan.recentMessages);
+    return Result.ok(null);
   }
 
-  const summary = summaryResult.value.trim();
-  if (summary.length === 0) {
+  const summaryMarkdown = summaryResult.value.trim();
+  if (summaryMarkdown.length === 0) {
+    return Result.ok(null);
+  }
+
+  return Result.ok({
+    plan,
+    summary: parseChatCompactionSummary(summaryMarkdown),
+    summaryMarkdown,
+  });
+};
+
+export const compactChatMessages = async ({
+  messages,
+  onSummaryError,
+  prepareTranscript,
+  preserveTokens,
+  summarizeTranscript,
+  triggerTokens,
+}: CompactChatMessagesOptions): Promise<
+  Result<ChatMessage[], HandlerError<422 | 500>>
+> => {
+  const plan = planChatCompaction({ messages, preserveTokens, triggerTokens });
+  if (plan.type === "none") {
+    return Result.ok(messages);
+  }
+
+  const checkpointResult = await summarizeChatCompaction({
+    messages,
+    onSummaryError,
+    prepareTranscript,
+    preserveTokens,
+    summarizeTranscript,
+    triggerTokens,
+  });
+  if (Result.isError(checkpointResult)) {
+    return Result.err(checkpointResult.error);
+  }
+
+  if (checkpointResult.value === null) {
     return Result.ok(plan.recentMessages);
   }
 
   return Result.ok([
     createCompactionSummaryMessage({
-      summarizedMessageCount: plan.messagesToSummarize.length,
-      summary,
+      summarizedMessageCount:
+        checkpointResult.value.plan.messagesToSummarize.length,
+      summary: checkpointResult.value.summaryMarkdown,
     }),
-    ...plan.recentMessages,
+    ...checkpointResult.value.plan.recentMessages,
   ]);
 };
 
@@ -325,7 +399,56 @@ export const compactChatMessagesForModel = async ({
               "",
               transcript,
             ].join("\n"),
-            system: COMPACTION_SYSTEM_PROMPT,
+            system: CHAT_COMPACTION_SYSTEM_PROMPT,
+            temperature: 0,
+            ...aiAnalytics?.stepCallbacks,
+          }),
+        catch: (error) => {
+          aiAnalytics?.captureError(error);
+          return error;
+        },
+      });
+      if (Result.isError(result)) {
+        throw result.error;
+      }
+
+      return result.value.text;
+    },
+  });
+
+export const summarizeChatCompactionForModel = async ({
+  abortSignal,
+  aiAnalytics,
+  boundary,
+  messages,
+  model,
+  onSummaryError,
+  preserveTokens,
+  triggerTokens,
+}: CompactChatMessagesForModelOptions): Promise<
+  Result<ChatCompactionCheckpoint | null, HandlerError<422 | 500>>
+> =>
+  await summarizeChatCompaction({
+    messages,
+    onSummaryError,
+    preserveTokens,
+    triggerTokens,
+    prepareTranscript: async (transcript) =>
+      await prepareTextForThirdParty({ boundary, text: transcript }),
+    summarizeTranscript: async (transcript) => {
+      const result = await Result.tryPromise({
+        try: async () =>
+          await generateText({
+            abortSignal,
+            maxOutputTokens: MAX_SUMMARY_OUTPUT_TOKENS,
+            model,
+            prompt: [
+              "Compact the earlier conversation transcript below.",
+              "Return only the checkpoint summary.",
+              "",
+              transcript,
+            ].join("\n"),
+            system: CHAT_COMPACTION_SYSTEM_PROMPT,
             temperature: 0,
             ...aiAnalytics?.stepCallbacks,
           }),
@@ -420,7 +543,7 @@ export const renderModelMessagesForCompaction = (
     )
     .join("\n\n");
 
-const createCompactionSummaryMessage = ({
+export const createCompactionSummaryMessage = ({
   summarizedMessageCount,
   summary,
 }: {
@@ -439,6 +562,115 @@ const createCompactionSummaryMessage = ({
     },
   ],
 });
+
+export const parseChatCompactionSummary = (
+  summaryMarkdown: string,
+): ChatCompactionSummary => ({
+  version: CHAT_COMPACTION_PROMPT_VERSION,
+  blocked: parseListSection(summaryMarkdown, "Blocked"),
+  constraints: parseListSection(summaryMarkdown, "Constraints"),
+  criticalContext: parseListSection(summaryMarkdown, "Critical Context"),
+  done: parseListSection(summaryMarkdown, "Done"),
+  goal: firstMeaningfulLine(readMarkdownSection(summaryMarkdown, "Goal")),
+  inProgress: parseListSection(summaryMarkdown, "In Progress"),
+  keyDecisions: parseKeyDecisions(
+    parseListSection(summaryMarkdown, "Key Decisions"),
+  ),
+  modifiedFiles: parseTaggedList(summaryMarkdown, "modified-files"),
+  nextSteps: parseListSection(summaryMarkdown, "Next Steps"),
+  readFiles: parseTaggedList(summaryMarkdown, "read-files"),
+});
+
+const readMarkdownSection = (markdown: string, heading: string): string => {
+  const match = new RegExp(
+    `^#{2,3}\\s+${escapeRegExp(heading)}\\s*$`,
+    "imu",
+  ).exec(markdown);
+  if (!match) {
+    return "";
+  }
+
+  const sectionStart = match.index + match[0].length;
+  const rest = markdown.slice(sectionStart);
+  const nextBoundary =
+    /^(?:#{2,3}\s+\S.*|<read-files>|<modified-files>)$/imu.exec(rest);
+  const sectionEnd = nextBoundary ? nextBoundary.index : rest.length;
+
+  return rest.slice(0, sectionEnd).trim();
+};
+
+const parseListSection = (markdown: string, heading: string): string[] =>
+  parseListLines(readMarkdownSection(markdown, heading));
+
+const parseTaggedList = (markdown: string, tag: string): string[] => {
+  const match = new RegExp(
+    `<${escapeRegExp(tag)}>\\s*([\\s\\S]*?)\\s*</${escapeRegExp(tag)}>`,
+    "iu",
+  ).exec(markdown);
+  return parseListLines(match?.at(1) ?? "");
+};
+
+const parseListLines = (section: string): string[] =>
+  section
+    .split(/\r?\n/u)
+    .map((line) => normalizeListLine(line))
+    .flatMap((line) => (isMeaningfulSummaryLine(line) ? [line] : []));
+
+const parseKeyDecisions = (
+  lines: readonly string[],
+): ChatCompactionSummary["keyDecisions"] => lines.map(parseKeyDecision);
+
+const parseKeyDecision = (
+  line: string,
+): ChatCompactionSummary["keyDecisions"][number] => {
+  const dashIndex = line.indexOf(" - ");
+  if (dashIndex !== -1) {
+    return {
+      decision: line.slice(0, dashIndex).trim(),
+      rationale: line.slice(dashIndex + 3).trim(),
+    };
+  }
+
+  const becauseNeedle = " because ";
+  const becauseIndex = line.toLowerCase().indexOf(becauseNeedle);
+  if (becauseIndex !== -1) {
+    return {
+      decision: line.slice(0, becauseIndex).trim(),
+      rationale: line.slice(becauseIndex + becauseNeedle.length).trim(),
+    };
+  }
+
+  return {
+    decision: line,
+    rationale: null,
+  };
+};
+
+const firstMeaningfulLine = (section: string): string | null =>
+  parseListLines(section).at(0) ?? null;
+
+const normalizeListLine = (line: string): string =>
+  line
+    .trim()
+    .replace(/^[-*]\s+/u, "")
+    .replace(/^\d+[.)]\s+/u, "")
+    .trim();
+
+const isMeaningfulSummaryLine = (line: string): boolean => {
+  if (!line || /^#{2,3}\s+/u.test(line)) {
+    return false;
+  }
+
+  const normalized = line.toLowerCase();
+  return (
+    normalized !== "none" &&
+    normalized !== "n/a" &&
+    normalized !== "not applicable"
+  );
+};
+
+const escapeRegExp = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 
 const createModelCompactionSummaryMessage = ({
   summarizedMessageCount,

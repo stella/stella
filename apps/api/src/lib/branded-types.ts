@@ -16,6 +16,7 @@ export type SafeIdType =
   | "caseLawPolarityRule"
   | "caseLawSource"
   | "chatMessage"
+  | "chatThreadCompaction"
   | "chatThread"
   | "fileChatThread"
   | "clause"

@@ -12,7 +12,9 @@ import { jsonb } from "@/api/db/columns";
 import {
   agentSkillPolicies,
   agentSkillResourcePolicies,
+  chatMessageSearchDocumentPolicies,
   chatMessagePolicies,
+  chatThreadCompactionPolicies,
   chatThreadPolicies,
   chatThreadSearchDocumentPolicies,
   fileChatThreadPolicies,
@@ -48,6 +50,7 @@ import type {
 import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
 import type { DecisionSection } from "@/api/handlers/case-law/types";
 import type {
+  ChatCompactionSummary,
   ChatMessageRole,
   PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
@@ -1758,6 +1761,79 @@ export const chatThreadSearchDocuments = p.pgTable(
   (table) => [
     p.index("chat_thread_search_docs_tsv_idx").using("gin", table.tsv),
     ...chatThreadSearchDocumentPolicies(),
+  ],
+);
+
+export const chatMessageSearchDocuments = p.pgTable(
+  "chat_message_search_documents",
+  {
+    messageId: safeUuid<"chatMessage">("message_id")
+      .primaryKey()
+      .references(() => chatMessages.id, { onDelete: "cascade" }),
+    threadId: safeUuid<"chatThread">("thread_id")
+      .notNull()
+      .references(() => chatThreads.id, { onDelete: "cascade" }),
+    role: p.varchar({ length: 16 }).notNull().$type<ChatMessageRole>(),
+    searchableText: p.text("searchable_text").notNull().default(""),
+    tsv: tsvector(),
+    createdAt: p.timestamp("created_at").notNull(),
+    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.index("chat_message_search_docs_tsv_idx").using("gin", table.tsv),
+    p
+      .index("chat_message_search_docs_thread_created_idx")
+      .on(table.threadId, table.createdAt, table.messageId),
+    ...chatMessageSearchDocumentPolicies(),
+  ],
+);
+
+export const chatThreadCompactions = p.pgTable(
+  "chat_thread_compactions",
+  {
+    id: pUuid<"chatThreadCompaction">().primaryKey(),
+    threadId: safeUuid<"chatThread">("thread_id")
+      .notNull()
+      .references(() => chatThreads.id, { onDelete: "cascade" }),
+    status: p
+      .varchar({ length: 16 })
+      .$type<"active" | "stale">()
+      .notNull()
+      .default("active"),
+    summary: jsonb().$type<ChatCompactionSummary>().notNull(),
+    summaryMarkdown: p.text("summary_markdown").notNull(),
+    firstSummarizedMessageId: safeUuid<"chatMessage">(
+      "first_summarized_message_id",
+    )
+      .notNull()
+      .references(() => chatMessages.id, { onDelete: "cascade" }),
+    lastSummarizedMessageId: safeUuid<"chatMessage">(
+      "last_summarized_message_id",
+    )
+      .notNull()
+      .references(() => chatMessages.id, { onDelete: "cascade" }),
+    firstKeptMessageId: safeUuid<"chatMessage">(
+      "first_kept_message_id",
+    )
+      .notNull()
+      .references(() => chatMessages.id, { onDelete: "cascade" }),
+    summarizedMessageCount: p.integer("summarized_message_count").notNull(),
+    totalTokens: p.integer("total_tokens").notNull(),
+    preservedTokens: p.integer("preserved_tokens").notNull(),
+    promptVersion: p.smallint("prompt_version").notNull(),
+    modelProvider: p.text("model_provider"),
+    modelId: p.text("model_id"),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .uniqueIndex("chat_thread_compactions_active_thread_uidx")
+      .on(table.threadId)
+      .where(sql`status = 'active'`),
+    p
+      .index("chat_thread_compactions_thread_status_created_idx")
+      .on(table.threadId, table.status, table.createdAt),
+    ...chatThreadCompactionPolicies(),
   ],
 );
 
@@ -3915,6 +3991,9 @@ export const relations = defineRelations(
     caseLawIngestionFailures,
     chatThreads,
     chatMessages,
+    chatMessageSearchDocuments,
+    chatThreadCompactions,
+    chatThreadSearchDocuments,
     fileChatThreads,
     mcpConnectors,
     mcpOAuthClients,
@@ -4590,9 +4669,21 @@ export const relations = defineRelations(
         from: r.chatThreads.id,
         to: r.chatMessages.threadId,
       }),
+      compactions: r.many.chatThreadCompactions({
+        from: r.chatThreads.id,
+        to: r.chatThreadCompactions.threadId,
+      }),
       fileChatThread: r.one.fileChatThreads({
         from: r.chatThreads.id,
         to: r.fileChatThreads.chatThreadId,
+      }),
+      messageSearchDocuments: r.many.chatMessageSearchDocuments({
+        from: r.chatThreads.id,
+        to: r.chatMessageSearchDocuments.threadId,
+      }),
+      searchDocument: r.one.chatThreadSearchDocuments({
+        from: r.chatThreads.id,
+        to: r.chatThreadSearchDocuments.threadId,
       }),
       userFiles: r.many.userFiles({
         from: r.chatThreads.id,
@@ -4607,6 +4698,32 @@ export const relations = defineRelations(
       workspace: r.one.workspaces({
         from: r.chatMessages.workspaceId,
         to: r.workspaces.id,
+      }),
+      searchDocument: r.one.chatMessageSearchDocuments({
+        from: r.chatMessages.id,
+        to: r.chatMessageSearchDocuments.messageId,
+      }),
+    },
+    chatMessageSearchDocuments: {
+      message: r.one.chatMessages({
+        from: r.chatMessageSearchDocuments.messageId,
+        to: r.chatMessages.id,
+      }),
+      thread: r.one.chatThreads({
+        from: r.chatMessageSearchDocuments.threadId,
+        to: r.chatThreads.id,
+      }),
+    },
+    chatThreadCompactions: {
+      thread: r.one.chatThreads({
+        from: r.chatThreadCompactions.threadId,
+        to: r.chatThreads.id,
+      }),
+    },
+    chatThreadSearchDocuments: {
+      thread: r.one.chatThreads({
+        from: r.chatThreadSearchDocuments.threadId,
+        to: r.chatThreads.id,
       }),
     },
     fileChatThreads: {

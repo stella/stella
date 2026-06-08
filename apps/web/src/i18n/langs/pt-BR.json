@@ -531,6 +531,7 @@
       "docxReplaceSummary": "Substitua “{find}” por “{replace}”",
       "docxSignatureTableSummary": "Inserir tabela de assinaturas perto de {blockId}",
       "execute-typescript": "Lendo dados do caso",
+      "expand-chat-history": "Lendo o histórico do chat",
       "fetch_url": "Lendo página",
       "infosoud_lookup_case": "Busca de processo no InfoSoud",
       "load-skill": "Lendo orientações",
@@ -539,6 +540,7 @@
       "read-skill-resource": "Lendo orientações",
       "run-stella-query": "Lendo dados do caso",
       "search-across-matters": "Pesquisando casos",
+      "search-chat-history": "Pesquisando no histórico do chat",
       "unknown": "Usando ferramenta",
       "update-entity-fields": "Atualizando metadados",
       "web_search": "Pesquisando na web"

@@ -531,6 +531,7 @@
       "docxReplaceSummary": "Aizstāt „{find}” ar „{replace}”",
       "docxSignatureTableSummary": "Ievietot parakstu tabulu pie {blockId}",
       "execute-typescript": "Lietas datu lasīšana",
+      "expand-chat-history": "Lasa tērzēšanas vēsturi",
       "fetch_url": "Lapas lasīšana",
       "infosoud_lookup_case": "InfoSoud lietas meklēšana",
       "load-skill": "Norādījumu lasīšana",
@@ -539,6 +540,7 @@
       "read-skill-resource": "Norādījumu lasīšana",
       "run-stella-query": "Lietas datu lasīšana",
       "search-across-matters": "Meklēšana vairākās lietās",
+      "search-chat-history": "Meklē tērzēšanas vēsturē",
       "unknown": "Rīka izmantošana",
       "update-entity-fields": "Metadatu atjaunināšana",
       "web_search": "Meklēšana tīmeklī"

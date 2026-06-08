@@ -531,6 +531,7 @@
       "docxReplaceSummary": "Pakeisti „{find}“ į „{replace}“",
       "docxSignatureTableSummary": "Įterpti parašų lentelę prie {blockId}",
       "execute-typescript": "Skaitomi bylos duomenys",
+      "expand-chat-history": "Skaitoma pokalbio istorija",
       "fetch_url": "Skaitomas puslapis",
       "infosoud_lookup_case": "InfoSoud bylos paieška",
       "load-skill": "Skaitomos gairės",
@@ -539,6 +540,7 @@
       "read-skill-resource": "Skaitomos gairės",
       "run-stella-query": "Skaitomi bylos duomenys",
       "search-across-matters": "Ieškoma keliose bylose",
+      "search-chat-history": "Ieškoma pokalbio istorijoje",
       "unknown": "Naudojamas įrankis",
       "update-entity-fields": "Atnaujinami metaduomenys",
       "web_search": "Ieškoma internete"

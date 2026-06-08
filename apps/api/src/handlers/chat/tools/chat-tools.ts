@@ -15,6 +15,11 @@ import {
   createBusinessRegistryTools,
 } from "@/api/handlers/chat/tools/business-registry-tools";
 import {
+  EXPAND_CHAT_HISTORY_TOOL_NAME,
+  createChatHistoryTools,
+  SEARCH_CHAT_HISTORY_TOOL_NAME,
+} from "@/api/handlers/chat/tools/chat-history-tools";
+import {
   CREATE_DOCUMENT_TOOL_NAME,
   createCreateDocumentTool,
 } from "@/api/handlers/chat/tools/create-document-tool";
@@ -57,6 +62,7 @@ type InfosoudTools = ReturnType<typeof createInfosoudTools>;
 type ActiveDocxEditTools = ReturnType<typeof createActiveDocxEditTools>;
 type CreateDocumentTools = ReturnType<typeof createCreateDocumentTools>;
 type WebSearchTools = ReturnType<typeof createWebSearchTools>;
+type ChatHistoryTools = ReturnType<typeof createChatHistoryTools>;
 
 type BuiltInChatTools = OrgTools &
   ChatExecutionTools &
@@ -67,7 +73,8 @@ type BuiltInChatTools = OrgTools &
   WorkspaceTools &
   ActiveDocxEditTools &
   CreateDocumentTools &
-  WebSearchTools;
+  WebSearchTools &
+  ChatHistoryTools;
 
 export type ChatTools = BuiltInChatTools;
 
@@ -75,6 +82,8 @@ type GetChatToolsProps = {
   safeDb: SafeDb;
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
+  threadId: SafeId<"chatThread">;
+  excludedChatHistoryMessageIds?: readonly SafeId<"chatMessage">[] | undefined;
   userId: SafeId<"user">;
   // Use `resolveToolWorkspaceIds` to construct this — that helper is
   // the only path that intersects pinned IDs with the currently
@@ -129,6 +138,7 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   [BUSINESS_REGISTRY_LOOKUP_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.publicOfficial,
   "create-document": CHAT_TOOL_POLICY_KIND.internal,
   "describe-stella-api": CHAT_TOOL_POLICY_KIND.internal,
+  [EXPAND_CHAT_HISTORY_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
   // Per-thread `webSearchEnabled` already gates the tools; an
   // additional per-call approval would double-gate and block
   // streaming until the user clicks Allow. Classify alongside the
@@ -139,6 +149,7 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   "load-skill": CHAT_TOOL_POLICY_KIND.internal,
   "read-skill-resource": CHAT_TOOL_POLICY_KIND.internal,
   "run-stella-query": CHAT_TOOL_POLICY_KIND.internal,
+  [SEARCH_CHAT_HISTORY_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
   "update-entity-fields": CHAT_TOOL_POLICY_KIND.mutation,
   [WEB_SEARCH_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.publicOfficial,
 } as const satisfies Record<
@@ -150,6 +161,8 @@ export const getChatTools = ({
   safeDb,
   scopedDb,
   organizationId,
+  threadId,
+  excludedChatHistoryMessageIds,
   userId,
   toolWorkspaceIds,
   refRegistry,
@@ -204,6 +217,11 @@ export const getChatTools = ({
   const activeDocxEditTools = hasActiveFileChat
     ? createActiveDocxEditTools()
     : {};
+  const historyTools = createChatHistoryTools({
+    excludedMessageIds: excludedChatHistoryMessageIds,
+    safeDb,
+    threadId,
+  });
   const externalChatTools = applyChatToolPolicies({
     defaultPolicyKind: CHAT_TOOL_POLICY_KIND.external,
     tools: externalTools,
@@ -234,6 +252,7 @@ export const getChatTools = ({
       ...boeTools,
       ...infosoudTools,
       ...workspaceTools,
+      ...historyTools,
       ...createDocumentTools,
       ...activeDocxEditTools,
       ...webSearchTools,

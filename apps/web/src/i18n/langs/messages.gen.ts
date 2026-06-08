@@ -534,6 +534,7 @@ type Messages = {
       "docxReplaceSummary": "Replace “{find}” with “{replace}”";
       "docxSignatureTableSummary": "Insert signature table near {blockId}";
       "execute-typescript": "Reading workspace data";
+      "expand-chat-history": "Reading chat history";
       "fetch_url": "Reading page";
       "infosoud_lookup_case": "InfoSoud case lookup";
       "load-skill": "Reading guidance";
@@ -542,6 +543,7 @@ type Messages = {
       "read-skill-resource": "Reading guidance";
       "run-stella-query": "Reading workspace data";
       "search-across-matters": "Searching across matters";
+      "search-chat-history": "Searching chat history";
       "unknown": "Using tool";
       "update-entity-fields": "Updating metadata";
       "web_search": "Searching the web";

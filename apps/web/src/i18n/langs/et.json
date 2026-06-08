@@ -531,6 +531,7 @@
       "docxReplaceSummary": "Asenda „{find}“ sõnaga „{replace}“",
       "docxSignatureTableSummary": "Lisa allkirjatabel ploki {blockId} lähedale",
       "execute-typescript": "Asja andmete lugemine",
+      "expand-chat-history": "Vestlusajaloo lugemine",
       "fetch_url": "Lehe lugemine",
       "infosoud_lookup_case": "InfoSoudi kohtuasja otsing",
       "load-skill": "Juhiste lugemine",
@@ -539,6 +540,7 @@
       "read-skill-resource": "Juhiste lugemine",
       "run-stella-query": "Asja andmete lugemine",
       "search-across-matters": "Otsing kõigis asjades",
+      "search-chat-history": "Vestlusajaloo otsimine",
       "unknown": "Tööriista kasutamine",
       "update-entity-fields": "Metaandmete uuendamine",
       "web_search": "Veebist otsimine"

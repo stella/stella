@@ -531,6 +531,7 @@
       "docxReplaceSummary": "A(z) „{find}” cseréje erre: „{replace}”",
       "docxSignatureTableSummary": "Aláírási táblázat beszúrása ide: {blockId}",
       "execute-typescript": "Ügyadatok olvasása",
+      "expand-chat-history": "Csevegési előzmények olvasása",
       "fetch_url": "Oldal olvasása",
       "infosoud_lookup_case": "InfoSoud ügykeresés",
       "load-skill": "Útmutató olvasása",
@@ -539,6 +540,7 @@
       "read-skill-resource": "Útmutató olvasása",
       "run-stella-query": "Ügyadatok olvasása",
       "search-across-matters": "Keresés az ügyek között",
+      "search-chat-history": "Csevegési előzmények keresése",
       "unknown": "Eszköz használata",
       "update-entity-fields": "Metaadatok frissítése",
       "web_search": "Keresés az interneten"

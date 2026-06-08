@@ -531,6 +531,7 @@
       "docxReplaceSummary": "Nahradiť „{find}“ za „{replace}“",
       "docxSignatureTableSummary": "Vložiť podpisovú tabuľku k {blockId}",
       "execute-typescript": "Čítam dáta veci",
+      "expand-chat-history": "Čítanie histórie chatu",
       "fetch_url": "Čítanie stránky",
       "infosoud_lookup_case": "Vyhľadanie spisu v InfoSoude",
       "load-skill": "Čítam pokyny",
@@ -539,6 +540,7 @@
       "read-skill-resource": "Čítam pokyny",
       "run-stella-query": "Čítam dáta veci",
       "search-across-matters": "Vyhľadávanie naprieč vecami",
+      "search-chat-history": "Prehľadávanie histórie chatu",
       "unknown": "Používanie nástroja",
       "update-entity-fields": "Aktualizácia metadát",
       "web_search": "Vyhľadávanie na webe"

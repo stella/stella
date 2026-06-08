@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import * as p from "drizzle-orm/pg-core";
 
 export const stella = p.pgRole("stella").existing();
@@ -102,16 +103,16 @@ const fileChatThreadScopeCheck = sql`(
   ${workspaceCheck}
 )`;
 
-// The chat search-document table stores only `thread_id` and derives
-// all tenancy from its owning thread, so RLS joins `chat_threads` and
-// applies the same scope the thread enforces. This is defence in
-// depth: global search reads this table via the RLS-bypassing root
-// connection and filters by user explicitly, but any stella-role
-// reader is still held to the thread's own visibility.
-const chatThreadSearchDocumentScopeCheck = sql`(
+// Derived chat tables store only `thread_id` and derive all tenancy
+// from their owning thread, so RLS joins `chat_threads` and applies
+// the same scope the thread enforces. This is defence in depth:
+// some search maintenance reads via the RLS-bypassing root connection
+// and filters explicitly, but any stella-role reader is still held to
+// the thread's own visibility.
+const chatDerivedThreadScopeCheck = (threadIdSql: SQL) => sql`(
   EXISTS (
     SELECT 1 FROM chat_threads ct
-    WHERE ct.id = chat_thread_search_documents.thread_id
+    WHERE ct.id = ${threadIdSql}
       AND ct.user_id = (SELECT current_setting(
         '${sql.raw(SETTING_USER_ID)}', true
       ))
@@ -550,22 +551,86 @@ export const chatThreadSearchDocumentPolicies = () => [
   p.pgPolicy("chat_thread_search_document_select", {
     for: "select",
     to: stella,
-    using: chatThreadSearchDocumentScopeCheck,
+    using: chatDerivedThreadScopeCheck(
+      sql`chat_thread_search_documents.thread_id`,
+    ),
   }),
   p.pgPolicy("chat_thread_search_document_insert", {
     for: "insert",
     to: stella,
-    withCheck: chatThreadSearchDocumentScopeCheck,
+    withCheck: chatDerivedThreadScopeCheck(
+      sql`chat_thread_search_documents.thread_id`,
+    ),
   }),
   p.pgPolicy("chat_thread_search_document_update", {
     for: "update",
     to: stella,
-    using: chatThreadSearchDocumentScopeCheck,
+    using: chatDerivedThreadScopeCheck(
+      sql`chat_thread_search_documents.thread_id`,
+    ),
   }),
   p.pgPolicy("chat_thread_search_document_delete", {
     for: "delete",
     to: stella,
-    using: chatThreadSearchDocumentScopeCheck,
+    using: chatDerivedThreadScopeCheck(
+      sql`chat_thread_search_documents.thread_id`,
+    ),
+  }),
+];
+
+export const chatMessageSearchDocumentPolicies = () => [
+  p.pgPolicy("chat_message_search_document_select", {
+    for: "select",
+    to: stella,
+    using: chatDerivedThreadScopeCheck(
+      sql`chat_message_search_documents.thread_id`,
+    ),
+  }),
+  p.pgPolicy("chat_message_search_document_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: chatDerivedThreadScopeCheck(
+      sql`chat_message_search_documents.thread_id`,
+    ),
+  }),
+  p.pgPolicy("chat_message_search_document_update", {
+    for: "update",
+    to: stella,
+    using: chatDerivedThreadScopeCheck(
+      sql`chat_message_search_documents.thread_id`,
+    ),
+  }),
+  p.pgPolicy("chat_message_search_document_delete", {
+    for: "delete",
+    to: stella,
+    using: chatDerivedThreadScopeCheck(
+      sql`chat_message_search_documents.thread_id`,
+    ),
+  }),
+];
+
+export const chatThreadCompactionPolicies = () => [
+  p.pgPolicy("chat_thread_compaction_select", {
+    for: "select",
+    to: stella,
+    using: chatDerivedThreadScopeCheck(sql`chat_thread_compactions.thread_id`),
+  }),
+  p.pgPolicy("chat_thread_compaction_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: chatDerivedThreadScopeCheck(
+      sql`chat_thread_compactions.thread_id`,
+    ),
+  }),
+  p.pgPolicy("chat_thread_compaction_update", {
+    for: "update",
+    to: stella,
+    using: chatDerivedThreadScopeCheck(sql`chat_thread_compactions.thread_id`),
+  }),
+  p.pgPolicy("chat_thread_compaction_delete", {
+    for: "delete",
+    to: stella,
+    using: chatDerivedThreadScopeCheck(sql`chat_thread_compactions.thread_id`),
   }),
 ];
 

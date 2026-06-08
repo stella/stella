@@ -531,6 +531,7 @@
       "docxReplaceSummary": "„{find}“ durch „{replace}“ ersetzen",
       "docxSignatureTableSummary": "Signaturtabelle in der Nähe von {blockId} einfügen",
       "execute-typescript": "Mandatsdaten lesen",
+      "expand-chat-history": "Chatverlauf lesen",
       "fetch_url": "Seite lesen",
       "infosoud_lookup_case": "InfoSoud Aktensuche",
       "load-skill": "Hinweise lesen",
@@ -539,6 +540,7 @@
       "read-skill-resource": "Hinweise lesen",
       "run-stella-query": "Mandatsdaten lesen",
       "search-across-matters": "In allen Mandaten suchen",
+      "search-chat-history": "Chatverlauf durchsuchen",
       "unknown": "Werkzeug verwenden",
       "update-entity-fields": "Metadaten aktualisieren",
       "web_search": "Web wird durchsucht"
