@@ -93,6 +93,14 @@ describe("Issue #712 — run shading round-trips and renders", () => {
     expect(roundTripShading({ shading })?.pattern).toBe("pct25");
   });
 
+  test("a solid pattern with a color but no fill renders and round-trips", () => {
+    // `<w:shd w:val="solid" w:color="FF0000"/>` paints the color as a solid
+    // background; flatten it into the fill so it isn't dropped.
+    const shading = { pattern: "solid" as const, color: { rgb: "FF0000" } };
+    expect(renderedBackground({ shading })).toBe("#FF0000");
+    expect(roundTripShading({ shading })?.fill?.rgb).toBe("FF0000");
+  });
+
   test("a theme-color fill round-trips (themeColor preserved)", () => {
     const formatting: Run["formatting"] = {
       shading: { fill: { themeColor: "accent1" } },
@@ -105,6 +113,7 @@ describe("Issue #712 — run shading round-trips and renders", () => {
     // (covered in renderParagraph-run-shading.test.ts). Here we only assert the
     // data is not lost.
     const formatting: Run["formatting"] = {
+      // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- a named OOXML highlight value, not UI styling
       highlight: "green",
       shading: { fill: { rgb: "FFFF00" } },
     };

@@ -23,7 +23,14 @@ import type { RunShadingAttrs } from "../schema/marks";
 export function shadingToRunShadingAttrs(
   shading: ShadingProperties | undefined,
 ): RunShadingAttrs | null {
-  const fill = shading?.fill;
+  if (!shading) {
+    return null;
+  }
+  // A `solid` pattern with no fill paints `w:color` over everything, so its
+  // pattern color IS the background — flatten it into the fill slot rather than
+  // dropping it (`resolveShadingFill` treats solid+color as renderable).
+  const usingSolidColor = !shading.fill && shading.pattern === "solid";
+  const fill = shading.fill ?? (usingSolidColor ? shading.color : undefined);
   if (!fill || fill.auto || (!fill.rgb && !fill.themeColor)) {
     return null;
   }
@@ -41,8 +48,11 @@ export function shadingToRunShadingAttrs(
   if (fill.themeShade) {
     attrs.themeShade = fill.themeShade;
   }
+  // Carry a genuine pattern overlay for export fidelity, but not the default
+  // `clear`/`nil`, nor the `solid` we just flattened into a plain fill.
   if (
-    shading?.pattern &&
+    !usingSolidColor &&
+    shading.pattern &&
     shading.pattern !== "clear" &&
     shading.pattern !== "nil"
   ) {

@@ -9,9 +9,8 @@
 // the painter render it. No parseDOM: the highlight mark already claims
 // `background-color` on HTML paste; this mark is populated from docx import.
 
-import { resolveShadingFill } from "../../../utils/formatToStyle";
+import { ensureHexPrefix } from "../../../utils/colorResolver";
 import { expectRunShadingMarkAttrs } from "../../attrs";
-import { runShadingAttrsToShading } from "../../conversion/runShadingMark";
 import { createMarkExtension } from "../create";
 
 export const RunShadingExtension = createMarkExtension({
@@ -26,16 +25,13 @@ export const RunShadingExtension = createMarkExtension({
       pattern: { default: null },
     },
     toDOM(mark) {
-      const attrs = expectRunShadingMarkAttrs(mark);
-      // The editable overlay has no theme, so only a concrete rgb fill is
-      // paintable here. Theme-only fills are left to the paged painter (which
-      // has the real theme) rather than guessing the Office default — without
-      // the rgb guard, `resolveShadingFill(_, null)` would resolve a theme slot
-      // to its default colour (often black). A clear/absent pattern paints the
-      // fill solid. (#722)
-      const background = attrs.rgb
-        ? resolveShadingFill(runShadingAttrsToShading(attrs), null)
-        : "";
+      const { rgb } = expectRunShadingMarkAttrs(mark);
+      // The editable overlay has no theme. Use the concrete rgb fill directly:
+      // `resolveColor` prefers a theme slot when both are present, which here
+      // (theme=null) resolves to the Office default (often black). Theme-only
+      // fills carry no rgb and are left to the paged painter, which has the
+      // real theme. (#722)
+      const background = rgb ? ensureHexPrefix(rgb) : "";
       return [
         "span",
         background ? { style: `background-color: ${background}` } : {},

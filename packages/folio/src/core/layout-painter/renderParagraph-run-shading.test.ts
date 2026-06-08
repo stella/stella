@@ -98,6 +98,8 @@ function backgroundOf(run: TextRun): string | undefined {
   return textEl?.style.backgroundColor;
 }
 
+// Test fixtures use literal colors to assert what the painter paints.
+/* eslint-disable no-inline-style-colors/no-inline-style-colors */
 describe("renderLine run shading", () => {
   test("paints a shaded run's background", () => {
     expect(
