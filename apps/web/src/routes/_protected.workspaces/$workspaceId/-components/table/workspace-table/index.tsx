@@ -159,13 +159,13 @@ export const WorkspaceTable = ({
   );
   const selectAllState = getSelectAllState({
     selectableRowIds,
-    rowSelection: table.getState().rowSelection,
+    rowSelection: table.state.rowSelection,
   });
   const handleToggleSelectAll = useCallback(() => {
     table.setRowSelection(
       getNextSelectAllRowSelection({
         selectableRowIds,
-        rowSelection: table.getState().rowSelection,
+        rowSelection: table.state.rowSelection,
       }),
     );
   }, [selectableRowIds, table]);

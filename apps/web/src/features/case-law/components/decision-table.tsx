@@ -3,9 +3,10 @@ import { useMemo } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   createColumnHelper,
+  createCoreRowModel,
   flexRender,
-  getCoreRowModel,
-  useReactTable,
+  tableFeatures,
+  useTable,
 } from "@tanstack/react-table";
 import type { CellContext } from "@tanstack/react-table";
 import { useFormatter, useTranslations } from "use-intl";
@@ -34,9 +35,20 @@ type DecisionTableProps = {
   isLoading: boolean;
 };
 
-const columnHelper = createColumnHelper<Decision>();
+// Core-only feature set: the case-law table renders a static list and does
+// not sort, filter, paginate, or select, so no optional features are
+// registered (keeping them out of the bundle).
+const decisionTableFeatures = tableFeatures({});
+type DecisionFeatures = typeof decisionTableFeatures;
+type DecisionCellContext<TValue> = CellContext<
+  DecisionFeatures,
+  Decision,
+  TValue
+>;
 
-const renderCaseNumberCell = (info: CellContext<Decision, string>) => {
+const columnHelper = createColumnHelper<DecisionFeatures, Decision>();
+
+const renderCaseNumberCell = (info: DecisionCellContext<string>) => {
   const {
     country,
     court,
@@ -98,7 +110,7 @@ const renderCaseNumberCell = (info: CellContext<Decision, string>) => {
   );
 };
 
-const renderCountryCell = (info: CellContext<Decision, string>) => (
+const renderCountryCell = (info: DecisionCellContext<string>) => (
   <span className="bg-muted rounded px-1.5 py-0.5 text-xs">
     {info.getValue()}
   </span>
@@ -109,51 +121,52 @@ export const DecisionTable = ({ decisions, isLoading }: DecisionTableProps) => {
   const format = useFormatter();
 
   const columns = useMemo(
-    () => [
-      columnHelper.accessor("caseNumber", {
-        header: t("caseLaw.columns.caseNumber"),
-        cell: renderCaseNumberCell,
-      }),
-      columnHelper.accessor("court", {
-        header: t("caseLaw.columns.court"),
-      }),
-      columnHelper.accessor("country", {
-        header: t("common.country"),
-        cell: renderCountryCell,
-      }),
-      columnHelper.accessor("decisionDate", {
-        header: t("common.date"),
-        cell: (info) => {
-          const value = info.getValue();
-          if (value === null) {
-            return "\u2014";
-          }
-          const date = value instanceof Date ? value : new Date(value);
-          if (Number.isNaN(date.getTime())) {
-            return "\u2014";
-          }
-          return format.dateTime(date, {
-            dateStyle: "medium",
-            timeZone: "UTC",
-          });
-        },
-      }),
-      columnHelper.accessor("decisionType", {
-        header: t("common.type"),
-        cell: (info) => info.getValue() ?? "—",
-      }),
-    ],
+    () =>
+      // `columns()` preserves each column's individual value type while
+      // widening the array to the union v9's `useTable` expects.
+      columnHelper.columns([
+        columnHelper.accessor("caseNumber", {
+          header: t("caseLaw.columns.caseNumber"),
+          cell: renderCaseNumberCell,
+        }),
+        columnHelper.accessor("court", {
+          header: t("caseLaw.columns.court"),
+        }),
+        columnHelper.accessor("country", {
+          header: t("common.country"),
+          cell: renderCountryCell,
+        }),
+        columnHelper.accessor("decisionDate", {
+          header: t("common.date"),
+          cell: (info) => {
+            const value = info.getValue();
+            if (value === null) {
+              return "\u2014";
+            }
+            const date = value instanceof Date ? value : new Date(value);
+            if (Number.isNaN(date.getTime())) {
+              return "\u2014";
+            }
+            return format.dateTime(date, {
+              dateStyle: "medium",
+              timeZone: "UTC",
+            });
+          },
+        }),
+        columnHelper.accessor("decisionType", {
+          header: t("common.type"),
+          cell: (info) => info.getValue() ?? "—",
+        }),
+      ]),
     [t, format],
   );
 
-  const table = useReactTable({
+  const table = useTable({
+    features: decisionTableFeatures,
+    rowModels: { coreRowModel: createCoreRowModel() },
     data: decisions,
     columns,
-    getCoreRowModel: getCoreRowModel(),
     getRowId: (row) => row.id,
-    sortingFns: {
-      sortProperty: () => 0,
-    },
   });
 
   if (isLoading) {
@@ -202,7 +215,7 @@ export const DecisionTable = ({ decisions, isLoading }: DecisionTableProps) => {
                 className="border-border/35 hover:bg-muted/30 border-b last:border-b-0"
                 key={row.id}
               >
-                {row.getVisibleCells().map((cell) => (
+                {row.getAllCells().map((cell) => (
                   <td className="px-4 py-2" key={cell.id}>
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>

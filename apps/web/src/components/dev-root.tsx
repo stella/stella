@@ -1,6 +1,7 @@
 import { TanStackDevtools } from "@tanstack/react-devtools";
 import { ReactQueryDevtoolsPanel } from "@tanstack/react-query-devtools";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
+import { tableDevtoolsPlugin } from "@tanstack/react-table-devtools";
 import { useShallow } from "zustand/react/shallow";
 
 import { useDevStore } from "@/lib/dev-store";
@@ -24,6 +25,7 @@ export default function DevRoot() {
           name: "TanStack Router",
           render: <TanStackRouterDevtoolsPanel />,
         },
+        tableDevtoolsPlugin(),
       ]}
     />
   ) : null;

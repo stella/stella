@@ -4,10 +4,10 @@ import type {
   ColumnOrderState,
   ColumnPinningState,
   ColumnSizingState,
+  ColumnVisibilityState,
   OnChangeFn,
   RowSelectionState,
   SortingState,
-  VisibilityState,
 } from "@tanstack/react-table";
 import { useDebouncedCallback } from "use-debounce";
 import { useShallow } from "zustand/shallow";
@@ -90,6 +90,7 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
       selectColId,
       ...view.layout.columnPinning.filter((id) => id !== addPropertyColId),
     ],
+    right: [],
   };
 
   const onColumnPinningChange: OnChangeFn<ColumnPinningState> = (updater) => {
@@ -120,7 +121,7 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
     });
   };
 
-  const columnVisibility = useMemo<VisibilityState>(() => {
+  const columnVisibility = useMemo<ColumnVisibilityState>(() => {
     const visibility: Record<string, boolean> = {};
 
     for (const id of view.layout.hiddenProperties) {
@@ -130,7 +131,9 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
     return visibility;
   }, [view.layout.hiddenProperties]);
 
-  const onColumnVisibilityChange: OnChangeFn<VisibilityState> = (updater) => {
+  const onColumnVisibilityChange: OnChangeFn<ColumnVisibilityState> = (
+    updater,
+  ) => {
     const data =
       typeof updater === "function" ? updater(columnVisibility) : updater;
 
