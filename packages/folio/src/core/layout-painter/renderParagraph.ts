@@ -330,16 +330,19 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
     element.style.opacity = "0.4";
   }
 
-  // Highlight (background color)
-  if (run.highlight) {
-    element.style.backgroundColor = run.highlight;
+  // Background color: an explicit highlight (w:highlight) wins over run shading
+  // (w:shd). Folio carries arbitrary run-background fills as `shading` because
+  // they fall outside the OOXML named-highlight palette. eigenpal #722 (#712).
+  const runBackground = run.highlight ?? run.shading;
+  if (runBackground) {
+    element.style.backgroundColor = runBackground;
     const hasTrackedChangeColor = run.isInsertion || run.isDeletion;
     const hasCommentHighlight =
       run.commentIds !== undefined && run.commentIds.length > 0;
     const automaticTextColor =
       hasExplicitTextColor || hasTrackedChangeColor || hasCommentHighlight
         ? undefined
-        : getAutomaticTextColorForBackground(run.highlight);
+        : getAutomaticTextColorForBackground(runBackground);
     if (automaticTextColor) {
       element.style.color = automaticTextColor;
     }

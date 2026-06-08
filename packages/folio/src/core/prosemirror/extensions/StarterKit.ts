@@ -43,6 +43,7 @@ import { HyperlinkExtension } from "./marks/HyperlinkExtension";
 import { ItalicExtension } from "./marks/ItalicExtension";
 import { RtlExtension } from "./marks/RtlExtension";
 import { RunFormattingOverrideExtension } from "./marks/RunFormattingOverrideExtension";
+import { RunShadingExtension } from "./marks/RunShadingExtension";
 import { SmallCapsExtension } from "./marks/SmallCapsExtension";
 import { StrikeExtension } from "./marks/StrikeExtension";
 import { SubscriptExtension } from "./marks/SubscriptExtension";
@@ -128,6 +129,7 @@ export function createStarterKit(
   add("strike", StrikeExtension());
   add("textColor", TextColorExtension());
   add("highlight", HighlightExtension());
+  add("runShading", RunShadingExtension());
   add("fontSize", FontSizeExtension());
   add("fontFamily", FontFamilyExtension());
   add("superscript", SuperscriptExtension());

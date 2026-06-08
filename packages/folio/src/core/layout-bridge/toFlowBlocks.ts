@@ -51,6 +51,7 @@ import {
   expectMathAttrs,
   expectParagraphAttrs,
   expectRunFormattingOverrideMarkAttrs,
+  expectRunShadingMarkAttrs,
   expectTableAttrs,
   expectTableCellAttrs,
   expectTableRowAttrs,
@@ -60,6 +61,7 @@ import {
   expectTrackedChangeMarkAttrs,
   expectUnderlineMarkAttrs,
 } from "../prosemirror/attrs";
+import { runShadingAttrsToShading } from "../prosemirror/conversion/runShadingMark";
 import type { RunFormattingOverrideAttrs } from "../prosemirror/schema/marks";
 import type {
   ImageAttrs,
@@ -75,6 +77,7 @@ import type {
 } from "../types/document";
 import { NUMBER_FORMAT_VALUES } from "../types/documentEnumValues";
 import { resolveColor, resolveHighlightToCss } from "../utils/colorResolver";
+import { resolveShadingFill } from "../utils/formatToStyle";
 import {
   pointsToPixels,
   halfPointsToPixels,
@@ -470,6 +473,17 @@ function extractRunFormatting(
           expectHighlightMarkAttrs(mark).color,
         );
         break;
+
+      case "runShading": {
+        const shadingCss = resolveShadingFill(
+          runShadingAttrsToShading(expectRunShadingMarkAttrs(mark)),
+          theme,
+        );
+        if (shadingCss) {
+          formatting.shading = shadingCss;
+        }
+        break;
+      }
 
       case "fontSize": {
         const attrs = expectFontSizeMarkAttrs(mark);

@@ -6,6 +6,7 @@
  * to the extension system (extensions/marks/).
  */
 
+import type { ShadingProperties } from "../../types/colors";
 import type {
   EmphasisMark,
   TextEffect,
@@ -59,6 +60,19 @@ export type FontFamilyAttrs = {
 
 export type HighlightAttrs = {
   color: NonNullable<TextFormatting["highlight"]>;
+};
+
+/**
+ * Run-level shading mark attributes (w:shd). Carries the shading FILL as a
+ * flattened ColorValue (mirroring TextColorAttrs) plus the pattern. The default
+ * `clear` pattern is never stored (absence ⇒ the fill renders as a solid
+ * background and re-serializes to `w:val="clear"`); only non-clear patterns
+ * (`solid`, `pct*`, stripes) are carried for export fidelity. The pattern color
+ * (`w:shd w:color`) is not modelled here — it only matters for non-rendered
+ * pattern overlays and is vanishingly rare on runs.
+ */
+export type RunShadingAttrs = TextColorAttrs & {
+  pattern?: NonNullable<ShadingProperties["pattern"]>;
 };
 
 export type CharacterSpacingAttrs = {

@@ -40,6 +40,7 @@ export type {
   CommentAttrs,
   TrackedChangeMarkAttrs,
   RunFormattingOverrideAttrs,
+  RunShadingAttrs,
   HyperlinkAttrs,
 } from "./marks";
 

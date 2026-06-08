@@ -58,6 +58,7 @@ import type {
   TableCellAttrs,
 } from "../schema/nodes";
 import { assertValidProseMirrorDocument } from "../validation";
+import { shadingToRunShadingAttrs } from "./runShadingMark";
 
 /**
  * Options for document conversion
@@ -2385,6 +2386,15 @@ function textFormattingToMarks(
         color: formatting.highlight,
       }),
     );
+  }
+
+  // Run shading (w:shd) used as a run background. Folio models highlight as a
+  // strict OOXML named-palette union, so an arbitrary fill (e.g. a Word/Google
+  // Docs run background) round-trips as a dedicated runShading mark instead of
+  // silently disappearing at PM conversion. eigenpal #722 (#712).
+  const runShadingMarkAttrs = shadingToRunShadingAttrs(formatting.shading);
+  if (runShadingMarkAttrs) {
+    marks.push(schema.mark("runShading", runShadingMarkAttrs));
   }
 
   // Font size

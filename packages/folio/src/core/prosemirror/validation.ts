@@ -17,6 +17,7 @@ import {
   readBlockSdtAttrs,
   readParagraphAttrs,
   readRunFormattingOverrideMarkAttrs,
+  readRunShadingMarkAttrs,
   readSdtAttrs,
   readShapeAttrs,
   readStrikeMarkAttrs,
@@ -237,6 +238,10 @@ const validateMarks = (
 
       case "highlight":
         appendAttrIssues(markPath, readHighlightMarkAttrs(mark), issues);
+        continue;
+
+      case "runShading":
+        appendAttrIssues(markPath, readRunShadingMarkAttrs(mark), issues);
         continue;
 
       case "fontSize":
