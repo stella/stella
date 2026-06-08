@@ -34,6 +34,11 @@ import { api } from "@/lib/api";
 import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
 import { userErrorMessage } from "@/lib/errors";
 
+import {
+  buildAutofillUpdates,
+  groupSupportsRegistryAutofill,
+} from "./registry-autofill";
+
 type FillFormat = "docx" | "pdf";
 
 const DOCX_EXT_RE = /\.docx$/iu;
@@ -612,6 +617,129 @@ const collectValidatableFields = (
   return result;
 };
 
+// Registries offered for one-click party-block autofill. Slugs are a
+// subset of the unified lookup endpoint's supported registries; labels
+// are registry proper names (not translatable UI copy).
+const REGISTRY_OPTIONS = [
+  { slug: "krs", label: "Poland — KRS" },
+  { slug: "ares", label: "Czechia — ARES" },
+  { slug: "orsr", label: "Slovakia — ORSR" },
+  { slug: "companies-house", label: "United Kingdom — Companies House" },
+  { slug: "prh", label: "Finland — PRH" },
+  { slug: "brreg", label: "Norway — Brønnøysund" },
+  { slug: "recherche-entreprises", label: "France — recherche-entreprises" },
+] as const;
+
+type RegistrySlug = (typeof REGISTRY_OPTIONS)[number]["slug"];
+
+/** One-click party-block autofill from a business register. Looks up a
+ *  company by its canonical id (KRS number, IČO, …) and fills the
+ *  matching fields in this group; the user reviews before submitting. */
+const RegistryAutofillControl = ({
+  groupFields,
+  onApply,
+}: {
+  groupFields: ResolvedField[];
+  onApply: (updates: { path: string; value: string }[]) => void;
+}) => {
+  const t = useTranslations();
+  const [registry, setRegistry] = useState<RegistrySlug>("krs");
+  const [companyId, setCompanyId] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleLookup = async () => {
+    const q = companyId.trim();
+    if (q === "") {
+      return;
+    }
+    setLoading(true);
+    const response = await api.contacts["business-registries"].get({
+      query: { registry, q },
+    });
+    setLoading(false);
+
+    if (response.error) {
+      stellaToast.add({
+        type: "error",
+        title: t("templates.registryNotFound"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+
+    const { data } = response;
+    if (data instanceof Response || data.type !== "lookup" || !data.hit) {
+      stellaToast.add({
+        type: "error",
+        title: t("templates.registryNotFound"),
+      });
+      return;
+    }
+
+    const updates = buildAutofillUpdates(groupFields, data.hit);
+    if (updates.length === 0) {
+      stellaToast.add({
+        type: "error",
+        title: t("templates.registryNotFound"),
+      });
+      return;
+    }
+    onApply(updates);
+    stellaToast.add({
+      type: "success",
+      title: t("templates.registryFilled", { count: updates.length }),
+    });
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-b pb-3">
+      <Select
+        onValueChange={(val) => {
+          const option = REGISTRY_OPTIONS.find((o) => o.slug === val);
+          if (option) {
+            setRegistry(option.slug);
+          }
+        }}
+        value={registry}
+      >
+        <SelectTrigger className="w-auto min-w-44">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectPopup>
+          {REGISTRY_OPTIONS.map((option) => (
+            <SelectItem key={option.slug} value={option.slug}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectPopup>
+      </Select>
+      <Input
+        className="w-44"
+        onChange={(e) => setCompanyId(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            void handleLookup();
+          }
+        }}
+        placeholder={t("templates.registryIdPlaceholder")}
+        value={companyId}
+      />
+      <Button
+        disabled={loading || companyId.trim() === ""}
+        onClick={() => void handleLookup()}
+        type="button"
+        variant="outline"
+      >
+        {t("templates.registryLookup")}
+      </Button>
+    </div>
+  );
+};
+
 export const TemplateForm = ({
   fields,
   conditions,
@@ -771,6 +899,16 @@ export const TemplateForm = ({
       touchedRef.current = rest;
     }
   }, []);
+
+  /** Apply registry-autofill updates to the form. */
+  const applyAutofill = useCallback(
+    (updates: { path: string; value: string }[]) => {
+      for (const update of updates) {
+        handleChangeWithValidation(update.path, update.value);
+      }
+    },
+    [handleChangeWithValidation],
+  );
 
   /** Validate all fields; returns true if valid. */
   const validateAll = useCallback(
@@ -1034,6 +1172,12 @@ export const TemplateForm = ({
                 <legend className="text-muted-foreground px-1 text-sm font-medium">
                   {prefix}
                 </legend>
+              )}
+              {prefix !== "" && groupSupportsRegistryAutofill(groupFields) && (
+                <RegistryAutofillControl
+                  groupFields={groupFields}
+                  onApply={applyAutofill}
+                />
               )}
               {groupFields.map((field) => (
                 <FieldRenderer
