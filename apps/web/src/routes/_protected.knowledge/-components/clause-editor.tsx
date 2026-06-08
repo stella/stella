@@ -1,3 +1,5 @@
+import { useRef } from "react";
+
 import Bold from "@tiptap/extension-bold";
 import Document from "@tiptap/extension-document";
 import Heading from "@tiptap/extension-heading";
@@ -112,6 +114,40 @@ const tipTapToClauseBody = (json: JSONContent): ClauseParagraph[] => {
   });
 };
 
+/**
+ * Merge edited (directive-free) paragraphs back into the original body,
+ * keeping directive paragraphs ({{#if}}/{{#each}}…) verbatim at their
+ * positions. The rich editor only renders non-directive paragraphs, so on
+ * save we re-interleave the edits into the non-directive slots; otherwise
+ * editing any conditional clause would silently strip its logic. Edits
+ * beyond the original non-directive count are appended at the end.
+ */
+export const mergeEditedBody = (
+  original: readonly ClauseParagraph[],
+  edited: readonly ClauseParagraph[],
+): ClauseParagraph[] => {
+  const result: ClauseParagraph[] = [];
+  let editIndex = 0;
+  for (const paragraph of original) {
+    if (paragraph.isDirective) {
+      result.push(paragraph);
+      continue;
+    }
+    const next = edited[editIndex];
+    if (next !== undefined) {
+      result.push(next);
+      editIndex += 1;
+    }
+  }
+  for (let i = editIndex; i < edited.length; i += 1) {
+    const extra = edited[i];
+    if (extra !== undefined) {
+      result.push(extra);
+    }
+  }
+  return result;
+};
+
 // ── Editor Component ────────────────────────────────
 
 type ClauseEditorProps = {
@@ -125,6 +161,11 @@ export const ClauseEditor = ({
   onChange,
   placeholder,
 }: ClauseEditorProps) => {
+  // Keep the latest body (incl. its directive paragraphs) so save can
+  // re-interleave edits without dropping directives the editor never shows.
+  const contentRef = useRef(content);
+  contentRef.current = content;
+
   const editor = useEditor({
     extensions: [
       Document,
@@ -140,12 +181,17 @@ export const ClauseEditor = ({
     ],
     content: clauseBodyToTipTap(content),
     onUpdate: ({ editor: e }) => {
-      onChange(tipTapToClauseBody(e.getJSON()));
+      onChange(
+        mergeEditedBody(contentRef.current, tipTapToClauseBody(e.getJSON())),
+      );
     },
   });
 
   // Sync content when the dialog resets
-  const contentKey = content.map((p) => p.text).join("\n");
+  const contentKey = content
+    .filter((p) => !p.isDirective)
+    .map((p) => p.text)
+    .join("\n");
   const editorReady = isUsableEditor(editor);
 
   useExternalSyncEffect(() => {
