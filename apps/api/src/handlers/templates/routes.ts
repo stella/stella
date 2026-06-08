@@ -17,6 +17,7 @@ import fillTemplatePreview from "@/api/handlers/templates/fill-preview";
 import getTemplate from "@/api/handlers/templates/get";
 import listTemplates from "@/api/handlers/templates/list";
 import manifestTemplate from "@/api/handlers/templates/manifest";
+import prepareTemplate from "@/api/handlers/templates/prepare";
 import previewTemplate from "@/api/handlers/templates/preview";
 import saveTemplateDocument from "@/api/handlers/templates/save-document";
 import updateTemplate from "@/api/handlers/templates/update";
@@ -45,6 +46,10 @@ export const templatesRoute = new Elysia({
   .post("/manifest", manifestTemplate.handler, {
     body: manifestTemplate.config.body,
     permissions: manifestTemplate.config.permissions,
+  })
+  .post("/prepare", prepareTemplate.handler, {
+    body: prepareTemplate.config.body,
+    permissions: prepareTemplate.config.permissions,
   })
   // ── CRUD endpoints ─────────────────────────────────
   .get("/", listTemplates.handler, {
