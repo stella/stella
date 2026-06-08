@@ -1,9 +1,10 @@
-import { asc, eq, gt, notExists, sql } from "drizzle-orm";
+import { and, asc, eq, gt, notExists, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db";
 import {
   legislationDocuments,
   legislationSearchDocuments,
+  legislationSources,
 } from "@/api/db/schema";
 import { resolveFtsConfig } from "@/api/handlers/case-law/fts-config";
 import type { DecisionSection } from "@/api/handlers/case-law/types";
@@ -24,6 +25,13 @@ const sectionsToPlainText = (
   sections: readonly DecisionSection[] | null,
 ): string => sections?.map((s) => s.text).join(" ") ?? "";
 
+// Same redistribution gate as the corpus-index projection. null descriptor =
+// legacy public source, treated as redistributable.
+const redistributable = sql`(
+  ${legislationSources.descriptor} IS NULL
+  OR (${legislationSources.descriptor} ->> 'allowsRedistribution') = 'true'
+)`;
+
 export const indexLegislationDocument = async (
   documentId: SafeId<"legislationDocument">,
   scopedDb: ScopedDb,
@@ -39,11 +47,16 @@ export const indexLegislationDocument = async (
         sections: legislationDocuments.sections,
       })
       .from(legislationDocuments)
-      .where(eq(legislationDocuments.id, documentId))
+      .innerJoin(
+        legislationSources,
+        eq(legislationSources.id, legislationDocuments.sourceId),
+      )
+      .where(and(eq(legislationDocuments.id, documentId), redistributable))
       .limit(1),
   );
 
   if (!document) {
+    await removeLegislationFromIndex(documentId, scopedDb);
     return;
   }
 
@@ -101,17 +114,24 @@ export const backfillLegislationSearchIndex = async (
     tx
       .select({ id: legislationDocuments.id })
       .from(legislationDocuments)
+      .innerJoin(
+        legislationSources,
+        eq(legislationSources.id, legislationDocuments.sourceId),
+      )
       .where(
-        notExists(
-          tx
-            .select({ one: sql`1` })
-            .from(legislationSearchDocuments)
-            .where(
-              eq(
-                legislationSearchDocuments.documentId,
-                legislationDocuments.id,
+        and(
+          redistributable,
+          notExists(
+            tx
+              .select({ one: sql`1` })
+              .from(legislationSearchDocuments)
+              .where(
+                eq(
+                  legislationSearchDocuments.documentId,
+                  legislationDocuments.id,
+                ),
               ),
-            ),
+          ),
         ),
       )
       .orderBy(asc(legislationDocuments.createdAt))
@@ -127,10 +147,17 @@ export const backfillLegislationSearchIndex = async (
         legislationSearchDocuments,
         eq(legislationSearchDocuments.documentId, legislationDocuments.id),
       )
+      .innerJoin(
+        legislationSources,
+        eq(legislationSources.id, legislationDocuments.sourceId),
+      )
       .where(
-        gt(
-          legislationDocuments.updatedAt,
-          legislationSearchDocuments.updatedAt,
+        and(
+          redistributable,
+          gt(
+            legislationDocuments.updatedAt,
+            legislationSearchDocuments.updatedAt,
+          ),
         ),
       )
       .orderBy(asc(legislationDocuments.createdAt))

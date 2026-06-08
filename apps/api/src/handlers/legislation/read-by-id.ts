@@ -33,7 +33,7 @@ export const readLegislationHandler = async (
         country: legislationDocuments.country,
         language: legislationDocuments.language,
         documentType: legislationDocuments.documentType,
-        statusValue: legislationDocuments.status,
+        status: legislationDocuments.status,
         effectiveDate: legislationDocuments.effectiveDate,
         versionValidFrom: legislationDocuments.versionValidFrom,
         versionValidTo: legislationDocuments.versionValidTo,
