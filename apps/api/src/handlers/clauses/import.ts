@@ -3,7 +3,12 @@ import { eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 
 import type { SafeDb, Transaction } from "@/api/db";
-import { clauseCategories, clauses, clauseVersions } from "@/api/db/schema";
+import {
+  clauseCategories,
+  clauses,
+  clauseVariants,
+  clauseVersions,
+} from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -181,6 +186,18 @@ const importHandler = async function* ({
           version: 1,
           body: item.body,
         });
+
+        const variants = item.variants ?? [];
+        for (const [variantIndex, variant] of variants.entries()) {
+          await tx.insert(clauseVariants).values({
+            id: createSafeId<"clauseVariant">(),
+            organizationId,
+            clauseId,
+            label: variant.label,
+            body: variant.body,
+            sortOrder: variantIndex,
+          });
+        }
 
         insertedIds.push(clauseId);
         auditEvents.push({
