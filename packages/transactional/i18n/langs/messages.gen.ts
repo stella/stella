@@ -23,6 +23,7 @@ type Messages = {
   };
   "otp": {
     "changeEmail": "Use this code to verify your new email address.";
+    "deleteAccount": "Use this code to verify deleting your account.";
     "emailVerification": "Use this code to verify your email address.";
     "expires": "This code expires in 5 minutes.";
     "forgetPassword": "Use this code to reset your password.";

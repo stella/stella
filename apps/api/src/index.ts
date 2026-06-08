@@ -34,6 +34,7 @@ import { legislationCorpusRoute } from "@/api/handlers/legislation/corpus-routes
 import { legislationRoute } from "@/api/handlers/legislation/routes";
 import { mcpConnectorsRoute } from "@/api/handlers/mcp-connectors/routes";
 import { mcpRoute } from "@/api/handlers/mcp/routes";
+import { meRoute } from "@/api/handlers/me/routes";
 import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
 import { playbooksRoute } from "@/api/handlers/playbooks/routes";
 import { propertiesRoute } from "@/api/handlers/properties/routes";
@@ -388,6 +389,7 @@ const api = new Elysia()
       .use(viewsRoute)
       .use(tasksRoute)
       .use(myTasksRoute)
+      .use(meRoute)
       .use(devRoute)
       .use(verifyAuthRoute),
   );

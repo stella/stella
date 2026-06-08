@@ -64,7 +64,12 @@ const getTransactionalEmailFrom = () =>
 type SendOTPEmailProps = {
   email: string;
   otp: string;
-  type: "sign-in" | "email-verification" | "forget-password" | "change-email";
+  type:
+    | "sign-in"
+    | "email-verification"
+    | "forget-password"
+    | "change-email"
+    | "delete-account";
   lang: SupportedLang;
 };
 

@@ -20,6 +20,7 @@
   },
   "otp": {
     "changeEmail": "Použijte tento kód pro ověření vaší nové e-mailové adresy.",
+    "deleteAccount": "Použijte tento kód k ověření smazání vašeho účtu.",
     "emailVerification": "Použijte tento kód pro ověření vaší e-mailové adresy.",
     "expires": "Platnost kódu vyprší za 5 minut.",
     "forgetPassword": "Použijte tento kód pro obnovení hesla.",

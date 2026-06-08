@@ -20,6 +20,7 @@
   },
   "otp": {
     "changeEmail": "Naudokite šį kodą naujo el. pašto adreso patvirtinimui.",
+    "deleteAccount": "Naudokite šį kodą paskyros ištrynimui patvirtinti.",
     "emailVerification": "Naudokite šį kodą el. pašto adreso patvirtinimui.",
     "expires": "Šio kodo galiojimas baigiasi po 5 minučių.",
     "forgetPassword": "Naudokite šį kodą slaptažodžio atkūrimui.",

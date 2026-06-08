@@ -11,6 +11,15 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import {
+  Dialog,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogPanel,
+  DialogPopup,
+} from "@stll/ui/components/dialog";
+import {
   Frame,
   FrameDescription,
   FrameHeader,
@@ -34,8 +43,9 @@ import {
   supportedLanguages,
   useI18nStore,
 } from "@/i18n/i18n-store";
+import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
-import { toAuthClientError } from "@/lib/errors";
+import { toAPIError, toAuthClientError } from "@/lib/errors";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
 import type { CommonTimezone } from "@/lib/timezones";
 import { sessionOptions } from "@/routes/-queries";
@@ -153,6 +163,56 @@ function ProfilePageBody() {
   const [wordEditShortcut, setWordEditShortcut] = useState(
     () => session?.user.wordEditShortcut ?? "",
   );
+
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [otpError, setOtpError] = useState<string | null>(null);
+
+  const sendOtpMutation = useMutation({
+    mutationFn: async () => {
+      setOtpError(null);
+      const res = await api.me.delete["send-otp"].post();
+      if (res.error) {
+        throw toAPIError(res.error);
+      }
+      return res.data;
+    },
+    onSuccess: () => {
+      setOtpSent(true);
+      stellaToast.add({
+        title: t("settings.account.otpSentSuccess"),
+        type: "success",
+      });
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : t("errors.actionFailed");
+      setOtpError(msg);
+    },
+  });
+
+  const verifyDeleteMutation = useMutation({
+    mutationFn: async (code: string) => {
+      setOtpError(null);
+      const res = await api.me.delete.verify.post({ code });
+      if (res.error) {
+        throw toAPIError(res.error);
+      }
+      return res.data;
+    },
+    onSuccess: async () => {
+      stellaToast.add({
+        title: t("settings.account.deleteAccountSuccess"),
+        type: "success",
+      });
+      await authClient.signOut();
+      window.location.href = "/auth";
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : t("errors.actionFailed");
+      setOtpError(msg);
+    },
+  });
 
   const updateTimezone = useMutation({
     mutationFn: async (timezoneId: string) => {
@@ -300,15 +360,119 @@ function ProfilePageBody() {
         <SessionsCard />
       </section>
 
-      {/* TODO: danger zone (follow-up PR). Both surfaces are
-          designed but their backends aren't built yet, so they
-          ship together rather than as fake placeholders.
-          - Export my data: async job (gather user data → ZIP →
-            S3 → emailed download link). Needs a job runner first.
-          - Delete account: OTP-verified flow (POST
-            /me/delete/send-otp + POST /me/delete/verify); must
-            reject sole-org-owners, revoke all sessions, call
-            auth.api.deleteUser, redirect to /auth. */}
+      <Frame className="border-destructive/32">
+        <FrameHeader>
+          <FrameTitle className="text-destructive-foreground">
+            {t("settings.account.dangerZone")}
+          </FrameTitle>
+          <FrameDescription>
+            {t("settings.account.dangerZoneDescription")}
+          </FrameDescription>
+        </FrameHeader>
+        <FramePanel>
+          <div className="flex flex-col gap-4 p-4">
+            <p className="text-muted-foreground text-sm">
+              {t("settings.account.deleteAccountWarning")}
+            </p>
+            <div>
+              <Button
+                variant="destructive"
+                onClick={() => setIsDeleteDialogOpen(true)}
+              >
+                {t("settings.account.deleteAccount")}
+              </Button>
+            </div>
+          </div>
+        </FramePanel>
+      </Frame>
+
+      <Dialog
+        open={isDeleteDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsDeleteDialogOpen(false);
+            setOtpSent(false);
+            setOtpCode("");
+            setOtpError(null);
+          }
+        }}
+      >
+        <DialogPopup>
+          <DialogHeader>
+            <DialogTitle>{t("settings.account.deleteAccount")}</DialogTitle>
+            <DialogDescription>
+              {otpSent
+                ? t("settings.account.deleteAccountOtpDescription")
+                : t("settings.account.deleteAccountConfirmDescription")}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogPanel>
+            <div className="flex flex-col gap-4 py-2">
+              {otpError && (
+                <div className="border-destructive/20 bg-destructive/10 text-destructive-foreground rounded-lg border p-3 text-sm">
+                  {otpError}
+                </div>
+              )}
+              {otpSent ? (
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="otp-input">
+                    {t("settings.account.enterOtp")}
+                  </Label>
+                  <Input
+                    id="otp-input"
+                    placeholder="123456"
+                    maxLength={6}
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value)}
+                    className="max-w-[200px] text-center text-lg tracking-widest"
+                  />
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-sm">
+                  {t("settings.account.deleteAccountWarningExplanation")}
+                </p>
+              )}
+            </div>
+          </DialogPanel>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setIsDeleteDialogOpen(false);
+                setOtpSent(false);
+                setOtpCode("");
+                setOtpError(null);
+              }}
+              disabled={
+                sendOtpMutation.isPending || verifyDeleteMutation.isPending
+              }
+            >
+              {t("common.cancel")}
+            </Button>
+            {otpSent ? (
+              <Button
+                variant="destructive"
+                onClick={() => verifyDeleteMutation.mutate(otpCode)}
+                disabled={
+                  otpCode.length !== 6 || verifyDeleteMutation.isPending
+                }
+                loading={verifyDeleteMutation.isPending}
+              >
+                {t("settings.account.confirmDelete")}
+              </Button>
+            ) : (
+              <Button
+                variant="destructive"
+                onClick={() => sendOtpMutation.mutate()}
+                disabled={sendOtpMutation.isPending}
+                loading={sendOtpMutation.isPending}
+              >
+                {t("settings.account.sendOtpCode")}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
     </>
   );
 }

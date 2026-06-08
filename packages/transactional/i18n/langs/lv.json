@@ -20,6 +20,7 @@
   },
   "otp": {
     "changeEmail": "Izmantojiet šo kodu, lai apstiprinātu savu jauno e-pasta adresi.",
+    "deleteAccount": "Izmantojiet šo kodu, lai apstiprinātu sava konta dzēšanu.",
     "emailVerification": "Izmantojiet šo kodu, lai apstiprinātu savu e-pasta adresi.",
     "expires": "Šī koda derīguma termiņš ir 5 minūtes.",
     "forgetPassword": "Izmantojiet šo kodu, lai atiestatītu savu paroli.",

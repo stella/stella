@@ -20,6 +20,7 @@
   },
   "otp": {
     "changeEmail": "Kasutage seda koodi oma uue e-posti aadressi kinnitamiseks.",
+    "deleteAccount": "Kasutage seda koodi oma konto kustutamise kinnitamiseks.",
     "emailVerification": "Kasutage seda koodi oma e-posti aadressi kinnitamiseks.",
     "expires": "See kood aegub 5 minuti pärast.",
     "forgetPassword": "Kasutage seda koodi oma parooli lähtestamiseks.",

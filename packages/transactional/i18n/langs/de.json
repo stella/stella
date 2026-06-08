@@ -20,6 +20,7 @@
   },
   "otp": {
     "changeEmail": "Verwenden Sie diesen Code, um Ihre neue E-Mail-Adresse zu bestätigen.",
+    "deleteAccount": "Verwenden Sie diesen Code, um das Löschen Ihres Kontos zu bestätigen.",
     "emailVerification": "Verwenden Sie diesen Code, um Ihre E-Mail-Adresse zu bestätigen.",
     "expires": "Dieser Code läuft in 5 Minuten ab.",
     "forgetPassword": "Verwenden Sie diesen Code, um Ihr Passwort zurückzusetzen.",
