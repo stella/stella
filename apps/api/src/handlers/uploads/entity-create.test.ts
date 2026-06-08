@@ -3,11 +3,12 @@ import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { eq, TransactionRollbackError } from "drizzle-orm";
 
 import type { SafeDb, Transaction } from "@/api/db";
-import { organization } from "@/api/db/auth-schema";
+import { organization, user } from "@/api/db/auth-schema";
 import {
   entities,
   entityVersions,
   fields,
+  pendingUploads,
   properties,
   workspaces,
 } from "@/api/db/schema";
@@ -25,10 +26,12 @@ import type {
 
 import {
   checkEntityCreateCapacityForInsert,
+  countActiveEntityCreateReservations,
   resolveEntityCreateFileName,
   validateEntityCreate,
   validateEntityCreateCapacity,
 } from "./entity-create";
+import { FINALIZE_CLAIM_TIMEOUT_MS } from "./lib";
 
 const workspaceId = toSafeId<"workspace">("workspace_upload");
 const propertyId = toSafeId<"property">("property_upload");
@@ -53,12 +56,16 @@ const fileProperty = {
 
 const createValidationTx = ({
   entityCount = 0,
+  reservedUploadCount = 0,
   parent,
 }: {
   entityCount?: number;
+  reservedUploadCount?: number;
   parent?: { id: string; kind: string } | null;
 }) => ({
-  $count: mock(async () => entityCount),
+  $count: mock(async (table) =>
+    table === pendingUploads ? reservedUploadCount : entityCount,
+  ),
   query: {
     properties: {
       findFirst: mock(async () => fileProperty),
@@ -104,13 +111,18 @@ const runCapacityValidation = async ({
     }),
   );
 
-const createCapacityInsertTx = (existingEntityCount: number) => {
+const createCapacityInsertTx = (
+  existingEntityCount: number,
+  reservedUploadCount = 0,
+) => {
   const forUpdate = mock(async () => [{ id: workspaceId }]);
   const limit = mock(() => ({ for: forUpdate }));
   const where = mock(() => ({ limit }));
   const from = mock(() => ({ where }));
   const select = mock(() => ({ from }));
-  const countEntities = mock(async () => existingEntityCount);
+  const countEntities = mock(async (table) =>
+    table === pendingUploads ? reservedUploadCount : existingEntityCount,
+  );
 
   return {
     forUpdate,
@@ -121,12 +133,20 @@ const createCapacityInsertTx = (existingEntityCount: number) => {
   };
 };
 
-const runCapacityInsertCheck = async (existingEntityCount: number) => {
-  const { forUpdate, tx } = createCapacityInsertTx(existingEntityCount);
+const runCapacityInsertCheck = async (
+  existingEntityCount: number,
+  reservedUploadCount = 0,
+  excludeUploadId?: SafeId<"pendingUpload">,
+) => {
+  const { forUpdate, tx } = createCapacityInsertTx(
+    existingEntityCount,
+    reservedUploadCount,
+  );
   const result = await checkEntityCreateCapacityForInsert({
     tx: asTestRaw<Transaction>(tx),
     workspaceId,
     entityCount: 1,
+    excludeUploadId,
   });
 
   return { forUpdate, result };
@@ -211,6 +231,8 @@ const seedFileEntity = async ({
 };
 
 type SeedWorkspaceResult = {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
   propertyId: SafeId<"property">;
   folderAId: SafeId<"entity">;
@@ -221,6 +243,7 @@ const seedWorkspace = async (
   tx: TestDatabaseTransaction,
 ): Promise<SeedWorkspaceResult> => {
   const organizationId = toSafeId<"organization">(`org_${Bun.randomUUIDv7()}`);
+  const userId = toSafeId<"user">(`user_${Bun.randomUUIDv7()}`);
   const seededWorkspaceId = toSafeId<"workspace">(Bun.randomUUIDv7());
   const seededPropertyId = toSafeId<"property">(Bun.randomUUIDv7());
   const folderAId = toSafeId<"entity">(Bun.randomUUIDv7());
@@ -231,6 +254,11 @@ const seedWorkspace = async (
     name: "Upload Conflict Test",
     slug: `upload-conflict-${Bun.randomUUIDv7()}`,
     createdAt: new Date(),
+  });
+  await tx.insert(user).values({
+    id: userId,
+    name: "Upload Test User",
+    email: `${userId}@example.com`,
   });
   await tx.insert(workspaces).values({
     id: seededWorkspaceId,
@@ -262,6 +290,8 @@ const seedWorkspace = async (
   ]);
 
   return {
+    organizationId,
+    userId,
     workspaceId: seededWorkspaceId,
     propertyId: seededPropertyId,
     folderAId,
@@ -360,6 +390,26 @@ describe("entity-create presigned upload validation", () => {
     }
   });
 
+  test("counts pending entity-create reservations during capacity preflight", async () => {
+    const tx = createValidationTx({
+      entityCount: LIMITS.entitiesCount - 2,
+      reservedUploadCount: 1,
+      parent: { id: parentId, kind: "folder" },
+    });
+    const { safeDb } = createScopedDbMock(tx);
+
+    const result = await runCapacityValidation({
+      entityCount: 2,
+      safeDb,
+      parentIdInput: parentId,
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.message).toBe("Entities limit reached");
+    }
+  });
+
   test("accepts planned folder trees that exactly fit remaining capacity", async () => {
     const tx = createValidationTx({
       entityCount: LIMITS.entitiesCount - 2,
@@ -389,6 +439,176 @@ describe("entity-create presigned upload validation", () => {
     const { result } = await runCapacityInsertCheck(LIMITS.entitiesCount - 1);
 
     expect(Result.isOk(result)).toBe(true);
+  });
+
+  test("rejects finalization writes when another pending upload reserves the last slot", async () => {
+    const { result } = await runCapacityInsertCheck(
+      LIMITS.entitiesCount - 1,
+      1,
+    );
+
+    expect(Result.isError(result)).toBe(true);
+  });
+
+  test("counts only active entity-create reservations", async () => {
+    const result = await runRolledBack(async (tx) => {
+      const seeded = await seedWorkspace(tx);
+      const currentUploadId = toSafeId<"pendingUpload">(Bun.randomUUIDv7());
+      const now = new Date();
+      const future = new Date(now.getTime() + 60_000);
+      const past = new Date(now.getTime() - 60_000);
+      const recentClaim = new Date(now.getTime() - 1000);
+      const staleClaim = new Date(
+        now.getTime() - FINALIZE_CLAIM_TIMEOUT_MS - 1000,
+      );
+
+      await tx.insert(pendingUploads).values([
+        {
+          id: toSafeId<"pendingUpload">(Bun.randomUUIDv7()),
+          organizationId: seeded.organizationId,
+          workspaceId: seeded.workspaceId,
+          userId: seeded.userId,
+          purpose: "entity_create",
+          purposeData: {
+            type: "entity_create",
+            propertyId: seeded.propertyId,
+          },
+          declaredName: "pending.md",
+          declaredMime: MARKDOWN_MIME_TYPE,
+          declaredSize: 8,
+          declaredSha256: SHA_256_HEX,
+          status: "pending",
+          expiresAt: future,
+          createdAt: now,
+        },
+        {
+          id: toSafeId<"pendingUpload">(Bun.randomUUIDv7()),
+          organizationId: seeded.organizationId,
+          workspaceId: seeded.workspaceId,
+          userId: seeded.userId,
+          purpose: "entity_create",
+          purposeData: {
+            type: "entity_create",
+            propertyId: seeded.propertyId,
+          },
+          declaredName: "failed.md",
+          declaredMime: MARKDOWN_MIME_TYPE,
+          declaredSize: 8,
+          declaredSha256: SHA_256_HEX,
+          status: "failed",
+          expiresAt: future,
+          claimedAt: recentClaim,
+          createdAt: now,
+        },
+        {
+          id: toSafeId<"pendingUpload">(Bun.randomUUIDv7()),
+          organizationId: seeded.organizationId,
+          workspaceId: seeded.workspaceId,
+          userId: seeded.userId,
+          purpose: "entity_create",
+          purposeData: {
+            type: "entity_create",
+            propertyId: seeded.propertyId,
+          },
+          declaredName: "scanning.md",
+          declaredMime: MARKDOWN_MIME_TYPE,
+          declaredSize: 8,
+          declaredSha256: SHA_256_HEX,
+          status: "scanning",
+          expiresAt: past,
+          claimedAt: recentClaim,
+          createdAt: now,
+        },
+        {
+          id: currentUploadId,
+          organizationId: seeded.organizationId,
+          workspaceId: seeded.workspaceId,
+          userId: seeded.userId,
+          purpose: "entity_create",
+          purposeData: {
+            type: "entity_create",
+            propertyId: seeded.propertyId,
+          },
+          declaredName: "current.md",
+          declaredMime: MARKDOWN_MIME_TYPE,
+          declaredSize: 8,
+          declaredSha256: SHA_256_HEX,
+          status: "pending",
+          expiresAt: future,
+          createdAt: now,
+        },
+        {
+          id: toSafeId<"pendingUpload">(Bun.randomUUIDv7()),
+          organizationId: seeded.organizationId,
+          workspaceId: seeded.workspaceId,
+          userId: seeded.userId,
+          purpose: "entity_create",
+          purposeData: {
+            type: "entity_create",
+            propertyId: seeded.propertyId,
+          },
+          declaredName: "expired.md",
+          declaredMime: MARKDOWN_MIME_TYPE,
+          declaredSize: 8,
+          declaredSha256: SHA_256_HEX,
+          status: "pending",
+          expiresAt: past,
+          createdAt: now,
+        },
+        {
+          id: toSafeId<"pendingUpload">(Bun.randomUUIDv7()),
+          organizationId: seeded.organizationId,
+          workspaceId: seeded.workspaceId,
+          userId: seeded.userId,
+          purpose: "entity_create",
+          purposeData: {
+            type: "entity_create",
+            propertyId: seeded.propertyId,
+          },
+          declaredName: "stale-scanning.md",
+          declaredMime: MARKDOWN_MIME_TYPE,
+          declaredSize: 8,
+          declaredSha256: SHA_256_HEX,
+          status: "scanning",
+          expiresAt: past,
+          claimedAt: staleClaim,
+          createdAt: now,
+        },
+        {
+          id: toSafeId<"pendingUpload">(Bun.randomUUIDv7()),
+          organizationId: seeded.organizationId,
+          workspaceId: seeded.workspaceId,
+          userId: seeded.userId,
+          purpose: "entity_version",
+          purposeData: {
+            type: "entity_version",
+            entityId: seeded.folderAId,
+          },
+          declaredName: "version.md",
+          declaredMime: MARKDOWN_MIME_TYPE,
+          declaredSize: 8,
+          declaredSha256: SHA_256_HEX,
+          status: "pending",
+          expiresAt: future,
+          createdAt: now,
+        },
+      ]);
+
+      return {
+        all: await countActiveEntityCreateReservations({
+          tx: asTestRaw<Transaction>(tx),
+          workspaceId: seeded.workspaceId,
+        }),
+        withoutCurrent: await countActiveEntityCreateReservations({
+          tx: asTestRaw<Transaction>(tx),
+          workspaceId: seeded.workspaceId,
+          excludeUploadId: currentUploadId,
+        }),
+      };
+    });
+
+    expect(result.all).toBe(4);
+    expect(result.withoutCurrent).toBe(3);
   });
 });
 

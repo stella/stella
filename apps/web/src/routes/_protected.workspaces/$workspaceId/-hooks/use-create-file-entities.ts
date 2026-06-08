@@ -49,121 +49,11 @@ type UploadResult = {
   renamed: boolean;
 };
 
-type CreateFolderEntityOptions = {
-  workspaceId: string;
+type PreparedFileEntityUpload = {
+  uploadId: string;
   parentId: string | null;
-  name: string;
-};
-
-const createFolderEntity = async ({
-  workspaceId,
-  parentId,
-  name,
-}: CreateFolderEntityOptions): Promise<string> => {
-  const response = await api
-    .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-    .put({
-      queryKey: entitiesKeys.all(workspaceId),
-      kind: "folder",
-      parentId: parentId === null ? null : toSafeId<"entity">(parentId),
-      name,
-    });
-
-  if (response.error) {
-    throw toAPIError(response.error);
-  }
-
-  return response.data.entityId;
-};
-
-const requireCreatedDirectoryId = (
-  createdDirectoryIds: ReadonlyMap<string, string>,
-  key: string,
-): string => {
-  const entityId = createdDirectoryIds.get(key);
-  if (entityId) {
-    return entityId;
-  }
-
-  throw new ClientOperationError({
-    action: "create-dropped-folder-tree",
-    message: "Folder upload plan referenced a missing parent folder",
-  });
-};
-
-type CreateFolderTreeForUploadOptions = {
-  workspaceId: string;
-  parentId: string | null;
-  plan: DroppedFolderUploadPlan;
-};
-
-type CreatedFolderTreeForUpload = {
-  files: File[];
-  parentIdByFile: Map<File, string | null>;
-};
-
-type PreflightFolderTreeUploadCapacityOptions = {
-  workspaceId: string;
-  parentId: string | null;
-  propertyId: string | null;
-  plan: DroppedFolderUploadPlan;
-};
-
-const preflightFolderTreeUploadCapacity = async ({
-  workspaceId,
-  parentId,
-  propertyId,
-  plan,
-}: PreflightFolderTreeUploadCapacityOptions): Promise<void> => {
-  const entityCount = plan.directories.length + plan.files.length;
-  if (entityCount === 0) {
-    return;
-  }
-
-  const response = await api
-    .uploads({ workspaceId: toSafeId<"workspace">(workspaceId) })
-    ["entity-create"].preflight.post({
-      entityCount,
-      propertyId: propertyId ? toSafeId<"property">(propertyId) : null,
-      parentId: parentId === null ? null : toSafeId<"entity">(parentId),
-    });
-
-  if (response.error) {
-    throw toAPIError(response.error);
-  }
-};
-
-const createFolderTreeForUpload = async ({
-  workspaceId,
-  parentId,
-  plan,
-}: CreateFolderTreeForUploadOptions): Promise<CreatedFolderTreeForUpload> => {
-  const createdDirectoryIds = new Map<string, string>();
-
-  for (const directory of plan.directories) {
-    const directoryParentId = directory.parentKey
-      ? requireCreatedDirectoryId(createdDirectoryIds, directory.parentKey)
-      : parentId;
-
-    const entityId = await createFolderEntity({
-      workspaceId,
-      parentId: directoryParentId,
-      name: directory.name,
-    });
-    createdDirectoryIds.set(directory.key, entityId);
-  }
-
-  const files: File[] = [];
-  const parentIdByFile = new Map<File, string | null>();
-  for (const placement of plan.files) {
-    const fileParentId = placement.parentKey
-      ? requireCreatedDirectoryId(createdDirectoryIds, placement.parentKey)
-      : parentId;
-    files.push(placement.file);
-    parentIdByFile.set(placement.file, fileParentId);
-  }
-
-  return { files, parentIdByFile };
+  url: string;
+  headers: Record<string, string>;
 };
 
 /**
@@ -178,6 +68,98 @@ const bufferToHex = (buffer: ArrayBuffer): string => {
     out += byte.toString(16).padStart(2, "0");
   }
   return out;
+};
+
+const hashFileSha256Hex = async (file: File): Promise<string> => {
+  const fileBuffer = await file.arrayBuffer();
+  const sha256Buffer = await crypto.subtle.digest("SHA-256", fileBuffer);
+  return bufferToHex(sha256Buffer);
+};
+
+type PrepareFolderTreeUploadOptions = {
+  workspaceId: string;
+  parentId: string | null;
+  propertyId: string | null;
+  plan: DroppedFolderUploadPlan;
+};
+
+type PreparedFolderTreeUpload = {
+  files: File[];
+  preparedUploadByFile: Map<File, PreparedFileEntityUpload>;
+  parentIdByFile: Map<File, string | null>;
+};
+
+const prepareFolderTreeUpload = async ({
+  workspaceId,
+  parentId,
+  propertyId,
+  plan,
+}: PrepareFolderTreeUploadOptions): Promise<PreparedFolderTreeUpload> => {
+  const files = [];
+  for (const [index, placement] of plan.files.entries()) {
+    files.push({
+      key: String(index),
+      parentKey: placement.parentKey,
+      name: placement.file.name,
+      mimeType: placement.file.type || "application/octet-stream",
+      size: placement.file.size,
+      sha256Hex: await hashFileSha256Hex(placement.file),
+    });
+  }
+
+  const response = await api
+    .uploads({ workspaceId: toSafeId<"workspace">(workspaceId) })
+    ["entity-create"].tree.post({
+      queryKey: entitiesKeys.all(workspaceId),
+      propertyId: propertyId ? toSafeId<"property">(propertyId) : null,
+      parentId: parentId === null ? null : toSafeId<"entity">(parentId),
+      directories: plan.directories,
+      files,
+    });
+
+  if (response.error) {
+    throw toAPIError(response.error);
+  }
+
+  const fileByKey = new Map<string, File>();
+  for (const [index, placement] of plan.files.entries()) {
+    fileByKey.set(String(index), placement.file);
+  }
+
+  const preparedUploadByFile = new Map<File, PreparedFileEntityUpload>();
+  for (const preparedFile of response.data.files) {
+    const file = fileByKey.get(preparedFile.key);
+    if (!file) {
+      throw new ClientOperationError({
+        action: "prepare-dropped-folder-upload",
+        message: "Prepared upload referenced an unknown file",
+      });
+    }
+    preparedUploadByFile.set(file, {
+      uploadId: preparedFile.uploadId,
+      parentId: preparedFile.parentId,
+      url: preparedFile.url,
+      headers: preparedFile.headers,
+    });
+  }
+
+  if (preparedUploadByFile.size !== plan.files.length) {
+    throw new ClientOperationError({
+      action: "prepare-dropped-folder-upload",
+      message: "Prepared upload response did not include every file",
+    });
+  }
+
+  const parentIdByFile = new Map<File, string | null>();
+  for (const [file, preparedUpload] of preparedUploadByFile) {
+    parentIdByFile.set(file, preparedUpload.parentId);
+  }
+
+  return {
+    files: plan.files.map(({ file }) => file),
+    preparedUploadByFile,
+    parentIdByFile,
+  };
 };
 
 const attachResponseForRetry = (error: Error, response: Response): void => {
@@ -202,6 +184,25 @@ const abortUpload = async (
     .uploads({ workspaceId: toSafeId<"workspace">(workspaceId) })({ uploadId })
     .abort.post({})
     .catch(() => undefined);
+};
+
+type AbortPreparedUploadsForFilesOptions = {
+  workspaceId: string;
+  files: File[];
+  preparedUploadForFile: (file: File) => PreparedFileEntityUpload | undefined;
+};
+
+const abortPreparedUploadsForFiles = async ({
+  workspaceId,
+  files,
+  preparedUploadForFile,
+}: AbortPreparedUploadsForFilesOptions): Promise<void> => {
+  for (const file of files) {
+    const preparedUpload = preparedUploadForFile(file);
+    if (preparedUpload) {
+      await abortUpload(workspaceId, preparedUpload.uploadId);
+    }
+  }
 };
 
 /**
@@ -234,19 +235,19 @@ type UploadSingleFileOptions = {
   signal: AbortSignal;
 };
 
-const uploadSingleFile = async ({
+type PrepareSingleFileEntityUploadOptions = UploadSingleFileOptions;
+
+const prepareSingleFileEntityUpload = async ({
   file,
   workspaceId,
   propertyId,
   parentId,
   signal,
-}: UploadSingleFileOptions): Promise<UploadResult> => {
+}: PrepareSingleFileEntityUploadOptions): Promise<PreparedFileEntityUpload> => {
   signal.throwIfAborted();
 
   // 1. SHA-256 of file bytes.
-  const fileBuffer = await file.arrayBuffer();
-  const sha256Buffer = await crypto.subtle.digest("SHA-256", fileBuffer);
-  const sha256Hex = bufferToHex(sha256Buffer);
+  const sha256Hex = await hashFileSha256Hex(file);
 
   signal.throwIfAborted();
 
@@ -270,7 +271,30 @@ const uploadSingleFile = async ({
     attachResponseForRetry(error, presign.response);
     throw error;
   }
-  const { uploadId, url, headers } = presign.data;
+
+  return {
+    ...presign.data,
+    parentId: parentId ?? null,
+  };
+};
+
+type UploadPreparedFileEntityOptions = {
+  file: File;
+  workspaceId: string;
+  preparedUpload: PreparedFileEntityUpload;
+  signal: AbortSignal;
+};
+
+const uploadPreparedFileEntity = async ({
+  file,
+  workspaceId,
+  preparedUpload,
+  signal,
+}: UploadPreparedFileEntityOptions): Promise<UploadResult> => {
+  const { uploadId, url, headers } = preparedUpload;
+  const wsClient = api.uploads({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  });
 
   // 3. PUT to S3. S3 enforces the signed checksum + length; a
   //    mismatched body comes back as 4xx and we surface the body
@@ -338,6 +362,18 @@ const uploadSingleFile = async ({
   };
 };
 
+const uploadSingleFile = async (
+  options: UploadSingleFileOptions,
+): Promise<UploadResult> => {
+  const preparedUpload = await prepareSingleFileEntityUpload(options);
+  return await uploadPreparedFileEntity({
+    file: options.file,
+    workspaceId: options.workspaceId,
+    preparedUpload,
+    signal: options.signal,
+  });
+};
+
 type BatchUploadLabels = {
   uploading: string;
   uploadingDescription: string;
@@ -384,6 +420,11 @@ type BatchUploadOptions = {
   propertyId: string;
   parentId?: string | null | undefined;
   parentIdForFile?: (file: File) => string | null | undefined;
+  preparedUploadForFile?: (file: File) => PreparedFileEntityUpload | undefined;
+  onPreparedUploadFailed?: (
+    file: File,
+    preparedUpload: PreparedFileEntityUpload,
+  ) => Promise<void> | void;
   labels: BatchUploadLabels;
   onError?: (error: Error) => void;
 };
@@ -404,6 +445,8 @@ export const uploadFileEntitiesBatched = async (
     propertyId,
     parentId,
     parentIdForFile,
+    preparedUploadForFile,
+    onPreparedUploadFailed,
     labels,
     onError,
   } = options;
@@ -413,15 +456,35 @@ export const uploadFileEntitiesBatched = async (
   }
 
   return await new Promise<UploadResult[]>((resolve) => {
+    const completedFiles = new Set<File>();
     const queue = new UploadQueue<UploadResult>(async (file, signal) => {
+      const preparedUpload = preparedUploadForFile?.(file);
+      if (preparedUpload) {
+        try {
+          const result = await uploadPreparedFileEntity({
+            file,
+            workspaceId,
+            preparedUpload,
+            signal,
+          });
+          completedFiles.add(file);
+          return result;
+        } catch (error) {
+          await onPreparedUploadFailed?.(file, preparedUpload);
+          throw error;
+        }
+      }
+
       const fileParentId = parentIdForFile?.(file);
-      return await uploadSingleFile({
+      const result = await uploadSingleFile({
         file,
         workspaceId,
         propertyId,
         parentId: fileParentId === undefined ? parentId : fileParentId,
         signal,
       });
+      completedFiles.add(file);
+      return result;
     }, MAX_PARALLEL_FILE_UPLOADS);
 
     const initialTotal = files.length;
@@ -471,6 +534,21 @@ export const uploadFileEntitiesBatched = async (
 
       for (const { error } of failed) {
         onError?.(error);
+      }
+
+      if (cancelled && preparedUploadForFile) {
+        const unfinishedPreparedFiles = files.filter(
+          (file) => !completedFiles.has(file),
+        );
+        abortPreparedUploadsForFiles({
+          workspaceId,
+          files: unfinishedPreparedFiles,
+          preparedUploadForFile,
+        }).catch((error: unknown) => {
+          if (error instanceof Error) {
+            onError?.(error);
+          }
+        });
       }
 
       const failedNames = failed.map((f) => f.file.name);
@@ -602,28 +680,29 @@ export const useCreateFileEntities = (workspaceId: string) => {
         const plan = buildDroppedFolderUploadPlan(input.tree);
         const propertyId =
           plan.files.length > 0 ? await ensureFileProperty() : null;
-        await preflightFolderTreeUploadCapacity({
+        const preparedTree = await prepareFolderTreeUpload({
           workspaceId,
           parentId,
           propertyId,
           plan,
         });
-        const createdTree = await createFolderTreeForUpload({
-          workspaceId,
-          parentId,
-          plan,
-        });
 
-        if (createdTree.files.length === 0 || propertyId === null) {
+        if (preparedTree.files.length === 0 || propertyId === null) {
           return;
         }
 
         const uploaded = await uploadFileEntitiesBatched({
-          files: createdTree.files,
+          files: preparedTree.files,
           workspaceId,
           propertyId,
           parentId,
-          parentIdForFile: (file) => createdTree.parentIdByFile.get(file),
+          parentIdForFile: (file) => preparedTree.parentIdByFile.get(file),
+          preparedUploadForFile: (file) =>
+            preparedTree.preparedUploadByFile.get(file),
+          onPreparedUploadFailed: async (file, preparedUpload) => {
+            preparedTree.preparedUploadByFile.delete(file);
+            await abortUpload(workspaceId, preparedUpload.uploadId);
+          },
           labels,
           onError: (error) => analytics.captureError(error),
         });

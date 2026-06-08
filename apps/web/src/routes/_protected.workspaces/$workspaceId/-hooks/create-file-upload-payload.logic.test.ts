@@ -35,4 +35,13 @@ describe("entity-create upload payload", () => {
 
     expect(payload.parentId).toBeNull();
   });
+
+  test("preserves zero-byte file sizes", () => {
+    const payload = buildEntityCreatePresignPayload({
+      ...baseInput,
+      size: 0,
+    });
+
+    expect(payload.size).toBe(0);
+  });
 });

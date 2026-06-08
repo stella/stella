@@ -223,7 +223,7 @@ export const FileTabPanel = ({
       replaceFileFieldId(variables.fieldId, {
         id: response.fieldId,
         fileName: variables.fileName,
-        label: variables.fileName,
+        label: tab.label,
         mimeType: MARKDOWN_MIME,
         pdfFileId: null,
         ...(variables.propertyId ? { propertyId: variables.propertyId } : {}),

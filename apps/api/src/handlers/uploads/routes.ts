@@ -2,6 +2,7 @@ import Elysia from "elysia";
 import { rateLimit } from "elysia-rate-limit";
 
 import abortUpload from "@/api/handlers/uploads/abort";
+import entityCreateTree from "@/api/handlers/uploads/entity-create-tree";
 import finalizeUpload from "@/api/handlers/uploads/finalize";
 import preflightEntityCreate from "@/api/handlers/uploads/preflight-entity-create";
 import presignUpload from "@/api/handlers/uploads/presign";
@@ -23,6 +24,10 @@ import {
  *   POST /uploads/:workspaceId/entity-create/preflight
  *        body: { entityCount, propertyId?, parentId? }
  *        → { ok: true }
+ *
+ *   POST /uploads/:workspaceId/entity-create/tree
+ *        body: { propertyId?, parentId?, directories, files }
+ *        → { directories, files } // folders committed; files reserved + signed
  *
  *   POST /uploads/:workspaceId/:uploadId/finalize
  *        → { finalizedResult }   // see PendingUploadFinalizedResult
@@ -61,6 +66,11 @@ export const uploadsRoute = new Elysia({
   .post("/entity-create/preflight", preflightEntityCreate.handler, {
     body: preflightEntityCreate.config.body,
     permissions: preflightEntityCreate.config.permissions,
+  })
+  .post("/entity-create/tree", entityCreateTree.handler, {
+    body: entityCreateTree.config.body,
+    invalidateQuery: true,
+    permissions: entityCreateTree.config.permissions,
   })
   .post("/:uploadId/finalize", finalizeUpload.handler, {
     params: finalizeUpload.config.params,

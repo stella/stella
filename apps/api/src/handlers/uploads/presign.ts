@@ -18,7 +18,13 @@ import {
 } from "@/api/db/schema";
 import { resolveUploadMime } from "@/api/handlers/files/utils";
 import { validateAgentSkill } from "@/api/handlers/uploads/agent-skill";
-import { validateEntityCreate } from "@/api/handlers/uploads/entity-create";
+import {
+  checkEntityCreateCapacityForInsert,
+  checkEntityCreateTargetForInsert,
+  entityCreateWriteErrorMessage,
+  type EntityCreateWriteFailureStatus,
+  validateEntityCreate,
+} from "@/api/handlers/uploads/entity-create";
 import { validateEntityVersion } from "@/api/handlers/uploads/entity-version";
 import {
   PRESIGN_URL_EXPIRY_SECONDS,
@@ -41,7 +47,7 @@ const baseFileMetadataSchema = {
   name: tDefaultVarchar,
   mimeType: t.String({ minLength: 1, maxLength: 255 }),
   size: t.Integer({
-    minimum: 1,
+    minimum: 0,
     // S3 enforces this via the signed Content-Length; finalize
     // re-checks via S3.HEAD. Pinning it at the schema level lets
     // the API refuse oversized requests before even minting a URL.
@@ -95,7 +101,11 @@ type EntityCreatePurposeDataWithParent = Extract<
   { type: "entity_create" }
 > & { parentId: SafeId<"entity"> | null };
 
-const toPurposeData = (purposeBody: PresignBody): PendingUploadPurposeData => {
+type PresignPurposeData =
+  | EntityCreatePurposeDataWithParent
+  | Exclude<PendingUploadPurposeData, { type: "entity_create" }>;
+
+const toPurposeData = (purposeBody: PresignBody): PresignPurposeData => {
   if (purposeBody.purpose === "entity_create") {
     const purposeData: EntityCreatePurposeDataWithParent = {
       type: "entity_create",
@@ -184,6 +194,7 @@ const presignUpload = createSafeHandler(
     const expiresAt = new Date(
       now.getTime() + PRESIGN_URL_EXPIRY_SECONDS * 1000,
     );
+    const purposeData = toPurposeData(purposeBody);
 
     const presign = await presignUploadUrl({
       key: tmpKey,
@@ -206,22 +217,46 @@ const presignUpload = createSafeHandler(
       );
     }
 
+    type PresignWriteResult =
+      | { status: "ok" }
+      | { status: EntityCreateWriteFailureStatus };
+
     // Persist intent. RLS pins the row to this workspace, so even
     // a stolen URL can only be finalized by a request that
     // resolves to the same workspace_ids on the API role.
-    yield* Result.await(
-      // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-      safeDb((tx) => {
+    const writeResult = yield* Result.await(
+      safeDb(async (tx): Promise<PresignWriteResult> => {
+        if (purposeData.type === "entity_create") {
+          const capacityResult = await checkEntityCreateCapacityForInsert({
+            tx,
+            workspaceId,
+            entityCount: 1,
+          });
+          if (Result.isError(capacityResult)) {
+            return { status: capacityResult.error };
+          }
+
+          const targetResult = await checkEntityCreateTargetForInsert({
+            tx,
+            workspaceId,
+            propertyId: purposeData.propertyId,
+            parentId: purposeData.parentId ?? null,
+          });
+          if (Result.isError(targetResult)) {
+            return { status: targetResult.error };
+          }
+        }
+
         // audit: skip — presigned URL bookkeeping; the audit row is
         // emitted by the per-purpose finalize once the upload
         // becomes a durable entity.
-        return tx.insert(pendingUploads).values({
+        await tx.insert(pendingUploads).values({
           id: uploadId,
           organizationId: session.activeOrganizationId,
           workspaceId,
           userId: user.id,
           purpose: purposeBody.purpose,
-          purposeData: toPurposeData(purposeBody),
+          purposeData,
           declaredName: purposeBody.name,
           declaredMime: resolvedMime,
           declaredSize: purposeBody.size,
@@ -230,8 +265,18 @@ const presignUpload = createSafeHandler(
           expiresAt,
           createdAt: now,
         });
+
+        return { status: "ok" };
       }),
     );
+    if (writeResult.status !== "ok") {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: entityCreateWriteErrorMessage(writeResult.status),
+        }),
+      );
+    }
 
     return Result.ok({
       uploadId,

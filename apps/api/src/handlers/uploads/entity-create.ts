@@ -19,7 +19,7 @@
  *   + extraction enqueues.
  */
 import { Result, panic } from "better-result";
-import { and, count, eq, isNull, like } from "drizzle-orm";
+import { and, count, eq, isNull, like, ne, or, sql } from "drizzle-orm";
 
 import type { SafeDb, Transaction } from "@/api/db";
 import { jsonField } from "@/api/db/json-utils";
@@ -58,7 +58,12 @@ import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
-import { UploadFinalizeError, finalizeErr, finalizeOk } from "./lib";
+import {
+  FINALIZE_CLAIM_TIMEOUT_MS,
+  UploadFinalizeError,
+  finalizeErr,
+  finalizeOk,
+} from "./lib";
 
 const MAX_FILENAME_LENGTH = 255;
 
@@ -139,6 +144,172 @@ export type ValidateEntityCreateCapacityProps = {
   entityCount: number;
 };
 
+type EntityCreateReservationFilterProps = {
+  workspaceId: SafeId<"workspace">;
+  excludeUploadId?: SafeId<"pendingUpload"> | undefined;
+};
+
+const activeEntityCreateReservationFilter = ({
+  workspaceId,
+  excludeUploadId,
+}: EntityCreateReservationFilterProps) => {
+  const timeoutSec = Math.floor(FINALIZE_CLAIM_TIMEOUT_MS / 1000);
+  const baseFilter = and(
+    eq(pendingUploads.workspaceId, workspaceId),
+    eq(pendingUploads.purpose, "entity_create"),
+    or(
+      and(
+        or(
+          eq(pendingUploads.status, "pending"),
+          eq(pendingUploads.status, "failed"),
+        ),
+        sql`${pendingUploads.expiresAt} > NOW()`,
+      ),
+      and(
+        eq(pendingUploads.status, "scanning"),
+        or(
+          sql`${pendingUploads.expiresAt} > NOW()`,
+          sql`${pendingUploads.claimedAt} >= NOW() - ${timeoutSec} * interval '1 second'`,
+        ),
+      ),
+    ),
+  );
+
+  if (!excludeUploadId) {
+    return baseFilter;
+  }
+
+  return and(baseFilter, ne(pendingUploads.id, excludeUploadId));
+};
+
+type CountActiveEntityCreateReservationsProps = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  excludeUploadId?: SafeId<"pendingUpload"> | undefined;
+};
+
+export const countActiveEntityCreateReservations = async ({
+  tx,
+  workspaceId,
+  excludeUploadId,
+}: CountActiveEntityCreateReservationsProps): Promise<number> =>
+  await tx.$count(
+    pendingUploads,
+    activeEntityCreateReservationFilter({ workspaceId, excludeUploadId }),
+  );
+
+export type EntityCreateWriteFailureStatus =
+  | "property-not-found"
+  | "property-type-mismatch"
+  | "parent-not-found"
+  | "parent-type-mismatch"
+  | "entities-limit-reached";
+
+export const entityCreateWriteErrorMessage = (
+  status: EntityCreateWriteFailureStatus,
+): string => {
+  if (status === "property-not-found") {
+    return "Property not found in workspace";
+  }
+  if (status === "property-type-mismatch") {
+    return "Property isn't of type file";
+  }
+  if (status === "parent-not-found") {
+    return "Parent entity not found in this workspace";
+  }
+  if (status === "entities-limit-reached") {
+    return "Entities limit reached";
+  }
+  return "Parent entity must be a folder";
+};
+
+type CheckEntityCreateParentForInsertProps = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  parentId: SafeId<"entity"> | null;
+};
+
+export const checkEntityCreateParentForInsert = async ({
+  tx,
+  workspaceId,
+  parentId,
+}: CheckEntityCreateParentForInsertProps): Promise<
+  Result<void, "parent-not-found" | "parent-type-mismatch">
+> => {
+  if (!parentId) {
+    return Result.ok(undefined);
+  }
+
+  const parentRows = await tx
+    .select({ id: entities.id, kind: entities.kind })
+    .from(entities)
+    .where(
+      and(eq(entities.id, parentId), eq(entities.workspaceId, workspaceId)),
+    )
+    .limit(1)
+    .for("update");
+  const parent = parentRows.at(0);
+
+  if (!parent) {
+    return Result.err("parent-not-found");
+  }
+  if (parent.kind !== "folder") {
+    return Result.err("parent-type-mismatch");
+  }
+
+  return Result.ok(undefined);
+};
+
+type CheckEntityCreateTargetForInsertProps = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  propertyId: SafeId<"property">;
+  parentId: SafeId<"entity"> | null;
+};
+
+export const checkEntityCreateTargetForInsert = async ({
+  tx,
+  workspaceId,
+  propertyId,
+  parentId,
+}: CheckEntityCreateTargetForInsertProps): Promise<
+  Result<
+    { propertyId: SafeId<"property"> },
+    Exclude<EntityCreateWriteFailureStatus, "entities-limit-reached">
+  >
+> => {
+  const propertyRows = await tx
+    .select({ id: properties.id, content: properties.content })
+    .from(properties)
+    .where(
+      and(
+        eq(properties.id, propertyId),
+        eq(properties.workspaceId, workspaceId),
+      ),
+    )
+    .limit(1)
+    .for("update");
+  const property = propertyRows.at(0);
+
+  if (!property) {
+    return Result.err("property-not-found");
+  }
+  if (property.content.type !== "file") {
+    return Result.err("property-type-mismatch");
+  }
+
+  const parentResult = await checkEntityCreateParentForInsert({
+    tx,
+    workspaceId,
+    parentId,
+  });
+  if (Result.isError(parentResult)) {
+    return Result.err(parentResult.error);
+  }
+
+  return Result.ok({ propertyId: property.id });
+};
+
 /**
  * Cheap pre-flight: entity-count capacity + optional property
  * existence/type + parent existence/type. Recursive folder uploads
@@ -180,20 +351,33 @@ export const validateEntityCreateCapacity = async function* ({
       )
     : Promise.resolve(Result.ok(null));
 
-  const [existingEntityCountResult, resolvedPropertyResult, parentResultValue] =
-    await Promise.all([
-      safeDb((tx) =>
-        tx.$count(entities, eq(entities.workspaceId, workspaceId)),
-      ),
-      propertyResult,
-      parentResult,
-    ]);
+  const [
+    existingEntityCountResult,
+    reservedEntityCountResult,
+    resolvedPropertyResult,
+    parentResultValue,
+  ] = await Promise.all([
+    safeDb((tx) => tx.$count(entities, eq(entities.workspaceId, workspaceId))),
+    safeDb(
+      async (tx) =>
+        await countActiveEntityCreateReservations({
+          tx,
+          workspaceId,
+        }),
+    ),
+    propertyResult,
+    parentResult,
+  ]);
 
   const existingEntityCount = yield* existingEntityCountResult;
+  const reservedEntityCount = yield* reservedEntityCountResult;
   const property = yield* resolvedPropertyResult;
   const parent = yield* parentResultValue;
 
-  if (existingEntityCount + entityCount > LIMITS.entitiesCount) {
+  if (
+    existingEntityCount + reservedEntityCount + entityCount >
+    LIMITS.entitiesCount
+  ) {
     return Result.err(
       new HandlerError({ status: 400, message: "Entities limit reached" }),
     );
@@ -244,12 +428,14 @@ type CheckEntityCreateCapacityForInsertProps = {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
   entityCount: number;
+  excludeUploadId?: SafeId<"pendingUpload"> | undefined;
 };
 
 export const checkEntityCreateCapacityForInsert = async ({
   tx,
   workspaceId,
   entityCount,
+  excludeUploadId,
 }: CheckEntityCreateCapacityForInsertProps): Promise<
   Result<void, "entities-limit-reached">
 > => {
@@ -271,7 +457,16 @@ export const checkEntityCreateCapacityForInsert = async ({
     entities,
     eq(entities.workspaceId, workspaceId),
   );
-  if (existingEntityCount + entityCount > LIMITS.entitiesCount) {
+  const reservedEntityCount = await countActiveEntityCreateReservations({
+    tx,
+    workspaceId,
+    excludeUploadId,
+  });
+
+  if (
+    existingEntityCount + reservedEntityCount + entityCount >
+    LIMITS.entitiesCount
+  ) {
     return Result.err("entities-limit-reached");
   }
 
@@ -376,13 +571,6 @@ export const finalizeEntityCreate = async function* ({
     return promoteResult;
   }
 
-  type WriteFailureStatus =
-    | "property-not-found"
-    | "property-type-mismatch"
-    | "parent-not-found"
-    | "parent-type-mismatch"
-    | "entities-limit-reached";
-
   type WriteResult =
     | {
         status: "ok";
@@ -391,23 +579,7 @@ export const finalizeEntityCreate = async function* ({
           { type: "entity_create" }
         >;
       }
-    | { status: WriteFailureStatus };
-
-  const writeErrorMessage = (status: WriteFailureStatus): string => {
-    if (status === "property-not-found") {
-      return "Property not found in workspace";
-    }
-    if (status === "property-type-mismatch") {
-      return "Property isn't of type file";
-    }
-    if (status === "parent-not-found") {
-      return "Parent entity not found in this workspace";
-    }
-    if (status === "entities-limit-reached") {
-      return "Entities limit reached";
-    }
-    return "Parent entity must be a folder";
-  };
+    | { status: EntityCreateWriteFailureStatus };
 
   const cleanupFinalObject = async (stage: string) => {
     await getS3()
@@ -424,57 +596,30 @@ export const finalizeEntityCreate = async function* ({
   const parentId = purposeData.parentId ?? null;
 
   const writeResultResult = await safeDb(async (tx): Promise<WriteResult> => {
-    const propertyRows = await tx
-      .select({ id: properties.id, content: properties.content })
-      .from(properties)
-      .where(
-        and(
-          eq(properties.id, purposeData.propertyId),
-          eq(properties.workspaceId, workspaceId),
-        ),
-      )
-      .limit(1)
-      .for("update");
-    const property = propertyRows.at(0);
-
-    if (!property) {
-      return { status: "property-not-found" };
-    }
-    if (property.content.type !== "file") {
-      return { status: "property-type-mismatch" };
-    }
-    if (parentId) {
-      const parentRows = await tx
-        .select({ id: entities.id, kind: entities.kind })
-        .from(entities)
-        .where(
-          and(eq(entities.id, parentId), eq(entities.workspaceId, workspaceId)),
-        )
-        .limit(1)
-        .for("update");
-      const parent = parentRows.at(0);
-
-      if (!parent) {
-        return { status: "parent-not-found" };
-      }
-      if (parent.kind !== "folder") {
-        return { status: "parent-type-mismatch" };
-      }
-    }
-
     const capacityResult = await checkEntityCreateCapacityForInsert({
       tx,
       workspaceId,
       entityCount: 1,
+      excludeUploadId: uploadId,
     });
     if (Result.isError(capacityResult)) {
       return { status: capacityResult.error };
     }
 
+    const targetResult = await checkEntityCreateTargetForInsert({
+      tx,
+      workspaceId,
+      propertyId: purposeData.propertyId,
+      parentId,
+    });
+    if (Result.isError(targetResult)) {
+      return { status: targetResult.error };
+    }
+
     const renamed = await resolveEntityCreateFileName({
       tx,
       workspaceId,
-      propertyId: property.id,
+      propertyId: targetResult.value.propertyId,
       parentId,
       name: sanitizedName,
     });
@@ -503,7 +648,7 @@ export const finalizeEntityCreate = async function* ({
     await tx.insert(fields).values({
       id: fieldId,
       workspaceId,
-      propertyId: property.id,
+      propertyId: targetResult.value.propertyId,
       entityVersionId,
       content: {
         type: "file",
@@ -544,7 +689,7 @@ export const finalizeEntityCreate = async function* ({
             fileName: renamed.value,
             mimeType: declaredMime,
             sizeBytes: declaredSize,
-            propertyId: property.id,
+            propertyId: targetResult.value.propertyId,
             parentId,
           },
         },
@@ -595,7 +740,7 @@ export const finalizeEntityCreate = async function* ({
     await cleanupFinalObject("final-cleanup-after-business-error");
     return finalizeErr({
       status: 400,
-      message: writeErrorMessage(writeResult.status),
+      message: entityCreateWriteErrorMessage(writeResult.status),
       rejectReason: writeResult.status,
     });
   }
