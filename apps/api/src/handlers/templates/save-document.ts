@@ -10,6 +10,7 @@ import {
   writeManifest,
 } from "@/api/handlers/docx/template-manifest";
 import type { FieldMeta, TemplateManifest } from "@/api/handlers/docx/types";
+import { isTemplateManifest } from "@/api/handlers/docx/types";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -29,6 +30,12 @@ const buildVersionS3Key = (
 
 const saveDocumentBodySchema = t.Object({
   file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
+  // Optional edited manifest (the Studio's field settings, conditions,
+  // computed). When present it is the base manifest, so the editor's field
+  // metadata is persisted without a separate binary re-embed round-trip.
+  // t.Any() because Elysia auto-parses JSON-looking multipart fields into
+  // objects (the manifest endpoint hits the same gotcha).
+  manifest: t.Optional(t.Any()),
 });
 
 const saveDocumentParamsSchema = t.Object({
@@ -50,7 +57,22 @@ const saveTemplateDocument = createSafeRootHandler(
   async function* ({ safeDb, session, user, params, body, recordAuditEvent }) {
     const organizationId = session.activeOrganizationId;
     const { templateId } = params;
-    const { file } = body;
+    const { file, manifest: manifestJson } = body;
+
+    // Parse the optional client manifest; ignore it if malformed and fall back
+    // to the manifest embedded in the uploaded DOCX. Elysia may hand us either
+    // the raw JSON string or an already-parsed object, so handle both.
+    let clientManifest: TemplateManifest | undefined;
+    if (manifestJson !== undefined) {
+      let candidate: unknown = manifestJson;
+      if (typeof manifestJson === "string") {
+        const parsed = Result.try((): unknown => JSON.parse(manifestJson));
+        candidate = Result.isError(parsed) ? undefined : parsed.value;
+      }
+      if (isTemplateManifest(candidate)) {
+        clientManifest = candidate;
+      }
+    }
 
     if (file.type !== DOCX_MIME_TYPE) {
       return Result.err(
@@ -91,7 +113,8 @@ const saveTemplateDocument = createSafeRootHandler(
       readManifest(buffer),
     ]);
 
-    const baseManifest = embeddedManifest ?? existing.manifest;
+    const baseManifest =
+      clientManifest ?? embeddedManifest ?? existing.manifest;
     const fields = mergeManifestWithDiscovery(baseManifest, discovered);
     const fieldMetas: FieldMeta[] = fields.map((f) => ({
       path: f.path,
