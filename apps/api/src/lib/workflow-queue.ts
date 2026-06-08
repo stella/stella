@@ -2,19 +2,18 @@ import { panic, Result } from "better-result";
 import { Queue, Worker } from "bullmq";
 import type { RedisClient } from "bun";
 import { sleep } from "bun";
-import { and, asc, eq, gt, inArray, or, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db";
 import { jsonField } from "@/api/db/json-utils";
 import { rootDb } from "@/api/db/root";
 import {
   cellMetadata,
-  entities,
   fields,
   justifications,
   properties,
 } from "@/api/db/schema";
-import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
+import type { FieldContent } from "@/api/db/schema-validators";
 import {
   loadOrgAIConfig,
   loadPromptCachingPreference,
@@ -43,6 +42,11 @@ import {
   brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
 import { broadcast } from "@/api/lib/sse";
+import {
+  collectFullWorkflowTargetIds,
+  fetchExplicitWorkflowTargetRows,
+  readFullWorkflowSnapshotCursor,
+} from "@/api/lib/workflow-target-queries";
 import { resolveWorkflowTargetEntityIds } from "@/api/lib/workflow-targets";
 import { getBatchGenerator } from "@/api/lib/workflow/generate-batch-provider";
 import type {
@@ -249,16 +253,6 @@ type StartWorkflowResult = {
   status: "started" | "already-running" | "skipped" | "failed";
 };
 
-type WorkflowTargetEntityRow = {
-  id: SafeId<"entity">;
-  kind: EntityKind;
-};
-
-type FullWorkflowTargetCursor = {
-  createdAt: string;
-  id: SafeId<"entity">;
-};
-
 type EnqueueEntityJobsArgs = {
   entityIds: readonly SafeId<"entity">[];
   executionPlan: ExecutionLevel[];
@@ -342,135 +336,6 @@ const removeQueuedWorkflowJobs = async (
         }
       }),
     );
-  }
-};
-
-const fetchExplicitWorkflowTargetRows = async ({
-  inputEntityIds,
-  scopedDb,
-  workspaceId,
-}: {
-  inputEntityIds: readonly SafeId<"entity">[];
-  scopedDb: ScopedDb;
-  workspaceId: SafeId<"workspace">;
-}): Promise<WorkflowTargetEntityRow[]> => {
-  const entityRows: WorkflowTargetEntityRow[] = [];
-  for (const chunk of chunkItems(
-    inputEntityIds,
-    LIMITS.workflowEntityBatchSize,
-  )) {
-    const rows = await scopedDb((tx) =>
-      tx
-        .select({ id: entities.id, kind: entities.kind })
-        .from(entities)
-        .where(
-          and(
-            eq(entities.workspaceId, workspaceId),
-            inArray(entities.id, chunk),
-          ),
-        ),
-    );
-    for (const row of rows) {
-      entityRows.push(row);
-    }
-  }
-
-  return entityRows;
-};
-
-const WORKFLOW_TIMESTAMP_CURSOR_FORMAT = 'YYYY-MM-DD"T"HH24:MI:SS.US';
-
-const readFullWorkflowSnapshotCursor = async ({
-  scopedDb,
-}: {
-  scopedDb: ScopedDb;
-}): Promise<string> => {
-  const rows = await scopedDb((tx) =>
-    tx.execute<{ value: string }>(
-      sql`SELECT to_char(now(), ${WORKFLOW_TIMESTAMP_CURSOR_FORMAT}) AS value`,
-    ),
-  );
-  const row = rows.at(0);
-  if (!row) {
-    return panic("Workflow snapshot cursor query returned no rows");
-  }
-
-  return row.value;
-};
-
-const fetchFullWorkflowTargetBatch = async ({
-  createdAtCutoff,
-  lastCursor,
-  scopedDb,
-  workspaceId,
-}: {
-  createdAtCutoff: string;
-  lastCursor: FullWorkflowTargetCursor | null;
-  scopedDb: ScopedDb;
-  workspaceId: SafeId<"workspace">;
-}): Promise<FullWorkflowTargetCursor[]> =>
-  await scopedDb((tx) =>
-    tx
-      .select({
-        createdAt: sql<string>`to_char(${entities.createdAt}, ${WORKFLOW_TIMESTAMP_CURSOR_FORMAT})`,
-        id: entities.id,
-      })
-      .from(entities)
-      .where(
-        and(
-          eq(entities.workspaceId, workspaceId),
-          eq(entities.kind, "document"),
-          sql`${entities.createdAt} <= ${createdAtCutoff}::timestamp`,
-          ...(lastCursor === null
-            ? []
-            : [
-                or(
-                  sql`${entities.createdAt} > ${lastCursor.createdAt}::timestamp`,
-                  and(
-                    sql`${entities.createdAt} = ${lastCursor.createdAt}::timestamp`,
-                    gt(entities.id, lastCursor.id),
-                  ),
-                ),
-              ]),
-        ),
-      )
-      .orderBy(asc(entities.createdAt), asc(entities.id))
-      .limit(LIMITS.workflowEntityBatchSize),
-  );
-
-const collectFullWorkflowTargetIds = async ({
-  createdAtCutoff,
-  scopedDb,
-  workspaceId,
-}: {
-  createdAtCutoff: string;
-  scopedDb: ScopedDb;
-  workspaceId: SafeId<"workspace">;
-}): Promise<SafeId<"entity">[]> => {
-  const entityIds: SafeId<"entity">[] = [];
-  let lastCursor: FullWorkflowTargetCursor | null = null;
-
-  while (true) {
-    const rows = await fetchFullWorkflowTargetBatch({
-      createdAtCutoff,
-      lastCursor,
-      scopedDb,
-      workspaceId,
-    });
-
-    if (rows.length === 0) {
-      return entityIds;
-    }
-
-    for (const row of rows) {
-      entityIds.push(row.id);
-    }
-
-    const lastRow = rows.at(-1);
-    if (!lastRow) {
-      return entityIds;
-    }
-    lastCursor = lastRow;
   }
 };
 

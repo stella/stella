@@ -46,6 +46,7 @@ export const WorkflowStartConfirmationPromptProvider = ({
   const [pendingPrompt, setPendingPrompt] = useState<PendingPrompt | null>(
     null,
   );
+  const lastEntityCountRef = useRef(0);
 
   const settlePrompt = useCallback((confirmed: boolean) => {
     const prompt = pendingPromptRef.current;
@@ -61,6 +62,7 @@ export const WorkflowStartConfirmationPromptProvider = ({
       return await new Promise((resolve) => {
         const nextPrompt = { ...input, resolve };
         pendingPromptRef.current = nextPrompt;
+        lastEntityCountRef.current = input.entityCount;
         setPendingPrompt(nextPrompt);
       });
     },
@@ -94,7 +96,7 @@ export const WorkflowStartConfirmationPromptProvider = ({
             </AlertDialogTitle>
             <AlertDialogDescription>
               {t("workspaces.workflow.largeRunPrompt.description", {
-                count: String(pendingPrompt?.entityCount ?? 0),
+                count: String(lastEntityCountRef.current),
               })}
             </AlertDialogDescription>
           </AlertDialogHeader>

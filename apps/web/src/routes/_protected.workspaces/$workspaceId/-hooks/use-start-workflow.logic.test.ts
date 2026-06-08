@@ -1,10 +1,10 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 
-import { entitySummariesCountOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { workflowTargetCountOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 
 import {
-  estimateWorkflowEntityCount,
+  estimateWorkflowTargetCount,
   LARGE_WORKFLOW_ENTITY_PROMPT_THRESHOLD,
   resolveWorkflowStartDecision,
 } from "./use-start-workflow.logic";
@@ -59,28 +59,36 @@ describe("workflow start decision", () => {
     expect(decision).toEqual({ type: "cancel" });
   });
 
-  test("counts scoped entity ids without loading workspace summaries", async () => {
+  test("loads the backend target count for scoped entity ids", async () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
+    const options = workflowTargetCountOptions({
+      entityIds: ["entity-folder", "entity-document"],
+      workspaceId: "workspace-a",
+    });
+    queryClient.setQueryData(options.queryKey, 1);
 
-    const count = await estimateWorkflowEntityCount({
-      args: { entityIds: ["entity-a", "entity-b"] },
+    const count = await estimateWorkflowTargetCount({
+      args: { entityIds: ["entity-folder", "entity-document"] },
       queryClient,
       workspaceId: "workspace-a",
     });
 
-    expect(count).toBe(2);
+    expect(count).toBe(1);
   });
 
-  test("loads workspace summaries when scoped entity ids are empty", async () => {
+  test("loads the full-workspace target count when scoped entity ids are empty", async () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
-    const options = entitySummariesCountOptions("workspace-a");
+    const options = workflowTargetCountOptions({
+      entityIds: [],
+      workspaceId: "workspace-a",
+    });
     queryClient.setQueryData(options.queryKey, 128);
 
-    const count = await estimateWorkflowEntityCount({
+    const count = await estimateWorkflowTargetCount({
       args: { entityIds: [] },
       queryClient,
       workspaceId: "workspace-a",

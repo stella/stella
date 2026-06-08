@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-import { entitySummariesCountOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { workflowTargetCountOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 
 export type StartWorkflowArgs = {
   entityIds?: string[];
@@ -38,24 +38,25 @@ export const resolveWorkflowStartDecision = async ({
   return { type: "start" };
 };
 
-type EstimateWorkflowEntityCountArgs = {
+type EstimateWorkflowTargetCountArgs = {
   args: StartWorkflowArgs | undefined;
   queryClient: QueryClient;
   workspaceId: string;
 };
 
-export const estimateWorkflowEntityCount = async ({
+export const estimateWorkflowTargetCount = async ({
   args,
   queryClient,
   workspaceId,
-}: EstimateWorkflowEntityCountArgs): Promise<number | null> => {
-  if (args?.entityIds !== undefined && args.entityIds.length > 0) {
-    return args.entityIds.length;
-  }
+}: EstimateWorkflowTargetCountArgs): Promise<number | null> => {
+  const entityIds = args?.entityIds === undefined ? [] : [...args.entityIds];
 
   try {
     return await queryClient.ensureQueryData(
-      entitySummariesCountOptions(workspaceId),
+      workflowTargetCountOptions({
+        entityIds,
+        workspaceId,
+      }),
     );
   } catch {
     return null;

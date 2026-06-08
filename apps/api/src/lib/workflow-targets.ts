@@ -1,7 +1,7 @@
 import type { EntityKind } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 
-type WorkflowTargetEntityRow = {
+export type WorkflowTargetEntityRow = {
   id: SafeId<"entity">;
   kind: EntityKind;
 };

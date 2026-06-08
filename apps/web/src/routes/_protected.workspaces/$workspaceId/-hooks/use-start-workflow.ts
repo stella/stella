@@ -7,7 +7,7 @@ import { toSafeId } from "@/lib/safe-id";
 import { aiAvailabilityOptions } from "@/routes/_protected.organization/-ai-config-queries";
 import { useWorkflowStartConfirmationPrompt } from "@/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt";
 import {
-  estimateWorkflowEntityCount,
+  estimateWorkflowTargetCount,
   resolveWorkflowStartDecision,
 } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow.logic";
 import type { StartWorkflowArgs } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow.logic";
@@ -38,7 +38,7 @@ export const useStartWorkflow = (workspaceId: string) => {
       const decision = await resolveWorkflowStartDecision({
         confirmLargeRun,
         estimateEntityCount: async () =>
-          await estimateWorkflowEntityCount({
+          await estimateWorkflowTargetCount({
             args,
             queryClient,
             workspaceId,
