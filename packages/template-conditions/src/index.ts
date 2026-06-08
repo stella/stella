@@ -437,3 +437,13 @@ export const evaluateCondition = (
 // from the boolean condition engine above; re-exported here as the package's
 // single entry point.
 export { evaluateNumericExpression } from "./compute.js";
+
+// Structured condition model for a no-code condition builder; serializes to
+// the expression syntax `evaluateCondition` consumes.
+export { serializeCondition } from "./condition-builder.js";
+export type {
+  ConditionGroup,
+  ConditionNode,
+  ConditionOperator,
+  ConditionRule,
+} from "./condition-builder.js";
