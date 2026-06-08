@@ -8,6 +8,7 @@ import {
 } from "@/api/db/schema";
 import { resolveFtsConfig } from "@/api/handlers/case-law/fts-config";
 import type { DecisionSection } from "@/api/handlers/case-law/types";
+import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import { logger } from "@/api/lib/observability/logger";
@@ -24,13 +25,6 @@ const SEARCH_INDEX_CONCURRENCY = 4;
 const sectionsToPlainText = (
   sections: readonly DecisionSection[] | null,
 ): string => sections?.map((s) => s.text).join(" ") ?? "";
-
-// Same redistribution gate as the corpus-index projection. null descriptor =
-// legacy public source, treated as redistributable.
-const redistributable = sql`(
-  ${legislationSources.descriptor} IS NULL
-  OR (${legislationSources.descriptor} ->> 'allowsRedistribution') = 'true'
-)`;
 
 export const indexLegislationDocument = async (
   documentId: SafeId<"legislationDocument">,
@@ -51,7 +45,12 @@ export const indexLegislationDocument = async (
         legislationSources,
         eq(legislationSources.id, legislationDocuments.sourceId),
       )
-      .where(and(eq(legislationDocuments.id, documentId), redistributable))
+      .where(
+        and(
+          eq(legislationDocuments.id, documentId),
+          redistributableLegislationSource,
+        ),
+      )
       .limit(1),
   );
 
@@ -120,7 +119,7 @@ export const backfillLegislationSearchIndex = async (
       )
       .where(
         and(
-          redistributable,
+          redistributableLegislationSource,
           notExists(
             tx
               .select({ one: sql`1` })
@@ -153,7 +152,7 @@ export const backfillLegislationSearchIndex = async (
       )
       .where(
         and(
-          redistributable,
+          redistributableLegislationSource,
           gt(
             legislationDocuments.updatedAt,
             legislationSearchDocuments.updatedAt,

@@ -1,16 +1,17 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { status } from "elysia";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { ScopedDb } from "@/api/db";
-import { legislationDocuments } from "@/api/db/schema";
+import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import {
   readCorpusAst,
   readCorpusText,
 } from "@/api/handlers/case-law/corpus-storage";
 import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
+import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 
@@ -48,7 +49,16 @@ export const readLegislationHandler = async (
         textS3Key: legislationDocuments.textS3Key,
       })
       .from(legislationDocuments)
-      .where(eq(legislationDocuments.id, documentId))
+      .innerJoin(
+        legislationSources,
+        eq(legislationSources.id, legislationDocuments.sourceId),
+      )
+      .where(
+        and(
+          eq(legislationDocuments.id, documentId),
+          redistributableLegislationSource,
+        ),
+      )
       .limit(1),
   );
 

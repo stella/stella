@@ -92,7 +92,12 @@ CREATE UNIQUE INDEX "legislation_sources_adapter_key_idx"
   ON "legislation_sources" ("adapter_key");
 --> statement-breakpoint
 CREATE UNIQUE INDEX "legislation_documents_eli_version_lang_idx"
-  ON "legislation_documents" ("source_id", "eli", "version_valid_from", "language");
+  ON "legislation_documents" ("source_id", "eli", "version_valid_from", "language")
+  WHERE "version_valid_from" IS NOT NULL;
+--> statement-breakpoint
+CREATE UNIQUE INDEX "legislation_documents_eli_current_lang_idx"
+  ON "legislation_documents" ("source_id", "eli", "language")
+  WHERE "version_valid_from" IS NULL;
 --> statement-breakpoint
 CREATE INDEX "legislation_documents_eli_idx" ON "legislation_documents" ("eli");
 --> statement-breakpoint

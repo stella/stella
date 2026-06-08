@@ -8,6 +8,7 @@ import {
   legislationSources,
 } from "@/api/db/schema";
 import { readCorpusText } from "@/api/handlers/case-law/corpus-storage";
+import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   getCorpusIndexClient,
@@ -62,11 +63,6 @@ const SELECT_COLUMNS = {
   fulltext: legislationDocuments.fulltext,
   contentHash: legislationDocuments.contentHash,
 };
-
-const redistributable = sql`(
-  ${legislationSources.descriptor} IS NULL
-  OR (${legislationSources.descriptor} ->> 'allowsRedistribution') = 'true'
-)`;
 
 const hasContent = sql`${legislationDocuments.contentHash} IS NOT NULL`;
 
@@ -157,7 +153,7 @@ export const backfillLegislationCorpusIndex = async (
       .where(
         and(
           hasContent,
-          redistributable,
+          redistributableLegislationSource,
           or(
             isNull(legislationDocuments.indexedGeneration),
             sql`${legislationDocuments.indexedGeneration} <> (${generation} || '_' || lower(${legislationDocuments.country}))`,
@@ -183,7 +179,7 @@ export const backfillLegislationCorpusIndex = async (
             .where(
               and(
                 hasContent,
-                redistributable,
+                redistributableLegislationSource,
                 sql`${legislationDocuments.indexedGeneration} = (${generation} || '_' || lower(${legislationDocuments.country}))`,
                 sql`${legislationDocuments.indexedHash} IS DISTINCT FROM ${legislationDocuments.contentHash}`,
               ),

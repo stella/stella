@@ -3059,7 +3059,12 @@ export const legislationDocuments = p.pgTable(
   (t) => [
     p
       .uniqueIndex("legislation_documents_eli_version_lang_idx")
-      .on(t.sourceId, t.eli, t.versionValidFrom, t.language),
+      .on(t.sourceId, t.eli, t.versionValidFrom, t.language)
+      .where(isNotNull(t.versionValidFrom)),
+    p
+      .uniqueIndex("legislation_documents_eli_current_lang_idx")
+      .on(t.sourceId, t.eli, t.language)
+      .where(isNull(t.versionValidFrom)),
     p.index("legislation_documents_eli_idx").on(t.eli),
     p.index("legislation_documents_country_idx").on(t.country),
     p.index("legislation_documents_status_idx").on(t.status),
