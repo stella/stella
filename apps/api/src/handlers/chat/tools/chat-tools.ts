@@ -29,6 +29,7 @@ import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-regi
 import { createInfosoudTools } from "@/api/handlers/chat/tools/infosoud-tools";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
 import { createSkillTools } from "@/api/handlers/chat/tools/skill-tools";
+import { createTemplateTools } from "@/api/handlers/chat/tools/template-tools";
 import {
   applyChatToolPolicies,
   CHAT_TOOL_POLICY_KIND,
@@ -72,6 +73,7 @@ type CurrentSkillEditToolName =
 type CurrentSkillEditTools = Partial<
   Record<CurrentSkillEditToolName, NonNullable<ToolSet[string]>>
 >;
+type TemplateTools = ReturnType<typeof createTemplateTools>;
 
 type BuiltInChatTools = OrgTools &
   ChatExecutionTools &
@@ -84,7 +86,8 @@ type BuiltInChatTools = OrgTools &
   ActiveDocxEditTools &
   CreateDocumentTools &
   WebSearchTools &
-  ChatHistoryTools;
+  ChatHistoryTools &
+  TemplateTools;
 
 export type ChatTools = BuiltInChatTools;
 type BuiltInChatToolPolicyName =
@@ -162,6 +165,7 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   // once the toggle is on.
   [FETCH_URL_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.publicOfficial,
   infosoud_lookup_case: CHAT_TOOL_POLICY_KIND.publicOfficial,
+  list_templates: CHAT_TOOL_POLICY_KIND.internal,
   "load-skill": CHAT_TOOL_POLICY_KIND.internal,
   "read-skill-resource": CHAT_TOOL_POLICY_KIND.internal,
   "run-stella-query": CHAT_TOOL_POLICY_KIND.internal,
@@ -258,6 +262,9 @@ export const getChatTools = ({
     scopedDb,
   });
 
+  // Template library tools (list templates; describe/fill to follow).
+  const templateTools = createTemplateTools({ scopedDb });
+
   // create-document is client-executed (no server `execute`) — the
   // chat client picks the destination matter and posts the result
   // via the AI SDK's addToolOutput. It is always registered so the
@@ -274,6 +281,7 @@ export const getChatTools = ({
       ...boeTools,
       ...infosoudTools,
       ...workspaceTools,
+      ...templateTools,
       ...historyTools,
       ...createDocumentTools,
       ...activeDocxEditTools,
