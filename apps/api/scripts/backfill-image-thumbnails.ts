@@ -56,8 +56,18 @@ type EntityFieldRow = {
   organization_id: string;
 };
 
+const deleteThumbnailBestEffort = async (thumbnailKey: string) => {
+  const cleanup = await Result.tryPromise({
+    try: async () => await getS3().delete(thumbnailKey),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(cleanup)) {
+    console.warn(`  chat: thumbnail cleanup failed for ${thumbnailKey}`);
+  }
+};
+
 const backfillEntityFields = async (): Promise<number> => {
-  let cursor = "";
+  let cursor: string | null = null;
   let enqueued = 0;
 
   for (;;) {
@@ -79,7 +89,7 @@ const backfillEntityFields = async (): Promise<number> => {
         AND coalesce(f.content->'thumbnailDerivative'->>'status', 'pending') = 'pending'
         AND f.content->>'mimeType' IN ('image/jpeg', 'image/png', 'image/gif', 'image/webp')
         AND coalesce((f.content->>'encrypted')::boolean, false) = false
-        AND f.id > ${cursor}
+        ${cursor ? sql`AND f.id > ${cursor}` : sql``}
       ORDER BY f.id ASC
       LIMIT ${BATCH_SIZE}
     `);
@@ -106,7 +116,11 @@ const backfillEntityFields = async (): Promise<number> => {
       enqueued += 1;
     }
 
-    cursor = rows[rows.length - 1].field_id;
+    const lastRow = rows.at(-1);
+    if (!lastRow) {
+      break;
+    }
+    cursor = lastRow.field_id;
     console.log(`  entities: ${enqueued} job(s) enqueued so far...`);
   }
 
@@ -114,7 +128,7 @@ const backfillEntityFields = async (): Promise<number> => {
 };
 
 const backfillChatFiles = async (): Promise<number> => {
-  let cursor = "";
+  let cursor: string | null = null;
   let generated = 0;
 
   for (;;) {
@@ -130,7 +144,7 @@ const backfillChatFiles = async (): Promise<number> => {
         and(
           isNull(userFiles.thumbnailFileId),
           inArray(userFiles.mimeType, THUMBNAILABLE_MIME_TYPES),
-          gt(userFiles.id, cursor),
+          cursor ? gt(userFiles.id, cursor) : undefined,
         ),
       )
       .orderBy(asc(userFiles.id))
@@ -163,14 +177,33 @@ const backfillChatFiles = async (): Promise<number> => {
         userId: row.userId,
       });
       await getS3().write(thumbnailKey, thumbnail.value.webp);
-      await rootDb
-        .update(userFiles)
-        .set({ thumbnailFileId, placeholder: thumbnail.value.placeholder })
-        .where(eq(userFiles.id, row.id));
+      const updatedRows = await Result.tryPromise({
+        try: async () =>
+          await rootDb
+            .update(userFiles)
+            .set({ thumbnailFileId, placeholder: thumbnail.value.placeholder })
+            .where(
+              and(eq(userFiles.id, row.id), isNull(userFiles.thumbnailFileId)),
+            )
+            .returning({ id: userFiles.id }),
+        catch: (cause) => cause,
+      });
+      if (Result.isError(updatedRows)) {
+        await deleteThumbnailBestEffort(thumbnailKey);
+        throw updatedRows.error;
+      }
+      if (updatedRows.value.length === 0) {
+        await deleteThumbnailBestEffort(thumbnailKey);
+        continue;
+      }
       generated += 1;
     }
 
-    cursor = rows[rows.length - 1].id;
+    const lastRow = rows.at(-1);
+    if (!lastRow) {
+      break;
+    }
+    cursor = lastRow.id;
     console.log(`  chat: ${generated} thumbnail(s) generated so far...`);
   }
 

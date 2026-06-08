@@ -90,6 +90,42 @@ describe("chat thread messages", () => {
     expect(html).toContain(">Copy</button>");
   });
 
+  test("uses generated thumbnail URLs for image attachments with placeholders", () => {
+    const imagePart = {
+      type: "file",
+      filename: "evidence.png",
+      mediaType: "image/png",
+      placeholder: "data:image/png;base64,AAAA",
+      url: "stella://file::file_test123",
+    } as const;
+    const chatMessages: PersistedChatMessage[] = [
+      {
+        id: "message-A",
+        parts: [imagePart],
+        role: "user",
+      },
+    ];
+
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        approvalPendingMessageId={null}
+        messages={chatMessages}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        showToolCalls={false}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+
+    expect(html).toContain("/v1/user-files/file_test123/content");
+    expect(html).toContain("/v1/user-files/file_test123/thumbnail");
+    expect(html).toContain("background-image");
+    expect(html).toContain("data:image/png;base64,AAAA");
+  });
+
   test("shows retry only on the latest assistant response", () => {
     const chatMessages: PersistedChatMessage[] = [
       {

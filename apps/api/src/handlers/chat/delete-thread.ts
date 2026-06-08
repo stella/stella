@@ -12,6 +12,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const config = {
   permissions: { chat: ["delete"] },
@@ -36,6 +37,30 @@ const deleteThread = createSafeRootHandler(
       workspaceId,
     });
 
+    const thread = yield* Result.await(
+      safeDb(async (tx) => {
+        const rows = await tx
+          .select({ id: chatThreads.id })
+          .from(chatThreads)
+          .where(
+            and(
+              eq(chatThreads.id, params.threadId),
+              eq(chatThreads.userId, user.id),
+              scope.scope === "workspace"
+                ? eq(chatThreads.workspaceId, scope.workspaceId)
+                : isNull(chatThreads.workspaceId),
+            ),
+          )
+          .limit(1);
+
+        return rows.at(0);
+      }),
+    );
+
+    if (!thread) {
+      return Result.ok();
+    }
+
     const files = yield* Result.await(
       safeDb((tx) =>
         tx.query.userFiles.findMany({
@@ -47,6 +72,7 @@ const deleteThread = createSafeRootHandler(
             id: true,
             s3Key: true,
             thumbnailFileId: true,
+            userId: true,
           },
         }),
       ),
@@ -60,7 +86,7 @@ const deleteThread = createSafeRootHandler(
               createUserFileKey({
                 fileId: file.thumbnailFileId,
                 mimeType: THUMBNAIL_MIME_TYPE,
-                userId: user.id,
+                userId: brandPersistedUserId(file.userId),
               }),
             ]
           : [file.s3Key],

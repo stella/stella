@@ -15,7 +15,7 @@ const IMAGE_THUMBNAIL_MIME_TYPES = {
 } as const satisfies Record<string, null>;
 
 export const isThumbnailableMimeType = (mimeType: string): boolean =>
-  mimeType in IMAGE_THUMBNAIL_MIME_TYPES;
+  Object.hasOwn(IMAGE_THUMBNAIL_MIME_TYPES, mimeType);
 
 type ShouldGenerateImageThumbnailOptions = {
   encrypted?: boolean;
@@ -70,16 +70,17 @@ export const generateImageThumbnail = async (
 ): Promise<Result<ImageThumbnailResult, ImageDerivativeError>> => {
   Bun.Image.backend = "bun";
 
-  return Result.tryPromise({
+  return await Result.tryPromise({
     try: async () => {
-      const webp = await new Bun.Image(source)
+      const image = new Bun.Image(source);
+      const webp = await image
         .resize(THUMBNAIL_MAX_EDGE, THUMBNAIL_MAX_EDGE, {
           fit: "inside",
           withoutEnlargement: true,
         })
         .webp({ quality: THUMBNAIL_WEBP_QUALITY })
         .bytes();
-      const placeholder = await new Bun.Image(source).placeholder();
+      const placeholder = await image.placeholder();
       return { webp, placeholder } satisfies ImageThumbnailResult;
     },
     catch: (error) =>

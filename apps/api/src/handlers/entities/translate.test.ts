@@ -33,6 +33,9 @@ const scanFileMock = mock(async (_input: ScanFileInput) =>
 const s3WriteMock = mock(async () => {});
 const s3DeleteMock = mock(async () => {});
 const processExtractionMock = mock(async () => {});
+const enqueueImageThumbnailMock = mock(async () => {});
+const enqueueImageThumbnailOrMarkFailedMock = mock(async () => {});
+const enqueuePdfDerivativeMock = mock(async () => {});
 const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => {});
 const captureErrorMock = mock(() => {});
 
@@ -67,7 +70,11 @@ void mock.module("@/api/lib/search/process-extraction", () => ({
 }));
 
 void mock.module("@/api/lib/file-derivative-queue", () => ({
+  enqueueImageThumbnail: enqueueImageThumbnailMock,
+  enqueueImageThumbnailOrMarkFailed: enqueueImageThumbnailOrMarkFailedMock,
+  enqueuePdfDerivative: enqueuePdfDerivativeMock,
   enqueuePdfDerivativeOrMarkFailed: enqueuePdfDerivativeOrMarkFailedMock,
+  initFileDerivativeWorker: mock(() => undefined),
 }));
 
 void mock.module("@/api/lib/analytics", () => ({

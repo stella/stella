@@ -152,7 +152,12 @@ const remapFileIds = (
         return field;
       }
 
-      const { pdfDerivative: _, ...restContent } = field.content;
+      const {
+        pdfDerivative: _pdfDerivative,
+        placeholder: _placeholder,
+        thumbnailDerivative: _thumbnailDerivative,
+        ...restContent
+      } = field.content;
 
       return {
         ...field,

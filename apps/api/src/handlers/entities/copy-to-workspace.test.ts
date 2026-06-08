@@ -53,6 +53,18 @@ void mock.module("@/api/lib/search/index-global", () => ({
   upsertWorkspaceSearchDocuments: mock(async () => undefined),
 }));
 
+const enqueueImageThumbnailOrMarkFailedMock = mock(async () => undefined);
+const enqueueImageThumbnailMock = mock(async () => undefined);
+const enqueuePdfDerivativeMock = mock(async () => undefined);
+const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => undefined);
+void mock.module("@/api/lib/file-derivative-queue", () => ({
+  enqueueImageThumbnail: enqueueImageThumbnailMock,
+  enqueueImageThumbnailOrMarkFailed: enqueueImageThumbnailOrMarkFailedMock,
+  enqueuePdfDerivative: enqueuePdfDerivativeMock,
+  enqueuePdfDerivativeOrMarkFailed: enqueuePdfDerivativeOrMarkFailedMock,
+  initFileDerivativeWorker: mock(() => undefined),
+}));
+
 const { default: copyToWorkspace } = await import("./copy-to-workspace");
 
 const sourceWorkspaceId = toSafeId<"workspace">("source_workspace");
@@ -132,6 +144,10 @@ beforeEach(() => {
   processExtractionMock.mockClear();
   syncWorkspaceSearchActivityMock.mockClear();
   broadcastQueryInvalidationToTargetWorkspaceMock.mockClear();
+  enqueueImageThumbnailMock.mockClear();
+  enqueueImageThumbnailOrMarkFailedMock.mockClear();
+  enqueuePdfDerivativeMock.mockClear();
+  enqueuePdfDerivativeOrMarkFailedMock.mockClear();
 });
 
 const createContext = ({
@@ -544,7 +560,14 @@ describe("copy-to-workspace", () => {
         fields: [
           {
             propertyId: sourceFilePropertyId,
-            content: { ...fileContent, id: originalFileId },
+            content: {
+              ...fileContent,
+              id: originalFileId,
+              mimeType: "image/png",
+              placeholder: "data:image/png;base64,AAAA",
+              thumbnailDerivative: { status: "ready" },
+              thumbnailFileId: "original-thumbnail-uuid",
+            },
           },
         ],
       },
@@ -634,6 +657,11 @@ describe("copy-to-workspace", () => {
       expect(copiedField.content.id).toMatch(
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu,
       );
+      expect(copiedField.content.thumbnailFileId).toBeNull();
+      expect(copiedField.content.thumbnailDerivative).toEqual({
+        status: "pending",
+      });
+      expect("placeholder" in copiedField.content).toBe(false);
     }
   });
 
