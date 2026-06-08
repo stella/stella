@@ -1895,14 +1895,13 @@ function bordersFormGroup(a?: ParagraphBorders, b?: ParagraphBorders): boolean {
   );
 }
 
-// Strong-RTL letters: the Hebrew, Arabic, Syriac, Thaana, NKo, Samaritan,
-// Mandaic, Arabic Extended-A blocks plus the Hebrew/Arabic presentation forms.
-// Weak/neutral code points in those blocks (Arabic-Indic digits, combining
-// marks, punctuation) are NOT letters, so first-LETTER detection skips them —
-// only a strong R/AL *letter* triggers RTL. Authored with `\u` escapes (a
-// pasted glyph once silently corrupted the presentation-forms range).
+// Strong-RTL letters, matched by Unicode script so RTL scripts outside the BMP
+// (Adlam) and newer blocks (Arabic Extended-B) are covered without hand-rolling
+// code-point ranges. Only used to classify the first *letter* (`\p{L}`), so the
+// non-letter members of these scripts (Arabic-Indic digits, combining marks,
+// punctuation) are never tested — they're weak/neutral and skipped upstream.
 const RTL_STRONG_LETTER =
-  /[\u0590-\u085F\u08A0-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/u;
+  /[\p{Script=Hebrew}\p{Script=Arabic}\p{Script=Syriac}\p{Script=Thaana}\p{Script=Nko}\p{Script=Samaritan}\p{Script=Mandaic}\p{Script=Adlam}]/u;
 
 /**
  * Decide whether a paragraph without an explicit `w:bidi` flag should still be

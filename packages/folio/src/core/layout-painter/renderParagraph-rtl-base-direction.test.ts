@@ -166,6 +166,10 @@ describe("Issue #719 — RTL base direction detection", () => {
     expect(render([text("مرحبا", true)]).dir).toBe("rtl");
   });
 
+  test("RTL scripts outside the BMP (Adlam) are detected", () => {
+    expect(render([text("\u{1E900}\u{1E921}", true)]).dir).toBe("rtl");
+  });
+
   test("a CJK-only rtl run resolves LTR (CJK is strong left-to-right)", () => {
     // CJK, Devanagari, Thai, Hangul and kana are Unicode bidi class L, so a
     // w:rtl run containing only such text must lay out LTR — not fall through to
