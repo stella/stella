@@ -10,6 +10,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import {
+  BracesIcon,
   EyeIcon,
   EyeOffIcon,
   PlusIcon,
@@ -88,6 +89,7 @@ export const TemplateStudio = ({
     parseNameExprs(manifest, "computed"),
   );
   const [selected, setSelected] = useState<DirectiveRange | null>(null);
+  const [hasSelection, setHasSelection] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showDirectives, setShowDirectives] = useState(true);
@@ -134,6 +136,31 @@ export const TemplateStudio = ({
     },
     [],
   );
+
+  // The hero gesture: turn the current text selection into a `{{field}}`,
+  // deriving a unique field path from the selected text and opening it in the
+  // inspector (the dispatched selection change re-runs syncSelection).
+  const makeField = () => {
+    const view = editorViewRef.current;
+    if (!view) {
+      return;
+    }
+    const { from, to } = view.state.selection;
+    if (from === to) {
+      return;
+    }
+    const text = view.state.doc.textBetween(from, to, " ");
+    const base = slugify(text);
+    let path = base;
+    for (let n = 2; fields.some((f) => f.path === path); n++) {
+      path = `${base}_${n}`;
+    }
+    view.dispatch(
+      view.state.tr.insertText(`{{${path}}}`, from, to).scrollIntoView(),
+    );
+    view.focus();
+    upsertField(path, {});
+  };
 
   const handleSave = async () => {
     const editor = editorRef.current;
@@ -212,6 +239,15 @@ export const TemplateStudio = ({
           </span>
           <div className="flex items-center gap-1">
             <Button
+              disabled={!hasSelection}
+              onClick={makeField}
+              size="sm"
+              variant="outline"
+            >
+              <BracesIcon />
+              Make field
+            </Button>
+            <Button
               aria-label={t("common.preview")}
               onClick={() => setShowDirectives((v) => !v)}
               size="sm"
@@ -241,7 +277,10 @@ export const TemplateStudio = ({
               onEditorViewReady={(view) => {
                 editorViewRef.current = view;
               }}
-              onSelectionChange={() => syncSelection()}
+              onSelectionChange={(state) => {
+                setHasSelection(state?.hasSelection ?? false);
+                syncSelection();
+              }}
               showTemplateDirectives={showDirectives}
             />
           </Suspense>
@@ -506,6 +545,17 @@ const INPUT_TYPES = new Set([
   "date",
   "select",
 ]);
+
+// Derive a field path from selected prose: "Jan Kowalski" -> "jan_kowalski".
+const slugify = (text: string): string => {
+  const slug = text
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "_")
+    .replace(/^_+|_+$/gu, "")
+    .slice(0, 40);
+  return slug.length > 0 ? slug : "field";
+};
 
 const defaultField = (path: string): StudioField => ({
   path,
