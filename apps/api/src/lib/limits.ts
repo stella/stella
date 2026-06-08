@@ -315,4 +315,6 @@ export const API_RATE_LIMITS = {
    *  source IP, so this is loose enough for production while
    *  still bounding the worst case. */
   hostedUsageWebhook: { duration: 60_000, max: 300 },
+  /** Delete account OTP email request limit: 5 requests per minute. */
+  deleteAccountOtp: { duration: 60_000, max: 5 },
 } as const;

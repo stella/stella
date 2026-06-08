@@ -127,67 +127,100 @@ export const verifyAndDeleteUser = async (
     try: async () => {
       const identifier = `delete-account:${email}`;
 
-      const verificationRow = await rootDb
-        .select()
-        .from(verification)
-        .where(eq(verification.identifier, identifier))
-        .limit(1)
-        .then((rows) => rows[0]);
+      await rootDb.transaction(async (tx) => {
+        const verificationRow = await tx
+          .select()
+          .from(verification)
+          .where(eq(verification.identifier, identifier))
+          .limit(1)
+          .then((rows) => rows[0]);
 
-      if (!verificationRow) {
-        throw new HandlerError({
-          status: 400,
-          message: "Invalid verification code",
-        });
-      }
+        if (!verificationRow) {
+          throw new HandlerError({
+            status: 400,
+            message: "Invalid verification code",
+          });
+        }
 
-      if (verificationRow.value !== code) {
-        // Prevent brute force by deleting the OTP on the first incorrect attempt
-        await rootDb
+        if (verificationRow.value !== code) {
+          // Prevent brute force by deleting the OTP on the first incorrect attempt
+          await tx
+            .delete(verification)
+            .where(eq(verification.identifier, identifier));
+
+          throw new HandlerError({
+            status: 400,
+            message: "Invalid verification code",
+          });
+        }
+
+        if (verificationRow.expiresAt.getTime() < Date.now()) {
+          await tx
+            .delete(verification)
+            .where(eq(verification.identifier, identifier));
+
+          throw new HandlerError({
+            status: 400,
+            message: "Verification code has expired",
+          });
+        }
+
+        // 2. Perform ownership check with SELECT FOR UPDATE locks inside transaction
+        // Fetch all organizations where the user is an owner, locking the member rows to prevent concurrent modifications
+        const ownedOrgs = await tx
+          .select({ orgId: member.organizationId, orgName: organization.name })
+          .from(member)
+          .innerJoin(organization, eq(organization.id, member.organizationId))
+          .where(and(eq(member.userId, currentUserId), eq(member.role, "owner")))
+          .for("update");
+
+        for (const org of ownedOrgs) {
+          const otherOwners = await tx
+            .select({ id: member.id })
+            .from(member)
+            .where(
+              and(
+                eq(member.organizationId, org.orgId),
+                eq(member.role, "owner"),
+                ne(member.userId, currentUserId),
+              ),
+            )
+            .limit(1)
+            .for("update");
+
+          if (otherOwners.length === 0) {
+            throw new HandlerError({
+              status: 400,
+              message: `Cannot delete account because you are the sole owner of organization "${org.orgName}". Please transfer ownership or delete the organization first.`,
+            });
+          }
+        }
+
+        // audit: skip — ephemeral verification code deletion
+        await tx
           .delete(verification)
-          .where(eq(verification.identifier, identifier));
+          .where(eq(verification.id, verificationRow.id));
 
-        throw new HandlerError({
-          status: 400,
-          message: "Invalid verification code",
-        });
-      }
+        // To maintain referential integrity with tables having "onDelete: restrict" (e.g. templates and usage ledger)
+        // we anonymize the user profile, strip all active credentials, and clear sessions/memberships.
+        // 1. Delete credentials and active sessions
+        await tx.delete(account).where(eq(account.userId, currentUserId));
+        await tx.delete(session).where(eq(session.userId, currentUserId));
+        await tx.delete(member).where(eq(member.userId, currentUserId));
 
-      if (verificationRow.expiresAt.getTime() < Date.now()) {
-        await rootDb
-          .delete(verification)
-          .where(eq(verification.identifier, identifier));
-
-        throw new HandlerError({
-          status: 400,
-          message: "Verification code has expired",
-        });
-      }
-
-      // audit: skip — ephemeral verification code deletion
-      await rootDb
-        .delete(verification)
-        .where(eq(verification.id, verificationRow.id));
-
-      // To maintain referential integrity with tables having "onDelete: restrict" (e.g. templates and usage ledger)
-      // we anonymize the user profile, strip all active credentials, and clear sessions/memberships.
-      // 1. Delete credentials and active sessions
-      await rootDb.delete(account).where(eq(account.userId, currentUserId));
-      await rootDb.delete(session).where(eq(session.userId, currentUserId));
-      await rootDb.delete(member).where(eq(member.userId, currentUserId));
-
-      // 2. Clear personal data in the user table and release the original email address
-      await rootDb
-        .update(user)
-        .set({
-          name: "Deleted User",
-          email: `deleted-${currentUserId}@stella.placeholder`,
-          emailVerified: false,
-          image: null,
-          preferredName: null,
-          wordEditShortcut: null,
-        })
-        .where(eq(user.id, currentUserId));
+        // 2. Clear personal data in the user table and release the original email address
+        await tx
+          .update(user)
+          .set({
+            name: "Deleted User",
+            email: `deleted-${currentUserId}@stella.placeholder`,
+            emailVerified: false,
+            image: null,
+            preferredName: null,
+            wordEditShortcut: null,
+          })
+          .where(eq(user.id, currentUserId));
+      });
     },
     catch: (err) =>
       err instanceof HandlerError
