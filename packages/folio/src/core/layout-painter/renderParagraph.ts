@@ -2302,17 +2302,16 @@ export function renderParagraphFragment(
       //    use this shape — the body of "(i) Tranche Closing..."
       //    wraps to the page margin, only the first line's marker is
       //    indented.
-      const markerHasHanging =
-        indent?.hanging !== undefined && indent.hanging > 0;
-      const markerHasFirstLine =
-        indent?.firstLine !== undefined && indent.firstLine > 0;
-      let markerPos = indentLeft;
-      if (markerHasHanging) {
-        markerPos = Math.max(0, indentLeft - (indent.hanging ?? 0));
-      } else if (markerHasFirstLine) {
-        markerPos = indentLeft + (indent.firstLine ?? 0);
-      }
-      lineEl.style.paddingLeft = `${markerPos}px`;
+      // The marker occupies a `hanging`-wide slot starting `hanging` left of
+      // the body (at `indentLeft - hanging`); the body lands at `indentLeft`.
+      // The offset rides on padding-left (NOT text-indent: Chrome folds
+      // text-indent into the first inline-block's box, overriding the marker's
+      // min-width and breaking tab-stop alignment).
+      const hanging = indent?.hanging ?? 0;
+      const firstLine = indent?.firstLine ?? 0;
+      const markerStart =
+        hanging > 0 ? indentLeft - hanging : indentLeft + firstLine;
+      lineEl.style.paddingLeft = `${Math.max(0, markerStart)}px`;
       lineEl.style.textIndent = "0"; // Don't use textIndent for lists
 
       // Resolve marker font per ECMA-376 §17.9.6:
@@ -2350,6 +2349,16 @@ export function renderParagraphFragment(
         block.attrs.listMarkerRevision,
         block.attrs.listMarkerSecondSlotOffsetTwips,
       );
+      // When the hang exceeds the left indent the marker belongs in the left
+      // margin — exactly where Word puts it (a list whose direct `w:ind` has
+      // `hanging` > `left`, eigenpal #730 / #729). CSS padding can't be
+      // negative, so the negative portion rides on the marker's own margin-left.
+      // Gated to `indentLeft > 0`: with no left indent the body/continuation
+      // lines already sit at `hanging` (see body-line branch above), so hanging
+      // the marker into the margin there would misalign the first line.
+      if (markerStart < 0 && indentLeft > 0) {
+        marker.style.marginLeft = `${markerStart}px`;
+      }
       lineEl.prepend(marker);
     }
 
