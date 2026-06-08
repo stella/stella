@@ -1,9 +1,25 @@
 import { Result } from "better-result";
 import { and, eq, ne } from "drizzle-orm";
 
-import { account, member, organization, session, user, verification } from "@/api/db/auth-schema";
+import { account, member, oauthAccessToken, oauthClient, oauthConsent, oauthRefreshToken, organization, session, user, verification } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
-import { workspaceMembers, workspaces } from "@/api/db/schema";
+import {
+  agentSkills,
+  chatThreads,
+  desktopEditHandoffs,
+  desktopEditSessions,
+  fileChatThreads,
+  folioCollabSessions,
+  mcpOAuthState,
+  mcpUserConnections,
+  pendingUploads,
+  promptShortcuts,
+  taskAssignees,
+  userFiles,
+  workspaceMembers,
+  workspaceViewTemplates,
+  workspaces,
+} from "@/api/db/schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 /**
@@ -211,15 +227,32 @@ export const verifyAndDeleteUser = async (
           .delete(verification)
           .where(eq(verification.id, verificationRow.id));
 
-        // To maintain referential integrity with tables having "onDelete: restrict" (e.g. templates and usage ledger)
-        // we anonymize the user profile, strip all active credentials, and clear sessions/memberships.
-        // 1. Delete credentials and active sessions
+        // The user row is anonymized (UPDATE) rather than deleted to preserve
+        // rows in tables with onDelete:restrict (templates.createdBy, clauses.createdBy,
+        // usageEvents.userId, etc.) which form the audit trail. Because no DELETE
+        // fires on the user row, none of the onDelete:cascade / onDelete:set null
+        // constraints trigger automatically — we must clean up every linked table
+        // explicitly below.
+
+        // 1. Auth credentials and sessions (auth-schema tables)
         await tx.delete(account).where(eq(account.userId, currentUserId));
         // eslint-disable-next-line auth-lifecycle/no-direct-auth-artifact-delete
         await tx.delete(session).where(eq(session.userId, currentUserId));
         await tx.delete(member).where(eq(member.userId, currentUserId));
 
-        // 2. Delete workspace memberships and clear workspace lead roles
+        // 2. OAuth / Better-Auth token tables (auth-schema)
+        // eslint-disable-next-line auth-lifecycle/no-direct-auth-artifact-delete
+        await tx.delete(oauthAccessToken).where(eq(oauthAccessToken.userId, currentUserId));
+        // eslint-disable-next-line auth-lifecycle/no-direct-auth-artifact-delete
+        await tx.delete(oauthRefreshToken).where(eq(oauthRefreshToken.userId, currentUserId));
+        await tx.delete(oauthConsent).where(eq(oauthConsent.userId, currentUserId));
+        await tx.delete(oauthClient).where(eq(oauthClient.userId, currentUserId));
+
+        // 3. MCP credentials and in-flight OAuth state (schema.ts, cascade on user.id)
+        await tx.delete(mcpUserConnections).where(eq(mcpUserConnections.userId, currentUserId));
+        await tx.delete(mcpOAuthState).where(eq(mcpOAuthState.userId, currentUserId));
+
+        // 4. Workspace memberships — clear lead role then delete member rows
         await tx
           .update(workspaces)
           .set({ leadUserId: null })
@@ -227,6 +260,39 @@ export const verifyAndDeleteUser = async (
         await tx
           .delete(workspaceMembers)
           .where(eq(workspaceMembers.userId, currentUserId));
+
+        // 5. Task assignee records (cascade on user.id)
+        await tx.delete(taskAssignees).where(eq(taskAssignees.userId, currentUserId));
+
+        // 6. Desktop edit sessions and handoffs (cascade on createdBy → user.id)
+        await tx
+          .delete(desktopEditHandoffs)
+          .where(eq(desktopEditHandoffs.createdBy, currentUserId));
+        await tx
+          .delete(desktopEditSessions)
+          .where(eq(desktopEditSessions.createdBy, currentUserId));
+
+        // 7. Folio collab sessions — tokens cascade when session is deleted
+        await tx
+          .delete(folioCollabSessions)
+          .where(eq(folioCollabSessions.createdBy, currentUserId));
+
+        // 8. Pending (in-flight) S3 uploads
+        await tx.delete(pendingUploads).where(eq(pendingUploads.userId, currentUserId));
+
+        // 9. AI chat threads — messages and fileChatThreads cascade on thread deletion
+        await tx.delete(fileChatThreads).where(eq(fileChatThreads.userId, currentUserId));
+        await tx.delete(chatThreads).where(eq(chatThreads.userId, currentUserId));
+
+        // 10. Personal user files (private S3 uploads)
+        await tx.delete(userFiles).where(eq(userFiles.userId, currentUserId));
+
+        // 11. Personal workspace view templates, prompt shortcuts, agent skills
+        await tx
+          .delete(workspaceViewTemplates)
+          .where(eq(workspaceViewTemplates.userId, currentUserId));
+        await tx.delete(promptShortcuts).where(eq(promptShortcuts.userId, currentUserId));
+        await tx.delete(agentSkills).where(eq(agentSkills.userId, currentUserId));
 
         // 3. Clear personal data in the user table and release the original email address
         await tx
