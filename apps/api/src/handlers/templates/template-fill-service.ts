@@ -117,7 +117,7 @@ export const fillStoredTemplate = async ({
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   /** Optional model-backed generator for AI-fillable fields (aiPrompt). */
-  generateAiValue?: AiFieldGenerator;
+  generateAiValue?: AiFieldGenerator | undefined;
 }): Promise<FillTemplateResult> => {
   const loaded = await loadTemplate(templateId, scopedDb);
   if (!loaded) {
