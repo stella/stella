@@ -20,6 +20,7 @@ import {
   processBlockDirectives,
 } from "./block-directives";
 import { discoverPlaceholders } from "./discover-placeholders";
+import { applyNumbering, hasNumberingMarkers } from "./numbering";
 import { HEADER_FOOTER_RE, W_NS } from "./ooxml";
 import { patchXmlPart } from "./rich-patch";
 import { readManifestFromZip, stripManifest } from "./template-manifest";
@@ -201,6 +202,21 @@ export const fillTemplate = async (
     }
   } else {
     panic("fillTemplate received values outside the supported data model");
+  }
+
+  // Resolve clause cross-references / numbering on the assembled body — after
+  // conditional removal, so clauses dropped by a {{#if}} are not numbered and
+  // references to them stay unresolved.
+  const numberingZip = await JSZip.loadAsync(data);
+  const bodyEntry = numberingZip.file("word/document.xml");
+  if (bodyEntry) {
+    const bodyXml = await bodyEntry.async("string");
+    if (hasNumberingMarkers(bodyXml)) {
+      numberingZip.file("word/document.xml", applyNumbering(bodyXml));
+      data = Buffer.from(
+        await numberingZip.generateAsync({ type: "nodebuffer" }),
+      );
+    }
   }
 
   // Discover what the template actually contains

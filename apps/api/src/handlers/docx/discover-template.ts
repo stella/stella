@@ -365,6 +365,11 @@ const analyzeContainer = (
       if (!name) {
         continue;
       }
+      // @-prefixed markers (@clause:, @num:, @ref:) are resolved at fill time,
+      // not user-entered fields — keep them out of the discovered schema.
+      if (name.startsWith("@")) {
+        continue;
+      }
       placeholderCounts.set(name, (placeholderCounts.get(name) ?? 0) + 1);
 
       // Track field condition visibility
