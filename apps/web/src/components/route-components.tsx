@@ -15,31 +15,15 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
 
+import { isNetworkError } from "@/components/route-components.logic";
 import { StellaMark } from "@/components/stella-mark";
 import { useSignOut } from "@/hooks/use-sign-out";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { isMemberError, isUnauthorizedError } from "@/lib/errors";
-import { CriticalQueryTimeoutError } from "@/lib/react-query";
 
 type DefaultErrorComponentProps = ErrorComponentProps & {
   className?: string;
 };
-
-/** Network errors that indicate a transient connectivity
- *  issue (API down, DNS failure, etc.).
- *  Message varies by browser engine:
- *  - Chromium: "Failed to fetch"
- *  - Firefox:  "NetworkError when attempting to fetch resource."
- *  - Safari:   "Load failed" */
-const NETWORK_ERROR_MESSAGES = new Set([
-  "Failed to fetch",
-  "NetworkError when attempting to fetch resource.",
-  "Load failed",
-]);
-
-const isNetworkError = (error: unknown): boolean =>
-  CriticalQueryTimeoutError.is(error) ||
-  (error instanceof TypeError && NETWORK_ERROR_MESSAGES.has(error.message));
 
 /** Max number of automatic recovery attempts before
  *  falling back to the manual "Try again" button.
