@@ -56,6 +56,9 @@ export const LinkClauseDialog = ({
   const [selectedCategory, setSelectedCategory] = useState("");
   const [search, setSearch] = useState("");
   const [selectedClauseId, setSelectedClauseId] = useState<string | null>(null);
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(
+    null,
+  );
   const [slotName, setSlotName] = useState("");
   const [linking, setLinking] = useState(false);
 
@@ -76,6 +79,28 @@ export const LinkClauseDialog = ({
     catData && "categories" in catData ? catData.categories : [];
   const clauses = clauseData && "items" in clauseData ? clauseData.items : [];
 
+  // Variants of the currently selected clause, offered at link time.
+  const { data: variantsResult } = useQuery({
+    queryKey: ["clause-variants", selectedClauseId],
+    queryFn: async () => {
+      if (!selectedClauseId) {
+        return { variants: [] };
+      }
+      const response = await api
+        .clauses({ clauseId: toSafeId<"clause">(selectedClauseId) })
+        .variants.get();
+      if (response.error || response.data instanceof Response) {
+        throw new Error("Failed to load clause variants");
+      }
+      return response.data;
+    },
+    enabled: open && selectedClauseId !== null,
+  });
+  const variants =
+    variantsResult && "variants" in variantsResult
+      ? variantsResult.variants
+      : [];
+
   const filtered = clauses.filter((c) => {
     if (selectedCategory && c.categoryId !== selectedCategory) {
       return false;
@@ -95,8 +120,12 @@ export const LinkClauseDialog = ({
 
     const body: {
       clauseId: SafeId<"clause">;
+      variantId?: SafeId<"clauseVariant">;
       slotName?: string;
     } = { clauseId: toSafeId<"clause">(selectedClauseId) };
+    if (selectedVariantId) {
+      body.variantId = toSafeId<"clauseVariant">(selectedVariantId);
+    }
     if (slotName.trim()) {
       body.slotName = slotName.trim();
     }
@@ -125,11 +154,20 @@ export const LinkClauseDialog = ({
     });
 
     setSelectedClauseId(null);
+    setSelectedVariantId(null);
     setSearch("");
     setSlotName("");
     onOpenChange(false);
     onLinked();
-  }, [selectedClauseId, slotName, templateId, t, onOpenChange, onLinked]);
+  }, [
+    selectedClauseId,
+    selectedVariantId,
+    slotName,
+    templateId,
+    t,
+    onOpenChange,
+    onLinked,
+  ]);
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
@@ -188,7 +226,10 @@ export const LinkClauseDialog = ({
                         ? "bg-muted"
                         : "hover:bg-muted/50"
                     }`}
-                    onClick={() => setSelectedClauseId(clause.id)}
+                    onClick={() => {
+                      setSelectedClauseId(clause.id);
+                      setSelectedVariantId(null);
+                    }}
                     type="button"
                   >
                     <TextQuoteIcon className="text-muted-foreground size-4 shrink-0" />
@@ -205,6 +246,30 @@ export const LinkClauseDialog = ({
               ))}
             </ul>
           </div>
+
+          {selectedClauseId && variants.length > 0 && (
+            <div>
+              <label
+                className="mb-1 block text-sm font-medium"
+                htmlFor="variant-select"
+              >
+                {t("clauses.variant")}
+              </label>
+              <select
+                className="flex h-9 w-full rounded-md border bg-transparent px-3 py-1 text-sm"
+                id="variant-select"
+                onChange={(e) => setSelectedVariantId(e.target.value || null)}
+                value={selectedVariantId ?? ""}
+              >
+                <option value="">{t("clauses.variantDefault")}</option>
+                {variants.map((variant) => (
+                  <option key={variant.id} value={variant.id}>
+                    {variant.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div>
             <label
