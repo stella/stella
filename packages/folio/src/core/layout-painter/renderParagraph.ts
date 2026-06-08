@@ -2026,6 +2026,12 @@ export function renderParagraphFragment(
     fragmentEl.style.textAlign = "right";
   }
 
+  // An RTL paragraph with no explicit alignment defaults to right; pass that
+  // through to per-line rendering so flex-promoted lines (image-only,
+  // image+text, right-tab anchors) align to the start side too, not just the
+  // fragment text-align. (#723)
+  const effectiveAlignment = alignment ?? (isRtl ? "right" : undefined);
+
   // Track indentation for line-level application
   // Indentation is applied per-line, not at fragment level
   const indent = block.attrs?.indent;
@@ -2229,7 +2235,7 @@ export function renderParagraphFragment(
       }
     }
 
-    const lineEl = renderLine(block, line, alignment, doc, {
+    const lineEl = renderLine(block, line, effectiveAlignment, doc, {
       availableWidth: lineAvailableWidth - lineLeftOffset - lineRightOffset,
       isLastLine,
       isFirstLine,
