@@ -174,4 +174,11 @@ describe("Issue #719 — RTL base direction detection", () => {
     expect(render([text("中文", true)]).dir).toBe("");
     expect(render([text("अआ", true)]).dir).toBe("");
   });
+
+  test("weak chars (Arabic-Indic digits) are skipped; the first letter decides", () => {
+    // Arabic-Indic digits are bidi class AN (weak), not strong R — leading them
+    // must not trigger RTL. A run led by them whose first *letter* is Latin is
+    // LTR.
+    expect(render([text("١٢٣ Hello", true)]).dir).toBe("");
+  });
 });

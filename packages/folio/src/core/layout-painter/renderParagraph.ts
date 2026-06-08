@@ -1895,15 +1895,14 @@ function bordersFormGroup(a?: ParagraphBorders, b?: ParagraphBorders): boolean {
   );
 }
 
-// The first strong-directional character (Unicode Bidi class R/AL vs L). Group
-// 1 is the RTL letters (Hebrew, Arabic, Syriac, Thaana, NKo, Samaritan,
-// Mandaic, Arabic Extended-A, and the Hebrew/Arabic presentation forms); group
-// 2 is `\p{L}`, any other letter — strong-L, covering Latin, CJK, Indic, kana,
-// Hangul, etc. Digits, punctuation and spaces are neutral and skipped. One
-// native scan finds the first strong char. Authored with `\u` escapes (a
+// Strong-RTL letters: the Hebrew, Arabic, Syriac, Thaana, NKo, Samaritan,
+// Mandaic, Arabic Extended-A blocks plus the Hebrew/Arabic presentation forms.
+// Weak/neutral code points in those blocks (Arabic-Indic digits, combining
+// marks, punctuation) are NOT letters, so first-LETTER detection skips them —
+// only a strong R/AL *letter* triggers RTL. Authored with `\u` escapes (a
 // pasted glyph once silently corrupted the presentation-forms range).
-const FIRST_STRONG_CHAR =
-  /([\u0590-\u085F\u08A0-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF])|(\p{L})/u;
+const RTL_STRONG_LETTER =
+  /[\u0590-\u085F\u08A0-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/u;
 
 /**
  * Decide whether a paragraph without an explicit `w:bidi` flag should still be
@@ -1918,14 +1917,14 @@ function paragraphBaseIsRtl(block: ParagraphBlock): boolean {
   if (!textRuns.some((r) => r.rtl)) {
     return false;
   }
-  const match = FIRST_STRONG_CHAR.exec(textRuns.map((r) => r.text).join(""));
-  // No strong character (digits/punctuation only) — honor w:rtl. Otherwise the
-  // first strong char decides: an RTL letter (group 1) => RTL, any other
-  // letter => LTR.
-  if (!match) {
+  // The first strong char is the first *letter* (`\p{L}`); digits, combining
+  // marks, punctuation and spaces are weak/neutral and skipped in one native
+  // scan. The first letter's script decides; no letter at all => honor w:rtl.
+  const firstLetter = /\p{L}/u.exec(textRuns.map((r) => r.text).join(""))?.[0];
+  if (firstLetter === undefined) {
     return true;
   }
-  return Boolean(match[1]);
+  return RTL_STRONG_LETTER.test(firstLetter);
 }
 
 /**
