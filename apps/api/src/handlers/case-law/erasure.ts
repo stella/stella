@@ -6,6 +6,7 @@ import { envBase } from "@/api/env-base";
 import { removeDecisionFromCorpusIndex } from "@/api/handlers/case-law/corpus-index";
 import { deleteCorpusDocument } from "@/api/handlers/case-law/corpus-storage";
 import { removeDecisionFromIndex } from "@/api/handlers/case-law/search-index";
+import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 
@@ -59,37 +60,54 @@ export const redactCaseLawDecision = async ({
   // 2. Object-storage corpus payloads. Delete if ANY key is present: a
   // partially ingested decision (e.g. text written but AST not yet) must
   // still have its personal data erased, not skipped.
+  let corpusObjectsDeleted = true;
   if (
     decision.textS3Key !== null ||
     decision.normalizedS3Key !== null ||
     decision.astS3Key !== null
   ) {
-    await deleteCorpusDocument({
-      textKey: decision.textS3Key,
-      sectionsKey: decision.normalizedS3Key,
-      astKey: decision.astS3Key,
-    });
+    try {
+      await deleteCorpusDocument({
+        textKey: decision.textS3Key,
+        sectionsKey: decision.normalizedS3Key,
+        astKey: decision.astS3Key,
+      });
+    } catch (error) {
+      corpusObjectsDeleted = false;
+      captureError(error, {
+        decisionId,
+        step: "redactCaseLawDecision.deleteCorpusDocument",
+      });
+    }
   }
 
   // 3. Postgres canonical text + key/hash columns. Nulling content_hash
-  // stops both backfill loops from re-indexing the body.
+  // stops reads and both backfill loops from treating retained corpus keys
+  // as active content. Keys are only retained when S3 deletion failed so a
+  // later retry still knows which immutable objects to remove.
+  const scrubValues = {
+    fulltext: null,
+    sections: null,
+    documentAst: null,
+    ...(corpusObjectsDeleted
+      ? {
+          textS3Key: null,
+          normalizedS3Key: null,
+          astS3Key: null,
+        }
+      : {}),
+    contentHash: null,
+    indexedHash: null,
+    indexedGeneration: null,
+    indexedAt: null,
+  };
+
   // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
   await scopedDb((tx) => {
     // audit: skip — GDPR redaction; recorded in case_law_index_jobs below
     return tx
       .update(caseLawDecisions)
-      .set({
-        fulltext: null,
-        sections: null,
-        documentAst: null,
-        textS3Key: null,
-        normalizedS3Key: null,
-        astS3Key: null,
-        contentHash: null,
-        indexedHash: null,
-        indexedGeneration: null,
-        indexedAt: null,
-      })
+      .set(scrubValues)
       .where(eq(caseLawDecisions.id, decisionId));
   });
 

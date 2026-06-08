@@ -7,12 +7,13 @@ import { legislationDocuments } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 // eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
-import { isUuid } from "@/api/lib/custom-schema";
+import { isUuid, tSafeId } from "@/api/lib/custom-schema";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import {
   corpusIndexId,
   corpusIndexPattern,
+  isCorpusIndexJurisdiction,
 } from "@/api/lib/legal-search/index-naming";
 import {
   blendCitationAuthority,
@@ -40,7 +41,7 @@ export const searchLegislationBodySchema = t.Object({
   jurisdiction: t.Optional(t.String({ maxLength: 3 })),
   documentType: t.Optional(t.String({ maxLength: 128 })),
   status: t.Optional(t.String({ maxLength: 32 })),
-  source: t.Optional(t.String({ maxLength: 36 })),
+  source: t.Optional(tSafeId("legislationSource")),
   language: t.Optional(t.String({ maxLength: 8 })),
   dateFrom: t.Optional(t.String({ format: "date" })),
   dateTo: t.Optional(t.String({ format: "date" })),
@@ -163,7 +164,7 @@ const mapRowHit = (row: RawRow): LegislationHit => ({
   sourceUrl: toNullableString(row["source_url"]),
   // oxlint-disable-next-line typescript/strict-boolean-expressions -- row.headline from DB (any)
   headline: row["headline"]
-    ? escapeAndHighlight(JSON.stringify(row["headline"]))
+    ? escapeAndHighlight(toNullableString(row["headline"]) ?? "")
     : null,
   score: Number(row["score"]) || 0,
 });
@@ -216,7 +217,7 @@ const corpusIndexSearch = async (
   const snippetById = new Map<string, string>();
   for (const [index, hit] of result.value.hits.entries()) {
     const id = hit["document_id"];
-    if (typeof id !== "string") {
+    if (typeof id !== "string" || !isUuid(id)) {
       continue;
     }
     candidates.push({ id, score: result.value.hits.length - index });
@@ -308,6 +309,13 @@ export const searchLegislationHandler = async (
   // is a 400, not a 500 from an invalid-uuid cast.
   if (body.source !== undefined && !isUuid(body.source)) {
     return status(400, { message: "Invalid source" });
+  }
+
+  if (
+    body.jurisdiction !== undefined &&
+    !isCorpusIndexJurisdiction(body.jurisdiction)
+  ) {
+    return status(400, { message: "Invalid jurisdiction" });
   }
 
   const parsedCursor = body.cursor ? decodeCursor(body.cursor) : null;

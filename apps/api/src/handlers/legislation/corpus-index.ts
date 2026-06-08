@@ -8,7 +8,6 @@ import {
   legislationSources,
 } from "@/api/db/schema";
 import { readCorpusText } from "@/api/handlers/case-law/corpus-storage";
-import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   getCorpusIndexClient,
@@ -130,15 +129,11 @@ const buildDoc = (row: IndexableRow, text: string): Record<string, unknown> => {
 };
 
 const loadText = async (row: IndexableRow): Promise<string> => {
+  // Match the case-law indexer: when canonical text is in object storage,
+  // a transient S3 failure must abort the batch so the daemon retries instead
+  // of committing indexedHash = contentHash for fallback or empty text.
   if (row.textS3Key !== null) {
-    try {
-      return await readCorpusText(row.textS3Key);
-    } catch (error) {
-      captureError(error, {
-        documentId: row.id,
-        step: "legislationCorpusIndex.loadText",
-      });
-    }
+    return await readCorpusText(row.textS3Key);
   }
   return row.fulltext ?? "";
 };

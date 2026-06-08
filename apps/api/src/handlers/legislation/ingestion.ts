@@ -87,6 +87,39 @@ const sanitizeInput = (
   metadata: sanitizeMetadata(input.metadata ?? {}),
 });
 
+type PreserveLegislationCorpusWriteRetryInput = {
+  documentId: SafeId<"legislationDocument">;
+  previousSourceHash: string | null;
+  scopedDb: ScopedDb;
+};
+
+const preserveLegislationCorpusWriteRetry = async ({
+  documentId,
+  previousSourceHash,
+  scopedDb,
+}: PreserveLegislationCorpusWriteRetryInput): Promise<void> => {
+  // Keep the next ingestion pass from treating this document as unchanged
+  // after a failed object-storage write. Clear corpus-derived pointers so
+  // reads use the fresh Postgres columns until S3 succeeds.
+  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+  await scopedDb((tx) => {
+    // audit: skip — background corpus storage retry bookkeeping; derived state
+    return tx
+      .update(legislationDocuments)
+      .set({
+        sourceHash: previousSourceHash,
+        textS3Key: null,
+        normalizedS3Key: null,
+        astS3Key: null,
+        contentHash: null,
+        indexedHash: null,
+        indexedGeneration: null,
+        indexedAt: null,
+      })
+      .where(eq(legislationDocuments.id, documentId));
+  });
+};
+
 /**
  * Store + upsert one legislation document. Deduplicates by content hash:
  * an unchanged re-ingest is skipped. When CORPUS_STORAGE_ENABLED, the
@@ -194,6 +227,11 @@ export const processLegislationDocument = async (
       captureError(error, {
         documentId: id,
         step: "processLegislationDocument.corpusWrite",
+      });
+      await preserveLegislationCorpusWriteRetry({
+        documentId: id,
+        previousSourceHash: existing?.sourceHash ?? null,
+        scopedDb,
       });
     }
   }

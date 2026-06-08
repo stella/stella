@@ -16,12 +16,15 @@ import { panic } from "better-result";
 // alpha), but we guard so a malformed value can't craft an odd id.
 const JURISDICTION_PATTERN = /^[a-z]{2,8}$/u;
 
+export const isCorpusIndexJurisdiction = (value: string): boolean =>
+  JURISDICTION_PATTERN.test(value.toLowerCase());
+
 export const corpusIndexId = (
   generation: string,
   jurisdiction: string,
 ): string => {
   const jur = jurisdiction.toLowerCase();
-  if (!JURISDICTION_PATTERN.test(jur)) {
+  if (!isCorpusIndexJurisdiction(jur)) {
     panic(`Invalid jurisdiction for corpus index index id: ${jurisdiction}`);
   }
   return `${generation}_${jur}`;

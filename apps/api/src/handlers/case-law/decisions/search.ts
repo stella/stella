@@ -17,6 +17,7 @@ import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client
 import {
   corpusIndexId,
   corpusIndexPattern,
+  isCorpusIndexJurisdiction,
 } from "@/api/lib/legal-search/index-naming";
 import {
   blendCitationAuthority,
@@ -438,6 +439,10 @@ const searchCorpusIndexDecisions = async (
     if (!parsedCursor || !isUuid(parsedCursor.id)) {
       return status(400, { message: "Invalid cursor" });
     }
+  }
+
+  if (body.country !== undefined && !isCorpusIndexJurisdiction(body.country)) {
+    return status(400, { message: "Invalid country" });
   }
 
   const generation = corpusGeneration("case_law");

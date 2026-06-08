@@ -122,6 +122,7 @@ export const readDecisionHandler = async (
         // to fetch canonical payloads when corpus storage is enabled.
         astS3Key: true,
         textS3Key: true,
+        contentHash: true,
         // fulltext: only as fallback when no AST
         // sections: frontend doesn't use these
       },
@@ -163,6 +164,7 @@ export const readDecisionHandler = async (
   // than today.
   const documentAst = await resolveAst({
     astS3Key: decision.astS3Key,
+    contentHash: decision.contentHash,
     pgAst: decision.documentAst,
     decisionId,
   });
@@ -172,6 +174,7 @@ export const readDecisionHandler = async (
   if (!hasUsableAst(documentAst)) {
     fulltext = await resolveFulltext({
       textS3Key: decision.textS3Key,
+      contentHash: decision.contentHash,
       decisionId,
       caseLawDb,
     });
@@ -237,16 +240,18 @@ export const readDecisionBySlugHandler = async (
 
 type ResolveAstInput = {
   astS3Key: string | null;
+  contentHash: string | null;
   pgAst: DocumentAst | EmptyAst | null;
   decisionId: SafeId<"caseLawDecision">;
 };
 
 const resolveAst = async ({
   astS3Key,
+  contentHash,
   pgAst,
   decisionId,
 }: ResolveAstInput): Promise<DocumentAst | EmptyAst | null> => {
-  if (!corpusReadEnabled() || astS3Key === null) {
+  if (!corpusReadEnabled() || astS3Key === null || contentHash === null) {
     return pgAst;
   }
   try {
@@ -259,16 +264,18 @@ const resolveAst = async ({
 
 type ResolveFulltextInput = {
   textS3Key: string | null;
+  contentHash: string | null;
   decisionId: SafeId<"caseLawDecision">;
   caseLawDb: CaseLawPublicReadDb;
 };
 
 const resolveFulltext = async ({
   textS3Key,
+  contentHash,
   decisionId,
   caseLawDb,
 }: ResolveFulltextInput): Promise<string | null> => {
-  if (corpusReadEnabled() && textS3Key !== null) {
+  if (corpusReadEnabled() && textS3Key !== null && contentHash !== null) {
     try {
       return await readCorpusText(textS3Key);
     } catch (error) {
