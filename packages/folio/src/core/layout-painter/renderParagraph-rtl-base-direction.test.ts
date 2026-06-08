@@ -160,13 +160,12 @@ describe("Issue #719 — RTL base direction detection", () => {
     expect(render([text("مرحبا", true)]).dir).toBe("rtl");
   });
 
-  test("CJK / other neutral scripts are not treated as RTL-strong", () => {
-    // Regression: the RTL char-class must be authored from exact range
-    // endpoints. A corrupted range once swallowed most of the BMP (CJK,
-    // Devanagari, Kana, Thai, Georgian, Latin Extended Additional) as
-    // RTL-strong, flipping mixed-script paragraphs. A CJK-led rtl run followed
-    // by Latin body must resolve LTR (CJK is neutral; the first strong char is
-    // the Latin "Body").
-    expect(render([text("中", true), text(" Body")]).dir).toBe("");
+  test("a CJK-only rtl run resolves LTR (CJK is strong left-to-right)", () => {
+    // CJK, Devanagari, Thai, Hangul and kana are Unicode bidi class L, so a
+    // w:rtl run containing only such text must lay out LTR — not fall through to
+    // the digits/punctuation `honor w:rtl` path. Also guards the RTL char-class
+    // against the pasted-glyph corruption that once swallowed most of the BMP.
+    expect(render([text("中文", true)]).dir).toBe("");
+    expect(render([text("अआ", true)]).dir).toBe("");
   });
 });

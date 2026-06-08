@@ -1895,42 +1895,37 @@ function bordersFormGroup(a?: ParagraphBorders, b?: ParagraphBorders): boolean {
   );
 }
 
-// First strong-directional character classes (subset of the Unicode Bidi
-// character types L vs R/AL) used for base-direction detection. Authored with
-// `\u` escapes (not pasted glyphs) so the range endpoints stay reviewable and
-// can't be silently corrupted on a copy/paste round-trip. RTL covers Hebrew,
-// Arabic, Syriac, Thaana, NKo, Samaritan, Mandaic, Arabic Extended-A, and the
-// Hebrew/Arabic presentation forms.
-const RTL_STRONG_CHAR =
-  /[\u0590-\u085F\u08A0-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/u;
-const LTR_STRONG_CHAR =
-  /[\u0041-\u005A\u0061-\u007A\u00C0-\u02B8\u0370-\u0589\u10A0-\u10FF\u1E00-\u1FFF]/u;
+// The first strong-directional character (Unicode Bidi class R/AL vs L). Group
+// 1 is the RTL letters (Hebrew, Arabic, Syriac, Thaana, NKo, Samaritan,
+// Mandaic, Arabic Extended-A, and the Hebrew/Arabic presentation forms); group
+// 2 is `\p{L}`, any other letter — strong-L, covering Latin, CJK, Indic, kana,
+// Hangul, etc. Digits, punctuation and spaces are neutral and skipped. One
+// native scan finds the first strong char. Authored with `\u` escapes (a
+// pasted glyph once silently corrupted the presentation-forms range).
+const FIRST_STRONG_CHAR =
+  /([\u0590-\u085F\u08A0-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF])|(\p{L})/u;
 
 /**
  * Decide whether a paragraph without an explicit `w:bidi` flag should still be
  * laid out right-to-left. Only paragraphs that carry at least one `w:rtl` run
  * are candidates; among those the base direction follows the first strong
  * directional character (the `dir="auto"` rule), so Hebrew/Arabic-led lines
- * order RTL while an English-led line with an embedded RTL word stays LTR.
+ * order RTL while an English- (or CJK-/Devanagari-/…) led line stays LTR.
  * eigenpal #723 (#719).
  */
 function paragraphBaseIsRtl(block: ParagraphBlock): boolean {
-  const textRuns = (block.runs ?? []).filter(isTextRun);
+  const textRuns = block.runs.filter(isTextRun);
   if (!textRuns.some((r) => r.rtl)) {
     return false;
   }
-  for (const run of textRuns) {
-    for (const ch of run.text) {
-      if (RTL_STRONG_CHAR.test(ch)) {
-        return true;
-      }
-      if (LTR_STRONG_CHAR.test(ch)) {
-        return false;
-      }
-    }
+  const match = FIRST_STRONG_CHAR.exec(textRuns.map((r) => r.text).join(""));
+  // No strong character (digits/punctuation only) — honor w:rtl. Otherwise the
+  // first strong char decides: an RTL letter (group 1) => RTL, any other
+  // letter => LTR.
+  if (!match) {
+    return true;
   }
-  // RTL runs but no strong character (digits/punctuation only) — honor w:rtl.
-  return true;
+  return Boolean(match[1]);
 }
 
 /**
