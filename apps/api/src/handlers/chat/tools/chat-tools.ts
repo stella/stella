@@ -40,6 +40,7 @@ import {
   WEB_SEARCH_TOOL_NAME,
 } from "@/api/handlers/chat/tools/web-search-tools";
 import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools";
+import type { OrgAIConfig } from "@/api/lib/ai-models";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getDeployAvailableRegistryHandlers } from "@/api/lib/business-registries/dispatch";
@@ -98,6 +99,7 @@ type GetChatToolsProps = {
   safeDb: SafeDb;
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
+  orgAIConfig?: OrgAIConfig | null;
   threadId: SafeId<"chatThread">;
   excludedChatHistoryMessageIds?: readonly SafeId<"chatMessage">[] | undefined;
   userId: SafeId<"user">;
@@ -185,6 +187,7 @@ export const getChatTools = ({
   safeDb,
   scopedDb,
   organizationId,
+  orgAIConfig,
   threadId,
   excludedChatHistoryMessageIds,
   userId,
@@ -265,7 +268,11 @@ export const getChatTools = ({
   });
 
   // Template library tools: list, describe, and fill templates.
-  const templateTools = createTemplateTools({ scopedDb, organizationId });
+  const templateTools = createTemplateTools({
+    scopedDb,
+    organizationId,
+    orgAIConfig,
+  });
 
   // create-document is client-executed (no server `execute`) — the
   // chat client picks the destination matter and posts the result
