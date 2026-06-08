@@ -308,6 +308,12 @@ function renderHtmlInline(
           paraId,
         );
         break;
+      case "mathEquation":
+        // Markdown can't carry OMML; emit the plain-text fallback when present.
+        if (item.plainText) {
+          out += escapeHtml(item.plainText);
+        }
+        break;
       default:
         // Range markers carry no visible payload inside table cells.
         break;

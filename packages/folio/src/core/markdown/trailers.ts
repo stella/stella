@@ -6,7 +6,14 @@
  * import cycle). Ported from eigenpal/docx-editor PR #595.
  */
 
-import type { Comment, Document, Endnote, Footnote } from "../types/document";
+import type {
+  Comment,
+  Document,
+  Endnote,
+  Footnote,
+  ParagraphContent,
+  Run,
+} from "../types/document";
 import { escapeLinkUrl } from "./escape";
 import { renderBlocks } from "./renderBlock";
 import type { RenderContext } from "./types";
@@ -71,15 +78,41 @@ function noteText(
 
 function commentText(comment: Comment): string {
   return comment.content
-    .map((p) =>
-      p.content
-        .map((c) =>
-          c.type === "run"
-            ? c.content.map((x) => (x.type === "text" ? x.text : "")).join("")
-            : "",
-        )
-        .join(""),
-    )
+    .map((p) => inlineText(p.content))
     .join(" ")
     .trim();
+}
+
+function runText(run: Run): string {
+  return run.content.map((x) => (x.type === "text" ? x.text : "")).join("");
+}
+
+/** Flatten paragraph inline content to plain text, recursing through wrappers. */
+function inlineText(content: ParagraphContent[]): string {
+  let out = "";
+  for (const item of content) {
+    if (item.type === "run") {
+      out += runText(item);
+    } else if (item.type === "hyperlink") {
+      for (const child of item.children) {
+        if (child.type === "run") {
+          out += runText(child);
+        }
+      }
+    } else if (item.type === "simpleField") {
+      out += inlineText(item.content);
+    } else if (item.type === "complexField") {
+      out += inlineText(item.fieldResult);
+    } else if (
+      item.type === "insertion" ||
+      item.type === "deletion" ||
+      item.type === "moveFrom" ||
+      item.type === "moveTo"
+    ) {
+      out += inlineText(item.content);
+    } else if (item.type === "inlineSdt") {
+      out += inlineText(item.content as ParagraphContent[]);
+    }
+  }
+  return out;
 }

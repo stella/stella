@@ -257,6 +257,38 @@ describe("toMarkdown — tables", () => {
       '<table>\n  <tr>\n    <th colspan="2">Span</th>\n  </tr>\n  <tr>\n    <td>L</td>\n    <td>R</td>\n  </tr>\n</table>',
     );
   });
+
+  test("math in an HTML-fallback table cell exports its fallback", () => {
+    const table: BlockContent = {
+      type: "table",
+      rows: [
+        {
+          type: "tableRow",
+          cells: [
+            {
+              type: "tableCell",
+              formatting: { gridSpan: 2 },
+              content: [
+                {
+                  type: "paragraph",
+                  content: [
+                    run("E="),
+                    {
+                      type: "mathEquation",
+                      display: "inline",
+                      ommlXml: "<m/>",
+                      plainText: "mc^2",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    expect(md([table])).toContain("E=mc^2");
+  });
 });
 
 describe("toMarkdown — clean preset for skills", () => {
@@ -320,5 +352,35 @@ describe("toMarkdown — clean preset for skills", () => {
       { comments: "sidecar" },
     );
     expect(out).toBe("text[^c1]\n\n## Comments\n[^c1]: R: note");
+  });
+
+  test("comment sidecar text includes hyperlink/field text, not just runs", () => {
+    const commentPara: Paragraph = {
+      type: "paragraph",
+      content: [
+        run("see "),
+        {
+          type: "hyperlink",
+          href: "https://x",
+          children: [run("link")],
+        },
+      ],
+    };
+    const content: Paragraph["content"] = [
+      run("x"),
+      { type: "commentReference", id: 7 },
+    ];
+    const out = toMarkdown(
+      {
+        package: {
+          document: {
+            content: [{ type: "paragraph", content }],
+            comments: [{ id: 7, author: "A", content: [commentPara] }],
+          },
+        },
+      },
+      { comments: "sidecar" },
+    );
+    expect(out).toBe("x[^c1]\n\n## Comments\n[^c1]: A: see link");
   });
 });
