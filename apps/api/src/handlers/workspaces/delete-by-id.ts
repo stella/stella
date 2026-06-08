@@ -14,12 +14,18 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
-import { deleteS3Keys, deleteS3Objects } from "@/api/handlers/files/utils";
+import { THUMBNAIL_MIME_TYPE } from "@/api/handlers/files/image-derivative";
+import {
+  createUserFileKey,
+  deleteS3Keys,
+  deleteS3Objects,
+} from "@/api/handlers/files/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const changeWorkspaceStatus = async (
@@ -50,6 +56,13 @@ const extractFileRefs = (content: FieldContent): FileRef[] => {
     refs.push({
       fileId: content.pdfFileId,
       mimeType: PDF_MIME_TYPE,
+    });
+  }
+
+  if (content.thumbnailFileId) {
+    refs.push({
+      fileId: content.thumbnailFileId,
+      mimeType: THUMBNAIL_MIME_TYPE,
     });
   }
 
@@ -98,6 +111,8 @@ const deleteWorkspace = createSafeHandler(
         .select({
           id: userFiles.id,
           s3Key: userFiles.s3Key,
+          thumbnailFileId: userFiles.thumbnailFileId,
+          userId: userFiles.userId,
         })
         .from(userFiles)
         .innerJoin(chatThreads, eq(userFiles.threadId, chatThreads.id))
@@ -135,9 +150,20 @@ const deleteWorkspace = createSafeHandler(
 
     if (chatFileRefs.length > 0) {
       s3Deletes.push(
-        deleteS3Keys(chatFileRefs.map((file) => file.s3Key)).then((result) =>
-          Result.unwrap(result),
-        ),
+        deleteS3Keys(
+          chatFileRefs.flatMap((file) =>
+            file.thumbnailFileId
+              ? [
+                  file.s3Key,
+                  createUserFileKey({
+                    fileId: file.thumbnailFileId,
+                    mimeType: THUMBNAIL_MIME_TYPE,
+                    userId: brandPersistedUserId(file.userId),
+                  }),
+                ]
+              : [file.s3Key],
+          ),
+        ).then((result) => Result.unwrap(result)),
       );
     }
 

@@ -17,6 +17,7 @@ import {
   workspaceViews,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
+import { THUMBNAIL_MIME_TYPE } from "@/api/handlers/files/image-derivative";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -158,6 +159,14 @@ const collectFileCopies = (content: FieldContent): FileCopy[] => {
     });
   }
 
+  if (content.thumbnailFileId) {
+    copies.push({
+      sourceFileId: content.thumbnailFileId,
+      targetFileId: Bun.randomUUIDv7(),
+      mimeType: THUMBNAIL_MIME_TYPE,
+    });
+  }
+
   return copies;
 };
 
@@ -195,6 +204,9 @@ const remapFieldContent = (
     id: fileIdMap.get(content.id) ?? content.id,
     pdfFileId: content.pdfFileId
       ? (fileIdMap.get(content.pdfFileId) ?? content.pdfFileId)
+      : null,
+    thumbnailFileId: content.thumbnailFileId
+      ? (fileIdMap.get(content.thumbnailFileId) ?? content.thumbnailFileId)
       : null,
   };
 };

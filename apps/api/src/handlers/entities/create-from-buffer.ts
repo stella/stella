@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import type { ScopedDb } from "@/api/db";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
+import { thumbnailDerivativeStateForFile } from "@/api/handlers/files/image-derivative";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -11,7 +12,10 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
-import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
+import {
+  enqueueImageThumbnailOrMarkFailed,
+  enqueuePdfDerivativeOrMarkFailed,
+} from "@/api/lib/file-derivative-queue";
 import { LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -185,6 +189,11 @@ export const createEntityFromBuffer = async ({
             encrypted: false,
             mimeType,
           }),
+          thumbnailFileId: null,
+          thumbnailDerivative: thumbnailDerivativeStateForFile({
+            encrypted: false,
+            mimeType,
+          }),
           ...(scanWarnings !== undefined && { scanWarnings }),
         },
       });
@@ -225,6 +234,16 @@ export const createEntityFromBuffer = async ({
   processExtraction(entityId).catch(captureError);
 
   enqueuePdfDerivativeOrMarkFailed({
+    encrypted: false,
+    entityId,
+    fieldId,
+    mimeType,
+    organizationId,
+    userId,
+    workspaceId,
+  }).catch(captureError);
+
+  enqueueImageThumbnailOrMarkFailed({
     encrypted: false,
     entityId,
     fieldId,

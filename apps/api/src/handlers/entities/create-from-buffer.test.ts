@@ -13,6 +13,9 @@ import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 const s3WriteMock = mock(async () => {});
 const s3DeleteMock = mock(async () => {});
 const processExtractionMock = mock(async () => {});
+const enqueueImageThumbnailMock = mock(async () => {});
+const enqueueImageThumbnailOrMarkFailedMock = mock(async () => {});
+const enqueuePdfDerivativeMock = mock(async () => {});
 const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => {});
 
 void mock.module("@/api/lib/s3", () => ({
@@ -27,7 +30,11 @@ void mock.module("@/api/lib/search/process-extraction", () => ({
 }));
 
 void mock.module("@/api/lib/file-derivative-queue", () => ({
+  enqueueImageThumbnail: enqueueImageThumbnailMock,
+  enqueueImageThumbnailOrMarkFailed: enqueueImageThumbnailOrMarkFailedMock,
+  enqueuePdfDerivative: enqueuePdfDerivativeMock,
   enqueuePdfDerivativeOrMarkFailed: enqueuePdfDerivativeOrMarkFailedMock,
+  initFileDerivativeWorker: mock(() => undefined),
 }));
 
 const { createEntityFromBuffer } = await import("./create-from-buffer");

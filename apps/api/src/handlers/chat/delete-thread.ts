@@ -5,12 +5,14 @@ import { t } from "elysia";
 import { defaultDatabaseRetry } from "@/api/db";
 import { chatThreads, userFiles } from "@/api/db/schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
-import { deleteS3Keys } from "@/api/handlers/files/utils";
+import { THUMBNAIL_MIME_TYPE } from "@/api/handlers/files/image-derivative";
+import { createUserFileKey, deleteS3Keys } from "@/api/handlers/files/utils";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const config = {
   permissions: { chat: ["delete"] },
@@ -35,6 +37,30 @@ const deleteThread = createSafeRootHandler(
       workspaceId,
     });
 
+    const thread = yield* Result.await(
+      safeDb(async (tx) => {
+        const rows = await tx
+          .select({ id: chatThreads.id })
+          .from(chatThreads)
+          .where(
+            and(
+              eq(chatThreads.id, params.threadId),
+              eq(chatThreads.userId, user.id),
+              scope.scope === "workspace"
+                ? eq(chatThreads.workspaceId, scope.workspaceId)
+                : isNull(chatThreads.workspaceId),
+            ),
+          )
+          .limit(1);
+
+        return rows.at(0);
+      }),
+    );
+
+    if (!thread) {
+      return Result.ok();
+    }
+
     const files = yield* Result.await(
       safeDb((tx) =>
         tx.query.userFiles.findMany({
@@ -45,13 +71,27 @@ const deleteThread = createSafeRootHandler(
           columns: {
             id: true,
             s3Key: true,
+            thumbnailFileId: true,
+            userId: true,
           },
         }),
       ),
     );
 
     if (files.length > 0) {
-      const deleteResult = await deleteS3Keys(files.map((file) => file.s3Key));
+      const s3Keys = files.flatMap((file) =>
+        file.thumbnailFileId
+          ? [
+              file.s3Key,
+              createUserFileKey({
+                fileId: file.thumbnailFileId,
+                mimeType: THUMBNAIL_MIME_TYPE,
+                userId: brandPersistedUserId(file.userId),
+              }),
+            ]
+          : [file.s3Key],
+      );
+      const deleteResult = await deleteS3Keys(s3Keys);
       if (Result.isError(deleteResult)) {
         yield* Result.err(
           new HandlerError({

@@ -18,6 +18,11 @@ import {
   TEXT_PLAIN_MIME_TYPE,
 } from "@/api/handlers/chat/attachment-validation";
 import { ChatError } from "@/api/handlers/chat/errors";
+import {
+  generateImageThumbnail,
+  shouldGenerateImageThumbnail,
+  THUMBNAIL_MIME_TYPE,
+} from "@/api/handlers/files/image-derivative";
 import { createUserFileKey, deleteS3Keys } from "@/api/handlers/files/utils";
 import { isUserFileUrl, toUserFileUrl } from "@/api/handlers/user-files/types";
 import { captureError } from "@/api/lib/analytics";
@@ -62,6 +67,7 @@ type UploadMessageFilesReturn = Result<
 export type UploadedChatFile = {
   id: SafeId<"userFile">;
   s3Key: string;
+  thumbnailS3Key: string | null;
 };
 
 type UploadedChatMessage = {
@@ -133,6 +139,7 @@ export const uploadMessageFiles = async ({
     uploadedFiles.push({
       id: uploadedFile.value.id,
       s3Key: uploadedFile.value.s3Key,
+      thumbnailS3Key: uploadedFile.value.thumbnailS3Key,
     });
     parts.push({
       ...part,
@@ -170,7 +177,11 @@ export const deleteUploadedChatFiles = async ({
     return Result.ok();
   }
 
-  const deleteS3Result = await deleteS3Keys(files.map((file) => file.s3Key));
+  const deleteS3Result = await deleteS3Keys(
+    files.flatMap((file) =>
+      file.thumbnailS3Key ? [file.s3Key, file.thumbnailS3Key] : [file.s3Key],
+    ),
+  );
   if (Result.isError(deleteS3Result)) {
     return Result.err(
       new HandlerError({
@@ -428,6 +439,43 @@ export const uploadUserFile = async ({
       }),
     );
 
+    // Best-effort image thumbnail + blur placeholder. A failure here never
+    // blocks the upload: the original still serves; the row just carries no
+    // derivative.
+    let thumbnailFileId: string | null = null;
+    let placeholder: string | null = null;
+    let thumbnailKey: string | null = null;
+    if (shouldGenerateImageThumbnail({ mimeType: file.mimeType })) {
+      const thumbnailResult = await generateImageThumbnail(file.bytes);
+      if (Result.isError(thumbnailResult)) {
+        captureError(thumbnailResult.error, {
+          stage: "chat-thumbnail-generate",
+          userFileId: id,
+        });
+      } else {
+        const generatedThumbnailId = Bun.randomUUIDv7();
+        const key = createUserFileKey({
+          fileId: generatedThumbnailId,
+          mimeType: THUMBNAIL_MIME_TYPE,
+          userId,
+        });
+        const writeThumbnailResult = await Result.tryPromise({
+          try: async () => await getS3().write(key, thumbnailResult.value.webp),
+          catch: (cause) => cause,
+        });
+        if (Result.isError(writeThumbnailResult)) {
+          captureError(writeThumbnailResult.error, {
+            stage: "chat-thumbnail-write",
+            userFileId: id,
+          });
+        } else {
+          thumbnailFileId = generatedThumbnailId;
+          placeholder = thumbnailResult.value.placeholder;
+          thumbnailKey = key;
+        }
+      }
+    }
+
     const saveResult = await safeDb(async (tx) => {
       await tx.insert(userFiles).values({
         id,
@@ -439,6 +487,8 @@ export const uploadUserFile = async ({
         sha256Hex,
         sizeBytes: file.bytes.byteLength,
         threadId,
+        thumbnailFileId,
+        placeholder,
       });
 
       await recordAuditEvent(tx, {
@@ -462,11 +512,17 @@ export const uploadUserFile = async ({
         mimeType: file.mimeType,
         fileName: sanitizedFileName,
         s3Key,
+        thumbnailS3Key: thumbnailKey,
       });
     }
 
     const cleanupResult = await Result.tryPromise({
-      try: async () => await getS3().delete(s3Key),
+      try: async () => {
+        await getS3().delete(s3Key);
+        if (thumbnailKey) {
+          await getS3().delete(thumbnailKey);
+        }
+      },
       catch: (cleanupError) =>
         new HandlerError({
           status: 500,

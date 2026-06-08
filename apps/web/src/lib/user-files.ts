@@ -19,3 +19,12 @@ export const getUserFileContentUrl = (url: string): string | null => {
 
   return apiUrl(`/user-files/${fileId}/content`);
 };
+
+export const getUserFileThumbnailUrl = (url: string): string | null => {
+  const fileId = parseUserFileId(url);
+  if (fileId === null) {
+    return null;
+  }
+
+  return apiUrl(`/user-files/${fileId}/thumbnail`);
+};
