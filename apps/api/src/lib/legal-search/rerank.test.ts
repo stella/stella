@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 
 import {
   blendCitationAuthority,
+  blendStableCitationAuthority,
   rrfMerge,
   type ScoredCandidate,
 } from "@/api/lib/legal-search/rerank";
@@ -81,6 +82,28 @@ test("empty candidate set yields no hits", () => {
   expect(
     blendCitationAuthority({ candidates: [], authorityById: authority({}) }),
   ).toEqual([]);
+});
+
+test("stable blend keeps cursor scores unchanged when later windows are appended", () => {
+  const firstWindow: ScoredCandidate[] = [
+    { id: "a", score: 1 },
+    { id: "b", score: 0.9 },
+  ];
+  const secondWindow: ScoredCandidate[] = [
+    ...firstWindow,
+    { id: "c", score: 0.8 },
+  ];
+
+  const firstScore = blendStableCitationAuthority({
+    candidates: firstWindow,
+    authorityById: authority({ a: 0.2, b: 0.1, c: 3 }),
+  }).find((hit) => hit.id === "a")?.score;
+  const scoreAfterAppend = blendStableCitationAuthority({
+    candidates: secondWindow,
+    authorityById: authority({ a: 0.2, b: 0.1, c: 3 }),
+  }).find((hit) => hit.id === "a")?.score;
+
+  expect(scoreAfterAppend).toBe(firstScore);
 });
 
 test("rrfMerge: appearing high in multiple lists beats a single-list top hit", () => {

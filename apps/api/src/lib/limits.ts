@@ -100,9 +100,12 @@ export const LIMITS = {
   caseLawSitemapIndexEntryLimit: 50_000,
   caseLawFacetLimit: 20,
   caseLawPolarityRulesPerLanguage: 500,
-  // corpus index two-stage search: lexical candidates over-fetched before
-  // the citation-authority rerank (pagination depth is capped at this).
+  // corpus index two-stage search: lexical candidates fetched per index window
+  // before the citation-authority rerank.
   corpusIndexSearchCandidateLimit: 300,
+  // Max corpus-index lexical candidates scanned across windows for one
+  // cursor request.
+  corpusIndexSearchScanLimit: 10_000,
   // Decisions pushed to corpus index per indexer batch.
   corpusIndexBatchSize: 50,
   infoSoudEventsMax: 200,

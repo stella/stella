@@ -13,16 +13,13 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { isUuid } from "@/api/lib/custom-schema";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
-import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
+import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   corpusIndexId,
   corpusIndexPattern,
   isCorpusIndexJurisdiction,
 } from "@/api/lib/legal-search/index-naming";
-import {
-  blendCitationAuthority,
-  type ScoredCandidate,
-} from "@/api/lib/legal-search/rerank";
+import { blendStableCitationAuthority } from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 import {
@@ -414,19 +411,6 @@ const extractCorpusSnippet = (
   return raw.replaceAll("<b>", "<mark>").replaceAll("</b>", "</mark>");
 };
 
-const isAfterCursor = (
-  hit: { score: number; id: string },
-  cursor: { score: number; id: string },
-): boolean => {
-  if (hit.score < cursor.score) {
-    return true;
-  }
-  if (hit.score > cursor.score) {
-    return false;
-  }
-  return hit.id < cursor.id;
-};
-
 const searchCorpusIndexDecisions = async (
   body: SearchDecisionsBody,
   caseLawDb: CaseLawPublicReadDb,
@@ -450,76 +434,67 @@ const searchCorpusIndexDecisions = async (
     ? corpusIndexId(generation, body.country)
     : corpusIndexPattern(generation);
 
-  const result = await getCorpusIndexClient().search({
+  const searchPage = await readCorpusIndexSearchPage({
     indexId,
     query: buildCorpusIndexQuery(body),
-    maxHits: LIMITS.corpusIndexSearchCandidateLimit,
+    limit,
+    parsedCursor,
     snippetFields: ["text"],
-  });
-  if (result.isErr()) {
-    throw result.error;
-  }
+    extractId: (hit) => {
+      const id = hit["document_id"];
+      return typeof id === "string" && isUuid(id) ? id : null;
+    },
+    extractSnippet: extractCorpusSnippet,
+    rankCandidates: async (candidates) => {
+      const ids = candidates.map((candidate) =>
+        toSafeId<"caseLawDecision">(candidate.id),
+      );
+      const rows =
+        ids.length === 0
+          ? []
+          : await caseLawDb((tx) =>
+              tx
+                .select({
+                  id: caseLawDecisions.id,
+                  caseNumber: caseLawDecisions.caseNumber,
+                  slug: caseLawDecisions.slug,
+                  ecli: caseLawDecisions.ecli,
+                  court: caseLawDecisions.court,
+                  country: caseLawDecisions.country,
+                  language: caseLawDecisions.language,
+                  languageGroupKey: caseLawDecisions.languageGroupKey,
+                  decisionDate: caseLawDecisions.decisionDate,
+                  decisionType: caseLawDecisions.decisionType,
+                  sourceUrl: caseLawDecisions.sourceUrl,
+                  citationCount: caseLawDecisions.citationCount,
+                  citationAuthority: caseLawDecisions.citationAuthority,
+                  createdAt: caseLawDecisions.createdAt,
+                })
+                .from(caseLawDecisions)
+                .where(inArray(caseLawDecisions.id, ids)),
+            );
 
-  const candidates: ScoredCandidate[] = [];
-  const snippetById = new Map<string, string>();
-  const seenIds = new Set<string>();
-  for (const [index, hit] of result.value.hits.entries()) {
-    const id = hit["document_id"];
-    if (typeof id !== "string" || !isUuid(id) || seenIds.has(id)) {
-      continue;
-    }
-    seenIds.add(id);
-    // Descending pseudo-score preserves corpus index BM25 ordering as the
-    // lexical signal for the citation-authority blend.
-    candidates.push({ id, score: result.value.hits.length - index });
-    const snippet = extractCorpusSnippet(result.value.snippets[index]);
-    if (snippet !== null) {
-      snippetById.set(id, snippet);
-    }
-  }
+      const byId = new Map(rows.map((row) => [String(row.id), row]));
+      const authorityById = new Map(
+        rows.map((row) => [String(row.id), row.citationAuthority]),
+      );
 
-  const ids = candidates.map((candidate) =>
-    toSafeId<"caseLawDecision">(candidate.id),
-  );
-  const rows =
-    ids.length === 0
-      ? []
-      : await caseLawDb((tx) =>
-          tx
-            .select({
-              id: caseLawDecisions.id,
-              caseNumber: caseLawDecisions.caseNumber,
-              slug: caseLawDecisions.slug,
-              ecli: caseLawDecisions.ecli,
-              court: caseLawDecisions.court,
-              country: caseLawDecisions.country,
-              language: caseLawDecisions.language,
-              languageGroupKey: caseLawDecisions.languageGroupKey,
-              decisionDate: caseLawDecisions.decisionDate,
-              decisionType: caseLawDecisions.decisionType,
-              sourceUrl: caseLawDecisions.sourceUrl,
-              citationCount: caseLawDecisions.citationCount,
-              citationAuthority: caseLawDecisions.citationAuthority,
-              createdAt: caseLawDecisions.createdAt,
-            })
-            .from(caseLawDecisions)
-            .where(inArray(caseLawDecisions.id, ids)),
-        );
-
-  const byId = new Map(rows.map((row) => [String(row.id), row]));
-  const authorityById = new Map(
-    rows.map((row) => [String(row.id), row.citationAuthority]),
-  );
-  const ranked = blendCitationAuthority({
-    candidates: candidates.filter((candidate) => byId.has(candidate.id)),
-    authorityById,
+      return {
+        context: { byId },
+        ranked: blendStableCitationAuthority({
+          candidates: candidates.filter((candidate) => byId.has(candidate.id)),
+          authorityById,
+        }),
+      };
+    },
   });
 
-  const windowed = parsedCursor
-    ? ranked.filter((hit) => isAfterCursor(hit, parsedCursor))
-    : ranked;
-  const hasMore = windowed.length > limit;
-  const pageRanked = hasMore ? windowed.slice(0, limit) : windowed;
+  const {
+    context: { byId },
+    hasMore,
+    pageRanked,
+    snippetById,
+  } = searchPage;
 
   const languageGroupKeys = [
     ...new Set(

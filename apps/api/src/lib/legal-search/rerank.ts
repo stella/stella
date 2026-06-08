@@ -113,3 +113,27 @@ export const blendCitationAuthority = ({
   hits.sort(byScoreThenId);
   return hits;
 };
+
+/**
+ * Stable cursor score for corpus-index pagination. Callers provide a lexical
+ * score already normalized against the index-wide hit count, so adding later
+ * candidate windows does not change scores for earlier hits.
+ */
+export const blendStableCitationAuthority = ({
+  candidates,
+  authorityById,
+  weight = DEFAULT_AUTHORITY_WEIGHT,
+}: BlendOptions): RankedHit[] => {
+  const hits = candidates.map((candidate) => {
+    const authority = authorityById.get(candidate.id) ?? 0;
+    return {
+      id: candidate.id,
+      score: candidate.score + weight * authority,
+      lexicalScore: candidate.score,
+      citationAuthority: authority,
+    };
+  });
+
+  hits.sort(byScoreThenId);
+  return hits;
+};

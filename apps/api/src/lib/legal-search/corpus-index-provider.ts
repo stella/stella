@@ -4,24 +4,21 @@ import { rootDb } from "@/api/db/root";
 import { caseLawDecisions } from "@/api/db/schema";
 // eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
+import { isUuid } from "@/api/lib/custom-schema";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
-import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
+import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
 import {
   corpusIndexId,
   corpusIndexPattern,
 } from "@/api/lib/legal-search/index-naming";
-import {
-  blendCitationAuthority,
-  type ScoredCandidate,
-} from "@/api/lib/legal-search/rerank";
+import { blendStableCitationAuthority } from "@/api/lib/legal-search/rerank";
 import type {
   LegalSearchHit,
   LegalSearchProvider,
   LegalSearchQuery,
   LegalSearchResult,
 } from "@/api/lib/legal-search/types";
-import { LIMITS } from "@/api/lib/limits";
 import { encodeCursor, decodeCursor } from "@/api/lib/search/cursor";
 
 /**
@@ -75,19 +72,6 @@ const extractSnippet = (
   return raw.replaceAll("<b>", "<mark>").replaceAll("</b>", "</mark>");
 };
 
-const afterCursor = (
-  hit: { score: number; id: string },
-  cursor: { score: number; id: string },
-): boolean => {
-  if (hit.score < cursor.score) {
-    return true;
-  }
-  if (hit.score > cursor.score) {
-    return false;
-  }
-  return hit.id < cursor.id;
-};
-
 const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
   const limit = query.limit;
   const generation = corpusGeneration(query.documentFamily ?? "case_law");
@@ -98,73 +82,69 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
     ? corpusIndexId(generation, query.jurisdiction)
     : corpusIndexPattern(generation);
 
-  const result = await getCorpusIndexClient().search({
+  const parsedCursor = query.cursor ? decodeCursor(query.cursor) : null;
+  const searchPage = await readCorpusIndexSearchPage({
     indexId,
     query: buildQuery(query),
-    maxHits: LIMITS.corpusIndexSearchCandidateLimit,
+    limit,
+    parsedCursor,
     snippetFields: ["text"],
-  });
-  if (result.isErr()) {
-    throw result.error;
-  }
+    extractId: (hit) => {
+      const id = hit["document_id"];
+      return typeof id === "string" && isUuid(id) ? id : null;
+    },
+    extractSnippet,
+    rankCandidates: async (candidates) => {
+      const ids = candidates.map((candidate) =>
+        toSafeId<"caseLawDecision">(candidate.id),
+      );
+      const rows =
+        ids.length === 0
+          ? []
+          : await rootDb
+              .select({
+                id: caseLawDecisions.id,
+                caseNumber: caseLawDecisions.caseNumber,
+                ecli: caseLawDecisions.ecli,
+                court: caseLawDecisions.court,
+                country: caseLawDecisions.country,
+                language: caseLawDecisions.language,
+                decisionDate: caseLawDecisions.decisionDate,
+                decisionType: caseLawDecisions.decisionType,
+                sourceUrl: caseLawDecisions.sourceUrl,
+                citationCount: caseLawDecisions.citationCount,
+                citationAuthority: caseLawDecisions.citationAuthority,
+                createdAt: caseLawDecisions.createdAt,
+              })
+              .from(caseLawDecisions)
+              .where(inArray(caseLawDecisions.id, ids));
 
-  const candidates: ScoredCandidate[] = [];
-  const snippetById = new Map<string, string>();
-  for (const [index, hit] of result.value.hits.entries()) {
-    const id = hit["document_id"];
-    if (typeof id !== "string") {
-      continue;
-    }
-    // Descending pseudo-score preserves corpus index's BM25 ordering as the
-    // lexical signal for the blend (absolute BM25 values aren't needed).
-    candidates.push({ id, score: result.value.hits.length - index });
-    const snippet = extractSnippet(result.value.snippets[index]);
-    if (snippet !== null) {
-      snippetById.set(id, snippet);
-    }
-  }
+      // Keyed by plain string id (candidate ids from corpus index are strings).
+      const displayById = new Map(rows.map((row) => [String(row.id), row]));
+      const authorityById = new Map(
+        rows.map((row) => [String(row.id), row.citationAuthority]),
+      );
 
-  const ids = candidates.map((c) => toSafeId<"caseLawDecision">(c.id));
-  const rows =
-    ids.length === 0
-      ? []
-      : await rootDb
-          .select({
-            id: caseLawDecisions.id,
-            caseNumber: caseLawDecisions.caseNumber,
-            ecli: caseLawDecisions.ecli,
-            court: caseLawDecisions.court,
-            country: caseLawDecisions.country,
-            language: caseLawDecisions.language,
-            decisionDate: caseLawDecisions.decisionDate,
-            decisionType: caseLawDecisions.decisionType,
-            sourceUrl: caseLawDecisions.sourceUrl,
-            citationCount: caseLawDecisions.citationCount,
-            citationAuthority: caseLawDecisions.citationAuthority,
-            createdAt: caseLawDecisions.createdAt,
-          })
-          .from(caseLawDecisions)
-          .where(inArray(caseLawDecisions.id, ids));
-
-  // Keyed by plain string id (candidate ids from corpus index are strings).
-  const displayById = new Map(rows.map((row) => [String(row.id), row]));
-  const authorityById = new Map(
-    rows.map((row) => [String(row.id), row.citationAuthority]),
-  );
-
-  // Drop candidates missing from Postgres (index/DB drift) so we never
-  // surface a hit we cannot render.
-  const ranked = blendCitationAuthority({
-    candidates: candidates.filter((c) => displayById.has(c.id)),
-    authorityById,
+      // Drop candidates missing from Postgres (index/DB drift) so we never
+      // surface a hit we cannot render.
+      return {
+        context: { displayById },
+        ranked: blendStableCitationAuthority({
+          candidates: candidates.filter((candidate) =>
+            displayById.has(candidate.id),
+          ),
+          authorityById,
+        }),
+      };
+    },
   });
 
-  const parsedCursor = query.cursor ? decodeCursor(query.cursor) : null;
-  const windowed = parsedCursor
-    ? ranked.filter((hit) => afterCursor(hit, parsedCursor))
-    : ranked;
-  const hasMore = windowed.length > limit;
-  const pageRanked = hasMore ? windowed.slice(0, limit) : windowed;
+  const {
+    context: { displayById },
+    hasMore,
+    pageRanked,
+    snippetById,
+  } = searchPage;
 
   const last = pageRanked.at(-1);
   const nextCursor = hasMore && last ? encodeCursor(last.score, last.id) : null;

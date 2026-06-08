@@ -9,16 +9,13 @@ import { envBase } from "@/api/env-base";
 import { toSafeId } from "@/api/lib/branded-types";
 import { isUuid, tSafeId } from "@/api/lib/custom-schema";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
-import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
+import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   corpusIndexId,
   corpusIndexPattern,
   isCorpusIndexJurisdiction,
 } from "@/api/lib/legal-search/index-naming";
-import {
-  blendCitationAuthority,
-  type ScoredCandidate,
-} from "@/api/lib/legal-search/rerank";
+import { blendStableCitationAuthority } from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 import {
@@ -192,6 +189,17 @@ const buildCorpusIndexQuery = (body: SearchLegislationBody): string => {
   return clauses.join(" AND ");
 };
 
+const extractCorpusSnippet = (
+  snippet: Record<string, unknown> | undefined,
+): string | null => {
+  const text = snippet?.["text"];
+  const raw = Array.isArray(text) ? text.join(" … ") : text;
+  if (typeof raw !== "string" || raw.length === 0) {
+    return null;
+  }
+  return raw.replaceAll("<b>", "<mark>").replaceAll("</b>", "</mark>");
+};
+
 const corpusIndexSearch = async (
   body: SearchLegislationBody,
   parsedCursor: { score: number; id: string } | null,
@@ -203,75 +211,63 @@ const corpusIndexSearch = async (
     ? corpusIndexId(generation, body.jurisdiction)
     : corpusIndexPattern(generation);
 
-  const result = await getCorpusIndexClient().search({
+  const searchPage = await readCorpusIndexSearchPage({
     indexId,
     query: buildCorpusIndexQuery(body),
-    maxHits: LIMITS.corpusIndexSearchCandidateLimit,
+    limit,
+    parsedCursor,
     snippetFields: ["text"],
-  });
-  if (result.isErr()) {
-    throw result.error;
-  }
-
-  const candidates: ScoredCandidate[] = [];
-  const snippetById = new Map<string, string>();
-  for (const [index, hit] of result.value.hits.entries()) {
-    const id = hit["document_id"];
-    if (typeof id !== "string" || !isUuid(id)) {
-      continue;
-    }
-    candidates.push({ id, score: result.value.hits.length - index });
-    const snippet = result.value.snippets[index]?.["text"];
-    const raw = Array.isArray(snippet) ? snippet.join(" … ") : snippet;
-    if (typeof raw === "string" && raw.length > 0) {
-      snippetById.set(
-        id,
-        raw.replaceAll("<b>", "<mark>").replaceAll("</b>", "</mark>"),
+    extractId: (hit) => {
+      const id = hit["document_id"];
+      return typeof id === "string" && isUuid(id) ? id : null;
+    },
+    extractSnippet: extractCorpusSnippet,
+    rankCandidates: async (candidates) => {
+      const ids = candidates.map((candidate) =>
+        toSafeId<"legislationDocument">(candidate.id),
       );
-    }
-  }
+      const rows =
+        ids.length === 0
+          ? []
+          : await scopedDb((tx) =>
+              tx
+                .select({
+                  id: legislationDocuments.id,
+                  eli: legislationDocuments.eli,
+                  title: legislationDocuments.title,
+                  country: legislationDocuments.country,
+                  language: legislationDocuments.language,
+                  documentType: legislationDocuments.documentType,
+                  statusValue: legislationDocuments.status,
+                  effectiveDate: legislationDocuments.effectiveDate,
+                  sourceUrl: legislationDocuments.sourceUrl,
+                  citationAuthority: legislationDocuments.citationAuthority,
+                })
+                .from(legislationDocuments)
+                .where(inArray(legislationDocuments.id, ids)),
+            );
 
-  const ids = candidates.map((c) => toSafeId<"legislationDocument">(c.id));
-  const rows =
-    ids.length === 0
-      ? []
-      : await scopedDb((tx) =>
-          tx
-            .select({
-              id: legislationDocuments.id,
-              eli: legislationDocuments.eli,
-              title: legislationDocuments.title,
-              country: legislationDocuments.country,
-              language: legislationDocuments.language,
-              documentType: legislationDocuments.documentType,
-              statusValue: legislationDocuments.status,
-              effectiveDate: legislationDocuments.effectiveDate,
-              sourceUrl: legislationDocuments.sourceUrl,
-              citationAuthority: legislationDocuments.citationAuthority,
-            })
-            .from(legislationDocuments)
-            .where(inArray(legislationDocuments.id, ids)),
-        );
+      const byId = new Map(rows.map((row) => [String(row.id), row]));
+      const authorityById = new Map(
+        rows.map((row) => [String(row.id), row.citationAuthority]),
+      );
 
-  const byId = new Map(rows.map((row) => [String(row.id), row]));
-  const authorityById = new Map(
-    rows.map((row) => [String(row.id), row.citationAuthority]),
-  );
-
-  const ranked = blendCitationAuthority({
-    candidates: candidates.filter((c) => byId.has(c.id)),
-    authorityById,
+      return {
+        context: { byId },
+        ranked: blendStableCitationAuthority({
+          candidates: candidates.filter((candidate) => byId.has(candidate.id)),
+          authorityById,
+        }),
+      };
+    },
   });
 
-  const windowed = parsedCursor
-    ? ranked.filter(
-        (hit) =>
-          hit.score < parsedCursor.score ||
-          (hit.score === parsedCursor.score && hit.id < parsedCursor.id),
-      )
-    : ranked;
-  const hasMore = windowed.length > limit;
-  const pageRanked = hasMore ? windowed.slice(0, limit) : windowed;
+  const {
+    context: { byId },
+    hasMore,
+    pageRanked,
+    snippetById,
+  } = searchPage;
   const last = pageRanked.at(-1);
   const nextCursor = hasMore && last ? encodeCursor(last.score, last.id) : null;
 
