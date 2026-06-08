@@ -5,6 +5,7 @@ import {
   ArrowLeftIcon,
   ChevronDownIcon,
   ChevronRightIcon,
+  PlusIcon,
   XIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -24,6 +25,13 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
+
+import {
+  type DraftCondition,
+  draftToNamedCondition,
+  emptyGroup,
+  NamedConditionsEditor,
+} from "./condition-builder";
 
 type DiscoverResponse = Awaited<ReturnType<typeof api.templates.discover.post>>;
 
@@ -114,6 +122,7 @@ export const ConfigureStep = ({
     buildEditableFields(discoveredFields),
   );
   const [expandedField, setExpandedField] = useState<string | null>(null);
+  const [draftConditions, setDraftConditions] = useState<DraftCondition[]>([]);
   const [saving, setSaving] = useState(false);
 
   const updateField = useCallback(
@@ -149,7 +158,14 @@ export const ConfigureStep = ({
               : undefined,
           required: f.required || undefined,
         })),
-        conditions,
+        conditions: [
+          ...conditions,
+          ...draftConditions
+            .map(draftToNamedCondition)
+            .filter(
+              (c): c is { name: string; expression: string } => c !== null,
+            ),
+        ],
       };
 
       // Send the original DOCX + manifest to the create
@@ -180,7 +196,7 @@ export const ConfigureStep = ({
       });
       onSaved();
     },
-    [name, fields, conditions, file, t, onSaved],
+    [name, fields, conditions, draftConditions, file, t, onSaved],
   );
 
   return (
@@ -275,6 +291,41 @@ export const ConfigureStep = ({
                 );
               })}
             </ul>
+          </div>
+
+          <div className="rounded-lg border">
+            <div className="flex items-center justify-between border-b px-4 py-3">
+              <h3 className="text-muted-foreground text-sm font-medium">
+                {t("templates.conditionsTitle")}
+              </h3>
+              <Button
+                onClick={() =>
+                  setDraftConditions((prev) => [
+                    ...prev,
+                    {
+                      id: crypto.randomUUID(),
+                      name: "",
+                      group: emptyGroup(),
+                    },
+                  ])
+                }
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                <PlusIcon />
+                {t("templates.addCondition")}
+              </Button>
+            </div>
+            {draftConditions.length > 0 && (
+              <div className="p-4">
+                <NamedConditionsEditor
+                  conditions={draftConditions}
+                  fields={fields.map((f) => f.path)}
+                  onChange={setDraftConditions}
+                />
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
