@@ -34,7 +34,7 @@ type CitationAuthorityTx = {
   execute: (query: SQL) => Promise<unknown>;
 };
 
-const SECONDS_PER_YEAR = 365.25 * 86400;
+const SECONDS_PER_YEAR = 365.25 * 86_400;
 
 export const recomputeCitationAuthorityForAll = async (
   tx: CitationAuthorityTx,
@@ -91,13 +91,12 @@ export const recomputeCitationAuthorityForAll = async (
     WHERE agg.decision_id = d.id
   `);
 
-  const result = await tx.execute(
+  const result: unknown = await tx.execute(
     sql`SELECT count(*)::int AS n FROM case_law_decisions WHERE citation_count > 0`,
   );
-  const rows: unknown = result;
-  const first = Array.isArray(rows) ? rows.at(0) : undefined;
-  if (first !== null && typeof first === "object" && "n" in first) {
-    return Number(first.n) || 0;
-  }
-  return 0;
+  // SAFETY: `count(*)::int AS n` yields one row whose `n` is an integer;
+  // the driver may return the rows bare or wrapped, so guard for an array.
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- known count() result shape
+  const rows = Array.isArray(result) ? (result as { n: number }[]) : [];
+  return Number(rows.at(0)?.n) || 0;
 };

@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import {
   caseLawIndexConfig,
   corpusIndexConfig,
-} from "@/api/lib/legal-search/quickwit-index-config";
+} from "@/api/lib/legal-search/corpus-index-config";
 
 test("searchable text fields enable fieldnorms so BM25 scoring works", () => {
   const fields = new Map(

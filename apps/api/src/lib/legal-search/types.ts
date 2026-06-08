@@ -1,4 +1,4 @@
-import type { DocumentAst } from "@stll/case-law/document-ast";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -7,12 +7,12 @@ import type { FacetBucket } from "@/api/lib/search/types";
 
 /**
  * Provider-neutral contract for legal-corpus search. The app calls this,
- * never an engine directly, so swapping Postgres FTS for Quickwit (and
+ * never an engine directly, so swapping Postgres FTS for corpus index (and
  * back) is a config change, not a code rewrite. The corpus is global
  * (public records): there are no tenant/workspace fields here.
  */
 
-export const LEGAL_SEARCH_ENGINES = ["pg-fts", "quickwit"] as const;
+export const LEGAL_SEARCH_ENGINES = ["pg-fts", "corpus-index"] as const;
 export type LegalSearchEngine = (typeof LEGAL_SEARCH_ENGINES)[number];
 
 export type LegalSearchQuery = {
@@ -62,7 +62,7 @@ export type LegalSearchFacets = {
  * shipped case-law search endpoint and its web consumer already key on
  * `hits`/`facets`/`nextCursor`, so the provider keeps that shape rather
  * than forcing a frontend break. `totalCount` is intentionally dropped
- * (Quickwit cannot produce exact counts on broad queries cheaply, and
+ * (corpus index cannot produce exact counts on broad queries cheaply, and
  * the UI does not read it).
  */
 export type LegalSearchResult = {
@@ -84,7 +84,7 @@ export type LegalDocumentContext = {
  * Read-side abstraction the app calls for legal-corpus search. Indexing,
  * deletion, and redaction are NOT here: like the shipped case-law FTS,
  * those are daemon-loop / dedicated-module concerns (search-index.ts,
- * quickwit-index.ts), not request-path operations.
+ * corpus-index.ts), not request-path operations.
  */
 export type LegalSearchProvider = {
   search: (query: LegalSearchQuery) => Promise<LegalSearchResult>;

@@ -20,7 +20,7 @@ import {
  * Postgres FTS legal-search provider — the shipped case-law search,
  * adapted to read the materialized `citation_authority` column instead
  * of recomputing the citation-graph LATERAL per query. This is the
- * cutover-safe default while Quickwit is validated.
+ * cutover-safe default while corpus index is validated.
  */
 
 type RawRow = Record<string, unknown>;
@@ -139,7 +139,7 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
       : rootDb.execute(facetQuery("language", "language")),
   ]);
 
-  const hitsResult: RawRows = hitsRaw ?? [];
+  const hitsResult: RawRows = hitsRaw;
   const hasMore = hitsResult.length > limit;
   const resultRows = hasMore ? hitsResult.slice(0, limit) : hitsResult;
 
@@ -181,9 +181,9 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
   const facets = parsedCursor
     ? null
     : {
-        court: mapFacet(courtRaw ?? []),
-        country: mapFacet(countryRaw ?? []),
-        language: mapFacet(languageRaw ?? []),
+        court: mapFacet(courtRaw),
+        country: mapFacet(countryRaw),
+        language: mapFacet(languageRaw),
       };
 
   return { hits, facets, nextCursor, limit };

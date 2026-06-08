@@ -1,5 +1,5 @@
 -- Legislation / statutes corpus — global tables mirroring case law,
--- sharing the object-storage + Quickwit substrate via the `legislation`
+-- sharing the object-storage + corpus index substrate via the `legislation`
 -- family. Additive. RLS: stella reads, stella_ingestion writes (same
 -- global-corpus model as case_law_*; policy names are reused).
 

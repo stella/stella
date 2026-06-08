@@ -1,13 +1,13 @@
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-family";
 
 /**
- * Quickwit index configuration, generic over document family. Shared
+ * corpus index index configuration, generic over document family. Shared
  * core fields apply to every family; each family adds its own
  * (case_law: court/decision_date/ecli/citation_*; legislation:
  * status/effective_date/eli). Notes that matter:
  *
  * - `text` and `title` enable `fieldnorms` so BM25 scoring works
- *   (Quickwit disables BM25 by default for latency).
+ *   (corpus index disables BM25 by default for latency).
  * - jurisdiction / document_type / source (+ status for legislation) are
  *   `tag_fields` so queries prune irrelevant splits.
  * - date fields are fast datetime for range filtering, not the
@@ -15,11 +15,17 @@ import type { CorpusFamily } from "@/api/lib/legal-search/corpus-family";
  *   on every doc).
  */
 
-type QuickwitFieldType = "text" | "u64" | "i64" | "f64" | "bool" | "datetime";
+type CorpusIndexFieldType =
+  | "text"
+  | "u64"
+  | "i64"
+  | "f64"
+  | "bool"
+  | "datetime";
 
-type QuickwitFieldMapping = {
+type CorpusIndexFieldMapping = {
   name: string;
-  type: QuickwitFieldType;
+  type: CorpusIndexFieldType;
   tokenizer?: "raw" | "default" | "en_stem";
   record?: "basic" | "freq" | "position";
   fieldnorms?: boolean;
@@ -28,12 +34,12 @@ type QuickwitFieldMapping = {
   input_formats?: string[];
 };
 
-export type QuickwitIndexConfig = {
+export type CorpusIndexConfig = {
   version: string;
   index_id: string;
   doc_mapping: {
     mode: "lenient" | "strict" | "dynamic";
-    field_mappings: QuickwitFieldMapping[];
+    field_mappings: CorpusIndexFieldMapping[];
     tag_fields: string[];
     store_source: boolean;
   };
@@ -42,13 +48,13 @@ export type QuickwitIndexConfig = {
   };
 };
 
-export const QUICKWIT_CONFIG_VERSION = "0.8";
+export const CORPUS_INDEX_CONFIG_VERSION = "0.8";
 
 const DATE_INPUT_FORMATS = ["%Y-%m-%d", "rfc3339", "unix_timestamp"];
 
 // Fields every family shares. `document_id` is the stable join key back
 // to Postgres; `text`/`title` carry BM25.
-const CORE_FIELDS: QuickwitFieldMapping[] = [
+const CORE_FIELDS: CorpusIndexFieldMapping[] = [
   { name: "document_id", type: "text", tokenizer: "raw", fast: true },
   { name: "jurisdiction", type: "text", tokenizer: "raw", fast: true },
   { name: "document_type", type: "text", tokenizer: "raw", fast: true },
@@ -77,7 +83,7 @@ const CORE_FIELDS: QuickwitFieldMapping[] = [
   { name: "canonical_ast_key", type: "text", tokenizer: "raw", stored: true },
 ];
 
-const FAMILY_FIELDS: Record<CorpusFamily, QuickwitFieldMapping[]> = {
+const FAMILY_FIELDS: Record<CorpusFamily, CorpusIndexFieldMapping[]> = {
   case_law: [
     { name: "court", type: "text", tokenizer: "raw", fast: true },
     {
@@ -110,8 +116,8 @@ const FAMILY_TAG_FIELDS: Record<CorpusFamily, string[]> = {
 export const corpusIndexConfig = (
   family: CorpusFamily,
   indexId: string,
-): QuickwitIndexConfig => ({
-  version: QUICKWIT_CONFIG_VERSION,
+): CorpusIndexConfig => ({
+  version: CORPUS_INDEX_CONFIG_VERSION,
   index_id: indexId,
   doc_mapping: {
     mode: "lenient",
@@ -124,5 +130,5 @@ export const corpusIndexConfig = (
   },
 });
 
-export const caseLawIndexConfig = (indexId: string): QuickwitIndexConfig =>
+export const caseLawIndexConfig = (indexId: string): CorpusIndexConfig =>
   corpusIndexConfig("case_law", indexId);

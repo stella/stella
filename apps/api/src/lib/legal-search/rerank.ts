@@ -1,7 +1,7 @@
 /**
  * Two-stage retrieve-then-rerank: the engine returns lexical (BM25)
  * candidates; the API blends in the precomputed citation authority.
- * Quickwit cannot express this blend in-engine (no function_score), so
+ * corpus index cannot express this blend in-engine (no function_score), so
  * it lives here.
  *
  * `rrfMerge` fuses several lexical candidate lists (the AI query planner
@@ -46,15 +46,15 @@ const byScoreThenId = (
  * in a single list. Scale-free, so it needs no score normalization.
  */
 export const rrfMerge = (
-  lists: ReadonlyArray<readonly ScoredCandidate[]>,
+  lists: readonly (readonly ScoredCandidate[])[],
   k: number = DEFAULT_RRF_K,
 ): Map<string, number> => {
   const fused = new Map<string, number>();
   for (const list of lists) {
-    list.forEach((candidate, rank) => {
+    for (const [rank, candidate] of list.entries()) {
       const contribution = 1 / (k + rank + 1);
       fused.set(candidate.id, (fused.get(candidate.id) ?? 0) + contribution);
-    });
+    }
   }
   return fused;
 };

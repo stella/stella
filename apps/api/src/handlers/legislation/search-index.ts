@@ -14,7 +14,7 @@ import { logger } from "@/api/lib/observability/logger";
 /**
  * Postgres FTS projection for legislation, mirroring
  * case-law/search-index.ts: maintains `legislation_search_documents`
- * (tsvector) as a background backfill so the pre-Quickwit search path
+ * (tsvector) as a background backfill so the pre-corpus index search path
  * works for statutes too.
  */
 

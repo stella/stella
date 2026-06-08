@@ -1,9 +1,9 @@
 import { eq } from "drizzle-orm";
 import { status } from "elysia";
 
-import type { DocumentAst } from "@stll/case-law/document-ast";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import { rootDb } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db";
 import { legislationDocuments } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import {
@@ -17,36 +17,40 @@ import type { SafeId } from "@/api/lib/branded-types";
 /**
  * Read one legislation document for display. Prefers canonical text/AST
  * from object storage when enabled, falling back to the Postgres columns
- * (mirrors case-law read-by-id). Global corpus → reads via rootDb.
+ * (mirrors case-law read-by-id). Global corpus tables are readable by the
+ * scoped role, so reads go through scopedDb.
  */
 export const readLegislationHandler = async (
   documentId: SafeId<"legislationDocument">,
+  scopedDb: ScopedDb,
 ) => {
-  const [document] = await rootDb
-    .select({
-      id: legislationDocuments.id,
-      eli: legislationDocuments.eli,
-      title: legislationDocuments.title,
-      country: legislationDocuments.country,
-      language: legislationDocuments.language,
-      documentType: legislationDocuments.documentType,
-      statusValue: legislationDocuments.status,
-      effectiveDate: legislationDocuments.effectiveDate,
-      versionValidFrom: legislationDocuments.versionValidFrom,
-      versionValidTo: legislationDocuments.versionValidTo,
-      sourceUrl: legislationDocuments.sourceUrl,
-      documentUrl: legislationDocuments.documentUrl,
-      metadata: legislationDocuments.metadata,
-      createdAt: legislationDocuments.createdAt,
-      updatedAt: legislationDocuments.updatedAt,
-      documentAst: legislationDocuments.documentAst,
-      fulltext: legislationDocuments.fulltext,
-      astS3Key: legislationDocuments.astS3Key,
-      textS3Key: legislationDocuments.textS3Key,
-    })
-    .from(legislationDocuments)
-    .where(eq(legislationDocuments.id, documentId))
-    .limit(1);
+  const [document] = await scopedDb((tx) =>
+    tx
+      .select({
+        id: legislationDocuments.id,
+        eli: legislationDocuments.eli,
+        title: legislationDocuments.title,
+        country: legislationDocuments.country,
+        language: legislationDocuments.language,
+        documentType: legislationDocuments.documentType,
+        statusValue: legislationDocuments.status,
+        effectiveDate: legislationDocuments.effectiveDate,
+        versionValidFrom: legislationDocuments.versionValidFrom,
+        versionValidTo: legislationDocuments.versionValidTo,
+        sourceUrl: legislationDocuments.sourceUrl,
+        documentUrl: legislationDocuments.documentUrl,
+        metadata: legislationDocuments.metadata,
+        createdAt: legislationDocuments.createdAt,
+        updatedAt: legislationDocuments.updatedAt,
+        documentAst: legislationDocuments.documentAst,
+        fulltext: legislationDocuments.fulltext,
+        astS3Key: legislationDocuments.astS3Key,
+        textS3Key: legislationDocuments.textS3Key,
+      })
+      .from(legislationDocuments)
+      .where(eq(legislationDocuments.id, documentId))
+      .limit(1),
+  );
 
   if (!document) {
     return status(404, { message: "Legislation document not found" });

@@ -1,9 +1,9 @@
--- Legal corpus + Quickwit migration.
+-- Legal corpus + corpus index migration.
 --
 -- Additive only. The pg-fts path (case_law_decisions.fulltext /
 -- sections / document_ast and the case_law_search_documents tsvector
 -- table) is left intact and remains the canonical text + search backend
--- until the Quickwit cutover is proven. Those columns/tables are dropped
+-- until the corpus index cutover is proven. Those columns/tables are dropped
 -- only in a later, separately-acknowledged release.
 
 -- 1. Per-source license / redistribution descriptor (see corpus-source.ts).
@@ -50,7 +50,7 @@ CREATE INDEX "case_law_decisions_indexed_idx"
 --> statement-breakpoint
 
 -- 3. Append-only audit trail for index mutations across the
---    object-store + Quickwit boundary.
+--    object-store + corpus index boundary.
 CREATE TABLE "case_law_index_jobs" (
   "id" uuid PRIMARY KEY NOT NULL,
   "decision_id" uuid,

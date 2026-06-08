@@ -685,8 +685,8 @@ if (!REPORT_ONLY) {
   // recomputing the citation-graph aggregate per query.
   if (!DRY_RUN) {
     console.log("\n=== RECOMPUTING CITATION AUTHORITY ===");
-    const updated = await rootDb.transaction((tx) =>
-      recomputeCitationAuthorityForAll(tx),
+    const updated = await rootDb.transaction(
+      async (tx) => await recomputeCitationAuthorityForAll(tx),
     );
     console.log(`Citation authority refreshed for ${updated} cited decisions.`);
   }

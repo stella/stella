@@ -1,7 +1,7 @@
 import { and, asc, eq, sql } from "drizzle-orm";
 import { status } from "elysia";
 
-import type { DocumentAst } from "@stll/case-law/document-ast";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { caseLawDecisions } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";

@@ -1,16 +1,16 @@
 import { panic, Result, TaggedError } from "better-result";
 
 import { envBase } from "@/api/env-base";
-import type { QuickwitIndexConfig } from "@/api/lib/legal-search/quickwit-index-config";
+import type { CorpusIndexConfig } from "@/api/lib/legal-search/corpus-index-config";
 
 /**
- * Thin lazy HTTP client over Quickwit's REST API. Built on first use
+ * Thin lazy HTTP client over corpus index's REST API. Built on first use
  * (no import-time side effects); every call has a timeout and returns a
- * typed Result. Quickwit is purely the lexical first stage — the
+ * typed Result. corpus index is purely the lexical first stage — the
  * citation-authority blend happens in the rerank util, not here.
  */
 
-export class QuickwitError extends TaggedError("QuickwitError")<{
+export class CorpusIndexError extends TaggedError("CorpusIndexError")<{
   message: string;
   status?: number | undefined;
   cause?: unknown;
@@ -20,9 +20,9 @@ const SEARCH_TIMEOUT_MS = 30_000;
 const INGEST_TIMEOUT_MS = 120_000;
 const ADMIN_TIMEOUT_MS = 30_000;
 
-export type QuickwitSearchInput = {
+export type CorpusIndexSearchInput = {
   indexId: string;
-  /** Full Quickwit query string, including any field:value filter clauses. */
+  /** Full corpus index query string, including any field:value filter clauses. */
   query: string;
   maxHits: number;
   startOffset?: number | undefined;
@@ -30,49 +30,52 @@ export type QuickwitSearchInput = {
   snippetFields?: string[] | undefined;
 };
 
-export type QuickwitHit = Record<string, unknown>;
+export type CorpusIndexHit = Record<string, unknown>;
 
-export type QuickwitSearchResponse = {
+export type CorpusIndexSearchResponse = {
   numHits: number;
-  hits: QuickwitHit[];
-  snippets: Array<Record<string, unknown>>;
+  hits: CorpusIndexHit[];
+  snippets: Record<string, unknown>[];
 };
 
-export type QuickwitClient = {
+export type CorpusIndexClient = {
   createIndex: (
-    config: QuickwitIndexConfig,
-  ) => Promise<Result<void, QuickwitError>>;
-  deleteIndex: (indexId: string) => Promise<Result<void, QuickwitError>>;
-  indexExists: (indexId: string) => Promise<Result<boolean, QuickwitError>>;
+    config: CorpusIndexConfig,
+  ) => Promise<Result<void, CorpusIndexError>>;
+  deleteIndex: (indexId: string) => Promise<Result<void, CorpusIndexError>>;
+  indexExists: (indexId: string) => Promise<Result<boolean, CorpusIndexError>>;
   ingestBatch: (
     indexId: string,
     ndjson: string,
-  ) => Promise<Result<void, QuickwitError>>;
+  ) => Promise<Result<void, CorpusIndexError>>;
   search: (
-    input: QuickwitSearchInput,
-  ) => Promise<Result<QuickwitSearchResponse, QuickwitError>>;
+    input: CorpusIndexSearchInput,
+  ) => Promise<Result<CorpusIndexSearchResponse, CorpusIndexError>>;
   deleteByQuery: (
     indexId: string,
     query: string,
-  ) => Promise<Result<void, QuickwitError>>;
+  ) => Promise<Result<void, CorpusIndexError>>;
 };
 
 const baseUrl = (): string => {
-  const value = envBase.QUICKWIT_ENDPOINT;
+  const value = envBase.CORPUS_INDEX_ENDPOINT;
   if (value === undefined || value.length === 0) {
     panic(
-      "QUICKWIT_ENDPOINT is required when the Quickwit search provider is selected",
+      "CORPUS_INDEX_ENDPOINT is required when the corpus index search provider is selected",
     );
   }
+  // eslint-disable-next-line sonarjs/slow-regex -- trims trailing slashes on a trusted config URL, not user input
   return value.replace(/\/+$/u, "");
 };
 
-const toQuickwitError = (error: unknown): QuickwitError =>
-  error instanceof QuickwitError
+const toCorpusIndexError = (error: unknown): CorpusIndexError =>
+  error instanceof CorpusIndexError
     ? error
-    : new QuickwitError({
+    : new CorpusIndexError({
         message:
-          error instanceof Error ? error.message : "Quickwit request failed",
+          error instanceof Error
+            ? error.message
+            : "corpus index request failed",
         cause: error,
       });
 
@@ -87,20 +90,20 @@ const requestJson = async <T>(
   });
   if (!response.ok) {
     const body = await response.text().catch(() => "");
-    throw new QuickwitError({
-      message: `Quickwit ${init.method ?? "GET"} ${path} -> ${response.status}: ${body.slice(0, 500)}`,
+    throw new CorpusIndexError({
+      message: `corpus index ${init.method ?? "GET"} ${path} -> ${response.status}: ${body.slice(0, 500)}`,
       status: response.status,
     });
   }
   // SAFETY: the JSON shape is the caller's declared contract at the
-  // Quickwit HTTP boundary; callers read fields defensively.
+  // corpus index HTTP boundary; callers read fields defensively.
   // eslint-disable-next-line typescript/no-unsafe-type-assertion
   return (await response.json()) as T;
 };
 
-const buildClient = (): QuickwitClient => ({
-  createIndex: (config) =>
-    Result.tryPromise({
+const buildClient = (): CorpusIndexClient => ({
+  createIndex: async (config) =>
+    await Result.tryPromise({
       try: async () => {
         await requestJson<unknown>(
           "/api/v1/indexes",
@@ -112,11 +115,11 @@ const buildClient = (): QuickwitClient => ({
           ADMIN_TIMEOUT_MS,
         );
       },
-      catch: toQuickwitError,
+      catch: toCorpusIndexError,
     }),
 
-  deleteIndex: (indexId) =>
-    Result.tryPromise({
+  deleteIndex: async (indexId) =>
+    await Result.tryPromise({
       try: async () => {
         await requestJson<unknown>(
           `/api/v1/indexes/${indexId}`,
@@ -124,11 +127,11 @@ const buildClient = (): QuickwitClient => ({
           ADMIN_TIMEOUT_MS,
         );
       },
-      catch: toQuickwitError,
+      catch: toCorpusIndexError,
     }),
 
-  indexExists: (indexId) =>
-    Result.tryPromise({
+  indexExists: async (indexId) =>
+    await Result.tryPromise({
       try: async () => {
         const response = await fetch(`${baseUrl()}/api/v1/indexes/${indexId}`, {
           method: "GET",
@@ -138,18 +141,18 @@ const buildClient = (): QuickwitClient => ({
           return false;
         }
         if (!response.ok) {
-          throw new QuickwitError({
-            message: `Quickwit GET /api/v1/indexes/${indexId} -> ${response.status}`,
+          throw new CorpusIndexError({
+            message: `corpus index GET /api/v1/indexes/${indexId} -> ${response.status}`,
             status: response.status,
           });
         }
         return true;
       },
-      catch: toQuickwitError,
+      catch: toCorpusIndexError,
     }),
 
-  ingestBatch: (indexId, ndjson) =>
-    Result.tryPromise({
+  ingestBatch: async (indexId, ndjson) =>
+    await Result.tryPromise({
       try: async () => {
         await requestJson<unknown>(
           `/api/v1/${indexId}/ingest?commit=auto`,
@@ -161,10 +164,10 @@ const buildClient = (): QuickwitClient => ({
           INGEST_TIMEOUT_MS,
         );
       },
-      catch: toQuickwitError,
+      catch: toCorpusIndexError,
     }),
 
-  search: ({
+  search: async ({
     indexId,
     query,
     maxHits,
@@ -172,7 +175,7 @@ const buildClient = (): QuickwitClient => ({
     sortByField,
     snippetFields,
   }) =>
-    Result.tryPromise({
+    await Result.tryPromise({
       try: async () => {
         const body: Record<string, unknown> = {
           query,
@@ -189,8 +192,8 @@ const buildClient = (): QuickwitClient => ({
         }
         const response = await requestJson<{
           num_hits?: number;
-          hits?: QuickwitHit[];
-          snippets?: Array<Record<string, unknown>>;
+          hits?: CorpusIndexHit[];
+          snippets?: Record<string, unknown>[];
         }>(
           `/api/v1/${indexId}/search`,
           {
@@ -206,11 +209,11 @@ const buildClient = (): QuickwitClient => ({
           snippets: response.snippets ?? [],
         };
       },
-      catch: toQuickwitError,
+      catch: toCorpusIndexError,
     }),
 
-  deleteByQuery: (indexId, query) =>
-    Result.tryPromise({
+  deleteByQuery: async (indexId, query) =>
+    await Result.tryPromise({
       try: async () => {
         await requestJson<unknown>(
           `/api/v1/${indexId}/delete-tasks`,
@@ -222,13 +225,13 @@ const buildClient = (): QuickwitClient => ({
           ADMIN_TIMEOUT_MS,
         );
       },
-      catch: toQuickwitError,
+      catch: toCorpusIndexError,
     }),
 });
 
-let cached: QuickwitClient | null = null;
+let cached: CorpusIndexClient | null = null;
 
-export const getQuickwitClient = (): QuickwitClient => {
+export const getCorpusIndexClient = (): CorpusIndexClient => {
   cached ??= buildClient();
   return cached;
 };

@@ -1,6 +1,7 @@
+import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
-import type { DocumentAst } from "@stll/case-law/document-ast";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { ScopedDb } from "@/api/db";
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
@@ -23,7 +24,7 @@ import type { SafeId } from "@/api/lib/branded-types";
  * `processLegislationDocument` (store + upsert), which any source feeds —
  * a structured import today, or a `LegislationAdapter` (Slov-Lex /
  * eSbírka / Polish Sejm) once its source-specific fetch+parse is built.
- * The substrate (object storage, Quickwit index, pg-fts projection,
+ * The substrate (object storage, corpus index index, pg-fts projection,
  * search, erasure) is shared with case law via the `legislation` family.
  */
 
@@ -79,7 +80,10 @@ const sanitizeInput = (
   ...input,
   eli: stripDangerousChars(input.eli),
   title: stripDangerousChars(input.title),
-  fulltext: input.fulltext != null ? stripDangerousChars(input.fulltext) : null,
+  fulltext:
+    input.fulltext === null || input.fulltext === undefined
+      ? null
+      : stripDangerousChars(input.fulltext),
   metadata: sanitizeMetadata(input.metadata ?? {}),
 });
 
@@ -88,7 +92,7 @@ const sanitizeInput = (
  * an unchanged re-ingest is skipped. When CORPUS_STORAGE_ENABLED, the
  * canonical payload is written to object storage (outside the tx) and
  * the row's S3 keys + content hash are recorded so the indexers pick it
- * up. The pg-fts and Quickwit projections are maintained by the backfill
+ * up. The pg-fts and corpus index projections are maintained by the backfill
  * loops (not inline), matching the case-law pipeline.
  */
 export const processLegislationDocument = async (
@@ -159,7 +163,7 @@ export const processLegislationDocument = async (
       .values(values)
       .returning({ id: legislationDocuments.id });
     if (!row) {
-      throw new Error("Failed to insert legislation document");
+      panic("Failed to insert legislation document");
     }
     return row.id;
   });
@@ -241,8 +245,9 @@ export const runLegislationIngestion = async ({
     }
   }
 
+  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
   await scopedDb((tx) => {
-    // audit: skip — background legislation ingestion; cursor advance
+    // audit: skip — background legislation ingestion; sync-cursor advance
     return tx
       .update(legislationSources)
       .set({ syncCursor: cursor, lastSyncAt: new Date() })

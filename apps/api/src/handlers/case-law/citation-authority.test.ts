@@ -102,7 +102,7 @@ beforeAll(async () => {
     },
   ]);
 
-  await db.transaction((tx) =>
+  await db.transaction(async (tx) =>
     recomputeCitationAuthorityForAll(tx, { now: NOW }),
   );
 });

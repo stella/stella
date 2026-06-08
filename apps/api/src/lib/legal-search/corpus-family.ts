@@ -1,7 +1,7 @@
 import { envBase } from "@/api/env-base";
 
 /**
- * Document families served by the corpus / Quickwit DB. The search,
+ * Document families served by the corpus / corpus index DB. The search,
  * index, storage, and rerank substrate is generic over these; each
  * family differs only in its index field mappings (below) and its
  * ingestion source (a per-family slice). Adding "gazette", "regulation",
@@ -27,5 +27,7 @@ export const corpusGeneration = (family: CorpusFamily): string => {
       return envBase.LEGAL_SEARCH_INDEX_GENERATION;
     case "legislation":
       return "legislation_v1";
+    default:
+      return family satisfies never;
   }
 };

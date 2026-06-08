@@ -15,7 +15,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 
 /**
  * Corpus-legislation routes (ingested statutes searchable via the
- * Quickwit/pg-fts substrate). Namespaced under /legislation/corpus to
+ * corpus index/pg-fts substrate). Namespaced under /legislation/corpus to
  * avoid colliding with the existing BOE proxy routes in routes.ts.
  */
 
@@ -24,9 +24,11 @@ const searchLegislation = createSafeRootHandler(
     permissions: { workspace: ["read"] },
     body: searchLegislationBodySchema,
   } satisfies HandlerConfig,
-  async function* ({ body }) {
+  async function* ({ body, scopedDb }) {
     const response = yield* Result.await(
-      Result.tryPromise(async () => await searchLegislationHandler(body)),
+      Result.tryPromise(
+        async () => await searchLegislationHandler(body, scopedDb),
+      ),
     );
     return Result.ok(response);
   },
@@ -37,9 +39,11 @@ const readLegislation = createSafeRootHandler(
     permissions: { workspace: ["read"] },
     params: t.Object({ documentId: tSafeId("legislationDocument") }),
   } satisfies HandlerConfig,
-  async function* ({ params: { documentId } }) {
+  async function* ({ params: { documentId }, scopedDb }) {
     const response = yield* Result.await(
-      Result.tryPromise(async () => await readLegislationHandler(documentId)),
+      Result.tryPromise(
+        async () => await readLegislationHandler(documentId, scopedDb),
+      ),
     );
     return Result.ok(response);
   },

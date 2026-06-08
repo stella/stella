@@ -57,18 +57,18 @@ export const envBase = createEnv({
       v.pipe(v.string(), v.parseBoolean()),
       "false",
     ),
-    // Legal corpus + Quickwit. Defaults keep the shipped pg-fts /
-    // Postgres-text path active; flipping to Quickwit is a config change.
+    // Legal corpus + corpus index. Defaults keep the shipped pg-fts /
+    // Postgres-text path active; flipping to corpus index is a config change.
     LEGAL_SEARCH_PROVIDER: v.optional(
-      v.picklist(["pg-fts", "quickwit"]),
+      v.picklist(["pg-fts", "corpus-index"]),
       "pg-fts",
     ),
     // Blue-green generation prefix. Each jurisdiction gets its own index
     // (`<generation>_<country>`, e.g. case_law_v1_svk); bump the prefix to
     // rebuild all jurisdictions and flip to it.
     LEGAL_SEARCH_INDEX_GENERATION: v.optional(v.string(), "case_law_v1"),
-    QUICKWIT_ENDPOINT: v.optional(v.pipe(v.string(), v.url())),
-    QUICKWIT_S3_BUCKET: v.optional(v.string()),
+    CORPUS_INDEX_ENDPOINT: v.optional(v.pipe(v.string(), v.url())),
+    CORPUS_INDEX_S3_BUCKET: v.optional(v.string()),
     // Falls back to S3_BUCKET when unset (dev). Required when
     // CORPUS_STORAGE_ENABLED is true (enforced post-validation).
     LEGAL_CORPUS_S3_BUCKET: v.optional(v.string()),
@@ -76,7 +76,7 @@ export const envBase = createEnv({
       v.pipe(v.string(), v.parseBoolean()),
       "false",
     ),
-    QUICKWIT_INDEXING_ENABLED: v.optional(
+    CORPUS_INDEXING_ENABLED: v.optional(
       v.pipe(v.string(), v.parseBoolean()),
       "false",
     ),
@@ -91,10 +91,12 @@ export const envBase = createEnv({
 
 // Cross-field invariants the per-field schema can't express.
 if (
-  envBase.LEGAL_SEARCH_PROVIDER === "quickwit" &&
-  envBase.QUICKWIT_ENDPOINT === undefined
+  envBase.LEGAL_SEARCH_PROVIDER === "corpus-index" &&
+  envBase.CORPUS_INDEX_ENDPOINT === undefined
 ) {
-  panic("LEGAL_SEARCH_PROVIDER=quickwit requires QUICKWIT_ENDPOINT to be set");
+  panic(
+    "LEGAL_SEARCH_PROVIDER=corpus-index requires CORPUS_INDEX_ENDPOINT to be set",
+  );
 }
 
 // In deployed envs the corpus must use its own bucket, not the default

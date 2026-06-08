@@ -2713,7 +2713,7 @@ export const caseLawDecisions = p.pgTable(
     p
       .index("case_law_decisions_citation_authority_idx")
       .on(t.citationAuthority),
-    // Supports the missing/stale scan the Quickwit indexer loop runs
+    // Supports the missing/stale scan the corpus index indexer loop runs
     // (mirrors backfillSearchIndex): rows whose indexedHash differs
     // from contentHash, or were never indexed.
     p.index("case_law_decisions_indexed_idx").on(t.indexedHash, t.contentHash),
@@ -2938,7 +2938,7 @@ export const caseLawIngestionFailures = p.pgTable(
 
 /**
  * Append-only audit trail for search-index mutations across the
- * object-store + Quickwit boundary. Because canonical text and index
+ * object-store + corpus index boundary. Because canonical text and index
  * state move out of the DB transaction log, this is the record of what
  * entered, left, or was redacted from the corpus. `decisionId` is null
  * for batch/full-rebuild rows.
@@ -2981,7 +2981,7 @@ export const caseLawIndexJobs = p.pgTable(
 // temporal model: each row is a consolidated expression of a work (`eli`),
 // valid over [version_valid_from, version_valid_to); version_valid_to NULL
 // = the current consolidation. status = current | historical | repealed |
-// draft. Shares the object-storage + Quickwit substrate via the
+// draft. Shares the object-storage + corpus index substrate via the
 // `legislation` corpus family.
 // ---------------------------------------------------------------------------
 

@@ -10,7 +10,7 @@ import type { SQL } from "drizzle-orm";
  *   CORPUS_STORAGE_ENABLED=true LEGAL_CORPUS_S3_BUCKET=... \
  *     bun run src/scripts/backfill-corpus-storage.ts
  */
-import type { DocumentAst } from "@stll/case-law/document-ast";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { createIngestionDb } from "@/api/db";
 import { rlsDb } from "@/api/db/root";
@@ -53,9 +53,8 @@ const backfillRow = async (row: BackfillRow): Promise<void> => {
       sections: row.sections,
       ast: row.documentAst,
     });
-    await ingestionDb((tx) => {
-      // audit: skip — corpus storage backfill, derived state
-      return tx
+    await ingestionDb((tx) =>
+      tx
         .update(caseLawDecisions)
         .set({
           textS3Key: result.textKey,
@@ -63,8 +62,8 @@ const backfillRow = async (row: BackfillRow): Promise<void> => {
           astS3Key: result.astKey,
           contentHash: result.contentHash,
         })
-        .where(eq(caseLawDecisions.id, row.id));
-    });
+        .where(eq(caseLawDecisions.id, row.id)),
+    );
     written += 1;
   } catch (error) {
     failed += 1;
@@ -104,7 +103,7 @@ while (true) {
     await Promise.all(rows.slice(i, i + CONCURRENCY).map(backfillRow));
   }
 
-  lastId = rows[rows.length - 1]?.id ?? lastId;
+  lastId = rows.at(-1)?.id ?? lastId;
   console.log(`  written=${written} failed=${failed}`);
 }
 

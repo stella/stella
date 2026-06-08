@@ -13,8 +13,8 @@ import { recomputeCitationAuthorityForAll } from "@/api/handlers/case-law/citati
 
 console.log("=== BACKFILL CITATION AUTHORITY ===");
 
-const updated = await rootDb.transaction((tx) =>
-  recomputeCitationAuthorityForAll(tx),
+const updated = await rootDb.transaction(
+  async (tx) => await recomputeCitationAuthorityForAll(tx),
 );
 
 console.log(`Citation authority materialized for ${updated} cited decisions.`);

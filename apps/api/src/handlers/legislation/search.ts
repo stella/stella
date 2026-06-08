@@ -2,17 +2,18 @@ import { inArray, sql } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
-import { rootDb } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db";
 import { legislationDocuments } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
+// eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
 import { isUuid } from "@/api/lib/custom-schema";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
+import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import {
   corpusIndexId,
   corpusIndexPattern,
 } from "@/api/lib/legal-search/index-naming";
-import { getQuickwitClient } from "@/api/lib/legal-search/quickwit-client";
 import {
   blendCitationAuthority,
   type ScoredCandidate,
@@ -26,7 +27,7 @@ import {
 
 /**
  * Legislation search. Same two-engine shape as case law (pg-fts default,
- * Quickwit when LEGAL_SEARCH_PROVIDER=quickwit) over the `legislation`
+ * corpus index when LEGAL_SEARCH_PROVIDER=corpus-index) over the `legislation`
  * family, returning legislation-shaped hits (eli/status/effectiveDate).
  */
 
@@ -88,6 +89,7 @@ const headlineRegconfig = sql`'public.stella_unaccent'::regconfig`;
 const pgSearch = async (
   body: SearchLegislationBody,
   parsedCursor: { score: number; id: string } | null,
+  scopedDb: ScopedDb,
 ): Promise<{ hits: LegislationHit[]; nextCursor: string | null }> => {
   const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
   const tsQuery = sql`plainto_tsquery('simple', unaccent(${body.query}))`;
@@ -107,7 +109,8 @@ const pgSearch = async (
     ? sql`AND (${scoreExpr}, sd.document_id) < (${parsedCursor.score}::float8, ${parsedCursor.id})`
     : sql``;
 
-  const rows = await rootDb.execute(sql`
+  const rows = await scopedDb((tx) =>
+    tx.execute(sql`
     SELECT
       sd.document_id,
       d.eli,
@@ -132,9 +135,10 @@ const pgSearch = async (
       ${cursorFilter}
     ORDER BY score DESC, sd.document_id DESC
     LIMIT ${limit + 1}
-  `);
+  `),
+  );
 
-  const result: RawRow[] = rows ?? [];
+  const result: RawRow[] = rows;
   const hasMore = result.length > limit;
   const pageRows = hasMore ? result.slice(0, limit) : result;
   const lastRow = pageRows.at(-1);
@@ -164,13 +168,21 @@ const mapRowHit = (row: RawRow): LegislationHit => ({
   score: Number(row["score"]) || 0,
 });
 
-const buildQuickwitQuery = (body: SearchLegislationBody): string => {
+const buildCorpusIndexQuery = (body: SearchLegislationBody): string => {
   const q = (v: string) => `"${v.replaceAll('"', '\\"')}"`;
   const clauses = [`(${body.query})`];
-  if (body.documentType) clauses.push(`document_type:${q(body.documentType)}`);
-  if (body.status) clauses.push(`status:${q(body.status)}`);
-  if (body.source) clauses.push(`source:${q(body.source)}`);
-  if (body.language) clauses.push(`language:${q(body.language)}`);
+  if (body.documentType) {
+    clauses.push(`document_type:${q(body.documentType)}`);
+  }
+  if (body.status) {
+    clauses.push(`status:${q(body.status)}`);
+  }
+  if (body.source) {
+    clauses.push(`source:${q(body.source)}`);
+  }
+  if (body.language) {
+    clauses.push(`language:${q(body.language)}`);
+  }
   if (body.dateFrom || body.dateTo) {
     clauses.push(
       `effective_date:[${body.dateFrom ?? "*"} TO ${body.dateTo ?? "*"}]`,
@@ -179,9 +191,10 @@ const buildQuickwitQuery = (body: SearchLegislationBody): string => {
   return clauses.join(" AND ");
 };
 
-const quickwitSearch = async (
+const corpusIndexSearch = async (
   body: SearchLegislationBody,
   parsedCursor: { score: number; id: string } | null,
+  scopedDb: ScopedDb,
 ): Promise<{ hits: LegislationHit[]; nextCursor: string | null }> => {
   const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
   const generation = corpusGeneration("legislation");
@@ -189,10 +202,10 @@ const quickwitSearch = async (
     ? corpusIndexId(generation, body.jurisdiction)
     : corpusIndexPattern(generation);
 
-  const result = await getQuickwitClient().search({
+  const result = await getCorpusIndexClient().search({
     indexId,
-    query: buildQuickwitQuery(body),
-    maxHits: LIMITS.quickwitSearchCandidateLimit,
+    query: buildCorpusIndexQuery(body),
+    maxHits: LIMITS.corpusIndexSearchCandidateLimit,
     snippetFields: ["text"],
   });
   if (result.isErr()) {
@@ -201,10 +214,10 @@ const quickwitSearch = async (
 
   const candidates: ScoredCandidate[] = [];
   const snippetById = new Map<string, string>();
-  result.value.hits.forEach((hit, index) => {
+  for (const [index, hit] of result.value.hits.entries()) {
     const id = hit["document_id"];
     if (typeof id !== "string") {
-      return;
+      continue;
     }
     candidates.push({ id, score: result.value.hits.length - index });
     const snippet = result.value.snippets[index]?.["text"];
@@ -215,27 +228,29 @@ const quickwitSearch = async (
         raw.replaceAll("<b>", "<mark>").replaceAll("</b>", "</mark>"),
       );
     }
-  });
+  }
 
   const ids = candidates.map((c) => toSafeId<"legislationDocument">(c.id));
   const rows =
     ids.length === 0
       ? []
-      : await rootDb
-          .select({
-            id: legislationDocuments.id,
-            eli: legislationDocuments.eli,
-            title: legislationDocuments.title,
-            country: legislationDocuments.country,
-            language: legislationDocuments.language,
-            documentType: legislationDocuments.documentType,
-            statusValue: legislationDocuments.status,
-            effectiveDate: legislationDocuments.effectiveDate,
-            sourceUrl: legislationDocuments.sourceUrl,
-            citationAuthority: legislationDocuments.citationAuthority,
-          })
-          .from(legislationDocuments)
-          .where(inArray(legislationDocuments.id, ids));
+      : await scopedDb((tx) =>
+          tx
+            .select({
+              id: legislationDocuments.id,
+              eli: legislationDocuments.eli,
+              title: legislationDocuments.title,
+              country: legislationDocuments.country,
+              language: legislationDocuments.language,
+              documentType: legislationDocuments.documentType,
+              statusValue: legislationDocuments.status,
+              effectiveDate: legislationDocuments.effectiveDate,
+              sourceUrl: legislationDocuments.sourceUrl,
+              citationAuthority: legislationDocuments.citationAuthority,
+            })
+            .from(legislationDocuments)
+            .where(inArray(legislationDocuments.id, ids)),
+        );
 
   const byId = new Map(rows.map((row) => [String(row.id), row]));
   const authorityById = new Map(
@@ -284,7 +299,10 @@ const quickwitSearch = async (
   return { hits, nextCursor };
 };
 
-export const searchLegislationHandler = async (body: SearchLegislationBody) => {
+export const searchLegislationHandler = async (
+  body: SearchLegislationBody,
+  scopedDb: ScopedDb,
+) => {
   // source_id and the cursor id reach Postgres as UUID comparisons in the
   // pg-fts path; reject malformed values at the boundary so a bad filter
   // is a 400, not a 500 from an invalid-uuid cast.
@@ -301,9 +319,9 @@ export const searchLegislationHandler = async (body: SearchLegislationBody) => {
   }
 
   const { hits, nextCursor } =
-    envBase.LEGAL_SEARCH_PROVIDER === "quickwit"
-      ? await quickwitSearch(body, parsedCursor)
-      : await pgSearch(body, parsedCursor);
+    envBase.LEGAL_SEARCH_PROVIDER === "corpus-index"
+      ? await corpusIndexSearch(body, parsedCursor, scopedDb)
+      : await pgSearch(body, parsedCursor, scopedDb);
 
   return { hits, nextCursor, totalCount: null };
 };

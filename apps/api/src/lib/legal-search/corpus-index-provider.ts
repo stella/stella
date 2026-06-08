@@ -2,14 +2,15 @@ import { inArray } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import { caseLawDecisions } from "@/api/db/schema";
+// eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
+import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
 import {
   corpusIndexId,
   corpusIndexPattern,
 } from "@/api/lib/legal-search/index-naming";
-import { getQuickwitClient } from "@/api/lib/legal-search/quickwit-client";
 import {
   blendCitationAuthority,
   type ScoredCandidate,
@@ -24,10 +25,10 @@ import { LIMITS } from "@/api/lib/limits";
 import { encodeCursor, decodeCursor } from "@/api/lib/search/cursor";
 
 /**
- * Quickwit legal-search provider: two-stage retrieve-then-rerank.
- * Quickwit returns BM25 lexical candidates (filtered by tag/fast fields
+ * corpus index legal-search provider: two-stage retrieve-then-rerank.
+ * corpus index returns BM25 lexical candidates (filtered by tag/fast fields
  * for split pruning); the API re-joins them to the precomputed
- * citation_authority in Postgres and blends via RRF — Quickwit has no
+ * citation_authority in Postgres and blends via RRF — corpus index has no
  * in-engine function scoring, so the legal-domain ranking stays here.
  */
 
@@ -68,7 +69,7 @@ const extractSnippet = (
   if (typeof raw !== "string" || raw.length === 0) {
     return null;
   }
-  // Quickwit wraps matched terms in <b>; the UI renders <mark>. Quickwit
+  // corpus index wraps matched terms in <b>; the UI renders <mark>. corpus index
   // escapes the surrounding text, so this swap is safe. Aligning fully
   // with the pg ts_headline pipeline is a follow-up.
   return raw.replaceAll("<b>", "<mark>").replaceAll("</b>", "</mark>");
@@ -92,15 +93,15 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
   const generation = corpusGeneration(query.documentFamily ?? "case_law");
 
   // Scoped query → that jurisdiction's index; unscoped → the generation
-  // glob (Quickwit multi-index search across all jurisdiction indexes).
+  // glob (corpus index multi-index search across all jurisdiction indexes).
   const indexId = query.jurisdiction
     ? corpusIndexId(generation, query.jurisdiction)
     : corpusIndexPattern(generation);
 
-  const result = await getQuickwitClient().search({
+  const result = await getCorpusIndexClient().search({
     indexId,
     query: buildQuery(query),
-    maxHits: LIMITS.quickwitSearchCandidateLimit,
+    maxHits: LIMITS.corpusIndexSearchCandidateLimit,
     snippetFields: ["text"],
   });
   if (result.isErr()) {
@@ -109,19 +110,19 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
 
   const candidates: ScoredCandidate[] = [];
   const snippetById = new Map<string, string>();
-  result.value.hits.forEach((hit, index) => {
+  for (const [index, hit] of result.value.hits.entries()) {
     const id = hit["document_id"];
     if (typeof id !== "string") {
-      return;
+      continue;
     }
-    // Descending pseudo-score preserves Quickwit's BM25 ordering as the
+    // Descending pseudo-score preserves corpus index's BM25 ordering as the
     // lexical signal for the blend (absolute BM25 values aren't needed).
     candidates.push({ id, score: result.value.hits.length - index });
     const snippet = extractSnippet(result.value.snippets[index]);
     if (snippet !== null) {
       snippetById.set(id, snippet);
     }
-  });
+  }
 
   const ids = candidates.map((c) => toSafeId<"caseLawDecision">(c.id));
   const rows =
@@ -145,7 +146,7 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
           .from(caseLawDecisions)
           .where(inArray(caseLawDecisions.id, ids));
 
-  // Keyed by plain string id (candidate ids from Quickwit are strings).
+  // Keyed by plain string id (candidate ids from corpus index are strings).
   const displayById = new Map(rows.map((row) => [String(row.id), row]));
   const authorityById = new Map(
     rows.map((row) => [String(row.id), row.citationAuthority]),
@@ -193,13 +194,13 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
     ];
   });
 
-  // Exact facet counts over broad queries are expensive in Quickwit; the
+  // Exact facet counts over broad queries are expensive in corpus index; the
   // shipped UI already tolerates null facets (returned on paginated
-  // pages). Quickwit aggregations are a follow-up.
+  // pages). corpus index aggregations are a follow-up.
   return { hits, facets: null, nextCursor, limit };
 };
 
-export const quickwitLegalProvider: LegalSearchProvider = {
+export const corpusIndexProvider: LegalSearchProvider = {
   search,
   getDocumentContext: loadDocumentContext,
 };

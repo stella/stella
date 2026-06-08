@@ -3,8 +3,8 @@ import { eq } from "drizzle-orm";
 import type { ScopedDb } from "@/api/db";
 import { caseLawDecisions, caseLawIndexJobs } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
+import { removeDecisionFromCorpusIndex } from "@/api/handlers/case-law/corpus-index";
 import { deleteCorpusDocument } from "@/api/handlers/case-law/corpus-storage";
-import { removeDecisionFromQuickwit } from "@/api/handlers/case-law/quickwit-index";
 import { removeDecisionFromIndex } from "@/api/handlers/case-law/search-index";
 import type { SafeId } from "@/api/lib/branded-types";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
@@ -14,7 +14,7 @@ import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
  * in (up to) four places once the migration is underway, and erasure
  * must hit all of them:
  *
- *   1. Quickwit search index (delete-task) — if configured.
+ *   1. corpus index search index (delete-task) — if configured.
  *   2. The pg-fts projection (case_law_search_documents).
  *   3. The object-storage corpus payloads (text/sections/AST).
  *   4. The Postgres canonical columns (fulltext/sections/document_ast).
@@ -53,17 +53,17 @@ export const redactCaseLawDecision = async ({
     return false;
   }
 
-  // 1. Quickwit (delete-task + audit row) in this jurisdiction's index.
-  // Skipped when Quickwit isn't configured.
-  let auditedViaQuickwit = false;
-  if (envBase.QUICKWIT_ENDPOINT !== undefined) {
-    await removeDecisionFromQuickwit(
+  // 1. corpus index (delete-task + audit row) in this jurisdiction's index.
+  // Skipped when corpus index isn't configured.
+  let auditedViaCorpusIndex = false;
+  if (envBase.CORPUS_INDEX_ENDPOINT !== undefined) {
+    await removeDecisionFromCorpusIndex(
       decisionId,
       scopedDb,
       corpusIndexId(generation, decision.country),
       "redact",
     );
-    auditedViaQuickwit = true;
+    auditedViaCorpusIndex = true;
   }
 
   // 2. pg-fts projection.
@@ -86,8 +86,9 @@ export const redactCaseLawDecision = async ({
 
   // 4. Postgres canonical text + key/hash columns. Nulling content_hash
   // stops both backfill loops from re-indexing the body.
+  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
   await scopedDb((tx) => {
-    // audit: skip — GDPR redaction recorded in case_law_index_jobs
+    // audit: skip — GDPR redaction; recorded in case_law_index_jobs below
     return tx
       .update(caseLawDecisions)
       .set({
@@ -103,10 +104,11 @@ export const redactCaseLawDecision = async ({
       .where(eq(caseLawDecisions.id, decisionId));
   });
 
-  // Ensure the erasure is auditable even when Quickwit isn't configured.
-  if (!auditedViaQuickwit) {
+  // Ensure the erasure is auditable even when corpus index isn't configured.
+  if (!auditedViaCorpusIndex) {
+    // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
     await scopedDb((tx) => {
-      // audit: skip — append-only erasure audit row
+      // audit: skip — this insert IS the append-only erasure audit row
       return tx.insert(caseLawIndexJobs).values({
         decisionId,
         generation,

@@ -40,9 +40,13 @@ export type CorpusSourceDescriptor = {
  */
 export const isRedistributable = (
   descriptor: CorpusSourceDescriptor | null | undefined,
-): boolean => descriptor == null || descriptor.allowsRedistribution;
+): boolean =>
+  descriptor === null ||
+  descriptor === undefined ||
+  descriptor.allowsRedistribution;
 
 /** Whether a source's full text may be fed to the AI layer. */
 export const allowsDerivedAi = (
   descriptor: CorpusSourceDescriptor | null | undefined,
-): boolean => descriptor == null || descriptor.allowsDerivedAi;
+): boolean =>
+  descriptor === null || descriptor === undefined || descriptor.allowsDerivedAi;
