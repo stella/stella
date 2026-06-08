@@ -23,8 +23,9 @@
  */
 
 import type { Document } from "../types/document";
-import { appendTrailers, newContext } from "./internals";
+import { newContext } from "./internals";
 import { renderBlocks } from "./renderBlock";
+import { appendTrailers } from "./trailers";
 import type { MarkdownOptions, MarkdownResult } from "./types";
 
 export type {

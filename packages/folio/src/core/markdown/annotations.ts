@@ -14,7 +14,11 @@ import type { RenderContext } from "./types";
 type Mode = "tracked" | "comment";
 
 function escapeAttr(value: string): string {
-  return value.replace(/"/gu, "&quot;");
+  return value
+    .replace(/&/gu, "&amp;")
+    .replace(/</gu, "&lt;")
+    .replace(/>/gu, "&gt;")
+    .replace(/"/gu, "&quot;");
 }
 
 function attrString(info: {

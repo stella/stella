@@ -29,7 +29,9 @@ export function escapeInline(text: string): string {
 
 /**
  * Cells use `|` as the column separator. Newlines inside a cell become `<br>`
- * so the row stays on one line.
+ * so the row stays on one line. The input is already markdown (each cell is a
+ * rendered paragraph that ran through {@link escapeInline}), so backslashes are
+ * part of existing escape sequences and must NOT be re-escaped here.
  */
 export function escapeTableCell(text: string): string {
   return text.replace(/\|/gu, "\\|").replace(/\r?\n/gu, "<br>");
@@ -44,9 +46,10 @@ export function escapeLinkUrl(url: string): string {
 }
 
 /**
- * Alt text inside `![alt](url)`. Escape brackets so the link parser doesn't
- * get confused, and collapse newlines so the alt stays single-line.
+ * Alt text inside `![alt](url)`. Raw (un-escaped) text, so escape the backslash
+ * first, then the brackets that would confuse the link parser, and collapse
+ * newlines so the alt stays single-line.
  */
 export function escapeAltText(text: string): string {
-  return text.replace(/([[\]])/gu, "\\$1").replace(/\r?\n/gu, " ");
+  return text.replace(/([\\[\]])/gu, "\\$1").replace(/\r?\n/gu, " ");
 }

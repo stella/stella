@@ -11,7 +11,7 @@
  * module so its public surface is independent of the docx model's drawing
  * types.
  */
-export interface ImageMeta {
+export type ImageMeta = {
   /** `paraId` of the containing paragraph, when the source paragraph has one. */
   paraId?: string | undefined;
   /** 1-based ordinal in registration order. Unique per render call. */
@@ -22,10 +22,10 @@ export interface ImageMeta {
   mimeType: string;
   /** Alt text from the drawing, when present. */
   alt?: string | undefined;
-}
+};
 
 /** Full registration record for an image, keyed by `virtualPath`. */
-export interface ImageRef extends ImageMeta {
+export type ImageRef = {
   /** Raw bytes as exposed by the DOCX parser. */
   data: Uint8Array;
   /** Base64-encoded contents, without the `data:` prefix. */
@@ -34,14 +34,14 @@ export interface ImageRef extends ImageMeta {
   dataUrl: string;
   /** The path that appears inside the markdown's `![alt](…)` reference. */
   virtualPath: string;
-}
+} & ImageMeta;
 
 /**
  * Options for {@link toMarkdown}. The clean-markdown preset skills use is
  * `{ annotations: "strip", trackedChanges: "clean", comments: "strip",
  * hyperlinks: "inline", footnotes: "strip" }`.
  */
-export interface MarkdownOptions {
+export type MarkdownOptions = {
   /**
    * How to encode constructs markdown can't express natively (comments,
    * tracked changes).
@@ -82,34 +82,34 @@ export interface MarkdownOptions {
    * `./images/{paraId}-img{n}.{ext}` (or `./images/img{n}.{ext}`).
    */
   imagePath?: (info: ImageMeta) => string;
-}
+};
 
 /** Result of a render, when the caller needs images/warnings as well as text. */
-export interface MarkdownResult {
+export type MarkdownResult = {
   /** The full rendered markdown string. */
   markdown: string;
   /** Every image referenced in `markdown`, keyed by its virtual path. */
   images: Map<string, ImageRef>;
   /** Non-fatal diagnostics; recurring messages are deduped. */
   warnings: string[];
-}
+};
 
 /** Resolved option values with defaults applied. Used internally. */
-export interface ResolvedOptions {
+export type ResolvedOptions = {
   annotations: "html" | "pandoc" | "strip";
   trackedChanges: "clean" | "annotate";
   comments: "strip" | "inline" | "sidecar";
   hyperlinks: "inline" | "reference";
   footnotes: "keep" | "strip";
   imagePath?: ((info: ImageMeta) => string) | undefined;
-}
+};
 
 /**
  * Internal rendering context threaded through every render call. Aggregates
  * side-channel output: image map, warnings, and footnote/comment/hyperlink
  * reference lists. Exported only so the split renderer files share the shape.
  */
-export interface RenderContext {
+export type RenderContext = {
   opts: ResolvedOptions;
   /** Accumulated images keyed by virtual path. */
   images: Map<string, ImageRef>;
@@ -117,12 +117,16 @@ export interface RenderContext {
   imagesByPath: Map<string, ImageRef>;
   /** Diagnostics accumulator. */
   warnings: string[];
-  /** Footnote refs collected during this render, in document order. */
-  footnoteRefs: Array<{ refId: number; markerNumber: number }>;
+  /** Footnote/endnote refs collected during this render, in document order. */
+  footnoteRefs: {
+    refId: number;
+    markerNumber: number;
+    kind: "footnote" | "endnote";
+  }[];
   /** Comment refs collected during this render (sidecar mode only). */
-  commentRefs: Array<{ commentId: number; markerNumber: number }>;
+  commentRefs: { commentId: number; markerNumber: number }[];
   /** Hyperlink refs collected during this render (reference mode only). */
-  hyperlinkRefs: Array<{ href: string; refNumber: number }>;
+  hyperlinkRefs: { href: string; refNumber: number }[];
   /** 1-based counter for default virtual paths. */
   imageCounter: number;
-}
+};

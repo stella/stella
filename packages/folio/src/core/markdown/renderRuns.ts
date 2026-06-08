@@ -151,7 +151,11 @@ function renderRunContent(
           break;
         }
         const markerNumber = ctx.footnoteRefs.length + 1;
-        ctx.footnoteRefs.push({ refId: item.id, markerNumber });
+        ctx.footnoteRefs.push({
+          refId: item.id,
+          markerNumber,
+          kind: item.type === "endnoteRef" ? "endnote" : "footnote",
+        });
         out += `[^${markerNumber}]`;
         break;
       }
@@ -205,15 +209,16 @@ function renderRun(
     return "";
   }
   // Markdown can't carry whitespace at the boundaries of a mark, so we split
-  // leading/trailing whitespace out of the wrapped text.
-  const match = /^(\s*)(.*?)(\s*)$/su.exec(inner);
-  if (!match) {
-    return applyMarks(inner, marksFor(run));
-  }
-  const [, lead, core, trail] = match;
+  // leading/trailing whitespace out of the wrapped text. Done with trim-length
+  // math rather than a regex to avoid backtracking on long runs.
+  const leadLen = inner.length - inner.trimStart().length;
+  const trailLen = inner.length - inner.trimEnd().length;
+  const core = inner.slice(leadLen, inner.length - trailLen);
   if (!core) {
     return inner;
   }
+  const lead = inner.slice(0, leadLen);
+  const trail = inner.slice(inner.length - trailLen);
   return `${lead}${applyMarks(core, marksFor(run))}${trail}`;
 }
 
@@ -280,15 +285,15 @@ function renderTrackedWrapper(
       return wrapDeletion(ctx, wrapper.info, inner);
     case "moveFrom":
       return wrapMoveFrom(ctx, wrapper.info, inner);
-    case "moveTo":
+    default:
       return wrapMoveTo(ctx, wrapper.info, inner);
   }
 }
 
-interface CommentSlot {
+type CommentSlot = {
   start: number;
   comment?: Comment | undefined;
-}
+};
 
 /**
  * Render the full inline content of a paragraph, tracking comment-range
@@ -337,18 +342,15 @@ export function renderParagraphInline(
         }
         break;
       }
-      case "inlineSdt": {
+      case "inlineSdt":
         // `InlineSdt.content` is a subset of `ParagraphContent`.
-        if (item.content) {
-          out += renderParagraphInline(
-            ctx,
-            pkg,
-            item.content as ParagraphContent[],
-            paraId,
-          );
-        }
+        out += renderParagraphInline(
+          ctx,
+          pkg,
+          item.content as ParagraphContent[],
+          paraId,
+        );
         break;
-      }
       default:
         // Range markers without inline payload (bookmark*, move*Range*,
         // commentReference, math) contribute nothing here.

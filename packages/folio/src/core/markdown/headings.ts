@@ -18,9 +18,9 @@ export function parseHeadingLevel(styleId?: string): number | undefined {
   if (!styleId) {
     return undefined;
   }
-  const match = /heading\s*(\d)/iu.exec(styleId);
-  if (match) {
-    return Number.parseInt(match[1]!, 10);
+  const digit = /heading\s*(\d)/iu.exec(styleId)?.[1];
+  if (digit) {
+    return Number.parseInt(digit, 10);
   }
   return undefined;
 }

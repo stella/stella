@@ -42,8 +42,8 @@ export function renderBlocks(
         out.push(md);
       }
       prevWasListItem = false;
-    } else if (block.type === "blockSdt") {
-      // `BlockSdt.content` is `(Paragraph | Table)[]` — a subset of BlockContent.
+    } else {
+      // blockSdt — `BlockSdt.content` is a subset of BlockContent.
       const nested = renderBlocks(ctx, pkg, block.content);
       if (nested) {
         if (out.length) {

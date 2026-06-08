@@ -6,7 +6,7 @@
  * PR #595.
  */
 
-import type { DocxPackage, Paragraph } from "../types/document";
+import type { DocxPackage, ListRendering, Paragraph } from "../types/document";
 import { isHeadingStyle, parseHeadingLevel } from "./headings";
 import { renderParagraphInline } from "./renderRuns";
 import type { RenderContext } from "./types";
@@ -33,7 +33,7 @@ export function renderParagraph(
   }
 
   if (para.listRendering) {
-    return renderListItem(para, inline);
+    return renderListItem(para.listRendering, inline);
   }
 
   // Word's built-in quote styles: `Quote`, `IntenseQuote`. Avoid loose matches
@@ -45,11 +45,23 @@ export function renderParagraph(
       .join("\n");
   }
 
-  return inline;
+  return escapeLeadingBlockMarker(inline);
 }
 
-function renderListItem(para: Paragraph, inline: string): string {
-  const list = para.listRendering!;
+/**
+ * A plain paragraph whose visible text begins with markdown block syntax (e.g.
+ * `# Not a heading`, `- value`, `1. value`, `> quote`) would be reclassified as
+ * a heading/list/blockquote on re-parse, even though Word carries no matching
+ * style/list metadata. Escape the leading marker so literal text round-trips.
+ */
+function escapeLeadingBlockMarker(text: string): string {
+  return text
+    .replace(/^(\s*)([#>])/u, "$1\\$2")
+    .replace(/^(\s*)([-+*])(\s)/u, "$1\\$2$3")
+    .replace(/^(\s*)(\d{1,9})([.)])(\s)/u, "$1$2\\$3$4");
+}
+
+function renderListItem(list: ListRendering, inline: string): string {
   const indent = "  ".repeat(list.level);
   if (list.isBullet) {
     return `${indent}- ${inline}`.trimEnd();

@@ -68,6 +68,14 @@ describe("toMarkdown — block structure", () => {
     expect(md([para([run("Cited")], { styleId: "Quote" })])).toBe("> Cited");
   });
 
+  test("a plain paragraph that begins with block syntax is escaped", () => {
+    // Literal legal text must not be reclassified as a heading/list/quote.
+    expect(md([para([run("# Not a heading")])])).toBe("\\# Not a heading");
+    expect(md([para([run("- not a bullet")])])).toBe("\\- not a bullet");
+    expect(md([para([run("1. not a list")])])).toBe("1\\. not a list");
+    expect(md([para([run("> not a quote")])])).toBe("\\> not a quote");
+  });
+
   test("bullet and ordered lists keep Word's exact marker", () => {
     const out = md([
       para([run("first")], { listRendering: list(0, true, "•") }),

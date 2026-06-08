@@ -65,7 +65,12 @@ function renderGfmTable(
   firstRowIsHeader: boolean,
 ): string {
   const cellTexts = rows.map((row) => renderGfmRow(ctx, pkg, row));
-  const maxCols = cellTexts.reduce((m, c) => Math.max(m, c.length), 0);
+  let maxCols = 0;
+  for (const cells of cellTexts) {
+    if (cells.length > maxCols) {
+      maxCols = cells.length;
+    }
+  }
   if (!maxCols) {
     return "";
   }
@@ -78,16 +83,20 @@ function renderGfmTable(
     return filled;
   });
 
+  const separator = `| ${Array.from({ length: maxCols }, () => "---").join(" | ")} |`;
   const lines: string[] = [];
   if (firstRowIsHeader) {
-    lines.push(toRowLine(padded[0]!));
-    lines.push(`| ${new Array(maxCols).fill("---").join(" | ")} |`);
-    for (let i = 1; i < padded.length; i++) {
-      lines.push(toRowLine(padded[i]!));
+    const [header, ...body] = padded;
+    if (header) {
+      lines.push(toRowLine(header));
+    }
+    lines.push(separator);
+    for (const row of body) {
+      lines.push(toRowLine(row));
     }
   } else {
-    lines.push(`| ${new Array(maxCols).fill("").join(" | ")} |`);
-    lines.push(`| ${new Array(maxCols).fill("---").join(" | ")} |`);
+    lines.push(`| ${Array.from({ length: maxCols }, () => "").join(" | ")} |`);
+    lines.push(separator);
     for (const row of padded) {
       lines.push(toRowLine(row));
     }
@@ -139,7 +148,7 @@ function renderHtmlTable(
   firstRowIsHeader: boolean,
 ): string {
   const out: string[] = ["<table>"];
-  rows.forEach((row, rowIdx) => {
+  for (const [rowIdx, row] of rows.entries()) {
     const tag = firstRowIsHeader && rowIdx === 0 ? "th" : "td";
     out.push("  <tr>");
     let gridCol = 0;
@@ -162,7 +171,7 @@ function renderHtmlTable(
       gridCol += colspan;
     }
     out.push("  </tr>");
-  });
+  }
   out.push("</table>");
   return out.join("\n");
 }
@@ -181,11 +190,15 @@ function countRowSpan(
 ): number {
   let span = 1;
   for (let r = rowIdx + 1; r < rows.length; r++) {
-    const target = cellAtGridColumn(rows[r]!, gridCol);
+    const row = rows[r];
+    if (!row) {
+      break;
+    }
+    const target = cellAtGridColumn(row, gridCol);
     if (
       target &&
       target.formatting?.vMerge === "continue" &&
-      (target.formatting?.gridSpan ?? 1) === colspan
+      (target.formatting.gridSpan ?? 1) === colspan
     ) {
       span += 1;
     } else {
@@ -224,7 +237,7 @@ function renderHtmlCell(
       if (inner) {
         parts.push(inner);
       }
-    } else if (item.type === "table") {
+    } else {
       // Nested tables inside an HTML cell stay HTML: GFM is not parsed inside
       // HTML blocks, so a pipe-table here would render as literal text.
       const nested = renderHtmlTable(ctx, pkg, item.rows, true);
@@ -282,14 +295,13 @@ function renderHtmlInline(
         break;
       }
       case "inlineSdt":
-        if (item.content) {
-          out += renderHtmlInline(
-            ctx,
-            pkg,
-            item.content as ParagraphContent[],
-            paraId,
-          );
-        }
+        // `InlineSdt.content` is a subset of `ParagraphContent`.
+        out += renderHtmlInline(
+          ctx,
+          pkg,
+          item.content as ParagraphContent[],
+          paraId,
+        );
         break;
       default:
         // Range markers carry no visible payload inside table cells.
@@ -302,7 +314,7 @@ function renderHtmlInline(
 function renderHtmlChildren(
   ctx: RenderContext,
   pkg: DocxPackage | undefined,
-  children: Array<Run | Hyperlink>,
+  children: (Run | Hyperlink)[],
   paraId: string | undefined,
 ): string {
   return children
@@ -365,7 +377,11 @@ function renderHtmlRun(
           break;
         }
         const markerNumber = ctx.footnoteRefs.length + 1;
-        ctx.footnoteRefs.push({ refId: item.id, markerNumber });
+        ctx.footnoteRefs.push({
+          refId: item.id,
+          markerNumber,
+          kind: item.type === "endnoteRef" ? "endnote" : "footnote",
+        });
         text += `<sup>[${markerNumber}]</sup>`;
         break;
       }
