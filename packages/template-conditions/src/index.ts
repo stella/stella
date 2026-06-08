@@ -471,3 +471,8 @@ export const evaluateCondition = (
 
   return evaluateTokens(tokens, data, namedConditions, _resolved, _depth);
 };
+
+// Value-returning arithmetic evaluator for computed fields. Kept separate
+// from the boolean condition engine above; re-exported here as the package's
+// single entry point.
+export { evaluateNumericExpression } from "./compute.js";
