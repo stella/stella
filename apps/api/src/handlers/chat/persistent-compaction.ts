@@ -2,13 +2,14 @@ import type { LanguageModel } from "ai";
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import type { SafeDb, SafeDbError } from "@/api/db";
+import type { SafeDb, SafeDbError, Transaction } from "@/api/db";
 import { chatThreadCompactions } from "@/api/db/schema";
 import {
   CHAT_COMPACTION_PROMPT_VERSION,
   createCompactionSummaryMessage,
   summarizeChatCompactionForModel,
 } from "@/api/handlers/chat/compaction";
+import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import type {
   ChatCompactionSummary,
@@ -86,6 +87,54 @@ export const applyChatCompactionCheckpoint = ({
   ];
 };
 
+type ShouldInvalidateChatCompactionCheckpointProps = {
+  deletedMessageCount: number;
+  persistencePlan: Pick<MessagePersistencePlan, "type">;
+};
+
+export const shouldInvalidateChatCompactionCheckpoint = ({
+  deletedMessageCount,
+  persistencePlan,
+}: ShouldInvalidateChatCompactionCheckpointProps): boolean => {
+  if (deletedMessageCount > 0) {
+    return true;
+  }
+
+  switch (persistencePlan.type) {
+    case "update":
+    case "replace-last-assistant":
+      return true;
+    case "insert":
+    case "none":
+      return false;
+    default: {
+      const exhaustive: never = persistencePlan.type;
+      return exhaustive;
+    }
+  }
+};
+
+type MarkActiveChatCompactionCheckpointStaleProps = {
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+};
+
+export const markActiveChatCompactionCheckpointStale = async ({
+  threadId,
+  tx,
+}: MarkActiveChatCompactionCheckpointStaleProps): Promise<void> => {
+  // audit: skip - derived compaction checkpoint cache; no user-authored state change
+  await tx
+    .update(chatThreadCompactions)
+    .set({ status: "stale" })
+    .where(
+      and(
+        eq(chatThreadCompactions.threadId, threadId),
+        eq(chatThreadCompactions.status, "active"),
+      ),
+    );
+};
+
 type PersistChatCompactionCheckpointProps = {
   abortSignal: AbortSignal;
   boundary: ChatThirdPartyBoundary;
@@ -130,16 +179,7 @@ export const persistChatCompactionCheckpoint = async ({
   }
 
   const persistResult = await safeDb(async (tx) => {
-    // audit: skip — derived compaction checkpoint cache; no user-authored state change
-    await tx
-      .update(chatThreadCompactions)
-      .set({ status: "stale" })
-      .where(
-        and(
-          eq(chatThreadCompactions.threadId, threadId),
-          eq(chatThreadCompactions.status, "active"),
-        ),
-      );
+    await markActiveChatCompactionCheckpointStale({ threadId, tx });
 
     // audit: skip — derived compaction checkpoint cache; no user-authored state change
     await tx.insert(chatThreadCompactions).values({

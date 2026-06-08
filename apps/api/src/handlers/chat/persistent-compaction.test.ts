@@ -3,7 +3,10 @@ import { describe, expect, test } from "bun:test";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 
-import { applyChatCompactionCheckpoint } from "./persistent-compaction";
+import {
+  applyChatCompactionCheckpoint,
+  shouldInvalidateChatCompactionCheckpoint,
+} from "./persistent-compaction";
 
 const message = (id: string, text: string): ChatMessage => ({
   id,
@@ -81,5 +84,23 @@ describe("persistent chat compaction", () => {
     });
 
     expect(applied).toBeNull();
+  });
+
+  test("invalidates active checkpoints when a retained message is updated", () => {
+    expect(
+      shouldInvalidateChatCompactionCheckpoint({
+        deletedMessageCount: 0,
+        persistencePlan: { type: "update" },
+      }),
+    ).toBe(true);
+  });
+
+  test("keeps active checkpoints valid for append-only inserts", () => {
+    expect(
+      shouldInvalidateChatCompactionCheckpoint({
+        deletedMessageCount: 0,
+        persistencePlan: { type: "insert" },
+      }),
+    ).toBe(false);
   });
 });

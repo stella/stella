@@ -7,11 +7,7 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, SafeDbError } from "@/api/db";
-import {
-  chatMessages,
-  chatThreadCompactions,
-  chatThreads,
-} from "@/api/db/schema";
+import { chatMessages, chatThreads } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { env } from "@/api/env";
 import {
@@ -54,8 +50,10 @@ import {
 } from "@/api/handlers/chat/persist-message";
 import {
   applyChatCompactionCheckpoint,
+  markActiveChatCompactionCheckpointStale,
   persistChatCompactionCheckpoint,
   readLatestChatCompaction,
+  shouldInvalidateChatCompactionCheckpoint,
 } from "@/api/handlers/chat/persistent-compaction";
 import { hydrateMessages, streamChat } from "@/api/handlers/chat/stream-chat";
 import { createChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
@@ -1878,16 +1876,6 @@ const runPersistMessage = async ({
             ),
           );
 
-        await tx
-          .update(chatThreadCompactions)
-          .set({ status: "stale" })
-          .where(
-            and(
-              eq(chatThreadCompactions.threadId, threadId),
-              eq(chatThreadCompactions.status, "active"),
-            ),
-          );
-
         for (const deletedMessageId of deleteMessageIds) {
           await recordAuditEvent(tx, {
             action: AUDIT_ACTION.DELETE,
@@ -1897,6 +1885,15 @@ const runPersistMessage = async ({
             metadata: { threadId, reason: "truncate_for_replay" },
           });
         }
+      }
+
+      if (
+        shouldInvalidateChatCompactionCheckpoint({
+          deletedMessageCount: deleteMessageIds.length,
+          persistencePlan,
+        })
+      ) {
+        await markActiveChatCompactionCheckpointStale({ threadId, tx });
       }
 
       const updatedMessageId = brandPersistedChatMessageId(
@@ -1975,15 +1972,14 @@ const runPersistMessage = async ({
           .delete(chatMessages)
           .where(and(eq(chatMessages.id, deletedMessageId)));
 
-        await tx
-          .update(chatThreadCompactions)
-          .set({ status: "stale" })
-          .where(
-            and(
-              eq(chatThreadCompactions.threadId, threadId),
-              eq(chatThreadCompactions.status, "active"),
-            ),
-          );
+        if (
+          shouldInvalidateChatCompactionCheckpoint({
+            deletedMessageCount: 1,
+            persistencePlan,
+          })
+        ) {
+          await markActiveChatCompactionCheckpointStale({ threadId, tx });
+        }
 
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.DELETE,
