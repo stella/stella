@@ -912,8 +912,11 @@
   background: color-mix(in srgb, var(--doc-text) 8%, transparent);
 }
 
-/* Clause slots and block-directive lines sit a touch softer than fields. */
+/* Clause slots, numbering markers, and block-directive lines sit a touch
+   softer than fields. */
 .folio-template-directive--clause,
+.folio-template-directive--num,
+.folio-template-directive--ref,
 .folio-template-directive--if,
 .folio-template-directive--elseif,
 .folio-template-directive--else,

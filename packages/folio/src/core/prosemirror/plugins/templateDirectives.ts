@@ -13,6 +13,7 @@
  * exactly what the fill pipeline will act on:
  *  - `{{placeholder}}` / `{{dotted.path}}` — inline fields
  *  - `{{@clause:Name}}` / `{{@clause:Name:v3}}` — inline clause slots
+ *  - `{{@num:Key}}` / `{{@ref:Key}}` — inline numbering + cross-references
  *  - `{{#if expr}}` `{{#elseif expr}}` `{{#else}}` `{{/if}}`
  *    `{{#each expr}}` `{{/each}}` — block directives (own paragraph)
  */
@@ -28,6 +29,8 @@ import { collectBlockChunks, joinChunks, offsetToDocPos } from "./pmTextScan";
 export type DirectiveKind =
   | "placeholder"
   | "clause"
+  | "num"
+  | "ref"
   | "if"
   | "elseif"
   | "else"
@@ -58,6 +61,9 @@ const BLOCK_DIRECTIVE_RE =
   /^\s*\{\{\s*(#if|#elseif|#else|#each|\/if|\/each)\s*(.*?)\}\}\s*$/u;
 // Inline clause slot: {{@clause:Name}}, {{ @clause:Name:v3 }}.
 const CLAUSE_SLOT_RE = /\{\{\s*@clause:([^:}\s]+)(?::([^}\s]+))?\s*\}\}/gu;
+// Inline numbering markers: {{@num:Key}} (a numbered clause/item) and
+// {{@ref:Key}} (a back-reference). Mirrors the server's numbering.ts.
+const NUMBERING_RE = /\{\{\s*@(num|ref):([\p{L}\p{N}_.-]+)\s*\}\}/gu;
 
 const BLOCK_KIND: Record<string, DirectiveKind> = {
   "#if": "if",
@@ -107,11 +113,30 @@ export const scanDirectives = (doc: PMNode): DirectiveRange[] => {
       clauseMatch = CLAUSE_SLOT_RE.exec(joined);
     }
 
+    // Numbering + cross-reference markers, before the generic placeholder
+    // scan claims them (it skips all `@`-prefixed inners).
+    NUMBERING_RE.lastIndex = 0;
+    let numberingMatch = NUMBERING_RE.exec(joined);
+    while (numberingMatch !== null) {
+      ranges.push({
+        from: offsetToDocPos(chunks, numberingMatch.index),
+        to: offsetToDocPos(
+          chunks,
+          numberingMatch.index + numberingMatch[0].length,
+        ),
+        kind: numberingMatch[1] === "ref" ? "ref" : "num",
+        expr: numberingMatch[2] ?? "",
+        block: false,
+      });
+      numberingMatch = NUMBERING_RE.exec(joined);
+    }
+
     PLACEHOLDER_RE.lastIndex = 0;
     let fieldMatch = PLACEHOLDER_RE.exec(joined);
     while (fieldMatch !== null) {
       const inner = fieldMatch[1] ?? "";
-      // Skip clause slots (handled above) — only plain fields here.
+      // Skip @-prefixed markers (clause slots, numbering) handled above —
+      // only plain fields here.
       if (!inner.startsWith("@")) {
         ranges.push({
           from: offsetToDocPos(chunks, fieldMatch.index),
