@@ -1,4 +1,4 @@
-import type { FlowBlock } from "../core/layout-engine/types";
+import type { FlowBlock } from "./types";
 
 export type LayoutRunReason =
   | "font-ready"

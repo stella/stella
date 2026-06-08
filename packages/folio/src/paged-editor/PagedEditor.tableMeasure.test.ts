@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import { clearAllCaches } from "../core/layout-engine/measure/cache";
+import {
+  measureBlocks,
+  measureTableBlock,
+  measureTableCellBlockVisualHeight,
+} from "../core/layout-engine/measure/measureBlocks";
 import { resetCanvasContext } from "../core/layout-engine/measure/measureContainer";
 import type {
   FlowBlock,
@@ -11,11 +16,6 @@ import type {
   TableBlock,
   TextBoxBlock,
 } from "../core/layout-engine/types";
-import {
-  measureBlocks,
-  measureTableBlock,
-  measureTableCellBlockVisualHeight,
-} from "./PagedEditor";
 
 function withFakeTextMeasure(runTest: () => void): void {
   const originalDocument = globalThis.document;

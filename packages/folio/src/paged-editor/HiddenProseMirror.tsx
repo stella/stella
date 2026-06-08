@@ -41,6 +41,11 @@ import type * as YProseMirror from "y-prosemirror";
 import type { Doc as YDoc, XmlFragment } from "yjs";
 import type * as Yjs from "yjs";
 
+import {
+  recordHiddenEditorPhase,
+  recordHiddenEditorStateCreate,
+  type HiddenEditorStateReason,
+} from "../core/layout-engine/layoutInstrumentation";
 import { toProseDoc, createEmptyDoc } from "../core/prosemirror/conversion";
 import { fromProseDoc } from "../core/prosemirror/conversion/fromProseDoc";
 import type { ExtensionManager } from "../core/prosemirror/extensions/ExtensionManager";
@@ -48,11 +53,6 @@ import { createDocumentStylesPlugin } from "../core/prosemirror/plugins/document
 import { schema } from "../core/prosemirror/schema";
 import type { Document, Theme, StyleDefinitions } from "../core/types/document";
 import { suppressHiddenEditorScrollToSelection } from "./hiddenEditorScroll";
-import {
-  recordHiddenEditorPhase,
-  recordHiddenEditorStateCreate,
-  type HiddenEditorStateReason,
-} from "./layoutInstrumentation";
 import { isReadOnlyEditKey } from "./readOnlyEditAttempt";
 // Import ProseMirror CSS
 import "prosemirror-view/style/prosemirror.css";
