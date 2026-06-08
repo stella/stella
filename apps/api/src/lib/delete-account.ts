@@ -3,6 +3,7 @@ import { and, eq, ne } from "drizzle-orm";
 
 import { account, member, organization, session, user, verification } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
+import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 /**
@@ -93,18 +94,26 @@ export const createDeleteAccountOtp = async (
     try: async () => {
       const identifier = `delete-account:${email}`;
 
-      // audit: skip — ephemeral verification code clean up
-      await rootDb
-        .delete(verification)
-        .where(eq(verification.identifier, identifier));
+      await rootDb.transaction(async (tx) => {
+        // Lock the user row by email first to serialize OTP requests for this email
+        await tx
+          .select({ id: user.id })
+          .from(user)
+          .where(eq(user.email, email))
+          .for("update");
 
-      const id = Bun.randomUUIDv7();
-      // audit: skip — ephemeral verification code insertion
-      await rootDb.insert(verification).values({
-        id,
-        identifier,
-        value: otp,
-        expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes
+        // Now we delete any existing OTP records for this identifier safely
+        await tx
+          .delete(verification)
+          .where(eq(verification.identifier, identifier));
+
+        const id = Bun.randomUUIDv7();
+        await tx.insert(verification).values({
+          id,
+          identifier,
+          value: otp,
+          expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes
+        });
       });
     },
     catch: (err) =>
@@ -114,6 +123,7 @@ export const createDeleteAccountOtp = async (
         cause: err,
       }),
   });
+
 
 /**
  * Verifies the OTP and deletes the user from the database.
@@ -205,10 +215,20 @@ export const verifyAndDeleteUser = async (
         // we anonymize the user profile, strip all active credentials, and clear sessions/memberships.
         // 1. Delete credentials and active sessions
         await tx.delete(account).where(eq(account.userId, currentUserId));
+        // eslint-disable-next-line auth-lifecycle/no-direct-auth-artifact-delete
         await tx.delete(session).where(eq(session.userId, currentUserId));
         await tx.delete(member).where(eq(member.userId, currentUserId));
 
-        // 2. Clear personal data in the user table and release the original email address
+        // 2. Delete workspace memberships and clear workspace lead roles
+        await tx
+          .update(workspaces)
+          .set({ leadUserId: null })
+          .where(eq(workspaces.leadUserId, currentUserId));
+        await tx
+          .delete(workspaceMembers)
+          .where(eq(workspaceMembers.userId, currentUserId));
+
+        // 3. Clear personal data in the user table and release the original email address
         await tx
           .update(user)
           .set({

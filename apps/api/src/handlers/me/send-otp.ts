@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { env } from "@/api/env";
 import { createSafeSessionHandler } from "@/api/lib/api-handlers";
@@ -41,7 +41,7 @@ const deleteAccountSendOtp = createSafeSessionHandler(
     crypto.getRandomValues(array);
     const [val] = array;
     if (val === undefined) {
-      throw new Error("Failed to generate random value");
+      panic("Failed to generate random value");
     }
     const otp = (100_000 + (val % 900_000)).toString();
 
