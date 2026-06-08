@@ -1896,10 +1896,13 @@ function bordersFormGroup(a?: ParagraphBorders, b?: ParagraphBorders): boolean {
 }
 
 // Strong-RTL letters, matched by Unicode script so RTL scripts outside the BMP
-// (Adlam) and newer blocks (Arabic Extended-B) are covered without hand-rolling
-// code-point ranges. Only used to classify the first *letter* (`\p{L}`), so the
-// non-letter members of these scripts (Arabic-Indic digits, combining marks,
-// punctuation) are never tested — they're weak/neutral and skipped upstream.
+// (Adlam U+1E900) and newer blocks (Arabic Extended-B U+0870) are covered
+// without hand-rolling code-point ranges. These eight cover every RTL script in
+// real-world use (Hebrew/Arabic are ~all of it); newer scripts (Yezidi, Garay,
+// …) are omitted because the pinned oxlint/tsc Unicode database rejects their
+// names. Only used to classify the first *letter* (`\p{L}`), so the non-letter
+// members of these scripts (Arabic-Indic digits, combining marks, punctuation)
+// are never tested — they're weak/neutral and skipped upstream.
 const RTL_STRONG_LETTER =
   /[\p{Script=Hebrew}\p{Script=Arabic}\p{Script=Syriac}\p{Script=Thaana}\p{Script=Nko}\p{Script=Samaritan}\p{Script=Mandaic}\p{Script=Adlam}]/u;
 
