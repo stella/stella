@@ -640,7 +640,9 @@ type Messages = {
     "updateFailed": "Failed to update clause";
     "usageNotes": "Usage notes";
     "usageNotesPlaceholder": "When should this clause be used? (for AI assembly)";
+    "variant": "Variant";
     "variantCreated": "Variant created";
+    "variantDefault": "Standard (no variant)";
     "variantDeleted": "Variant deleted";
     "variantLabel": "Variant label";
     "variantLabelPlaceholder": "e.g. Standard";
