@@ -26,11 +26,11 @@ export function shadingToRunShadingAttrs(
   if (!shading) {
     return null;
   }
-  // A `solid` pattern with no fill paints `w:color` over everything, so its
-  // pattern color IS the background — flatten it into the fill slot rather than
-  // dropping it (`resolveShadingFill` treats solid+color as renderable).
-  const usingSolidColor = !shading.fill && shading.pattern === "solid";
-  const fill = shading.fill ?? (usingSolidColor ? shading.color : undefined);
+  // A `solid` pattern paints `w:color` over the whole cell, so the pattern
+  // color (when present) is the visible background — not the fill. Flatten the
+  // chosen color into the fill slot. Other patterns show the fill.
+  const isSolid = shading.pattern === "solid";
+  const fill = isSolid ? (shading.color ?? shading.fill) : shading.fill;
   if (!fill || fill.auto || (!fill.rgb && !fill.themeColor)) {
     return null;
   }
@@ -51,7 +51,7 @@ export function shadingToRunShadingAttrs(
   // Carry a genuine pattern overlay for export fidelity, but not the default
   // `clear`/`nil`, nor the `solid` we just flattened into a plain fill.
   if (
-    !usingSolidColor &&
+    !isSolid &&
     shading.pattern &&
     shading.pattern !== "clear" &&
     shading.pattern !== "nil"

@@ -102,6 +102,18 @@ describe("Issue #712 — run shading round-trips and renders", () => {
     expect(roundTripShading({ shading })?.fill?.rgb).toBe("FF0000");
   });
 
+  test("a solid pattern paints the color over the fill (color wins)", () => {
+    // `<w:shd w:val="solid" w:color="FF0000" w:fill="00FF00"/>` — the solid
+    // pattern covers the fill, so the visible background is the color.
+    const shading = {
+      pattern: "solid" as const,
+      color: { rgb: "FF0000" },
+      fill: { rgb: "00FF00" },
+    };
+    expect(renderedBackground({ shading })).toBe("#FF0000");
+    expect(roundTripShading({ shading })?.fill?.rgb).toBe("FF0000");
+  });
+
   test("a theme-color fill round-trips (themeColor preserved)", () => {
     const formatting: Run["formatting"] = {
       shading: { fill: { themeColor: "accent1" } },
