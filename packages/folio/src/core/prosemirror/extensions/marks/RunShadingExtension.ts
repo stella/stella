@@ -6,12 +6,17 @@
 // highlight. This dedicated mark preserves the fill through the ProseMirror
 // round-trip — it was previously parsed into `formatting.shading` but dropped
 // at PM conversion, so the background silently vanished on reload — and lets
-// the painter render it. No parseDOM: the highlight mark already claims
-// `background-color` on HTML paste; this mark is populated from docx import.
+// the painter render it. It's populated from docx import and, on HTML paste,
+// claims the `background-color` colors the highlight mark rejects (anything
+// outside the OOXML named palette).
 
 import { ensureHexPrefix } from "../../../utils/colorResolver";
 import { expectRunShadingMarkAttrs } from "../../attrs";
 import { createMarkExtension } from "../create";
+import {
+  normalizeCssColorKey,
+  parseDOMHighlightColor,
+} from "./HighlightExtension";
 
 export const RunShadingExtension = createMarkExtension({
   name: "runShading",
@@ -24,6 +29,23 @@ export const RunShadingExtension = createMarkExtension({
       themeShade: { default: null },
       pattern: { default: null },
     },
+    parseDOM: [
+      {
+        style: "background-color",
+        getAttrs: (value) => {
+          // Defer to the highlight mark for any color it can map to the OOXML
+          // named palette; claim the rest (arbitrary hex/rgb) as run shading so
+          // pasted custom backgrounds aren't dropped.
+          if (parseDOMHighlightColor(value)) {
+            return false;
+          }
+          const hex = /^#([0-9a-fA-F]{6})$/u.exec(
+            normalizeCssColorKey(value),
+          )?.[1];
+          return hex ? { rgb: hex.toUpperCase() } : false;
+        },
+      },
+    ],
     toDOM(mark) {
       const { rgb } = expectRunShadingMarkAttrs(mark);
       // The editable overlay has no theme. Use the concrete rgb fill directly:

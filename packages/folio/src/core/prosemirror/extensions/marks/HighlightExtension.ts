@@ -79,7 +79,7 @@ const readHighlightName = (value: string): HighlightColor | null => {
   return null;
 };
 
-const normalizeCssColorKey = (value: string): string => {
+export const normalizeCssColorKey = (value: string): string => {
   const compact = value.trim().toLowerCase().replace(/\s+/gu, "");
   const hexMatch = /^#([0-9a-f]{3}|[0-9a-f]{6})$/u.exec(compact);
   const hex = hexMatch?.[1];
@@ -108,7 +108,9 @@ const cssColorComponentToHex = (value: string | undefined): string => {
   return Math.min(255, Math.max(0, component)).toString(16).padStart(2, "0");
 };
 
-const parseDOMHighlightColor = (value: string): HighlightColor | null => {
+export const parseDOMHighlightColor = (
+  value: string,
+): HighlightColor | null => {
   const trimmed = value.trim();
   if (
     trimmed === "" ||

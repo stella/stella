@@ -17,6 +17,7 @@ import type {
   Run,
   ShadingProperties,
 } from "../../types/document";
+import { schema } from "../schema";
 import { fromProseDoc } from "./fromProseDoc";
 import { toProseDoc } from "./toProseDoc";
 
@@ -143,5 +144,26 @@ describe("Issue #712 — run shading round-trips and renders", () => {
   test("a run with no shading is unaffected", () => {
     expect(renderedBackground({ bold: true })).toBeUndefined();
     expect(roundTripShading({ bold: true })).toBeUndefined();
+  });
+});
+
+describe("Issue #712 — HTML paste of a custom background", () => {
+  const rule = schema.marks["runShading"]?.spec.parseDOM?.[0];
+  const getAttrs = (value: string): unknown =>
+    (rule?.getAttrs as ((v: string) => unknown) | undefined)?.(value);
+
+  test("a custom background-color is claimed as run shading", () => {
+    expect(getAttrs("#D9D9D9")).toEqual({ rgb: "D9D9D9" });
+    expect(getAttrs("rgb(217, 217, 217)")).toEqual({ rgb: "D9D9D9" });
+  });
+
+  test("a named-palette color is left to the highlight mark", () => {
+    // highlight maps these; runShading must not double-claim them.
+    expect(getAttrs("yellow")).toBe(false);
+    expect(getAttrs("#FFFF00")).toBe(false);
+  });
+
+  test("a non-color value is ignored", () => {
+    expect(getAttrs("transparent")).toBe(false);
   });
 });
