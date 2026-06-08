@@ -25,7 +25,7 @@ type CreateTemplateToolsArgs = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   /** Org AI config from the chat turn; enables AI-fillable fields when set. */
-  orgAIConfig?: OrgAIConfig | null;
+  orgAIConfig?: OrgAIConfig | null | undefined;
 };
 
 /**
