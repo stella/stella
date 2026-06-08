@@ -11,6 +11,10 @@ import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
 import { extractText } from "@/api/handlers/docx/extract-text";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
+import {
+  type AiFieldGenerator,
+  resolveAiFields,
+} from "@/api/handlers/docx/resolve-ai-fields";
 import { resolveClauseSlots } from "@/api/handlers/docx/resolve-clause-slots";
 import { readManifest } from "@/api/handlers/docx/template-manifest";
 import { isTemplateData } from "@/api/handlers/docx/types";
@@ -106,18 +110,21 @@ export const fillStoredTemplate = async ({
   values,
   scopedDb,
   organizationId,
+  generateAiValue,
 }: {
   templateId: SafeId<"template">;
   values: Record<string, unknown>;
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
+  /** Optional model-backed generator for AI-fillable fields (aiPrompt). */
+  generateAiValue?: AiFieldGenerator;
 }): Promise<FillTemplateResult> => {
   const loaded = await loadTemplate(templateId, scopedDb);
   if (!loaded) {
     return { error: "Template not found." };
   }
 
-  const record: Record<string, unknown> = { ...values };
+  let record: Record<string, unknown> = { ...values };
 
   const slots = await discoverClauseSlots(loaded.buffer);
   if (slots.length > 0) {
@@ -130,6 +137,16 @@ export const fillStoredTemplate = async ({
     for (const [key, value] of Object.entries(patches)) {
       record[key] = value;
     }
+  }
+
+  // Draft AI-fillable fields (manifest fields with an aiPrompt) before fill.
+  const manifest = await readManifest(loaded.buffer);
+  if (manifest) {
+    record = await resolveAiFields({
+      values: record,
+      fields: manifest.fields,
+      generate: generateAiValue,
+    });
   }
 
   if (!isTemplateData(record)) {

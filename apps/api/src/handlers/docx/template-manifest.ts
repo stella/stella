@@ -83,6 +83,9 @@ const buildFieldXml = (field: FieldMeta): string => {
   if (field.required !== undefined) {
     attrs.push(`required="${field.required}"`);
   }
+  if (field.aiPrompt !== undefined) {
+    attrs.push(`aiPrompt="${escapeXml(field.aiPrompt)}"`);
+  }
 
   const children: string[] = [];
 
@@ -226,6 +229,10 @@ const parseFieldMeta = (el: slimdom.Element): FieldMeta => {
   }
   if (required !== undefined) {
     field.required = required;
+  }
+  const aiPrompt = el.getAttribute("aiPrompt");
+  if (aiPrompt !== null) {
+    field.aiPrompt = aiPrompt;
   }
 
   // Parse options

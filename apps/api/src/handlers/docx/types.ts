@@ -247,6 +247,13 @@ export type FieldMeta = {
   options?: string[] | undefined;
   validation?: FieldValidation | undefined;
   required?: boolean | undefined;
+  /**
+   * When set, the field's value is drafted by AI at fill time from this
+   * instruction (e.g. "Draft the scope of this power of attorney"), unless the
+   * user supplies a value. The model provider is injected at the fill boundary;
+   * with no provider the field is simply left unfilled.
+   */
+  aiPrompt?: string | undefined;
 };
 
 /**
@@ -326,7 +333,9 @@ export const isFieldMeta = (value: unknown): value is FieldMeta => {
         value["options"].every((option) => typeof option === "string"))) &&
     (value["validation"] === undefined ||
       isFieldValidation(value["validation"])) &&
-    (value["required"] === undefined || typeof value["required"] === "boolean")
+    (value["required"] === undefined ||
+      typeof value["required"] === "boolean") &&
+    (value["aiPrompt"] === undefined || typeof value["aiPrompt"] === "string")
   );
 };
 
