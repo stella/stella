@@ -89,6 +89,11 @@ describe("toMarkdown — block structure", () => {
     ]);
     expect(ordered).toBe("1. a\n2. b");
   });
+
+  test("a hidden list marker (w:vanish) exports as plain prose", () => {
+    const hidden: ListRendering = { ...list(0, true, "•"), markerHidden: true };
+    expect(md([para([run("text")], { listRendering: hidden })])).toBe("text");
+  });
 });
 
 describe("toMarkdown — inline marks", () => {
@@ -230,5 +235,24 @@ describe("toMarkdown — clean preset for skills", () => {
       },
     });
     expect(out).toBe("text[^1]\n\n[^1]: note");
+  });
+
+  test("a point comment (commentReference) is preserved in sidecar mode", () => {
+    const content: Paragraph["content"] = [
+      run("text"),
+      { type: "commentReference", id: 5 },
+    ];
+    const out = toMarkdown(
+      {
+        package: {
+          document: {
+            content: [{ type: "paragraph", content }],
+            comments: [{ id: 5, author: "R", content: [para([run("note")])] }],
+          },
+        },
+      },
+      { comments: "sidecar" },
+    );
+    expect(out).toBe("text[^c1]\n\n## Comments\n[^c1]: R: note");
   });
 });

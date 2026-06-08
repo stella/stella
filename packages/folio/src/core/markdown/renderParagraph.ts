@@ -32,7 +32,9 @@ export function renderParagraph(
     return `${hashes} ${inline}`;
   }
 
-  if (para.listRendering) {
+  // A numbering level with `w:vanish` keeps `listRendering` but hides the
+  // marker, so render it as plain prose rather than a Markdown list item.
+  if (para.listRendering && !para.listRendering.markerHidden) {
     return renderListItem(para.listRendering, inline);
   }
 

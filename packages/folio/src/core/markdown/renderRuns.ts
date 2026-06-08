@@ -329,6 +329,11 @@ export function renderParagraphInline(
       case "commentRangeEnd":
         out = handleCommentEnd(ctx, item, openComments, out);
         break;
+      case "commentReference":
+        // A point comment (or a range the parser collapsed to a reference).
+        // It has no covered text, so emit just the marker.
+        out += renderPointComment(ctx, pkg, item.id);
+        break;
       case "simpleField":
       case "complexField": {
         // Render the visible result content.
@@ -387,6 +392,27 @@ function handleCommentStart(
   const comment = pkg?.document.comments?.find((c) => c.id === marker.id);
   openComments.push({ start: startPos, comment });
   return "";
+}
+
+function renderPointComment(
+  ctx: RenderContext,
+  pkg: DocxPackage | undefined,
+  id: number,
+): string {
+  if (ctx.opts.comments === "strip") {
+    return "";
+  }
+  const comment = pkg?.document.comments?.find((c) => c.id === id);
+  if (!comment) {
+    return "";
+  }
+  if (ctx.opts.comments === "sidecar") {
+    const markerNumber = ctx.commentRefs.length + 1;
+    ctx.commentRefs.push({ commentId: comment.id, markerNumber });
+    return `[^c${markerNumber}]`;
+  }
+  // Inline: a point comment covers no text, so wrap an empty span.
+  return wrapComment(ctx, { id: comment.id, author: comment.author }, "");
 }
 
 function handleCommentEnd(
