@@ -24,9 +24,9 @@ import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { TemplateClausesTab } from "@/routes/_protected.knowledge/-components/template-clauses-tab";
-import { TemplateDocxEditor } from "@/routes/_protected.knowledge/-components/template-docx-editor";
 import { TemplateForm } from "@/routes/_protected.knowledge/-components/template-form";
 import { TemplateList } from "@/routes/_protected.knowledge/-components/template-list";
+import { TemplateStudio } from "@/routes/_protected.knowledge/-components/template-studio";
 import { TemplateVersionsTab } from "@/routes/_protected.knowledge/-components/template-versions-tab";
 import {
   buildEditableFields,
@@ -913,8 +913,9 @@ const TemplateDetail = ({
             <TabsPanel value="preview">
               {detail && (
                 <div className="h-[78vh]">
-                  <TemplateDocxEditor
+                  <TemplateStudio
                     fileName={detail.fileName}
+                    manifest={detail.manifest}
                     presignedUrl={detail.presignedUrl}
                     templateId={template.id}
                   />
