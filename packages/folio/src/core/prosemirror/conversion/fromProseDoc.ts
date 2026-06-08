@@ -73,6 +73,7 @@ import {
   expectFootnoteRefMarkAttrs,
   expectHardBreakAttrs,
   expectHighlightMarkAttrs,
+  expectRunShadingMarkAttrs,
   expectHyperlinkMarkAttrs,
   expectImageAttrs,
   expectMathAttrs,
@@ -100,6 +101,7 @@ import type {
   TextBoxAttrs,
 } from "../schema/nodes";
 import { assertValidProseMirrorDocument } from "../validation";
+import { runShadingAttrsToShading } from "./runShadingMark";
 
 function normalizeShapeOutlineStyle(
   style: string | undefined,
@@ -1826,6 +1828,13 @@ function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
 
       case "highlight":
         formatting.highlight = expectHighlightMarkAttrs(mark).color;
+        break;
+
+      case "runShading":
+        // Rebuild the model `w:shd` fill so the run serializer re-emits it.
+        formatting.shading = runShadingAttrsToShading(
+          expectRunShadingMarkAttrs(mark),
+        );
         break;
 
       case "fontSize": {

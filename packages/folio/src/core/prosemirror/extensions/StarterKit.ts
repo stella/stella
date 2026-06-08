@@ -43,6 +43,7 @@ import { HyperlinkExtension } from "./marks/HyperlinkExtension";
 import { ItalicExtension } from "./marks/ItalicExtension";
 import { RtlExtension } from "./marks/RtlExtension";
 import { RunFormattingOverrideExtension } from "./marks/RunFormattingOverrideExtension";
+import { RunShadingExtension } from "./marks/RunShadingExtension";
 import { SmallCapsExtension } from "./marks/SmallCapsExtension";
 import { StrikeExtension } from "./marks/StrikeExtension";
 import { SubscriptExtension } from "./marks/SubscriptExtension";
@@ -127,6 +128,10 @@ export function createStarterKit(
   add("underline", UnderlineExtension());
   add("strike", StrikeExtension());
   add("textColor", TextColorExtension());
+  // Register runShading BEFORE highlight: a later mark is the inner DOM span, so
+  // an explicit highlight (registered after) wins the background when a run has
+  // both — matching the paged painter's `run.highlight ?? run.shading`. (#722)
+  add("runShading", RunShadingExtension());
   add("highlight", HighlightExtension());
   add("fontSize", FontSizeExtension());
   add("fontFamily", FontFamilyExtension());

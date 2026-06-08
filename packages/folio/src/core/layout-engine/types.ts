@@ -41,6 +41,12 @@ export type RunFormatting = {
   // `#FFFF00` are not union members. Either keep a separate CSS field or move
   // resolution to the painter before this can become the named-color union.
   highlight?: string;
+  /**
+   * Run-level shading (w:shd) used as a background, stored as a *resolved CSS*
+   * color (like `highlight`). Painted only when there is no `highlight` (an
+   * explicit highlight wins). eigenpal #722 (#712).
+   */
+  shading?: string;
   fontFamily?: string;
   fontSize?: number;
   letterSpacing?: number;
