@@ -1061,6 +1061,7 @@ function paragraphToRuns(
       const run: FieldRun = {
         kind: "field",
         fieldType: mappedType,
+        instruction: attrs.instruction,
         fallback: attrs.displayText || "",
         pmStart: childPos,
         pmEnd: childPos + child.nodeSize,

@@ -7,6 +7,8 @@
 
 import { ommlToMathml } from "../docx/mathToMathml";
 import { parseXmlDocument } from "../docx/xmlParser";
+import { evaluateFieldInstruction } from "../fields/evaluateField";
+import type { FieldContext } from "../fields/fieldContext";
 import { getListMarkerInlineWidth } from "../layout-engine/measure/listMarkerWidth";
 import type {
   ParagraphBlock,
@@ -945,31 +947,36 @@ function renderLineBreakRun(run: LineBreakRun, doc: Document): HTMLElement {
  * Render a field run (PAGE, NUMPAGES, etc.)
  * Substitutes the field with actual values from context.
  */
+const EMPTY_BOOKMARK_PAGES: ReadonlyMap<string, number> = new Map();
+const EMPTY_BOOKMARK_TEXT: ReadonlyMap<string, string> = new Map();
+const EMPTY_SEQ_VALUES: ReadonlyMap<number, number> = new Map();
+
 function renderFieldRun(
   run: FieldRun,
   doc: Document,
   context: RenderContext,
 ): HTMLElement {
-  let text = run.fallback ?? "";
-
-  switch (run.fieldType) {
-    case "PAGE":
-      text = String(context.pageNumber);
-      break;
-    case "NUMPAGES":
-      text = String(context.totalPages);
-      break;
-    case "DATE":
-      text = new Date().toLocaleDateString();
-      break;
-    case "TIME":
-      text = new Date().toLocaleTimeString();
-      break;
-    case "OTHER":
-      // Any field we don't recognise — render the cached fallback Word
-      // last computed (already assigned to `text` above).
-      break;
-  }
+  // Resolve the field against the painted page. PAGE/NUMPAGES/DATE/TIME compute
+  // live here as before; PAGEREF/REF/SEQ/SECTIONPAGES fall back to the cached
+  // text until their resolution maps are plumbed through the layout. The
+  // instruction drives evaluation; `fieldType` is the fallback when a node
+  // carries no instruction string.
+  const fieldContext: FieldContext = {
+    pageNumber: context.pageNumber,
+    totalPages: context.totalPages,
+    bookmarkPages: EMPTY_BOOKMARK_PAGES,
+    bookmarkText: EMPTY_BOOKMARK_TEXT,
+    seqValues: EMPTY_SEQ_VALUES,
+    now: new Date(),
+  };
+  const text = evaluateFieldInstruction(
+    run.instruction || run.fieldType,
+    fieldContext,
+    {
+      fallback: run.fallback ?? "",
+      ...(run.pmStart === undefined ? {} : { instanceId: run.pmStart }),
+    },
+  );
 
   // Spread the whole FieldRun so every RunFormatting field carries through —
   // Word renders the field result with the result run's full w:rPr. Explicit

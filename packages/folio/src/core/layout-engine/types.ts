@@ -240,7 +240,11 @@ export type LineBreakRun = {
  */
 export type FieldRun = RunFormatting & {
   kind: "field";
+  /** Coarse render category, kept for cache keys and caret-width fast paths. */
   fieldType: "PAGE" | "NUMPAGES" | "DATE" | "TIME" | "OTHER";
+  /** Full OOXML field instruction (e.g. `PAGE \* ROMAN`, `PAGEREF _Ref1 \h`)
+   *  for live evaluation; falls back to `fieldType` when absent. */
+  instruction?: string;
   /** Fallback text if field can't be resolved */
   fallback?: string;
   pmStart?: number;

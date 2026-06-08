@@ -10,8 +10,9 @@ export type FieldContext = {
   pageNumber: number;
   /** Total pages in the document (NUMPAGES). */
   totalPages: number;
-  /** Pages in the field's current section (SECTIONPAGES). */
-  sectionPages: number;
+  /** Pages in the field's current section (SECTIONPAGES); omit until the
+   *  per-section page counts are available, in which case the field falls back. */
+  sectionPages?: number;
   /** Bookmark name -> 1-indexed page it lands on (PAGEREF). */
   bookmarkPages: ReadonlyMap<string, number>;
   /** Bookmark name -> resolved display text (REF). */

@@ -35,10 +35,18 @@ export function evaluateField(
     case "NUMPAGES":
       return computePageNumber(ctx.totalPages, parsed);
     case "SECTIONPAGES":
-      return computePageNumber(ctx.sectionPages, parsed);
+      return ctx.sectionPages === undefined
+        ? fallback
+        : computePageNumber(ctx.sectionPages, parsed);
+
+    case "TIME": {
+      const format = getFormatSwitch(parsed);
+      return format
+        ? formatDate(ctx.now, format)
+        : ctx.now.toLocaleTimeString();
+    }
 
     case "DATE":
-    case "TIME":
     case "CREATEDATE":
     case "SAVEDATE":
     case "PRINTDATE": {
