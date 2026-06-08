@@ -1,0 +1,86 @@
+import {
+  computePageNumber,
+  formatDate,
+  getFormatSwitch,
+  parseFieldInstruction,
+} from "../docx/fieldParser";
+import type { ParsedFieldInstruction } from "../docx/fieldParser";
+import type { FieldContext } from "./fieldContext";
+
+type EvaluateFieldOptions = {
+  /** Shown for unsupported field types and unresolved references. */
+  fallback?: string;
+  /** Run identity (`pmStart`) used to look up a precomputed SEQ value. */
+  instanceId?: number;
+};
+
+/**
+ * Evaluate a parsed field instruction to its display string for `ctx`.
+ *
+ * Returns `options.fallback` (default empty) for field types this engine does
+ * not compute and for references that do not resolve in the current layout, so
+ * an unsupported or dangling field keeps its last-known cached text rather than
+ * vanishing. Pure: all position-dependent inputs come from `ctx`.
+ */
+export function evaluateField(
+  parsed: ParsedFieldInstruction,
+  ctx: FieldContext,
+  options: EvaluateFieldOptions = {},
+): string {
+  const fallback = options.fallback ?? "";
+
+  switch (parsed.type) {
+    case "PAGE":
+      return computePageNumber(ctx.pageNumber, parsed);
+    case "NUMPAGES":
+      return computePageNumber(ctx.totalPages, parsed);
+    case "SECTIONPAGES":
+      return computePageNumber(ctx.sectionPages, parsed);
+
+    case "DATE":
+    case "TIME":
+    case "CREATEDATE":
+    case "SAVEDATE":
+    case "PRINTDATE": {
+      const format = getFormatSwitch(parsed);
+      return format
+        ? formatDate(ctx.now, format)
+        : ctx.now.toLocaleDateString();
+    }
+
+    case "PAGEREF": {
+      const page = parsed.argument
+        ? ctx.bookmarkPages.get(parsed.argument)
+        : undefined;
+      return page === undefined ? fallback : computePageNumber(page, parsed);
+    }
+
+    case "REF": {
+      const text = parsed.argument
+        ? ctx.bookmarkText.get(parsed.argument)
+        : undefined;
+      return text ?? fallback;
+    }
+
+    case "SEQ": {
+      const value =
+        options.instanceId === undefined
+          ? undefined
+          : ctx.seqValues.get(options.instanceId);
+      return value === undefined ? fallback : computePageNumber(value, parsed);
+    }
+
+    default:
+      return fallback;
+  }
+}
+
+/** Parse `instruction` then evaluate it; convenience for callers holding the
+ *  raw instruction string rather than a pre-parsed instruction. */
+export function evaluateFieldInstruction(
+  instruction: string,
+  ctx: FieldContext,
+  options: EvaluateFieldOptions = {},
+): string {
+  return evaluateField(parseFieldInstruction(instruction), ctx, options);
+}
