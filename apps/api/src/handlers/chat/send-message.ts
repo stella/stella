@@ -518,6 +518,7 @@ const sendMessage = createSafeRootHandler(
       safeDb,
       scopedDb,
       threadId: body.threadId,
+      excludedChatHistoryMessageIds: deleteMessageIdsBeforeLatest,
       userId: user.id,
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: effectiveContextMatterIds,

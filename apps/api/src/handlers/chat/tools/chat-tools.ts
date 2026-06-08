@@ -83,6 +83,7 @@ type GetChatToolsProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   threadId: SafeId<"chatThread">;
+  excludedChatHistoryMessageIds?: readonly SafeId<"chatMessage">[] | undefined;
   userId: SafeId<"user">;
   // Use `resolveToolWorkspaceIds` to construct this — that helper is
   // the only path that intersects pinned IDs with the currently
@@ -161,6 +162,7 @@ export const getChatTools = ({
   scopedDb,
   organizationId,
   threadId,
+  excludedChatHistoryMessageIds,
   userId,
   toolWorkspaceIds,
   refRegistry,
@@ -216,6 +218,7 @@ export const getChatTools = ({
     ? createActiveDocxEditTools()
     : {};
   const historyTools = createChatHistoryTools({
+    excludedMessageIds: excludedChatHistoryMessageIds,
     safeDb,
     threadId,
   });
