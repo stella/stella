@@ -1895,6 +1895,44 @@ function bordersFormGroup(a?: ParagraphBorders, b?: ParagraphBorders): boolean {
   );
 }
 
+// First strong-directional character classes (subset of the Unicode Bidi
+// character types L vs R/AL) used for base-direction detection. Authored with
+// `\u` escapes (not pasted glyphs) so the range endpoints stay reviewable and
+// can't be silently corrupted on a copy/paste round-trip. RTL covers Hebrew,
+// Arabic, Syriac, Thaana, NKo, Samaritan, Mandaic, Arabic Extended-A, and the
+// Hebrew/Arabic presentation forms.
+const RTL_STRONG_CHAR =
+  /[\u0590-\u085F\u08A0-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/u;
+const LTR_STRONG_CHAR =
+  /[\u0041-\u005A\u0061-\u007A\u00C0-\u02B8\u0370-\u0589\u10A0-\u10FF\u1E00-\u1FFF]/u;
+
+/**
+ * Decide whether a paragraph without an explicit `w:bidi` flag should still be
+ * laid out right-to-left. Only paragraphs that carry at least one `w:rtl` run
+ * are candidates; among those the base direction follows the first strong
+ * directional character (the `dir="auto"` rule), so Hebrew/Arabic-led lines
+ * order RTL while an English-led line with an embedded RTL word stays LTR.
+ * eigenpal #723 (#719).
+ */
+function paragraphBaseIsRtl(block: ParagraphBlock): boolean {
+  const textRuns = (block.runs ?? []).filter(isTextRun);
+  if (!textRuns.some((r) => r.rtl)) {
+    return false;
+  }
+  for (const run of textRuns) {
+    for (const ch of run.text) {
+      if (RTL_STRONG_CHAR.test(ch)) {
+        return true;
+      }
+      if (LTR_STRONG_CHAR.test(ch)) {
+        return false;
+      }
+    }
+  }
+  // RTL runs but no strong character (digits/punctuation only) — honor w:rtl.
+  return true;
+}
+
 /**
  * Render a paragraph fragment
  *
@@ -1949,9 +1987,15 @@ export function renderParagraphFragment(
     fragmentEl.dataset["styleId"] = block.attrs.styleId;
   }
 
-  // Apply RTL direction
-  const isBidi = block.attrs?.bidi;
-  if (isBidi) {
+  // Apply RTL direction. An explicit `w:bidi` paragraph is always RTL. When
+  // there's no `w:bidi` but the paragraph carries right-to-left runs (`w:rtl`),
+  // fall back to first-strong base-direction detection: Word/UBA order the runs
+  // by the paragraph's base direction, but the painter lays them out as
+  // independently `dir`-marked spans (each an isolate), so without a base `dir`
+  // on the fragment the runs stay in logical LTR order and reversed Hebrew/
+  // Arabic reads backwards. eigenpal #723 (#719).
+  const isRtl = Boolean(block.attrs?.bidi) || paragraphBaseIsRtl(block);
+  if (isRtl) {
     fragmentEl.dir = "rtl";
   }
 
@@ -1968,9 +2012,9 @@ export function renderParagraphFragment(
     } else {
       // 'justify' uses text-align: left (or right for RTL)
       // Justify is implemented via word-spacing on individual lines
-      fragmentEl.style.textAlign = isBidi ? "right" : "left";
+      fragmentEl.style.textAlign = isRtl ? "right" : "left";
     }
-  } else if (isBidi) {
+  } else if (isRtl) {
     // No explicit alignment on RTL paragraph — default to right
     fragmentEl.style.textAlign = "right";
   }
@@ -1984,7 +2028,7 @@ export function renderParagraphFragment(
   if (indent) {
     // Track indent values for line-level application
     // For RTL paragraphs, swap left/right indentation
-    if (isBidi) {
+    if (isRtl) {
       if (indent.left !== undefined) {
         indentRight = indent.left;
       }
