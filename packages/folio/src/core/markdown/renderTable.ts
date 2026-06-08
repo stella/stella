@@ -278,9 +278,14 @@ function renderHtmlInline(
         out += renderHtmlHyperlink(ctx, pkg, item, paraId);
         break;
       case "insertion":
-      case "moveTo":
-        out += renderHtmlChildren(ctx, pkg, item.content, paraId);
+      case "moveTo": {
+        const inner = renderHtmlChildren(ctx, pkg, item.content, paraId);
+        out +=
+          ctx.opts.trackedChanges === "annotate"
+            ? `<ins>${inner}</ins>`
+            : inner;
         break;
+      }
       case "deletion":
       case "moveFrom":
         if (ctx.opts.trackedChanges === "annotate") {
