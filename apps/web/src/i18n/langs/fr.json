@@ -2615,6 +2615,11 @@
       "allManualInputsDescription": "Veuillez ajouter au moins une propriété IA pour démarrer le flux de travail",
       "allManualInputsTitle": "Toutes les propriétés sont des saisies manuelles",
       "generate": "Générer",
+      "largeRunPrompt": {
+        "description": "Cela mettra en file d’attente l’extraction par IA pour {count} entités. Lancez-la uniquement si vous voulez traiter autant de fichiers maintenant.",
+        "start": "Lancer l’extraction",
+        "title": "Lancer l’extraction par IA ?"
+      },
       "noFieldsToProcess": "Aucun champ à traiter",
       "someFieldsOutdatedDescription": "Veuillez mettre à jour les champs à sélection unique et multiple pour correspondre aux options des propriétés",
       "someFieldsOutdatedTitle": "Certains champs sont obsolètes",

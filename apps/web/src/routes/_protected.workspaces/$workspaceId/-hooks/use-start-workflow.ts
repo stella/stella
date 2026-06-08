@@ -5,6 +5,12 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toSafeId } from "@/lib/safe-id";
 import { aiAvailabilityOptions } from "@/routes/_protected.organization/-ai-config-queries";
+import { useWorkflowStartConfirmationPrompt } from "@/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt";
+import {
+  estimateWorkflowTargetCount,
+  resolveWorkflowStartDecision,
+} from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow.logic";
+import type { StartWorkflowArgs } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow.logic";
 import { workspaceKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 
 /**
@@ -21,31 +27,46 @@ export const useStartWorkflow = (workspaceId: string) => {
   const { data: aiAvailability } = useQuery(
     aiAvailabilityOptions({ organizationId: activeOrganizationId }),
   );
+  const confirmLargeRun = useWorkflowStartConfirmationPrompt();
 
-  return async (args?: {
-    entityIds?: string[];
-    entityIdsOrder?: string[];
-    propertyIds?: string[];
-  }) => {
+  return async (args?: StartWorkflowArgs) => {
     if (!aiAvailability?.available) {
       return undefined;
     }
 
     try {
+      const decision = await resolveWorkflowStartDecision({
+        confirmLargeRun,
+        estimateEntityCount: async () =>
+          await estimateWorkflowTargetCount({
+            args,
+            queryClient,
+            workspaceId,
+          }),
+      });
+      if (decision.type === "cancel") {
+        return undefined;
+      }
+
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .workflow.start.post({
-          ...(args?.entityIds && {
-            entityIds: args.entityIds.map((id) => toSafeId<"entity">(id)),
-          }),
-          ...(args?.entityIdsOrder && {
-            entityIdsOrder: args.entityIdsOrder.map((id) =>
-              toSafeId<"entity">(id),
-            ),
-          }),
-          ...(args?.propertyIds && {
-            propertyIds: args.propertyIds.map((id) => toSafeId<"property">(id)),
-          }),
+          ...(args?.entityIds !== undefined &&
+            args.entityIds.length > 0 && {
+              entityIds: args.entityIds.map((id) => toSafeId<"entity">(id)),
+            }),
+          ...(args?.entityIdsOrder !== undefined &&
+            args.entityIdsOrder.length > 0 && {
+              entityIdsOrder: args.entityIdsOrder.map((id) =>
+                toSafeId<"entity">(id),
+              ),
+            }),
+          ...(args?.propertyIds !== undefined &&
+            args.propertyIds.length > 0 && {
+              propertyIds: args.propertyIds.map((id) =>
+                toSafeId<"property">(id),
+              ),
+            }),
         });
 
       if (response.error) {

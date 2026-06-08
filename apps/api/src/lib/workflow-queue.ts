@@ -1,20 +1,19 @@
-import { matchError, panic, Result } from "better-result";
+import { panic, Result } from "better-result";
 import { Queue, Worker } from "bullmq";
 import type { RedisClient } from "bun";
 import { sleep } from "bun";
-import { and, asc, eq, gt, inArray, or, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db";
 import { jsonField } from "@/api/db/json-utils";
 import { rootDb } from "@/api/db/root";
 import {
   cellMetadata,
-  entities,
   fields,
   justifications,
   properties,
 } from "@/api/db/schema";
-import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
+import type { FieldContent } from "@/api/db/schema-validators";
 import {
   loadOrgAIConfig,
   loadPromptCachingPreference,
@@ -43,6 +42,11 @@ import {
   brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
 import { broadcast } from "@/api/lib/sse";
+import {
+  collectFullWorkflowTargetIds,
+  fetchExplicitWorkflowTargetRows,
+  readFullWorkflowSnapshotCursor,
+} from "@/api/lib/workflow-target-queries";
 import { resolveWorkflowTargetEntityIds } from "@/api/lib/workflow-targets";
 import { getBatchGenerator } from "@/api/lib/workflow/generate-batch-provider";
 import type {
@@ -60,6 +64,11 @@ import {
   selectRecoverableOrphanWorkspaceIds,
   selectRunningLockReservation,
 } from "@/api/lib/workflow/orphan-recovery";
+import {
+  computeWorkflowJobTimeoutMs,
+  runWorkflowBatchGenerationWithRetry,
+  WORKFLOW_BATCH_AI_TIMEOUT_MS,
+} from "@/api/lib/workflow/run-logic";
 import type { PartialAnswerUpdate } from "@/api/lib/workflow/streaming-answer";
 import { prepareBatch } from "@/api/lib/workflow/utils";
 
@@ -196,28 +205,6 @@ const LOCK_DURATION_MS = 5 * 60 * 1000;
 const STALLED_INTERVAL_MS = 30 * 1000;
 const MAX_STALLED_COUNT = 2;
 
-// Per-batch AI timeout. The same constant feeds into both the AI SDK
-// abort signal in `processOneBatch` and the per-job timeout below so
-// changes stay coupled.
-const BATCH_AI_TIMEOUT_MS = 120 * 1000;
-const INTEGRATION_ERROR_RETRY_DELAY_MS = 5 * 1000;
-const INTEGRATION_ERROR_ATTEMPTS = 2;
-// Floor for the per-job hard timeout — even a single-level plan gets
-// a generous window for setup, network blips, and the post-AI DB
-// writes.
-const JOB_TIMEOUT_FLOOR_MS = 6 * 60 * 1000;
-// Each dependency level runs sequentially and may itself contain
-// multiple batches sharing the per-batch timeout. The 1.5× factor
-// accommodates one retry within a batch plus DB write overhead.
-const JOB_TIMEOUT_PER_LEVEL_MS = Math.ceil(BATCH_AI_TIMEOUT_MS * 1.5);
-
-const computeJobTimeoutMs = (executionPlan: ExecutionLevel[]): number => {
-  const levels = executionPlan.length;
-  return Math.max(
-    JOB_TIMEOUT_FLOOR_MS,
-    levels * JOB_TIMEOUT_PER_LEVEL_MS + JOB_TIMEOUT_FLOOR_MS,
-  );
-};
 // Workflow-level Redis lock TTL. Long enough to outlast a single batch
 // even on big workspaces, short enough to self-heal an uncleanly-killed
 // worker without stranding the workspace for hours. The lock is also
@@ -264,16 +251,6 @@ type StartWorkflowArgs = {
 
 type StartWorkflowResult = {
   status: "started" | "already-running" | "skipped" | "failed";
-};
-
-type WorkflowTargetEntityRow = {
-  id: SafeId<"entity">;
-  kind: EntityKind;
-};
-
-type FullWorkflowTargetCursor = {
-  createdAt: string;
-  id: SafeId<"entity">;
 };
 
 type EnqueueEntityJobsArgs = {
@@ -359,135 +336,6 @@ const removeQueuedWorkflowJobs = async (
         }
       }),
     );
-  }
-};
-
-const fetchExplicitWorkflowTargetRows = async ({
-  inputEntityIds,
-  scopedDb,
-  workspaceId,
-}: {
-  inputEntityIds: readonly SafeId<"entity">[];
-  scopedDb: ScopedDb;
-  workspaceId: SafeId<"workspace">;
-}): Promise<WorkflowTargetEntityRow[]> => {
-  const entityRows: WorkflowTargetEntityRow[] = [];
-  for (const chunk of chunkItems(
-    inputEntityIds,
-    LIMITS.workflowEntityBatchSize,
-  )) {
-    const rows = await scopedDb((tx) =>
-      tx
-        .select({ id: entities.id, kind: entities.kind })
-        .from(entities)
-        .where(
-          and(
-            eq(entities.workspaceId, workspaceId),
-            inArray(entities.id, chunk),
-          ),
-        ),
-    );
-    for (const row of rows) {
-      entityRows.push(row);
-    }
-  }
-
-  return entityRows;
-};
-
-const WORKFLOW_TIMESTAMP_CURSOR_FORMAT = 'YYYY-MM-DD"T"HH24:MI:SS.US';
-
-const readFullWorkflowSnapshotCursor = async ({
-  scopedDb,
-}: {
-  scopedDb: ScopedDb;
-}): Promise<string> => {
-  const rows = await scopedDb((tx) =>
-    tx.execute<{ value: string }>(
-      sql`SELECT to_char(now(), ${WORKFLOW_TIMESTAMP_CURSOR_FORMAT}) AS value`,
-    ),
-  );
-  const row = rows.at(0);
-  if (!row) {
-    return panic("Workflow snapshot cursor query returned no rows");
-  }
-
-  return row.value;
-};
-
-const fetchFullWorkflowTargetBatch = async ({
-  createdAtCutoff,
-  lastCursor,
-  scopedDb,
-  workspaceId,
-}: {
-  createdAtCutoff: string;
-  lastCursor: FullWorkflowTargetCursor | null;
-  scopedDb: ScopedDb;
-  workspaceId: SafeId<"workspace">;
-}): Promise<FullWorkflowTargetCursor[]> =>
-  await scopedDb((tx) =>
-    tx
-      .select({
-        createdAt: sql<string>`to_char(${entities.createdAt}, ${WORKFLOW_TIMESTAMP_CURSOR_FORMAT})`,
-        id: entities.id,
-      })
-      .from(entities)
-      .where(
-        and(
-          eq(entities.workspaceId, workspaceId),
-          eq(entities.kind, "document"),
-          sql`${entities.createdAt} <= ${createdAtCutoff}::timestamp`,
-          ...(lastCursor === null
-            ? []
-            : [
-                or(
-                  sql`${entities.createdAt} > ${lastCursor.createdAt}::timestamp`,
-                  and(
-                    sql`${entities.createdAt} = ${lastCursor.createdAt}::timestamp`,
-                    gt(entities.id, lastCursor.id),
-                  ),
-                ),
-              ]),
-        ),
-      )
-      .orderBy(asc(entities.createdAt), asc(entities.id))
-      .limit(LIMITS.workflowEntityBatchSize),
-  );
-
-const collectFullWorkflowTargetIds = async ({
-  createdAtCutoff,
-  scopedDb,
-  workspaceId,
-}: {
-  createdAtCutoff: string;
-  scopedDb: ScopedDb;
-  workspaceId: SafeId<"workspace">;
-}): Promise<SafeId<"entity">[]> => {
-  const entityIds: SafeId<"entity">[] = [];
-  let lastCursor: FullWorkflowTargetCursor | null = null;
-
-  while (true) {
-    const rows = await fetchFullWorkflowTargetBatch({
-      createdAtCutoff,
-      lastCursor,
-      scopedDb,
-      workspaceId,
-    });
-
-    if (rows.length === 0) {
-      return entityIds;
-    }
-
-    for (const row of rows) {
-      entityIds.push(row.id);
-    }
-
-    const lastRow = rows.at(-1);
-    if (!lastRow) {
-      return entityIds;
-    }
-    lastCursor = lastRow;
   }
 };
 
@@ -1144,7 +992,7 @@ export const initWorkflowWorker = () => {
       // AI timeout. A fixed 6-min ceiling would deterministically
       // abort entities with several slow levels even when each
       // individual batch stays within budget.
-      const jobTimeoutMs = computeJobTimeoutMs(job.data.executionPlan);
+      const jobTimeoutMs = computeWorkflowJobTimeoutMs(job.data.executionPlan);
       const timeoutHandle = setTimeout(() => {
         controller.abort(
           new Error(
@@ -1610,56 +1458,40 @@ const processOneBatch = async ({
     ]);
     const generateFn = getBatchGenerator();
 
-    let batchResult: Awaited<ReturnType<typeof generateFn>> | undefined;
-    for (let attempt = 1; attempt <= INTEGRATION_ERROR_ATTEMPTS; attempt++) {
-      // generateBatch returns a Result<T, E> directly. The combined
-      // signal aborts when EITHER the per-batch AI timeout fires OR the
-      // worker-level per-job timeout does, so the AI SDK actually cancels
-      // the in-flight request.
-      batchResult = await generateFn({
-        abortSignal: AbortSignal.any([
-          AbortSignal.timeout(BATCH_AI_TIMEOUT_MS),
-          signal,
-        ]),
-        batch,
-        entityVersionId,
-        organizationId,
-        workspaceId,
-        scopedDb,
-        orgAIConfig,
-        promptCachingEnabled,
-        onPartialAnswer: previewPublisher.publish,
-      });
-
-      if (!Result.isError(batchResult)) {
-        break;
-      }
-
-      const retryIntegrationError: boolean = matchError(batchResult.error, {
-        WorkflowIntegrationError: () => true,
-        WorkflowValidationError: () => false,
-      });
-      if (!retryIntegrationError || attempt >= INTEGRATION_ERROR_ATTEMPTS) {
-        break;
-      }
-
-      captureError(batchResult.error, {
-        workspaceId,
-        entityId,
-        batchId: batch.id,
-        level: String(level),
-        requestId,
-        attempt: String(attempt),
-        retry: "true",
-      });
-      signal.throwIfAborted();
-      await sleep(INTEGRATION_ERROR_RETRY_DELAY_MS);
-      signal.throwIfAborted();
-    }
-
-    if (batchResult === undefined) {
-      return;
-    }
+    // generateBatch returns a Result<T, E> directly. The combined
+    // signal aborts when EITHER the per-batch AI timeout fires OR the
+    // worker-level per-job timeout does, so the AI SDK actually cancels
+    // the in-flight request.
+    const batchResult = await runWorkflowBatchGenerationWithRetry({
+      generate: async () =>
+        await generateFn({
+          abortSignal: AbortSignal.any([
+            AbortSignal.timeout(WORKFLOW_BATCH_AI_TIMEOUT_MS),
+            signal,
+          ]),
+          batch,
+          entityVersionId,
+          organizationId,
+          workspaceId,
+          scopedDb,
+          orgAIConfig,
+          promptCachingEnabled,
+          onPartialAnswer: previewPublisher.publish,
+        }),
+      onRetryError: (error, attempt) => {
+        captureError(error, {
+          workspaceId,
+          entityId,
+          batchId: batch.id,
+          level: String(level),
+          requestId,
+          attempt: String(attempt),
+          retry: "true",
+        });
+      },
+      sleep,
+      throwIfAborted: () => signal.throwIfAborted(),
+    });
 
     if (Result.isError(batchResult)) {
       captureError(batchResult.error, {

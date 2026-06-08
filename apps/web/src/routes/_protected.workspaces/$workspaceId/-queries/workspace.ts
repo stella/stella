@@ -12,10 +12,20 @@ type JustificationsKey = {
   entityIds: string[];
 };
 
+type WorkflowTargetCountKey = {
+  workspaceId: string;
+  entityIds: string[];
+};
+
 export const workspaceKeys = {
   workflow: (workspaceId: string) => [
     ...workspacesKeys.byId(workspaceId),
     "workflow",
+  ],
+  workflowTargetCount: ({ entityIds, workspaceId }: WorkflowTargetCountKey) => [
+    ...workspaceKeys.workflow(workspaceId),
+    "target-count",
+    { entityIds },
   ],
   justifications: (workspaceId: string) => [
     ...workspacesKeys.byId(workspaceId),
@@ -28,6 +38,8 @@ export const workspaceKeys = {
 };
 
 type WorkflowKey = { workspaceId: string };
+type WorkflowTargetCountOptionsInput =
+  QueryOptionsInput<WorkflowTargetCountKey>;
 
 const WORKFLOW_DEFAULT_STATUS = { running: false } as const;
 
@@ -46,6 +58,32 @@ export const workflowOptions = ({ key }: { key: WorkflowKey }) =>
       }
 
       return response.data;
+    },
+  });
+
+export const workflowTargetCountOptions = ({
+  entityIds,
+  workspaceId,
+}: WorkflowTargetCountOptionsInput) =>
+  queryOptions({
+    queryKey: workspaceKeys.workflowTargetCount({ entityIds, workspaceId }),
+    queryFn: async ({ signal }) => {
+      const response = await api
+        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .workflow["target-count"].post(
+          {
+            ...(entityIds.length > 0 && {
+              entityIds: entityIds.map((id) => toSafeId<"entity">(id)),
+            }),
+          },
+          { fetch: { signal } },
+        );
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data.count;
     },
   });
 

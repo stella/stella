@@ -2615,6 +2615,11 @@
       "allManualInputsDescription": "A munkafolyamat indításához adjon hozzá legalább egy AI tulajdonságot",
       "allManualInputsTitle": "Minden tulajdonság kézi bevitel",
       "generate": "Generálás",
+      "largeRunPrompt": {
+        "description": "Ez {count} entitáshoz sorolja be az AI-kivonatolást. Csak akkor indítsa el, ha most ennyi fájlt szeretne feldolgozni.",
+        "start": "Kivonatolás indítása",
+        "title": "Elindítja az AI-kivonatolást?"
+      },
       "noFieldsToProcess": "Nincsenek feldolgozandó mezők",
       "someFieldsOutdatedDescription": "Frissítse az egyszeres és többszörös választás mezőket, hogy megfeleljenek a tulajdonság opcióinak",
       "someFieldsOutdatedTitle": "Egyes mezők elavultak",

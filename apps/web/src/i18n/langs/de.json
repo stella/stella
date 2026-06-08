@@ -2615,6 +2615,11 @@
       "allManualInputsDescription": "Fügen Sie mindestens eine KI-Eigenschaft hinzu, um den Arbeitsablauf zu starten",
       "allManualInputsTitle": "Alle Eigenschaften sind manuelle Eingaben",
       "generate": "Generieren",
+      "largeRunPrompt": {
+        "description": "Dadurch wird die KI-Extraktion für {count} Entitäten in die Warteschlange gestellt. Starten Sie sie nur, wenn Sie jetzt so viele Dateien verarbeiten möchten.",
+        "start": "Extraktion starten",
+        "title": "KI-Extraktion starten?"
+      },
       "noFieldsToProcess": "Keine Felder zum Verarbeiten",
       "someFieldsOutdatedDescription": "Aktualisieren Sie die Einfach- und Mehrfachauswahlfelder, um den Eigenschaftsoptionen zu entsprechen",
       "someFieldsOutdatedTitle": "Einige Felder sind veraltet",

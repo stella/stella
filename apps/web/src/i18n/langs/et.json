@@ -2615,6 +2615,11 @@
       "allManualInputsDescription": "Töövoo käivitamiseks lisage vähemalt üks tehisintellekti omadus",
       "allManualInputsTitle": "Kõik omadused on käsitsi sisestatavad",
       "generate": "Genereeri",
+      "largeRunPrompt": {
+        "description": "See lisab AI väljavõtte järjekorda {count} üksuse jaoks. Käivita see ainult siis, kui soovid praegu nii palju faile töödelda.",
+        "start": "Käivita väljavõte",
+        "title": "Käivitada AI väljavõte?"
+      },
       "noFieldsToProcess": "Töödeldavad väljad puuduvad",
       "someFieldsOutdatedDescription": "Uuendage ühekordse ja mitmikvaliku väljad, et need vastaksid omaduse valikutele",
       "someFieldsOutdatedTitle": "Mõned väljad on aegunud",
