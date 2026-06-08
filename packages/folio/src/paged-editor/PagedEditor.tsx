@@ -37,6 +37,7 @@ import { HiddenHeaderFooterPMs } from "../components/HiddenHeaderFooterPMs";
 import type { HiddenHeaderFooterPMsRef } from "../components/HiddenHeaderFooterPMs";
 import { getFootnoteText } from "../core/docx/footnoteParser";
 import { buildBookmarkPageMap } from "../core/fields/bookmarkPages";
+import { buildSeqValues } from "../core/fields/seqValues";
 import { clickToPosition } from "../core/layout-bridge/clickToPosition";
 import { clickToPositionDom } from "../core/layout-bridge/clickToPositionDom";
 import {
@@ -2636,6 +2637,11 @@ export function PagedEditor(
           );
           if (bookmarkPages.size > 0) {
             renderOpts.bookmarkPages = bookmarkPages;
+          }
+          // Assign SEQ caption numbers in document order so SEQ fields resolve.
+          const seqValues = buildSeqValues(newBlocks);
+          if (seqValues.size > 0) {
+            renderOpts.seqValues = seqValues;
           }
           // Document watermark (rendered behind every page). Build a
           // per-header-rId map so titlePg / even-odd / per-section

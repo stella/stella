@@ -168,6 +168,8 @@ export type RenderPageOptions = {
   document?: Document;
   /** Bookmark name -> 1-indexed page, for resolving PAGEREF fields at paint. */
   bookmarkPages?: ReadonlyMap<string, number>;
+  /** Field run `pmStart` -> precomputed SEQ value, for resolving SEQ fields. */
+  seqValues?: ReadonlyMap<number, number>;
   /** Custom page class name */
   pageClassName?: string;
   /** Show page borders (for debugging) */
@@ -2491,6 +2493,7 @@ function buildPageRenderArgs(
     totalPages,
     section: "body",
     ...(options.bookmarkPages ? { bookmarkPages: options.bookmarkPages } : {}),
+    ...(options.seqValues ? { seqValues: options.seqValues } : {}),
   };
   const pageOptions: RenderPageOptions = { ...options };
   const hasSectionHeaderFooter = applySectionHeaderFooterOptions(

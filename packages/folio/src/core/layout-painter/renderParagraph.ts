@@ -966,7 +966,7 @@ function renderFieldRun(
     totalPages: context.totalPages,
     bookmarkPages: context.bookmarkPages ?? EMPTY_BOOKMARK_PAGES,
     bookmarkText: EMPTY_BOOKMARK_TEXT,
-    seqValues: EMPTY_SEQ_VALUES,
+    seqValues: context.seqValues ?? EMPTY_SEQ_VALUES,
     now: new Date(),
   };
   const text = evaluateFieldInstruction(
