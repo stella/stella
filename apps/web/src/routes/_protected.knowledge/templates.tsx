@@ -5,17 +5,13 @@ import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
   CheckCircle2Icon,
-  ChevronDownIcon,
-  ChevronRightIcon,
   FileTextIcon,
   PencilIcon,
-  PlayIcon,
 } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
-import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/components/tabs";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
@@ -26,13 +22,8 @@ import { TemplateForm } from "@/routes/_protected.knowledge/-components/template
 import { TemplateList } from "@/routes/_protected.knowledge/-components/template-list";
 import { TemplateStudio } from "@/routes/_protected.knowledge/-components/template-studio";
 import { TemplateVersionsTab } from "@/routes/_protected.knowledge/-components/template-versions-tab";
-import {
-  buildEditableFields,
-  ConfigureStep,
-  FieldConfigEditor,
-} from "@/routes/_protected.knowledge/-components/template-wizard";
+import { ConfigureStep } from "@/routes/_protected.knowledge/-components/template-wizard";
 import type {
-  EditableField,
   NamedCondition,
   ResolvedField,
   StructureError,
@@ -365,69 +356,6 @@ const renameReducer = (
   }
 };
 
-type FieldEditState =
-  | { status: "idle" }
-  | {
-      status: "editing";
-      fields: EditableField[];
-      expandedPath: string | null;
-      saving: boolean;
-    };
-
-type FieldEditAction =
-  | { type: "start"; fields: EditableField[] }
-  | { type: "cancel" }
-  | { type: "setExpanded"; path: string | null }
-  | { type: "updateField"; path: string; patch: Partial<EditableField> }
-  | { type: "savingStart" }
-  | { type: "saveFailed" }
-  | { type: "saved" };
-
-const fieldEditReducer = (
-  state: FieldEditState,
-  action: FieldEditAction,
-): FieldEditState => {
-  switch (action.type) {
-    case "start":
-      return {
-        status: "editing",
-        fields: action.fields,
-        expandedPath: null,
-        saving: false,
-      };
-    case "cancel":
-    case "saved":
-      return { status: "idle" };
-    case "setExpanded":
-      if (state.status !== "editing") {
-        return state;
-      }
-      return { ...state, expandedPath: action.path };
-    case "updateField":
-      if (state.status !== "editing") {
-        return state;
-      }
-      return {
-        ...state,
-        fields: state.fields.map((f) =>
-          f.path === action.path ? { ...f, ...action.patch } : f,
-        ),
-      };
-    case "savingStart":
-      if (state.status !== "editing") {
-        return state;
-      }
-      return { ...state, saving: true };
-    case "saveFailed":
-      if (state.status !== "editing") {
-        return state;
-      }
-      return { ...state, saving: false };
-    default:
-      return state;
-  }
-};
-
 /** Template detail view: shows metadata, fields, and
  *  actions (test fill, delete). */
 const TemplateDetail = ({
@@ -478,10 +406,6 @@ const TemplateDetail = ({
   });
   const renameInputRef = useRef<HTMLInputElement>(null);
   const renameCancelledRef = useRef(false);
-
-  const [fieldEdit, fieldEditDispatch] = useReducer(fieldEditReducer, {
-    status: "idle",
-  });
 
   // Focus input when entering rename mode
   useEffect(() => {
@@ -566,112 +490,6 @@ const TemplateDetail = ({
     onFill(detail);
   }, [state, detail, onFill]);
 
-  const startEditFields = useCallback(() => {
-    if (state !== "ready" || !detail) {
-      return;
-    }
-    const manifestFields = detail.manifest?.fields ?? [];
-    // Convert manifest fields to ResolvedField shape
-    // for buildEditableFields
-    const resolved = manifestFields.map((f) => ({
-      path: f.path,
-      kind:
-        f.inputType === "boolean" ? ("boolean" as const) : ("string" as const),
-      count: 1,
-      label: f.label,
-      inputType: f.inputType,
-      options: f.options,
-      required: f.required,
-    }));
-    fieldEditDispatch({
-      type: "start",
-      fields: buildEditableFields(resolved),
-    });
-  }, [state, detail]);
-
-  const cancelEditFields = useCallback(() => {
-    fieldEditDispatch({ type: "cancel" });
-  }, []);
-
-  const updateField = useCallback(
-    (path: string, patch: Partial<EditableField>) => {
-      fieldEditDispatch({ type: "updateField", path, patch });
-    },
-    [],
-  );
-
-  const saveFields = useCallback(async () => {
-    if (state !== "ready" || !detail) {
-      return;
-    }
-
-    if (fieldEdit.status !== "editing") {
-      return;
-    }
-
-    fieldEditDispatch({ type: "savingStart" });
-
-    const manifest = {
-      version: 1,
-      fields: fieldEdit.fields.map((f) => ({
-        path: f.path,
-        label: f.label || undefined,
-        inputType: f.inputType,
-        options:
-          f.inputType === "select" && f.options.length > 0
-            ? f.options
-            : undefined,
-        required: f.required || undefined,
-      })),
-      conditions: detail.manifest?.conditions ?? [],
-    };
-
-    const response = await api
-      .templates({ templateId: toSafeId<"template">(template.id) })
-      .post({ manifest: JSON.stringify(manifest) });
-
-    if (response.error) {
-      fieldEditDispatch({ type: "saveFailed" });
-      stellaToast.add({
-        type: "error",
-        title: t("templates.fieldUpdateFailed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
-      return;
-    }
-
-    // Invalidate the detail query to pick up new manifest
-    queryClient
-      .invalidateQueries({
-        queryKey: knowledgeKeys.templates.detail(
-          activeOrganizationId,
-          template.id,
-        ),
-      })
-      .catch(() => {
-        /* fire-and-forget */
-      });
-
-    fieldEditDispatch({ type: "saved" });
-
-    stellaToast.add({
-      type: "success",
-      title: t("templates.fieldsUpdated"),
-    });
-  }, [
-    state,
-    detail,
-    fieldEdit,
-    template.id,
-    t,
-    queryClient,
-    activeOrganizationId,
-  ]);
-
-  const fields = detail?.manifest?.fields ?? [];
   const fieldCount = detail?.manifest?.fields.length ?? template.fieldCount;
 
   return (
@@ -733,168 +551,6 @@ const TemplateDetail = ({
           presignedUrl={detail.presignedUrl}
           templateId={template.id}
         />
-      )}
-      {false && (
-        <div className="mx-auto w-full max-w-4xl overflow-y-auto p-6">
-          <Tabs defaultValue="preview">
-            <TabsList variant="underline">
-              <TabsTab value="preview">{t("common.edit")}</TabsTab>
-              <TabsTab value="fields">{t("templates.fields")}</TabsTab>
-              <TabsTab value="clauses">{t("common.clauses")}</TabsTab>
-              <TabsTab value="history">{t("common.history")}</TabsTab>
-            </TabsList>
-
-            <TabsPanel value="fields">
-              {(() => {
-                if (fieldEdit.status === "editing") {
-                  return (
-                    <div className="mt-4">
-                      <div className="rounded-lg border">
-                        <div className="border-b px-4 py-3">
-                          <h3 className="text-muted-foreground text-sm font-medium">
-                            {t("templates.fieldCount", {
-                              count: fieldEdit.fields.length,
-                            })}
-                          </h3>
-                        </div>
-                        <ul className="divide-y">
-                          {fieldEdit.fields.map((field) => {
-                            const isExpanded =
-                              fieldEdit.expandedPath === field.path;
-                            return (
-                              <li key={field.path}>
-                                <button
-                                  className="hover:bg-muted/50 flex w-full items-center gap-3 px-4 py-3 text-start text-sm"
-                                  onClick={() =>
-                                    fieldEditDispatch({
-                                      type: "setExpanded",
-                                      path: isExpanded ? null : field.path,
-                                    })
-                                  }
-                                  type="button"
-                                >
-                                  {isExpanded ? (
-                                    <ChevronDownIcon className="text-muted-foreground size-4 shrink-0" />
-                                  ) : (
-                                    <ChevronRightIcon className="text-muted-foreground size-4 shrink-0" />
-                                  )}
-                                  <span className="min-w-0 flex-1 font-medium">
-                                    {field.label || field.path}
-                                  </span>
-                                  <span className="text-muted-foreground shrink-0 text-xs">
-                                    {t(
-                                      `templates.inputTypes.${field.inputType}`,
-                                    )}
-                                  </span>
-                                  {field.required && (
-                                    <span className="text-muted-foreground shrink-0 text-xs">
-                                      *
-                                    </span>
-                                  )}
-                                </button>
-                                {isExpanded && (
-                                  <FieldConfigEditor
-                                    field={field}
-                                    onUpdate={(patch) =>
-                                      updateField(field.path, patch)
-                                    }
-                                  />
-                                )}
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </div>
-                      <div className="mt-4 flex justify-end gap-2">
-                        <Button
-                          disabled={fieldEdit.saving}
-                          onClick={cancelEditFields}
-                          size="sm"
-                          variant="outline"
-                        >
-                          {t("common.cancel")}
-                        </Button>
-                        <Button
-                          disabled={fieldEdit.saving}
-                          onClick={() => {
-                            void saveFields();
-                          }}
-                          size="sm"
-                        >
-                          {t("common.save")}
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                }
-                return (
-                  fields.length > 0 && (
-                    <div className="mt-4 rounded-lg border">
-                      <div className="flex items-center justify-between border-b px-4 py-3">
-                        <h3 className="text-muted-foreground text-sm font-medium">
-                          {t("templates.fieldCount", {
-                            count: fields.length,
-                          })}
-                        </h3>
-                        <Button
-                          onClick={startEditFields}
-                          size="sm"
-                          variant="ghost"
-                        >
-                          <PencilIcon className="size-3.5" />
-                          {t("templates.editFields")}
-                        </Button>
-                      </div>
-                      <ul className="divide-y">
-                        {fields.map((field) => (
-                          <li
-                            className="flex items-center gap-3 px-4 py-3 text-sm"
-                            key={field.path}
-                          >
-                            <span className="min-w-0 flex-1 font-medium">
-                              {field.label || field.path}
-                            </span>
-                            <span className="text-muted-foreground shrink-0 text-xs">
-                              {field.inputType
-                                ? t(`templates.inputTypes.${field.inputType}`)
-                                : t("templates.inputTypes.text")}
-                            </span>
-                            {field.required && (
-                              <span className="text-muted-foreground shrink-0 text-xs">
-                                *
-                              </span>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )
-                );
-              })()}
-            </TabsPanel>
-
-            <TabsPanel value="preview">
-              {detail && (
-                <div className="h-[78vh]">
-                  <TemplateStudio
-                    fileName={detail.fileName}
-                    manifest={detail.manifest}
-                    presignedUrl={detail.presignedUrl}
-                    templateId={template.id}
-                  />
-                </div>
-              )}
-            </TabsPanel>
-
-            <TabsPanel value="clauses">
-              <TemplateClausesTab templateId={template.id} />
-            </TabsPanel>
-
-            <TabsPanel value="history">
-              <TemplateVersionsTab templateId={template.id} />
-            </TabsPanel>
-          </Tabs>
-        </div>
       )}
     </div>
   );
