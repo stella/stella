@@ -70,7 +70,7 @@ export const indexDecision = async (
     ? sql`unaccent(coalesce(${title}, '') || ' ' || coalesce(${searchableText}, ''))`
     : sql`coalesce(${title}, '') || ' ' || coalesce(${searchableText}, '')`;
 
-  const tsvExpr = sql`to_tsvector('simple', ${textExpr})`;
+  const tsvExpr = sql`to_tsvector(${fts.regconfig}, ${textExpr})`;
 
   await scopedDb(async (tx) => {
     // Raise statement timeout for the tsvector upsert.
@@ -87,7 +87,7 @@ export const indexDecision = async (
       ${title},
       ${searchableText},
       ${decision.language},
-      ${"simple"},
+      ${fts.regconfig},
       now(),
       ${tsvExpr}
     )

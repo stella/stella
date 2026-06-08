@@ -62,7 +62,7 @@ export const indexLegislationDocument = async (
   const textExpr = fts.useUnaccent
     ? sql`unaccent(coalesce(${document.title}, '') || ' ' || coalesce(${searchableText}, ''))`
     : sql`coalesce(${document.title}, '') || ' ' || coalesce(${searchableText}, '')`;
-  const tsvExpr = sql`to_tsvector('simple', ${textExpr})`;
+  const tsvExpr = sql`to_tsvector(${fts.regconfig}, ${textExpr})`;
 
   await scopedDb(async (tx) => {
     await tx.execute(sql`SET LOCAL statement_timeout = '15min'`);
@@ -75,7 +75,7 @@ export const indexLegislationDocument = async (
       ${document.title},
       ${searchableText},
       ${document.language},
-      ${"simple"},
+      ${fts.regconfig},
       now(),
       ${tsvExpr}
     )
