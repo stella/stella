@@ -36,8 +36,14 @@ const deleteAccountSendOtp = createSafeSessionHandler(
       );
     }
 
-    // 3. Generate a 6-digit OTP
-    const otp = Math.floor(100_000 + Math.random() * 900_000).toString();
+    // 3. Generate a cryptographically secure 6-digit OTP
+    const array = new Uint32Array(1);
+    crypto.getRandomValues(array);
+    const [val] = array;
+    if (val === undefined) {
+      throw new Error("Failed to generate random value");
+    }
+    const otp = (100_000 + (val % 900_000)).toString();
 
     // 4. Store OTP in verification table
     yield* Result.await(createDeleteAccountOtp(emailStr, otp));

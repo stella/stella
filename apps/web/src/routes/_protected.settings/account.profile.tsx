@@ -205,7 +205,11 @@ function ProfilePageBody() {
         title: t("settings.account.deleteAccountSuccess"),
         type: "success",
       });
-      await authClient.signOut();
+      try {
+        await authClient.signOut();
+      } catch {
+        // Session might already be invalidated on the server
+      }
       window.location.href = "/auth";
     },
     onError: (err: unknown) => {
@@ -422,8 +426,10 @@ function ProfilePageBody() {
                     id="otp-input"
                     placeholder="123456"
                     maxLength={6}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     value={otpCode}
-                    onChange={(e) => setOtpCode(e.target.value)}
+                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
                     className="max-w-[200px] text-center text-lg tracking-widest"
                   />
                 </div>
