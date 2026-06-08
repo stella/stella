@@ -2,6 +2,7 @@ import { panic } from "better-result";
 
 export const RUNNER_NAMES = [
   "case-law-ingest",
+  "case-law-corpus-storage-backfill",
   "statute-ingest",
   "search-index",
 ] as const;
@@ -20,6 +21,11 @@ const RUNNER_DEFINITIONS: readonly RunnerDefinition[] = [
     name: "case-law-ingest",
     status: "implemented",
     description: "case-law source ingestion daemon",
+  },
+  {
+    name: "case-law-corpus-storage-backfill",
+    status: "implemented",
+    description: "copy existing case-law text payloads from Postgres to S3",
   },
   {
     name: "statute-ingest",

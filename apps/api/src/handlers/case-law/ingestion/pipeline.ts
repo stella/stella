@@ -232,6 +232,41 @@ const uploadSourceRaw = async (
   return key;
 };
 
+type PreserveCorpusWriteRetryInput = {
+  decisionId: SafeId<"caseLawDecision">;
+  previousSourceHash: string | null;
+  scopedDb: ScopedDb;
+};
+
+const preserveCorpusWriteRetry = async ({
+  decisionId,
+  previousSourceHash,
+  scopedDb,
+}: PreserveCorpusWriteRetryInput): Promise<void> => {
+  // If the corpus write fails after the DB text update, do not leave the
+  // source hash at the incoming value. A matching source hash would make the
+  // next ingestion pass skip this decision before it can retry object storage.
+  // Clear corpus keys too so reads fall back to the fresh Postgres columns
+  // instead of serving an older object payload.
+  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+  await scopedDb((tx) => {
+    // audit: skip — background corpus storage retry bookkeeping; derived state
+    return tx
+      .update(caseLawDecisions)
+      .set({
+        sourceHash: previousSourceHash,
+        textS3Key: null,
+        normalizedS3Key: null,
+        astS3Key: null,
+        contentHash: null,
+        indexedHash: null,
+        indexedGeneration: null,
+        indexedAt: null,
+      })
+      .where(eq(caseLawDecisions.id, decisionId));
+  });
+};
+
 /**
  * Insert a single decision and its citations into the database.
  * Skips duplicates based on sourceHash.
@@ -436,10 +471,11 @@ export const processDecision = async (
     return decisionRow.id;
   });
 
-  // Persist canonical text/sections/AST to object storage when enabled,
-  // then record the keys + content hash. Done outside the DB transaction
-  // (S3 I/O must not hold a transaction open) and best-effort: a failure
-  // leaves the row fully readable from its Postgres columns.
+  // Persist canonical text/sections/AST to object storage when enabled, then
+  // record the keys + content hash. Done outside the DB transaction (S3 I/O
+  // must not hold a transaction open). A failure leaves the row fully readable
+  // from its Postgres columns and preserves the source-hash mismatch so normal
+  // ingestion can retry the corpus write.
   if (envBase.CORPUS_STORAGE_ENABLED) {
     try {
       const written = await writeCorpusDocument({
@@ -463,7 +499,13 @@ export const processDecision = async (
           .where(eq(caseLawDecisions.id, decisionId));
       });
     } catch (error) {
+      s3UploadFailed = true;
       captureError(error, { decisionId, step: "processDecision.corpusWrite" });
+      await preserveCorpusWriteRetry({
+        decisionId,
+        previousSourceHash: existing?.sourceHash ?? null,
+        scopedDb,
+      });
     }
   }
 

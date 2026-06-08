@@ -3,12 +3,25 @@ import { status } from "elysia";
 import type { Static } from "elysia";
 
 import { caseLawDecisions } from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
 import { courtWeightSql } from "@/api/handlers/case-law/citation-score";
 import { validCaseLawLanguageAlternateCountSql } from "@/api/handlers/case-law/decisions/language";
 import type { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
 import { bodyPreviewJoin } from "@/api/handlers/case-law/decisions/search-sql";
+// eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
+import { toSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { isUuid } from "@/api/lib/custom-schema";
+import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
+import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
+import {
+  corpusIndexId,
+  corpusIndexPattern,
+} from "@/api/lib/legal-search/index-naming";
+import {
+  blendCitationAuthority,
+  type ScoredCandidate,
+} from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 import {
@@ -43,6 +56,17 @@ const headlineRegconfig = sql`
 type SearchDecisionsBody = Static<typeof searchDecisionsBodySchema>;
 
 export const searchDecisionsHandler = async (
+  body: SearchDecisionsBody,
+  caseLawDb: CaseLawPublicReadDb,
+) => {
+  if (envBase.LEGAL_SEARCH_PROVIDER === "corpus-index") {
+    return await searchCorpusIndexDecisions(body, caseLawDb);
+  }
+
+  return await searchPostgresDecisions(body, caseLawDb);
+};
+
+const searchPostgresDecisions = async (
   body: SearchDecisionsBody,
   caseLawDb: CaseLawPublicReadDb,
 ) => {
@@ -349,6 +373,221 @@ export const searchDecisionsHandler = async (
     hits,
     facets,
     totalCount,
+    nextCursor,
+  };
+};
+
+const quoteCorpusIndexValue = (value: string): string =>
+  `"${value.replaceAll('"', '\\"')}"`;
+
+const buildCorpusIndexQuery = (body: SearchDecisionsBody): string => {
+  const clauses: string[] = [`(${body.query})`];
+  if (body.decisionType) {
+    clauses.push(`document_type:${quoteCorpusIndexValue(body.decisionType)}`);
+  }
+  if (body.sourceId) {
+    clauses.push(`source:${quoteCorpusIndexValue(body.sourceId)}`);
+  }
+  if (body.language) {
+    clauses.push(`language:${quoteCorpusIndexValue(body.language)}`);
+  }
+  if (body.court) {
+    clauses.push(`court:${quoteCorpusIndexValue(body.court)}`);
+  }
+  if (body.dateFrom || body.dateTo) {
+    clauses.push(
+      `decision_date:[${body.dateFrom ?? "*"} TO ${body.dateTo ?? "*"}]`,
+    );
+  }
+  return clauses.join(" AND ");
+};
+
+const extractCorpusSnippet = (
+  snippet: Record<string, unknown> | undefined,
+): string | null => {
+  const text = snippet?.["text"];
+  const raw = Array.isArray(text) ? text.join(" … ") : text;
+  if (typeof raw !== "string" || raw.length === 0) {
+    return null;
+  }
+  return raw.replaceAll("<b>", "<mark>").replaceAll("</b>", "</mark>");
+};
+
+const isAfterCursor = (
+  hit: { score: number; id: string },
+  cursor: { score: number; id: string },
+): boolean => {
+  if (hit.score < cursor.score) {
+    return true;
+  }
+  if (hit.score > cursor.score) {
+    return false;
+  }
+  return hit.id < cursor.id;
+};
+
+const searchCorpusIndexDecisions = async (
+  body: SearchDecisionsBody,
+  caseLawDb: CaseLawPublicReadDb,
+) => {
+  const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
+
+  let parsedCursor: { score: number; id: string } | null = null;
+  if (body.cursor) {
+    parsedCursor = decodeCursor(body.cursor);
+    if (!parsedCursor || !isUuid(parsedCursor.id)) {
+      return status(400, { message: "Invalid cursor" });
+    }
+  }
+
+  const generation = corpusGeneration("case_law");
+  const indexId = body.country
+    ? corpusIndexId(generation, body.country)
+    : corpusIndexPattern(generation);
+
+  const result = await getCorpusIndexClient().search({
+    indexId,
+    query: buildCorpusIndexQuery(body),
+    maxHits: LIMITS.corpusIndexSearchCandidateLimit,
+    snippetFields: ["text"],
+  });
+  if (result.isErr()) {
+    throw result.error;
+  }
+
+  const candidates: ScoredCandidate[] = [];
+  const snippetById = new Map<string, string>();
+  const seenIds = new Set<string>();
+  for (const [index, hit] of result.value.hits.entries()) {
+    const id = hit["document_id"];
+    if (typeof id !== "string" || !isUuid(id) || seenIds.has(id)) {
+      continue;
+    }
+    seenIds.add(id);
+    // Descending pseudo-score preserves corpus index BM25 ordering as the
+    // lexical signal for the citation-authority blend.
+    candidates.push({ id, score: result.value.hits.length - index });
+    const snippet = extractCorpusSnippet(result.value.snippets[index]);
+    if (snippet !== null) {
+      snippetById.set(id, snippet);
+    }
+  }
+
+  const ids = candidates.map((candidate) =>
+    toSafeId<"caseLawDecision">(candidate.id),
+  );
+  const rows =
+    ids.length === 0
+      ? []
+      : await caseLawDb((tx) =>
+          tx
+            .select({
+              id: caseLawDecisions.id,
+              caseNumber: caseLawDecisions.caseNumber,
+              slug: caseLawDecisions.slug,
+              ecli: caseLawDecisions.ecli,
+              court: caseLawDecisions.court,
+              country: caseLawDecisions.country,
+              language: caseLawDecisions.language,
+              languageGroupKey: caseLawDecisions.languageGroupKey,
+              decisionDate: caseLawDecisions.decisionDate,
+              decisionType: caseLawDecisions.decisionType,
+              sourceUrl: caseLawDecisions.sourceUrl,
+              citationCount: caseLawDecisions.citationCount,
+              citationAuthority: caseLawDecisions.citationAuthority,
+              createdAt: caseLawDecisions.createdAt,
+            })
+            .from(caseLawDecisions)
+            .where(inArray(caseLawDecisions.id, ids)),
+        );
+
+  const byId = new Map(rows.map((row) => [String(row.id), row]));
+  const authorityById = new Map(
+    rows.map((row) => [String(row.id), row.citationAuthority]),
+  );
+  const ranked = blendCitationAuthority({
+    candidates: candidates.filter((candidate) => byId.has(candidate.id)),
+    authorityById,
+  });
+
+  const windowed = parsedCursor
+    ? ranked.filter((hit) => isAfterCursor(hit, parsedCursor))
+    : ranked;
+  const hasMore = windowed.length > limit;
+  const pageRanked = hasMore ? windowed.slice(0, limit) : windowed;
+
+  const languageGroupKeys = [
+    ...new Set(
+      pageRanked
+        .map((hit) => byId.get(hit.id)?.languageGroupKey ?? null)
+        .filter((value): value is string => value !== null),
+    ),
+  ];
+  const languageAlternateCounts =
+    languageGroupKeys.length > 0
+      ? await caseLawDb((tx) =>
+          tx
+            .select({
+              languageGroupKey: caseLawDecisions.languageGroupKey,
+              count: validCaseLawLanguageAlternateCountSql,
+            })
+            .from(caseLawDecisions)
+            .where(
+              inArray(caseLawDecisions.languageGroupKey, languageGroupKeys),
+            )
+            .groupBy(caseLawDecisions.languageGroupKey),
+        )
+      : [];
+  const languageAlternateCountByGroupKey = new Map(
+    languageAlternateCounts
+      .filter(
+        (
+          row,
+        ): row is {
+          count: number;
+          languageGroupKey: string;
+        } => row.languageGroupKey !== null,
+      )
+      .map((row) => [row.languageGroupKey, row.count]),
+  );
+
+  const last = pageRanked.at(-1);
+  const nextCursor = hasMore && last ? encodeCursor(last.score, last.id) : null;
+
+  const hits = pageRanked.flatMap((hit) => {
+    const row = byId.get(hit.id);
+    if (!row) {
+      return [];
+    }
+
+    return [
+      {
+        decisionId: row.id,
+        caseNumber: row.caseNumber,
+        slug: row.slug,
+        ecli: row.ecli,
+        court: row.court,
+        country: row.country,
+        language: row.language,
+        languageAlternateCount:
+          row.languageGroupKey === null
+            ? 0
+            : (languageAlternateCountByGroupKey.get(row.languageGroupKey) ?? 1),
+        languageGroupKey: row.languageGroupKey,
+        decisionDate: row.decisionDate,
+        decisionType: row.decisionType,
+        sourceUrl: row.sourceUrl,
+        headline: snippetById.get(hit.id) ?? null,
+        citationCount: row.citationCount,
+        createdAt: row.createdAt.toISOString(),
+      },
+    ];
+  });
+
+  return {
+    hits,
+    facets: null,
+    totalCount: null,
     nextCursor,
   };
 };

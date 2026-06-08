@@ -53,23 +53,10 @@ export const redactCaseLawDecision = async ({
     return false;
   }
 
-  // 1. corpus index (delete-task + audit row) in this jurisdiction's index.
-  // Skipped when corpus index isn't configured.
-  let auditedViaCorpusIndex = false;
-  if (envBase.CORPUS_INDEX_ENDPOINT !== undefined) {
-    await removeDecisionFromCorpusIndex(
-      decisionId,
-      scopedDb,
-      corpusIndexId(generation, decision.country),
-      "redact",
-    );
-    auditedViaCorpusIndex = true;
-  }
-
-  // 2. pg-fts projection.
+  // 1. pg-fts projection.
   await removeDecisionFromIndex(decisionId, scopedDb);
 
-  // 3. Object-storage corpus payloads. Delete if ANY key is present: a
+  // 2. Object-storage corpus payloads. Delete if ANY key is present: a
   // partially ingested decision (e.g. text written but AST not yet) must
   // still have its personal data erased, not skipped.
   if (
@@ -84,7 +71,7 @@ export const redactCaseLawDecision = async ({
     });
   }
 
-  // 4. Postgres canonical text + key/hash columns. Nulling content_hash
+  // 3. Postgres canonical text + key/hash columns. Nulling content_hash
   // stops both backfill loops from re-indexing the body.
   // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
   await scopedDb((tx) => {
@@ -100,9 +87,26 @@ export const redactCaseLawDecision = async ({
         astS3Key: null,
         contentHash: null,
         indexedHash: null,
+        indexedGeneration: null,
+        indexedAt: null,
       })
       .where(eq(caseLawDecisions.id, decisionId));
   });
+
+  // 4. corpus index (delete-task + audit row) in this jurisdiction's index.
+  // Skipped when corpus index isn't configured. This intentionally happens
+  // after local authoritative stores are scrubbed, so a transient index
+  // failure cannot leave the DB/S3 payloads unerased.
+  let auditedViaCorpusIndex = false;
+  if (envBase.CORPUS_INDEX_ENDPOINT !== undefined) {
+    await removeDecisionFromCorpusIndex(
+      decisionId,
+      scopedDb,
+      corpusIndexId(generation, decision.country),
+      "redact",
+    );
+    auditedViaCorpusIndex = true;
+  }
 
   // Ensure the erasure is auditable even when corpus index isn't configured.
   if (!auditedViaCorpusIndex) {
