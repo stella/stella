@@ -1,5 +1,6 @@
 import {
   lazy,
+  type ReactNode,
   Suspense,
   useCallback,
   useEffect,
@@ -10,9 +11,11 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import {
+  ArrowLeftIcon,
   BracesIcon,
   EyeIcon,
   EyeOffIcon,
+  PlayIcon,
   PlusIcon,
   SaveIcon,
   Trash2Icon,
@@ -29,6 +32,7 @@ import { Input } from "@stll/ui/components/input";
 import { Label } from "@stll/ui/components/label";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { Separator } from "@stll/ui/components/separator";
+import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/components/tabs";
 import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 import "@stll/folio/editor.css";
@@ -65,11 +69,26 @@ export const TemplateStudio = ({
   presignedUrl,
   fileName,
   manifest,
+  nameSlot,
+  metaLabel,
+  onBack,
+  onTestFill,
+  clausesSlot,
+  historySlot,
 }: {
   templateId: string;
   presignedUrl: string;
   fileName: string;
   manifest: unknown;
+  /** The (rename-able) template name, owned by the detail view. */
+  nameSlot: ReactNode;
+  /** Field-count + date summary line. */
+  metaLabel: string;
+  onBack: () => void;
+  onTestFill: () => void;
+  /** Clauses + version-history panels, rendered as Inspector subtabs. */
+  clausesSlot: ReactNode;
+  historySlot: ReactNode;
 }) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -231,78 +250,108 @@ export const TemplateStudio = ({
 
   return (
     <div className="flex h-full min-h-0">
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex items-center justify-between border-b px-3 py-2">
-          <span className="text-muted-foreground text-xs">
-            {/* i18n: stubbed; extract to templates.studio.* once layout settles */}
-            Select text in the document, then make it a field
-          </span>
-          <div className="flex items-center gap-1">
-            <Button
-              disabled={!hasSelection}
-              onClick={makeField}
-              size="sm"
-              variant="outline"
-            >
-              <BracesIcon />
-              Make field
-            </Button>
-            <Button
-              aria-label={t("common.preview")}
-              onClick={() => setShowDirectives((v) => !v)}
-              size="sm"
-              variant="ghost"
-            >
-              {showDirectives ? <EyeIcon /> : <EyeOffIcon />}
-            </Button>
-            <Button
-              disabled={!isDirty || isSaving}
-              onClick={() => void handleSave()}
-              size="sm"
-            >
-              <SaveIcon />
-              {t("common.save")}
-            </Button>
-          </div>
-        </div>
-        <div className="min-h-0 flex-1 [scrollbar-gutter:stable] overflow-auto">
-          <Suspense fallback={null}>
-            <DocxEditor
-              ref={editorRef}
-              autoOpenReviewSidebar={false}
-              className="h-full"
-              documentBuffer={docBuffer}
-              loadingIndicator={null}
-              onChange={() => setIsDirty(true)}
-              onEditorViewReady={(view) => {
-                editorViewRef.current = view;
-              }}
-              onSelectionChange={(state) => {
-                setHasSelection(state?.hasSelection ?? false);
-                syncSelection();
-              }}
-              showTemplateDirectives={showDirectives}
-            />
-          </Suspense>
-        </div>
+      {/* Full-bleed document — the editor is the whole left side. */}
+      <div className="min-h-0 flex-1 [scrollbar-gutter:stable] overflow-auto">
+        <Suspense fallback={null}>
+          <DocxEditor
+            ref={editorRef}
+            autoOpenReviewSidebar={false}
+            className="h-full"
+            documentBuffer={docBuffer}
+            loadingIndicator={null}
+            onChange={() => setIsDirty(true)}
+            onEditorViewReady={(view) => {
+              editorViewRef.current = view;
+            }}
+            onSelectionChange={(state) => {
+              setHasSelection(state?.hasSelection ?? false);
+              syncSelection();
+            }}
+            showTemplateDirectives={showDirectives}
+          />
+        </Suspense>
       </div>
 
+      {/* Inspector: all template chrome + selection settings, clauses, history. */}
       <aside className="flex w-[360px] shrink-0 flex-col border-l">
-        <Inspector
-          conditions={conditions}
-          computed={computed}
-          fields={fields}
-          onConditionsChange={(next) => {
-            setConditions(next);
-            setIsDirty(true);
-          }}
-          onComputedChange={(next) => {
-            setComputed(next);
-            setIsDirty(true);
-          }}
-          onFieldUpdate={upsertField}
-          selected={selected}
-        />
+        <div className="flex items-center gap-1 border-b px-2 py-1.5">
+          <Button
+            aria-label={t("templates.backToList")}
+            onClick={onBack}
+            size="sm"
+            variant="ghost"
+          >
+            <ArrowLeftIcon />
+          </Button>
+          <div className="min-w-0 flex-1">{nameSlot}</div>
+          <Button
+            aria-label={t("common.preview")}
+            onClick={() => setShowDirectives((v) => !v)}
+            size="sm"
+            variant="ghost"
+          >
+            {showDirectives ? <EyeIcon /> : <EyeOffIcon />}
+          </Button>
+          <Button
+            disabled={!isDirty || isSaving}
+            onClick={() => void handleSave()}
+            size="sm"
+          >
+            <SaveIcon />
+            {t("common.save")}
+          </Button>
+        </div>
+
+        <div className="flex items-center gap-2 border-b px-3 py-1.5">
+          <span className="text-muted-foreground truncate text-xs">
+            {metaLabel}
+          </span>
+          <div className="flex-1" />
+          <Button
+            disabled={!hasSelection}
+            onClick={makeField}
+            size="sm"
+            variant="outline"
+          >
+            <BracesIcon />
+            Make field
+          </Button>
+          <Button onClick={onTestFill} size="sm" variant="outline">
+            <PlayIcon />
+            {t("templates.testFill")}
+          </Button>
+        </div>
+
+        <Tabs className="flex min-h-0 flex-1 flex-col" defaultValue="fields">
+          <TabsList variant="underline">
+            <TabsTab value="fields">{t("templates.fields")}</TabsTab>
+            <TabsTab value="clauses">{t("common.clauses")}</TabsTab>
+            <TabsTab value="history">{t("common.history")}</TabsTab>
+          </TabsList>
+          <TabsPanel className="min-h-0 flex-1" value="fields">
+            <Inspector
+              conditions={conditions}
+              computed={computed}
+              fields={fields}
+              onConditionsChange={(next) => {
+                setConditions(next);
+                setIsDirty(true);
+              }}
+              onComputedChange={(next) => {
+                setComputed(next);
+                setIsDirty(true);
+              }}
+              onFieldUpdate={upsertField}
+              selected={selected}
+            />
+          </TabsPanel>
+          <TabsPanel className="min-h-0 flex-1 overflow-auto" value="clauses">
+            {clausesSlot}
+          </TabsPanel>
+          <TabsPanel className="min-h-0 flex-1 overflow-auto" value="history">
+            {historySlot}
+          </TabsPanel>
+        </Tabs>
       </aside>
     </div>
   );

@@ -676,13 +676,6 @@ const TemplateDetail = ({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-2 border-b px-4 py-2">
-        <Button onClick={onBack} size="sm" variant="ghost">
-          <ArrowLeftIcon />
-          {t("templates.backToList")}
-        </Button>
-      </div>
-
       {state === "loading" && (
         <div className="flex flex-1 items-center justify-center p-8">
           <p className="text-muted-foreground text-sm">
@@ -699,58 +692,50 @@ const TemplateDetail = ({
         </div>
       )}
 
-      {state === "ready" && (
+      {state === "ready" && detail && (
+        <TemplateStudio
+          clausesSlot={<TemplateClausesTab templateId={template.id} />}
+          fileName={detail.fileName}
+          historySlot={<TemplateVersionsTab templateId={template.id} />}
+          manifest={detail.manifest}
+          metaLabel={`${t("templates.fieldCount", { count: fieldCount })} \u00b7 ${format.dateTime(new Date(template.createdAt), { dateStyle: "medium" })}`}
+          nameSlot={
+            rename.status === "editing" ? (
+              <Input
+                aria-label={t("templates.templateName")}
+                className="h-7 text-sm font-semibold"
+                disabled={rename.saving}
+                onBlur={() => {
+                  void saveRename();
+                }}
+                onChange={(e) =>
+                  renameDispatch({ type: "setDraft", value: e.target.value })
+                }
+                onKeyDown={handleRenameKeyDown}
+                ref={renameInputRef}
+                value={rename.draft}
+              />
+            ) : (
+              <button
+                className="group flex w-full items-center gap-1.5 text-start"
+                onClick={startRename}
+                type="button"
+              >
+                <span className="truncate text-sm font-semibold">
+                  {rename.displayName}
+                </span>
+                <PencilIcon className="text-muted-foreground size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
+              </button>
+            )
+          }
+          onBack={onBack}
+          onTestFill={handleTestFill}
+          presignedUrl={detail.presignedUrl}
+          templateId={template.id}
+        />
+      )}
+      {false && (
         <div className="mx-auto w-full max-w-4xl overflow-y-auto p-6">
-          <div className="mb-6 flex items-start justify-between">
-            <div>
-              {rename.status === "editing" ? (
-                <Input
-                  aria-label={t("templates.templateName")}
-                  className="h-8 text-lg font-semibold"
-                  disabled={rename.saving}
-                  onBlur={() => {
-                    void saveRename();
-                  }}
-                  onChange={(e) =>
-                    renameDispatch({ type: "setDraft", value: e.target.value })
-                  }
-                  onKeyDown={handleRenameKeyDown}
-                  ref={renameInputRef}
-                  value={rename.draft}
-                />
-              ) : (
-                <button
-                  className="group flex items-center gap-1.5 text-start"
-                  onClick={startRename}
-                  type="button"
-                >
-                  <h2 className="text-lg font-semibold">
-                    {rename.displayName}
-                  </h2>
-                  <PencilIcon className="text-muted-foreground size-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
-                </button>
-              )}
-              <p className="text-muted-foreground mt-1 text-sm">
-                {t("templates.fieldCount", {
-                  count: fieldCount,
-                })}
-                {" \u00b7 "}
-                {format.dateTime(new Date(template.createdAt), {
-                  dateStyle: "medium",
-                })}
-              </p>
-            </div>
-            <Button
-              disabled={false}
-              onClick={handleTestFill}
-              size="sm"
-              variant="outline"
-            >
-              <PlayIcon />
-              {t("templates.testFill")}
-            </Button>
-          </div>
-
           <Tabs defaultValue="preview">
             <TabsList variant="underline">
               <TabsTab value="preview">{t("common.edit")}</TabsTab>
