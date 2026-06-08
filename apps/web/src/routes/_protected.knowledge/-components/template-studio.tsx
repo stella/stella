@@ -1,0 +1,585 @@
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getRouteApi } from "@tanstack/react-router";
+import {
+  EyeIcon,
+  EyeOffIcon,
+  PlusIcon,
+  SaveIcon,
+  Trash2Icon,
+  WandSparklesIcon,
+} from "lucide-react";
+import type { EditorView } from "prosemirror-view";
+import { useTranslations } from "use-intl";
+
+import { getTemplateDirectives } from "@stll/folio";
+import type { DirectiveRange, DocxEditorRef } from "@stll/folio";
+import { Button } from "@stll/ui/components/button";
+import { Checkbox } from "@stll/ui/components/checkbox";
+import { Input } from "@stll/ui/components/input";
+import { Label } from "@stll/ui/components/label";
+import { ScrollArea } from "@stll/ui/components/scroll-area";
+import { Separator } from "@stll/ui/components/separator";
+import { Textarea } from "@stll/ui/components/textarea";
+import { stellaToast } from "@stll/ui/components/toast";
+import "@stll/folio/editor.css";
+
+import { api } from "@/lib/api";
+import { DOCX_MIME } from "@/lib/consts";
+import { toSafeId } from "@/lib/safe-id";
+import {
+  FieldConfigEditor,
+  type EditableField,
+} from "@/routes/_protected.knowledge/-components/template-wizard";
+import {
+  knowledgeKeys,
+  templateDocxBufferOptions,
+} from "@/routes/_protected.knowledge/-queries";
+
+const DocxEditor = lazy(async () => {
+  const m = await import("@stll/folio");
+  return { default: m.DocxEditor };
+});
+
+const protectedRouteApi = getRouteApi("/_protected");
+
+/**
+ * Template Studio: the single authoring surface for a template. The document
+ * (Folio) is primary on the left; a selection-scoped Inspector on the right
+ * shows whole-template settings when nothing is selected, a field's settings
+ * when a `{{field}}` marker is selected, and a condition when a `{{#if}}` block
+ * is selected. Field metadata lives in the manifest; on save the edited
+ * manifest is re-embedded (/manifest) and the bytes stored as a new version.
+ */
+export const TemplateStudio = ({
+  templateId,
+  presignedUrl,
+  fileName,
+  manifest,
+}: {
+  templateId: string;
+  presignedUrl: string;
+  fileName: string;
+  manifest: unknown;
+}) => {
+  const t = useTranslations();
+  const queryClient = useQueryClient();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const editorRef = useRef<DocxEditorRef>(null);
+  const editorViewRef = useRef<EditorView | null>(null);
+
+  const [fields, setFields] = useState<StudioField[]>(() =>
+    parseFields(manifest),
+  );
+  const [conditions, setConditions] = useState<NameExpr[]>(() =>
+    parseNameExprs(manifest, "conditions"),
+  );
+  const [computed, setComputed] = useState<NameExpr[]>(() =>
+    parseNameExprs(manifest, "computed"),
+  );
+  const [selected, setSelected] = useState<DirectiveRange | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [showDirectives, setShowDirectives] = useState(true);
+
+  const {
+    data: loadedBuffer,
+    isLoading,
+    isError,
+  } = useQuery(
+    templateDocxBufferOptions(activeOrganizationId, templateId, presignedUrl),
+  );
+  const [docBuffer, setDocBuffer] = useState<ArrayBuffer | null>(null);
+  useEffect(() => {
+    if (loadedBuffer && docBuffer === null) {
+      setDocBuffer(loadedBuffer);
+    }
+  }, [loadedBuffer, docBuffer]);
+
+  // Map the editor's caret to the directive it sits in, so the Inspector knows
+  // which face to show. Reads the live plugin state via the captured view.
+  const syncSelection = useCallback(() => {
+    const view = editorViewRef.current;
+    if (!view) {
+      setSelected(null);
+      return;
+    }
+    const head = view.state.selection.from;
+    const covering = getTemplateDirectives(view.state).find(
+      (range) => head >= range.from && head <= range.to,
+    );
+    setSelected(covering ?? null);
+  }, []);
+
+  const upsertField = useCallback(
+    (path: string, patch: Partial<StudioField>) => {
+      setFields((prev) => {
+        const exists = prev.some((f) => f.path === path);
+        if (exists) {
+          return prev.map((f) => (f.path === path ? { ...f, ...patch } : f));
+        }
+        return [...prev, { ...defaultField(path), ...patch }];
+      });
+      setIsDirty(true);
+    },
+    [],
+  );
+
+  const handleSave = async () => {
+    const editor = editorRef.current;
+    if (!editor) {
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const bytes = await editor.save();
+      if (!bytes) {
+        stellaToast.add({ title: t("templates.saveFailed"), type: "error" });
+        return;
+      }
+      const base = new File([bytes], fileName, { type: DOCX_MIME });
+
+      // Re-embed the edited manifest, then store the result as a new version.
+      const embedded = await api.templates.manifest.post({
+        file: base,
+        manifest: JSON.stringify(
+          buildManifest(manifest, fields, conditions, computed),
+        ),
+      });
+      if (embedded.error) {
+        stellaToast.add({ title: t("templates.saveFailed"), type: "error" });
+        return;
+      }
+      // The endpoint returns the docx bytes (Blob/ArrayBuffer) with the
+      // manifest embedded; wrap them straight back into a File to store.
+      const withManifest = new File([embedded.data as BlobPart], fileName, {
+        type: DOCX_MIME,
+      });
+      const stored = await api
+        .templates({ templateId: toSafeId<"template">(templateId) })
+        .document.post({ file: withManifest });
+      if (stored.error) {
+        stellaToast.add({ title: t("templates.saveFailed"), type: "error" });
+        return;
+      }
+
+      setIsDirty(false);
+      stellaToast.add({ title: t("templates.templateSaved"), type: "success" });
+      void queryClient.invalidateQueries({
+        queryKey: knowledgeKeys.templates.all(activeOrganizationId),
+      });
+    } catch {
+      stellaToast.add({ title: t("templates.saveFailed"), type: "error" });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (isError) {
+    return (
+      <div className="flex h-full items-center justify-center p-8">
+        <p className="text-muted-foreground text-sm">
+          {t("templates.previewFailed")}
+        </p>
+      </div>
+    );
+  }
+  if (isLoading || !docBuffer) {
+    return (
+      <div className="flex h-full items-center justify-center p-8">
+        <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full min-h-0">
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex items-center justify-between border-b px-3 py-2">
+          <span className="text-muted-foreground text-xs">
+            {/* i18n: stubbed; extract to templates.studio.* once layout settles */}
+            Select text in the document, then make it a field
+          </span>
+          <div className="flex items-center gap-1">
+            <Button
+              aria-label={t("common.preview")}
+              onClick={() => setShowDirectives((v) => !v)}
+              size="sm"
+              variant="ghost"
+            >
+              {showDirectives ? <EyeIcon /> : <EyeOffIcon />}
+            </Button>
+            <Button
+              disabled={!isDirty || isSaving}
+              onClick={() => void handleSave()}
+              size="sm"
+            >
+              <SaveIcon />
+              {t("common.save")}
+            </Button>
+          </div>
+        </div>
+        <div className="min-h-0 flex-1 [scrollbar-gutter:stable] overflow-auto">
+          <Suspense fallback={null}>
+            <DocxEditor
+              ref={editorRef}
+              autoOpenReviewSidebar={false}
+              className="h-full"
+              documentBuffer={docBuffer}
+              loadingIndicator={null}
+              onChange={() => setIsDirty(true)}
+              onEditorViewReady={(view) => {
+                editorViewRef.current = view;
+              }}
+              onSelectionChange={() => syncSelection()}
+              showTemplateDirectives={showDirectives}
+            />
+          </Suspense>
+        </div>
+      </div>
+
+      <aside className="flex w-[360px] shrink-0 flex-col border-l">
+        <Inspector
+          conditions={conditions}
+          computed={computed}
+          fields={fields}
+          onConditionsChange={(next) => {
+            setConditions(next);
+            setIsDirty(true);
+          }}
+          onComputedChange={(next) => {
+            setComputed(next);
+            setIsDirty(true);
+          }}
+          onFieldUpdate={upsertField}
+          selected={selected}
+        />
+      </aside>
+    </div>
+  );
+};
+
+// ── Inspector ────────────────────────────────────────────
+
+type StudioField = EditableField & { aiPrompt: string | undefined };
+type NameExpr = { name: string; expression: string };
+
+type InspectorProps = {
+  selected: DirectiveRange | null;
+  fields: StudioField[];
+  conditions: NameExpr[];
+  computed: NameExpr[];
+  onFieldUpdate: (path: string, patch: Partial<StudioField>) => void;
+  onConditionsChange: (next: NameExpr[]) => void;
+  onComputedChange: (next: NameExpr[]) => void;
+};
+
+const Inspector = ({
+  selected,
+  fields,
+  conditions,
+  computed,
+  onFieldUpdate,
+  onConditionsChange,
+  onComputedChange,
+}: InspectorProps) => {
+  if (selected && selected.kind === "placeholder") {
+    const field =
+      fields.find((f) => f.path === selected.expr) ??
+      defaultField(selected.expr);
+    return (
+      <ScrollArea className="min-h-0 flex-1">
+        <ScopeHeader title="Field" subtitle={field.path} />
+        <FieldConfigEditor
+          field={field}
+          onUpdate={(patch) => onFieldUpdate(field.path, patch)}
+        />
+        <AiDraftControl
+          aiPrompt={field.aiPrompt}
+          onChange={(aiPrompt) => onFieldUpdate(field.path, { aiPrompt })}
+        />
+      </ScrollArea>
+    );
+  }
+
+  if (selected && (selected.kind === "if" || selected.kind === "elseif")) {
+    return (
+      <ScrollArea className="min-h-0 flex-1">
+        <ScopeHeader title="Condition" subtitle={selected.kind} />
+        <div className="px-4 py-4">
+          <p className="text-muted-foreground text-xs leading-relaxed">
+            This block shows only when:
+          </p>
+          <code className="bg-muted mt-2 block rounded px-3 py-2 text-xs">
+            {selected.expr || "—"}
+          </code>
+          <p className="text-muted-foreground mt-3 text-xs leading-relaxed">
+            Named conditions are managed in Template settings (click empty space
+            in the document).
+          </p>
+        </div>
+      </ScrollArea>
+    );
+  }
+
+  if (selected && selected.kind === "clause") {
+    return (
+      <ScrollArea className="min-h-0 flex-1">
+        <ScopeHeader title="Clause slot" subtitle={selected.expr} />
+        <div className="text-muted-foreground px-4 py-4 text-xs leading-relaxed">
+          A clause from the library is inserted here at fill time. Manage linked
+          clauses in the Clauses tab.
+        </div>
+      </ScrollArea>
+    );
+  }
+
+  // Default: whole-template settings.
+  return (
+    <ScrollArea className="min-h-0 flex-1">
+      <ScopeHeader title="Template" />
+      <NameExprList
+        addLabel="Add condition"
+        emptyLabel="No conditions yet."
+        heading="Conditions"
+        items={conditions}
+        onChange={onConditionsChange}
+      />
+      <Separator />
+      <NameExprList
+        addLabel="Add computed field"
+        emptyLabel="No computed fields yet."
+        heading="Computed"
+        items={computed}
+        onChange={onComputedChange}
+      />
+      <Separator />
+      <div className="px-4 py-4">
+        <h3 className="text-muted-foreground mb-2 text-xs font-medium">
+          Fields ({fields.length})
+        </h3>
+        <ul className="flex flex-col gap-1">
+          {fields.map((f) => (
+            <li
+              key={f.path}
+              className="flex items-center justify-between text-xs"
+            >
+              <code className="truncate">{f.path}</code>
+              <span className="text-muted-foreground shrink-0">
+                {f.aiPrompt ? "AI" : f.inputType}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </ScrollArea>
+  );
+};
+
+const ScopeHeader = ({
+  title,
+  subtitle,
+}: {
+  title: string;
+  subtitle?: string;
+}) => (
+  <div className="border-b px-4 py-3">
+    <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+      {title}
+    </p>
+    {subtitle ? <code className="text-sm">{subtitle}</code> : null}
+  </div>
+);
+
+const AiDraftControl = ({
+  aiPrompt,
+  onChange,
+}: {
+  aiPrompt: string | undefined;
+  onChange: (value: string | undefined) => void;
+}) => {
+  const enabled = aiPrompt !== undefined;
+  return (
+    <div className="flex flex-col gap-2 border-t px-4 py-4">
+      <div className="flex items-center gap-2">
+        <Checkbox
+          checked={enabled}
+          onCheckedChange={(checked) => onChange(checked ? "" : undefined)}
+        />
+        <Label className="flex items-center gap-1.5 text-sm">
+          <WandSparklesIcon className="size-3.5" />
+          AI-drafted
+        </Label>
+      </div>
+      {enabled ? (
+        <Textarea
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Describe what AI should draft for this field, e.g. the scope of this power of attorney."
+          rows={3}
+          value={aiPrompt}
+        />
+      ) : null}
+    </div>
+  );
+};
+
+const NameExprList = ({
+  heading,
+  items,
+  onChange,
+  addLabel,
+  emptyLabel,
+}: {
+  heading: string;
+  items: NameExpr[];
+  onChange: (next: NameExpr[]) => void;
+  addLabel: string;
+  emptyLabel: string;
+}) => {
+  const update = (index: number, patch: Partial<NameExpr>) =>
+    onChange(
+      items.map((item, i) => (i === index ? { ...item, ...patch } : item)),
+    );
+
+  return (
+    <div className="flex flex-col gap-2 px-4 py-4">
+      <h3 className="text-muted-foreground text-xs font-medium">{heading}</h3>
+      {items.length === 0 ? (
+        <p className="text-muted-foreground text-xs">{emptyLabel}</p>
+      ) : null}
+      {items.map((item, index) => (
+        <div key={index} className="flex flex-col gap-1.5 rounded border p-2">
+          <div className="flex items-center gap-1.5">
+            <Input
+              className="h-8"
+              onChange={(e) => update(index, { name: e.target.value })}
+              placeholder="name"
+              value={item.name}
+            />
+            <Button
+              aria-label="Remove"
+              onClick={() => onChange(items.filter((_, i) => i !== index))}
+              size="sm"
+              variant="ghost"
+            >
+              <Trash2Icon />
+            </Button>
+          </div>
+          <Input
+            className="h-8 font-mono text-xs"
+            onChange={(e) => update(index, { expression: e.target.value })}
+            placeholder="expression"
+            value={item.expression}
+          />
+        </div>
+      ))}
+      <Button
+        className="justify-start gap-2"
+        onClick={() => onChange([...items, { name: "", expression: "" }])}
+        size="sm"
+        variant="outline"
+      >
+        <PlusIcon />
+        {addLabel}
+      </Button>
+    </div>
+  );
+};
+
+// ── Manifest <-> state ───────────────────────────────────
+
+const INPUT_TYPES = new Set([
+  "text",
+  "textarea",
+  "number",
+  "boolean",
+  "date",
+  "select",
+]);
+
+const defaultField = (path: string): StudioField => ({
+  path,
+  kind: "string",
+  label: "",
+  inputType: "text",
+  required: false,
+  options: [],
+  aiPrompt: undefined,
+});
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null;
+
+const parseFields = (manifest: unknown): StudioField[] => {
+  if (!isRecord(manifest) || !Array.isArray(manifest["fields"])) {
+    return [];
+  }
+  return manifest["fields"].filter(isRecord).map((raw) => {
+    const inputType =
+      typeof raw["inputType"] === "string" && INPUT_TYPES.has(raw["inputType"])
+        ? (raw["inputType"] as EditableField["inputType"])
+        : "text";
+    return {
+      path: typeof raw["path"] === "string" ? raw["path"] : "",
+      kind: typeof raw["kind"] === "string" ? raw["kind"] : "string",
+      label: typeof raw["label"] === "string" ? raw["label"] : "",
+      inputType,
+      required: raw["required"] === true,
+      options: Array.isArray(raw["options"])
+        ? raw["options"].filter((o): o is string => typeof o === "string")
+        : [],
+      aiPrompt:
+        typeof raw["aiPrompt"] === "string" ? raw["aiPrompt"] : undefined,
+    };
+  });
+};
+
+const parseNameExprs = (
+  manifest: unknown,
+  key: "conditions" | "computed",
+): NameExpr[] => {
+  if (!isRecord(manifest) || !Array.isArray(manifest[key])) {
+    return [];
+  }
+  return manifest[key].filter(isRecord).map((raw) => ({
+    name: typeof raw["name"] === "string" ? raw["name"] : "",
+    expression: typeof raw["expression"] === "string" ? raw["expression"] : "",
+  }));
+};
+
+const buildManifest = (
+  original: unknown,
+  fields: StudioField[],
+  conditions: NameExpr[],
+  computed: NameExpr[],
+) => {
+  const version =
+    isRecord(original) && typeof original["version"] === "number"
+      ? original["version"]
+      : 1;
+  return {
+    version,
+    fields: fields
+      .filter((f) => f.path)
+      .map((f) => ({
+        path: f.path,
+        inputType: f.inputType,
+        ...(f.label ? { label: f.label } : {}),
+        ...(f.required ? { required: true } : {}),
+        ...(f.options.length > 0 ? { options: f.options } : {}),
+        ...(f.aiPrompt ? { aiPrompt: f.aiPrompt } : {}),
+      })),
+    conditions: conditions.filter((c) => c.name && c.expression),
+    computed: computed.filter((c) => c.name && c.expression),
+  };
+};
