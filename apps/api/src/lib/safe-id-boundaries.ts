@@ -26,6 +26,10 @@ export const brandPersistedWorkspaceId = (
   workspaceId: string,
 ): SafeId<"workspace"> => toSafeId<"workspace">(workspaceId);
 
+export const brandPersistedTemplateId = (
+  templateId: string,
+): SafeId<"template"> => toSafeId<"template">(templateId);
+
 export const brandPersistedEntityId = (entityId: string): SafeId<"entity"> =>
   toSafeId<"entity">(entityId);
 
