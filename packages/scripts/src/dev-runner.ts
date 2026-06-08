@@ -36,7 +36,7 @@ const DEFAULT_PORTS = {
   web: 3000,
 } as const;
 const DEFAULT_HTTP_PROBE_TIMEOUT_MS = 1500;
-const DEFAULT_HTTP_READY_TIMEOUT_MS = 30_000;
+const DEFAULT_HTTP_READY_TIMEOUT_MS = 120_000;
 const DEFAULT_OPEN_BROWSER_TIMEOUT_MS = 5000;
 const DEFAULT_INFRA_PORTS = {
   gotenberg: 3003,
@@ -923,7 +923,11 @@ export const ensureWorktreeEnvLinks = ({
     const mainEnvPath = pathResolve(mainRoot, spec.path);
     if (isWorktree && existsSync(mainEnvPath)) {
       mkdirSync(dirname(targetPath), { recursive: true });
-      symlinkSync(mainEnvPath, targetPath);
+      try {
+        symlinkSync(mainEnvPath, targetPath);
+      } catch {
+        copyFileSync(mainEnvPath, targetPath);
+      }
       preparedFiles++;
       continue;
     }
@@ -941,7 +945,7 @@ export const ensureWorktreeEnvLinks = ({
   return preparedFiles;
 };
 
-const apiUrlForPort = (port: number) => `http://localhost:${String(port)}`;
+const apiUrlForPort = (port: number) => `http://127.0.0.1:${String(port)}`;
 const webUrlForPort = (port: number) => `http://localhost:${String(port)}`;
 const desktopBridgeUrlForPort = (port: number) =>
   `http://127.0.0.1:${String(port)}`;
@@ -962,8 +966,8 @@ export const createApiEnv = ({
   ...baseEnv,
   AI_SDK_DEVTOOLS_PORT: String(ports.aiSdkDevtools),
   BETTER_AUTH_COOKIE_PREFIX: `stella-dev-${String(ports.api)}`,
-  BETTER_AUTH_URL: apiUrlForPort(ports.api),
-  FRONTEND_URL: webUrlForPort(ports.web),
+  BETTER_AUTH_URL: `http://localhost:${String(ports.api)}`,
+  FRONTEND_URL: `http://localhost:${String(ports.web)}`,
   NODE_ENV: "development",
   STELLA_API_PORT: String(ports.api),
   STELLA_WEB_PORT: String(ports.web),
@@ -989,7 +993,7 @@ export const createWebEnv = ({
   STELLA_WEB_PORT: String(ports.web),
   VITE_AI_DEVTOOLS_ENABLED: aiDevtoolsEnabled ? "true" : "false",
   VITE_AI_SDK_DEVTOOLS_PORT: String(ports.aiSdkDevtools),
-  VITE_API_URL: apiUrlForPort(ports.api),
+  VITE_API_URL: `http://localhost:${String(ports.api)}`,
   VITE_DESKTOP_BRIDGE_PORT: String(ports.desktopBridge),
 });
 
@@ -1140,6 +1144,97 @@ const stripAppEnvKeys = ({
   return Object.fromEntries(
     Object.entries(baseEnv).filter(([key]) => !envKeys.has(key)),
   );
+};
+
+export const loadEnvFile = (envFilePath: string): Record<string, string> => {
+  if (!existsSync(envFilePath)) {
+    return {};
+  }
+  const env: Record<string, string> = {};
+  const envFile = readFileSync(envFilePath, "utf-8");
+  for (const line of envFile.split(/\r?\n/u)) {
+    const trimmed = line.trim();
+    if (trimmed.length === 0 || trimmed.startsWith("#")) {
+      continue;
+    }
+    const withoutExport = trimmed.startsWith("export ")
+      ? trimmed.slice("export ".length)
+      : trimmed;
+    const eqIndex = withoutExport.indexOf("=");
+    if (eqIndex === -1) {
+      continue;
+    }
+    const key = withoutExport.slice(0, eqIndex).trim();
+    const rawValue = withoutExport.slice(eqIndex + 1).trimStart();
+    let quoteChar: string | null = null;
+    if (rawValue.startsWith('"')) {
+      quoteChar = '"';
+    } else if (rawValue.startsWith("'")) {
+      quoteChar = "'";
+    }
+    let endIndex = rawValue.length;
+    if (quoteChar !== null) {
+      const closingQuote = rawValue.indexOf(quoteChar, 1);
+      if (closingQuote !== -1) {
+        endIndex = closingQuote + 1;
+      }
+    } else {
+      const hashIndex = rawValue.indexOf("#");
+      if (hashIndex !== -1) {
+        endIndex = hashIndex;
+      }
+    }
+    let value = rawValue.slice(0, endIndex).trim();
+    if (
+      quoteChar !== null &&
+      value.startsWith(quoteChar) &&
+      value.endsWith(quoteChar)
+    ) {
+      value = value.slice(1, -1);
+    }
+    env[key] = value;
+  }
+
+  return env;
+};
+
+export const expandEnvMap = (
+  env: Record<string, string>,
+): Record<string, string> => {
+  const expanded = { ...env };
+  const cache: Record<string, string> = {};
+  const visiting = new Set<string>();
+
+  const resolveKey = (key: string): string => {
+    if (cache[key] !== undefined) {
+      return cache[key];
+    }
+    const rawVal = expanded[key] ?? process.env[key];
+    if (rawVal === undefined) {
+      return "";
+    }
+    if (visiting.has(key)) {
+      return rawVal;
+    }
+    visiting.add(key);
+    const resolved = rawVal
+      .replace(
+        /(?<!\\)\$(?:\{([^}]+)\}|([a-zA-Z_][a-zA-Z0-9_]*))/gu,
+        (_, p1, p2) => {
+          const varName = p1 || p2;
+          return resolveKey(varName);
+        },
+      )
+      .replace(/\\(\$)/gu, "$1");
+    visiting.delete(key);
+    cache[key] = resolved;
+    return resolved;
+  };
+
+  for (const key of Object.keys(expanded)) {
+    expanded[key] = resolveKey(key);
+  }
+  return expanded;
 };
 
 const runCommandText = ({
@@ -1336,12 +1431,15 @@ export const buildPreparationSteps = ({
     steps.push({
       cmd: [resolveCommandPath("bun"), "run", "db:migrate"],
       cwd: pathResolve(rootDir, "apps/api"),
-      env: createApiEnv({
-        baseEnv: apiBaseEnv,
-        infraOffset,
-        infraPorts,
-        ports,
-      }),
+      env: {
+        ...expandEnvMap(loadEnvFile(pathResolve(rootDir, "apps/api/.env"))),
+        ...createApiEnv({
+          baseEnv: apiBaseEnv,
+          infraOffset,
+          infraPorts,
+          ports,
+        }),
+      },
       label: "Applying database migrations",
     });
   }
@@ -1376,29 +1474,35 @@ const buildPersistentSteps = ({
     baseEnv: process.env,
     envFilePath: pathResolve(rootDir, "apps/desktop/.env"),
   });
-  const apiEnv = createApiEnv({
-    baseEnv: apiBaseEnv,
-    infraOffset,
-    infraPorts,
-    ports,
-  });
-  const webEnv = createWebEnv({
-    aiDevtoolsEnabled,
-    baseEnv: webBaseEnv,
-    ports,
-  });
-  const desktopEnv = createDesktopEnv({
-    baseEnv: desktopBaseEnv,
-    ports,
-  });
+  const apiEnv = {
+    ...expandEnvMap(loadEnvFile(pathResolve(rootDir, "apps/api/.env"))),
+    ...createApiEnv({
+      baseEnv: apiBaseEnv,
+      infraOffset,
+      infraPorts,
+      ports,
+    }),
+  };
+  const webEnv = {
+    ...expandEnvMap(loadEnvFile(pathResolve(rootDir, "apps/web/.env"))),
+    ...createWebEnv({
+      aiDevtoolsEnabled,
+      baseEnv: webBaseEnv,
+      ports,
+    }),
+  };
+  const desktopEnv = {
+    ...expandEnvMap(loadEnvFile(pathResolve(rootDir, "apps/desktop/.env"))),
+    ...createDesktopEnv({
+      baseEnv: desktopBaseEnv,
+      ports,
+    }),
+  };
   const primary: Step[] = [];
   const secondary: Step[] = [];
 
   if (modeIncludesApi(mode)) {
     primary.push({
-      // Preload the dev/test-only mock-AI registration so USE_MOCK_AI routes
-      // workflow generation through the faker-backed mock. The compiled
-      // production binary never loads it, keeping @faker-js/faker a devDependency.
       cmd: [
         resolveCommandPath("bun"),
         "--preload",
@@ -1434,6 +1538,8 @@ const buildPersistentSteps = ({
         "--",
         "--port",
         String(ports.web),
+        "--host",
+        "localhost",
         "--strictPort",
       ],
       cwd: pathResolve(rootDir, "apps/web"),
