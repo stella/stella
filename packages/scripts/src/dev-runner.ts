@@ -1507,8 +1507,6 @@ const buildPersistentSteps = ({
         resolveCommandPath("bun"),
         "--preload",
         "./src/dev/register-mock-ai.ts",
-        "--port",
-        String(ports.api),
         "--watch",
         "src/index.ts",
       ],
