@@ -52,17 +52,13 @@ export const estimateWorkflowTargetCount = async ({
   args,
   queryClient,
   workspaceId,
-}: EstimateWorkflowTargetCountArgs): Promise<number | null> => {
+}: EstimateWorkflowTargetCountArgs): Promise<number> => {
   const entityIds = args?.entityIds === undefined ? [] : [...args.entityIds];
 
-  try {
-    return await queryClient.fetchQuery(
-      workflowTargetCountOptions({
-        entityIds,
-        workspaceId,
-      }),
-    );
-  } catch {
-    return null;
-  }
+  return await queryClient.fetchQuery(
+    workflowTargetCountOptions({
+      entityIds,
+      workspaceId,
+    }),
+  );
 };

@@ -113,4 +113,26 @@ describe("workflow start decision", () => {
       options.queryKey,
     ]);
   });
+
+  test("propagates target count load failures", async () => {
+    const expectedError = new Error("target count failed");
+    const queryClient: WorkflowTargetCountQueryClient = {
+      fetchQuery: async () => {
+        throw expectedError;
+      },
+    };
+
+    await estimateWorkflowTargetCount({
+      args: undefined,
+      queryClient,
+      workspaceId: "workspace-a",
+    }).then(
+      () => {
+        throw new Error("Expected target count failure");
+      },
+      (error: unknown) => {
+        expect(error).toBe(expectedError);
+      },
+    );
+  });
 });
