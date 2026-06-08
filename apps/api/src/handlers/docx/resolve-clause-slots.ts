@@ -51,6 +51,7 @@ export const resolveClauseSlots = async (
         },
         columns: {
           clauseId: true,
+          clauseVariantId: true,
           clauseVersionId: true,
         },
       }),
@@ -61,13 +62,14 @@ export const resolveClauseSlots = async (
     }
 
     // oxlint-disable-next-line no-await-in-loop -- consumes the link resolved in this iteration; sequential per slot
-    const versionRow = await resolveVersion(
-      link.clauseId,
-      link.clauseVersionId,
-      slot.versionModifier,
+    const versionRow = await resolveVersion({
+      clauseId: link.clauseId,
+      variantId: link.clauseVariantId,
+      pinnedVersionId: link.clauseVersionId,
+      modifier: slot.versionModifier,
       scopedDb,
       organizationId,
-    );
+    });
 
     if (!versionRow) {
       continue;
@@ -85,13 +87,23 @@ type VersionRow = {
   body: Parameters<typeof clauseBodyToRichPatch>[0];
 };
 
-const resolveVersion = async (
-  clauseId: SafeId<"clause">,
-  pinnedVersionId: SafeId<"clauseVersion"> | null,
-  modifier: string | undefined,
-  scopedDb: ScopedDb,
-  organizationId: SafeId<"organization">,
-): Promise<VersionRow | undefined> => {
+type ResolveVersionOptions = {
+  clauseId: SafeId<"clause">;
+  variantId: SafeId<"clauseVariant"> | null;
+  pinnedVersionId: SafeId<"clauseVersion"> | null;
+  modifier: string | undefined;
+  scopedDb: ScopedDb;
+  organizationId: SafeId<"organization">;
+};
+
+const resolveVersion = async ({
+  clauseId,
+  variantId,
+  pinnedVersionId,
+  modifier,
+  scopedDb,
+  organizationId,
+}: ResolveVersionOptions): Promise<VersionRow | undefined> => {
   // :latest — always use the clause's current version
   if (modifier === "latest") {
     const clause = await scopedDb((tx) =>
@@ -129,6 +141,22 @@ const resolveVersion = async (
         where: {
           clauseId: { eq: clauseId },
           version,
+          organizationId: { eq: organizationId },
+        },
+        columns: { body: true },
+      }),
+    );
+  }
+
+  // A linked variant is an author-chosen alternative body (not a
+  // version). It wins over the pinned/current version, but an explicit
+  // slot modifier (:latest / :vN, handled above) still takes precedence
+  // — that marker targets the clause's main versions, not the variant.
+  if (variantId) {
+    return scopedDb((tx) =>
+      tx.query.clauseVariants.findFirst({
+        where: {
+          id: { eq: variantId },
           organizationId: { eq: organizationId },
         },
         columns: { body: true },
