@@ -240,6 +240,44 @@ export const validateEntityCreate = async function* (
   });
 };
 
+type CheckEntityCreateCapacityForInsertProps = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  entityCount: number;
+};
+
+export const checkEntityCreateCapacityForInsert = async ({
+  tx,
+  workspaceId,
+  entityCount,
+}: CheckEntityCreateCapacityForInsertProps): Promise<
+  Result<void, "entities-limit-reached">
+> => {
+  if (!Number.isInteger(entityCount) || entityCount < 1) {
+    panic("Entity create insert count must be a positive integer");
+  }
+
+  const workspaceRows = await tx
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(eq(workspaces.id, workspaceId))
+    .limit(1)
+    .for("update");
+  if (!workspaceRows.at(0)) {
+    panic("Workspace lock for entity create returned no rows");
+  }
+
+  const existingEntityCount = await tx.$count(
+    entities,
+    eq(entities.workspaceId, workspaceId),
+  );
+  if (existingEntityCount + entityCount > LIMITS.entitiesCount) {
+    return Result.err("entities-limit-reached");
+  }
+
+  return Result.ok(undefined);
+};
+
 export type FinalizeEntityCreateProps = {
   safeDb: SafeDb;
   recordAuditEvent: AuditRecorder;
@@ -342,7 +380,8 @@ export const finalizeEntityCreate = async function* ({
     | "property-not-found"
     | "property-type-mismatch"
     | "parent-not-found"
-    | "parent-type-mismatch";
+    | "parent-type-mismatch"
+    | "entities-limit-reached";
 
   type WriteResult =
     | {
@@ -363,6 +402,9 @@ export const finalizeEntityCreate = async function* ({
     }
     if (status === "parent-not-found") {
       return "Parent entity not found in this workspace";
+    }
+    if (status === "entities-limit-reached") {
+      return "Entities limit reached";
     }
     return "Parent entity must be a folder";
   };
@@ -418,6 +460,15 @@ export const finalizeEntityCreate = async function* ({
       if (parent.kind !== "folder") {
         return { status: "parent-type-mismatch" };
       }
+    }
+
+    const capacityResult = await checkEntityCreateCapacityForInsert({
+      tx,
+      workspaceId,
+      entityCount: 1,
+    });
+    if (Result.isError(capacityResult)) {
+      return { status: capacityResult.error };
     }
 
     const renamed = await resolveEntityCreateFileName({

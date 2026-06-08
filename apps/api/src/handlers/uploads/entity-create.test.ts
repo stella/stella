@@ -15,6 +15,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type {
@@ -23,6 +24,7 @@ import type {
 } from "@/api/tests/security/test-utils";
 
 import {
+  checkEntityCreateCapacityForInsert,
   resolveEntityCreateFileName,
   validateEntityCreate,
   validateEntityCreateCapacity,
@@ -101,6 +103,34 @@ const runCapacityValidation = async ({
       entityCount,
     }),
   );
+
+const createCapacityInsertTx = (existingEntityCount: number) => {
+  const forUpdate = mock(async () => [{ id: workspaceId }]);
+  const limit = mock(() => ({ for: forUpdate }));
+  const where = mock(() => ({ limit }));
+  const from = mock(() => ({ where }));
+  const select = mock(() => ({ from }));
+  const countEntities = mock(async () => existingEntityCount);
+
+  return {
+    forUpdate,
+    tx: {
+      select,
+      $count: countEntities,
+    },
+  };
+};
+
+const runCapacityInsertCheck = async (existingEntityCount: number) => {
+  const { forUpdate, tx } = createCapacityInsertTx(existingEntityCount);
+  const result = await checkEntityCreateCapacityForInsert({
+    tx: asTestRaw<Transaction>(tx),
+    workspaceId,
+    entityCount: 1,
+  });
+
+  return { forUpdate, result };
+};
 
 type RolledBackTxCallback<T> = (tx: TestDatabaseTransaction) => Promise<T>;
 
@@ -342,6 +372,21 @@ describe("entity-create presigned upload validation", () => {
       safeDb,
       parentIdInput: parentId,
     });
+
+    expect(Result.isOk(result)).toBe(true);
+  });
+
+  test("rejects finalization writes that no longer fit entity capacity", async () => {
+    const { forUpdate, result } = await runCapacityInsertCheck(
+      LIMITS.entitiesCount,
+    );
+
+    expect(Result.isError(result)).toBe(true);
+    expect(forUpdate).toHaveBeenCalledWith("update");
+  });
+
+  test("accepts finalization writes that exactly fit remaining capacity", async () => {
+    const { result } = await runCapacityInsertCheck(LIMITS.entitiesCount - 1);
 
     expect(Result.isOk(result)).toBe(true);
   });
