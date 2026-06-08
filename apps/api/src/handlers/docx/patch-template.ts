@@ -12,6 +12,8 @@ import { panic } from "better-result";
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
+import { evaluateNumericExpression } from "@stll/template-conditions";
+
 import {
   flattenTemplateData,
   HAS_BLOCK_DIRECTIVES_RE,
@@ -22,6 +24,7 @@ import { HEADER_FOOTER_RE, W_NS } from "./ooxml";
 import { patchXmlPart } from "./rich-patch";
 import { readManifestFromZip, stripManifest } from "./template-manifest";
 import type {
+  ComputedField,
   FillTemplateResult,
   NamedCondition,
   RichPatchValue,
@@ -121,6 +124,35 @@ const preProcessBlockDirectives = async (
   };
 };
 
+/**
+ * Evaluate manifest-declared computed fields against the user-entered data
+ * and merge the results in, so both block directives and `{{...}}`
+ * substitution can use them. A value the user actually entered wins over a
+ * computed default; fields are evaluated in declaration order, so a computed
+ * field may reference an earlier one. Non-numeric / malformed expressions
+ * resolve to `undefined` and are skipped (the placeholder stays unfilled).
+ */
+const applyComputedFields = (
+  values: PatchValues | TemplateData,
+  computed: readonly ComputedField[],
+): PatchValues | TemplateData => {
+  if (computed.length === 0) {
+    return values;
+  }
+  const merged: PatchValues | TemplateData = { ...values };
+  for (const field of computed) {
+    const existing = merged[field.name];
+    if (existing !== undefined && existing !== "") {
+      continue;
+    }
+    const value = evaluateNumericExpression(field.expression, merged);
+    if (value !== undefined) {
+      merged[field.name] = String(value);
+    }
+  }
+  return merged;
+};
+
 export const fillTemplate = async (
   template: string | Buffer,
   values: PatchValues | TemplateData,
@@ -139,17 +171,22 @@ export const fillTemplate = async (
       ? manifest.conditions
       : undefined;
 
+  // Derive computed fields up front so they're available whether the values
+  // take the patch-values fast path or the template-data (block-directive)
+  // path — an all-string fill still needs its computed fields evaluated.
+  const withComputed = applyComputedFields(values, manifest?.computed ?? []);
+
   let effectiveValues: PatchValues;
   let structureErrors: TemplateStructureError[] = [];
 
-  if (isPatchValues(values)) {
-    effectiveValues = values;
-  } else if (isTemplateData(values)) {
+  if (isPatchValues(withComputed)) {
+    effectiveValues = withComputed;
+  } else if (isTemplateData(withComputed)) {
     // Checks for block directives internally; returns null
     // when none are found
     const result = await preProcessBlockDirectives(
       zip,
-      values,
+      withComputed,
       namedConditions,
     );
 
@@ -160,7 +197,7 @@ export const fillTemplate = async (
     } else {
       // No block directives; flatten nested objects into
       // dot-separated patch keys
-      effectiveValues = flattenTemplateData(values);
+      effectiveValues = flattenTemplateData(withComputed);
     }
   } else {
     panic("fillTemplate received values outside the supported data model");
