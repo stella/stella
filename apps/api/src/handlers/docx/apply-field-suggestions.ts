@@ -20,9 +20,9 @@ export type FieldSuggestion = {
   literalText: string;
   /** Target field path, e.g. "company.name" or "signatory.role". */
   fieldPath: string;
-  inputType?: InputType;
+  inputType?: InputType | undefined;
   /** When set, the field becomes AI-fillable (drafted at fill time). */
-  aiPrompt?: string;
+  aiPrompt?: string | undefined;
 };
 
 const escapeXml = (value: string): string =>
