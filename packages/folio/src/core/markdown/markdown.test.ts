@@ -146,6 +146,19 @@ describe("toMarkdown — tables", () => {
     expect(md([table])).toBe("| A | B |\n| --- | --- |\n| 1 | 2 |");
   });
 
+  test("a literal pipe in a cell is encoded so it is not a column break", () => {
+    const table: BlockContent = {
+      type: "table",
+      rows: [
+        {
+          type: "tableRow",
+          cells: [{ type: "tableCell", content: [para([run("a|b")])] }],
+        },
+      ],
+    };
+    expect(md([table])).toBe("| a&#124;b |\n| --- |");
+  });
+
   test("a merged cell falls back to inline HTML with colspan", () => {
     const table: BlockContent = {
       type: "table",

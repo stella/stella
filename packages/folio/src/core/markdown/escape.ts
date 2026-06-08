@@ -28,13 +28,15 @@ export function escapeInline(text: string): string {
 }
 
 /**
- * Cells use `|` as the column separator. Newlines inside a cell become `<br>`
- * so the row stays on one line. The input is already markdown (each cell is a
- * rendered paragraph that ran through {@link escapeInline}), so backslashes are
- * part of existing escape sequences and must NOT be re-escaped here.
+ * Cells use `|` as the column separator. The input is already markdown (each
+ * cell is a rendered paragraph that ran through {@link escapeInline}), so a
+ * backslash escape would interact with existing escape sequences — encode the
+ * pipe as the HTML entity instead, which GFM renders as a literal `|` without
+ * treating it as a delimiter. Newlines become `<br>` to keep the row on one
+ * line.
  */
 export function escapeTableCell(text: string): string {
-  return text.replace(/\|/gu, "\\|").replace(/\r?\n/gu, "<br>");
+  return text.replace(/\|/gu, "&#124;").replace(/\r?\n/gu, "<br>");
 }
 
 /**
