@@ -2621,6 +2621,12 @@
         "title": "Lancer l’extraction par IA ?"
       },
       "noFieldsToProcess": "Aucun champ à traiter",
+      "serviceTierPrompt": {
+        "description": "Ce flux de travail mettra en file d'attente l'extraction IA pour {count} entités. Lancez-la maintenant avec des crédits standard, ou utilisez des crédits réduits et attendez plus longtemps.",
+        "flex": "Utiliser des crédits réduits",
+        "standard": "Lancer maintenant",
+        "title": "Utiliser des crédits réduits ?"
+      },
       "someFieldsOutdatedDescription": "Veuillez mettre à jour les champs à sélection unique et multiple pour correspondre aux options des propriétés",
       "someFieldsOutdatedTitle": "Certains champs sont obsolètes",
       "startedSuccessfully": "Flux de travail démarré avec succès",

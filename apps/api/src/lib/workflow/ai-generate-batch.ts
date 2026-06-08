@@ -5,7 +5,7 @@ import { Result } from "better-result";
 
 import { markCacheBreakpoint } from "@/api/lib/ai-caching";
 import { getModelForRole, resolveCaching } from "@/api/lib/ai-models";
-import type { OrgAIConfig } from "@/api/lib/ai-models";
+import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-models";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
@@ -38,6 +38,7 @@ type GenerateWorkflowDataProps = {
   entityVersionId: string;
   orgAIConfig?: OrgAIConfig | null;
   promptCachingEnabled: boolean;
+  serviceTier: AIRequestServiceTier;
   onPartialAnswer?:
     | ((update: PartialAnswerUpdate) => Promise<void> | void)
     | undefined;
@@ -59,6 +60,7 @@ export const generateWorkflowData = async ({
   workspaceId,
   orgAIConfig,
   promptCachingEnabled,
+  serviceTier,
   onPartialAnswer,
 }: GenerateWorkflowDataProps): Promise<
   Result<WorkflowDataOutput, WorkflowIntegrationError>
@@ -135,6 +137,7 @@ export const generateWorkflowData = async ({
           promptCachingEnabled,
           scopeKey: entityVersionId,
           organizationId,
+          serviceTier,
         }),
         messages: [{ role: "user", content: messageContent }],
         output: Output.object({ schema: valibotSchema(schema) }),

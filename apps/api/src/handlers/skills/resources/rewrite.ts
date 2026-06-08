@@ -144,6 +144,7 @@ const rewriteSkillResource = createSafeRootHandler(
             promptCachingEnabled,
             scopeKey: null,
             organizationId: session.activeOrganizationId,
+            serviceTier: "standard",
           }),
           prompt,
           ...aiAnalytics.stepCallbacks,

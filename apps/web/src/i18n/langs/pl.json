@@ -2621,6 +2621,12 @@
         "title": "Uruchomić ekstrakcję AI?"
       },
       "noFieldsToProcess": "Brak pól do przetworzenia",
+      "serviceTierPrompt": {
+        "description": "Ten proces doda ekstrakcję AI do kolejki dla {count} jednostek. Uruchom teraz ze standardowymi kredytami albo użyj obniżonych kredytów i poczekaj dłużej.",
+        "flex": "Użyj obniżonych kredytów",
+        "standard": "Uruchom teraz",
+        "title": "Użyć obniżonych kredytów?"
+      },
       "someFieldsOutdatedDescription": "Zaktualizuj pola jednokrotnego i wielokrotnego wyboru, aby odpowiadały opcjom właściwości",
       "someFieldsOutdatedTitle": "Niektóre pola są nieaktualne",
       "startedSuccessfully": "Proces uruchomiony pomyślnie",

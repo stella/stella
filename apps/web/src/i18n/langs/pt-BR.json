@@ -2621,6 +2621,12 @@
         "title": "Iniciar extração com IA?"
       },
       "noFieldsToProcess": "Nenhum campo para processar",
+      "serviceTierPrompt": {
+        "description": "Este fluxo de trabalho colocará a extração de IA na fila para {count} entidades. Inicie agora com créditos padrão ou use créditos reduzidos e espere mais.",
+        "flex": "Usar créditos reduzidos",
+        "standard": "Iniciar agora",
+        "title": "Usar créditos reduzidos?"
+      },
       "someFieldsOutdatedDescription": "Atualize os campos de seleção única e múltipla para corresponder às opções de propriedade",
       "someFieldsOutdatedTitle": "Alguns campos estão desatualizados",
       "startedSuccessfully": "Fluxo de trabalho iniciado com sucesso",

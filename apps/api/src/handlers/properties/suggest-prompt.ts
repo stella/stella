@@ -165,6 +165,7 @@ const suggestPrompt = createSafeHandler(
             promptCachingEnabled,
             scopeKey: null,
             organizationId: session.activeOrganizationId,
+            serviceTier: "standard",
           }),
           system: SYSTEM_PROMPT,
           messages: [{ role: "user", content: userMessage }],

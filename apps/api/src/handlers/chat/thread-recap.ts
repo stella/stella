@@ -118,6 +118,7 @@ export const generateThreadRecapText = async ({
         promptCachingEnabled,
         scopeKey: threadId,
         organizationId,
+        serviceTier: "standard",
       }),
       prompt: `Conversation transcript:\n\n${transcript}\n\nRecap:`,
       system: RECAP_SYSTEM_PROMPT,

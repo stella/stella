@@ -4,8 +4,10 @@ export type StartWorkflowArgs = {
   entityIds?: string[];
   entityIdsOrder?: string[];
   propertyIds?: string[];
+  serviceTier?: WorkflowServiceTier;
 };
 
+export type WorkflowServiceTier = "standard" | "flex";
 export type WorkflowStartDecision = { type: "start" } | { type: "cancel" };
 
 export const LARGE_WORKFLOW_ENTITY_PROMPT_THRESHOLD = 50;
@@ -61,4 +63,33 @@ export const estimateWorkflowTargetCount = async ({
       workspaceId,
     }),
   );
+};
+
+type ResolveWorkflowServiceTierArgs = {
+  args: StartWorkflowArgs | undefined;
+  deferredServiceTierAvailable: boolean;
+  promptForServiceTier: (input: {
+    entityCount: number;
+  }) => Promise<WorkflowServiceTier>;
+  entityCount: number;
+};
+
+export const resolveWorkflowServiceTier = async ({
+  args,
+  deferredServiceTierAvailable,
+  promptForServiceTier,
+  entityCount,
+}: ResolveWorkflowServiceTierArgs): Promise<WorkflowServiceTier> => {
+  if (args?.serviceTier !== undefined) {
+    return args.serviceTier;
+  }
+
+  if (
+    !deferredServiceTierAvailable ||
+    entityCount < LARGE_WORKFLOW_ENTITY_PROMPT_THRESHOLD
+  ) {
+    return "standard";
+  }
+
+  return await promptForServiceTier({ entityCount });
 };

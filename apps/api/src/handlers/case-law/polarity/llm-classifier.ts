@@ -84,6 +84,7 @@ export const classifyWithLLM = async (
           promptCachingEnabled: true,
           scopeKey: `polarity:${language}`,
           organizationId: null,
+          serviceTier: "flex",
         }),
         system: SYSTEM_PROMPT,
         messages: [

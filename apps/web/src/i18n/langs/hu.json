@@ -2621,6 +2621,12 @@
         "title": "Elindítja az AI-kivonatolást?"
       },
       "noFieldsToProcess": "Nincsenek feldolgozandó mezők",
+      "serviceTierPrompt": {
+        "description": "Ez a munkafolyamat {count} entitás AI-kivonatolását állítja sorba. Indítsa el most standard kreditekkel, vagy használjon csökkentett krediteket és várjon tovább.",
+        "flex": "Csökkentett kreditek használata",
+        "standard": "Indítás most",
+        "title": "Csökkentett kreditek használata?"
+      },
       "someFieldsOutdatedDescription": "Frissítse az egyszeres és többszörös választás mezőket, hogy megfeleljenek a tulajdonság opcióinak",
       "someFieldsOutdatedTitle": "Egyes mezők elavultak",
       "startedSuccessfully": "Munkafolyamat sikeresen elindítva",

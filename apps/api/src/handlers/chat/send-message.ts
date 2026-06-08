@@ -863,11 +863,13 @@ const resolveChatCompactionModel = ({
             promptCachingEnabled: false,
             role: "chat",
             scopeKey: null,
+            serviceTier: "standard",
           })
         : getModelForRole("chat", orgAIConfig, {
             organizationId,
             promptCachingEnabled: false,
             scopeKey: null,
+            serviceTier: "standard",
           }),
     catch: (cause) =>
       HandlerError.is(cause)

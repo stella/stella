@@ -110,6 +110,7 @@ ${decisionText}`;
     promptCachingEnabled,
     scopeKey: decisionId,
     organizationId,
+    serviceTier: "flex",
   });
   const { modelId } = getModelInfoForRole("fast", orgAIConfig);
   const aiAnalytics = createAIAnalyticsCallbacks({

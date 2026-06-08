@@ -284,6 +284,7 @@ const generateRefinedSearchQuery = async ({
           promptCachingEnabled,
           scopeKey: null,
           organizationId,
+          serviceTier: "standard",
         }),
         system: SEARCH_REFINE_SYSTEM,
         prompt: JSON.stringify({
@@ -463,6 +464,7 @@ export const summarizeSearchResults = async ({
           promptCachingEnabled,
           scopeKey: null,
           organizationId,
+          serviceTier: "standard",
         }),
         system: SEARCH_SUMMARY_SYSTEM,
         prompt: JSON.stringify({

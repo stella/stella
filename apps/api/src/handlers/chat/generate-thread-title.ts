@@ -70,6 +70,7 @@ export const generateThreadTitle = async ({
         promptCachingEnabled,
         scopeKey: threadId,
         organizationId,
+        serviceTier: "batch",
       }),
       prompt: `Given this conversation, reply with a short thread title (max 6 words). Reply with the title only, nothing else.
 

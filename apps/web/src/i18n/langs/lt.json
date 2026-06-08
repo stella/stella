@@ -2621,6 +2621,12 @@
         "title": "Pradėti DI išgavimą?"
       },
       "noFieldsToProcess": "Nėra laukų apdorojimui",
+      "serviceTierPrompt": {
+        "description": "Ši darbo eiga į eilę įtrauks AI išgavimą {count} objektams. Paleiskite dabar naudodami standartinius kreditus arba naudokite sumažintus kreditus ir palaukite ilgiau.",
+        "flex": "Naudoti sumažintus kreditus",
+        "standard": "Paleisti dabar",
+        "title": "Naudoti sumažintus kreditus?"
+      },
       "someFieldsOutdatedDescription": "Atnaujinkite vieno ir kelių pasirinkimų laukus, kad atitiktų savybių parinktis",
       "someFieldsOutdatedTitle": "Kai kurie laukai yra pasenę",
       "startedSuccessfully": "Darbo eiga sėkmingai paleista",

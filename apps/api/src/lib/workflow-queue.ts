@@ -18,6 +18,7 @@ import {
   loadOrgAIConfig,
   loadPromptCachingPreference,
 } from "@/api/lib/ai-config-loader";
+import type { AIRequestServiceTier } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -66,8 +67,8 @@ import {
 } from "@/api/lib/workflow/orphan-recovery";
 import {
   computeWorkflowJobTimeoutMs,
+  getWorkflowBatchAITimeoutMs,
   runWorkflowBatchGenerationWithRetry,
-  WORKFLOW_BATCH_AI_TIMEOUT_MS,
 } from "@/api/lib/workflow/run-logic";
 import type { PartialAnswerUpdate } from "@/api/lib/workflow/streaming-answer";
 import { prepareBatch } from "@/api/lib/workflow/utils";
@@ -112,6 +113,7 @@ type EntityJobData = {
   entityId: string;
   executionPlan: ExecutionLevel[];
   requestId: string;
+  serviceTier?: AIRequestServiceTier;
   /**
    * Property IDs the caller wants processed even if their current
    * content would normally cause `prepareBatch` to skip them (e.g. a
@@ -197,7 +199,7 @@ const isCurrentWorkflowRequest = async ({
 // MAX_STALLED_COUNT: a job that stalls this many times moves to
 // failed (and then retries via `attempts`).
 //
-// computeJobTimeoutMs: process-level ceiling per entity job, scaled
+// computeWorkflowJobTimeoutMs: process-level ceiling per entity job, scaled
 // with the execution plan's depth. A flat 6-minute cap would
 // deterministically abort entities with several slow dependency
 // levels even when each batch stays within its own AI timeout.
@@ -247,6 +249,7 @@ type StartWorkflowArgs = {
    * filter are dropped from every level of the plan.
    */
   propertyIds?: SafeId<"property">[];
+  serviceTier?: AIRequestServiceTier;
 };
 
 type StartWorkflowResult = {
@@ -262,6 +265,7 @@ type EnqueueEntityJobsArgs = {
   requestId: string;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
+  serviceTier: AIRequestServiceTier;
   forcePropertyIds?: readonly SafeId<"property">[];
 };
 
@@ -288,6 +292,7 @@ const enqueueEntityJobs = async ({
   organizationId,
   q,
   requestId,
+  serviceTier,
   userId,
   workspaceId,
   forcePropertyIds,
@@ -311,6 +316,7 @@ const enqueueEntityJobs = async ({
           entityId,
           executionPlan,
           requestId,
+          serviceTier,
           ...(forcePropertyIds &&
             forcePropertyIds.length > 0 && {
               forcePropertyIds: [...forcePropertyIds],
@@ -367,6 +373,7 @@ export const startWorkflow = async ({
   entityIds: inputEntityIds,
   entityIdsOrder: inputOrder,
   propertyIds: inputPropertyIds,
+  serviceTier = "standard",
 }: StartWorkflowArgs): Promise<StartWorkflowResult> => {
   const redis = getRedis();
   const requestId = Bun.randomUUIDv7();
@@ -528,6 +535,7 @@ export const startWorkflow = async ({
           organizationId,
           q,
           requestId,
+          serviceTier,
           userId,
           workspaceId,
           ...(inputPropertyIds &&
@@ -992,7 +1000,10 @@ export const initWorkflowWorker = () => {
       // AI timeout. A fixed 6-min ceiling would deterministically
       // abort entities with several slow levels even when each
       // individual batch stays within budget.
-      const jobTimeoutMs = computeWorkflowJobTimeoutMs(job.data.executionPlan);
+      const jobTimeoutMs = computeWorkflowJobTimeoutMs(
+        job.data.executionPlan,
+        job.data.serviceTier ?? "standard",
+      );
       const timeoutHandle = setTimeout(() => {
         controller.abort(
           new Error(
@@ -1182,6 +1193,7 @@ const processEntityJob = async (data: EntityJobData, signal: AbortSignal) => {
     entityId,
     executionPlan,
     requestId,
+    serviceTier = "standard",
     forcePropertyIds,
   } = data;
   const forcedPropertyIds: ReadonlySet<string> = new Set(forcePropertyIds);
@@ -1240,6 +1252,7 @@ const processEntityJob = async (data: EntityJobData, signal: AbortSignal) => {
             scopedDb,
             requestId,
             signal,
+            serviceTier,
             forcedPropertyIds,
           }),
       ),
@@ -1271,6 +1284,7 @@ type ProcessOneBatchArgs = {
   scopedDb: ScopedDb;
   requestId: string;
   signal: AbortSignal;
+  serviceTier: AIRequestServiceTier;
   forcedPropertyIds: ReadonlySet<string>;
 };
 
@@ -1356,6 +1370,7 @@ const processOneBatch = async ({
   scopedDb,
   requestId,
   signal,
+  serviceTier,
   forcedPropertyIds,
 }: ProcessOneBatchArgs) => {
   signal.throwIfAborted();
@@ -1466,7 +1481,7 @@ const processOneBatch = async ({
       generate: async () =>
         await generateFn({
           abortSignal: AbortSignal.any([
-            AbortSignal.timeout(WORKFLOW_BATCH_AI_TIMEOUT_MS),
+            AbortSignal.timeout(getWorkflowBatchAITimeoutMs(serviceTier)),
             signal,
           ]),
           batch,
@@ -1476,6 +1491,7 @@ const processOneBatch = async ({
           scopedDb,
           orgAIConfig,
           promptCachingEnabled,
+          serviceTier,
           onPartialAnswer: previewPublisher.publish,
         }),
       onRetryError: (error, attempt) => {

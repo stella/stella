@@ -488,11 +488,13 @@ export const streamChat = async ({
             scopeKey: promptCacheKey,
             role: "chat",
             organizationId,
+            serviceTier: "standard",
           })
         : getModelForRole("chat", orgAIConfig, {
             promptCachingEnabled,
             scopeKey: promptCacheKey,
             organizationId,
+            serviceTier: "standard",
           });
       // Eligible fallback: a *different* model on the same orgAI
       // config. Skip when the user has pinned a specific dev
@@ -575,6 +577,7 @@ export const streamChat = async ({
           promptCachingEnabled,
           scopeKey: promptCacheKey,
           organizationId,
+          serviceTier: "standard",
         });
         const fallbackAnalytics = createAIAnalyticsCallbacks({
           usageMetering: {

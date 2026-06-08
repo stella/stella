@@ -201,6 +201,7 @@ const previewProperty = createSafeHandler(
       scopedDb,
       orgAIConfig,
       promptCachingEnabled,
+      serviceTier: "standard",
     });
 
     if (Result.isError(generateResult)) {

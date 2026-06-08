@@ -2621,6 +2621,12 @@
         "title": "Spustiť extrakciu AI?"
       },
       "noFieldsToProcess": "Žiadne polia na spracovanie",
+      "serviceTierPrompt": {
+        "description": "Tento pracovný postup zaradí AI extrakciu pre {count} entít. Spustite ju hneď za štandardné kredity, alebo použite znížené kredity a počkajte dlhšie.",
+        "flex": "Použiť znížené kredity",
+        "standard": "Spustiť hneď",
+        "title": "Použiť znížené kredity?"
+      },
       "someFieldsOutdatedDescription": "Aktualizujte polia jednoduchého a viacnásobného výberu tak, aby zodpovedali možnostiam vlastností",
       "someFieldsOutdatedTitle": "Niektoré polia sú zastarané",
       "startedSuccessfully": "Pracovný postup úspešne spustený",

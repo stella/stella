@@ -2621,6 +2621,12 @@
         "title": "Käivitada AI väljavõte?"
       },
       "noFieldsToProcess": "Töödeldavad väljad puuduvad",
+      "serviceTierPrompt": {
+        "description": "See töövoog paneb AI-väljavõtte järjekorda {count} üksuse jaoks. Käivitage kohe standardkrediitidega või kasutage vähendatud krediite ja oodake kauem.",
+        "flex": "Kasuta vähendatud krediite",
+        "standard": "Käivita kohe",
+        "title": "Kas kasutada vähendatud krediite?"
+      },
       "someFieldsOutdatedDescription": "Uuendage ühekordse ja mitmikvaliku väljad, et need vastaksid omaduse valikutele",
       "someFieldsOutdatedTitle": "Mõned väljad on aegunud",
       "startedSuccessfully": "Töövoog edukalt käivitatud",

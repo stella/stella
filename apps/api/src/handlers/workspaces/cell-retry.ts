@@ -128,6 +128,7 @@ const cellRetry = createSafeHandler(
             scopedDb,
             entityIds: [entityId],
             propertyIds: [propertyId],
+            serviceTier: "standard",
           }),
         catch: (cause) =>
           new HandlerError({

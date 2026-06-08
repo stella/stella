@@ -6,9 +6,11 @@ import { api } from "@/lib/api";
 import { toSafeId } from "@/lib/safe-id";
 import { aiAvailabilityOptions } from "@/routes/_protected.organization/-ai-config-queries";
 import { useWorkflowStartConfirmationPrompt } from "@/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt";
+import { useWorkflowServiceTierPrompt } from "@/routes/_protected.workspaces/$workspaceId/-components/workflow-service-tier-prompt";
 import {
   estimateWorkflowTargetCount,
   resolveWorkflowStartDecision,
+  resolveWorkflowServiceTier,
 } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow.logic";
 import type { StartWorkflowArgs } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow.logic";
 import { workspaceKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
@@ -28,6 +30,7 @@ export const useStartWorkflow = (workspaceId: string) => {
     aiAvailabilityOptions({ organizationId: activeOrganizationId }),
   );
   const confirmLargeRun = useWorkflowStartConfirmationPrompt();
+  const promptForServiceTier = useWorkflowServiceTierPrompt();
 
   return async (args?: StartWorkflowArgs) => {
     if (!aiAvailability?.available) {
@@ -35,18 +38,26 @@ export const useStartWorkflow = (workspaceId: string) => {
     }
 
     try {
+      const entityCount = await estimateWorkflowTargetCount({
+        args,
+        queryClient,
+        workspaceId,
+      });
       const decision = await resolveWorkflowStartDecision({
         confirmLargeRun,
-        estimateEntityCount: async () =>
-          await estimateWorkflowTargetCount({
-            args,
-            queryClient,
-            workspaceId,
-          }),
+        estimateEntityCount: async () => entityCount,
       });
       if (decision.type === "cancel") {
         return undefined;
       }
+
+      const serviceTier = await resolveWorkflowServiceTier({
+        args,
+        deferredServiceTierAvailable:
+          aiAvailability.deferredServiceTierAvailable ?? false,
+        entityCount,
+        promptForServiceTier,
+      });
 
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
@@ -67,6 +78,7 @@ export const useStartWorkflow = (workspaceId: string) => {
                 toSafeId<"property">(id),
               ),
             }),
+          serviceTier,
         });
 
       if (response.error) {

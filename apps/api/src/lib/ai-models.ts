@@ -26,10 +26,19 @@ import { anthropic, createAnthropic } from "@ai-sdk/anthropic";
 import { createAzure } from "@ai-sdk/azure";
 import { devToolsMiddleware } from "@ai-sdk/devtools";
 import { createGoogleGenerativeAI, google } from "@ai-sdk/google";
+import type { GoogleLanguageModelOptions } from "@ai-sdk/google";
 import { createVertex } from "@ai-sdk/google-vertex";
 import { createMistral, mistral } from "@ai-sdk/mistral";
 import { createOpenAI, openai } from "@ai-sdk/openai";
-import type { JSONObject } from "@ai-sdk/provider";
+import type { OpenAILanguageModelChatOptions } from "@ai-sdk/openai";
+import { APICallError } from "@ai-sdk/provider";
+import type {
+  JSONObject,
+  LanguageModelV3GenerateResult,
+  LanguageModelV3StreamPart,
+  LanguageModelV3StreamResult,
+  SharedV3ProviderMetadata,
+} from "@ai-sdk/provider";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { defaultSettingsMiddleware, wrapLanguageModel } from "ai";
 import type { LanguageModel, LanguageModelMiddleware } from "ai";
@@ -43,6 +52,7 @@ import {
 } from "@stll/ai-catalog";
 import type { AIProvider, BYOKProvider, ModelRole } from "@stll/ai-catalog";
 
+import type { UsageServiceTier } from "@/api/db/schema";
 import { env } from "@/api/env";
 import {
   AZURE_FOUNDRY_DEFAULT_API_VERSION,
@@ -91,6 +101,11 @@ export const isAllowedBYOKModel = (
 };
 
 export type DataRegion = "eu" | "global" | "ch";
+export type AIRequestServiceTier = UsageServiceTier;
+export const STELLA_PROVIDER_METADATA_KEY = "stella";
+export const SERVICE_TIER_PROVIDER_METADATA_KEY = "effectiveServiceTier";
+export const FALLBACK_FROM_SERVICE_TIER_PROVIDER_METADATA_KEY =
+  "fallbackFromServiceTier";
 
 /**
  * Providers that support regional endpoint routing.
@@ -860,6 +875,339 @@ const cachingMiddleware = (
     await Promise.resolve(computeCachingParams(params, provider, decision)),
 });
 
+// -- Provider service tier routing ------------------------------
+
+export type ServiceTierProviderTarget =
+  | "google_gemini_api"
+  | "google_vertex"
+  | "openai"
+  | "none";
+
+const GOOGLE_GEMINI_FLEX_TIER = "flex" satisfies NonNullable<
+  GoogleLanguageModelOptions["serviceTier"]
+>;
+const GOOGLE_GEMINI_STANDARD_TIER = "standard" satisfies NonNullable<
+  GoogleLanguageModelOptions["serviceTier"]
+>;
+const GOOGLE_VERTEX_FLEX_SHARED_REQUEST_TYPE = "flex" satisfies NonNullable<
+  GoogleLanguageModelOptions["sharedRequestType"]
+>;
+const GOOGLE_VERTEX_SHARED_REQUEST_TYPE = "shared" satisfies NonNullable<
+  GoogleLanguageModelOptions["requestType"]
+>;
+const OPENAI_FLEX_TIER = "flex" satisfies NonNullable<
+  OpenAILanguageModelChatOptions["serviceTier"]
+>;
+const OPENAI_STANDARD_TIER = "default" satisfies NonNullable<
+  OpenAILanguageModelChatOptions["serviceTier"]
+>;
+
+type GoogleGeminiServiceTierOptions = Pick<
+  GoogleLanguageModelOptions,
+  "serviceTier"
+>;
+type GoogleVertexServiceTierOptions = Pick<
+  GoogleLanguageModelOptions,
+  "requestType" | "sharedRequestType"
+>;
+type OpenAIServiceTierOptions = Pick<
+  OpenAILanguageModelChatOptions,
+  "serviceTier"
+>;
+
+const providerTargetForConfig = (
+  config: OrgAIProviderConfig,
+): ServiceTierProviderTarget => {
+  if (config.provider === "google") {
+    return config.region && config.region !== "global"
+      ? "google_vertex"
+      : "google_gemini_api";
+  }
+  if (config.provider === "openai") {
+    return "openai";
+  }
+  return "none";
+};
+
+const providerTargetForProvider = ({
+  provider,
+  region,
+}: {
+  provider: AIProvider;
+  region?: DataRegion | undefined;
+}): ServiceTierProviderTarget => {
+  if (provider === "google") {
+    return region && region !== "global"
+      ? "google_vertex"
+      : "google_gemini_api";
+  }
+  if (provider === "openai") {
+    return "openai";
+  }
+  return "none";
+};
+
+const providerTargetForInstanceProvider = (
+  provider: AIProvider,
+): ServiceTierProviderTarget => providerTargetForProvider({ provider });
+
+const isDeferredServiceTier = (serviceTier: AIRequestServiceTier): boolean =>
+  serviceTier === "flex" || serviceTier === "batch";
+
+export const resolveEffectiveServiceTierForProvider = ({
+  provider,
+  region,
+  serviceTier,
+}: {
+  provider: AIProvider;
+  region?: DataRegion | undefined;
+  serviceTier: AIRequestServiceTier;
+}): AIRequestServiceTier => {
+  if (!isDeferredServiceTier(serviceTier)) {
+    return serviceTier;
+  }
+
+  const target = providerTargetForProvider({ provider, region });
+  return target === "none" ? "standard" : serviceTier;
+};
+
+const mergeProviderOptionPatch = (
+  providerOptions: ProviderOptionsMap | undefined,
+  providerKey: string,
+  patch: ProviderOptionsValue,
+): ProviderOptionsMap => {
+  const existing = providerOptions?.[providerKey] ?? {};
+  return {
+    ...providerOptions,
+    [providerKey]: {
+      ...existing,
+      ...patch,
+    },
+  };
+};
+
+export const resolveServiceTierProviderOptions = ({
+  target,
+  serviceTier,
+}: {
+  target: ServiceTierProviderTarget;
+  serviceTier: AIRequestServiceTier;
+}): ProviderOptionsMap | undefined => {
+  if (target === "google_gemini_api") {
+    const googleOptions = {
+      serviceTier: isDeferredServiceTier(serviceTier)
+        ? GOOGLE_GEMINI_FLEX_TIER
+        : GOOGLE_GEMINI_STANDARD_TIER,
+    } satisfies GoogleGeminiServiceTierOptions;
+
+    return {
+      google: googleOptions,
+    };
+  }
+
+  if (target === "google_vertex") {
+    if (!isDeferredServiceTier(serviceTier)) {
+      return undefined;
+    }
+    const googleOptions = {
+      sharedRequestType: GOOGLE_VERTEX_FLEX_SHARED_REQUEST_TYPE,
+      requestType: GOOGLE_VERTEX_SHARED_REQUEST_TYPE,
+    } satisfies GoogleVertexServiceTierOptions;
+
+    return {
+      google: googleOptions,
+    };
+  }
+
+  if (target === "openai") {
+    const openaiOptions = {
+      serviceTier: isDeferredServiceTier(serviceTier)
+        ? OPENAI_FLEX_TIER
+        : OPENAI_STANDARD_TIER,
+    } satisfies OpenAIServiceTierOptions;
+
+    return {
+      openai: openaiOptions,
+    };
+  }
+
+  return undefined;
+};
+
+const computeServiceTierParams = (
+  params: CallOptions,
+  target: ServiceTierProviderTarget,
+  serviceTier: AIRequestServiceTier,
+): CallOptions => {
+  const providerOptionsPatch = resolveServiceTierProviderOptions({
+    target,
+    serviceTier,
+  });
+  if (providerOptionsPatch === undefined) {
+    return params;
+  }
+
+  let nextProviderOptions: ProviderOptionsMap = params.providerOptions ?? {};
+  for (const [providerKey, patch] of Object.entries(providerOptionsPatch)) {
+    nextProviderOptions = mergeProviderOptionPatch(
+      nextProviderOptions,
+      providerKey,
+      patch,
+    );
+  }
+
+  return {
+    ...params,
+    providerOptions: nextProviderOptions,
+  };
+};
+
+const computeStandardFallbackServiceTierParams = (
+  params: CallOptions,
+  target: ServiceTierProviderTarget,
+): CallOptions => {
+  if (target === "google_vertex") {
+    const googleOptions = params.providerOptions?.["google"];
+    if (googleOptions === undefined) {
+      return params;
+    }
+
+    const { requestType, sharedRequestType, ...standardGoogleOptions } =
+      googleOptions;
+    return {
+      ...params,
+      providerOptions: {
+        ...params.providerOptions,
+        google: standardGoogleOptions,
+      },
+    };
+  }
+
+  return computeServiceTierParams(params, target, "standard");
+};
+
+const isServiceTierFallbackError = (error: unknown): boolean =>
+  APICallError.isInstance(error) &&
+  error.isRetryable &&
+  error.statusCode !== undefined;
+
+const shouldRetryWithStandardServiceTier = ({
+  error,
+  serviceTier,
+  target,
+}: {
+  error: unknown;
+  serviceTier: AIRequestServiceTier;
+  target: ServiceTierProviderTarget;
+}): boolean =>
+  target !== "none" &&
+  isDeferredServiceTier(serviceTier) &&
+  isServiceTierFallbackError(error);
+
+const buildServiceTierFallbackMetadata = (
+  fallbackFromServiceTier: AIRequestServiceTier,
+): SharedV3ProviderMetadata => ({
+  [STELLA_PROVIDER_METADATA_KEY]: {
+    [SERVICE_TIER_PROVIDER_METADATA_KEY]: "standard",
+    [FALLBACK_FROM_SERVICE_TIER_PROVIDER_METADATA_KEY]: fallbackFromServiceTier,
+  },
+});
+
+const mergeProviderMetadata = (
+  providerMetadata: SharedV3ProviderMetadata | undefined,
+  patch: SharedV3ProviderMetadata,
+): SharedV3ProviderMetadata => {
+  const next: SharedV3ProviderMetadata = { ...providerMetadata };
+
+  for (const [providerKey, providerPatch] of Object.entries(patch)) {
+    next[providerKey] = {
+      ...providerMetadata?.[providerKey],
+      ...providerPatch,
+    };
+  }
+
+  return next;
+};
+
+const markServiceTierFallbackGenerateResult = (
+  result: LanguageModelV3GenerateResult,
+  fallbackFromServiceTier: AIRequestServiceTier,
+): LanguageModelV3GenerateResult => ({
+  ...result,
+  providerMetadata: mergeProviderMetadata(
+    result.providerMetadata,
+    buildServiceTierFallbackMetadata(fallbackFromServiceTier),
+  ),
+});
+
+const markServiceTierFallbackStreamResult = (
+  result: LanguageModelV3StreamResult,
+  fallbackFromServiceTier: AIRequestServiceTier,
+): LanguageModelV3StreamResult => ({
+  ...result,
+  stream: result.stream.pipeThrough(
+    new TransformStream<LanguageModelV3StreamPart, LanguageModelV3StreamPart>({
+      transform: (chunk, controller) => {
+        if (chunk.type !== "finish") {
+          controller.enqueue(chunk);
+          return;
+        }
+
+        controller.enqueue({
+          ...chunk,
+          providerMetadata: mergeProviderMetadata(
+            chunk.providerMetadata,
+            buildServiceTierFallbackMetadata(fallbackFromServiceTier),
+          ),
+        });
+      },
+    }),
+  ),
+});
+
+export const createServiceTierMiddleware = (
+  target: ServiceTierProviderTarget,
+  serviceTier: AIRequestServiceTier,
+): SingleMiddleware => ({
+  specificationVersion: "v3",
+  transformParams: async ({ params }) =>
+    await Promise.resolve(
+      computeServiceTierParams(params, target, serviceTier),
+    ),
+  wrapGenerate: async ({ doGenerate, model, params }) => {
+    try {
+      return await doGenerate();
+    } catch (error) {
+      if (!shouldRetryWithStandardServiceTier({ error, serviceTier, target })) {
+        throw error;
+      }
+
+      return markServiceTierFallbackGenerateResult(
+        await model.doGenerate(
+          computeStandardFallbackServiceTierParams(params, target),
+        ),
+        serviceTier,
+      );
+    }
+  },
+  wrapStream: async ({ doStream, model, params }) => {
+    try {
+      return await doStream();
+    } catch (error) {
+      if (!shouldRetryWithStandardServiceTier({ error, serviceTier, target })) {
+        throw error;
+      }
+
+      return markServiceTierFallbackStreamResult(
+        await model.doStream(
+          computeStandardFallbackServiceTierParams(params, target),
+        ),
+        serviceTier,
+      );
+    }
+  },
+});
+
 // -- Default settings -------------------------------------------
 
 /**
@@ -1023,6 +1371,8 @@ const withInstrumentation = (
     role: ModelRole;
     modelId: string;
     organizationId: SafeId<"organization"> | null;
+    serviceTier: AIRequestServiceTier;
+    serviceTierTarget: ServiceTierProviderTarget;
   },
 ): LanguageModel => {
   const middlewares: SingleMiddleware[] = [
@@ -1035,6 +1385,7 @@ const withInstrumentation = (
       }),
     }),
     cachingMiddleware(ctx.provider, ctx.decision),
+    createServiceTierMiddleware(ctx.serviceTierTarget, ctx.serviceTier),
   ];
   if (isAIDevToolsEnabled()) {
     middlewares.push(devToolsMiddleware());
@@ -1074,6 +1425,29 @@ const getOrgProviderConfig = (
 ): OrgAIProviderConfig =>
   findOrgProviderConfig(config, provider) ??
   panic(`Org AI config has no ${provider} provider`);
+
+export const isDeferredServiceTierAvailableForRole = (
+  role: ModelRole,
+  orgConfig: OrgAIConfig | null | undefined,
+): boolean => {
+  if (orgConfig) {
+    const selection = orgConfig.overrideModels[role];
+    const providerConfig = getOrgProviderConfig(orgConfig, selection.provider);
+    return providerTargetForConfig(providerConfig) !== "none";
+  }
+
+  return (
+    hasInstanceProvider() &&
+    providerTargetForInstanceProvider(getActiveProvider()) !== "none"
+  );
+};
+
+type AIModelRequestOptions = {
+  promptCachingEnabled: boolean;
+  scopeKey: string | null;
+  organizationId: SafeId<"organization"> | null;
+  serviceTier: AIRequestServiceTier;
+};
 
 export const validateDevModelOverride = (
   modelId: string,
@@ -1126,13 +1500,10 @@ export const validateDevModelOverride = (
 export const getModelForRole = (
   role: ModelRole,
   orgConfig: OrgAIConfig | null | undefined,
-  options: {
-    promptCachingEnabled: boolean;
-    scopeKey: string | null;
-    organizationId: SafeId<"organization"> | null;
-  },
+  options: AIModelRequestOptions,
 ): LanguageModel => {
-  const { promptCachingEnabled, scopeKey, organizationId } = options;
+  const { promptCachingEnabled, scopeKey, organizationId, serviceTier } =
+    options;
   // BYOK path: org selects a model for each role through
   // one of its configured provider credentials.
   if (orgConfig) {
@@ -1146,6 +1517,8 @@ export const getModelForRole = (
       role,
       modelId: selection.modelId,
       organizationId,
+      serviceTier,
+      serviceTierTarget: providerTargetForConfig(providerConfig),
     });
   }
 
@@ -1170,6 +1543,8 @@ export const getModelForRole = (
     role,
     modelId,
     organizationId,
+    serviceTier,
+    serviceTierTarget: providerTargetForInstanceProvider(provider),
   });
 };
 
@@ -1240,15 +1615,11 @@ export const getModelInfoById = (
 export const getModelById = (
   modelId: string,
   orgConfig: OrgAIConfig | null | undefined,
-  options: {
-    promptCachingEnabled: boolean;
-    scopeKey: string | null;
-    role: ModelRole;
-    organizationId: SafeId<"organization"> | null;
-  },
+  options: AIModelRequestOptions & { role: ModelRole },
 ): LanguageModel => {
   const override = decodeModelOverride(modelId);
-  const { promptCachingEnabled, scopeKey, role, organizationId } = options;
+  const { promptCachingEnabled, scopeKey, role, organizationId, serviceTier } =
+    options;
   const decision = resolveCaching({ promptCachingEnabled, role, scopeKey });
   if (orgConfig) {
     const providerConfig = override.provider
@@ -1262,6 +1633,8 @@ export const getModelById = (
         role,
         modelId: override.modelId,
         organizationId,
+        serviceTier,
+        serviceTierTarget: providerTargetForConfig(providerConfig),
       },
     );
   }
@@ -1274,14 +1647,19 @@ export const getModelById = (
         role,
         modelId: override.modelId,
         organizationId,
+        serviceTier,
+        serviceTierTarget: providerTargetForInstanceProvider(override.provider),
       },
     );
   }
+  const provider = getActiveProvider();
   return withInstrumentation(getInstanceFactory()(override.modelId), {
-    provider: getActiveProvider(),
+    provider,
     decision,
     role,
     modelId: override.modelId,
     organizationId,
+    serviceTier,
+    serviceTierTarget: providerTargetForInstanceProvider(provider),
   });
 };

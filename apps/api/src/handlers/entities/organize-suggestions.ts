@@ -262,6 +262,7 @@ const organizeSuggestionsHandler = async function* ({
           promptCachingEnabled,
           scopeKey: `${organizationId}:${workspaceId}:organize`,
           organizationId,
+          serviceTier: "flex",
         }),
         system: ORGANIZE_SYSTEM_PROMPT,
         prompt: JSON.stringify({
@@ -707,6 +708,7 @@ const generateMissingSummaries = async ({
           promptCachingEnabled,
           scopeKey: `${organizationId}:${workspaceId}:summaries`,
           organizationId,
+          serviceTier: "flex",
         }),
         system: SUMMARY_SYSTEM_PROMPT,
         prompt: JSON.stringify({

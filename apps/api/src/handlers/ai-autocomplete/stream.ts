@@ -74,6 +74,7 @@ const autocompleteStream = createSafeRootHandler(
             promptCachingEnabled,
             scopeKey: null,
             organizationId: session.activeOrganizationId,
+            serviceTier: "standard",
           }),
         );
       } catch (error) {

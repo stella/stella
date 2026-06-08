@@ -2621,6 +2621,12 @@
         "title": "Sākt MI izgūšanu?"
       },
       "noFieldsToProcess": "Nav lauku apstrādei",
+      "serviceTierPrompt": {
+        "description": "Šī darbplūsma ievietos AI izgūšanu rindā {count} vienībām. Palaidiet tagad ar standarta kredītiem vai izmantojiet samazinātus kredītus un gaidiet ilgāk.",
+        "flex": "Izmantot samazinātus kredītus",
+        "standard": "Palaist tagad",
+        "title": "Izmantot samazinātus kredītus?"
+      },
       "someFieldsOutdatedDescription": "Atjauniniet vienas un vairāku izvēļu laukus, lai tie atbilstu rekvizītu opcijām",
       "someFieldsOutdatedTitle": "Daži lauki ir novecojuši",
       "startedSuccessfully": "Darbplūsma veiksmīgi palaista",
