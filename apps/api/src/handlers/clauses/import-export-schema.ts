@@ -4,12 +4,21 @@ import type { ClauseMetadata } from "./metadata";
 import { isClauseBody } from "./types";
 import type { ClauseBody } from "./types";
 
+export type ClauseExportVariant = {
+  label: string;
+  body: ClauseBody;
+};
+
 export type ClauseExportItem = {
   title: string;
   description: string | null;
   usageNotes: string | null;
   language: string | null;
   body: ClauseBody;
+  // Author-curated alternative bodies. Optional so exports predating
+  // variant support still import. Version history is intentionally not
+  // exported: it is instance-local and the current body imports as v1.
+  variants?: ClauseExportVariant[];
   metadata: ClauseMetadata | Record<string, unknown> | null;
   categoryName: string | null;
   categoryPath: string[] | null;
@@ -54,6 +63,23 @@ export const isClauseExportPayload = (
       !isRecord(clause["metadata"])
     ) {
       return false;
+    }
+    const variants = clause["variants"];
+    if (variants !== undefined) {
+      if (!Array.isArray(variants)) {
+        return false;
+      }
+      for (const variant of variants) {
+        if (!isRecord(variant)) {
+          return false;
+        }
+        if (typeof variant["label"] !== "string" || !variant["label"]) {
+          return false;
+        }
+        if (!isClauseBody(variant["body"])) {
+          return false;
+        }
+      }
     }
   }
 
