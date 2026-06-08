@@ -121,6 +121,37 @@ describe("toMarkdown — inline marks", () => {
     ).toBe("`code()`");
   });
 
+  test("inline code with backticks uses a longer fence", () => {
+    const mono = { fontFamily: { ascii: "Consolas" } };
+    expect(md([para([run("a``b", mono)])])).toBe("```a``b```");
+    // Content beginning with a backtick gets an inner space.
+    expect(md([para([run("`x", mono)])])).toBe("`` `x ``");
+  });
+
+  test("a math equation exports its plain-text fallback", () => {
+    const out = toMarkdown({
+      package: {
+        document: {
+          content: [
+            {
+              type: "paragraph",
+              content: [
+                run("E="),
+                {
+                  type: "mathEquation",
+                  display: "inline",
+                  ommlXml: "<m/>",
+                  plainText: "mc^2",
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    expect(out).toBe("E=mc^2");
+  });
+
   test("a hyperlink renders inline", () => {
     const link: Hyperlink = {
       type: "hyperlink",

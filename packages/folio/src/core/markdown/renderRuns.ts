@@ -94,13 +94,19 @@ function applyMarks(text: string, marks: MarkKey[]): string {
   if (!text) {
     return text;
   }
-  // Code overrides other marks: code is literal.
+  // Code overrides other marks: a code span is literal, so undo the inline
+  // markdown escaping `escapeInline` applied to the run text. Per CommonMark the
+  // fence must be longer than the longest backtick run in the content, and a
+  // space is padded inside when the content begins or ends with a backtick.
   if (marks.includes("code")) {
-    // If text contains backticks, use a longer fence.
-    if (text.includes("`")) {
-      return `\`\`${text}\`\``;
+    const literal = text.replace(/\\([\\`*[\]_<])/gu, "$1");
+    let longestRun = 0;
+    for (const m of literal.matchAll(/`+/gu)) {
+      longestRun = Math.max(longestRun, m[0].length);
     }
-    return `\`${text}\``;
+    const fence = "`".repeat(longestRun + 1);
+    const pad = literal.startsWith("`") || literal.endsWith("`") ? " " : "";
+    return `${fence}${pad}${literal}${pad}${fence}`;
   }
   let out = text;
   for (const m of marks) {
@@ -360,6 +366,12 @@ export function renderParagraphInline(
           item.content as ParagraphContent[],
           paraId,
         );
+        break;
+      case "mathEquation":
+        // Markdown can't carry OMML; emit the plain-text fallback when present.
+        if (item.plainText) {
+          out += escapeInline(item.plainText);
+        }
         break;
       default:
         // Range markers without inline payload (bookmark*, move*Range*,
