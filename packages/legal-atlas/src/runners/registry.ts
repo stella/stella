@@ -4,6 +4,7 @@ export const RUNNER_NAMES = [
   "case-law-ingest",
   "case-law-corpus-storage-backfill",
   "legal-corpus-storage-backfill",
+  "legal-corpus-index-backfill",
   "statute-ingest",
   "search-index",
 ] as const;
@@ -32,6 +33,11 @@ const RUNNER_DEFINITIONS: readonly RunnerDefinition[] = [
     name: "legal-corpus-storage-backfill",
     status: "implemented",
     description: "copy existing case-law and legislation payloads to S3",
+  },
+  {
+    name: "legal-corpus-index-backfill",
+    status: "implemented",
+    description: "index corpus-backed case-law and legislation payloads",
   },
   {
     name: "statute-ingest",

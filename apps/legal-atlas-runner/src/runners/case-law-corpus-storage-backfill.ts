@@ -6,11 +6,14 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { createIngestionDb } from "@/api/db";
 import { rlsDb } from "@/api/db/root";
 import { caseLawDecisions, legislationDocuments } from "@/api/db/schema";
+import { backfillCorpusIndex } from "@/api/handlers/case-law/corpus-index";
 import { writeCorpusDocument } from "@/api/handlers/case-law/corpus-storage";
 import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
 import type { DecisionSection } from "@/api/handlers/case-law/types";
+import { backfillLegislationCorpusIndex } from "@/api/handlers/legislation/corpus-index";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
+import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
 
 const BATCH_SIZE = 50;
@@ -310,6 +313,62 @@ const backfillLegislation = async (
   return { written, failed };
 };
 
+type IndexBackfillResult = {
+  indexed: number;
+};
+
+const backfillCaseLawIndex = async (
+  limit: number | null,
+): Promise<IndexBackfillResult> => {
+  const generation = corpusGeneration("case_law");
+  let indexed = 0;
+
+  while (true) {
+    const batchSize = nextBatchSize(limit, indexed);
+    if (batchSize === 0) {
+      break;
+    }
+
+    const count = await backfillCorpusIndex(ingestionDb, batchSize, generation);
+    if (count === 0) {
+      break;
+    }
+
+    indexed += count;
+    logInfo(`  case-law indexed=${indexed}`);
+  }
+
+  return { indexed };
+};
+
+const backfillLegislationIndex = async (
+  limit: number | null,
+): Promise<IndexBackfillResult> => {
+  const generation = corpusGeneration("legislation");
+  let indexed = 0;
+
+  while (true) {
+    const batchSize = nextBatchSize(limit, indexed);
+    if (batchSize === 0) {
+      break;
+    }
+
+    const count = await backfillLegislationCorpusIndex(
+      ingestionDb,
+      batchSize,
+      generation,
+    );
+    if (count === 0) {
+      break;
+    }
+
+    indexed += count;
+    logInfo(`  legislation indexed=${indexed}`);
+  }
+
+  return { indexed };
+};
+
 export const runLegalCorpusStorageBackfill = async (
   argv: readonly string[] = [],
 ): Promise<number> => {
@@ -336,6 +395,40 @@ export const runLegalCorpusStorageBackfill = async (
     `Done. Case-law wrote ${caseLaw.written}, ${caseLaw.failed} failed. Legislation wrote ${legislation.written}, ${legislation.failed} failed.`,
   );
   return caseLaw.failed === 0 && legislation.failed === 0 ? 0 : 1;
+};
+
+export const runLegalCorpusIndexBackfill = async (
+  argv: readonly string[] = [],
+): Promise<number> => {
+  const parsed = parseArgs(argv);
+  if (!parsed.ok) {
+    logError(parsed.message);
+    return 64;
+  }
+
+  await refreshS3();
+  await refreshCorpusS3();
+
+  logInfo("=== BACKFILL LEGAL CORPUS INDEX ===");
+  logInfo(
+    `Limits: case-law=${parsed.options.caseLawLimit ?? "all"} legislation=${parsed.options.legislationLimit ?? "all"}`,
+  );
+
+  try {
+    const caseLaw = await backfillCaseLawIndex(parsed.options.caseLawLimit);
+    const legislation = await backfillLegislationIndex(
+      parsed.options.legislationLimit,
+    );
+
+    logInfo(
+      `Done. Case-law indexed ${caseLaw.indexed}. Legislation indexed ${legislation.indexed}.`,
+    );
+    return 0;
+  } catch (error) {
+    captureError(error, { step: "legalCorpusIndexBackfill" });
+    logError(error instanceof Error ? error.message : String(error));
+    return 1;
+  }
 };
 
 export const runCaseLawCorpusStorageBackfill = async (
