@@ -20,6 +20,9 @@ const toArrayBuffer = (value: string): ArrayBuffer => {
 // 1x1 transparent PNG.
 const PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=";
+const SVG_BASE64 = Buffer.from(
+  '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
+).toString("base64");
 
 describe("resolveEmailMimeType", () => {
   test("keeps explicit email MIME types", () => {
@@ -131,6 +134,24 @@ describe("renderEmailHtml", () => {
 
     expect(html).toContain(`data:image/png;base64,${PNG_BASE64}`);
     expect(html).not.toContain("cid:logo");
+  });
+
+  test("does not inline cid images with unsafe MIME types", () => {
+    const html = renderEmailHtml(
+      htmlEmail({
+        body: {
+          type: "html",
+          html: '<html><body><img src="cid:logo"></body></html>',
+        },
+        inlineImages: [
+          { cid: "logo", mimeType: "image/svg+xml", dataBase64: SVG_BASE64 },
+        ],
+      }),
+    );
+
+    expect(html).not.toContain("data:image/svg+xml");
+    expect(html).not.toContain("cid:logo");
+    expect(html).not.toContain("src=");
   });
 
   test("strips srcset candidates before preview rendering", () => {
@@ -285,6 +306,27 @@ describe("emailToHtml (.eml)", () => {
     "--BND--",
     "",
   ].join("\r\n");
+  const svgInlineEml = [
+    "From: Jane Lawyer <jane@example.com>",
+    "To: client@example.org",
+    "Subject: SVG CID",
+    "MIME-Version: 1.0",
+    'Content-Type: multipart/related; boundary="BND"',
+    "",
+    "--BND",
+    "Content-Type: text/html; charset=utf-8",
+    "",
+    '<html><body><img src="cid:logo123"></body></html>',
+    "--BND",
+    "Content-Type: image/svg+xml",
+    "Content-Transfer-Encoding: base64",
+    "Content-ID: <logo123>",
+    'Content-Disposition: inline; filename="logo.svg"',
+    "",
+    SVG_BASE64,
+    "--BND--",
+    "",
+  ].join("\r\n");
 
   test("parses headers, sanitizes, and inlines the related image", async () => {
     const result = await emailToHtml(toArrayBuffer(eml), "message/rfc822");
@@ -301,6 +343,21 @@ describe("emailToHtml (.eml)", () => {
     expect(html).not.toContain("cid:logo123");
     expect(html).toContain(`data:image/png;base64,${PNG_BASE64}`);
     expect(html).not.toContain("https://example.com/remote.png");
+  });
+
+  test("does not inline related SVG images", async () => {
+    const result = await emailToHtml(
+      toArrayBuffer(svgInlineEml),
+      "message/rfc822",
+    );
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) {
+      return;
+    }
+
+    expect(result.value).not.toContain("data:image/svg+xml");
+    expect(result.value).not.toContain("cid:logo123");
+    expect(result.value).not.toContain("<script");
   });
 
   test("keeps ordinary attachment bytes for extraction", async () => {

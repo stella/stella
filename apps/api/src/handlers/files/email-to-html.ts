@@ -165,7 +165,7 @@ const parseEml = async (fileBuffer: ArrayBuffer): Promise<ParsedEmail> => {
 
     if (
       attachment.contentId &&
-      isImageMimeType(attachment.mimeType, attachment.filename)
+      isSafeInlineImage(attachment.mimeType, attachment.filename)
     ) {
       inlineImages.push({
         cid: stripAngleBrackets(attachment.contentId),
@@ -215,6 +215,9 @@ const IMAGE_EXTENSION_MIME: Record<string, string> = {
   tiff: "image/tiff",
 };
 
+const SAFE_INLINE_IMAGE_MIME_TYPES = new Set(
+  Object.values(IMAGE_EXTENSION_MIME),
+);
 const GENERIC_ATTACHMENT_MIME_TYPES = new Set([
   "",
   "application/octet-stream",
@@ -243,7 +246,7 @@ const parseMsg = (fileBuffer: ArrayBuffer): ParsedEmail => {
     if (!attachment.contentId) {
       continue;
     }
-    if (!isImageMimeType(attachment.mimeType, attachment.fileName)) {
+    if (!isSafeInlineImage(attachment.mimeType, attachment.fileName)) {
       continue;
     }
     inlineImages.push({
@@ -283,18 +286,20 @@ const resolveAttachmentMimeType = (
   mimeType: string | null,
   fileName: string | null,
 ): string => {
-  const normalized = mimeType?.trim().toLowerCase() ?? "";
+  const normalized = mimeType?.split(";").at(0)?.trim().toLowerCase() ?? "";
   if (GENERIC_ATTACHMENT_MIME_TYPES.has(normalized)) {
     return guessImageMime(fileName ?? undefined);
   }
   return normalized;
 };
 
-const isImageMimeType = (
+const isSafeInlineImage = (
   mimeType: string | null,
   fileName: string | null,
 ): boolean =>
-  resolveAttachmentMimeType(mimeType, fileName).startsWith("image/");
+  SAFE_INLINE_IMAGE_MIME_TYPES.has(
+    resolveAttachmentMimeType(mimeType, fileName),
+  );
 
 // ── HTML rendering + sanitization ───────────────────────
 
@@ -559,9 +564,6 @@ const isSafeInlineResource = (value: string): boolean =>
 const isSafeLocalHref = (value: string): boolean => value.startsWith("#");
 
 const inlineCidImages = ($: CheerioApi, images: InlineImage[]): void => {
-  if (images.length === 0) {
-    return;
-  }
   const byCid = new Map(
     images.map((image) => [image.cid.toLowerCase(), image] as const),
   );
@@ -575,6 +577,10 @@ const inlineCidImages = ($: CheerioApi, images: InlineImage[]): void => {
     const cid = stripAngleBrackets(src.slice("cid:".length)).toLowerCase();
     const match = byCid.get(cid);
     if (match) {
+      if (!isSafeInlineImage(match.mimeType, null)) {
+        image.removeAttr("src");
+        return;
+      }
       image.attr("src", `data:${match.mimeType};base64,${match.dataBase64}`);
       return;
     }
