@@ -1,14 +1,13 @@
 import { valibotSchema } from "@ai-sdk/valibot";
-import { generateText, tool } from "ai";
+import { tool } from "ai";
 import * as v from "valibot";
 
 import type { ScopedDb } from "@/api/db";
-import type { AiFieldGenerator } from "@/api/handlers/docx/resolve-ai-fields";
+import { buildAiFieldGenerator } from "@/api/handlers/docx/ai-field-generator";
 import {
   describeStoredTemplate,
   fillStoredTemplate,
 } from "@/api/handlers/templates/template-fill-service";
-import { getModelForRole } from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -17,9 +16,6 @@ import { brandPersistedTemplateId } from "@/api/lib/safe-id-boundaries";
 const LIST_TEMPLATES_TOOL_NAME = "list_templates" as const;
 const DESCRIBE_TEMPLATE_TOOL_NAME = "describe_template" as const;
 const FILL_TEMPLATE_TOOL_NAME = "fill_template" as const;
-
-const AI_FIELD_TIMEOUT_MS = 20_000;
-const AI_FIELD_MAX_TOKENS = 800;
 
 type CreateTemplateToolsArgs = {
   scopedDb: ScopedDb;
@@ -40,37 +36,15 @@ export const createTemplateTools = ({
   organizationId,
   orgAIConfig,
 }: CreateTemplateToolsArgs) => {
-  // Model-backed generator for AI-fillable fields (FieldMeta.aiPrompt).
-  // Built only inside a chat turn that carries an org AI config; a failed or
+  // Model-backed generator for AI-fillable fields (FieldMeta.aiPrompt); shared
+  // with the web fill routes so AI placeholders behave identically. A failed or
   // unavailable model just leaves the field unfilled rather than erroring.
   // TODO(metering): wire createAIAnalyticsCallbacks so this nested generation
   // is metered alongside other model calls.
-  const generateAiValue: AiFieldGenerator | undefined =
-    orgAIConfig === undefined
-      ? undefined
-      : async ({ prompt, values }) => {
-          try {
-            const { text } = await generateText({
-              abortSignal: AbortSignal.timeout(AI_FIELD_TIMEOUT_MS),
-              maxOutputTokens: AI_FIELD_MAX_TOKENS,
-              model: getModelForRole("fast", orgAIConfig, {
-                promptCachingEnabled: false,
-                scopeKey: organizationId,
-                organizationId,
-              }),
-              prompt: `You are drafting a single field of a legal document. Instruction: ${prompt}
-
-Known details (JSON):
-${JSON.stringify(values)}
-
-Reply with only the text for this field — no preamble, no quotes, no markdown.`,
-            });
-            const trimmed = text.trim();
-            return trimmed.length > 0 ? trimmed : undefined;
-          } catch {
-            return undefined;
-          }
-        };
+  const generateAiValue = buildAiFieldGenerator({
+    orgAIConfig: orgAIConfig ?? null,
+    organizationId,
+  });
 
   return {
     [LIST_TEMPLATES_TOOL_NAME]: tool({

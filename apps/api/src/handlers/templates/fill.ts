@@ -3,9 +3,13 @@ import { t } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { templateFills } from "@/api/db/schema";
+import { buildAiFieldGenerator } from "@/api/handlers/docx/ai-field-generator";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
-import { isTemplateData } from "@/api/handlers/docx/types";
+import { resolveAiFields } from "@/api/handlers/docx/resolve-ai-fields";
+import { readManifest } from "@/api/handlers/docx/template-manifest";
+import { isTemplateData, type TemplateData } from "@/api/handlers/docx/types";
 import { convertToPdf } from "@/api/handlers/files/gotenberg";
+import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -106,7 +110,24 @@ export const fillHandler = async ({
     );
   }
 
-  const result = await fillTemplate(buffer, parsed);
+  // Draft any AI-fillable fields (manifest fields with an aiPrompt) before fill,
+  // so an AI placeholder like "the scope of this power of attorney" is filled on
+  // download just as the chat fill tool fills it. A user-supplied value wins.
+  let fillData: TemplateData = parsed;
+  const manifest = await readManifest(buffer);
+  if (manifest?.fields.some((field) => field.aiPrompt)) {
+    const orgAIConfig = await loadOrgAIConfig(organizationId);
+    const resolved = await resolveAiFields({
+      values: parsed,
+      fields: manifest.fields,
+      generate: buildAiFieldGenerator({ orgAIConfig, organizationId }),
+    });
+    if (isTemplateData(resolved)) {
+      fillData = resolved;
+    }
+  }
+
+  const result = await fillTemplate(buffer, fillData);
 
   const fillStatus =
     result.unmatchedPlaceholders.length > 0 ? "partial" : "success";
