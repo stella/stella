@@ -38,6 +38,7 @@ const openDisplayableFile = ({
       id: field.id,
       entityId,
       label,
+      fileName: field.content.fileName,
       mimeType: field.content.mimeType,
       pdfFileId: field.content.pdfFileId,
       propertyId: field.propertyId,

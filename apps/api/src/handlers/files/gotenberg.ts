@@ -121,6 +121,50 @@ const gotenbergAuth = (): string => {
   return `Basic ${credentials}`;
 };
 
+const GOTENBERG_RETRY = {
+  times: 2,
+  delayMs: 2000,
+  backoff: "exponential",
+  shouldRetry: (error: GotenbergError) =>
+    error.statusCode === undefined || error.statusCode >= 500,
+} as const;
+
+/** Post an HTML document to Gotenberg's Chromium route. */
+const chromiumHtmlToPdf = async (
+  html: string,
+  formFields: Record<string, string>,
+): Promise<ConvertToPdfResult> => {
+  const formData = new FormData();
+  formData.append(
+    "files",
+    new Blob([html], { type: "text/html" }),
+    "index.html",
+  );
+  for (const [key, value] of Object.entries(formFields)) {
+    formData.append(key, value);
+  }
+
+  const response = await fetch(
+    `${env.GOTENBERG_URL}/forms/chromium/convert/html`,
+    {
+      method: "POST",
+      headers: { Authorization: gotenbergAuth() },
+      body: formData,
+      signal: AbortSignal.timeout(30_000),
+    },
+  );
+
+  if (!response.ok) {
+    throw new GotenbergError({
+      message: `Gotenberg returned ${response.status}`,
+      statusCode: response.status,
+    });
+  }
+
+  const result = await response.arrayBuffer();
+  return { buffer: result, sizeBytes: result.byteLength };
+};
+
 // ── Image dimension parsing ──────────────────────────────
 
 type ImageSize = { width: number; height: number };
@@ -221,39 +265,15 @@ img { display: block; width: ${size.width}px; height: ${size.height}px; }
 <body><img src="${dataUri}"></body>
 </html>`;
 
-  const formData = new FormData();
-  formData.append(
-    "files",
-    new Blob([html], { type: "text/html" }),
-    "index.html",
-  );
-  formData.append("paperWidth", String(pxToIn(size.width)));
-  formData.append("paperHeight", String(pxToIn(size.height)));
-  formData.append("marginTop", "0");
-  formData.append("marginBottom", "0");
-  formData.append("marginLeft", "0");
-  formData.append("marginRight", "0");
-  formData.append("preferCssPageSize", "true");
-
-  const response = await fetch(
-    `${env.GOTENBERG_URL}/forms/chromium/convert/html`,
-    {
-      method: "POST",
-      headers: { Authorization: gotenbergAuth() },
-      body: formData,
-      signal: AbortSignal.timeout(30_000),
-    },
-  );
-
-  if (!response.ok) {
-    throw new GotenbergError({
-      message: `Gotenberg returned ${response.status}`,
-      statusCode: response.status,
-    });
-  }
-
-  const result = await response.arrayBuffer();
-  return { buffer: result, sizeBytes: result.byteLength };
+  return await chromiumHtmlToPdf(html, {
+    paperWidth: String(pxToIn(size.width)),
+    paperHeight: String(pxToIn(size.height)),
+    marginTop: "0",
+    marginBottom: "0",
+    marginLeft: "0",
+    marginRight: "0",
+    preferCssPageSize: "true",
+  });
 };
 
 export const convertToPdf = async (
@@ -278,15 +298,7 @@ export const convertToPdf = async (
                 cause,
               }),
       },
-      {
-        retry: {
-          times: 2,
-          delayMs: 2000,
-          backoff: "exponential",
-          shouldRetry: (error) =>
-            error.statusCode === undefined || error.statusCode >= 500,
-        },
-      },
+      { retry: GOTENBERG_RETRY },
     );
   }
 
@@ -337,14 +349,6 @@ export const convertToPdf = async (
         });
       },
     },
-    {
-      retry: {
-        times: 2,
-        delayMs: 2000,
-        backoff: "exponential",
-        shouldRetry: (error) =>
-          error.statusCode === undefined || error.statusCode >= 500,
-      },
-    },
+    { retry: GOTENBERG_RETRY },
   );
 };

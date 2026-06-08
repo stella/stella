@@ -153,7 +153,7 @@ export const AddEntityMenu = ({
       onChange={(e) => {
         const files = [...(e.currentTarget.files ?? [])];
         if (files.length > 0) {
-          createFileEntities(files);
+          createFileEntities({ files, parentId: parentId ?? null });
         }
         e.target.value = "";
       }}

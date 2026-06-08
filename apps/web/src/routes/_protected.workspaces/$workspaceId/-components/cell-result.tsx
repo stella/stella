@@ -187,7 +187,12 @@ const FileCell = ({
   workspaceId,
   propertyId,
 }: FileCellProps) => {
-  const isDisplayable = isFileDisplayable({ mimeType, pdfFileId, encrypted });
+  const isDisplayable = isFileDisplayable({
+    mimeType,
+    fileName,
+    pdfFileId,
+    encrypted,
+  });
   const openFile = useInspectorStore((s) => s.openFile);
 
   if (isDisplayable) {
@@ -202,6 +207,7 @@ const FileCell = ({
                 id: fieldId,
                 entityId,
                 label: fileName,
+                fileName,
                 workspaceId,
                 mimeType,
                 pdfFileId,
@@ -212,7 +218,11 @@ const FileCell = ({
           />
         }
       >
-        <DocumentIcon className="size-3.5 shrink-0" mimeType={mimeType} />
+        <DocumentIcon
+          className="size-3.5 shrink-0"
+          fileName={fileName}
+          mimeType={mimeType}
+        />
         <span className="min-w-0 truncate text-start">{fileName}</span>
       </Tooltip>
     );
@@ -225,7 +235,11 @@ const FileCell = ({
         <span className="bg-muted grid max-w-full min-w-0 grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded px-1 py-0.5 text-start opacity-60" />
       }
     >
-      <DocumentIcon className="size-3.5 shrink-0" mimeType={mimeType} />
+      <DocumentIcon
+        className="size-3.5 shrink-0"
+        fileName={fileName}
+        mimeType={mimeType}
+      />
       <span className="min-w-0 truncate text-start">{fileName}</span>
     </Tooltip>
   );

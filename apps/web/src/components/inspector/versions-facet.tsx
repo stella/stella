@@ -58,6 +58,7 @@ export const VersionsFacet = ({
             id: fieldId,
             entityId,
             label: target.file.fileName,
+            fileName: target.file.fileName,
             mimeType: target.file.mimeType,
             pdfFileId: null,
             propertyId: target.file.propertyId,

@@ -1,6 +1,12 @@
-import { File, FileImage, FileSpreadsheet, FileText } from "lucide-react";
+import {
+  File,
+  FileImage,
+  FileSpreadsheet,
+  FileText,
+  MailIcon,
+} from "lucide-react";
 
-import { PDF_MIME_TYPE } from "@/consts";
+import { getDocumentIconKind } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon.logic";
 
 type DocxIconProps = {
   className?: string | undefined;
@@ -97,50 +103,40 @@ const PdfIcon = ({ className }: PdfIconProps) => (
   </svg>
 );
 
-const wordMimeTypes = new Set([
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/rtf",
-  "application/vnd.oasis.opendocument.text",
-]);
-
-const spreadsheetMimeTypes = new Set([
-  "application/vnd.ms-excel",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/vnd.oasis.opendocument.spreadsheet",
-  "text/csv",
-]);
-
-const imageMimeTypes = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/gif",
-  "image/webp",
-]);
-
 type DocumentIconProps = {
   mimeType: string;
+  fileName?: string | null | undefined;
   className?: string | undefined;
 };
 
-export function DocumentIcon({ mimeType, className }: DocumentIconProps) {
-  if (mimeType === PDF_MIME_TYPE) {
+export function DocumentIcon({
+  mimeType,
+  fileName,
+  className,
+}: DocumentIconProps) {
+  const iconKind = getDocumentIconKind(mimeType, fileName);
+
+  if (iconKind === "pdf") {
     return <PdfIcon className={className} />;
   }
 
-  if (wordMimeTypes.has(mimeType)) {
+  if (iconKind === "word") {
     return <DocxIcon className={className} />;
   }
 
-  if (spreadsheetMimeTypes.has(mimeType)) {
+  if (iconKind === "spreadsheet") {
     return <FileSpreadsheet className={className} />;
   }
 
-  if (imageMimeTypes.has(mimeType)) {
+  if (iconKind === "image") {
     return <FileImage className={className} />;
   }
 
-  if (mimeType.startsWith("text/")) {
+  if (iconKind === "email") {
+    return <MailIcon className={className} />;
+  }
+
+  if (iconKind === "text") {
     return <FileText className={className} />;
   }
 

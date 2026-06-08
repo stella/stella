@@ -6,6 +6,10 @@ import type { ScopedDb } from "@/api/db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import { env } from "@/api/env";
 import {
+  emailToHtml,
+  resolveEmailMimeType,
+} from "@/api/handlers/files/email-to-html";
+import {
   convertToPdf,
   isConvertibleMimeType,
   isNativelyRenderableMimeType,
@@ -200,6 +204,66 @@ export const readFileHandler = async ({
       scope: { organizationId, workspaceId },
     }),
     stampable: false,
+  };
+};
+
+type ReadEmailHtmlPreviewHandlerProps = {
+  scopedDb: ScopedDb;
+  fieldId: SafeId<"field">;
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+};
+
+export const readEmailHtmlPreviewHandler = async ({
+  scopedDb,
+  fieldId,
+  organizationId,
+  workspaceId,
+}: ReadEmailHtmlPreviewHandlerProps) => {
+  const rows = await fileFieldQuery(scopedDb, fieldId, workspaceId);
+  const row = rows.at(0);
+
+  if (!row) {
+    return status(404);
+  }
+
+  if (row.content.type !== "file") {
+    return status(400);
+  }
+
+  const content = row.content;
+  const emailMimeType = resolveEmailMimeType({
+    fileName: content.fileName,
+    mimeType: content.mimeType,
+  });
+  if (content.encrypted || !emailMimeType) {
+    return status(400);
+  }
+
+  const fileKey = createFileKey({
+    organizationId,
+    workspaceId,
+    fileId: content.id,
+    mimeType: content.mimeType,
+  });
+  const fileBuffer = await getS3().file(fileKey).arrayBuffer();
+  const htmlResult = await emailToHtml(fileBuffer, emailMimeType);
+
+  if (Result.isError(htmlResult)) {
+    captureError(htmlResult.error, {
+      fieldId,
+      mimeType: emailMimeType,
+      workspaceId,
+    });
+    return status(422, { message: "Failed to render email preview" });
+  }
+
+  return {
+    fileId: content.id,
+    fileName: content.fileName,
+    html: htmlResult.value,
+    mimeType: "text/html",
+    originalMimeType: emailMimeType,
   };
 };
 

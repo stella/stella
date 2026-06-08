@@ -88,6 +88,7 @@ jobs:
             pkg:npm/client-zip,
             pkg:npm/crossws,
             pkg:npm/jszip,
+            pkg:npm/postal-mime,
             pkg:npm/valibot,
             pkg:npm/y-prosemirror,
             pkg:npm/yjs,

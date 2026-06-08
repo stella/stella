@@ -19,7 +19,7 @@
  *   + extraction enqueues.
  */
 import { Result, panic } from "better-result";
-import { and, eq, like } from "drizzle-orm";
+import { and, count, eq, isNull, like, ne, or, sql } from "drizzle-orm";
 
 import type { SafeDb, Transaction } from "@/api/db";
 import { jsonField } from "@/api/db/json-utils";
@@ -58,19 +58,28 @@ import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
-import { UploadFinalizeError, finalizeErr, finalizeOk } from "./lib";
+import {
+  FINALIZE_CLAIM_TIMEOUT_MS,
+  UploadFinalizeError,
+  finalizeErr,
+  finalizeOk,
+} from "./lib";
 
 const MAX_FILENAME_LENGTH = 255;
 
 type ResolveFileNameProps = {
   tx: Transaction;
+  workspaceId: SafeId<"workspace">;
   propertyId: SafeId<"property">;
+  parentId: SafeId<"entity"> | null;
   name: SanitizedFileName;
 };
 
-const resolveFileName = async ({
+export const resolveEntityCreateFileName = async ({
   tx,
+  workspaceId,
   propertyId,
+  parentId,
   name,
 }: ResolveFileNameProps) => {
   const lastDot = name.lastIndexOf(".");
@@ -78,13 +87,32 @@ const resolveFileName = async ({
   const ext = lastDot === -1 ? "" : name.slice(lastDot);
   const pattern = `${escapeLike(base)}%${escapeLike(ext)}`;
 
-  const fieldsCount = await tx.$count(
-    fields,
-    and(
-      eq(fields.propertyId, propertyId),
-      like(jsonField(fields.content, "v1")("fileName"), pattern),
-    ),
-  );
+  const siblingParentFilter =
+    parentId === null
+      ? isNull(entities.parentId)
+      : eq(entities.parentId, parentId);
+
+  const countRows = await tx
+    .select({ total: count() })
+    .from(fields)
+    .innerJoin(entityVersions, eq(fields.entityVersionId, entityVersions.id))
+    .innerJoin(
+      entities,
+      and(
+        eq(entityVersions.entityId, entities.id),
+        eq(entities.currentVersionId, entityVersions.id),
+      ),
+    )
+    .where(
+      and(
+        eq(fields.workspaceId, workspaceId),
+        eq(fields.propertyId, propertyId),
+        eq(entities.workspaceId, workspaceId),
+        siblingParentFilter,
+        like(jsonField(fields.content, "v1")("fileName"), pattern),
+      ),
+    );
+  const fieldsCount = countRows.at(0)?.total ?? 0;
 
   if (fieldsCount === 0) {
     return { renamed: false as const, value: name };
@@ -105,39 +133,256 @@ export type ValidateEntityCreateProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   propertyId: SafeId<"property">;
+  parentId: SafeId<"entity"> | null;
+};
+
+export type ValidateEntityCreateCapacityProps = {
+  safeDb: SafeDb;
+  workspaceId: SafeId<"workspace">;
+  propertyId?: SafeId<"property"> | null;
+  parentId: SafeId<"entity"> | null;
+  entityCount: number;
+};
+
+type EntityCreateReservationFilterProps = {
+  workspaceId: SafeId<"workspace">;
+  excludeUploadId?: SafeId<"pendingUpload"> | undefined;
+};
+
+const activeEntityCreateReservationFilter = ({
+  workspaceId,
+  excludeUploadId,
+}: EntityCreateReservationFilterProps) => {
+  const timeoutSec = Math.floor(FINALIZE_CLAIM_TIMEOUT_MS / 1000);
+  const baseFilter = and(
+    eq(pendingUploads.workspaceId, workspaceId),
+    eq(pendingUploads.purpose, "entity_create"),
+    or(
+      and(
+        or(
+          eq(pendingUploads.status, "pending"),
+          eq(pendingUploads.status, "failed"),
+        ),
+        sql`${pendingUploads.expiresAt} > NOW()`,
+      ),
+      and(
+        eq(pendingUploads.status, "scanning"),
+        or(
+          sql`${pendingUploads.expiresAt} > NOW()`,
+          sql`${pendingUploads.claimedAt} >= NOW() - ${timeoutSec} * interval '1 second'`,
+        ),
+      ),
+    ),
+  );
+
+  if (!excludeUploadId) {
+    return baseFilter;
+  }
+
+  return and(baseFilter, ne(pendingUploads.id, excludeUploadId));
+};
+
+type CountActiveEntityCreateReservationsProps = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  excludeUploadId?: SafeId<"pendingUpload"> | undefined;
+};
+
+export const countActiveEntityCreateReservations = async ({
+  tx,
+  workspaceId,
+  excludeUploadId,
+}: CountActiveEntityCreateReservationsProps): Promise<number> =>
+  await tx.$count(
+    pendingUploads,
+    activeEntityCreateReservationFilter({ workspaceId, excludeUploadId }),
+  );
+
+export type EntityCreateWriteFailureStatus =
+  | "property-not-found"
+  | "property-type-mismatch"
+  | "parent-not-found"
+  | "parent-type-mismatch"
+  | "entities-limit-reached";
+
+export const entityCreateWriteErrorMessage = (
+  status: EntityCreateWriteFailureStatus,
+): string => {
+  if (status === "property-not-found") {
+    return "Property not found in workspace";
+  }
+  if (status === "property-type-mismatch") {
+    return "Property isn't of type file";
+  }
+  if (status === "parent-not-found") {
+    return "Parent entity not found in this workspace";
+  }
+  if (status === "entities-limit-reached") {
+    return "Entities limit reached";
+  }
+  return "Parent entity must be a folder";
+};
+
+type CheckEntityCreateParentForInsertProps = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  parentId: SafeId<"entity"> | null;
+};
+
+export const checkEntityCreateParentForInsert = async ({
+  tx,
+  workspaceId,
+  parentId,
+}: CheckEntityCreateParentForInsertProps): Promise<
+  Result<void, "parent-not-found" | "parent-type-mismatch">
+> => {
+  if (!parentId) {
+    return Result.ok(undefined);
+  }
+
+  const parentRows = await tx
+    .select({ id: entities.id, kind: entities.kind })
+    .from(entities)
+    .where(
+      and(eq(entities.id, parentId), eq(entities.workspaceId, workspaceId)),
+    )
+    .limit(1)
+    .for("update");
+  const parent = parentRows.at(0);
+
+  if (!parent) {
+    return Result.err("parent-not-found");
+  }
+  if (parent.kind !== "folder") {
+    return Result.err("parent-type-mismatch");
+  }
+
+  return Result.ok(undefined);
+};
+
+type CheckEntityCreateTargetForInsertProps = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  propertyId: SafeId<"property">;
+  parentId: SafeId<"entity"> | null;
+};
+
+export const checkEntityCreateTargetForInsert = async ({
+  tx,
+  workspaceId,
+  propertyId,
+  parentId,
+}: CheckEntityCreateTargetForInsertProps): Promise<
+  Result<
+    { propertyId: SafeId<"property"> },
+    Exclude<EntityCreateWriteFailureStatus, "entities-limit-reached">
+  >
+> => {
+  const propertyRows = await tx
+    .select({ id: properties.id, content: properties.content })
+    .from(properties)
+    .where(
+      and(
+        eq(properties.id, propertyId),
+        eq(properties.workspaceId, workspaceId),
+      ),
+    )
+    .limit(1)
+    .for("update");
+  const property = propertyRows.at(0);
+
+  if (!property) {
+    return Result.err("property-not-found");
+  }
+  if (property.content.type !== "file") {
+    return Result.err("property-type-mismatch");
+  }
+
+  const parentResult = await checkEntityCreateParentForInsert({
+    tx,
+    workspaceId,
+    parentId,
+  });
+  if (Result.isError(parentResult)) {
+    return Result.err(parentResult.error);
+  }
+
+  return Result.ok({ propertyId: property.id });
 };
 
 /**
- * Cheap pre-flight: entity-count limit + property exists + property
- * is of `file` type. Mirrors the gating the legacy upload handler
- * runs at the top of its body.
+ * Cheap pre-flight: entity-count capacity + optional property
+ * existence/type + parent existence/type. Recursive folder uploads
+ * use `entityCount` to validate the whole planned tree before any
+ * folders are committed.
  *
  * @yields safeDb errors out to the parent safe-handler.
  */
-export const validateEntityCreate = async function* ({
+export const validateEntityCreateCapacity = async function* ({
   safeDb,
   workspaceId,
   propertyId,
-}: ValidateEntityCreateProps) {
-  const [entityCountResult, propertyResult] = await Promise.all([
-    safeDb((tx) => tx.$count(entities, eq(entities.workspaceId, workspaceId))),
-    safeDb((tx) =>
-      tx.query.properties.findFirst({
-        columns: { id: true, content: true },
-        where: { id: { eq: propertyId }, workspaceId: { eq: workspaceId } },
+  parentId,
+  entityCount,
+}: ValidateEntityCreateCapacityProps) {
+  if (!Number.isInteger(entityCount) || entityCount < 1) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Entity create count must be a positive integer",
       }),
+    );
+  }
+
+  const parentResult = parentId
+    ? safeDb((tx) =>
+        tx.query.entities.findFirst({
+          columns: { id: true, kind: true },
+          where: { id: { eq: parentId }, workspaceId: { eq: workspaceId } },
+        }),
+      )
+    : Promise.resolve(Result.ok(null));
+  const propertyResult = propertyId
+    ? safeDb((tx) =>
+        tx.query.properties.findFirst({
+          columns: { id: true, content: true },
+          where: { id: { eq: propertyId }, workspaceId: { eq: workspaceId } },
+        }),
+      )
+    : Promise.resolve(Result.ok(null));
+
+  const [
+    existingEntityCountResult,
+    reservedEntityCountResult,
+    resolvedPropertyResult,
+    parentResultValue,
+  ] = await Promise.all([
+    safeDb((tx) => tx.$count(entities, eq(entities.workspaceId, workspaceId))),
+    safeDb(
+      async (tx) =>
+        await countActiveEntityCreateReservations({
+          tx,
+          workspaceId,
+        }),
     ),
+    propertyResult,
+    parentResult,
   ]);
 
-  const entityCount = yield* entityCountResult;
-  const property = yield* propertyResult;
+  const existingEntityCount = yield* existingEntityCountResult;
+  const reservedEntityCount = yield* reservedEntityCountResult;
+  const property = yield* resolvedPropertyResult;
+  const parent = yield* parentResultValue;
 
-  if (entityCount >= LIMITS.entitiesCount) {
+  if (
+    existingEntityCount + reservedEntityCount + entityCount >
+    LIMITS.entitiesCount
+  ) {
     return Result.err(
       new HandlerError({ status: 400, message: "Entities limit reached" }),
     );
   }
-  if (!property) {
+  if (propertyId && !property) {
     return Result.err(
       new HandlerError({
         status: 400,
@@ -145,10 +390,84 @@ export const validateEntityCreate = async function* ({
       }),
     );
   }
-  if (property.content.type !== "file") {
+  if (property && property.content.type !== "file") {
     return Result.err(
       new HandlerError({ status: 400, message: "Property isn't of type file" }),
     );
+  }
+  if (parentId && !parent) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Parent entity not found in this workspace",
+      }),
+    );
+  }
+  if (parent && parent.kind !== "folder") {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Parent entity must be a folder",
+      }),
+    );
+  }
+
+  return Result.ok(undefined);
+};
+
+export const validateEntityCreate = async function* (
+  props: ValidateEntityCreateProps,
+) {
+  return yield* validateEntityCreateCapacity({
+    ...props,
+    entityCount: 1,
+  });
+};
+
+type CheckEntityCreateCapacityForInsertProps = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  entityCount: number;
+  excludeUploadId?: SafeId<"pendingUpload"> | undefined;
+};
+
+export const checkEntityCreateCapacityForInsert = async ({
+  tx,
+  workspaceId,
+  entityCount,
+  excludeUploadId,
+}: CheckEntityCreateCapacityForInsertProps): Promise<
+  Result<void, "entities-limit-reached">
+> => {
+  if (!Number.isInteger(entityCount) || entityCount < 1) {
+    panic("Entity create insert count must be a positive integer");
+  }
+
+  const workspaceRows = await tx
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(eq(workspaces.id, workspaceId))
+    .limit(1)
+    .for("update");
+  if (!workspaceRows.at(0)) {
+    panic("Workspace lock for entity create returned no rows");
+  }
+
+  const existingEntityCount = await tx.$count(
+    entities,
+    eq(entities.workspaceId, workspaceId),
+  );
+  const reservedEntityCount = await countActiveEntityCreateReservations({
+    tx,
+    workspaceId,
+    excludeUploadId,
+  });
+
+  if (
+    existingEntityCount + reservedEntityCount + entityCount >
+    LIMITS.entitiesCount
+  ) {
+    return Result.err("entities-limit-reached");
   }
 
   return Result.ok(undefined);
@@ -166,13 +485,25 @@ export type FinalizeEntityCreateProps = {
   declaredMime: string;
   declaredSize: number;
   declaredSha256Hex: string;
-  purposeData: Extract<PendingUploadPurposeData, { type: "entity_create" }>;
+  purposeData: EntityCreatePurposeData;
   scanWarnings: string[] | undefined;
   uploadId: SafeId<"pendingUpload">;
   claimRequestId: string;
   promoteTmpObject: (
     finalKey: string,
   ) => Promise<Result<void, UploadFinalizeError>>;
+};
+
+type EntityCreatePurposeData = Extract<
+  PendingUploadPurposeData,
+  { type: "entity_create" }
+> & {
+  /**
+   * Optional for compatibility with pending rows created before
+   * folder-aware presigned uploads. New presigns always write an
+   * explicit `null` for root uploads.
+   */
+  parentId?: SafeId<"entity"> | null;
 };
 
 /**
@@ -248,7 +579,7 @@ export const finalizeEntityCreate = async function* ({
           { type: "entity_create" }
         >;
       }
-    | { status: "property-not-found" | "property-type-mismatch" };
+    | { status: EntityCreateWriteFailureStatus };
 
   const cleanupFinalObject = async (stage: string) => {
     await getS3()
@@ -262,30 +593,34 @@ export const finalizeEntityCreate = async function* ({
       );
   };
 
+  const parentId = purposeData.parentId ?? null;
+
   const writeResultResult = await safeDb(async (tx): Promise<WriteResult> => {
-    const propertyRows = await tx
-      .select({ id: properties.id, content: properties.content })
-      .from(properties)
-      .where(
-        and(
-          eq(properties.id, purposeData.propertyId),
-          eq(properties.workspaceId, workspaceId),
-        ),
-      )
-      .limit(1)
-      .for("update");
-    const property = propertyRows.at(0);
-
-    if (!property) {
-      return { status: "property-not-found" };
-    }
-    if (property.content.type !== "file") {
-      return { status: "property-type-mismatch" };
-    }
-
-    const renamed = await resolveFileName({
+    const capacityResult = await checkEntityCreateCapacityForInsert({
       tx,
-      propertyId: property.id,
+      workspaceId,
+      entityCount: 1,
+      excludeUploadId: uploadId,
+    });
+    if (Result.isError(capacityResult)) {
+      return { status: capacityResult.error };
+    }
+
+    const targetResult = await checkEntityCreateTargetForInsert({
+      tx,
+      workspaceId,
+      propertyId: purposeData.propertyId,
+      parentId,
+    });
+    if (Result.isError(targetResult)) {
+      return { status: targetResult.error };
+    }
+
+    const renamed = await resolveEntityCreateFileName({
+      tx,
+      workspaceId,
+      propertyId: targetResult.value.propertyId,
+      parentId,
       name: sanitizedName,
     });
     const entityStamp = await allocateEntityStamp(tx, workspaceId);
@@ -293,6 +628,7 @@ export const finalizeEntityCreate = async function* ({
     await tx.insert(entities).values({
       id: entityId,
       workspaceId,
+      parentId,
       name: renamed.value,
       createdBy: userId,
       docSequence: entityStamp.docSequence,
@@ -312,7 +648,7 @@ export const finalizeEntityCreate = async function* ({
     await tx.insert(fields).values({
       id: fieldId,
       workspaceId,
-      propertyId: property.id,
+      propertyId: targetResult.value.propertyId,
       entityVersionId,
       content: {
         type: "file",
@@ -353,7 +689,8 @@ export const finalizeEntityCreate = async function* ({
             fileName: renamed.value,
             mimeType: declaredMime,
             sizeBytes: declaredSize,
-            propertyId: property.id,
+            propertyId: targetResult.value.propertyId,
+            parentId,
           },
         },
       },
@@ -403,10 +740,7 @@ export const finalizeEntityCreate = async function* ({
     await cleanupFinalObject("final-cleanup-after-business-error");
     return finalizeErr({
       status: 400,
-      message:
-        writeResult.status === "property-not-found"
-          ? "Property not found in workspace"
-          : "Property isn't of type file",
+      message: entityCreateWriteErrorMessage(writeResult.status),
       rejectReason: writeResult.status,
     });
   }

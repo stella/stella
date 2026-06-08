@@ -421,6 +421,7 @@ function RouteComponentInner({
       id: fieldId,
       entityId,
       label: activeFileLabel,
+      fileName: activeFileLabel,
       workspaceId,
       mimeType: activeMimeType,
       pdfFileId: activePdfFileId,

@@ -33,6 +33,56 @@ const fileExtensionMap: Record<string, string> = {
 export const getFileExtension = (mimeType: string): string =>
   fileExtensionMap[mimeType] ?? "bin";
 
+/**
+ * MIME types browsers report when they have no registered handler
+ * for a file (so `File.type` arrives empty or generic). For these
+ * we trust the filename extension instead.
+ */
+const GENERIC_UPLOAD_MIME_TYPES = new Set([
+  "",
+  "application/octet-stream",
+  "binary/octet-stream",
+]);
+
+/**
+ * Extensions worth recovering from a generic MIME type. Outlook
+ * `.msg` in particular is usually reported as octet-stream on
+ * machines without Outlook; `.eml` occasionally too. Without this
+ * the file would never get a PDF derivative for preview.
+ */
+const EXTENSION_MIME_OVERRIDES: Record<string, string> = {
+  eml: "message/rfc822",
+  markdown: "text/markdown",
+  md: "text/markdown",
+  msg: "application/vnd.ms-outlook",
+};
+
+type ResolveUploadMimeProps = {
+  declaredMime: string;
+  fileName: string;
+};
+
+/**
+ * Normalize a client-declared upload MIME type: when the browser
+ * reports a generic/empty type, fall back to a known type inferred
+ * from the filename extension. Well-typed uploads pass through
+ * unchanged.
+ */
+export const resolveUploadMime = ({
+  declaredMime,
+  fileName,
+}: ResolveUploadMimeProps): string => {
+  if (!GENERIC_UPLOAD_MIME_TYPES.has(declaredMime)) {
+    return declaredMime;
+  }
+  const dotIndex = fileName.lastIndexOf(".");
+  if (dotIndex === -1) {
+    return declaredMime;
+  }
+  const extension = fileName.slice(dotIndex + 1).toLowerCase();
+  return EXTENSION_MIME_OVERRIDES[extension] ?? declaredMime;
+};
+
 type CreateFileKeyProps = {
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;

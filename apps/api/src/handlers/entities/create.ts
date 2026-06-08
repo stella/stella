@@ -6,6 +6,7 @@ import type { Static } from "elysia";
 import type { SafeDb, Transaction } from "@/api/db";
 import { entities, entityVersions, workspaces } from "@/api/db/schema";
 import { entityKindSchema } from "@/api/db/schema-validators";
+import { checkEntityCreateCapacityForInsert } from "@/api/handlers/uploads/entity-create";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -16,7 +17,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { LIMITS } from "@/api/lib/limits";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
 const createEntityBodySchema = t.Object({
@@ -33,22 +33,6 @@ type CreateEntitiesHandlerProps = {
   userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
   body: CreateEntityBodySchema;
-};
-
-const checkEntityLimit = async (
-  tx: Transaction,
-  workspaceId: SafeId<"workspace">,
-) => {
-  const totalEntities = await tx.$count(
-    entities,
-    eq(entities.workspaceId, workspaceId),
-  );
-
-  if (totalEntities >= LIMITS.entitiesCount) {
-    return Result.err("Entities limit reached");
-  }
-
-  return Result.ok({ maxEntitiesCount: LIMITS.entitiesCount - totalEntities });
 };
 
 const validateParentId = async (
@@ -102,12 +86,16 @@ const createEntitiesHandler = async function* ({
 
   const txResult = yield* Result.await(
     safeDb(async (tx) => {
-      const limitResult = await checkEntityLimit(tx, workspaceId);
-      if (Result.isError(limitResult)) {
+      const capacityResult = await checkEntityCreateCapacityForInsert({
+        tx,
+        workspaceId,
+        entityCount: 1,
+      });
+      if (Result.isError(capacityResult)) {
         return {
           ok: false as const,
           status: 400 as const,
-          message: limitResult.error,
+          message: "Entities limit reached",
         };
       }
 

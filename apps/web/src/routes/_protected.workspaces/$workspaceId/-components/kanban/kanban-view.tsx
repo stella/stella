@@ -335,6 +335,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       files,
       workspaceId,
       propertyId: filePropertyId,
+      parentId: null,
       labels,
       onError: (error) => analytics.captureError(error),
     });

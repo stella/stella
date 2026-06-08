@@ -143,6 +143,7 @@ export const KanbanCard = ({
   const icon = (
     <EntityKindIcon
       className="size-4 shrink-0"
+      fileName={file?.fileName}
       kind={entity.kind}
       mimeType={file?.mimeType}
       status={entity.status}
@@ -317,6 +318,7 @@ export const KanbanCard = ({
               id: file.fieldId,
               entityId: file.entityId,
               label: name,
+              fileName: file.fileName,
               mimeType: file.mimeType,
               pdfFileId: file.pdfFileId,
               propertyId: file.propertyId,
@@ -329,6 +331,7 @@ export const KanbanCard = ({
                 id: file.fieldId,
                 entityId: file.entityId,
                 label: name,
+                fileName: file.fileName,
                 mimeType: file.mimeType,
                 pdfFileId: file.pdfFileId,
                 propertyId: file.propertyId,

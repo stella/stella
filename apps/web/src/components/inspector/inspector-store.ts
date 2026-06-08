@@ -16,9 +16,10 @@ export type FileTab = {
   id: string;
   renderId?: string | undefined;
   entityId: string;
-  /** The PDF filename; preserved across justification slot
-   *  navigation so the tab header always shows the file name. */
+  /** Display label shown in the tab header. */
   label: string;
+  /** Stored file field name; used for extension-based preview routing. */
+  fileName: string;
   mimeType?: string | undefined;
   pdfFileId: string | null;
   /** The workspace this tab belongs to. Used to prevent
@@ -405,6 +406,7 @@ type Actions = {
 
 type FileFieldReplacement = {
   id: string;
+  fileName?: string | undefined;
   label?: string | undefined;
   mimeType?: string | undefined;
   pdfFileId?: string | null | undefined;
@@ -841,6 +843,7 @@ const isInspectorTab = (value: unknown): value is InspectorTab => {
     const pdfFileId = value["pdfFileId"];
     return (
       typeof label === "string" &&
+      typeof value["fileName"] === "string" &&
       typeof value["entityId"] === "string" &&
       typeof value["workspaceId"] === "string" &&
       (pdfFileId === null || typeof pdfFileId === "string") &&
@@ -950,6 +953,7 @@ export const useInspectorStore = create<State & Actions>()(
             if (tab.label) {
               existing.label = tab.label;
             }
+            existing.fileName = tab.fileName;
             if (tab.mimeType !== undefined) {
               existing.mimeType = tab.mimeType;
             }
@@ -1009,6 +1013,7 @@ export const useInspectorStore = create<State & Actions>()(
             if (tab.label) {
               existing.label = tab.label;
             }
+            existing.fileName = tab.fileName;
             if (tab.mimeType !== undefined) {
               existing.mimeType = tab.mimeType;
             }
@@ -1358,6 +1363,9 @@ export const useInspectorStore = create<State & Actions>()(
         }
         if (next.label) {
           tab.label = next.label;
+        }
+        if (next.fileName) {
+          tab.fileName = next.fileName;
         }
         if (next.mimeType !== undefined) {
           tab.mimeType = next.mimeType;

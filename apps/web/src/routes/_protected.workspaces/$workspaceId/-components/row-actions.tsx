@@ -184,6 +184,7 @@ export const RowActions = ({
             id: file.fieldId,
             entityId: file.entityId,
             label: name,
+            fileName: file.fileName,
             mimeType: file.mimeType,
             pdfFileId: file.pdfFileId,
             propertyId: file.propertyId,

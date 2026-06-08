@@ -1205,6 +1205,7 @@ const OrganizerFileNode = ({
     >
       <EntityKindIcon
         className="text-muted-foreground mt-1.5 size-4 shrink-0"
+        fileName={row.originalName}
         kind="document"
         mimeType={row.mimeType}
       />

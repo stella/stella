@@ -616,6 +616,7 @@ const CurrentFileFieldSync = ({ tab }: { tab: FileTab }) => {
     );
     replaceFileFieldId(tab.id, {
       id: latestFileFieldForProperty.id,
+      fileName: latestFileContent.fileName,
       label: latestFileContent.fileName,
       mimeType: latestFileContent.mimeType,
       pdfFileId: latestFileContent.pdfFileId,

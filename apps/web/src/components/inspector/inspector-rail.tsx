@@ -253,7 +253,13 @@ const VerticalTabIcon = ({
   }
 
   if (active && tab.mimeType) {
-    return <DocumentIcon className="size-3.5" mimeType={tab.mimeType} />;
+    return (
+      <DocumentIcon
+        className="size-3.5"
+        fileName={tab.fileName}
+        mimeType={tab.mimeType}
+      />
+    );
   }
 
   if (active) {
