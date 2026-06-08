@@ -12,7 +12,12 @@
 
 import type * as slimdom from "slimdom";
 
-import { evaluateCondition, resolvePath } from "@stll/template-conditions";
+import {
+  blockDirectiveLinePattern,
+  evaluateCondition,
+  hasBlockDirectivePattern,
+  resolvePath,
+} from "@stll/template-conditions";
 
 import { isElement, paragraphText, W_NS } from "./ooxml";
 import type {
@@ -32,13 +37,12 @@ export { evaluateCondition, resolvePath };
 
 // ── Regex patterns ───────────────────────────────────────
 
+// Canonical patterns from @stll/template-conditions (markers.ts).
 /** Matches a block directive as the sole paragraph content. */
-const DIRECTIVE_RE =
-  // oxlint-disable-next-line sonarjs/slow-regex -- directive matching runs on one OOXML paragraph at a time
-  /^\s*\{\{\s*(#if|#elseif|#else|#each|\/if|\/each)\s*(.*?)\}\}\s*$/u;
+const DIRECTIVE_RE = blockDirectiveLinePattern();
 
 /** Fast-path: does the raw XML contain any block directives? */
-export const HAS_BLOCK_DIRECTIVES_RE = /\{\{\s*[#/]/u;
+export const HAS_BLOCK_DIRECTIVES_RE = hasBlockDirectivePattern();
 
 // ── Type guards ─────────────────────────────────────────
 

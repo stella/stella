@@ -9,13 +9,14 @@
 
 import * as slimdom from "slimdom";
 
+import { placeholderPattern } from "@stll/template-conditions";
+
 import { isElement, paragraphText, W_NS } from "./ooxml";
 import type { RichPatchValue } from "./types";
 
-// `\s*` tolerates surrounding whitespace (`{{ name }}`) while keeping the
-// captured key clean; the whole match (`match[0]`) is replaced, so the inner
-// spaces vanish with it. Mirrors discover-placeholders.ts and folio's scanner.
-export const PLACEHOLDER_RE = /\{\{\s*([\p{L}\p{N}_.@:-]+)\s*\}\}/gu;
+// Canonical pattern from @stll/template-conditions (markers.ts) — the single
+// source of truth shared with discover-placeholders, folio, and the web preview.
+export const PLACEHOLDER_RE = placeholderPattern();
 
 const XML_NS = "http://www.w3.org/XML/1998/namespace";
 

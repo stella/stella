@@ -10,13 +10,14 @@
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
+import { placeholderPattern } from "@stll/template-conditions";
+
 import { HEADER_FOOTER_RE, paragraphText, W_NS } from "./ooxml";
 import type { DiscoveredPlaceholder } from "./types";
 
-// `\s*` inside the braces tolerates surrounding whitespace (`{{ name }}`); it
-// sits outside the capture, so the discovered name stays clean. Mirrored in
-// rich-patch.ts (replacement) and folio's templateDirectives.ts (highlighting).
-export const PLACEHOLDER_RE = /\{\{\s*([\p{L}\p{N}_.@:-]+)\s*\}\}/gu;
+// Canonical pattern from @stll/template-conditions (markers.ts) — the single
+// source of truth shared with rich-patch, folio, and the web preview.
+export const PLACEHOLDER_RE = placeholderPattern();
 
 /**
  * Scan all `w:p` paragraphs in a parsed XML document and

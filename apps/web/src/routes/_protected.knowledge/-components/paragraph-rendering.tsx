@@ -1,49 +1,41 @@
 import { useTranslations } from "use-intl";
 
-// ── Placeholder regex ────────────────────────────────
-
-const PLACEHOLDER_RE = /\{\{([^{}]+)\}\}/gu;
+import { BLOCK_DIRECTIVE_KINDS, scanMarkers } from "@stll/template-conditions";
 
 // ── Types ────────────────────────────────────────────
 
-export type BlockDirectiveKind =
-  | "if"
-  | "elseif"
-  | "else"
-  | "endif"
-  | "each"
-  | "endeach";
+// Block directives that wrap content (own paragraph). Derived from the shared
+// grammar so it cannot drift from the fill pipeline's directive kinds.
+export type BlockDirectiveKind = (typeof BLOCK_DIRECTIVE_KINDS)[number];
 
 // ── Sub-components ───────────────────────────────────
-
-const CLAUSE_MARKER_PREFIX = "@clause:";
 
 export const HighlightedText = ({ text }: { text: string }) => {
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
 
-  for (const match of text.matchAll(PLACEHOLDER_RE)) {
-    const start = match.index;
-    if (start > lastIndex) {
-      parts.push(text.slice(lastIndex, start));
+  for (const marker of scanMarkers(text)) {
+    if (marker.start > lastIndex) {
+      parts.push(text.slice(lastIndex, marker.start));
     }
 
-    const inner = match[1] ?? "";
-    const isClauseSlot = inner.startsWith(CLAUSE_MARKER_PREFIX);
+    // Plain fields read as the prominent "to fill" token; clause slots,
+    // numbering markers, and block directives sit a touch softer.
+    const isField = marker.meta.kind === "placeholder";
 
     parts.push(
       <mark
         className={`rounded-sm px-0.5 ${
-          isClauseSlot
-            ? "bg-muted dark:bg-muted"
-            : "bg-warning/15 dark:bg-warning/15"
+          isField
+            ? "bg-warning/15 dark:bg-warning/15"
+            : "bg-muted dark:bg-muted"
         }`}
-        key={start}
+        key={marker.start}
       >
-        {`{{${inner}}}`}
+        {marker.raw}
       </mark>,
     );
-    lastIndex = start + match[0].length;
+    lastIndex = marker.end;
   }
 
   if (lastIndex < text.length) {

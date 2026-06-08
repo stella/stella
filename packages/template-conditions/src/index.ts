@@ -447,3 +447,23 @@ export type {
   ConditionOperator,
   ConditionRule,
 } from "./condition-builder.js";
+
+// Canonical `{{...}}` marker grammar — the single source of truth for every
+// directive recognizer (api fill pipeline, folio editor, web preview).
+export {
+  assertNever,
+  BLOCK_DIRECTIVE_KINDS,
+  blockDirectiveLinePattern,
+  classifyMarker,
+  clauseSlotPattern,
+  DIRECTIVE_KINDS,
+  hasBlockDirectivePattern,
+  hasNumberingPattern,
+  isBlockDirectiveKind,
+  markerPattern,
+  numPattern,
+  placeholderPattern,
+  refPattern,
+  scanMarkers,
+} from "./markers.js";
+export type { DirectiveKind, MarkerMeta, ScannedMarker } from "./markers.js";

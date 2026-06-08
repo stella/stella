@@ -8,35 +8,31 @@
  * shared {@link createDocScanPlugin} factory; the document text is
  * the only input, so there is no host-pushed config.
  *
- * Grammar matches the server-side handlers (discover-placeholders,
- * block-directives, discover-clause-slots) so the editor highlights
- * exactly what the fill pipeline will act on:
- *  - `{{placeholder}}` / `{{dotted.path}}` — inline fields
- *  - `{{@clause:Name}}` / `{{@clause:Name:v3}}` — inline clause slots
- *  - `{{@num:Key}}` / `{{@ref:Key}}` — inline numbering + cross-references
- *  - `{{#if expr}}` `{{#elseif expr}}` `{{#else}}` `{{/if}}`
- *    `{{#each expr}}` `{{/each}}` — block directives (own paragraph)
+ * The grammar itself is NOT defined here: the kinds and the
+ * `{{...}}` parser come from `@stll/template-conditions`
+ * ({@link scanMarkers}, {@link classifyMarker}), the same module the
+ * fill pipeline uses. This file only maps the scanner's text offsets
+ * onto ProseMirror positions, so a new directive added to the shared
+ * grammar is highlighted here automatically.
  */
 
 import type { Node as PMNode } from "prosemirror-model";
 import { PluginKey } from "prosemirror-state";
 import type { EditorState } from "prosemirror-state";
 
+import {
+  assertNever,
+  type DirectiveKind,
+  isBlockDirectiveKind,
+  type MarkerMeta,
+  scanMarkers,
+} from "@stll/template-conditions";
+
 import { createDocScanPlugin, getDocScanRanges } from "./createDocScanPlugin";
 import type { DocScanState } from "./createDocScanPlugin";
 import { collectBlockChunks, joinChunks, offsetToDocPos } from "./pmTextScan";
 
-export type DirectiveKind =
-  | "placeholder"
-  | "clause"
-  | "num"
-  | "ref"
-  | "if"
-  | "elseif"
-  | "else"
-  | "endif"
-  | "each"
-  | "endeach";
+export type { DirectiveKind };
 
 export type DirectiveRange = {
   /** Inclusive PM doc position of the marker start. */
@@ -52,26 +48,27 @@ export type DirectiveRange = {
   block: boolean;
 };
 
-// Inline field: {{name}}, {{ company.name }}, also matches {{@clause:..}}
-// (filtered out below in favour of the clause-specific scan). The `\s*` inside
-// the braces tolerates surrounding whitespace without polluting the capture.
-const PLACEHOLDER_RE = /\{\{\s*([\p{L}\p{N}_.@:-]+)\s*\}\}/gu;
-// Block directive occupying its own paragraph (anchored ^...$).
-const BLOCK_DIRECTIVE_RE =
-  /^\s*\{\{\s*(#if|#elseif|#else|#each|\/if|\/each)\s*(.*?)\}\}\s*$/u;
-// Inline clause slot: {{@clause:Name}}, {{ @clause:Name:v3 }}.
-const CLAUSE_SLOT_RE = /\{\{\s*@clause:([^:}\s]+)(?::([^}\s]+))?\s*\}\}/gu;
-// Inline numbering markers: {{@num:Key}} (a numbered clause/item) and
-// {{@ref:Key}} (a back-reference). Mirrors the server's numbering.ts.
-const NUMBERING_RE = /\{\{\s*@(num|ref):([\p{L}\p{N}_.-]+)\s*\}\}/gu;
-
-const BLOCK_KIND: Record<string, DirectiveKind> = {
-  "#if": "if",
-  "#elseif": "elseif",
-  "#else": "else",
-  "/if": "endif",
-  "#each": "each",
-  "/each": "endeach",
+/** The display expression for a marker (field path, clause name, key, condition). */
+const directiveExpr = (meta: MarkerMeta): string => {
+  switch (meta.kind) {
+    case "placeholder":
+      return meta.expr;
+    case "clause":
+      return meta.name;
+    case "num":
+    case "ref":
+      return meta.key;
+    case "if":
+    case "elseif":
+    case "each":
+      return meta.expr;
+    case "else":
+    case "endif":
+    case "endeach":
+      return "";
+    default:
+      return assertNever(meta);
+  }
 };
 
 export const scanDirectives = (doc: PMNode): DirectiveRange[] => {
@@ -79,74 +76,41 @@ export const scanDirectives = (doc: PMNode): DirectiveRange[] => {
 
   for (const chunks of collectBlockChunks(doc)) {
     const joined = joinChunks(chunks);
+    const trimmed = joined.trim();
 
-    // A whole paragraph that is a single block directive.
-    const blockMatch = BLOCK_DIRECTIVE_RE.exec(joined);
-    const blockKind = blockMatch ? BLOCK_KIND[blockMatch[1] ?? ""] : undefined;
-    if (blockMatch && blockKind) {
+    // A whole paragraph that is a single block directive gets a block range
+    // spanning the line (the overlay pairs opener→closer into a gutter rail).
+    const lineMarkers = scanMarkers(trimmed);
+    const sole = lineMarkers.length === 1 ? lineMarkers[0] : undefined;
+    if (sole && sole.raw === trimmed && isBlockDirectiveKind(sole.meta.kind)) {
       const last = chunks.at(-1);
       ranges.push({
         from: chunks[0]?.start ?? 0,
         to: last ? last.start + last.text.length : 0,
-        kind: blockKind,
-        expr: (blockMatch[2] ?? "").trim(),
+        kind: sole.meta.kind,
+        expr: directiveExpr(sole.meta),
         block: true,
       });
       continue;
     }
 
-    // Inline clause slots first so the generic placeholder regex
-    // does not double-claim the same `{{@clause:...}}` span.
-    CLAUSE_SLOT_RE.lastIndex = 0;
-    let clauseMatch = CLAUSE_SLOT_RE.exec(joined);
-    while (clauseMatch !== null) {
-      ranges.push({
-        from: offsetToDocPos(chunks, clauseMatch.index),
-        to: offsetToDocPos(chunks, clauseMatch.index + clauseMatch[0].length),
-        kind: "clause",
-        expr: clauseMatch[1] ?? "",
-        block: false,
-        ...(clauseMatch[2] !== undefined
-          ? { clauseVersion: clauseMatch[2] }
-          : {}),
-      });
-      clauseMatch = CLAUSE_SLOT_RE.exec(joined);
-    }
-
-    // Numbering + cross-reference markers, before the generic placeholder
-    // scan claims them (it skips all `@`-prefixed inners).
-    NUMBERING_RE.lastIndex = 0;
-    let numberingMatch = NUMBERING_RE.exec(joined);
-    while (numberingMatch !== null) {
-      ranges.push({
-        from: offsetToDocPos(chunks, numberingMatch.index),
-        to: offsetToDocPos(
-          chunks,
-          numberingMatch.index + numberingMatch[0].length,
-        ),
-        kind: numberingMatch[1] === "ref" ? "ref" : "num",
-        expr: numberingMatch[2] ?? "",
-        block: false,
-      });
-      numberingMatch = NUMBERING_RE.exec(joined);
-    }
-
-    PLACEHOLDER_RE.lastIndex = 0;
-    let fieldMatch = PLACEHOLDER_RE.exec(joined);
-    while (fieldMatch !== null) {
-      const inner = fieldMatch[1] ?? "";
-      // Skip @-prefixed markers (clause slots, numbering) handled above —
-      // only plain fields here.
-      if (!inner.startsWith("@")) {
-        ranges.push({
-          from: offsetToDocPos(chunks, fieldMatch.index),
-          to: offsetToDocPos(chunks, fieldMatch.index + fieldMatch[0].length),
-          kind: "placeholder",
-          expr: inner,
-          block: false,
-        });
+    // Otherwise, inline markers (fields, clause slots, numbering). Block
+    // directives only count when they own the whole paragraph, matching the
+    // fill engine, so skip any found mid-line here.
+    for (const marker of scanMarkers(joined)) {
+      if (isBlockDirectiveKind(marker.meta.kind)) {
+        continue;
       }
-      fieldMatch = PLACEHOLDER_RE.exec(joined);
+      const clauseVersion =
+        marker.meta.kind === "clause" ? marker.meta.version : undefined;
+      ranges.push({
+        from: offsetToDocPos(chunks, marker.start),
+        to: offsetToDocPos(chunks, marker.end),
+        kind: marker.meta.kind,
+        expr: directiveExpr(marker.meta),
+        block: false,
+        ...(clauseVersion !== undefined ? { clauseVersion } : {}),
+      });
     }
   }
 

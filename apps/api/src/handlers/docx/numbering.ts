@@ -15,9 +15,16 @@
  * user-facing field schema by discovery (it skips `@`-prefixed names).
  */
 
-const NUM_RE = /\{\{\s*@num:([\p{L}\p{N}_.-]+)\s*\}\}/gu;
-const REF_RE = /\{\{\s*@ref:([\p{L}\p{N}_.-]+)\s*\}\}/gu;
-const ANY_MARKER_RE = /\{\{\s*@(?:num|ref):/u;
+import {
+  hasNumberingPattern,
+  numPattern,
+  refPattern,
+} from "@stll/template-conditions";
+
+// Canonical patterns from @stll/template-conditions (markers.ts).
+const NUM_RE = numPattern();
+const REF_RE = refPattern();
+const ANY_MARKER_RE = hasNumberingPattern();
 
 /** Fast-path: does this part contain any numbering markers at all? */
 export const hasNumberingMarkers = (xml: string): boolean =>
