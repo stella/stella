@@ -751,10 +751,10 @@ const TemplateDetail = ({
             </Button>
           </div>
 
-          <Tabs defaultValue="fields">
+          <Tabs defaultValue="preview">
             <TabsList variant="underline">
-              <TabsTab value="fields">{t("templates.fields")}</TabsTab>
               <TabsTab value="preview">{t("common.edit")}</TabsTab>
+              <TabsTab value="fields">{t("templates.fields")}</TabsTab>
               <TabsTab value="clauses">{t("common.clauses")}</TabsTab>
               <TabsTab value="history">{t("common.history")}</TabsTab>
             </TabsList>
