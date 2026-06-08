@@ -42,9 +42,17 @@ export function escapeTableCell(text: string): string {
 /**
  * Hyperlink URLs in inline form need parens balanced; we URL-encode the
  * problematic characters rather than escape, so the link still resolves.
+ * `encodeURIComponent` leaves `(` and `)` untouched, so an unbalanced paren in
+ * a DOCX URL (e.g. `https://example.com/a)b`) would close the inline
+ * `[text](url)` destination early; encode the parens explicitly.
  */
+const LINK_URL_ENCODED: Record<string, string> = { "(": "%28", ")": "%29" };
+
 export function escapeLinkUrl(url: string): string {
-  return url.replace(/[()<>"\s]/gu, encodeURIComponent);
+  return url.replace(
+    /[()<>"\s]/gu,
+    (ch) => LINK_URL_ENCODED[ch] ?? encodeURIComponent(ch),
+  );
 }
 
 /**

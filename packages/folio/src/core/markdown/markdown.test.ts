@@ -189,7 +189,20 @@ describe("toMarkdown — inline marks", () => {
     const out = toMarkdown(doc([{ type: "paragraph", content: [link] }]), {
       hyperlinks: "reference",
     });
-    expect(out).toBe("[t][1]\n\n[1]: https://x.com/a%20b(c)");
+    expect(out).toBe("[t][1]\n\n[1]: https://x.com/a%20b%28c%29");
+  });
+
+  test("an unbalanced paren in an inline link destination is encoded", () => {
+    const link: Hyperlink = {
+      type: "hyperlink",
+      href: "https://example.com/a)b",
+      children: [run("x")],
+    };
+    // `encodeURIComponent` leaves parens untouched, so without explicit
+    // encoding the `)` would close the `[x](…)` destination early.
+    expect(toMarkdown(doc([{ type: "paragraph", content: [link] }]))).toBe(
+      "[x](https://example.com/a%29b)",
+    );
   });
 });
 
@@ -382,5 +395,64 @@ describe("toMarkdown — clean preset for skills", () => {
       { comments: "sidecar" },
     );
     expect(out).toBe("x[^c1]\n\n## Comments\n[^c1]: A: see link");
+  });
+
+  const delMark = (): Paragraph["pPrMark"] => ({
+    kind: "del",
+    info: { id: 1, author: "A" },
+  });
+
+  test("a deleted paragraph mark merges into the next paragraph on accept", () => {
+    const first: Paragraph = {
+      type: "paragraph",
+      content: [run("Hello")],
+      pPrMark: delMark(),
+    };
+    // Word's join keeps the first paragraph's properties and concatenates the
+    // runs; "annotate" mode (default) leaves both paragraphs intact.
+    expect(md([first, para([run(" world")])], clean)).toBe("Hello world");
+    expect(md([first, para([run(" world")])])).toBe("Hello\n\n world");
+  });
+
+  test("the merged paragraph keeps the first paragraph's heading style", () => {
+    const heading: Paragraph = {
+      type: "paragraph",
+      content: [run("Title")],
+      formatting: { styleId: "Heading1" },
+      pPrMark: delMark(),
+    };
+    expect(md([heading, para([run(" tail")])], clean)).toBe("# Title tail");
+  });
+
+  test("a chain of deleted marks collapses into one paragraph", () => {
+    const a: Paragraph = {
+      type: "paragraph",
+      content: [run("A")],
+      pPrMark: delMark(),
+    };
+    const b: Paragraph = {
+      type: "paragraph",
+      content: [run("B")],
+      pPrMark: delMark(),
+    };
+    expect(md([a, b, para([run("C")])], clean)).toBe("ABC");
+  });
+
+  test("a deleted mark before a table is left unmerged (no structural join)", () => {
+    const para1: Paragraph = {
+      type: "paragraph",
+      content: [run("Lead")],
+      pPrMark: delMark(),
+    };
+    const table: BlockContent = {
+      type: "table",
+      rows: [
+        {
+          type: "tableRow",
+          cells: [{ type: "tableCell", content: [para([run("X")])] }],
+        },
+      ],
+    };
+    expect(md([para1, table], clean)).toBe("Lead\n\n| X |\n| --- |");
   });
 });

@@ -9,6 +9,40 @@ import { renderParagraph } from "./renderParagraph";
 import { renderTable } from "./renderTable";
 import type { RenderContext } from "./types";
 
+/**
+ * In `trackedChanges: "clean"` mode every change is accepted. A paragraph whose
+ * end-of-paragraph mark is a pending deletion (`pPrMark.kind === "del"`) loses
+ * its break on accept and merges with the following paragraph. Word's join
+ * keeps the FIRST paragraph's properties (style, list) and drops the resolved
+ * mark; the surviving break is the next paragraph's, so a run of consecutive
+ * deletions collapses into one paragraph. A non-paragraph next block (table,
+ * SDT) is structurally incompatible and stays unmerged, matching the editor's
+ * accept-change join guard (`commands/comments.ts`).
+ */
+function mergeAcceptedParagraphBreaks(blocks: BlockContent[]): BlockContent[] {
+  const merged: BlockContent[] = [];
+  for (const block of blocks) {
+    const prev = merged.at(-1);
+    if (
+      prev?.type === "paragraph" &&
+      prev.pPrMark?.kind === "del" &&
+      block.type === "paragraph"
+    ) {
+      // Drop the resolved deletion mark; inherit the next paragraph's mark so a
+      // chain keeps merging.
+      const { pPrMark: _resolved, ...base } = prev;
+      const next = block.pPrMark;
+      const content = [...prev.content, ...block.content];
+      merged[merged.length - 1] = next
+        ? { ...base, content, pPrMark: next }
+        : { ...base, content };
+      continue;
+    }
+    merged.push(block);
+  }
+  return merged;
+}
+
 export function renderBlocks(
   ctx: RenderContext,
   pkg: DocxPackage | undefined,
@@ -17,7 +51,12 @@ export function renderBlocks(
   const out: string[] = [];
   let prevWasListItem = false;
 
-  for (const block of blocks) {
+  const ordered =
+    ctx.opts.trackedChanges === "clean"
+      ? mergeAcceptedParagraphBreaks(blocks)
+      : blocks;
+
+  for (const block of ordered) {
     if (block.type === "paragraph") {
       // A hidden-marker (`w:vanish`) list paragraph renders as plain prose, so
       // treat it as prose here too (it must not suppress the blank line after a
