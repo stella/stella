@@ -11,6 +11,7 @@
   ],
   "exports": {
     ".": "./src/index.ts",
+    "./markdown": "./src/core/markdown/index.ts",
     "./server": "./src/server.ts",
     "./editor.css": "./src/styles/editor.css"
   },

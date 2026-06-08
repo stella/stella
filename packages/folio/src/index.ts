@@ -114,3 +114,13 @@ export {
   type AutocompleteCaretOverlayProps,
   type AutocompleteCaretRect,
 } from "./paged-editor/AutocompleteCaretOverlay";
+
+// DOCX-document → Markdown export (also available at `@stll/folio/markdown`).
+export {
+  toMarkdown,
+  toMarkdownResult,
+  type ImageMeta,
+  type ImageRef,
+  type MarkdownOptions,
+  type MarkdownResult,
+} from "./core/markdown";
