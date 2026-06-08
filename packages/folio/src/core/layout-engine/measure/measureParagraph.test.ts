@@ -1,11 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
-import { clearAllCaches, hashParagraphBlock } from "./cache";
+import {
+  smallCapsAwareCharWidth,
+  withFakeTextMeasure,
+} from "./__tests__/fakeTextMeasure";
+import { hashParagraphBlock } from "./cache";
 import {
   buildFontString,
   getFontMetrics,
   measureTextWidth,
-  resetCanvasContext,
 } from "./measureContainer";
 import {
   clampFloatingWrapMargins,
@@ -15,62 +18,7 @@ import {
 
 const PT_TO_PX = 96 / 72;
 
-function withFakeTextMeasure(
-  runTest: (getMeasureCount: () => number) => void,
-): void {
-  const originalDocument = globalThis.document;
-  let measureCount = 0;
-  const fakeDocument = {
-    createElement() {
-      return {
-        getContext() {
-          return {
-            font: "",
-            measureText(this: { font: string }, text: string) {
-              measureCount += 1;
-              let width = 0;
-              const isSmallCaps = this.font.includes("small-caps");
-              for (const char of text) {
-                const isUppercase = char >= "A" && char <= "Z";
-                const isLowercase = char >= "a" && char <= "z";
-                if (isUppercase) {
-                  width += 10;
-                } else if (isSmallCaps && isLowercase) {
-                  width += 8;
-                } else {
-                  width += 5;
-                }
-              }
-              return {
-                width,
-                actualBoundingBoxAscent: 8,
-                actualBoundingBoxDescent: 2,
-              };
-            },
-          };
-        },
-      };
-    },
-  } as unknown as Document;
-
-  Object.defineProperty(globalThis, "document", {
-    configurable: true,
-    value: fakeDocument,
-  });
-  clearAllCaches();
-  resetCanvasContext();
-
-  try {
-    runTest(() => measureCount);
-  } finally {
-    resetCanvasContext();
-    clearAllCaches();
-    Object.defineProperty(globalThis, "document", {
-      configurable: true,
-      value: originalDocument,
-    });
-  }
-}
+const fakeMeasure = { charWidth: smallCapsAwareCharWidth };
 
 describe("text measurement cache", () => {
   test("reuses canvas text width measurements for identical text and style", () => {
@@ -81,7 +29,7 @@ describe("text measurement cache", () => {
         measureTextWidth("Repeated legal text", style),
       );
       expect(getMeasureCount()).toBe(1);
-    });
+    }, fakeMeasure);
   });
 
   test("keeps horizontal scale in the text width cache key", () => {
@@ -99,7 +47,7 @@ describe("text measurement cache", () => {
 
       expect(scaledWidth).toBe(normalWidth * 1.5);
       expect(getMeasureCount()).toBe(2);
-    });
+    }, fakeMeasure);
   });
 });
 
@@ -110,7 +58,7 @@ describe("font metrics cache", () => {
 
       expect(getFontMetrics(style)).toEqual(getFontMetrics(style));
       expect(getMeasureCount()).toBe(1);
-    });
+    }, fakeMeasure);
   });
 
   test("keeps font variant in the metrics cache key", () => {
@@ -123,7 +71,7 @@ describe("font metrics cache", () => {
       });
 
       expect(getMeasureCount()).toBe(2);
-    });
+    }, fakeMeasure);
   });
 });
 
@@ -312,7 +260,7 @@ describe("inline image paragraph measurement", () => {
       expect(measure.lines).toHaveLength(2);
       expect(measure.lines.at(1)?.leftOffset).toBeUndefined();
       expect(measure.lines.at(1)?.width).toBe(20);
-    });
+    }, fakeMeasure);
   });
 
   // Regression: a logo + label header line (image flowing alongside text) used
@@ -349,7 +297,7 @@ describe("inline image paragraph measurement", () => {
       expect(descent).toBeGreaterThan(0);
       expect(line?.lineHeight).toBe(imageHeight + descent);
       expect(line?.ascent).toBe(imageHeight);
-    });
+    }, fakeMeasure);
   });
 
   test("image-only line keeps imageH + descent*2 breathing-room band", () => {
@@ -416,7 +364,7 @@ describe("inline image paragraph measurement", () => {
       expect(line?.lineHeight).toBe(
         imageHeight + distTop + distBottom + descent,
       );
-    });
+    }, fakeMeasure);
   });
 
   // Regression: a 100×200 inline image rotated 90° should reserve a 200×100
@@ -505,7 +453,7 @@ describe("inline image paragraph measurement", () => {
       // Two lines: leading text on one, the rotated image alone on the next.
       expect(measure.lines.length).toBeGreaterThanOrEqual(2);
       expect(measure.lines.at(-1)?.width).toBe(200);
-    });
+    }, fakeMeasure);
   });
 
   test("inline image with no rotation keeps raw width on the line", () => {
@@ -571,7 +519,7 @@ describe("math paragraph measurement", () => {
       const inlineLineHeight = inlineMeasure.lines.at(0)?.lineHeight ?? 0;
       const stackedLineHeight = stackedMeasure.lines.at(0)?.lineHeight ?? 0;
       expect(stackedLineHeight).toBeGreaterThan(inlineLineHeight + 10);
-    });
+    }, fakeMeasure);
   });
 });
 
@@ -667,7 +615,7 @@ describe("paragraph indentation measurement", () => {
       };
 
       expect(measureParagraph(block, 100).lines).toHaveLength(1);
-    });
+    }, fakeMeasure);
   });
 });
 
@@ -695,7 +643,7 @@ describe("all-caps paragraph measurement", () => {
       );
 
       expect(measure.lines).toHaveLength(2);
-    });
+    }, fakeMeasure);
   });
 
   test("measures horizontally scaled runs using scaled glyph widths", () => {
@@ -710,7 +658,7 @@ describe("all-caps paragraph measurement", () => {
       );
 
       expect(measure.lines).toHaveLength(2);
-    });
+    }, fakeMeasure);
   });
 
   test("measures small-caps runs using small-caps glyph widths", () => {
@@ -728,7 +676,7 @@ describe("all-caps paragraph measurement", () => {
       expect(
         getRunCharWidths({ kind: "text", text: "ii", smallCaps: true }),
       ).toEqual([8, 8]);
-    });
+    }, fakeMeasure);
   });
 
   test("includes small-caps formatting in paragraph cache keys", () => {

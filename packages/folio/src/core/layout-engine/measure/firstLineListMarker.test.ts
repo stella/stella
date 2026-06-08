@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { ParagraphBlock } from "../types";
-import { resetCanvasContext } from "./measureContainer";
+import { withFakeTextMeasure } from "./__tests__/fakeTextMeasure";
 import { measureParagraph } from "./measureParagraph";
 
 // First-line-indent list paragraphs (`<w:ind w:left="0" w:firstLine="N"/>`,
@@ -16,50 +16,6 @@ import { measureParagraph } from "./measureParagraph";
 // Agreement" then ". The Company..." on the next line because the
 // measurement assumed the full first-line width was available for
 // text that the painter then had to share with a 30+12 px marker box.
-
-function withFakeTextMeasure(runTest: () => void): void {
-  // Each character reports 5 px (uppercase 10 px) — same shape as
-  // measureParagraph.test.ts so the line-break math is predictable.
-  const originalDocument = globalThis.document;
-  const fakeDocument = {
-    createElement() {
-      return {
-        getContext() {
-          return {
-            font: "",
-            measureText(text: string) {
-              let width = 0;
-              for (const char of text) {
-                width += char >= "A" && char <= "Z" ? 10 : 5;
-              }
-              return {
-                width,
-                actualBoundingBoxAscent: 8,
-                actualBoundingBoxDescent: 2,
-              };
-            },
-          };
-        },
-      };
-    },
-  } as unknown as Document;
-
-  Object.defineProperty(globalThis, "document", {
-    configurable: true,
-    value: fakeDocument,
-  });
-  resetCanvasContext();
-
-  try {
-    runTest();
-  } finally {
-    Object.defineProperty(globalThis, "document", {
-      configurable: true,
-      value: originalDocument,
-    });
-    resetCanvasContext();
-  }
-}
 
 describe("measureParagraph — first-line list marker reservation", () => {
   test("first-line text width on a list paragraph excludes marker + tab-after", () => {

@@ -1,49 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
 import type { FlowBlock, ImageBlock, ParagraphBlock } from "../types";
-import { clearAllCaches } from "./cache";
+import {
+  fixedCharWidth,
+  withFakeTextMeasure,
+} from "./__tests__/fakeTextMeasure";
 import { measureBlock, measureBlocks } from "./measureBlocks";
-import { resetCanvasContext } from "./measureContainer";
 
-function withFakeTextMeasure(runTest: () => void): void {
-  const originalDocument = globalThis.document;
-  const fakeDocument = {
-    createElement() {
-      return {
-        getContext() {
-          return {
-            font: "",
-            measureText(text: string) {
-              return {
-                width: text.length * 5,
-                actualBoundingBoxAscent: 8,
-                actualBoundingBoxDescent: 2,
-              };
-            },
-          };
-        },
-      };
-    },
-  } as unknown as Document;
-
-  Object.defineProperty(globalThis, "document", {
-    configurable: true,
-    value: fakeDocument,
-  });
-  clearAllCaches();
-  resetCanvasContext();
-
-  try {
-    runTest();
-  } finally {
-    resetCanvasContext();
-    clearAllCaches();
-    Object.defineProperty(globalThis, "document", {
-      configurable: true,
-      value: originalDocument,
-    });
-  }
-}
+const fakeMeasure = { charWidth: fixedCharWidth(5) };
 
 const imageBlock: ImageBlock = {
   kind: "image",
@@ -103,7 +67,7 @@ describe("measureBlocks", () => {
         "pageBreak",
         "image",
       ]);
-    });
+    }, fakeMeasure);
   });
 
   test("per-block content widths are honoured for parallel arrays", () => {
@@ -118,6 +82,6 @@ describe("measureBlocks", () => {
       // Both inputs are paragraphs measured against different widths; the
       // dispatch still produces a measure for each block.
       expect(measures.every((m) => m.kind === "paragraph")).toBe(true);
-    });
+    }, fakeMeasure);
   });
 });

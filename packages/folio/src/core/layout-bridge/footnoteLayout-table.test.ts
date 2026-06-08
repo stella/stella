@@ -1,12 +1,17 @@
 import { describe, expect, test } from "bun:test";
 
-import { resetCanvasContext } from "../layout-engine/measure/measureContainer";
+import {
+  fixedCharWidth,
+  withFakeTextMeasure,
+} from "../layout-engine/measure/__tests__/fakeTextMeasure";
 import type { FlowBlock } from "../layout-engine/types";
 import type { Footnote } from "../types/document";
 import {
   applyFootnotePresentation,
   convertFootnoteToContent,
 } from "./footnoteLayout";
+
+const fakeMeasure = { charWidth: fixedCharWidth(5) };
 
 const footnoteWithTable: Footnote = {
   type: "footnote",
@@ -164,44 +169,6 @@ const footnoteWithRowSpanTable: Footnote = {
   ],
 };
 
-function withFakeTextMeasure(runTest: () => void): void {
-  const originalDocument = globalThis.document;
-  const fakeDocument = {
-    createElement() {
-      return {
-        getContext() {
-          return {
-            font: "",
-            measureText(text: string) {
-              return {
-                width: text.length * 5,
-                actualBoundingBoxAscent: 8,
-                actualBoundingBoxDescent: 2,
-              };
-            },
-          };
-        },
-      };
-    },
-  } as unknown as Document;
-
-  Object.defineProperty(globalThis, "document", {
-    configurable: true,
-    value: fakeDocument,
-  });
-  resetCanvasContext();
-
-  try {
-    runTest();
-  } finally {
-    resetCanvasContext();
-    Object.defineProperty(globalThis, "document", {
-      configurable: true,
-      value: originalDocument,
-    });
-  }
-}
-
 describe("footnote layout", () => {
   test("routes footnotes through the body pipeline so tables survive", () => {
     const content = convertFootnoteToContent(footnoteWithTable, 3, 400, {
@@ -283,7 +250,7 @@ describe("footnote layout", () => {
         throw new Error("Expected footnote table to have a table measure");
       }
       expect(tableMeasure.totalHeight).toBeGreaterThan(0);
-    });
+    }, fakeMeasure);
   });
 
   test("skips row-spanned columns while measuring footnote table rows", () => {
@@ -303,7 +270,7 @@ describe("footnote layout", () => {
       expect(tableMeasure.rows.at(0)?.cells.at(0)?.rowSpan).toBe(2);
       expect(tableMeasure.rows.at(0)?.cells.at(0)?.width).toBeCloseTo(96);
       expect(tableMeasure.rows.at(1)?.cells.at(0)?.width).toBeCloseTo(192);
-    });
+    }, fakeMeasure);
   });
 
   test("applies footnote font size to nested table paragraphs and field runs", () => {

@@ -16,59 +16,8 @@ import {
   calculateTabWidth,
   type TabContext,
 } from "../../prosemirror/utils/tabCalculator";
-import { clearAllCaches } from "./cache";
-import { resetCanvasContext } from "./measureContainer";
+import { withFakeTextMeasure } from "./__tests__/fakeTextMeasure";
 import { measureParagraph } from "./measureParagraph";
-
-// Mirrors the fake used by the sibling test files: 5px per lowercase glyph,
-// 10px per uppercase glyph. The fake ignores font size, which is fine for
-// the decimal-prefix tests below — `calculateTabWidth` only cares about
-// pixel widths, and the measurer-vs-painter agreement check builds the
-// painter side with the same fake.
-function withFakeTextMeasure(runTest: () => void): void {
-  const originalDocument = globalThis.document;
-  const fakeDocument = {
-    createElement() {
-      return {
-        getContext() {
-          return {
-            font: "",
-            measureText(this: { font: string }, text: string) {
-              let width = 0;
-              for (const char of text) {
-                const isUppercase = char >= "A" && char <= "Z";
-                width += isUppercase ? 10 : 5;
-              }
-              return {
-                width,
-                actualBoundingBoxAscent: 8,
-                actualBoundingBoxDescent: 2,
-              };
-            },
-          };
-        },
-      };
-    },
-  } as unknown as Document;
-
-  Object.defineProperty(globalThis, "document", {
-    configurable: true,
-    value: fakeDocument,
-  });
-  clearAllCaches();
-  resetCanvasContext();
-
-  try {
-    runTest();
-  } finally {
-    resetCanvasContext();
-    clearAllCaches();
-    Object.defineProperty(globalThis, "document", {
-      configurable: true,
-      value: originalDocument,
-    });
-  }
-}
 
 describe("measureParagraph — decimal tab stop (PR #512 gemini HIGH)", () => {
   test("decimal tab measurer matches painter (decimalPrefixWidth threaded)", () => {

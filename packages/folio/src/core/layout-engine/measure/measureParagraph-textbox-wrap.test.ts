@@ -9,49 +9,16 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  fixedCharWidth,
+  withFakeTextMeasure,
+} from "./__tests__/fakeTextMeasure";
+import {
   type FloatingExclusionRect,
   rectsToFloatingZones,
 } from "./floatingZones";
-import { resetCanvasContext } from "./measureContainer";
 import { measureParagraph } from "./measureParagraph";
 
-function withFakeTextMeasure(runTest: () => void): void {
-  const originalDocument = globalThis.document;
-  const fakeDocument = {
-    createElement() {
-      return {
-        getContext() {
-          return {
-            font: "",
-            measureText(_text: string) {
-              return {
-                width: _text.length * 5,
-                actualBoundingBoxAscent: 8,
-                actualBoundingBoxDescent: 2,
-              };
-            },
-          };
-        },
-      };
-    },
-  } as unknown as Document;
-
-  Object.defineProperty(globalThis, "document", {
-    configurable: true,
-    value: fakeDocument,
-  });
-  resetCanvasContext();
-
-  try {
-    runTest();
-  } finally {
-    resetCanvasContext();
-    Object.defineProperty(globalThis, "document", {
-      configurable: true,
-      value: originalDocument,
-    });
-  }
-}
+const fakeMeasure = { charWidth: fixedCharWidth(5) };
 
 describe("body text wraps around floating text box", () => {
   test("a left-floated text box with wrapType='square' carves a left margin out of the first line", () => {
@@ -96,7 +63,7 @@ describe("body text wraps around floating text box", () => {
       expect(firstLine).toBeDefined();
       // First line was reduced past the floating text box.
       expect(firstLine?.leftOffset).toBe(162);
-    });
+    }, fakeMeasure);
   });
 
   test("a text box with wrapType='behind' does not reduce line widths", () => {
@@ -121,6 +88,6 @@ describe("body text wraps around floating text box", () => {
       const firstLine = measure.lines.at(0);
       expect(firstLine?.leftOffset).toBeUndefined();
       expect(firstLine?.rightOffset).toBeUndefined();
-    });
+    }, fakeMeasure);
   });
 });

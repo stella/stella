@@ -2,51 +2,17 @@ import { describe, expect, test } from "bun:test";
 
 import type { ParagraphBlock } from "../types";
 import {
+  fixedCharWidth,
+  withFakeTextMeasure,
+} from "./__tests__/fakeTextMeasure";
+import {
   DEFAULT_TAB_STOP_TWIPS,
   getListMarkerInlineWidth,
 } from "./listMarkerWidth";
-import { resetCanvasContext } from "./measureContainer";
 
 const DEFAULT_TAB_STOP_PX = (DEFAULT_TAB_STOP_TWIPS / 1440) * 96;
 
-function withFakeTextMeasure(runTest: () => void): void {
-  const originalDocument = globalThis.document;
-  const fakeDocument = {
-    createElement() {
-      return {
-        getContext() {
-          return {
-            font: "",
-            measureText(text: string) {
-              // 10px per char — simple, predictable, fine for these tests.
-              return {
-                width: text.length * 10,
-                actualBoundingBoxAscent: 8,
-                actualBoundingBoxDescent: 2,
-              };
-            },
-          };
-        },
-      };
-    },
-  } as unknown as Document;
-
-  Object.defineProperty(globalThis, "document", {
-    configurable: true,
-    value: fakeDocument,
-  });
-  resetCanvasContext();
-
-  try {
-    runTest();
-  } finally {
-    resetCanvasContext();
-    Object.defineProperty(globalThis, "document", {
-      configurable: true,
-      value: originalDocument,
-    });
-  }
-}
+const fakeMeasure = { charWidth: fixedCharWidth(10) };
 
 function listBlock(overrides: ParagraphBlock["attrs"]): ParagraphBlock {
   return {
@@ -61,7 +27,7 @@ describe("getListMarkerInlineWidth", () => {
   test("no marker → 0", () => {
     withFakeTextMeasure(() => {
       expect(getListMarkerInlineWidth(listBlock({}))).toBe(0);
-    });
+    }, fakeMeasure);
   });
 
   test("hidden marker → 0", () => {
@@ -71,7 +37,7 @@ describe("getListMarkerInlineWidth", () => {
           listBlock({ listMarker: "1.", listMarkerHidden: true }),
         ),
       ).toBe(0);
-    });
+    }, fakeMeasure);
   });
 
   test("hanging indent: width equals hanging slot", () => {
@@ -83,7 +49,7 @@ describe("getListMarkerInlineWidth", () => {
         }),
       );
       expect(width).toBe(36);
-    });
+    }, fakeMeasure);
   });
 
   test('w:suff="nothing" → exactly natural marker width', () => {
@@ -96,7 +62,7 @@ describe("getListMarkerInlineWidth", () => {
       );
       // Natural width = 2 chars * 10 = 20.
       expect(width).toBe(20);
-    });
+    }, fakeMeasure);
   });
 
   test('w:suff="space" → natural + one space glyph', () => {
@@ -109,7 +75,7 @@ describe("getListMarkerInlineWidth", () => {
       );
       // 2 chars + 1 space char = 30.
       expect(width).toBe(30);
-    });
+    }, fakeMeasure);
   });
 
   // Regression for upstream #600: a long marker like "1.1.1." must grow to
@@ -128,7 +94,7 @@ describe("getListMarkerInlineWidth", () => {
       const expectedGrid = Math.floor(60 / DEFAULT_TAB_STOP_PX) + 1;
       const expectedBodyStart = expectedGrid * DEFAULT_TAB_STOP_PX;
       expect(width).toBeCloseTo(expectedBodyStart, 5);
-    });
+    }, fakeMeasure);
   });
 
   test('short marker still aligns body at next default-grid stop with suff="tab"', () => {
@@ -141,7 +107,7 @@ describe("getListMarkerInlineWidth", () => {
       // Natural width = 20. minBodyStart=20. Next grid = floor(20/48)+1=1
       // → bodyStart = 48. Marker = 48.
       expect(width).toBeCloseTo(DEFAULT_TAB_STOP_PX, 5);
-    });
+    }, fakeMeasure);
   });
 
   test("custom tab stop closer than default grid wins", () => {
@@ -155,7 +121,7 @@ describe("getListMarkerInlineWidth", () => {
         }),
       );
       expect(width).toBeCloseTo(24, 5);
-    });
+    }, fakeMeasure);
   });
 
   test("tab stops marked `clear` or `bar` are ignored", () => {
@@ -171,7 +137,7 @@ describe("getListMarkerInlineWidth", () => {
       );
       // Both ignored → falls back to the default-grid stop at 48 px.
       expect(width).toBeCloseTo(DEFAULT_TAB_STOP_PX, 5);
-    });
+    }, fakeMeasure);
   });
 
   test("custom defaultTabStopTwips on the block overrides the OOXML default grid", () => {
@@ -185,7 +151,7 @@ describe("getListMarkerInlineWidth", () => {
       );
       // Natural width = 20; next 96 px stop is 96. Marker width = 96.
       expect(width).toBeCloseTo(96, 5);
-    });
+    }, fakeMeasure);
   });
 
   // Regression for bot review #460: when the marker overflows the hanging
@@ -208,7 +174,7 @@ describe("getListMarkerInlineWidth", () => {
       const expectedBodyStart =
         Math.ceil(104 / DEFAULT_TAB_STOP_PX) * DEFAULT_TAB_STOP_PX;
       expect(width).toBeCloseTo(expectedBodyStart - 24, 5);
-    });
+    }, fakeMeasure);
   });
 
   // Regression for bot review #460 (codex): when `minBodyStart` lands
@@ -234,7 +200,7 @@ describe("getListMarkerInlineWidth", () => {
       // minBodyStart = 18 + 30 = 48 = default-grid stop exactly.
       // bodyStart MUST be 48, not 96. marker = 48 - 18 = 30.
       expect(width).toBeCloseTo(DEFAULT_TAB_STOP_PX - 18, 5);
-    });
+    }, fakeMeasure);
   });
 
   test("first-line indent shifts marker start: bodyStart adjusts", () => {
@@ -248,6 +214,6 @@ describe("getListMarkerInlineWidth", () => {
       // markerStartPx = 24. Natural width = 20 → minBodyStart = 44.
       // Next default-grid stop past 44 is 48. marker = 48 - 24 = 24.
       expect(width).toBeCloseTo(DEFAULT_TAB_STOP_PX - 24, 5);
-    });
+    }, fakeMeasure);
   });
 });
