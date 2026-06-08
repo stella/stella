@@ -1825,11 +1825,16 @@ function convertParagraph(
     options.originalListSeenNumIds,
   );
 
+  const bookmarkNames = pmAttrs.bookmarks?.map((b) => b.name);
+
   return {
     kind: "paragraph",
     id: nextBlockId(),
     runs,
     attrs,
+    ...(bookmarkNames && bookmarkNames.length > 0
+      ? { bookmarks: bookmarkNames }
+      : {}),
     pmStart: startPos,
     pmEnd: startPos + node.nodeSize,
   };

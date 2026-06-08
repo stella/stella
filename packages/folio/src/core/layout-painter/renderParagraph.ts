@@ -964,7 +964,7 @@ function renderFieldRun(
   const fieldContext: FieldContext = {
     pageNumber: context.pageNumber,
     totalPages: context.totalPages,
-    bookmarkPages: EMPTY_BOOKMARK_PAGES,
+    bookmarkPages: context.bookmarkPages ?? EMPTY_BOOKMARK_PAGES,
     bookmarkText: EMPTY_BOOKMARK_TEXT,
     seqValues: EMPTY_SEQ_VALUES,
     now: new Date(),

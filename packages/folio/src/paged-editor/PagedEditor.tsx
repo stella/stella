@@ -36,6 +36,7 @@ import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 import { HiddenHeaderFooterPMs } from "../components/HiddenHeaderFooterPMs";
 import type { HiddenHeaderFooterPMsRef } from "../components/HiddenHeaderFooterPMs";
 import { getFootnoteText } from "../core/docx/footnoteParser";
+import { buildBookmarkPageMap } from "../core/fields/bookmarkPages";
 import { clickToPosition } from "../core/layout-bridge/clickToPosition";
 import { clickToPositionDom } from "../core/layout-bridge/clickToPositionDom";
 import {
@@ -2626,6 +2627,15 @@ export function PagedEditor(
           }
           if (footnotesByPage?.size) {
             renderOpts.footnotesByPage = footnotesByPage;
+          }
+          // Map bookmarks to the pages they land on so PAGEREF fields resolve
+          // to live page numbers at paint.
+          const bookmarkPages = buildBookmarkPageMap(
+            newLayout.pages,
+            newBlocks,
+          );
+          if (bookmarkPages.size > 0) {
+            renderOpts.bookmarkPages = bookmarkPages;
           }
           // Document watermark (rendered behind every page). Build a
           // per-header-rId map so titlePg / even-odd / per-section

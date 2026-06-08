@@ -450,6 +450,9 @@ export type ParagraphBlock = {
   id: BlockId;
   runs: Run[];
   attrs?: ParagraphAttrs;
+  /** Names of bookmarks anchored to this paragraph; used to map a bookmark to
+   *  the page it lands on for PAGEREF/REF resolution. */
+  bookmarks?: string[];
   /** ProseMirror start position for this block. */
   pmStart?: number;
   /** ProseMirror end position for this block. */

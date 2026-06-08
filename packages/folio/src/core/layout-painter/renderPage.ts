@@ -166,6 +166,8 @@ export type FootnoteRenderItem = {
 export type RenderPageOptions = {
   /** Document to create elements in (default: window.document) */
   document?: Document;
+  /** Bookmark name -> 1-indexed page, for resolving PAGEREF fields at paint. */
+  bookmarkPages?: ReadonlyMap<string, number>;
   /** Custom page class name */
   pageClassName?: string;
   /** Show page borders (for debugging) */
@@ -2488,6 +2490,7 @@ function buildPageRenderArgs(
     pageNumber: page.number,
     totalPages,
     section: "body",
+    ...(options.bookmarkPages ? { bookmarkPages: options.bookmarkPages } : {}),
   };
   const pageOptions: RenderPageOptions = { ...options };
   const hasSectionHeaderFooter = applySectionHeaderFooterOptions(
