@@ -259,10 +259,23 @@ export type NamedCondition = {
   label?: string;
 };
 
+/**
+ * A field whose value is derived from other fields via an arithmetic
+ * expression (evaluated by `evaluateNumericExpression`) at fill time, e.g.
+ * `{ name: "rent_indexed", expression: "min(rent*(1+index/100), rent*1.05)" }`.
+ */
+export type ComputedField = {
+  name: string;
+  expression: string;
+  label?: string;
+};
+
 export type TemplateManifest = {
   version: number;
   fields: FieldMeta[];
   conditions: NamedCondition[];
+  // Optional: manifests authored before computed fields existed omit it.
+  computed?: ComputedField[];
 };
 
 const isRecordLike = (value: unknown): value is Record<string, unknown> =>
@@ -318,6 +331,12 @@ export const isFieldMeta = (value: unknown): value is FieldMeta => {
 };
 
 export const isNamedCondition = (value: unknown): value is NamedCondition =>
+  isRecordLike(value) &&
+  typeof value["name"] === "string" &&
+  typeof value["expression"] === "string" &&
+  (value["label"] === undefined || typeof value["label"] === "string");
+
+export const isComputedField = (value: unknown): value is ComputedField =>
   isRecordLike(value) &&
   typeof value["name"] === "string" &&
   typeof value["expression"] === "string" &&
@@ -385,7 +404,12 @@ export const isTemplateManifest = (value: unknown): value is TemplateManifest =>
   Array.isArray(value["fields"]) &&
   value["fields"].every(isFieldMeta) &&
   Array.isArray(value["conditions"]) &&
-  value["conditions"].every(isNamedCondition);
+  value["conditions"].every(isNamedCondition) &&
+  // `computed` is optional for backward compatibility with manifests
+  // authored before computed fields existed.
+  (value["computed"] === undefined ||
+    (Array.isArray(value["computed"]) &&
+      value["computed"].every(isComputedField)));
 
 export type ResolvedField = {
   path: string;
