@@ -6,6 +6,7 @@ import { rootDb } from "@/api/db/root";
 import { legislationDocuments } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import { toSafeId } from "@/api/lib/branded-types";
+import { isUuid } from "@/api/lib/custom-schema";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import {
   corpusIndexId,
@@ -62,8 +63,25 @@ type LegislationHit = {
 
 type RawRow = Record<string, unknown>;
 
-const toNullableString = (x: unknown): string | null =>
-  x === null ? null : JSON.stringify(x);
+const toNullableString = (x: unknown): string | null => {
+  if (x === null || x === undefined) {
+    return null;
+  }
+
+  if (typeof x === "string") {
+    return x;
+  }
+
+  if (typeof x === "number" || typeof x === "boolean") {
+    return x.toString();
+  }
+
+  if (x instanceof Date) {
+    return x.toISOString();
+  }
+
+  return JSON.stringify(x);
+};
 
 const headlineRegconfig = sql`'public.stella_unaccent'::regconfig`;
 
@@ -267,8 +285,18 @@ const quickwitSearch = async (
 };
 
 export const searchLegislationHandler = async (body: SearchLegislationBody) => {
+  // source_id and the cursor id reach Postgres as UUID comparisons in the
+  // pg-fts path; reject malformed values at the boundary so a bad filter
+  // is a 400, not a 500 from an invalid-uuid cast.
+  if (body.source !== undefined && !isUuid(body.source)) {
+    return status(400, { message: "Invalid source" });
+  }
+
   const parsedCursor = body.cursor ? decodeCursor(body.cursor) : null;
-  if (body.cursor !== undefined && parsedCursor === null) {
+  if (
+    body.cursor !== undefined &&
+    (parsedCursor === null || !isUuid(parsedCursor.id))
+  ) {
     return status(400, { message: "Invalid cursor" });
   }
 

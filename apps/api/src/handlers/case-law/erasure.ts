@@ -69,10 +69,12 @@ export const redactCaseLawDecision = async ({
   // 2. pg-fts projection.
   await removeDecisionFromIndex(decisionId, scopedDb);
 
-  // 3. Object-storage corpus payloads.
+  // 3. Object-storage corpus payloads. Delete if ANY key is present: a
+  // partially ingested decision (e.g. text written but AST not yet) must
+  // still have its personal data erased, not skipped.
   if (
-    decision.textS3Key !== null &&
-    decision.normalizedS3Key !== null &&
+    decision.textS3Key !== null ||
+    decision.normalizedS3Key !== null ||
     decision.astS3Key !== null
   ) {
     await deleteCorpusDocument({

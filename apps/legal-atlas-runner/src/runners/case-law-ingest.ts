@@ -552,9 +552,10 @@ export const runCaseLawIngest = async (
     while (true) {
       await Bun.sleep(CITATION_AUTHORITY_INTERVAL_MS);
       try {
-        const updated = await ingestionDb((tx) =>
-          recomputeCitationAuthorityForAll(tx),
-        );
+        const updated = await ingestionDb(async (tx) => {
+          const count = await recomputeCitationAuthorityForAll(tx);
+          return count;
+        });
         logInfo(`[citation-authority] Recomputed (${updated} cited decisions)`);
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);

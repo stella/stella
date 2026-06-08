@@ -8,7 +8,6 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { readCorpusText } from "@/api/handlers/case-law/corpus-storage";
-import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 import {
@@ -132,15 +131,11 @@ const buildDoc = (row: IndexableRow, text: string): Record<string, unknown> => {
 };
 
 const loadText = async (row: IndexableRow): Promise<string> => {
+  // No catch-and-fallback: a transient S3 failure must abort the batch so
+  // the daemon retries. Swallowing it would index empty text and then
+  // record indexedHash = contentHash, permanently pinning a broken entry.
   if (row.textS3Key !== null) {
-    try {
-      return await readCorpusText(row.textS3Key);
-    } catch (error) {
-      captureError(error, {
-        decisionId: row.id,
-        step: "quickwitIndex.loadText",
-      });
-    }
+    return await readCorpusText(row.textS3Key);
   }
   return row.fulltext ?? "";
 };

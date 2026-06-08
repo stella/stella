@@ -57,7 +57,10 @@ export const recomputeCitationAuthorityForAll = async (
     SET
       citation_authority = ln(1 + (
         agg.raw_sum / GREATEST(
-          extract(epoch FROM (${nowExpr} - d.decision_date)) / ${SECONDS_PER_YEAR},
+          COALESCE(
+            extract(epoch FROM (${nowExpr} - d.decision_date)) / ${SECONDS_PER_YEAR},
+            1.0
+          ),
           1.0
         )
       )),
