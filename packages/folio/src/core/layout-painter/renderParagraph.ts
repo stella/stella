@@ -1452,7 +1452,10 @@ export function renderLine(
     onlyRun &&
     isMathRun(onlyRun) &&
     onlyRun.display === "block" &&
-    alignment !== "right"
+    // Only an EXPLICIT right alignment suppresses display-math centering; a
+    // right default synthesized from RTL base direction must not (the equation
+    // still centres in an RTL paragraph). (#723)
+    block.attrs?.alignment !== "right"
   ) {
     lineEl.style.textAlign = "center";
   }
@@ -1895,6 +1898,58 @@ function bordersFormGroup(a?: ParagraphBorders, b?: ParagraphBorders): boolean {
   );
 }
 
+// Strong-RTL letters, matched by Unicode script so RTL scripts outside the BMP
+// (Adlam U+1E900) and newer blocks (Arabic Extended-B U+0870) are covered
+// without hand-rolling code-point ranges. These eight cover every RTL script in
+// real-world use (Hebrew/Arabic are ~all of it); newer scripts (Yezidi, Garay,
+// …) are omitted because the pinned oxlint/tsc Unicode database rejects their
+// names. Only used to classify the first *letter* (`\p{L}`), so the non-letter
+// members of these scripts (Arabic-Indic digits, combining marks, punctuation)
+// are never tested — they're weak/neutral and skipped upstream.
+const RTL_STRONG_LETTER =
+  /[\p{Script=Hebrew}\p{Script=Arabic}\p{Script=Syriac}\p{Script=Thaana}\p{Script=Nko}\p{Script=Samaritan}\p{Script=Mandaic}\p{Script=Adlam}]/u;
+
+/**
+ * Decide whether a paragraph without an explicit `w:bidi` flag should still be
+ * laid out right-to-left. Only paragraphs that carry at least one `w:rtl` run
+ * are candidates; among those the base direction follows the first strong
+ * directional character (the `dir="auto"` rule), so Hebrew/Arabic-led lines
+ * order RTL while an English- (or CJK-/Devanagari-/…) led line stays LTR.
+ * eigenpal #723 (#719).
+ */
+function paragraphBaseIsRtl(block: ParagraphBlock): boolean {
+  // Text runs plus field runs (a field result like a cross-reference renders as
+  // text, so it can be the paragraph's first strong character).
+  const runs = block.runs.filter((r) => isTextRun(r) || isFieldRun(r));
+  if (!runs.some((r) => r.rtl)) {
+    return false;
+  }
+  const text = runs
+    .map((r) => {
+      if (isTextRun(r)) {
+        return r.text;
+      }
+      return isFieldRun(r) ? (r.fallback ?? "") : "";
+    })
+    .join("");
+  // The first strong directional signal, in one native scan: an explicit bidi
+  // mark (RLM U+200F / ALM U+061C => RTL, LRM U+200E => LTR) or the first
+  // letter (`\p{L}`). Digits, combining marks, punctuation and spaces are
+  // weak/neutral and skipped. The first letter's script decides; nothing
+  // strong => honor w:rtl.
+  const match = /(\u200F|\u061C)|(\u200E)|(\p{L})/u.exec(text);
+  if (!match) {
+    return true;
+  }
+  if (match[1] !== undefined) {
+    return true; // RLM or ALM
+  }
+  if (match[2] !== undefined) {
+    return false; // LRM
+  }
+  return match[3] !== undefined && RTL_STRONG_LETTER.test(match[3]);
+}
+
 /**
  * Render a paragraph fragment
  *
@@ -1949,9 +2004,16 @@ export function renderParagraphFragment(
     fragmentEl.dataset["styleId"] = block.attrs.styleId;
   }
 
-  // Apply RTL direction
-  const isBidi = block.attrs?.bidi;
-  if (isBidi) {
+  // Apply RTL direction. An explicit `w:bidi` flag wins: `true` ⇒ RTL, and an
+  // explicit `w:val="0"` (parsed as `false`) ⇒ LTR even when the paragraph
+  // carries `w:rtl` runs. Only when the flag is absent do we fall back to
+  // first-strong base-direction detection: Word/UBA order the runs by the
+  // paragraph's base direction, but the painter lays them out as independently
+  // `dir`-marked spans (each an isolate), so without a base `dir` on the
+  // fragment the runs stay in logical LTR order and reversed Hebrew/Arabic
+  // reads backwards. eigenpal #723 (#719).
+  const isRtl = block.attrs?.bidi ?? paragraphBaseIsRtl(block);
+  if (isRtl) {
     fragmentEl.dir = "rtl";
   }
 
@@ -1968,12 +2030,18 @@ export function renderParagraphFragment(
     } else {
       // 'justify' uses text-align: left (or right for RTL)
       // Justify is implemented via word-spacing on individual lines
-      fragmentEl.style.textAlign = isBidi ? "right" : "left";
+      fragmentEl.style.textAlign = isRtl ? "right" : "left";
     }
-  } else if (isBidi) {
+  } else if (isRtl) {
     // No explicit alignment on RTL paragraph — default to right
     fragmentEl.style.textAlign = "right";
   }
+
+  // An RTL paragraph with no explicit alignment defaults to right; pass that
+  // through to per-line rendering so flex-promoted lines (image-only,
+  // image+text, right-tab anchors) align to the start side too, not just the
+  // fragment text-align. (#723)
+  const effectiveAlignment = alignment ?? (isRtl ? "right" : undefined);
 
   // Track indentation for line-level application
   // Indentation is applied per-line, not at fragment level
@@ -1984,7 +2052,7 @@ export function renderParagraphFragment(
   if (indent) {
     // Track indent values for line-level application
     // For RTL paragraphs, swap left/right indentation
-    if (isBidi) {
+    if (isRtl) {
       if (indent.left !== undefined) {
         indentRight = indent.left;
       }
@@ -2178,7 +2246,7 @@ export function renderParagraphFragment(
       }
     }
 
-    const lineEl = renderLine(block, line, alignment, doc, {
+    const lineEl = renderLine(block, line, effectiveAlignment, doc, {
       availableWidth: lineAvailableWidth - lineLeftOffset - lineRightOffset,
       isLastLine,
       isFirstLine,
