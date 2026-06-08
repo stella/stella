@@ -67,6 +67,48 @@ export const filesKeys = {
 
 type FileOptionsProps = QueryOptionsInput<FileByFieldIdKey>;
 
+type FetchFromStorageOptions = {
+  signal: AbortSignal;
+  purpose: NonNullable<FileByFieldIdKey["purpose"]>;
+};
+
+// Presigned URLs are fetched directly from S3 (cross-origin), so a
+// failure here can be CORS, TLS, DNS, offline, or a content blocker —
+// none of which produce an HTTP response. Wrapping the bare fetch keeps
+// the raw browser string ("NetworkError when attempting to fetch
+// resource.") out of telemetry and records which fetch + purpose failed
+// instead. Aborts are re-thrown untouched so React Query treats a
+// cancelled query as a cancellation, not a real error.
+const fetchFromStorage = async (
+  presignedUrl: string,
+  { signal, purpose }: FetchFromStorageOptions,
+) => {
+  let file: Response;
+  try {
+    file = await fetch(presignedUrl, { signal });
+  } catch (cause) {
+    if (signal.aborted) {
+      throw cause;
+    }
+    throw new APIError({
+      status: 0,
+      message: `Storage fetch failed before response (purpose=${purpose})`,
+      details: {
+        cause: cause instanceof Error ? cause.message : String(cause),
+      },
+    });
+  }
+
+  if (!file.ok) {
+    throw new APIError({
+      status: file.status,
+      message: `Failed to fetch file from storage (purpose=${purpose})`,
+    });
+  }
+
+  return file;
+};
+
 export const fileMetadataOptions = (props: FileOptionsProps) =>
   queryOptions({
     queryKey: filesKeys.metadataByFieldId(props),
@@ -108,14 +150,10 @@ export const fileOptions = (props: FileOptionsProps) =>
         throw toAPIError(response.error);
       }
 
-      const file = await fetch(response.data.presignedUrl, { signal });
-
-      if (!file.ok) {
-        throw new APIError({
-          status: file.status,
-          message: "Failed to fetch file from storage",
-        });
-      }
+      const file = await fetchFromStorage(response.data.presignedUrl, {
+        signal,
+        purpose: props.purpose ?? "display",
+      });
 
       return {
         fileId: response.data.fileId,
@@ -166,14 +204,10 @@ export const textFileOptions = (props: FileOptionsProps) =>
         throw toAPIError(response.error);
       }
 
-      const file = await fetch(response.data.presignedUrl, { signal });
-
-      if (!file.ok) {
-        throw new APIError({
-          status: file.status,
-          message: "Failed to fetch file from storage",
-        });
-      }
+      const file = await fetchFromStorage(response.data.presignedUrl, {
+        signal,
+        purpose: "download",
+      });
 
       return {
         fileId: response.data.fileId,
