@@ -207,6 +207,7 @@ const FileCell = ({
                 id: fieldId,
                 entityId,
                 label: fileName,
+                fileName,
                 workspaceId,
                 mimeType,
                 pdfFileId,

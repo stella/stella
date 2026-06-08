@@ -256,7 +256,7 @@ const VerticalTabIcon = ({
     return (
       <DocumentIcon
         className="size-3.5"
-        fileName={tab.label}
+        fileName={tab.fileName}
         mimeType={tab.mimeType}
       />
     );

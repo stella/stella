@@ -1179,6 +1179,7 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
           id: fieldId,
           entityId: entity.entityId,
           label: entity.name,
+          fileName: entity.name,
           mimeType: entity.mimeType ?? undefined,
           pdfFileId: entity.pdfFileId,
           propertyId: entity.propertyId ?? undefined,

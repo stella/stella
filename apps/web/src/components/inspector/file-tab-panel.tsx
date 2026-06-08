@@ -33,7 +33,10 @@ import {
   MetadataPanelSkeleton,
   TabFacetBar,
 } from "@/components/inspector/file-facets";
-import { getMarkdownDraftSyncDecision } from "@/components/inspector/file-tab-panel.logic";
+import {
+  getFileTabNativePreviewKind,
+  getMarkdownDraftSyncDecision,
+} from "@/components/inspector/file-tab-panel.logic";
 import { InspectorPdfErrorFallback } from "@/components/inspector/inspector-pdf-error-fallback";
 import { useInspectorStore } from "@/components/inspector/inspector-store";
 import type { FileTab } from "@/components/inspector/inspector-store";
@@ -49,13 +52,7 @@ import { VersionsFacet } from "@/components/inspector/versions-facet";
 import Tooltip from "@/components/tooltip";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import {
-  DOCX_MIME,
-  MARKDOWN_MIME,
-  isEmailFile,
-  isMarkdownFile,
-  TOOLBAR_ROW_HEIGHT,
-} from "@/lib/consts";
+import { DOCX_MIME, MARKDOWN_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { DocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
@@ -178,14 +175,12 @@ export const FileTabPanel = ({
   const setFileFacet = useInspectorStore((s) => s.setFileFacet);
   const requestDocxEdit = useInspectorStore((s) => s.requestDocxEdit);
   const isNativeDocxDisplay = tab.mimeType === DOCX_MIME;
-  const isEmailDisplay = isEmailFile({
-    fileName: tab.label,
+  const nativePreviewKind = getFileTabNativePreviewKind({
+    fileName: tab.fileName,
     mimeType: tab.mimeType,
   });
-  const isMarkdownDisplay = isMarkdownFile({
-    fileName: tab.label,
-    mimeType: tab.mimeType,
-  });
+  const isEmailDisplay = nativePreviewKind === "email";
+  const isMarkdownDisplay = nativePreviewKind === "markdown";
   const markdownTextQuery = useQuery({
     ...textFileOptions({ workspaceId: tab.workspaceId, fieldId: tab.id }),
     enabled: isMarkdownDisplay,
@@ -227,6 +222,7 @@ export const FileTabPanel = ({
     onSuccess: async (response, variables) => {
       replaceFileFieldId(variables.fieldId, {
         id: response.fieldId,
+        fileName: variables.fileName,
         label: variables.fileName,
         mimeType: MARKDOWN_MIME,
         pdfFileId: null,
@@ -328,7 +324,7 @@ export const FileTabPanel = ({
           onClick={() => {
             void downloadTabOriginalFile({
               fieldId: tab.id,
-              fileName: tab.label,
+              fileName: tab.fileName,
               workspaceId: tab.workspaceId,
               onError: (message) => {
                 stellaToast.add({ title: message, type: "error" });
@@ -587,7 +583,7 @@ export const FileTabPanel = ({
                 markdownSaveMutation.mutate({
                   entityId: tab.entityId,
                   fieldId: tab.id,
-                  fileName: tab.label,
+                  fileName: tab.fileName,
                   propertyId: tab.propertyId,
                   text: markdownDraft,
                   workspaceId: tab.workspaceId,

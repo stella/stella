@@ -185,6 +185,7 @@ const PropertyCell = ({
         <WithOpenEntityButton
           entityId={entity.entityId}
           fieldId={fileFieldId}
+          fileName={fileName}
           justificationFieldId={field.id}
           label={fileName}
           mimeType={mimeType}
@@ -240,6 +241,7 @@ type WithOpenEntityButtonProps = {
   entityId: string;
   justificationFieldId: string;
   label: string;
+  fileName: string;
   mimeType?: string | undefined;
   pdfFileId?: string | null | undefined;
   propertyId: string;
@@ -253,6 +255,7 @@ const WithOpenEntityButton = ({
   entityId,
   justificationFieldId,
   label,
+  fileName,
   mimeType,
   pdfFileId,
   propertyId,
@@ -273,6 +276,7 @@ const WithOpenEntityButton = ({
       id: fieldId,
       entityId,
       label,
+      fileName,
       mimeType,
       pdfFileId: pdfFileId ?? null,
       justificationFieldId,

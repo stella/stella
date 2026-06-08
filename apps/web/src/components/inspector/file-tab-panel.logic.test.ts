@@ -1,6 +1,26 @@
 import { describe, expect, test } from "bun:test";
 
-import { getMarkdownDraftSyncDecision } from "./file-tab-panel.logic";
+import {
+  getFileTabNativePreviewKind,
+  getMarkdownDraftSyncDecision,
+} from "./file-tab-panel.logic";
+
+describe("file tab native preview kind", () => {
+  test("uses the stored filename for extension-recovered previews", () => {
+    expect(
+      getFileTabNativePreviewKind({
+        fileName: "thread.eml",
+        mimeType: "application/octet-stream",
+      }),
+    ).toBe("email");
+    expect(
+      getFileTabNativePreviewKind({
+        fileName: "notes.md",
+        mimeType: "application/octet-stream",
+      }),
+    ).toBe("markdown");
+  });
+});
 
 describe("markdown draft sync", () => {
   test("does not replace a dirty draft on same-field refetch", () => {

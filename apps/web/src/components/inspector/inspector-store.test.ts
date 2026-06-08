@@ -282,6 +282,7 @@ describe("replaceFileFieldId", () => {
       id: "field-1",
       entityId: "entity-1",
       label: "Document 4",
+      fileName: "Document 4.pdf",
       mimeType: "application/pdf",
       pdfFileId: "pdf-1",
       propertyId: "property-1",
@@ -292,6 +293,7 @@ describe("replaceFileFieldId", () => {
       id: "field-1",
       entityId: "entity-1",
       label: "0041_Pleadings_draft.pdf",
+      fileName: "0041_Pleadings_draft.pdf",
       mimeType: "application/pdf",
       pdfFileId: "pdf-1",
       propertyId: "property-1",
@@ -313,6 +315,7 @@ describe("replaceFileFieldId", () => {
       id: "field-v1",
       entityId: "entity-1",
       label: "Contract.docx",
+      fileName: "Contract.docx",
       mimeType:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       pdfFileId: null,
@@ -324,6 +327,7 @@ describe("replaceFileFieldId", () => {
       id: "field-v2",
       entityId: "entity-1",
       label: "Contract.docx",
+      fileName: "Contract.docx",
       mimeType:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       pdfFileId: null,
@@ -344,6 +348,7 @@ describe("replaceFileFieldId", () => {
       id: "field-shared",
       entityId: "entity-A",
       label: "A.docx",
+      fileName: "A.docx",
       mimeType: "application/pdf",
       pdfFileId: null,
       propertyId: "property-A",
@@ -354,6 +359,7 @@ describe("replaceFileFieldId", () => {
       id: "field-shared",
       entityId: "entity-B",
       label: "B.docx",
+      fileName: "B.docx",
       mimeType: "application/pdf",
       pdfFileId: null,
       propertyId: "property-B",
@@ -372,6 +378,7 @@ describe("replaceFileFieldId", () => {
       id: "field-old",
       entityId: "entity-1",
       label: "Contract.docx",
+      fileName: "Contract.docx",
       mimeType:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       pdfFileId: null,
@@ -405,6 +412,7 @@ describe("replaceFileFieldId", () => {
       id: "field-old",
       entityId: "entity-1",
       label: "Contract.docx",
+      fileName: "Contract.docx",
       mimeType:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       pdfFileId: null,
@@ -414,6 +422,7 @@ describe("replaceFileFieldId", () => {
 
     useInspectorStore.getState().replaceFileFieldId("field-old", {
       id: "field-new",
+      fileName: "Contract revised.docx",
       label: "Contract revised.docx",
       mimeType: "application/pdf",
       pdfFileId: "pdf-1",
@@ -428,6 +437,7 @@ describe("replaceFileFieldId", () => {
     }
 
     expect(tab.label).toBe("Contract revised.docx");
+    expect(tab.fileName).toBe("Contract revised.docx");
     expect(tab.mimeType).toBe("application/pdf");
     expect(tab.pdfFileId).toBe("pdf-1");
     expect(tab.propertyId).toBe("property-2");
@@ -452,6 +462,7 @@ describe("Inspector tab broadcast", () => {
       id: "field-1",
       entityId: "entity-1",
       label: "Contract.docx",
+      fileName: "Contract.docx",
       mimeType:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       pdfFileId: null,

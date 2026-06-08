@@ -1,3 +1,23 @@
+import { isEmailFile, isMarkdownFile } from "@/lib/consts";
+
+export type FileTabNativePreviewKind = "email" | "markdown" | "pdf";
+
+export const getFileTabNativePreviewKind = ({
+  fileName,
+  mimeType,
+}: {
+  fileName: string;
+  mimeType?: string | undefined;
+}): FileTabNativePreviewKind => {
+  if (isEmailFile({ fileName, mimeType })) {
+    return "email";
+  }
+  if (isMarkdownFile({ fileName, mimeType })) {
+    return "markdown";
+  }
+  return "pdf";
+};
+
 export type MarkdownDraftSyncDecision =
   | {
       fieldId: string;
