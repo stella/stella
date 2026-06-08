@@ -1,5 +1,3 @@
-import type { QueryClient } from "@tanstack/react-query";
-
 import { workflowTargetCountOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 
 export type StartWorkflowArgs = {
@@ -11,6 +9,12 @@ export type StartWorkflowArgs = {
 export type WorkflowStartDecision = { type: "start" } | { type: "cancel" };
 
 export const LARGE_WORKFLOW_ENTITY_PROMPT_THRESHOLD = 50;
+
+export type WorkflowTargetCountQueryClient = {
+  fetchQuery: (
+    options: ReturnType<typeof workflowTargetCountOptions>,
+  ) => Promise<number>;
+};
 
 type ResolveWorkflowStartDecisionArgs = {
   confirmLargeRun: (input: { entityCount: number }) => Promise<boolean>;
@@ -40,7 +44,7 @@ export const resolveWorkflowStartDecision = async ({
 
 type EstimateWorkflowTargetCountArgs = {
   args: StartWorkflowArgs | undefined;
-  queryClient: QueryClient;
+  queryClient: WorkflowTargetCountQueryClient;
   workspaceId: string;
 };
 
@@ -52,7 +56,7 @@ export const estimateWorkflowTargetCount = async ({
   const entityIds = args?.entityIds === undefined ? [] : [...args.entityIds];
 
   try {
-    return await queryClient.ensureQueryData(
+    return await queryClient.fetchQuery(
       workflowTargetCountOptions({
         entityIds,
         workspaceId,

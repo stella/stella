@@ -1,4 +1,3 @@
-import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 
 import { workflowTargetCountOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
@@ -8,6 +7,23 @@ import {
   LARGE_WORKFLOW_ENTITY_PROMPT_THRESHOLD,
   resolveWorkflowStartDecision,
 } from "./use-start-workflow.logic";
+import type { WorkflowTargetCountQueryClient } from "./use-start-workflow.logic";
+
+type WorkflowTargetCountOptions = Parameters<
+  WorkflowTargetCountQueryClient["fetchQuery"]
+>[0];
+
+const createWorkflowTargetCountClient = (count: number) => {
+  const fetchQueryCalls: WorkflowTargetCountOptions[] = [];
+  const queryClient: WorkflowTargetCountQueryClient = {
+    fetchQuery: async (options) => {
+      fetchQueryCalls.push(options);
+      return count;
+    },
+  };
+
+  return { fetchQueryCalls, queryClient };
+};
 
 describe("workflow start decision", () => {
   test("starts small workflows without prompting", async () => {
@@ -60,14 +76,11 @@ describe("workflow start decision", () => {
   });
 
   test("loads the backend target count for scoped entity ids", async () => {
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
+    const { fetchQueryCalls, queryClient } = createWorkflowTargetCountClient(1);
     const options = workflowTargetCountOptions({
       entityIds: ["entity-folder", "entity-document"],
       workspaceId: "workspace-a",
     });
-    queryClient.setQueryData(options.queryKey, 1);
 
     const count = await estimateWorkflowTargetCount({
       args: { entityIds: ["entity-folder", "entity-document"] },
@@ -76,17 +89,18 @@ describe("workflow start decision", () => {
     });
 
     expect(count).toBe(1);
+    expect(fetchQueryCalls.map((call) => call.queryKey)).toEqual([
+      options.queryKey,
+    ]);
   });
 
   test("loads the full-workspace target count when scoped entity ids are empty", async () => {
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
+    const { fetchQueryCalls, queryClient } =
+      createWorkflowTargetCountClient(128);
     const options = workflowTargetCountOptions({
       entityIds: [],
       workspaceId: "workspace-a",
     });
-    queryClient.setQueryData(options.queryKey, 128);
 
     const count = await estimateWorkflowTargetCount({
       args: { entityIds: [] },
@@ -95,5 +109,8 @@ describe("workflow start decision", () => {
     });
 
     expect(count).toBe(128);
+    expect(fetchQueryCalls.map((call) => call.queryKey)).toEqual([
+      options.queryKey,
+    ]);
   });
 });
