@@ -6,6 +6,7 @@ import type {
   KrsLookupResponse,
   KrsRawAdres,
   KrsRawDzial6,
+  KrsRawKapital,
   KrsRawOdpis,
   KrsRawSiedziba,
   KrsRegisterCode,
@@ -147,6 +148,21 @@ const parseIdentifiers = (odpis: KrsRawOdpis | undefined): KrsIdentifiers => {
   };
 };
 
+// Share capital lives in dzial1.kapital.wysokoscKapitaluZakladowego as
+// a { wartosc, waluta } pair. We surface both verbatim (Polish
+// comma-decimal amount + ISO currency) and return null unless BOTH are
+// present — an amount without a known currency is not a usable figure.
+const parseShareCapital = (
+  kapital: KrsRawKapital | undefined,
+): { amount: string; currency: string } | null => {
+  const amount = trimToNull(kapital?.wysokoscKapitaluZakladowego?.wartosc);
+  const currency = trimToNull(kapital?.wysokoscKapitaluZakladowego?.waluta);
+  if (!amount || !currency) {
+    return null;
+  }
+  return { amount, currency };
+};
+
 const composeStreetLine = (
   street: string | undefined,
   houseSegment: string,
@@ -245,6 +261,7 @@ export const parseEntity = (
     name,
     legalForm: trimToNull(podmiot?.formaPrawna),
     identifiers: parseIdentifiers(odpis),
+    shareCapital: parseShareCapital(dzial1?.kapital),
     address: siedzibaIAdres?.adres ? parseAddress(siedzibaIAdres.adres) : null,
     registeredSeat: parseSeat(siedzibaIAdres?.siedziba),
     email: trimToNull(siedzibaIAdres?.adresPocztyElektronicznej),

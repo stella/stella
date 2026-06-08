@@ -319,6 +319,12 @@ describe("parseEntity (fixture-driven)", () => {
     expect(entity.legalForm).toBe("SPÓŁKA AKCYJNA");
     expect(entity.identifiers.nip).toBe("7342867148");
     expect(entity.identifiers.regon).toBe("49270733300000");
+    // Share capital surfaced verbatim from
+    // dzial1.kapital.wysokoscKapitaluZakladowego (Polish comma decimal).
+    expect(entity.shareCapital).toEqual({
+      amount: "99910510,00",
+      currency: "PLN",
+    });
     expect(entity.address?.street).toBe("JAGIELLOŃSKA 74");
     expect(entity.address?.postalCode).toBe("03-301");
     expect(entity.address?.city).toBe("WARSZAWA");
@@ -367,6 +373,7 @@ describe("parseEntity (fixture-driven)", () => {
     expect(entity.name).toBe("0000006865");
     expect(entity.legalForm).toBeNull();
     expect(entity.identifiers).toEqual({ nip: null, regon: null });
+    expect(entity.shareCapital).toBeNull();
     expect(entity.address).toBeNull();
     expect(entity.registeredSeat).toBeNull();
     // Defaults to RejP because the discriminator is absent.
