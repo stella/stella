@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, eq, ne } from "drizzle-orm";
 
-import { member, organization, user, verification } from "@/api/db/auth-schema";
+import { account, member, organization, session, user, verification } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -169,8 +169,25 @@ export const verifyAndDeleteUser = async (
         .delete(verification)
         .where(eq(verification.id, verificationRow.id));
 
-      // audit: skip — user account deletion is self-serve
-      await rootDb.delete(user).where(eq(user.id, currentUserId));
+      // To maintain referential integrity with tables having "onDelete: restrict" (e.g. templates and usage ledger)
+      // we anonymize the user profile, strip all active credentials, and clear sessions/memberships.
+      // 1. Delete credentials and active sessions
+      await rootDb.delete(account).where(eq(account.userId, currentUserId));
+      await rootDb.delete(session).where(eq(session.userId, currentUserId));
+      await rootDb.delete(member).where(eq(member.userId, currentUserId));
+
+      // 2. Clear personal data in the user table and release the original email address
+      await rootDb
+        .update(user)
+        .set({
+          name: "Deleted User",
+          email: `deleted-${currentUserId}@stella.placeholder`,
+          emailVerified: false,
+          image: null,
+          preferredName: null,
+          wordEditShortcut: null,
+        })
+        .where(eq(user.id, currentUserId));
     },
     catch: (err) =>
       err instanceof HandlerError
