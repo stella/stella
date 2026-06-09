@@ -2072,6 +2072,7 @@ type Messages = {
       "emptyClauseSlot": "Empty clause slot";
       "expressionPlaceholder": "expression";
       "fieldHelp": "When someone fills this template, they'll be asked for this value. You decide here how that question looks.";
+      "fillFormPreview": "How it appears in the fill form";
       "filledByPerson": "Person filling the form";
       "insert": "Insert";
       "loop": "Loop";
@@ -2081,6 +2082,8 @@ type Messages = {
       "noComputed": "No computed fields yet.";
       "noConditions": "No conditions yet.";
       "prepareWithAi": "Prepare with AI";
+      "renameField": "Rename field";
+      "renameFieldInvalid": "That name is invalid or already taken";
       "scopeClause": "Clause slot";
       "scopeCondition": "Condition";
       "scopeField": "Field";
@@ -2095,6 +2098,7 @@ type Messages = {
     "templateSaved": "Template saved";
     "testFill": "Test fill";
     "unmatchedPlaceholders": "Some placeholders were not filled: {list}";
+    "unsavedLeaveConfirm": "You have unsaved changes. Leave without saving?";
     "unusedValues": "Some values were not used: {list}";
     "uploadDescription": "Upload a .docx file with '{{placeholders}}' to create a template";
     "uploadDifferent": "Upload a different template";
