@@ -47,7 +47,7 @@ export type StructureError = DiscoverData["structureErrors"][number];
 const DOCX_EXTENSION_RE = /\.docx$/iu;
 const REQUIRED_MARKER = "*";
 
-const INPUT_TYPES = [
+export const INPUT_TYPES = [
   "text",
   "textarea",
   "number",
@@ -69,7 +69,7 @@ export type EditableField = {
 
 const INPUT_TYPE_SET: ReadonlySet<string> = new Set(INPUT_TYPES);
 
-const isInputType = (value: string): value is InputType =>
+export const isInputType = (value: string): value is InputType =>
   INPUT_TYPE_SET.has(value);
 
 const inferInputType = (field: ResolvedField): InputType => {
