@@ -497,105 +497,106 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       {/* Identity, status, and how the skill runs. The files below are the main
           surface; editing happens in the inspector. */}
       <div className="border-b p-4">
-        <div className="flex max-w-3xl flex-col gap-2">
-          {/* Name + description read as a title/summary, not form fields. */}
-          <div className="flex items-center gap-3">
+        {/* Name + description read as a title/summary; the status controls sit
+            in the top-right corner, the identity stays a readable width. */}
+        <div className="flex items-start gap-4">
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
             <input
               aria-label={tSkills("formName")}
-              className="text-foreground placeholder:text-muted-foreground/50 focus-visible:ring-ring/30 -ms-1.5 min-w-0 flex-1 rounded-md bg-transparent px-1.5 py-0.5 text-lg font-semibold outline-none focus-visible:ring-2"
+              className="text-foreground placeholder:text-muted-foreground/50 focus-visible:ring-ring/30 -ms-1.5 w-full max-w-3xl rounded-md bg-transparent px-1.5 py-0.5 text-lg font-semibold outline-none focus-visible:ring-2"
               onBlur={commitName}
               onChange={(event) => setName(event.target.value)}
               placeholder={tSkills("formName")}
               value={name}
             />
-            <div className="flex shrink-0 items-center gap-2">
-              {detail.data && (
-                <span className="text-muted-foreground rounded-md border px-1.5 py-0.5 text-xs">
-                  {detail.data.scope === "team"
-                    ? tSkills("scopeTeam")
-                    : tSkills("scopePrivate")}
-                </span>
-              )}
-              <Button
-                aria-label={
-                  enabled ? tSkills("disableSkill") : tSkills("enableSkill")
-                }
-                onClick={toggleEnabled}
-                size="icon-sm"
-                variant={enabled ? "secondary" : "ghost"}
-              >
-                <PowerIcon className="size-4" />
-              </Button>
-              {detail.data && !enabled && (
-                <Button
-                  disabled={patchMetadata.isPending}
-                  onClick={onPublish}
-                  size="sm"
-                >
-                  {tSkills("coaching.publish")}
-                </Button>
-              )}
-            </div>
+            <textarea
+              aria-label={tSkills("formDescription")}
+              className="text-muted-foreground placeholder:text-muted-foreground/50 focus-visible:ring-ring/30 -ms-1.5 field-sizing-content w-full max-w-3xl resize-none rounded-md bg-transparent px-1.5 py-0.5 text-sm leading-relaxed outline-none focus-visible:ring-2"
+              onBlur={commitDescription}
+              onChange={(event) => setDescription(event.target.value)}
+              placeholder={tSkills("formDescription")}
+              rows={2}
+              value={description}
+            />
           </div>
-          <textarea
-            aria-label={tSkills("formDescription")}
-            className="text-muted-foreground placeholder:text-muted-foreground/50 focus-visible:ring-ring/30 -ms-1.5 field-sizing-content w-full resize-none rounded-md bg-transparent px-1.5 py-0.5 text-sm leading-relaxed outline-none focus-visible:ring-2"
-            onBlur={commitDescription}
-            onChange={(event) => setDescription(event.target.value)}
-            placeholder={tSkills("formDescription")}
-            rows={2}
-            value={description}
-          />
-          {/* How the skill runs: an optional slash command and/or an auto-invoke
-            hint. Secondary to the identity above; either, both, or neither. */}
-          <div className="mt-1 border-t pt-3">
-            <p className="text-muted-foreground mb-2.5 text-xs font-semibold tracking-wider uppercase">
-              {tSkills("howItRuns")}
-            </p>
-            <div className="grid grid-cols-[9rem_minmax(0,1fr)] items-start gap-x-3 gap-y-2.5">
-              <label
-                className="text-muted-foreground pt-1.5 text-xs"
-                htmlFor="edit-skill-command"
+          <div className="flex shrink-0 items-center gap-2">
+            {detail.data && (
+              <span className="text-muted-foreground rounded-md border px-1.5 py-0.5 text-xs">
+                {detail.data.scope === "team"
+                  ? tSkills("scopeTeam")
+                  : tSkills("scopePrivate")}
+              </span>
+            )}
+            <Button
+              aria-label={
+                enabled ? tSkills("disableSkill") : tSkills("enableSkill")
+              }
+              onClick={toggleEnabled}
+              size="icon-sm"
+              variant={enabled ? "secondary" : "ghost"}
+            >
+              <PowerIcon className="size-4" />
+            </Button>
+            {detail.data && !enabled && (
+              <Button
+                disabled={patchMetadata.isPending}
+                onClick={onPublish}
+                size="sm"
               >
-                {t("knowledge.skills.commandLabel")}
-              </label>
-              <div className="flex flex-col gap-1">
-                <div className="flex items-stretch">
-                  <span className="bg-muted border-border flex items-center rounded-s-md border border-e-0 px-2 text-xs">
-                    /
-                  </span>
-                  <Input
-                    className={cn(
-                      "rounded-s-none",
-                      commandError && "border-destructive",
-                    )}
-                    id="edit-skill-command"
-                    onBlur={commitCommand}
-                    onChange={(event) => setCommand(event.target.value)}
-                    placeholder={t("knowledge.skills.commandPlaceholder")}
-                    value={command}
-                  />
-                </div>
-                {commandError && (
-                  <p className="text-destructive text-xs">{commandError}</p>
-                )}
+                {tSkills("coaching.publish")}
+              </Button>
+            )}
+          </div>
+        </div>
+        {/* How the skill runs: an optional slash command and/or an auto-invoke
+            hint. Full-width divider; fields stay a readable width. */}
+        <div className="mt-3 border-t pt-3">
+          <p className="text-muted-foreground mb-2.5 text-xs font-semibold tracking-wider uppercase">
+            {tSkills("howItRuns")}
+          </p>
+          <div className="grid max-w-3xl grid-cols-[9rem_minmax(0,1fr)] items-start gap-x-3 gap-y-2.5">
+            <label
+              className="text-muted-foreground pt-1.5 text-xs"
+              htmlFor="edit-skill-command"
+            >
+              {t("knowledge.skills.commandLabel")}
+            </label>
+            <div className="flex flex-col gap-1">
+              <div className="flex items-stretch">
+                <span className="bg-muted border-border flex items-center rounded-s-md border border-e-0 px-2 text-xs">
+                  /
+                </span>
+                <Input
+                  className={cn(
+                    "rounded-s-none",
+                    commandError && "border-destructive",
+                  )}
+                  id="edit-skill-command"
+                  onBlur={commitCommand}
+                  onChange={(event) => setCommand(event.target.value)}
+                  placeholder={t("knowledge.skills.commandPlaceholder")}
+                  value={command}
+                />
               </div>
-              <label
-                className="text-muted-foreground pt-1.5 text-xs"
-                htmlFor="edit-skill-auto-hint"
-              >
-                {t("knowledge.skills.autoInvokeHintLabel")}
-              </label>
-              <Textarea
-                className="min-h-12 resize-y"
-                id="edit-skill-auto-hint"
-                maxLength={2000}
-                onBlur={commitAutoInvokeHint}
-                onChange={(event) => setAutoInvokeHint(event.target.value)}
-                placeholder={t("knowledge.skills.autoInvokeHintPlaceholder")}
-                value={autoInvokeHint}
-              />
+              {commandError && (
+                <p className="text-destructive text-xs">{commandError}</p>
+              )}
             </div>
+            <label
+              className="text-muted-foreground pt-1.5 text-xs"
+              htmlFor="edit-skill-auto-hint"
+            >
+              {t("knowledge.skills.autoInvokeHintLabel")}
+            </label>
+            <Textarea
+              className="min-h-12 resize-y"
+              id="edit-skill-auto-hint"
+              maxLength={2000}
+              onBlur={commitAutoInvokeHint}
+              onChange={(event) => setAutoInvokeHint(event.target.value)}
+              placeholder={t("knowledge.skills.autoInvokeHintPlaceholder")}
+              value={autoInvokeHint}
+            />
           </div>
         </div>
       </div>
