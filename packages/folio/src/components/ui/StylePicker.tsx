@@ -175,6 +175,22 @@ export function StylePicker({
     return docStyles.toSorted((a, b) => a.priority - b.priority);
   }, [styles]);
 
+  // The collapsed trigger shows the applied style's name. `SelectValue` can only
+  // render it when a matching gallery item exists, but the gallery filter
+  // (qFormat / hidden / semiHidden) can drop the style that is actually applied
+  // — e.g. a doc whose "Normal" is semiHidden, or a table/custom style — leaving
+  // the trigger blank. Resolve a fallback name from the full styles list then.
+  const triggerLabel = React.useMemo(() => {
+    if (displayLabel !== undefined) {
+      return displayLabel;
+    }
+    const current = value || "Normal";
+    if (styleOptions.some((s) => s.styleId === current)) {
+      return undefined;
+    }
+    return styles?.find((s) => s.styleId === current)?.name || current;
+  }, [displayLabel, value, styleOptions, styles]);
+
   return (
     <Select
       value={value || "Normal"}
@@ -189,13 +205,13 @@ export function StylePicker({
           width: typeof width === "number" ? `${width}px` : width,
         }}
       >
-        {displayLabel !== undefined ? (
+        {triggerLabel !== undefined ? (
           <span
             className="data-placeholder:text-muted-foreground flex flex-1 items-center gap-2 truncate"
             data-slot="select-value"
             style={displayLabelStyle}
           >
-            {displayLabel}
+            {triggerLabel}
           </span>
         ) : (
           <SelectValue />
