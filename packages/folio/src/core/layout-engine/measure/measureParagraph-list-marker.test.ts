@@ -2,51 +2,18 @@ import { describe, expect, test } from "bun:test";
 
 import type { ParagraphBlock } from "../types";
 import {
+  fixedCharWidth,
+  withFakeTextMeasure,
+} from "./__tests__/fakeTextMeasure";
+import {
   DEFAULT_TAB_STOP_TWIPS,
   getListMarkerInlineWidth,
 } from "./listMarkerWidth";
-import { resetCanvasContext } from "./measureContainer";
 import { measureParagraph } from "./measureParagraph";
 
 const DEFAULT_TAB_STOP_PX = (DEFAULT_TAB_STOP_TWIPS / 1440) * 96;
 
-function withFakeTextMeasure(runTest: () => void): void {
-  const originalDocument = globalThis.document;
-  const fakeDocument = {
-    createElement() {
-      return {
-        getContext() {
-          return {
-            font: "",
-            measureText(text: string) {
-              return {
-                width: text.length * 10,
-                actualBoundingBoxAscent: 8,
-                actualBoundingBoxDescent: 2,
-              };
-            },
-          };
-        },
-      };
-    },
-  } as unknown as Document;
-
-  Object.defineProperty(globalThis, "document", {
-    configurable: true,
-    value: fakeDocument,
-  });
-  resetCanvasContext();
-
-  try {
-    runTest();
-  } finally {
-    resetCanvasContext();
-    Object.defineProperty(globalThis, "document", {
-      configurable: true,
-      value: originalDocument,
-    });
-  }
-}
+const fakeMeasure = { charWidth: fixedCharWidth(10) };
 
 describe("measureParagraph reserves the marker's tab-stop footprint", () => {
   // Regression for upstream #600: with the previous "+12 px gap" logic the
@@ -87,7 +54,7 @@ describe("measureParagraph reserves the marker's tab-stop footprint", () => {
       // contains; the constraint we care about is captured by checking the
       // first line did not promise more room than is actually available.)
       expect(measure.lines).toHaveLength(1);
-    });
+    }, fakeMeasure);
   });
 
   // Regression for bot review #460 (codex P1): on a hanging-indent list
@@ -123,7 +90,7 @@ describe("measureParagraph reserves the marker's tab-stop footprint", () => {
       // 19 'a's = 190 px > 180 → must wrap to ≥ 2 lines.
       const measure = measureParagraph(block, 200);
       expect(measure.lines.length).toBeGreaterThanOrEqual(2);
-    });
+    }, fakeMeasure);
   });
 
   // Regression: hanging-indent + suff=tab (the common case) — the marker
@@ -150,6 +117,6 @@ describe("measureParagraph reserves the marker's tab-stop footprint", () => {
       // 4-char body = 40 px. Should fit on one line — no over-budget wrap.
       expect(measure.lines).toHaveLength(1);
       expect(firstLine?.width).toBeGreaterThan(0);
-    });
+    }, fakeMeasure);
   });
 });

@@ -1,45 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
-import { resetCanvasContext } from "./measureContainer";
+import {
+  fixedCharWidth,
+  withFakeTextMeasure,
+} from "./__tests__/fakeTextMeasure";
 import { measureParagraph } from "./measureParagraph";
 
-function withFakeTextMeasure(runTest: () => void): void {
-  const originalDocument = globalThis.document;
-  const fakeDocument = {
-    createElement() {
-      return {
-        getContext() {
-          return {
-            font: "",
-            measureText(_text: string) {
-              return {
-                width: _text.length * 5,
-                actualBoundingBoxAscent: 8,
-                actualBoundingBoxDescent: 2,
-              };
-            },
-          };
-        },
-      };
-    },
-  } as unknown as Document;
-
-  Object.defineProperty(globalThis, "document", {
-    configurable: true,
-    value: fakeDocument,
-  });
-  resetCanvasContext();
-
-  try {
-    runTest();
-  } finally {
-    resetCanvasContext();
-    Object.defineProperty(globalThis, "document", {
-      configurable: true,
-      value: originalDocument,
-    });
-  }
-}
+const fakeMeasure = { charWidth: fixedCharWidth(5) };
 
 describe("measureParagraph skips lines past obstructing floats", () => {
   // Regression: a float consuming nearly the full content width leaves no
@@ -85,7 +52,7 @@ describe("measureParagraph skips lines past obstructing floats", () => {
       expect(firstLine?.floatSkipBefore).toBeGreaterThanOrEqual(120);
       // Total height includes the skip — containers must size correctly.
       expect(measure.totalHeight).toBeGreaterThanOrEqual(120);
-    });
+    }, fakeMeasure);
   });
 
   // Regression: two floats stacked vertically, each on a different side,
@@ -126,7 +93,7 @@ describe("measureParagraph skips lines past obstructing floats", () => {
       expect(firstLine?.floatSkipBefore).toBeGreaterThanOrEqual(160);
       expect(firstLine?.leftOffset).toBeUndefined();
       expect(firstLine?.rightOffset).toBeUndefined();
-    });
+    }, fakeMeasure);
   });
 
   // Floats with adequate room next to them must NOT trigger a skip — the
@@ -158,6 +125,6 @@ describe("measureParagraph skips lines past obstructing floats", () => {
       expect(firstLine?.floatSkipBefore).toBeUndefined();
       // Float still applies — line is offset by 200px on the left.
       expect(firstLine?.leftOffset).toBe(200);
-    });
+    }, fakeMeasure);
   });
 });

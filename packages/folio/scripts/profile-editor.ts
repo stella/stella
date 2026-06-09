@@ -10,12 +10,8 @@ import type {
   LayoutInstrumentation,
   LayoutPhase,
   LayoutRunReason,
-} from "../src/paged-editor/layoutInstrumentation";
-
-type CounterBucket = {
-  count: number;
-  totalMs: number;
-};
+} from "../src/core/layout-engine/layoutInstrumentation";
+import type { CounterBucket } from "../tests/support/layoutMeasurement";
 
 type PerfStats = {
   pages: number;
@@ -78,17 +74,6 @@ declare global {
   var __folioPerfCounters: PerfStats | undefined;
   var __resetFolioPerfCounters: (() => void) | undefined;
   var __folioLayoutInstrumentation: LayoutInstrumentation | undefined;
-  var __folioLayoutMeasurementStats:
-    | {
-        layoutCompletions: number;
-        layoutErrors: { message: string; reason: LayoutRunReason }[];
-        layoutPhases: Record<LayoutPhase, CounterBucket>;
-        layoutReasons: Record<LayoutRunReason, number>;
-        hiddenStateCreations: Record<HiddenEditorStateReason, number>;
-        hiddenEditorPhases: Record<HiddenEditorPhase, CounterBucket>;
-        measureBlockCalls: number;
-      }
-    | undefined;
 }
 
 async function main() {

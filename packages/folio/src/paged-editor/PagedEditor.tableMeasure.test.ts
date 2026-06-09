@@ -1,7 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
-import { clearAllCaches } from "../core/layout-engine/measure/cache";
-import { resetCanvasContext } from "../core/layout-engine/measure/measureContainer";
+import {
+  fixedCharWidth,
+  withFakeTextMeasure,
+} from "../core/layout-engine/measure/__tests__/fakeTextMeasure";
+import {
+  measureBlocks,
+  measureTableBlock,
+  measureTableCellBlockVisualHeight,
+} from "../core/layout-engine/measure/measureBlocks";
 import type {
   FlowBlock,
   ImageBlock,
@@ -11,51 +18,8 @@ import type {
   TableBlock,
   TextBoxBlock,
 } from "../core/layout-engine/types";
-import {
-  measureBlocks,
-  measureTableBlock,
-  measureTableCellBlockVisualHeight,
-} from "./PagedEditor";
 
-function withFakeTextMeasure(runTest: () => void): void {
-  const originalDocument = globalThis.document;
-  const fakeDocument = {
-    createElement() {
-      return {
-        getContext() {
-          return {
-            font: "",
-            measureText(text: string) {
-              return {
-                width: text.length * 5,
-                actualBoundingBoxAscent: 8,
-                actualBoundingBoxDescent: 2,
-              };
-            },
-          };
-        },
-      };
-    },
-  } as unknown as Document;
-
-  Object.defineProperty(globalThis, "document", {
-    configurable: true,
-    value: fakeDocument,
-  });
-  clearAllCaches();
-  resetCanvasContext();
-
-  try {
-    runTest();
-  } finally {
-    resetCanvasContext();
-    clearAllCaches();
-    Object.defineProperty(globalThis, "document", {
-      configurable: true,
-      value: originalDocument,
-    });
-  }
-}
+const fakeMeasure = { charWidth: fixedCharWidth(5) };
 
 const imageOnlyParagraph: ParagraphBlock = {
   kind: "paragraph",
@@ -272,7 +236,7 @@ describe("measureBlocks floating text-box bands", () => {
       const skip = afterMeasure.lines.at(0)?.floatSkipBefore ?? 0;
       expect(skip).toBeGreaterThan(0);
       expect(skip + beforeMeasure.totalHeight).toBeCloseTo(120, 5);
-    });
+    }, fakeMeasure);
   });
 
   test("a tall block before the anchor leaves no band skip (no blank gap)", () => {
@@ -311,7 +275,7 @@ describe("measureBlocks floating text-box bands", () => {
       }
       expect(beforeMeasure.totalHeight).toBeGreaterThan(60);
       expect(afterMeasure.lines.at(0)?.floatSkipBefore ?? 0).toBe(0);
-    });
+    }, fakeMeasure);
   });
 
   test("reserves measured height for auto-height bands", () => {
@@ -353,7 +317,7 @@ describe("measureBlocks floating text-box bands", () => {
       expect(afterMeasure.lines.at(0)?.floatSkipBefore).toBeGreaterThanOrEqual(
         bandMeasure.height,
       );
-    });
+    }, fakeMeasure);
   });
 
   test("uses the current section top margin for page-pinned bands", () => {
@@ -403,7 +367,7 @@ describe("measureBlocks floating text-box bands", () => {
       const skip = afterMeasure.lines.at(0)?.floatSkipBefore ?? 0;
       expect(skip).toBeGreaterThan(0);
       expect(skip + beforeMeasure.totalHeight).toBeCloseTo(56, 5);
-    });
+    }, fakeMeasure);
   });
 
   test("two bands sharing a topY each anchor to their own text box", () => {
@@ -456,7 +420,7 @@ describe("measureBlocks floating text-box bands", () => {
       expect(midMeasure.lines.at(0)?.floatSkipBefore).toBeCloseTo(60, 5);
       // The second band still reserves space at its own anchor.
       expect(afterMeasure.lines.at(0)?.floatSkipBefore ?? 0).toBeGreaterThan(0);
-    });
+    }, fakeMeasure);
   });
 
   test("a hard page break before the band restarts the page frame", () => {
@@ -500,7 +464,7 @@ describe("measureBlocks floating text-box bands", () => {
       expect(beforeMeasure.totalHeight).toBeGreaterThan(60);
       // Full band reserved from the fresh page top despite the tall prior page.
       expect(afterMeasure.lines.at(0)?.floatSkipBefore ?? 0).toBeCloseTo(60, 5);
-    });
+    }, fakeMeasure);
   });
 
   test("a next-page section break before the band restarts the page frame", () => {
@@ -540,7 +504,7 @@ describe("measureBlocks floating text-box bands", () => {
         throw new Error("Expected paragraph measure after the band");
       }
       expect(afterMeasure.lines.at(0)?.floatSkipBefore ?? 0).toBeCloseTo(60, 5);
-    });
+    }, fakeMeasure);
   });
 
   test("a continuous section break does not restart the page frame", () => {
@@ -588,7 +552,7 @@ describe("measureBlocks floating text-box bands", () => {
       }
       expect(beforeMeasure.totalHeight).toBeGreaterThan(60);
       expect(afterMeasure.lines.at(0)?.floatSkipBefore ?? 0).toBe(0);
-    });
+    }, fakeMeasure);
   });
 
   test("a hard break after a band clears it for the next page", () => {
@@ -620,7 +584,7 @@ describe("measureBlocks floating text-box bands", () => {
         throw new Error("Expected paragraph measure after the break");
       }
       expect(afterMeasure.lines.at(0)?.floatSkipBefore ?? 0).toBe(0);
-    });
+    }, fakeMeasure);
   });
 
   test("a band after a float anchor reserves from the page cursor, not the float frame", () => {
@@ -684,7 +648,7 @@ describe("measureBlocks floating text-box bands", () => {
       // above the cursor and `after` is not pushed down.
       expect(beforeMeasure.totalHeight).toBeGreaterThan(60);
       expect(afterMeasure.lines.at(0)?.floatSkipBefore ?? 0).toBe(0);
-    });
+    }, fakeMeasure);
   });
 
   test("reserves a leading skip for a table or image following a band", () => {
@@ -744,7 +708,7 @@ describe("measureBlocks floating text-box bands", () => {
       if (imageMeasure?.kind === "image") {
         expect(imageMeasure.bandSkipBefore).toBeCloseTo(60, 5);
       }
-    });
+    }, fakeMeasure);
   });
 });
 
@@ -825,7 +789,7 @@ describe("measureTableBlock", () => {
           throw new Error("Expected paragraph measure");
         }
         expect(blockMeasure.lines.length).toBeGreaterThan(1);
-      });
+      }, fakeMeasure);
     });
 
     test("collapses noWrap cells to a single MeasuredLine even in a narrow column", () => {
@@ -857,7 +821,7 @@ describe("measureTableBlock", () => {
           throw new Error("Expected paragraph measure");
         }
         expect(blockMeasure.lines.length).toBe(1);
-      });
+      }, fakeMeasure);
     });
   });
 });

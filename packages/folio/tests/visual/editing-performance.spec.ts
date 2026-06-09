@@ -1,11 +1,16 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
-import type { Layout } from "../../src/core/layout-engine/types";
+import type { DocxEditorRef } from "../../src/components/DocxEditor.props";
 import type {
-  HiddenEditorStateReason,
+  HiddenEditorPhase,
   LayoutInstrumentation,
-} from "../../src/paged-editor/layoutInstrumentation";
+  LayoutPhase,
+} from "../../src/core/layout-engine/layoutInstrumentation";
+import type {
+  CounterBucket,
+  LayoutMeasurementStats,
+} from "../support/layoutMeasurement";
 
 const PARAGRAPH_COUNT = 1500;
 const TYPING_TEXT = "abc";
@@ -16,26 +21,18 @@ const BURST_LAYOUT_COMPLETION_BUDGET = 2;
 const BURST_MEASURE_BLOCK_BUDGET = 50;
 const IDLE_MEASURE_BLOCK_BUDGET = 50;
 
-type LayoutMeasurementStats = {
-  hiddenStateCreations: Record<HiddenEditorStateReason, number>;
-  hiddenStateReasons: string[];
-  layoutCompletions: number;
-  layoutReasons: string[];
-  measureBlockCalls: number;
-};
-
 type LayoutSnapshot = {
   pages: {
     fragments: {
-      fromLine?: number;
-      fromRow?: number;
-      height?: number;
+      fromLine?: number | undefined;
+      fromRow?: number | undefined;
+      height?: number | undefined;
       kind: string;
-      pmEnd?: number;
-      pmStart?: number;
-      toLine?: number;
-      toRow?: number;
-      width?: number;
+      pmEnd?: number | undefined;
+      pmStart?: number | undefined;
+      toLine?: number | undefined;
+      toRow?: number | undefined;
+      width?: number | undefined;
       x: number;
       y: number;
     }[];
@@ -46,16 +43,11 @@ type LayoutSnapshot = {
 declare global {
   var __folioPlayground:
     | {
-        getEditorRef: () => {
-          getEditorRef: () => {
-            getLayout: () => Layout | null;
-            relayout: () => void;
-          } | null;
-        } | null;
+        getEditorRef: () => DocxEditorRef | null;
       }
     | undefined;
   var __folioLayoutInstrumentation: LayoutInstrumentation | undefined;
-  var __folioLayoutMeasurementStats: LayoutMeasurementStats | undefined;
+  var __resetFolioLayoutMeasurementStats: (() => void) | undefined;
 }
 
 test("typing in a large document does not remeasure every block during the burst", async ({
@@ -82,7 +74,6 @@ test("typing in a large document does not remeasure every block during the burst
   );
   console.info("folio initial layout diagnostic", {
     hiddenStateCreations: initialStats?.hiddenStateCreations,
-    hiddenStateReasons: initialStats?.hiddenStateReasons,
     initialMeasureBlockCalls: initialStats?.measureBlockCalls,
     initialReasons: initialStats?.layoutReasons,
     paragraphCount: PARAGRAPH_COUNT,
@@ -93,14 +84,7 @@ test("typing in a large document does not remeasure every block during the burst
   expect(totalHiddenStateCreations(initialStats)).toBe(1);
 
   await page.evaluate(() => {
-    const stats = globalThis.__folioLayoutMeasurementStats;
-    if (stats) {
-      stats.hiddenStateCreations = { "external-document": 0, mount: 0 };
-      stats.hiddenStateReasons = [];
-      stats.layoutCompletions = 0;
-      stats.layoutReasons = [];
-      stats.measureBlockCalls = 0;
-    }
+    globalThis.__resetFolioLayoutMeasurementStats?.();
   });
 
   const startedAt = performance.now();
@@ -139,7 +123,6 @@ test("typing in a large document does not remeasure every block during the burst
     downstreamPmShift: downstreamPmStartAfter - downstreamPmStartBefore,
     elapsedMs: Number(elapsedMs.toFixed(3)),
     hiddenStateCreations: initialStats?.hiddenStateCreations,
-    hiddenStateReasons: initialStats?.hiddenStateReasons,
     initialMeasureBlockCalls: initialStats?.measureBlockCalls,
     initialReasons: initialStats?.layoutReasons,
     layoutCompletions: stats?.layoutCompletions,
@@ -179,8 +162,6 @@ test("fixture initial load does not perform duplicate font-ready relayout", asyn
   const stats = await page.evaluate(
     () => globalThis.__folioLayoutMeasurementStats,
   );
-  const fontReadyLayouts =
-    stats?.layoutReasons.filter((reason) => reason === "font-ready") ?? [];
   console.info("folio fixture initial layout diagnostic", {
     layoutCompletions: stats?.layoutCompletions,
     layoutReasons: stats?.layoutReasons,
@@ -188,7 +169,7 @@ test("fixture initial load does not perform duplicate font-ready relayout", asyn
   });
 
   expect(stats?.layoutCompletions).toBe(1);
-  expect(fontReadyLayouts).toHaveLength(0);
+  expect(stats?.layoutReasons["font-ready"] ?? 0).toBe(0);
   expect(stats?.measureBlockCalls).toBeLessThanOrEqual(
     DEMO_INITIAL_MEASURE_BLOCK_BUDGET,
   );
@@ -210,14 +191,7 @@ test("incremental layout after editing stays stable and matches a fresh full rel
   await page.waitForTimeout(250);
 
   await page.evaluate(() => {
-    const stats = globalThis.__folioLayoutMeasurementStats;
-    if (stats) {
-      stats.hiddenStateCreations = { "external-document": 0, mount: 0 };
-      stats.hiddenStateReasons = [];
-      stats.layoutCompletions = 0;
-      stats.layoutReasons = [];
-      stats.measureBlockCalls = 0;
-    }
+    globalThis.__resetFolioLayoutMeasurementStats?.();
   });
 
   await page
@@ -281,26 +255,56 @@ test("virtualized long documents render later pages on scroll", async ({
 
 async function installLayoutMeasurement(browserPage: Page): Promise<void> {
   await browserPage.addInitScript(() => {
-    globalThis.__folioLayoutMeasurementStats = {
+    const makeLayoutPhaseCounters = (): Record<LayoutPhase, CounterBucket> => ({
+      "flow-blocks": { count: 0, totalMs: 0 },
+      "header-footer": { count: 0, totalMs: 0 },
+      "initial-fonts": { count: 0, totalMs: 0 },
+      "layout-document": { count: 0, totalMs: 0 },
+      "measure-blocks": { count: 0, totalMs: 0 },
+      "render-pages": { count: 0, totalMs: 0 },
+    });
+    const makeHiddenEditorPhaseCounters = (): Record<
+      HiddenEditorPhase,
+      CounterBucket
+    > => ({
+      "editor-state": { count: 0, totalMs: 0 },
+      "editor-view": { count: 0, totalMs: 0 },
+      "to-prose-doc": { count: 0, totalMs: 0 },
+      "update-state": { count: 0, totalMs: 0 },
+    });
+
+    const makeStats = (): LayoutMeasurementStats => ({
+      hiddenEditorPhases: makeHiddenEditorPhaseCounters(),
       hiddenStateCreations: { "external-document": 0, mount: 0 },
-      hiddenStateReasons: [],
       layoutCompletions: 0,
-      layoutReasons: [],
+      layoutErrors: [],
+      layoutPhases: makeLayoutPhaseCounters(),
+      layoutReasons: {
+        "font-ready": 0,
+        initial: 0,
+        "layout-input": 0,
+        manual: 0,
+        transaction: 0,
+      },
       measureBlockCalls: 0,
+    });
+
+    globalThis.__folioLayoutMeasurementStats = makeStats();
+    globalThis.__resetFolioLayoutMeasurementStats = () => {
+      globalThis.__folioLayoutMeasurementStats = makeStats();
     };
     globalThis.__folioLayoutInstrumentation = {
       onHiddenEditorStateCreate(event) {
         const stats = globalThis.__folioLayoutMeasurementStats;
         if (stats) {
           stats.hiddenStateCreations[event.reason] += 1;
-          stats.hiddenStateReasons.push(event.reason);
         }
       },
       onLayoutComplete(event) {
         const stats = globalThis.__folioLayoutMeasurementStats;
         if (stats) {
           stats.layoutCompletions += 1;
-          stats.layoutReasons.push(event.reason);
+          stats.layoutReasons[event.reason] += 1;
         }
       },
       onMeasureBlock() {
