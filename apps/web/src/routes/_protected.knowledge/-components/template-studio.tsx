@@ -55,7 +55,7 @@ import { api } from "@/lib/api";
 import { DOCX_MIME, SIDE_RAIL_TAB_ICON_SIZE_PX } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
-import { AiSuggestFields } from "@/routes/_protected.knowledge/-components/template-ai-fields";
+import { TemplateStudioAIBar } from "@/routes/_protected.knowledge/-components/template-ai-bar";
 import { TemplateClausesTab } from "@/routes/_protected.knowledge/-components/template-clauses-tab";
 import { TemplateForm } from "@/routes/_protected.knowledge/-components/template-form";
 import { useTemplateNavStore } from "@/routes/_protected.knowledge/-components/template-nav-store";
@@ -138,6 +138,19 @@ export const TemplateStudioPage = ({
   const [hasSelection, setHasSelection] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showDirectives, setShowDirectives] = useState(true);
+  // Reactive twin of editorViewRef for children that re-render on view
+  // creation (the floating AI bar needs a live prop, not a ref).
+  const [liveEditorView, setLiveEditorView] = useState<EditorView | null>(null);
+  // useFitToWidth's containerRef is a callback ref, so capture the node in
+  // state too — the AI bar wants the element itself.
+  const [containerNode, setContainerNode] = useState<HTMLElement | null>(null);
+  const attachContainer = useCallback(
+    (node: HTMLElement | null) => {
+      setContainerNode(node);
+      return containerRef(node);
+    },
+    [containerRef],
+  );
 
   const {
     data: loadedBuffer,
@@ -420,7 +433,6 @@ export const TemplateStudioPage = ({
           <BracesIcon />
           {t("templates.studio.makeField")}
         </Button>
-        <AiSuggestFields getView={() => editorViewRef.current} />
         <Button
           disabled={!isDirty || isSaving}
           onClick={() => void handleSave()}
@@ -431,33 +443,41 @@ export const TemplateStudioPage = ({
         </Button>
       </div>
 
-      <div
-        className="min-h-0 flex-1 [scrollbar-gutter:stable] overflow-auto"
-        ref={containerRef}
-      >
-        <Suspense fallback={null}>
-          <DocxEditor
-            ref={editorRef}
-            autoOpenReviewSidebar={false}
-            className="h-full"
-            documentBuffer={docBuffer}
-            initialZoom={fitZoom}
-            loadingIndicator={null}
-            onChange={markDirty}
-            onEditorViewReady={(view) => {
-              // Folio re-reports null on some re-renders; keep the last live
-              // view so selection syncing doesn't lose its reference.
-              if (view) {
-                editorViewRef.current = view;
-              }
-            }}
-            onSelectionChange={(state) => {
-              setHasSelection(state?.hasSelection ?? false);
-              syncSelection();
-            }}
-            showTemplateDirectives={showDirectives}
-          />
-        </Suspense>
+      {/* `relative` so the floating AI bar + stepper anchor over the doc. */}
+      <div className="relative min-h-0 flex-1">
+        <div
+          className="h-full [scrollbar-gutter:stable] overflow-auto"
+          ref={attachContainer}
+        >
+          <Suspense fallback={null}>
+            <DocxEditor
+              ref={editorRef}
+              autoOpenReviewSidebar={false}
+              className="h-full"
+              documentBuffer={docBuffer}
+              initialZoom={fitZoom}
+              loadingIndicator={null}
+              onChange={markDirty}
+              onEditorViewReady={(view) => {
+                // Folio re-reports null on some re-renders; keep the last live
+                // view so selection syncing doesn't lose its reference.
+                if (view) {
+                  editorViewRef.current = view;
+                  setLiveEditorView(view);
+                }
+              }}
+              onSelectionChange={(state) => {
+                setHasSelection(state?.hasSelection ?? false);
+                syncSelection();
+              }}
+              showTemplateDirectives={showDirectives}
+            />
+          </Suspense>
+        </div>
+        <TemplateStudioAIBar
+          containerEl={containerNode}
+          editorView={liveEditorView}
+        />
       </div>
     </div>
   );
