@@ -910,6 +910,8 @@ export function measureBlocks(
         lines: [],
         totalHeight: 20,
       };
+      cumulativeY += fallback.totalHeight;
+      pageRelativeY += fallback.totalHeight;
       return fallback;
     }
   });

@@ -5,6 +5,7 @@ import type {
   ImageBlock,
   ParagraphBlock,
   TableBlock,
+  TextBoxBlock,
 } from "../types";
 import {
   fixedCharWidth,
@@ -195,5 +196,47 @@ describe("measureBlocks error instrumentation", () => {
     expect(events).toEqual([
       { blockIndex: 0, blockKind: "paragraph", message: "measure boom" },
     ]);
+  });
+
+  test("advances page cursors after returning the fallback measure", () => {
+    withFakeTextMeasure(
+      () => {
+        const failing = para("failing", "will throw!");
+        const band: TextBoxBlock = {
+          kind: "textBox",
+          id: "band",
+          width: 300,
+          height: 60,
+          content: [],
+          wrapType: "topAndBottom",
+          position: { vertical: { relativeTo: "margin", posOffset: 0 } },
+        };
+        const after = para("after", "after");
+
+        const measures = measureBlocks([failing, band, after], 600, 96);
+        const fallback = measures.at(0);
+        const afterMeasure = measures.at(2);
+
+        expect(fallback?.kind).toBe("paragraph");
+        expect(afterMeasure?.kind).toBe("paragraph");
+        if (fallback?.kind !== "paragraph") {
+          throw new Error("Expected fallback paragraph measure");
+        }
+        if (afterMeasure?.kind !== "paragraph") {
+          throw new Error("Expected paragraph after band");
+        }
+
+        expect(fallback.totalHeight).toBe(20);
+        expect(afterMeasure.lines.at(0)?.floatSkipBefore).toBeCloseTo(40, 5);
+      },
+      {
+        charWidth: (char) => {
+          if (char === "!") {
+            throw new Error("measure boom");
+          }
+          return 5;
+        },
+      },
+    );
   });
 });
