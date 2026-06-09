@@ -28,17 +28,23 @@ const context = {
 
 // --------------- Schema ---------------
 
-export const bboxSchema = v.pipe(
-  v.array(
-    v.pipe(
-      v.tuple([v.number(), v.number(), v.number(), v.number()]),
-      v.description(context.bBoxItem.description),
-      v.examples(context.bBoxItem.examples),
-    ),
-  ),
-  v.nonEmpty(),
-  v.description(context.bBoxArray.description),
+// Element schema for `Output.array`: the SDK wraps the elements in an
+// object root, which OpenAI's strict response format requires (a
+// top-level array schema is rejected). Emptiness is checked by the
+// caller; `Output.array` carries no array-level constraints.
+//
+// A length-4 array, not `v.tuple`: tuples convert to the array form
+// of `items`, which OpenAI strict mode rejects; `v.length(4)`
+// converts to `minItems`/`maxItems`, which it accepts. The caller
+// narrows validated elements back to the 4-tuple.
+export const bboxItemSchema = v.pipe(
+  v.array(v.number()),
+  v.length(4),
+  v.description(context.bBoxItem.description),
+  v.examples(context.bBoxItem.examples),
 );
+
+export const BBOX_ARRAY_DESCRIPTION = context.bBoxArray.description;
 
 // --------------- User message templates ---------------
 

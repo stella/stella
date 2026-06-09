@@ -1,17 +1,33 @@
 import { generateText, Output } from "ai";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { getModelForRole } from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { strictOutputSchema } from "@/api/lib/ai-output-schema";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import {
+  BBOX_ARRAY_DESCRIPTION,
   BBOX_SYSTEM_PROMPT,
-  bboxSchema,
+  bboxItemSchema,
   buildBBoxUserMessage,
 } from "@/api/lib/bbox/ai-prompts";
 import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+
+// `bboxItemSchema` already validated `v.length(4)`; this only narrows
+// the static type from `number[]` to the 4-tuple without a cast.
+const toBBoxTuple = (item: number[]): [number, number, number, number] => {
+  const [yMin, xMin, yMax, xMax] = item;
+  if (
+    yMin === undefined ||
+    xMin === undefined ||
+    yMax === undefined ||
+    xMax === undefined
+  ) {
+    panic("BBox element passed length validation but has missing values");
+  }
+  return [yMin, xMin, yMax, xMax];
+};
 
 type GenerateBBoxDataProps = {
   pdfData: Uint8Array;
@@ -56,7 +72,7 @@ export const generateBBoxData = async ({
     traceId: Bun.randomUUIDv7(),
   });
 
-  return await Result.tryPromise({
+  const generated = await Result.tryPromise({
     try: async () => {
       const result = await generateText({
         model: getModelForRole("pdf", orgAIConfig, {
@@ -86,7 +102,10 @@ export const generateBBoxData = async ({
             ],
           },
         ],
-        output: Output.object({ schema: strictOutputSchema(bboxSchema) }),
+        output: Output.array({
+          element: strictOutputSchema(bboxItemSchema),
+          description: BBOX_ARRAY_DESCRIPTION,
+        }),
         abortSignal,
         ...aiAnalytics.stepCallbacks,
       });
@@ -102,4 +121,19 @@ export const generateBBoxData = async ({
       });
     },
   });
+
+  if (Result.isError(generated)) {
+    return Result.err(generated.error);
+  }
+  // Previously enforced by `v.nonEmpty()` on the array schema;
+  // `Output.array` validates per element, so the emptiness invariant
+  // moves here.
+  if (generated.value.length === 0) {
+    const error = new WorkflowIntegrationError({
+      message: "BBox AI generation returned no bounding boxes",
+    });
+    aiAnalytics.captureError(error);
+    return Result.err(error);
+  }
+  return Result.ok(generated.value.map(toBBoxTuple));
 };
