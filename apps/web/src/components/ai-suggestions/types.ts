@@ -105,6 +105,13 @@ export type FileAIChatConfig = {
   defaultMode?: AIChatMode;
   /** Default apply mode (direct edit vs Word tracked changes). */
   defaultApplyMode?: AISuggestionApplyMode;
+  /**
+   * Whether the one-time "apply with tracked changes?" prompt gates the
+   * first accept. Defaults to true. Surfaces where only one mode makes
+   * sense (the Template Studio applies markers as plain text) set false
+   * and pin the mode via `defaultApplyMode`.
+   */
+  promptForApplyMode?: boolean;
   /** Author label shown for tracked-change applies. */
   applyAuthor?: string;
   /**
@@ -114,6 +121,13 @@ export type FileAIChatConfig = {
    * accepts are applied.
    */
   onUnlockRequest?: () => void;
+  /**
+   * Called once per suggestion after it was successfully applied to the
+   * document (single accept, group accept, or the unlock flush). Lets the
+   * mounting surface react to the edit — e.g. the Template Studio registers
+   * the accepted field in its session.
+   */
+  onSuggestionApplied?: (suggestion: AISuggestion) => void;
 };
 
 export type FileAIChatStatus = AIBarStatus;
