@@ -45,6 +45,7 @@ import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { Separator } from "@stll/ui/components/separator";
 import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 import "@stll/folio/editor.css";
 
 import { FacetBar } from "@/components/inspector/inspector-facet-bar";
@@ -56,7 +57,11 @@ import type {
 } from "@/components/inspector/view-registry";
 import { registerInspectorView } from "@/components/inspector/view-registry";
 import { api } from "@/lib/api";
-import { DOCX_MIME, SIDE_RAIL_TAB_ICON_SIZE_PX } from "@/lib/consts";
+import {
+  DOCX_MIME,
+  SIDE_RAIL_TAB_ICON_SIZE_PX,
+  TOOLBAR_ROW_HEIGHT,
+} from "@/lib/consts";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { TemplateStudioAIBar } from "@/routes/_protected.knowledge/-components/template-ai-bar";
@@ -759,7 +764,12 @@ const StudioActionRow = () => {
     return null;
   }
   return (
-    <div className="flex items-center gap-1 border-b px-2 py-1.5">
+    <div
+      className={cn(
+        "flex shrink-0 items-center gap-1 border-b px-3",
+        TOOLBAR_ROW_HEIGHT,
+      )}
+    >
       <span className="text-muted-foreground min-w-0 flex-1 truncate text-xs">
         {ui.metaLabel}
       </span>
