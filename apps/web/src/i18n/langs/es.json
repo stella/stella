@@ -2056,6 +2056,8 @@
       "computed": "Calculado",
       "conditionBlockHelp": "Este bloque solo se muestra cuando:",
       "expressionPlaceholder": "expresión",
+      "insert": "Insertar",
+      "loop": "Bucle",
       "makeField": "Crear campo",
       "namePlaceholder": "nombre",
       "namedConditionsHelp": "Las condiciones con nombre se gestionan en la configuración de la plantilla (haz clic en un espacio vacío del documento).",

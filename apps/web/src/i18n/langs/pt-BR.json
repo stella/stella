@@ -2056,6 +2056,8 @@
       "computed": "Calculado",
       "conditionBlockHelp": "Este bloco aparece apenas quando:",
       "expressionPlaceholder": "expressão",
+      "insert": "Inserir",
+      "loop": "Laço",
       "makeField": "Criar campo",
       "namePlaceholder": "nome",
       "namedConditionsHelp": "As condições nomeadas são gerenciadas nas configurações do modelo (clique em um espaço vazio no documento).",

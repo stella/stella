@@ -2056,6 +2056,8 @@
       "computed": "Számított",
       "conditionBlockHelp": "Ez a blokk csak akkor jelenik meg, ha:",
       "expressionPlaceholder": "kifejezés",
+      "insert": "Beszúrás",
+      "loop": "Ciklus",
       "makeField": "Mező létrehozása",
       "namePlaceholder": "név",
       "namedConditionsHelp": "A megnevezett feltételeket a sablonbeállításokban kezelheti (kattintson egy üres helyre a dokumentumban).",

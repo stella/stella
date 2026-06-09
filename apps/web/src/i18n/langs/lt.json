@@ -2056,6 +2056,8 @@
       "computed": "Apskaičiuota",
       "conditionBlockHelp": "Šis blokas rodomas tik kai:",
       "expressionPlaceholder": "išraiška",
+      "insert": "Įterpti",
+      "loop": "Ciklas",
       "makeField": "Sukurti lauką",
       "namePlaceholder": "pavadinimas",
       "namedConditionsHelp": "Pavadintos sąlygos tvarkomos šablono nustatymuose (spustelėkite tuščią vietą dokumente).",

@@ -13,11 +13,14 @@ import { getRouteApi } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
   BracesIcon,
+  ChevronDownIcon,
   EyeIcon,
   EyeOffIcon,
   PlayIcon,
   PlusIcon,
+  RepeatIcon,
   SaveIcon,
+  SplitIcon,
   Trash2Icon,
   WandSparklesIcon,
 } from "lucide-react";
@@ -30,19 +33,40 @@ import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import { Input } from "@stll/ui/components/input";
 import { Label } from "@stll/ui/components/label";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+} from "@stll/ui/components/menu";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { Separator } from "@stll/ui/components/separator";
-import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/components/tabs";
 import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 import "@stll/folio/editor.css";
 
+import { FacetBar } from "@/components/inspector/inspector-facet-bar";
+import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
+import type {
+  InspectorRailIconProps,
+  InspectorViewRenderProps,
+} from "@/components/inspector/view-registry";
+import { registerInspectorView } from "@/components/inspector/view-registry";
 import { api } from "@/lib/api";
-import { DOCX_MIME } from "@/lib/consts";
+import { DOCX_MIME, SIDE_RAIL_TAB_ICON_SIZE_PX } from "@/lib/consts";
 import { toSafeId } from "@/lib/safe-id";
+import { TemplateClausesTab } from "@/routes/_protected.knowledge/-components/template-clauses-tab";
 import {
-  FieldConfigEditor,
+  defaultStudioField,
+  type NameExpr,
+  type StudioField,
+  useTemplateStudioStore,
+} from "@/routes/_protected.knowledge/-components/template-studio-store";
+import { TemplateVersionsTab } from "@/routes/_protected.knowledge/-components/template-versions-tab";
+import {
   type EditableField,
+  FieldConfigEditor,
 } from "@/routes/_protected.knowledge/-components/template-wizard";
 import {
   knowledgeKeys,
@@ -56,39 +80,45 @@ const DocxEditor = lazy(async () => {
 
 const protectedRouteApi = getRouteApi("/_protected");
 
+const TEMPLATE_STUDIO_VIEW = "template-studio";
+const TEMPLATES_ROUTE_ID = "/_protected/knowledge/templates";
+const templateStudioTabId = (templateId: string) =>
+  `template-studio:${templateId}`;
+
+type TemplateStudioPayload = { templateId: string };
+
 /**
- * Template Studio: the single authoring surface for a template. The document
- * (Folio) is primary on the left; a selection-scoped Inspector on the right
- * shows whole-template settings when nothing is selected, a field's settings
- * when a `{{field}}` marker is selected, and a condition when a `{{#if}}` block
- * is selected. Field metadata lives in the manifest; on save the edited
- * manifest is re-embedded (/manifest) and the bytes stored as a new version.
+ * Template Studio page: the document (Folio) fills the surface, with a slim
+ * action bar above it. The whole-template / per-field settings live in a single
+ * tab in the global right-side Inspector (registered below), so the document
+ * gets the full width. The page seeds a module-level session store the inspector
+ * tab reads from, and opens/closes that tab over its own lifetime. Field
+ * metadata lives in the manifest; on save the edited manifest is re-embedded
+ * (/document) and the bytes stored as a new version.
  */
-export const TemplateStudio = ({
+export const TemplateStudioPage = ({
   templateId,
   presignedUrl,
   fileName,
   manifest,
+  name,
   nameSlot,
   metaLabel,
   onBack,
   onTestFill,
-  clausesSlot,
-  historySlot,
 }: {
   templateId: string;
   presignedUrl: string;
   fileName: string;
   manifest: unknown;
-  /** The (rename-able) template name, owned by the detail view. */
+  /** Plain template name, used as the inspector tab label. */
+  name: string;
+  /** The (rename-able) template name UI, owned by the detail view. */
   nameSlot: ReactNode;
   /** Field-count + date summary line. */
   metaLabel: string;
   onBack: () => void;
   onTestFill: () => void;
-  /** Clauses + version-history panels, rendered as Inspector subtabs. */
-  clausesSlot: ReactNode;
-  historySlot: ReactNode;
 }) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -99,18 +129,17 @@ export const TemplateStudio = ({
   const editorViewRef = useRef<EditorView | null>(null);
   const { containerRef, fitZoom } = useFitToWidth();
 
-  const [fields, setFields] = useState<StudioField[]>(() =>
-    parseFields(manifest),
-  );
-  const [conditions, setConditions] = useState<NameExpr[]>(() =>
-    parseNameExprs(manifest, "conditions"),
-  );
-  const [computed, setComputed] = useState<NameExpr[]>(() =>
-    parseNameExprs(manifest, "computed"),
-  );
-  const [selected, setSelected] = useState<DirectiveRange | null>(null);
+  const isDirty = useTemplateStudioStore((s) => s.isDirty);
+  const init = useTemplateStudioStore((s) => s.init);
+  const reset = useTemplateStudioStore((s) => s.reset);
+  const setSelected = useTemplateStudioStore((s) => s.setSelected);
+  const upsertField = useTemplateStudioStore((s) => s.upsertField);
+  const markDirty = useTemplateStudioStore((s) => s.markDirty);
+  const markSaved = useTemplateStudioStore((s) => s.markSaved);
+  const openView = useInspectorStore((s) => s.openView);
+  const closeTab = useInspectorStore((s) => s.closeTab);
+
   const [hasSelection, setHasSelection] = useState(false);
-  const [isDirty, setIsDirty] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showDirectives, setShowDirectives] = useState(true);
 
@@ -127,6 +156,31 @@ export const TemplateStudio = ({
       setDocBuffer(loadedBuffer);
     }
   }, [loadedBuffer, docBuffer]);
+
+  // Seed the shared session from the manifest and open the Fields/Clauses/
+  // History tab in the global inspector; tear both down when the page unmounts
+  // (leaving the studio). Keyed on templateId so editing the manifest in the
+  // tab doesn't re-seed and discard in-progress edits.
+  useEffect(() => {
+    init({
+      templateId,
+      fields: parseFields(manifest),
+      conditions: parseNameExprs(manifest, "conditions"),
+      computed: parseNameExprs(manifest, "computed"),
+    });
+    openView({
+      type: TEMPLATE_STUDIO_VIEW,
+      id: templateStudioTabId(templateId),
+      label: name,
+      payload: { templateId },
+      ownerRouteId: TEMPLATES_ROUTE_ID,
+    });
+    return () => {
+      closeTab(templateStudioTabId(templateId));
+      reset(templateId);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once per template; the manifest is the fixed source doc for this templateId and re-seeding would discard edits made in the inspector tab.
+  }, [templateId]);
 
   // Folio defers creating the ProseMirror view until first interaction, so
   // onEditorViewReady never fires and the selection->inspector binding can't
@@ -148,8 +202,8 @@ export const TemplateStudio = ({
     return () => cancelAnimationFrame(raf);
   }, [docBuffer]);
 
-  // Map the editor's caret to the directive it sits in, so the Inspector knows
-  // which face to show. Reads the live plugin state via the captured view.
+  // Map the editor's caret to the directive it sits in, so the inspector tab
+  // knows which face to show. Reads the live plugin state via the captured view.
   const syncSelection = useCallback(() => {
     const view = editorViewRef.current;
     if (!view) {
@@ -161,25 +215,11 @@ export const TemplateStudio = ({
       (range) => head >= range.from && head <= range.to,
     );
     setSelected(covering ?? null);
-  }, []);
-
-  const upsertField = useCallback(
-    (path: string, patch: Partial<StudioField>) => {
-      setFields((prev) => {
-        const exists = prev.some((f) => f.path === path);
-        if (exists) {
-          return prev.map((f) => (f.path === path ? { ...f, ...patch } : f));
-        }
-        return [...prev, { ...defaultField(path), ...patch }];
-      });
-      setIsDirty(true);
-    },
-    [],
-  );
+  }, [setSelected]);
 
   // The hero gesture: turn the current text selection into a `{{field}}`,
-  // deriving a unique field path from the selected text and opening it in the
-  // inspector (the dispatched selection change re-runs syncSelection).
+  // deriving a unique field path from the selected text and registering it in
+  // the session (the dispatched selection change re-runs syncSelection).
   const makeField = () => {
     const view = editorViewRef.current;
     if (!view) {
@@ -191,8 +231,9 @@ export const TemplateStudio = ({
     }
     const text = view.state.doc.textBetween(from, to, " ");
     const base = slugify(text);
+    const existing = useTemplateStudioStore.getState().fields;
     let path = base;
-    for (let n = 2; fields.some((f) => f.path === path); n++) {
+    for (let n = 2; existing.some((f) => f.path === path); n++) {
       path = `${base}_${n}`;
     }
     view.dispatch(
@@ -201,6 +242,77 @@ export const TemplateStudio = ({
     view.focus();
     upsertField(path, {});
   };
+
+  // Folio creates its editable PM view lazily (on first focus), so the captured
+  // ref can be null if the user opens the Insert menu without clicking into the
+  // document first. Ensure + focus the view, then run the insert (next frame if
+  // it had to be created).
+  const withEditorView = (perform: (view: EditorView) => void) => {
+    if (editorViewRef.current) {
+      perform(editorViewRef.current);
+      return;
+    }
+    editorRef.current?.ensureEditorView({ focus: true });
+    requestAnimationFrame(() => {
+      if (editorViewRef.current) {
+        perform(editorViewRef.current);
+      }
+    });
+  };
+
+  const insertInline = (text: string) =>
+    withEditorView((view) => {
+      const { from, to } = view.state.selection;
+      view.dispatch(view.state.tr.insertText(text, from, to).scrollIntoView());
+      view.focus();
+      markDirty();
+    });
+
+  // Block directives must occupy their own paragraph (the fill engine anchors
+  // them line-by-line), so insert opener/body/closer as three paragraphs after
+  // the current one.
+  const insertBlock = (open: string, close: string) =>
+    withEditorView((view) => {
+      const { state } = view;
+      const paragraph = state.schema.nodes["paragraph"];
+      if (!paragraph) {
+        return;
+      }
+      const para = (text: string) =>
+        paragraph.create(
+          null,
+          text.length > 0 ? state.schema.text(text) : null,
+        );
+      const { $from } = state.selection;
+      const pos = $from.depth >= 1 ? $from.after(1) : state.doc.content.size;
+      try {
+        view.dispatch(
+          state.tr
+            .insert(pos, [para(open), para(""), para(close)])
+            .scrollIntoView(),
+        );
+        view.focus();
+        markDirty();
+      } catch {
+        // Selection wasn't in an insertable block context; ignore.
+      }
+    });
+
+  // Insert a fresh, uniquely-named field at the cursor and register it so it
+  // shows in the Fields list right away (rename it there).
+  const insertField = () => {
+    const existing = useTemplateStudioStore.getState().fields;
+    let path = "field";
+    for (let n = 2; existing.some((f) => f.path === path); n++) {
+      path = `field_${n}`;
+    }
+    insertInline(`{{${path}}}`);
+    upsertField(path, {});
+  };
+
+  const insertCondition = () => insertBlock("{{#if condition}}", "{{/if}}");
+  const insertLoop = () => insertBlock("{{#each items}}", "{{/each}}");
+  const insertClause = () => insertInline("{{@clause:Clause}}");
 
   const handleSave = async () => {
     const editor = editorRef.current;
@@ -219,6 +331,8 @@ export const TemplateStudio = ({
       // Persist the edited manifest alongside the bytes in one call; the server
       // re-embeds it (avoids a binary re-embed round-trip that Eden would parse
       // as text and corrupt).
+      const { fields, conditions, computed } =
+        useTemplateStudioStore.getState();
       const stored = await api
         .templates({ templateId: toSafeId<"template">(templateId) })
         .document.post({
@@ -232,7 +346,7 @@ export const TemplateStudio = ({
         return;
       }
 
-      setIsDirty(false);
+      markSaved();
       stellaToast.add({ title: t("templates.templateSaved"), type: "success" });
       void queryClient.invalidateQueries({
         queryKey: knowledgeKeys.templates.all(activeOrganizationId),
@@ -262,8 +376,77 @@ export const TemplateStudio = ({
   }
 
   return (
-    <div className="flex h-full min-h-0">
-      {/* Full-bleed document — the editor is the whole left side. */}
+    <div className="flex h-full min-h-0 flex-col">
+      {/* Template action bar — the document fills everything below it. */}
+      <div className="flex items-center gap-1 border-b px-2 py-1.5">
+        <Button
+          aria-label={t("templates.backToList")}
+          onClick={onBack}
+          size="sm"
+          variant="ghost"
+        >
+          <ArrowLeftIcon />
+        </Button>
+        <div className="min-w-0 flex-1">{nameSlot}</div>
+        <span className="text-muted-foreground hidden truncate text-xs lg:block">
+          {metaLabel}
+        </span>
+        <Button
+          aria-label={t("common.preview")}
+          onClick={() => setShowDirectives((v) => !v)}
+          size="sm"
+          variant="ghost"
+        >
+          {showDirectives ? <EyeIcon /> : <EyeOffIcon />}
+        </Button>
+        <Menu>
+          <MenuTrigger render={<Button size="sm" variant="outline" />}>
+            <PlusIcon />
+            {t("templates.studio.insert")}
+            <ChevronDownIcon className="size-3" />
+          </MenuTrigger>
+          <MenuPopup align="end">
+            <MenuItem onClick={insertField}>
+              <BracesIcon />
+              {t("templates.studio.scopeField")}
+            </MenuItem>
+            <MenuItem onClick={insertCondition}>
+              <SplitIcon />
+              {t("templates.studio.scopeCondition")}
+            </MenuItem>
+            <MenuItem onClick={insertLoop}>
+              <RepeatIcon />
+              {t("templates.studio.loop")}
+            </MenuItem>
+            <MenuItem onClick={insertClause}>
+              <span className="text-sm font-semibold">§</span>
+              {t("templates.studio.scopeClause")}
+            </MenuItem>
+          </MenuPopup>
+        </Menu>
+        <Button
+          disabled={!hasSelection}
+          onClick={makeField}
+          size="sm"
+          variant="outline"
+        >
+          <BracesIcon />
+          {t("templates.studio.makeField")}
+        </Button>
+        <Button onClick={onTestFill} size="sm" variant="outline">
+          <PlayIcon />
+          {t("templates.testFill")}
+        </Button>
+        <Button
+          disabled={!isDirty || isSaving}
+          onClick={() => void handleSave()}
+          size="sm"
+        >
+          <SaveIcon />
+          {t("common.save")}
+        </Button>
+      </div>
+
       <div
         className="min-h-0 flex-1 [scrollbar-gutter:stable] overflow-auto"
         ref={containerRef}
@@ -276,7 +459,7 @@ export const TemplateStudio = ({
             documentBuffer={docBuffer}
             initialZoom={fitZoom}
             loadingIndicator={null}
-            onChange={() => setIsDirty(true)}
+            onChange={markDirty}
             onEditorViewReady={(view) => {
               // Folio re-reports null on some re-renders; keep the last live
               // view so selection syncing doesn't lose its reference.
@@ -292,96 +475,98 @@ export const TemplateStudio = ({
           />
         </Suspense>
       </div>
-
-      {/* Inspector: all template chrome + selection settings, clauses, history. */}
-      <aside className="flex w-[360px] shrink-0 flex-col border-s">
-        <div className="flex items-center gap-1 border-b px-2 py-1.5">
-          <Button
-            aria-label={t("templates.backToList")}
-            onClick={onBack}
-            size="sm"
-            variant="ghost"
-          >
-            <ArrowLeftIcon />
-          </Button>
-          <div className="min-w-0 flex-1">{nameSlot}</div>
-          <Button
-            aria-label={t("common.preview")}
-            onClick={() => setShowDirectives((v) => !v)}
-            size="sm"
-            variant="ghost"
-          >
-            {showDirectives ? <EyeIcon /> : <EyeOffIcon />}
-          </Button>
-          <Button
-            disabled={!isDirty || isSaving}
-            onClick={() => void handleSave()}
-            size="sm"
-          >
-            <SaveIcon />
-            {t("common.save")}
-          </Button>
-        </div>
-
-        <div className="flex items-center gap-2 border-b px-3 py-1.5">
-          <span className="text-muted-foreground truncate text-xs">
-            {metaLabel}
-          </span>
-          <div className="flex-1" />
-          <Button
-            disabled={!hasSelection}
-            onClick={makeField}
-            size="sm"
-            variant="outline"
-          >
-            <BracesIcon />
-            {t("templates.studio.makeField")}
-          </Button>
-          <Button onClick={onTestFill} size="sm" variant="outline">
-            <PlayIcon />
-            {t("templates.testFill")}
-          </Button>
-        </div>
-
-        <Tabs className="flex min-h-0 flex-1 flex-col" defaultValue="fields">
-          <TabsList variant="underline">
-            <TabsTab value="fields">{t("templates.fields")}</TabsTab>
-            <TabsTab value="clauses">{t("common.clauses")}</TabsTab>
-            <TabsTab value="history">{t("common.history")}</TabsTab>
-          </TabsList>
-          <TabsPanel className="min-h-0 flex-1" value="fields">
-            <Inspector
-              conditions={conditions}
-              computed={computed}
-              fields={fields}
-              onConditionsChange={(next) => {
-                setConditions(next);
-                setIsDirty(true);
-              }}
-              onComputedChange={(next) => {
-                setComputed(next);
-                setIsDirty(true);
-              }}
-              onFieldUpdate={upsertField}
-              selected={selected}
-            />
-          </TabsPanel>
-          <TabsPanel className="min-h-0 flex-1 overflow-auto" value="clauses">
-            {clausesSlot}
-          </TabsPanel>
-          <TabsPanel className="min-h-0 flex-1 overflow-auto" value="history">
-            {historySlot}
-          </TabsPanel>
-        </Tabs>
-      </aside>
     </div>
   );
 };
 
-// ── Inspector ────────────────────────────────────────────
+// ── Global inspector tab ─────────────────────────────────
 
-type StudioField = EditableField & { aiPrompt: string | undefined };
-type NameExpr = { name: string; expression: string };
+// The template settings live as a single tab in the app's right-side
+// inspector. The page (above) owns the document + actions and seeds the shared
+// session store this view reads from. `close-on-route-leave` is a backstop; the
+// page also closes the tab on unmount.
+type StudioFacet = "fields" | "clauses" | "history";
+
+const STUDIO_FACETS: readonly StudioFacet[] = ["fields", "clauses", "history"];
+
+function TemplateStudioInspectorView({
+  tab,
+  onClose,
+}: InspectorViewRenderProps<TemplateStudioPayload>) {
+  const t = useTranslations();
+  const { templateId } = tab.payload;
+  const [facet, setFacet] = useState<StudioFacet>("fields");
+  const sessionTemplateId = useTemplateStudioStore((s) => s.templateId);
+  const fields = useTemplateStudioStore((s) => s.fields);
+  const conditions = useTemplateStudioStore((s) => s.conditions);
+  const computed = useTemplateStudioStore((s) => s.computed);
+  const selected = useTemplateStudioStore((s) => s.selected);
+  const upsertField = useTemplateStudioStore((s) => s.upsertField);
+  const setConditions = useTemplateStudioStore((s) => s.setConditions);
+  const setComputed = useTemplateStudioStore((s) => s.setComputed);
+
+  const facetLabels: Record<StudioFacet, string> = {
+    fields: t("templates.fields"),
+    clauses: t("common.clauses"),
+    history: t("common.history"),
+  };
+
+  // The page seeds the session on mount; until then (or after it unmounts and
+  // clears) the body has nothing to show — but keep the header + subtab row so
+  // the tab reads consistently with the rest of the inspector.
+  const ready = sessionTemplateId === templateId;
+
+  return (
+    <div className="bg-background flex h-full flex-1 flex-col overflow-hidden">
+      <InspectorTabHeader label={tab.label} onClose={onClose} />
+      <FacetBar
+        facet={facet}
+        facets={STUDIO_FACETS}
+        labels={facetLabels}
+        onChange={setFacet}
+      />
+      {!ready && (
+        <div className="flex flex-1 items-center justify-center p-8">
+          <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
+        </div>
+      )}
+      {ready && facet === "fields" && (
+        <Inspector
+          conditions={conditions}
+          computed={computed}
+          fields={fields}
+          onComputedChange={setComputed}
+          onConditionsChange={setConditions}
+          onFieldUpdate={upsertField}
+          selected={selected}
+        />
+      )}
+      {ready && facet === "clauses" && (
+        <div className="min-h-0 flex-1 overflow-auto">
+          <TemplateClausesTab templateId={templateId} />
+        </div>
+      )}
+      {ready && facet === "history" && (
+        <div className="min-h-0 flex-1 overflow-auto">
+          <TemplateVersionsTab templateId={templateId} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+const TemplateStudioRailIcon = (
+  _props: InspectorRailIconProps<TemplateStudioPayload>,
+) => <BracesIcon size={SIDE_RAIL_TAB_ICON_SIZE_PX} />;
+
+registerInspectorView<TemplateStudioPayload>({
+  navigationPolicy: "close-on-route-leave",
+  railIcon: TemplateStudioRailIcon,
+  render: TemplateStudioInspectorView,
+  type: TEMPLATE_STUDIO_VIEW,
+});
+
+// ── Selection-scoped inspector ───────────────────────────
 
 type InspectorProps = {
   selected: DirectiveRange | null;
@@ -406,12 +591,12 @@ const Inspector = ({
   if (selected && selected.kind === "placeholder") {
     const field =
       fields.find((f) => f.path === selected.expr) ??
-      defaultField(selected.expr);
+      defaultStudioField(selected.expr);
     return (
       <ScrollArea className="min-h-0 flex-1">
         <ScopeHeader
-          title={t("templates.studio.scopeField")}
           subtitle={field.path}
+          title={t("templates.studio.scopeField")}
         />
         <FieldConfigEditor
           field={field}
@@ -429,8 +614,8 @@ const Inspector = ({
     return (
       <ScrollArea className="min-h-0 flex-1">
         <ScopeHeader
-          title={t("templates.studio.scopeCondition")}
           subtitle={selected.kind}
+          title={t("templates.studio.scopeCondition")}
         />
         <div className="px-4 py-4">
           <p className="text-muted-foreground text-xs leading-relaxed">
@@ -451,8 +636,8 @@ const Inspector = ({
     return (
       <ScrollArea className="min-h-0 flex-1">
         <ScopeHeader
-          title={t("templates.studio.scopeClause")}
           subtitle={selected.expr}
+          title={t("templates.studio.scopeClause")}
         />
         <div className="text-muted-foreground px-4 py-4 text-xs leading-relaxed">
           {t("templates.studio.clauseSlotHelp")}
@@ -693,16 +878,6 @@ const slugify = (text: string): string => {
   const slug = trimChar(collapsed, "_").slice(0, 40);
   return slug.length > 0 ? slug : "field";
 };
-
-const defaultField = (path: string): StudioField => ({
-  path,
-  kind: "string",
-  label: "",
-  inputType: "text",
-  required: false,
-  options: [],
-  aiPrompt: undefined,
-});
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null;

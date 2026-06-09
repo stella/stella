@@ -2059,6 +2059,8 @@ type Messages = {
       "computed": "Computed";
       "conditionBlockHelp": "This block shows only when:";
       "expressionPlaceholder": "expression";
+      "insert": "Insert";
+      "loop": "Loop";
       "makeField": "Make field";
       "namePlaceholder": "name";
       "namedConditionsHelp": "Named conditions are managed in Template settings (click empty space in the document).";

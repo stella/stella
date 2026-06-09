@@ -2056,6 +2056,8 @@
       "computed": "Arvutatud",
       "conditionBlockHelp": "See plokk kuvatakse ainult siis, kui:",
       "expressionPlaceholder": "avaldis",
+      "insert": "Sisesta",
+      "loop": "Tsükkel",
       "makeField": "Loo väli",
       "namePlaceholder": "nimi",
       "namedConditionsHelp": "Nimega tingimusi hallatakse malli sätetes (klõpsake dokumendis tühjale kohale).",

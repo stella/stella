@@ -2056,6 +2056,8 @@
       "computed": "Berechnet",
       "conditionBlockHelp": "Dieser Block wird nur angezeigt, wenn:",
       "expressionPlaceholder": "Ausdruck",
+      "insert": "Einfügen",
+      "loop": "Schleife",
       "makeField": "Feld erstellen",
       "namePlaceholder": "Name",
       "namedConditionsHelp": "Benannte Bedingungen werden in den Vorlageneinstellungen verwaltet (klicken Sie auf eine leere Stelle im Dokument).",

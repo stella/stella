@@ -2056,6 +2056,8 @@
       "computed": "Vypočítané",
       "conditionBlockHelp": "Tento blok se zobrazí pouze když:",
       "expressionPlaceholder": "výraz",
+      "insert": "Vložit",
+      "loop": "Smyčka",
       "makeField": "Vytvořit pole",
       "namePlaceholder": "název",
       "namedConditionsHelp": "Pojmenované podmínky se spravují v nastavení šablony (klikněte do prázdného místa v dokumentu).",

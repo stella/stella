@@ -2056,6 +2056,8 @@
       "computed": "Aprēķināts",
       "conditionBlockHelp": "Šis bloks tiek rādīts tikai tad, ja:",
       "expressionPlaceholder": "izteiksme",
+      "insert": "Ievietot",
+      "loop": "Cilpa",
       "makeField": "Izveidot lauku",
       "namePlaceholder": "nosaukums",
       "namedConditionsHelp": "Nosauktos nosacījumus pārvalda veidnes iestatījumos (noklikšķiniet uz tukšas vietas dokumentā).",

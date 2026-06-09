@@ -2056,6 +2056,8 @@
       "computed": "Obliczane",
       "conditionBlockHelp": "Ten blok jest widoczny tylko gdy:",
       "expressionPlaceholder": "wyrażenie",
+      "insert": "Wstaw",
+      "loop": "Pętla",
       "makeField": "Utwórz pole",
       "namePlaceholder": "nazwa",
       "namedConditionsHelp": "Nazwanymi warunkami zarządza się w ustawieniach szablonu (kliknij puste miejsce w dokumencie).",

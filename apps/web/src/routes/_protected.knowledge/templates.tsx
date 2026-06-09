@@ -17,11 +17,9 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
-import { TemplateClausesTab } from "@/routes/_protected.knowledge/-components/template-clauses-tab";
 import { TemplateForm } from "@/routes/_protected.knowledge/-components/template-form";
 import { TemplateList } from "@/routes/_protected.knowledge/-components/template-list";
-import { TemplateStudio } from "@/routes/_protected.knowledge/-components/template-studio";
-import { TemplateVersionsTab } from "@/routes/_protected.knowledge/-components/template-versions-tab";
+import { TemplateStudioPage } from "@/routes/_protected.knowledge/-components/template-studio";
 import { ConfigureStep } from "@/routes/_protected.knowledge/-components/template-wizard";
 import type {
   NamedCondition,
@@ -522,12 +520,11 @@ const TemplateDetail = ({
       )}
 
       {state === "ready" && detail && (
-        <TemplateStudio
-          clausesSlot={<TemplateClausesTab templateId={template.id} />}
+        <TemplateStudioPage
           fileName={detail.fileName}
-          historySlot={<TemplateVersionsTab templateId={template.id} />}
           manifest={detail.manifest}
           metaLabel={`${t("templates.fieldCount", { count: fieldCount })} \u00b7 ${format.dateTime(new Date(template.createdAt), { dateStyle: "medium" })}`}
+          name={rename.displayName}
           nameSlot={
             rename.status === "editing" ? (
               <Input

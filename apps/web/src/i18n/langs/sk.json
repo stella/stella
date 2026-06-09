@@ -2056,6 +2056,8 @@
       "computed": "Vypočítané",
       "conditionBlockHelp": "Tento blok sa zobrazí iba keď:",
       "expressionPlaceholder": "výraz",
+      "insert": "Vložiť",
+      "loop": "Slučka",
       "makeField": "Vytvoriť pole",
       "namePlaceholder": "názov",
       "namedConditionsHelp": "Pomenované podmienky sa spravujú v nastaveniach šablóny (kliknite na prázdne miesto v dokumente).",

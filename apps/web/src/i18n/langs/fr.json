@@ -2056,6 +2056,8 @@
       "computed": "Calculé",
       "conditionBlockHelp": "Ce bloc s'affiche uniquement lorsque :",
       "expressionPlaceholder": "expression",
+      "insert": "Insérer",
+      "loop": "Boucle",
       "makeField": "Créer un champ",
       "namePlaceholder": "nom",
       "namedConditionsHelp": "Les conditions nommées se gèrent dans les paramètres du modèle (cliquez sur un espace vide du document).",
