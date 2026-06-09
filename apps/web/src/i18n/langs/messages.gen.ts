@@ -1362,6 +1362,7 @@ type Messages = {
       "generateSkill": "Generate with AI";
       "generateTitle": "Generate skill with AI";
       "generating": "Generating…";
+      "howItRuns": "How it runs";
       "importHelp": "Paste a direct SKILL.md URL, a GitHub file URL, or a GitHub folder URL that contains SKILL.md.";
       "importSkill": "Import from URL";
       "importTitle": "Import skill";

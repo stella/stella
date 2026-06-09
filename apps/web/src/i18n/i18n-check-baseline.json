@@ -295,85 +295,7 @@
       "de",
       "fr"
     ],
-    "knowledge.agentSkills.coaching.checkTrigger": [
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.agentSkills.coaching.checkTriggerDone": [
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.agentSkills.coaching.guidanceDone": [
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.agentSkills.coaching.guidanceRemaining": [
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.agentSkills.coaching.hint": [
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
     "knowledge.agentSkills.coaching.publish": [
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "knowledge.agentSkills.coaching.title": [
       "cs",
       "de",
       "es",
@@ -398,6 +320,19 @@
     "knowledge.agentSkills.formVersion": [
       "de",
       "fr"
+    ],
+    "knowledge.agentSkills.howItRuns": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
     ],
     "knowledge.agentSkills.newFileFilenamePlaceholder": [
       "cs",

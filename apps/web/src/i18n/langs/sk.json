@@ -1359,6 +1359,7 @@
       "generateSkill": "Vygenerovať pomocou AI",
       "generateTitle": "Vygenerovať zručnosť pomocou AI",
       "generating": "Generovanie…",
+      "howItRuns": "How it runs",
       "importHelp": "Vložte priamu URL súboru SKILL.md, URL súboru na GitHube alebo URL priečinka na GitHube, ktorý obsahuje SKILL.md.",
       "importSkill": "Importovať z URL",
       "importTitle": "Importovať zručnosť",

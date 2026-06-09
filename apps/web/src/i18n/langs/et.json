@@ -1359,6 +1359,7 @@
       "generateSkill": "Genereeri AI-ga",
       "generateTitle": "Genereeri oskus AI-ga",
       "generating": "Genereerimine…",
+      "howItRuns": "How it runs",
       "importHelp": "Kleebi otsene SKILL.md URL, GitHubi faili URL või GitHubi kausta URL, mis sisaldab faili SKILL.md.",
       "importSkill": "Impordi URL-ist",
       "importTitle": "Impordi oskus",

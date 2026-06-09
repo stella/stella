@@ -1359,6 +1359,7 @@
       "generateSkill": "Generálás AI-val",
       "generateTitle": "Készség generálása AI-val",
       "generating": "Generálás…",
+      "howItRuns": "How it runs",
       "importHelp": "Illessz be egy közvetlen SKILL.md URL-t, GitHub-fájl URL-t vagy olyan GitHub-mappa URL-t, amely tartalmazza a SKILL.md fájlt.",
       "importSkill": "Importálás URL-ből",
       "importTitle": "Készség importálása",
