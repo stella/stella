@@ -1,17 +1,15 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
-import { PencilIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
-import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
-import { toSafeId } from "@/lib/safe-id";
 import { TemplateList } from "@/routes/_protected.knowledge/-components/template-list";
+import { useTemplateNavStore } from "@/routes/_protected.knowledge/-components/template-nav-store";
 import { TemplateStudioPage } from "@/routes/_protected.knowledge/-components/template-studio";
 import {
   knowledgeKeys,
@@ -141,16 +139,6 @@ function RouteComponent() {
           setView({ kind: "list" });
           invalidateTemplates();
         }}
-        onRenamed={(newName) =>
-          setView((prev) =>
-            prev.kind === "detail"
-              ? {
-                  ...prev,
-                  template: { ...prev.template, name: newName },
-                }
-              : prev,
-          )
-        }
         template={view.template}
       />
     );
@@ -202,75 +190,20 @@ function RouteComponent() {
   );
 }
 
-type RenameState =
-  | { status: "idle"; displayName: string }
-  | {
-      status: "editing";
-      draft: string;
-      displayName: string;
-      saving: boolean;
-    };
-
-type RenameAction =
-  | { type: "start"; displayName: string }
-  | { type: "cancel" }
-  | { type: "setDraft"; value: string }
-  | { type: "savingStart" }
-  | { type: "saved"; name: string }
-  | { type: "saveFailed" };
-
-const renameReducer = (
-  state: RenameState,
-  action: RenameAction,
-): RenameState => {
-  switch (action.type) {
-    case "start":
-      return {
-        status: "editing",
-        draft: action.displayName,
-        displayName: action.displayName,
-        saving: false,
-      };
-    case "cancel":
-      return { status: "idle", displayName: state.displayName };
-    case "setDraft":
-      if (state.status !== "editing") {
-        return state;
-      }
-      return { ...state, draft: action.value };
-    case "savingStart":
-      if (state.status !== "editing") {
-        return state;
-      }
-      return { ...state, saving: true };
-    case "saved":
-      return {
-        status: "idle",
-        displayName: action.name,
-      };
-    case "saveFailed":
-      if (state.status !== "editing") {
-        return state;
-      }
-      return { ...state, saving: false };
-    default:
-      return state;
-  }
-};
-
-/** Template detail view: shows metadata, fields, and
- *  actions (test fill, delete). */
+/** Template detail view: loads the template + opens the full Studio. Rename
+ *  lives in the Studio's inspector tab header; the name shows in the breadcrumb
+ *  (published via the nav store). */
 const TemplateDetail = ({
   template,
   onBack,
-  onRenamed,
 }: {
   template: TemplateItem;
   onBack: () => void;
-  onRenamed: (newName: string) => void;
 }) => {
   const t = useTranslations();
   const format = useFormatter();
+  const setNavOpen = useTemplateNavStore((s) => s.setOpen);
+  const clearNav = useTemplateNavStore((s) => s.clear);
 
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
@@ -299,89 +232,12 @@ const TemplateDetail = ({
     return "ready";
   })();
 
-  const [rename, renameDispatch] = useReducer(renameReducer, {
-    status: "idle",
-    displayName: template.name,
-  });
-  const renameInputRef = useRef<HTMLInputElement>(null);
-  const renameCancelledRef = useRef(false);
-
-  // Focus input when entering rename mode
+  // Publish the open template to the breadcrumb (Knowledge › Templates › Name)
+  // and wire its "Templates" crumb back to the list; clear on leave.
   useEffect(() => {
-    if (rename.status === "editing") {
-      renameInputRef.current?.focus();
-      renameInputRef.current?.select();
-    }
-  }, [rename.status]);
-
-  const startRename = useCallback(() => {
-    renameCancelledRef.current = false;
-    renameDispatch({ type: "start", displayName: rename.displayName });
-  }, [rename.displayName]);
-
-  const cancelRename = useCallback(() => {
-    renameCancelledRef.current = true;
-    renameDispatch({ type: "cancel" });
-  }, []);
-
-  const saveRename = useCallback(async () => {
-    if (renameCancelledRef.current) {
-      return;
-    }
-
-    if (rename.status !== "editing") {
-      return;
-    }
-
-    const trimmed = rename.draft.trim();
-    if (!trimmed || trimmed === rename.displayName) {
-      renameDispatch({ type: "cancel" });
-      return;
-    }
-
-    renameCancelledRef.current = true;
-    renameDispatch({ type: "savingStart" });
-    const response = await api
-      .templates({ templateId: toSafeId<"template">(template.id) })
-      .post({ name: trimmed });
-
-    if (response.error) {
-      renameDispatch({ type: "saveFailed" });
-      renameCancelledRef.current = false;
-      stellaToast.add({
-        type: "error",
-        title: t("templates.renameFailed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
-      return;
-    }
-
-    renameDispatch({ type: "saved", name: trimmed });
-    onRenamed(trimmed);
-    stellaToast.add({
-      type: "success",
-      title: t("templates.templateRenamed"),
-    });
-  }, [rename, template.id, t, onRenamed]);
-
-  const handleRenameKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        // eslint-disable-next-line @typescript-eslint/no-floating-promises
-        saveRename();
-        return;
-      }
-      if (e.key === "Escape") {
-        cancelRename();
-      }
-    },
-    [saveRename, cancelRename],
-  );
-
+    setNavOpen({ templateId: template.id, name: template.name, exit: onBack });
+    return () => clearNav();
+  }, [template.id, template.name, onBack, setNavOpen, clearNav]);
 
   const fieldCount = detail?.manifest?.fields.length ?? template.fieldCount;
 
@@ -408,37 +264,7 @@ const TemplateDetail = ({
           fileName={detail.fileName}
           manifest={detail.manifest}
           metaLabel={`${t("templates.fieldCount", { count: fieldCount })} \u00b7 ${format.dateTime(new Date(template.createdAt), { dateStyle: "medium" })}`}
-          name={rename.displayName}
-          nameSlot={
-            rename.status === "editing" ? (
-              <Input
-                aria-label={t("templates.templateName")}
-                className="h-7 text-sm font-semibold"
-                disabled={rename.saving}
-                onBlur={() => {
-                  void saveRename();
-                }}
-                onChange={(e) =>
-                  renameDispatch({ type: "setDraft", value: e.target.value })
-                }
-                onKeyDown={handleRenameKeyDown}
-                ref={renameInputRef}
-                value={rename.draft}
-              />
-            ) : (
-              <button
-                className="group flex w-full items-center gap-1.5 text-start"
-                onClick={startRename}
-                type="button"
-              >
-                <span className="truncate text-sm font-semibold">
-                  {rename.displayName}
-                </span>
-                <PencilIcon className="text-muted-foreground size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
-              </button>
-            )
-          }
-          onBack={onBack}
+          name={template.name}
           presignedUrl={detail.presignedUrl}
           templateId={template.id}
         />

@@ -15,6 +15,7 @@ import { ContactBreadcrumb } from "@/components/breadcrumbs/contact-breadcrumb";
 import { PdfBreadcrumb } from "@/components/breadcrumbs/pdf-breadcrumb";
 import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
 import { SkillBreadcrumb } from "@/components/breadcrumbs/skill-breadcrumb";
+import { TemplatesBreadcrumb } from "@/components/breadcrumbs/templates-breadcrumb";
 import { WorkspaceBreadcrumb } from "@/components/breadcrumbs/workspace-breadcrumb";
 import type { RouterFullPath } from "@/lib/types";
 
@@ -83,11 +84,7 @@ export const AppBreadcrumbs = () => {
           {t("navigation.knowledge")}
         </BreadcrumbLink>
       ),
-      [serializeKey(["/knowledge/templates"])]: (
-        <BreadcrumbLink to="/knowledge/templates">
-          {t("navigation.templates")}
-        </BreadcrumbLink>
-      ),
+      [serializeKey(["/knowledge/templates"])]: <TemplatesBreadcrumb />,
       [serializeKey(["/contacts/"])]: (
         <BreadcrumbLink to="/contacts">
           {t("navigation.contacts")}
