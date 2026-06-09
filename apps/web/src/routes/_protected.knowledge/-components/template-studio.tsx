@@ -151,6 +151,10 @@ export const TemplateStudioPage = ({
     },
     [containerRef],
   );
+  const getEditorView = useCallback(() => editorViewRef.current, []);
+  const forceEditorView = useCallback(() => {
+    editorRef.current?.ensureEditorView({ focus: false });
+  }, []);
 
   const {
     data: loadedBuffer,
@@ -477,6 +481,8 @@ export const TemplateStudioPage = ({
         <TemplateStudioAIBar
           containerEl={containerNode}
           editorView={liveEditorView}
+          ensureView={forceEditorView}
+          getView={getEditorView}
         />
       </div>
     </div>

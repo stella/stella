@@ -45,11 +45,17 @@ type SuggestedFieldMeta = Pick<StudioField, "path" | "inputType" | "aiPrompt">;
 type TemplateStudioAIBarProps = {
   editorView: EditorView | null;
   containerEl: HTMLElement | null;
+  /** Read the page's live view ref — fresher than the reactive prop. */
+  getView: () => EditorView | null;
+  /** Force Folio's lazily created PM view (it defers until interaction). */
+  ensureView: () => void;
 };
 
 export const TemplateStudioAIBar = ({
   editorView,
   containerEl,
+  getView,
+  ensureView,
 }: TemplateStudioAIBarProps) => {
   const t = useTranslations();
   const user = useAuthenticatedUser();
@@ -72,18 +78,28 @@ export const TemplateStudioAIBar = ({
     placeholder: t("templates.studio.aiBarPlaceholder"),
   });
 
-  const editorViewRef = useRef<EditorView | null>(null);
-  editorViewRef.current = editorView;
-
   const config = useMemo<FileAIChatConfig>(
     () => ({
       onGenerate: async (input): Promise<AIGenerateResponse> => {
-        const view = editorViewRef.current;
+        // Folio creates its PM view lazily; a submit straight after load (or
+        // an HMR remount) can land before it exists. Ensure + retry a frame
+        // later, and read the document from the view rather than trusting the
+        // host's snapshot, so the first send never fails on an empty doc.
+        let view = getView();
+        if (!view) {
+          ensureView();
+          await new Promise<void>((resolve) => {
+            requestAnimationFrame(() => resolve());
+          });
+          view = getView();
+        }
         if (!view) {
           return { text: t("templates.studio.aiNoText") };
         }
         const bounds = input.selectionRange;
-        const text = bounds ? input.selectionText : input.documentText;
+        const text = bounds
+          ? input.selectionText
+          : buildPositionalText(view.state.doc).text;
         if (text.trim().length === 0) {
           return { text: t("templates.studio.aiNoText") };
         }
@@ -135,7 +151,7 @@ export const TemplateStudioAIBar = ({
         markDirty();
       },
     }),
-    [t, upsertField, markDirty],
+    [t, upsertField, markDirty, getView, ensureView],
   );
 
   return (
@@ -178,6 +194,10 @@ const buildSuggestions = (
   const existing = useTemplateStudioStore.getState().fields;
   const takenPaths = new Set(existing.map((f) => f.path));
   const suggestions: AISuggestion[] = [];
+  // The model sometimes proposes the same literal under two paths
+  // (company.name and signatory.company_name); one span must carry one
+  // suggestion, so first path wins per occupied range.
+  const occupied: { from: number; to: number }[] = [];
 
   for (const item of suggested) {
     if (item.literalText.length === 0) {
@@ -203,7 +223,9 @@ const buildSuggestions = (
     while (idx !== -1) {
       const from = positional.pmPositionAt(idx);
       const to = positional.pmPositionAt(idx + item.literalText.length - 1) + 1;
-      if (!bounds || (from >= bounds.from && to <= bounds.to)) {
+      const overlaps = occupied.some((r) => from < r.to && to > r.from);
+      if (!overlaps && (!bounds || (from >= bounds.from && to <= bounds.to))) {
+        occupied.push({ from, to });
         const id = crypto.randomUUID();
         fieldMeta.set(id, meta);
         suggestions.push({
