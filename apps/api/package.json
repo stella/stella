@@ -97,7 +97,7 @@
     "valibot": "catalog:"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.4.6",
+    "@electric-sql/pglite": "^0.5.1",
     "@faker-js/faker": "^10.3.0",
     "@stll/typescript-config": "workspace:*",
     "@types/bun": "catalog:",
