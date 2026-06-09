@@ -101,6 +101,13 @@ export type DocxEditorProps = {
    * and markup views are meaningless.
    */
   showReviewControls?: boolean;
+  /**
+   * Whether the page header/footer can be edited — the double-click-to-edit
+   * behavior and the "Double-click to add header/footer" hover hints
+   * (default: true). Turn off for plain-markdown editing, which has no running
+   * header/footer.
+   */
+  showHeaderFooterEditing?: boolean;
   /** Whether to show page margin guides/boundaries (default: false) */
   showMarginGuides?: boolean;
   /** Color for margin guides (default: '#c0c0c0') */

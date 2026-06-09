@@ -148,6 +148,7 @@ export function MarkdownFolioEditor({
         mode={readOnly ? "viewing" : "editing"}
         onChange={onFolioChange}
         ref={editorRef}
+        showHeaderFooterEditing={false}
         showPrintButton={false}
         showReviewControls={false}
         showZoomControl

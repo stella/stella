@@ -272,11 +272,11 @@ export type PagedEditorProps = {
   collaboration?: HiddenProseMirrorCollaboration | undefined;
   /** Extension manager for plugins/schema/commands (optional — falls back to default) */
   extensionManager?: ExtensionManager;
-  /** Callback when header or footer is double-clicked for editing. */
-  onHeaderFooterDoubleClick?: (
-    position: "header" | "footer",
-    pageNumber?: number,
-  ) => void;
+  /** Callback when header or footer is double-clicked for editing. Pass
+   * `undefined` to disable header/footer editing entirely. */
+  onHeaderFooterDoubleClick?:
+    | ((position: "header" | "footer", pageNumber?: number) => void)
+    | undefined;
   /** Active header/footer editing mode (dims body, intercepts body clicks). */
   hfEditMode?: "header" | "footer" | null;
   /** Called when user clicks the body area while in HF editing mode. */

@@ -615,6 +615,18 @@
   padding: 4px 0;
 }
 
+/* Header/footer editing disabled (e.g. markdown editing): no hover affordance
+   and no "Double-click to add …" hint. */
+.folio-no-hf-edit .layout-page-header:hover,
+.folio-no-hf-edit .layout-page-footer:hover {
+  background-color: transparent;
+}
+
+.folio-no-hf-edit .layout-page-header:empty:hover::after,
+.folio-no-hf-edit .layout-page-footer:empty:hover::after {
+  content: none;
+}
+
 /*
  * Post-eigenpal#611: the painter is the sole visible HF renderer in both
  * edit and non-edit modes. The .hf-editor-pm rule block (the styling for
