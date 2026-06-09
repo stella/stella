@@ -524,6 +524,7 @@ type Messages = {
       "create-document": "Preparing document";
       "describe-stella-api": "Preparing data lookup";
       "describe-stella-function": "Preparing data lookup";
+      "describe_template": "Reading template fields";
       "docxCommentSummary": "Add a comment to {blockId}";
       "docxDeleteSummary": "Delete {blockId}";
       "docxEditMore": "{count, plural, one {# more edit} other {# more edits}}";
@@ -536,7 +537,9 @@ type Messages = {
       "execute-typescript": "Reading workspace data";
       "expand-chat-history": "Reading chat history";
       "fetch_url": "Reading page";
+      "fill_template": "Filling template";
       "infosoud_lookup_case": "InfoSoud case lookup";
+      "list_templates": "Listing templates";
       "load-skill": "Reading guidance";
       "read-contact": "Reading contact";
       "read-content-across-matters": "Reading content across matters";
