@@ -17,85 +17,43 @@ import { cn } from "@stll/ui/lib/utils";
 export const FILE_TREE_ROW_HEIGHT_PX = 36;
 export const FILE_TREE_INDENT_PX = 20;
 const DISCLOSURE_SLOT_PX = 14;
-const NAME_GAP_PX = 6;
 const GUIDE_COLUMN_OFFSET_PX = DISCLOSURE_SLOT_PX / 2;
-const FILE_GUIDE_TARGET_OFFSET_PX = DISCLOSURE_SLOT_PX + NAME_GAP_PX;
-const GUIDE_LINE_COLOR_CLASS = "bg-muted-foreground/30";
-
-type TreeGuideLinesProps = {
-  depth: number;
-  guideDepths: readonly number[];
-  isFolder: boolean;
-  isLast: boolean;
-};
+const GUIDE_LINE_COLOR_CLASS = "bg-muted-foreground/20";
 
 /**
- * The faint vertical/elbow guide lines that connect a nested row to its
- * ancestors. `guideDepths` lists the ancestor depths that still have following
- * siblings (so their vertical line continues through this row).
+ * Faint vertical indent guides — one per nesting level, aligned under each
+ * ancestor's disclosure column. Nested rows read as belonging to their parent
+ * without the visual noise of per-row elbow connectors.
  */
-export const TreeGuideLines = ({
-  depth,
-  guideDepths,
-  isFolder,
-  isLast,
-}: TreeGuideLinesProps) => {
+export const TreeGuideLines = ({ depth }: { depth: number }) => {
   if (depth === 0) {
     return null;
   }
-
-  const parentGuideLeft =
-    (depth - 1) * FILE_TREE_INDENT_PX + GUIDE_COLUMN_OFFSET_PX;
-  const folderGuideTargetLeft =
-    depth * FILE_TREE_INDENT_PX + GUIDE_COLUMN_OFFSET_PX;
-  const fileGuideTargetLeft =
-    depth * FILE_TREE_INDENT_PX + FILE_GUIDE_TARGET_OFFSET_PX;
-  const horizontalTargetLeft = isFolder
-    ? folderGuideTargetLeft
-    : fileGuideTargetLeft;
-  const horizontalWidth = horizontalTargetLeft - parentGuideLeft;
-  // The immediate parent's column is the same x as this row's own current line;
-  // rendering a full-height guide there would mask the half-height "L" stop on
-  // the last child.
-  const continuationGuideDepths = guideDepths.filter(
-    (guideDepth) => guideDepth !== depth - 1,
-  );
-
   return (
     <span
       aria-hidden="true"
       className="pointer-events-none absolute inset-y-0 start-0"
     >
-      {continuationGuideDepths.map((guideDepth) => (
-        <span
-          className={cn(GUIDE_LINE_COLOR_CLASS, "absolute top-0 bottom-0 w-px")}
-          key={guideDepth}
-          style={{
-            left: guideDepth * FILE_TREE_INDENT_PX + GUIDE_COLUMN_OFFSET_PX,
-          }}
-        />
-      ))}
-      <span
-        className={cn(
-          GUIDE_LINE_COLOR_CLASS,
-          "absolute top-0 w-px",
-          isLast ? "h-1/2" : "bottom-0",
-        )}
-        style={{ left: parentGuideLeft }}
-      />
-      <span
-        className={cn(GUIDE_LINE_COLOR_CLASS, "absolute top-1/2 h-px")}
-        style={{ left: parentGuideLeft, width: horizontalWidth }}
-      />
+      {Array.from({ length: depth }, (_unused, level) => {
+        const left = level * FILE_TREE_INDENT_PX + GUIDE_COLUMN_OFFSET_PX;
+        return (
+          <span
+            className={cn(
+              GUIDE_LINE_COLOR_CLASS,
+              "absolute top-0 bottom-0 w-px",
+            )}
+            key={left}
+            style={{ left }}
+          />
+        );
+      })}
     </span>
   );
 };
 
 type FileTreeNameCellProps = {
   depth: number;
-  guideDepths: readonly number[];
   isFolder: boolean;
-  isLast: boolean;
   expanded: boolean;
   icon: ReactNode;
   children: ReactNode;
@@ -109,9 +67,7 @@ type FileTreeNameCellProps = {
  */
 export const FileTreeNameCell = ({
   depth,
-  guideDepths,
   isFolder,
-  isLast,
   expanded,
   icon,
   children,
@@ -120,12 +76,7 @@ export const FileTreeNameCell = ({
     className="relative flex h-full min-w-0 items-center gap-1.5 self-stretch"
     style={{ paddingLeft: `${depth * FILE_TREE_INDENT_PX}px` }}
   >
-    <TreeGuideLines
-      depth={depth}
-      guideDepths={guideDepths}
-      isFolder={isFolder}
-      isLast={isLast}
-    />
+    <TreeGuideLines depth={depth} />
     {isFolder ? (
       <ChevronRightIcon
         className={cn(
@@ -151,8 +102,6 @@ export type FileTreeNode = {
 type FlatRow = {
   node: FileTreeNode;
   depth: number;
-  guideDepths: number[];
-  isLast: boolean;
 };
 
 const flatten = (
@@ -160,25 +109,15 @@ const flatten = (
   expandedIds: ReadonlySet<string>,
 ): FlatRow[] => {
   const rows: FlatRow[] = [];
-  const visit = (
-    siblings: readonly FileTreeNode[],
-    depth: number,
-    guideDepths: number[],
-  ) => {
-    siblings.forEach((node, index) => {
-      const isLast = index === siblings.length - 1;
-      rows.push({ node, depth, guideDepths, isLast });
-      if (node.kind !== "folder" || !expandedIds.has(node.id)) {
-        return;
+  const visit = (siblings: readonly FileTreeNode[], depth: number) => {
+    for (const node of siblings) {
+      rows.push({ node, depth });
+      if (node.kind === "folder" && expandedIds.has(node.id)) {
+        visit(node.children ?? [], depth + 1);
       }
-      visit(
-        node.children ?? [],
-        depth + 1,
-        isLast ? guideDepths : [...guideDepths, depth],
-      );
-    });
+    }
   };
-  visit(nodes, 0, []);
+  visit(nodes, 0);
   return rows;
 };
 
@@ -228,7 +167,7 @@ export function FileTree({
   const rows = flatten(nodes, expandedIds);
   return (
     <div className={cn("flex flex-col", className)}>
-      {rows.map(({ node, depth, guideDepths, isLast }) => {
+      {rows.map(({ node, depth }) => {
         const isFolder = node.kind === "folder";
         const expanded = isFolder && expandedIds.has(node.id);
         return (
@@ -261,12 +200,10 @@ export function FileTree({
               <FileTreeNameCell
                 depth={depth}
                 expanded={expanded}
-                guideDepths={guideDepths}
                 icon={
                   renderIcon?.(node, expanded) ?? defaultIcon(node, expanded)
                 }
                 isFolder={isFolder}
-                isLast={isLast}
               >
                 {renderName ? (
                   renderName(node)

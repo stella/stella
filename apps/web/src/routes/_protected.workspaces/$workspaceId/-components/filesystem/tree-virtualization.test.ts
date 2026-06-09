@@ -70,20 +70,12 @@ describe("filesystem row virtualization", () => {
       "doc-root",
     ]);
     expect(rows.map((row) => row.depth)).toEqual([0, 1, 1, 2, 0]);
-    expect(rows.map((row) => row.isLast)).toEqual([
-      false,
-      false,
-      true,
-      true,
-      true,
-    ]);
     const nestedDoc = rows.at(3);
     expect(nestedDoc).toBeDefined();
     if (!nestedDoc) {
       throw new Error("Expected nested document row");
     }
     expect([...nestedDoc.ancestorIds]).toEqual(["folder-a", "folder-b"]);
-    expect(nestedDoc.guideDepths).toEqual([0]);
   });
 
   test("omits collapsed descendants while preserving later roots", () => {
@@ -110,6 +102,5 @@ describe("filesystem row virtualization", () => {
       throw new Error("Expected nested folder row");
     }
     expect([...nestedFolder.ancestorIds]).toEqual(["folder-a"]);
-    expect(nestedFolder.guideDepths).toEqual([0]);
   });
 });

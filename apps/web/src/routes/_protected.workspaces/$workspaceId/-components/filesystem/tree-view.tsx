@@ -872,8 +872,6 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                     getSelectedDragItems={getSelectedDragItems}
                     getSelectedEntities={getSelectedEntities}
                     gridTemplate={gridTemplate}
-                    guideDepths={row.guideDepths}
-                    isLast={row.isLast}
                     node={row.node}
                     onNavigateToFolder={(folderId) => {
                       void navigateToFolder(folderId);
@@ -1073,8 +1071,6 @@ const ColumnHeaderCell = ({
 type FilesystemRowProps = {
   node: TableTreeNode;
   depth: number | undefined;
-  guideDepths: number[];
-  isLast: boolean;
   workspaceId: string;
   extraColumns: ExtraColumn[];
   gridTemplate: string;
@@ -1097,8 +1093,6 @@ type FilesystemRowProps = {
 const FilesystemRow = ({
   node,
   depth = 0,
-  guideDepths,
-  isLast,
   workspaceId,
   extraColumns,
   gridTemplate,
@@ -1362,7 +1356,6 @@ const FilesystemRow = ({
     <FileTreeNameCell
       depth={depth}
       expanded={expanded}
-      guideDepths={guideDepths}
       icon={(() => {
         if (isFolder) {
           if (expanded) {
@@ -1386,7 +1379,6 @@ const FilesystemRow = ({
         return <FileIcon className="text-muted-foreground size-4 shrink-0" />;
       })()}
       isFolder={isFolder}
-      isLast={isLast}
     >
       {isEditing ? (
         <InlineEdit

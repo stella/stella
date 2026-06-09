@@ -4,8 +4,6 @@ export type FlattenedFilesystemRow = {
   node: TableTreeNode;
   depth: number;
   ancestorIds: Set<string>;
-  guideDepths: number[];
-  isLast: boolean;
 };
 
 export const flattenFilesystemRows = (
@@ -18,11 +16,9 @@ export const flattenFilesystemRows = (
     nodes: readonly TableTreeNode[],
     depth: number,
     ancestorIds: Set<string>,
-    guideDepths: number[],
   ) => {
-    for (const [index, node] of nodes.entries()) {
-      const isLast = index === nodes.length - 1;
-      rows.push({ node, depth, ancestorIds, guideDepths, isLast });
+    for (const node of nodes) {
+      rows.push({ node, depth, ancestorIds });
 
       if (node.kind !== "folder" || !expandedIds.has(node.entityId)) {
         continue;
@@ -30,16 +26,11 @@ export const flattenFilesystemRows = (
 
       const childAncestorIds = new Set(ancestorIds);
       childAncestorIds.add(node.entityId);
-      visit(
-        node.children,
-        depth + 1,
-        childAncestorIds,
-        isLast ? guideDepths : [...guideDepths, depth],
-      );
+      visit(node.children, depth + 1, childAncestorIds);
     }
   };
 
-  visit(roots, 0, new Set(), []);
+  visit(roots, 0, new Set());
 
   return rows;
 };
