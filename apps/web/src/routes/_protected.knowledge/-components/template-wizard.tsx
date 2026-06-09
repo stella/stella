@@ -25,6 +25,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
+import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 
 import {
   type DraftCondition,
@@ -68,6 +69,20 @@ export type EditableField = {
 };
 
 const INPUT_TYPE_SET: ReadonlySet<string> = new Set(INPUT_TYPES);
+
+/** Canonical icon + name for a field's value type (shared with the matter
+ *  table's property chips via the value-type registry). */
+export const ValueTypeLabel = ({ inputType }: { inputType: InputType }) => {
+  const t = useTranslations();
+  const meta = VALUE_TYPE_META[inputTypeValueKind(inputType)];
+  const Icon = meta.icon;
+  return (
+    <span className="flex min-w-0 items-center gap-1.5">
+      <Icon aria-hidden="true" className="size-3.5 shrink-0 opacity-70" />
+      <span className="truncate">{t(meta.labelKey)}</span>
+    </span>
+  );
+};
 
 export const isInputType = (value: string): value is InputType =>
   INPUT_TYPE_SET.has(value);
@@ -272,8 +287,8 @@ export const ConfigureStep = ({
                       <span className="min-w-0 flex-1 font-medium">
                         {field.label || field.path}
                       </span>
-                      <span className="text-muted-foreground shrink-0 text-xs">
-                        {t(`templates.inputTypes.${field.inputType}`)}
+                      <span className="text-muted-foreground flex shrink-0 items-center gap-1 text-xs">
+                        <ValueTypeLabel inputType={field.inputType} />
                       </span>
                       {field.required && (
                         <span className="text-muted-foreground shrink-0 text-xs">
@@ -464,13 +479,13 @@ export const FieldConfigEditor = ({
         >
           <SelectTrigger>
             <SelectValue>
-              {() => t(`templates.inputTypes.${field.inputType}`)}
+              {() => <ValueTypeLabel inputType={field.inputType} />}
             </SelectValue>
           </SelectTrigger>
           <SelectPopup>
             {INPUT_TYPES.map((type) => (
               <SelectItem key={type} value={type}>
-                {t(`templates.inputTypes.${type}`)}
+                <ValueTypeLabel inputType={type} />
               </SelectItem>
             ))}
           </SelectPopup>

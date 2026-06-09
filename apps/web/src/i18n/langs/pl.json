@@ -2024,10 +2024,6 @@
     "generating": "Generowanie...",
     "inputTypes": {
       "boolean": "Tak / Nie",
-      "date": "Data",
-      "number": "Liczba",
-      "select": "Lista rozwijana",
-      "text": "Tekst",
       "textarea": "Tekst (wielowierszowy)"
     },
     "invalidFileType": "Prześlij plik .docx",

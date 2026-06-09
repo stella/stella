@@ -2024,10 +2024,6 @@
     "generating": "Generando...",
     "inputTypes": {
       "boolean": "Sí / No",
-      "date": "Fecha",
-      "number": "Número",
-      "select": "Desplegable",
-      "text": "Texto",
       "textarea": "Texto (multilínea)"
     },
     "invalidFileType": "Suba un archivo .docx",

@@ -2024,10 +2024,6 @@
     "generating": "Ģenerē...",
     "inputTypes": {
       "boolean": "Jā / Nē",
-      "date": "Datums",
-      "number": "Skaitlis",
-      "select": "Nolaižamais saraksts",
-      "text": "Teksts",
       "textarea": "Teksts (vairāku rindu)"
     },
     "invalidFileType": "Lūdzu, augšupielādējiet .docx failu",

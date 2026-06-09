@@ -2024,10 +2024,6 @@
     "generating": "Génération...",
     "inputTypes": {
       "boolean": "Oui / Non",
-      "date": "Date",
-      "number": "Nombre",
-      "select": "Liste déroulante",
-      "text": "Texte",
       "textarea": "Texte (multiligne)"
     },
     "invalidFileType": "Veuillez importer un fichier .docx",

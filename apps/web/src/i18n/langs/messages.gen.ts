@@ -2027,10 +2027,6 @@ type Messages = {
     "generating": "Generating...";
     "inputTypes": {
       "boolean": "Yes / No";
-      "date": "Date";
-      "number": "Number";
-      "select": "Dropdown";
-      "text": "Text";
       "textarea": "Text (multiline)";
     };
     "invalidFileType": "Please upload a .docx file";

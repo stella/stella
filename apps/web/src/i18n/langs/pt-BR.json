@@ -2024,10 +2024,6 @@
     "generating": "Gerando...",
     "inputTypes": {
       "boolean": "Sim / Não",
-      "date": "Data",
-      "number": "Número",
-      "select": "Menu suspenso",
-      "text": "Texto",
       "textarea": "Texto (multilinha)"
     },
     "invalidFileType": "Faça upload de um arquivo .docx",

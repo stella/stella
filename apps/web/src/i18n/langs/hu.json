@@ -2024,10 +2024,6 @@
     "generating": "Generálás...",
     "inputTypes": {
       "boolean": "Igen / Nem",
-      "date": "Dátum",
-      "number": "Szám",
-      "select": "Legördülő lista",
-      "text": "Szöveg",
       "textarea": "Szöveg (többsoros)"
     },
     "invalidFileType": "Kérjük, töltsön fel egy .docx fájlt",

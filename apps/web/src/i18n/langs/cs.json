@@ -2024,10 +2024,6 @@
     "generating": "Generování...",
     "inputTypes": {
       "boolean": "Ano / Ne",
-      "date": "Datum",
-      "number": "Číslo",
-      "select": "Rozbalovací nabídka",
-      "text": "Text",
       "textarea": "Text (víceřádkový)"
     },
     "invalidFileType": "Nahrajte prosím soubor .docx",
