@@ -7,9 +7,6 @@
   "exports": {
     ".": "./src/index.ts"
   },
-  "dependencies": {
-    "better-result": "catalog:"
-  },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
     "test": "bun test",
@@ -17,6 +14,9 @@
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/template-conditions",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/template-conditions",
     "format": "oxfmt ."
+  },
+  "dependencies": {
+    "better-result": "catalog:"
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
