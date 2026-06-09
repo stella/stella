@@ -109,3 +109,34 @@ describe("resolveSuggestionAnchor", () => {
     expect(anchor).toEqual(directRange);
   });
 });
+
+describe("resolveSuggestionAnchor fallbacks", () => {
+  test("falls back to one-sided context when a neighbouring edit broke the other side", () => {
+    // The suggestion was generated when the text read
+    // "Company Ltd with offices at 10 Main St" — then accepting the adjacent
+    // company-name suggestion replaced "Company Ltd" with "{{name}}", so
+    // contextBefore no longer matches; contextAfter + text still do.
+    const doc = makeDoc(["{{name}} with offices at 10 Main St, registered"]);
+    const suggestion = makeSuggestion({
+      originalText: "10 Main St",
+      contextBefore: "Company Ltd with offices at ",
+      contextAfter: ", registered",
+    });
+    const anchor = resolveSuggestionAnchor(doc, suggestion);
+    if (!anchor) {
+      throw new Error("expected anchor to be resolved via fallback");
+    }
+    expect(doc.textBetween(anchor.from, anchor.to)).toBe("10 Main St");
+  });
+
+  test("fallback stays null when the bare text is ambiguous", () => {
+    // Both contexts are gone and the text appears twice — no safe anchor.
+    const doc = makeDoc(["10 Main St then 10 Main St"]);
+    const suggestion = makeSuggestion({
+      originalText: "10 Main St",
+      contextBefore: "vanished before ",
+      contextAfter: " vanished after",
+    });
+    expect(resolveSuggestionAnchor(doc, suggestion)).toBeNull();
+  });
+});

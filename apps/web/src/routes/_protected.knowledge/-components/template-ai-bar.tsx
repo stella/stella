@@ -16,6 +16,7 @@ import { useMemo, useRef } from "react";
 import type { EditorView } from "prosemirror-view";
 import { useTranslations } from "use-intl";
 
+import { buildPositionalText } from "@stll/folio";
 import type { AISuggestion } from "@stll/folio";
 
 import { FileAIChatHost } from "@/components/ai-suggestions/host";
@@ -152,9 +153,13 @@ export const TemplateStudioAIBar = ({
 
 /**
  * Map the model's field suggestions onto in-place document suggestions: one
- * AISuggestion per occurrence of each literal (single text node, inside the
- * requested bounds), replacing the literal with its `{{field}}` marker.
- * Records each suggestion's field metadata for registration on accept.
+ * AISuggestion per occurrence of each literal (inside the requested bounds),
+ * replacing the literal with its `{{field}}` marker. Occurrences and their
+ * context windows come from the same positional-text model the staleness
+ * resolver searches (`buildPositionalText`, blocks joined with \n) — contexts
+ * built any other way fail to re-anchor after the first edit and the
+ * suggestions all go stale. Records each suggestion's field metadata for
+ * registration on accept.
  */
 const buildSuggestions = (
   view: EditorView,
@@ -168,6 +173,8 @@ const buildSuggestions = (
   fieldMeta: Map<string, SuggestedFieldMeta>,
 ): AISuggestion[] => {
   const { doc } = view.state;
+  const positional = buildPositionalText(doc);
+  const haystack = positional.text;
   const existing = useTemplateStudioStore.getState().fields;
   const takenPaths = new Set(existing.map((f) => f.path));
   const suggestions: AISuggestion[] = [];
@@ -192,45 +199,31 @@ const buildSuggestions = (
       aiPrompt: item.aiPrompt,
     };
 
-    doc.descendants((node, pos) => {
-      if (!node.isText || !node.text) {
-        return true;
+    let idx = haystack.indexOf(item.literalText);
+    while (idx !== -1) {
+      const from = positional.pmPositionAt(idx);
+      const to = positional.pmPositionAt(idx + item.literalText.length - 1) + 1;
+      if (!bounds || (from >= bounds.from && to <= bounds.to)) {
+        const id = crypto.randomUUID();
+        fieldMeta.set(id, meta);
+        suggestions.push({
+          id,
+          topic: path,
+          severity: "substantive",
+          range: { from, to },
+          originalText: item.literalText,
+          suggestedText: `{{${path}}}`,
+          contextBefore: haystack.slice(Math.max(0, idx - CONTEXT_CHARS), idx),
+          contextAfter: haystack.slice(
+            idx + item.literalText.length,
+            idx + item.literalText.length + CONTEXT_CHARS,
+          ),
+          rationale: path,
+          status: "pending",
+        });
       }
-      let idx = node.text.indexOf(item.literalText);
-      while (idx !== -1) {
-        const from = pos + idx;
-        const to = from + item.literalText.length;
-        if (!bounds || (from >= bounds.from && to <= bounds.to)) {
-          const id = crypto.randomUUID();
-          fieldMeta.set(id, meta);
-          suggestions.push({
-            id,
-            topic: path,
-            severity: "substantive",
-            range: { from, to },
-            originalText: item.literalText,
-            suggestedText: `{{${path}}}`,
-            contextBefore: doc.textBetween(
-              Math.max(0, from - CONTEXT_CHARS),
-              from,
-              " ",
-            ),
-            contextAfter: doc.textBetween(
-              to,
-              Math.min(doc.content.size, to + CONTEXT_CHARS),
-              " ",
-            ),
-            rationale: path,
-            status: "pending",
-          });
-        }
-        idx = node.text.indexOf(
-          item.literalText,
-          idx + item.literalText.length,
-        );
-      }
-      return true;
-    });
+      idx = haystack.indexOf(item.literalText, idx + item.literalText.length);
+    }
   }
 
   return suggestions.toSorted((a, b) => a.range.from - b.range.from);
