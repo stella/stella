@@ -26,7 +26,7 @@ export type SharedFieldInputs = {
 
 export type HeaderFooterFieldInputs = Pick<
   SharedFieldInputs,
-  "bookmarkPages" | "bookmarkText" | "seqValues"
+  "bookmarkPages" | "bookmarkText" | "seqValues" | "sectionPageCounts"
 >;
 
 type BlockLocation = { page: number; sectionIndex: number };
@@ -144,13 +144,21 @@ export function buildHeaderFooterFieldValues(
       continue;
     }
     const parsed = parseFieldInstruction(run.instruction || run.fieldType);
-    const fieldContext =
-      parsed.type === "PAGE"
+    const fieldContext: FieldContext = {
+      ...context,
+      ...(parsed.type === "PAGE"
+        ? { pageNumber: widestFormattedPageNumber(parsed, pageCount) }
+        : {}),
+      ...(parsed.type === "SECTIONPAGES"
         ? {
-            ...context,
-            pageNumber: widestFormattedPageNumber(parsed, pageCount),
+            sectionPages: widestSectionPageCount(
+              parsed,
+              pageCount,
+              inputs?.sectionPageCounts,
+            ),
           }
-        : context;
+        : {}),
+    };
     values.set(
       run.pmStart,
       evaluateField(parsed, fieldContext, {
@@ -163,19 +171,41 @@ export function buildHeaderFooterFieldValues(
   return values;
 }
 
+function widestSectionPageCount(
+  parsed: ParsedFieldInstruction,
+  fallbackPageCount: number,
+  sectionPageCounts: ReadonlyMap<number, number> | undefined,
+): number {
+  if (!sectionPageCounts || sectionPageCounts.size === 0) {
+    return fallbackPageCount;
+  }
+  return widestFormattedCount(parsed, Array.from(sectionPageCounts.values()));
+}
+
 function widestFormattedPageNumber(
   parsed: ParsedFieldInstruction,
   pageCount: number,
 ): number {
+  return widestFormattedCount(
+    parsed,
+    Array.from({ length: pageCount }, (_, index) => index + 1),
+  );
+}
+
+function widestFormattedCount(
+  parsed: ParsedFieldInstruction,
+  counts: readonly number[],
+): number {
   const format = getFormatSwitch(parsed)?.toUpperCase();
   if (format !== "ROMAN" && format !== "ALPHABETIC") {
-    return pageCount;
+    return Math.max(...counts, 1);
   }
 
-  let widestPage = 1;
-  let widestWidth = formattedPageWidthScore(computePageNumber(1, parsed));
+  const first = counts.at(0) ?? 1;
+  let widestPage = first;
+  let widestWidth = formattedPageWidthScore(computePageNumber(first, parsed));
 
-  for (let page = 2; page <= pageCount; page++) {
+  for (const page of counts.slice(1)) {
     const width = formattedPageWidthScore(computePageNumber(page, parsed));
     if (width > widestWidth) {
       widestPage = page;

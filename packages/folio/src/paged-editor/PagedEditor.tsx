@@ -2680,14 +2680,19 @@ export function PagedEditor(
           const fieldClock = new Date();
           let previousFieldValues: Map<number, string> | null = null;
           for (let pass = 0; pass < MAX_FIELD_STABILIZATION_PASSES; pass++) {
+            const seqValues = buildSeqValues(newBlocks);
+            const bookmarkTextInputs =
+              previousFieldValues === null
+                ? { seqValues }
+                : { fieldValues: previousFieldValues, seqValues };
             const { values, changed } = resolveFieldValues(
               newBlocks,
               newLayout.pages,
               {
                 totalPages: newLayout.pages.length,
                 bookmarkPages: buildBookmarkPageMap(newLayout.pages, newBlocks),
-                bookmarkText: buildBookmarkText(newBlocks),
-                seqValues: buildSeqValues(newBlocks),
+                bookmarkText: buildBookmarkText(newBlocks, bookmarkTextInputs),
+                seqValues,
                 sectionPageCounts: buildSectionPageCounts(newLayout.pages),
                 now: fieldClock,
               },
@@ -2697,9 +2702,11 @@ export function PagedEditor(
                 ? !changed
                 : fieldValuesEqual(previousFieldValues, values);
             if (settled) {
+              stabilizedFieldValues = values;
               break;
             }
             previousFieldValues = values;
+            stabilizedFieldValues = values;
             newMeasures = measureBlocks(
               newBlocks,
               blockWidths,
@@ -2728,13 +2735,20 @@ export function PagedEditor(
         // fixed point with a small cap. Gated on a real change, so field-free
         // documents and most edits do zero passes; skipped on the incremental
         // (typing) path to keep keystrokes cheap.
+        let stabilizedFieldValues: Map<number, string> | undefined;
         stabilizeFieldWidths();
 
         const rebuildHeaderFooterForLayout = (): typeof hfExtenderContent => {
+          const seqValues = buildSeqValues(newBlocks);
+          const bookmarkTextInputs =
+            stabilizedFieldValues === undefined
+              ? { seqValues }
+              : { fieldValues: stabilizedFieldValues, seqValues };
           const finalHfFieldInputs: HeaderFooterFieldInputs = {
             bookmarkPages: buildBookmarkPageMap(newLayout.pages, newBlocks),
-            bookmarkText: buildBookmarkText(newBlocks),
-            seqValues: buildSeqValues(newBlocks),
+            bookmarkText: buildBookmarkText(newBlocks, bookmarkTextInputs),
+            seqValues,
+            sectionPageCounts: buildSectionPageCounts(newLayout.pages),
           };
           const finalHfOptions = buildHfOptions(
             newLayout.pages.length,
@@ -2956,15 +2970,19 @@ export function PagedEditor(
           if (bookmarkPages.size > 0) {
             renderOpts.bookmarkPages = bookmarkPages;
           }
-          // Bookmark text for REF cross-references.
-          const bookmarkText = buildBookmarkText(newBlocks);
-          if (bookmarkText.size > 0) {
-            renderOpts.bookmarkText = bookmarkText;
-          }
           // Assign SEQ caption numbers in document order so SEQ fields resolve.
           const seqValues = buildSeqValues(newBlocks);
           if (seqValues.size > 0) {
             renderOpts.seqValues = seqValues;
+          }
+          // Bookmark text for REF cross-references.
+          const bookmarkTextInputs =
+            stabilizedFieldValues === undefined
+              ? { seqValues }
+              : { fieldValues: stabilizedFieldValues, seqValues };
+          const bookmarkText = buildBookmarkText(newBlocks, bookmarkTextInputs);
+          if (bookmarkText.size > 0) {
+            renderOpts.bookmarkText = bookmarkText;
           }
           // Per-section page counts so SECTIONPAGES fields resolve.
           renderOpts.sectionPageCounts = buildSectionPageCounts(

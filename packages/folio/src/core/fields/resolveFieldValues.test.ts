@@ -267,4 +267,23 @@ describe("buildHeaderFooterFieldValues", () => {
     expect(values.get(10)).toBe("VIII");
     expect(values.get(20)).toBe("9");
   });
+
+  test("measures SECTIONPAGES against section page counts", () => {
+    const blocks: FlowBlock[] = [
+      para("p", [
+        field(10, "SECTIONPAGES"),
+        field(20, "SECTIONPAGES \\* ROMAN"),
+      ]),
+    ];
+
+    const values = buildHeaderFooterFieldValues(blocks, 9, now, {
+      sectionPageCounts: new Map([
+        [0, 1],
+        [1, 8],
+      ]),
+    });
+
+    expect(values.get(10)).toBe("8");
+    expect(values.get(20)).toBe("VIII");
+  });
 });

@@ -52,6 +52,29 @@ describe("buildBookmarkText", () => {
     expect(buildBookmarkText(blocks).get("_Ref1")).toBe("Figure 1: Caption");
   });
 
+  test("includes live field results in paragraph text", () => {
+    const field: FieldRun = {
+      kind: "field",
+      fieldType: "OTHER",
+      instruction: "SEQ Figure \\* ROMAN",
+      fallback: "I",
+      pmStart: 12,
+    };
+    const blocks: FlowBlock[] = [
+      para("h", [text("Figure "), field, text(": Caption")], ["_Ref1"]),
+    ];
+
+    expect(
+      buildBookmarkText(blocks, { seqValues: new Map([[12, 4]]) }).get("_Ref1"),
+    ).toBe("Figure IV: Caption");
+    expect(
+      buildBookmarkText(blocks, {
+        fieldValues: new Map([[12, "V"]]),
+        seqValues: new Map([[12, 4]]),
+      }).get("_Ref1"),
+    ).toBe("Figure V: Caption");
+  });
+
   test("includes visible list markers in paragraph text", () => {
     const blocks: FlowBlock[] = [
       {
