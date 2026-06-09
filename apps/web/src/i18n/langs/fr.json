@@ -545,6 +545,7 @@
       "run-stella-query": "Lecture des données du dossier",
       "search-across-matters": "Recherche dans tous les dossiers",
       "search-chat-history": "Recherche dans l’historique du chat",
+      "suggest_template_fields": "Suggestion des champs du modèle",
       "unknown": "Utilisation d’un outil",
       "update-entity-fields": "Mise à jour des métadonnées",
       "web_search": "Recherche web"

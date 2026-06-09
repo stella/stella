@@ -81,6 +81,7 @@ const CHAT_TOOL_TITLE_KEYS = {
   fill_template: "chat.tool.fill_template",
   infosoud_lookup_case: "chat.tool.infosoud_lookup_case",
   list_templates: "chat.tool.list_templates",
+  suggest_template_fields: "chat.tool.suggest_template_fields",
   "run-stella-query": "chat.tool.run-stella-query",
   "load-skill": "chat.tool.load-skill",
   "read-skill-resource": "chat.tool.read-skill-resource",

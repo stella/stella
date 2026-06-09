@@ -12,7 +12,6 @@ import { getRouteApi } from "@tanstack/react-router";
 import { panic } from "better-result";
 import {
   BracesIcon,
-  ChevronDownIcon,
   EyeIcon,
   EyeOffIcon,
   PlusIcon,
@@ -62,6 +61,7 @@ import { useTemplateNavStore } from "@/routes/_protected.knowledge/-components/t
 import {
   defaultStudioField,
   type NameExpr,
+  type StudioActions,
   type StudioField,
   useTemplateStudioStore,
 } from "@/routes/_protected.knowledge/-components/template-studio-store";
@@ -125,7 +125,6 @@ export const TemplateStudioPage = ({
   const editorViewRef = useRef<EditorView | null>(null);
   const { containerRef, fitZoom } = useFitToWidth();
 
-  const isDirty = useTemplateStudioStore((s) => s.isDirty);
   const init = useTemplateStudioStore((s) => s.init);
   const reset = useTemplateStudioStore((s) => s.reset);
   const setSelected = useTemplateStudioStore((s) => s.setSelected);
@@ -155,6 +154,38 @@ export const TemplateStudioPage = ({
   const forceEditorView = useCallback(() => {
     editorRef.current?.ensureEditorView({ focus: false });
   }, []);
+
+  // The document actions render in the Studio's inspector tab (its top row),
+  // not in a page toolbar — register them + the UI state they reflect. The ref
+  // indirection keeps the registered closures stable while handlers re-create
+  // per render.
+  const actionsRef = useRef<StudioActions | null>(null);
+  const setActions = useTemplateStudioStore((s) => s.setActions);
+  const patchUi = useTemplateStudioStore((s) => s.patchUi);
+  useEffect(() => {
+    setActions({
+      toggleDirectives: () => actionsRef.current?.toggleDirectives(),
+      insertField: () => actionsRef.current?.insertField(),
+      insertCondition: () => actionsRef.current?.insertCondition(),
+      insertLoop: () => actionsRef.current?.insertLoop(),
+      insertClause: () => actionsRef.current?.insertClause(),
+      makeField: () => actionsRef.current?.makeField(),
+      save: () => actionsRef.current?.save(),
+    });
+    return () => setActions(null);
+  }, [setActions]);
+  useEffect(() => {
+    patchUi({ metaLabel });
+  }, [patchUi, metaLabel]);
+  useEffect(() => {
+    patchUi({ showDirectives });
+  }, [patchUi, showDirectives]);
+  useEffect(() => {
+    patchUi({ hasSelection });
+  }, [patchUi, hasSelection]);
+  useEffect(() => {
+    patchUi({ isSaving });
+  }, [patchUi, isSaving]);
 
   const {
     data: loadedBuffer,
@@ -371,6 +402,16 @@ export const TemplateStudioPage = ({
     }
   };
 
+  actionsRef.current = {
+    toggleDirectives: () => setShowDirectives((v) => !v),
+    insertField,
+    insertCondition,
+    insertLoop,
+    insertClause,
+    makeField,
+    save: () => void handleSave(),
+  };
+
   if (isError) {
     return (
       <div className="flex h-full items-center justify-center p-8">
@@ -390,63 +431,6 @@ export const TemplateStudioPage = ({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* Template action bar — the document fills everything below it. */}
-      <div className="flex items-center gap-1 border-b px-2 py-1.5">
-        <span className="text-muted-foreground min-w-0 flex-1 truncate text-xs">
-          {metaLabel}
-        </span>
-        <Button
-          aria-label={t("common.preview")}
-          onClick={() => setShowDirectives((v) => !v)}
-          size="sm"
-          variant="ghost"
-        >
-          {showDirectives ? <EyeIcon /> : <EyeOffIcon />}
-        </Button>
-        <Menu>
-          <MenuTrigger render={<Button size="sm" variant="outline" />}>
-            <PlusIcon />
-            {t("templates.studio.insert")}
-            <ChevronDownIcon className="size-3" />
-          </MenuTrigger>
-          <MenuPopup align="end">
-            <MenuItem onClick={insertField}>
-              <BracesIcon />
-              {t("templates.studio.scopeField")}
-            </MenuItem>
-            <MenuItem onClick={insertCondition}>
-              <SplitIcon />
-              {t("templates.studio.scopeCondition")}
-            </MenuItem>
-            <MenuItem onClick={insertLoop}>
-              <RepeatIcon />
-              {t("templates.studio.loop")}
-            </MenuItem>
-            <MenuItem onClick={insertClause}>
-              <span className="text-sm font-semibold">§</span>
-              {t("templates.studio.scopeClause")}
-            </MenuItem>
-          </MenuPopup>
-        </Menu>
-        <Button
-          disabled={!hasSelection}
-          onClick={makeField}
-          size="sm"
-          variant="outline"
-        >
-          <BracesIcon />
-          {t("templates.studio.makeField")}
-        </Button>
-        <Button
-          disabled={!isDirty || isSaving}
-          onClick={() => void handleSave()}
-          size="sm"
-        >
-          <SaveIcon />
-          {t("common.save")}
-        </Button>
-      </div>
-
       {/* `relative` so the floating AI bar + stepper anchor over the doc. */}
       <div className="relative min-h-0 flex-1">
         <div
@@ -585,6 +569,7 @@ function TemplateStudioInspectorView({
           onCancel: () => setRename({ active: false, value: "" }),
         }}
       />
+      <StudioActionRow />
       <FacetBar
         facet={facet}
         facets={STUDIO_FACETS}
@@ -703,6 +688,76 @@ const TemplateFillFacet = ({ templateId }: { templateId: string }) => {
       structureErrors={discovered.structureErrors}
       templateId={templateId}
     />
+  );
+};
+
+/** Document actions row — rendered in the inspector tab's top area; the page
+ *  registers the handlers + UI state in the session store. */
+const StudioActionRow = () => {
+  const t = useTranslations();
+  const actions = useTemplateStudioStore((s) => s.actions);
+  const ui = useTemplateStudioStore((s) => s.ui);
+  const isDirty = useTemplateStudioStore((s) => s.isDirty);
+  if (!actions) {
+    return null;
+  }
+  return (
+    <div className="flex items-center gap-1 border-b px-2 py-1.5">
+      <span className="text-muted-foreground min-w-0 flex-1 truncate text-xs">
+        {ui.metaLabel}
+      </span>
+      <Button
+        aria-label={t("common.preview")}
+        onClick={actions.toggleDirectives}
+        size="icon-sm"
+        variant="ghost"
+      >
+        {ui.showDirectives ? <EyeIcon /> : <EyeOffIcon />}
+      </Button>
+      <Menu>
+        <MenuTrigger
+          aria-label={t("templates.studio.insert")}
+          render={<Button size="icon-sm" variant="ghost" />}
+        >
+          <PlusIcon />
+        </MenuTrigger>
+        <MenuPopup align="end">
+          <MenuItem onClick={actions.insertField}>
+            <BracesIcon />
+            {t("templates.studio.scopeField")}
+          </MenuItem>
+          <MenuItem onClick={actions.insertCondition}>
+            <SplitIcon />
+            {t("templates.studio.scopeCondition")}
+          </MenuItem>
+          <MenuItem onClick={actions.insertLoop}>
+            <RepeatIcon />
+            {t("templates.studio.loop")}
+          </MenuItem>
+          <MenuItem onClick={actions.insertClause}>
+            <span className="text-sm font-semibold">{"\u00a7"}</span>
+            {t("templates.studio.scopeClause")}
+          </MenuItem>
+        </MenuPopup>
+      </Menu>
+      <Button
+        aria-label={t("templates.studio.makeField")}
+        disabled={!ui.hasSelection}
+        onClick={actions.makeField}
+        size="icon-sm"
+        variant="ghost"
+      >
+        <BracesIcon />
+      </Button>
+      <Button
+        disabled={!isDirty || ui.isSaving}
+        onClick={actions.save}
+        size="sm"
+      >
+        <SaveIcon />
+        {t("common.save")}
+      </Button>
+    </div>
   );
 };
 

@@ -545,6 +545,7 @@
       "run-stella-query": "Ügyadatok olvasása",
       "search-across-matters": "Keresés az ügyek között",
       "search-chat-history": "Csevegési előzmények keresése",
+      "suggest_template_fields": "Sablonmezők javaslása",
       "unknown": "Eszköz használata",
       "update-entity-fields": "Metaadatok frissítése",
       "web_search": "Keresés az interneten"

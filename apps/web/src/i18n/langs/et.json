@@ -545,6 +545,7 @@
       "run-stella-query": "Asja andmete lugemine",
       "search-across-matters": "Otsing kõigis asjades",
       "search-chat-history": "Vestlusajaloo otsimine",
+      "suggest_template_fields": "Pakun malli välju",
       "unknown": "Tööriista kasutamine",
       "update-entity-fields": "Metaandmete uuendamine",
       "web_search": "Veebist otsimine"
