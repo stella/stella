@@ -37,6 +37,7 @@ import { HiddenHeaderFooterPMs } from "../components/HiddenHeaderFooterPMs";
 import type { HiddenHeaderFooterPMsRef } from "../components/HiddenHeaderFooterPMs";
 import { getFootnoteText } from "../core/docx/footnoteParser";
 import { buildBookmarkPageMap } from "../core/fields/bookmarkPages";
+import { buildSectionPageCounts } from "../core/fields/sectionPageCounts";
 import { buildSeqValues } from "../core/fields/seqValues";
 import { clickToPosition } from "../core/layout-bridge/clickToPosition";
 import { clickToPositionDom } from "../core/layout-bridge/clickToPositionDom";
@@ -2643,6 +2644,10 @@ export function PagedEditor(
           if (seqValues.size > 0) {
             renderOpts.seqValues = seqValues;
           }
+          // Per-section page counts so SECTIONPAGES fields resolve.
+          renderOpts.sectionPageCounts = buildSectionPageCounts(
+            newLayout.pages,
+          );
           // Document watermark (rendered behind every page). Build a
           // per-header-rId map so titlePg / even-odd / per-section
           // header parts each paint their own watermark; the painter

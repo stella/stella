@@ -968,6 +968,9 @@ function renderFieldRun(
     bookmarkText: EMPTY_BOOKMARK_TEXT,
     seqValues: context.seqValues ?? EMPTY_SEQ_VALUES,
     now: new Date(),
+    ...(context.sectionPages === undefined
+      ? {}
+      : { sectionPages: context.sectionPages }),
   };
   const text = evaluateFieldInstruction(
     run.instruction || run.fieldType,

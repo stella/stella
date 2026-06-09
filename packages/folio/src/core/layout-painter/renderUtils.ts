@@ -26,6 +26,8 @@ export type RenderContext = {
   bookmarkPages?: ReadonlyMap<string, number>;
   /** Field run `pmStart` -> precomputed SEQ value, for resolving SEQ fields. */
   seqValues?: ReadonlyMap<number, number>;
+  /** Pages in this page's section, for resolving SECTIONPAGES fields. */
+  sectionPages?: number;
   /** Content width in pixels (page width minus margins) - used for justify */
   contentWidth?: number;
   /** When true, floating images render in-flow instead of being skipped (for table cells) */

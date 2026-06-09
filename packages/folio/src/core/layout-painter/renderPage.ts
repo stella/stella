@@ -170,6 +170,8 @@ export type RenderPageOptions = {
   bookmarkPages?: ReadonlyMap<string, number>;
   /** Field run `pmStart` -> precomputed SEQ value, for resolving SEQ fields. */
   seqValues?: ReadonlyMap<number, number>;
+  /** Section index -> page count in that section, for SECTIONPAGES fields. */
+  sectionPageCounts?: ReadonlyMap<number, number>;
   /** Custom page class name */
   pageClassName?: string;
   /** Show page borders (for debugging) */
@@ -2479,6 +2481,19 @@ export function applySectionHeaderFooterOptions(
   return true;
 }
 
+/** SECTIONPAGES context fragment for `page`: the page count of its section, or
+ *  nothing when section counts were not supplied (field then falls back). */
+function sectionPagesContext(
+  page: Page,
+  counts: ReadonlyMap<number, number> | undefined,
+): { sectionPages?: number } {
+  if (!counts) {
+    return {};
+  }
+  const value = counts.get(page.sectionIndex ?? 0);
+  return value === undefined ? {} : { sectionPages: value };
+}
+
 /**
  * Build a RenderContext and resolved page options (with footnotes) for a page.
  * Centralises logic shared by populatePageShell, repopulatePageContent, and the eager render path.
@@ -2494,6 +2509,7 @@ function buildPageRenderArgs(
     section: "body",
     ...(options.bookmarkPages ? { bookmarkPages: options.bookmarkPages } : {}),
     ...(options.seqValues ? { seqValues: options.seqValues } : {}),
+    ...sectionPagesContext(page, options.sectionPageCounts),
   };
   const pageOptions: RenderPageOptions = { ...options };
   const hasSectionHeaderFooter = applySectionHeaderFooterOptions(
