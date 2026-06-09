@@ -1,5 +1,5 @@
 import { generateText, Output } from "ai";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { getModelForRole } from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
@@ -13,6 +13,21 @@ import {
 } from "@/api/lib/bbox/ai-prompts";
 import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+
+// `bboxItemSchema` already validated `v.length(4)`; this only narrows
+// the static type from `number[]` to the 4-tuple without a cast.
+const toBBoxTuple = (item: number[]): [number, number, number, number] => {
+  const [yMin, xMin, yMax, xMax] = item;
+  if (
+    yMin === undefined ||
+    xMin === undefined ||
+    yMax === undefined ||
+    xMax === undefined
+  ) {
+    panic("BBox element passed length validation but has missing values");
+  }
+  return [yMin, xMin, yMax, xMax];
+};
 
 type GenerateBBoxDataProps = {
   pdfData: Uint8Array;
@@ -108,7 +123,7 @@ export const generateBBoxData = async ({
   });
 
   if (Result.isError(generated)) {
-    return generated;
+    return Result.err(generated.error);
   }
   // Previously enforced by `v.nonEmpty()` on the array schema;
   // `Output.array` validates per element, so the emptiness invariant
@@ -120,5 +135,5 @@ export const generateBBoxData = async ({
     aiAnalytics.captureError(error);
     return Result.err(error);
   }
-  return generated;
+  return Result.ok(generated.value.map(toBBoxTuple));
 };
