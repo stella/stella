@@ -1137,6 +1137,7 @@ const FieldFace = ({
 }) => {
   const t = useTranslations();
   const actions = useTemplateStudioStore((s) => s.actions);
+  const fieldCount = useTemplateStudioStore((s) => s.fields.length);
   const [suggesting, setSuggesting] = useState(false);
   const [exampleValue, setExampleValue] = useState<string | undefined>(
     undefined,
@@ -1175,6 +1176,7 @@ const FieldFace = ({
           <div className="flex items-center gap-0.5">
             <Button
               aria-label={t("common.previous")}
+              disabled={fieldCount < 2}
               onClick={() => actions?.focusAdjacentField(-1)}
               size="icon-sm"
               variant="ghost"
@@ -1183,6 +1185,7 @@ const FieldFace = ({
             </Button>
             <Button
               aria-label={t("common.next")}
+              disabled={fieldCount < 2}
               onClick={() => actions?.focusAdjacentField(1)}
               size="icon-sm"
               variant="ghost"
