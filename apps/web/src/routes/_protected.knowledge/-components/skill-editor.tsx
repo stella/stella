@@ -5,17 +5,26 @@ import { getRouteApi } from "@tanstack/react-router";
 import {
   FileCodeIcon,
   FileIcon,
+  FilePlusIcon,
   FileTextIcon,
   FolderPlusIcon,
   PencilIcon,
   PlusIcon,
   PowerIcon,
   Trash2Icon,
+  UploadIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuSeparator,
+  MenuTrigger,
+} from "@stll/ui/components/menu";
 import {
   Popover,
   PopoverContent,
@@ -725,9 +734,14 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         )}
         {detail.data && (
           <div className="mt-2 shrink-0 px-1">
-            <RootCreateButton
+            <RootAddMenu
               createPending={createResource.isPending}
               onCreateFile={onCreateFile}
+              onUploadFiles={(files) => {
+                for (const file of files) {
+                  void handleUpload(file);
+                }
+              }}
             />
           </div>
         )}
@@ -1120,69 +1134,172 @@ function FileRowActions({
   );
 }
 
-type RootCreateButtonProps = {
+type RootAddMenuProps = {
   createPending: boolean;
   onCreateFile: (path: string, content: string) => boolean;
+  onUploadFiles: (files: File[]) => void;
 };
 
-// Header affordance for creating a file at an arbitrary path (root or nested).
-function RootCreateButton({
+// Root-level "Add" affordance, mirroring the matters Files view: a menu with
+// upload, new file, and new folder. A skill folder is just a path prefix, so
+// creating one asks for its first file as well.
+function RootAddMenu({
   createPending,
   onCreateFile,
-}: RootCreateButtonProps) {
+  onUploadFiles,
+}: RootAddMenuProps) {
   const t = useTranslations();
   const tSkills = useTranslations("knowledge.agentSkills");
-  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [mode, setMode] = useState<"file" | "folder" | null>(null);
   const [path, setPath] = useState("");
+  const [folder, setFolder] = useState("");
+  const [folderFilename, setFolderFilename] = useState("");
 
-  const submit = () => {
+  const closePopover = () => {
+    setMode(null);
+    setPath("");
+    setFolder("");
+    setFolderFilename("");
+  };
+
+  const submitNewFile = () => {
     const trimmed = path.trim();
     if (!trimmed) {
       return;
     }
     if (onCreateFile(trimmed, "")) {
-      setPath("");
-      setOpen(false);
+      closePopover();
+    }
+  };
+
+  const submitNewFolder = () => {
+    const folderName = folder.trim();
+    const file = folderFilename.trim() || "readme.md";
+    if (!folderName) {
+      return;
+    }
+    const normalizedFile = file.endsWith(".md") ? file : `${file}.md`;
+    if (onCreateFile(`${folderName}/${normalizedFile}`, "")) {
+      closePopover();
     }
   };
 
   return (
-    <Popover onOpenChange={setOpen} open={open}>
-      <PopoverTrigger
-        render={
-          <Button size="xs" variant="ghost">
-            <PlusIcon />
-            {t("common.add")}
-          </Button>
-        }
-      />
-      <PopoverContent className="w-72">
-        <div className="flex flex-col gap-2">
-          <Input
-            autoFocus
-            onChange={(event) => setPath(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                submit();
-              }
-              if (event.key === "Escape") {
-                setOpen(false);
-              }
-            }}
-            placeholder={tSkills("newFilePathPlaceholder")}
-            value={path}
-          />
-          <Button
-            disabled={createPending || path.trim().length === 0}
-            onClick={submit}
-            size="sm"
-          >
+    <>
+      <Menu>
+        <MenuTrigger
+          nativeButton
+          render={
+            <Button ref={triggerRef} size="xs" variant="ghost">
+              <PlusIcon />
+              {t("common.add")}
+            </Button>
+          }
+        />
+        <MenuPopup>
+          <MenuItem onClick={() => fileInputRef.current?.click()}>
+            <UploadIcon />
+            {t("common.uploadFiles")}
+          </MenuItem>
+          <MenuSeparator />
+          <MenuItem onClick={() => setMode("file")}>
+            <FilePlusIcon />
             {tSkills("newFile")}
-          </Button>
-        </div>
-      </PopoverContent>
-    </Popover>
+          </MenuItem>
+          <MenuItem onClick={() => setMode("folder")}>
+            <FolderPlusIcon />
+            {tSkills("newFolder")}
+          </MenuItem>
+        </MenuPopup>
+      </Menu>
+      <input
+        className="hidden"
+        multiple
+        onChange={(event) => {
+          const files = [...(event.currentTarget.files ?? [])];
+          event.currentTarget.value = "";
+          if (files.length > 0) {
+            onUploadFiles(files);
+          }
+        }}
+        ref={fileInputRef}
+        type="file"
+      />
+      <Popover
+        onOpenChange={(open) => {
+          if (!open) {
+            closePopover();
+          }
+        }}
+        open={mode !== null}
+      >
+        <PopoverContent anchor={triggerRef} className="w-72">
+          {mode === "folder" ? (
+            <div className="flex flex-col gap-2">
+              <Input
+                autoFocus
+                onChange={(event) => setFolder(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    closePopover();
+                  }
+                }}
+                placeholder={tSkills("newFolderNamePlaceholder")}
+                value={folder}
+              />
+              <Input
+                onChange={(event) => setFolderFilename(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    submitNewFolder();
+                  }
+                  if (event.key === "Escape") {
+                    closePopover();
+                  }
+                }}
+                placeholder={tSkills("newFolderFilenamePlaceholder")}
+                value={folderFilename}
+              />
+              <Button
+                disabled={createPending || folder.trim().length === 0}
+                onClick={submitNewFolder}
+                size="sm"
+              >
+                {tSkills("newFolder")}
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <Input
+                autoFocus
+                onChange={(event) => setPath(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    submitNewFile();
+                  }
+                  if (event.key === "Escape") {
+                    closePopover();
+                  }
+                }}
+                placeholder={tSkills("newFilePathPlaceholder")}
+                value={path}
+              />
+              <Button
+                disabled={createPending || path.trim().length === 0}
+                onClick={submitNewFile}
+                size="sm"
+              >
+                {tSkills("newFile")}
+              </Button>
+            </div>
+          )}
+        </PopoverContent>
+      </Popover>
+    </>
   );
 }
 
