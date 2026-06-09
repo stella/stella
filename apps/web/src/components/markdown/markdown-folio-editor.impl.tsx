@@ -6,7 +6,7 @@ import { useTranslations } from "use-intl";
 
 import "@stll/folio/editor.css";
 import { DocxEditor, fromMarkdown, toMarkdown } from "@stll/folio";
-import type { Document, MarkdownOptions } from "@stll/folio";
+import type { Document, DocxEditorRef, MarkdownOptions } from "@stll/folio";
 import { Button } from "@stll/ui/components/button";
 import { Textarea } from "@stll/ui/components/textarea";
 import { cn } from "@stll/ui/lib/utils";
@@ -103,6 +103,43 @@ export function MarkdownFolioEditor({
     setMode("wysiwyg");
   };
 
+  // Folio is a fixed-page editor and only fits the page to the panel once, so a
+  // wider inspector would leave empty space beside a narrow page. Re-fit the
+  // zoom to the panel width whenever it resizes so the document fills the space.
+  const editorRef = useRef<DocxEditorRef>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+    const fitToWidth = () => {
+      const editor = editorRef.current;
+      const page = container.querySelector<HTMLElement>(".paged-editor");
+      if (!editor || !page) {
+        return;
+      }
+      const zoom = editor.getZoom() || 1;
+      const naturalWidth = page.getBoundingClientRect().width / zoom;
+      if (naturalWidth <= 0) {
+        return;
+      }
+      const available = container.clientWidth - 8;
+      const next = Math.max(0.5, Math.min(2.5, available / naturalWidth));
+      if (Math.abs(next - zoom) > 0.01) {
+        editor.setZoom(next);
+      }
+    };
+    // Observe the panel (not the page) so our own setZoom doesn't re-trigger.
+    const observer = new ResizeObserver(() => fitToWidth());
+    observer.observe(container);
+    const initial = setTimeout(fitToWidth, 150);
+    return () => {
+      observer.disconnect();
+      clearTimeout(initial);
+    };
+  }, [seed]);
+
   if (mode === "raw") {
     return (
       <div className={cn("flex min-h-0 flex-1 flex-col", className)}>
@@ -123,13 +160,17 @@ export function MarkdownFolioEditor({
   }
 
   return (
-    <div className={cn("flex min-h-0 flex-1 flex-col", className)}>
+    <div
+      className={cn("flex min-h-0 flex-1 flex-col", className)}
+      ref={containerRef}
+    >
       <DocxEditor
         className="h-full"
         document={doc}
         key={seed}
         mode={readOnly ? "viewing" : "editing"}
         onChange={onFolioChange}
+        ref={editorRef}
         showPrintButton={false}
         showReviewControls={false}
         showZoomControl
