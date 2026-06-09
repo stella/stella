@@ -825,6 +825,68 @@ describe("round-trip", () => {
     expect(afterStrip).toBeNull();
   });
 
+  test("composite parts + format round-trip", async () => {
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "lawyer",
+          label: "Lawyer",
+          parts: [
+            {
+              key: "position",
+              label: "Position",
+              inputType: "select",
+              options: ["rad. praw.", "adw."],
+            },
+            { key: "name", inputType: "text", pattern: "\\p{Lu}.+" },
+          ],
+          format: "{{position}} {{name}}",
+        },
+      ],
+      conditions: [],
+    };
+
+    const docx = await createMinimalDocx();
+    const withManifest = await writeManifest(docx, manifest);
+    const readBack = await readManifest(withManifest);
+
+    const field = readBack?.fields.find((f) => f.path === "lawyer");
+    expect(field?.format).toBe("{{position}} {{name}}");
+    expect(field?.parts).toEqual([
+      {
+        key: "position",
+        label: "Position",
+        inputType: "select",
+        options: ["rad. praw.", "adw."],
+      },
+      { key: "name", inputType: "text", pattern: "\\p{Lu}.+" },
+    ]);
+  });
+
+  test("composite parts survive mergeManifestWithDiscovery", async () => {
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "lawyer",
+          parts: [{ key: "name", inputType: "text" }],
+          format: "{{name}}",
+        },
+      ],
+      conditions: [],
+    };
+    const discovered: DiscoveredTemplate = {
+      placeholders: [{ name: "lawyer", count: 1 }],
+      fields: [{ path: "lawyer", kind: "string", count: 1 }],
+      structureErrors: [],
+    };
+
+    const resolved = mergeManifestWithDiscovery(manifest, discovered);
+    expect(resolved[0]?.parts).toEqual([{ key: "name", inputType: "text" }]);
+    expect(resolved[0]?.format).toBe("{{name}}");
+  });
+
   test("write → strip → write creates fresh manifest", async () => {
     const docx = await createMinimalDocx();
     const v1 = await writeManifest(docx, sampleManifest);

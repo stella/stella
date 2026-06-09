@@ -1978,6 +1978,7 @@ type Messages = {
   "templates": {
     "addCondition": "Add condition";
     "addItem": "Add item";
+    "addPart": "Add part";
     "addTag": "Add tag";
     "aiAdaptHint": "AI adapts this wording to fit each place it appears in the document.";
     "allTemplates": "All templates";
@@ -2018,11 +2019,15 @@ type Messages = {
     "editCategory": "Edit category";
     "editFields": "Edit fields";
     "fieldCount": "{count, plural, one {# field} other {# fields}}";
+    "fieldFormat": "Output format";
+    "fieldFormatHint": "Use '{{key}}' to insert a part.";
     "fieldInputType": "Input type";
     "fieldLabel": "Label";
     "fieldLabelPlaceholder": "e.g. Full Name";
+    "fieldMultipleParts": "Multiple parts";
     "fieldOptions": "Options";
     "fieldOptionsPlaceholder": "Type an option and press Enter";
+    "fieldPartKeyPlaceholder": "key";
     "fieldUpdateFailed": "Failed to update fields";
     "fields": "Fields";
     "fieldsUpdated": "Fields updated";

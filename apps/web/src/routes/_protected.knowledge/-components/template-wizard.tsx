@@ -60,6 +60,19 @@ export const INPUT_TYPES = [
 
 type InputType = (typeof INPUT_TYPES)[number];
 
+export const PART_INPUT_TYPES = ["text", "select"] as const;
+
+type PartInputType = (typeof PART_INPUT_TYPES)[number];
+
+export type EditablePart = {
+  key: string;
+  inputType: PartInputType;
+  options: string[];
+  label?: string | undefined;
+  /** Round-tripped from the manifest; not editable in this UI. */
+  pattern?: string | undefined;
+};
+
 export type EditableField = {
   path: string;
   kind: string;
@@ -67,6 +80,11 @@ export type EditableField = {
   inputType: InputType;
   required: boolean;
   options: string[];
+  /** Composite field: one value entered as several parts joined by `format`.
+   *  Present iff `format` is present; `inputType` is then ignored for input
+   *  rendering. */
+  parts?: EditablePart[] | undefined;
+  format?: string | undefined;
 };
 
 const INPUT_TYPE_SET: ReadonlySet<string> = new Set(INPUT_TYPES);
@@ -111,7 +129,56 @@ export const buildEditableFields = (
     inputType: inferInputType(f),
     required: f.required ?? false,
     options: f.options ?? [],
+    parts: f.parts?.map((part) => ({
+      key: part.key,
+      inputType: part.inputType,
+      options: part.options ?? [],
+      label: part.label,
+      pattern: part.pattern,
+    })),
+    format: f.format,
   }));
+
+type ManifestPart = {
+  key: string;
+  inputType: PartInputType;
+  options?: string[] | undefined;
+  label?: string | undefined;
+  pattern?: string | undefined;
+};
+
+type CompositeManifestProps = {
+  parts: ManifestPart[] | undefined;
+  format: string | undefined;
+};
+
+/**
+ * The manifest shape of a field's composite configuration: parts and format
+ * are emitted together, or not at all (a half-configured composite — no parts
+ * yet, or no format yet — saves as a plain field).
+ */
+export const compositeManifestProps = (
+  field: EditableField,
+): CompositeManifestProps => {
+  const parts = (field.parts ?? []).filter((part) => part.key.trim() !== "");
+  const format = field.format?.trim() ?? "";
+  if (parts.length === 0 || format === "") {
+    return { parts: undefined, format: undefined };
+  }
+  return {
+    parts: parts.map((part) => ({
+      key: part.key,
+      inputType: part.inputType,
+      options:
+        part.inputType === "select" && part.options.length > 0
+          ? part.options
+          : undefined,
+      label: part.label || undefined,
+      pattern: part.pattern || undefined,
+    })),
+    format,
+  };
+};
 
 type ConfigureStepProps = {
   file: File;
@@ -164,16 +231,21 @@ export const ConfigureStep = ({
       // Build manifest from editable field state
       const manifest = {
         version: 1,
-        fields: fields.map((f) => ({
-          path: f.path,
-          label: f.label || undefined,
-          inputType: f.inputType,
-          options:
-            f.inputType === "select" && f.options.length > 0
-              ? f.options
-              : undefined,
-          required: f.required || undefined,
-        })),
+        fields: fields.map((f) => {
+          const composite = compositeManifestProps(f);
+          return {
+            path: f.path,
+            label: f.label || undefined,
+            inputType: f.inputType,
+            options:
+              f.inputType === "select" && f.options.length > 0
+                ? f.options
+                : undefined,
+            required: f.required || undefined,
+            parts: composite.parts,
+            format: composite.format,
+          };
+        }),
         conditions: [
           ...conditions,
           ...draftConditions
@@ -440,6 +512,135 @@ const OptionsTagInput = ({
   );
 };
 
+const PART_KEY_DISALLOWED_RE = /[^\p{L}\p{N}_.-]/gu;
+
+const emptyEditablePart = (): EditablePart => ({
+  key: "",
+  inputType: "text",
+  options: [],
+});
+
+/** Editor for a composite field's parts: key + type per row (options chips
+ *  for selects), plus the join format over `{{key}}` markers. */
+const CompositePartsEditor = ({
+  field,
+  onUpdate,
+}: {
+  field: EditableField;
+  onUpdate: (patch: Partial<EditableField>) => void;
+}) => {
+  const t = useTranslations();
+  const parts = field.parts ?? [];
+
+  const updatePart = (index: number, patch: Partial<EditablePart>) => {
+    onUpdate({
+      parts: parts.map((part, i) =>
+        i === index ? { ...part, ...patch } : part,
+      ),
+    });
+  };
+
+  const formatPlaceholder = parts
+    .filter((part) => part.key !== "")
+    .map((part) => `{{${part.key}}}`)
+    .join(" ");
+
+  return (
+    <>
+      <div className="flex flex-col gap-2">
+        {parts.map((part, index) => (
+          <div
+            className="flex flex-col gap-2"
+            // Rows have no stable identity while their keys are edited.
+            key={`part-${String(index)}`}
+          >
+            <div className="flex items-center gap-2">
+              <Input
+                aria-label={t("templates.fieldPartKeyPlaceholder")}
+                className="flex-1"
+                onChange={(e) =>
+                  updatePart(index, {
+                    key: e.target.value.replace(PART_KEY_DISALLOWED_RE, ""),
+                  })
+                }
+                placeholder={t("templates.fieldPartKeyPlaceholder")}
+                value={part.key}
+              />
+              <Select
+                onValueChange={(val) => {
+                  if (val === "text" || val === "select") {
+                    updatePart(index, { inputType: val });
+                  }
+                }}
+                value={part.inputType}
+              >
+                <SelectTrigger
+                  aria-label={t("templates.fieldInputType")}
+                  className="w-auto min-w-28"
+                >
+                  <SelectValue>
+                    {() => <ValueTypeLabel inputType={part.inputType} />}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectPopup>
+                  {PART_INPUT_TYPES.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      <ValueTypeLabel inputType={type} />
+                    </SelectItem>
+                  ))}
+                </SelectPopup>
+              </Select>
+              <Button
+                aria-label={t("common.remove")}
+                onClick={() =>
+                  onUpdate({ parts: parts.filter((_, i) => i !== index) })
+                }
+                size="icon-xs"
+                type="button"
+                variant="ghost"
+              >
+                <XIcon />
+              </Button>
+            </div>
+            {part.inputType === "select" && (
+              <OptionsTagInput
+                onChange={(opts) => updatePart(index, { options: opts })}
+                options={part.options}
+              />
+            )}
+          </div>
+        ))}
+        <Button
+          className="self-start"
+          onClick={() => onUpdate({ parts: [...parts, emptyEditablePart()] })}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          <PlusIcon />
+          {t("templates.addPart")}
+        </Button>
+      </div>
+
+      <Field>
+        <FieldLabel>{t("templates.fieldFormat")}</FieldLabel>
+        <FieldControl
+          render={
+            <Input
+              onChange={(e) => onUpdate({ format: e.target.value })}
+              placeholder={formatPlaceholder}
+              value={field.format ?? ""}
+            />
+          }
+        />
+        <p className="text-muted-foreground text-xs">
+          {t("templates.fieldFormatHint")}
+        </p>
+      </Field>
+    </>
+  );
+};
+
 export const FieldConfigEditor = ({
   field,
   onUpdate,
@@ -452,6 +653,7 @@ export const FieldConfigEditor = ({
   embedded?: boolean;
 }) => {
   const t = useTranslations();
+  const isComposite = field.parts !== undefined;
 
   return (
     <div
@@ -479,30 +681,32 @@ export const FieldConfigEditor = ({
         />
       </Field>
 
-      <Field>
-        <FieldLabel>{t("templates.fieldInputType")}</FieldLabel>
-        <Select
-          onValueChange={(val) => {
-            if (val && isInputType(val)) {
-              onUpdate({ inputType: val });
-            }
-          }}
-          value={field.inputType}
-        >
-          <SelectTrigger>
-            <SelectValue>
-              {() => <ValueTypeLabel inputType={field.inputType} />}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectPopup>
-            {INPUT_TYPES.map((type) => (
-              <SelectItem key={type} value={type}>
-                <ValueTypeLabel inputType={type} />
-              </SelectItem>
-            ))}
-          </SelectPopup>
-        </Select>
-      </Field>
+      {!isComposite && (
+        <Field>
+          <FieldLabel>{t("templates.fieldInputType")}</FieldLabel>
+          <Select
+            onValueChange={(val) => {
+              if (val && isInputType(val)) {
+                onUpdate({ inputType: val });
+              }
+            }}
+            value={field.inputType}
+          >
+            <SelectTrigger>
+              <SelectValue>
+                {() => <ValueTypeLabel inputType={field.inputType} />}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectPopup>
+              {INPUT_TYPES.map((type) => (
+                <SelectItem key={type} value={type}>
+                  <ValueTypeLabel inputType={type} />
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
+        </Field>
+      )}
 
       <Field>
         <div className="flex items-center gap-2">
@@ -514,7 +718,30 @@ export const FieldConfigEditor = ({
         </div>
       </Field>
 
-      {field.inputType === "select" && (
+      <Field>
+        <div className="flex items-center gap-2">
+          <Checkbox
+            checked={isComposite}
+            onCheckedChange={(checked) => {
+              if (checked) {
+                onUpdate({
+                  parts: field.parts ?? [emptyEditablePart()],
+                  format: field.format ?? "",
+                });
+                return;
+              }
+              onUpdate({ parts: undefined, format: undefined });
+            }}
+          />
+          <FieldLabel>{t("templates.fieldMultipleParts")}</FieldLabel>
+        </div>
+      </Field>
+
+      {isComposite && (
+        <CompositePartsEditor field={field} onUpdate={onUpdate} />
+      )}
+
+      {!isComposite && field.inputType === "select" && (
         <Field>
           <FieldLabel>{t("templates.fieldOptions")}</FieldLabel>
           <OptionsTagInput

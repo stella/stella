@@ -8,6 +8,7 @@ import {
   buildAiFieldGenerator,
   buildAiOccurrenceAdapter,
 } from "@/api/handlers/docx/ai-field-generator";
+import { applyCompositeFields } from "@/api/handlers/docx/composite-fields";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
 import { resolveAiFields } from "@/api/handlers/docx/resolve-ai-fields";
 import { readManifest } from "@/api/handlers/docx/template-manifest";
@@ -121,6 +122,18 @@ export const fillHandler = async ({
   let fillBuffer: Buffer = buffer;
   let adaptedPaths: readonly string[] = [];
   const manifest = await readManifest(buffer);
+
+  // Assemble composite (multipart) field values into their final strings
+  // before any AI step or substitution sees them (in place: an assembled
+  // value is a plain string, so the data stays valid TemplateData).
+  const compositeError = applyCompositeFields(fillData, manifest);
+  if (compositeError !== null) {
+    return new Response(JSON.stringify({ error: compositeError }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const hasAiDraftFields = manifest?.fields.some((field) => field.aiPrompt);
   const hasAiAdaptFields = manifest?.fields.some((field) => field.aiAdapt);
   if (manifest && (hasAiDraftFields || hasAiAdaptFields)) {

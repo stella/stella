@@ -13,6 +13,8 @@
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
+import { isFieldPath } from "@stll/template-conditions";
+
 import { WorkflowValidationError } from "@/api/lib/errors/tagged-errors";
 
 import { isElement } from "./ooxml";
@@ -21,9 +23,11 @@ import type {
   DiscoveredField,
   DiscoveredTemplate,
   FieldMeta,
+  FieldPart,
   FieldValidation,
   InputType,
   NamedCondition,
+  PartInputType,
   ResolvedField,
   TemplateManifest,
 } from "./types";
@@ -63,6 +67,9 @@ const INPUT_TYPES: ReadonlySet<string> = new Set([
 const isInputType = (value: string): value is InputType =>
   INPUT_TYPES.has(value);
 
+const isPartInputType = (value: string): value is PartInputType =>
+  value === "text" || value === "select";
+
 // ── XML builders ─────────────────────────────────────────
 
 const escapeXml = (s: string): string =>
@@ -71,6 +78,30 @@ const escapeXml = (s: string): string =>
     .replace(/</gu, "&lt;")
     .replace(/>/gu, "&gt;")
     .replace(/"/gu, "&quot;");
+
+const buildOptionsXml = (options: readonly string[]): string => {
+  const optionElements = options
+    .map((o) => `<st:option value="${escapeXml(o)}"/>`)
+    .join("");
+  return `<st:options>${optionElements}</st:options>`;
+};
+
+const buildPartXml = (part: FieldPart): string => {
+  const attrs: string[] = [
+    `key="${escapeXml(part.key)}"`,
+    `inputType="${escapeXml(part.inputType)}"`,
+  ];
+  if (part.label !== undefined) {
+    attrs.push(`label="${escapeXml(part.label)}"`);
+  }
+  if (part.pattern !== undefined) {
+    attrs.push(`pattern="${escapeXml(part.pattern)}"`);
+  }
+  if (part.options && part.options.length > 0) {
+    return `<st:part ${attrs.join(" ")}>${buildOptionsXml(part.options)}</st:part>`;
+  }
+  return `<st:part ${attrs.join(" ")}/>`;
+};
 
 const buildFieldXml = (field: FieldMeta): string => {
   const attrs: string[] = [`path="${escapeXml(field.path)}"`];
@@ -89,14 +120,20 @@ const buildFieldXml = (field: FieldMeta): string => {
   if (field.aiAdapt !== undefined) {
     attrs.push(`aiAdapt="${field.aiAdapt}"`);
   }
+  if (field.format !== undefined) {
+    attrs.push(`format="${escapeXml(field.format)}"`);
+  }
 
   const children: string[] = [];
 
   if (field.options && field.options.length > 0) {
-    const optionElements = field.options
-      .map((o) => `<st:option value="${escapeXml(o)}"/>`)
-      .join("");
-    children.push(`<st:options>${optionElements}</st:options>`);
+    children.push(buildOptionsXml(field.options));
+  }
+
+  if (field.parts && field.parts.length > 0) {
+    children.push(
+      `<st:parts>${field.parts.map(buildPartXml).join("")}</st:parts>`,
+    );
   }
 
   if (field.validation) {
@@ -214,6 +251,40 @@ const getFirstElementChild = (
   return null;
 };
 
+const parseFieldPart = (el: slimdom.Element): FieldPart | null => {
+  const key = el.getAttribute("key");
+  if (key === null || !isFieldPath(key)) {
+    return null;
+  }
+
+  const rawType = el.getAttribute("inputType");
+  const part: FieldPart = {
+    key,
+    inputType: rawType !== null && isPartInputType(rawType) ? rawType : "text",
+  };
+
+  const label = el.getAttribute("label");
+  if (label !== null) {
+    part.label = label;
+  }
+  const pattern = el.getAttribute("pattern");
+  if (pattern !== null) {
+    part.pattern = pattern;
+  }
+
+  const optionsEl = getFirstElementChild(el, "options");
+  if (optionsEl) {
+    const options = getElementChildren(optionsEl, "option")
+      .map((o) => o.getAttribute("value"))
+      .filter((v): v is string => v !== null);
+    if (options.length > 0) {
+      part.options = options;
+    }
+  }
+
+  return part;
+};
+
 const parseFieldMeta = (el: slimdom.Element): FieldMeta => {
   const path = el.getAttribute("path") ?? "";
   const label = el.getAttribute("label") ?? undefined;
@@ -283,6 +354,21 @@ const parseFieldMeta = (el: slimdom.Element): FieldMeta => {
     if (Object.keys(validation).length > 0) {
       field.validation = validation;
     }
+  }
+
+  // parts + format round-trip together; a half-shape (hand-edited XML) is
+  // dropped so the "both present or both absent" invariant holds downstream.
+  const format = el.getAttribute("format");
+  const partsEl = getFirstElementChild(el, "parts");
+  const parts =
+    partsEl === null
+      ? []
+      : getElementChildren(partsEl, "part")
+          .map(parseFieldPart)
+          .filter((part): part is FieldPart => part !== null);
+  if (format !== null && parts.length > 0) {
+    field.parts = parts;
+    field.format = format;
   }
 
   return field;
@@ -555,6 +641,8 @@ export const mergeManifestWithDiscovery = (
         validation: f.validation,
         required: f.required,
         aiAdapt: f.aiAdapt,
+        parts: f.parts,
+        format: f.format,
       });
     }
   }
@@ -598,6 +686,10 @@ const mergeField = (
     }
     if (meta.aiAdapt !== undefined) {
       resolved.aiAdapt = meta.aiAdapt;
+    }
+    if (meta.parts !== undefined && meta.format !== undefined) {
+      resolved.parts = meta.parts;
+      resolved.format = meta.format;
     }
   }
 
