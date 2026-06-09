@@ -1320,13 +1320,7 @@ type Messages = {
       "builtInSection": "Built-in skills";
       "chooseFile": "Choose a file or drag it here";
       "coaching": {
-        "checkTrigger": "Set how it runs (a / command or an auto-run hint)";
-        "checkTriggerDone": "Run trigger set";
-        "guidanceDone": "All guidance notes filled in";
-        "guidanceRemaining": "{count, plural, one {# guidance note to fill in} other {# guidance notes to fill in}}";
-        "hint": "Replace each “e.g.” hint with your own, and delete the guidance notes as you go.";
         "publish": "Publish skill";
-        "title": "Finish your skill";
       };
       "deleteConfirmDescription": "\"{name}\" will be removed from this workspace.";
       "deleteConfirmTitle": "Delete skill?";

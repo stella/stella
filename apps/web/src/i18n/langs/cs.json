@@ -1317,13 +1317,7 @@
       "builtInSection": "Vestavěné dovednosti",
       "chooseFile": "Vyberte soubor nebo ho sem přetáhněte",
       "coaching": {
-        "checkTrigger": "Set how it runs (a / command or an auto-run hint)",
-        "checkTriggerDone": "Run trigger set",
-        "guidanceDone": "All guidance notes filled in",
-        "guidanceRemaining": "{count, plural, one {# guidance note to fill in} other {# guidance notes to fill in}}",
-        "hint": "Replace each “e.g.” hint with your own, and delete the guidance notes as you go.",
-        "publish": "Publish skill",
-        "title": "Finish your skill"
+        "publish": "Publish skill"
       },
       "deleteConfirmDescription": "Dovednost „{name}“ bude z tohoto pracovního prostoru odebrána.",
       "deleteConfirmTitle": "Smazat dovednost?",

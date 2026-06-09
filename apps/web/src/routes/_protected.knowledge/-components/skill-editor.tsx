@@ -41,11 +41,6 @@ import {
 import { catalogueKeys } from "@/routes/_protected.knowledge/-queries/catalogue";
 
 const SKILL_BODY_FILE_NAME = "SKILL.md";
-// Blueprints seed coaching notes as `<!-- guide: … -->` comments. The editor
-// counts the ones still left so the user can see how much scaffold remains.
-const GUIDE_MARKER_PATTERN = /<!--\s*guide:/gu;
-const countGuideMarkers = (text: string): number =>
-  text.match(GUIDE_MARKER_PATTERN)?.length ?? 0;
 
 // Mirrors apps/api/src/handlers/skills/resources/resource-path.ts.
 // Keep the two in sync.
@@ -325,17 +320,6 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
 
   const fileNodes = useMemo(() => buildSkillNodes(resources), [resources]);
 
-  // Quality coaching: how many `<!-- guide: … -->` notes are still unfilled
-  // across SKILL.md and every companion file (drafts included), and whether the
-  // skill has a way to be invoked.
-  const guideCount = useMemo(() => {
-    let total = countGuideMarkers(bodyContent);
-    for (const resource of resources) {
-      total += countGuideMarkers(resource.content);
-    }
-    return total;
-  }, [bodyContent, resources]);
-
   const onPublish = () => {
     if (enabled) {
       return;
@@ -593,11 +577,6 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
           <p className="text-muted-foreground me-auto text-xs font-semibold tracking-wider uppercase">
             {tSkills("filesHeading")}
           </p>
-          {guideCount > 0 && (
-            <span className="text-muted-foreground me-1 text-xs">
-              {tSkills("coaching.guidanceRemaining", { count: guideCount })}
-            </span>
-          )}
           <RootCreateButton
             createPending={createResource.isPending}
             onCreateFile={onCreateFile}
