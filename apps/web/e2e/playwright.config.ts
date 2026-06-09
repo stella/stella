@@ -12,9 +12,12 @@ const IS_CI = process.env["CI"] !== undefined;
 export default defineConfig({
   testDir: "./specs",
   // Each spec creates and tears down its own workspace, so parallelism
-  // is safe. Capped at 4 to keep Postgres/MinIO contention modest.
+  // is safe. Capped at 4 locally to keep Postgres/MinIO contention
+  // modest; serial in CI because two specs cold-compiling heavy route
+  // chunks (folio, chat) on a 2-core runner starve each other past
+  // their expect timeouts.
   fullyParallel: true,
-  workers: IS_CI ? 2 : 4,
+  workers: IS_CI ? 1 : 4,
   // CI failures are almost always real (server logs, traces tell the story).
   // Retries hide flakes; fix them in code instead.
   retries: 0,

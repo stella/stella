@@ -41,7 +41,11 @@ test("chat composer sends a message and renders the assistant reply", async ({
   );
 
   const transcript = page.getByRole("log");
-  await expect(transcript.getByText(messageText)).toBeVisible();
+  // First assertion on the thread route: its lazy chunk cold-compiles
+  // on a fresh dev server, so allow the same headroom as the composer.
+  await expect(transcript.getByText(messageText)).toBeVisible({
+    timeout: 30_000,
+  });
 
   // A "Copy" action renders only under an assistant message that has
   // non-empty text (AssistantMessageActions in
