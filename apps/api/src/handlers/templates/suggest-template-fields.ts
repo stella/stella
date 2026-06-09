@@ -20,18 +20,19 @@ import type { SafeId } from "@/api/lib/branded-types";
 
 const SUGGEST_TIMEOUT_MS = 45_000;
 
-// strictObject, not object: OpenAI's strict structured-output mode rejects any
-// schema object without `additionalProperties: false`, which only strictObject
-// emits ("Invalid schema for response_format" — fails on gpt-* fast models).
+// strictObject + nullable (not object/optional): OpenAI's strict structured
+// output rejects schema objects without `additionalProperties: false` and any
+// property missing from `required` — so optionals must be required-but-nullable
+// ("Invalid schema for response_format" — fails on gpt-* fast models otherwise).
 export const fieldSuggestionsSchema = v.strictObject({
   suggestions: v.array(
     v.strictObject({
       literalText: v.string(),
       fieldPath: v.string(),
-      inputType: v.optional(
+      inputType: v.nullable(
         v.picklist(["text", "textarea", "number", "boolean", "date", "select"]),
       ),
-      aiPrompt: v.optional(v.string()),
+      aiPrompt: v.nullable(v.string()),
     }),
   ),
 });
@@ -47,7 +48,7 @@ For each, return:
 - literalText: the EXACT text in the document to replace, copied verbatim
 - fieldPath: a dot-separated name, e.g. company.name, company.krs, signatory.name, signatory.role, signing_date, scope
 - inputType: one of text, textarea, number, boolean, date, select
-- aiPrompt: ONLY for free-text sections that should be drafted by AI at fill time (e.g. the scope of the power of attorney) — an instruction describing what to draft. Omit it for ordinary fields.`;
+- aiPrompt: ONLY for free-text sections that should be drafted by AI at fill time (e.g. the scope of the power of attorney) — an instruction describing what to draft. Use null for ordinary fields.`;
 
 const buildPrompt = (documentText: string, instructions?: string): string => {
   const extra = instructions
@@ -83,7 +84,14 @@ export const suggestTemplateFields = async ({
       system: SYSTEM_PROMPT,
     });
     const { suggestions } = await result.output;
-    return suggestions;
+    // The schema models "absent" as null (OpenAI strict mode); FieldSuggestion
+    // uses optional members.
+    return suggestions.map((s) => ({
+      literalText: s.literalText,
+      fieldPath: s.fieldPath,
+      inputType: s.inputType ?? undefined,
+      aiPrompt: s.aiPrompt ?? undefined,
+    }));
   } catch {
     return [];
   }
