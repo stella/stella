@@ -1974,6 +1974,7 @@
   "templates": {
     "addCondition": "Añadir condición",
     "addItem": "Añadir elemento",
+    "aiAdaptHint": "La IA adapta esta redacción a cada lugar del documento donde aparece.",
     "allTemplates": "Todas las plantillas",
     "backToList": "Volver a plantillas",
     "browseFiles": "Explorar archivos",
@@ -2080,10 +2081,12 @@
       "prepareWithAi": "Preparar con IA",
       "renameField": "Renombrar campo",
       "renameFieldInvalid": "Ese nombre no es válido o ya existe",
+      "repeatForEach": "Repetir para cada…",
       "scopeClause": "Espacio de cláusula",
       "scopeCondition": "Condición",
       "scopeField": "Campo",
       "scopeTemplate": "Plantilla",
+      "showOnlyIf": "Mostrar solo si…",
       "suggestConfig": "Sugerir configuración",
       "whoFills": "¿Quién lo rellena?"
     },

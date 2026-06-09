@@ -1974,6 +1974,7 @@
   "templates": {
     "addCondition": "Bedingung hinzufügen",
     "addItem": "Element hinzufügen",
+    "aiAdaptHint": "Die KI passt diese Formulierung an jede Stelle im Dokument an, an der sie vorkommt.",
     "allTemplates": "Alle Vorlagen",
     "backToList": "Zurück zu Vorlagen",
     "browseFiles": "Dateien durchsuchen",
@@ -2080,10 +2081,12 @@
       "prepareWithAi": "Mit KI vorbereiten",
       "renameField": "Feld umbenennen",
       "renameFieldInvalid": "Dieser Name ist ungültig oder bereits vergeben",
+      "repeatForEach": "Für jedes Element wiederholen…",
       "scopeClause": "Klausel-Slot",
       "scopeCondition": "Bedingung",
       "scopeField": "Feld",
       "scopeTemplate": "Vorlage",
+      "showOnlyIf": "Nur anzeigen, wenn…",
       "suggestConfig": "Konfiguration vorschlagen",
       "whoFills": "Wer füllt das aus?"
     },

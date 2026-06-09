@@ -30,6 +30,7 @@ import {
   WandSparklesIcon,
 } from "lucide-react";
 import { TextSelection } from "prosemirror-state";
+import type { Transaction } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import { useTranslations } from "use-intl";
 
@@ -106,6 +107,8 @@ const protectedRouteApi = getRouteApi("/_protected");
 
 const TEMPLATE_STUDIO_VIEW = "template-studio";
 const MAKE_FIELD_CONTEXT_ID = "make-field";
+const WRAP_IF_CONTEXT_ID = "wrap-if";
+const WRAP_EACH_CONTEXT_ID = "wrap-each";
 const TEMPLATES_ROUTE_ID = "/_protected/knowledge/templates";
 const templateStudioTabId = (templateId: string) =>
   `template-studio:${templateId}`;
@@ -172,7 +175,8 @@ export const TemplateStudioPage = ({
     },
     [containerRef],
   );
-  // Right-click on selected text offers turning it into a {{field}} directly.
+  // Right-click on selected text offers the structural gestures directly:
+  // turn it into a {{field}}, or wrap it in a condition / loop block.
   const makeFieldContextItems = useMemo(
     () => [
       {
@@ -180,6 +184,18 @@ export const TemplateStudioPage = ({
         label: t("templates.studio.makeField"),
         requiresSelection: true,
         icon: <BracesIcon size={14} />,
+      },
+      {
+        id: WRAP_IF_CONTEXT_ID,
+        label: t("templates.studio.showOnlyIf"),
+        requiresSelection: true,
+        icon: <SplitIcon size={14} />,
+      },
+      {
+        id: WRAP_EACH_CONTEXT_ID,
+        label: t("templates.studio.repeatForEach"),
+        requiresSelection: true,
+        icon: <RepeatIcon size={14} />,
       },
     ],
     [t],
@@ -368,9 +384,16 @@ export const TemplateStudioPage = ({
     });
 
   // Block directives must occupy their own paragraph (the fill engine anchors
-  // them line-by-line), so insert opener/body/closer as three paragraphs after
-  // the current one.
-  const insertBlock = (open: string, close: string) =>
+  // them line-by-line). With a selection, wrap the paragraphs it covers in
+  // opener/closer; with a caret, insert opener/body/closer after the current
+  // paragraph. Either way the placeholder name ends up selected, so typing
+  // renames it immediately.
+  const insertOrWrapBlock = (
+    open: string,
+    close: string,
+    placeholder: string,
+    range?: { from: number; to: number },
+  ) =>
     withEditorView((view) => {
       const { state } = view;
       const paragraph = state.schema.nodes["paragraph"];
@@ -382,14 +405,34 @@ export const TemplateStudioPage = ({
           null,
           text.length > 0 ? state.schema.text(text) : null,
         );
-      const { $from } = state.selection;
-      const pos = $from.depth >= 1 ? $from.after(1) : state.doc.content.size;
-      try {
-        view.dispatch(
-          state.tr
-            .insert(pos, [para(open), para(""), para(close)])
-            .scrollIntoView(),
+      const selectPlaceholder = (tr: Transaction, openStart: number) => {
+        const namePos = openStart + 1 + open.indexOf(placeholder);
+        return tr.setSelection(
+          TextSelection.create(tr.doc, namePos, namePos + placeholder.length),
         );
+      };
+      const { from, to } = range ?? state.selection;
+      try {
+        if (from === to) {
+          const $from = state.doc.resolve(from);
+          const pos =
+            $from.depth >= 1 ? $from.after(1) : state.doc.content.size;
+          view.dispatch(
+            selectPlaceholder(
+              state.tr.insert(pos, [para(open), para(""), para(close)]),
+              pos,
+            ).scrollIntoView(),
+          );
+        } else {
+          const $from = state.doc.resolve(from);
+          const $to = state.doc.resolve(to);
+          const start = $from.depth >= 1 ? $from.before(1) : 0;
+          const end = $to.depth >= 1 ? $to.after(1) : state.doc.content.size;
+          const tr = state.tr
+            .insert(end, para(close))
+            .insert(start, para(open));
+          view.dispatch(selectPlaceholder(tr, start).scrollIntoView());
+        }
         view.focus();
         markDirty();
       } catch {
@@ -409,8 +452,10 @@ export const TemplateStudioPage = ({
     upsertField(path, {});
   };
 
-  const insertCondition = () => insertBlock("{{#if condition}}", "{{/if}}");
-  const insertLoop = () => insertBlock("{{#each items}}", "{{/each}}");
+  const insertCondition = (range?: { from: number; to: number }) =>
+    insertOrWrapBlock("{{#if condition}}", "{{/if}}", "condition", range);
+  const insertLoop = (range?: { from: number; to: number }) =>
+    insertOrWrapBlock("{{#each items}}", "{{/each}}", "items", range);
   const insertClause = () => insertInline("{{@clause:Clause}}");
 
   const handleSave = async () => {
@@ -636,6 +681,12 @@ export const TemplateStudioPage = ({
               onCustomContextAction={(id, range) => {
                 if (id === MAKE_FIELD_CONTEXT_ID) {
                   makeField(range);
+                }
+                if (id === WRAP_IF_CONTEXT_ID) {
+                  insertCondition(range);
+                }
+                if (id === WRAP_EACH_CONTEXT_ID) {
+                  insertLoop(range);
                 }
               }}
               customContextMenuItems={makeFieldContextItems}

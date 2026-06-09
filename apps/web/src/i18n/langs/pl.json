@@ -1974,6 +1974,7 @@
   "templates": {
     "addCondition": "Dodaj warunek",
     "addItem": "Dodaj element",
+    "aiAdaptHint": "AI dostosuje to sformułowanie do każdego miejsca w dokumencie, w którym się pojawia.",
     "allTemplates": "Wszystkie szablony",
     "backToList": "Powrót do szablonów",
     "browseFiles": "Przeglądaj pliki",
@@ -2080,10 +2081,12 @@
       "prepareWithAi": "Przygotuj z AI",
       "renameField": "Zmień nazwę pola",
       "renameFieldInvalid": "Ta nazwa jest nieprawidłowa lub już zajęta",
+      "repeatForEach": "Powtórz dla każdego…",
       "scopeClause": "Miejsce klauzuli",
       "scopeCondition": "Warunek",
       "scopeField": "Pole",
       "scopeTemplate": "Szablon",
+      "showOnlyIf": "Pokaż tylko, jeśli…",
       "suggestConfig": "Zaproponuj konfigurację",
       "whoFills": "Kto to wypełni?"
     },

@@ -1974,6 +1974,7 @@
   "templates": {
     "addCondition": "Pievienot nosacījumu",
     "addItem": "Pievienot vienību",
+    "aiAdaptHint": "MI pielāgos šo formulējumu katrai dokumenta vietai, kur tas parādās.",
     "allTemplates": "Visas veidnes",
     "backToList": "Atpakaļ pie veidnēm",
     "browseFiles": "Pārlūkot failus",
@@ -2080,10 +2081,12 @@
       "prepareWithAi": "Sagatavot ar MI",
       "renameField": "Pārdēvēt lauku",
       "renameFieldInvalid": "Šis nosaukums nav derīgs vai jau ir aizņemts",
+      "repeatForEach": "Atkārtot katram…",
       "scopeClause": "Klauzulas vieta",
       "scopeCondition": "Nosacījums",
       "scopeField": "Lauks",
       "scopeTemplate": "Veidne",
+      "showOnlyIf": "Rādīt tikai tad, ja…",
       "suggestConfig": "Ieteikt konfigurāciju",
       "whoFills": "Kas to aizpildīs?"
     },

@@ -1974,6 +1974,7 @@
   "templates": {
     "addCondition": "Ajouter une condition",
     "addItem": "Ajouter un élément",
+    "aiAdaptHint": "L'IA adapte cette formulation à chaque endroit du document où elle apparaît.",
     "allTemplates": "Tous les modèles",
     "backToList": "Retour aux modèles",
     "browseFiles": "Parcourir les fichiers",
@@ -2080,10 +2081,12 @@
       "prepareWithAi": "Préparer avec l'IA",
       "renameField": "Renommer le champ",
       "renameFieldInvalid": "Ce nom est invalide ou déjà utilisé",
+      "repeatForEach": "Répéter pour chaque…",
       "scopeClause": "Emplacement de clause",
       "scopeCondition": "Condition",
       "scopeField": "Champ",
       "scopeTemplate": "Modèle",
+      "showOnlyIf": "Afficher seulement si…",
       "suggestConfig": "Suggérer la configuration",
       "whoFills": "Qui le remplit ?"
     },

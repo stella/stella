@@ -1974,6 +1974,7 @@
   "templates": {
     "addCondition": "Pridėti sąlygą",
     "addItem": "Pridėti elementą",
+    "aiAdaptHint": "DI pritaikys šią formuluotę kiekvienai dokumento vietai, kurioje ji pasirodo.",
     "allTemplates": "Visi šablonai",
     "backToList": "Grįžti prie šablonų",
     "browseFiles": "Naršyti failus",
@@ -2080,10 +2081,12 @@
       "prepareWithAi": "Paruošti su DI",
       "renameField": "Pervadinti lauką",
       "renameFieldInvalid": "Šis pavadinimas netinkamas arba jau užimtas",
+      "repeatForEach": "Kartoti kiekvienam…",
       "scopeClause": "Sąlygos vieta",
       "scopeCondition": "Sąlyga",
       "scopeField": "Laukas",
       "scopeTemplate": "Šablonas",
+      "showOnlyIf": "Rodyti tik jei…",
       "suggestConfig": "Pasiūlyti konfigūraciją",
       "whoFills": "Kas tai užpildys?"
     },

@@ -1974,6 +1974,7 @@
   "templates": {
     "addCondition": "Lisa tingimus",
     "addItem": "Lisa element",
+    "aiAdaptHint": "AI kohandab seda sõnastust dokumendi iga koha järgi, kus see esineb.",
     "allTemplates": "Kõik mallid",
     "backToList": "Tagasi mallide juurde",
     "browseFiles": "Sirvi faile",
@@ -2080,10 +2081,12 @@
       "prepareWithAi": "Valmista ette AI-ga",
       "renameField": "Nimeta väli ümber",
       "renameFieldInvalid": "See nimi on vigane või juba kasutusel",
+      "repeatForEach": "Korda iga elemendi puhul…",
       "scopeClause": "Klausli koht",
       "scopeCondition": "Tingimus",
       "scopeField": "Väli",
       "scopeTemplate": "Mall",
+      "showOnlyIf": "Kuva ainult siis, kui…",
       "suggestConfig": "Paku seadistust",
       "whoFills": "Kes selle täidab?"
     },

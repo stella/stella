@@ -1974,6 +1974,7 @@
   "templates": {
     "addCondition": "Feltétel hozzáadása",
     "addItem": "Elem hozzáadása",
+    "aiAdaptHint": "Az MI a megfogalmazást a dokumentum minden előfordulási helyéhez igazítja.",
     "allTemplates": "Összes sablon",
     "backToList": "Vissza a sablonokhoz",
     "browseFiles": "Fájlok tallózása",
@@ -2080,10 +2081,12 @@
       "prepareWithAi": "Előkészítés MI-vel",
       "renameField": "Mező átnevezése",
       "renameFieldInvalid": "Ez a név érvénytelen vagy már foglalt",
+      "repeatForEach": "Ismétlés minden elemre…",
       "scopeClause": "Kikötéshely",
       "scopeCondition": "Feltétel",
       "scopeField": "Mező",
       "scopeTemplate": "Sablon",
+      "showOnlyIf": "Csak akkor jelenjen meg, ha…",
       "suggestConfig": "Beállítás javaslása",
       "whoFills": "Ki tölti ki?"
     },

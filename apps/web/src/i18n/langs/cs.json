@@ -1974,6 +1974,7 @@
   "templates": {
     "addCondition": "Přidat podmínku",
     "addItem": "Přidat položku",
+    "aiAdaptHint": "AI přizpůsobí tuto formulaci každému místu v dokumentu, kde se objeví.",
     "allTemplates": "Všechny šablony",
     "backToList": "Zpět na šablony",
     "browseFiles": "Procházet soubory",
@@ -2080,10 +2081,12 @@
       "prepareWithAi": "Připravit pomocí AI",
       "renameField": "Přejmenovat pole",
       "renameFieldInvalid": "Tento název je neplatný nebo už existuje",
+      "repeatForEach": "Opakovat pro každé…",
       "scopeClause": "Vzorové ustanovení",
       "scopeCondition": "Podmínka",
       "scopeField": "Pole",
       "scopeTemplate": "Šablona",
+      "showOnlyIf": "Zobrazit, jen pokud…",
       "suggestConfig": "Navrhnout nastavení",
       "whoFills": "Kdo to vyplní?"
     },
