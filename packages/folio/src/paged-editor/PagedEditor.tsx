@@ -7054,7 +7054,9 @@ export function PagedEditor(
                 alignItems: "center",
                 justifyContent: "center",
                 cursor: "pointer",
-                zIndex: 200,
+                // Keep this editor overlay below the app's popover/modal layer
+                // (z-50) so it can't bleed through an open popover over a table.
+                zIndex: 40,
                 padding: 0,
                 boxShadow: "none",
               }}
