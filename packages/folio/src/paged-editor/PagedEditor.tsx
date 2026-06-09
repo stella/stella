@@ -279,6 +279,10 @@ export type PagedEditorProps = {
   onEditorViewReady?: (view: EditorView | null) => void;
   /** External ProseMirror plugins. */
   externalPlugins?: Plugin[];
+  /** Paint the template-directive overlay. Toggling this hides the chips even
+   *  while the directive plugin stays installed — the hidden view isn't
+   *  reconfigured on a same-document plugin change, so gate the overlay here. */
+  showTemplateDirectives?: boolean;
   /** Optional Yjs collaboration owner for the hidden ProseMirror state. */
   collaboration?: HiddenProseMirrorCollaboration | undefined;
   /** Extension manager for plugins/schema/commands (optional — falls back to default) */
@@ -1773,6 +1777,7 @@ export function PagedEditor(
     onSelectionTextChange,
     onEditorViewReady,
     externalPlugins = EMPTY_PLUGINS,
+    showTemplateDirectives = true,
     collaboration,
     extensionManager,
     onHeaderFooterDoubleClick,
@@ -6972,10 +6977,12 @@ export function PagedEditor(
           {/* Template-directive widgets — rich chips over {{...}}
               markers in the template editor. Renders nothing when
               the directives plugin isn't installed. */}
-          <TemplateDirectivesOverlay
-            contentLeft={directiveContentLeft}
-            groups={directiveRectGroups}
-          />
+          {showTemplateDirectives && (
+            <TemplateDirectivesOverlay
+              contentLeft={directiveContentLeft}
+              groups={directiveRectGroups}
+            />
+          )}
 
           {/* Selection overlay */}
           <SelectionOverlay
