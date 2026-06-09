@@ -15,6 +15,7 @@ import { resolveClauseSlots } from "@/api/handlers/docx/resolve-clause-slots";
 import { readManifest } from "@/api/handlers/docx/template-manifest";
 import { isTemplateData } from "@/api/handlers/docx/types";
 import { convertToPdf } from "@/api/handlers/files/gotenberg";
+import { recordTemplateUse } from "@/api/handlers/templates/record-use";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -194,6 +195,7 @@ const fillByIdHandler = async function* ({
     Result.tryPromise({
       try: async () =>
         await scopedDb(async (tx) => {
+          await recordTemplateUse({ tx, templateId });
           await tx.insert(templateFills).values({
             organizationId,
             templateId,

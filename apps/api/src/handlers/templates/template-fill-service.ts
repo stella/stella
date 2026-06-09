@@ -22,6 +22,7 @@ import {
 import { resolveClauseSlots } from "@/api/handlers/docx/resolve-clause-slots";
 import { readManifest } from "@/api/handlers/docx/template-manifest";
 import { isTemplateData } from "@/api/handlers/docx/types";
+import { recordTemplateUse } from "@/api/handlers/templates/record-use";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getS3 } from "@/api/lib/s3";
 
@@ -183,6 +184,10 @@ export const fillStoredTemplate = async ({
 
   const result = await fillTemplate(fillBuffer, record);
   const { paragraphs } = await extractText(result.buffer);
+
+  await scopedDb(async (tx) => {
+    await recordTemplateUse({ tx, templateId });
+  });
 
   return {
     text: paragraphs
