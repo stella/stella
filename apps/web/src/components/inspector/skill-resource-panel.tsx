@@ -146,7 +146,7 @@ export const SkillResourcePanel = ({
   };
 
   return (
-    <div className="bg-background flex h-full min-h-0 flex-col">
+    <div className="bg-background flex h-full min-h-0 min-w-0 flex-1 flex-col">
       <InspectorTabHeader
         actions={
           isEditable && !useFolio ? (
