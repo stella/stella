@@ -214,6 +214,12 @@ const resolveProvider = (): AIProvider => {
   if (env.AI_PROVIDER) {
     return env.AI_PROVIDER;
   }
+  // With a registered mock, every provider resolves to the same stub
+  // model, so a synthetic default lets USE_MOCK_AI work without any
+  // provider key configured.
+  if (env.USE_MOCK_AI && mockModelFactory) {
+    return "google";
+  }
   if (env.OPENROUTER_API_KEY) {
     return "openrouter";
   }
