@@ -59,6 +59,8 @@ function walkBlocks(
           walkBlocks(cell.blocks, counters, values);
         }
       }
+    } else if (block.kind === "textBox") {
+      walkBlocks(block.content, counters, values);
     }
   }
 }

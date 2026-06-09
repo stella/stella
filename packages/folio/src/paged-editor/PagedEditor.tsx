@@ -2299,33 +2299,32 @@ export function PagedEditor(
           margins,
         };
         // Header/footer blocks are measured once but painted on every page with
-        // a different page number. Reserve the widest page-number width (from
-        // the prior render's page count — headers are measured before the body
-        // re-lays-out) so a multi-digit page number can't wrap a near-full-width
-        // line differently than the single layout.
+        // a different page number. Measure with the prior render's page count
+        // first, then rebuild the prepared HF content with the final page count
+        // after body layout stabilizes so digit-boundary changes are reflected
+        // before paint.
         const hfPageCountEstimate = layout?.pages.length ?? 1;
         const hfClock = new Date();
-        const hfMeasureBlocks: MeasureBlocksFn = (hfBlocks, hfWidth) =>
-          measureBlocks(
-            hfBlocks,
-            hfWidth,
-            undefined,
-            undefined,
-            buildHeaderFooterFieldValues(
+        const buildHfOptions = (pageCount: number) => {
+          const hfMeasureBlocks: MeasureBlocksFn = (hfBlocks, hfWidth) =>
+            measureBlocks(
               hfBlocks,
-              hfPageCountEstimate,
-              hfClock,
-            ),
-          );
-        const hfOptions = {
-          ...(styles ? { styles } : {}),
-          ...(_theme !== undefined ? { theme: _theme } : {}),
-          measureBlocks: hfMeasureBlocks,
-          ...(defaultTabStop !== undefined
-            ? { defaultTabStopTwips: defaultTabStop }
-            : {}),
+              hfWidth,
+              undefined,
+              undefined,
+              buildHeaderFooterFieldValues(hfBlocks, pageCount, hfClock),
+            );
+          return {
+            ...(styles ? { styles } : {}),
+            ...(_theme !== undefined ? { theme: _theme } : {}),
+            measureBlocks: hfMeasureBlocks,
+            ...(defaultTabStop !== undefined
+              ? { defaultTabStopTwips: defaultTabStop }
+              : {}),
+          };
         };
-        const headerContentForRender = renderHfFromContentOrPm(
+        const hfOptions = buildHfOptions(hfPageCountEstimate);
+        let headerContentForRender = renderHfFromContentOrPm(
           headerContent,
           headerContentRId,
           hfPMsRef.current,
@@ -2333,7 +2332,7 @@ export function PagedEditor(
           hfMetricsHeader,
           hfOptions,
         );
-        const footerContentForRender = renderHfFromContentOrPm(
+        let footerContentForRender = renderHfFromContentOrPm(
           footerContent,
           footerContentRId,
           hfPMsRef.current,
@@ -2342,7 +2341,7 @@ export function PagedEditor(
           hfOptions,
         );
         const hasTitlePg = sectionProperties?.titlePg === true;
-        const firstPageHeaderForRender = hasTitlePg
+        let firstPageHeaderForRender = hasTitlePg
           ? renderHfFromContentOrPm(
               firstPageHeaderContent,
               firstPageHeaderContentRId,
@@ -2352,7 +2351,7 @@ export function PagedEditor(
               hfOptions,
             )
           : undefined;
-        const firstPageFooterForRender = hasTitlePg
+        let firstPageFooterForRender = hasTitlePg
           ? renderHfFromContentOrPm(
               firstPageFooterContent,
               firstPageFooterContentRId,
@@ -2362,14 +2361,14 @@ export function PagedEditor(
               hfOptions,
             )
           : undefined;
-        const headerContentByRId = renderHeaderFooterContentByRId(
+        let headerContentByRId = renderHeaderFooterContentByRId(
           document?.package.headers,
           hfPMsRef.current,
           contentWidth,
           hfMetricsHeader,
           hfOptions,
         );
-        const footerContentByRId = renderHeaderFooterContentByRId(
+        let footerContentByRId = renderHeaderFooterContentByRId(
           document?.package.footers,
           hfPMsRef.current,
           contentWidth,
@@ -2629,6 +2628,60 @@ export function PagedEditor(
             layoutArtifactsRef.current.measures = newMeasures;
             setMeasures(newMeasures);
           }
+        }
+
+        if (newLayout.pages.length !== hfPageCountEstimate) {
+          const finalHfOptions = buildHfOptions(newLayout.pages.length);
+          headerContentForRender = renderHfFromContentOrPm(
+            headerContent,
+            headerContentRId,
+            hfPMsRef.current,
+            contentWidth,
+            hfMetricsHeader,
+            finalHfOptions,
+          );
+          footerContentForRender = renderHfFromContentOrPm(
+            footerContent,
+            footerContentRId,
+            hfPMsRef.current,
+            contentWidth,
+            hfMetricsFooter,
+            finalHfOptions,
+          );
+          firstPageHeaderForRender = hasTitlePg
+            ? renderHfFromContentOrPm(
+                firstPageHeaderContent,
+                firstPageHeaderContentRId,
+                hfPMsRef.current,
+                contentWidth,
+                hfMetricsHeader,
+                finalHfOptions,
+              )
+            : undefined;
+          firstPageFooterForRender = hasTitlePg
+            ? renderHfFromContentOrPm(
+                firstPageFooterContent,
+                firstPageFooterContentRId,
+                hfPMsRef.current,
+                contentWidth,
+                hfMetricsFooter,
+                finalHfOptions,
+              )
+            : undefined;
+          headerContentByRId = renderHeaderFooterContentByRId(
+            document?.package.headers,
+            hfPMsRef.current,
+            contentWidth,
+            hfMetricsHeader,
+            finalHfOptions,
+          );
+          footerContentByRId = renderHeaderFooterContentByRId(
+            document?.package.footers,
+            hfPMsRef.current,
+            contentWidth,
+            hfMetricsFooter,
+            finalHfOptions,
+          );
         }
 
         setLayout(newLayout);

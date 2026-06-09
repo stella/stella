@@ -5,6 +5,7 @@ import type {
   FlowBlock,
   ParagraphBlock,
   TableBlock,
+  TextBoxBlock,
 } from "../layout-engine/types";
 import { buildSeqValues } from "./seqValues";
 
@@ -91,6 +92,26 @@ describe("buildSeqValues", () => {
       ],
     };
     const blocks: FlowBlock[] = [table, para("after", [seq(30, "SEQ Figure")])];
+
+    const values = buildSeqValues(blocks);
+
+    expect(values.get(10)).toBe(1);
+    expect(values.get(20)).toBe(2);
+    expect(values.get(30)).toBe(3);
+  });
+
+  test("counts SEQ fields inside text boxes in document order", () => {
+    const textBox: TextBoxBlock = {
+      kind: "textBox",
+      id: "box",
+      width: 240,
+      content: [para("caption", [seq(20, "SEQ Figure")])],
+    };
+    const blocks: FlowBlock[] = [
+      para("before", [seq(10, "SEQ Figure")]),
+      textBox,
+      para("after", [seq(30, "SEQ Figure")]),
+    ];
 
     const values = buildSeqValues(blocks);
 
