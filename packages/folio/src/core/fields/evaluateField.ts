@@ -19,6 +19,10 @@ function hasRefNumberingSwitch(parsed: ParsedFieldInstruction): boolean {
   });
 }
 
+function hasPageRefPositionSwitch(parsed: ParsedFieldInstruction): boolean {
+  return parsed.switches.some((s) => s.switch.toLowerCase() === "p");
+}
+
 type EvaluateFieldOptions = {
   /** Shown for unsupported field types and unresolved references. */
   fallback?: string;
@@ -76,6 +80,9 @@ export function evaluateField(
       return fallback;
 
     case "PAGEREF": {
+      if (hasPageRefPositionSwitch(parsed)) {
+        return fallback;
+      }
       const page = parsed.argument
         ? ctx.bookmarkPages.get(parsed.argument)
         : undefined;
