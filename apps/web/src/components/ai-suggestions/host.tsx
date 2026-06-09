@@ -28,6 +28,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   LoaderCircleIcon,
+  RotateCcwIcon,
   SquareIcon,
   SquarePenIcon,
   WandSparklesIcon,
@@ -137,6 +138,17 @@ function writeStoredApplyMode(mode: AISuggestionApplyMode): void {
  * the thread instead of generating a response.
  */
 const NEW_THREAD_COMMANDS = new Set(["/new", "/clear"]);
+
+/**
+ * The raw input a generation was started with (composer HTML plus
+ * optional preset/paste payload). Kept verbatim so a stopped run can
+ * be retried with the exact same input.
+ */
+type GenerateBarInput = {
+  prompt: string;
+  presetId?: string;
+  pastedText?: string;
+};
 
 const SEVERITY_DOT_CLASS: Record<AISuggestionSeverity, string> = {
   substantive: "bg-destructive",
@@ -283,6 +295,20 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
 
   const generationToken = useRef(0);
 
+  /**
+   * Input of the most recently started generation, kept so a
+   * user-initiated stop can offer Retry. Only `handleStop` promotes
+   * it into `retryInput`; normal completion never does.
+   */
+  const lastGenerateInput = useRef<GenerateBarInput | null>(null);
+  /**
+   * When non-null, the bar's action button shows Retry (re-sending
+   * this input) instead of the send arrow. Set on stop; cleared by
+   * typing a new draft, Escape, a new thread, or starting any
+   * generation.
+   */
+  const [retryInput, setRetryInput] = useState<GenerateBarInput | null>(null);
+
   // ---- derived state -------------------------------------------------------
 
   /**
@@ -368,6 +394,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
    */
   const handleStop = useCallback(() => {
     generationToken.current += 1;
+    setRetryInput(lastGenerateInput.current);
     setMessages((prev) =>
       prev.map<ThreadMessage>((m) =>
         m.role === "assistant" && m.status === "loading"
@@ -398,6 +425,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
    */
   const handleNewThread = useCallback(() => {
     generationToken.current += 1;
+    setRetryInput(null);
     setMessages([]);
     setPendingAccepts([]);
     setPendingFirstAccept(null);
@@ -413,11 +441,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
   // ---- generate ------------------------------------------------------------
 
   const handleGenerate = useCallback(
-    async (input: {
-      prompt: string;
-      presetId?: string;
-      pastedText?: string;
-    }) => {
+    async (input: GenerateBarInput) => {
       if (generating) {
         return;
       }
@@ -432,6 +456,9 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
         handleNewThread();
         return;
       }
+
+      lastGenerateInput.current = input;
+      setRetryInput(null);
 
       const userMessage: UserThreadMessage = {
         id: `u-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
@@ -581,6 +608,28 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
       handleNewThread,
     ],
   );
+
+  // ---- retry after stop ------------------------------------------------------
+
+  /** Re-runs the prompt whose generation the user just stopped. */
+  const handleRetry = useCallback(() => {
+    const input = retryInput;
+    if (input === null) {
+      return;
+    }
+    setRetryInput(null);
+    void handleGenerate(input);
+  }, [retryInput, handleGenerate]);
+
+  // A non-empty draft means the user has moved on to a new prompt;
+  // drop the retry offer so the action button reverts to send (and
+  // stays send even if they delete the draft again).
+  const composerIsEmpty = editorController.isEmpty;
+  useEffect(() => {
+    if (!composerIsEmpty && retryInput !== null) {
+      setRetryInput(null);
+    }
+  }, [composerIsEmpty, retryInput]);
 
   // ---- accept / reject -----------------------------------------------------
 
@@ -992,16 +1041,22 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
 
   // ---- keybindings ---------------------------------------------------------
 
-  // Escape closes the floating thread panel. In standalone there's
-  // no panel to close (the thread is always visible alongside the
-  // bar), so the binding is skipped — no need to install a global
-  // keydown listener that would always be a no-op.
+  // Escape closes the floating thread panel and dismisses a pending
+  // retry offer. The listener is only installed while it has work to
+  // do: in standalone there's no panel to close (the thread is always
+  // visible alongside the bar), so only an active retry offer keeps
+  // the binding alive there.
+  const panelClosableByEscape = layout === "floating" && panelOpen;
   useEffect(() => {
-    if (layout !== "floating") {
+    if (!panelClosableByEscape && retryInput === null) {
       return undefined;
     }
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && panelOpen) {
+      if (e.key !== "Escape") {
+        return;
+      }
+      setRetryInput(null);
+      if (panelClosableByEscape) {
         setPanelOpen(false);
       }
     };
@@ -1009,7 +1064,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
     return () => {
       window.removeEventListener("keydown", handler);
     };
-  }, [layout, panelOpen]);
+  }, [panelClosableByEscape, retryInput]);
 
   // (Mode is derived from canEdit + readOnly — no auto-sync needed.)
 
@@ -1056,6 +1111,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
         void handleGenerate(input);
       }}
       onStop={handleStop}
+      onRetry={retryInput !== null ? handleRetry : undefined}
       onNewThread={hasMessages ? handleNewThread : undefined}
       newThreadLabel={t("chat.newChat")}
       onTogglePanel={() => setPanelOpen((v) => !v)}
@@ -1170,6 +1226,14 @@ type PromptBarProps = {
    * floating control on top of the bar.
    */
   onStop?: () => void;
+  /**
+   * Offered after a user-initiated stop: while provided AND the
+   * composer is empty, the send arrow becomes a retry button that
+   * re-runs the stopped prompt. The owner clears it (prop becomes
+   * undefined) once the user types a new draft, presses Escape, or
+   * starts a new thread.
+   */
+  onRetry?: (() => void) | undefined;
 
   // ---- floating-only -----------------------------------------------------
   // These three props drive UI that only exists in floating mode
@@ -1334,6 +1398,7 @@ export function PromptBar(props: PromptBarProps) {
     presets,
     threadHasMessages = false,
     onStop,
+    onRetry,
     onNewThread,
     newThreadLabel,
     onTogglePanel,
@@ -1365,6 +1430,15 @@ export function PromptBar(props: PromptBarProps) {
     : submitDisabled;
   const morphSendToStop = showStop && !queueWhileGenerating;
   const showQueueStopButton = showStop && queueWhileGenerating;
+  // After a stop the send arrow becomes Retry until the user starts
+  // a new draft (the owner also clears `onRetry` then; the `isEmpty`
+  // gate just avoids a one-render flash before that state lands).
+  const morphSendToRetry =
+    !morphSendToStop &&
+    onRetry !== undefined &&
+    isEmpty &&
+    !busy &&
+    !isSendBlocked;
 
   // Glow on attention pulse — kicked from the inspector when the
   // user clicks the AI-suggestions chip so they see the bar light
@@ -1575,16 +1649,28 @@ export function PromptBar(props: PromptBarProps) {
         <TooltipTrigger
           render={
             <Button
-              aria-label={
-                morphSendToStop ? t("chat.stopResponse") : t("chat.sendPrompt")
-              }
+              aria-label={(() => {
+                if (morphSendToStop) {
+                  return t("chat.stopResponse");
+                }
+                if (morphSendToRetry) {
+                  return t("common.retry");
+                }
+                return t("chat.sendPrompt");
+              })()}
               className="rounded-full"
               disabled={
-                morphSendToStop ? false : composerSubmitDisabled || !canSubmit
+                morphSendToStop || morphSendToRetry
+                  ? false
+                  : composerSubmitDisabled || !canSubmit
               }
               onClick={() => {
                 if (morphSendToStop) {
                   onStop();
+                  return;
+                }
+                if (morphSendToRetry) {
+                  onRetry();
                   return;
                 }
                 void submitDraft();
@@ -1592,11 +1678,15 @@ export function PromptBar(props: PromptBarProps) {
               size="icon"
               type="button"
             >
-              {morphSendToStop ? (
-                <SquareIcon aria-hidden="true" />
-              ) : (
-                <ArrowUpIcon aria-hidden="true" />
-              )}
+              {(() => {
+                if (morphSendToStop) {
+                  return <SquareIcon aria-hidden="true" />;
+                }
+                if (morphSendToRetry) {
+                  return <RotateCcwIcon aria-hidden="true" />;
+                }
+                return <ArrowUpIcon aria-hidden="true" />;
+              })()}
             </Button>
           }
         />
@@ -1604,6 +1694,9 @@ export function PromptBar(props: PromptBarProps) {
           {(() => {
             if (morphSendToStop) {
               return t("chat.stopResponse");
+            }
+            if (morphSendToRetry) {
+              return t("common.retry");
             }
             if (canSubmit) {
               return t("chat.sendPrompt");
