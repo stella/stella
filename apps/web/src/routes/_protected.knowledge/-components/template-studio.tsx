@@ -34,6 +34,10 @@ import {
   Menu,
   MenuItem,
   MenuPopup,
+  MenuSeparator,
+  MenuSub,
+  MenuSubPopup,
+  MenuSubTrigger,
   MenuTrigger,
 } from "@stll/ui/components/menu";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
@@ -72,6 +76,7 @@ import {
 } from "@/routes/_protected.knowledge/-components/template-wizard";
 import {
   knowledgeKeys,
+  templateClausesOptions,
   templateDetailOptions,
   templateDocxBufferOptions,
 } from "@/routes/_protected.knowledge/-queries";
@@ -169,6 +174,8 @@ export const TemplateStudioPage = ({
       insertCondition: () => actionsRef.current?.insertCondition(),
       insertLoop: () => actionsRef.current?.insertLoop(),
       insertClause: () => actionsRef.current?.insertClause(),
+      insertClauseSlot: (slotName) =>
+        actionsRef.current?.insertClauseSlot(slotName),
       makeField: () => actionsRef.current?.makeField(),
       save: () => actionsRef.current?.save(),
     });
@@ -408,6 +415,7 @@ export const TemplateStudioPage = ({
     insertCondition,
     insertLoop,
     insertClause,
+    insertClauseSlot: (slotName) => insertInline(`{{@clause:${slotName}}}`),
     makeField,
     save: () => void handleSave(),
   };
@@ -698,6 +706,35 @@ const StudioActionRow = () => {
   const actions = useTemplateStudioStore((s) => s.actions);
   const ui = useTemplateStudioStore((s) => s.ui);
   const isDirty = useTemplateStudioStore((s) => s.isDirty);
+  const sessionTemplateId = useTemplateStudioStore((s) => s.templateId);
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  // Linked clauses feed the Insert > Clause slot submenu so the user picks a
+  // real clause instead of typing a slot name into a bare {{@clause:...}}.
+  const { data: clausesData } = useQuery({
+    ...templateClausesOptions(activeOrganizationId, sessionTemplateId ?? ""),
+    enabled: sessionTemplateId !== null,
+  });
+  const linkedClauses =
+    clausesData && "links" in clausesData && Array.isArray(clausesData.links)
+      ? clausesData.links.flatMap(
+          (link: {
+            id: string;
+            slotName: string | null;
+            clause: { title: string } | null;
+          }) =>
+            link.clause
+              ? [
+                  {
+                    id: link.id,
+                    slotName: link.slotName,
+                    title: link.clause.title,
+                  },
+                ]
+              : [],
+        )
+      : [];
   if (!actions) {
     return null;
   }
@@ -734,10 +771,30 @@ const StudioActionRow = () => {
             <RepeatIcon />
             {t("templates.studio.loop")}
           </MenuItem>
-          <MenuItem onClick={actions.insertClause}>
-            <span className="text-sm font-semibold">{"\u00a7"}</span>
-            {t("templates.studio.scopeClause")}
-          </MenuItem>
+          <MenuSub>
+            <MenuSubTrigger>
+              <span className="text-sm font-semibold">{"\u00a7"}</span>
+              {t("templates.studio.scopeClause")}
+            </MenuSubTrigger>
+            <MenuSubPopup>
+              {linkedClauses.map((link) => (
+                <MenuItem
+                  key={link.id}
+                  onClick={() =>
+                    actions.insertClauseSlot(
+                      link.slotName ?? slugify(link.title),
+                    )
+                  }
+                >
+                  {link.title}
+                </MenuItem>
+              ))}
+              {linkedClauses.length > 0 && <MenuSeparator />}
+              <MenuItem onClick={actions.insertClause}>
+                {t("templates.studio.emptyClauseSlot")}
+              </MenuItem>
+            </MenuSubPopup>
+          </MenuSub>
         </MenuPopup>
       </Menu>
       <Button
