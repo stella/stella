@@ -20,12 +20,6 @@ import { toSafeId } from "@/lib/safe-id";
 import { TemplateForm } from "@/routes/_protected.knowledge/-components/template-form";
 import { TemplateList } from "@/routes/_protected.knowledge/-components/template-list";
 import { TemplateStudioPage } from "@/routes/_protected.knowledge/-components/template-studio";
-import { ConfigureStep } from "@/routes/_protected.knowledge/-components/template-wizard";
-import type {
-  NamedCondition,
-  ResolvedField,
-  StructureError,
-} from "@/routes/_protected.knowledge/-components/template-wizard";
 import {
   knowledgeKeys,
   templateCategoriesOptions,
@@ -52,15 +46,10 @@ type DetailData = Exclude<
   Response
 >;
 
+const DOCX_EXTENSION_RE = /\.docx$/iu;
+
 type View =
   | { kind: "list" }
-  | {
-      kind: "configure";
-      file: File;
-      fields: ResolvedField[];
-      conditions: NamedCondition[];
-      structureErrors: StructureError[];
-    }
   | { kind: "detail"; template: TemplateItem }
   | {
       kind: "fill";
@@ -128,24 +117,46 @@ function RouteComponent() {
       });
   }, [queryClient, activeOrganizationId]);
 
-  if (view.kind === "configure") {
-    return (
-      <ConfigureStep
-        conditions={view.conditions}
-        fields={view.fields}
-        file={view.file}
-        onBack={() => {
-          setView({ kind: "list" });
-          invalidateTemplates();
-        }}
-        onSaved={() => {
-          setView({ kind: "list" });
-          invalidateTemplates();
-        }}
-        structureErrors={view.structureErrors}
-      />
-    );
-  }
+  // Uploading a template drops you straight into the Studio: create it (the
+  // server discovers fields from the DOCX), then open the editor. Field/clause
+  // config now happens in the Studio, so there's no separate configure step.
+  const [creating, setCreating] = useState(false);
+  const openUploadedTemplate = useCallback(
+    async (file: File) => {
+      setCreating(true);
+      const response = await api.templates.put({
+        file,
+        name: file.name.replace(DOCX_EXTENSION_RE, ""),
+      });
+      setCreating(false);
+      if (response.error) {
+        stellaToast.add({
+          type: "error",
+          title: t("templates.saveFailed"),
+          description: userErrorMessage(
+            response.error,
+            t("common.unexpectedError"),
+          ),
+        });
+        return;
+      }
+      const created = response.data;
+      invalidateTemplates();
+      setView({
+        kind: "detail",
+        template: {
+          id: created.id,
+          name: created.name,
+          fileName: created.fileName,
+          fieldCount: created.fieldCount,
+          sizeBytes: created.sizeBytes,
+          categoryId: null,
+          createdAt: new Date(created.createdAt),
+        },
+      });
+    },
+    [t, invalidateTemplates],
+  );
 
   if (view.kind === "detail") {
     return (
@@ -288,21 +299,25 @@ function RouteComponent() {
     );
   }
 
+  if (creating) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-8">
+        <p className="text-muted-foreground text-sm">
+          {t("templates.discovering")}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <TemplateList
       categories={categories}
       onCategoriesChanged={invalidateCategories}
       onCategorySelect={handleCategorySelect}
       onDeleted={invalidateTemplates}
-      onDiscovered={(file, schema) =>
-        setView({
-          kind: "configure",
-          file,
-          fields: schema.fields,
-          conditions: schema.conditions,
-          structureErrors: schema.structureErrors,
-        })
-      }
+      onDiscovered={(file) => {
+        void openUploadedTemplate(file);
+      }}
       onSelect={(template) => setView({ kind: "detail", template })}
       selectedCategoryId={selectedCategoryId}
       templates={templates}
