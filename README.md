@@ -72,7 +72,8 @@ Hosted stella preview is available at [my.stll.app](https://my.stll.app).
 
 ### Self-hosting
 
-Run stella on your own infrastructure. The
+Run stella on your own infrastructure: see the
+[self-hosting guide](docs/self-hosting.md). The
 self-host Compose file runs the API and Gotenberg only; configure Postgres,
 Redis or Valkey, S3-compatible storage, `GOTENBERG_URL`, and Gotenberg
 credentials in `apps/api/.env`. The frontend is a TanStack Start SSR app:
