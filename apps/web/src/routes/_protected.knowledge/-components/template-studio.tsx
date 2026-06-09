@@ -9,6 +9,7 @@ import {
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
+import { panic } from "better-result";
 import {
   BracesIcon,
   ChevronDownIcon,
@@ -52,6 +53,7 @@ import type {
 import { registerInspectorView } from "@/components/inspector/view-registry";
 import { api } from "@/lib/api";
 import { DOCX_MIME, SIDE_RAIL_TAB_ICON_SIZE_PX } from "@/lib/consts";
+import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { AiSuggestFields } from "@/routes/_protected.knowledge/-components/template-ai-fields";
 import { TemplateClausesTab } from "@/routes/_protected.knowledge/-components/template-clauses-tab";
@@ -597,22 +599,57 @@ function TemplateStudioInspectorView({
 }
 
 // Filling happens in-place as the "Fill" subtab. It targets the *saved*
-// template (the fill endpoint reads from S3), so it reads the persisted
-// manifest via the detail query, not the live/unsaved session store.
+// template (the fill endpoint reads from S3). The persisted manifest carries no
+// field kind/itemFields, so re-discover the stored DOCX (the same merge the
+// fill endpoint uses) to get the real field shape — {{#each}} array fields
+// included — rather than reconstructing it from the flat manifest.
 const TemplateFillFacet = ({ templateId }: { templateId: string }) => {
   const t = useTranslations();
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-  const { data: detailData } = useQuery(
-    templateDetailOptions(activeOrganizationId, templateId),
-  );
+  const detailOptions = templateDetailOptions(activeOrganizationId, templateId);
+  const { data: detailData } = useQuery(detailOptions);
   const detail =
     detailData && !(detailData instanceof Response) && "manifest" in detailData
       ? detailData
       : null;
 
-  if (!detail) {
+  const presignedUrl = detail?.presignedUrl;
+  const fileName = detail?.fileName;
+  const {
+    data: discovered,
+    isLoading: discovering,
+    isError,
+  } = useQuery({
+    queryKey: [
+      ...detailOptions.queryKey,
+      "fill-discover",
+      presignedUrl,
+      fileName,
+    ],
+    queryFn: async () => {
+      if (presignedUrl === undefined || fileName === undefined) {
+        panic("fill tab: saved template document is unavailable");
+      }
+      const res = await fetch(presignedUrl, {
+        signal: AbortSignal.timeout(15_000),
+      });
+      const blob = await res.blob();
+      const file = new File([blob], fileName, { type: DOCX_MIME });
+      const response = await api.templates.discover.post({ file });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      if (response.data instanceof Response) {
+        panic("fill tab: discover returned a raw response");
+      }
+      return response.data;
+    },
+    enabled: presignedUrl !== undefined && fileName !== undefined,
+  });
+
+  if (!detail || discovering) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
         <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
@@ -620,39 +657,24 @@ const TemplateFillFacet = ({ templateId }: { templateId: string }) => {
     );
   }
 
-  const { manifest } = detail;
-  // Computed fields and namespace parents (a path that is only a dotted prefix
-  // of others) are not fillable inputs — keep them out of the form.
-  const allFields = manifest?.fields ?? [];
-  const computedNames = new Set((manifest?.computed ?? []).map((c) => c.name));
-  const fieldPaths = allFields.map((f) => f.path);
-  const fields = allFields
-    .filter(
-      (f) =>
-        !computedNames.has(f.path) &&
-        !fieldPaths.some((p) => p !== f.path && p.startsWith(`${f.path}.`)),
-    )
-    .map((f) => ({
-      path: f.path,
-      kind:
-        f.inputType === "boolean" ? ("boolean" as const) : ("string" as const),
-      count: 1,
-      label: f.label,
-      inputType: f.inputType,
-      options: f.options,
-      validation: f.validation,
-      required: f.required,
-    }));
-  const conditions = manifest?.conditions ?? [];
+  if (isError || !discovered) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-8">
+        <p className="text-muted-foreground text-sm">
+          {t("templates.loadFailed")}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <TemplateForm
-      conditions={conditions}
-      fields={fields}
+      conditions={discovered.conditions}
+      fields={discovered.fields}
       fileName={detail.fileName}
       onBack={() => undefined}
       onDone={() => undefined}
-      structureErrors={[]}
+      structureErrors={discovered.structureErrors}
       templateId={templateId}
     />
   );
