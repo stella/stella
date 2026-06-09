@@ -9,8 +9,6 @@ import {
   ClockIcon,
   DownloadIcon,
   EyeIcon,
-  FolderIcon,
-  FolderOpenIcon,
   HashIcon,
   Rows3Icon,
   SparklesIcon,
@@ -39,6 +37,7 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { FolderExpandToggle } from "@/components/file-tree/folder-expand-toggle";
 import Tooltip from "@/components/tooltip";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -98,22 +97,10 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
     <div className="flex shrink-0 flex-wrap items-center gap-1 px-2 py-1">
       {view.layout.type === "filesystem" && folderState.hasFolders && (
         <>
-          <Button
-            onClick={toggleAllFolders}
-            size="icon-xs"
-            title={
-              folderState.allExpanded
-                ? t("workspaces.filesystem.collapseAll")
-                : t("workspaces.filesystem.expandAll")
-            }
-            variant="ghost"
-          >
-            {folderState.allExpanded ? (
-              <FolderOpenIcon className="size-3.5" />
-            ) : (
-              <FolderIcon className="size-3.5" />
-            )}
-          </Button>
+          <FolderExpandToggle
+            allExpanded={folderState.allExpanded}
+            onToggle={toggleAllFolders}
+          />
           <span className="bg-border mx-1 h-4 w-px" />
         </>
       )}
