@@ -5,10 +5,10 @@ import * as v from "valibot";
 
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { getModelForRole } from "@/api/lib/ai-models";
+import { strictOutputSchema } from "@/api/lib/ai-output-schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { strictOutputSchema } from "@/api/lib/strict-output-schema";
 
 const SUGGEST_EDITS_TIMEOUT_MS = 60_000;
 
