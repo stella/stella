@@ -251,9 +251,20 @@ describe("buildHeaderFooterFieldValues", () => {
       seqValues: new Map([[40, 3]]),
     });
 
-    expect(values.get(10)).toBe("IV"); // roman of the widest page
+    expect(values.get(10)).toBe("IV");
     expect(values.get(20)).toBe("12");
     expect(values.get(30)).toBe("Figure 2: Caption");
     expect(values.get(40)).toBe("3");
+  });
+
+  test("reserves formatted PAGE fields at a wider display value", () => {
+    const blocks: FlowBlock[] = [
+      para("p", [field(10, "PAGE \\* ROMAN"), field(20, "PAGE")]),
+    ];
+
+    const values = buildHeaderFooterFieldValues(blocks, 9, now);
+
+    expect(values.get(10)).toBe("VIII");
+    expect(values.get(20)).toBe("9");
   });
 });

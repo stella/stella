@@ -1,4 +1,9 @@
-import { parseFieldInstruction } from "../docx/fieldParser";
+import {
+  computePageNumber,
+  getFormatSwitch,
+  parseFieldInstruction,
+} from "../docx/fieldParser";
+import type { ParsedFieldInstruction } from "../docx/fieldParser";
 import type {
   BlockId,
   FieldRun,
@@ -139,9 +144,16 @@ export function buildHeaderFooterFieldValues(
       continue;
     }
     const parsed = parseFieldInstruction(run.instruction || run.fieldType);
+    const fieldContext =
+      parsed.type === "PAGE"
+        ? {
+            ...context,
+            pageNumber: widestFormattedPageNumber(parsed, pageCount),
+          }
+        : context;
     values.set(
       run.pmStart,
-      evaluateField(parsed, context, {
+      evaluateField(parsed, fieldContext, {
         fallback: run.fallback ?? "",
         instanceId: run.pmStart,
         ...(run.fldLock ? { locked: true } : {}),
@@ -150,6 +162,50 @@ export function buildHeaderFooterFieldValues(
   }
   return values;
 }
+
+function widestFormattedPageNumber(
+  parsed: ParsedFieldInstruction,
+  pageCount: number,
+): number {
+  const format = getFormatSwitch(parsed)?.toUpperCase();
+  if (format !== "ROMAN" && format !== "ALPHABETIC") {
+    return pageCount;
+  }
+
+  let widestPage = 1;
+  let widestWidth = formattedPageWidthScore(computePageNumber(1, parsed));
+
+  for (let page = 2; page <= pageCount; page++) {
+    const width = formattedPageWidthScore(computePageNumber(page, parsed));
+    if (width > widestWidth) {
+      widestPage = page;
+      widestWidth = width;
+    }
+  }
+
+  return widestPage;
+}
+
+function formattedPageWidthScore(value: string): number {
+  let score = 0;
+  for (const char of value) {
+    score += PAGE_WIDTH_SCORE[char] ?? 3;
+  }
+  return score;
+}
+
+// Header/footer field resolution also runs in non-DOM tests; keep this a small
+// deterministic score instead of using canvas-backed text measurement here.
+const PAGE_WIDTH_SCORE: Readonly<Record<string, number>> = {
+  I: 1,
+  L: 3,
+  V: 4,
+  X: 4,
+  C: 5,
+  D: 5,
+  M: 5,
+  W: 5,
+};
 
 /** Whether two resolved-value maps are identical, for loop convergence. */
 export function fieldValuesEqual(
