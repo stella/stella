@@ -51,6 +51,29 @@ describe("buildBookmarkText", () => {
     expect(buildBookmarkText(blocks).get("_Ref1")).toBe("Figure : Caption");
   });
 
+  test("includes visible list markers in paragraph text", () => {
+    const blocks: FlowBlock[] = [
+      {
+        ...para("h", [text("Definitions")], ["_Heading"]),
+        attrs: { listMarker: "1." },
+      },
+      {
+        ...para("hidden", [text("Hidden marker")], ["_Hidden"]),
+        attrs: { listMarker: "2.", listMarkerHidden: true },
+      },
+      {
+        ...para("tight", [text("No space")], ["_Tight"]),
+        attrs: { listMarker: "3.", listMarkerSuffix: "nothing" },
+      },
+    ];
+
+    const map = buildBookmarkText(blocks);
+
+    expect(map.get("_Heading")).toBe("1. Definitions");
+    expect(map.get("_Hidden")).toBe("Hidden marker");
+    expect(map.get("_Tight")).toBe("3.No space");
+  });
+
   test("maps bookmarks inside text boxes", () => {
     const textBox: TextBoxBlock = {
       kind: "textBox",

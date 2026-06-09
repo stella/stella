@@ -48,5 +48,19 @@ function paragraphText(block: ParagraphBlock): string {
       text += run.text;
     }
   }
-  return text.trim();
+  return `${visibleListMarker(block)}${text}`.trim();
+}
+
+function visibleListMarker(block: ParagraphBlock): string {
+  const marker = block.attrs?.listMarker;
+  if (!marker || block.attrs?.listMarkerHidden) {
+    return "";
+  }
+  const normalized = marker.replace(/\t+/gu, " ").trim();
+  if (!normalized) {
+    return "";
+  }
+  return block.attrs?.listMarkerSuffix === "nothing"
+    ? normalized
+    : `${normalized} `;
 }
