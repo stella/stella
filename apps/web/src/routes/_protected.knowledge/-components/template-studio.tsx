@@ -15,6 +15,7 @@ import { panic } from "better-result";
 import type { LucideIcon } from "lucide-react";
 import {
   BracesIcon,
+  ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   EyeIcon,
@@ -29,6 +30,7 @@ import {
   Trash2Icon,
   WandSparklesIcon,
 } from "lucide-react";
+import type { ResolvedPos } from "prosemirror-model";
 import { TextSelection } from "prosemirror-state";
 import type { Transaction } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
@@ -82,6 +84,7 @@ import { useTemplateNavStore } from "@/routes/_protected.knowledge/-components/t
 import {
   defaultStudioField,
   type NameExpr,
+  type OutlineNode,
   type StudioActions,
   type StudioField,
   useTemplateStudioStore,
@@ -231,6 +234,7 @@ export const TemplateStudioPage = ({
       focusAdjacentField: (direction) =>
         actionsRef.current?.focusAdjacentField(direction),
       focusField: (path) => actionsRef.current?.focusField(path),
+      focusPosition: (pos) => actionsRef.current?.focusPosition(pos),
     });
     return () => setActions(null);
   }, [setActions]);
@@ -317,20 +321,25 @@ export const TemplateStudioPage = ({
     return () => cancelAnimationFrame(raf);
   }, [docBuffer]);
 
+  const setOutline = useTemplateStudioStore((s) => s.setOutline);
+
   // Map the editor's caret to the directive it sits in, so the inspector tab
-  // knows which face to show. Reads the live plugin state via the captured view.
+  // knows which face to show. Reads the live plugin state via the captured
+  // view; the outline rebuild rides along (same scan, fires on every edit).
   const syncSelection = useCallback(() => {
     const view = editorViewRef.current;
     if (!view) {
       setSelected(null);
       return;
     }
+    const directives = getTemplateDirectives(view.state);
     const head = view.state.selection.from;
-    const covering = getTemplateDirectives(view.state).find(
+    const covering = directives.find(
       (range) => head >= range.from && head <= range.to,
     );
     setSelected(covering ?? null);
-  }, [setSelected]);
+    setOutline(buildOutline(directives));
+  }, [setSelected, setOutline]);
 
   // The hero gesture: turn the current text selection into a `{{field}}`,
   // deriving a unique field path from the selected text and registering it in
@@ -411,12 +420,26 @@ export const TemplateStudioPage = ({
           TextSelection.create(tr.doc, namePos, namePos + placeholder.length),
         );
       };
+      // Anchor at the nearest enclosing paragraph, not the top-level block:
+      // inside a table, depth 1 is the whole table and wrapping there would
+      // swallow it. The fill engine expands per paragraph wherever it lives
+      // (including inside a cell), so the markers belong next to the lines.
+      const paragraphDepth = ($pos: ResolvedPos): number => {
+        for (let depth = $pos.depth; depth >= 1; depth--) {
+          if ($pos.node(depth).type === paragraph) {
+            return depth;
+          }
+        }
+        return 1;
+      };
       const { from, to } = range ?? state.selection;
       try {
         if (from === to) {
           const $from = state.doc.resolve(from);
           const pos =
-            $from.depth >= 1 ? $from.after(1) : state.doc.content.size;
+            $from.depth >= 1
+              ? $from.after(paragraphDepth($from))
+              : state.doc.content.size;
           view.dispatch(
             selectPlaceholder(
               state.tr.insert(pos, [para(open), para(""), para(close)]),
@@ -426,8 +449,12 @@ export const TemplateStudioPage = ({
         } else {
           const $from = state.doc.resolve(from);
           const $to = state.doc.resolve(to);
-          const start = $from.depth >= 1 ? $from.before(1) : 0;
-          const end = $to.depth >= 1 ? $to.after(1) : state.doc.content.size;
+          const start =
+            $from.depth >= 1 ? $from.before(paragraphDepth($from)) : 0;
+          const end =
+            $to.depth >= 1
+              ? $to.after(paragraphDepth($to))
+              : state.doc.content.size;
           const tr = state.tr
             .insert(end, para(close))
             .insert(start, para(open));
@@ -555,11 +582,17 @@ export const TemplateStudioPage = ({
         .filter((d) => d.kind === "placeholder" && d.expr === path)
         .toSorted((a, b) => a.from - b.from)
         .at(0);
-      if (!target) {
+      if (target) {
+        actionsRef.current?.focusPosition(target.from);
+      }
+    },
+    focusPosition: (pos) => {
+      const view = editorViewRef.current;
+      if (!view) {
         return;
       }
       const $pos = view.state.doc.resolve(
-        Math.min(target.from + 2, view.state.doc.content.size),
+        Math.min(pos + 2, view.state.doc.content.size),
       );
       view.dispatch(
         view.state.tr.setSelection(TextSelection.near($pos)).scrollIntoView(),
@@ -676,6 +709,7 @@ export const TemplateStudioPage = ({
                 if (view) {
                   editorViewRef.current = view;
                   setLiveEditorView(view);
+                  setOutline(buildOutline(getTemplateDirectives(view.state)));
                 }
               }}
               onCustomContextAction={(id, range) => {
@@ -730,6 +764,68 @@ const paragraphsAround = (text: string, marker: string): string => {
     .join("\n");
 };
 
+/** Folds the flat directive scan into the document's nesting: if/each
+ *  markers open groups that own everything up to their closer, so the
+ *  panel mirrors which fields only appear under a condition or repeat. */
+const buildOutline = (directives: DirectiveRange[]): OutlineNode[] => {
+  const root: OutlineNode[] = [];
+  const stack: OutlineNode[][] = [root];
+  const top = () => stack.at(-1) ?? root;
+  for (const d of directives.toSorted((a, b) => a.from - b.from)) {
+    if (d.kind === "placeholder") {
+      top().push({ type: "field", path: d.expr, from: d.from });
+    } else if (d.kind === "clause") {
+      top().push({ type: "clause", name: d.expr, from: d.from });
+    } else if (d.kind === "if" || d.kind === "each") {
+      const group: OutlineNode = {
+        type: "group",
+        kind: d.kind,
+        expr: d.expr,
+        from: d.from,
+        children: [],
+      };
+      top().push(group);
+      stack.push(group.children);
+    } else if (d.kind === "elseif" || d.kind === "else") {
+      // A branch closes the previous branch and opens a sibling group.
+      if (stack.length > 1) {
+        stack.pop();
+      }
+      const group: OutlineNode = {
+        type: "group",
+        kind: d.kind,
+        expr: d.expr,
+        from: d.from,
+        children: [],
+      };
+      top().push(group);
+      stack.push(group.children);
+    } else if (
+      (d.kind === "endif" || d.kind === "endeach") &&
+      stack.length > 1
+    ) {
+      stack.pop();
+    }
+  }
+  return root;
+};
+
+const outlineFieldPaths = (nodes: OutlineNode[]): Set<string> => {
+  const paths = new Set<string>();
+  const walk = (list: OutlineNode[]) => {
+    for (const node of list) {
+      if (node.type === "field") {
+        paths.add(node.path);
+      }
+      if (node.type === "group") {
+        walk(node.children);
+      }
+    }
+  };
+  walk(nodes);
+  return paths;
+};
+
 type StudioFacet = "fields" | "clauses" | "history" | "fill";
 
 const STUDIO_FACETS: readonly StudioFacet[] = [
@@ -750,6 +846,7 @@ function TemplateStudioInspectorView({
   const fields = useTemplateStudioStore((s) => s.fields);
   const conditions = useTemplateStudioStore((s) => s.conditions);
   const computed = useTemplateStudioStore((s) => s.computed);
+  const outline = useTemplateStudioStore((s) => s.outline);
   const selected = useTemplateStudioStore((s) => s.selected);
   const upsertField = useTemplateStudioStore((s) => s.upsertField);
   const setConditions = useTemplateStudioStore((s) => s.setConditions);
@@ -837,6 +934,7 @@ function TemplateStudioInspectorView({
           conditions={conditions}
           computed={computed}
           fields={fields}
+          outline={outline}
           onComputedChange={setComputed}
           onConditionsChange={setConditions}
           onFieldUpdate={upsertField}
@@ -1082,6 +1180,7 @@ registerInspectorView<TemplateStudioPayload>({
 type InspectorProps = {
   selected: DirectiveRange | null;
   fields: StudioField[];
+  outline: OutlineNode[];
   conditions: NameExpr[];
   computed: NameExpr[];
   onFieldUpdate: (path: string, patch: Partial<StudioField>) => void;
@@ -1092,6 +1191,7 @@ type InspectorProps = {
 const Inspector = ({
   selected,
   fields,
+  outline,
   conditions,
   computed,
   onFieldUpdate,
@@ -1153,7 +1253,7 @@ const Inspector = ({
   return (
     <ScrollArea className="min-h-0 flex-1">
       <ScopeHeader title={t("templates.studio.scopeTemplate")} />
-      <FieldNavigator fields={fields} />
+      <FieldNavigator fields={fields} outline={outline} />
       <Separator />
       <NameExprList
         addLabel={t("templates.addCondition")}
@@ -1178,42 +1278,146 @@ const Inspector = ({
   );
 };
 
-/** Clickable field index: each row jumps the document caret into the field's
- *  first marker, which flips the inspector to that field's face. */
-const FieldNavigator = ({ fields }: { fields: StudioField[] }) => {
+/** Document outline: fields where they sit, condition/loop blocks as
+ *  collapsible groups owning what's inside them, clause slots inline.
+ *  Every row jumps the document caret to its marker. */
+const FieldNavigator = ({
+  fields,
+  outline,
+}: {
+  fields: StudioField[];
+  outline: OutlineNode[];
+}) => {
   const t = useTranslations();
-  const actions = useTemplateStudioStore((s) => s.actions);
+  // Fields registered in the session but not (yet) placed in the document
+  // still deserve a row, appended at root level.
+  const placed = outlineFieldPaths(outline);
+  const unplaced = fields.filter((f) => !placed.has(f.path));
   return (
     <div className="px-4 py-4">
       <h3 className="text-muted-foreground mb-2 text-xs font-medium">
         {t("templates.fieldCount", { count: fields.length })}
       </h3>
       <ul className="flex flex-col">
-        {fields.map((f) => {
-          const Icon = VALUE_TYPE_META[inputTypeValueKind(f.inputType)].icon;
-          return (
-            <li key={f.path}>
-              <button
-                className="hover:bg-muted flex w-full items-center gap-2 rounded px-1.5 py-1 text-start text-xs"
-                onClick={() => actions?.focusField(f.path)}
-                type="button"
-              >
-                <Icon className="text-muted-foreground size-3.5 shrink-0" />
-                <span className="truncate">
-                  {f.label === "" ? f.path : f.label}
-                </span>
-                {f.aiPrompt === undefined ? null : (
-                  <WandSparklesIcon className="text-muted-foreground size-3 shrink-0" />
-                )}
-                <code className="text-muted-foreground ms-auto shrink-0 text-[10px]">
-                  {f.path}
-                </code>
-              </button>
-            </li>
-          );
-        })}
+        {outline.map((node, index) => (
+          <OutlineRow fields={fields} key={index} node={node} />
+        ))}
+        {unplaced.map((f) => (
+          <OutlineRow
+            fields={fields}
+            key={`unplaced-${f.path}`}
+            node={{ type: "field", path: f.path, from: -1 }}
+          />
+        ))}
       </ul>
     </div>
+  );
+};
+
+const OutlineRow = ({
+  node,
+  fields,
+}: {
+  node: OutlineNode;
+  fields: StudioField[];
+}) => {
+  const t = useTranslations();
+  const actions = useTemplateStudioStore((s) => s.actions);
+  const [open, setOpen] = useState(true);
+
+  const jump = () => {
+    if (node.from >= 0) {
+      actions?.focusPosition(node.from);
+    }
+  };
+
+  if (node.type === "field") {
+    const field = fields.find((f) => f.path === node.path);
+    const Icon =
+      field === undefined
+        ? VALUE_TYPE_META.text.icon
+        : VALUE_TYPE_META[inputTypeValueKind(field.inputType)].icon;
+    const label =
+      field === undefined || field.label === "" ? node.path : field.label;
+    return (
+      <li>
+        <button
+          className="hover:bg-muted flex w-full items-center gap-2 rounded px-1.5 py-1 text-start text-xs"
+          onClick={jump}
+          type="button"
+        >
+          <Icon className="text-muted-foreground size-3.5 shrink-0" />
+          <span className="truncate">{label}</span>
+          {field?.aiPrompt === undefined ? null : (
+            <WandSparklesIcon className="text-muted-foreground size-3 shrink-0" />
+          )}
+          <code className="text-muted-foreground ms-auto shrink-0 text-[10px]">
+            {node.path}
+          </code>
+        </button>
+      </li>
+    );
+  }
+
+  if (node.type === "clause") {
+    return (
+      <li>
+        <button
+          className="hover:bg-muted flex w-full items-center gap-2 rounded px-1.5 py-1 text-start text-xs"
+          onClick={jump}
+          title={t("templates.studio.scopeClause")}
+          type="button"
+        >
+          <span className="text-muted-foreground w-3.5 shrink-0 text-center text-xs font-semibold">
+            {"\u00a7"}
+          </span>
+          <span className="truncate">{node.name}</span>
+        </button>
+      </li>
+    );
+  }
+
+  const GroupIcon = node.kind === "each" ? RepeatIcon : SplitIcon;
+  const groupTitle =
+    node.kind === "each"
+      ? t("templates.studio.loop")
+      : t("templates.studio.scopeCondition");
+  return (
+    <li>
+      <div className="flex items-center">
+        <button
+          aria-expanded={open}
+          aria-label={groupTitle}
+          className="hover:bg-muted text-muted-foreground rounded p-0.5"
+          onClick={() => setOpen((v) => !v)}
+          type="button"
+        >
+          {open ? (
+            <ChevronDownIcon className="size-3.5" />
+          ) : (
+            <ChevronRightIcon className="size-3.5" />
+          )}
+        </button>
+        <button
+          className="hover:bg-muted flex min-w-0 flex-1 items-center gap-2 rounded px-1.5 py-1 text-start text-xs"
+          onClick={jump}
+          title={groupTitle}
+          type="button"
+        >
+          <GroupIcon className="text-muted-foreground size-3.5 shrink-0" />
+          <code className="truncate">
+            {node.expr === "" ? node.kind : node.expr}
+          </code>
+        </button>
+      </div>
+      {open && node.children.length > 0 ? (
+        <ul className="border-border ms-2 flex flex-col border-s ps-2">
+          {node.children.map((child, index) => (
+            <OutlineRow fields={fields} key={index} node={child} />
+          ))}
+        </ul>
+      ) : null}
+    </li>
   );
 };
 
