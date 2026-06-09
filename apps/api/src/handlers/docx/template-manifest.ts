@@ -22,15 +22,18 @@ import type {
   ComputedField,
   DiscoveredField,
   DiscoveredTemplate,
+  FieldLookup,
   FieldMeta,
   FieldPart,
   FieldValidation,
   InputType,
+  LookupRegistry,
   NamedCondition,
   PartInputType,
   ResolvedField,
   TemplateManifest,
 } from "./types";
+import { LOOKUP_REGISTRIES } from "./types";
 
 // ── Constants ────────────────────────────────────────────
 
@@ -70,6 +73,9 @@ const isInputType = (value: string): value is InputType =>
 const isPartInputType = (value: string): value is PartInputType =>
   value === "text" || value === "select";
 
+const isLookupRegistry = (value: string): value is LookupRegistry =>
+  LOOKUP_REGISTRIES.some((registry) => registry === value);
+
 // ── XML builders ─────────────────────────────────────────
 
 const escapeXml = (s: string): string =>
@@ -101,6 +107,14 @@ const buildPartXml = (part: FieldPart): string => {
     return `<st:part ${attrs.join(" ")}>${buildOptionsXml(part.options)}</st:part>`;
   }
   return `<st:part ${attrs.join(" ")}/>`;
+};
+
+const buildLookupXml = (lookup: FieldLookup): string => {
+  const attrs: string[] = [`registry="${escapeXml(lookup.registry)}"`];
+  if (lookup.aiFormat !== undefined) {
+    attrs.push(`aiFormat="${escapeXml(lookup.aiFormat)}"`);
+  }
+  return `<st:lookup ${attrs.join(" ")}/>`;
 };
 
 const buildFieldXml = (field: FieldMeta): string => {
@@ -137,6 +151,10 @@ const buildFieldXml = (field: FieldMeta): string => {
     children.push(
       `<st:parts>${field.parts.map(buildPartXml).join("")}</st:parts>`,
     );
+  }
+
+  if (field.lookup) {
+    children.push(buildLookupXml(field.lookup));
   }
 
   if (field.validation) {
@@ -362,6 +380,21 @@ const parseFieldMeta = (el: slimdom.Element): FieldMeta => {
     }
     if (Object.keys(validation).length > 0) {
       field.validation = validation;
+    }
+  }
+
+  // A hand-edited registry outside the supported set is dropped so the
+  // isFieldMeta invariant holds downstream.
+  const lookupEl = getFirstElementChild(el, "lookup");
+  if (lookupEl) {
+    const registry = lookupEl.getAttribute("registry");
+    if (registry !== null && isLookupRegistry(registry)) {
+      const lookup: FieldLookup = { registry };
+      const aiFormat = lookupEl.getAttribute("aiFormat");
+      if (aiFormat !== null) {
+        lookup.aiFormat = aiFormat;
+      }
+      field.lookup = lookup;
     }
   }
 
@@ -653,6 +686,7 @@ export const mergeManifestWithDiscovery = (
         parts: f.parts,
         format: f.format,
         optionsFrom: f.optionsFrom,
+        lookup: f.lookup,
       });
     }
   }
@@ -703,6 +737,9 @@ const mergeField = (
     }
     if (meta.optionsFrom !== undefined) {
       resolved.optionsFrom = meta.optionsFrom;
+    }
+    if (meta.lookup !== undefined) {
+      resolved.lookup = meta.lookup;
     }
   }
 

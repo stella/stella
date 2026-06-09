@@ -6,11 +6,12 @@ import { templateFills } from "@/api/db/schema";
 import { adaptAiFields } from "@/api/handlers/docx/adapt-ai-fields";
 import {
   buildAiFieldGenerator,
+  buildAiLookupFormatter,
   buildAiOccurrenceAdapter,
 } from "@/api/handlers/docx/ai-field-generator";
-import { applyCompositeFields } from "@/api/handlers/docx/composite-fields";
-import { checkDependentFields } from "@/api/handlers/docx/dependent-fields";
 import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
+import { createDispatchLookupResolver } from "@/api/handlers/docx/lookup-fields";
+import { applyManifestFillSteps } from "@/api/handlers/docx/manifest-fill-steps";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
 import { resolveAiFields } from "@/api/handlers/docx/resolve-ai-fields";
 import { resolveClauseSlots } from "@/api/handlers/docx/resolve-clause-slots";
@@ -144,28 +145,31 @@ const fillByIdHandler = async function* ({
   let adaptedPaths: readonly string[] = [];
   const manifest = await readManifest(buffer);
 
-  // Assemble composite (multipart) field values into their final strings
-  // before any AI step or substitution sees them.
-  const compositeError = applyCompositeFields(parsed, manifest);
-  if (compositeError !== null) {
-    return Result.err(
-      new HandlerError({ status: 400, message: compositeError }),
-    );
-  }
-
-  // Dependent (optionsFrom) selects must hold one of the source field's
-  // submitted values; reject before any AI step or substitution.
-  const dependentError = checkDependentFields(parsed, manifest);
-  if (dependentError !== null) {
-    return Result.err(
-      new HandlerError({ status: 400, message: dependentError }),
-    );
-  }
-
+  const hasLookupAiFormat = manifest?.fields.some(
+    (field) => field.lookup?.aiFormat,
+  );
   const hasAiDraftFields = manifest?.fields.some((field) => field.aiPrompt);
   const hasAiAdaptFields = manifest?.fields.some((field) => field.aiAdapt);
+  // Loaded once for lookup formatting and the AI draft/adapt steps below.
+  const orgAIConfig =
+    manifest && (hasAiDraftFields || hasAiAdaptFields || hasLookupAiFormat)
+      ? await loadOrgAIConfig(organizationId)
+      : null;
+
+  // Resolve registry lookups, assemble composite (multipart) values, and
+  // check dependent (optionsFrom) selects before any AI step or substitution
+  // sees them; a failing step rejects the request naming the field.
+  const stepError = await applyManifestFillSteps({
+    values: parsed,
+    manifest,
+    resolveLookup: createDispatchLookupResolver(),
+    formatLookupWithAi: buildAiLookupFormatter({ orgAIConfig, organizationId }),
+  });
+  if (stepError !== null) {
+    return Result.err(new HandlerError({ status: 400, message: stepError }));
+  }
+
   if (manifest && (hasAiDraftFields || hasAiAdaptFields)) {
-    const orgAIConfig = await loadOrgAIConfig(organizationId);
     if (hasAiDraftFields) {
       const aiResolved = await resolveAiFields({
         values: parsed,

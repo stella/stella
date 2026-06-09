@@ -4,6 +4,7 @@ import { panic } from "better-result";
 import {
   AlertTriangleIcon,
   EyeIcon,
+  LandmarkIcon,
   PlusIcon,
   TrashIcon,
   WandSparklesIcon,
@@ -86,6 +87,13 @@ const readPartValues = (value: unknown): Record<string, string> => {
   return out;
 };
 
+/** Mirrors `validateKrsNumber` from the business-registries package (not
+ *  exposed to the web workspace): exactly 10 digits, whitespace-tolerant. */
+const KRS_NUMBER_RE = /^\d{10}$/u;
+
+const isValidKrsNumber = (value: string): boolean =>
+  KRS_NUMBER_RE.test(value.replaceAll(/\s/gu, ""));
+
 type FieldErrors = Record<string, string | undefined>;
 type TouchedFields = Record<string, boolean>;
 
@@ -96,7 +104,8 @@ type ValidationError =
   | { kind: "numberMin"; min: number }
   | { kind: "numberMax"; max: number }
   | { kind: "pattern" }
-  | { kind: "optionNotInSource"; source: string };
+  | { kind: "optionNotInSource"; source: string }
+  | { kind: "lookupNumber" };
 
 /** Validate a composite field's part values. */
 const validateCompositeField = (
@@ -156,6 +165,13 @@ const validateField = (
   // Length / pattern only apply to string inputs
   if (str.length === 0) {
     return undefined;
+  }
+
+  // A lookup field's value is the registry number itself (the server resolves
+  // it into the company details); check the number format before submit so a
+  // typo fails locally instead of as a server-side lookup error.
+  if (field.lookup?.registry === "krs" && !isValidKrsNumber(str)) {
+    return { kind: "lookupNumber" };
   }
 
   const { minLength, maxLength, min, max, pattern } = field.validation ?? {};
@@ -417,6 +433,25 @@ const AiAdaptHint = ({ show }: { show: boolean }) => {
     <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
       <WandSparklesIcon aria-hidden="true" className="size-3.5 shrink-0" />
       {t("templates.aiAdaptHint")}
+    </p>
+  );
+};
+
+/** Shown under registry-lookup fields: the entered number (e.g. KRS) is
+ *  resolved against the register at fill time and replaced with the company
+ *  details; the wand marks an AI format instruction shaping that text. */
+const LookupHint = ({ lookup }: { lookup: ResolvedField["lookup"] }) => {
+  const t = useTranslations();
+  if (!lookup) {
+    return null;
+  }
+  return (
+    <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
+      <LandmarkIcon aria-hidden="true" className="size-3.5 shrink-0" />
+      {t("templates.lookupFieldHint")}
+      {lookup.aiFormat !== undefined && lookup.aiFormat !== "" && (
+        <WandSparklesIcon aria-hidden="true" className="size-3.5 shrink-0" />
+      )}
     </p>
   );
 };
@@ -691,6 +726,7 @@ const FieldRenderer = ({
         }
       />
       <AiAdaptHint show={field.aiAdapt === true} />
+      <LookupHint lookup={field.lookup} />
       <FieldError message={error} />
     </Field>
   );
@@ -1132,6 +1168,8 @@ export const TemplateForm = ({
           return t("templates.validationOptionNotInSource", {
             field: err.source,
           });
+        case "lookupNumber":
+          return t("templates.validationKrsFormat");
         default:
           return undefined;
       }

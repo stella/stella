@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/components/select";
+import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
@@ -64,6 +65,19 @@ export const PART_INPUT_TYPES = ["text", "select"] as const;
 
 type PartInputType = (typeof PART_INPUT_TYPES)[number];
 
+/** Registries the lookup affordance offers; mirrors the manifest's
+ *  supported set (only KRS for now). */
+const LOOKUP_REGISTRIES = ["krs"] as const;
+
+type LookupRegistry = (typeof LOOKUP_REGISTRIES)[number];
+
+export type EditableLookup = {
+  registry: LookupRegistry;
+  /** AI instruction shaping the resolved company details; empty = the
+   *  deterministic "name, seat" rendering. */
+  aiFormat?: string | undefined;
+};
+
 export type EditablePart = {
   key: string;
   inputType: PartInputType;
@@ -88,6 +102,9 @@ export type EditableField = {
   /** Dependent select: path of the field whose entered values supply this
    *  select's options in the fill form; static options act as fallback. */
   optionsFrom?: string | undefined;
+  /** Registry lookup: the person filling enters only the registry number;
+   *  the server resolves the company at fill time. Text fields only. */
+  lookup?: EditableLookup | undefined;
 };
 
 const INPUT_TYPE_SET: ReadonlySet<string> = new Set(INPUT_TYPES);
@@ -141,6 +158,7 @@ export const buildEditableFields = (
     })),
     format: f.format,
     optionsFrom: f.optionsFrom,
+    lookup: f.lookup,
   }));
 
 type ManifestPart = {
@@ -181,6 +199,28 @@ export const compositeManifestProps = (
       pattern: part.pattern || undefined,
     })),
     format,
+  };
+};
+
+/**
+ * The manifest shape of a field's lookup configuration: only meaningful on a
+ * plain text field (composite parts and other input types collect a different
+ * value), with a blank AI format instruction normalized away.
+ */
+export const lookupManifestProps = (
+  field: EditableField,
+): EditableLookup | undefined => {
+  if (
+    field.lookup === undefined ||
+    field.parts !== undefined ||
+    field.inputType !== "text"
+  ) {
+    return undefined;
+  }
+  const aiFormat = field.lookup.aiFormat?.trim() ?? "";
+  return {
+    registry: field.lookup.registry,
+    aiFormat: aiFormat === "" ? undefined : aiFormat,
   };
 };
 
@@ -261,6 +301,7 @@ export const ConfigureStep = ({
               f.inputType === "select" && f.optionsFrom
                 ? f.optionsFrom
                 : undefined,
+            lookup: lookupManifestProps(f),
           };
         }),
         conditions: [
@@ -738,6 +779,67 @@ const OptionsFromFieldControl = ({
   );
 };
 
+/** Lookup affordance for text fields: enable a KRS registry lookup (the
+ *  person filling enters only the KRS number) plus an optional AI format
+ *  instruction shaping the resolved company details. */
+const LookupConfigControl = ({
+  field,
+  onUpdate,
+}: {
+  field: EditableField;
+  onUpdate: (patch: Partial<EditableField>) => void;
+}) => {
+  const t = useTranslations();
+
+  return (
+    <>
+      <Field>
+        <div className="flex items-center gap-2">
+          <Checkbox
+            checked={field.lookup !== undefined}
+            onCheckedChange={(checked) =>
+              onUpdate({
+                lookup: checked
+                  ? (field.lookup ?? { registry: "krs" })
+                  : undefined,
+              })
+            }
+          />
+          <FieldLabel>{t("templates.fieldLookupEnable")}</FieldLabel>
+        </div>
+        <p className="text-muted-foreground text-xs">
+          {t("templates.fieldLookupHint")}
+        </p>
+      </Field>
+
+      {field.lookup !== undefined && (
+        <Field>
+          <FieldLabel>{t("templates.fieldLookupAiFormat")}</FieldLabel>
+          <FieldControl
+            render={
+              <Textarea
+                onChange={(e) =>
+                  onUpdate({
+                    lookup: {
+                      registry: field.lookup?.registry ?? "krs",
+                      aiFormat: e.target.value,
+                    },
+                  })
+                }
+                placeholder={t("templates.fieldLookupAiFormatPlaceholder")}
+                value={field.lookup.aiFormat ?? ""}
+              />
+            }
+          />
+          <p className="text-muted-foreground text-xs">
+            {t("templates.fieldLookupAiFormatHint")}
+          </p>
+        </Field>
+      )}
+    </>
+  );
+};
+
 export const FieldConfigEditor = ({
   field,
   onUpdate,
@@ -840,6 +942,10 @@ export const FieldConfigEditor = ({
 
       {isComposite && (
         <CompositePartsEditor field={field} onUpdate={onUpdate} />
+      )}
+
+      {!isComposite && field.inputType === "text" && (
+        <LookupConfigControl field={field} onUpdate={onUpdate} />
       )}
 
       {!isComposite && field.inputType === "select" && (

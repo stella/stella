@@ -11,11 +11,14 @@ import {
   adaptAiFields,
   type AiOccurrenceAdapter,
 } from "@/api/handlers/docx/adapt-ai-fields";
-import { applyCompositeFields } from "@/api/handlers/docx/composite-fields";
-import { checkDependentFields } from "@/api/handlers/docx/dependent-fields";
 import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
 import { extractText } from "@/api/handlers/docx/extract-text";
+import {
+  type AiLookupFormatter,
+  createDispatchLookupResolver,
+} from "@/api/handlers/docx/lookup-fields";
+import { applyManifestFillSteps } from "@/api/handlers/docx/manifest-fill-steps";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
 import {
   type AiFieldGenerator,
@@ -124,6 +127,7 @@ export const fillStoredTemplate = async ({
   organizationId,
   generateAiValue,
   adaptAiValue,
+  formatLookupValue,
 }: {
   templateId: SafeId<"template">;
   values: FillValues;
@@ -133,6 +137,9 @@ export const fillStoredTemplate = async ({
   generateAiValue?: AiFieldGenerator | undefined;
   /** Optional model-backed per-occurrence adapter for aiAdapt fields. */
   adaptAiValue?: AiOccurrenceAdapter | undefined;
+  /** Optional model-backed formatter for registry-lookup fields with an
+   *  aiFormat instruction; without it the deterministic rendering is used. */
+  formatLookupValue?: AiLookupFormatter | undefined;
 }): Promise<FillTemplateResult> => {
   const loaded = await loadTemplate(templateId, scopedDb);
   if (!loaded) {
@@ -159,18 +166,17 @@ export const fillStoredTemplate = async ({
   let adaptedPaths: readonly string[] = [];
   const manifest = await readManifest(loaded.buffer);
   if (manifest) {
-    // Assemble composite (multipart) field values into their final strings
-    // before any AI step or substitution sees them.
-    const compositeError = applyCompositeFields(record, manifest);
-    if (compositeError !== null) {
-      return { error: compositeError };
-    }
-
-    // Dependent (optionsFrom) selects must hold one of the source field's
-    // submitted values; reject before any AI step or substitution.
-    const dependentError = checkDependentFields(record, manifest);
-    if (dependentError !== null) {
-      return { error: dependentError };
+    // Resolve registry lookups, assemble composite (multipart) values, and
+    // check dependent (optionsFrom) selects before any AI step or
+    // substitution sees them; a failing step rejects naming the field.
+    const stepError = await applyManifestFillSteps({
+      values: record,
+      manifest,
+      resolveLookup: createDispatchLookupResolver(),
+      formatLookupWithAi: formatLookupValue,
+    });
+    if (stepError !== null) {
+      return { error: stepError };
     }
 
     record = await resolveAiFields({

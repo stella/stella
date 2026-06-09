@@ -120,7 +120,8 @@ const saveTemplateDocument = createSafeRootHandler(
     // aiPrompt, so recover each field's AI settings from the source manifest
     // by path. Without this, saving a template silently disables its
     // AI-fillable (aiPrompt) and AI-adapted (aiAdapt) fields. Composite
-    // parts + format and dependent optionsFrom are restored the same way.
+    // parts + format, dependent optionsFrom, and registry lookup are
+    // restored the same way.
     const sourceFieldByPath = new Map(
       (baseManifest?.fields ?? []).map((f) => [f.path, f]),
     );
@@ -136,6 +137,7 @@ const saveTemplateDocument = createSafeRootHandler(
       parts: sourceFieldByPath.get(f.path)?.parts,
       format: sourceFieldByPath.get(f.path)?.format,
       optionsFrom: sourceFieldByPath.get(f.path)?.optionsFrom,
+      lookup: sourceFieldByPath.get(f.path)?.lookup,
     }));
 
     const manifest: TemplateManifest = {

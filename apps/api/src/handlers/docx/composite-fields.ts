@@ -90,8 +90,10 @@ export const renderCompositeFormat = (
   );
 
 /** Replace the value at `path` where {@link resolvePath} found it: the exact
- *  flat dotted key when present, otherwise the nested leaf. */
-const replaceResolvedValue = (
+ *  flat dotted key when present, otherwise the nested leaf. Shared with the
+ *  registry-lookup resolution (lookup-fields.ts), which rewrites values the
+ *  same way. */
+export const replaceResolvedValue = (
   values: Record<string, unknown>,
   path: string,
   value: string,
