@@ -132,8 +132,8 @@ const BlueprintGallerySheetBody = ({
     },
     onError: (error) => {
       stellaToast.add({
-        title: tGallery("createError"),
-        description: userErrorFromThrown(error, tGallery("createError")),
+        title: t("common.unexpectedError"),
+        description: userErrorFromThrown(error, t("common.unexpectedError")),
         type: "error",
       });
     },

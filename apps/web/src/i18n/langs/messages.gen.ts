@@ -1493,8 +1493,6 @@ type Messages = {
             "title": "Intake to draft";
           };
         };
-        "createError": "Could not create the skill. Please try again.";
-        "creating": "Setting up…";
         "insideLabel": "Inside";
         "startBlank": "Start from blank";
         "startBlankHint": "An empty skill, for when you know exactly what you want.";

@@ -1490,8 +1490,6 @@
             "title": "Od podkladů k návrhu"
           }
         },
-        "createError": "Dovednost se nepodařilo vytvořit. Zkuste to prosím znovu.",
-        "creating": "Připravuji…",
         "insideLabel": "Uvnitř",
         "startBlank": "Začít od nuly",
         "startBlankHint": "Prázdná dovednost — když přesně víte, co chcete.",
