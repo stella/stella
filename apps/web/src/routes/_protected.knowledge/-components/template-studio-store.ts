@@ -58,6 +58,8 @@ export type StudioActions = {
   focusAdjacentField: (direction: 1 | -1) => void;
   /** Move the document caret into the first marker of the given field. */
   focusField: (path: string) => void;
+  /** Move the document caret to an exact document position. */
+  focusPosition: (pos: number) => void;
 };
 
 /** Page-owned UI state the inspector's action row reflects. */
@@ -74,6 +76,17 @@ const DEFAULT_UI: StudioUiState = {
   hasSelection: false,
   isSaving: false,
 };
+
+export type OutlineNode =
+  | { type: "field"; path: string; from: number }
+  | { type: "clause"; name: string; from: number }
+  | {
+      type: "group";
+      kind: "if" | "elseif" | "else" | "each";
+      expr: string;
+      from: number;
+      children: OutlineNode[];
+    };
 
 type TemplateStudioState = {
   /** Null until a template page mounts and seeds the session. */
@@ -96,6 +109,9 @@ type TemplateStudioState = {
   renameField: (oldPath: string, newPath: string) => void;
   setConditions: (conditions: NameExpr[]) => void;
   setComputed: (computed: NameExpr[]) => void;
+  /** Document structure tree, rebuilt by the editor on every scan. */
+  outline: OutlineNode[];
+  setOutline: (outline: OutlineNode[]) => void;
   setSelected: (selected: DirectiveRange | null) => void;
   markDirty: () => void;
   markSaved: () => void;
@@ -106,6 +122,8 @@ export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
   fields: [],
   conditions: [],
   computed: [],
+  outline: [],
+  setOutline: (outline) => set({ outline }),
   selected: null,
   isDirty: false,
   actions: null,
