@@ -2029,6 +2029,9 @@ type Messages = {
     "fieldLabelPlaceholder": "e.g. Full Name";
     "fieldMultipleParts": "Multiple parts";
     "fieldOptions": "Options";
+    "fieldOptionsFrom": "Options from field";
+    "fieldOptionsFromHint": "The fill form offers the values entered in that field; static options are used while it is empty.";
+    "fieldOptionsFromNone": "Static options only";
     "fieldOptionsPlaceholder": "Type an option and press Enter";
     "fieldPartKeyPlaceholder": "key";
     "fieldUpdateFailed": "Failed to update fields";
@@ -2127,6 +2130,7 @@ type Messages = {
     "validationMinLength": "Minimum {min} characters";
     "validationNumberMax": "Maximum value is {max}";
     "validationNumberMin": "Minimum value is {min}";
+    "validationOptionNotInSource": "Must be one of the values entered in {field}";
     "validationPattern": "Invalid format";
     "validationRequired": "This field is required";
     "versionLabel": "Version {version}";

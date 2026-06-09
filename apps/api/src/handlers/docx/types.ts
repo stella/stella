@@ -288,6 +288,13 @@ export type FieldMeta = {
   /** Join template over part keys, `{{key}}` syntax (e.g. "{{position}} {{name}}").
    *  Present iff `parts` is present. */
   format?: string | undefined;
+  /**
+   * Dependent select: path of another field whose submitted value(s) supply
+   * this field's allowed options at fill time (e.g. the user first enters a
+   * list of parties, and this field must be one of them). Static {@link
+   * options} act as a fallback while the source field is empty.
+   */
+  optionsFrom?: string | undefined;
 };
 
 /**
@@ -396,7 +403,10 @@ export const isFieldMeta = (value: unknown): value is FieldMeta => {
       (Array.isArray(value["parts"]) &&
         value["parts"].length > 0 &&
         value["parts"].every(isFieldPart))) &&
-    (value["format"] === undefined || typeof value["format"] === "string")
+    (value["format"] === undefined || typeof value["format"] === "string") &&
+    (value["optionsFrom"] === undefined ||
+      (typeof value["optionsFrom"] === "string" &&
+        isFieldPath(value["optionsFrom"])))
   );
 };
 
@@ -499,6 +509,9 @@ export type ResolvedField = {
   parts?: FieldPart[] | undefined;
   /** Mirrors {@link FieldMeta.format}. */
   format?: string | undefined;
+  /** Mirrors {@link FieldMeta.optionsFrom}: the fill form derives the select's
+   *  options live from the referenced field's current value(s). */
+  optionsFrom?: string | undefined;
   itemFields?: ResolvedField[] | undefined;
   /** Condition expression that must be true for this
    *  field to be visible in the fill form. */
