@@ -67,6 +67,9 @@ export type StudioActions = {
   focusPosition: (pos: number) => void;
   /** Live fill preview in the document: path → value, or null to clear. */
   setFillPreview: (values: Record<string, string> | null) => void;
+  /** Replace the selection (or insert at the caret) with an existing field's
+   *  marker; replacing text flips the field to AI-adapted wording. */
+  insertExistingField: (path: string) => void;
 };
 
 /** Page-owned UI state the inspector's action row reflects. */
