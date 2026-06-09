@@ -759,9 +759,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/entities.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-utils.ts#1"
-          },
-          {
             "location": "packages/folio/src/components/DocxEditor.props.ts#1"
           },
           {
@@ -1102,6 +1099,9 @@
           },
           {
             "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/markdown-preview.tsx#1"
           },
           {
             "location": "apps/web/src/components/mcp-icon.tsx#1"
@@ -1605,6 +1605,12 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt.tsx#9"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workspace-drop-zone.tsx#1"
           },
           {
@@ -2002,6 +2008,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/tools/business-registry-tools.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#6"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/create-document-tool.ts#3"
@@ -2421,9 +2430,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/entities.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-utils.ts#1"
-          },
-          {
             "location": "packages/folio/src/components/DocxEditor.props.ts#1"
           },
           {
@@ -2764,6 +2770,9 @@
           },
           {
             "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/markdown-preview.tsx#1"
           },
           {
             "location": "apps/web/src/components/mcp-icon.tsx#1"
@@ -3265,6 +3274,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workspace-drop-zone.tsx#1"
@@ -4319,7 +4334,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-external-file-drop.ts#7"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-external-file-drop.ts#4"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#15"
@@ -4378,7 +4393,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#11"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-external-file-drop.ts#7"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-external-file-drop.ts#4"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#15"
@@ -4531,7 +4546,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#11"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-external-file-drop.ts#7"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-external-file-drop.ts#4"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#15"
@@ -5084,9 +5099,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/entities.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-utils.ts#1"
-          },
-          {
             "location": "packages/folio/src/components/DocxEditor.props.ts#1"
           },
           {
@@ -5427,6 +5439,9 @@
           },
           {
             "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/markdown-preview.tsx#1"
           },
           {
             "location": "apps/web/src/components/mcp-icon.tsx#1"
@@ -5928,6 +5943,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workspace-drop-zone.tsx#1"
@@ -7358,9 +7379,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/entities.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-utils.ts#1"
-          },
-          {
             "location": "packages/folio/src/components/DocxEditor.props.ts#1"
           },
           {
@@ -7701,6 +7719,9 @@
           },
           {
             "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/markdown-preview.tsx#1"
           },
           {
             "location": "apps/web/src/components/mcp-icon.tsx#1"
@@ -8202,6 +8223,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workspace-drop-zone.tsx#1"
@@ -9782,6 +9809,9 @@
             "location": "apps/web/src/components/inspector/document-ai-source-bar.tsx#3"
           },
           {
+            "location": "apps/web/src/components/inspector/email-html-viewer.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#15"
           },
           {
@@ -9789,6 +9819,9 @@
           },
           {
             "location": "apps/web/src/components/inspector/file-facets.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#4"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-panel.tsx#10"
@@ -10074,6 +10107,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workspace-drop-zone.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-table.tsx#3"
@@ -10403,7 +10439,7 @@
             "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#26"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#4"
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#5"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-panel.tsx#11"
@@ -10628,10 +10664,16 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#4"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx#7"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workspace-drop-zone.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/entities/$entityId.tsx#1"
@@ -11005,7 +11047,70 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-table@8.21.3",
+      "bom-ref": "pkg:npm/@tanstack/react-table-devtools@9.0.0-beta.3",
+      "description": "React devtools for TanStack Table.",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@tanstack/react-table-devtools/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@tanstack/react-table-devtools/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/web/src/components/dev-root.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-devtools.tsx#1"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://tanstack.com/table"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/TanStack/table.git"
+        }
+      ],
+      "group": "@tanstack",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "react-table-devtools",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@tanstack/react-table-devtools/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40tanstack/react-table-devtools@9.0.0-beta.3",
+      "scope": "required",
+      "type": "library",
+      "version": "9.0.0-beta.3"
+    },
+    {
+      "authors": [
+        {
+          "name": "Tanner Linsley"
+        }
+      ],
+      "bom-ref": "pkg:npm/@tanstack/react-table@9.0.0-beta.3",
       "description": "Headless UI for building powerful tables & datagrids for React.",
       "evidence": {
         "identity": [
@@ -11027,28 +11132,25 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/select-all.logic.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/types.ts#6"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-features.ts#11"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/types.ts#10"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/table-store.ts#5"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state.logic.ts#6"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state.ts#11"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-utils.ts#3"
-          },
-          {
-            "location": "apps/web/src/features/case-law/components/decision-table.tsx#9"
           },
           {
             "location": "apps/web/src/features/case-law/components/decision-table.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/sort-property.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx#7"
+            "location": "apps/web/src/features/case-law/components/decision-table.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx#8"
@@ -11057,22 +11159,13 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/end-fillers.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/end-fillers.tsx#2"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/header-cells.tsx#13"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/header-cells.tsx#14"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells.tsx#6"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells.tsx#12"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells.tsx#11"
           }
         ]
       },
@@ -11102,10 +11195,10 @@
           "value": "node_modules/@tanstack/react-table/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-table@8.21.3",
+      "purl": "pkg:npm/%40tanstack/react-table@9.0.0-beta.3",
       "scope": "required",
       "type": "library",
-      "version": "8.21.3"
+      "version": "9.0.0-beta.3"
     },
     {
       "authors": [
@@ -11175,66 +11268,6 @@
       "scope": "required",
       "type": "library",
       "version": "3.13.26"
-    },
-    {
-      "authors": [
-        {
-          "name": "Tanner Linsley"
-        }
-      ],
-      "bom-ref": "pkg:npm/@tanstack/table-core@8.21.3",
-      "description": "Headless UI for building powerful tables & datagrids for TS/JS.",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@tanstack/table-core/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@tanstack/table-core/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-utils.ts#4"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://tanstack.com/table"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/TanStack/table.git"
-        }
-      ],
-      "group": "@tanstack",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-          }
-        }
-      ],
-      "name": "table-core",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@tanstack/table-core/package.json"
-        }
-      ],
-      "purl": "pkg:npm/%40tanstack/table-core@8.21.3",
-      "scope": "required",
-      "type": "library",
-      "version": "8.21.3"
     },
     {
       "bom-ref": "pkg:npm/@tauri-apps/api@2.11.0",
@@ -12202,9 +12235,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/entities.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-utils.ts#1"
-          },
-          {
             "location": "packages/folio/src/components/DocxEditor.props.ts#1"
           },
           {
@@ -12545,6 +12575,9 @@
           },
           {
             "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/markdown-preview.tsx#1"
           },
           {
             "location": "apps/web/src/components/mcp-icon.tsx#1"
@@ -13046,6 +13079,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workspace-drop-zone.tsx#1"
@@ -13599,6 +13638,9 @@
             "location": "apps/api/src/handlers/chat/loop-detector.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/chat/persistent-compaction.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/chat/stream-chat.ts#8"
           },
           {
@@ -13621,6 +13663,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/tools/business-registry-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/chat-tools.ts#1"
@@ -13969,6 +14014,9 @@
         ],
         "occurrences": [
           {
+            "location": "apps/api/scripts/backfill-image-thumbnails.ts#21"
+          },
+          {
             "location": "apps/api/scripts/benchmark-chat-read-surface.ts#15"
           },
           {
@@ -14116,6 +14164,9 @@
             "location": "apps/api/src/handlers/chat/get-threads.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/chat/persistent-compaction.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/chat/resolve-file-thread.ts#1"
           },
           {
@@ -14129,6 +14180,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/third-party-boundary.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#3"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/execute/chat-execution-tools.ts#3"
@@ -14374,7 +14428,16 @@
             "location": "apps/api/src/handlers/fields/upsert-by-id.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/files/email-to-html.ts#14"
+          },
+          {
             "location": "apps/api/src/handlers/files/gotenberg.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/files/image-derivative.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/files/outlook-msg.ts#1"
           },
           {
             "location": "apps/api/src/handlers/files/pdf-utils.ts#1"
@@ -14791,6 +14854,9 @@
             "location": "apps/api/src/handlers/uploads/agent-skill.ts#11"
           },
           {
+            "location": "apps/api/src/handlers/uploads/entity-create-tree.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/uploads/entity-create.ts#21"
           },
           {
@@ -14809,6 +14875,9 @@
             "location": "apps/api/src/handlers/uploads/permissions.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/uploads/preflight-entity-create.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/uploads/presign.ts#10"
           },
           {
@@ -14822,6 +14891,9 @@
           },
           {
             "location": "apps/api/src/handlers/user-files/read-content.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/user-files/read-thumbnail.ts#1"
           },
           {
             "location": "apps/api/src/handlers/view-templates/create.ts#1"
@@ -14897,6 +14969,9 @@
           },
           {
             "location": "apps/api/src/handlers/workspaces/read-overview.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/read-workflow-target-count.ts#1"
           },
           {
             "location": "apps/api/src/handlers/workspaces/read.ts#1"
@@ -15070,7 +15145,13 @@
             "location": "apps/api/src/lib/workflow/parse-justifications.ts#1"
           },
           {
+            "location": "apps/api/src/lib/workflow/run-logic.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/workflow-queue.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/workflow-target-queries.ts#1"
           },
           {
             "location": "apps/api/src/mcp/anonymization-core.ts#1"
@@ -15331,7 +15412,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/header-cells.tsx#15"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/header-cells.tsx#14"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#5"
@@ -15502,6 +15583,9 @@
             "location": "apps/api/src/handlers/external-preview/preview.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/files/email-to-html.ts#15"
+          },
+          {
             "location": "apps/api/src/handlers/mcp-connectors/icons.ts#2"
           },
           {
@@ -15512,6 +15596,9 @@
           },
           {
             "location": "apps/api/src/lib/markdown/html-to-markdown.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/search/extraction-worker.ts#19"
           }
         ]
       },
@@ -16046,6 +16133,9 @@
             "location": "apps/api/src/handlers/external-preview/preview.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/files/email-to-html.ts#16"
+          },
+          {
             "location": "apps/api/src/lib/markdown/html-to-markdown.ts#2"
           },
           {
@@ -16152,6 +16242,9 @@
             "location": "apps/api/src/handlers/external-preview/preview.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/files/email-to-html.ts#16"
+          },
+          {
             "location": "apps/api/src/lib/markdown/html-to-markdown.ts#2"
           },
           {
@@ -16214,6 +16307,9 @@
             "location": "apps/api/scripts/apply-search-migration.ts#16"
           },
           {
+            "location": "apps/api/scripts/backfill-image-thumbnails.ts#22"
+          },
+          {
             "location": "apps/api/scripts/classify-citations.ts#20"
           },
           {
@@ -16251,6 +16347,9 @@
           },
           {
             "location": "apps/api/src/db/rls.ts#2"
+          },
+          {
+            "location": "apps/api/src/db/rls.ts#3"
           },
           {
             "location": "apps/api/src/db/root.ts#2"
@@ -16367,6 +16466,9 @@
             "location": "apps/api/src/handlers/chat/get-threads.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/chat/persistent-compaction.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/chat/resolve-file-thread.ts#2"
           },
           {
@@ -16374,6 +16476,12 @@
           },
           {
             "location": "apps/api/src/handlers/chat/skills.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#4"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#5"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/execute/org-function-registry.ts#2"
@@ -16826,6 +16934,9 @@
             "location": "apps/api/src/handlers/uploads/agent-skill.ts#12"
           },
           {
+            "location": "apps/api/src/handlers/uploads/entity-create-tree.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/uploads/entity-create.ts#22"
           },
           {
@@ -17048,6 +17159,9 @@
             "location": "apps/api/src/lib/workflow-queue.ts#5"
           },
           {
+            "location": "apps/api/src/lib/workflow-target-queries.ts#2"
+          },
+          {
             "location": "apps/api/src/mcp/compat-tools.ts#2"
           },
           {
@@ -17078,7 +17192,7 @@
             "location": "apps/api/src/db/columns.ts#2"
           },
           {
-            "location": "apps/api/src/db/rls.ts#2"
+            "location": "apps/api/src/db/rls.ts#3"
           },
           {
             "location": "apps/api/src/db/schema.ts#6"
@@ -18026,7 +18140,16 @@
             "location": "apps/api/src/handlers/uploads/abort.ts#15"
           },
           {
+            "location": "apps/api/src/handlers/uploads/entity-create-tree.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/uploads/entity-create-tree.ts#4"
+          },
+          {
             "location": "apps/api/src/handlers/uploads/finalize.ts#23"
+          },
+          {
+            "location": "apps/api/src/handlers/uploads/preflight-entity-create.ts#2"
           },
           {
             "location": "apps/api/src/handlers/uploads/presign.ts#11"
@@ -18045,6 +18168,9 @@
           },
           {
             "location": "apps/api/src/handlers/user-files/read-content.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/user-files/read-thumbnail.ts#2"
           },
           {
             "location": "apps/api/src/handlers/user-files/routes.ts#1"
@@ -18102,6 +18228,9 @@
           },
           {
             "location": "apps/api/src/handlers/workspaces/read-by-id.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/read-workflow-target-count.ts#2"
           },
           {
             "location": "apps/api/src/handlers/workspaces/routes.ts#2"
@@ -18859,13 +18988,16 @@
             "location": "apps/web/src/components/inspector/docx-desktop-open-button.tsx#3"
           },
           {
+            "location": "apps/web/src/components/inspector/email-html-viewer.tsx#2"
+          },
+          {
             "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#16"
           },
           {
             "location": "apps/web/src/components/inspector/external-reference-panel.tsx#19"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#11"
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#14"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-pdf-error-fallback.tsx#1"
@@ -19120,7 +19252,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/document-icon.tsx#1"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/document-icon.tsx#7"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#24"
@@ -19207,7 +19339,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/shared.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/sort-property.tsx#2"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/sort-property.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-helpers.tsx#13"
@@ -19228,10 +19360,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/header-cells.tsx#16"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/header-cells.tsx#15"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells.tsx#13"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells.tsx#12"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column.tsx#3"
@@ -19270,7 +19402,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#19"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workspace-drop-zone.tsx#3"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workspace-drop-zone.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/expenses.tsx#4"
@@ -19588,6 +19720,66 @@
       "scope": "required",
       "type": "library",
       "version": "6.0.227"
+    },
+    {
+      "authors": [
+        {
+          "name": "Andris Reinman"
+        }
+      ],
+      "bom-ref": "pkg:npm/postal-mime@2.7.4",
+      "description": "Email parser for Node.js and browser environments",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/postal-mime/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/postal-mime/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/handlers/files/email-to-html.ts#17"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://postal-mime.postalsys.com"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/postalsys/postal-mime.git"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT-0",
+            "url": "https://opensource.org/licenses/MIT-0"
+          }
+        }
+      ],
+      "name": "postal-mime",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/postal-mime/package.json"
+        }
+      ],
+      "purl": "pkg:npm/postal-mime@2.7.4",
+      "scope": "required",
+      "type": "library",
+      "version": "2.7.4"
     },
     {
       "authors": [
@@ -21052,9 +21244,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/entities.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-utils.ts#1"
-          },
-          {
             "location": "packages/folio/src/components/DocxEditor.props.ts#1"
           },
           {
@@ -21395,6 +21584,9 @@
           },
           {
             "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/markdown-preview.tsx#1"
           },
           {
             "location": "apps/web/src/components/mcp-icon.tsx#1"
@@ -21896,6 +22088,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workspace-drop-zone.tsx#1"
@@ -22757,6 +22955,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities.ts#9"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-external-file-drop.ts#5"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-retry-cell.ts#2"
           },
           {
@@ -22889,6 +23090,9 @@
             "location": "apps/web/src/components/inspector/docx-desktop-open-button.tsx#4"
           },
           {
+            "location": "apps/web/src/components/inspector/email-html-viewer.tsx#3"
+          },
+          {
             "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#17"
           },
           {
@@ -22898,7 +23102,7 @@
             "location": "apps/web/src/components/inspector/file-facets.tsx#4"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#12"
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#15"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-panel.tsx#12"
@@ -22908,6 +23112,9 @@
           },
           {
             "location": "apps/web/src/components/inspector/inspector-rail.tsx#13"
+          },
+          {
+            "location": "apps/web/src/components/inspector/markdown-file-viewer.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#4"
@@ -22964,7 +23171,7 @@
             "location": "apps/web/src/features/case-law/components/decision-filters.tsx#4"
           },
           {
-            "location": "apps/web/src/features/case-law/components/decision-table.tsx#11"
+            "location": "apps/web/src/features/case-law/components/decision-table.tsx#12"
           },
           {
             "location": "apps/web/src/lib/pdf/pdf-viewport.tsx#13"
@@ -23321,7 +23528,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/shared.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/sort-property.tsx#3"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/sort-property.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-helpers.tsx#15"
@@ -23375,7 +23582,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#20"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workspace-drop-zone.tsx#4"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt.tsx#11"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workspace-drop-zone.tsx#6"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/expenses.tsx#5"
@@ -23730,6 +23940,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/tools/business-registry-tools.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#6"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/create-document-tool.ts#3"
@@ -24224,7 +24437,7 @@
             "location": "apps/web/src/components/app-sidebar.tsx#35"
           },
           {
-            "location": "apps/web/src/components/dev-root.tsx#4"
+            "location": "apps/web/src/components/dev-root.tsx#5"
           },
           {
             "location": "apps/web/src/components/dev-sidebar-group.tsx#13"
@@ -24299,7 +24512,7 @@
             "location": "apps/web/src/components/app-sidebar.tsx#35"
           },
           {
-            "location": "apps/web/src/components/dev-root.tsx#4"
+            "location": "apps/web/src/components/dev-root.tsx#5"
           },
           {
             "location": "apps/web/src/components/dev-sidebar-group.tsx#13"

@@ -65,9 +65,9 @@ Project: root
 - @tanstack/react-start 1.168.18 — MIT
 - @tanstack/react-store 0.11.0 — MIT
 - @tanstack/react-store 0.9.3 — MIT
-- @tanstack/react-table 8.21.3 — MIT
+- @tanstack/react-table 9.0.0-beta.3 — MIT
+- @tanstack/react-table-devtools 9.0.0-beta.3 — MIT
 - @tanstack/react-virtual 3.13.26 — MIT
-- @tanstack/table-core 8.21.3 — MIT
 - @tauri-apps/api 2.11.0 — Apache-2.0 OR MIT
 - @tiptap/core 3.24.0 — MIT
 - @tiptap/extension-bold 3.24.0 — MIT
@@ -114,6 +114,7 @@ Project: root
 - lucide-react 1.17.0 — ISC
 - nodemailer 8.0.10 — MIT-0
 - pdfjs-dist 6.0.227 — Apache-2.0
+- postal-mime 2.7.4 — MIT-0
 - posthog-js 1.376.6 — SEE LICENSE IN LICENSE
 - posthog-node 5.35.8 — MIT
 - prosemirror-commands 1.7.1 — MIT
