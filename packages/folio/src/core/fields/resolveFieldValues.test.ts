@@ -8,7 +8,10 @@ import type {
   ParagraphFragment,
   Page,
 } from "../layout-engine/types";
-import { resolveFieldValues } from "./resolveFieldValues";
+import {
+  buildHeaderFooterFieldValues,
+  resolveFieldValues,
+} from "./resolveFieldValues";
 import type { SharedFieldInputs } from "./resolveFieldValues";
 
 const MARGINS: PageMargins = { top: 96, right: 96, bottom: 96, left: 96 };
@@ -118,5 +121,37 @@ describe("resolveFieldValues", () => {
       shared(),
     );
     expect(stable.changed).toBe(false);
+  });
+});
+
+describe("buildHeaderFooterFieldValues", () => {
+  const now = new Date(2026, 0, 1);
+
+  test("reserves page-number fields at the widest page width", () => {
+    const blocks: FlowBlock[] = [
+      para("p", [
+        field(10, "PAGE"),
+        field(20, "NUMPAGES"),
+        field(30, "SECTIONPAGES"),
+      ]),
+    ];
+
+    const values = buildHeaderFooterFieldValues(blocks, 42, now);
+
+    // All three reserve the largest page count's width.
+    expect(values.get(10)).toBe("42");
+    expect(values.get(20)).toBe("42");
+    expect(values.get(30)).toBe("42");
+  });
+
+  test("applies format switches and ignores non-page-number fields", () => {
+    const blocks: FlowBlock[] = [
+      para("p", [field(10, "PAGE \\* ROMAN"), field(20, "PAGEREF _x \\h")]),
+    ];
+
+    const values = buildHeaderFooterFieldValues(blocks, 4, now);
+
+    expect(values.get(10)).toBe("IV"); // roman of the widest page
+    expect(values.has(20)).toBe(false); // PAGEREF resolves per-page at paint
   });
 });

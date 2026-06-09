@@ -39,6 +39,7 @@ import { getFootnoteText } from "../core/docx/footnoteParser";
 import { buildBookmarkPageMap } from "../core/fields/bookmarkPages";
 import { buildBookmarkText } from "../core/fields/bookmarkText";
 import {
+  buildHeaderFooterFieldValues,
   fieldValuesEqual,
   resolveFieldValues,
 } from "../core/fields/resolveFieldValues";
@@ -63,6 +64,7 @@ import {
   collectFootnoteRefs,
   buildFootnoteContentMap,
 } from "../core/layout-bridge/footnoteLayout";
+import type { MeasureBlocksFn } from "../core/layout-bridge/footnoteLayout";
 import {
   convertHeaderFooterPmDocToContent,
   convertHeaderFooterToContent,
@@ -2296,10 +2298,29 @@ export function PagedEditor(
           pageSize,
           margins,
         };
+        // Header/footer blocks are measured once but painted on every page with
+        // a different page number. Reserve the widest page-number width (from
+        // the prior render's page count — headers are measured before the body
+        // re-lays-out) so a multi-digit page number can't wrap a near-full-width
+        // line differently than the single layout.
+        const hfPageCountEstimate = layout?.pages.length ?? 1;
+        const hfClock = new Date();
+        const hfMeasureBlocks: MeasureBlocksFn = (hfBlocks, hfWidth) =>
+          measureBlocks(
+            hfBlocks,
+            hfWidth,
+            undefined,
+            undefined,
+            buildHeaderFooterFieldValues(
+              hfBlocks,
+              hfPageCountEstimate,
+              hfClock,
+            ),
+          );
         const hfOptions = {
           ...(styles ? { styles } : {}),
           ...(_theme !== undefined ? { theme: _theme } : {}),
-          measureBlocks,
+          measureBlocks: hfMeasureBlocks,
           ...(defaultTabStop !== undefined
             ? { defaultTabStopTwips: defaultTabStop }
             : {}),

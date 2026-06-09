@@ -84,6 +84,64 @@ export function resolveFieldValues(
   return { values, changed };
 }
 
+const EMPTY_STRING_NUMBER: ReadonlyMap<string, number> = new Map();
+const EMPTY_STRING_STRING: ReadonlyMap<string, string> = new Map();
+const EMPTY_NUMBER_NUMBER: ReadonlyMap<number, number> = new Map();
+
+/**
+ * Field values for measuring header/footer blocks, which are laid out once but
+ * painted on every page with a different page number. Page-number fields
+ * (PAGE/NUMPAGES/SECTIONPAGES) are reserved at the width of the largest page
+ * (`pageCount`) so a multi-digit number on a later page can't wrap differently
+ * than the single layout; other fields keep their fallback (resolved per-page at
+ * paint). `pageCount` is the document's page count — a prior render's count is a
+ * fine estimate, since headers are measured before the body is re-laid-out.
+ */
+export function buildHeaderFooterFieldValues(
+  blocks: readonly FlowBlock[],
+  pageCount: number,
+  now: Date,
+): Map<number, string> {
+  const values = new Map<number, string>();
+  const fields: FieldRun[] = [];
+  for (const block of blocks) {
+    collectFieldRuns(block, fields);
+  }
+  if (fields.length === 0) {
+    return values;
+  }
+
+  const context: FieldContext = {
+    pageNumber: pageCount,
+    totalPages: pageCount,
+    sectionPages: pageCount,
+    bookmarkPages: EMPTY_STRING_NUMBER,
+    bookmarkText: EMPTY_STRING_STRING,
+    seqValues: EMPTY_NUMBER_NUMBER,
+    now,
+  };
+  for (const run of fields) {
+    if (run.pmStart === undefined) {
+      continue;
+    }
+    const parsed = parseFieldInstruction(run.instruction || run.fieldType);
+    if (
+      parsed.type === "PAGE" ||
+      parsed.type === "NUMPAGES" ||
+      parsed.type === "SECTIONPAGES"
+    ) {
+      values.set(
+        run.pmStart,
+        evaluateField(parsed, context, {
+          fallback: run.fallback ?? "",
+          instanceId: run.pmStart,
+        }),
+      );
+    }
+  }
+  return values;
+}
+
 /** Whether two resolved-value maps are identical, for loop convergence. */
 export function fieldValuesEqual(
   a: ReadonlyMap<number, string>,
