@@ -8,7 +8,6 @@ import {
   MessageSquareIcon,
   MessageSquarePlusIcon,
   PanelRightIcon,
-  WandSparklesIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -187,6 +186,41 @@ const getTabAbbrev = (label: string): string => {
   return stem.slice(0, 3);
 };
 
+type FileTabIconProps = {
+  active: boolean;
+  label: string;
+  fileName: string;
+  mimeType: string | undefined;
+};
+
+/** Rail icon for any file-like tab: the mime glyph when the tab is the open one,
+ * the filename abbreviation otherwise. Shared by workspace file tabs and skill
+ * resources so every file reads the same way in the rail. */
+const FileTabIcon = ({
+  active,
+  fileName,
+  label,
+  mimeType,
+}: FileTabIconProps) => {
+  if (active && mimeType) {
+    return (
+      <DocumentIcon
+        className="size-3.5"
+        fileName={fileName}
+        mimeType={mimeType}
+      />
+    );
+  }
+  if (active) {
+    return <FileTextIcon className="size-3.5" />;
+  }
+  return (
+    <span className="text-[9px] leading-none font-semibold tracking-tight uppercase">
+      {getTabAbbrev(label)}
+    </span>
+  );
+};
+
 type VerticalTabIconProps = {
   tab: InspectorTab;
   active: boolean;
@@ -249,27 +283,23 @@ const VerticalTabIcon = ({
   }
 
   if (tab.type === "skill-resource") {
-    return <WandSparklesIcon className="size-3.5" />;
-  }
-
-  if (active && tab.mimeType) {
     return (
-      <DocumentIcon
-        className="size-3.5"
-        fileName={tab.fileName}
+      <FileTabIcon
+        active={active}
+        fileName={tab.label}
+        label={tab.label}
         mimeType={tab.mimeType}
       />
     );
   }
 
-  if (active) {
-    return <FileTextIcon className="size-3.5" />;
-  }
-
   return (
-    <span className="text-[9px] leading-none font-semibold tracking-tight uppercase">
-      {getTabAbbrev(tab.label)}
-    </span>
+    <FileTabIcon
+      active={active}
+      fileName={tab.fileName}
+      label={tab.label}
+      mimeType={tab.mimeType}
+    />
   );
 };
 
