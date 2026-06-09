@@ -31,6 +31,7 @@ import { FileTree } from "@/components/file-tree/file-tree";
 import type { FileTreeNode } from "@/components/file-tree/file-tree";
 import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { api } from "@/lib/api";
+import { MARKDOWN_MIME, isMarkdownFile } from "@/lib/consts";
 import { APIError, toAPIError, userErrorFromThrown } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -173,7 +174,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         target: "body",
         resourcePath: SKILL_BODY_FILE_NAME,
         label: SKILL_BODY_FILE_NAME,
-        mimeType: "text/markdown",
+        mimeType: MARKDOWN_MIME,
         content: bodyContent,
       });
       return;
@@ -189,7 +190,9 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       target: "resource",
       resourcePath: resource.path,
       label: resource.path.split("/").at(-1) ?? resource.path,
-      mimeType: resource.path.endsWith(".md") ? "text/markdown" : "text/plain",
+      mimeType: isMarkdownFile({ fileName: resource.path })
+        ? MARKDOWN_MIME
+        : "text/plain",
       content: resource.content,
     });
   };
@@ -804,7 +807,7 @@ function SkillFileTree({
           return (
             <Input
               autoFocus
-              className="h-7 flex-1 font-mono text-xs"
+              className="h-7 flex-1 text-sm"
               onBlur={() => {
                 if (renameValue.trim() === resource.path) {
                   onCancelRename();
@@ -827,7 +830,7 @@ function SkillFileTree({
           );
         }
         return (
-          <span className="truncate font-mono text-xs" title={node.name}>
+          <span className="truncate" title={node.name}>
             {node.name}
           </span>
         );
@@ -1134,9 +1137,14 @@ const CODE_EXTENSIONS = new Set([
   "rb",
   "sh",
 ]);
-const TEXT_EXTENSIONS = new Set(["md", "mdx", "txt", "csv", "tsv"]);
+const TEXT_EXTENSIONS = new Set(["mdx", "txt", "csv", "tsv"]);
 
 const fileIcon = (fileName: string) => {
+  // Recognise markdown via the shared MIME/extension helper so the file view,
+  // the inspector rail, and the panel all agree on what counts as markdown.
+  if (isMarkdownFile({ fileName })) {
+    return <FileTextIcon className="size-4 shrink-0" />;
+  }
   const dotIndex = fileName.lastIndexOf(".");
   const ext = dotIndex === -1 ? "" : fileName.slice(dotIndex + 1).toLowerCase();
   if (TEXT_EXTENSIONS.has(ext)) {
