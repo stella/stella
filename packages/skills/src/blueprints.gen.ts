@@ -3,7 +3,8 @@
 
 import blueprint0 from "../blueprints/answer-from-sources/SKILL.md" with { type: "text" };
 import blueprint0Resource0 from "../blueprints/answer-from-sources/prompts/research.prompt.md" with { type: "text" };
-import blueprint0Resource1 from "../blueprints/answer-from-sources/references/sources/guide.md" with { type: "text" };
+import blueprint0Resource1 from "../blueprints/answer-from-sources/references/sources/eu/gdpr.md" with { type: "text" };
+import blueprint0Resource2 from "../blueprints/answer-from-sources/references/sources/source-map.md" with { type: "text" };
 import blueprint1 from "../blueprints/blank/SKILL.md" with { type: "text" };
 import blueprint2 from "../blueprints/check-against-rules/SKILL.md" with { type: "text" };
 import blueprint2Resource0 from "../blueprints/check-against-rules/prompts/review.prompt.md" with { type: "text" };
@@ -13,7 +14,7 @@ import blueprint2Resource3 from "../blueprints/check-against-rules/references/gu
 import blueprint2Resource4 from "../blueprints/check-against-rules/references/jurisdiction/guide.md" with { type: "text" };
 import blueprint3 from "../blueprints/intake-to-draft/SKILL.md" with { type: "text" };
 import blueprint3Resource0 from "../blueprints/intake-to-draft/prompts/draft.prompt.md" with { type: "text" };
-import blueprint3Resource1 from "../blueprints/intake-to-draft/references/muster/guide.md" with { type: "text" };
+import blueprint3Resource1 from "../blueprints/intake-to-draft/references/models/demand-letter.md" with { type: "text" };
 import blueprint3Resource2 from "../blueprints/intake-to-draft/references/style.md" with { type: "text" };
 
 export const BLUEPRINTS = [
@@ -22,7 +23,8 @@ export const BLUEPRINTS = [
     source: blueprint0,
     resources: [
       { kind: "prompt", path: "prompts/research.prompt.md", source: blueprint0Resource0 },
-      { kind: "reference", path: "references/sources/guide.md", source: blueprint0Resource1 }
+      { kind: "reference", path: "references/sources/eu/gdpr.md", source: blueprint0Resource1 },
+      { kind: "reference", path: "references/sources/source-map.md", source: blueprint0Resource2 }
     ],
   },
   {
@@ -48,7 +50,7 @@ export const BLUEPRINTS = [
     source: blueprint3,
     resources: [
       { kind: "prompt", path: "prompts/draft.prompt.md", source: blueprint3Resource0 },
-      { kind: "reference", path: "references/muster/guide.md", source: blueprint3Resource1 },
+      { kind: "reference", path: "references/models/demand-letter.md", source: blueprint3Resource1 },
       { kind: "reference", path: "references/style.md", source: blueprint3Resource2 }
     ],
   }

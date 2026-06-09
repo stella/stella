@@ -1,3 +1,3 @@
-<!-- guide: This is the exact instruction the assistant runs when the skill is invoked. Reference the interview answers, the style rules, and the model documents. -->
+<!-- guide: This is the instruction the assistant runs when the skill is invoked. Keep it short and point at the files — the detail lives in SKILL.md and references/. -->
 
-> e.g. Using the interview answers, draft the document following references/style.md and the closest model in references/muster/. Mark anything unconfirmed as [TO CONFIRM] and list open questions at the end.
+Run the interview from SKILL.md first and wait for the answers. Then draft the demand letter from `references/models/demand-letter.md`, applying `references/style.md`. Mark anything unconfirmed as `[TO CONFIRM]` and end with the open-questions list.

@@ -1,3 +1,3 @@
-<!-- guide: This is the exact instruction the assistant runs when the skill is invoked. Reference the source map and the reasoning structure from SKILL.md. -->
+<!-- guide: This is the instruction the assistant runs when the skill is invoked. Keep it short and point at the files — the detail lives in SKILL.md and references/. -->
 
-> e.g. Answer the user's question using references/sources/ in order of authority. Follow the reasoning structure and cite each source. If the sources do not settle it, say so.
+Answer the user's data-protection question using `references/sources/source-map.md`, working in authority order. Follow the four-step reasoning structure from SKILL.md and cite the article or guideline paragraph for every claim. If the sources do not settle the question, or a national derogation may change the answer, say so explicitly.

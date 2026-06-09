@@ -1,6 +1,3 @@
-# Rules (placeholder)
+# Statute extracts
 
-<!-- guide: This folder holds the rules your check applies. Create one file per act or regulation. When you cover more than one jurisdiction, split into subfolders, e.g. references/jurisdiction/cz/act-110.md and references/jurisdiction/eu/reg-1169.md. Delete this guide.md once you add real files. -->
-
-> e.g. references/jurisdiction/cz/act-110.md — the sections you rely on
-> e.g. references/jurisdiction/eu/reg-1169.md
+<!-- guide: One file per act, holding only the sections your checks rely on — for the example checklist that would be the provisions behind C2 (limits on perpetual obligations) and C7 (penalty clauses). Split into subfolders when you cover more than one jurisdiction, e.g. references/jurisdiction/cz/civil-code.md next to references/jurisdiction/eu/. Replace this guide.md with the real files; checks should cite these extracts, not the assistant's memory. -->

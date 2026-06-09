@@ -1,50 +1,46 @@
 ---
 name: intake-to-draft
-description: Interviews the user for the facts it needs, then drafts a document from them.
+description: Collects the facts of an unpaid invoice, then drafts a payment demand letter. Use when the user asks to draft a demand letter or a payment reminder.
 ---
 
-<!-- guide: Rewrite the name and description above. The description is the TRIGGER the assistant uses to decide when to run this skill, so name what it drafts and when. One sentence. e.g. "Collects the parties and key terms, then drafts a demand letter, when the user asks to draft one." -->
+<!-- guide: This skill ships as a worked example — a payment demand letter. Keep the ask-first, draft-second shape and swap the content: rename it, point the description at YOUR document type, and replace the interview questions and the model in references/models/. -->
 
 # What this skill does
 
-> e.g. Gathers the facts needed for a [document type], then produces a first draft the user can edit.
-
-<!-- guide: One sentence, one job. A draft skill works best when it asks first and writes second. -->
+Gathers the facts of an unpaid invoice in one interview round, then drafts a demand letter from the model in `references/models/demand-letter.md`.
 
 ## Interview
 
-<!-- guide: List the questions to ask BEFORE drafting — the minimum facts you cannot draft without. Ask them up front, in one go. Stop and ask if an answer is missing; do not invent facts. -->
+Ask all of these in one message before drafting. Do not draft while an answer is missing, and never invent a fact:
 
-> e.g.
->
-> - Who are the parties?
-> - What outcome does the user want?
-> - Any deadline or key dates?
+- Who is the creditor and who is the debtor (names and addresses)?
+- Invoice number, amount with currency, and the original due date?
+- Were earlier reminders sent, and when?
+- What payment deadline should the letter set?
+- What happens after the deadline — default interest, court action, handover to counsel?
+
+<!-- guide: The interview is the minimum set of facts you cannot draft without. Ask them up front, in one go; replace these with the facts YOUR document needs. -->
 
 ## Drafting rules
 
-<!-- guide: How should the draft read? Tone, structure, length, what to leave as a fill-in. Keep style details in references/style.md and model documents in references/muster/. -->
-
-> e.g. Professional and concise. Address each point. Mark anything uncertain as [TO CONFIRM] rather than guessing.
-
-See `references/style.md` and `references/muster/`.
+- Follow `references/style.md` for tone, dates, and amounts.
+- Start from `references/models/demand-letter.md` and keep its section order.
+- State consequences factually; announce only steps the creditor actually intends to take.
+- Mark anything not confirmed in the interview as `[TO CONFIRM]`.
 
 ## Output
 
-<!-- guide: Define the shape of the draft and anything that follows it (e.g. a short list of open questions for the user to confirm). -->
-
-> e.g. The drafted document, followed by a short "Open questions" list.
+The letter, ready to paste onto letterhead, followed by an "Open questions" list containing every `[TO CONFIRM]` item.
 
 ## Reference index
 
-- `references/style.md` — > e.g. tone and structure rules
-- `references/muster/` — > e.g. model documents to imitate, one per type
+- `references/style.md` — tone, structure, and formatting rules for the letter
+- `references/models/demand-letter.md` — the model letter to imitate
+
+<!-- guide: Model documents are the single biggest lever on draft quality — add one strong model per document type you draft. -->
 
 ## Workflow
 
-1. Ask the interview questions; wait for answers.
-2. > e.g. Pick the closest model from `references/muster/`.
-3. Draft following `references/style.md`.
-4. List any open questions for the user to confirm.
-
-<!-- guide: Spell out the steps, including which model document to start from. -->
+1. Ask the interview questions; wait for the answers.
+2. Draft from the model, applying the style rules.
+3. End with the open-questions list.

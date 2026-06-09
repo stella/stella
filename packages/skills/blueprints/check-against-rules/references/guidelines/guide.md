@@ -1,5 +1,3 @@
-# Guidelines (placeholder)
+# Guidance
 
-<!-- guide: Soft law goes here: authority opinions, Q&A documents, regulator guidance — the material you consult for borderline cases. One file per source. Delete this guide.md once you add real files. -->
-
-> e.g. references/guidelines/authority-qa.md — how the regulator reads the rule
+<!-- guide: Soft law for borderline calls: regulator opinions, Q&A documents, bar-association guidance. One file per source, named after it (e.g. authority-qa.md), each starting with one line on when to consult it. Replace this guide.md with the real files. -->

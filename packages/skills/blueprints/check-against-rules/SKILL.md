@@ -1,65 +1,65 @@
 ---
 name: check-against-rules
-description: Checks a document against a defined set of rules and returns findings with citations.
+description: Reviews a non-disclosure agreement against the firm's NDA checklist and reports findings with citations. Use when the user attaches an NDA and asks to check or review it.
 ---
 
-<!-- guide: Rewrite the name and description above. The description is the TRIGGER the assistant uses to decide when to run this skill, so name the document it reads and the ask that should load it. One sentence. e.g. "Reviews a non-disclosure agreement against a confidentiality checklist when a contract is attached and the user asks to check it." -->
+<!-- guide: This skill ships as a worked example — an NDA review. Keep the shape, swap the content: rename it, point the description at YOUR document type (the description is the TRIGGER the assistant uses to decide when to run the skill), and replace the checklist with your rules. -->
 
 # What this skill does
 
-> e.g. Reviews a [document type] against [a body of rules] and reports what fails, with a citation for each finding.
+Reviews a non-disclosure agreement clause by clause against `references/checklist.md` and reports every failed check, citing the rule and the clause that breaks it.
 
-<!-- guide: One sentence, one job. If you need the word "and" to describe it, consider splitting it into two skills. -->
+<!-- guide: One sentence, one job. If you need the word "and" to describe yours, consider splitting it into two skills. -->
 
 ## Input
 
-> e.g. A [document] the user attaches, plus optionally [the rule set or jurisdiction].
-
-<!-- guide: State what comes in. If a key fact is missing (document type, jurisdiction), tell the assistant to ASK before judging instead of guessing. -->
+An NDA attached by the user. If the document is not an NDA, say so and stop. If the governing law is not stated in the document, ask for it before judging the jurisdiction-dependent checks.
 
 ## Classification
 
-<!-- guide: Many checks depend on WHAT KIND of input it is. Use a small decision table that routes to the rules that apply. Delete this section if your check is uniform. -->
+| If the NDA is…                 | Then…                                            |
+| ------------------------------ | ------------------------------------------------ |
+| mutual (both parties disclose) | apply every check                                |
+| one-way, client discloses      | skip C5 — one-way in the client's favour is fine |
+| one-way, client receives       | C5 fails unless the imbalance is justified       |
 
-| If the input is…  | Apply…                                          |
-| ----------------- | ----------------------------------------------- |
-| > e.g. category A | > e.g. the rules in references/jurisdiction/... |
-| > e.g. category B | > e.g. references/guidelines/...                |
+<!-- guide: Many checks depend on WHAT KIND of input it is. Keep a small decision table that routes to the rules that apply; delete it if your check is uniform. -->
 
 ## What to flag
 
-> e.g. - [item] — flag when [threshold]
-
-<!-- guide: This is the heart of the skill. Keep the full list in references/checklist.md and point to it here so the body stays short. Every item must be concrete and testable. -->
-
-See `references/checklist.md`.
+The rule set lives in `references/checklist.md` — one row per check, each with the concrete threshold that turns it into a finding. Only report what a checklist row supports; never flag from memory.
 
 ## Output
 
-<!-- guide: Define the EXACT report shape so every run looks identical. A table of findings? Bullets with a citation each? Name the columns. -->
+One table, one row per check:
 
-> e.g. one row per check: FINDING | STATUS (ok / fail / n/a) | RULE | NOTE
+| Code | Check | Status | Where | Note |
+| ---- | ----- | ------ | ----- | ---- |
+
+Status is `ok`, `fail`, or `n/a`. "Where" cites the clause or section of the reviewed document. After the table, summarise the failed checks in two or three sentences, worst first.
+
+<!-- guide: Define the EXACT report shape so every run looks identical — name the columns. -->
 
 ## Output rules
 
-- Always cite the specific rule (section, article, or case) for each finding.
+- Cite the checklist code and the document clause for every finding.
+- Report what the document says; whether to sign it is the lawyer's call, not the report's.
+- If the document is incomplete or illegible, list what is missing instead of guessing.
 
-<!-- guide: Add your non-negotiables. e.g. answer in one language; do not give legal advice; if the input is incomplete, ask. If the input may come from disclosure / a case file, note any use restriction before working with it. -->
+<!-- guide: Add your non-negotiables: answer in one language, confidentiality notes, what to do with material from disclosure… -->
 
 ## Reference index
 
-<!-- guide: Keep one line per file under references/ describing what is inside it. This is how the assistant knows which file to open for a given question. -->
+- `references/checklist.md` — the NDA checklist, one row per check (C1–C8)
+- `references/jurisdiction/` — statute extracts the checks rely on, one file per act, split by jurisdiction
+- `references/guidelines/` — regulator and bar-association guidance for borderline calls
+- `references/case-law/` — decisions, one entry per case
 
-- `references/checklist.md` — > e.g. the quick checklist table
-- `references/jurisdiction/` — > e.g. the rules, one file per act, split by jurisdiction
-- `references/guidelines/` — > e.g. authority opinions, Q&A, soft law
-- `references/case-law/` — > e.g. decisions, one entry per case
+<!-- guide: Keep one line per file under references/ — this index is how the assistant decides which file to open. -->
 
 ## Workflow
 
-1. Classify the input.
-2. > e.g. For borderline cases, consult `references/guidelines/`.
-3. Check against `references/checklist.md`.
-4. Produce the report in the Output format above.
-
-<!-- guide: Spell out the steps the assistant follows, including WHICH reference file to consult for which situation. -->
+1. Confirm the document is an NDA and classify it (mutual or one-way).
+2. Work through `references/checklist.md` top to bottom.
+3. For borderline calls, consult `references/guidelines/` and `references/case-law/`.
+4. Produce the report in the Output format, then the short summary.

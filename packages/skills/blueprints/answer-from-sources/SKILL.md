@@ -1,52 +1,62 @@
 ---
 name: answer-from-sources
-description: Answers a question grounded in authoritative sources, with citations.
+description: Answers data-protection (GDPR) questions grounded in the regulation and supervisory guidance, with a citation for every claim. Use for questions about personal data, consent, or data-subject rights.
 ---
 
-<!-- guide: Rewrite the name and description above. The description is the TRIGGER the assistant uses to decide when to run this skill, so name the kind of question it answers. One sentence. e.g. "Answers a data-protection question grounded in the regulation and guidance, with citations." -->
+<!-- guide: This skill ships as a worked example — GDPR Q&A. Keep the structure, swap the domain: rename it, point the description at the questions YOUR skill answers, and rebuild the source map in references/sources/. -->
 
 # What this skill does
 
-> e.g. Answers a [domain] question by reasoning from [authoritative sources] and citing each step.
-
-<!-- guide: One sentence, one job. This pattern is for questions, not document review. -->
+Answers a data-protection question by working through the sources in `references/sources/` in order of authority, citing the provision behind every claim.
 
 ## Input
 
-> e.g. A question from the user about [domain].
+A data-protection question. If two things are not obvious from it, ask for both at once before answering: the jurisdiction (EU-wide, or a member state whose national derogations matter) and the role of the party asking (controller or processor).
 
-<!-- guide: State what comes in. If the question is too broad or missing context (jurisdiction, dates), tell the assistant to ask a clarifying question first. -->
+<!-- guide: State what comes in, and which missing context justifies a clarifying question. Ask once, not piecemeal. -->
 
 ## Sources
 
-<!-- guide: Define the hierarchy of authority — what to trust first, and which jurisdiction(s) apply. Keep the source map in references/sources/. -->
+Authority order, highest first — on conflict, the higher source wins:
 
-> e.g. Prefer [primary law] over [guidance] over [commentary]; for [jurisdiction] use ...
+1. GDPR, the regulation text itself
+2. CJEU case law interpreting it
+3. EDPB guidelines and opinions
+4. National supervisory-authority guidance
+5. Commentary
 
-See `references/sources/`.
+National law may derogate where the GDPR leaves room (for example the age of consent or the employment context); flag it when the question touches such an area. The per-source notes live in `references/sources/`.
+
+<!-- guide: The hierarchy is the heart of this pattern: write down what wins on conflict, and where national variation can change the general answer. -->
 
 ## Reasoning structure
 
-<!-- guide: How should the answer be built? e.g. issue -> applicable source -> application -> conclusion. Keeping a fixed structure makes answers consistent and checkable. -->
+Build every answer in four steps, in this order:
 
-> e.g. 1) the issue, 2) the governing source, 3) how it applies here, 4) the answer.
+1. **Issue** — restate the question as the legal issue it raises.
+2. **Source** — the governing provision(s), cited by article.
+3. **Application** — how the provision applies to the facts asked.
+4. **Answer** — the conclusion, and what remains open.
 
 ## Output rules
 
-- Cite the source for every claim.
+- Cite the article or guideline paragraph for every claim.
 - Separate what the sources say from any practical suggestion.
+- If the sources do not settle the question, say so explicitly; do not paper over the gap.
+- Frame the answer as research support, not legal advice.
 
-<!-- guide: Add your non-negotiables. e.g. flag uncertainty; do not present an answer as legal advice; say when the sources do not settle the question. -->
+<!-- guide: Add your non-negotiables — answer language, how to handle conflicting sources, when to refuse. -->
 
 ## Reference index
 
-- `references/sources/` — > e.g. the authority hierarchy and per-jurisdiction source list
+- `references/sources/source-map.md` — the source list in authority order, with one row per source
+- `references/sources/eu/gdpr.md` — orientation notes on the regulation itself
+
+<!-- guide: Keep one line per file under references/ — this index is how the assistant decides which file to open. -->
 
 ## Workflow
 
-1. Identify the issue; ask for missing context if needed.
-2. Find the governing source via `references/sources/`.
-3. Apply it using the reasoning structure above.
-4. Answer with citations.
-
-<!-- guide: Spell out the steps, including which source list to consult. -->
+1. Identify the issue; ask once for jurisdiction and role if missing.
+2. Find the governing source via `references/sources/source-map.md`.
+3. Apply the reasoning structure.
+4. Answer with citations, flagging anything the sources leave open.
