@@ -1440,8 +1440,12 @@ export function PromptBar(props: PromptBarProps) {
           // back as the user deletes content.
           className={cn(
             "folio-ai-bar-editor text-foreground min-w-0 flex-1 [&_.ProseMirror]:field-sizing-fixed [&_.ProseMirror]:max-h-32 [&_.ProseMirror]:min-h-0 [&_.ProseMirror]:overflow-y-auto [&_.ProseMirror]:py-1.5 [&_.ProseMirror]:text-[13px] [&_.ProseMirror]:leading-5 [&_.ProseMirror]:select-text [&_.ProseMirror]:focus-visible:outline-none [&_.ProseMirror_p]:my-0",
+            // Suppress the composer's own placeholder whenever the host
+            // renders an overlay in the same cell (custom placeholder, the
+            // busy "working" label, or the editor-loading label) — otherwise
+            // the two texts paint on top of each other.
             isEmpty &&
-              emptyPlaceholder !== undefined &&
+              (emptyPlaceholder !== undefined || busy || isSendBlocked) &&
               "folio-ai-bar-editor--custom-placeholder",
             inputDisabled && "pointer-events-none",
           )}
