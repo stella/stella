@@ -177,6 +177,7 @@ function getTableCellVerticalBorderHeight(cell: TableCell | undefined): number {
 export function measureTableBlock(
   tableBlock: TableBlock,
   contentWidth: number,
+  fieldValues?: ReadonlyMap<number, string>,
 ): TableMeasure {
   const DEFAULT_CELL_PADDING_X = 7; // Word default: 108 twips ≈ 7px
   const DEFAULT_CELL_PADDING_Y = 0; // OOXML/TableNormal default: top=0, bottom=0
@@ -288,7 +289,9 @@ export function measureTableBlock(
           ? NO_WRAP_MEASURE_WIDTH
           : cellContentWidth;
         const cellMeasure: TableCellMeasure = {
-          blocks: cell.blocks.map((b) => measureBlock(b, measureWidth)),
+          blocks: cell.blocks.map((b) =>
+            measureBlock(b, measureWidth, undefined, undefined, fieldValues),
+          ),
           width: cellWidth,
           height: 0, // Calculated below
         };
@@ -640,6 +643,7 @@ export function measureBlock(
   contentWidth: number,
   floatingZones?: FloatingImageZone[],
   cumulativeY?: number,
+  fieldValues?: ReadonlyMap<number, string>,
 ): Measure {
   switch (block.kind) {
     case "paragraph": {
@@ -650,7 +654,11 @@ export function measureBlock(
       // and contentWidth (both captured in the cache key). When floating zones
       // ARE present, we always measure fresh since zones depend on inter-block
       // layout context (cumulative Y, neighboring floating tables/images).
-      if (!floatingZones || floatingZones.length === 0) {
+      // Resolved field values also change the measured width and are not part
+      // of the cache key, so bypass the cache when they are supplied.
+      const cacheable =
+        (!floatingZones || floatingZones.length === 0) && !fieldValues;
+      if (cacheable) {
         const cached = getCachedParagraphMeasure(pBlock, contentWidth);
         if (cached) {
           return cached;
@@ -663,9 +671,12 @@ export function measureBlock(
       if (floatingZones) {
         measureOpts.floatingZones = floatingZones;
       }
+      if (fieldValues) {
+        measureOpts.fieldValues = fieldValues;
+      }
       const result = measureParagraph(pBlock, contentWidth, measureOpts);
 
-      if (!floatingZones || floatingZones.length === 0) {
+      if (cacheable) {
         setCachedParagraphMeasure(pBlock, contentWidth, result);
       }
 
@@ -673,7 +684,7 @@ export function measureBlock(
     }
 
     case "table": {
-      return measureTableBlock(block as TableBlock, contentWidth);
+      return measureTableBlock(block as TableBlock, contentWidth, fieldValues);
     }
 
     case "image": {
@@ -686,7 +697,7 @@ export function measureBlock(
     }
 
     case "textBox": {
-      return measureTextBoxBlock(block as TextBoxBlock);
+      return measureTextBoxBlock(block as TextBoxBlock, fieldValues);
     }
 
     case "pageBreak":
@@ -708,10 +719,15 @@ export function measureBlock(
   }
 }
 
-export function measureTextBoxBlock(tb: TextBoxBlock): TextBoxMeasure {
+export function measureTextBoxBlock(
+  tb: TextBoxBlock,
+  fieldValues?: ReadonlyMap<number, string>,
+): TextBoxMeasure {
   const margins = tb.margins ?? DEFAULT_TEXTBOX_MARGINS;
   const innerWidth = tb.width - margins.left - margins.right;
-  const innerMeasures = tb.content.map((p) => measureParagraph(p, innerWidth));
+  const innerMeasures = tb.content.map((p) =>
+    measureParagraph(p, innerWidth, fieldValues ? { fieldValues } : undefined),
+  );
   const contentHeight = innerMeasures.reduce(
     (sum, m) => sum + m.totalHeight,
     0,
@@ -748,6 +764,7 @@ export function measureBlocks(
   contentWidth: number | number[],
   marginTop: number | number[] = 0,
   pageGeometry?: BandPageGeometry,
+  fieldValues?: ReadonlyMap<number, string>,
 ): Measure[] {
   const defaultWidth = Array.isArray(contentWidth)
     ? (contentWidth[0] ?? 0)
@@ -860,7 +877,13 @@ export function measureBlocks(
       const blockWidth = Array.isArray(contentWidth)
         ? (contentWidth[blockIndex] ?? defaultWidth)
         : contentWidth;
-      const measure = measureBlock(block, blockWidth, zones, cumulativeY);
+      const measure = measureBlock(
+        block,
+        blockWidth,
+        zones,
+        cumulativeY,
+        fieldValues,
+      );
 
       // Paragraphs clear a full-width band internally (findClearLineY inside
       // measureParagraph). An in-flow table or inline image does not, so reserve

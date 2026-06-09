@@ -87,6 +87,9 @@ export type MeasureParagraphOptions = {
   floatingZones?: FloatingImageZone[];
   /** Y offset of this paragraph relative to the exclusion zones (default: 0) */
   paragraphYOffset?: number;
+  /** Field run `pmStart` -> resolved display text, so a field measures at its
+   *  painted width instead of the cached fallback. */
+  fieldValues?: ReadonlyMap<number, string>;
 };
 
 /**
@@ -309,6 +312,17 @@ function isFieldRun(run: Run): run is FieldRun {
   return run.kind === "field";
 }
 
+/** Text a field run is measured at: its resolved value when known (so the
+ *  measurer agrees with the painter), else the cached fallback. */
+function fieldMeasureText(
+  run: FieldRun,
+  fieldValues: ReadonlyMap<number, string> | undefined,
+): string {
+  const resolved =
+    run.pmStart === undefined ? undefined : fieldValues?.get(run.pmStart);
+  return resolved ?? (run.fallback || "1");
+}
+
 /**
  * Check if a run is a math equation run
  */
@@ -379,7 +393,11 @@ function isEmptyTextRun(run: TextRun): boolean {
  * desync measurer and painter on tab advance for paragraphs with a tab
  * preceding a floating image.
  */
-function measureInlineWidthAfterTab(runs: Run[], tabIndex: number): number {
+function measureInlineWidthAfterTab(
+  runs: Run[],
+  tabIndex: number,
+  fieldValues?: ReadonlyMap<number, string>,
+): number {
   let width = 0;
   for (let i = tabIndex + 1; i < runs.length; i++) {
     const next = runs[i];
@@ -389,7 +407,10 @@ function measureInlineWidthAfterTab(runs: Run[], tabIndex: number): number {
     if (isTextRun(next)) {
       width += measureTextWidth(next.text || "", runToFontStyle(next));
     } else if (isFieldRun(next)) {
-      width += measureTextWidth(next.fallback || "1", runToFontStyle(next));
+      width += measureTextWidth(
+        fieldMeasureText(next, fieldValues),
+        runToFontStyle(next),
+      );
     } else if (isImageRun(next) && !isFloatingImageRun(next)) {
       width += next.width || 0;
     } else if (isMathRun(next)) {
@@ -414,6 +435,7 @@ function measureInlineWidthAfterTab(runs: Run[], tabIndex: number): number {
 function measureDecimalPrefixWidthAfterTab(
   runs: Run[],
   tabIndex: number,
+  fieldValues?: ReadonlyMap<number, string>,
 ): number {
   let text = "";
   let firstRun: TextRun | FieldRun | MathRun | undefined;
@@ -426,7 +448,7 @@ function measureDecimalPrefixWidthAfterTab(
       text += next.text || "";
       firstRun ??= next;
     } else if (isFieldRun(next)) {
-      text += next.fallback || "1";
+      text += fieldMeasureText(next, fieldValues);
       firstRun ??= next;
     } else if (isMathRun(next)) {
       text += next.plainText || "[equation]";
@@ -896,10 +918,15 @@ export function measureParagraph(
       const style = runToFontStyle(run);
       updateMaxFont(style);
 
-      const followingWidth = measureInlineWidthAfterTab(runs, runIndex);
+      const followingWidth = measureInlineWidthAfterTab(
+        runs,
+        runIndex,
+        options?.fieldValues,
+      );
       const decimalPrefixWidth = measureDecimalPrefixWidthAfterTab(
         runs,
         runIndex,
+        options?.fieldValues,
       );
 
       // Tab width comes from the shared tab-stop model (`calculateTabWidth` —
@@ -1034,8 +1061,9 @@ export function measureParagraph(
     }
 
     if (isFieldRun(run)) {
-      // Measure field using fallback text (actual value substituted at render time)
-      const fallback = run.fallback || "1";
+      // Measure the field at its resolved value when known so the line breaker
+      // agrees with the painter; otherwise the cached fallback text.
+      const fallback = fieldMeasureText(run, options?.fieldValues);
       const style: FontStyle = {
         fontFamily: run.fontFamily ?? DEFAULT_FONT_FAMILY,
         fontSize: run.fontSize ?? DEFAULT_FONT_SIZE,

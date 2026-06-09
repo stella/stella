@@ -38,6 +38,10 @@ import type { HiddenHeaderFooterPMsRef } from "../components/HiddenHeaderFooterP
 import { getFootnoteText } from "../core/docx/footnoteParser";
 import { buildBookmarkPageMap } from "../core/fields/bookmarkPages";
 import { buildBookmarkText } from "../core/fields/bookmarkText";
+import {
+  fieldValuesEqual,
+  resolveFieldValues,
+} from "../core/fields/resolveFieldValues";
 import { buildSectionPageCounts } from "../core/fields/sectionPageCounts";
 import { buildSeqValues } from "../core/fields/seqValues";
 import { clickToPosition } from "../core/layout-bridge/clickToPosition";
@@ -2437,7 +2441,7 @@ export function PagedEditor(
                 measureBlock: measureSingleBlockWithoutFloatingZones,
               })
             : null;
-        const newMeasures =
+        let newMeasures =
           incrementalResult?.measures ??
           measureBlocks(newBlocks, blockWidths, blockMeasureInputs.marginTops, {
             pageHeight: blockMeasureInputs.pageHeights,
@@ -2481,6 +2485,9 @@ export function PagedEditor(
         if (sectionHeaderFooterRefs !== undefined) {
           layoutOpts.sectionHeaderFooterRefs = sectionHeaderFooterRefs;
         }
+        // The exact options the layout was produced with, reused if the field-
+        // width stabilization pass re-lays-out below.
+        let layoutOptsUsed: Parameters<typeof layoutDocument>[2] = layoutOpts;
 
         if (hasFootnotes) {
           // Build footnote content and measure heights up front. The
@@ -2523,10 +2530,8 @@ export function PagedEditor(
           // fn-bearing page (in paginator.addFootnoteHeight); we pass per-fn
           // content plus any wrapper margin here.
 
-          newLayout = layoutDocument(newBlocks, newMeasures, {
-            ...layoutOpts,
-            footnoteHeightById,
-          });
+          layoutOptsUsed = { ...layoutOpts, footnoteHeightById };
+          newLayout = layoutDocument(newBlocks, newMeasures, layoutOptsUsed);
 
           // The layout engine assigned `page.footnoteIds` line-by-
           // line via `paginator.addFootnoteHeight(_, ids)`, so a fn
@@ -2544,6 +2549,62 @@ export function PagedEditor(
         } else {
           // No footnotes — single pass
           newLayout = layoutDocument(newBlocks, newMeasures, layoutOpts);
+        }
+
+        // Field-width stabilization: fields were measured at their cached
+        // fallback text. Resolve them against this layout and, if a value's
+        // width differs, re-measure and re-lay-out so wrapping matches what the
+        // painter draws. PAGE/NUMPAGES depend on the layout they help produce,
+        // so a re-layout can shift pages and change values again — iterate to a
+        // fixed point with a small cap. Gated on a real change, so field-free
+        // documents and most edits do zero passes; skipped on the incremental
+        // (typing) path to keep keystrokes cheap.
+        if (!incrementalResult) {
+          const MAX_FIELD_STABILIZATION_PASSES = 3;
+          let previousFieldValues: Map<number, string> | null = null;
+          for (let pass = 0; pass < MAX_FIELD_STABILIZATION_PASSES; pass++) {
+            const { values, changed } = resolveFieldValues(
+              newBlocks,
+              newLayout.pages,
+              {
+                totalPages: newLayout.pages.length,
+                bookmarkPages: buildBookmarkPageMap(newLayout.pages, newBlocks),
+                bookmarkText: buildBookmarkText(newBlocks),
+                seqValues: buildSeqValues(newBlocks),
+                sectionPageCounts: buildSectionPageCounts(newLayout.pages),
+                now: new Date(),
+              },
+            );
+            const settled =
+              previousFieldValues === null
+                ? !changed
+                : fieldValuesEqual(previousFieldValues, values);
+            if (settled) {
+              break;
+            }
+            previousFieldValues = values;
+            newMeasures = measureBlocks(
+              newBlocks,
+              blockWidths,
+              blockMeasureInputs.marginTops,
+              {
+                pageHeight: blockMeasureInputs.pageHeights,
+                marginBottom: blockMeasureInputs.marginBottoms,
+              },
+              values,
+            );
+            newLayout = layoutDocument(newBlocks, newMeasures, layoutOptsUsed);
+            if (hasFootnotes) {
+              pageFootnoteMap = new Map<number, number[]>();
+              for (const page of newLayout.pages) {
+                if (page.footnoteIds && page.footnoteIds.length > 0) {
+                  pageFootnoteMap.set(page.number, page.footnoteIds);
+                }
+              }
+            }
+            layoutArtifactsRef.current.measures = newMeasures;
+            setMeasures(newMeasures);
+          }
         }
 
         setLayout(newLayout);
