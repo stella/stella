@@ -37,6 +37,7 @@ import { HiddenHeaderFooterPMs } from "../components/HiddenHeaderFooterPMs";
 import type { HiddenHeaderFooterPMsRef } from "../components/HiddenHeaderFooterPMs";
 import { getFootnoteText } from "../core/docx/footnoteParser";
 import { buildBookmarkPageMap } from "../core/fields/bookmarkPages";
+import { buildBookmarkText } from "../core/fields/bookmarkText";
 import { buildSectionPageCounts } from "../core/fields/sectionPageCounts";
 import { buildSeqValues } from "../core/fields/seqValues";
 import { clickToPosition } from "../core/layout-bridge/clickToPosition";
@@ -2638,6 +2639,11 @@ export function PagedEditor(
           );
           if (bookmarkPages.size > 0) {
             renderOpts.bookmarkPages = bookmarkPages;
+          }
+          // Bookmark text for REF cross-references.
+          const bookmarkText = buildBookmarkText(newBlocks);
+          if (bookmarkText.size > 0) {
+            renderOpts.bookmarkText = bookmarkText;
           }
           // Assign SEQ caption numbers in document order so SEQ fields resolve.
           const seqValues = buildSeqValues(newBlocks);

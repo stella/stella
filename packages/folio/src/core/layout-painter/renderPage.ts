@@ -168,6 +168,8 @@ export type RenderPageOptions = {
   document?: Document;
   /** Bookmark name -> 1-indexed page, for resolving PAGEREF fields at paint. */
   bookmarkPages?: ReadonlyMap<string, number>;
+  /** Bookmark name -> paragraph text, for resolving REF fields at paint. */
+  bookmarkText?: ReadonlyMap<string, string>;
   /** Field run `pmStart` -> precomputed SEQ value, for resolving SEQ fields. */
   seqValues?: ReadonlyMap<number, number>;
   /** Section index -> page count in that section, for SECTIONPAGES fields. */
@@ -2508,6 +2510,7 @@ function buildPageRenderArgs(
     totalPages,
     section: "body",
     ...(options.bookmarkPages ? { bookmarkPages: options.bookmarkPages } : {}),
+    ...(options.bookmarkText ? { bookmarkText: options.bookmarkText } : {}),
     ...(options.seqValues ? { seqValues: options.seqValues } : {}),
     ...sectionPagesContext(page, options.sectionPageCounts),
   };

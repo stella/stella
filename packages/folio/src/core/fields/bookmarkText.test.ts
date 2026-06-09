@@ -1,0 +1,57 @@
+import { describe, expect, test } from "bun:test";
+
+import type {
+  FieldRun,
+  FlowBlock,
+  ParagraphBlock,
+  TextRun,
+} from "../layout-engine/types";
+import { buildBookmarkText } from "./bookmarkText";
+
+const text = (value: string): TextRun => ({ kind: "text", text: value });
+
+const para = (
+  id: string,
+  runs: (TextRun | FieldRun)[],
+  bookmarks?: string[],
+): ParagraphBlock => ({
+  kind: "paragraph",
+  id,
+  runs,
+  ...(bookmarks ? { bookmarks } : {}),
+});
+
+describe("buildBookmarkText", () => {
+  test("maps each bookmark to its paragraph's trimmed text", () => {
+    const blocks: FlowBlock[] = [
+      para("h1", [text("  Section 1. Definitions  ")], ["_Ref1"]),
+      para("body", [text("ignored")]),
+      para("h2", [text("Schedule A")], ["_Ref2", "_Alt"]),
+    ];
+
+    const map = buildBookmarkText(blocks);
+
+    expect(map.get("_Ref1")).toBe("Section 1. Definitions");
+    expect(map.get("_Ref2")).toBe("Schedule A");
+    expect(map.get("_Alt")).toBe("Schedule A");
+    expect(map.size).toBe(3);
+  });
+
+  test("concatenates only text runs, skipping fields and the like", () => {
+    const field: FieldRun = {
+      kind: "field",
+      fieldType: "OTHER",
+      instruction: "SEQ Figure",
+    };
+    const blocks: FlowBlock[] = [
+      para("h", [text("Figure "), field, text(": Caption")], ["_Ref1"]),
+    ];
+
+    expect(buildBookmarkText(blocks).get("_Ref1")).toBe("Figure : Caption");
+  });
+
+  test("returns empty when no paragraph carries a bookmark", () => {
+    const blocks: FlowBlock[] = [para("a", [text("x")])];
+    expect(buildBookmarkText(blocks).size).toBe(0);
+  });
+});

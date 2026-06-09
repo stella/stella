@@ -24,6 +24,8 @@ export type RenderContext = {
   section: "body" | "header" | "footer";
   /** Bookmark name -> 1-indexed page, for resolving PAGEREF fields. */
   bookmarkPages?: ReadonlyMap<string, number>;
+  /** Bookmark name -> paragraph text, for resolving REF fields. */
+  bookmarkText?: ReadonlyMap<string, string>;
   /** Field run `pmStart` -> precomputed SEQ value, for resolving SEQ fields. */
   seqValues?: ReadonlyMap<number, number>;
   /** Pages in this page's section, for resolving SECTIONPAGES fields. */
