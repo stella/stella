@@ -69,10 +69,12 @@ export type MarkerMeta =
 // ── Low-level pattern factories (the canonical literals) ──
 // Each returns a fresh RegExp so callers never share `lastIndex` state.
 
-/** Any `{{...}}` marker; group 1 is the inner text (untrimmed). */
+/** Any `{{...}}` marker; group 1 is the inner text (untrimmed — callers trim). */
 export const markerPattern = (): RegExp =>
-  // oxlint-disable-next-line sonarjs/slow-regex -- bounded to one marker's inner text
-  /\{\{\s*([^{}]*?)\s*\}\}/gu;
+  // A single greedy `[^{}]*` matches the inner text in one pass. The previous
+  // `\s*([^{}]*?)\s*` form backtracks polynomially on a `{{` with no closing
+  // `}}` (\s overlaps [^{}]); this scans the whole document, so keep it linear.
+  /\{\{([^{}]*)\}\}/gu;
 
 /** Inline field / clause / numbering marker (inner allows the directive sigils). */
 export const placeholderPattern = (): RegExp =>
@@ -108,8 +110,9 @@ const FIELD_PATH_RE = /^[\p{L}\p{N}_.-]+$/u;
 const CLAUSE_INNER_RE = /^@clause:([^:}\s]+)(?::([^}\s]+))?$/u;
 const NUM_INNER_RE = /^@num:([\p{L}\p{N}_.-]+)$/u;
 const REF_INNER_RE = /^@ref:([\p{L}\p{N}_.-]+)$/u;
-// oxlint-disable-next-line sonarjs/slow-regex -- bounded to one marker's inner text
-const BLOCK_INNER_RE = /^(#if|#elseif|#else|#each|\/if|\/each)\b\s*(.*)$/u;
+// `\b(.*)` rather than `\b\s*(.*)`: the overlapping `\s*`/`.*` quantifiers are
+// polynomial; group 2 is trimmed at the use site below, so drop the `\s*`.
+const BLOCK_INNER_RE = /^(#if|#elseif|#else|#each|\/if|\/each)\b(.*)$/u;
 
 /**
  * Classify the inner text of a `{{...}}` marker. Returns `null` when the text is
@@ -187,7 +190,8 @@ export const scanMarkers = (text: string): ScannedMarker[] => {
   const out: ScannedMarker[] = [];
   let match = re.exec(text);
   while (match !== null) {
-    const inner = match[1] ?? "";
+    // markerPattern captures surrounding whitespace now; trim to the directive.
+    const inner = (match[1] ?? "").trim();
     const meta = classifyMarker(inner);
     if (meta) {
       out.push({
