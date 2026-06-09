@@ -27,6 +27,7 @@ import type {
   IncomingActiveExternal,
   IncomingActiveFile,
   IncomingActiveSkill,
+  IncomingActiveTemplate,
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
 import {
@@ -250,7 +251,7 @@ const sendMessage = createSafeRootHandler(
         pinnedIds: [],
         accessibleWorkspaceIds,
       }),
-      hasActiveFileChat: true,
+      hasActiveDocxEditClient: true,
       webSearchEnabled: validationThreadState.webSearchEnabled,
       externalTools: validationExternalMcpTools?.tools,
       disabledNativeToolSlugs,
@@ -470,6 +471,7 @@ const sendMessage = createSafeRootHandler(
       activeExternal: body.activeExternal,
       activeFile: body.activeFile,
       activeSkill: body.activeSkill,
+      activeTemplate: body.activeTemplate,
       contextMatterIds: effectiveContextMatterIds,
       memberRole,
       messageWindow: messagesForContextResult.value,
@@ -574,7 +576,9 @@ const sendMessage = createSafeRootHandler(
         pinnedIds: effectiveContextMatterIds,
         accessibleWorkspaceIds,
       }),
-      hasActiveFileChat: body.activeFile?.supportsDocxEdits === true,
+      hasActiveDocxEditClient:
+        body.activeFile?.supportsDocxEdits === true ||
+        body.activeTemplate !== undefined,
       webSearchEnabled: thread.data.webSearchEnabled,
       externalTools: externalMcpTools.tools,
       disabledNativeToolSlugs,
@@ -1486,6 +1490,7 @@ type PrepareChatContextProps = {
   activeExternal: IncomingActiveExternal | undefined;
   activeFile: IncomingActiveFile | undefined;
   activeSkill: IncomingActiveSkill | undefined;
+  activeTemplate: IncomingActiveTemplate | undefined;
   contextMatterIds: SafeId<"workspace">[];
   memberRole: { role: string };
   messageWindow: ChatMessage[];
@@ -1524,6 +1529,7 @@ const prepareChatContext = async ({
   activeExternal,
   activeFile,
   activeSkill,
+  activeTemplate,
   contextMatterIds,
   memberRole,
   messageWindow,
@@ -1552,6 +1558,7 @@ const prepareChatContext = async ({
         activeExternal,
         activeFile,
         activeSkill,
+        activeTemplate,
         contextMatterIds,
         memberRole,
         organizationId,
