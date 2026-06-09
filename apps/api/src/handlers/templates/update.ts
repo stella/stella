@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
@@ -229,7 +229,12 @@ const updateTemplateHandler = async function* ({
       );
     }
 
-    return Result.ok(txResult.row);
+    const row = txResult.row;
+    if (!row) {
+      panic("Failed to update template");
+    }
+
+    return Result.ok(row);
   }
 
   const updated = yield* Result.await(
@@ -269,6 +274,10 @@ const updateTemplateHandler = async function* ({
       return row;
     }),
   );
+
+  if (!updated) {
+    panic("Failed to update template");
+  }
 
   return Result.ok(updated);
 };

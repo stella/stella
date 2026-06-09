@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -132,7 +132,12 @@ const createWorkspaceContact = createSafeHandler(
 
     upsertWorkspaceSearchDocument(workspaceId).catch(captureError);
 
-    return Result.ok(txResult.value.created);
+    const created = txResult.value.created;
+    if (!created) {
+      panic("Failed to create workspace contact");
+    }
+
+    return Result.ok(created);
   },
 );
 

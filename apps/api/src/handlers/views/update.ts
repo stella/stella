@@ -92,7 +92,7 @@ const updateView = createSafeHandler(
     }
 
     if (Object.keys(updates).length === 0) {
-      return Result.ok(undefined);
+      return Result.ok({});
     }
 
     const updateResult = yield* Result.await(
@@ -165,7 +165,7 @@ const updateView = createSafeHandler(
       data: ["views", workspaceId],
     });
 
-    return Result.ok(undefined);
+    return Result.ok({});
   },
 );
 

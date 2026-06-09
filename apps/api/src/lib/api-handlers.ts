@@ -170,11 +170,22 @@ type SafeStatusResponse<TStatusCode extends HandlerErrorStatusCode> =
     ? ElysiaCustomStatusResponse<TStatusCode, SafeErrorBody>
     : never;
 
+/**
+ * Success payloads must be non-nullish, including every union member.
+ * Elysia serializes a bare `null`/`undefined` return as a 200 with an
+ * empty body, which Eden parses as `""` on the client — so a payload
+ * typed `T | null` arrives as `T | ""` at runtime and breaks optional
+ * chaining one property deep. Model absence as a field instead
+ * (`{ entitlement: null }`, `{ items: [] }`); void mutations return a
+ * minimal object such as `{}`.
+ */
+type SafeHandlerPayload = NonNullable<unknown>;
+
 type SafeHandlerResult<TResult> =
   | TResult
   | SafeStatusResponse<HandlerErrorStatusCode>;
 
-type SafeHandlerFn<TContext, TResult> = (
+type SafeHandlerFn<TContext, TResult extends SafeHandlerPayload> = (
   ctx: TContext,
 ) => AsyncGenerator<
   Err<never, SafeHandlerError>,
@@ -185,7 +196,7 @@ type SafeHandlerFn<TContext, TResult> = (
 type SafeHandlerDefinition<
   TConfig extends InputSchema = InputSchema,
   TContext = Context<UnwrapRoute<TConfig>>,
-  TResult = unknown,
+  TResult extends SafeHandlerPayload = SafeHandlerPayload,
 > = {
   config: TConfig;
   handler: (ctx: TContext) => Promise<SafeHandlerResult<TResult>>;
@@ -214,7 +225,10 @@ type SafeHandlerLogContext = {
   route: string;
 };
 
-const runSafeHandler = async <TContext extends SafeHandlerLogContext, TResult>(
+const runSafeHandler = async <
+  TContext extends SafeHandlerLogContext,
+  TResult extends SafeHandlerPayload,
+>(
   ctx: TContext,
   handler: SafeHandlerFn<TContext, TResult>,
 ): Promise<SafeHandlerResult<TResult>> => {
@@ -308,7 +322,7 @@ const runSafeHandler = async <TContext extends SafeHandlerLogContext, TResult>(
 const createSafeScopedHandler = <
   TConfig extends HandlerConfig,
   TContext extends BaseHandlerContext<TConfig>,
-  TResult,
+  TResult extends SafeHandlerPayload,
 >(
   config: TConfig,
   handler: SafeHandlerFn<TContext, TResult>,
@@ -442,7 +456,7 @@ const runUsagePreflight = async ({
 const createSafeDirectHandler = <
   TConfig extends InputSchema,
   TContext extends SafeHandlerLogContext,
-  TResult,
+  TResult extends SafeHandlerPayload,
 >(
   config: TConfig,
   handler: SafeHandlerFn<TContext, TResult>,
@@ -457,13 +471,19 @@ const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
   message: error.message,
 });
 
-export const createSafeRootHandler = <TConfig extends HandlerConfig, TResult>(
+export const createSafeRootHandler = <
+  TConfig extends HandlerConfig,
+  TResult extends SafeHandlerPayload,
+>(
   config: TConfig,
   handler: SafeHandlerFn<RootHandlerContext<TConfig>, TResult>,
 ): SafeHandlerDefinition<TConfig, RootHandlerContext<TConfig>, TResult> =>
   createSafeScopedHandler(config, handler);
 
-export const createSafeHandler = <TConfig extends HandlerConfig, TResult>(
+export const createSafeHandler = <
+  TConfig extends HandlerConfig,
+  TResult extends SafeHandlerPayload,
+>(
   config: TConfig,
   handler: SafeHandlerFn<WorkspaceHandlerContext<TConfig>, TResult>,
 ): SafeHandlerDefinition<TConfig, WorkspaceHandlerContext<TConfig>, TResult> =>
@@ -471,7 +491,7 @@ export const createSafeHandler = <TConfig extends HandlerConfig, TResult>(
 
 export const createSafeSessionHandler = <
   TConfig extends SessionHandlerConfig,
-  TResult,
+  TResult extends SafeHandlerPayload,
 >(
   config: TConfig,
   handler: SafeHandlerFn<SessionHandlerContext<TConfig>, TResult>,
@@ -494,7 +514,7 @@ type TokenHandlerContext<
  */
 export const createSafeTokenHandler = <
   TConfig extends TokenHandlerConfig,
-  TResult,
+  TResult extends SafeHandlerPayload,
 >(
   config: TConfig,
   handler: SafeHandlerFn<TokenHandlerContext<TConfig>, TResult>,
@@ -514,7 +534,7 @@ type PublicHandlerContext<
  */
 export const createSafePublicHandler = <
   TConfig extends PublicHandlerConfig,
-  TResult,
+  TResult extends SafeHandlerPayload,
 >(
   config: TConfig,
   handler: SafeHandlerFn<PublicHandlerContext<TConfig>, TResult>,

@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
@@ -189,6 +189,10 @@ export const createVariantHandler = async function* ({
     }),
   );
 
+  if (!inserted) {
+    panic("Failed to create clause variant");
+  }
+
   return Result.ok(inserted);
 };
 
@@ -291,6 +295,10 @@ export const updateVariantHandler = async function* ({
     }),
   );
 
+  if (!updated) {
+    panic("Failed to update clause variant");
+  }
+
   return Result.ok(updated);
 };
 
@@ -371,5 +379,5 @@ export const deleteVariantHandler = async function* ({
     }),
   );
 
-  return Result.ok(undefined);
+  return Result.ok({});
 };

@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
@@ -160,6 +160,10 @@ export const createCategoryHandler = async function* ({
     }),
   );
 
+  if (!inserted) {
+    panic("Failed to create clause category");
+  }
+
   return Result.ok(inserted);
 };
 
@@ -284,6 +288,10 @@ export const updateCategoryHandler = async function* ({
     }),
   );
 
+  if (!updated) {
+    panic("Failed to update clause category");
+  }
+
   return Result.ok(updated);
 };
 
@@ -362,5 +370,5 @@ export const deleteCategoryHandler = async function* ({
     }),
   );
 
-  return Result.ok(undefined);
+  return Result.ok({});
 };

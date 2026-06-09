@@ -172,7 +172,8 @@ export const ChatThreadPage = ({
     enabled: canManageOrganization,
   });
   const usageLimit = useUsageLimit({
-    hasHostedEntitlement: usageEntitlementData?.entitlement.source === "hosted",
+    hasHostedEntitlement:
+      usageEntitlementData?.entitlement?.source === "hosted",
   });
   const handleUsageLimit = usageLimit.handle;
   // Fire only on the *transition* into a new error. Without this,

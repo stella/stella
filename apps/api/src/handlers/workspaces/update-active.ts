@@ -29,7 +29,7 @@ const updateActiveWorkspace = createSafeHandler(
       }),
     );
 
-    return Result.ok(undefined);
+    return Result.ok({});
   },
 );
 

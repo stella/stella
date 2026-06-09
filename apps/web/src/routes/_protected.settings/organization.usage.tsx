@@ -36,7 +36,7 @@ function UsageSettingsPage() {
         description={t("settings.organization.usageDescription")}
         title={t("settings.organization.usage")}
       />
-      <UsageBody data={data ?? null} isLoading={isLoading} />
+      <UsageBody data={data?.entitlement ? data : null} isLoading={isLoading} />
     </>
   );
 }

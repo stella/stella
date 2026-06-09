@@ -119,7 +119,7 @@ const deleteProperty = createSafeHandler(
       );
     }
 
-    return Result.ok(undefined);
+    return Result.ok({});
   },
 );
 

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
@@ -130,18 +131,20 @@ export const createTemplateCategoryHandler = async ({
         createdAt: templateCategories.createdAt,
       });
 
-    if (inserted) {
-      await recordAuditEvent(tx, {
-        action: AUDIT_ACTION.CREATE,
-        resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
-        resourceId: inserted.id,
-        metadata: {
-          kind: "template-category",
-          name: inserted.name,
-          parentId: inserted.parentId,
-        },
-      });
+    if (!inserted) {
+      panic("Failed to create template category");
     }
+
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.CREATE,
+      resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
+      resourceId: inserted.id,
+      metadata: {
+        kind: "template-category",
+        name: inserted.name,
+        parentId: inserted.parentId,
+      },
+    });
 
     return inserted;
   });
@@ -227,7 +230,7 @@ export const updateTemplateCategoryHandler = async ({
     updatedAt: new Date(),
   };
 
-  const [updated] = await scopedDb(async (tx) => {
+  const updatedRows = await scopedDb(async (tx) => {
     const rows = await tx
       .update(templateCategories)
       .set(updates)
@@ -260,6 +263,11 @@ export const updateTemplateCategoryHandler = async ({
 
     return rows;
   });
+
+  const updated = updatedRows.at(0);
+  if (!updated) {
+    panic("Failed to update template category");
+  }
 
   return updated;
 };
@@ -327,5 +335,5 @@ export const deleteTemplateCategoryHandler = async ({
     });
   });
 
-  return undefined;
+  return {};
 };

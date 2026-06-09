@@ -170,7 +170,7 @@ const deleteEntitiesHandler = async function* ({
     provider.removeEntity(entity.id).catch(captureError);
   }
 
-  return Result.ok(undefined);
+  return Result.ok({});
 };
 
 const config = {

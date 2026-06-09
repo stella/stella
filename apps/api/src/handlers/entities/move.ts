@@ -188,7 +188,7 @@ const moveEntityHandler = async function* ({
 
   syncWorkspaceSearchActivity(workspaceId).catch(captureError);
 
-  return Result.ok(undefined);
+  return Result.ok({});
 };
 
 /**

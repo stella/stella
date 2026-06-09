@@ -18,12 +18,15 @@ export const usageEntitlementKeys = {
 
 type UsageEntitlementOptionsInput = QueryOptionsInput<UsageEntitlementKey>;
 
-/** Returns the org's active usage entitlement state, or null when absent. */
+/** The org's usage entitlement state; `{ entitlement: null }` when absent. */
 export type UsageEntitlementResponse = NonNullable<
   Awaited<ReturnType<typeof api.usage.entitlement.get>>["data"]
-> | null;
+>;
 
-export type UsageEntitlement = NonNullable<UsageEntitlementResponse>;
+export type UsageEntitlement = Exclude<
+  UsageEntitlementResponse,
+  { entitlement: null }
+>;
 
 const fetchUsageEntitlement = async ({
   signal,

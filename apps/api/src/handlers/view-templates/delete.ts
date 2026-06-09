@@ -56,7 +56,7 @@ const deleteViewTemplate = createSafeHandler(
       }),
     );
 
-    return Result.ok(undefined);
+    return Result.ok({});
   },
 );
 

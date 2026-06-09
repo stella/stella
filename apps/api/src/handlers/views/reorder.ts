@@ -105,7 +105,7 @@ const reorderViews = createSafeHandler(
       data: ["views", workspaceId],
     });
 
-    return Result.ok(undefined);
+    return Result.ok({});
   },
 );
 

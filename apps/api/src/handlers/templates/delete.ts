@@ -94,7 +94,7 @@ const deleteTemplateHandler = async function* ({
     getS3().delete(key).catch(captureError);
   }
 
-  return Result.ok(undefined);
+  return Result.ok({});
 };
 
 const config = {

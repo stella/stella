@@ -308,7 +308,7 @@ const updateWorkspace = createSafeHandler(
 
     upsertWorkspaceSearchDocument(workspaceId).catch(captureError);
 
-    return Result.ok(undefined);
+    return Result.ok({});
   },
 );
 
