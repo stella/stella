@@ -40,6 +40,8 @@ import { isInputType } from "@/routes/_protected.knowledge/-components/template-
  *  (the host re-anchors stale ranges via contextBefore/After). */
 const CONTEXT_CHARS = 24;
 
+const SUGGEST_FIELDS_PRESET_ID = "suggest-template-fields";
+
 type SuggestedFieldMeta = Pick<StudioField, "path" | "inputType" | "aiPrompt">;
 
 type TemplateStudioAIBarProps = {
@@ -103,25 +105,54 @@ export const TemplateStudioAIBar = ({
         if (text.trim().length === 0) {
           return { text: t("templates.studio.aiNoText") };
         }
-        const instructions = input.prompt.trim();
-        const response = await api.templates["suggest-fields"].post({
+        // The preset asks for field suggestions; anything typed freely is a
+        // general edit instruction ("change the governing law to Czech") and
+        // goes to the edit generator instead.
+        if (input.presetId === SUGGEST_FIELDS_PRESET_ID) {
+          const response = await api.templates["suggest-fields"].post({
+            text,
+          });
+          if (response.error) {
+            throw toAPIError(response.error);
+          }
+          const suggestions = buildFieldSuggestions(
+            view,
+            response.data.suggestions,
+            bounds,
+            fieldMetaRef.current,
+          );
+          if (suggestions.length === 0) {
+            return { text: t("templates.studio.aiNoFields") };
+          }
+          return {
+            text: t("templates.studio.aiFoundFields", {
+              count: suggestions.length,
+            }),
+            suggestions,
+          };
+        }
+
+        const instruction = input.prompt.trim();
+        if (instruction.length === 0) {
+          return { text: t("templates.studio.aiNoText") };
+        }
+        const response = await api.templates["suggest-edits"].post({
           text,
-          ...(instructions ? { instructions } : {}),
+          instruction,
         });
         if (response.error) {
           throw toAPIError(response.error);
         }
-        const suggestions = buildSuggestions(
+        const suggestions = buildEditSuggestions(
           view,
-          response.data.suggestions,
+          response.data.edits,
           bounds,
-          fieldMetaRef.current,
         );
         if (suggestions.length === 0) {
-          return { text: t("templates.studio.aiNoFields") };
+          return { text: t("templates.studio.aiNoEdits") };
         }
         return {
-          text: t("templates.studio.aiFoundFields", {
+          text: t("templates.studio.aiFoundEdits", {
             count: suggestions.length,
           }),
           suggestions,
@@ -129,7 +160,7 @@ export const TemplateStudioAIBar = ({
       },
       presets: [
         {
-          id: "suggest-template-fields",
+          id: SUGGEST_FIELDS_PRESET_ID,
           label: t("templates.studio.aiSuggest"),
           prompt: t("templates.studio.aiPresetPrompt"),
           mode: "edit",
@@ -168,16 +199,73 @@ export const TemplateStudioAIBar = ({
 };
 
 /**
- * Map the model's field suggestions onto in-place document suggestions: one
- * AISuggestion per occurrence of each literal (inside the requested bounds),
- * replacing the literal with its `{{field}}` marker. Occurrences and their
- * context windows come from the same positional-text model the staleness
- * resolver searches (`buildPositionalText`, blocks joined with \n) — contexts
- * built any other way fail to re-anchor after the first edit and the
- * suggestions all go stale. Records each suggestion's field metadata for
- * registration on accept.
+ * Shared occurrence mapper: turn (literal -> replacement) specs into in-place
+ * document suggestions, one AISuggestion per occurrence of each literal
+ * (inside the requested bounds). Occurrences and their context windows come
+ * from the same positional-text model the staleness resolver searches
+ * (`buildPositionalText`, blocks joined with \n) — contexts built any other
+ * way fail to re-anchor after the first edit and the suggestions all go
+ * stale. One suggestion per span: first spec wins per occupied range.
  */
-const buildSuggestions = (
+type ReplacementSpec = {
+  literalText: string;
+  suggestedText: string;
+  topic: string;
+  rationale: string;
+  /** Registers field metadata for this suggestion id (field flow only). */
+  registerMeta?: (id: string) => void;
+};
+
+const buildReplacementSuggestions = (
+  view: EditorView,
+  specs: readonly ReplacementSpec[],
+  bounds: { from: number; to: number } | null,
+): AISuggestion[] => {
+  const { doc } = view.state;
+  const positional = buildPositionalText(doc);
+  const haystack = positional.text;
+  const suggestions: AISuggestion[] = [];
+  const occupied: { from: number; to: number }[] = [];
+
+  for (const spec of specs) {
+    if (spec.literalText.length === 0) {
+      continue;
+    }
+    let idx = haystack.indexOf(spec.literalText);
+    while (idx !== -1) {
+      const from = positional.pmPositionAt(idx);
+      const to = positional.pmPositionAt(idx + spec.literalText.length - 1) + 1;
+      const overlaps = occupied.some((r) => from < r.to && to > r.from);
+      if (!overlaps && (!bounds || (from >= bounds.from && to <= bounds.to))) {
+        occupied.push({ from, to });
+        const id = crypto.randomUUID();
+        spec.registerMeta?.(id);
+        suggestions.push({
+          id,
+          topic: spec.topic,
+          severity: "substantive",
+          range: { from, to },
+          originalText: spec.literalText,
+          suggestedText: spec.suggestedText,
+          contextBefore: haystack.slice(Math.max(0, idx - CONTEXT_CHARS), idx),
+          contextAfter: haystack.slice(
+            idx + spec.literalText.length,
+            idx + spec.literalText.length + CONTEXT_CHARS,
+          ),
+          rationale: spec.rationale,
+          status: "pending",
+        });
+      }
+      idx = haystack.indexOf(spec.literalText, idx + spec.literalText.length);
+    }
+  }
+
+  return suggestions.toSorted((a, b) => a.range.from - b.range.from);
+};
+
+/** Field flow: each literal becomes its `{{field}}` marker; collision-free
+ *  path decided at generation time so every occurrence shares one marker. */
+const buildFieldSuggestions = (
   view: EditorView,
   suggested: readonly {
     literalText: string;
@@ -188,23 +276,11 @@ const buildSuggestions = (
   bounds: { from: number; to: number } | null,
   fieldMeta: Map<string, SuggestedFieldMeta>,
 ): AISuggestion[] => {
-  const { doc } = view.state;
-  const positional = buildPositionalText(doc);
-  const haystack = positional.text;
   const existing = useTemplateStudioStore.getState().fields;
   const takenPaths = new Set(existing.map((f) => f.path));
-  const suggestions: AISuggestion[] = [];
-  // The model sometimes proposes the same literal under two paths
-  // (company.name and signatory.company_name); one span must carry one
-  // suggestion, so first path wins per occupied range.
-  const occupied: { from: number; to: number }[] = [];
+  const specs: ReplacementSpec[] = [];
 
   for (const item of suggested) {
-    if (item.literalText.length === 0) {
-      continue;
-    }
-    // Collision-free path decided at generation time so every occurrence of
-    // this literal carries the same marker text.
     let path = item.fieldPath;
     for (let n = 2; takenPaths.has(path); n++) {
       path = `${item.fieldPath}_${n}`;
@@ -218,35 +294,37 @@ const buildSuggestions = (
           : "text",
       aiPrompt: item.aiPrompt,
     };
-
-    let idx = haystack.indexOf(item.literalText);
-    while (idx !== -1) {
-      const from = positional.pmPositionAt(idx);
-      const to = positional.pmPositionAt(idx + item.literalText.length - 1) + 1;
-      const overlaps = occupied.some((r) => from < r.to && to > r.from);
-      if (!overlaps && (!bounds || (from >= bounds.from && to <= bounds.to))) {
-        occupied.push({ from, to });
-        const id = crypto.randomUUID();
+    specs.push({
+      literalText: item.literalText,
+      suggestedText: `{{${path}}}`,
+      topic: path,
+      rationale: path,
+      registerMeta: (id) => {
         fieldMeta.set(id, meta);
-        suggestions.push({
-          id,
-          topic: path,
-          severity: "substantive",
-          range: { from, to },
-          originalText: item.literalText,
-          suggestedText: `{{${path}}}`,
-          contextBefore: haystack.slice(Math.max(0, idx - CONTEXT_CHARS), idx),
-          contextAfter: haystack.slice(
-            idx + item.literalText.length,
-            idx + item.literalText.length + CONTEXT_CHARS,
-          ),
-          rationale: path,
-          status: "pending",
-        });
-      }
-      idx = haystack.indexOf(item.literalText, idx + item.literalText.length);
-    }
+      },
+    });
   }
 
-  return suggestions.toSorted((a, b) => a.range.from - b.range.from);
+  return buildReplacementSuggestions(view, specs, bounds);
 };
+
+/** Edit flow: free-form instruction results, applied verbatim. */
+const buildEditSuggestions = (
+  view: EditorView,
+  edits: readonly {
+    originalText: string;
+    replacementText: string;
+    note?: string | undefined;
+  }[],
+  bounds: { from: number; to: number } | null,
+): AISuggestion[] =>
+  buildReplacementSuggestions(
+    view,
+    edits.map((edit) => ({
+      literalText: edit.originalText,
+      suggestedText: edit.replacementText,
+      topic: edit.note ?? edit.replacementText,
+      rationale: edit.note ?? "",
+    })),
+    bounds,
+  );
