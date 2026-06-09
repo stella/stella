@@ -263,6 +263,9 @@ export default defineConfig({
     // Module-augmentation files must use `interface` for declaration
     // merging; oxlint's --fix would rewrite it to `type` and break it.
     "types/**/*.d.ts",
+    // Static browser assets (e.g. the CSP-strict dark-mode bootstrap) are
+    // untyped JS; type-aware rules flag their DOM globals as `error`.
+    "apps/web/public/**",
   ],
 
   jsPlugins: [
