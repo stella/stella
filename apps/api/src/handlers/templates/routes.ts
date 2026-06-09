@@ -23,8 +23,10 @@ import saveTemplateDocument from "@/api/handlers/templates/save-document";
 import suggestEdits from "@/api/handlers/templates/suggest-edits";
 import suggestFields from "@/api/handlers/templates/suggest-fields";
 import updateTemplate from "@/api/handlers/templates/update";
+import templateVersionDiff from "@/api/handlers/templates/versions-diff";
 import getTemplateVersion from "@/api/handlers/templates/versions-get";
 import listTemplateVersions from "@/api/handlers/templates/versions-list";
+import templateVersionSummarize from "@/api/handlers/templates/versions-summarize";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 
 export const templatesRoute = new Elysia({
@@ -107,11 +109,24 @@ export const templatesRoute = new Elysia({
   .get("/:templateId/versions", listTemplateVersions.handler, {
     params: listTemplateVersions.config.params,
     permissions: listTemplateVersions.config.permissions,
+    query: listTemplateVersions.config.query,
   })
   .get("/:templateId/versions/:versionId", getTemplateVersion.handler, {
     params: getTemplateVersion.config.params,
     permissions: getTemplateVersion.config.permissions,
   })
+  .get("/:templateId/versions/:versionId/diff", templateVersionDiff.handler, {
+    params: templateVersionDiff.config.params,
+    permissions: templateVersionDiff.config.permissions,
+  })
+  .post(
+    "/:templateId/versions/:versionId/summarize",
+    templateVersionSummarize.handler,
+    {
+      params: templateVersionSummarize.config.params,
+      permissions: templateVersionSummarize.config.permissions,
+    },
+  )
   // ── Clause linking ──────────────────────────────────
   .get("/:templateId/clauses", listTemplateClauses.handler, {
     params: listTemplateClauses.config.params,

@@ -43,6 +43,8 @@ import {
   isUploadRateLimitedPath,
 } from "@/api/handlers/entities/upload-rate-limit";
 import uploadVersion from "@/api/handlers/entities/upload-version";
+import versionDiff from "@/api/handlers/entities/version-diff";
+import versionSummarize from "@/api/handlers/entities/version-summarize";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
@@ -218,6 +220,18 @@ export const entitiesRoute = new Elysia({
     params: readFieldFile.config.params,
     permissions: readFieldFile.config.permissions,
   })
+  .get("/entity/:entityId/versions/:versionId/diff", versionDiff.handler, {
+    params: versionDiff.config.params,
+    permissions: versionDiff.config.permissions,
+  })
+  .post(
+    "/entity/:entityId/versions/:versionId/summarize",
+    versionSummarize.handler,
+    {
+      params: versionSummarize.config.params,
+      permissions: versionSummarize.config.permissions,
+    },
+  )
   .post("/entity/:entityId/compare", compareVersions.handler, {
     body: compareVersions.config.body,
     params: compareVersions.config.params,
