@@ -6777,6 +6777,13 @@ export function PagedEditor(
     width: `max(100%, ${String(scaledViewportWidth)}px)`,
     height: scaledViewportHeight,
     backgroundColor: "transparent",
+    // The page keeps its unscaled width and is shrunk via `transform: scale()`,
+    // which doesn't shrink the layout box — so at zoom < 1 the unscaled page
+    // overflows this extent and creates phantom horizontal scroll. Clip it: the
+    // visible (scaled) page already fits, and at zoom >= 1 the extent is wide
+    // enough that nothing is clipped. `clip` (not `hidden`) avoids forcing a
+    // vertical scroll context.
+    overflowX: "clip",
   };
   const scaledViewportStyle: CSSProperties = {
     ...viewportStyles,
