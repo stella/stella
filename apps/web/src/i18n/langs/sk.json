@@ -1536,6 +1536,11 @@
       "teamSection": "Tímové zručnosti"
     }
   },
+  "markdownEditor": {
+    "rawLabel": "Markdown source",
+    "showFormatted": "Formatted",
+    "showRaw": "Show raw"
+  },
   "navigation": {
     "account": "Účet",
     "calendar": "Kalendár",

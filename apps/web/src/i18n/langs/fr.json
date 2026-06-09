@@ -1536,6 +1536,11 @@
       "teamSection": "Compétences d’équipe"
     }
   },
+  "markdownEditor": {
+    "rawLabel": "Markdown source",
+    "showFormatted": "Formatted",
+    "showRaw": "Show raw"
+  },
   "navigation": {
     "account": "Compte",
     "calendar": "Calendrier",

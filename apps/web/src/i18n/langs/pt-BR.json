@@ -1536,6 +1536,11 @@
       "teamSection": "Habilidades da equipe"
     }
   },
+  "markdownEditor": {
+    "rawLabel": "Markdown source",
+    "showFormatted": "Formatted",
+    "showRaw": "Show raw"
+  },
   "navigation": {
     "account": "Conta",
     "calendar": "Calendário",

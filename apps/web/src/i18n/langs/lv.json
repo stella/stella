@@ -1536,6 +1536,11 @@
       "teamSection": "Komandas prasmes"
     }
   },
+  "markdownEditor": {
+    "rawLabel": "Markdown source",
+    "showFormatted": "Formatted",
+    "showRaw": "Show raw"
+  },
   "navigation": {
     "account": "Konts",
     "calendar": "Kalendārs",

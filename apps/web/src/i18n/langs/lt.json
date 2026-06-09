@@ -1536,6 +1536,11 @@
       "teamSection": "Komandos įgūdžiai"
     }
   },
+  "markdownEditor": {
+    "rawLabel": "Markdown source",
+    "showFormatted": "Formatted",
+    "showRaw": "Show raw"
+  },
   "navigation": {
     "account": "Paskyra",
     "calendar": "Kalendorius",

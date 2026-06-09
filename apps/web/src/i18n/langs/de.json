@@ -1536,6 +1536,11 @@
       "teamSection": "Team-Skills"
     }
   },
+  "markdownEditor": {
+    "rawLabel": "Markdown source",
+    "showFormatted": "Formatted",
+    "showRaw": "Show raw"
+  },
   "navigation": {
     "account": "Konto",
     "calendar": "Kalender",

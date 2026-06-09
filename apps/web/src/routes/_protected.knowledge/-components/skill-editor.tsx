@@ -168,9 +168,10 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   const skillName = detail.data?.name ?? "";
   const bodyContent = detail.data?.body ?? "";
 
-  // Open a file in the right-side inspector (the shared markdown editor).
-  // SKILL.md targets the skill body; everything else targets a resource row.
-  const openInInspector = (next: SelectedFile) => {
+  // Clicking a file opens it in the right-side Inspector (the matters Files-view
+  // pattern). Markdown files render in the Folio WYSIWYG editor there; other text
+  // files use the raw editor — both handled inside the inspector panel.
+  const selectFile = (next: SelectedFile) => {
     setSelected(next);
     if (next.type === "body") {
       openSkillResourceTab({
@@ -242,21 +243,11 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       }
       return response.data;
     },
-    onSuccess: (data, variables) => {
+    onSuccess: (data) => {
       onChanged();
       void detail.refetch();
-      // Open the new file in the inspector so the user can fill it in.
-      openSkillResourceTab({
-        skillName,
-        skillId,
-        origin: "upload",
-        target: "resource",
-        resourcePath: data.path,
-        label: data.path.split("/").at(-1) ?? data.path,
-        mimeType: data.path.endsWith(".md") ? "text/markdown" : "text/plain",
-        content: variables.content,
-      });
-      setSelected({ type: "resource", resourceId: data.id, path: data.path });
+      // New files are always .md, so select straight into the main-pane editor.
+      selectFile({ type: "resource", resourceId: data.id, path: data.path });
     },
     onError: (error) => toastError(error, t("common.unexpectedError")),
   });
@@ -656,7 +647,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                     resourceId: entry.id,
                   })
                 }
-                onSelect={openInInspector}
+                onSelect={selectFile}
                 onStartRename={(entry) => {
                   setRenamingResourceId(entry.id);
                   setRenameValue(entry.path);

@@ -9,10 +9,15 @@ import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { MarkdownPreview } from "@/components/markdown-preview";
+import { MarkdownFolioEditor } from "@/components/markdown/markdown-folio-editor";
 import { api } from "@/lib/api";
 import { PDF_MIME, isMarkdownFile } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
+import {
+  toEditorMarkdown,
+  toStoredMarkdown,
+} from "@/routes/_protected.knowledge/-components/skill-body-markdown";
 
 import type { SkillResourceTab } from "./inspector-store";
 import { useInspectorStore } from "./inspector-store";
@@ -56,6 +61,11 @@ export const SkillResourcePanel = ({
   const renderMode = detectRenderMode(tab.mimeType, tab.resourcePath);
   const isEditable =
     renderMode !== "pdf" && tab.origin !== "built-in" && tab.skillId !== null;
+  // Markdown edits in the shared Folio WYSIWYG editor (auto-saving), so the ICP
+  // never touches raw markdown (a "Show raw" toggle is there for power users).
+  // Other text files keep the raw editor below.
+  const useFolio =
+    renderMode === "markdown" && isEditable && tab.skillId !== null;
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(tab.content);
@@ -106,11 +116,40 @@ export const SkillResourcePanel = ({
     setEditing(false);
   };
 
+  // Autosave path for the Folio editor. The editor emits debounced markdown with
+  // skill frontmatter stripped and guide comments shown as callouts; map it back
+  // to the stored shape (frontmatter re-prepended, callouts → guide comments)
+  // before persisting.
+  const persistMarkdown = async (editorMarkdown: string) => {
+    if (tab.skillId === null) {
+      return;
+    }
+    const stored = toStoredMarkdown(editorMarkdown, tab.content);
+    const skill = api.skills({ skillId: toSafeId<"agentSkill">(tab.skillId) });
+    const response =
+      tab.target === "body"
+        ? await skill.patch({ body: stored, queryKey: ["skills"] })
+        : await skill.resources.patch({
+            path: tab.resourcePath,
+            content: stored,
+            queryKey: ["skills"],
+          });
+    if (response.error) {
+      stellaToast.add({
+        title: t("common.unexpectedError"),
+        description: toAPIError(response.error).message,
+        type: "error",
+      });
+      return;
+    }
+    updateSkillResourceTabContent(tab.id, stored);
+  };
+
   return (
     <div className="bg-background flex h-full min-h-0 flex-col">
       <InspectorTabHeader
         actions={
-          isEditable ? (
+          isEditable && !useFolio ? (
             <div className="flex items-center gap-1">
               {editing ? (
                 <>
@@ -164,15 +203,23 @@ export const SkillResourcePanel = ({
         }
         onClose={onClose}
       />
-      <SkillResourceBody
-        content={tab.content}
-        draft={draft}
-        editing={editing}
-        editLabel={t("common.edit")}
-        onDraftChange={setDraft}
-        pdfPlaceholder={t("knowledge.agentSkills.pdfPreviewSoon")}
-        renderMode={renderMode}
-      />
+      {useFolio && tab.skillId !== null ? (
+        <MarkdownFolioEditor
+          key={tab.id}
+          markdown={toEditorMarkdown(tab.content)}
+          onMarkdownChange={(md) => void persistMarkdown(md)}
+        />
+      ) : (
+        <SkillResourceBody
+          content={tab.content}
+          draft={draft}
+          editing={editing}
+          editLabel={t("common.edit")}
+          onDraftChange={setDraft}
+          pdfPlaceholder={t("knowledge.agentSkills.pdfPreviewSoon")}
+          renderMode={renderMode}
+        />
+      )}
     </div>
   );
 };

@@ -1536,6 +1536,11 @@
       "teamSection": "Csapat készségei"
     }
   },
+  "markdownEditor": {
+    "rawLabel": "Markdown source",
+    "showFormatted": "Formatted",
+    "showRaw": "Show raw"
+  },
   "navigation": {
     "account": "Fiók",
     "calendar": "Naptár",

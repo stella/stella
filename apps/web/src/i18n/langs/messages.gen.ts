@@ -1539,6 +1539,11 @@ type Messages = {
       "teamSection": "Team skills";
     };
   };
+  "markdownEditor": {
+    "rawLabel": "Markdown source";
+    "showFormatted": "Formatted";
+    "showRaw": "Show raw";
+  };
   "navigation": {
     "account": "Account";
     "calendar": "Calendar";
