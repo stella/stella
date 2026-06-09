@@ -180,8 +180,20 @@ function RouteComponent() {
 
   if (view.kind === "fill") {
     const { manifest } = view.detail;
-    const fields =
-      manifest?.fields.map((f) => ({
+    // Computed fields and namespace parents (a path that is only a dotted
+    // prefix of others) are not fillable inputs — keep them out of the form.
+    const allFields = manifest?.fields ?? [];
+    const computedNames = new Set(
+      (manifest?.computed ?? []).map((c) => c.name),
+    );
+    const fieldPaths = allFields.map((f) => f.path);
+    const fields = allFields
+      .filter(
+        (f) =>
+          !computedNames.has(f.path) &&
+          !fieldPaths.some((p) => p !== f.path && p.startsWith(`${f.path}.`)),
+      )
+      .map((f) => ({
         path: f.path,
         kind:
           f.inputType === "boolean"
@@ -193,7 +205,7 @@ function RouteComponent() {
         options: f.options,
         validation: f.validation,
         required: f.required,
-      })) ?? [];
+      }));
 
     const conditions = manifest?.conditions ?? [];
 
