@@ -164,6 +164,43 @@ describe("incremental paragraph measurement", () => {
 
     expect(result).toBeNull();
   });
+
+  test("bails out when a paragraph contains live fields", () => {
+    const previousBlocks = makeParagraphBlocks([{ text: "See page " }]);
+    const nextBlock = previousBlocks[0];
+    if (!nextBlock) {
+      throw new Error("Expected test block");
+    }
+    const nextBlocks: FlowBlock[] = [
+      {
+        ...nextBlock,
+        runs: [
+          ...nextBlock.runs,
+          {
+            kind: "field",
+            fieldType: "OTHER",
+            instruction: "PAGEREF _target",
+            fallback: "1",
+            pmStart: nextBlock.pmEnd - 1,
+            pmEnd: nextBlock.pmEnd,
+          },
+        ],
+      },
+    ];
+    const widths = [624];
+
+    const result = tryBuildIncrementalMeasures({
+      previousBlocks,
+      previousMeasures: previousBlocks.map(fakeMeasureBlock),
+      previousBlockWidths: widths,
+      nextBlocks,
+      nextBlockWidths: widths,
+      dirtyRange: { from: 0, to: 10 },
+      measureBlock: fakeMeasureBlock,
+    });
+
+    expect(result).toBeNull();
+  });
 });
 
 function normalizeDirtyRange(range: DirtyRange): DirtyRange {
