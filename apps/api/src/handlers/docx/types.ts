@@ -247,6 +247,30 @@ export type FieldPart = {
   pattern?: string | undefined;
 };
 
+/** Registries a lookup field can resolve against. Mirrors the slugs of
+ *  `BUSINESS_REGISTRY_DISPATCH`; extend as more registries gain fill-time
+ *  lookup support. */
+export const LOOKUP_REGISTRIES = ["krs"] as const;
+
+export type LookupRegistry = (typeof LOOKUP_REGISTRIES)[number];
+
+/**
+ * Registry lookup configuration (see {@link FieldMeta.lookup}): the person
+ * filling enters only the registry number; at fill time the company is
+ * resolved via the business-registry dispatch and the marker is filled with
+ * the rendered company details.
+ */
+export type FieldLookup = {
+  registry: LookupRegistry;
+  /**
+   * Optional AI instruction that formats the registry hit into the final
+   * string (e.g. "[company name], with its seat in [seat], KRS [number]").
+   * Without it (or with no model provider) a deterministic "name, seat"
+   * rendering is used.
+   */
+  aiFormat?: string | undefined;
+};
+
 export type FieldValidation = {
   required?: boolean;
   minLength?: number;
@@ -295,6 +319,12 @@ export type FieldMeta = {
    * options} act as a fallback while the source field is empty.
    */
   optionsFrom?: string | undefined;
+  /**
+   * Registry lookup field: the submitted value is a registry number (e.g. a
+   * KRS number) that is resolved against the configured business registry at
+   * fill time and replaced with the rendered company details.
+   */
+  lookup?: FieldLookup | undefined;
 };
 
 /**
@@ -375,6 +405,14 @@ export const isFieldPart = (value: unknown): value is FieldPart =>
       value["options"].every((option) => typeof option === "string"))) &&
   (value["pattern"] === undefined || typeof value["pattern"] === "string");
 
+const isLookupRegistry = (value: unknown): value is LookupRegistry =>
+  LOOKUP_REGISTRIES.some((registry) => registry === value);
+
+export const isFieldLookup = (value: unknown): value is FieldLookup =>
+  isRecordLike(value) &&
+  isLookupRegistry(value["registry"]) &&
+  (value["aiFormat"] === undefined || typeof value["aiFormat"] === "string");
+
 export const isFieldMeta = (value: unknown): value is FieldMeta => {
   if (!isRecordLike(value) || typeof value["path"] !== "string") {
     return false;
@@ -406,7 +444,8 @@ export const isFieldMeta = (value: unknown): value is FieldMeta => {
     (value["format"] === undefined || typeof value["format"] === "string") &&
     (value["optionsFrom"] === undefined ||
       (typeof value["optionsFrom"] === "string" &&
-        isFieldPath(value["optionsFrom"])))
+        isFieldPath(value["optionsFrom"]))) &&
+    (value["lookup"] === undefined || isFieldLookup(value["lookup"]))
   );
 };
 
@@ -512,6 +551,9 @@ export type ResolvedField = {
   /** Mirrors {@link FieldMeta.optionsFrom}: the fill form derives the select's
    *  options live from the referenced field's current value(s). */
   optionsFrom?: string | undefined;
+  /** Mirrors {@link FieldMeta.lookup}: the fill form shows a registry-lookup
+   *  hint and checks the registry-number format before submit. */
+  lookup?: FieldLookup | undefined;
   itemFields?: ResolvedField[] | undefined;
   /** Condition expression that must be true for this
    *  field to be visible in the fill form. */
