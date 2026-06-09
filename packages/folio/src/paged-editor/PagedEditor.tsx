@@ -3863,7 +3863,16 @@ export function PagedEditor(
         templateDirectivesKey.getState(newState)?.ranges ?? [];
       if (nextDirectives !== directivesRef.current) {
         directivesRef.current = nextDirectives;
-        updateDirectivesOverlay();
+        // On a doc edit the layout is about to reflow; projecting now places
+        // the new ranges against the stale (pre-reflow) layout, so the marker
+        // highlights jitter sideways for a frame. Defer to the post-layout
+        // effect (keyed on `updateDirectivesOverlay`), which re-projects against
+        // the settled layout — the same deferral the selection overlay uses.
+        // Only project inline when ranges change without a doc change (no
+        // reflow pending, so the current layout is already correct).
+        if (!transaction.docChanged) {
+          updateDirectivesOverlay();
+        }
       }
 
       if (transaction.docChanged) {
