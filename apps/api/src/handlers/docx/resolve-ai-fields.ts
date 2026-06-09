@@ -11,6 +11,8 @@
  * A value the user actually supplied always wins over the AI draft.
  */
 
+import { resolvePath } from "@stll/template-conditions";
+
 import type { FieldMeta } from "./types";
 
 export type AiFieldGenerator = (input: {
@@ -38,7 +40,10 @@ export const resolveAiFields = async ({
 
   const resolved: Record<string, unknown> = { ...values };
   for (const field of aiFields) {
-    const existing = resolved[field.path];
+    // The fill form nests dotted paths (`company.name` -> `{ company: { name }}`),
+    // so resolve the path rather than reading the flat key — otherwise a nested
+    // user value is missed and the AI draft overwrites it.
+    const existing = resolvePath(field.path, resolved);
     if (existing !== undefined && existing !== "") {
       continue; // user-entered value wins
     }

@@ -33,6 +33,17 @@ describe("resolveAiFields", () => {
     expect(result["scope"]).toBe("manually written scope");
   });
 
+  test("a nested user value wins for a dotted AI-field path", async () => {
+    // The fill form nests dotted paths, so the user's value arrives under
+    // `company`, not at the flat key `company.scope`.
+    const result = await resolveAiFields({
+      values: { company: { scope: "manually written scope" } },
+      fields: [{ path: "company.scope", aiPrompt: "Draft the scope" }],
+      generate: echoGenerator,
+    });
+    expect(result).toEqual({ company: { scope: "manually written scope" } });
+  });
+
   test("leaves AI fields unfilled when no generator is supplied", async () => {
     const result = await resolveAiFields({
       values: {},
