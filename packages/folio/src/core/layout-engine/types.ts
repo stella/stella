@@ -240,9 +240,15 @@ export type LineBreakRun = {
  */
 export type FieldRun = RunFormatting & {
   kind: "field";
+  /** Coarse render category, kept for cache keys and caret-width fast paths. */
   fieldType: "PAGE" | "NUMPAGES" | "DATE" | "TIME" | "OTHER";
+  /** Full OOXML field instruction (e.g. `PAGE \* ROMAN`, `PAGEREF _Ref1 \h`)
+   *  for live evaluation; falls back to `fieldType` when absent. */
+  instruction?: string;
   /** Fallback text if field can't be resolved */
   fallback?: string;
+  /** Whether OOXML marked this field as locked (`w:fldLock`). */
+  fldLock?: boolean;
   pmStart?: number;
   pmEnd?: number;
 };
@@ -446,6 +452,9 @@ export type ParagraphBlock = {
   id: BlockId;
   runs: Run[];
   attrs?: ParagraphAttrs;
+  /** Names of bookmarks anchored to this paragraph; used to map a bookmark to
+   *  the page it lands on for PAGEREF/REF resolution. */
+  bookmarks?: string[];
   /** ProseMirror start position for this block. */
   pmStart?: number;
   /** ProseMirror end position for this block. */

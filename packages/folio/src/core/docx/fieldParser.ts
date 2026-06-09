@@ -695,52 +695,61 @@ export function formatDate(date: Date, format: string): string {
 
   const pad = (n: number) => n.toString().padStart(2, "0");
 
-  let result = format;
-
-  // Year
-  result = result.replace(/yyyy/gu, date.getFullYear().toString());
-  result = result.replace(
-    /yy/gu,
-    (date.getFullYear() % 100).toString().padStart(2, "0"),
-  );
-
-  // Month - do longer patterns first
-  // SAFETY: getMonth() returns 0-11, matching array indices
-  result = result.replace(/MMMM/gu, months[date.getMonth()]!);
-  result = result.replace(/MMM/gu, shortMonths[date.getMonth()]!);
-  result = result.replace(/MM/gu, pad(date.getMonth() + 1));
-  result = result.replace(/M/gu, (date.getMonth() + 1).toString());
-
-  // Day - do longer patterns first
-  // SAFETY: getDay() returns 0-6, matching array indices
-  result = result.replace(/dddd/gu, days[date.getDay()]!);
-  result = result.replace(/ddd/gu, shortDays[date.getDay()]!);
-  result = result.replace(/dd/gu, pad(date.getDate()));
-  result = result.replace(/d/gu, date.getDate().toString());
-
-  // Hour (12-hour)
   const hour12 = date.getHours() % 12 || 12;
-  result = result.replace(/hh/gu, pad(hour12));
-  result = result.replace(/h/gu, hour12.toString());
-
-  // Hour (24-hour)
-  result = result.replace(/HH/gu, pad(date.getHours()));
-  result = result.replace(/H/gu, date.getHours().toString());
-
-  // Minute (use lowercase m for minutes - distinguished by context)
-  // This is simplified - in OOXML, 'm' in date context is month, in time context is minute
-  result = result.replace(/mm/gu, pad(date.getMinutes()));
-
-  // Second
-  result = result.replace(/ss/gu, pad(date.getSeconds()));
-  result = result.replace(/s/gu, date.getSeconds().toString());
-
-  // AM/PM
   const ampm = date.getHours() >= 12 ? "PM" : "AM";
-  result = result.replace(/AM\/PM/gu, ampm);
-  result = result.replace(/am\/pm/gu, ampm.toLowerCase());
-
-  return result;
+  // Single-pass token replacement prevents replacement text from being
+  // interpreted as more tokens (`AM/PM` contains `M`, `Monday` contains `d`).
+  return format.replace(
+    /AM\/PM|am\/pm|yyyy|yy|MMMM|MMM|MM|M|dddd|ddd|dd|d|hh|h|HH|H|mm|m|ss|s/gu,
+    (token) => {
+      switch (token) {
+        case "yyyy":
+          return date.getFullYear().toString();
+        case "yy":
+          return (date.getFullYear() % 100).toString().padStart(2, "0");
+        // SAFETY: getMonth() returns 0-11, matching array indices.
+        case "MMMM":
+          return months[date.getMonth()]!;
+        case "MMM":
+          return shortMonths[date.getMonth()]!;
+        case "MM":
+          return pad(date.getMonth() + 1);
+        case "M":
+          return (date.getMonth() + 1).toString();
+        // SAFETY: getDay() returns 0-6, matching array indices.
+        case "dddd":
+          return days[date.getDay()]!;
+        case "ddd":
+          return shortDays[date.getDay()]!;
+        case "dd":
+          return pad(date.getDate());
+        case "d":
+          return date.getDate().toString();
+        case "hh":
+          return pad(hour12);
+        case "h":
+          return hour12.toString();
+        case "HH":
+          return pad(date.getHours());
+        case "H":
+          return date.getHours().toString();
+        case "mm":
+          return pad(date.getMinutes());
+        case "m":
+          return date.getMinutes().toString();
+        case "ss":
+          return pad(date.getSeconds());
+        case "s":
+          return date.getSeconds().toString();
+        case "AM/PM":
+          return ampm;
+        case "am/pm":
+          return ampm.toLowerCase();
+        default:
+          return token;
+      }
+    },
+  );
 }
 
 // ============================================================================

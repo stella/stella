@@ -166,6 +166,14 @@ export type FootnoteRenderItem = {
 export type RenderPageOptions = {
   /** Document to create elements in (default: window.document) */
   document?: Document;
+  /** Bookmark name -> 1-indexed page, for resolving PAGEREF fields at paint. */
+  bookmarkPages?: ReadonlyMap<string, number>;
+  /** Bookmark name -> paragraph text, for resolving REF fields at paint. */
+  bookmarkText?: ReadonlyMap<string, string>;
+  /** Field run `pmStart` -> precomputed SEQ value, for resolving SEQ fields. */
+  seqValues?: ReadonlyMap<number, number>;
+  /** Section index -> page count in that section, for SECTIONPAGES fields. */
+  sectionPageCounts?: ReadonlyMap<number, number>;
   /** Custom page class name */
   pageClassName?: string;
   /** Show page borders (for debugging) */
@@ -2475,6 +2483,19 @@ export function applySectionHeaderFooterOptions(
   return true;
 }
 
+/** SECTIONPAGES context fragment for `page`: the page count of its section, or
+ *  nothing when section counts were not supplied (field then falls back). */
+function sectionPagesContext(
+  page: Page,
+  counts: ReadonlyMap<number, number> | undefined,
+): { sectionPages?: number } {
+  if (!counts) {
+    return {};
+  }
+  const value = counts.get(page.sectionIndex ?? 0);
+  return value === undefined ? {} : { sectionPages: value };
+}
+
 /**
  * Build a RenderContext and resolved page options (with footnotes) for a page.
  * Centralises logic shared by populatePageShell, repopulatePageContent, and the eager render path.
@@ -2488,6 +2509,10 @@ function buildPageRenderArgs(
     pageNumber: page.number,
     totalPages,
     section: "body",
+    ...(options.bookmarkPages ? { bookmarkPages: options.bookmarkPages } : {}),
+    ...(options.bookmarkText ? { bookmarkText: options.bookmarkText } : {}),
+    ...(options.seqValues ? { seqValues: options.seqValues } : {}),
+    ...sectionPagesContext(page, options.sectionPageCounts),
   };
   const pageOptions: RenderPageOptions = { ...options };
   const hasSectionHeaderFooter = applySectionHeaderFooterOptions(
@@ -2537,6 +2562,7 @@ type PageContainerState = {
   pageStates: PageShellState[];
   totalPages: number;
   optionsHash: string;
+  fieldContextHash: string;
   pageDataMap: Map<
     HTMLElement,
     { page: Page; index: number; rendered: boolean }
@@ -2786,8 +2812,14 @@ function runContentKey(run: Run): string {
     parts.push(`mx:${run.ommlXml}`);
   } else {
     parts.push(`ft:${run.fieldType}`);
+    if (run.instruction !== undefined) {
+      parts.push(`fi:${run.instruction}`);
+    }
     if (run.fallback !== undefined) {
       parts.push(`fb:${run.fallback}`);
+    }
+    if (run.fldLock) {
+      parts.push("fl");
     }
   }
 
@@ -2978,6 +3010,33 @@ function computeOptionsHash(options: RenderPageOptions): string {
   return parts.join("|");
 }
 
+function sortedMapFingerprint<K, V>(
+  prefix: string,
+  map: ReadonlyMap<K, V> | undefined,
+): string[] {
+  if (!map || map.size === 0) {
+    return [];
+  }
+
+  const entries: string[] = [];
+  for (const [key, value] of map) {
+    entries.push(`${String(key)}=${String(value)}`);
+  }
+  entries.sort();
+  return [`${prefix}:${entries.join(",")}`];
+}
+
+function computeFieldContextHash(options: RenderPageOptions): string {
+  const parts: string[] = [];
+  parts.push(...sortedMapFingerprint("bm-page", options.bookmarkPages));
+  parts.push(...sortedMapFingerprint("bm-text", options.bookmarkText));
+  parts.push(...sortedMapFingerprint("seq", options.seqValues));
+  parts.push(
+    ...sortedMapFingerprint("section-pages", options.sectionPageCounts),
+  );
+  return parts.join("|");
+}
+
 /**
  * Apply standard container styles for the pages wrapper.
  */
@@ -3028,6 +3087,7 @@ export function renderPages(
   const pc = container as PageContainer;
   const prevState = pc.__pageRenderState;
   const currentOptionsHash = computeOptionsHash(options);
+  const currentFieldContextHash = computeFieldContextHash(options);
   const useVirtualization = totalPages >= VIRTUALIZATION_THRESHOLD;
 
   // Determine if we can do an incremental update
@@ -3045,6 +3105,8 @@ export function renderPages(
     // If total page count changed, NUMPAGES fields in headers/footers are stale.
     // Force re-render of all currently-rendered pages.
     const totalPagesChanged = prevState.totalPages !== totalPages;
+    const fieldContextChanged =
+      prevState.fieldContextHash !== currentFieldContextHash;
 
     // Update existing pages
     const commonCount = Math.min(prevShells.length, pages.length);
@@ -3075,20 +3137,39 @@ export function renderPages(
 
       const newFp = computePageFingerprint(page, options.blockLookup);
 
-      if (prev.fingerprint === newFp && !totalPagesChanged) {
+      if (
+        prev.fingerprint === newFp &&
+        !totalPagesChanged &&
+        !fieldContextChanged
+      ) {
         // Page unchanged — data map already points at the fresh page object.
         continue;
       }
 
       // Page changed — update the shell
       const shell = prev.element;
+      const pageContextChanged = totalPagesChanged || fieldContextChanged;
+      if (pageContextChanged) {
+        shell.innerHTML = "";
+        data.rendered = false;
+        populatePageShell(shell, prevDataMap, totalPages, options);
+        applyPageStyles(shell, page.size.w, page.size.h, options);
+        syncPageBorderOverlay(
+          shell,
+          page,
+          options,
+          options.document ?? document,
+        );
+        shell.dataset["pageNumber"] = String(page.number);
+        continue;
+      }
+
       const newRenderFp = computePageRenderFingerprint(
         page,
         options.blockLookup,
       );
 
-      const renderChanged =
-        totalPagesChanged || prev.renderFingerprint !== newRenderFp;
+      const renderChanged = prev.renderFingerprint !== newRenderFp;
       const positionsSynced =
         !renderChanged && syncRenderedPmPositionData(shell, oldPage, data.page);
 
@@ -3156,6 +3237,7 @@ export function renderPages(
 
     // Update stored state with fresh options (blockLookup, footnotes, etc.)
     prevState.totalPages = totalPages;
+    prevState.fieldContextHash = currentFieldContextHash;
     prevState.currentOptions = options;
 
     // Incremental path: existing shells were repopulated in place; fire
@@ -3345,6 +3427,7 @@ export function renderPages(
     })),
     totalPages,
     optionsHash: currentOptionsHash,
+    fieldContextHash: currentFieldContextHash,
     pageDataMap,
     currentOptions: options,
   };

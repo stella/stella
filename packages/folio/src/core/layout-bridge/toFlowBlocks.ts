@@ -1061,7 +1061,9 @@ function paragraphToRuns(
       const run: FieldRun = {
         kind: "field",
         fieldType: mappedType,
+        instruction: attrs.instruction,
         fallback: attrs.displayText || "",
+        ...(attrs.fldLock ? { fldLock: true } : {}),
         pmStart: childPos,
         pmEnd: childPos + child.nodeSize,
         ...fieldFormatting,
@@ -1824,11 +1826,16 @@ function convertParagraph(
     options.originalListSeenNumIds,
   );
 
+  const bookmarkNames = pmAttrs.bookmarks?.map((b) => b.name);
+
   return {
     kind: "paragraph",
     id: nextBlockId(),
     runs,
     attrs,
+    ...(bookmarkNames && bookmarkNames.length > 0
+      ? { bookmarks: bookmarkNames }
+      : {}),
     pmStart: startPos,
     pmEnd: startPos + node.nodeSize,
   };

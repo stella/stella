@@ -1,7 +1,16 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import type { Page } from "../layout-engine/types";
+import type {
+  FieldRun,
+  MeasuredLine,
+  Page,
+  ParagraphBlock,
+  ParagraphFragment,
+  ParagraphMeasure,
+  HeaderFooterContent,
+} from "../layout-engine/types";
 import type { Watermark } from "../types/document";
+import type { BlockLookup } from "./index";
 import { renderPages } from "./renderPage";
 
 class FakeElement {
@@ -144,6 +153,19 @@ class FakeElement {
 
   dispatchEvent(_event: Event): boolean {
     return true;
+  }
+
+  getContext(_contextId: "2d"): CanvasRenderingContext2D {
+    return {
+      font: "",
+      measureText(text: string) {
+        return {
+          width: text.length * 5,
+          actualBoundingBoxAscent: 8,
+          actualBoundingBoxDescent: 2,
+        };
+      },
+    } as CanvasRenderingContext2D;
   }
 
   getBoundingClientRect(): DOMRect {
@@ -314,6 +336,86 @@ function makePage(number: number, headerRId: string): Page {
   };
 }
 
+const fieldRun: FieldRun = {
+  kind: "field",
+  fieldType: "OTHER",
+  instruction: "PAGEREF _Target",
+  fallback: "?",
+  pmStart: 10,
+  pmEnd: 11,
+};
+
+const fieldParagraph: ParagraphBlock = {
+  kind: "paragraph",
+  id: "field-paragraph",
+  runs: [fieldRun],
+};
+
+const fieldLine: MeasuredLine = {
+  fromRun: 0,
+  fromChar: 0,
+  toRun: 0,
+  toChar: 1,
+  width: 10,
+  ascent: 8,
+  descent: 2,
+  lineHeight: 12,
+};
+
+const fieldMeasure: ParagraphMeasure = {
+  kind: "paragraph",
+  lines: [fieldLine],
+  totalHeight: 12,
+};
+
+const fieldFragment: ParagraphFragment = {
+  kind: "paragraph",
+  blockId: "field-paragraph",
+  x: 72,
+  y: 72,
+  width: 600,
+  height: 12,
+  fromLine: 0,
+  toLine: 1,
+};
+
+const fieldBlockLookup: BlockLookup = new Map([
+  [
+    "field-paragraph",
+    {
+      block: fieldParagraph,
+      measure: fieldMeasure,
+    },
+  ],
+]);
+
+const fieldHeaderContent: HeaderFooterContent = {
+  blocks: [fieldParagraph],
+  measures: [fieldMeasure],
+  height: 24,
+  textSig: "field-header",
+};
+
+function makeFieldPages(): Page[] {
+  return Array.from({ length: 8 }, (_unused, index) => ({
+    number: index + 1,
+    sectionPageNumber: index + 1,
+    fragments: index === 0 ? [fieldFragment] : [],
+    margins: { top: 72, right: 72, bottom: 72, left: 72 },
+    size: { w: 816, h: 1056 },
+  }));
+}
+
+function makeEmptyPages(): Page[] {
+  return Array.from({ length: 8 }, (_unused, index) => ({
+    number: index + 1,
+    sectionPageNumber: index + 1,
+    fragments: [],
+    margins: { top: 72, right: 72, bottom: 72, left: 72 },
+    size: { w: 816, h: 1056 },
+  }));
+}
+
 describe("renderPages watermark overlays", () => {
   beforeEach(() => {
     setGlobal("HTMLElement", FakeElement);
@@ -348,5 +450,59 @@ describe("renderPages watermark overlays", () => {
     expect(
       firstShell.querySelector(":scope > .layout-page-watermark"),
     ).toBeNull();
+  });
+
+  test("repaints rendered pages when field resolution maps change", () => {
+    const container = fakeDocument.createElement("div");
+    const pages = makeFieldPages();
+    const options = {
+      blockLookup: fieldBlockLookup,
+      document: fakeDocument as unknown as Document,
+    };
+
+    renderPages(pages, container as unknown as HTMLElement, {
+      ...options,
+      bookmarkPages: new Map([["_Target", 2]]),
+    });
+    const firstShell = container.children.at(0);
+    if (!firstShell) {
+      throw new TypeError("expected first page shell");
+    }
+    expect(firstShell.textContent).toBe("2");
+
+    renderPages(pages, container as unknown as HTMLElement, {
+      ...options,
+      bookmarkPages: new Map([["_Target", 4]]),
+    });
+
+    expect(container.children.at(0)).toBe(firstShell);
+    expect(firstShell.textContent).toBe("4");
+  });
+
+  test("repaints rendered headers when field resolution maps change", () => {
+    const container = fakeDocument.createElement("div");
+    const pages = makeEmptyPages();
+    const options = {
+      document: fakeDocument as unknown as Document,
+      headerContent: fieldHeaderContent,
+    };
+
+    renderPages(pages, container as unknown as HTMLElement, {
+      ...options,
+      bookmarkPages: new Map([["_Target", 2]]),
+    });
+    const firstShell = container.children.at(0);
+    if (!firstShell) {
+      throw new TypeError("expected first page shell");
+    }
+    expect(firstShell.textContent).toBe("2");
+
+    renderPages(pages, container as unknown as HTMLElement, {
+      ...options,
+      bookmarkPages: new Map([["_Target", 4]]),
+    });
+
+    expect(container.children.at(0)).toBe(firstShell);
+    expect(firstShell.textContent).toBe("4");
   });
 });

@@ -22,6 +22,14 @@ export type RenderContext = {
   totalPages: number;
   /** Which section is being rendered */
   section: "body" | "header" | "footer";
+  /** Bookmark name -> 1-indexed page, for resolving PAGEREF fields. */
+  bookmarkPages?: ReadonlyMap<string, number>;
+  /** Bookmark name -> paragraph text, for resolving REF fields. */
+  bookmarkText?: ReadonlyMap<string, string>;
+  /** Field run `pmStart` -> precomputed SEQ value, for resolving SEQ fields. */
+  seqValues?: ReadonlyMap<number, number>;
+  /** Pages in this page's section, for resolving SECTIONPAGES fields. */
+  sectionPages?: number;
   /** Content width in pixels (page width minus margins) - used for justify */
   contentWidth?: number;
   /** When true, floating images render in-flow instead of being skipped (for table cells) */

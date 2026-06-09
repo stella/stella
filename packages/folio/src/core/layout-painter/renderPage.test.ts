@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { clearAllCaches } from "../layout-engine/measure/cache";
 import { resetCanvasContext } from "../layout-engine/measure/measureContainer";
 import type {
+  FieldRun,
   Page,
   HeaderFooterContent,
   ParagraphBlock,
@@ -357,6 +358,31 @@ describe("render page fingerprint", () => {
       id: "p1",
       runs: [{ kind: "text", text: "world", pmStart: 1, pmEnd: 6 }],
     };
+    expect(computePageFingerprint(page, lookup(before))).not.toBe(
+      computePageFingerprint(page, lookup(after)),
+    );
+  });
+
+  test("changes when a field instruction changes without layout geometry changing", () => {
+    const field = (instruction: string): FieldRun => ({
+      kind: "field",
+      fieldType: "OTHER",
+      instruction,
+      fallback: "cached",
+      pmStart: 1,
+      pmEnd: 2,
+    });
+    const before: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [field("REF _A")],
+    };
+    const after: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [field("REF _B")],
+    };
+
     expect(computePageFingerprint(page, lookup(before))).not.toBe(
       computePageFingerprint(page, lookup(after)),
     );

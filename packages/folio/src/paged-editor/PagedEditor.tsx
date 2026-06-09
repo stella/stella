@@ -36,6 +36,16 @@ import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 import { HiddenHeaderFooterPMs } from "../components/HiddenHeaderFooterPMs";
 import type { HiddenHeaderFooterPMsRef } from "../components/HiddenHeaderFooterPMs";
 import { getFootnoteText } from "../core/docx/footnoteParser";
+import { buildBookmarkPageMap } from "../core/fields/bookmarkPages";
+import { buildBookmarkText } from "../core/fields/bookmarkText";
+import {
+  buildHeaderFooterFieldValues,
+  fieldValuesEqual,
+  resolveFieldValues,
+} from "../core/fields/resolveFieldValues";
+import type { HeaderFooterFieldInputs } from "../core/fields/resolveFieldValues";
+import { buildSectionPageCounts } from "../core/fields/sectionPageCounts";
+import { buildSeqValues } from "../core/fields/seqValues";
 import { clickToPosition } from "../core/layout-bridge/clickToPosition";
 import { clickToPositionDom } from "../core/layout-bridge/clickToPositionDom";
 import {
@@ -55,6 +65,7 @@ import {
   collectFootnoteRefs,
   buildFootnoteContentMap,
 } from "../core/layout-bridge/footnoteLayout";
+import type { MeasureBlocksFn } from "../core/layout-bridge/footnoteLayout";
 import {
   convertHeaderFooterPmDocToContent,
   convertHeaderFooterToContent,
@@ -1680,6 +1691,27 @@ function getMargins(
   };
 }
 
+function pageMarginsEqual(left: PageMargins, right: PageMargins): boolean {
+  return (
+    left.top === right.top &&
+    left.right === right.right &&
+    left.bottom === right.bottom &&
+    left.left === right.left &&
+    left.header === right.header &&
+    left.footer === right.footer
+  );
+}
+
+function optionalPageMarginsEqual(
+  left: PageMargins | undefined,
+  right: PageMargins | undefined,
+): boolean {
+  if (left === undefined || right === undefined) {
+    return left === right;
+  }
+  return pageMarginsEqual(left, right);
+}
+
 /**
  * Extract column layout from section properties.
  * Returns undefined for single-column (default) to avoid unnecessary paginator overhead.
@@ -2288,15 +2320,41 @@ export function PagedEditor(
           pageSize,
           margins,
         };
-        const hfOptions = {
-          ...(styles ? { styles } : {}),
-          ...(_theme !== undefined ? { theme: _theme } : {}),
-          measureBlocks,
-          ...(defaultTabStop !== undefined
-            ? { defaultTabStopTwips: defaultTabStop }
-            : {}),
+        // Header/footer blocks are measured once but painted on every page with
+        // a different page number. Measure with the prior render's page count
+        // first, then rebuild the prepared HF content with the final page count
+        // after body layout stabilizes so digit-boundary changes are reflected
+        // before paint.
+        const hfPageCountEstimate = layout?.pages.length ?? 1;
+        const hfClock = new Date();
+        const buildHfOptions = (
+          pageCount: number,
+          fieldInputs?: HeaderFooterFieldInputs,
+        ) => {
+          const hfMeasureBlocks: MeasureBlocksFn = (hfBlocks, hfWidth) =>
+            measureBlocks(
+              hfBlocks,
+              hfWidth,
+              undefined,
+              undefined,
+              buildHeaderFooterFieldValues(
+                hfBlocks,
+                pageCount,
+                hfClock,
+                fieldInputs,
+              ),
+            );
+          return {
+            ...(styles ? { styles } : {}),
+            ...(_theme !== undefined ? { theme: _theme } : {}),
+            measureBlocks: hfMeasureBlocks,
+            ...(defaultTabStop !== undefined
+              ? { defaultTabStopTwips: defaultTabStop }
+              : {}),
+          };
         };
-        const headerContentForRender = renderHfFromContentOrPm(
+        const hfOptions = buildHfOptions(hfPageCountEstimate);
+        let headerContentForRender = renderHfFromContentOrPm(
           headerContent,
           headerContentRId,
           hfPMsRef.current,
@@ -2304,7 +2362,7 @@ export function PagedEditor(
           hfMetricsHeader,
           hfOptions,
         );
-        const footerContentForRender = renderHfFromContentOrPm(
+        let footerContentForRender = renderHfFromContentOrPm(
           footerContent,
           footerContentRId,
           hfPMsRef.current,
@@ -2313,7 +2371,7 @@ export function PagedEditor(
           hfOptions,
         );
         const hasTitlePg = sectionProperties?.titlePg === true;
-        const firstPageHeaderForRender = hasTitlePg
+        let firstPageHeaderForRender = hasTitlePg
           ? renderHfFromContentOrPm(
               firstPageHeaderContent,
               firstPageHeaderContentRId,
@@ -2323,7 +2381,7 @@ export function PagedEditor(
               hfOptions,
             )
           : undefined;
-        const firstPageFooterForRender = hasTitlePg
+        let firstPageFooterForRender = hasTitlePg
           ? renderHfFromContentOrPm(
               firstPageFooterContent,
               firstPageFooterContentRId,
@@ -2333,14 +2391,14 @@ export function PagedEditor(
               hfOptions,
             )
           : undefined;
-        const headerContentByRId = renderHeaderFooterContentByRId(
+        let headerContentByRId = renderHeaderFooterContentByRId(
           document?.package.headers,
           hfPMsRef.current,
           contentWidth,
           hfMetricsHeader,
           hfOptions,
         );
-        const footerContentByRId = renderHeaderFooterContentByRId(
+        let footerContentByRId = renderHeaderFooterContentByRId(
           document?.package.footers,
           hfPMsRef.current,
           contentWidth,
@@ -2378,27 +2436,53 @@ export function PagedEditor(
           pageSize,
           warn: hfWarn,
         });
-        const effectiveMargins = extendForHfOverflow(margins);
-        const effectiveFirstPageMargins = hasTitlePg
+        let effectiveMargins = extendForHfOverflow(margins);
+        let effectiveFirstPageMargins = hasTitlePg
           ? extendForFirstPage(margins)
           : undefined;
-        // Section-break blocks carry their own `pageSize`/`margins` from
-        // `<w:sectPr>` and the layout engine prefers those over the
-        // body-level fallback. Extend each against its own resolved page
-        // so an overflowing footer never re-overlaps body text on the next
-        // section. (Eigenpal #400.)
-        extendSectionBreakMargins(
-          newBlocks.filter(
-            (block): block is SectionBreakBlock =>
-              block.kind === "sectionBreak",
-          ),
-          {
-            content: hfExtenderContent,
-            bodyPageSize: pageSize,
-            bodyMargins: effectiveMargins,
-            warn: hfWarn,
-          },
+        const sectionBreaks = newBlocks.filter(
+          (block): block is SectionBreakBlock => block.kind === "sectionBreak",
         );
+        const originalSectionBreakMargins = new Map<
+          SectionBreakBlock["id"],
+          PageMargins | undefined
+        >();
+        for (const sectionBreak of sectionBreaks) {
+          originalSectionBreakMargins.set(
+            sectionBreak.id,
+            sectionBreak.margins ? { ...sectionBreak.margins } : undefined,
+          );
+        }
+        const restoreSectionBreakMargins = (): void => {
+          for (const sectionBreak of sectionBreaks) {
+            const originalMargins = originalSectionBreakMargins.get(
+              sectionBreak.id,
+            );
+            if (originalMargins === undefined) {
+              delete sectionBreak.margins;
+              continue;
+            }
+            sectionBreak.margins = { ...originalMargins };
+          }
+        };
+        const applySectionBreakMargins = (
+          content: typeof hfExtenderContent,
+          bodyMargins: PageMargins,
+        ): void => {
+          restoreSectionBreakMargins();
+          // Section-break blocks carry their own `pageSize`/`margins` from
+          // `<w:sectPr>` and the layout engine prefers those over the
+          // body-level fallback. Extend each against its own resolved page
+          // so an overflowing footer never re-overlaps body text on the next
+          // section. (Eigenpal #400.)
+          extendSectionBreakMargins(sectionBreaks, {
+            content,
+            bodyPageSize: pageSize,
+            bodyMargins,
+            warn: hfWarn,
+          });
+        };
+        applySectionBreakMargins(hfExtenderContent, effectiveMargins);
         recordPhaseDuration("header-footer", phaseStartedAt);
 
         // Compute per-block widths + band geometry from the EFFECTIVE margins
@@ -2408,19 +2492,19 @@ export function PagedEditor(
         // raw margins would mis-place the reserved band when a tall header/footer
         // extends the margins. eigenpal #694.
         phaseStartedAt = performance.now();
-        const bodyLayoutConfig: SectionLayoutConfig = {
+        let bodyLayoutConfig: SectionLayoutConfig = {
           pageSize,
           margins: effectiveMargins,
         };
         if (columns !== undefined) {
           bodyLayoutConfig.columns = columns;
         }
-        const blockMeasureInputs = computePerBlockMeasureInputs({
+        let blockMeasureInputs = computePerBlockMeasureInputs({
           blocks: newBlocks,
           bodyConfig: bodyLayoutConfig,
           finalConfig: bodyLayoutConfig,
         });
-        const blockWidths = blockMeasureInputs.widths;
+        let blockWidths = blockMeasureInputs.widths;
         const incrementalResult =
           options.dirtyRange && !options.forceFull && layoutArtifactsRef.current
             ? tryBuildIncrementalMeasures({
@@ -2433,7 +2517,7 @@ export function PagedEditor(
                 measureBlock: measureSingleBlockWithoutFloatingZones,
               })
             : null;
-        const newMeasures =
+        let newMeasures =
           incrementalResult?.measures ??
           measureBlocks(newBlocks, blockWidths, blockMeasureInputs.marginTops, {
             pageHeight: blockMeasureInputs.pageHeights,
@@ -2460,23 +2544,36 @@ export function PagedEditor(
           | "evenPage"
           | "oddPage"
           | undefined;
-        const layoutOpts: Parameters<typeof layoutDocument>[2] = {
-          pageSize,
-          margins: effectiveMargins,
-          pageGap,
+        const buildLayoutOpts = (
+          nextMargins: PageMargins,
+          nextFirstPageMargins: PageMargins | undefined,
+        ): Parameters<typeof layoutDocument>[2] => {
+          const nextLayoutOpts: Parameters<typeof layoutDocument>[2] = {
+            pageSize,
+            margins: nextMargins,
+            pageGap,
+          };
+          if (nextFirstPageMargins !== undefined) {
+            nextLayoutOpts.firstPageMargins = nextFirstPageMargins;
+          }
+          if (columns !== undefined) {
+            nextLayoutOpts.columns = columns;
+          }
+          if (bodyBreakType !== undefined) {
+            nextLayoutOpts.bodyBreakType = bodyBreakType;
+          }
+          if (sectionHeaderFooterRefs !== undefined) {
+            nextLayoutOpts.sectionHeaderFooterRefs = sectionHeaderFooterRefs;
+          }
+          return nextLayoutOpts;
         };
-        if (effectiveFirstPageMargins !== undefined) {
-          layoutOpts.firstPageMargins = effectiveFirstPageMargins;
-        }
-        if (columns !== undefined) {
-          layoutOpts.columns = columns;
-        }
-        if (bodyBreakType !== undefined) {
-          layoutOpts.bodyBreakType = bodyBreakType;
-        }
-        if (sectionHeaderFooterRefs !== undefined) {
-          layoutOpts.sectionHeaderFooterRefs = sectionHeaderFooterRefs;
-        }
+        const layoutOpts = buildLayoutOpts(
+          effectiveMargins,
+          effectiveFirstPageMargins,
+        );
+        // The exact options the layout was produced with, reused if the field-
+        // width stabilization pass re-lays-out below.
+        let layoutOptsUsed: Parameters<typeof layoutDocument>[2] = layoutOpts;
 
         if (hasFootnotes) {
           // Build footnote content and measure heights up front. The
@@ -2519,10 +2616,8 @@ export function PagedEditor(
           // fn-bearing page (in paginator.addFootnoteHeight); we pass per-fn
           // content plus any wrapper margin here.
 
-          newLayout = layoutDocument(newBlocks, newMeasures, {
-            ...layoutOpts,
-            footnoteHeightById,
-          });
+          layoutOptsUsed = { ...layoutOpts, footnoteHeightById };
+          newLayout = layoutDocument(newBlocks, newMeasures, layoutOptsUsed);
 
           // The layout engine assigned `page.footnoteIds` line-by-
           // line via `paginator.addFootnoteHeight(_, ids)`, so a fn
@@ -2540,6 +2635,245 @@ export function PagedEditor(
         } else {
           // No footnotes — single pass
           newLayout = layoutDocument(newBlocks, newMeasures, layoutOpts);
+        }
+
+        const rebuildFootnotePageMap = (): void => {
+          pageFootnoteMap = new Map<number, number[]>();
+          for (const page of newLayout.pages) {
+            if (page.footnoteIds && page.footnoteIds.length > 0) {
+              pageFootnoteMap.set(page.number, page.footnoteIds);
+            }
+          }
+        };
+
+        const withFootnoteHeights = (
+          nextLayoutOpts: Parameters<typeof layoutDocument>[2],
+        ): Parameters<typeof layoutDocument>[2] => {
+          if (!hasFootnotes) {
+            return nextLayoutOpts;
+          }
+          const footnoteHeightById = new Map<number, number>();
+          for (const [id, content] of footnoteContentMap) {
+            footnoteHeightById.set(
+              id,
+              content.height + FOOTNOTE_ENTRY_MARGIN_BOTTOM,
+            );
+          }
+          return { ...nextLayoutOpts, footnoteHeightById };
+        };
+
+        const relayoutWithCurrentMeasures = (
+          nextLayoutOpts: Parameters<typeof layoutDocument>[2],
+        ): void => {
+          layoutOptsUsed = withFootnoteHeights(nextLayoutOpts);
+          newLayout = layoutDocument(newBlocks, newMeasures, layoutOptsUsed);
+          if (hasFootnotes) {
+            rebuildFootnotePageMap();
+          }
+        };
+
+        const stabilizeFieldWidths = (): void => {
+          if (incrementalResult) {
+            return;
+          }
+          const MAX_FIELD_STABILIZATION_PASSES = 3;
+          const fieldClock = new Date();
+          let previousFieldValues: Map<number, string> | null = null;
+          for (let pass = 0; pass < MAX_FIELD_STABILIZATION_PASSES; pass++) {
+            const seqValues = buildSeqValues(newBlocks);
+            const bookmarkTextInputs =
+              previousFieldValues === null
+                ? { seqValues }
+                : { fieldValues: previousFieldValues, seqValues };
+            const { values, changed } = resolveFieldValues(
+              newBlocks,
+              newLayout.pages,
+              {
+                totalPages: newLayout.pages.length,
+                bookmarkPages: buildBookmarkPageMap(newLayout.pages, newBlocks),
+                bookmarkText: buildBookmarkText(newBlocks, bookmarkTextInputs),
+                seqValues,
+                sectionPageCounts: buildSectionPageCounts(newLayout.pages),
+                now: fieldClock,
+              },
+            );
+            const settled =
+              previousFieldValues === null
+                ? !changed
+                : fieldValuesEqual(previousFieldValues, values);
+            if (settled) {
+              stabilizedFieldValues = values;
+              break;
+            }
+            previousFieldValues = values;
+            stabilizedFieldValues = values;
+            newMeasures = measureBlocks(
+              newBlocks,
+              blockWidths,
+              blockMeasureInputs.marginTops,
+              {
+                pageHeight: blockMeasureInputs.pageHeights,
+                marginBottom: blockMeasureInputs.marginBottoms,
+              },
+              values,
+            );
+            relayoutWithCurrentMeasures(layoutOptsUsed);
+            layoutArtifactsRef.current = {
+              blocks: newBlocks,
+              blockWidths,
+              measures: newMeasures,
+            };
+            setMeasures(newMeasures);
+          }
+        };
+
+        // Field-width stabilization: fields were measured at their cached
+        // fallback text. Resolve them against this layout and, if a value's
+        // width differs, re-measure and re-lay-out so wrapping matches what the
+        // painter draws. PAGE/NUMPAGES depend on the layout they help produce,
+        // so a re-layout can shift pages and change values again — iterate to a
+        // fixed point with a small cap. Gated on a real change, so field-free
+        // documents and most edits do zero passes; skipped on the incremental
+        // (typing) path to keep keystrokes cheap.
+        let stabilizedFieldValues: Map<number, string> | undefined;
+        stabilizeFieldWidths();
+
+        const rebuildHeaderFooterForLayout = (): typeof hfExtenderContent => {
+          const seqValues = buildSeqValues(newBlocks);
+          const bookmarkTextInputs =
+            stabilizedFieldValues === undefined
+              ? { seqValues }
+              : { fieldValues: stabilizedFieldValues, seqValues };
+          const finalHfFieldInputs: HeaderFooterFieldInputs = {
+            bookmarkPages: buildBookmarkPageMap(newLayout.pages, newBlocks),
+            bookmarkText: buildBookmarkText(newBlocks, bookmarkTextInputs),
+            seqValues,
+            sectionPageCounts: buildSectionPageCounts(newLayout.pages),
+          };
+          const finalHfOptions = buildHfOptions(
+            newLayout.pages.length,
+            finalHfFieldInputs,
+          );
+          headerContentForRender = renderHfFromContentOrPm(
+            headerContent,
+            headerContentRId,
+            hfPMsRef.current,
+            contentWidth,
+            hfMetricsHeader,
+            finalHfOptions,
+          );
+          footerContentForRender = renderHfFromContentOrPm(
+            footerContent,
+            footerContentRId,
+            hfPMsRef.current,
+            contentWidth,
+            hfMetricsFooter,
+            finalHfOptions,
+          );
+          firstPageHeaderForRender = hasTitlePg
+            ? renderHfFromContentOrPm(
+                firstPageHeaderContent,
+                firstPageHeaderContentRId,
+                hfPMsRef.current,
+                contentWidth,
+                hfMetricsHeader,
+                finalHfOptions,
+              )
+            : undefined;
+          firstPageFooterForRender = hasTitlePg
+            ? renderHfFromContentOrPm(
+                firstPageFooterContent,
+                firstPageFooterContentRId,
+                hfPMsRef.current,
+                contentWidth,
+                hfMetricsFooter,
+                finalHfOptions,
+              )
+            : undefined;
+          headerContentByRId = renderHeaderFooterContentByRId(
+            document?.package.headers,
+            hfPMsRef.current,
+            contentWidth,
+            hfMetricsHeader,
+            finalHfOptions,
+          );
+          footerContentByRId = renderHeaderFooterContentByRId(
+            document?.package.footers,
+            hfPMsRef.current,
+            contentWidth,
+            hfMetricsFooter,
+            finalHfOptions,
+          );
+          return {
+            headerContent: headerContentForRender,
+            footerContent: footerContentForRender,
+            firstPageHeaderContent: firstPageHeaderForRender,
+            firstPageFooterContent: firstPageFooterForRender,
+          };
+        };
+
+        const MAX_HEADER_FOOTER_STABILIZATION_PASSES = 3;
+        for (
+          let pass = 0;
+          pass < MAX_HEADER_FOOTER_STABILIZATION_PASSES;
+          pass++
+        ) {
+          const finalHfExtenderContent = rebuildHeaderFooterForLayout();
+          const finalEffectiveMargins = computeHeaderFooterMarginExtender({
+            ...finalHfExtenderContent,
+            pageSize,
+            warn: hfWarn,
+          })(margins);
+          const finalEffectiveFirstPageMargins = hasTitlePg
+            ? computeFirstPageHeaderFooterMarginExtender({
+                ...finalHfExtenderContent,
+                pageSize,
+                warn: hfWarn,
+              })(margins)
+            : undefined;
+
+          if (
+            !pageMarginsEqual(effectiveMargins, finalEffectiveMargins) ||
+            !optionalPageMarginsEqual(
+              effectiveFirstPageMargins,
+              finalEffectiveFirstPageMargins,
+            )
+          ) {
+            effectiveMargins = finalEffectiveMargins;
+            effectiveFirstPageMargins = finalEffectiveFirstPageMargins;
+            applySectionBreakMargins(finalHfExtenderContent, effectiveMargins);
+            bodyLayoutConfig = { pageSize, margins: effectiveMargins };
+            if (columns !== undefined) {
+              bodyLayoutConfig.columns = columns;
+            }
+            blockMeasureInputs = computePerBlockMeasureInputs({
+              blocks: newBlocks,
+              bodyConfig: bodyLayoutConfig,
+              finalConfig: bodyLayoutConfig,
+            });
+            blockWidths = blockMeasureInputs.widths;
+            newMeasures = measureBlocks(
+              newBlocks,
+              blockWidths,
+              blockMeasureInputs.marginTops,
+              {
+                pageHeight: blockMeasureInputs.pageHeights,
+                marginBottom: blockMeasureInputs.marginBottoms,
+              },
+            );
+            layoutArtifactsRef.current = {
+              blocks: newBlocks,
+              blockWidths,
+              measures: newMeasures,
+            };
+            setMeasures(newMeasures);
+            relayoutWithCurrentMeasures(
+              buildLayoutOpts(effectiveMargins, effectiveFirstPageMargins),
+            );
+            stabilizeFieldWidths();
+            continue;
+          }
+          break;
         }
 
         setLayout(newLayout);
@@ -2627,6 +2961,33 @@ export function PagedEditor(
           if (footnotesByPage?.size) {
             renderOpts.footnotesByPage = footnotesByPage;
           }
+          // Map bookmarks to the pages they land on so PAGEREF fields resolve
+          // to live page numbers at paint.
+          const bookmarkPages = buildBookmarkPageMap(
+            newLayout.pages,
+            newBlocks,
+          );
+          if (bookmarkPages.size > 0) {
+            renderOpts.bookmarkPages = bookmarkPages;
+          }
+          // Assign SEQ caption numbers in document order so SEQ fields resolve.
+          const seqValues = buildSeqValues(newBlocks);
+          if (seqValues.size > 0) {
+            renderOpts.seqValues = seqValues;
+          }
+          // Bookmark text for REF cross-references.
+          const bookmarkTextInputs =
+            stabilizedFieldValues === undefined
+              ? { seqValues }
+              : { fieldValues: stabilizedFieldValues, seqValues };
+          const bookmarkText = buildBookmarkText(newBlocks, bookmarkTextInputs);
+          if (bookmarkText.size > 0) {
+            renderOpts.bookmarkText = bookmarkText;
+          }
+          // Per-section page counts so SECTIONPAGES fields resolve.
+          renderOpts.sectionPageCounts = buildSectionPageCounts(
+            newLayout.pages,
+          );
           // Document watermark (rendered behind every page). Build a
           // per-header-rId map so titlePg / even-odd / per-section
           // header parts each paint their own watermark; the painter
