@@ -14,6 +14,7 @@ import {
 import { ContactBreadcrumb } from "@/components/breadcrumbs/contact-breadcrumb";
 import { PdfBreadcrumb } from "@/components/breadcrumbs/pdf-breadcrumb";
 import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
+import { SkillBreadcrumb } from "@/components/breadcrumbs/skill-breadcrumb";
 import { WorkspaceBreadcrumb } from "@/components/breadcrumbs/workspace-breadcrumb";
 import type { RouterFullPath } from "@/lib/types";
 
@@ -102,8 +103,11 @@ export const AppBreadcrumbs = () => {
         <BreadcrumbItem>{t("knowledge.sections.prompts.title")}</BreadcrumbItem>
       ),
       [serializeKey(["/knowledge/tools"])]: (
-        <BreadcrumbItem>{t("knowledge.sections.tools.title")}</BreadcrumbItem>
+        <BreadcrumbLink to="/knowledge/tools">
+          {t("knowledge.sections.tools.title")}
+        </BreadcrumbLink>
       ),
+      [serializeKey(["/knowledge/tools/$skillId"])]: <SkillBreadcrumb />,
       [serializeKey(["/settings"])]: (
         <BreadcrumbLink to="/settings">{t("common.settings")}</BreadcrumbLink>
       ),
