@@ -11,42 +11,55 @@ type SmokeSession = {
 
 const API_URL = process.env["E2E_API_URL"] ?? "https://api-staging.stll.app";
 
-const READINESS_ATTEMPTS = 60;
-const READINESS_INTERVAL_MS = 5_000;
+const READINESS_TIMEOUT_MS = 300_000;
+const READINESS_INTERVAL_MS = 5000;
+// Require several consecutive expected-commit samples before proceeding:
+// during rollover the ALB serves old and new tasks side by side, so a
+// single new-commit hit does not mean later browser traffic avoids the
+// draining task. Consecutive matches signal the old task has drained.
+const READINESS_STABLE_SAMPLES = 3;
 
-const sleep = (ms: number) =>
-  new Promise((resolve) => {
+const sleep = async (ms: number) =>
+  await new Promise<void>((resolve) => {
     setTimeout(resolve, ms);
   });
 
-// Block until the deployed revision is actually serving. verify-staging
+// Block until the deployed revision is stably serving. verify-staging
 // fires the moment the promote returns, while ECS is still rolling the
 // new task in; requests in that window hang or reset and the old task
-// keeps answering with the previous commit. Polling /health until it
-// reports the expected commit removes that race (and any request errors
-// during rollover are just retried). With no expected commit (local
-// runs) a single 200 is enough.
+// keeps answering with the previous commit, which renders a blank page.
+// Time-bounded so a hanging endpoint can't exceed the budget; request
+// errors during rollover reset the streak. With no expected commit
+// (local runs) any healthy 200 counts.
 const waitForDeployedRevision = async (): Promise<void> => {
   const expectedCommit = process.env["EXPECTED_COMMIT"];
-  for (let attempt = 0; attempt < READINESS_ATTEMPTS; attempt++) {
+  const deadline = Date.now() + READINESS_TIMEOUT_MS;
+  let consecutive = 0;
+
+  while (Date.now() < deadline) {
+    let healthy = false;
     try {
       const response = await fetch(`${API_URL}/health`, {
         signal: AbortSignal.timeout(10_000),
       });
       if (response.ok) {
         const { commit } = (await response.json()) as { commit?: string };
-        if (!expectedCommit || commit === expectedCommit) {
-          return;
-        }
+        healthy = !expectedCommit || commit === expectedCommit;
       }
     } catch {
-      // Connection reset/timeout during rollover; fall through to retry.
+      // Connection reset/timeout during rollover; treated as not-ready.
+    }
+
+    consecutive = healthy ? consecutive + 1 : 0;
+    if (consecutive >= READINESS_STABLE_SAMPLES) {
+      return;
     }
     await sleep(READINESS_INTERVAL_MS);
   }
+
   throw new Error(
-    `Staging did not serve ${expectedCommit ?? "a healthy revision"} within ` +
-      `${(READINESS_ATTEMPTS * READINESS_INTERVAL_MS) / 1000}s`,
+    `Staging did not stably serve ${expectedCommit ?? "a healthy revision"} ` +
+      `within ${READINESS_TIMEOUT_MS / 1000}s`,
   );
 };
 
