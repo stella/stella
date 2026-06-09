@@ -100,6 +100,10 @@ export {
   type DirectiveRange,
 } from "./core/prosemirror/plugins/templateDirectives";
 export {
+  setTemplatePreviewValues,
+  type TemplatePreviewValues,
+} from "./core/prosemirror/plugins/templatePreviewValues";
+export {
   acceptAutocompleteSuggestion,
   acceptAutocompleteWord,
   appendAutocompleteToken,

@@ -159,6 +159,7 @@ import {
   setSuggestionMode,
 } from "../core/prosemirror/plugins/suggestionMode";
 import { createTemplateDirectivesPlugin } from "../core/prosemirror/plugins/templateDirectives";
+import { createTemplatePreviewValuesPlugin } from "../core/prosemirror/plugins/templatePreviewValues";
 import type { Comment } from "../core/types/content";
 import type {
   Document,
@@ -676,6 +677,11 @@ export function DocxEditor({
     () => createTemplateDirectivesPlugin(),
     [],
   );
+  // Inert until a host pushes preview values (template fill preview).
+  const templatePreviewPlugin = useMemo(
+    () => createTemplatePreviewValuesPlugin(),
+    [],
+  );
   const editorPlugins = useMemo(
     () => [
       autocompletePlugin,
@@ -685,6 +691,7 @@ export function DocxEditor({
       aiCitationPlugin,
       anonymizationDecorationsPlugin,
       ...(showTemplateDirectives ? [templateDirectivesPlugin] : []),
+      templatePreviewPlugin,
     ],
     [
       autocompletePlugin,
@@ -695,6 +702,7 @@ export function DocxEditor({
       anonymizationDecorationsPlugin,
       showTemplateDirectives,
       templateDirectivesPlugin,
+      templatePreviewPlugin,
     ],
   );
 
