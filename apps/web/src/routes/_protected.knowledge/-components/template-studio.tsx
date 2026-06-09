@@ -97,6 +97,7 @@ export const TemplateStudio = ({
   });
   const editorRef = useRef<DocxEditorRef>(null);
   const editorViewRef = useRef<EditorView | null>(null);
+  const { containerRef, fitZoom } = useFitToWidth();
 
   const [fields, setFields] = useState<StudioField[]>(() =>
     parseFields(manifest),
@@ -263,13 +264,17 @@ export const TemplateStudio = ({
   return (
     <div className="flex h-full min-h-0">
       {/* Full-bleed document — the editor is the whole left side. */}
-      <div className="min-h-0 flex-1 [scrollbar-gutter:stable] overflow-auto">
+      <div
+        className="min-h-0 flex-1 [scrollbar-gutter:stable] overflow-auto"
+        ref={containerRef}
+      >
         <Suspense fallback={null}>
           <DocxEditor
             ref={editorRef}
             autoOpenReviewSidebar={false}
             className="h-full"
             documentBuffer={docBuffer}
+            initialZoom={fitZoom}
             loadingIndicator={null}
             onChange={() => setIsDirty(true)}
             onEditorViewReady={(view) => {
@@ -600,6 +605,49 @@ const NameExprList = ({
   );
 };
 
+// ── Fit-to-width ─────────────────────────────────────────
+
+// Letter width at 96 DPI (816px); a touch wider than A4 so either page size
+// fits without horizontal scroll. Sets only the initial zoom; the editor's own
+// zoom control (Ctrl/Cmd+scroll) takes over after.
+const DOCX_PAGE_WIDTH = 816;
+const FIT_PADDING = 16;
+const MIN_ZOOM = 0.25;
+const MAX_FIT_ZOOM = 1;
+
+const clampFitZoom = (zoom: number) =>
+  Math.max(MIN_ZOOM, Math.min(MAX_FIT_ZOOM, zoom));
+
+const useFitToWidth = () => {
+  const [fitZoom, setFitZoom] = useState(MAX_FIT_ZOOM);
+
+  const containerRef = useCallback((node: HTMLElement | null) => {
+    if (!node) {
+      return undefined;
+    }
+    const updateZoom = () => {
+      const { clientWidth } = node;
+      if (clientWidth <= 0) {
+        return;
+      }
+      const available = Math.max(1, clientWidth - FIT_PADDING * 2);
+      setFitZoom(
+        clampFitZoom(Math.round((available / DOCX_PAGE_WIDTH) * 100) / 100),
+      );
+    };
+    updateZoom();
+    const rafId = requestAnimationFrame(updateZoom);
+    const observer = new ResizeObserver(updateZoom);
+    observer.observe(node);
+    return () => {
+      cancelAnimationFrame(rafId);
+      observer.disconnect();
+    };
+  }, []);
+
+  return { containerRef, fitZoom };
+};
+
 // ── Manifest <-> state ───────────────────────────────────
 
 const INPUT_TYPES = new Set([
@@ -639,24 +687,40 @@ const parseFields = (manifest: unknown): StudioField[] => {
   if (!isRecord(manifest) || !Array.isArray(manifest["fields"])) {
     return [];
   }
-  return manifest["fields"].filter(isRecord).map((raw) => {
-    const inputType =
-      typeof raw["inputType"] === "string" && INPUT_TYPES.has(raw["inputType"])
-        ? (raw["inputType"] as EditableField["inputType"])
-        : "text";
-    return {
-      path: typeof raw["path"] === "string" ? raw["path"] : "",
-      kind: typeof raw["kind"] === "string" ? raw["kind"] : "string",
-      label: typeof raw["label"] === "string" ? raw["label"] : "",
-      inputType,
-      required: raw["required"] === true,
-      options: Array.isArray(raw["options"])
-        ? raw["options"].filter((o): o is string => typeof o === "string")
-        : [],
-      aiPrompt:
-        typeof raw["aiPrompt"] === "string" ? raw["aiPrompt"] : undefined,
-    };
-  });
+  const fields: StudioField[] = manifest["fields"]
+    .filter(isRecord)
+    .map((raw) => {
+      const inputType =
+        typeof raw["inputType"] === "string" &&
+        INPUT_TYPES.has(raw["inputType"])
+          ? (raw["inputType"] as EditableField["inputType"])
+          : "text";
+      return {
+        path: typeof raw["path"] === "string" ? raw["path"] : "",
+        kind: typeof raw["kind"] === "string" ? raw["kind"] : "string",
+        label: typeof raw["label"] === "string" ? raw["label"] : "",
+        inputType,
+        required: raw["required"] === true,
+        options: Array.isArray(raw["options"])
+          ? raw["options"].filter((o): o is string => typeof o === "string")
+          : [],
+        aiPrompt:
+          typeof raw["aiPrompt"] === "string" ? raw["aiPrompt"] : undefined,
+      };
+    });
+
+  // Mirror the server merge: computed fields and namespace parents (a path that
+  // is only a dotted prefix of others) are not fillable inputs. This keeps the
+  // display clean for templates saved before the server fix landed.
+  const computedNames = new Set(
+    parseNameExprs(manifest, "computed").map((c) => c.name),
+  );
+  const paths = fields.map((f) => f.path);
+  return fields.filter(
+    (f) =>
+      !computedNames.has(f.path) &&
+      !paths.some((p) => p !== f.path && p.startsWith(`${f.path}.`)),
+  );
 };
 
 const parseNameExprs = (

@@ -906,10 +906,12 @@
  * highlight tolerates reflow without flicker. Block directives additionally get
  * a thin left gutter rail spanning opener→closer. Monochrome --doc-* tokens.
  * ============================================================================ */
+/* {{markers}} get Word's "Blue" text-highlight look (#0000FF) so fields read
+   like a highlighter band over prose, the convention legal-template tools use. */
 .folio-template-directive {
   position: absolute;
   border-radius: 3px;
-  background: color-mix(in srgb, var(--doc-text) 8%, transparent);
+  background: color-mix(in srgb, #0000ff 42%, transparent);
 }
 
 /* Clause slots, numbering markers, and block-directive lines sit a touch
@@ -923,11 +925,11 @@
 .folio-template-directive--endif,
 .folio-template-directive--each,
 .folio-template-directive--endeach {
-  background: color-mix(in srgb, var(--doc-text) 5%, transparent);
+  background: color-mix(in srgb, #0000ff 24%, transparent);
 }
 
 .folio-template-band-rail {
   position: absolute;
   border-radius: 2px;
-  background: color-mix(in srgb, var(--doc-text) 20%, transparent);
+  background: color-mix(in srgb, #0000ff 50%, transparent);
 }
