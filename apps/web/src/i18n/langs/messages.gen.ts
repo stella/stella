@@ -1980,6 +1980,7 @@ type Messages = {
   "templates": {
     "addCondition": "Add condition";
     "addItem": "Add item";
+    "aiAdaptHint": "AI adapts this wording to fit each place it appears in the document.";
     "allTemplates": "All templates";
     "backToList": "Back to templates";
     "browseFiles": "Browse files";
@@ -2086,10 +2087,12 @@ type Messages = {
       "prepareWithAi": "Prepare with AI";
       "renameField": "Rename field";
       "renameFieldInvalid": "That name is invalid or already taken";
+      "repeatForEach": "Repeat for each…";
       "scopeClause": "Clause slot";
       "scopeCondition": "Condition";
       "scopeField": "Field";
       "scopeTemplate": "Template";
+      "showOnlyIf": "Show only if…";
       "suggestConfig": "Suggest configuration";
       "whoFills": "Who fills this?";
     };
