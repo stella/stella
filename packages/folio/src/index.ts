@@ -115,8 +115,9 @@ export {
   type AutocompleteCaretRect,
 } from "./paged-editor/AutocompleteCaretOverlay";
 
-// DOCX-document → Markdown export (also available at `@stll/folio/markdown`).
+// DOCX-document ↔ Markdown bridge (also available at `@stll/folio/markdown`).
 export {
+  fromMarkdown,
   toMarkdown,
   toMarkdownResult,
   type ImageMeta,

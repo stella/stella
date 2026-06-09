@@ -446,6 +446,7 @@
         "fast-xml-parser": "^5.8.0",
         "jszip": "catalog:",
         "lucide-react": "catalog:",
+        "marked": "^15.0.12",
         "prosemirror-commands": "^1.7.1",
         "prosemirror-dropcursor": "^1.8.2",
         "prosemirror-gapcursor": "^1.4.1",
