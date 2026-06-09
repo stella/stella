@@ -2065,6 +2065,9 @@ const parseFields = (manifest: unknown): StudioField[] => {
           typeof raw["aiPrompt"] === "string" ? raw["aiPrompt"] : undefined,
         aiAdapt: raw["aiAdapt"] === true,
       };
+      if (typeof raw["optionsFrom"] === "string") {
+        field.optionsFrom = raw["optionsFrom"];
+      }
       if (Array.isArray(raw["parts"]) && typeof raw["format"] === "string") {
         field.parts = parseEditableParts(raw["parts"]);
         field.format = raw["format"];
@@ -2093,7 +2096,7 @@ const parseEditableParts = (raw: unknown[]): EditablePart[] =>
     inputType: part["inputType"] === "select" ? "select" : "text",
     options: Array.isArray(part["options"])
       ? part["options"].filter((o): o is string => typeof o === "string")
-      : undefined,
+      : [],
     pattern: typeof part["pattern"] === "string" ? part["pattern"] : undefined,
   }));
 
@@ -2135,6 +2138,7 @@ const buildManifest = (
           aiAdapt?: boolean;
           parts?: EditablePart[];
           format?: string;
+          optionsFrom?: string;
         } = { path: f.path, inputType: f.inputType };
         if (f.label) {
           field.label = f.label;
@@ -2150,6 +2154,9 @@ const buildManifest = (
         }
         if (f.aiAdapt) {
           field.aiAdapt = true;
+        }
+        if (f.optionsFrom !== undefined && f.inputType === "select") {
+          field.optionsFrom = f.optionsFrom;
         }
         if (f.parts !== undefined && f.parts.length > 0 && f.format) {
           field.parts = f.parts;
