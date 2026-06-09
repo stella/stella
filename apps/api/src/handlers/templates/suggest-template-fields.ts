@@ -34,6 +34,8 @@ export const fieldSuggestionsSchema = v.strictObject({
       inputType: v.nullable(
         v.picklist(["text", "textarea", "number", "boolean", "date", "select"]),
       ),
+      label: v.nullable(v.string()),
+      exampleValue: v.nullable(v.string()),
       aiPrompt: v.nullable(v.string()),
     }),
   ),
@@ -50,6 +52,8 @@ For each, return:
 - literalText: the EXACT text in the document to replace, copied verbatim
 - fieldPath: a dot-separated name, e.g. company.name, company.krs, signatory.name, signatory.role, signing_date, scope. Only letters, digits, underscores, dashes and dots — for list positions use dots (attorneys.0.name), NEVER brackets
 - inputType: one of text, textarea, number, boolean, date, select
+- label: a short user-facing question or name for the fill form, in the document's language (e.g. "Company name")
+- exampleValue: a realistic example of the value, copied or derived from the document
 - aiPrompt: ONLY for free-text sections that should be drafted by AI at fill time (e.g. the scope of the power of attorney) — an instruction describing what to draft. Use null for ordinary fields.`;
 
 // The model occasionally invents bracket-indexed paths (attorneys[0].name)
@@ -114,6 +118,8 @@ export const suggestTemplateFields = async ({
           literalText: s.literalText,
           fieldPath,
           inputType: s.inputType ?? undefined,
+          label: s.label ?? undefined,
+          exampleValue: s.exampleValue ?? undefined,
           aiPrompt: s.aiPrompt ?? undefined,
         },
       ];
