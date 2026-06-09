@@ -116,6 +116,12 @@ const saveTemplateDocument = createSafeRootHandler(
     const baseManifest =
       clientManifest ?? embeddedManifest ?? existing.manifest;
     const fields = mergeManifestWithDiscovery(baseManifest, discovered);
+    // mergeManifestWithDiscovery returns ResolvedField, which carries no
+    // aiPrompt, so recover each field's prompt from the source manifest by path.
+    // Without this, saving a template silently disables its AI-fillable fields.
+    const aiPromptByPath = new Map(
+      (baseManifest?.fields ?? []).map((f) => [f.path, f.aiPrompt]),
+    );
     const fieldMetas: FieldMeta[] = fields.map((f) => ({
       path: f.path,
       label: f.label,
@@ -123,6 +129,7 @@ const saveTemplateDocument = createSafeRootHandler(
       options: f.options,
       validation: f.validation,
       required: f.required,
+      aiPrompt: aiPromptByPath.get(f.path),
     }));
 
     const manifest: TemplateManifest = {
@@ -135,23 +142,34 @@ const saveTemplateDocument = createSafeRootHandler(
     // Re-embed the merged manifest so the stored DOCX stays in sync with the DB.
     const updatedDocx = await writeManifest(buffer, manifest);
 
-    const newVersion = existing.currentVersion + 1;
-    const versionS3Key = buildVersionS3Key(
-      organizationId,
-      templateId,
-      newVersion,
-    );
-
-    // Write to the version-specific key outside the transaction to keep it short.
-    await getS3().write(versionS3Key, new Uint8Array(updatedDocx));
-
-    // Advisory lock + version count + update + insert in one transaction to
-    // prevent TOCTOU on the per-template version limit.
+    // Advisory lock, then allocate the version, write its S3 object, and commit
+    // the row + version insert — all under the lock. Allocating the version and
+    // writing S3 *outside* the lock let two overlapping saves pick the same vN,
+    // write the same key (one clobbering the other), and leave the committed
+    // version pointing at the loser's bytes.
     const txResult = yield* Result.await(
       safeDb(async (tx) => {
         await tx.execute(
           sql`SELECT pg_advisory_xact_lock(hashtext(${templateId}))`,
         );
+
+        // Re-read under the lock: a concurrent save that already committed will
+        // have bumped currentVersion, so the next version is read fresh here.
+        const [locked] = await tx
+          .select({
+            currentVersion: templates.currentVersion,
+            s3Key: templates.s3Key,
+          })
+          .from(templates)
+          .where(
+            and(
+              eq(templates.id, templateId),
+              eq(templates.organizationId, organizationId),
+            ),
+          );
+        if (!locked) {
+          return { ok: false as const, reason: "not-found" as const };
+        }
 
         const versionCount = await tx.$count(
           templateVersions,
@@ -159,8 +177,19 @@ const saveTemplateDocument = createSafeRootHandler(
         );
 
         if (versionCount >= LIMITS.templateVersionsPerTemplate) {
-          return { ok: false as const };
+          return { ok: false as const, reason: "limit" as const };
         }
+
+        const newVersion = locked.currentVersion + 1;
+        const versionS3Key = buildVersionS3Key(
+          organizationId,
+          templateId,
+          newVersion,
+        );
+        // Under the lock: only concurrent saves of this same template wait, and
+        // they must serialize anyway so vN's bytes aren't overwritten before the
+        // version row commits.
+        await getS3().write(versionS3Key, new Uint8Array(updatedDocx));
 
         const [row] = await tx
           .update(templates)
@@ -202,8 +231,8 @@ const saveTemplateDocument = createSafeRootHandler(
           resourceId: templateId,
           workspaceId: null,
           changes: {
-            currentVersion: { old: existing.currentVersion, new: newVersion },
-            s3Key: { old: existing.s3Key, new: versionS3Key },
+            currentVersion: { old: locked.currentVersion, new: newVersion },
+            s3Key: { old: locked.s3Key, new: versionS3Key },
             fieldCount: { old: null, new: manifest.fields.length },
           },
         });
@@ -213,6 +242,11 @@ const saveTemplateDocument = createSafeRootHandler(
     );
 
     if (!txResult.ok) {
+      if (txResult.reason === "not-found") {
+        return Result.err(
+          new HandlerError({ status: 404, message: "Template not found" }),
+        );
+      }
       return Result.err(
         new HandlerError({
           status: 400,
