@@ -48,10 +48,13 @@ type AiSuggestFieldsProps = {
 
 // Find the first single-text-node occurrence of `literal` and return its PM
 // range. Mirrors the backend's single-run constraint: a literal split across
-// formatting runs is reported as not-found rather than partially wrapped.
+// formatting runs is reported as not-found rather than partially wrapped. When
+// `bounds` is given (a selection-scoped suggestion), only matches fully inside
+// that range are accepted, so a repeated literal elsewhere isn't wrapped.
 const findLiteralRange = (
   view: EditorView,
   literal: string,
+  bounds?: { from: number; to: number } | null,
 ): { from: number; to: number } | null => {
   let found: { from: number; to: number } | null = null;
   view.state.doc.descendants((node, pos) => {
@@ -59,10 +62,15 @@ const findLiteralRange = (
       return false;
     }
     if (node.isText && node.text) {
-      const idx = node.text.indexOf(literal);
-      if (idx !== -1) {
-        found = { from: pos + idx, to: pos + idx + literal.length };
-        return false;
+      let idx = node.text.indexOf(literal);
+      while (idx !== -1) {
+        const from = pos + idx;
+        const to = from + literal.length;
+        if (!bounds || (from >= bounds.from && to <= bounds.to)) {
+          found = { from, to };
+          return false;
+        }
+        idx = node.text.indexOf(literal, idx + 1);
       }
     }
     return true;
@@ -100,6 +108,13 @@ export const AiSuggestFields = ({ getView }: AiSuggestFieldsProps) => {
   const [instructions, setInstructions] = useState("");
   const [loading, setLoading] = useState(false);
   const [proposals, setProposals] = useState<Proposal[]>([]);
+  // Selection bounds the suggestions were generated from (null for whole-doc),
+  // so accept wraps the occurrence inside the selection. Mapped forward as each
+  // accepted field shifts positions.
+  const [scopeRange, setScopeRange] = useState<{
+    from: number;
+    to: number;
+  } | null>(null);
 
   const handleOpenChange = (next: boolean) => {
     if (next) {
@@ -129,6 +144,11 @@ export const AiSuggestFields = ({ getView }: AiSuggestFieldsProps) => {
       stellaToast.add({ type: "error", title: t("templates.studio.aiNoText") });
       return;
     }
+    setScopeRange(
+      scope === "selection"
+        ? { from: view.state.selection.from, to: view.state.selection.to }
+        : null,
+    );
     const trimmedInstructions = instructions.trim();
     setLoading(true);
     const { data, error } = await api.templates["suggest-fields"].post({
@@ -177,7 +197,7 @@ export const AiSuggestFields = ({ getView }: AiSuggestFieldsProps) => {
     if (!proposal || !view) {
       return;
     }
-    const range = findLiteralRange(view, proposal.literalText);
+    const range = findLiteralRange(view, proposal.literalText, scopeRange);
     if (!range) {
       stellaToast.add({
         type: "error",
@@ -186,12 +206,19 @@ export const AiSuggestFields = ({ getView }: AiSuggestFieldsProps) => {
       return;
     }
     const path = uniquePath(proposal.path.trim() || "field");
-    view.dispatch(
-      view.state.tr
-        .insertText(`{{${path}}}`, range.from, range.to)
-        .scrollIntoView(),
-    );
+    const tr = view.state.tr
+      .insertText(`{{${path}}}`, range.from, range.to)
+      .scrollIntoView();
+    view.dispatch(tr);
     view.focus();
+    // Keep the selection bounds valid for the remaining proposals — the insert
+    // shifts later positions.
+    if (scopeRange) {
+      setScopeRange({
+        from: tr.mapping.map(scopeRange.from),
+        to: tr.mapping.map(scopeRange.to),
+      });
+    }
     upsertField(path, {
       inputType: proposal.inputType,
       ...(proposal.aiPrompt ? { aiPrompt: proposal.aiPrompt } : {}),
