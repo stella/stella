@@ -545,6 +545,7 @@
       "run-stella-query": "Odczytywanie danych sprawy",
       "search-across-matters": "Wyszukiwanie w różnych sprawach",
       "search-chat-history": "Przeszukiwanie historii czatu",
+      "suggest_template_fields": "Proponowanie pól szablonu",
       "unknown": "Używanie narzędzia",
       "update-entity-fields": "Aktualizacja metadanych",
       "web_search": "Wyszukiwanie w sieci"
