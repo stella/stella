@@ -53,6 +53,7 @@ import { registerInspectorView } from "@/components/inspector/view-registry";
 import { api } from "@/lib/api";
 import { DOCX_MIME, SIDE_RAIL_TAB_ICON_SIZE_PX } from "@/lib/consts";
 import { toSafeId } from "@/lib/safe-id";
+import { AiSuggestFields } from "@/routes/_protected.knowledge/-components/template-ai-fields";
 import { TemplateClausesTab } from "@/routes/_protected.knowledge/-components/template-clauses-tab";
 import { TemplateForm } from "@/routes/_protected.knowledge/-components/template-form";
 import { useTemplateNavStore } from "@/routes/_protected.knowledge/-components/template-nav-store";
@@ -417,6 +418,7 @@ export const TemplateStudioPage = ({
           <BracesIcon />
           {t("templates.studio.makeField")}
         </Button>
+        <AiSuggestFields getView={() => editorViewRef.current} />
         <Button
           disabled={!isDirty || isSaving}
           onClick={() => void handleSave()}
