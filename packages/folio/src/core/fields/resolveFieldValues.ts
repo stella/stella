@@ -19,6 +19,11 @@ export type SharedFieldInputs = {
   now: Date;
 };
 
+export type HeaderFooterFieldInputs = Pick<
+  SharedFieldInputs,
+  "bookmarkPages" | "bookmarkText" | "seqValues"
+>;
+
 type BlockLocation = { page: number; sectionIndex: number };
 type FieldAnchor =
   | { type: "block"; blockId: BlockId; run: FieldRun }
@@ -109,6 +114,7 @@ export function buildHeaderFooterFieldValues(
   blocks: readonly FlowBlock[],
   pageCount: number,
   now: Date,
+  inputs?: Partial<HeaderFooterFieldInputs>,
 ): Map<number, string> {
   const values = new Map<number, string>();
   const fields: FieldRun[] = [];
@@ -123,9 +129,9 @@ export function buildHeaderFooterFieldValues(
     pageNumber: pageCount,
     totalPages: pageCount,
     sectionPages: pageCount,
-    bookmarkPages: EMPTY_STRING_NUMBER,
-    bookmarkText: EMPTY_STRING_STRING,
-    seqValues: EMPTY_NUMBER_NUMBER,
+    bookmarkPages: inputs?.bookmarkPages ?? EMPTY_STRING_NUMBER,
+    bookmarkText: inputs?.bookmarkText ?? EMPTY_STRING_STRING,
+    seqValues: inputs?.seqValues ?? EMPTY_NUMBER_NUMBER,
     now,
   };
   for (const run of fields) {
@@ -133,20 +139,14 @@ export function buildHeaderFooterFieldValues(
       continue;
     }
     const parsed = parseFieldInstruction(run.instruction || run.fieldType);
-    if (
-      parsed.type === "PAGE" ||
-      parsed.type === "NUMPAGES" ||
-      parsed.type === "SECTIONPAGES"
-    ) {
-      values.set(
-        run.pmStart,
-        evaluateField(parsed, context, {
-          fallback: run.fallback ?? "",
-          instanceId: run.pmStart,
-          ...(run.fldLock ? { locked: true } : {}),
-        }),
-      );
-    }
+    values.set(
+      run.pmStart,
+      evaluateField(parsed, context, {
+        fallback: run.fallback ?? "",
+        instanceId: run.pmStart,
+        ...(run.fldLock ? { locked: true } : {}),
+      }),
+    );
   }
   return values;
 }

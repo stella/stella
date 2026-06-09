@@ -235,14 +235,25 @@ describe("buildHeaderFooterFieldValues", () => {
     expect(values.get(30)).toBe("42");
   });
 
-  test("applies format switches and ignores non-page-number fields", () => {
+  test("measures resolvable header/footer fields with shared inputs", () => {
     const blocks: FlowBlock[] = [
-      para("p", [field(10, "PAGE \\* ROMAN"), field(20, "PAGEREF _x \\h")]),
+      para("p", [
+        field(10, "PAGE \\* ROMAN"),
+        field(20, "PAGEREF _x \\h"),
+        field(30, "REF _caption"),
+        field(40, "SEQ Figure"),
+      ]),
     ];
 
-    const values = buildHeaderFooterFieldValues(blocks, 4, now);
+    const values = buildHeaderFooterFieldValues(blocks, 4, now, {
+      bookmarkPages: new Map([["_x", 12]]),
+      bookmarkText: new Map([["_caption", "Figure 2: Caption"]]),
+      seqValues: new Map([[40, 3]]),
+    });
 
     expect(values.get(10)).toBe("IV"); // roman of the widest page
-    expect(values.has(20)).toBe(false); // PAGEREF resolves per-page at paint
+    expect(values.get(20)).toBe("12");
+    expect(values.get(30)).toBe("Figure 2: Caption");
+    expect(values.get(40)).toBe("3");
   });
 });

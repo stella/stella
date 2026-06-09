@@ -43,6 +43,7 @@ import {
   fieldValuesEqual,
   resolveFieldValues,
 } from "../core/fields/resolveFieldValues";
+import type { HeaderFooterFieldInputs } from "../core/fields/resolveFieldValues";
 import { buildSectionPageCounts } from "../core/fields/sectionPageCounts";
 import { buildSeqValues } from "../core/fields/seqValues";
 import { clickToPosition } from "../core/layout-bridge/clickToPosition";
@@ -2326,14 +2327,22 @@ export function PagedEditor(
         // before paint.
         const hfPageCountEstimate = layout?.pages.length ?? 1;
         const hfClock = new Date();
-        const buildHfOptions = (pageCount: number) => {
+        const buildHfOptions = (
+          pageCount: number,
+          fieldInputs?: HeaderFooterFieldInputs,
+        ) => {
           const hfMeasureBlocks: MeasureBlocksFn = (hfBlocks, hfWidth) =>
             measureBlocks(
               hfBlocks,
               hfWidth,
               undefined,
               undefined,
-              buildHeaderFooterFieldValues(hfBlocks, pageCount, hfClock),
+              buildHeaderFooterFieldValues(
+                hfBlocks,
+                pageCount,
+                hfClock,
+                fieldInputs,
+              ),
             );
           return {
             ...(styles ? { styles } : {}),
@@ -2721,8 +2730,16 @@ export function PagedEditor(
         // (typing) path to keep keystrokes cheap.
         stabilizeFieldWidths();
 
-        if (newLayout.pages.length !== hfPageCountEstimate) {
-          const finalHfOptions = buildHfOptions(newLayout.pages.length);
+        const rebuildHeaderFooterForLayout = (): typeof hfExtenderContent => {
+          const finalHfFieldInputs: HeaderFooterFieldInputs = {
+            bookmarkPages: buildBookmarkPageMap(newLayout.pages, newBlocks),
+            bookmarkText: buildBookmarkText(newBlocks),
+            seqValues: buildSeqValues(newBlocks),
+          };
+          const finalHfOptions = buildHfOptions(
+            newLayout.pages.length,
+            finalHfFieldInputs,
+          );
           headerContentForRender = renderHfFromContentOrPm(
             headerContent,
             headerContentRId,
@@ -2773,12 +2790,21 @@ export function PagedEditor(
             hfMetricsFooter,
             finalHfOptions,
           );
-          const finalHfExtenderContent = {
+          return {
             headerContent: headerContentForRender,
             footerContent: footerContentForRender,
             firstPageHeaderContent: firstPageHeaderForRender,
             firstPageFooterContent: firstPageFooterForRender,
           };
+        };
+
+        const MAX_HEADER_FOOTER_STABILIZATION_PASSES = 3;
+        for (
+          let pass = 0;
+          pass < MAX_HEADER_FOOTER_STABILIZATION_PASSES;
+          pass++
+        ) {
+          const finalHfExtenderContent = rebuildHeaderFooterForLayout();
           const finalEffectiveMargins = computeHeaderFooterMarginExtender({
             ...finalHfExtenderContent,
             pageSize,
@@ -2831,7 +2857,9 @@ export function PagedEditor(
               buildLayoutOpts(effectiveMargins, effectiveFirstPageMargins),
             );
             stabilizeFieldWidths();
+            continue;
           }
+          break;
         }
 
         setLayout(newLayout);
