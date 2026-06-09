@@ -14,7 +14,9 @@
 // Leads a guide callout's blockquote. Distinguishes coaching notes from the
 // `> e.g. …` example blockquotes that blueprints also carry.
 const GUIDE_CALLOUT_LEAD = "💡 ";
-const GUIDE_COMMENT_PATTERN = /<!--\s*guide:\s*([\s\S]*?)\s*-->/gu;
+// The captured text is whitespace-normalised by the caller, so the pattern
+// keeps no `\s*` around the lazy capture (that ambiguity is backtracking-prone).
+const GUIDE_COMMENT_PATTERN = /<!--\s*guide:([\s\S]*?)-->/gu;
 // One callout line: `> 💡 text`. Matched per line (toMarkdown renders a
 // single-line blockquote for a single-line quote paragraph).
 const GUIDE_CALLOUT_PATTERN = /^> 💡 (.*)$/gmu;

@@ -70,7 +70,6 @@ type ViewToolbarProps = {
 };
 
 export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
-  const t = useTranslations();
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const updateView = useUpdateView(workspaceId);
   const { filters, sorts, hiddenProperties } = view.layout;

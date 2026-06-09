@@ -55,14 +55,14 @@ const textRun = (text: string, fmt: RunFormat = {}): Run => {
   // the lines on top of each other. Split on "\n" into text + break content.
   const segments = text.split("\n");
   const content: Run["content"] = [];
-  segments.forEach((segment, index) => {
+  for (const [index, segment] of segments.entries()) {
     if (index > 0) {
       content.push({ type: "break" });
     }
     if (segment.length > 0) {
       content.push({ type: "text", text: segment });
     }
-  });
+  }
   if (content.length === 0) {
     content.push({ type: "text", text: "" });
   }
@@ -151,7 +151,7 @@ const tableFromToken = (token: Tokens.Table): Table => ({
 const listBlocks = (list: Tokens.List, level: number): BlockContent[] => {
   const out: BlockContent[] = [];
   const start = Number(list.start) || 1;
-  list.items.forEach((item: Tokens.ListItem, index: number) => {
+  for (const [index, item] of list.items.entries()) {
     const rendering: ListRendering = list.ordered
       ? {
           marker: `${start + index}.`,
@@ -174,7 +174,7 @@ const listBlocks = (list: Tokens.List, level: number): BlockContent[] => {
     for (const nested of nestedLists) {
       out.push(...listBlocks(nested, level + 1));
     }
-  });
+  }
   return out;
 };
 
