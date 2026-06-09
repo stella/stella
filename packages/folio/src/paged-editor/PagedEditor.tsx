@@ -5728,19 +5728,12 @@ export function PagedEditor(
         }
       }
 
-      // Double-click: select entire cell (CellSelection) if in table, otherwise word selection
+      // Double-click: select the word under the cursor. Inside a table this
+      // still selects the word (matching Word / Google Docs), not the whole
+      // cell — cell selection is reachable by dragging across cells.
       if (e.detail === 2 && hiddenPMRef.current) {
         const pmPos = getPositionFromMouse(e.clientX, e.clientY);
         if (pmPos !== null) {
-          // If inside a table cell, select the entire cell
-          const cellPos = findCellPosFromPmPos(pmPos);
-          if (cellPos !== null) {
-            e.preventDefault();
-            e.stopPropagation();
-            hiddenPMRef.current.setCellSelection(cellPos, cellPos);
-            return;
-          }
-
           const view = hiddenPMRef.current.getView();
           if (view) {
             const { doc } = view.state;
