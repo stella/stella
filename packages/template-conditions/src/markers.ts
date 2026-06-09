@@ -107,6 +107,11 @@ export const blockDirectiveLinePattern = (): RegExp =>
 
 // Anchored forms used to classify the inner text of one marker.
 const FIELD_PATH_RE = /^[\p{L}\p{N}_.-]+$/u;
+
+/** Whether `value` is a valid field path per the marker grammar (dotted
+ *  segments of letters/digits/underscore/dash — no brackets or spaces). */
+export const isFieldPath = (value: string): boolean =>
+  FIELD_PATH_RE.test(value);
 const CLAUSE_INNER_RE = /^@clause:([^:}\s]+)(?::([^}\s]+))?$/u;
 const NUM_INNER_RE = /^@num:([\p{L}\p{N}_.-]+)$/u;
 const REF_INNER_RE = /^@ref:([\p{L}\p{N}_.-]+)$/u;
