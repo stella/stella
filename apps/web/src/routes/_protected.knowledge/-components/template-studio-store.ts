@@ -56,6 +56,8 @@ export type StudioActions = {
   renameFieldPath: (oldPath: string, newPath: string) => boolean;
   /** Move the document caret to the next/previous field marker. */
   focusAdjacentField: (direction: 1 | -1) => void;
+  /** Move the document caret into the first marker of the given field. */
+  focusField: (path: string) => void;
 };
 
 /** Page-owned UI state the inspector's action row reflects. */

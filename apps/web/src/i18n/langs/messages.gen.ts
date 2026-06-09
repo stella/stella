@@ -2064,7 +2064,9 @@ type Messages = {
       "aiSuggest": "Suggest fields";
       "clauseSlotHelp": "A clause from the library is inserted here at fill time. Manage linked clauses in the Clauses tab.";
       "computed": "Computed";
+      "computedSectionHelp": "Derived values, calculated from other fields when the template is filled. Use them in the document like any field: {{name}}.";
       "conditionBlockHelp": "This block shows only when:";
+      "conditionsSectionHelp": "Yes/no switches. An {{#if name}} block in the document shows only when its condition is true.";
       "draftedByAi": "AI drafts it";
       "emptyClauseSlot": "Empty clause slot";
       "expressionPlaceholder": "expression";
