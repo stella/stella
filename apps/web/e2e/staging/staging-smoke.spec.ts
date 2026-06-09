@@ -24,5 +24,5 @@ test("chat thread page renders for an entitlement-less owner", async ({
   // of the composer. Either state proves the route rendered.
   const composer = page.getByRole("textbox", { name: /type your question/iu });
   const aiKeyGate = page.getByText("Connect AI provider");
-  await expect(composer.or(aiKeyGate).first()).toBeVisible();
+  await expect(composer.or(aiKeyGate)).toBeVisible();
 });
