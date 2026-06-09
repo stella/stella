@@ -215,23 +215,37 @@ export const templateDocxBufferOptions = (
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
 
+const TEMPLATE_VERSIONS_PAGE_SIZE = 20;
+
 export const templateVersionsOptions = (
   organizationId: string,
   templateId: string,
 ) =>
-  queryOptions({
+  infiniteQueryOptions({
     queryKey: knowledgeKeys.templates.versions(organizationId, templateId),
-    queryFn: async ({ signal }) => {
+    queryFn: async ({ pageParam, signal }) => {
+      const query: { limit: number; cursor?: string } = {
+        limit: TEMPLATE_VERSIONS_PAGE_SIZE,
+      };
+      if (pageParam !== "") {
+        query.cursor = pageParam;
+      }
       const response = await api
         .templates({ templateId: toSafeId<"template">(templateId) })
-        .versions.get({ fetch: { signal } });
+        .versions.get({ query, fetch: { signal } });
 
       if (response.error) {
         throw toAPIError(response.error);
       }
-
-      return response.data;
+      const page = response.data;
+      if (!("items" in page)) {
+        // 404 body shape; the error channel already covers real 404s.
+        throw new APIError({ status: 404, message: "Template not found" });
+      }
+      return page;
     },
+    initialPageParam: "",
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
 
