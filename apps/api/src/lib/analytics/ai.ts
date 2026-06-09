@@ -10,7 +10,12 @@ import type { SafeDb } from "@/api/db";
 import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { ModelRole, OrgAIConfig } from "@/api/lib/ai-models";
-import { getModelInfoForRole } from "@/api/lib/ai-models";
+import {
+  SERVICE_TIER_PROVIDER_METADATA_KEY,
+  STELLA_PROVIDER_METADATA_KEY,
+  getModelInfoForRole,
+  resolveEffectiveServiceTierForProvider,
+} from "@/api/lib/ai-models";
 import { captureError as captureTelemetryError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -561,6 +566,27 @@ type RecordStepConsumptionInput = {
   inputTokens: number;
   modelId: string;
   outputTokens: number;
+  providerMetadata: OnStepFinishEvent["providerMetadata"];
+};
+
+const isUsageServiceTier = (value: unknown): value is UsageServiceTier =>
+  value === "standard" || value === "flex" || value === "batch";
+
+const resolveMeteredServiceTier = ({
+  providerMetadata,
+  requestedServiceTier,
+}: {
+  providerMetadata: OnStepFinishEvent["providerMetadata"];
+  requestedServiceTier: UsageServiceTier;
+}): UsageServiceTier => {
+  const metadataServiceTier =
+    providerMetadata?.[STELLA_PROVIDER_METADATA_KEY]?.[
+      SERVICE_TIER_PROVIDER_METADATA_KEY
+    ];
+
+  return isUsageServiceTier(metadataServiceTier)
+    ? metadataServiceTier
+    : requestedServiceTier;
 };
 
 const recordStepConsumption = ({
@@ -569,6 +595,7 @@ const recordStepConsumption = ({
   inputTokens,
   modelId,
   outputTokens,
+  providerMetadata,
 }: RecordStepConsumptionInput): void => {
   const metering = config.usageMetering;
   if (!metering) {
@@ -576,8 +603,17 @@ const recordStepConsumption = ({
   }
 
   const modelRole = config.modelRole ?? "chat";
-  const isByok =
-    getModelInfoForRole(modelRole, config.orgAIConfig).keySource === "byok";
+  const modelInfo = getModelInfoForRole(modelRole, config.orgAIConfig);
+  const isByok = modelInfo.keySource === "byok";
+  const meteredServiceTier = resolveMeteredServiceTier({
+    providerMetadata,
+    requestedServiceTier: metering.serviceTier,
+  });
+  const effectiveServiceTier = resolveEffectiveServiceTierForProvider({
+    provider: modelInfo.provider,
+    region: modelInfo.region,
+    serviceTier: meteredServiceTier,
+  });
   const { unitsConsumed, rawUsageMicroUnits } = usageUnitsFromTokens({
     actionType: metering.actionType,
     cacheReadTokens,
@@ -585,7 +621,7 @@ const recordStepConsumption = ({
     isByok,
     modelId,
     outputTokens,
-    serviceTier: metering.serviceTier,
+    serviceTier: effectiveServiceTier,
   });
 
   const consumption = metering.safeDb(
@@ -598,7 +634,7 @@ const recordStepConsumption = ({
         modelRole,
         organizationId: metering.organizationId,
         rawUsageMicroUnits,
-        serviceTier: metering.serviceTier,
+        serviceTier: effectiveServiceTier,
         traceId: config.traceId,
         userId: metering.userId,
         workspaceId: metering.workspaceId,
@@ -669,6 +705,7 @@ export const createAIAnalyticsCallbacks = ({
 
   const onStepFinish: NonNullable<AIAnalyticsStepCallbacks["onStepFinish"]> = ({
     model,
+    providerMetadata,
     response,
     stepNumber,
     toolCalls,
@@ -701,6 +738,7 @@ export const createAIAnalyticsCallbacks = ({
       inputTokens,
       modelId: response.modelId || currentStep.modelId,
       outputTokens,
+      providerMetadata,
     });
 
     if (!debugEnabled) {

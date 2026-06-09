@@ -120,6 +120,7 @@ const generateSkillDraft = createSafeRootHandler(
             promptCachingEnabled,
             scopeKey: null,
             organizationId: session.activeOrganizationId,
+            serviceTier: "flex",
           }),
           output: Output.object({ schema: valibotSchema(aiGenerationSchema) }),
           prompt,

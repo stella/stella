@@ -1,21 +1,38 @@
 import { matchError, Result } from "better-result";
 
+import type { AIRequestServiceTier } from "@/api/lib/ai-models";
 import type {
   WorkflowIntegrationError,
   WorkflowValidationError,
 } from "@/api/lib/errors/tagged-errors";
 import type { ExecutionLevel } from "@/api/lib/workflow/get-execution-plan";
 
-export const WORKFLOW_BATCH_AI_TIMEOUT_MS = 120 * 1000;
+export const STANDARD_WORKFLOW_BATCH_AI_TIMEOUT_MS = 120 * 1000;
+export const DEFERRED_WORKFLOW_BATCH_AI_TIMEOUT_MS = 16 * 60 * 1000;
 export const WORKFLOW_INTEGRATION_ERROR_RETRY_DELAY_MS = 5 * 1000;
 export const WORKFLOW_INTEGRATION_ERROR_ATTEMPTS = 2;
+export const WORKFLOW_ENTITY_JOB_ATTEMPTS = 2;
+export const WORKFLOW_ENTITY_JOB_BACKOFF_DELAY_MS = 5 * 1000;
 
 const JOB_TIMEOUT_FLOOR_MS = 6 * 60 * 1000;
 const JOB_TIMEOUT_PER_LEVEL_OVERHEAD_MS = 60 * 1000;
+const MIN_WORKFLOW_RUN_LOCK_TTL_SEC = 60 * 60;
+const WORKFLOW_RUN_LOCK_TTL_BUFFER_MS = 5 * 60 * 1000;
 
 type WorkflowBatchError = WorkflowIntegrationError | WorkflowValidationError;
 
 type WorkflowBatchGenerationResult<TValue> = Result<TValue, WorkflowBatchError>;
+
+const isDeferredWorkflowServiceTier = (
+  serviceTier: AIRequestServiceTier,
+): boolean => serviceTier === "flex" || serviceTier === "batch";
+
+export const getWorkflowBatchAITimeoutMs = (
+  serviceTier: AIRequestServiceTier,
+): number =>
+  isDeferredWorkflowServiceTier(serviceTier)
+    ? DEFERRED_WORKFLOW_BATCH_AI_TIMEOUT_MS
+    : STANDARD_WORKFLOW_BATCH_AI_TIMEOUT_MS;
 
 type ShouldRetryWorkflowBatchErrorArgs = {
   attempt: number;
@@ -25,18 +42,49 @@ type ShouldRetryWorkflowBatchErrorArgs = {
 
 export const computeWorkflowJobTimeoutMs = (
   executionPlan: ExecutionLevel[],
+  serviceTier: AIRequestServiceTier,
 ): number => {
   const levels = executionPlan.length;
+  const batchTimeoutMs = getWorkflowBatchAITimeoutMs(serviceTier);
   const retryDelayMs =
     WORKFLOW_INTEGRATION_ERROR_RETRY_DELAY_MS *
     Math.max(0, WORKFLOW_INTEGRATION_ERROR_ATTEMPTS - 1);
   const perLevelTimeoutMs =
-    WORKFLOW_BATCH_AI_TIMEOUT_MS * WORKFLOW_INTEGRATION_ERROR_ATTEMPTS +
+    batchTimeoutMs * WORKFLOW_INTEGRATION_ERROR_ATTEMPTS +
     retryDelayMs +
     JOB_TIMEOUT_PER_LEVEL_OVERHEAD_MS;
   return Math.max(
     JOB_TIMEOUT_FLOOR_MS,
     levels * perLevelTimeoutMs + JOB_TIMEOUT_FLOOR_MS,
+  );
+};
+
+const computeWorkflowEntityJobBackoffMs = (): number => {
+  let backoffMs = 0;
+  for (
+    let retryIndex = 0;
+    retryIndex < WORKFLOW_ENTITY_JOB_ATTEMPTS - 1;
+    retryIndex++
+  ) {
+    backoffMs += WORKFLOW_ENTITY_JOB_BACKOFF_DELAY_MS * 2 ** retryIndex;
+  }
+  return backoffMs;
+};
+
+export const computeWorkflowRunLockTtlSec = (
+  executionPlan: ExecutionLevel[],
+  serviceTier: AIRequestServiceTier,
+): number => {
+  const minimumLockTtlMs = MIN_WORKFLOW_RUN_LOCK_TTL_SEC * 1000;
+  const jobTimeoutMs = computeWorkflowJobTimeoutMs(executionPlan, serviceTier);
+  const entityJobBudgetMs =
+    jobTimeoutMs * WORKFLOW_ENTITY_JOB_ATTEMPTS +
+    computeWorkflowEntityJobBackoffMs();
+  return Math.ceil(
+    Math.max(
+      minimumLockTtlMs,
+      entityJobBudgetMs + WORKFLOW_RUN_LOCK_TTL_BUFFER_MS,
+    ) / 1000,
   );
 };
 

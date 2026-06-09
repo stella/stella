@@ -5,7 +5,8 @@ import type { ScopedDb } from "@/api/db";
 import { fields } from "@/api/db/schema";
 import type { JustificationContent } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
-import type { OrgAIConfig } from "@/api/lib/ai-models";
+import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-models";
+import type { AIUsageMetering } from "@/api/lib/analytics/ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   Unreachable,
@@ -50,6 +51,8 @@ export type GenerateBatchProps = {
   entityVersionId: SafeId<"entityVersion">;
   orgAIConfig?: OrgAIConfig | null;
   promptCachingEnabled: boolean;
+  serviceTier: AIRequestServiceTier;
+  usageMetering?: AIUsageMetering | undefined;
   onPartialAnswer?:
     | ((update: PartialAnswerUpdate) => Promise<void> | void)
     | undefined;

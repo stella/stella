@@ -1,3 +1,11 @@
+import { APICallError } from "@ai-sdk/provider";
+import type {
+  LanguageModelV3,
+  LanguageModelV3CallOptions,
+  LanguageModelV3GenerateResult,
+  LanguageModelV3StreamPart,
+  LanguageModelV3StreamResult,
+} from "@ai-sdk/provider";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
@@ -16,16 +24,100 @@ process.env["SMTP_PORT"] ??= "1025";
 
 const {
   DEFAULT_MODELS,
+  FALLBACK_FROM_SERVICE_TIER_PROVIDER_METADATA_KEY,
+  SERVICE_TIER_PROVIDER_METADATA_KEY,
+  STELLA_PROVIDER_METADATA_KEY,
+  createServiceTierMiddleware,
   defaultsForRole,
   getModelForRole,
   getModelInfoById,
   getModelInfoForRole,
   isAllowedBYOKModel,
+  isDeferredServiceTierAvailableForRole,
   REGIONAL_PROVIDERS,
   resolveCaching,
+  resolveEffectiveServiceTierForProvider,
+  resolveServiceTierProviderOptions,
   supportsRegion,
   validateDevModelOverride,
 } = await import("@/api/lib/ai-models");
+
+const TEST_GENERATE_RESULT: LanguageModelV3GenerateResult = {
+  content: [],
+  finishReason: { unified: "stop", raw: "stop" },
+  usage: {
+    inputTokens: {
+      total: 0,
+      noCache: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+    },
+    outputTokens: {
+      total: 0,
+      text: 0,
+      reasoning: 0,
+    },
+  },
+  warnings: [],
+};
+
+const TEST_STREAM_RESULT: LanguageModelV3StreamResult = {
+  stream: new ReadableStream({
+    start: (controller) => {
+      controller.close();
+    },
+  }),
+};
+
+const createFinishStreamResult = (): LanguageModelV3StreamResult => ({
+  stream: new ReadableStream<LanguageModelV3StreamPart>({
+    start: (controller) => {
+      controller.enqueue({
+        type: "finish",
+        finishReason: TEST_GENERATE_RESULT.finishReason,
+        usage: TEST_GENERATE_RESULT.usage,
+      });
+      controller.close();
+    },
+  }),
+});
+
+const createAPIError = ({
+  isRetryable,
+  statusCode,
+}: {
+  isRetryable?: boolean;
+  statusCode: number;
+}) =>
+  new APICallError({
+    message: "provider error",
+    requestBodyValues: {},
+    statusCode,
+    url: "https://example.test/v1/chat/completions",
+    ...(isRetryable === undefined ? {} : { isRetryable }),
+  });
+
+const TEST_PARAMS: LanguageModelV3CallOptions = {
+  prompt: [{ role: "user", content: [{ type: "text", text: "hello" }] }],
+};
+
+const createRecordingModel = (
+  onGenerate: (params: LanguageModelV3CallOptions) => void,
+  onStream?: (params: LanguageModelV3CallOptions) => void,
+): LanguageModelV3 => ({
+  specificationVersion: "v3",
+  provider: "test",
+  modelId: "test-model",
+  supportedUrls: {},
+  doGenerate: async (params) => {
+    onGenerate(params);
+    return TEST_GENERATE_RESULT;
+  },
+  doStream: async (params) => {
+    onStream?.(params);
+    return createFinishStreamResult();
+  },
+});
 
 const settingsForRole = (
   role: ModelRole,
@@ -39,6 +131,25 @@ const settingsForRole = (
     orgId,
     modelId,
   });
+
+const orgConfigForProvider = (
+  provider: Extract<AIProvider, "anthropic" | "google" | "openai">,
+  region?: "eu" | "global" | "ch",
+) => ({
+  providers: [
+    {
+      provider,
+      apiKey: "sk-test",
+      ...(region === undefined ? {} : { region }),
+    },
+  ],
+  overrideModels: {
+    chat: { provider, modelId: DEFAULT_MODELS[provider].chat },
+    fast: { provider, modelId: DEFAULT_MODELS[provider].fast },
+    pdf: { provider, modelId: DEFAULT_MODELS[provider].pdf },
+    reasoning: { provider, modelId: DEFAULT_MODELS[provider].reasoning },
+  },
+});
 
 describe("supportsRegion", () => {
   test("google supports regional routing", () => {
@@ -307,6 +418,7 @@ describe("BYOK model overrides", () => {
           promptCachingEnabled: true,
           scopeKey: null,
           organizationId: null,
+          serviceTier: "standard",
         }),
       ).not.toThrow();
     }
@@ -351,6 +463,7 @@ describe("BYOK model overrides", () => {
           promptCachingEnabled: true,
           scopeKey: null,
           organizationId: null,
+          serviceTier: "standard",
         }),
       ).not.toThrow();
     }
@@ -377,6 +490,7 @@ describe("BYOK model overrides", () => {
         promptCachingEnabled: true,
         scopeKey: null,
         organizationId: null,
+        serviceTier: "standard",
       }),
     ).not.toThrow();
     expect(getModelInfoForRole("reasoning", orgConfig).modelId).toBe(
@@ -414,6 +528,7 @@ describe("BYOK model overrides", () => {
         promptCachingEnabled: true,
         scopeKey: null,
         organizationId: null,
+        serviceTier: "standard",
       }),
     ).not.toThrow();
   });
@@ -452,6 +567,306 @@ describe("resolveCaching", () => {
       scopeKey: null,
     });
     expect(decision).toMatchObject({ enabled: true, scopeKey: null });
+  });
+});
+
+describe("resolveServiceTierProviderOptions", () => {
+  test("maps standard calls to explicit normal-priced provider tiers", () => {
+    expect(
+      resolveServiceTierProviderOptions({
+        target: "google_gemini_api",
+        serviceTier: "standard",
+      }),
+    ).toEqual({ google: { serviceTier: "standard" } });
+    expect(
+      resolveServiceTierProviderOptions({
+        target: "openai",
+        serviceTier: "standard",
+      }),
+    ).toEqual({ openai: { serviceTier: "default" } });
+  });
+
+  test("maps flex and batch calls to provider flex where supported", () => {
+    for (const serviceTier of ["flex", "batch"] as const) {
+      expect(
+        resolveServiceTierProviderOptions({
+          target: "google_gemini_api",
+          serviceTier,
+        }),
+      ).toEqual({ google: { serviceTier: "flex" } });
+      expect(
+        resolveServiceTierProviderOptions({
+          target: "openai",
+          serviceTier,
+        }),
+      ).toEqual({ openai: { serviceTier: "flex" } });
+    }
+  });
+
+  test("maps Vertex deferred calls to shared flex PayGo headers", () => {
+    expect(
+      resolveServiceTierProviderOptions({
+        target: "google_vertex",
+        serviceTier: "flex",
+      }),
+    ).toEqual({
+      vertex: {
+        sharedRequestType: "flex",
+        requestType: "shared",
+      },
+    });
+  });
+
+  test("omits provider options when no equivalent is known", () => {
+    expect(
+      resolveServiceTierProviderOptions({
+        target: "none",
+        serviceTier: "flex",
+      }),
+    ).toBeUndefined();
+    expect(
+      resolveServiceTierProviderOptions({
+        target: "google_vertex",
+        serviceTier: "standard",
+      }),
+    ).toBeUndefined();
+  });
+});
+
+describe("resolveEffectiveServiceTierForProvider", () => {
+  test("keeps deferred tiers only for providers with known equivalents", () => {
+    expect(
+      resolveEffectiveServiceTierForProvider({
+        provider: "google",
+        serviceTier: "flex",
+      }),
+    ).toBe("flex");
+    expect(
+      resolveEffectiveServiceTierForProvider({
+        provider: "openai",
+        serviceTier: "batch",
+      }),
+    ).toBe("batch");
+    expect(
+      resolveEffectiveServiceTierForProvider({
+        provider: "anthropic",
+        serviceTier: "flex",
+      }),
+    ).toBe("standard");
+  });
+});
+
+describe("isDeferredServiceTierAvailableForRole", () => {
+  test("returns true for org providers with deferred tier support", () => {
+    expect(
+      isDeferredServiceTierAvailableForRole(
+        "pdf",
+        orgConfigForProvider("google"),
+      ),
+    ).toBe(true);
+    expect(
+      isDeferredServiceTierAvailableForRole(
+        "pdf",
+        orgConfigForProvider("openai"),
+      ),
+    ).toBe(true);
+  });
+
+  test("returns false for org providers without deferred tier support", () => {
+    expect(
+      isDeferredServiceTierAvailableForRole(
+        "pdf",
+        orgConfigForProvider("anthropic"),
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("service tier fallback middleware", () => {
+  test("retries deferred generate calls once with standard provider options", async () => {
+    const middleware = createServiceTierMiddleware("openai", "flex");
+    const flexParams = await middleware.transformParams?.({
+      model: createRecordingModel(() => undefined),
+      params: TEST_PARAMS,
+      type: "generate",
+    });
+    if (!flexParams) {
+      throw new Error("Expected service tier middleware to transform params");
+    }
+
+    let fallbackParams: LanguageModelV3CallOptions | undefined;
+    const result = await middleware.wrapGenerate?.({
+      doGenerate: async () => {
+        throw createAPIError({ statusCode: 429 });
+      },
+      doStream: async () => TEST_STREAM_RESULT,
+      model: createRecordingModel((params) => {
+        fallbackParams = params;
+      }),
+      params: flexParams,
+    });
+
+    expect(fallbackParams?.providerOptions?.["openai"]).toEqual({
+      serviceTier: "default",
+    });
+    expect(
+      result?.providerMetadata?.[STELLA_PROVIDER_METADATA_KEY]?.[
+        SERVICE_TIER_PROVIDER_METADATA_KEY
+      ],
+    ).toBe("standard");
+    expect(
+      result?.providerMetadata?.[STELLA_PROVIDER_METADATA_KEY]?.[
+        FALLBACK_FROM_SERVICE_TIER_PROVIDER_METADATA_KEY
+      ],
+    ).toBe("flex");
+  });
+
+  test("does not fallback non-retryable deferred errors", async () => {
+    const middleware = createServiceTierMiddleware("openai", "flex");
+    const apiError = createAPIError({ isRetryable: false, statusCode: 400 });
+    let fallbackCount = 0;
+
+    const result = middleware.wrapGenerate?.({
+      doGenerate: async () => {
+        throw apiError;
+      },
+      doStream: async () => TEST_STREAM_RESULT,
+      model: createRecordingModel(() => {
+        fallbackCount++;
+      }),
+      params: TEST_PARAMS,
+    });
+    if (!result) {
+      throw new Error("Expected service tier middleware to wrap generate");
+    }
+
+    let caughtError: unknown;
+    try {
+      await result;
+    } catch (error) {
+      caughtError = error;
+    }
+
+    expect(caughtError).toBe(apiError);
+    expect(fallbackCount).toBe(0);
+  });
+
+  test("does not fallback retryable errors when standard fallback is disabled", async () => {
+    const middleware = createServiceTierMiddleware("openai", "flex", {
+      allowFallbackToStandard: false,
+    });
+    const apiError = createAPIError({ statusCode: 429 });
+    let fallbackCount = 0;
+
+    const result = middleware.wrapGenerate?.({
+      doGenerate: async () => {
+        throw apiError;
+      },
+      doStream: async () => TEST_STREAM_RESULT,
+      model: createRecordingModel(() => {
+        fallbackCount++;
+      }),
+      params: TEST_PARAMS,
+    });
+    if (!result) {
+      throw new Error("Expected service tier middleware to wrap generate");
+    }
+
+    let caughtError: unknown;
+    try {
+      await result;
+    } catch (error) {
+      caughtError = error;
+    }
+
+    expect(caughtError).toBe(apiError);
+    expect(fallbackCount).toBe(0);
+  });
+
+  test("removes Vertex Flex shared-request options for standard fallback", async () => {
+    const middleware = createServiceTierMiddleware("google_vertex", "flex");
+    const flexParams = await middleware.transformParams?.({
+      model: createRecordingModel(() => undefined),
+      params: {
+        ...TEST_PARAMS,
+        providerOptions: {
+          vertex: {
+            thinkingConfig: { thinkingLevel: "minimal" },
+          },
+        },
+      },
+      type: "generate",
+    });
+    if (!flexParams) {
+      throw new Error("Expected service tier middleware to transform params");
+    }
+
+    let fallbackParams: LanguageModelV3CallOptions | undefined;
+    await middleware.wrapGenerate?.({
+      doGenerate: async () => {
+        throw createAPIError({ statusCode: 503 });
+      },
+      doStream: async () => TEST_STREAM_RESULT,
+      model: createRecordingModel((params) => {
+        fallbackParams = params;
+      }),
+      params: flexParams,
+    });
+
+    expect(fallbackParams?.providerOptions?.["vertex"]).toEqual({
+      thinkingConfig: { thinkingLevel: "minimal" },
+    });
+  });
+
+  test("retries deferred stream calls with standard provider options", async () => {
+    const middleware = createServiceTierMiddleware("openai", "batch");
+    const flexParams = await middleware.transformParams?.({
+      model: createRecordingModel(() => undefined),
+      params: TEST_PARAMS,
+      type: "stream",
+    });
+    if (!flexParams) {
+      throw new Error("Expected service tier middleware to transform params");
+    }
+
+    let fallbackParams: LanguageModelV3CallOptions | undefined;
+    const result = await middleware.wrapStream?.({
+      doGenerate: async () => TEST_GENERATE_RESULT,
+      doStream: async () => {
+        throw createAPIError({ statusCode: 429 });
+      },
+      model: createRecordingModel(
+        () => undefined,
+        (params) => {
+          fallbackParams = params;
+        },
+      ),
+      params: flexParams,
+    });
+
+    const chunks: LanguageModelV3StreamPart[] = [];
+    await result?.stream.pipeTo(
+      new WritableStream({
+        write: (chunk: LanguageModelV3StreamPart) => {
+          chunks.push(chunk);
+        },
+      }),
+    );
+    const finishChunk = chunks.find((chunk) => chunk.type === "finish");
+
+    expect(fallbackParams?.providerOptions?.["openai"]).toEqual({
+      serviceTier: "default",
+    });
+    expect(
+      finishChunk?.providerMetadata?.[STELLA_PROVIDER_METADATA_KEY]?.[
+        SERVICE_TIER_PROVIDER_METADATA_KEY
+      ],
+    ).toBe("standard");
+    expect(
+      finishChunk?.providerMetadata?.[STELLA_PROVIDER_METADATA_KEY]?.[
+        FALLBACK_FROM_SERVICE_TIER_PROVIDER_METADATA_KEY
+      ],
+    ).toBe("batch");
   });
 });
 

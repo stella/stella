@@ -7,8 +7,11 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import {
   computeWorkflowJobTimeoutMs,
+  computeWorkflowRunLockTtlSec,
+  getWorkflowBatchAITimeoutMs,
   runWorkflowBatchGenerationWithRetry,
-  WORKFLOW_BATCH_AI_TIMEOUT_MS,
+  WORKFLOW_ENTITY_JOB_ATTEMPTS,
+  WORKFLOW_ENTITY_JOB_BACKOFF_DELAY_MS,
   WORKFLOW_INTEGRATION_ERROR_RETRY_DELAY_MS,
 } from "@/api/lib/workflow/run-logic";
 
@@ -109,8 +112,33 @@ describe("workflow batch retry", () => {
 
 describe("workflow timeout budget", () => {
   test("scales entity job timeout above the per-batch timeout and retry budget", () => {
-    expect(computeWorkflowJobTimeoutMs([[]])).toBeGreaterThan(
-      WORKFLOW_BATCH_AI_TIMEOUT_MS * 2,
+    for (const serviceTier of ["standard", "flex"] as const) {
+      expect(computeWorkflowJobTimeoutMs([[]], serviceTier)).toBeGreaterThan(
+        getWorkflowBatchAITimeoutMs(serviceTier) * 2,
+      );
+    }
+  });
+
+  test("keeps the workflow lock alive beyond all entity job attempts", () => {
+    const standardLockTtlSec = computeWorkflowRunLockTtlSec([[]], "standard");
+    expect(standardLockTtlSec).toBe(60 * 60);
+
+    const deferredPlan = [[], []];
+    const deferredJobTimeoutMs = computeWorkflowJobTimeoutMs(
+      deferredPlan,
+      "flex",
     );
+    const deferredLockTtlSec = computeWorkflowRunLockTtlSec(
+      deferredPlan,
+      "flex",
+    );
+
+    const retryBackoffMs =
+      WORKFLOW_ENTITY_JOB_BACKOFF_DELAY_MS *
+      Math.max(0, WORKFLOW_ENTITY_JOB_ATTEMPTS - 1);
+    expect(deferredLockTtlSec * 1000).toBeGreaterThan(
+      deferredJobTimeoutMs * WORKFLOW_ENTITY_JOB_ATTEMPTS + retryBackoffMs,
+    );
+    expect(deferredLockTtlSec).toBeGreaterThan(60 * 60);
   });
 });

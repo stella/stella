@@ -1,6 +1,9 @@
 import { Result } from "better-result";
 
-import { hasInstanceProvider } from "@/api/lib/ai-models";
+import {
+  hasInstanceProvider,
+  isDeferredServiceTierAvailableForRole,
+} from "@/api/lib/ai-models";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
@@ -20,6 +23,10 @@ const readAIAvailability = createSafeRootHandler(
       instanceProvisioned,
       orgConfigured,
       available: instanceProvisioned || orgConfigured,
+      deferredServiceTierAvailable: isDeferredServiceTierAvailableForRole(
+        "pdf",
+        orgAIConfig,
+      ),
     });
   },
 );

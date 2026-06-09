@@ -14,7 +14,10 @@ import { roles } from "@stll/permissions";
 import type { SafeDb, ScopedDb } from "@/api/db";
 import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
 import { env } from "@/api/env";
-import { getModelInfoForRole } from "@/api/lib/ai-models";
+import {
+  getModelInfoForRole,
+  resolveEffectiveServiceTierForProvider,
+} from "@/api/lib/ai-models";
 import type { ModelRole, OrgAIConfig } from "@/api/lib/ai-models";
 import { captureRequestError } from "@/api/lib/analytics";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -352,7 +355,7 @@ type ResolvedMeteringContext = {
   cost: number;
 };
 
-const resolveMeteringContext = ({
+export const resolveMeteringContext = ({
   metering,
   organizationId,
   orgAIConfig,
@@ -365,11 +368,14 @@ const resolveMeteringContext = ({
   workspaceId: SafeId<"workspace"> | null;
   userId: SafeId<"user">;
 }): ResolvedMeteringContext => {
-  const serviceTier = metering.serviceTier ?? "standard";
   const modelRole = metering.modelRole ?? "chat";
-  const isByok =
-    orgAIConfig !== null &&
-    getModelInfoForRole(modelRole, orgAIConfig).keySource === "byok";
+  const modelInfo = getModelInfoForRole(modelRole, orgAIConfig);
+  const isByok = modelInfo.keySource === "byok";
+  const serviceTier = resolveEffectiveServiceTierForProvider({
+    provider: modelInfo.provider,
+    region: modelInfo.region,
+    serviceTier: metering.serviceTier ?? "standard",
+  });
   const cost = computeUsageUnitCost({
     actionType: metering.actionType,
     serviceTier,

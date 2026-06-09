@@ -2621,6 +2621,12 @@
         "title": "KI-Extraktion starten?"
       },
       "noFieldsToProcess": "Keine Felder zum Verarbeiten",
+      "serviceTierPrompt": {
+        "description": "Dieser Arbeitsablauf stellt die KI-Extraktion für {count} Entitäten in die Warteschlange. Starten Sie jetzt mit Standard-Credits, oder verwenden Sie reduzierte Credits und warten Sie länger.",
+        "flex": "Reduzierte Credits verwenden",
+        "standard": "Jetzt starten",
+        "title": "Reduzierte Credits verwenden?"
+      },
       "someFieldsOutdatedDescription": "Aktualisieren Sie die Einfach- und Mehrfachauswahlfelder, um den Eigenschaftsoptionen zu entsprechen",
       "someFieldsOutdatedTitle": "Einige Felder sind veraltet",
       "startedSuccessfully": "Arbeitsablauf erfolgreich gestartet",

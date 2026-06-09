@@ -63,6 +63,7 @@ export const generateBBoxData = async ({
           promptCachingEnabled,
           scopeKey: justificationId,
           organizationId,
+          serviceTier: "standard",
         }),
         system: BBOX_SYSTEM_PROMPT,
         messages: [

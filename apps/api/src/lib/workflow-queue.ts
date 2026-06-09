@@ -4,7 +4,7 @@ import type { RedisClient } from "bun";
 import { sleep } from "bun";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
-import type { ScopedDb } from "@/api/db";
+import type { SafeDb, ScopedDb } from "@/api/db";
 import { jsonField } from "@/api/db/json-utils";
 import { rootDb } from "@/api/db/root";
 import {
@@ -18,6 +18,7 @@ import {
   loadOrgAIConfig,
   loadPromptCachingPreference,
 } from "@/api/lib/ai-config-loader";
+import type { AIRequestServiceTier } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -33,7 +34,7 @@ import {
   createBullMqConnection,
   createRedisClient,
 } from "@/api/lib/redis-client";
-import { createRootScopedDb } from "@/api/lib/root-scoped-db";
+import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
 import {
   brandPersistedEntityId,
   brandPersistedPropertyId,
@@ -66,9 +67,13 @@ import {
 } from "@/api/lib/workflow/orphan-recovery";
 import {
   computeWorkflowJobTimeoutMs,
+  computeWorkflowRunLockTtlSec,
+  getWorkflowBatchAITimeoutMs,
   runWorkflowBatchGenerationWithRetry,
-  WORKFLOW_BATCH_AI_TIMEOUT_MS,
+  WORKFLOW_ENTITY_JOB_ATTEMPTS,
+  WORKFLOW_ENTITY_JOB_BACKOFF_DELAY_MS,
 } from "@/api/lib/workflow/run-logic";
+import { parseStoredWorkflowServiceTier } from "@/api/lib/workflow/service-tier-state";
 import type { PartialAnswerUpdate } from "@/api/lib/workflow/streaming-answer";
 import { prepareBatch } from "@/api/lib/workflow/utils";
 
@@ -85,6 +90,7 @@ const WORKFLOW_RUN_STATE_FIELDS = [
   "plan-properties",
   "request-id",
   "scoped",
+  "service-tier",
 ] as const;
 
 const EXTRACTION_PREVIEW_EVENT_TYPE = "workflow-extraction-preview";
@@ -112,6 +118,8 @@ type EntityJobData = {
   entityId: string;
   executionPlan: ExecutionLevel[];
   requestId: string;
+  runLockTtlSec?: number;
+  serviceTier?: AIRequestServiceTier;
   /**
    * Property IDs the caller wants processed even if their current
    * content would normally cause `prepareBatch` to skip them (e.g. a
@@ -146,8 +154,11 @@ const getQueue = (): Queue<EntityJobData> => {
       // Retry once with backoff so a single transient failure (network
       // blip, AI provider 5xx) doesn't leave the cell empty. Stays low
       // enough that genuine logic errors surface quickly.
-      attempts: 2,
-      backoff: { type: "exponential", delay: 5000 },
+      attempts: WORKFLOW_ENTITY_JOB_ATTEMPTS,
+      backoff: {
+        type: "exponential",
+        delay: WORKFLOW_ENTITY_JOB_BACKOFF_DELAY_MS,
+      },
     },
   });
   return queue;
@@ -197,7 +208,7 @@ const isCurrentWorkflowRequest = async ({
 // MAX_STALLED_COUNT: a job that stalls this many times moves to
 // failed (and then retries via `attempts`).
 //
-// computeJobTimeoutMs: process-level ceiling per entity job, scaled
+// computeWorkflowJobTimeoutMs: process-level ceiling per entity job, scaled
 // with the execution plan's depth. A flat 6-minute cap would
 // deterministically abort entities with several slow dependency
 // levels even when each batch stays within its own AI timeout.
@@ -247,6 +258,7 @@ type StartWorkflowArgs = {
    * filter are dropped from every level of the plan.
    */
   propertyIds?: SafeId<"property">[];
+  serviceTier?: AIRequestServiceTier;
 };
 
 type StartWorkflowResult = {
@@ -260,8 +272,10 @@ type EnqueueEntityJobsArgs = {
   organizationId: SafeId<"organization">;
   q: Queue;
   requestId: string;
+  runLockTtlSec: number;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
+  serviceTier: AIRequestServiceTier;
   forcePropertyIds?: readonly SafeId<"property">[];
 };
 
@@ -288,6 +302,8 @@ const enqueueEntityJobs = async ({
   organizationId,
   q,
   requestId,
+  runLockTtlSec,
+  serviceTier,
   userId,
   workspaceId,
   forcePropertyIds,
@@ -311,6 +327,8 @@ const enqueueEntityJobs = async ({
           entityId,
           executionPlan,
           requestId,
+          runLockTtlSec,
+          serviceTier,
           ...(forcePropertyIds &&
             forcePropertyIds.length > 0 && {
               forcePropertyIds: [...forcePropertyIds],
@@ -367,6 +385,7 @@ export const startWorkflow = async ({
   entityIds: inputEntityIds,
   entityIdsOrder: inputOrder,
   propertyIds: inputPropertyIds,
+  serviceTier = "standard",
 }: StartWorkflowArgs): Promise<StartWorkflowResult> => {
   const redis = getRedis();
   const requestId = Bun.randomUUIDv7();
@@ -429,6 +448,20 @@ export const startWorkflow = async ({
       await clearWorkflowRunState(redis, workspaceId);
       return { status: "skipped" };
     }
+    const runLockTtlSec = computeWorkflowRunLockTtlSec(
+      executionPlan,
+      serviceTier,
+    );
+    await Promise.all([
+      redis.expire(workflowKey(workspaceId, "running"), runLockTtlSec),
+      redis.expire(workflowKey(workspaceId, "request-id"), runLockTtlSec),
+    ]);
+    await redis.set(
+      workflowKey(workspaceId, "service-tier"),
+      serviceTier,
+      "EX",
+      runLockTtlSec,
+    );
 
     const isExplicitRun =
       inputEntityIds !== undefined && inputEntityIds.length > 0;
@@ -480,7 +513,7 @@ export const startWorkflow = async ({
       workflowKey(workspaceId, "plan-properties"),
       JSON.stringify(planPropertyIds),
       "EX",
-      RUNNING_LOCK_TTL_SEC,
+      runLockTtlSec,
     );
 
     // Single-cell retries (propertyIds + entityIds) only touch a
@@ -503,7 +536,7 @@ export const startWorkflow = async ({
         workflowKey(workspaceId, "scoped"),
         "1",
         "EX",
-        RUNNING_LOCK_TTL_SEC,
+        runLockTtlSec,
       );
     }
 
@@ -528,6 +561,8 @@ export const startWorkflow = async ({
           organizationId,
           q,
           requestId,
+          runLockTtlSec,
+          serviceTier,
           userId,
           workspaceId,
           ...(inputPropertyIds &&
@@ -992,7 +1027,10 @@ export const initWorkflowWorker = () => {
       // AI timeout. A fixed 6-min ceiling would deterministically
       // abort entities with several slow levels even when each
       // individual batch stays within budget.
-      const jobTimeoutMs = computeWorkflowJobTimeoutMs(job.data.executionPlan);
+      const jobTimeoutMs = computeWorkflowJobTimeoutMs(
+        job.data.executionPlan,
+        job.data.serviceTier ?? "standard",
+      );
       const timeoutHandle = setTimeout(() => {
         controller.abort(
           new Error(
@@ -1070,6 +1108,7 @@ export const initWorkflowWorker = () => {
         branded.organizationId,
         brandPersistedUserId(data.userId),
         data.requestId,
+        data.runLockTtlSec ?? RUNNING_LOCK_TTL_SEC,
       );
     })().catch((completionError: unknown) => {
       captureError(completionError, {
@@ -1182,6 +1221,7 @@ const processEntityJob = async (data: EntityJobData, signal: AbortSignal) => {
     entityId,
     executionPlan,
     requestId,
+    serviceTier = "standard",
     forcePropertyIds,
   } = data;
   const forcedPropertyIds: ReadonlySet<string> = new Set(forcePropertyIds);
@@ -1203,6 +1243,11 @@ const processEntityJob = async (data: EntityJobData, signal: AbortSignal) => {
   }
 
   const scopedDb = createRootScopedDb({
+    organizationId: branded.organizationId,
+    userId,
+    workspaceIds: [branded.workspaceId],
+  });
+  const safeDb = createRootSafeDb({
     organizationId: branded.organizationId,
     userId,
     workspaceIds: [branded.workspaceId],
@@ -1238,8 +1283,11 @@ const processEntityJob = async (data: EntityJobData, signal: AbortSignal) => {
             batch,
             level,
             scopedDb,
+            safeDb,
             requestId,
             signal,
+            serviceTier,
+            userId,
             forcedPropertyIds,
           }),
       ),
@@ -1259,6 +1307,7 @@ const processEntityJob = async (data: EntityJobData, signal: AbortSignal) => {
     branded.organizationId,
     userId,
     requestId,
+    data.runLockTtlSec ?? RUNNING_LOCK_TTL_SEC,
   );
 };
 
@@ -1269,8 +1318,11 @@ type ProcessOneBatchArgs = {
   batch: PropertyBatch;
   level: number;
   scopedDb: ScopedDb;
+  safeDb: SafeDb;
   requestId: string;
   signal: AbortSignal;
+  serviceTier: AIRequestServiceTier;
+  userId: SafeId<"user">;
   forcedPropertyIds: ReadonlySet<string>;
 };
 
@@ -1354,8 +1406,11 @@ const processOneBatch = async ({
   batch: rawBatch,
   level,
   scopedDb,
+  safeDb,
   requestId,
   signal,
+  serviceTier,
+  userId,
   forcedPropertyIds,
 }: ProcessOneBatchArgs) => {
   signal.throwIfAborted();
@@ -1466,7 +1521,7 @@ const processOneBatch = async ({
       generate: async () =>
         await generateFn({
           abortSignal: AbortSignal.any([
-            AbortSignal.timeout(WORKFLOW_BATCH_AI_TIMEOUT_MS),
+            AbortSignal.timeout(getWorkflowBatchAITimeoutMs(serviceTier)),
             signal,
           ]),
           batch,
@@ -1476,6 +1531,15 @@ const processOneBatch = async ({
           scopedDb,
           orgAIConfig,
           promptCachingEnabled,
+          serviceTier,
+          usageMetering: {
+            actionType: "background",
+            organizationId,
+            safeDb,
+            serviceTier,
+            userId,
+            workspaceId,
+          },
           onPartialAnswer: previewPublisher.publish,
         }),
       onRetryError: (error, attempt) => {
@@ -1647,6 +1711,7 @@ const onEntityCompleted = async (
   organizationId: SafeId<"organization">,
   userId: SafeId<"user">,
   requestId: string,
+  runLockTtlSec: number,
 ) => {
   const isCurrentRequest = await isCurrentWorkflowRequest({
     requestId,
@@ -1672,16 +1737,14 @@ const onEntityCompleted = async (
   // of letting a slow batch fall back to the "freshen everything"
   // path or admit a parallel run.
   await Promise.all([
-    redis.expire(workflowKey(workspaceId, "running"), RUNNING_LOCK_TTL_SEC),
-    redis.expire(
-      workflowKey(workspaceId, "plan-properties"),
-      RUNNING_LOCK_TTL_SEC,
-    ),
-    redis.expire(workflowKey(workspaceId, "request-id"), RUNNING_LOCK_TTL_SEC),
+    redis.expire(workflowKey(workspaceId, "running"), runLockTtlSec),
+    redis.expire(workflowKey(workspaceId, "plan-properties"), runLockTtlSec),
+    redis.expire(workflowKey(workspaceId, "request-id"), runLockTtlSec),
+    redis.expire(workflowKey(workspaceId, "service-tier"), runLockTtlSec),
     // Refresh the scoped flag's TTL for the same reason: if it
     // expires mid-run, `finishWorkflow` would mistake a long-running
     // scoped retry for a full sweep and freshen the property globally.
-    redis.expire(workflowKey(workspaceId, "scoped"), RUNNING_LOCK_TTL_SEC),
+    redis.expire(workflowKey(workspaceId, "scoped"), runLockTtlSec),
   ]);
 };
 
@@ -1713,6 +1776,9 @@ const finishWorkflow = async (
   // sweep.
   const wasScopedRun =
     (await redis.get(workflowKey(workspaceId, "scoped"))) === "1";
+  const serviceTier = parseStoredWorkflowServiceTier(
+    await redis.get(workflowKey(workspaceId, "service-tier")),
+  );
 
   if (!wasScopedRun) {
     // Freshen only the properties that were part of this workflow's
@@ -1797,6 +1863,7 @@ const finishWorkflow = async (
         organizationId,
         userId,
         scopedDb,
+        serviceTier,
       }).catch((error: unknown) => captureError(error, { workspaceId }));
     }
   } catch (error: unknown) {

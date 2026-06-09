@@ -2621,6 +2621,12 @@
         "title": "Start AI extraction?"
       },
       "noFieldsToProcess": "No fields to process",
+      "serviceTierPrompt": {
+        "description": "This workflow will queue AI extraction for {count} entities. Start now with standard credits, or use reduced credits and wait longer.",
+        "flex": "Use reduced credits",
+        "standard": "Start now",
+        "title": "Use reduced credits?"
+      },
       "someFieldsOutdatedDescription": "Please update Single and Multi Select fields to match their property options",
       "someFieldsOutdatedTitle": "Some fields are outdated",
       "startedSuccessfully": "Workflow started successfully",

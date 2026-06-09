@@ -25,6 +25,7 @@ import {
 import { useWorkspaceSSE } from "@/lib/sse";
 import { useWorkspaceChatMentionRegistration } from "@/routes/_protected.chat/-hooks/use-workspace-chat-mention-registration";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import { WorkflowServiceTierPromptProvider } from "@/routes/_protected.workspaces/$workspaceId/-components/workflow-service-tier-prompt";
 import { WorkflowStartConfirmationPromptProvider } from "@/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt";
 import { WorkspaceDropZone } from "@/routes/_protected.workspaces/$workspaceId/-components/workspace-drop-zone";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
@@ -283,7 +284,9 @@ function RouteComponent() {
 
   return (
     <WorkflowStartConfirmationPromptProvider>
-      {content}
+      <WorkflowServiceTierPromptProvider>
+        {content}
+      </WorkflowServiceTierPromptProvider>
     </WorkflowStartConfirmationPromptProvider>
   );
 }

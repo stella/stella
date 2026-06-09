@@ -186,6 +186,8 @@ export const generateBatch = async ({
   scopedDb,
   orgAIConfig,
   promptCachingEnabled,
+  serviceTier,
+  usageMetering,
   onPartialAnswer,
 }: GenerateBatchProps): Promise<GenerateBatchResult> =>
   await Result.gen(async function* () {
@@ -238,6 +240,8 @@ export const generateBatch = async ({
         organizationId,
         orgAIConfig: orgAIConfig ?? null,
         promptCachingEnabled,
+        serviceTier,
+        usageMetering,
         onPartialAnswer,
         workspaceId,
       }),
