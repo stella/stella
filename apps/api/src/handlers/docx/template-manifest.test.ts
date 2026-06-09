@@ -914,6 +914,73 @@ describe("round-trip", () => {
     expect(manifestOnly?.optionsFrom).toBe("parties");
   });
 
+  test("lookup round-trips; an unsupported registry is dropped on read", async () => {
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "buyer_krs",
+          lookup: {
+            registry: "krs",
+            aiFormat: "[name], with its seat in [seat], KRS [number]",
+          },
+        },
+        { path: "seller_krs", lookup: { registry: "krs" } },
+      ],
+      conditions: [],
+    };
+
+    const docx = await createMinimalDocx();
+    const withManifest = await writeManifest(docx, manifest);
+    const readBack = await readManifest(withManifest);
+    expect(readBack?.fields.at(0)?.lookup).toEqual({
+      registry: "krs",
+      aiFormat: "[name], with its seat in [seat], KRS [number]",
+    });
+    expect(readBack?.fields.at(1)?.lookup).toEqual({ registry: "krs" });
+
+    // Hand-edited XML with a registry outside the supported set must not
+    // leak past the parser.
+    const zip = await JSZip.loadAsync(withManifest);
+    const itemEntry = zip.file("customXml/item1.xml");
+    const itemXml = await itemEntry?.async("string");
+    zip.file(
+      "customXml/item1.xml",
+      (itemXml ?? "").replaceAll('registry="krs"', 'registry="unknown"'),
+    );
+    const tampered = Buffer.from(
+      await zip.generateAsync({ type: "nodebuffer" }),
+    );
+    const tamperedBack = await readManifest(tampered);
+    expect(tamperedBack?.fields.at(0)?.lookup).toBeUndefined();
+    expect(tamperedBack?.fields.at(1)?.lookup).toBeUndefined();
+  });
+
+  test("lookup survives mergeManifestWithDiscovery", async () => {
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        { path: "buyer_krs", lookup: { registry: "krs", aiFormat: "fmt" } },
+        { path: "manifest_only", lookup: { registry: "krs" } },
+      ],
+      conditions: [],
+    };
+    const discovered: DiscoveredTemplate = {
+      placeholders: [{ name: "buyer_krs", count: 1 }],
+      fields: [{ path: "buyer_krs", kind: "string", count: 1 }],
+      structureErrors: [],
+    };
+
+    const resolved = mergeManifestWithDiscovery(manifest, discovered);
+    const discoveredField = resolved.find((f) => f.path === "buyer_krs");
+    const manifestOnly = resolved.find((f) => f.path === "manifest_only");
+    expect(discoveredField?.lookup).toEqual({
+      registry: "krs",
+      aiFormat: "fmt",
+    });
+    expect(manifestOnly?.lookup).toEqual({ registry: "krs" });
+  });
+
   test("composite parts survive mergeManifestWithDiscovery", async () => {
     const manifest: TemplateManifest = {
       version: 1,

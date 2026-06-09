@@ -2027,6 +2027,11 @@ type Messages = {
     "fieldInputType": "Input type";
     "fieldLabel": "Label";
     "fieldLabelPlaceholder": "e.g. Full Name";
+    "fieldLookupAiFormat": "AI format instruction";
+    "fieldLookupAiFormatHint": "AI writes the company details following this instruction; leave it empty for a plain name and seat.";
+    "fieldLookupAiFormatPlaceholder": "[company name], with its registered seat in [seat], KRS no. [number]";
+    "fieldLookupEnable": "Company lookup (KRS)";
+    "fieldLookupHint": "At fill time, the entered KRS number is looked up in the register and replaced with the company's details.";
     "fieldMultipleParts": "Multiple parts";
     "fieldOptions": "Options";
     "fieldOptionsFrom": "Options from field";
@@ -2048,6 +2053,7 @@ type Messages = {
     "invalidFileType": "Please upload a .docx file";
     "lastUsedAgo": "Last used {time}";
     "loadFailed": "Failed to load templates";
+    "lookupFieldHint": "Enter a KRS number; the company details are filled from the register.";
     "newTemplate": "New template";
     "noTemplates": "No templates yet";
     "pdfConversionFailed": "Failed to convert to PDF";
@@ -2121,6 +2127,7 @@ type Messages = {
     "usageGuidance": "Usage guidance";
     "usedTimes": "Used {count, plural, one {# time} other {# times}}";
     "validationErrors": "Please fix the highlighted errors";
+    "validationKrsFormat": "Enter a 10-digit KRS number";
     "validationMaxLength": "Maximum {max} characters";
     "validationMinLength": "Minimum {min} characters";
     "validationNumberMax": "Maximum value is {max}";
