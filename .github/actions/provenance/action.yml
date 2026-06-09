@@ -24,6 +24,11 @@ runs:
         subject-digest: ${{ inputs.subject-digest }}
         push-to-registry: true
 
+    - name: Wait before retry
+      if: steps.attest.outcome == 'failure'
+      shell: bash
+      run: sleep 10
+
     - name: Attest (retry)
       if: steps.attest.outcome == 'failure'
       uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
