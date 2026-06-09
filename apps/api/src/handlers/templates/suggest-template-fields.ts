@@ -20,9 +20,12 @@ import type { SafeId } from "@/api/lib/branded-types";
 
 const SUGGEST_TIMEOUT_MS = 45_000;
 
-export const fieldSuggestionsSchema = v.object({
+// strictObject, not object: OpenAI's strict structured-output mode rejects any
+// schema object without `additionalProperties: false`, which only strictObject
+// emits ("Invalid schema for response_format" — fails on gpt-* fast models).
+export const fieldSuggestionsSchema = v.strictObject({
   suggestions: v.array(
-    v.object({
+    v.strictObject({
       literalText: v.string(),
       fieldPath: v.string(),
       inputType: v.optional(
