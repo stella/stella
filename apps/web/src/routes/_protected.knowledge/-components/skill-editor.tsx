@@ -959,7 +959,9 @@ function FolderCreateActions({
 
   const submitNewFolder = () => {
     const folder = subfolder.trim();
-    const file = subfolderFilename.trim() || "README.md";
+    // Lowercase default: resource paths only allow lowercase segments, so an
+    // uppercase README.md would fail validation.
+    const file = subfolderFilename.trim() || "readme.md";
     if (!folder) {
       return;
     }
