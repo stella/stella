@@ -573,6 +573,9 @@
     "packages/template-conditions": {
       "name": "@stll/template-conditions",
       "version": "0.0.0",
+      "dependencies": {
+        "better-result": "catalog:",
+      },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
