@@ -13,6 +13,13 @@ export const resolvePath = (
   path: string,
   data: Record<string, unknown>,
 ): unknown => {
+  // A value may be supplied under the exact dotted key (a flat map, e.g. the
+  // fill_template tool's `{ "company.name": ... }`) or nested under each segment
+  // (the fill form, which builds `{ company: { name } }`). Prefer the exact key,
+  // then walk the nesting, so both callers resolve.
+  if (Object.hasOwn(data, path)) {
+    return data[path];
+  }
   const parts = path.split(".");
   let current: unknown = data;
   for (const part of parts) {
