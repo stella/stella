@@ -1492,6 +1492,7 @@
         "title": "How should your skill work?"
       },
       "commandConflict": "Umiejętność z tym poleceniem / już istnieje",
+      "commandHelp": "Type it in chat to run this skill.",
       "commandLabel": "Polecenie ukośnikowe (opcjonalne)",
       "commandPlaceholder": "np. podsumuj",
       "createTitle": "Nowa umiejętność",

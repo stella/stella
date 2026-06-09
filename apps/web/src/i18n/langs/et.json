@@ -1492,6 +1492,7 @@
         "title": "How should your skill work?"
       },
       "commandConflict": "Selle / käsuga oskus on juba olemas",
+      "commandHelp": "Type it in chat to run this skill.",
       "commandLabel": "Kaldkriipsu käsk (valikuline)",
       "commandPlaceholder": "nt kokku võtta",
       "createTitle": "Uus oskus",

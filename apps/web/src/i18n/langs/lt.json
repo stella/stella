@@ -1492,6 +1492,7 @@
         "title": "How should your skill work?"
       },
       "commandConflict": "Įgūdis su šia / komanda jau yra",
+      "commandHelp": "Type it in chat to run this skill.",
       "commandLabel": "Įstrižo brūkšnio komanda (neprivaloma)",
       "commandPlaceholder": "pvz. apibendrinti",
       "createTitle": "Naujas įgūdis",

@@ -1495,7 +1495,8 @@ type Messages = {
         "title": "How should your skill work?";
       };
       "commandConflict": "A skill with this / command already exists";
-      "commandLabel": "Slash command (optional)";
+      "commandHelp": "Type it in chat to run this skill.";
+      "commandLabel": "Chat command (optional)";
       "commandPlaceholder": "e.g. summarize";
       "createTitle": "New skill";
       "defaultBadge": "Default";

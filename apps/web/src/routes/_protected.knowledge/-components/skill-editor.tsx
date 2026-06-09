@@ -48,6 +48,14 @@ const RESOURCE_PATH_PATTERN =
   /^[a-z0-9][a-z0-9._-]*(\/[a-z0-9][a-z0-9._-]*)*$/u;
 const FILENAME_PATTERN = /^[a-z0-9][a-z0-9._-]*$/u;
 
+// A skill is invoked in chat via /its-command; suggest the skill's name as that
+// command by default (lowercase, hyphenated) so the field reads as /skill-name.
+const slugifyCommand = (name: string): string =>
+  name
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/gu, "-")
+    .replaceAll(/^-+|-+$/gu, "");
+
 const UPLOAD_ACCEPT =
   ".md,.txt,.docx,.pdf,text/markdown,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const UPLOAD_MAX_BYTES_TEXT = 100_000;
@@ -574,12 +582,19 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                   id="edit-skill-command"
                   onBlur={commitCommand}
                   onChange={(event) => setCommand(event.target.value)}
-                  placeholder={t("knowledge.skills.commandPlaceholder")}
+                  placeholder={
+                    slugifyCommand(skillName) ||
+                    t("knowledge.skills.commandPlaceholder")
+                  }
                   value={command}
                 />
               </div>
-              {commandError && (
+              {commandError ? (
                 <p className="text-destructive text-xs">{commandError}</p>
+              ) : (
+                <p className="text-muted-foreground text-xs">
+                  {t("knowledge.skills.commandHelp")}
+                </p>
               )}
             </div>
             <label

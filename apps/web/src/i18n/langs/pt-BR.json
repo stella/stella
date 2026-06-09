@@ -1492,6 +1492,7 @@
         "title": "How should your skill work?"
       },
       "commandConflict": "Já existe uma habilidade com este comando /",
+      "commandHelp": "Type it in chat to run this skill.",
       "commandLabel": "Comando com barra (opcional)",
       "commandPlaceholder": "p. ex. resumir",
       "createTitle": "Nova habilidade",

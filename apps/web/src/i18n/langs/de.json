@@ -1492,6 +1492,7 @@
         "title": "How should your skill work?"
       },
       "commandConflict": "Ein Skill mit diesem / Befehl existiert bereits",
+      "commandHelp": "Type it in chat to run this skill.",
       "commandLabel": "Schrägstrich-Befehl (optional)",
       "commandPlaceholder": "z. B. zusammenfassen",
       "createTitle": "Neuer Skill",

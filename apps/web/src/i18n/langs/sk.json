@@ -1492,6 +1492,7 @@
         "title": "How should your skill work?"
       },
       "commandConflict": "Zručnosť s týmto / príkazom už existuje",
+      "commandHelp": "Type it in chat to run this skill.",
       "commandLabel": "Lomkový príkaz (voliteľné)",
       "commandPlaceholder": "napr. zhrnúť",
       "createTitle": "Nová zručnosť",

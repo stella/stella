@@ -1492,6 +1492,7 @@
         "title": "How should your skill work?"
       },
       "commandConflict": "Prasme ar šo / komandu jau pastāv",
+      "commandHelp": "Type it in chat to run this skill.",
       "commandLabel": "Slīpsvītras komanda (nav obligāta)",
       "commandPlaceholder": "piem. apkopot",
       "createTitle": "Jauna prasme",

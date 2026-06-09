@@ -1492,7 +1492,8 @@
         "title": "Jak má vaše dovednost fungovat?"
       },
       "commandConflict": "Dovednost s tímto / příkazem už existuje",
-      "commandLabel": "Lomený příkaz (volitelné)",
+      "commandHelp": "Napsáním v chatu spustíte tuto dovednost.",
+      "commandLabel": "Příkaz v chatu (volitelné)",
       "commandPlaceholder": "např. shrnout",
       "createTitle": "Nová dovednost",
       "defaultBadge": "Výchozí",

@@ -1492,6 +1492,7 @@
         "title": "How should your skill work?"
       },
       "commandConflict": "Une compétence avec cette commande / existe déjà",
+      "commandHelp": "Type it in chat to run this skill.",
       "commandLabel": "Commande slash (facultatif)",
       "commandPlaceholder": "p. ex. résumer",
       "createTitle": "Nouvelle compétence",
