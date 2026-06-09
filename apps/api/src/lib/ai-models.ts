@@ -47,6 +47,7 @@ import { panic, Result } from "better-result";
 import {
   AI_PROVIDERS,
   ANTHROPIC_ADAPTIVE_THINKING_MODELS,
+  ANTHROPIC_FIXED_SAMPLING_MODELS,
   BYOK_MODEL_OPTIONS,
   DEFAULT_MODELS,
 } from "@stll/ai-catalog";
@@ -1290,6 +1291,11 @@ const supportsAnthropicAdaptiveThinking = (modelId: string): boolean =>
     modelId.includes(supportedModelId),
   );
 
+const rejectsAnthropicSamplingParams = (modelId: string): boolean =>
+  ANTHROPIC_FIXED_SAMPLING_MODELS.some((fixedModelId) =>
+    modelId.includes(fixedModelId),
+  );
+
 const anthropicThinkingForModel = (modelId: string): JSONObject =>
   supportsAnthropicAdaptiveThinking(modelId)
     ? { type: "adaptive" }
@@ -1377,6 +1383,24 @@ export const defaultsForRole = ({
 }: DefaultsForRoleParams): Settings =>
   DEFAULTS_BUILDERS[provider]({ role, orgId, modelId });
 
+// Fable 5 and Opus 4.7+ reject sampling overrides with a 400 on every
+// request shape; they always run with provider-side defaults. Stripping
+// in middleware (after the role defaults merge) covers both the role
+// defaults and explicit call-site values, so no caller can reintroduce
+// a sampling parameter for these models.
+const fixedSamplingMiddleware: SingleMiddleware = {
+  specificationVersion: "v3",
+  transformParams: async ({ params }) => {
+    const {
+      temperature: _temperature,
+      topP: _topP,
+      topK: _topK,
+      ...rest
+    } = params;
+    return await Promise.resolve(rest);
+  },
+};
+
 const withInstrumentation = (
   model: WrappableLanguageModel,
   ctx: {
@@ -1399,11 +1423,19 @@ const withInstrumentation = (
         modelId: ctx.modelId,
       }),
     }),
+  ];
+  if (
+    ctx.provider === "anthropic" &&
+    rejectsAnthropicSamplingParams(ctx.modelId)
+  ) {
+    middlewares.push(fixedSamplingMiddleware);
+  }
+  middlewares.push(
     cachingMiddleware(ctx.provider, ctx.decision),
     createServiceTierMiddleware(ctx.serviceTierTarget, ctx.serviceTier, {
       allowFallbackToStandard: ctx.allowServiceTierFallback,
     }),
-  ];
+  );
   if (isAIDevToolsEnabled()) {
     middlewares.push(devToolsMiddleware());
   }

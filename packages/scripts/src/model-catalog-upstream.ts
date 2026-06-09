@@ -27,7 +27,18 @@
  *
  * Usage: bun packages/scripts/src/model-catalog-upstream.ts
  */
-import { BYOK_MODEL_OPTIONS, DEFAULT_MODELS } from "@stll/ai-catalog";
+import {
+  BYOK_MODEL_OPTIONS,
+  DEFAULT_MODELS,
+  MODEL_RATES,
+} from "@stll/ai-catalog";
+
+import { parseUpstreamCost, validateRates } from "./model-catalog-rates";
+import type {
+  CatalogEntry,
+  RateFailure,
+  UpstreamCost,
+} from "./model-catalog-rates";
 
 const FETCH_TIMEOUT_MS = 15_000;
 
@@ -79,8 +90,6 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
 
 const isUnknownArray = (value: unknown): value is unknown[] =>
   Array.isArray(value);
-
-type CatalogEntry = { provider: string; modelId: string };
 
 const acknowledgementKey = ({
   provider,
@@ -164,6 +173,8 @@ type Upstream = {
   firstPartyPresent: Set<string>;
   /** `${provider}:${nativeId}` marked `status: "deprecated"` upstream. */
   firstPartyDeprecated: Set<string>;
+  /** `${provider}:${nativeId}` → upstream cost metadata, when published. */
+  firstPartyCost: Map<string, UpstreamCost>;
   /** OpenRouter listing was fetched and parsed. */
   openrouterReachable: boolean;
   /** models.dev listing was fetched and parsed. */
@@ -176,6 +187,7 @@ const loadUpstream = async (): Promise<Upstream> => {
   const canonAll = new Set<string>();
   const firstPartyPresent = new Set<string>();
   const firstPartyDeprecated = new Set<string>();
+  const firstPartyCost = new Map<string, UpstreamCost>();
   let openrouterReachable = false;
   let modelsDevReachable = false;
 
@@ -219,6 +231,10 @@ const loadUpstream = async (): Promise<Upstream> => {
         if (isObject(modelVal) && modelVal["status"] === "deprecated") {
           firstPartyDeprecated.add(key);
         }
+        const cost = parseUpstreamCost(modelVal);
+        if (cost !== null) {
+          firstPartyCost.set(key, cost);
+        }
       }
     }
     console.log(`  models.dev: ${count} models`);
@@ -232,6 +248,7 @@ const loadUpstream = async (): Promise<Upstream> => {
     canonAll,
     firstPartyPresent,
     firstPartyDeprecated,
+    firstPartyCost,
     openrouterReachable,
     modelsDevReachable,
   };
@@ -325,6 +342,37 @@ const main = async (): Promise<void> => {
     failures.push({ entry, verdict });
   }
 
+  const rateFailures: RateFailure[] = [];
+  if (upstream.modelsDevReachable) {
+    const rateCheck = validateRates({
+      entries,
+      firstPartyProviders: MODELS_DEV_PROVIDER,
+      costs: upstream.firstPartyCost,
+      rates: MODEL_RATES,
+    });
+    for (const failure of rateCheck.failures) {
+      // ACKNOWLEDGED is intentionally empty by default — see the note
+      // on the existence loop above.
+      // eslint-disable-next-line sonarjs/no-empty-collection
+      if (ACKNOWLEDGED.has(acknowledgementKey(failure.entry))) {
+        console.log(
+          `  · acknowledged ${failure.label.toLowerCase()} ${failure.entry.provider} / ${failure.entry.modelId}`,
+        );
+        continue;
+      }
+      rateFailures.push(failure);
+    }
+    for (const entry of rateCheck.skipped) {
+      console.warn(
+        `  ⚠ rate consistency unverifiable (no upstream cost metadata): ${entry.provider} / ${entry.modelId}`,
+      );
+    }
+  } else {
+    console.warn(
+      "  ⚠ rate-table validation skipped: models.dev listing unreachable",
+    );
+  }
+
   console.log(`\nChecked ${entries.length} offered model IDs.`);
 
   if (unverified.length > 0) {
@@ -346,8 +394,10 @@ const main = async (): Promise<void> => {
     process.exit(1);
   }
 
-  if (failures.length > 0) {
-    console.error(`\n✗ ${failures.length} offered model ID(s) need attention:`);
+  if (failures.length > 0 || rateFailures.length > 0) {
+    console.error(
+      `\n✗ ${failures.length + rateFailures.length} offered model ID(s) need attention:`,
+    );
     for (const { entry, verdict } of failures) {
       const label = verdict.kind === "deprecated" ? "DEPRECATED" : "MISSING";
       const detail = "detail" in verdict ? ` — ${verdict.detail}` : "";
@@ -355,10 +405,16 @@ const main = async (): Promise<void> => {
         `  ✗ [${label}] ${entry.provider} / ${entry.modelId}${detail}`,
       );
     }
+    for (const { entry, label, detail } of rateFailures) {
+      console.error(
+        `  ✗ [${label}] ${entry.provider} / ${entry.modelId} — ${detail}`,
+      );
+    }
     console.error(
-      "\nResolve by updating @stll/ai-catalog (migrate off the model), or,\n" +
-        "if the model is real and we deliberately keep serving it, add its\n" +
-        "provider-scoped acknowledgementKey() form to ACKNOWLEDGED with a dated note.",
+      "\nResolve by updating @stll/ai-catalog (migrate off the model, or\n" +
+        "refresh its MODEL_RATES entry), or, if the divergence is real and\n" +
+        "deliberate, add the provider-scoped acknowledgementKey() form to\n" +
+        "ACKNOWLEDGED with a dated note.",
     );
     process.exit(1);
   }
