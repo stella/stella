@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
@@ -11,7 +11,6 @@ import {
   PlusIcon,
   PowerIcon,
   Trash2Icon,
-  UploadIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -26,6 +25,7 @@ import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { FileDropZone } from "@/components/file-drop-zone";
 import { FileTree } from "@/components/file-tree/file-tree";
 import type { FileTreeNode } from "@/components/file-tree/file-tree";
 import { FolderExpandToggle } from "@/components/file-tree/folder-expand-toggle";
@@ -54,10 +54,9 @@ const slugifyCommand = (name: string): string =>
   name
     .toLowerCase()
     .replaceAll(/[^a-z0-9]+/gu, "-")
-    .replaceAll(/^-+|-+$/gu, "");
+    .replace(/^-/u, "")
+    .replace(/-$/u, "");
 
-const UPLOAD_ACCEPT =
-  ".md,.txt,.docx,.pdf,text/markdown,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const UPLOAD_MAX_BYTES_TEXT = 100_000;
 const UPLOAD_MAX_BYTES_BINARY = 5 * 1024 * 1024;
 const DOCX_MIME =
@@ -135,8 +134,6 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       return next;
     });
   };
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-
   useEffect(() => {
     if (!detail.data) {
       return;
@@ -144,7 +141,9 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     setName(detail.data.name);
     setDescription(detail.data.description);
     setEnabled(detail.data.enabled);
-    setCommand(detail.data.command ?? "");
+    // Default the command to the skill's name (slugified) so it's written under
+    // the / by default; the user can edit or clear it. Persisted on blur.
+    setCommand(detail.data.command ?? slugifyCommand(detail.data.name));
     setAutoInvokeHint(detail.data.autoInvokeHint ?? "");
   }, [detail.data]);
 
@@ -456,19 +455,6 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     createResource.mutate({ path, content });
   };
 
-  const onFilePickerChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      void handleUpload(file);
-    }
-    // Reset so picking the same file again still triggers onChange.
-    event.target.value = "";
-  };
-
-  const onTriggerUpload = () => {
-    fileInputRef.current?.click();
-  };
-
   const onCreateFile = (path: string, content: string) => {
     if (!RESOURCE_PATH_PATTERN.test(path)) {
       stellaToast.add({ title: tSkills("invalidPath"), type: "error" });
@@ -511,7 +497,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
           <div className="flex min-w-0 flex-1 flex-col gap-2">
             <input
               aria-label={tSkills("formName")}
-              className="text-foreground placeholder:text-muted-foreground/50 focus-visible:ring-ring/30 -ms-1.5 w-full max-w-3xl rounded-md bg-transparent px-1.5 py-0.5 text-lg font-semibold outline-none focus-visible:ring-2"
+              className="text-foreground placeholder:text-foreground-placeholder focus-visible:ring-ring/30 -ms-1.5 w-full max-w-3xl rounded-md bg-transparent px-1.5 py-0.5 text-lg font-semibold outline-none focus-visible:ring-2"
               onBlur={commitName}
               onChange={(event) => setName(event.target.value)}
               placeholder={tSkills("formName")}
@@ -519,7 +505,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
             />
             <textarea
               aria-label={tSkills("formDescription")}
-              className="text-muted-foreground placeholder:text-muted-foreground/50 focus-visible:ring-ring/30 -ms-1.5 field-sizing-content w-full max-w-3xl resize-none rounded-md bg-transparent px-1.5 py-0.5 text-sm leading-relaxed outline-none focus-visible:ring-2"
+              className="text-muted-foreground placeholder:text-foreground-placeholder focus-visible:ring-ring/30 -ms-1.5 field-sizing-content w-full max-w-3xl resize-none rounded-md bg-transparent px-1.5 py-0.5 text-sm leading-relaxed outline-none focus-visible:ring-2"
               onBlur={commitDescription}
               onChange={(event) => setDescription(event.target.value)}
               placeholder={tSkills("formDescription")}
@@ -582,10 +568,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                   id="edit-skill-command"
                   onBlur={commitCommand}
                   onChange={(event) => setCommand(event.target.value)}
-                  placeholder={
-                    slugifyCommand(skillName) ||
-                    t("knowledge.skills.commandPlaceholder")
-                  }
+                  placeholder={t("knowledge.skills.commandPlaceholder")}
                   value={command}
                 />
               </div>
@@ -617,7 +600,15 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       </div>
       {/* Files — the skill's bundle, the main surface. Click a file to edit it
           in the inspector. */}
-      <div className="flex min-h-0 flex-1 flex-col p-3">
+      <FileDropZone
+        className="p-3"
+        label={t("workspaces.dropToUploadFiles")}
+        onDrop={(files) => {
+          for (const file of files) {
+            void handleUpload(file);
+          }
+        }}
+      >
         <div className="mb-2 flex items-center gap-1 px-1">
           <p className="text-muted-foreground me-auto text-xs font-semibold tracking-wider uppercase">
             {tSkills("filesHeading")}
@@ -629,22 +620,6 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
               size="icon-sm"
             />
           )}
-          <Button
-            aria-label={tSkills("uploadFile")}
-            disabled={createResource.isPending || uploadResource.isPending}
-            onClick={onTriggerUpload}
-            size="icon-sm"
-            variant="ghost"
-          >
-            <UploadIcon className="size-4" />
-          </Button>
-          <input
-            accept={UPLOAD_ACCEPT}
-            className="hidden"
-            onChange={onFilePickerChange}
-            ref={fileInputRef}
-            type="file"
-          />
         </div>
         {detail.isLoading && (
           <p className="text-muted-foreground px-1 text-xs">
@@ -698,7 +673,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
             />
           </div>
         )}
-      </div>
+      </FileDropZone>
     </div>
   );
 }

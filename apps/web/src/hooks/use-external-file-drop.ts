@@ -6,11 +6,11 @@ import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/components/toast";
 
-import { ClientOperationError } from "@/lib/errors";
 import {
   collectDroppedFileTree,
   type DroppedFileTree,
-} from "@/routes/_protected.workspaces/$workspaceId/-hooks/external-file-drop.logic";
+} from "@/hooks/external-file-drop.logic";
+import { ClientOperationError } from "@/lib/errors";
 
 type ExternalFileDropOptions = {
   onDrop: (files: File[]) => void;

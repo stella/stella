@@ -1,9 +1,9 @@
 import type React from "react";
 import { useState } from "react";
 
+import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
 import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
-import { useExternalFileDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-external-file-drop";
 import { useUploadVersion } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-upload-version";
 import { getFirstFile } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 

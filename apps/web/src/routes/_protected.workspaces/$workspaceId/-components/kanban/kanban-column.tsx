@@ -54,6 +54,7 @@ import {
 } from "@stll/ui/components/popover";
 import { cn } from "@stll/ui/lib/utils";
 
+import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
 import type {
   EntityKind,
   WorkspaceEntity,
@@ -65,7 +66,6 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import { KanbanCard } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card";
-import { useExternalFileDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-external-file-drop";
 
 const KANBAN_CARD_ESTIMATE_PX = 128;
 const KANBAN_CARD_OVERSCAN = 8;
