@@ -335,7 +335,7 @@ export const TemplateStudio = ({
             variant="outline"
           >
             <BracesIcon />
-            Make field
+            {t("templates.studio.makeField")}
           </Button>
           <Button onClick={onTestFill} size="sm" variant="outline">
             <PlayIcon />
@@ -402,13 +402,17 @@ const Inspector = ({
   onConditionsChange,
   onComputedChange,
 }: InspectorProps) => {
+  const t = useTranslations();
   if (selected && selected.kind === "placeholder") {
     const field =
       fields.find((f) => f.path === selected.expr) ??
       defaultField(selected.expr);
     return (
       <ScrollArea className="min-h-0 flex-1">
-        <ScopeHeader title="Field" subtitle={field.path} />
+        <ScopeHeader
+          title={t("templates.studio.scopeField")}
+          subtitle={field.path}
+        />
         <FieldConfigEditor
           field={field}
           onUpdate={(patch) => onFieldUpdate(field.path, patch)}
@@ -424,17 +428,19 @@ const Inspector = ({
   if (selected && (selected.kind === "if" || selected.kind === "elseif")) {
     return (
       <ScrollArea className="min-h-0 flex-1">
-        <ScopeHeader title="Condition" subtitle={selected.kind} />
+        <ScopeHeader
+          title={t("templates.studio.scopeCondition")}
+          subtitle={selected.kind}
+        />
         <div className="px-4 py-4">
           <p className="text-muted-foreground text-xs leading-relaxed">
-            This block shows only when:
+            {t("templates.studio.conditionBlockHelp")}
           </p>
           <code className="bg-muted mt-2 block rounded px-3 py-2 text-xs">
             {selected.expr || "—"}
           </code>
           <p className="text-muted-foreground mt-3 text-xs leading-relaxed">
-            Named conditions are managed in Template settings (click empty space
-            in the document).
+            {t("templates.studio.namedConditionsHelp")}
           </p>
         </div>
       </ScrollArea>
@@ -444,10 +450,12 @@ const Inspector = ({
   if (selected && selected.kind === "clause") {
     return (
       <ScrollArea className="min-h-0 flex-1">
-        <ScopeHeader title="Clause slot" subtitle={selected.expr} />
+        <ScopeHeader
+          title={t("templates.studio.scopeClause")}
+          subtitle={selected.expr}
+        />
         <div className="text-muted-foreground px-4 py-4 text-xs leading-relaxed">
-          A clause from the library is inserted here at fill time. Manage linked
-          clauses in the Clauses tab.
+          {t("templates.studio.clauseSlotHelp")}
         </div>
       </ScrollArea>
     );
@@ -456,26 +464,26 @@ const Inspector = ({
   // Default: whole-template settings.
   return (
     <ScrollArea className="min-h-0 flex-1">
-      <ScopeHeader title="Template" />
+      <ScopeHeader title={t("templates.studio.scopeTemplate")} />
       <NameExprList
-        addLabel="Add condition"
-        emptyLabel="No conditions yet."
-        heading="Conditions"
+        addLabel={t("templates.addCondition")}
+        emptyLabel={t("templates.studio.noConditions")}
+        heading={t("templates.conditionsTitle")}
         items={conditions}
         onChange={onConditionsChange}
       />
       <Separator />
       <NameExprList
-        addLabel="Add computed field"
-        emptyLabel="No computed fields yet."
-        heading="Computed"
+        addLabel={t("templates.studio.addComputedField")}
+        emptyLabel={t("templates.studio.noComputed")}
+        heading={t("templates.studio.computed")}
         items={computed}
         onChange={onComputedChange}
       />
       <Separator />
       <div className="px-4 py-4">
         <h3 className="text-muted-foreground mb-2 text-xs font-medium">
-          Fields ({fields.length})
+          {t("templates.fieldCount", { count: fields.length })}
         </h3>
         <ul className="flex flex-col gap-1">
           {fields.map((f) => (
@@ -517,6 +525,7 @@ const AiDraftControl = ({
   aiPrompt: string | undefined;
   onChange: (value: string | undefined) => void;
 }) => {
+  const t = useTranslations();
   const enabled = aiPrompt !== undefined;
   return (
     <div className="flex flex-col gap-2 border-t px-4 py-4">
@@ -527,13 +536,13 @@ const AiDraftControl = ({
         />
         <Label className="flex items-center gap-1.5 text-sm">
           <WandSparklesIcon className="size-3.5" />
-          AI-drafted
+          {t("templates.studio.aiDrafted")}
         </Label>
       </div>
       {enabled ? (
         <Textarea
           onChange={(e) => onChange(e.target.value)}
-          placeholder="Describe what AI should draft for this field, e.g. the scope of this power of attorney."
+          placeholder={t("templates.studio.aiPromptPlaceholder")}
           rows={3}
           value={aiPrompt}
         />
@@ -555,6 +564,7 @@ const NameExprList = ({
   addLabel: string;
   emptyLabel: string;
 }) => {
+  const t = useTranslations();
   const update = (index: number, patch: Partial<NameExpr>) =>
     onChange(
       items.map((item, i) => (i === index ? { ...item, ...patch } : item)),
@@ -572,11 +582,11 @@ const NameExprList = ({
             <Input
               className="h-8"
               onChange={(e) => update(index, { name: e.target.value })}
-              placeholder="name"
+              placeholder={t("templates.studio.namePlaceholder")}
               value={item.name}
             />
             <Button
-              aria-label="Remove"
+              aria-label={t("common.remove")}
               onClick={() => onChange(items.filter((_, i) => i !== index))}
               size="sm"
               variant="ghost"
@@ -587,7 +597,7 @@ const NameExprList = ({
           <Input
             className="h-8 font-mono text-xs"
             onChange={(e) => update(index, { expression: e.target.value })}
-            placeholder="expression"
+            placeholder={t("templates.studio.expressionPlaceholder")}
             value={item.expression}
           />
         </div>
