@@ -11,7 +11,11 @@ import { Button } from "@stll/ui/components/button";
 import { Textarea } from "@stll/ui/components/textarea";
 import { cn } from "@stll/ui/lib/utils";
 
-import { useDocxFitZoom } from "@/components/docx-preview-zoom";
+import {
+  useDocxFitZoom,
+  useDocxWheelZoom,
+} from "@/components/docx-preview-zoom";
+import { composeRefs } from "@/lib/slot";
 
 // Flatten Word constructs markdown can't carry so the emitted markdown stays
 // clean: drop comments/annotations, flatten tracked changes, inline links,
@@ -109,12 +113,19 @@ export function MarkdownFolioEditor({
   // so markdown fills the inspector (body text full-width) and re-fits on resize
   // — identical behaviour to editing a .docx.
   const editorRef = useRef<DocxEditorRef>(null);
-  // Same fit params as the DOCX inspector (max auto-zoom 0.85) so markdown sits
-  // identically — page fits the panel with margins, no clipped text.
+  const containerRef = useRef<HTMLDivElement>(null);
+  // Same zoom behaviour as the DOCX inspector: fit-to-width (max auto-zoom 0.85)
+  // plus ctrl/⌘-wheel pinch zoom. composeRefs merges the wheel-zoom container
+  // ref with the fit hook's callback ref onto one element.
   const { containerRef: fitZoomRef, fitZoom } = useDocxFitZoom(0, 0.85);
+  const composedContainerRef = useMemo(
+    () => composeRefs(containerRef, fitZoomRef),
+    [fitZoomRef],
+  );
   useLayoutEffect(() => {
     editorRef.current?.setZoom(fitZoom);
   }, [fitZoom]);
+  useDocxWheelZoom(containerRef, editorRef);
 
   if (mode === "raw") {
     return (
@@ -138,7 +149,7 @@ export function MarkdownFolioEditor({
   return (
     <div
       className={cn("flex min-h-0 flex-1 flex-col", className)}
-      ref={fitZoomRef}
+      ref={composedContainerRef}
     >
       <DocxEditor
         className="h-full"
