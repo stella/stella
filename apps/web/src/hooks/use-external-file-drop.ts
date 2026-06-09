@@ -14,14 +14,16 @@ import { ClientOperationError } from "@/lib/errors";
 
 type ExternalFileDropOptions = {
   onDrop: (files: File[]) => void;
-  onDropTree?: (tree: DroppedFileTree) => void;
-  onError?: (error: Error) => void;
-  enabled?: boolean;
+  // Optionals accept explicit `undefined` (exactOptionalPropertyTypes) so wrapper
+  // components like FileDropZone can forward their own optional props through.
+  onDropTree?: ((tree: DroppedFileTree) => void) | undefined;
+  onError?: ((error: Error) => void) | undefined;
+  enabled?: boolean | undefined;
   /**
    * Optional caller-provided DOM ref; can be used when the target element
    * already has an existing ref. If omitted, the hook creates one.
    */
-  externalRef?: React.RefObject<HTMLDivElement | null>;
+  externalRef?: React.RefObject<HTMLDivElement | null> | undefined;
 };
 
 type ExternalFileDropResult = {

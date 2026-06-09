@@ -21,10 +21,10 @@ description: Checks a document against a defined set of rules and returns findin
 
 <!-- guide: Many checks depend on WHAT KIND of input it is. Use a small decision table that routes to the rules that apply. Delete this section if your check is uniform. -->
 
-| If the input is… | Apply… |
-| --- | --- |
+| If the input is…  | Apply…                                          |
+| ----------------- | ----------------------------------------------- |
 | > e.g. category A | > e.g. the rules in references/jurisdiction/... |
-| > e.g. category B | > e.g. references/guidelines/... |
+| > e.g. category B | > e.g. references/guidelines/...                |
 
 ## What to flag
 

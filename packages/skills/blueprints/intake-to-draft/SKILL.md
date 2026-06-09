@@ -16,6 +16,7 @@ description: Interviews the user for the facts it needs, then drafts a document 
 <!-- guide: List the questions to ask BEFORE drafting — the minimum facts you cannot draft without. Ask them up front, in one go. Stop and ask if an answer is missing; do not invent facts. -->
 
 > e.g.
+>
 > - Who are the parties?
 > - What outcome does the user want?
 > - Any deadline or key dates?
