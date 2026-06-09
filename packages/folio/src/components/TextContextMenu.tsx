@@ -31,7 +31,15 @@ export type TextContextAction =
   | "deleteColumn"
   | "addComment"
   | "acceptChange"
-  | "rejectChange";
+  | "rejectChange"
+  | `custom:${string}`;
+
+/** Built-in actions — everything except host-provided `custom:*` entries. */
+type BuiltInTextContextAction = Exclude<TextContextAction, `custom:${string}`>;
+
+const isBuiltInAction = (
+  action: TextContextAction,
+): action is BuiltInTextContextAction => !action.startsWith("custom:");
 
 /**
  * Menu item configuration
@@ -504,6 +512,9 @@ const CommentIcon = () => (
  * Get icon for action
  */
 function getActionIcon(action: TextContextAction): React.ReactNode {
+  if (!isBuiltInAction(action)) {
+    return null;
+  }
   switch (action) {
     case "cut":
       return <CutIcon />;
@@ -660,6 +671,9 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
     const disabled = (() => {
       if (item.disabled !== undefined) {
         return item.disabled;
+      }
+      if (!isBuiltInAction(item.action)) {
+        return false;
       }
       switch (item.action) {
         case "cut":
@@ -1058,8 +1072,8 @@ export function getTextActionLabel(action: TextContextAction): string {
     addComment: "Comment",
     acceptChange: "Accept Change",
     rejectChange: "Reject Change",
-  } as const satisfies Record<TextContextAction, string>;
-  return labels[action];
+  } as const satisfies Record<BuiltInTextContextAction, string>;
+  return isBuiltInAction(action) ? labels[action] : "";
 }
 
 /**
@@ -1083,8 +1097,8 @@ export function getTextActionShortcut(action: TextContextAction): string {
     addComment: "",
     acceptChange: "",
     rejectChange: "",
-  } as const satisfies Record<TextContextAction, string>;
-  return shortcuts[action];
+  } as const satisfies Record<BuiltInTextContextAction, string>;
+  return isBuiltInAction(action) ? shortcuts[action] : "";
 }
 
 /**
@@ -1102,6 +1116,9 @@ export function isTextActionAvailable(
   hasSelection: boolean,
   isEditable: boolean,
 ): boolean {
+  if (!isBuiltInAction(action)) {
+    return true;
+  }
   switch (action) {
     case "cut":
     case "copy":

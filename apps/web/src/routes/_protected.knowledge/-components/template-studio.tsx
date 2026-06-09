@@ -3,6 +3,7 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -89,6 +90,7 @@ const DocxEditor = lazy(async () => {
 const protectedRouteApi = getRouteApi("/_protected");
 
 const TEMPLATE_STUDIO_VIEW = "template-studio";
+const MAKE_FIELD_CONTEXT_ID = "make-field";
 const TEMPLATES_ROUTE_ID = "/_protected/knowledge/templates";
 const templateStudioTabId = (templateId: string) =>
   `template-studio:${templateId}`;
@@ -155,6 +157,18 @@ export const TemplateStudioPage = ({
     },
     [containerRef],
   );
+  // Right-click on selected text offers turning it into a {{field}} directly.
+  const makeFieldContextItems = useMemo(
+    () => [
+      {
+        id: MAKE_FIELD_CONTEXT_ID,
+        label: t("templates.studio.makeField"),
+        requiresSelection: true,
+      },
+    ],
+    [t],
+  );
+
   const getEditorView = useCallback(() => editorViewRef.current, []);
   const forceEditorView = useCallback(() => {
     editorRef.current?.ensureEditorView({ focus: false });
@@ -271,12 +285,12 @@ export const TemplateStudioPage = ({
   // The hero gesture: turn the current text selection into a `{{field}}`,
   // deriving a unique field path from the selected text and registering it in
   // the session (the dispatched selection change re-runs syncSelection).
-  const makeField = () => {
+  const makeField = (range?: { from: number; to: number }) => {
     const view = editorViewRef.current;
     if (!view) {
       return;
     }
-    const { from, to } = view.state.selection;
+    const { from, to } = range ?? view.state.selection;
     if (from === to) {
       return;
     }
@@ -462,6 +476,12 @@ export const TemplateStudioPage = ({
                   setLiveEditorView(view);
                 }
               }}
+              onCustomContextAction={(id, range) => {
+                if (id === MAKE_FIELD_CONTEXT_ID) {
+                  makeField(range);
+                }
+              }}
+              customContextMenuItems={makeFieldContextItems}
               onSelectionChange={(state) => {
                 setHasSelection(state?.hasSelection ?? false);
                 syncSelection();
