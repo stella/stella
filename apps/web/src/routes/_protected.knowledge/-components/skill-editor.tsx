@@ -5,7 +5,6 @@ import { getRouteApi } from "@tanstack/react-router";
 import {
   FileCodeIcon,
   FileIcon,
-  FilePlusIcon,
   FileTextIcon,
   FolderPlusIcon,
   PencilIcon,
@@ -29,6 +28,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { FileTree } from "@/components/file-tree/file-tree";
 import type { FileTreeNode } from "@/components/file-tree/file-tree";
+import { FolderExpandToggle } from "@/components/file-tree/folder-expand-toggle";
 import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { api } from "@/lib/api";
 import { MARKDOWN_MIME, isMarkdownFile } from "@/lib/consts";
@@ -319,6 +319,25 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   });
 
   const fileNodes = useMemo(() => buildSkillNodes(resources), [resources]);
+  const allFolderIds = useMemo(() => {
+    const ids = new Set<string>();
+    const walk = (siblings: FileTreeNode[]) => {
+      for (const node of siblings) {
+        if (node.kind === "folder") {
+          ids.add(node.id);
+          walk(node.children ?? []);
+        }
+      }
+    };
+    walk(fileNodes);
+    return ids;
+  }, [fileNodes]);
+  const allFoldersExpanded = [...allFolderIds].every(
+    (id) => !collapsedFolders.has(id),
+  );
+  const toggleAllFolders = () => {
+    setCollapsedFolders(allFoldersExpanded ? new Set(allFolderIds) : new Set());
+  };
 
   const onPublish = () => {
     if (enabled) {
@@ -577,10 +596,13 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
           <p className="text-muted-foreground me-auto text-xs font-semibold tracking-wider uppercase">
             {tSkills("filesHeading")}
           </p>
-          <RootCreateButton
-            createPending={createResource.isPending}
-            onCreateFile={onCreateFile}
-          />
+          {allFolderIds.size > 0 && (
+            <FolderExpandToggle
+              allExpanded={allFoldersExpanded}
+              onToggle={toggleAllFolders}
+              size="icon-sm"
+            />
+          )}
           <Button
             aria-label={tSkills("uploadFile")}
             disabled={createResource.isPending || uploadResource.isPending}
@@ -639,6 +661,14 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
               resources={resources}
               selected={selected}
               setRenameValue={setRenameValue}
+            />
+          </div>
+        )}
+        {detail.data && (
+          <div className="mt-2 shrink-0 px-1">
+            <RootCreateButton
+              createPending={createResource.isPending}
+              onCreateFile={onCreateFile}
             />
           </div>
         )}
@@ -1045,6 +1075,7 @@ function RootCreateButton({
   createPending,
   onCreateFile,
 }: RootCreateButtonProps) {
+  const t = useTranslations();
   const tSkills = useTranslations("knowledge.agentSkills");
   const [open, setOpen] = useState(false);
   const [path, setPath] = useState("");
@@ -1064,12 +1095,9 @@ function RootCreateButton({
     <Popover onOpenChange={setOpen} open={open}>
       <PopoverTrigger
         render={
-          <Button
-            aria-label={tSkills("newFile")}
-            size="icon-sm"
-            variant="ghost"
-          >
-            <FilePlusIcon className="size-4" />
+          <Button size="xs" variant="ghost">
+            <PlusIcon />
+            {t("common.add")}
           </Button>
         }
       />
