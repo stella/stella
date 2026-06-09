@@ -495,6 +495,7 @@
     },
     "sources": "Fontes:",
     "stopResponse": "Parar",
+    "stopped": "Interrompido",
     "suggestionSeverity": {
       "style": "Estilo",
       "substantive": "Substancial",
@@ -2064,7 +2065,7 @@
       "draftedByAi": "A IA redige",
       "emptyClauseSlot": "Espaço de cláusula vazio",
       "expressionPlaceholder": "expressão",
-      "fieldHelp": "Este marcador se torna um campo em branco ao preencher o modelo — o que você define aqui molda a pergunta do formulário.",
+      "fieldHelp": "Quando alguém preencher este modelo, este valor será solicitado. Aqui você decide como essa pergunta vai aparecer.",
       "filledByPerson": "Pessoa que preenche o formulário",
       "insert": "Inserir",
       "loop": "Laço",

@@ -130,6 +130,12 @@ function writeStoredApplyMode(mode: AISuggestionApplyMode): void {
   }
 }
 
+/**
+ * Composer commands (plain text after `htmlToPromptText`) that reset
+ * the thread instead of generating a response.
+ */
+const NEW_THREAD_COMMANDS = new Set(["/new", "/clear"]);
+
 const SEVERITY_DOT_CLASS: Record<AISuggestionSeverity, string> = {
   substantive: "bg-destructive",
   style: "bg-foreground/55",
@@ -203,6 +209,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
     layout = "floating",
     editorController,
   } = props;
+  const t = useTranslations();
   const author = config.applyAuthor ?? authorFallback;
 
   /**
@@ -349,6 +356,58 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
     editorView.dispatch(editorView.state.tr.setMeta(meta.key, meta.payload));
   }, [editorView, activeCitationId]);
 
+  // ---- stop / new thread ---------------------------------------------------
+
+  /**
+   * Cancels the in-flight generation. Bumping the run token makes the
+   * pending `onGenerate` promise resolve against a stale token (its
+   * result is dropped); flipping the loading assistant bubble to an
+   * error returns the derived bar status to idle.
+   */
+  const handleStop = useCallback(() => {
+    generationToken.current += 1;
+    setMessages((prev) =>
+      prev.map<ThreadMessage>((m) =>
+        m.role === "assistant" && m.status === "loading"
+          ? {
+              id: m.id,
+              role: "assistant",
+              text: m.text,
+              suggestions: m.suggestions,
+              citations: m.citations,
+              mode: m.mode,
+              createdAt: m.createdAt,
+              status: "error",
+              error: t("chat.stopped"),
+            }
+          : m,
+      ),
+    );
+  }, [setMessages, t]);
+
+  /**
+   * Resets the thread: drops messages, queued accepts, focus, and the
+   * first-accept prompt, then clears this host's suggestion
+   * decorations from the editor. The decoration-push effect skips
+   * empty lists (to avoid racing the review-store writer), so the
+   * empty push has to happen explicitly here. The run-token bump
+   * keeps a generation started before the reset from landing into
+   * the fresh thread.
+   */
+  const handleNewThread = useCallback(() => {
+    generationToken.current += 1;
+    setMessages([]);
+    setPendingAccepts([]);
+    setPendingFirstAccept(null);
+    setFocusedId(null);
+    setActiveCitationId(null);
+    setPanelOpen(false);
+    if (editorView) {
+      const meta = setAISuggestionsMeta([]);
+      editorView.dispatch(editorView.state.tr.setMeta(meta.key, meta.payload));
+    }
+  }, [editorView, setMessages, setPendingAccepts]);
+
   // ---- generate ------------------------------------------------------------
 
   const handleGenerate = useCallback(
@@ -366,6 +425,11 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
       // Flatten to plain text (with mentions inlined as `@Label`) so
       // pattern-matching generators don't have to parse HTML.
       const promptText = htmlToPromptText(input.prompt);
+
+      if (NEW_THREAD_COMMANDS.has(promptText)) {
+        handleNewThread();
+        return;
+      }
 
       const userMessage: UserThreadMessage = {
         id: `u-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
@@ -512,6 +576,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
       updateAssistantMessage,
       setMessages,
       mode,
+      handleNewThread,
     ],
   );
 
@@ -988,6 +1053,9 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
       onSubmit={(input) => {
         void handleGenerate(input);
       }}
+      onStop={handleStop}
+      onNewThread={hasMessages ? handleNewThread : undefined}
+      newThreadLabel={t("chat.newChat")}
       onTogglePanel={() => setPanelOpen((v) => !v)}
       editorController={editorController}
     />
@@ -1403,6 +1471,13 @@ export function PromptBar(props: PromptBarProps) {
           ))}
         </div>
       )}
+      {layout === "floating" && pendingCount > 0 && (
+        <span className="flex h-8 shrink-0 items-center ps-0.5">
+          <span className="bg-muted text-foreground inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[11px] font-semibold tabular-nums">
+            {pendingCount}
+          </span>
+        </span>
+      )}
       <div className="relative flex min-h-8 min-w-0 flex-1 items-center gap-1.5 px-1.5">
         {isEmpty && busy && (
           <div className="text-muted-foreground pointer-events-none absolute inset-x-1.5 top-1/2 z-10 flex min-w-0 -translate-y-1/2 items-center gap-2 text-[13px]">
@@ -1551,19 +1626,13 @@ export function PromptBar(props: PromptBarProps) {
                 type="button"
                 variant="ghost"
               >
-                {pendingCount > 0 ? (
-                  <span className="bg-muted text-foreground inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[11px] font-semibold tabular-nums">
-                    {pendingCount}
-                  </span>
-                ) : (
-                  <ChevronDownIcon
-                    aria-hidden="true"
-                    className={cn(
-                      "size-3.5 transition-transform duration-150",
-                      panelOpen && "rotate-180",
-                    )}
-                  />
-                )}
+                <ChevronDownIcon
+                  aria-hidden="true"
+                  className={cn(
+                    "size-3.5 transition-transform duration-150",
+                    panelOpen && "rotate-180",
+                  )}
+                />
               </Button>
             }
           />

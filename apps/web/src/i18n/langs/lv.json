@@ -495,6 +495,7 @@
     },
     "sources": "Avoti:",
     "stopResponse": "Apturēt",
+    "stopped": "Apturēts",
     "suggestionSeverity": {
       "style": "Stils",
       "substantive": "Pēc būtības",
@@ -2064,7 +2065,7 @@
       "draftedByAi": "MI sagatavo",
       "emptyClauseSlot": "Tukšs klauzulas slots",
       "expressionPlaceholder": "izteiksme",
-      "fieldHelp": "Aizpildot veidni, šis vietturis kļūst par tukšu lauku — šeit iestatītais veido jautājumu formā.",
+      "fieldHelp": "Kad kāds aizpildīs šo veidni, viņam tiks prasīta šī vērtība. Šeit jūs nosakāt, kā šis jautājums izskatīsies.",
       "filledByPerson": "Persona, kas aizpilda formu",
       "insert": "Ievietot",
       "loop": "Cilpa",

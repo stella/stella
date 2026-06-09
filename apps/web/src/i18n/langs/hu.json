@@ -495,6 +495,7 @@
     },
     "sources": "Források:",
     "stopResponse": "Leállítás",
+    "stopped": "Leállítva",
     "suggestionSeverity": {
       "style": "Stílus",
       "substantive": "Érdemi",
@@ -2064,7 +2065,7 @@
       "draftedByAi": "Az MI fogalmazza meg",
       "emptyClauseSlot": "Üres záradékhely",
       "expressionPlaceholder": "kifejezés",
-      "fieldHelp": "Ez a helyőrző a sablon kitöltésekor üres mezővé válik — az itteni beállítások alakítják az űrlap kérdését.",
+      "fieldHelp": "Amikor valaki kitölti ezt a sablont, ezt az értéket fogja megadni. Itt döntheti el, hogyan nézzen ki ez a kérdés.",
       "filledByPerson": "Az űrlapot kitöltő személy",
       "insert": "Beszúrás",
       "loop": "Ciklus",

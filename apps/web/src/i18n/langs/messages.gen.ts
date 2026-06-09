@@ -498,6 +498,7 @@ type Messages = {
     };
     "sources": "Sources:";
     "stopResponse": "Stop";
+    "stopped": "Stopped";
     "suggestionSeverity": {
       "style": "Style";
       "substantive": "Substantive";
@@ -2067,7 +2068,7 @@ type Messages = {
       "draftedByAi": "AI drafts it";
       "emptyClauseSlot": "Empty clause slot";
       "expressionPlaceholder": "expression";
-      "fieldHelp": "This placeholder becomes a blank when the template is filled — what you set here shapes the question in the fill form.";
+      "fieldHelp": "When someone fills this template, they'll be asked for this value. You decide here how that question looks.";
       "filledByPerson": "Person filling the form";
       "insert": "Insert";
       "loop": "Loop";

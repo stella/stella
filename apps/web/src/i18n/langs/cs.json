@@ -495,6 +495,7 @@
     },
     "sources": "Zdroje:",
     "stopResponse": "Zastavit",
+    "stopped": "Zastaveno",
     "suggestionSeverity": {
       "style": "Styl",
       "substantive": "Věcné",
@@ -2064,7 +2065,7 @@
       "draftedByAi": "Navrhne AI",
       "emptyClauseSlot": "Prázdný slot pro klauzuli",
       "expressionPlaceholder": "výraz",
-      "fieldHelp": "Tento zástupný symbol se při vyplňování šablony stane prázdným polem — zdejší nastavení určuje podobu otázky ve formuláři.",
+      "fieldHelp": "Když někdo šablonu vyplňuje, bude dotázán na tuto hodnotu. Zde určíte, jak bude otázka vypadat.",
       "filledByPerson": "Osoba vyplňující formulář",
       "insert": "Vložit",
       "loop": "Smyčka",

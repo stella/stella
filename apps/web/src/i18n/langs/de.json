@@ -495,6 +495,7 @@
     },
     "sources": "Quellen:",
     "stopResponse": "Stoppen",
+    "stopped": "Gestoppt",
     "suggestionSeverity": {
       "style": "Stil",
       "substantive": "Inhaltlich",
@@ -2064,7 +2065,7 @@
       "draftedByAi": "KI entwirft es",
       "emptyClauseSlot": "Leerer Klausel-Slot",
       "expressionPlaceholder": "Ausdruck",
-      "fieldHelp": "Dieser Platzhalter wird beim Ausfüllen der Vorlage zu einem Leerfeld — die Einstellungen hier bestimmen die Frage im Formular.",
+      "fieldHelp": "Wer diese Vorlage ausfüllt, wird nach diesem Wert gefragt. Hier legen Sie fest, wie diese Frage aussieht.",
       "filledByPerson": "Person, die das Formular ausfüllt",
       "insert": "Einfügen",
       "loop": "Schleife",

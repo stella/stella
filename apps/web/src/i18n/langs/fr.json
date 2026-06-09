@@ -495,6 +495,7 @@
     },
     "sources": "Sources :",
     "stopResponse": "Arrêter",
+    "stopped": "Arrêté",
     "suggestionSeverity": {
       "style": "Style",
       "substantive": "Substantiel",
@@ -2064,7 +2065,7 @@
       "draftedByAi": "L'IA le rédige",
       "emptyClauseSlot": "Emplacement de clause vide",
       "expressionPlaceholder": "expression",
-      "fieldHelp": "Cet espace réservé devient un champ vide lors du remplissage du modèle — vos réglages ici déterminent la question du formulaire.",
+      "fieldHelp": "Quand quelqu'un remplit ce modèle, cette valeur lui est demandée. Vous décidez ici de l'apparence de cette question.",
       "filledByPerson": "La personne qui remplit le formulaire",
       "insert": "Insérer",
       "loop": "Boucle",

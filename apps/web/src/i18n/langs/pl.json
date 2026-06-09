@@ -495,6 +495,7 @@
     },
     "sources": "Źródła:",
     "stopResponse": "Zatrzymaj",
+    "stopped": "Zatrzymano",
     "suggestionSeverity": {
       "style": "Styl",
       "substantive": "Merytoryczna",
@@ -2064,7 +2065,7 @@
       "draftedByAi": "AI to zredaguje",
       "emptyClauseSlot": "Puste miejsce na klauzulę",
       "expressionPlaceholder": "wyrażenie",
-      "fieldHelp": "Ten symbol zastępczy staje się pustym polem podczas wypełniania szablonu — ustawienia tutaj kształtują pytanie w formularzu.",
+      "fieldHelp": "Gdy ktoś będzie wypełniać ten szablon, zostanie poproszony o tę wartość. Tutaj decydujesz, jak to pytanie będzie wyglądać.",
       "filledByPerson": "Osoba wypełniająca formularz",
       "insert": "Wstaw",
       "loop": "Pętla",
