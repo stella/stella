@@ -20,9 +20,16 @@ const buildDocxBuffer = async (paragraphs: string[]): Promise<Buffer> => {
 // multiple <w:t> runs, so assert on the stripped text, not the raw XML.
 const docTextOf = async (buffer: Buffer): Promise<string> => {
   const zip = await JSZip.loadAsync(buffer);
-  const xml = (await zip.file("word/document.xml")?.async("string")) ?? "";
-  // oxlint-disable-next-line sonarjs/slow-regex -- test helper on small, controlled document XML
-  return xml.replace(/<[^>]+>/gu, "");
+  let text = (await zip.file("word/document.xml")?.async("string")) ?? "";
+  // Strip tags until stable so a tag span revealed by an earlier removal can't
+  // survive — the single-pass form trips CodeQL's incomplete-sanitization check.
+  let previous = "";
+  while (text !== previous) {
+    previous = text;
+    // oxlint-disable-next-line sonarjs/slow-regex -- test helper on small, controlled document XML
+    text = text.replace(/<[^>]+>/gu, "");
+  }
+  return text;
 };
 
 const lease = [
