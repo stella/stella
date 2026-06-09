@@ -169,6 +169,7 @@ export const TemplateStudioPage = ({
         id: MAKE_FIELD_CONTEXT_ID,
         label: t("templates.studio.makeField"),
         requiresSelection: true,
+        icon: <BracesIcon size={14} />,
       },
     ],
     [t],

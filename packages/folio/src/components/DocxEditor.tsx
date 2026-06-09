@@ -2205,7 +2205,22 @@ export function DocxEditor({
         },
       ];
     }
-    const items: TextContextMenuItem[] = [
+    const items: TextContextMenuItem[] = [];
+    // Host-provided entries lead the menu — they're the surface-specific
+    // primary actions (e.g. the Template Studio's "Make field").
+    const custom = (customContextMenuItems ?? []).filter(
+      (item) => !item.requiresSelection || contextMenu.hasSelection,
+    );
+    for (const [index, item] of custom.entries()) {
+      items.push({
+        action: `custom:${item.id}`,
+        label: item.label,
+        emphasis: true,
+        ...(item.icon === undefined ? {} : { icon: item.icon }),
+        dividerAfter: index === custom.length - 1,
+      });
+    }
+    items.push(
       { action: "cut", label: t("cut"), shortcut: `${mod}+X` },
       { action: "copy", label: t("copy"), shortcut: `${mod}+C` },
       { action: "paste", label: t("paste"), shortcut: `${mod}+V` },
@@ -2221,7 +2236,7 @@ export function DocxEditor({
         shortcut: "Del",
         dividerAfter: !contextMenu.hasSelection && !contextMenu.cursorInTable,
       },
-    ];
+    );
     if (contextMenu.hasSelection) {
       items.push({
         action: "addComment",
@@ -2258,18 +2273,6 @@ export function DocxEditor({
       label: t("selectAll"),
       shortcut: `${mod}+A`,
     });
-    const custom = (customContextMenuItems ?? []).filter(
-      (item) => !item.requiresSelection || contextMenu.hasSelection,
-    );
-    if (custom.length > 0) {
-      const last = items.at(-1);
-      if (last) {
-        last.dividerAfter = true;
-      }
-      for (const item of custom) {
-        items.push({ action: `custom:${item.id}`, label: item.label });
-      }
-    }
     return items;
   }, [
     contextMenu.hasSelection,
