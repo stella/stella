@@ -2001,10 +2001,6 @@
     "generating": "Generierung...",
     "inputTypes": {
       "boolean": "Ja / Nein",
-      "date": "Datum",
-      "number": "Zahl",
-      "select": "Auswahlliste",
-      "text": "Text",
       "textarea": "Text (mehrzeilig)"
     },
     "invalidFileType": "Bitte laden Sie eine .docx-Datei hoch",
