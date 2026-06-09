@@ -6,7 +6,6 @@
  * until the analysis is ready.
  */
 
-import { valibotSchema } from "@ai-sdk/valibot";
 import { Output, streamText } from "ai";
 import { and, eq, isNull } from "drizzle-orm";
 
@@ -35,6 +34,7 @@ import { rootDb } from "@/api/db/root";
 import { caseLawDecisions } from "@/api/db/schema";
 import { getModelForRole, getModelInfoForRole } from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
+import { strictOutputSchema } from "@/api/lib/ai-output-schema";
 import { captureError } from "@/api/lib/analytics";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -128,7 +128,7 @@ ${decisionText}`;
     const result = streamText({
       model,
       output: Output.array({
-        element: valibotSchema(analysisHeadingSchema),
+        element: strictOutputSchema(analysisHeadingSchema),
       }),
       system: systemPrompt,
       messages: [{ role: "user", content: userMessage }],

@@ -1,9 +1,9 @@
-import { valibotSchema } from "@ai-sdk/valibot";
 import { generateText, Output } from "ai";
 import { Result } from "better-result";
 
 import { getModelForRole } from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
+import { strictOutputSchema } from "@/api/lib/ai-output-schema";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import {
   BBOX_SYSTEM_PROMPT,
@@ -86,7 +86,7 @@ export const generateBBoxData = async ({
             ],
           },
         ],
-        output: Output.object({ schema: valibotSchema(bboxSchema) }),
+        output: Output.object({ schema: strictOutputSchema(bboxSchema) }),
         abortSignal,
         ...aiAnalytics.stepCallbacks,
       });

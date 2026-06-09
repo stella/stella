@@ -1,4 +1,3 @@
-import { valibotSchema } from "@ai-sdk/valibot";
 import { Output, streamText } from "ai";
 import type { FilePart, TextPart } from "ai";
 import { Result } from "better-result";
@@ -6,6 +5,7 @@ import { Result } from "better-result";
 import { markCacheBreakpoint } from "@/api/lib/ai-caching";
 import { getModelForRole, resolveCaching } from "@/api/lib/ai-models";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-models";
+import { strictOutputSchema } from "@/api/lib/ai-output-schema";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import type { AIUsageMetering } from "@/api/lib/analytics/ai";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -176,7 +176,7 @@ export const generateWorkflowData = async ({
           allowServiceTierFallback: false,
         }),
         messages: [{ role: "user", content: messageContent }],
-        output: Output.object({ schema: valibotSchema(schema) }),
+        output: Output.object({ schema: strictOutputSchema(schema) }),
         system: WORKFLOW_SYSTEM_PROMPT,
         abortSignal,
         ...aiAnalytics.stepCallbacks,

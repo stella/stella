@@ -1,4 +1,3 @@
-import { valibotSchema } from "@ai-sdk/valibot";
 import { generateText, Output } from "ai";
 import { Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -19,6 +18,7 @@ import {
   requireAIAvailable,
 } from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
+import { strictOutputSchema } from "@/api/lib/ai-output-schema";
 import { captureError } from "@/api/lib/analytics";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -282,7 +282,7 @@ const organizeSuggestionsHandler = async function* ({
           })),
         }),
         output: Output.object({
-          schema: valibotSchema(suggestionsAIOutputSchema),
+          schema: strictOutputSchema(suggestionsAIOutputSchema),
         }),
         // 200 base + 200 per file (≈30-40 tokens per JSON suggestion plus
         // wrapping). Capped at 24 000 so a 100-file batch (~20 200) has
@@ -720,7 +720,7 @@ const generateMissingSummaries = async ({
           })),
         }),
         output: Output.object({
-          schema: valibotSchema(generatedSummariesAISchema),
+          schema: strictOutputSchema(generatedSummariesAISchema),
         }),
         // Summaries can run longer than the suggestion JSON; allow a
         // bigger budget here. ~120 tokens per summary at 100 files puts

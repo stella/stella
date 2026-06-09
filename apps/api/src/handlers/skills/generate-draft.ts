@@ -1,10 +1,10 @@
-import { valibotSchema } from "@ai-sdk/valibot";
 import { generateText, Output } from "ai";
 import { Result } from "better-result";
 import { t } from "elysia";
 import * as v from "valibot";
 
 import { getModelForRole, requireAIAvailable } from "@/api/lib/ai-models";
+import { strictOutputSchema } from "@/api/lib/ai-output-schema";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -122,7 +122,9 @@ const generateSkillDraft = createSafeRootHandler(
             organizationId: session.activeOrganizationId,
             serviceTier: "flex",
           }),
-          output: Output.object({ schema: valibotSchema(aiGenerationSchema) }),
+          output: Output.object({
+            schema: strictOutputSchema(aiGenerationSchema),
+          }),
           prompt,
           ...aiAnalytics.stepCallbacks,
         }),
