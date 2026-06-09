@@ -35,12 +35,12 @@ type SkillScope = "team" | "private";
 type BlueprintId =
   | "check-against-rules"
   | "intake-to-draft"
-  | "answer-from-sources";
+  | "answer-from-sources"
+  | "blank";
+type BlueprintCardId = Exclude<BlueprintId, "blank">;
 
 export type BlueprintCreatedSkill = {
   id: string;
-  name: string;
-  scope: SkillScope;
 };
 
 type CardText = { title: string; blurb: string; inside: string };
@@ -50,13 +50,15 @@ const CARDS = [
   { id: "check-against-rules", Icon: ClipboardCheckIcon },
   { id: "intake-to-draft", Icon: PencilLineIcon },
   { id: "answer-from-sources", Icon: BookOpenIcon },
-] as const satisfies readonly { id: BlueprintId; Icon: typeof BookOpenIcon }[];
+] as const satisfies readonly {
+  id: BlueprintCardId;
+  Icon: typeof BookOpenIcon;
+}[];
 
 type BlueprintGallerySheetProps = {
   canManageTeam: boolean;
   onCreated: (skill: BlueprintCreatedSkill) => void;
   onOpenChange: (open: boolean) => void;
-  onStartBlank: () => void;
   open: boolean;
 };
 
@@ -70,7 +72,6 @@ const BlueprintGallerySheetBody = ({
   canManageTeam,
   onCreated,
   onOpenChange,
-  onStartBlank,
 }: BlueprintGallerySheetProps) => {
   const t = useTranslations();
   const tGallery = useTranslations("knowledge.skills.blueprintGallery");
@@ -78,7 +79,7 @@ const BlueprintGallerySheetBody = ({
 
   // Literal keys per card so a stale/missing key fails typecheck without
   // widening to the full TranslationKey union (which would force a values arg).
-  const cardText = (id: BlueprintId): CardText => {
+  const cardText = (id: BlueprintCardId): CardText => {
     if (id === "check-against-rules") {
       return {
         title: t(
@@ -124,10 +125,10 @@ const BlueprintGallerySheetBody = ({
       if (response.error) {
         throw toAPIError(response.error);
       }
-      return { id: response.data.id, name: cardText(id).title };
+      return { id: response.data.id };
     },
-    onSuccess: ({ id, name }) => {
-      onCreated({ id, name, scope });
+    onSuccess: ({ id }) => {
+      onCreated({ id });
       onOpenChange(false);
     },
     onError: (error) => {
@@ -212,15 +213,17 @@ const BlueprintGallerySheetBody = ({
           );
         })}
 
+        {/* The blank scaffold is a blueprint too — no form, the user lands
+            straight in the editor and fills the skill in there. */}
         <button
-          className="text-muted-foreground hover:text-foreground rounded-md border border-dashed px-4 py-3 text-start text-sm transition-colors disabled:opacity-60"
+          className="text-muted-foreground hover:text-foreground flex items-center rounded-md border border-dashed px-4 py-3 text-start text-sm transition-colors disabled:opacity-60"
           disabled={create.isPending}
-          onClick={() => {
-            onOpenChange(false);
-            onStartBlank();
-          }}
+          onClick={() => create.mutate("blank")}
           type="button"
         >
+          {pendingId === "blank" && (
+            <LoaderIcon className="me-2 size-4 shrink-0 animate-spin" />
+          )}
           <span className="text-foreground font-medium">
             {tGallery("startBlank")}
           </span>

@@ -10,6 +10,7 @@ export const BLUEPRINT_IDS = [
   "check-against-rules",
   "intake-to-draft",
   "answer-from-sources",
+  "blank",
 ] as const;
 
 export type BlueprintId = (typeof BLUEPRINT_IDS)[number];

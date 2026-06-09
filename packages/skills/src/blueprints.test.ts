@@ -44,14 +44,19 @@ describe("skill blueprints", () => {
         }
       });
 
-      test("teaches a nested references tree", () => {
-        const hasNestedReference = blueprint.resources.some(
-          (resource) =>
-            resource.kind === "reference" &&
-            resource.path.split("/").length >= 3,
-        );
-        expect(hasNestedReference).toBe(true);
-      });
+      // The blank blueprint is a deliberately empty scaffold — no resources,
+      // so there is no folder structure to teach.
+      test.if(blueprint.id !== "blank")(
+        "teaches a nested references tree",
+        () => {
+          const hasNestedReference = blueprint.resources.some(
+            (resource) =>
+              resource.kind === "reference" &&
+              resource.path.split("/").length >= 3,
+          );
+          expect(hasNestedReference).toBe(true);
+        },
+      );
     });
   }
 });

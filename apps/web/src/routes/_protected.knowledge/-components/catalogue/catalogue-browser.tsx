@@ -54,7 +54,6 @@ import {
   BlueprintGallerySheet,
   type BlueprintCreatedSkill,
 } from "@/routes/_protected.knowledge/-components/blueprint-gallery-sheet";
-import { CreateSkillSheet } from "@/routes/_protected.knowledge/-components/create-skill-sheet";
 import { knowledgeKeys } from "@/routes/_protected.knowledge/-queries";
 import {
   catalogueKeys,
@@ -164,7 +163,6 @@ export const CatalogueBrowser = ({
   );
   const [jurisdictionQuery, setJurisdictionQuery] = useState("");
   const [addMcpOpen, setAddMcpOpen] = useState(false);
-  const [createSkillOpen, setCreateSkillOpen] = useState(false);
   const [blueprintGalleryOpen, setBlueprintGalleryOpen] = useState(false);
   // Reuse `role` from the canAddCustom block above for team-skill gating.
   const canManageTeam = role === "admin" || role === "owner";
@@ -562,17 +560,10 @@ export const CatalogueBrowser = ({
         open={addMcpOpen}
         organizationId={organizationId}
       />
-      <CreateSkillSheet
-        canManageTeam={canManageTeam}
-        onCreated={onSkillSheetChanged}
-        onOpenChange={setCreateSkillOpen}
-        open={createSkillOpen}
-      />
       <BlueprintGallerySheet
         canManageTeam={canManageTeam}
         onCreated={onBlueprintCreated}
         onOpenChange={setBlueprintGalleryOpen}
-        onStartBlank={() => setCreateSkillOpen(true)}
         open={blueprintGalleryOpen}
       />
     </div>
