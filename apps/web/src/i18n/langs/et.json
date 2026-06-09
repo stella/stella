@@ -2027,10 +2027,6 @@
     "generating": "Loomine...",
     "inputTypes": {
       "boolean": "Jah / Ei",
-      "date": "Kuupäev",
-      "number": "Arv",
-      "select": "Rippmenüü",
-      "text": "Tekst",
       "textarea": "Tekst (mitmerealne)"
     },
     "invalidFileType": "Palun laadige üles .docx fail",
