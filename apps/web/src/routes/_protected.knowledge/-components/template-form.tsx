@@ -62,6 +62,30 @@ type StructureError = DiscoverData["structureErrors"][number];
 
 const REQUIRED_MARKER = "*";
 
+type CompositePart = NonNullable<ResolvedField["parts"]>[number];
+
+/** The field's parts when it is composite (parts + format), else null. */
+const compositeParts = (field: ResolvedField): CompositePart[] | null =>
+  field.parts !== undefined &&
+  field.parts.length > 0 &&
+  field.format !== undefined
+    ? field.parts
+    : null;
+
+/** Read a composite field's form value into a part-key → string map. */
+const readPartValues = (value: unknown): Record<string, string> => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return {};
+  }
+  const out: Record<string, string> = {};
+  for (const [key, partValue] of Object.entries(value)) {
+    if (typeof partValue === "string") {
+      out[key] = partValue;
+    }
+  }
+  return out;
+};
+
 type FieldErrors = Record<string, string | undefined>;
 type TouchedFields = Record<string, boolean>;
 
@@ -73,6 +97,42 @@ type ValidationError =
   | { kind: "numberMax"; max: number }
   | { kind: "pattern" };
 
+/** Validate a composite field's part values. */
+const validateCompositeField = (
+  parts: CompositePart[],
+  value: unknown,
+  required: boolean,
+): ValidationError | undefined => {
+  const partValues = readPartValues(value);
+  const isFilled = (part: CompositePart) =>
+    (partValues[part.key] ?? "").trim() !== "";
+  const filledCount = parts.filter(isFilled).length;
+  if (filledCount === 0) {
+    return required ? { kind: "required" } : undefined;
+  }
+  // A partially filled composite cannot be assembled: once any part is
+  // entered, every part is required (required field = all parts required).
+  if (filledCount < parts.length) {
+    return { kind: "required" };
+  }
+  for (const part of parts) {
+    if (part.pattern === undefined || part.pattern === "") {
+      continue;
+    }
+    try {
+      // Anchored: the pattern must describe the whole part value (same
+      // rule the server applies at fill time).
+      const re = new RegExp(`^(?:${part.pattern})$`, "u");
+      if (!re.test(partValues[part.key] ?? "")) {
+        return { kind: "pattern" };
+      }
+    } catch {
+      // Invalid regex in manifest; skip the check
+    }
+  }
+  return undefined;
+};
+
 /** Validate a single field value against its manifest
  *  rules. Returns a validation error or undefined. */
 const validateField = (
@@ -80,6 +140,12 @@ const validateField = (
   value: unknown,
 ): ValidationError | undefined => {
   const required = field.required ?? field.validation?.required ?? false;
+
+  const parts = compositeParts(field);
+  if (parts) {
+    return validateCompositeField(parts, value, required);
+  }
+
   const str = typeof value === "string" ? value : "";
 
   if (required && str.trim() === "" && value !== true) {
@@ -182,6 +248,9 @@ const groupFieldsByPrefix = (fields: readonly ResolvedField[]) => {
 };
 
 const getDefaultValue = (field: ResolvedField): unknown => {
+  if (compositeParts(field)) {
+    return {};
+  }
   if (field.kind === "boolean") {
     return false;
   }
@@ -244,6 +313,93 @@ const AiAdaptHint = ({ show }: { show: boolean }) => {
   );
 };
 
+/** One visual row for a composite field: one input per part (select or
+ *  text), labelled by the field's label; the form value is the object of
+ *  part values, assembled by the server at fill time. */
+const CompositeFieldRow = ({
+  field,
+  parts,
+  label,
+  required,
+  value,
+  onChange,
+  onBlur,
+  error,
+}: {
+  field: ResolvedField;
+  parts: CompositePart[];
+  label: string;
+  required: boolean;
+  value: unknown;
+  onChange: (path: string, value?: unknown) => void;
+  onBlur?: ((path: string) => void) | undefined;
+  error?: string | undefined;
+}) => {
+  const partValues = readPartValues(value);
+  const setPart = (key: string, partValue: string) =>
+    onChange(field.path, { ...partValues, [key]: partValue });
+
+  return (
+    <Field>
+      <FieldLabel>
+        {label}
+        {required && <RequiredIndicator />}
+      </FieldLabel>
+      <div className="flex flex-wrap items-start gap-2">
+        {parts.map((part) => {
+          const partLabel = part.label ?? part.key;
+          if (
+            part.inputType === "select" &&
+            part.options &&
+            part.options.length > 0
+          ) {
+            const selected = partValues[part.key];
+            return (
+              <Select
+                key={part.key}
+                name={`${field.path}.${part.key}`}
+                onValueChange={(val) => {
+                  setPart(part.key, typeof val === "string" ? val : "");
+                  onBlur?.(field.path);
+                }}
+                value={selected === "" ? undefined : selected}
+              >
+                <SelectTrigger
+                  aria-label={partLabel}
+                  className="w-auto min-w-36"
+                >
+                  <SelectValue placeholder={partLabel} />
+                </SelectTrigger>
+                <SelectPopup>
+                  {part.options.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option}
+                    </SelectItem>
+                  ))}
+                </SelectPopup>
+              </Select>
+            );
+          }
+          return (
+            <Input
+              aria-label={partLabel}
+              className="min-w-36 flex-1"
+              key={part.key}
+              name={`${field.path}.${part.key}`}
+              onBlur={() => onBlur?.(field.path)}
+              onChange={(e) => setPart(part.key, e.target.value)}
+              placeholder={partLabel}
+              type="text"
+              value={partValues[part.key] ?? ""}
+            />
+          );
+        })}
+      </div>
+      <FieldError message={error} />
+    </Field>
+  );
+};
+
 const FieldRenderer = ({
   field,
   value,
@@ -263,6 +419,24 @@ const FieldRenderer = ({
   const label = field.label ?? field.path;
   const required = field.required ?? field.validation?.required ?? false;
   const handleBlur = () => onBlur?.(field.path);
+
+  // A composite field renders one input per part on a single row; its form
+  // value is the object of part values, assembled by the server at fill time.
+  const parts = compositeParts(field);
+  if (parts) {
+    return (
+      <CompositeFieldRow
+        error={error}
+        field={field}
+        label={label}
+        onBlur={onBlur}
+        onChange={onChange}
+        parts={parts}
+        required={required}
+        value={value}
+      />
+    );
+  }
 
   if (inputType === "boolean" || field.kind === "boolean") {
     return (
@@ -552,6 +726,24 @@ const buildSubmitValues = (
       }
 
       result[field.path] = arrayValues;
+      continue;
+    }
+
+    const parts = compositeParts(field);
+    if (parts) {
+      const partValues = readPartValues(values[field.path]);
+      const anyFilled = parts.some(
+        (part) => (partValues[part.key] ?? "").trim() !== "",
+      );
+      if (anyFilled) {
+        // Submit every part key (validation guarantees all are filled); the
+        // server assembles them via the field's format.
+        const submitParts: Record<string, string> = {};
+        for (const part of parts) {
+          submitParts[part.key] = partValues[part.key] ?? "";
+        }
+        setNestedValue(result, field.path, submitParts);
+      }
       continue;
     }
 
