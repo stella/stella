@@ -1475,28 +1475,28 @@
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {
-            "blurb": "Answer a question grounded in authoritative sources.",
-            "inside": "a source hierarchy · a research prompt",
-            "title": "Answer from sources"
+            "blurb": "Odpoví na otázku s oporou v autoritativních zdrojích.",
+            "inside": "hierarchie zdrojů · prompt pro rešerši",
+            "title": "Odpověď ze zdrojů"
           },
           "checkAgainstRules": {
-            "blurb": "Review a document and flag what fails, with citations.",
-            "inside": "references by jurisdiction · a checklist · a review prompt",
-            "title": "Check against rules"
+            "blurb": "Zkontroluje dokument a označí, co neprošlo, včetně citací.",
+            "inside": "reference podle jurisdikce · kontrolní seznam · kontrolní prompt",
+            "title": "Kontrola podle pravidel"
           },
           "intakeToDraft": {
-            "blurb": "Ask for the facts, then draft a document.",
-            "inside": "an interview · model documents · a draft prompt",
-            "title": "Intake to draft"
+            "blurb": "Zeptá se na fakta a poté sepíše dokument.",
+            "inside": "rozhovor · vzorové dokumenty · prompt pro koncept",
+            "title": "Od podkladů k návrhu"
           }
         },
-        "createError": "Could not create the skill. Please try again.",
-        "creating": "Setting up…",
-        "insideLabel": "Inside",
-        "startBlank": "Start from blank",
-        "startBlankHint": "An empty skill, for when you know exactly what you want.",
-        "subtitle": "Pick a starting shape. We set up the folders and walk you through filling them in.",
-        "title": "How should your skill work?"
+        "createError": "Dovednost se nepodařilo vytvořit. Zkuste to prosím znovu.",
+        "creating": "Připravuji…",
+        "insideLabel": "Uvnitř",
+        "startBlank": "Začít od nuly",
+        "startBlankHint": "Prázdná dovednost — když přesně víte, co chcete.",
+        "subtitle": "Vyberte výchozí podobu. Připravíme složky a provedeme vás jejich vyplněním.",
+        "title": "Jak má vaše dovednost fungovat?"
       },
       "commandConflict": "Dovednost s tímto / příkazem už existuje",
       "commandLabel": "Lomený příkaz (volitelné)",
