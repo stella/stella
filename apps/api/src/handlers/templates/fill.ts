@@ -6,10 +6,11 @@ import { templateFills } from "@/api/db/schema";
 import { adaptAiFields } from "@/api/handlers/docx/adapt-ai-fields";
 import {
   buildAiFieldGenerator,
+  buildAiLookupFormatter,
   buildAiOccurrenceAdapter,
 } from "@/api/handlers/docx/ai-field-generator";
-import { applyCompositeFields } from "@/api/handlers/docx/composite-fields";
-import { checkDependentFields } from "@/api/handlers/docx/dependent-fields";
+import { createDispatchLookupResolver } from "@/api/handlers/docx/lookup-fields";
+import { applyManifestFillSteps } from "@/api/handlers/docx/manifest-fill-steps";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
 import { resolveAiFields } from "@/api/handlers/docx/resolve-ai-fields";
 import { readManifest } from "@/api/handlers/docx/template-manifest";
@@ -124,31 +125,35 @@ export const fillHandler = async ({
   let adaptedPaths: readonly string[] = [];
   const manifest = await readManifest(buffer);
 
-  // Assemble composite (multipart) field values into their final strings
-  // before any AI step or substitution sees them (in place: an assembled
-  // value is a plain string, so the data stays valid TemplateData).
-  const compositeError = applyCompositeFields(fillData, manifest);
-  if (compositeError !== null) {
-    return new Response(JSON.stringify({ error: compositeError }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
-  // Dependent (optionsFrom) selects must hold one of the source field's
-  // submitted values; reject before any AI step or substitution.
-  const dependentError = checkDependentFields(fillData, manifest);
-  if (dependentError !== null) {
-    return new Response(JSON.stringify({ error: dependentError }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
+  const hasLookupAiFormat = manifest?.fields.some(
+    (field) => field.lookup?.aiFormat,
+  );
   const hasAiDraftFields = manifest?.fields.some((field) => field.aiPrompt);
   const hasAiAdaptFields = manifest?.fields.some((field) => field.aiAdapt);
+  // Loaded once for lookup formatting and the AI draft/adapt steps below.
+  const orgAIConfig =
+    manifest && (hasAiDraftFields || hasAiAdaptFields || hasLookupAiFormat)
+      ? await loadOrgAIConfig(organizationId)
+      : null;
+
+  // Resolve registry lookups, assemble composite (multipart) values, and
+  // check dependent (optionsFrom) selects before any AI step or substitution
+  // sees them (in place: a resolved value is a plain string, so the data
+  // stays valid TemplateData); a failing step rejects naming the field.
+  const stepError = await applyManifestFillSteps({
+    values: fillData,
+    manifest,
+    resolveLookup: createDispatchLookupResolver(),
+    formatLookupWithAi: buildAiLookupFormatter({ orgAIConfig, organizationId }),
+  });
+  if (stepError !== null) {
+    return new Response(JSON.stringify({ error: stepError }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   if (manifest && (hasAiDraftFields || hasAiAdaptFields)) {
-    const orgAIConfig = await loadOrgAIConfig(organizationId);
     if (hasAiDraftFields) {
       const resolved = await resolveAiFields({
         values: parsed,
