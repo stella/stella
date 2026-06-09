@@ -8,7 +8,7 @@ import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
 import {
   Popover,
-  PopoverPopup,
+  PopoverPanel,
   PopoverTrigger,
 } from "@stll/ui/components/popover";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
@@ -209,115 +209,110 @@ export const AiSuggestFields = ({ getView }: AiSuggestFieldsProps) => {
           </Button>
         }
       />
-      <PopoverPopup align="end" className="w-96">
-        {/* Layout lives on this wrapper, not on PopoverPopup: coss renders
-            children inside an inner Viewport (with its own padding), so
-            flex/gap on the popup className would miss the content. */}
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-1">
-            <Button
-              className="flex-1"
-              onClick={() => setScope("document")}
-              size="sm"
-              variant={scope === "document" ? "secondary" : "ghost"}
-            >
-              {t("templates.studio.aiScopeDocument")}
-            </Button>
-            <Button
-              className="flex-1"
-              disabled={!hasSelection}
-              onClick={() => setScope("selection")}
-              size="sm"
-              variant={scope === "selection" ? "secondary" : "ghost"}
-            >
-              {t("templates.studio.aiScopeSelection")}
-            </Button>
-          </div>
-
-          <Textarea
-            className="min-h-16 text-sm"
-            onChange={(e) => setInstructions(e.currentTarget.value)}
-            placeholder={t("templates.studio.aiInstructionsPlaceholder")}
-            value={instructions}
-          />
-
+      <PopoverPanel align="end" className="w-96">
+        <div className="flex items-center gap-1">
           <Button
-            disabled={loading}
-            onClick={() => void handleSuggest()}
+            className="flex-1"
+            onClick={() => setScope("document")}
             size="sm"
+            variant={scope === "document" ? "secondary" : "ghost"}
           >
-            {loading ? (
-              <Loader2Icon className="animate-spin" />
-            ) : (
-              <WandSparklesIcon />
-            )}
-            {loading
-              ? t("templates.studio.aiAnalyzing")
-              : t("templates.studio.aiSuggest")}
+            {t("templates.studio.aiScopeDocument")}
           </Button>
-
-          {proposals.length > 0 && (
-            <ScrollArea className="max-h-80">
-              <ul className="flex flex-col gap-2">
-                {proposals.map((proposal, index) => (
-                  <li
-                    className="flex flex-col gap-1.5 rounded-md border p-2"
-                    key={`${proposal.literalText}-${index}`}
-                  >
-                    <p className="text-muted-foreground truncate text-xs italic">
-                      {proposal.literalText}
-                    </p>
-                    <div className="flex items-center gap-1.5">
-                      <Input
-                        className="h-7 flex-1 text-xs"
-                        onChange={(e) =>
-                          updateProposal(index, { path: e.currentTarget.value })
-                        }
-                        value={proposal.path}
-                      />
-                      <Select
-                        onValueChange={(value) => {
-                          if (typeof value === "string" && isInputType(value)) {
-                            updateProposal(index, { inputType: value });
-                          }
-                        }}
-                        value={proposal.inputType}
-                      >
-                        <SelectTrigger className="h-7 w-28 text-xs" size="sm">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectPopup>
-                          {INPUT_TYPES.map((type) => (
-                            <SelectItem key={type} value={type}>
-                              {t(`templates.inputTypes.${type}`)}
-                            </SelectItem>
-                          ))}
-                        </SelectPopup>
-                      </Select>
-                      <Button
-                        aria-label={t("templates.studio.aiAccept")}
-                        onClick={() => accept(index)}
-                        size="icon-sm"
-                        variant="ghost"
-                      >
-                        <CheckIcon />
-                      </Button>
-                      <Button
-                        aria-label={t("templates.studio.aiReject")}
-                        onClick={() => dismiss(index)}
-                        size="icon-sm"
-                        variant="ghost"
-                      >
-                        <XIcon />
-                      </Button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </ScrollArea>
-          )}
+          <Button
+            className="flex-1"
+            disabled={!hasSelection}
+            onClick={() => setScope("selection")}
+            size="sm"
+            variant={scope === "selection" ? "secondary" : "ghost"}
+          >
+            {t("templates.studio.aiScopeSelection")}
+          </Button>
         </div>
-      </PopoverPopup>
+
+        <Textarea
+          className="min-h-16 text-sm"
+          onChange={(e) => setInstructions(e.currentTarget.value)}
+          placeholder={t("templates.studio.aiInstructionsPlaceholder")}
+          value={instructions}
+        />
+
+        <Button
+          disabled={loading}
+          onClick={() => void handleSuggest()}
+          size="sm"
+        >
+          {loading ? (
+            <Loader2Icon className="animate-spin" />
+          ) : (
+            <WandSparklesIcon />
+          )}
+          {loading
+            ? t("templates.studio.aiAnalyzing")
+            : t("templates.studio.aiSuggest")}
+        </Button>
+
+        {proposals.length > 0 && (
+          <ScrollArea className="max-h-80">
+            <ul className="flex flex-col gap-2">
+              {proposals.map((proposal, index) => (
+                <li
+                  className="flex flex-col gap-1.5 rounded-md border p-2"
+                  key={`${proposal.literalText}-${index}`}
+                >
+                  <p className="text-muted-foreground truncate text-xs italic">
+                    {proposal.literalText}
+                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      className="h-7 flex-1 text-xs"
+                      onChange={(e) =>
+                        updateProposal(index, { path: e.currentTarget.value })
+                      }
+                      value={proposal.path}
+                    />
+                    <Select
+                      onValueChange={(value) => {
+                        if (typeof value === "string" && isInputType(value)) {
+                          updateProposal(index, { inputType: value });
+                        }
+                      }}
+                      value={proposal.inputType}
+                    >
+                      <SelectTrigger className="h-7 w-28 text-xs" size="sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectPopup>
+                        {INPUT_TYPES.map((type) => (
+                          <SelectItem key={type} value={type}>
+                            {t(`templates.inputTypes.${type}`)}
+                          </SelectItem>
+                        ))}
+                      </SelectPopup>
+                    </Select>
+                    <Button
+                      aria-label={t("templates.studio.aiAccept")}
+                      onClick={() => accept(index)}
+                      size="icon-sm"
+                      variant="ghost"
+                    >
+                      <CheckIcon />
+                    </Button>
+                    <Button
+                      aria-label={t("templates.studio.aiReject")}
+                      onClick={() => dismiss(index)}
+                      size="icon-sm"
+                      variant="ghost"
+                    >
+                      <XIcon />
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </ScrollArea>
+        )}
+      </PopoverPanel>
     </Popover>
   );
 };
