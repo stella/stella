@@ -2561,6 +2561,9 @@ export function PagedEditor(
         // (typing) path to keep keystrokes cheap.
         if (!incrementalResult) {
           const MAX_FIELD_STABILIZATION_PASSES = 3;
+          // One clock for all passes so a TIME field cannot tick between
+          // iterations and prevent convergence.
+          const fieldClock = new Date();
           let previousFieldValues: Map<number, string> | null = null;
           for (let pass = 0; pass < MAX_FIELD_STABILIZATION_PASSES; pass++) {
             const { values, changed } = resolveFieldValues(
@@ -2572,7 +2575,7 @@ export function PagedEditor(
                 bookmarkText: buildBookmarkText(newBlocks),
                 seqValues: buildSeqValues(newBlocks),
                 sectionPageCounts: buildSectionPageCounts(newLayout.pages),
-                now: new Date(),
+                now: fieldClock,
               },
             );
             const settled =

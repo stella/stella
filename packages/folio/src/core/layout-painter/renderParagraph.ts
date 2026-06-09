@@ -951,16 +951,20 @@ const EMPTY_BOOKMARK_PAGES: ReadonlyMap<string, number> = new Map();
 const EMPTY_BOOKMARK_TEXT: ReadonlyMap<string, string> = new Map();
 const EMPTY_SEQ_VALUES: ReadonlyMap<number, number> = new Map();
 
-function renderFieldRun(
+/**
+ * Resolve a field run to its display text against the painted page. Used by the
+ * painter and by the tab-anchor width/text helpers so the width reserved for a
+ * field after a tab and the text actually painted always agree. The instruction
+ * drives evaluation; `fieldType` is the fallback when a node carries none.
+ * Returns the cached fallback when no render context is available.
+ */
+function resolveFieldText(
   run: FieldRun,
-  doc: Document,
-  context: RenderContext,
-): HTMLElement {
-  // Resolve the field against the painted page. PAGE/NUMPAGES/DATE/TIME compute
-  // live here as before; PAGEREF/REF/SEQ/SECTIONPAGES fall back to the cached
-  // text until their resolution maps are plumbed through the layout. The
-  // instruction drives evaluation; `fieldType` is the fallback when a node
-  // carries no instruction string.
+  context: RenderContext | undefined,
+): string {
+  if (!context) {
+    return run.fallback ?? "";
+  }
   const fieldContext: FieldContext = {
     pageNumber: context.pageNumber,
     totalPages: context.totalPages,
@@ -972,7 +976,7 @@ function renderFieldRun(
       ? {}
       : { sectionPages: context.sectionPages }),
   };
-  const text = evaluateFieldInstruction(
+  return evaluateFieldInstruction(
     run.instruction || run.fieldType,
     fieldContext,
     {
@@ -980,6 +984,14 @@ function renderFieldRun(
       ...(run.pmStart === undefined ? {} : { instanceId: run.pmStart }),
     },
   );
+}
+
+function renderFieldRun(
+  run: FieldRun,
+  doc: Document,
+  context: RenderContext,
+): HTMLElement {
+  const text = resolveFieldText(run, context);
 
   // Spread the whole FieldRun so every RunFormatting field carries through —
   // Word renders the field result with the result run's full w:rPr. Explicit
@@ -1258,12 +1270,7 @@ function measureFollowingContentWidth(
         ) *
         (scale / 100);
     } else if (isFieldRun(run)) {
-      let fieldText = run.fallback ?? "";
-      if (run.fieldType === "PAGE" && context) {
-        fieldText = String(context.pageNumber);
-      } else if (run.fieldType === "NUMPAGES" && context) {
-        fieldText = String(context.totalPages);
-      }
+      const fieldText = resolveFieldText(run, context);
       width +=
         measureText(
           run.allCaps ? fieldText.toLocaleUpperCase() : fieldText,
@@ -1336,14 +1343,7 @@ function getTextAfterTab(
     if (isTextRun(run)) {
       text += run.text;
     } else if (isFieldRun(run)) {
-      // Resolve field values for TOC page numbers
-      if (run.fieldType === "PAGE" && context) {
-        text += String(context.pageNumber);
-      } else if (run.fieldType === "NUMPAGES" && context) {
-        text += String(context.totalPages);
-      } else {
-        text += run.fallback ?? "";
-      }
+      text += resolveFieldText(run, context);
     } else if (isTabRun(run) || isLineBreakRun(run)) {
       // Stop at next tab or line break
       break;
@@ -1830,13 +1830,9 @@ export function renderLine(
       // Render field run with context for PAGE/NUMPAGES substitution
       const runEl = renderFieldRun(run, doc, options.context);
       lineEl.append(runEl);
-      // Estimate field text width for tab calculations
-      let fieldText = run.fallback ?? "";
-      if (run.fieldType === "PAGE") {
-        fieldText = String(options.context.pageNumber);
-      } else if (run.fieldType === "NUMPAGES") {
-        fieldText = String(options.context.totalPages);
-      }
+      // Estimate field text width for tab calculations (same value the field
+      // painted, so tab math matches).
+      const fieldText = resolveFieldText(run, options.context);
       const fontSize = run.fontSize || 11;
       const fontFamily = run.fontFamily || "Calibri";
       const measuredWidth = measureText(

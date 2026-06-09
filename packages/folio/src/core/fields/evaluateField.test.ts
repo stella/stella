@@ -82,6 +82,15 @@ describe("evaluateField dates and unsupported types", () => {
     expect(evalInstr('DATE \\@ "yyyy-MM-dd"', ctx)).toBe("2026-06-08");
   });
 
+  test("DATE \\* MERGEFORMAT (no date picture) uses the locale date, not the switch", () => {
+    const ctx = baseContext();
+    // \* is a general format switch, not a date picture: must fall back to the
+    // locale date instead of formatting the literal "MERGEFORMAT".
+    expect(evalInstr("DATE \\* MERGEFORMAT", ctx)).toBe(
+      ctx.now.toLocaleDateString(),
+    );
+  });
+
   test("unsupported field types return the fallback", () => {
     const ctx = baseContext();
     expect(evalInstr("MERGEFIELD client_name", ctx)).toBe("FB");

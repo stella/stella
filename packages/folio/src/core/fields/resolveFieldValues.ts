@@ -70,7 +70,7 @@ export function resolveFieldValues(
         ...(sectionPages === undefined ? {} : { sectionPages }),
       };
       const value = evaluateField(
-        parseFieldInstruction(run.instruction ?? run.fieldType),
+        parseFieldInstruction(run.instruction || run.fieldType),
         context,
         { fallback: run.fallback ?? "", instanceId: run.pmStart },
       );

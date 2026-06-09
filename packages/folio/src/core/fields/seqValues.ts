@@ -29,7 +29,7 @@ function walkBlocks(
         if (run.kind !== "field" || run.pmStart === undefined) {
           continue;
         }
-        const parsed = parseFieldInstruction(run.instruction ?? run.fieldType);
+        const parsed = parseFieldInstruction(run.instruction || run.fieldType);
         if (parsed.type !== "SEQ") {
           continue;
         }

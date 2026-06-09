@@ -1,11 +1,16 @@
 import {
   computePageNumber,
   formatDate,
-  getFormatSwitch,
   parseFieldInstruction,
 } from "../docx/fieldParser";
 import type { ParsedFieldInstruction } from "../docx/fieldParser";
 import type { FieldContext } from "./fieldContext";
+
+/** The `\@` date picture, or undefined. Unlike the general format switch, this
+ *  must NOT match `\*` (e.g. `\* MERGEFORMAT`), which is not a date format. */
+function dateFormatSwitch(parsed: ParsedFieldInstruction): string | undefined {
+  return parsed.switches.find((s) => s.switch === "@")?.value;
+}
 
 type EvaluateFieldOptions = {
   /** Shown for unsupported field types and unresolved references. */
@@ -40,7 +45,7 @@ export function evaluateField(
         : computePageNumber(ctx.sectionPages, parsed);
 
     case "TIME": {
-      const format = getFormatSwitch(parsed);
+      const format = dateFormatSwitch(parsed);
       return format
         ? formatDate(ctx.now, format)
         : ctx.now.toLocaleTimeString();
@@ -50,7 +55,7 @@ export function evaluateField(
     case "CREATEDATE":
     case "SAVEDATE":
     case "PRINTDATE": {
-      const format = getFormatSwitch(parsed);
+      const format = dateFormatSwitch(parsed);
       return format
         ? formatDate(ctx.now, format)
         : ctx.now.toLocaleDateString();
