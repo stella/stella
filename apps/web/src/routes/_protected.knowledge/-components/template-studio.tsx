@@ -243,6 +243,8 @@ export const TemplateStudioPage = ({
       focusField: (path) => actionsRef.current?.focusField(path),
       focusPosition: (pos) => actionsRef.current?.focusPosition(pos),
       setFillPreview: (values) => actionsRef.current?.setFillPreview(values),
+      insertExistingField: (path) =>
+        actionsRef.current?.insertExistingField(path),
     });
     return () => setActions(null);
   }, [setActions]);
@@ -552,6 +554,26 @@ export const TemplateStudioPage = ({
 
   actionsRef.current = {
     toggleDirectives: () => setShowDirectives((v) => !v),
+    insertExistingField: (path) => {
+      withEditorView((view) => {
+        const { from, to } = view.state.selection;
+        view.dispatch(
+          view.state.tr.insertText(`{{${path}}}`, from, to).scrollIntoView(),
+        );
+        view.focus();
+        markDirty();
+        if (from !== to) {
+          // Replacing concrete text with a reused field means this spot's
+          // wording may need to differ (declension); let AI fit it.
+          const field = useTemplateStudioStore
+            .getState()
+            .fields.find((f) => f.path === path);
+          if (field && field.aiPrompt === undefined && !field.aiAdapt) {
+            upsertField(path, { aiAdapt: true });
+          }
+        }
+      });
+    },
     setFillPreview: (values) => {
       fillPreviewRef.current = values;
       const view = editorViewRef.current;
@@ -1080,6 +1102,7 @@ const StudioActionRow = () => {
   const t = useTranslations();
   const actions = useTemplateStudioStore((s) => s.actions);
   const ui = useTemplateStudioStore((s) => s.ui);
+  const fields = useTemplateStudioStore((s) => s.fields);
   const isDirty = useTemplateStudioStore((s) => s.isDirty);
   const sessionTemplateId = useTemplateStudioStore((s) => s.templateId);
   const activeOrganizationId = protectedRouteApi.useRouteContext({
@@ -1143,6 +1166,29 @@ const StudioActionRow = () => {
             <BracesIcon />
             {t("templates.studio.scopeField")}
           </MenuItem>
+          {fields.length > 0 && (
+            <MenuSub>
+              <MenuSubTrigger>
+                <BracesIcon />
+                {t("templates.fields")}
+              </MenuSubTrigger>
+              <MenuSubPopup>
+                {fields.map((f) => (
+                  <MenuItem
+                    key={f.path}
+                    onClick={() => actions.insertExistingField(f.path)}
+                  >
+                    <span className="min-w-0 truncate">
+                      {f.label === "" ? f.path : f.label}
+                    </span>
+                    <code className="text-muted-foreground ms-auto ps-3 text-[10px]">
+                      {f.path}
+                    </code>
+                  </MenuItem>
+                ))}
+              </MenuSubPopup>
+            </MenuSub>
+          )}
           <MenuItem onClick={actions.insertCondition}>
             <SplitIcon />
             {t("templates.studio.scopeCondition")}
