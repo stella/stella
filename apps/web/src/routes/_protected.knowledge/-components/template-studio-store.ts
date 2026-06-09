@@ -10,7 +10,11 @@ import type { EditableField } from "@/routes/_protected.knowledge/-components/te
 // History tab — rendered in the global inspector, a separate React tree — share
 // one source of truth. Only one template is authored at a time.
 
-export type StudioField = EditableField & { aiPrompt: string | undefined };
+export type StudioField = EditableField & {
+  aiPrompt: string | undefined;
+  /** Person fills a stub; AI rewords it per occurrence to fit the context. */
+  aiAdapt: boolean;
+};
 export type NameExpr = { name: string; expression: string };
 
 export const defaultStudioField = (path: string): StudioField => ({
@@ -21,6 +25,7 @@ export const defaultStudioField = (path: string): StudioField => ({
   required: false,
   options: [],
   aiPrompt: undefined,
+  aiAdapt: false,
 });
 
 type TemplateStudioSession = {
