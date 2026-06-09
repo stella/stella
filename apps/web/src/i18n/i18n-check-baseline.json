@@ -24,6 +24,7 @@
     "tasks.status",
     "tasks.statusValues.done",
     "tasks.statusValues.open",
+    "templates.conditionMatchAll",
     "templates.fieldOptions",
     "templates.inputTypes.date",
     "translate.settings.remove",
@@ -129,6 +130,10 @@
     ],
     "chat.webSearch.sources": [
       "fr"
+    ],
+    "clauses.variant": [
+      "et",
+      "sk"
     ],
     "clauses.version": [
       "de",
@@ -763,6 +768,13 @@
       "pl",
       "pt-BR"
     ],
+    "templates.conditionOperator": [
+      "de",
+      "pl"
+    ],
+    "templates.conditionsTitle": [
+      "fr"
+    ],
     "templates.fieldOptions": [
       "fr"
     ],
@@ -773,6 +785,12 @@
       "cs",
       "de",
       "sk"
+    ],
+    "templates.studio.expressionPlaceholder": [
+      "fr"
+    ],
+    "templates.studio.scopeCondition": [
+      "fr"
     ],
     "templates.versionLabel": [
       "de",

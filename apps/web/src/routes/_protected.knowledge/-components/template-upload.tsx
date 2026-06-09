@@ -201,7 +201,7 @@ export const TemplateUpload = ({ onDiscovered }: TemplateUploadProps) => {
               variant="outline"
             >
               <WandSparklesIcon />
-              Prepare with AI
+              {t("templates.studio.prepareWithAi")}
             </Button>
           </div>
           <p className="text-muted-foreground text-xs">
