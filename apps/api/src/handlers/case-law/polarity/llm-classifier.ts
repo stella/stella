@@ -7,12 +7,12 @@
  * for potential rule generation.
  */
 
-import { valibotSchema } from "@ai-sdk/valibot";
 import { generateText, Output } from "ai";
 import { Result } from "better-result";
 import * as v from "valibot";
 
 import { getModelForRole } from "@/api/lib/ai-models";
+import { strictOutputSchema } from "@/api/lib/ai-output-schema";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 
@@ -97,7 +97,7 @@ ${context}`,
           },
         ],
         output: Output.object({
-          schema: valibotSchema(classificationSchema),
+          schema: strictOutputSchema(classificationSchema),
         }),
         abortSignal: abortSignal
           ? AbortSignal.any([abortSignal, AbortSignal.timeout(15_000)])

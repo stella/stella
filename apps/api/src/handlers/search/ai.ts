@@ -1,4 +1,3 @@
-import { valibotSchema } from "@ai-sdk/valibot";
 import { generateText, Output } from "ai";
 import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
@@ -20,6 +19,7 @@ import { resolveSelectedWorkspaceIds } from "@/api/handlers/search/search";
 import { aiErrorStatusBody } from "@/api/lib/ai-error";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { getModelForRole, requireAIAvailable } from "@/api/lib/ai-models";
+import { strictOutputSchema } from "@/api/lib/ai-output-schema";
 import { captureError } from "@/api/lib/analytics";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -294,7 +294,7 @@ const generateRefinedSearchQuery = async ({
           previousValidationError: lastValidationError,
         }),
         output: Output.object({
-          schema: valibotSchema(refineSearchOutputSchema),
+          schema: strictOutputSchema(refineSearchOutputSchema),
         }),
         maxOutputTokens: 180,
         abortSignal: AbortSignal.timeout(20_000),
@@ -474,7 +474,7 @@ export const summarizeSearchResults = async ({
           results: contextsResult.map(toModelSearchResultContext),
         }),
         output: Output.object({
-          schema: valibotSchema(searchSummaryOutputSchema),
+          schema: strictOutputSchema(searchSummaryOutputSchema),
         }),
         maxOutputTokens: 700,
         abortSignal: AbortSignal.timeout(30_000),
