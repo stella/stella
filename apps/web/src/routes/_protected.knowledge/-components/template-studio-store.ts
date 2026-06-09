@@ -30,6 +30,14 @@ type TemplateStudioSession = {
   computed: NameExpr[];
 };
 
+/** What the model proposes for a single field's configuration. */
+export type SuggestedFieldConfig = {
+  label?: string | undefined;
+  inputType?: StudioField["inputType"] | undefined;
+  aiPrompt?: string | undefined;
+  exampleValue?: string | undefined;
+};
+
 /** Document actions the page owns; the inspector tab renders the buttons. */
 export type StudioActions = {
   toggleDirectives: () => void;
@@ -41,6 +49,8 @@ export type StudioActions = {
   insertClauseSlot: (slotName: string) => void;
   makeField: () => void;
   save: () => void;
+  /** Ask the model to propose label/type/example for one field. */
+  suggestFieldConfig: (path: string) => Promise<SuggestedFieldConfig | null>;
 };
 
 /** Page-owned UI state the inspector's action row reflects. */
