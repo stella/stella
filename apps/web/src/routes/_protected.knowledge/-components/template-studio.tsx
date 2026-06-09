@@ -540,7 +540,7 @@ export const TemplateStudioPage = ({
       }
       const text = buildPositionalText(view.state.doc).text;
       const response = await api.templates["suggest-fields"].post({
-        text,
+        text: paragraphsAround(text, `{{${path}}}`),
         instructions:
           `Configure the existing field {{${path}}}: propose its label, ` +
           `input type and a realistic exampleValue based on how it is used ` +
@@ -640,6 +640,21 @@ export const TemplateStudioPage = ({
 // inspector. The page (above) owns the document + actions and seeds the shared
 // session store this view reads from. `close-on-route-leave` is a backstop; the
 // page also closes the tab on unmount.
+/** The paragraph containing the marker plus one paragraph on each side:
+ *  enough context for the model to read how the field is used at the spot
+ *  where it was created, without sending the whole document. */
+const paragraphsAround = (text: string, marker: string): string => {
+  const lines = text.split("\n");
+  const index = lines.findIndex((line) => line.includes(marker));
+  if (index === -1) {
+    return text;
+  }
+  return lines
+    .slice(Math.max(0, index - 1), index + 2)
+    .filter((line) => line.trim() !== "")
+    .join("\n");
+};
+
 type StudioFacet = "fields" | "clauses" | "history" | "fill";
 
 const STUDIO_FACETS: readonly StudioFacet[] = [
