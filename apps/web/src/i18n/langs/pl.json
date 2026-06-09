@@ -2062,13 +2062,8 @@
     "structureWarnings": "{count, plural, one {# ostrzeżenie struktury} few {# ostrzeżenia struktury} many {# ostrzeżeń struktury} other {# ostrzeżeń struktury}}",
     "studio": {
       "addComputedField": "Dodaj pole obliczane",
-      "aiBarPlaceholder": "Instrukcje dla propozycji pól (opcjonalnie)",
       "aiDrafted": "Redagowane przez AI",
-      "aiFoundEdits": "{count, plural, =1 {Zaproponowano 1 zmianę — sprawdź ją w dokumencie.} few {Zaproponowano # zmiany — przejdź przez nie w dokumencie.} other {Zaproponowano # zmian — przejdź przez nie w dokumencie.}}",
-      "aiFoundFields": "{count, plural, =1 {Zaproponowano 1 umiejscowienie pola — sprawdź je w dokumencie.} few {Zaproponowano # umiejscowienia pól — przejdź przez nie w dokumencie.} other {Zaproponowano # umiejscowień pól — przejdź przez nie w dokumencie.}}",
-      "aiNoEdits": "AI nie zaproponowała żadnych zmian",
       "aiNoFields": "AI nie zaproponowała żadnych pól",
-      "aiNoText": "Brak tekstu do analizy",
       "aiPresetPrompt": "Zaproponuj wypełnialne pola szablonu",
       "aiPromptPlaceholder": "Opisz, co AI ma zredagować dla tego pola, np. zakres tego pełnomocnictwa.",
       "aiSuggest": "Zaproponuj pola",

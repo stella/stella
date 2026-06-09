@@ -2062,13 +2062,8 @@
     "structureWarnings": "{count, plural, one {# struktuurihoiatus} other {# struktuurihoiatust}}",
     "studio": {
       "addComputedField": "Lisa arvutatud väli",
-      "aiBarPlaceholder": "Juhised väljade soovitamiseks (valikuline)",
       "aiDrafted": "AI koostatud",
-      "aiFoundEdits": "{count, plural, =1 {Soovitati 1 muudatus — vaadake see dokumendis üle.} other {Soovitati # muudatust — käige need dokumendis läbi.}}",
-      "aiFoundFields": "{count, plural, =1 {Soovitati 1 välja paigutus — vaadake see dokumendis üle.} other {Soovitati # välja paigutust — käige need dokumendis läbi.}}",
-      "aiNoEdits": "AI ei pakkunud ühtegi muudatust",
       "aiNoFields": "AI ei pakkunud ühtegi välja",
-      "aiNoText": "Analüüsimiseks pole teksti",
       "aiPresetPrompt": "Paku malli täidetavaid välju",
       "aiPromptPlaceholder": "Kirjeldage, mida AI peaks selle välja jaoks koostama, nt selle volikirja ulatust.",
       "aiSuggest": "Paku välju",

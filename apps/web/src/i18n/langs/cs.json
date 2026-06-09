@@ -2062,13 +2062,8 @@
     "structureWarnings": "{count, plural, one {# varování struktury} few {# varování struktury} other {# varování struktury}}",
     "studio": {
       "addComputedField": "Přidat vypočítané pole",
-      "aiBarPlaceholder": "Pokyny pro návrhy polí (volitelné)",
       "aiDrafted": "Koncept od AI",
-      "aiFoundEdits": "{count, plural, =1 {Navržena 1 úprava — zkontrolujte ji v dokumentu.} few {Navrženy # úpravy — projděte je v dokumentu.} other {Navrženo # úprav — projděte je v dokumentu.}}",
-      "aiFoundFields": "{count, plural, =1 {Navrženo 1 umístění pole — zkontrolujte ho v dokumentu.} few {Navržena # umístění polí — projděte je v dokumentu.} other {Navrženo # umístění polí — projděte je v dokumentu.}}",
-      "aiNoEdits": "AI nenavrhla žádné úpravy",
       "aiNoFields": "AI nenavrhla žádná pole",
-      "aiNoText": "Není žádný text k analýze",
       "aiPresetPrompt": "Navrhni vyplnitelná pole šablony",
       "aiPromptPlaceholder": "Popište, co má AI pro toto pole navrhnout, např. rozsah této plné moci.",
       "aiSuggest": "Navrhnout pole",

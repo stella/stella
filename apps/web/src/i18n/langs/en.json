@@ -2062,13 +2062,8 @@
     "structureWarnings": "{count, plural, one {# structure warning} other {# structure warnings}}",
     "studio": {
       "addComputedField": "Add computed field",
-      "aiBarPlaceholder": "Instructions for field suggestions (optional)",
       "aiDrafted": "AI-drafted",
-      "aiFoundEdits": "{count, plural, =1 {Suggested 1 edit — review it in the document.} other {Suggested # edits — step through them in the document.}}",
-      "aiFoundFields": "{count, plural, =1 {Suggested 1 field placement — review it in the document.} other {Suggested # field placements — step through them in the document.}}",
-      "aiNoEdits": "The AI didn't suggest any edits",
       "aiNoFields": "The AI didn't suggest any fields",
-      "aiNoText": "There's no text to analyze",
       "aiPresetPrompt": "Suggest fillable template fields",
       "aiPromptPlaceholder": "Describe what AI should draft for this field, e.g. the scope of this power of attorney.",
       "aiSuggest": "Suggest fields",

@@ -2062,13 +2062,8 @@
     "structureWarnings": "{count, plural, one {# avertissement de structure} many {# avertissements de structure} other {# avertissements de structure}}",
     "studio": {
       "addComputedField": "Ajouter un champ calculé",
-      "aiBarPlaceholder": "Instructions pour les suggestions de champs (facultatif)",
       "aiDrafted": "Rédigé par l'IA",
-      "aiFoundEdits": "{count, plural, =1 {1 modification suggérée — vérifiez-la dans le document.} other {# modifications suggérées — parcourez-les dans le document.}}",
-      "aiFoundFields": "{count, plural, =1 {1 emplacement de champ suggéré — vérifiez-le dans le document.} other {# emplacements de champs suggérés — parcourez-les dans le document.}}",
-      "aiNoEdits": "L'IA n'a suggéré aucune modification",
       "aiNoFields": "L'IA n'a suggéré aucun champ",
-      "aiNoText": "Aucun texte à analyser",
       "aiPresetPrompt": "Suggérer des champs remplissables du modèle",
       "aiPromptPlaceholder": "Décrivez ce que l'IA doit rédiger pour ce champ, par ex. l'étendue de cette procuration.",
       "aiSuggest": "Suggérer des champs",

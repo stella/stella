@@ -2062,13 +2062,8 @@
     "structureWarnings": "{count, plural, one {# struktúra figyelmeztetés} other {# struktúra figyelmeztetés}}",
     "studio": {
       "addComputedField": "Számított mező hozzáadása",
-      "aiBarPlaceholder": "Utasítások a mezőjavaslatokhoz (nem kötelező)",
       "aiDrafted": "MI által megfogalmazva",
-      "aiFoundEdits": "{count, plural, =1 {1 módosítás javasolva — nézze át a dokumentumban.} other {# módosítás javasolva — lépkedjen végig rajtuk a dokumentumban.}}",
-      "aiFoundFields": "{count, plural, =1 {1 mezőelhelyezés javasolva — nézze át a dokumentumban.} other {# mezőelhelyezés javasolva — lépkedjen végig rajtuk a dokumentumban.}}",
-      "aiNoEdits": "Az MI nem javasolt egyetlen módosítást sem",
       "aiNoFields": "Az MI nem javasolt egyetlen mezőt sem",
-      "aiNoText": "Nincs elemezhető szöveg",
       "aiPresetPrompt": "Javasolj kitölthető sablonmezőket",
       "aiPromptPlaceholder": "Írja le, mit fogalmazzon meg a MI ehhez a mezőhöz, pl. a meghatalmazás terjedelmét.",
       "aiSuggest": "Mezők javaslása",

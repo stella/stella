@@ -2062,13 +2062,8 @@
     "structureWarnings": "{count, plural, one {# advertencia de estructura} other {# advertencias de estructura}}",
     "studio": {
       "addComputedField": "Añadir campo calculado",
-      "aiBarPlaceholder": "Instrucciones para las sugerencias de campos (opcional)",
       "aiDrafted": "Redactado por IA",
-      "aiFoundEdits": "{count, plural, =1 {Se sugirió 1 edición — revísala en el documento.} other {Se sugirieron # ediciones — recórrelas en el documento.}}",
-      "aiFoundFields": "{count, plural, =1 {Se sugirió 1 ubicación de campo — revísala en el documento.} other {Se sugirieron # ubicaciones de campos — recórrelas en el documento.}}",
-      "aiNoEdits": "La IA no sugirió ninguna edición",
       "aiNoFields": "La IA no sugirió ningún campo",
-      "aiNoText": "No hay texto para analizar",
       "aiPresetPrompt": "Sugerir campos rellenables de la plantilla",
       "aiPromptPlaceholder": "Describe qué debe redactar la IA para este campo, p. ej. el alcance de este poder notarial.",
       "aiSuggest": "Sugerir campos",
