@@ -817,6 +817,7 @@
     "somethingWentWrong": "Něco se pokazilo",
     "sort": "Řadit",
     "status": "Stav",
+    "summarizeChanges": "Shrnout změny",
     "today": "Dnes",
     "translate": "Přeložit",
     "tryAgain": "Zkusit znovu",
@@ -1974,6 +1975,7 @@
   "templates": {
     "addCondition": "Přidat podmínku",
     "addItem": "Přidat položku",
+    "addTag": "Přidat štítek",
     "aiAdaptHint": "AI přizpůsobí tuto formulaci každému místu v dokumentu, kde se objeví.",
     "allTemplates": "Všechny šablony",
     "backToList": "Zpět na šablony",
@@ -1997,6 +1999,7 @@
     "createCategory": "Nová kategorie",
     "deleteCategory": "Smazat kategorii",
     "deleteFailed": "Nepodařilo se smazat šablonu",
+    "describeWhenToUse": "Popište, kdy šablonu použít",
     "directiveEach": "Smyčka: {expression}",
     "directiveElse": "Jinak",
     "directiveElseIf": "Jinak pokud: {expression}",
@@ -2029,6 +2032,7 @@
       "textarea": "Text (víceřádkový)"
     },
     "invalidFileType": "Nahrajte prosím soubor .docx",
+    "lastUsedAgo": "Naposledy použito {time}",
     "loadFailed": "Nepodařilo se načíst šablony",
     "newTemplate": "Nová šablona",
     "noTemplates": "Zatím žádné šablony",
@@ -2090,6 +2094,7 @@
       "suggestConfig": "Navrhnout nastavení",
       "whoFills": "Kdo to vyplní?"
     },
+    "tagPlaceholder": "Napište štítek a stiskněte Enter",
     "templateDeleted": "Šablona smazána",
     "templateName": "Název šablony",
     "templateNamePlaceholder": "např. Pracovní smlouva",
@@ -2099,9 +2104,12 @@
     "unmatchedPlaceholders": "Některé zástupné texty nebyly vyplněny: {list}",
     "unsavedLeaveConfirm": "Máte neuložené změny. Odejít bez uložení?",
     "unusedValues": "Některé hodnoty nebyly použity: {list}",
+    "updatedAgo": "Aktualizováno {time}",
     "uploadDescription": "Nahrajte soubor .docx s '{{placeholders}}' pro vytvoření šablony",
     "uploadDifferent": "Nahrát jinou šablonu",
     "uploadTitle": "Vytvořit šablonu",
+    "usageGuidance": "Pokyny k použití",
+    "usedTimes": "Použito {count}×",
     "validationErrors": "Opravte prosím zvýrazněné chyby",
     "validationMaxLength": "Maximálně {max} znaků",
     "validationMinLength": "Minimálně {min} znaků",
@@ -2111,7 +2119,11 @@
     "validationRequired": "Toto pole je povinné",
     "versionLabel": "Verze {version}",
     "versionsEmpty": "Žádná historie verzí",
-    "viewVersion": "Zobrazit"
+    "viewVersion": "Zobrazit",
+    "whenNotToUse": "Kdy nepoužívat",
+    "whenNotToUsePlaceholder": "Kdy se této šabloně vyhnout?",
+    "whenToUse": "Kdy použít",
+    "whenToUsePlaceholder": "Kdy se má tato šablona použít? (pomáhá AI s výběrem šablony)"
   },
   "translate": {
     "dialog": {

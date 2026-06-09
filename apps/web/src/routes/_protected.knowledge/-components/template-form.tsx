@@ -1,7 +1,13 @@
 import { useCallback, useRef, useState } from "react";
 
 import { panic } from "better-result";
-import { AlertTriangleIcon, EyeIcon, PlusIcon, TrashIcon } from "lucide-react";
+import {
+  AlertTriangleIcon,
+  EyeIcon,
+  PlusIcon,
+  TrashIcon,
+  WandSparklesIcon,
+} from "lucide-react";
 import { useLocale, useTranslations } from "use-intl";
 
 import { evaluateCondition } from "@stll/template-conditions";
@@ -223,6 +229,21 @@ const FieldError = ({ message }: { message?: string | undefined }) => {
   return <p className="text-destructive-foreground text-sm">{message}</p>;
 };
 
+/** Shown under aiAdapt fields: the typed value is a stub that AI rewords to
+ *  fit the surrounding sentence at each place it appears in the document. */
+const AiAdaptHint = ({ show }: { show: boolean }) => {
+  const t = useTranslations();
+  if (!show) {
+    return null;
+  }
+  return (
+    <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
+      <WandSparklesIcon aria-hidden="true" className="size-3.5 shrink-0" />
+      {t("templates.aiAdaptHint")}
+    </p>
+  );
+};
+
 const FieldRenderer = ({
   field,
   value,
@@ -312,6 +333,7 @@ const FieldRenderer = ({
             />
           }
         />
+        <AiAdaptHint show={field.aiAdapt === true} />
         <FieldError message={error} />
       </Field>
     );
@@ -374,6 +396,7 @@ const FieldRenderer = ({
           />
         }
       />
+      <AiAdaptHint show={field.aiAdapt === true} />
       <FieldError message={error} />
     </Field>
   );

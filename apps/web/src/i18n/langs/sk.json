@@ -817,6 +817,7 @@
     "somethingWentWrong": "Niečo sa pokazilo",
     "sort": "Zoradiť",
     "status": "Stav",
+    "summarizeChanges": "Zhrnúť zmeny",
     "today": "Dnes",
     "translate": "Preložiť",
     "tryAgain": "Skúsiť znova",
@@ -1974,6 +1975,7 @@
   "templates": {
     "addCondition": "Pridať podmienku",
     "addItem": "Pridať položku",
+    "addTag": "Pridať štítok",
     "aiAdaptHint": "AI prispôsobí túto formuláciu každému miestu v dokumente, kde sa objaví.",
     "allTemplates": "Všetky šablóny",
     "backToList": "Späť na šablóny",
@@ -1997,6 +1999,7 @@
     "createCategory": "Nová kategória",
     "deleteCategory": "Odstrániť kategóriu",
     "deleteFailed": "Nepodarilo sa vymazať šablónu",
+    "describeWhenToUse": "Popíšte, kedy šablónu použiť",
     "directiveEach": "Cyklus: {expression}",
     "directiveElse": "Inak",
     "directiveElseIf": "Inak ak: {expression}",
@@ -2029,6 +2032,7 @@
       "textarea": "Text (viacriadkový)"
     },
     "invalidFileType": "Nahrajte prosím súbor .docx",
+    "lastUsedAgo": "Naposledy použité {time}",
     "loadFailed": "Nepodarilo sa načítať šablóny",
     "newTemplate": "Nová šablóna",
     "noTemplates": "Zatiaľ žiadne šablóny",
@@ -2090,6 +2094,7 @@
       "suggestConfig": "Navrhnúť nastavenie",
       "whoFills": "Kto to vyplní?"
     },
+    "tagPlaceholder": "Napíšte štítok a stlačte Enter",
     "templateDeleted": "Šablóna vymazaná",
     "templateName": "Názov šablóny",
     "templateNamePlaceholder": "napr. Pracovná zmluva",
@@ -2099,9 +2104,12 @@
     "unmatchedPlaceholders": "Niektoré zástupné znaky neboli vyplnené: {list}",
     "unsavedLeaveConfirm": "Máte neuložené zmeny. Odísť bez uloženia?",
     "unusedValues": "Niektoré hodnoty neboli použité: {list}",
+    "updatedAgo": "Aktualizované {time}",
     "uploadDescription": "Nahrajte súbor .docx s '{{placeholders}}' na vytvorenie šablóny",
     "uploadDifferent": "Nahrať inú šablónu",
     "uploadTitle": "Vytvoriť šablónu",
+    "usageGuidance": "Pokyny na použitie",
+    "usedTimes": "Použité {count}×",
     "validationErrors": "Opravte prosím zvýraznené chyby",
     "validationMaxLength": "Maximálne {max} znakov",
     "validationMinLength": "Minimálne {min} znakov",
@@ -2111,7 +2119,11 @@
     "validationRequired": "Toto pole je povinné",
     "versionLabel": "Verzia {version}",
     "versionsEmpty": "Žiadna história verzií",
-    "viewVersion": "Zobraziť"
+    "viewVersion": "Zobraziť",
+    "whenNotToUse": "Kedy nepoužívať",
+    "whenNotToUsePlaceholder": "Kedy sa tejto šablóne vyhnúť?",
+    "whenToUse": "Kedy použiť",
+    "whenToUsePlaceholder": "Kedy sa má táto šablóna použiť? (pomáha AI s výberom šablóny)"
   },
   "translate": {
     "dialog": {

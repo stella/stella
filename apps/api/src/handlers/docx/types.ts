@@ -254,6 +254,13 @@ export type FieldMeta = {
    * with no provider the field is simply left unfilled.
    */
   aiPrompt?: string | undefined;
+  /**
+   * When true, the user-entered value is a stub that AI rewrites at fill time
+   * to fit the surrounding text of each marker occurrence (declension and
+   * phrasing differ per sentence in inflected languages). With no model
+   * provider, or on any model failure, the stub fills every occurrence as-is.
+   */
+  aiAdapt?: boolean | undefined;
 };
 
 /**
@@ -335,7 +342,9 @@ export const isFieldMeta = (value: unknown): value is FieldMeta => {
       isFieldValidation(value["validation"])) &&
     (value["required"] === undefined ||
       typeof value["required"] === "boolean") &&
-    (value["aiPrompt"] === undefined || typeof value["aiPrompt"] === "string")
+    (value["aiPrompt"] === undefined ||
+      typeof value["aiPrompt"] === "string") &&
+    (value["aiAdapt"] === undefined || typeof value["aiAdapt"] === "boolean")
   );
 };
 
@@ -431,6 +440,9 @@ export type ResolvedField = {
   options?: string[] | undefined;
   validation?: FieldValidation | undefined;
   required?: boolean | undefined;
+  /** Mirrors {@link FieldMeta.aiAdapt}: the fill form shows an AI-adaptation
+   *  hint next to the field's input when set. */
+  aiAdapt?: boolean | undefined;
   itemFields?: ResolvedField[] | undefined;
   /** Condition expression that must be true for this
    *  field to be visible in the fill form. */

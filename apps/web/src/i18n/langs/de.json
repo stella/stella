@@ -817,6 +817,7 @@
     "somethingWentWrong": "Etwas ist schiefgelaufen",
     "sort": "Sortieren",
     "status": "Status",
+    "summarizeChanges": "Änderungen zusammenfassen",
     "today": "Heute",
     "translate": "Übersetzen",
     "tryAgain": "Erneut versuchen",
@@ -1974,6 +1975,7 @@
   "templates": {
     "addCondition": "Bedingung hinzufügen",
     "addItem": "Element hinzufügen",
+    "addTag": "Schlagwort hinzufügen",
     "aiAdaptHint": "Die KI passt diese Formulierung an jede Stelle im Dokument an, an der sie vorkommt.",
     "allTemplates": "Alle Vorlagen",
     "backToList": "Zurück zu Vorlagen",
@@ -1997,6 +1999,7 @@
     "createCategory": "Neue Kategorie",
     "deleteCategory": "Kategorie löschen",
     "deleteFailed": "Vorlage konnte nicht gelöscht werden",
+    "describeWhenToUse": "Beschreiben Sie, wann diese Vorlage verwendet wird",
     "directiveEach": "Schleife: {expression}",
     "directiveElse": "Sonst",
     "directiveElseIf": "Sonst wenn: {expression}",
@@ -2029,6 +2032,7 @@
       "textarea": "Text (mehrzeilig)"
     },
     "invalidFileType": "Bitte laden Sie eine .docx-Datei hoch",
+    "lastUsedAgo": "Zuletzt verwendet {time}",
     "loadFailed": "Vorlagen konnten nicht geladen werden",
     "newTemplate": "Neue Vorlage",
     "noTemplates": "Noch keine Vorlagen",
@@ -2090,6 +2094,7 @@
       "suggestConfig": "Konfiguration vorschlagen",
       "whoFills": "Wer füllt das aus?"
     },
+    "tagPlaceholder": "Schlagwort eingeben und Enter drücken",
     "templateDeleted": "Vorlage gelöscht",
     "templateName": "Vorlagenname",
     "templateNamePlaceholder": "z. B. Arbeitsvertrag",
@@ -2099,9 +2104,12 @@
     "unmatchedPlaceholders": "Einige Platzhalter wurden nicht ausgefüllt: {list}",
     "unsavedLeaveConfirm": "Sie haben ungespeicherte Änderungen. Ohne Speichern verlassen?",
     "unusedValues": "Einige Werte wurden nicht verwendet: {list}",
+    "updatedAgo": "Aktualisiert {time}",
     "uploadDescription": "Laden Sie eine .docx-Datei mit '{{placeholders}}' hoch, um eine Vorlage zu erstellen",
     "uploadDifferent": "Andere Vorlage hochladen",
     "uploadTitle": "Vorlage erstellen",
+    "usageGuidance": "Verwendungshinweise",
+    "usedTimes": "{count}-mal verwendet",
     "validationErrors": "Bitte beheben Sie die markierten Fehler",
     "validationMaxLength": "Maximal {max} Zeichen",
     "validationMinLength": "Mindestens {min} Zeichen",
@@ -2111,7 +2119,11 @@
     "validationRequired": "Dieses Feld ist erforderlich",
     "versionLabel": "Version {version}",
     "versionsEmpty": "Kein Versionsverlauf",
-    "viewVersion": "Anzeigen"
+    "viewVersion": "Anzeigen",
+    "whenNotToUse": "Wann nicht verwenden",
+    "whenNotToUsePlaceholder": "Wann sollte diese Vorlage nicht verwendet werden?",
+    "whenToUse": "Wann verwenden",
+    "whenToUsePlaceholder": "Wann sollte diese Vorlage verwendet werden? (hilft der KI bei der Vorlagenauswahl)"
   },
   "translate": {
     "dialog": {

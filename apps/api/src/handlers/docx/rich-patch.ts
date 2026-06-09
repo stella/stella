@@ -531,3 +531,75 @@ export const patchXmlPart = (
     changed,
   };
 };
+
+/**
+ * Text of every paragraph in an XML part, in document order, computed from
+ * the same text spans the patcher walks. Occurrence-indexed substitution
+ * (`patchXmlPartPerOccurrence`) counts marker occurrences against exactly
+ * this text, so context extraction and patching can never drift apart.
+ */
+export const partParagraphTexts = (xml: string): string[] => {
+  const doc = slimdom.parseXmlDocument(xml);
+  return [...doc.getElementsByTagNameNS(W_NS, "p")].map((paragraph) =>
+    collectTextSpans(paragraph)
+      .map((span) => span.text)
+      .join(""),
+  );
+};
+
+/**
+ * Replace placeholders occurrence-by-occurrence: the nth occurrence of
+ * `{{key}}` (in document order, counted across parts via the shared
+ * `counters` map) is replaced with `occurrenceValues.get(key)[n]`. Keys
+ * absent from the map and occurrences beyond the provided list are left
+ * untouched, so the regular global fill can still substitute them.
+ */
+export const patchXmlPartPerOccurrence = (
+  xml: string,
+  occurrenceValues: ReadonlyMap<string, readonly string[]>,
+  counters: Map<string, number>,
+): { xml: string; changed: boolean } => {
+  const doc = slimdom.parseXmlDocument(xml);
+  const paragraphs = [...doc.getElementsByTagNameNS(W_NS, "p")];
+  let changed = false;
+
+  for (const paragraph of paragraphs) {
+    const text = collectTextSpans(paragraph)
+      .map((span) => span.text)
+      .join("");
+    const matches: PlaceholderMatch[] = [];
+    for (const match of text.matchAll(placeholderPattern())) {
+      const key = match[1];
+      if (key === undefined) {
+        continue;
+      }
+      const renderings = occurrenceValues.get(key);
+      if (renderings === undefined) {
+        continue;
+      }
+      const index = counters.get(key) ?? 0;
+      counters.set(key, index + 1);
+      const value = renderings.at(index);
+      if (value === undefined) {
+        continue;
+      }
+      matches.push({
+        start: match.index,
+        end: match.index + match[0].length,
+        value,
+      });
+    }
+    if (matches.length === 0) {
+      continue;
+    }
+    for (const match of matches.toReversed()) {
+      applyInlineMatch(paragraph, collectTextSpans(paragraph), match);
+    }
+    changed = true;
+  }
+
+  return {
+    xml: changed ? slimdom.serializeToWellFormedString(doc) : xml,
+    changed,
+  };
+};

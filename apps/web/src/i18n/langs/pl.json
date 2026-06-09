@@ -817,6 +817,7 @@
     "somethingWentWrong": "Coś poszło nie tak",
     "sort": "Sortuj",
     "status": "Status",
+    "summarizeChanges": "Podsumuj zmiany",
     "today": "Dzisiaj",
     "translate": "Przetłumacz",
     "tryAgain": "Spróbuj ponownie",
@@ -1974,6 +1975,7 @@
   "templates": {
     "addCondition": "Dodaj warunek",
     "addItem": "Dodaj element",
+    "addTag": "Dodaj tag",
     "aiAdaptHint": "AI dostosuje to sformułowanie do każdego miejsca w dokumencie, w którym się pojawia.",
     "allTemplates": "Wszystkie szablony",
     "backToList": "Powrót do szablonów",
@@ -1997,6 +1999,7 @@
     "createCategory": "Nowa kategoria",
     "deleteCategory": "Usuń kategorię",
     "deleteFailed": "Nie udało się usunąć szablonu",
+    "describeWhenToUse": "Opisz, kiedy używać tego szablonu",
     "directiveEach": "Pętla: {expression}",
     "directiveElse": "W przeciwnym razie",
     "directiveElseIf": "W przeciwnym razie, jeśli: {expression}",
@@ -2029,6 +2032,7 @@
       "textarea": "Tekst (wielowierszowy)"
     },
     "invalidFileType": "Prześlij plik .docx",
+    "lastUsedAgo": "Ostatnio użyto {time}",
     "loadFailed": "Nie udało się załadować szablonów",
     "newTemplate": "Nowy szablon",
     "noTemplates": "Brak szablonów",
@@ -2090,6 +2094,7 @@
       "suggestConfig": "Zaproponuj konfigurację",
       "whoFills": "Kto to wypełni?"
     },
+    "tagPlaceholder": "Wpisz tag i naciśnij Enter",
     "templateDeleted": "Szablon usunięty",
     "templateName": "Nazwa szablonu",
     "templateNamePlaceholder": "np. Umowa o pracę",
@@ -2099,9 +2104,12 @@
     "unmatchedPlaceholders": "Niektóre symbole zastępcze nie zostały wypełnione: {list}",
     "unsavedLeaveConfirm": "Masz niezapisane zmiany. Wyjść bez zapisywania?",
     "unusedValues": "Niektóre wartości nie zostały użyte: {list}",
+    "updatedAgo": "Zaktualizowano {time}",
     "uploadDescription": "Prześlij plik .docx z '{{placeholders}}', aby utworzyć szablon",
     "uploadDifferent": "Prześlij inny szablon",
     "uploadTitle": "Utwórz szablon",
+    "usageGuidance": "Wskazówki użycia",
+    "usedTimes": "{count, plural, one {Użyto # raz} few {Użyto # razy} many {Użyto # razy} other {Użyto # razy}}",
     "validationErrors": "Popraw zaznaczone błędy",
     "validationMaxLength": "Maksymalnie {max} znaków",
     "validationMinLength": "Minimum {min} znaków",
@@ -2111,7 +2119,11 @@
     "validationRequired": "To pole jest wymagane",
     "versionLabel": "Wersja {version}",
     "versionsEmpty": "Brak historii wersji",
-    "viewVersion": "Podgląd"
+    "viewVersion": "Podgląd",
+    "whenNotToUse": "Kiedy nie używać",
+    "whenNotToUsePlaceholder": "Kiedy unikać tego szablonu?",
+    "whenToUse": "Kiedy używać",
+    "whenToUsePlaceholder": "Kiedy należy używać tego szablonu? (pomaga AI w wyborze szablonu)"
   },
   "translate": {
     "dialog": {

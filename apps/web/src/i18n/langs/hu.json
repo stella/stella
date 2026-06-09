@@ -817,6 +817,7 @@
     "somethingWentWrong": "Hiba történt",
     "sort": "Rendezés",
     "status": "Státusz",
+    "summarizeChanges": "Változtatások összefoglalása",
     "today": "Ma",
     "translate": "Fordítás",
     "tryAgain": "Próbálja újra",
@@ -1974,6 +1975,7 @@
   "templates": {
     "addCondition": "Feltétel hozzáadása",
     "addItem": "Elem hozzáadása",
+    "addTag": "Címke hozzáadása",
     "aiAdaptHint": "Az MI a megfogalmazást a dokumentum minden előfordulási helyéhez igazítja.",
     "allTemplates": "Összes sablon",
     "backToList": "Vissza a sablonokhoz",
@@ -1997,6 +1999,7 @@
     "createCategory": "Új kategória",
     "deleteCategory": "Kategória törlése",
     "deleteFailed": "Nem sikerült törölni a sablont",
+    "describeWhenToUse": "Írja le, mikor használandó ez a sablon",
     "directiveEach": "Ciklus: {expression}",
     "directiveElse": "Különben",
     "directiveElseIf": "Különben ha: {expression}",
@@ -2029,6 +2032,7 @@
       "textarea": "Szöveg (többsoros)"
     },
     "invalidFileType": "Kérjük, töltsön fel egy .docx fájlt",
+    "lastUsedAgo": "Utoljára használva {time}",
     "loadFailed": "Nem sikerült betölteni a sablonokat",
     "newTemplate": "Új sablon",
     "noTemplates": "Még nincsenek sablonok",
@@ -2090,6 +2094,7 @@
       "suggestConfig": "Beállítás javaslása",
       "whoFills": "Ki tölti ki?"
     },
+    "tagPlaceholder": "Írjon be egy címkét, majd nyomjon Entert",
     "templateDeleted": "Sablon törölve",
     "templateName": "Sablon neve",
     "templateNamePlaceholder": "pl. Munkaszerződés",
@@ -2099,9 +2104,12 @@
     "unmatchedPlaceholders": "Egyes helykitöltők nem lettek kitöltve: {list}",
     "unsavedLeaveConfirm": "Mentetlen módosításai vannak. Kilép mentés nélkül?",
     "unusedValues": "Egyes értékek nem kerültek felhasználásra: {list}",
+    "updatedAgo": "Frissítve {time}",
     "uploadDescription": "Töltsön fel egy .docx fájlt '{{placeholders}}' jelölőkkel sablon létrehozásához",
     "uploadDifferent": "Másik sablon feltöltése",
     "uploadTitle": "Sablon létrehozása",
+    "usageGuidance": "Használati útmutató",
+    "usedTimes": "{count} alkalommal használva",
     "validationErrors": "Kérjük, javítsa ki a kiemelt hibákat",
     "validationMaxLength": "Legfeljebb {max} karakter",
     "validationMinLength": "Legalább {min} karakter",
@@ -2111,7 +2119,11 @@
     "validationRequired": "Ez a mező kötelező",
     "versionLabel": "{version}. verzió",
     "versionsEmpty": "Nincs verzióelőzmény",
-    "viewVersion": "Megtekintés"
+    "viewVersion": "Megtekintés",
+    "whenNotToUse": "Mikor ne használja",
+    "whenNotToUsePlaceholder": "Mikor kerülendő ez a sablon?",
+    "whenToUse": "Mikor használja",
+    "whenToUsePlaceholder": "Mikor használandó ez a sablon? (segíti az AI sablonválasztását)"
   },
   "translate": {
     "dialog": {

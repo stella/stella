@@ -820,6 +820,7 @@ type Messages = {
     "somethingWentWrong": "Something went wrong";
     "sort": "Sort";
     "status": "Status";
+    "summarizeChanges": "Summarize changes";
     "today": "Today";
     "translate": "Translate";
     "tryAgain": "Try again";
@@ -1977,6 +1978,7 @@ type Messages = {
   "templates": {
     "addCondition": "Add condition";
     "addItem": "Add item";
+    "addTag": "Add tag";
     "aiAdaptHint": "AI adapts this wording to fit each place it appears in the document.";
     "allTemplates": "All templates";
     "backToList": "Back to templates";
@@ -2000,6 +2002,7 @@ type Messages = {
     "createCategory": "New category";
     "deleteCategory": "Delete category";
     "deleteFailed": "Failed to delete template";
+    "describeWhenToUse": "Describe when to use this";
     "directiveEach": "Loop: {expression}";
     "directiveElse": "Else";
     "directiveElseIf": "Else if: {expression}";
@@ -2032,6 +2035,7 @@ type Messages = {
       "textarea": "Text (multiline)";
     };
     "invalidFileType": "Please upload a .docx file";
+    "lastUsedAgo": "Last used {time}";
     "loadFailed": "Failed to load templates";
     "newTemplate": "New template";
     "noTemplates": "No templates yet";
@@ -2093,6 +2097,7 @@ type Messages = {
       "suggestConfig": "Suggest configuration";
       "whoFills": "Who fills this?";
     };
+    "tagPlaceholder": "Type a tag and press Enter";
     "templateDeleted": "Template deleted";
     "templateName": "Template name";
     "templateNamePlaceholder": "e.g. Employment Agreement";
@@ -2102,9 +2107,12 @@ type Messages = {
     "unmatchedPlaceholders": "Some placeholders were not filled: {list}";
     "unsavedLeaveConfirm": "You have unsaved changes. Leave without saving?";
     "unusedValues": "Some values were not used: {list}";
+    "updatedAgo": "Updated {time}";
     "uploadDescription": "Upload a .docx file with '{{placeholders}}' to create a template";
     "uploadDifferent": "Upload a different template";
     "uploadTitle": "Create a template";
+    "usageGuidance": "Usage guidance";
+    "usedTimes": "Used {count, plural, one {# time} other {# times}}";
     "validationErrors": "Please fix the highlighted errors";
     "validationMaxLength": "Maximum {max} characters";
     "validationMinLength": "Minimum {min} characters";
@@ -2115,6 +2123,10 @@ type Messages = {
     "versionLabel": "Version {version}";
     "versionsEmpty": "No version history";
     "viewVersion": "View";
+    "whenNotToUse": "When not to use";
+    "whenNotToUsePlaceholder": "When should this template be avoided?";
+    "whenToUse": "When to use";
+    "whenToUsePlaceholder": "When should this template be used? (guides AI template selection)";
   };
   "translate": {
     "dialog": {

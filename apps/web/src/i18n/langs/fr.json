@@ -817,6 +817,7 @@
     "somethingWentWrong": "Une erreur est survenue",
     "sort": "Trier",
     "status": "Statut",
+    "summarizeChanges": "Résumer les modifications",
     "today": "Aujourd'hui",
     "translate": "Traduire",
     "tryAgain": "Réessayer",
@@ -1974,6 +1975,7 @@
   "templates": {
     "addCondition": "Ajouter une condition",
     "addItem": "Ajouter un élément",
+    "addTag": "Ajouter une étiquette",
     "aiAdaptHint": "L'IA adapte cette formulation à chaque endroit du document où elle apparaît.",
     "allTemplates": "Tous les modèles",
     "backToList": "Retour aux modèles",
@@ -1997,6 +1999,7 @@
     "createCategory": "Nouvelle catégorie",
     "deleteCategory": "Supprimer la catégorie",
     "deleteFailed": "Impossible de supprimer le modèle",
+    "describeWhenToUse": "Décrivez quand utiliser ce modèle",
     "directiveEach": "Boucle : {expression}",
     "directiveElse": "Sinon",
     "directiveElseIf": "Sinon si : {expression}",
@@ -2029,6 +2032,7 @@
       "textarea": "Texte (multiligne)"
     },
     "invalidFileType": "Veuillez importer un fichier .docx",
+    "lastUsedAgo": "Dernière utilisation {time}",
     "loadFailed": "Impossible de charger les modèles",
     "newTemplate": "Nouveau modèle",
     "noTemplates": "Aucun modèle pour le moment",
@@ -2090,6 +2094,7 @@
       "suggestConfig": "Suggérer la configuration",
       "whoFills": "Qui le remplit ?"
     },
+    "tagPlaceholder": "Saisissez une étiquette et appuyez sur Entrée",
     "templateDeleted": "Modèle supprimé",
     "templateName": "Nom du modèle",
     "templateNamePlaceholder": "ex. Contrat de travail",
@@ -2099,9 +2104,12 @@
     "unmatchedPlaceholders": "Certains champs n'ont pas été remplis : {list}",
     "unsavedLeaveConfirm": "Vous avez des modifications non enregistrées. Quitter sans enregistrer ?",
     "unusedValues": "Certaines valeurs n'ont pas été utilisées : {list}",
+    "updatedAgo": "Mis à jour {time}",
     "uploadDescription": "Importez un fichier .docx avec des '{{espaces réservés}}' pour créer un modèle",
     "uploadDifferent": "Importer un autre modèle",
     "uploadTitle": "Créer un modèle",
+    "usageGuidance": "Conseils d'utilisation",
+    "usedTimes": "Utilisé {count, plural, one {# fois} other {# fois}}",
     "validationErrors": "Veuillez corriger les erreurs surlignées",
     "validationMaxLength": "Maximum {max} caractères",
     "validationMinLength": "Minimum {min} caractères",
@@ -2111,7 +2119,11 @@
     "validationRequired": "Ce champ est obligatoire",
     "versionLabel": "Version {version}",
     "versionsEmpty": "Aucun historique de versions",
-    "viewVersion": "Voir"
+    "viewVersion": "Voir",
+    "whenNotToUse": "Quand ne pas utiliser",
+    "whenNotToUsePlaceholder": "Quand faut-il éviter ce modèle ?",
+    "whenToUse": "Quand utiliser",
+    "whenToUsePlaceholder": "Quand ce modèle doit-il être utilisé ? (guide la sélection de modèles par l'IA)"
   },
   "translate": {
     "dialog": {

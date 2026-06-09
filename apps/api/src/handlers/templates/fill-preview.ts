@@ -2,7 +2,11 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { SafeDb, ScopedDb } from "@/api/db";
-import { buildAiFieldGenerator } from "@/api/handlers/docx/ai-field-generator";
+import { adaptAiFields } from "@/api/handlers/docx/adapt-ai-fields";
+import {
+  buildAiFieldGenerator,
+  buildAiOccurrenceAdapter,
+} from "@/api/handlers/docx/ai-field-generator";
 import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { extractText } from "@/api/handlers/docx/extract-text";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
@@ -111,16 +115,35 @@ const fillPreviewHandler = async function* ({
   }
 
   // Draft AI-fillable fields so the preview reflects what download produces.
+  let fillBuffer: Buffer = buffer;
+  let adaptedPaths: readonly string[] = [];
   const manifest = await readManifest(buffer);
-  if (manifest?.fields.some((field) => field.aiPrompt)) {
+  const hasAiDraftFields = manifest?.fields.some((field) => field.aiPrompt);
+  const hasAiAdaptFields = manifest?.fields.some((field) => field.aiAdapt);
+  if (manifest && (hasAiDraftFields || hasAiAdaptFields)) {
     const orgAIConfig = await loadOrgAIConfig(organizationId);
-    const aiResolved = await resolveAiFields({
-      values: record,
-      fields: manifest.fields,
-      generate: buildAiFieldGenerator({ orgAIConfig, organizationId }),
-    });
-    for (const [key, value] of Object.entries(aiResolved)) {
-      record[key] = value;
+    if (hasAiDraftFields) {
+      const aiResolved = await resolveAiFields({
+        values: record,
+        fields: manifest.fields,
+        generate: buildAiFieldGenerator({ orgAIConfig, organizationId }),
+      });
+      for (const [key, value] of Object.entries(aiResolved)) {
+        record[key] = value;
+      }
+    }
+    if (hasAiAdaptFields) {
+      // Rewrite each aiAdapt marker occurrence to fit its surrounding text;
+      // the stub stays in `record` so uncovered occurrences still get the
+      // plain global substitution below.
+      const adapted = await adaptAiFields({
+        buffer,
+        fields: manifest.fields,
+        values: record,
+        adapt: buildAiOccurrenceAdapter({ orgAIConfig, organizationId }),
+      });
+      fillBuffer = adapted.buffer;
+      adaptedPaths = adapted.adaptedPaths;
     }
   }
 
@@ -135,7 +158,7 @@ const fillPreviewHandler = async function* ({
     );
   }
 
-  const result = await fillTemplate(buffer, record);
+  const result = await fillTemplate(fillBuffer, record);
 
   // Extract text from the filled document
   const { paragraphs, charCount } = await extractText(result.buffer);
@@ -144,7 +167,11 @@ const fillPreviewHandler = async function* ({
     paragraphs,
     charCount,
     unmatchedPlaceholders: result.unmatchedPlaceholders,
-    unusedValues: result.unusedValues,
+    // Adapted stubs no longer match a marker (each occurrence was already
+    // substituted), so they are not "unused" in any user-meaningful sense.
+    unusedValues: result.unusedValues.filter(
+      (name) => !adaptedPaths.includes(name),
+    ),
     structureErrors: result.structureErrors,
   });
 };

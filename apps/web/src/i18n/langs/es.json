@@ -817,6 +817,7 @@
     "somethingWentWrong": "Algo salió mal",
     "sort": "Ordenar",
     "status": "Estado",
+    "summarizeChanges": "Resumir cambios",
     "today": "Hoy",
     "translate": "Traducir",
     "tryAgain": "Reintentar",
@@ -1974,6 +1975,7 @@
   "templates": {
     "addCondition": "Añadir condición",
     "addItem": "Añadir elemento",
+    "addTag": "Añadir etiqueta",
     "aiAdaptHint": "La IA adapta esta redacción a cada lugar del documento donde aparece.",
     "allTemplates": "Todas las plantillas",
     "backToList": "Volver a plantillas",
@@ -1997,6 +1999,7 @@
     "createCategory": "Nueva categoría",
     "deleteCategory": "Eliminar categoría",
     "deleteFailed": "No se pudo eliminar la plantilla",
+    "describeWhenToUse": "Describe cuándo usar esta plantilla",
     "directiveEach": "Bucle: {expression}",
     "directiveElse": "Si no",
     "directiveElseIf": "Si no, si: {expression}",
@@ -2029,6 +2032,7 @@
       "textarea": "Texto (multilínea)"
     },
     "invalidFileType": "Suba un archivo .docx",
+    "lastUsedAgo": "Último uso {time}",
     "loadFailed": "No se pudieron cargar las plantillas",
     "newTemplate": "Nueva plantilla",
     "noTemplates": "Aún no hay plantillas",
@@ -2090,6 +2094,7 @@
       "suggestConfig": "Sugerir configuración",
       "whoFills": "¿Quién lo rellena?"
     },
+    "tagPlaceholder": "Escribe una etiqueta y pulsa Enter",
     "templateDeleted": "Plantilla eliminada",
     "templateName": "Nombre de la plantilla",
     "templateNamePlaceholder": "p. ej. Contrato de trabajo",
@@ -2099,9 +2104,12 @@
     "unmatchedPlaceholders": "Algunos marcadores no se han rellenado: {list}",
     "unsavedLeaveConfirm": "Tienes cambios sin guardar. ¿Salir sin guardar?",
     "unusedValues": "Algunos valores no se han utilizado: {list}",
+    "updatedAgo": "Actualizado {time}",
     "uploadDescription": "Suba un archivo .docx con '{{placeholders}}' para crear una plantilla",
     "uploadDifferent": "Subir una plantilla diferente",
     "uploadTitle": "Crear una plantilla",
+    "usageGuidance": "Guía de uso",
+    "usedTimes": "Usado {count, plural, one {# vez} other {# veces}}",
     "validationErrors": "Corrija los errores resaltados",
     "validationMaxLength": "Máximo {max} caracteres",
     "validationMinLength": "Mínimo {min} caracteres",
@@ -2111,7 +2119,11 @@
     "validationRequired": "Este campo es obligatorio",
     "versionLabel": "Versión {version}",
     "versionsEmpty": "Sin historial de versiones",
-    "viewVersion": "Ver"
+    "viewVersion": "Ver",
+    "whenNotToUse": "Cuándo no usar",
+    "whenNotToUsePlaceholder": "¿Cuándo debe evitarse esta plantilla?",
+    "whenToUse": "Cuándo usar",
+    "whenToUsePlaceholder": "¿Cuándo debe usarse esta plantilla? (guía la selección de plantillas por la IA)"
   },
   "translate": {
     "dialog": {

@@ -817,6 +817,7 @@
     "somethingWentWrong": "Algo deu errado",
     "sort": "Classificar",
     "status": "Status",
+    "summarizeChanges": "Resumir alterações",
     "today": "Hoje",
     "translate": "Traduzir",
     "tryAgain": "Tente novamente",
@@ -1974,6 +1975,7 @@
   "templates": {
     "addCondition": "Adicionar condição",
     "addItem": "Adicionar item",
+    "addTag": "Adicionar etiqueta",
     "aiAdaptHint": "A IA adapta este texto a cada lugar do documento em que ele aparece.",
     "allTemplates": "Todos os modelos",
     "backToList": "Voltar aos modelos",
@@ -1997,6 +1999,7 @@
     "createCategory": "Nova categoria",
     "deleteCategory": "Excluir categoria",
     "deleteFailed": "Falha ao excluir modelo",
+    "describeWhenToUse": "Descreva quando usar este modelo",
     "directiveEach": "Repetição: {expression}",
     "directiveElse": "Senão",
     "directiveElseIf": "Senão se: {expression}",
@@ -2029,6 +2032,7 @@
       "textarea": "Texto (multilinha)"
     },
     "invalidFileType": "Faça upload de um arquivo .docx",
+    "lastUsedAgo": "Usado pela última vez {time}",
     "loadFailed": "Falha ao carregar modelos",
     "newTemplate": "Novo modelo",
     "noTemplates": "Ainda não há modelos",
@@ -2090,6 +2094,7 @@
       "suggestConfig": "Sugerir configuração",
       "whoFills": "Quem preenche isto?"
     },
+    "tagPlaceholder": "Digite uma etiqueta e pressione Enter",
     "templateDeleted": "Modelo excluído",
     "templateName": "Nome do modelo",
     "templateNamePlaceholder": "ex.: Contrato de trabalho",
@@ -2099,9 +2104,12 @@
     "unmatchedPlaceholders": "Alguns espaços reservados não foram preenchidos: {list}",
     "unsavedLeaveConfirm": "Você tem alterações não salvas. Sair sem salvar?",
     "unusedValues": "Alguns valores não foram utilizados: {list}",
+    "updatedAgo": "Atualizado {time}",
     "uploadDescription": "Faça upload de um arquivo .docx com '{{placeholders}}' para criar um modelo",
     "uploadDifferent": "Carregar um modelo diferente",
     "uploadTitle": "Criar modelo",
+    "usageGuidance": "Orientações de uso",
+    "usedTimes": "Usado {count, plural, one {# vez} other {# vezes}}",
     "validationErrors": "Corrija os erros destacados",
     "validationMaxLength": "Máximo de {max} caracteres",
     "validationMinLength": "Mínimo de {min} caracteres",
@@ -2111,7 +2119,11 @@
     "validationRequired": "Este campo é obrigatório",
     "versionLabel": "Versão {version}",
     "versionsEmpty": "Sem histórico de versões",
-    "viewVersion": "Ver"
+    "viewVersion": "Ver",
+    "whenNotToUse": "Quando não usar",
+    "whenNotToUsePlaceholder": "Quando este modelo deve ser evitado?",
+    "whenToUse": "Quando usar",
+    "whenToUsePlaceholder": "Quando este modelo deve ser usado? (orienta a seleção de modelos pela IA)"
   },
   "translate": {
     "dialog": {

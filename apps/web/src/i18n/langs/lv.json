@@ -817,6 +817,7 @@
     "somethingWentWrong": "Kaut kas nogāja greizi",
     "sort": "Kārtot",
     "status": "Statuss",
+    "summarizeChanges": "Apkopot izmaiņas",
     "today": "Šodien",
     "translate": "Tulkot",
     "tryAgain": "Mēģināt vēlreiz",
@@ -1974,6 +1975,7 @@
   "templates": {
     "addCondition": "Pievienot nosacījumu",
     "addItem": "Pievienot vienību",
+    "addTag": "Pievienot birku",
     "aiAdaptHint": "MI pielāgos šo formulējumu katrai dokumenta vietai, kur tas parādās.",
     "allTemplates": "Visas veidnes",
     "backToList": "Atpakaļ pie veidnēm",
@@ -1997,6 +1999,7 @@
     "createCategory": "Jauna kategorija",
     "deleteCategory": "Dzēst kategoriju",
     "deleteFailed": "Neizdevās dzēst veidni",
+    "describeWhenToUse": "Aprakstiet, kad izmantot šo veidni",
     "directiveEach": "Cikls: {expression}",
     "directiveElse": "Pretējā gadījumā",
     "directiveElseIf": "Pretējā gadījumā ja: {expression}",
@@ -2029,6 +2032,7 @@
       "textarea": "Teksts (vairāku rindu)"
     },
     "invalidFileType": "Lūdzu, augšupielādējiet .docx failu",
+    "lastUsedAgo": "Pēdējoreiz izmantots {time}",
     "loadFailed": "Neizdevās ielādēt veidnes",
     "newTemplate": "Jauna veidne",
     "noTemplates": "Veidņu pagaidām nav",
@@ -2090,6 +2094,7 @@
       "suggestConfig": "Ieteikt konfigurāciju",
       "whoFills": "Kas to aizpildīs?"
     },
+    "tagPlaceholder": "Ierakstiet birku un nospiediet Enter",
     "templateDeleted": "Veidne dzēsta",
     "templateName": "Veidnes nosaukums",
     "templateNamePlaceholder": "piem., Darba līgums",
@@ -2099,9 +2104,12 @@
     "unmatchedPlaceholders": "Daži vietturi netika aizpildīti: {list}",
     "unsavedLeaveConfirm": "Jums ir nesaglabātas izmaiņas. Vai iziet bez saglabāšanas?",
     "unusedValues": "Dažas vērtības netika izmantotas: {list}",
+    "updatedAgo": "Atjaunināts {time}",
     "uploadDescription": "Augšupielādējiet .docx failu ar '{{vietturiem}}', lai izveidotu veidni",
     "uploadDifferent": "Augšupielādēt citu veidni",
     "uploadTitle": "Izveidot veidni",
+    "usageGuidance": "Lietošanas norādes",
+    "usedTimes": "{count, plural, zero {Izmantots # reižu} one {Izmantots # reizi} other {Izmantots # reizes}}",
     "validationErrors": "Lūdzu, izlabojiet iezīmētās kļūdas",
     "validationMaxLength": "Maksimāli {max} rakstzīmes",
     "validationMinLength": "Minimāli {min} rakstzīmes",
@@ -2111,7 +2119,11 @@
     "validationRequired": "Šis lauks ir obligāts",
     "versionLabel": "{version}. versija",
     "versionsEmpty": "Nav versiju vēstures",
-    "viewVersion": "Skatīt"
+    "viewVersion": "Skatīt",
+    "whenNotToUse": "Kad neizmantot",
+    "whenNotToUsePlaceholder": "Kad no šīs veidnes izvairīties?",
+    "whenToUse": "Kad izmantot",
+    "whenToUsePlaceholder": "Kad šī veidne būtu jāizmanto? (palīdz AI izvēlēties veidni)"
   },
   "translate": {
     "dialog": {

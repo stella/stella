@@ -3,7 +3,11 @@ import { t } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { templateFills } from "@/api/db/schema";
-import { buildAiFieldGenerator } from "@/api/handlers/docx/ai-field-generator";
+import { adaptAiFields } from "@/api/handlers/docx/adapt-ai-fields";
+import {
+  buildAiFieldGenerator,
+  buildAiOccurrenceAdapter,
+} from "@/api/handlers/docx/ai-field-generator";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
 import { resolveAiFields } from "@/api/handlers/docx/resolve-ai-fields";
 import { readManifest } from "@/api/handlers/docx/template-manifest";
@@ -114,20 +118,44 @@ export const fillHandler = async ({
   // so an AI placeholder like "the scope of this power of attorney" is filled on
   // download just as the chat fill tool fills it. A user-supplied value wins.
   let fillData: TemplateData = parsed;
+  let fillBuffer: Buffer = buffer;
+  let adaptedPaths: readonly string[] = [];
   const manifest = await readManifest(buffer);
-  if (manifest?.fields.some((field) => field.aiPrompt)) {
+  const hasAiDraftFields = manifest?.fields.some((field) => field.aiPrompt);
+  const hasAiAdaptFields = manifest?.fields.some((field) => field.aiAdapt);
+  if (manifest && (hasAiDraftFields || hasAiAdaptFields)) {
     const orgAIConfig = await loadOrgAIConfig(organizationId);
-    const resolved = await resolveAiFields({
-      values: parsed,
-      fields: manifest.fields,
-      generate: buildAiFieldGenerator({ orgAIConfig, organizationId }),
-    });
-    if (isTemplateData(resolved)) {
-      fillData = resolved;
+    if (hasAiDraftFields) {
+      const resolved = await resolveAiFields({
+        values: parsed,
+        fields: manifest.fields,
+        generate: buildAiFieldGenerator({ orgAIConfig, organizationId }),
+      });
+      if (isTemplateData(resolved)) {
+        fillData = resolved;
+      }
+    }
+    if (hasAiAdaptFields) {
+      // Rewrite each aiAdapt marker occurrence to fit its surrounding text
+      // (declension); the stub stays in fillData so uncovered occurrences
+      // still get the plain global substitution below.
+      const adapted = await adaptAiFields({
+        buffer,
+        fields: manifest.fields,
+        values: fillData,
+        adapt: buildAiOccurrenceAdapter({ orgAIConfig, organizationId }),
+      });
+      fillBuffer = adapted.buffer;
+      adaptedPaths = adapted.adaptedPaths;
     }
   }
 
-  const result = await fillTemplate(buffer, fillData);
+  const result = await fillTemplate(fillBuffer, fillData);
+  // Adapted stubs no longer match a marker (each occurrence was already
+  // substituted), so they are not "unused" in any user-meaningful sense.
+  const unusedValues = result.unusedValues.filter(
+    (name) => !adaptedPaths.includes(name),
+  );
 
   const fillStatus =
     result.unmatchedPlaceholders.length > 0 ? "partial" : "success";
@@ -144,7 +172,7 @@ export const fillHandler = async ({
       format,
       status: fillStatus,
       unmatchedCount: result.unmatchedPlaceholders.length,
-      unusedCount: result.unusedValues.length,
+      unusedCount: unusedValues.length,
       structureErrors:
         result.structureErrors.length > 0 ? result.structureErrors : null,
     });
@@ -195,8 +223,8 @@ export const fillHandler = async ({
       result.unmatchedPlaceholders.join(","),
     );
   }
-  if (result.unusedValues.length > 0) {
-    headers.set("X-Unused-Values", result.unusedValues.join(","));
+  if (unusedValues.length > 0) {
+    headers.set("X-Unused-Values", unusedValues.join(","));
   }
   if (result.structureErrors.length > 0) {
     headers.set("X-Structure-Errors", JSON.stringify(result.structureErrors));

@@ -817,6 +817,7 @@
     "somethingWentWrong": "Midagi läks valesti",
     "sort": "Sorteeri",
     "status": "Olek",
+    "summarizeChanges": "Võta muudatused kokku",
     "today": "Täna",
     "translate": "Tõlgi",
     "tryAgain": "Proovi uuesti",
@@ -1974,6 +1975,7 @@
   "templates": {
     "addCondition": "Lisa tingimus",
     "addItem": "Lisa element",
+    "addTag": "Lisa silt",
     "aiAdaptHint": "AI kohandab seda sõnastust dokumendi iga koha järgi, kus see esineb.",
     "allTemplates": "Kõik mallid",
     "backToList": "Tagasi mallide juurde",
@@ -1997,6 +1999,7 @@
     "createCategory": "Uus kategooria",
     "deleteCategory": "Kustuta kategooria",
     "deleteFailed": "Malli kustutamine ebaõnnestus",
+    "describeWhenToUse": "Kirjelda, millal seda malli kasutada",
     "directiveEach": "Tsükkel: {expression}",
     "directiveElse": "Muul juhul",
     "directiveElseIf": "Muul juhul kui: {expression}",
@@ -2029,6 +2032,7 @@
       "textarea": "Tekst (mitmerealne)"
     },
     "invalidFileType": "Palun laadige üles .docx fail",
+    "lastUsedAgo": "Viimati kasutatud {time}",
     "loadFailed": "Mallide laadimine ebaõnnestus",
     "newTemplate": "Uus mall",
     "noTemplates": "Malle pole veel",
@@ -2090,6 +2094,7 @@
       "suggestConfig": "Paku seadistust",
       "whoFills": "Kes selle täidab?"
     },
+    "tagPlaceholder": "Sisesta silt ja vajuta Enter",
     "templateDeleted": "Mall kustutatud",
     "templateName": "Malli nimi",
     "templateNamePlaceholder": "nt Tööleping",
@@ -2099,9 +2104,12 @@
     "unmatchedPlaceholders": "Mõned kohatäitjad jäid täitmata: {list}",
     "unsavedLeaveConfirm": "Teil on salvestamata muudatusi. Kas lahkuda salvestamata?",
     "unusedValues": "Mõned väärtused jäid kasutamata: {list}",
+    "updatedAgo": "Uuendatud {time}",
     "uploadDescription": "Laadige üles .docx fail '{{kohatäitjatega}}', et luua mall",
     "uploadDifferent": "Laadige üles teine mall",
     "uploadTitle": "Loo mall",
+    "usageGuidance": "Kasutusjuhised",
+    "usedTimes": "Kasutatud {count, plural, one {# kord} other {# korda}}",
     "validationErrors": "Palun parandage esile tõstetud vead",
     "validationMaxLength": "Maksimaalselt {max} tähemärki",
     "validationMinLength": "Minimaalselt {min} tähemärki",
@@ -2111,7 +2119,11 @@
     "validationRequired": "See väli on kohustuslik",
     "versionLabel": "Versioon {version}",
     "versionsEmpty": "Versiooniajalogu pole",
-    "viewVersion": "Vaata"
+    "viewVersion": "Vaata",
+    "whenNotToUse": "Millal mitte kasutada",
+    "whenNotToUsePlaceholder": "Millal tuleks seda malli vältida?",
+    "whenToUse": "Millal kasutada",
+    "whenToUsePlaceholder": "Millal tuleks seda malli kasutada? (aitab AI-l malli valida)"
   },
   "translate": {
     "dialog": {
