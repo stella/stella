@@ -81,10 +81,10 @@ import {
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
-import { TemplateStudioAIBar } from "@/routes/_protected.knowledge/-components/template-ai-bar";
 import { TemplateClausesTab } from "@/routes/_protected.knowledge/-components/template-clauses-tab";
 import { TemplateForm } from "@/routes/_protected.knowledge/-components/template-form";
 import { useTemplateNavStore } from "@/routes/_protected.knowledge/-components/template-nav-store";
+import { TemplateStudioChat } from "@/routes/_protected.knowledge/-components/template-studio-chat";
 import {
   defaultStudioField,
   type NameExpr,
@@ -176,16 +176,6 @@ export const TemplateStudioPage = ({
   // Reactive twin of editorViewRef for children that re-render on view
   // creation (the floating AI bar needs a live prop, not a ref).
   const [liveEditorView, setLiveEditorView] = useState<EditorView | null>(null);
-  // useFitToWidth's containerRef is a callback ref, so capture the node in
-  // state too — the AI bar wants the element itself.
-  const [containerNode, setContainerNode] = useState<HTMLElement | null>(null);
-  const attachContainer = useCallback(
-    (node: HTMLElement | null) => {
-      setContainerNode(node);
-      return containerRef(node);
-    },
-    [containerRef],
-  );
   // Right-click on selected text offers the structural gestures directly:
   // turn it into a {{field}}, or wrap it in a condition / loop block.
   const makeFieldContextItems = useMemo(
@@ -749,7 +739,7 @@ export const TemplateStudioPage = ({
       <div className="relative min-h-0 flex-1">
         <div
           className="h-full [scrollbar-gutter:stable] overflow-auto"
-          ref={attachContainer}
+          ref={containerRef}
         >
           <Suspense fallback={null}>
             <DocxEditor
@@ -789,11 +779,13 @@ export const TemplateStudioPage = ({
             />
           </Suspense>
         </div>
-        <TemplateStudioAIBar
-          containerEl={containerNode}
+        <TemplateStudioChat
+          editorRef={editorRef}
           editorView={liveEditorView}
           ensureView={forceEditorView}
+          fileName={fileName}
           getView={getEditorView}
+          templateId={templateId}
         />
       </div>
     </div>
