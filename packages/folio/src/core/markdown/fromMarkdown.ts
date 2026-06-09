@@ -36,6 +36,33 @@ import { createEmptyDocument } from "../utils/createDocument";
 // round-trip. Folio renders Courier New through its bundled Cousine face.
 const MONO_FONT = { ascii: "Courier New", hAnsi: "Courier New" } as const;
 
+// marked's `Token` union carries a `Tokens.Generic` member whose `type: string`
+// overlaps every literal (and whose `any` index signature absorbs the whole
+// union, so `Exclude` can't strip it). A plain `token.type === "x"` guard thus
+// narrows to `Tokens.X | Tokens.Generic` and field access stays `any`. This
+// predicate maps the discriminator to the concrete token; the runtime type is
+// exactly the one the discriminator matched because marked only emits Generic
+// for custom extensions, which this lexer setup does not register.
+type HandledTokens = {
+  blockquote: Tokens.Blockquote;
+  code: Tokens.Code;
+  codespan: Tokens.Codespan;
+  del: Tokens.Del;
+  em: Tokens.Em;
+  heading: Tokens.Heading;
+  link: Tokens.Link;
+  list: Tokens.List;
+  paragraph: Tokens.Paragraph;
+  strong: Tokens.Strong;
+  table: Tokens.Table;
+  text: Tokens.Text;
+};
+
+const isTokenType = <T extends keyof HandledTokens>(
+  token: Token,
+  type: T,
+): token is HandledTokens[T] => token.type === type;
+
 type RunFormat = {
   bold?: boolean;
   italic?: boolean;
@@ -79,26 +106,26 @@ const inlineToRuns = (
   }
   const runs: Run[] = [];
   for (const token of tokens) {
-    if (token.type === "strong") {
+    if (isTokenType(token, "strong")) {
       runs.push(
         ...inlineToRuns(token.tokens, token.text, { ...base, bold: true }),
       );
-    } else if (token.type === "em") {
+    } else if (isTokenType(token, "em")) {
       runs.push(
         ...inlineToRuns(token.tokens, token.text, { ...base, italic: true }),
       );
-    } else if (token.type === "del") {
+    } else if (isTokenType(token, "del")) {
       runs.push(
         ...inlineToRuns(token.tokens, token.text, { ...base, strike: true }),
       );
-    } else if (token.type === "codespan") {
+    } else if (isTokenType(token, "codespan")) {
       runs.push(textRun(token.text, { ...base, mono: true }));
-    } else if (token.type === "link") {
+    } else if (isTokenType(token, "link")) {
       runs.push(...inlineToRuns(token.tokens, token.text, base));
     } else if (token.type === "br") {
       runs.push({ type: "run", content: [{ type: "break" }] });
-    } else if (token.type === "text") {
-      const nested = "tokens" in token ? token.tokens : undefined;
+    } else if (isTokenType(token, "text")) {
+      const nested = token.tokens;
       if (nested && nested.length > 0) {
         runs.push(...inlineToRuns(nested, token.text, base));
       } else {
@@ -164,8 +191,8 @@ const listBlocks = (list: Tokens.List, level: number): BlockContent[] => {
     const inlineTokens: Token[] = [];
     const nestedLists: Tokens.List[] = [];
     for (const child of item.tokens) {
-      if (child.type === "list") {
-        nestedLists.push(child as Tokens.List);
+      if (isTokenType(child, "list")) {
+        nestedLists.push(child);
       } else {
         inlineTokens.push(child);
       }
@@ -178,36 +205,28 @@ const listBlocks = (list: Tokens.List, level: number): BlockContent[] => {
   return out;
 };
 
-// SAFETY: marked's `Token` union carries a `Tokens.Generic` member whose
-// `type: string` overlaps every literal, so a `type === "x"` guard narrows to
-// `Tokens.X | Tokens.Generic`. Cast to the concrete token after each guard — the
-// runtime type is exactly the one the guard matched.
 const blocksFromTokens = (tokens: Token[] | undefined): BlockContent[] => {
   const blocks: BlockContent[] = [];
   for (const token of tokens ?? []) {
-    if (token.type === "heading") {
-      const heading = token as Tokens.Heading;
-      const level = Math.min(Math.max(heading.depth, 1), 4);
+    if (isTokenType(token, "heading")) {
+      const level = Math.min(Math.max(token.depth, 1), 4);
       blocks.push(
-        para(inlineToRuns(heading.tokens, heading.text, {}), `Heading${level}`),
+        para(inlineToRuns(token.tokens, token.text, {}), `Heading${level}`),
       );
-    } else if (token.type === "paragraph") {
-      const paragraph = token as Tokens.Paragraph;
-      blocks.push(para(inlineToRuns(paragraph.tokens, paragraph.text, {})));
-    } else if (token.type === "list") {
-      blocks.push(...listBlocks(token as Tokens.List, 0));
-    } else if (token.type === "table") {
-      blocks.push(tableFromToken(token as Tokens.Table));
-    } else if (token.type === "code") {
-      const code = token as Tokens.Code;
-      for (const line of code.text.split("\n")) {
+    } else if (isTokenType(token, "paragraph")) {
+      blocks.push(para(inlineToRuns(token.tokens, token.text, {})));
+    } else if (isTokenType(token, "list")) {
+      blocks.push(...listBlocks(token, 0));
+    } else if (isTokenType(token, "table")) {
+      blocks.push(tableFromToken(token));
+    } else if (isTokenType(token, "code")) {
+      for (const line of token.text.split("\n")) {
         blocks.push(
           para([textRun(line.length > 0 ? line : " ", { mono: true })]),
         );
       }
-    } else if (token.type === "blockquote") {
-      const quote = token as Tokens.Blockquote;
-      for (const inner of blocksFromTokens(quote.tokens)) {
+    } else if (isTokenType(token, "blockquote")) {
+      for (const inner of blocksFromTokens(token.tokens)) {
         const styled: BlockContent =
           inner.type === "paragraph"
             ? {
