@@ -67,6 +67,36 @@
   background-color: color-mix(in oklch, var(--doc-bg-hover) 90%, transparent);
 }
 
+/* Focused suggestion, in-text diff preview: the original range reads
+ * as deleted (struck through, dimmed) and the proposed replacement is
+ * injected right after it as a tinted insertion widget, so stepping
+ * through suggestions previews each change in the document itself. */
+.folio-ai-suggestion--focused-original {
+  text-decoration-line: line-through;
+  text-decoration-style: solid;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(
+    in oklch,
+    var(--doc-text-muted) 75%,
+    transparent
+  );
+  opacity: 0.55;
+}
+
+.folio-ai-suggestion--focused-replacement {
+  margin-inline-start: 3px;
+  padding: 0 3px;
+  border-radius: 4px;
+  background-color: color-mix(
+    in oklch,
+    var(--doc-success, var(--doc-text)) 16%,
+    transparent
+  );
+  box-shadow: inset 0 0 0 1px
+    color-mix(in oklch, var(--doc-success, var(--doc-text)) 30%, transparent);
+  white-space: pre-wrap;
+}
+
 /* -----------------------------------------------------------------------
  * Prompt bar
  * --------------------------------------------------------------------- */
