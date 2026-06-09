@@ -44,6 +44,16 @@ describe("resolveAiFields", () => {
     expect(result).toEqual({ company: { scope: "manually written scope" } });
   });
 
+  test("a flat dotted user value wins (fill_template tool shape)", async () => {
+    // The fill_template chat tool sends flat dotted keys, not nested objects.
+    const result = await resolveAiFields({
+      values: { "company.scope": "manually written scope" },
+      fields: [{ path: "company.scope", aiPrompt: "Draft the scope" }],
+      generate: echoGenerator,
+    });
+    expect(result["company.scope"]).toBe("manually written scope");
+  });
+
   test("leaves AI fields unfilled when no generator is supplied", async () => {
     const result = await resolveAiFields({
       values: {},
