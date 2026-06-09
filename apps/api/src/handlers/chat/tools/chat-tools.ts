@@ -174,6 +174,7 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   "read-skill-resource": CHAT_TOOL_POLICY_KIND.internal,
   "run-stella-query": CHAT_TOOL_POLICY_KIND.internal,
   [SEARCH_CHAT_HISTORY_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
+  suggest_template_fields: CHAT_TOOL_POLICY_KIND.internal,
   "update-current-skill-body": CHAT_TOOL_POLICY_KIND.mutation,
   "update-current-skill-resource": CHAT_TOOL_POLICY_KIND.mutation,
   "update-entity-fields": CHAT_TOOL_POLICY_KIND.mutation,
