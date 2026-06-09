@@ -51,29 +51,55 @@ export function resolveSuggestionAnchor(
   const windowStart = Math.max(0, from - ANCHOR_SEARCH_WINDOW_PM);
   const windowEnd = Math.min(docSize, to + ANCHOR_SEARCH_WINDOW_PM);
   const positional = buildPositionalText(doc, windowStart, windowEnd);
-  const needle =
-    suggestion.contextBefore +
-    suggestion.originalText +
-    suggestion.contextAfter;
 
-  const firstHit = positional.text.indexOf(needle);
-  if (firstHit === -1) {
-    return null;
-  }
-  const secondHit = positional.text.indexOf(needle, firstHit + 1);
-  if (secondHit !== -1) {
-    return null;
-  }
+  // Graduated fallbacks: a neighbouring edit (e.g. accepting the adjacent
+  // suggestion) often invalidates one side of the context while the text
+  // itself is untouched. Try the most specific needle first, then drop the
+  // broken side, then bare text — each level only matches when unique, so the
+  // relaxation cannot grab the wrong occurrence.
+  const needles = [
+    {
+      needle:
+        suggestion.contextBefore +
+        suggestion.originalText +
+        suggestion.contextAfter,
+      prefix: suggestion.contextBefore.length,
+    },
+    {
+      needle: suggestion.originalText + suggestion.contextAfter,
+      prefix: 0,
+    },
+    {
+      needle: suggestion.contextBefore + suggestion.originalText,
+      prefix: suggestion.contextBefore.length,
+    },
+    { needle: suggestion.originalText, prefix: 0 },
+  ];
 
-  const originalTextStart = firstHit + suggestion.contextBefore.length;
-  const originalTextEnd = originalTextStart + suggestion.originalText.length;
-  if (suggestion.originalText.length === 0) {
-    const point = positional.pmPositionAt(originalTextStart);
-    return { from: point, to: point };
+  for (const { needle, prefix } of needles) {
+    if (needle.length === 0) {
+      continue;
+    }
+    const firstHit = positional.text.indexOf(needle);
+    if (firstHit === -1) {
+      continue;
+    }
+    const secondHit = positional.text.indexOf(needle, firstHit + 1);
+    if (secondHit !== -1) {
+      continue;
+    }
+
+    const originalTextStart = firstHit + prefix;
+    const originalTextEnd = originalTextStart + suggestion.originalText.length;
+    if (suggestion.originalText.length === 0) {
+      const point = positional.pmPositionAt(originalTextStart);
+      return { from: point, to: point };
+    }
+    const anchorFrom = positional.pmPositionAt(originalTextStart);
+    const anchorTo = positional.pmPositionAt(originalTextEnd - 1) + 1;
+    return { from: anchorFrom, to: anchorTo };
   }
-  const anchorFrom = positional.pmPositionAt(originalTextStart);
-  const anchorTo = positional.pmPositionAt(originalTextEnd - 1) + 1;
-  return { from: anchorFrom, to: anchorTo };
+  return null;
 }
 
 export function isSuggestionStale(
