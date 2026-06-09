@@ -197,6 +197,23 @@ export type DocxEditorProps = {
    */
   showTemplateDirectives?: boolean | undefined;
   /**
+   * Host-provided text context-menu entries, appended after the built-ins.
+   * `requiresSelection` items only render when text is selected. Selecting one
+   * fires `onCustomContextAction` with the item id and the selection range
+   * captured when the menu opened (right-click can collapse the live PM
+   * selection, so the captured range is the reliable one).
+   */
+  customContextMenuItems?:
+    | readonly {
+        id: string;
+        label: string;
+        requiresSelection?: boolean;
+      }[]
+    | undefined;
+  onCustomContextAction?:
+    | ((id: string, selectionRange: { from: number; to: number }) => void)
+    | undefined;
+  /**
    * Operational flags for save-path features. Selective save and its tripwire
    * mode are OFF by default; hosts opt in once their rollout pipeline is ready.
    */
