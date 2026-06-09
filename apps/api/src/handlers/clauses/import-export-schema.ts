@@ -30,13 +30,49 @@ export type ClauseExportPayload = {
   clauses: ClauseExportItem[];
 };
 
+const isClauseExportVariantShape = (value: unknown): boolean => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  if (typeof value["label"] !== "string" || !value["label"]) {
+    return false;
+  }
+  return isClauseBody(value["body"]);
+};
+
+const isClauseExportItemShape = (value: unknown): boolean => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  if (typeof value["title"] !== "string" || !value["title"]) {
+    return false;
+  }
+  if (!isClauseBody(value["body"])) {
+    return false;
+  }
+  if (
+    value["metadata"] !== undefined &&
+    value["metadata"] !== null &&
+    !isRecord(value["metadata"])
+  ) {
+    return false;
+  }
+  const variants = value["variants"];
+  if (variants !== undefined) {
+    if (!Array.isArray(variants)) {
+      return false;
+    }
+    return variants.every(isClauseExportVariantShape);
+  }
+  return true;
+};
+
 export const isClauseExportPayload = (
   value: unknown,
 ): value is ClauseExportPayload => {
   if (!isRecord(value)) {
     return false;
   }
-
   if (value["version"] !== 1) {
     return false;
   }
@@ -46,42 +82,5 @@ export const isClauseExportPayload = (
   if (!Array.isArray(value["clauses"])) {
     return false;
   }
-
-  for (const clause of value["clauses"]) {
-    if (!isRecord(clause)) {
-      return false;
-    }
-    if (typeof clause["title"] !== "string" || !clause["title"]) {
-      return false;
-    }
-    if (!isClauseBody(clause["body"])) {
-      return false;
-    }
-    if (
-      clause["metadata"] !== undefined &&
-      clause["metadata"] !== null &&
-      !isRecord(clause["metadata"])
-    ) {
-      return false;
-    }
-    const variants = clause["variants"];
-    if (variants !== undefined) {
-      if (!Array.isArray(variants)) {
-        return false;
-      }
-      for (const variant of variants) {
-        if (!isRecord(variant)) {
-          return false;
-        }
-        if (typeof variant["label"] !== "string" || !variant["label"]) {
-          return false;
-        }
-        if (!isClauseBody(variant["body"])) {
-          return false;
-        }
-      }
-    }
-  }
-
-  return true;
+  return value["clauses"].every(isClauseExportItemShape);
 };

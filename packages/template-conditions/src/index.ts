@@ -4,6 +4,10 @@
  * (browser); the only runtime dependency is better-result (panic).
  */
 
+import { resolvePath } from "./path.js";
+
+export { resolvePath };
+
 // ── Types ─────────────────────────────────────────────────
 
 export type NamedCondition = {
@@ -18,28 +22,6 @@ export type NamedCondition = {
  * conditions (A→B→C→...→Z) is evaluated without cycles.
  */
 export const MAX_CONDITION_DEPTH = 50;
-
-// ── Path resolution ───────────────────────────────────────
-
-/** Narrow `unknown` to a string-keyed record. */
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-  typeof v === "object" && v !== null;
-
-/** Resolve a dotted path like `company.name` against data. */
-export const resolvePath = (
-  path: string,
-  data: Record<string, unknown>,
-): unknown => {
-  const parts = path.split(".");
-  let current: unknown = data;
-  for (const part of parts) {
-    if (!isRecord(current)) {
-      return undefined;
-    }
-    current = current[part];
-  }
-  return current;
-};
 
 // ── Tokenizer ─────────────────────────────────────────────
 
