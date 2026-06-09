@@ -51,6 +51,17 @@ type ActiveFileContext = {
   supportsDocxEdits?: boolean | undefined;
 };
 
+/**
+ * Template Studio surface: same snapshot shape as `ActiveFileContext`
+ * so `apply-active-docx-edits` operations share the block-id space,
+ * but keyed by templateId (org-scoped, no entity).
+ */
+type ActiveTemplateContext = {
+  templateId: string;
+  fileName: string;
+  docxEditSnapshot?: ActiveFileContext["docxEditSnapshot"];
+};
+
 type ActiveDecisionContext = {
   decisionId: string;
 };
@@ -96,6 +107,7 @@ type ChatThreadOptionsContext = {
   getActiveDecision?: (() => ActiveDecisionContext | undefined) | undefined;
   getActiveExternal?: (() => ActiveExternalContext | undefined) | undefined;
   getActiveFile?: (() => ActiveFileContext | undefined) | undefined;
+  getActiveTemplate?: (() => ActiveTemplateContext | undefined) | undefined;
   /**
    * Matters this chat draws context from. The transport sends the
    * current value (an empty array means "no matters pinned"). The
@@ -117,6 +129,7 @@ type ChatRuntimeContextKind =
   | "active-docx-edit"
   | "active-external"
   | "active-file"
+  | "active-template"
   | "plain";
 
 type ChatThreadQueryKey = ChatThreadRef & {
@@ -127,6 +140,10 @@ type ChatThreadQueryKey = ChatThreadRef & {
 const getChatRuntimeContextKind = (
   context: ChatThreadOptionsContext | undefined,
 ): ChatRuntimeContextKind => {
+  if (context?.getActiveTemplate) {
+    return "active-template";
+  }
+
   if (context?.handleActiveDocxEditToolCall) {
     return "active-docx-edit";
   }
@@ -379,6 +396,7 @@ export const buildSendRequestBody = ({
     activeDecision?: ActiveDecisionContext | undefined;
     activeExternal?: ActiveExternalContext | undefined;
     activeFile?: ActiveFileContext | undefined;
+    activeTemplate?: ActiveTemplateContext | undefined;
     contextMatterIds?: string[] | undefined;
     devModelId?: string | undefined;
     message: PersistedChatMessage;
@@ -409,6 +427,11 @@ export const buildSendRequestBody = ({
   const activeFile = context?.getActiveFile?.();
   if (activeFile) {
     body.activeFile = activeFile;
+  }
+
+  const activeTemplate = context?.getActiveTemplate?.();
+  if (activeTemplate) {
+    body.activeTemplate = activeTemplate;
   }
 
   const activeDecision = context?.getActiveDecision?.();

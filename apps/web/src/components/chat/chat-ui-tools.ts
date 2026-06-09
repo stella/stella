@@ -258,6 +258,59 @@ export const isApprovalPart = (part: unknown): part is ApprovalToolPart => {
   return "approval" in part;
 };
 
+type ApplyActiveDocxEditsToolInput =
+  ChatUITools["apply-active-docx-edits"]["input"];
+
+export const isApplyActiveDocxEditsInput = (
+  input: unknown,
+): input is ApplyActiveDocxEditsToolInput =>
+  typeof input === "object" &&
+  input !== null &&
+  "operations" in input &&
+  Array.isArray(input.operations);
+
+/**
+ * Latest apply-active-docx-edits part matching the given approval id
+ * (newest message first). Used by the surfaces that client-execute
+ * the tool (file overlay, Template Studio) to recover the operations
+ * the user just approved.
+ */
+export const getActiveDocxEditApprovalPart = (
+  messages: PersistedChatMessage[],
+  approvalId: string,
+):
+  | (ActiveDocxEditApprovalPart & { input: ApplyActiveDocxEditsToolInput })
+  | null => {
+  for (
+    let messageIndex = messages.length - 1;
+    messageIndex >= 0;
+    messageIndex -= 1
+  ) {
+    const message = messages.at(messageIndex);
+    if (!message || message.role !== "assistant") {
+      continue;
+    }
+
+    for (const part of message.parts) {
+      if (part.type !== "tool-apply-active-docx-edits") {
+        continue;
+      }
+
+      if (
+        (part.state === "approval-requested" ||
+          part.state === "approval-responded" ||
+          part.state === "output-denied") &&
+        part.approval.id === approvalId &&
+        isApplyActiveDocxEditsInput(part.input)
+      ) {
+        return part;
+      }
+    }
+  }
+
+  return null;
+};
+
 export const isApprovedActiveDocxEditPart = (
   part: ChatPart,
 ): part is ActiveDocxEditApprovalPart & {

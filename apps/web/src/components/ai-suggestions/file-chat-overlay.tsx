@@ -52,11 +52,8 @@ import { useChatEditor } from "@/components/chat-editor-provider";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
-import type {
-  ActiveDocxEditApprovalPart,
-  ApprovalToolName,
-  PersistedChatMessage,
-} from "@/components/chat/chat-ui-tools";
+import { getActiveDocxEditApprovalPart } from "@/components/chat/chat-ui-tools";
+import type { ApprovalToolName } from "@/components/chat/chat-ui-tools";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
@@ -608,50 +605,6 @@ const queueReviewSuggestions = ({
   }
 
   return { queuedIds, skipped };
-};
-
-const isApplyActiveDocxEditsInput = (
-  input: unknown,
-): input is ApplyActiveDocxEditsInput =>
-  typeof input === "object" &&
-  input !== null &&
-  "operations" in input &&
-  Array.isArray(input.operations);
-
-const getActiveDocxEditApprovalPart = (
-  messages: PersistedChatMessage[],
-  approvalId: string,
-):
-  | (ActiveDocxEditApprovalPart & { input: ApplyActiveDocxEditsInput })
-  | null => {
-  for (
-    let messageIndex = messages.length - 1;
-    messageIndex >= 0;
-    messageIndex -= 1
-  ) {
-    const message = messages.at(messageIndex);
-    if (!message || message.role !== "assistant") {
-      continue;
-    }
-
-    for (const part of message.parts) {
-      if (part.type !== "tool-apply-active-docx-edits") {
-        continue;
-      }
-
-      if (
-        (part.state === "approval-requested" ||
-          part.state === "approval-responded" ||
-          part.state === "output-denied") &&
-        part.approval.id === approvalId &&
-        isApplyActiveDocxEditsInput(part.input)
-      ) {
-        return part;
-      }
-    }
-  }
-
-  return null;
 };
 
 // No tools are auto-blocked when an active file is present. The

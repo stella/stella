@@ -1152,7 +1152,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
  * virtualization); fall back to coordinate math only when no paged
  * layout is mounted around the view.
  */
-function scrollEditorToPos(view: EditorView, pos: number): void {
+export function scrollEditorToPos(view: EditorView, pos: number): void {
   if (scrollFolioPositionIntoView(view, pos)) {
     return;
   }
@@ -1352,8 +1352,9 @@ type SuggestionStepperProps = {
 };
 
 /** Compact floating review bar: step through the pending suggestions in
- *  document order and accept/dismiss each in place. */
-function SuggestionStepper({
+ *  document order and accept/dismiss each in place. Shared with the
+ *  Template Studio chat, which feeds it tool-call suggestions. */
+export function SuggestionStepper({
   index,
   total,
   onStep,
@@ -2167,7 +2168,7 @@ type SuggestionCardProps = {
   onFocus: (id: string) => void;
 };
 
-function SuggestionCard(props: SuggestionCardProps) {
+export function SuggestionCard(props: SuggestionCardProps) {
   const t = useTranslations();
   const { suggestion, focused, showAcceptUI, onAccept, onReject, onFocus } =
     props;
