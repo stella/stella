@@ -9,7 +9,6 @@
  * empty list so the caller can fall back to plain `{{marker}}` discovery.
  */
 
-import { valibotSchema } from "@ai-sdk/valibot";
 import { Output, streamText } from "ai";
 import * as v from "valibot";
 
@@ -18,6 +17,7 @@ import { isFieldPath } from "@stll/template-conditions";
 import type { FieldSuggestion } from "@/api/handlers/docx/apply-field-suggestions";
 import { getModelForRole } from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
+import { strictOutputSchema } from "@/api/lib/ai-output-schema";
 import type { SafeId } from "@/api/lib/branded-types";
 
 const SUGGEST_TIMEOUT_MS = 45_000;
@@ -96,7 +96,9 @@ export const suggestTemplateFields = async ({
         organizationId,
         serviceTier: "standard",
       }),
-      output: Output.object({ schema: valibotSchema(fieldSuggestionsSchema) }),
+      output: Output.object({
+        schema: strictOutputSchema(fieldSuggestionsSchema),
+      }),
       system: SYSTEM_PROMPT,
     });
     const { suggestions } = await result.output;

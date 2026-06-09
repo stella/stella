@@ -237,6 +237,11 @@ const saveTemplateDocument = createSafeRootHandler(
           },
         });
 
+        if (!row) {
+          // The update targeted a row the locked re-read just confirmed exists;
+          // a missing returning row means it vanished mid-transaction.
+          return { ok: false as const, reason: "not-found" as const };
+        }
         return { ok: true as const, row };
       }),
     );
