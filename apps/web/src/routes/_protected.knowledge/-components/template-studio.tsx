@@ -134,7 +134,7 @@ export const TemplateStudio = ({
   // mounts lazily, so poll the ref until it's available).
   useEffect(() => {
     if (!docBuffer) {
-      return;
+      return undefined;
     }
     let raf = 0;
     const ensure = () => {
@@ -294,7 +294,7 @@ export const TemplateStudio = ({
       </div>
 
       {/* Inspector: all template chrome + selection settings, clauses, history. */}
-      <aside className="flex w-[360px] shrink-0 flex-col border-l">
+      <aside className="flex w-[360px] shrink-0 flex-col border-s">
         <div className="flex items-center gap-1 border-b px-2 py-1.5">
           <Button
             aria-label={t("templates.backToList")}
@@ -650,23 +650,38 @@ const useFitToWidth = () => {
 
 // ── Manifest <-> state ───────────────────────────────────
 
-const INPUT_TYPES = new Set([
+const INPUT_TYPE_VALUES = [
   "text",
   "textarea",
   "number",
   "boolean",
   "date",
   "select",
-]);
+] as const;
+
+const isInputType = (value: string): value is EditableField["inputType"] =>
+  INPUT_TYPE_VALUES.some((type) => type === value);
+
+const trimChar = (value: string, ch: string): string => {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value[start] === ch) {
+    start++;
+  }
+  while (end > start && value[end - 1] === ch) {
+    end--;
+  }
+  return value.slice(start, end);
+};
 
 // Derive a field path from selected prose: "Jan Kowalski" -> "jan_kowalski".
 const slugify = (text: string): string => {
-  const slug = text
+  // oxlint-disable-next-line sonarjs/slow-regex -- runs on one short text selection
+  const collapsed = text
     .trim()
     .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, "_")
-    .replace(/^_+|_+$/gu, "")
-    .slice(0, 40);
+    .replace(/[^\p{L}\p{N}]+/gu, "_");
+  const slug = trimChar(collapsed, "_").slice(0, 40);
   return slug.length > 0 ? slug : "field";
 };
 
@@ -690,11 +705,9 @@ const parseFields = (manifest: unknown): StudioField[] => {
   const fields: StudioField[] = manifest["fields"]
     .filter(isRecord)
     .map((raw) => {
+      const rawType = raw["inputType"];
       const inputType =
-        typeof raw["inputType"] === "string" &&
-        INPUT_TYPES.has(raw["inputType"])
-          ? (raw["inputType"] as EditableField["inputType"])
-          : "text";
+        typeof rawType === "string" && isInputType(rawType) ? rawType : "text";
       return {
         path: typeof raw["path"] === "string" ? raw["path"] : "",
         kind: typeof raw["kind"] === "string" ? raw["kind"] : "string",
@@ -750,14 +763,29 @@ const buildManifest = (
     version,
     fields: fields
       .filter((f) => f.path)
-      .map((f) => ({
-        path: f.path,
-        inputType: f.inputType,
-        ...(f.label ? { label: f.label } : {}),
-        ...(f.required ? { required: true } : {}),
-        ...(f.options.length > 0 ? { options: f.options } : {}),
-        ...(f.aiPrompt ? { aiPrompt: f.aiPrompt } : {}),
-      })),
+      .map((f) => {
+        const field: {
+          path: string;
+          inputType: EditableField["inputType"];
+          label?: string;
+          required?: boolean;
+          options?: string[];
+          aiPrompt?: string;
+        } = { path: f.path, inputType: f.inputType };
+        if (f.label) {
+          field.label = f.label;
+        }
+        if (f.required) {
+          field.required = true;
+        }
+        if (f.options.length > 0) {
+          field.options = f.options;
+        }
+        if (f.aiPrompt) {
+          field.aiPrompt = f.aiPrompt;
+        }
+        return field;
+      }),
     conditions: conditions.filter((c) => c.name && c.expression),
     computed: computed.filter((c) => c.name && c.expression),
   };
