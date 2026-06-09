@@ -3372,6 +3372,7 @@ export function DocxEditor({
                         ? { onEditorViewReady: reportEditorViewReady }
                         : {})}
                       externalPlugins={editorPlugins}
+                      showTemplateDirectives={showTemplateDirectives}
                       {...(collaboration !== undefined
                         ? { collaboration }
                         : {})}
