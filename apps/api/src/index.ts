@@ -39,6 +39,7 @@ import { ratesRoute } from "@/api/handlers/rates/routes";
 import { searchRoute } from "@/api/handlers/search/routes";
 import { shortcutsRoute } from "@/api/handlers/shortcuts/routes";
 import { skillsRoute } from "@/api/handlers/skills/routes";
+import { smokeRoute } from "@/api/handlers/smoke/routes";
 import { myTasksRoute } from "@/api/handlers/tasks/my-tasks-route";
 import { tasksRoute } from "@/api/handlers/tasks/routes";
 import {
@@ -300,6 +301,7 @@ const api = new Elysia()
   .use(mcpRoute)
   .use(aiAutocompleteRoute)
   .use(devPublicRoute)
+  .use(smokeRoute)
   .mount(getAuth().handler)
   .group("/v1", (app) =>
     app

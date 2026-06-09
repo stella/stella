@@ -18,6 +18,7 @@
     "i18n:sync": "bun ../../packages/scripts/src/i18n-check.ts src/i18n/langs --sync && bun ../../packages/scripts/src/i18n-typegen.ts src/i18n/langs",
     "test": "bun test --path-ignore-patterns='e2e/**'",
     "test:e2e": "playwright test --config e2e/playwright.config.ts",
+    "test:e2e:staging": "playwright test --config e2e/playwright.staging.config.ts",
     "test:e2e:ui": "playwright test --config e2e/playwright.config.ts --ui"
   },
   "dependencies": {

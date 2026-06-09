@@ -873,6 +873,13 @@ export const useChatEditor = ({
     },
     editorProps: {
       attributes: {
+        // A contenteditable div has no implicit ARIA role, so without
+        // these the composer is invisible to assistive tech (and to
+        // role-based queries); the visible placeholder span is
+        // aria-hidden.
+        role: "textbox",
+        "aria-multiline": "true",
+        "aria-label": resolvedPlaceholder,
         class:
           "field-sizing-content max-h-48 min-h-10 overflow-y-auto text-sm focus-visible:outline-none",
       },
