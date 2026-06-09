@@ -95,6 +95,7 @@ import {
 } from "@/routes/_protected.knowledge/-components/template-studio-store";
 import { TemplateVersionsTab } from "@/routes/_protected.knowledge/-components/template-versions-tab";
 import {
+  type EditablePart,
   type EditableField,
   FieldConfigEditor,
 } from "@/routes/_protected.knowledge/-components/template-wizard";
@@ -1020,6 +1021,13 @@ function TemplateStudioInspectorView({
 // fill endpoint uses) to get the real field shape — {{#each}} array fields
 // included — rather than reconstructing it from the flat manifest.
 const TemplateFillFacet = ({ templateId }: { templateId: string }) => {
+  // Leaving the facet clears the in-document preview.
+  useEffect(
+    () => () => {
+      useTemplateStudioStore.getState().actions?.setFillPreview(null);
+    },
+    [],
+  );
   const t = useTranslations();
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
@@ -1090,10 +1098,35 @@ const TemplateFillFacet = ({ templateId }: { templateId: string }) => {
       fileName={detail.fileName}
       onBack={() => undefined}
       onDone={() => undefined}
+      onValuesChange={pushFillPreview}
       structureErrors={discovered.structureErrors}
       templateId={templateId}
     />
   );
+};
+
+/** Typed fill values become the live in-document preview; composite part
+ *  objects join with spaces (the server renders the real format). */
+const pushFillPreview = (values: Record<string, unknown>) => {
+  const preview: Record<string, string> = {};
+  for (const [path, value] of Object.entries(values)) {
+    if (typeof value === "string" && value !== "") {
+      preview[path] = value;
+    } else if (typeof value === "number" || typeof value === "boolean") {
+      preview[path] = String(value);
+    } else if (value !== null && typeof value === "object") {
+      const joined = Object.values(value)
+        .filter((part): part is string => typeof part === "string")
+        .filter((part) => part !== "")
+        .join(" ");
+      if (joined !== "") {
+        preview[path] = joined;
+      }
+    }
+  }
+  useTemplateStudioStore
+    .getState()
+    .actions?.setFillPreview(Object.keys(preview).length > 0 ? preview : null);
 };
 
 /** Document actions row — rendered in the inspector tab's top area; the page
@@ -2019,7 +2052,7 @@ const parseFields = (manifest: unknown): StudioField[] => {
       const rawType = raw["inputType"];
       const inputType =
         typeof rawType === "string" && isInputType(rawType) ? rawType : "text";
-      return {
+      const field: StudioField = {
         path: typeof raw["path"] === "string" ? raw["path"] : "",
         kind: typeof raw["kind"] === "string" ? raw["kind"] : "string",
         label: typeof raw["label"] === "string" ? raw["label"] : "",
@@ -2032,6 +2065,11 @@ const parseFields = (manifest: unknown): StudioField[] => {
           typeof raw["aiPrompt"] === "string" ? raw["aiPrompt"] : undefined,
         aiAdapt: raw["aiAdapt"] === true,
       };
+      if (Array.isArray(raw["parts"]) && typeof raw["format"] === "string") {
+        field.parts = parseEditableParts(raw["parts"]);
+        field.format = raw["format"];
+      }
+      return field;
     });
 
   // Mirror the server merge: computed fields and namespace parents (a path that
@@ -2047,6 +2085,17 @@ const parseFields = (manifest: unknown): StudioField[] => {
       !paths.some((p) => p !== f.path && p.startsWith(`${f.path}.`)),
   );
 };
+
+const parseEditableParts = (raw: unknown[]): EditablePart[] =>
+  raw.filter(isRecord).map((part) => ({
+    key: typeof part["key"] === "string" ? part["key"] : "",
+    label: typeof part["label"] === "string" ? part["label"] : undefined,
+    inputType: part["inputType"] === "select" ? "select" : "text",
+    options: Array.isArray(part["options"])
+      ? part["options"].filter((o): o is string => typeof o === "string")
+      : undefined,
+    pattern: typeof part["pattern"] === "string" ? part["pattern"] : undefined,
+  }));
 
 const parseNameExprs = (
   manifest: unknown,
@@ -2084,6 +2133,8 @@ const buildManifest = (
           options?: string[];
           aiPrompt?: string;
           aiAdapt?: boolean;
+          parts?: EditablePart[];
+          format?: string;
         } = { path: f.path, inputType: f.inputType };
         if (f.label) {
           field.label = f.label;
@@ -2099,6 +2150,10 @@ const buildManifest = (
         }
         if (f.aiAdapt) {
           field.aiAdapt = true;
+        }
+        if (f.parts !== undefined && f.parts.length > 0 && f.format) {
+          field.parts = f.parts;
+          field.format = f.format;
         }
         return field;
       }),

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 
 import { panic } from "better-result";
 import {
@@ -216,7 +216,10 @@ type ServerFillProps = TemplateFormBaseProps & {
   file?: undefined;
 };
 
-type TemplateFormProps = TransientFillProps | ServerFillProps;
+type TemplateFormProps = (TransientFillProps | ServerFillProps) & {
+  /** Live values tap for hosts that preview the fill elsewhere. */
+  onValuesChange?: (values: Record<string, unknown>) => void;
+};
 
 type FormValues = Record<string, unknown>;
 
@@ -964,11 +967,15 @@ export const TemplateForm = ({
   fileName,
   onBack,
   onDone,
+  onValuesChange,
 }: TemplateFormProps) => {
   const t = useTranslations();
   const [values, setValues] = useState<FormValues>(() =>
     buildInitialValues(fields),
   );
+  useEffect(() => {
+    onValuesChange?.(values);
+  }, [values, onValuesChange]);
   const [loading, setLoading] = useState(false);
   const [touched, setTouched] = useState<TouchedFields>({});
   const [errors, setErrors] = useState<FieldErrors>({});
