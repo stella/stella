@@ -985,6 +985,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
       panelOpen={panelOpen}
       showThreadToggle={layout === "floating" && hasMessages}
       presets={config.presets}
+      threadHasMessages={hasMessages}
       onSubmit={(input) => {
         void handleGenerate(input);
       }}
@@ -1085,9 +1086,11 @@ type PromptBarProps = {
   /**
    * Pre-saved prompts surfaced as chips above the empty bar. Clicking a
    * chip — or pressing Tab while the input is empty (first preset) —
-   * accepts and sends it in one step.
+   * accepts and sends it in one step. Hidden once the thread has any
+   * message; starting a new thread brings them back.
    */
   presets?: AISuggestionPreset[] | undefined;
+  threadHasMessages?: boolean | undefined;
   onNewThread?: (() => void) | undefined;
   newThreadLabel?: string | undefined;
   /**
@@ -1260,6 +1263,7 @@ export function PromptBar(props: PromptBarProps) {
     canSubmitNow,
     onSubmit,
     presets,
+    threadHasMessages = false,
     onStop,
     onNewThread,
     newThreadLabel,
@@ -1333,6 +1337,7 @@ export function PromptBar(props: PromptBarProps) {
   const presetChipsVisible =
     layout === "floating" &&
     !panelOpen &&
+    !threadHasMessages &&
     presets !== undefined &&
     presets.length > 0 &&
     isEmpty &&
@@ -1611,7 +1616,17 @@ function ThreadPanel(props: ThreadPanelProps) {
   } = props;
 
   const panelRef = useRef<HTMLDivElement>(null);
+  const transcriptRef = useRef<HTMLDivElement>(null);
   const isFloating = layout === "floating";
+
+  // Keep the newest message in view: jump to the bottom whenever the thread
+  // grows (a sent prompt appends the user bubble + assistant placeholder).
+  useEffect(() => {
+    const el = transcriptRef.current;
+    if (el) {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    }
+  }, [messages.length]);
 
   const handleResizeStart = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -1749,6 +1764,7 @@ function ThreadPanel(props: ThreadPanelProps) {
           // when there's no confirm banner above the messages.
           isFloating && !pendingFirstAccept && "pt-3.5",
         )}
+        ref={transcriptRef}
         style={{ scrollbarGutter: "stable" }}
       >
         {messages.length === 0 && !isFloating ? (
