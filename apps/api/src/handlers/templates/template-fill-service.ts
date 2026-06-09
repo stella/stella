@@ -21,6 +21,11 @@ import { isTemplateData } from "@/api/handlers/docx/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getS3 } from "@/api/lib/s3";
 
+// Data a template is filled with: open-ended field-path → value map (paths come
+// from the template's manifest/markers, not a fixed entity), patched in place
+// with resolved clause slots and AI-drafted fields before fill.
+type FillValues = Record<string, unknown>;
+
 const loadTemplate = async (
   templateId: SafeId<"template">,
   scopedDb: ScopedDb,
@@ -113,7 +118,7 @@ export const fillStoredTemplate = async ({
   generateAiValue,
 }: {
   templateId: SafeId<"template">;
-  values: Record<string, unknown>;
+  values: FillValues;
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   /** Optional model-backed generator for AI-fillable fields (aiPrompt). */
@@ -124,7 +129,7 @@ export const fillStoredTemplate = async ({
     return { error: "Template not found." };
   }
 
-  let record: Record<string, unknown> = { ...values };
+  let record: FillValues = { ...values };
 
   const slots = await discoverClauseSlots(loaded.buffer);
   if (slots.length > 0) {

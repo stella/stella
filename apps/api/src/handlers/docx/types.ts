@@ -339,17 +339,19 @@ export const isFieldMeta = (value: unknown): value is FieldMeta => {
   );
 };
 
-export const isNamedCondition = (value: unknown): value is NamedCondition =>
+// NamedCondition and ComputedField share the { name, expression, label? }
+// shape, so one predicate backs both guards (each narrows to its own type).
+const hasNameExpressionLabel = (value: unknown): boolean =>
   isRecordLike(value) &&
   typeof value["name"] === "string" &&
   typeof value["expression"] === "string" &&
   (value["label"] === undefined || typeof value["label"] === "string");
 
+export const isNamedCondition = (value: unknown): value is NamedCondition =>
+  hasNameExpressionLabel(value);
+
 export const isComputedField = (value: unknown): value is ComputedField =>
-  isRecordLike(value) &&
-  typeof value["name"] === "string" &&
-  typeof value["expression"] === "string" &&
-  (value["label"] === undefined || typeof value["label"] === "string");
+  hasNameExpressionLabel(value);
 
 const isRichRun = (value: unknown): value is RichRun =>
   isRecordLike(value) &&

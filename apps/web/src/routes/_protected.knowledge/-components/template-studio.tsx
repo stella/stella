@@ -686,7 +686,6 @@ const trimChar = (value: string, ch: string): string => {
 
 // Derive a field path from selected prose: "Jan Kowalski" -> "jan_kowalski".
 const slugify = (text: string): string => {
-  // oxlint-disable-next-line sonarjs/slow-regex -- runs on one short text selection
   const collapsed = text
     .trim()
     .toLowerCase()

@@ -1,6 +1,7 @@
 import { useTranslations } from "use-intl";
 
-import { BLOCK_DIRECTIVE_KINDS, scanMarkers } from "@stll/template-conditions";
+import type { BLOCK_DIRECTIVE_KINDS } from "@stll/template-conditions";
+import { scanMarkers } from "@stll/template-conditions";
 
 // ── Types ────────────────────────────────────────────
 

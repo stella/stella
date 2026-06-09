@@ -19,8 +19,8 @@ const stubScopedDb = (rows: TemplateRow[]): ScopedDb => {
   const tx = { query: { templates: { findMany: async () => rows } } };
   // SAFETY: test double — exposes only the surface list_templates touches.
   // eslint-disable-next-line typescript/no-unsafe-type-assertion
-  return ((run: (t: typeof tx) => unknown) =>
-    Promise.resolve(run(tx))) as unknown as ScopedDb;
+  return (async (run: (t: typeof tx) => unknown) =>
+    await run(tx)) as unknown as ScopedDb;
 };
 
 describe("createTemplateTools", () => {
