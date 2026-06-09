@@ -23,10 +23,11 @@ test("chat thread page renders for an entitlement-less owner", async ({
   // legitimately gates the thread with the connect-provider card
   // instead of the composer. Either state proves the route rendered.
   // The gate renders its heading twice (inline card plus an
-  // auto-opened dialog), so first() collapses that duplicate; it
-  // cannot mask a composer-vs-gate bug because those states are
-  // mutually exclusive.
+  // auto-opened dialog), so first() scopes to that locator only; the
+  // composer keeps strict matching so a stray second composer fails.
   const composer = page.getByRole("textbox", { name: /type your question/iu });
-  const aiKeyGate = page.getByRole("heading", { name: "Connect AI provider" });
-  await expect(composer.or(aiKeyGate).first()).toBeVisible();
+  const aiKeyGate = page
+    .getByRole("heading", { name: "Connect AI provider" })
+    .first();
+  await expect(composer.or(aiKeyGate)).toBeVisible();
 });
