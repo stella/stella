@@ -18,7 +18,11 @@ test("chat thread page renders for an entitlement-less owner", async ({
   // The route error boundary replaces the thread UI wholesale; its
   // title is the canonical signature of a client-side render crash.
   await expect(page.getByText("Something went wrong")).toBeHidden();
-  await expect(
-    page.getByRole("textbox", { name: /type your question/iu }),
-  ).toBeVisible();
+
+  // The smoke org has no AI provider credentials, so RequireAIKey
+  // legitimately gates the thread with "Connect AI provider" instead
+  // of the composer. Either state proves the route rendered.
+  const composer = page.getByRole("textbox", { name: /type your question/iu });
+  const aiKeyGate = page.getByText("Connect AI provider");
+  await expect(composer.or(aiKeyGate)).toBeVisible();
 });
