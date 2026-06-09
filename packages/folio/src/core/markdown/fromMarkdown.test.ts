@@ -80,4 +80,32 @@ describe("markdown bridge — round-trip", () => {
       "- item\n\nAfter the list.",
     );
   });
+
+  test("a soft line break becomes a break node, not a raw newline in a run", () => {
+    // A Word run can't carry "\n"; the layout engine renders such lines on top
+    // of each other. A two-line blockquote must produce an explicit break.
+    const doc = fromMarkdown("> first line\n> second line");
+    let rawNewlineRuns = 0;
+    let breakNodes = 0;
+    for (const block of doc.package.document.content) {
+      if (block.type !== "paragraph") {
+        continue;
+      }
+      for (const run of block.content) {
+        if (run.type !== "run") {
+          continue;
+        }
+        for (const node of run.content) {
+          if (node.type === "break") {
+            breakNodes += 1;
+          }
+          if (node.type === "text" && node.text.includes("\n")) {
+            rawNewlineRuns += 1;
+          }
+        }
+      }
+    }
+    expect(rawNewlineRuns).toBe(0);
+    expect(breakNodes).toBeGreaterThan(0);
+  });
 });

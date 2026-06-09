@@ -43,16 +43,31 @@ type RunFormat = {
   mono?: boolean;
 };
 
-const textRun = (text: string, fmt: RunFormat = {}): Run => ({
-  type: "run",
-  formatting: {
+const textRun = (text: string, fmt: RunFormat = {}): Run => {
+  const formatting = {
     ...(fmt.bold ? { bold: true } : {}),
     ...(fmt.italic ? { italic: true } : {}),
     ...(fmt.strike ? { strike: true } : {}),
     ...(fmt.mono ? { fontFamily: MONO_FONT } : {}),
-  },
-  content: [{ type: "text", text }],
-});
+  };
+  // A Word run can't carry a raw newline — a soft/hard break (e.g. two lines in
+  // one blockquote) must be an explicit break node, or the layout engine renders
+  // the lines on top of each other. Split on "\n" into text + break content.
+  const segments = text.split("\n");
+  const content: Run["content"] = [];
+  segments.forEach((segment, index) => {
+    if (index > 0) {
+      content.push({ type: "break" });
+    }
+    if (segment.length > 0) {
+      content.push({ type: "text", text: segment });
+    }
+  });
+  if (content.length === 0) {
+    content.push({ type: "text", text: "" });
+  }
+  return { type: "run", formatting, content };
+};
 
 const inlineToRuns = (
   tokens: Token[] | undefined,
