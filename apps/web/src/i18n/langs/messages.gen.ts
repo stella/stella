@@ -2095,6 +2095,7 @@ type Messages = {
       "scopeTemplate": "Template";
       "showOnlyIf": "Show only if…";
       "suggestConfig": "Suggest configuration";
+      "textPlusAi": "Text + AI";
       "whoFills": "Who fills this?";
     };
     "tagPlaceholder": "Type a tag and press Enter";

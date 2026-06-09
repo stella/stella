@@ -2092,6 +2092,7 @@
       "scopeTemplate": "Mall",
       "showOnlyIf": "Kuva ainult siis, kui…",
       "suggestConfig": "Paku seadistust",
+      "textPlusAi": "Tekst + TI",
       "whoFills": "Kes selle täidab?"
     },
     "tagPlaceholder": "Sisesta silt ja vajuta Enter",

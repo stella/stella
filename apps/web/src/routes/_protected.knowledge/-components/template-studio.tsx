@@ -1488,7 +1488,12 @@ const FieldFace = ({
     setExampleValue(config.exampleValue);
   };
 
-  const filledByAi = field.aiPrompt !== undefined;
+  let fillMode: "person" | "textAi" | "ai" = "person";
+  if (field.aiAdapt) {
+    fillMode = "textAi";
+  } else if (field.aiPrompt !== undefined) {
+    fillMode = "ai";
+  }
 
   return (
     <ScrollArea className="min-h-0 flex-1">
@@ -1552,23 +1557,38 @@ const FieldFace = ({
         <div className="flex items-center gap-1">
           <Button
             className="flex-1"
-            onClick={() => onUpdate({ aiPrompt: undefined })}
+            onClick={() => onUpdate({ aiPrompt: undefined, aiAdapt: false })}
             size="sm"
-            variant={filledByAi ? "ghost" : "secondary"}
+            variant={fillMode === "person" ? "secondary" : "ghost"}
           >
             {t("templates.studio.filledByPerson")}
           </Button>
           <Button
             className="flex-1"
-            onClick={() => onUpdate({ aiPrompt: field.aiPrompt ?? "" })}
+            onClick={() => onUpdate({ aiPrompt: undefined, aiAdapt: true })}
             size="sm"
-            variant={filledByAi ? "secondary" : "ghost"}
+            variant={fillMode === "textAi" ? "secondary" : "ghost"}
+          >
+            {t("templates.studio.textPlusAi")}
+          </Button>
+          <Button
+            className="flex-1"
+            onClick={() =>
+              onUpdate({ aiPrompt: field.aiPrompt ?? "", aiAdapt: false })
+            }
+            size="sm"
+            variant={fillMode === "ai" ? "secondary" : "ghost"}
           >
             <WandSparklesIcon className="size-3.5" />
             {t("templates.studio.draftedByAi")}
           </Button>
         </div>
-        {filledByAi ? (
+        {fillMode === "textAi" ? (
+          <p className="text-muted-foreground text-xs leading-relaxed">
+            {t("templates.aiAdaptHint")}
+          </p>
+        ) : null}
+        {fillMode === "ai" ? (
           <Textarea
             onChange={(e) => onUpdate({ aiPrompt: e.target.value })}
             placeholder={t("templates.studio.aiPromptPlaceholder")}
@@ -1867,6 +1887,7 @@ const parseFields = (manifest: unknown): StudioField[] => {
           : [],
         aiPrompt:
           typeof raw["aiPrompt"] === "string" ? raw["aiPrompt"] : undefined,
+        aiAdapt: raw["aiAdapt"] === true,
       };
     });
 
@@ -1919,6 +1940,7 @@ const buildManifest = (
           required?: boolean;
           options?: string[];
           aiPrompt?: string;
+          aiAdapt?: boolean;
         } = { path: f.path, inputType: f.inputType };
         if (f.label) {
           field.label = f.label;
@@ -1931,6 +1953,9 @@ const buildManifest = (
         }
         if (f.aiPrompt) {
           field.aiPrompt = f.aiPrompt;
+        }
+        if (f.aiAdapt) {
+          field.aiAdapt = true;
         }
         return field;
       }),
