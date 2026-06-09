@@ -5354,6 +5354,45 @@ export function PagedEditor(
     };
   }, [handleMouseMove, handleMouseUp]);
 
+  // Mouse back/forward buttons (3 = back, 4 = forward) navigate browser history
+  // by default, which would yank the user out of the document mid-edit. While
+  // this editor is focused, repurpose them as undo / redo and suppress the
+  // navigation. preventDefault on mousedown drives the action; mouseup +
+  // auxclick also preventDefault since which event triggers the navigation
+  // varies across Chromium builds.
+  useEffect(() => {
+    if (readOnly) {
+      return;
+    }
+    const handleHistoryButton = (event: MouseEvent) => {
+      if (event.button !== 3 && event.button !== 4) {
+        return;
+      }
+      if (!hiddenPMRef.current?.isFocused()) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.type !== "mousedown") {
+        return;
+      }
+      if (event.button === 3) {
+        hiddenPMRef.current.undo();
+      } else {
+        hiddenPMRef.current.redo();
+      }
+    };
+    const options = { capture: true } as const;
+    window.addEventListener("mousedown", handleHistoryButton, options);
+    window.addEventListener("mouseup", handleHistoryButton, options);
+    window.addEventListener("auxclick", handleHistoryButton, options);
+    return () => {
+      window.removeEventListener("mousedown", handleHistoryButton, options);
+      window.removeEventListener("mouseup", handleHistoryButton, options);
+      window.removeEventListener("auxclick", handleHistoryButton, options);
+    };
+  }, [readOnly]);
+
   /**
    * Handle mousemove on pages to show table row/column insert buttons.
    * Detects proximity to table row/column boundaries and shows a floating "+" button.
