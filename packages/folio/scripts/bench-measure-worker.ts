@@ -67,11 +67,10 @@ class BenchOffscreenCanvas {
     };
   }
 }
-(globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas =
-  BenchOffscreenCanvas;
+Reflect.set(globalThis, "OffscreenCanvas", BenchOffscreenCanvas);
 
 // --- Synthetic document for the main-thread canvas -------------------
-(globalThis as { document?: unknown }).document = {
+Reflect.set(globalThis, "document", {
   createElement() {
     return {
       getContext() {
@@ -104,7 +103,7 @@ class BenchOffscreenCanvas {
       },
     };
   },
-};
+});
 
 // --- Out-of-band "worker" transport that defers work ----------------
 // This is *not* the real worker; the real worker runs in a separate

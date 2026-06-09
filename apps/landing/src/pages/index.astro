@@ -1,14 +1,18 @@
 ---
 import Base from "../layouts/Base.astro";
 import ThemeToggle from "../components/ThemeToggle.astro";
+import GitHubIcon from "../components/GitHubIcon.astro";
 import ProductShowcase from "../components/react/ProductShowcase";
 import { controlCapabilities } from "../data/capabilities";
+import { getChangelogReleases } from "../lib/changelog";
+
+const latestRelease = getChangelogReleases().at(0);
 
 const appUrl = "https://my.stll.app";
 const discordUrl = "https://discord.gg/8dZjmVFjTK";
 const githubUrl = "https://github.com/stella/stella";
 const selfHostingDocsUrl =
-  "https://github.com/stella/stella/blob/main/apps/docs/src/content/docs/guides/self-hosting.md";
+  "https://github.com/stella/stella/blob/main/docs/self-hosting.md";
 ---
 
 <Base>
@@ -20,9 +24,52 @@ const selfHostingDocsUrl =
   >
   </div>
 
+  <header
+    id="site-header"
+    class="fixed inset-x-0 top-0 z-50 border-b border-transparent transition-[background-color,backdrop-filter,border-color] duration-300"
+  >
+    <nav
+      class="mx-auto flex w-full max-w-300 items-center justify-between px-6 py-4"
+    >
+      <div class="flex items-center gap-3">
+        <img
+          src="/images/stella-logo.svg"
+          alt="stella"
+          class="h-6 dark:invert"
+        />
+        <span
+          class="border-border text-muted-foreground rounded-sm border px-1.5 py-0.5 text-[0.625rem] font-medium tracking-[0.1em] uppercase"
+        >
+          Beta
+        </span>
+        <span
+          class="h-4 w-px"
+          style="background: var(--border)"
+          aria-hidden="true"></span>
+        <a
+          href={githubUrl}
+          class="inline-flex transition-opacity hover:opacity-70"
+          style="color: var(--muted-foreground)"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="stella on GitHub"
+        >
+          <GitHubIcon class="h-5 w-5" />
+        </a>
+      </div>
+      <a
+        href={appUrl}
+        class="header-cta inline-flex h-9 items-center rounded-[0.625rem] px-4 text-sm font-medium whitespace-nowrap"
+        style="background: var(--primary); color: var(--primary-foreground)"
+      >
+        Start free
+      </a>
+    </nav>
+  </header>
+
   <main>
     <!-- ——— Hero ——— -->
-    <section class="relative flex min-h-dvh flex-col overflow-hidden">
+    <section class="relative flex min-h-dvh flex-col overflow-hidden pt-20">
       <div class="absolute inset-0 overflow-hidden" id="gradient-bg">
         <div
           id="gradient-light"
@@ -35,80 +82,63 @@ const selfHostingDocsUrl =
         >
         </div>
       </div>
-      <nav
-        class="relative z-10 mx-auto flex w-full max-w-300 items-center justify-between px-6 py-5"
-      >
-        <div class="flex items-center gap-3">
-          <img
-            src="/images/stella-logo.svg"
-            alt="stella"
-            class="h-6 dark:invert"
-          />
-          <span
-            class="border-border text-muted-foreground rounded-sm border px-1.5 py-0.5 text-[0.625rem] font-medium tracking-[0.1em] uppercase"
-          >
-            Beta
-          </span>
-        </div>
-        <div class="flex items-center gap-4">
-          <a
-            href="/changelog"
-            class="hidden text-sm font-medium transition-opacity hover:opacity-70 sm:inline"
-            style="color: var(--muted-foreground)"
-          >
-            Changelog
-          </a>
-          <ThemeToggle />
-        </div>
-      </nav>
-
-      <a
-        id="github-stars-banner"
-        href={githubUrl}
-        data-reveal
-        style="--reveal-delay: 0ms; background: color-mix(in srgb, var(--card) 88%, transparent); border: 1px solid var(--border); color: var(--foreground); backdrop-filter: blur(14px)"
-        class="relative z-10 mx-auto mt-2 inline-flex max-w-[calc(100%-3rem)] items-center gap-3 rounded-full px-4 py-2 text-sm font-medium shadow-sm hover:-translate-y-0.5 hover:opacity-90"
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label="stella on GitHub"
-      >
-        <svg
-          class="h-4 w-4 shrink-0"
-          fill="currentColor"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-          ><path
-            d="M12 .5C5.648.5.5 5.648.5 12a11.5 11.5 0 008.073 10.95c.59.11.805-.257.805-.57 0-.281-.01-1.024-.016-2.01-3.282.713-3.975-1.582-3.975-1.582-.536-1.362-1.31-1.725-1.31-1.725-1.072-.733.081-.718.081-.718 1.186.083 1.81 1.218 1.81 1.218 1.054 1.806 2.766 1.284 3.44.982.107-.764.413-1.285.752-1.58-2.62-.298-5.377-1.31-5.377-5.829 0-1.287.46-2.34 1.216-3.166-.122-.298-.527-1.5.116-3.126 0 0 .992-.317 3.25 1.209A11.33 11.33 0 0112 6.227c1.02.005 2.047.138 3.007.404 2.257-1.526 3.247-1.209 3.247-1.209.645 1.626.24 2.828.118 3.126.759.826 1.214 1.879 1.214 3.166 0 4.53-2.76 5.527-5.387 5.819.424.365.801 1.084.801 2.185 0 1.577-.014 2.85-.014 3.238 0 .316.212.686.81.569A11.502 11.502 0 0023.5 12C23.5 5.648 18.352.5 12 .5z"
-          ></path></svg
-        >
-        <span class="min-w-0 truncate">stella is open source</span>
-      </a>
 
       <div
         class="relative z-10 flex flex-1 flex-col items-center justify-center px-6 pb-16"
       >
-        <div
+        <a
+          href="/changelog"
           data-reveal
           style="--reveal-delay: 120ms; background: color-mix(in srgb, var(--card) 88%, transparent); border: 1px solid var(--border)"
-          class="mb-8 inline-flex items-center gap-3 rounded-full px-4 py-2"
+          class="group mb-8 inline-flex max-w-[calc(100%-3rem)] items-center gap-2.5 rounded-full px-4 py-2 text-sm font-medium shadow-sm transition-transform hover:-translate-y-0.5"
         >
           <span
-            class="hero-beta-dot h-2.5 w-2.5 rounded-full"
+            class="hero-beta-dot h-2 w-2 shrink-0 rounded-full"
             style="background: var(--success)"
             aria-hidden="true"></span>
           <span
-            class="text-xs font-semibold uppercase tracking-[0.18em]"
-            style="color: var(--foreground)"
+            class="hidden shrink-0 whitespace-nowrap sm:inline"
+            style="color: var(--foreground)">We ship weirdly fast</span
           >
-            Now in beta
+          <span
+            class="inline-flex min-w-0 items-center gap-1.5 sm:border-l sm:pl-2.5"
+            style="border-color: var(--border); color: var(--muted-foreground)"
+          >
+            {
+              latestRelease && (
+                <span
+                  class="shrink-0 font-medium"
+                  style="color: var(--foreground)"
+                >
+                  {latestRelease.tagName}
+                </span>
+              )
+            }
+            <span class="min-w-0 truncate">
+              {
+                latestRelease
+                  ? (latestRelease.heading ?? latestRelease.displayName)
+                  : "Changelog"
+              }
+            </span>
+            <span
+              aria-hidden="true"
+              class="shrink-0 transition-transform group-hover:translate-x-0.5"
+              >→</span
+            >
           </span>
-        </div>
+        </a>
         <h1
           data-reveal
           style="--reveal-delay: 240ms"
           class="max-w-3xl text-center font-display text-5xl font-medium leading-[1.08] sm:text-6xl lg:text-7xl"
         >
-          Legal workspace.<br />Open source.
+          Legal workspace.<br /><a
+            href={githubUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="os-link"
+            title="View source on GitHub">Open source.</a>
         </h1>
         <p
           data-reveal
@@ -119,14 +149,33 @@ const selfHostingDocsUrl =
           <br />
           Free to use, open to inspect, yours to keep.
         </p>
-        <a
-          href={appUrl}
+        <div
           data-reveal
-          style="--reveal-delay: 480ms; background: var(--primary); color: var(--primary-foreground)"
-          class="mt-8 inline-flex h-9 items-center rounded-[0.625rem] px-4 text-sm font-medium transition-opacity hover:opacity-90 whitespace-nowrap"
+          style="--reveal-delay: 480ms"
+          class="mt-10 flex flex-col items-center gap-3 sm:flex-row"
         >
-          Start free
-        </a>
+          <a
+            id="hero-cta"
+            href={appUrl}
+            style="background: var(--primary); color: var(--primary-foreground)"
+            class="group inline-flex h-11 items-center gap-2 rounded-[0.85rem] px-6 text-sm font-medium shadow-sm transition-[opacity,transform] hover:-translate-y-0.5 hover:opacity-90 whitespace-nowrap"
+          >
+            Start free
+            <span
+              aria-hidden="true"
+              class="transition-transform group-hover:translate-x-0.5">→</span
+            >
+          </a>
+          <a
+            href={selfHostingDocsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style="background: var(--background); border: 1px solid var(--border); color: var(--foreground)"
+            class="inline-flex h-11 items-center rounded-[0.85rem] px-6 text-sm font-medium transition-opacity hover:opacity-90 whitespace-nowrap"
+          >
+            Self-host
+          </a>
+        </div>
       </div>
 
       <div
@@ -427,6 +476,7 @@ const selfHostingDocsUrl =
           >
         </nav>
         <div class="flex items-center gap-4" aria-label="Social">
+          <ThemeToggle />
           <a
             href={githubUrl}
             class="transition-opacity hover:opacity-70"
@@ -435,11 +485,7 @@ const selfHostingDocsUrl =
             rel="noopener noreferrer"
             aria-label="GitHub"
           >
-            <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"
-              ><path
-                d="M12 .5C5.648.5.5 5.648.5 12a11.5 11.5 0 008.073 10.95c.59.11.805-.257.805-.57 0-.281-.01-1.024-.016-2.01-3.282.713-3.975-1.582-3.975-1.582-.536-1.362-1.31-1.725-1.31-1.725-1.072-.733.081-.718.081-.718 1.186.083 1.81 1.218 1.81 1.218 1.054 1.806 2.766 1.284 3.44.982.107-.764.413-1.285.752-1.58-2.62-.298-5.377-1.31-5.377-5.829 0-1.287.46-2.34 1.216-3.166-.122-.298-.527-1.5.116-3.126 0 0 .992-.317 3.25 1.209A11.33 11.33 0 0112 6.227c1.02.005 2.047.138 3.007.404 2.257-1.526 3.247-1.209 3.247-1.209.645 1.626.24 2.828.118 3.126.759.826 1.214 1.879 1.214 3.166 0 4.53-2.76 5.527-5.387 5.819.424.365.801 1.084.801 2.185 0 1.577-.014 2.85-.014 3.238 0 .316.212.686.81.569A11.502 11.502 0 0023.5 12C23.5 5.648 18.352.5 12 .5z"
-              ></path></svg
-            >
+            <GitHubIcon class="h-4 w-4" />
           </a>
           <a
             href={discordUrl}
@@ -516,6 +562,51 @@ const selfHostingDocsUrl =
   </footer>
 
   <style>
+    #site-header.is-scrolled {
+      background: color-mix(in srgb, var(--background) 80%, transparent);
+      -webkit-backdrop-filter: blur(14px);
+      backdrop-filter: blur(14px);
+      border-bottom-color: var(--border);
+    }
+
+    .header-cta {
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-4px);
+      pointer-events: none;
+      transition:
+        opacity 220ms var(--ease-out-quint),
+        transform 220ms var(--ease-out-quint),
+        visibility 0s linear 220ms;
+    }
+
+    #site-header.show-cta .header-cta {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+      pointer-events: auto;
+      transition:
+        opacity 220ms var(--ease-out-quint),
+        transform 220ms var(--ease-out-quint),
+        visibility 0s;
+    }
+
+    #site-header.show-cta .header-cta:hover {
+      opacity: 0.9;
+    }
+
+    .os-link {
+      text-decoration: none;
+      text-underline-offset: 0.14em;
+      text-decoration-thickness: 0.05em;
+      transition: text-decoration-color 200ms;
+    }
+
+    .os-link:hover {
+      text-decoration: underline;
+      text-decoration-color: color-mix(in srgb, var(--foreground) 45%, transparent);
+    }
+
     .hero-beta-dot {
       animation: hero-beta-pulse 4s var(--ease-out-quint) infinite;
     }
@@ -541,6 +632,35 @@ const selfHostingDocsUrl =
       }
     }
   </style>
+
+  <script is:inline>
+    (function () {
+      var header = document.getElementById("site-header");
+      if (!header) return;
+      var heroCta = document.getElementById("hero-cta");
+      var ticking = false;
+      function update() {
+        ticking = false;
+        header.classList.toggle("is-scrolled", window.scrollY > 8);
+        // Reveal the header CTA only once the hero's own CTA has scrolled up
+        // behind the fixed bar, so the two "Start free" buttons never overlap.
+        var revealCta = heroCta
+          ? heroCta.getBoundingClientRect().bottom <= header.offsetHeight
+          : window.scrollY > 8;
+        header.classList.toggle("show-cta", revealCta);
+      }
+      // Coalesce scroll/resize into one layout read per frame (avoids
+      // forced synchronous layout from getBoundingClientRect on every tick).
+      function onScroll() {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(update);
+      }
+      update();
+      window.addEventListener("scroll", onScroll, { passive: true });
+      window.addEventListener("resize", onScroll, { passive: true });
+    })();
+  </script>
 
   <!--
     Web Animations API drives the illustration motion directly.

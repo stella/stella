@@ -1,7 +1,4 @@
----
-title: Self-hosting
-description: Deploy stella on your own infrastructure.
----
+# Self-hosting
 
 stella is designed to be self-hosted. You retain full control over your data
 and infrastructure.
@@ -155,13 +152,13 @@ Gotenberg service.
 ## Database migrations
 
 Apply SQL migrations from `apps/api/drizzle/` before running the API against a
-new database. Use [Drizzle Kit](https://orm.drizzle.team/docs/kit-overview) and
-the [migrations](https://orm.drizzle.team/docs/migrations) documentation. With
-`DATABASE_URL` set (for example in `apps/api/.env`):
+new database. With `DATABASE_URL` set in `apps/api/.env`, run the `db:migrate`
+script (it loads `apps/api/.env` and applies the migrations via
+[Drizzle Kit](https://orm.drizzle.team/docs/migrations)):
 
 ```bash
 cd apps/api
-bun drizzle-kit migrate
+bun run db:migrate
 ```
 
 ## Container images

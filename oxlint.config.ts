@@ -263,6 +263,9 @@ export default defineConfig({
     // Module-augmentation files must use `interface` for declaration
     // merging; oxlint's --fix would rewrite it to `type` and break it.
     "types/**/*.d.ts",
+    // Static browser assets (e.g. the CSP-strict dark-mode bootstrap) are
+    // untyped JS; type-aware rules flag their DOM globals as `error`.
+    "apps/web/public/**",
   ],
 
   jsPlugins: [
@@ -351,10 +354,7 @@ export default defineConfig({
     {
       // Astro's content config wires virtual loader/schema helpers that
       // oxlint's type-aware pass sees as error-typed outside Astro's checker.
-      files: [
-        "apps/docs/src/content.config.ts",
-        "apps/landing/src/content.config.ts",
-      ],
+      files: ["apps/landing/src/content.config.ts"],
       rules: {
         "typescript/no-unsafe-assignment": "off",
         "typescript/no-unsafe-call": "off",
@@ -533,8 +533,6 @@ export default defineConfig({
                 group: [
                   "@stll/desktop",
                   "@stll/desktop/**",
-                  "@stll/docs",
-                  "@stll/docs/**",
                   "@stll/landing",
                   "@stll/landing/**",
                 ],
