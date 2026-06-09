@@ -19,7 +19,7 @@ import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
-import { userErrorMessage } from "@/lib/errors";
+import { toAPIError, userErrorMessage } from "@/lib/errors";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -89,8 +89,11 @@ export const LinkClauseDialog = ({
       const response = await api
         .clauses({ clauseId: toSafeId<"clause">(selectedClauseId) })
         .variants.get();
-      if (response.error || response.data instanceof Response) {
-        throw new Error("Failed to load clause variants");
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      if (response.data instanceof Response) {
+        throw new TypeError("Unexpected response shape");
       }
       return response.data;
     },

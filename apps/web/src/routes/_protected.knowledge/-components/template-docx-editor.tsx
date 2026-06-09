@@ -241,44 +241,32 @@ export const TemplateDocxEditor = ({
                 value={insertValue}
               />
               <div className="grid grid-cols-2 gap-1.5">
-                <Button
-                  className="justify-start gap-2"
-                  onClick={() => runInsert("field")}
-                  size="sm"
-                  variant="outline"
-                >
-                  <BracesIcon />
-                  field
-                </Button>
-                <Button
-                  className="justify-start gap-2"
-                  onClick={() => runInsert("if")}
-                  size="sm"
-                  variant="outline"
-                >
-                  <SplitIcon />
-                  if
-                </Button>
-                <Button
-                  className="justify-start gap-2"
-                  onClick={() => runInsert("each")}
-                  size="sm"
-                  variant="outline"
-                >
-                  <RepeatIcon />
-                  each
-                </Button>
-                <Button
-                  className="justify-start gap-2"
-                  onClick={() => runInsert("clause")}
-                  size="sm"
-                  variant="outline"
-                >
-                  <span className="text-base leading-none font-semibold">
-                    §
-                  </span>
-                  clause
-                </Button>
+                {(
+                  [
+                    { kind: "field", icon: <BracesIcon /> },
+                    { kind: "if", icon: <SplitIcon /> },
+                    { kind: "each", icon: <RepeatIcon /> },
+                    {
+                      kind: "clause",
+                      icon: (
+                        <span className="text-base leading-none font-semibold">
+                          §
+                        </span>
+                      ),
+                    },
+                  ] as const
+                ).map((insert) => (
+                  <Button
+                    className="justify-start gap-2"
+                    key={insert.kind}
+                    onClick={() => runInsert(insert.kind)}
+                    size="sm"
+                    variant="outline"
+                  >
+                    {insert.icon}
+                    {insert.kind}
+                  </Button>
+                ))}
               </div>
             </div>
           </PopoverPopup>

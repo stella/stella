@@ -4,7 +4,6 @@ import {
   classifyMarker,
   DIRECTIVE_KINDS,
   isBlockDirectiveKind,
-  type MarkerMeta,
   scanMarkers,
 } from "./markers.js";
 
@@ -66,8 +65,9 @@ describe("classifyMarker", () => {
     for (const sample of samples) {
       const meta = classifyMarker(sample);
       expect(meta).not.toBeNull();
-      // SAFETY: asserted non-null above.
-      expect(DIRECTIVE_KINDS).toContain((meta as MarkerMeta).kind);
+      if (meta) {
+        expect(DIRECTIVE_KINDS).toContain(meta.kind);
+      }
     }
   });
 });
