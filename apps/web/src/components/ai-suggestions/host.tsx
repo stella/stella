@@ -15,7 +15,11 @@
 
 import "@/components/chat-editor.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ComponentProps, ReactNode } from "react";
+import type {
+  ComponentProps,
+  KeyboardEvent as ReactKeyboardEvent,
+  ReactNode,
+} from "react";
 
 import {
   ArrowUpIcon,
@@ -26,6 +30,7 @@ import {
   LoaderCircleIcon,
   SquareIcon,
   SquarePenIcon,
+  WandSparklesIcon,
 } from "lucide-react";
 import type { EditorView } from "prosemirror-view";
 import { useTranslations } from "use-intl";
@@ -45,6 +50,7 @@ import type {
   AIGenerateInput,
   AISuggestion,
   AISuggestionApplyMode,
+  AISuggestionPreset,
   AISuggestionSeverity,
 } from "@stll/folio";
 import { Button } from "@stll/ui/components/button";
@@ -977,6 +983,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
       pendingCount={pendingCount}
       panelOpen={panelOpen}
       showThreadToggle={layout === "floating" && hasMessages}
+      presets={config.presets}
       onSubmit={(input) => {
         void handleGenerate(input);
       }}
@@ -989,6 +996,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
   // are pending suggestions, stepping through them in document order.
   const stepperBar =
     layout === "floating" &&
+    !threadVisible &&
     mode === "edit" &&
     showAcceptUI &&
     orderedPending.length > 0 ? (
@@ -1072,7 +1080,13 @@ type PromptBarProps = {
   layout: FileAIChatLayout;
   status: FileAIChatStatus;
   canSubmitNow?: (() => boolean) | undefined;
-  onSubmit: (input: { prompt: string }) => void;
+  onSubmit: (input: { prompt: string; presetId?: string }) => void;
+  /**
+   * Pre-saved prompts surfaced as chips above the empty bar. Clicking a
+   * chip — or pressing Tab while the input is empty (first preset) —
+   * accepts and sends it in one step.
+   */
+  presets?: AISuggestionPreset[] | undefined;
   onNewThread?: (() => void) | undefined;
   newThreadLabel?: string | undefined;
   /**
@@ -1244,6 +1258,7 @@ export function PromptBar(props: PromptBarProps) {
     showThreadToggle,
     canSubmitNow,
     onSubmit,
+    presets,
     onStop,
     onNewThread,
     newThreadLabel,
@@ -1312,10 +1327,45 @@ export function PromptBar(props: PromptBarProps) {
     submitDisabled: composerSubmitDisabled,
   });
 
+  // Preset chips: visible over the empty idle bar; click — or Tab with an
+  // empty input — accepts and sends the preset in one step.
+  const presetChipsVisible =
+    layout === "floating" &&
+    !panelOpen &&
+    presets !== undefined &&
+    presets.length > 0 &&
+    isEmpty &&
+    !busy &&
+    !isSendBlocked;
+  const submitPreset = useCallback(
+    (preset: AISuggestionPreset) => {
+      if (canSubmitNow !== undefined && !canSubmitNow()) {
+        return;
+      }
+      onSubmit({ prompt: preset.prompt, presetId: preset.id });
+    },
+    [canSubmitNow, onSubmit],
+  );
+  const handleShellKeyDown = useCallback(
+    (event: ReactKeyboardEvent) => {
+      if (event.key !== "Tab" || event.shiftKey || !presetChipsVisible) {
+        return;
+      }
+      const first = presets.at(0);
+      if (!first) {
+        return;
+      }
+      event.preventDefault();
+      submitPreset(first);
+    },
+    [presetChipsVisible, presets, submitPreset],
+  );
+
   return (
     <PromptBarShell
       aria-busy={busy}
       aria-label={t("chat.aiPrompt")}
+      onKeyDownCapture={handleShellKeyDown}
       className={cn(
         !inputDisabled && "focus-within:border-foreground/30",
         // Attention pulse — kicked by the inspector chip click to
@@ -1326,7 +1376,26 @@ export function PromptBar(props: PromptBarProps) {
       )}
       layout={layout}
       role="toolbar"
+      tabIndex={-1}
     >
+      {presetChipsVisible && (
+        <div className="absolute start-1 bottom-full mb-3 flex flex-col items-start gap-1.5">
+          {presets.map((preset) => (
+            <Button
+              aria-keyshortcuts="Tab"
+              className="bg-background/75 text-foreground h-9 gap-2.5 rounded-full border-none px-3 text-[13px] font-medium shadow-[0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)] backdrop-blur-xl backdrop-saturate-150"
+              key={preset.id}
+              onClick={() => submitPreset(preset)}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              <WandSparklesIcon aria-hidden="true" className="size-4" />
+              {preset.label}
+            </Button>
+          ))}
+        </div>
+      )}
       <div className="relative flex min-h-8 min-w-0 flex-1 items-center gap-1.5 px-1.5">
         {isEmpty && busy && (
           <div className="text-muted-foreground pointer-events-none absolute inset-x-1.5 top-1/2 z-10 flex min-w-0 -translate-y-1/2 items-center gap-2 text-[13px]">
