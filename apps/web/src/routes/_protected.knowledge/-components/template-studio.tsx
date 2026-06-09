@@ -1,6 +1,5 @@
 import {
   lazy,
-  type ReactNode,
   Suspense,
   useCallback,
   useEffect,
@@ -11,7 +10,6 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import {
-  ArrowLeftIcon,
   BracesIcon,
   ChevronDownIcon,
   EyeIcon,
@@ -57,6 +55,7 @@ import { DOCX_MIME, SIDE_RAIL_TAB_ICON_SIZE_PX } from "@/lib/consts";
 import { toSafeId } from "@/lib/safe-id";
 import { TemplateClausesTab } from "@/routes/_protected.knowledge/-components/template-clauses-tab";
 import { TemplateForm } from "@/routes/_protected.knowledge/-components/template-form";
+import { useTemplateNavStore } from "@/routes/_protected.knowledge/-components/template-nav-store";
 import {
   defaultStudioField,
   type NameExpr,
@@ -103,21 +102,16 @@ export const TemplateStudioPage = ({
   fileName,
   manifest,
   name,
-  nameSlot,
   metaLabel,
-  onBack,
 }: {
   templateId: string;
   presignedUrl: string;
   fileName: string;
   manifest: unknown;
-  /** Plain template name, used as the inspector tab label. */
+  /** Template name, used as the inspector tab label (rename lives there too). */
   name: string;
-  /** The (rename-able) template name UI, owned by the detail view. */
-  nameSlot: ReactNode;
   /** Field-count + date summary line. */
   metaLabel: string;
-  onBack: () => void;
 }) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -378,16 +372,7 @@ export const TemplateStudioPage = ({
     <div className="flex h-full min-h-0 flex-col">
       {/* Template action bar — the document fills everything below it. */}
       <div className="flex items-center gap-1 border-b px-2 py-1.5">
-        <Button
-          aria-label={t("templates.backToList")}
-          onClick={onBack}
-          size="sm"
-          variant="ghost"
-        >
-          <ArrowLeftIcon />
-        </Button>
-        <div className="min-w-0 flex-1">{nameSlot}</div>
-        <span className="text-muted-foreground hidden truncate text-xs lg:block">
+        <span className="text-muted-foreground min-w-0 flex-1 truncate text-xs">
           {metaLabel}
         </span>
         <Button
@@ -505,6 +490,45 @@ function TemplateStudioInspectorView({
   const setConditions = useTemplateStudioStore((s) => s.setConditions);
   const setComputed = useTemplateStudioStore((s) => s.setComputed);
 
+  const queryClient = useQueryClient();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const openView = useInspectorStore((s) => s.openView);
+  const setNavName = useTemplateNavStore((s) => s.setName);
+  const [rename, setRename] = useState<{ active: boolean; value: string }>({
+    active: false,
+    value: "",
+  });
+
+  const commitRename = async () => {
+    const next = rename.value.trim();
+    setRename({ active: false, value: "" });
+    if (!next || next === tab.label) {
+      return;
+    }
+    const response = await api
+      .templates({ templateId: toSafeId<"template">(templateId) })
+      .post({ name: next });
+    if (response.error) {
+      stellaToast.add({ type: "error", title: t("templates.renameFailed") });
+      return;
+    }
+    // Reflect the new name in the tab label, the breadcrumb, and the list.
+    openView({
+      type: TEMPLATE_STUDIO_VIEW,
+      id: templateStudioTabId(templateId),
+      label: next,
+      payload: { templateId },
+      ownerRouteId: TEMPLATES_ROUTE_ID,
+    });
+    setNavName(next);
+    void queryClient.invalidateQueries({
+      queryKey: knowledgeKeys.templates.all(activeOrganizationId),
+    });
+    stellaToast.add({ type: "success", title: t("templates.templateRenamed") });
+  };
+
   const facetLabels: Record<StudioFacet, string> = {
     fields: t("templates.fields"),
     clauses: t("common.clauses"),
@@ -519,7 +543,18 @@ function TemplateStudioInspectorView({
 
   return (
     <div className="bg-background flex h-full flex-1 flex-col overflow-hidden">
-      <InspectorTabHeader label={tab.label} onClose={onClose} />
+      <InspectorTabHeader
+        label={tab.label}
+        onClose={onClose}
+        onStartRename={() => setRename({ active: true, value: tab.label })}
+        rename={{
+          active: rename.active,
+          value: rename.value,
+          onChange: (value) => setRename({ active: true, value }),
+          onCommit: () => void commitRename(),
+          onCancel: () => setRename({ active: false, value: "" }),
+        }}
+      />
       <FacetBar
         facet={facet}
         facets={STUDIO_FACETS}
