@@ -7,6 +7,8 @@ import type {
   ParagraphBlock,
   ParagraphFragment,
   Page,
+  TableBlock,
+  TableFragment,
 } from "../layout-engine/types";
 import {
   buildHeaderFooterFieldValues,
@@ -39,6 +41,21 @@ const fragment = (blockId: string): ParagraphFragment => ({
   height: 20,
   fromLine: 0,
   toLine: 1,
+});
+
+const tableFragment = (
+  blockId: string,
+  fromRow: number,
+  toRow: number,
+): TableFragment => ({
+  kind: "table",
+  blockId,
+  x: 0,
+  y: 0,
+  width: 600,
+  height: 20,
+  fromRow,
+  toRow,
 });
 
 const page = (number: number, blockIds: string[]): Page => ({
@@ -90,6 +107,56 @@ describe("resolveFieldValues", () => {
 
     expect(values.get(10)).toBe("7");
     expect(values.get(20)).toBe("3");
+  });
+
+  test("evaluates fields inside split tables for their row page", () => {
+    const table: TableBlock = {
+      kind: "table",
+      id: "table",
+      rows: [
+        {
+          id: "r0",
+          cells: [{ id: "c0", blocks: [para("row0", [field(10, "PAGE")])] }],
+        },
+        {
+          id: "r1",
+          cells: [
+            {
+              id: "c1",
+              blocks: [
+                para("row1", [field(20, "PAGE"), field(30, "SECTIONPAGES")]),
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const pages: Page[] = [
+      {
+        number: 9,
+        fragments: [tableFragment("table", 0, 1)],
+        margins: MARGINS,
+        size: { w: 816, h: 1056 },
+        sectionIndex: 0,
+      },
+      {
+        number: 10,
+        fragments: [tableFragment("table", 1, 2)],
+        margins: MARGINS,
+        size: { w: 816, h: 1056 },
+        sectionIndex: 1,
+      },
+    ];
+
+    const { values } = resolveFieldValues(
+      [table],
+      pages,
+      shared({ sectionPageCounts: new Map([[1, 7]]) }),
+    );
+
+    expect(values.get(10)).toBe("9");
+    expect(values.get(20)).toBe("10");
+    expect(values.get(30)).toBe("7");
   });
 
   test("a field with no fragment for its block falls back to page 1", () => {

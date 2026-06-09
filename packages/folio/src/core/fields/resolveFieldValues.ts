@@ -20,6 +20,9 @@ export type SharedFieldInputs = {
 };
 
 type BlockLocation = { page: number; sectionIndex: number };
+type FieldAnchor =
+  | { type: "block"; blockId: BlockId; run: FieldRun }
+  | { type: "tableRow"; blockId: BlockId; rowIndex: number; run: FieldRun };
 
 export type ResolvedFieldValues = {
   /** Field run `pmStart` -> resolved display text. */
@@ -45,39 +48,40 @@ export function resolveFieldValues(
   shared: SharedFieldInputs,
 ): ResolvedFieldValues {
   const blockPage = buildBlockPageMap(pages);
+  const tableRowPage = buildTableRowPageMap(pages);
+  const fields: FieldAnchor[] = [];
+  for (const block of blocks) {
+    collectFieldAnchors(block, block.id, fields);
+  }
   const values = new Map<number, string>();
   let changed = false;
 
-  for (const block of blocks) {
-    const location = blockPage.get(block.id);
-    const fields: FieldRun[] = [];
-    collectFieldRuns(block, fields);
-
-    for (const run of fields) {
-      if (run.pmStart === undefined) {
-        continue;
-      }
-      const sectionPages = location
-        ? shared.sectionPageCounts.get(location.sectionIndex)
-        : undefined;
-      const context: FieldContext = {
-        pageNumber: location?.page ?? 1,
-        totalPages: shared.totalPages,
-        bookmarkPages: shared.bookmarkPages,
-        bookmarkText: shared.bookmarkText,
-        seqValues: shared.seqValues,
-        now: shared.now,
-        ...(sectionPages === undefined ? {} : { sectionPages }),
-      };
-      const value = evaluateField(
-        parseFieldInstruction(run.instruction || run.fieldType),
-        context,
-        { fallback: run.fallback ?? "", instanceId: run.pmStart },
-      );
-      values.set(run.pmStart, value);
-      if (value !== (run.fallback || "1")) {
-        changed = true;
-      }
+  for (const field of fields) {
+    const run = field.run;
+    if (run.pmStart === undefined) {
+      continue;
+    }
+    const location = resolveAnchorLocation(field, blockPage, tableRowPage);
+    const sectionPages = location
+      ? shared.sectionPageCounts.get(location.sectionIndex)
+      : undefined;
+    const context: FieldContext = {
+      pageNumber: location?.page ?? 1,
+      totalPages: shared.totalPages,
+      bookmarkPages: shared.bookmarkPages,
+      bookmarkText: shared.bookmarkText,
+      seqValues: shared.seqValues,
+      now: shared.now,
+      ...(sectionPages === undefined ? {} : { sectionPages }),
+    };
+    const value = evaluateField(
+      parseFieldInstruction(run.instruction || run.fieldType),
+      context,
+      { fallback: run.fallback ?? "", instanceId: run.pmStart },
+    );
+    values.set(run.pmStart, value);
+    if (value !== (run.fallback || "1")) {
+      changed = true;
     }
   }
 
@@ -174,6 +178,120 @@ function buildBlockPageMap(
     }
   }
   return map;
+}
+
+function buildTableRowPageMap(
+  pages: readonly Page[],
+): Map<string, BlockLocation> {
+  const map = new Map<string, BlockLocation>();
+  for (const page of pages) {
+    for (const fragment of page.fragments) {
+      if (fragment.kind !== "table") {
+        continue;
+      }
+      for (
+        let rowIndex = fragment.fromRow;
+        rowIndex < fragment.toRow;
+        rowIndex++
+      ) {
+        const key = tableRowKey(fragment.blockId, rowIndex);
+        if (!map.has(key)) {
+          map.set(key, {
+            page: page.number,
+            sectionIndex: page.sectionIndex ?? 0,
+          });
+        }
+      }
+    }
+  }
+  return map;
+}
+
+function tableRowKey(blockId: BlockId, rowIndex: number): string {
+  return `${blockId}:${rowIndex}`;
+}
+
+function resolveAnchorLocation(
+  field: FieldAnchor,
+  blockPage: ReadonlyMap<BlockId, BlockLocation>,
+  tableRowPage: ReadonlyMap<string, BlockLocation>,
+): BlockLocation | undefined {
+  if (field.type === "block") {
+    return blockPage.get(field.blockId);
+  }
+  return (
+    tableRowPage.get(tableRowKey(field.blockId, field.rowIndex)) ??
+    blockPage.get(field.blockId)
+  );
+}
+
+function collectFieldAnchors(
+  block: FlowBlock,
+  topLevelId: BlockId,
+  out: FieldAnchor[],
+): void {
+  if (block.kind === "paragraph") {
+    for (const run of block.runs) {
+      if (run.kind === "field") {
+        out.push({ type: "block", blockId: topLevelId, run });
+      }
+    }
+    return;
+  }
+
+  if (block.kind === "table") {
+    for (let rowIndex = 0; rowIndex < block.rows.length; rowIndex++) {
+      const row = block.rows[rowIndex];
+      if (!row) {
+        continue;
+      }
+      for (const cell of row.cells) {
+        for (const child of cell.blocks) {
+          collectTableRowFieldAnchors(child, block.id, rowIndex, out);
+        }
+      }
+    }
+    return;
+  }
+
+  if (block.kind === "textBox") {
+    for (const child of block.content) {
+      collectFieldAnchors(child, topLevelId, out);
+    }
+  }
+}
+
+function collectTableRowFieldAnchors(
+  block: FlowBlock,
+  tableId: BlockId,
+  rowIndex: number,
+  out: FieldAnchor[],
+): void {
+  if (block.kind === "paragraph") {
+    for (const run of block.runs) {
+      if (run.kind === "field") {
+        out.push({ type: "tableRow", blockId: tableId, rowIndex, run });
+      }
+    }
+    return;
+  }
+
+  if (block.kind === "table") {
+    for (const row of block.rows) {
+      for (const cell of row.cells) {
+        for (const child of cell.blocks) {
+          collectTableRowFieldAnchors(child, tableId, rowIndex, out);
+        }
+      }
+    }
+    return;
+  }
+
+  if (block.kind === "textBox") {
+    for (const child of block.content) {
+      collectTableRowFieldAnchors(child, tableId, rowIndex, out);
+    }
+  }
 }
 
 function collectFieldRuns(block: FlowBlock, out: FieldRun[]): void {
