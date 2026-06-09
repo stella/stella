@@ -96,8 +96,10 @@ export const mintSmokeSession = async (): Promise<SmokeSession> => {
   // No cleanup of prior rows: sessions expire after 15 minutes and
   // better-auth ignores expired rows, so one row per deploy is inert.
   const token = Bun.randomUUIDv7();
+  // Full token in the id: a UUIDv7 prefix is timestamp-dominated, so
+  // two mints in the same window would collide on the primary key.
   await rootDb.insert(session).values({
-    id: `smoke-session-${token.slice(0, 8)}`,
+    id: `smoke-session-${token}`,
     token,
     userId: SMOKE_USER.id,
     activeOrganizationId: SMOKE_ORG.id,

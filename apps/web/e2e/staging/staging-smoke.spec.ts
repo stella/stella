@@ -19,6 +19,6 @@ test("chat thread page renders for an entitlement-less owner", async ({
   // title is the canonical signature of a client-side render crash.
   await expect(page.getByText("Something went wrong")).toBeHidden();
   await expect(
-    page.getByPlaceholder(/type your question here/iu),
+    page.getByRole("textbox", { name: /type your question/iu }),
   ).toBeVisible();
 });

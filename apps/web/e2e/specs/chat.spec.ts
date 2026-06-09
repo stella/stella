@@ -17,11 +17,15 @@ test("chat composer sends a message and renders the assistant reply", async ({
   });
   await expect(errorBoundary).toHaveCount(0);
 
-  // TipTap gives the composer's contenteditable role="textbox"
-  // (@tiptap/core sets it on the editor element); the chat landing
-  // renders exactly one composer.
-  const composer = page.getByRole("textbox");
-  await expect(composer).toBeVisible();
+  // The composer's contenteditable carries an explicit role and
+  // aria-label (chat-editor-provider editorProps); the name filter
+  // keeps the locator unique even when other textbox-role editors
+  // (e.g. folio) are mounted.
+  const composer = page.getByRole("textbox", { name: /type your question/iu });
+  // First locator after navigation: a cold Vite dev server compiles the
+  // chat route chunk on demand, which can exceed the default 10s expect
+  // timeout on a fresh CI runner (see playwright.config.ts).
+  await expect(composer).toBeVisible({ timeout: 30_000 });
 
   const messageText = "Hello from the stella e2e chat spec";
   await composer.click();
