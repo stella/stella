@@ -3,11 +3,15 @@ import { t } from "elysia";
 
 import type { SafeDb, ScopedDb } from "@/api/db";
 import { templateFills } from "@/api/db/schema";
+import { buildAiFieldGenerator } from "@/api/handlers/docx/ai-field-generator";
 import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
+import { resolveAiFields } from "@/api/handlers/docx/resolve-ai-fields";
 import { resolveClauseSlots } from "@/api/handlers/docx/resolve-clause-slots";
+import { readManifest } from "@/api/handlers/docx/template-manifest";
 import { isTemplateData } from "@/api/handlers/docx/types";
 import { convertToPdf } from "@/api/handlers/files/gotenberg";
+import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -122,6 +126,22 @@ const fillByIdHandler = async function* ({
       organizationId,
     );
     for (const [key, value] of Object.entries(clausePatches)) {
+      parsed[key] = value;
+    }
+  }
+
+  // Draft AI-fillable fields so the downloaded document matches the preview
+  // (fill-preview resolves them too); without this an AI-drafted placeholder
+  // shown in the preview would download unresolved.
+  const manifest = await readManifest(buffer);
+  if (manifest?.fields.some((field) => field.aiPrompt)) {
+    const orgAIConfig = await loadOrgAIConfig(organizationId);
+    const aiResolved = await resolveAiFields({
+      values: parsed,
+      fields: manifest.fields,
+      generate: buildAiFieldGenerator({ orgAIConfig, organizationId }),
+    });
+    for (const [key, value] of Object.entries(aiResolved)) {
       parsed[key] = value;
     }
   }
