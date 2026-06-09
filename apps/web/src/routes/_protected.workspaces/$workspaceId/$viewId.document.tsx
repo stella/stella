@@ -42,6 +42,10 @@ import {
 import "@stll/folio/editor.css";
 import { cn } from "@stll/ui/lib/utils";
 
+import {
+  useDocxFitZoom,
+  useDocxWheelZoom,
+} from "@/components/docx-preview-zoom";
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
@@ -55,10 +59,6 @@ import { toSafeId } from "@/lib/safe-id";
 import { composeRefs } from "@/lib/slot";
 import { shouldUseDocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.logic";
 import { DocxLoadingShell } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell";
-import {
-  useDocxFitZoom,
-  useDocxWheelZoom,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-preview-zoom";
 import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import PdfViewer, {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { CodeIcon, PenLineIcon } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
@@ -10,6 +10,8 @@ import type { Document, DocxEditorRef, MarkdownOptions } from "@stll/folio";
 import { Button } from "@stll/ui/components/button";
 import { Textarea } from "@stll/ui/components/textarea";
 import { cn } from "@stll/ui/lib/utils";
+
+import { useDocxFitZoom } from "@/components/docx-preview-zoom";
 
 // Flatten Word constructs markdown can't carry so the emitted markdown stays
 // clean: drop comments/annotations, flatten tracked changes, inline links,
@@ -103,42 +105,16 @@ export function MarkdownFolioEditor({
     setMode("wysiwyg");
   };
 
-  // Folio is a fixed-page editor and only fits the page to the panel once, so a
-  // wider inspector would leave empty space beside a narrow page. Re-fit the
-  // zoom to the panel width whenever it resizes so the document fills the space.
+  // Fit the page to the panel width with the same hook the DOCX inspector uses,
+  // so markdown fills the inspector (body text full-width) and re-fits on resize
+  // — identical behaviour to editing a .docx.
   const editorRef = useRef<DocxEditorRef>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) {
-      return;
-    }
-    const fitToWidth = () => {
-      const editor = editorRef.current;
-      const page = container.querySelector<HTMLElement>(".paged-editor");
-      if (!editor || !page) {
-        return;
-      }
-      const zoom = editor.getZoom() || 1;
-      const naturalWidth = page.getBoundingClientRect().width / zoom;
-      if (naturalWidth <= 0) {
-        return;
-      }
-      const available = container.clientWidth - 8;
-      const next = Math.max(0.5, Math.min(2.5, available / naturalWidth));
-      if (Math.abs(next - zoom) > 0.01) {
-        editor.setZoom(next);
-      }
-    };
-    // Observe the panel (not the page) so our own setZoom doesn't re-trigger.
-    const observer = new ResizeObserver(() => fitToWidth());
-    observer.observe(container);
-    const initial = setTimeout(fitToWidth, 150);
-    return () => {
-      observer.disconnect();
-      clearTimeout(initial);
-    };
-  }, [seed]);
+  // Same fit params as the DOCX inspector (max auto-zoom 0.85) so markdown sits
+  // identically — page fits the panel with margins, no clipped text.
+  const { containerRef: fitZoomRef, fitZoom } = useDocxFitZoom(0, 0.85);
+  useLayoutEffect(() => {
+    editorRef.current?.setZoom(fitZoom);
+  }, [fitZoom]);
 
   if (mode === "raw") {
     return (
@@ -162,11 +138,12 @@ export function MarkdownFolioEditor({
   return (
     <div
       className={cn("flex min-h-0 flex-1 flex-col", className)}
-      ref={containerRef}
+      ref={fitZoomRef}
     >
       <DocxEditor
         className="h-full"
         document={doc}
+        initialZoom={fitZoom}
         key={seed}
         mode={readOnly ? "viewing" : "editing"}
         onChange={onFolioChange}

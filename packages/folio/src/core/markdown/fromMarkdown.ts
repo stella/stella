@@ -216,20 +216,15 @@ const blocksFromTokens = (tokens: Token[] | undefined): BlockContent[] => {
   return blocks;
 };
 
-// Markdown has no page chrome or page width: flatten the section so the editor
-// reads as a continuous document (content at the top, no header/footer band, no
-// inter-page gap) and narrow the page to a single readable column that fits a
-// side panel (the inspector) instead of an 8.5" sheet that overflows it.
-const MD_PAGE_WIDTH = 6480; // 4.5" in twips — a column, not a sheet
-const MD_SIDE_MARGIN = 360; // 0.25"
+// Markdown has no running header/footer, so flatten that band (content sits
+// near the top, no inter-page header/footer gap). The page width and side
+// margins stay at the default (Letter, 1" sides) so the editor fits to width
+// exactly like the DOCX inspector — the body text fills the panel.
 const applyMarkdownPageGeometry = (document: Document): void => {
   const section = document.package.document.finalSectionProperties;
   if (!section) {
     return;
   }
-  section.pageWidth = MD_PAGE_WIDTH;
-  section.marginLeft = MD_SIDE_MARGIN;
-  section.marginRight = MD_SIDE_MARGIN;
   section.marginTop = 480;
   section.marginBottom = 480;
   section.headerDistance = 0;
