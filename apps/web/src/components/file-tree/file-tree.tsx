@@ -199,7 +199,8 @@ export type FileTreeProps = {
   selectedId: string | null;
   onToggle: (id: string) => void;
   onSelect: (node: FileTreeNode) => void;
-  /** Per-node icon override (e.g. mime/extension icons). */
+  /** Per-node icon override (e.g. mime/extension icons). Return `undefined` for a
+   * node to fall back to the default folder/file icon. */
   renderIcon?: (node: FileTreeNode, expanded: boolean) => ReactNode;
   /** Name-slot override (e.g. an inline rename field). Defaults to the name. */
   renderName?: (node: FileTreeNode) => ReactNode;
@@ -261,7 +262,9 @@ export function FileTree({
                 depth={depth}
                 expanded={expanded}
                 guideDepths={guideDepths}
-                icon={(renderIcon ?? defaultIcon)(node, expanded)}
+                icon={
+                  renderIcon?.(node, expanded) ?? defaultIcon(node, expanded)
+                }
                 isFolder={isFolder}
                 isLast={isLast}
               >
