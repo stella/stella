@@ -4,6 +4,16 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useFormatter, useTranslations } from "use-intl";
 
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "@stll/ui/components/alert-dialog";
+import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
@@ -11,6 +21,7 @@ import { userErrorMessage } from "@/lib/errors";
 import { TemplateList } from "@/routes/_protected.knowledge/-components/template-list";
 import { useTemplateNavStore } from "@/routes/_protected.knowledge/-components/template-nav-store";
 import { TemplateStudioPage } from "@/routes/_protected.knowledge/-components/template-studio";
+import { useTemplateStudioStore } from "@/routes/_protected.knowledge/-components/template-studio-store";
 import {
   knowledgeKeys,
   templateCategoriesOptions,
@@ -45,6 +56,7 @@ function RouteComponent() {
     select: (ctx) => ctx.user.activeOrganizationId,
   });
   const [view, setView] = useState<View>({ kind: "list" });
+  const [confirmLeave, setConfirmLeave] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     null,
   );
@@ -133,14 +145,45 @@ function RouteComponent() {
   );
 
   if (view.kind === "detail") {
+    const exitDetail = () => {
+      setView({ kind: "list" });
+      invalidateTemplates();
+    };
     return (
-      <TemplateDetail
-        onBack={() => {
-          setView({ kind: "list" });
-          invalidateTemplates();
-        }}
-        template={view.template}
-      />
+      <>
+        <TemplateDetail
+          onBack={() => {
+            // Leaving the Studio discards unsaved document/manifest edits.
+            if (useTemplateStudioStore.getState().isDirty) {
+              setConfirmLeave(true);
+              return;
+            }
+            exitDetail();
+          }}
+          template={view.template}
+        />
+        <AlertDialog onOpenChange={setConfirmLeave} open={confirmLeave}>
+          <AlertDialogPopup>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t("common.confirmAction")}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {t("templates.unsavedLeaveConfirm")}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogClose render={<Button variant="ghost" />}>
+                {t("common.cancel")}
+              </AlertDialogClose>
+              <AlertDialogClose
+                onClick={exitDetail}
+                render={<Button variant="destructive" />}
+              >
+                {t("folio.discardChanges")}
+              </AlertDialogClose>
+            </AlertDialogFooter>
+          </AlertDialogPopup>
+        </AlertDialog>
+      </>
     );
   }
 

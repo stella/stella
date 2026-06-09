@@ -14,8 +14,11 @@ import { getRouteApi } from "@tanstack/react-router";
 import { panic } from "better-result";
 import {
   BracesIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
   EyeIcon,
   Loader2Icon,
+  PencilIcon,
   EyeOffIcon,
   PlusIcon,
   RepeatIcon,
@@ -24,11 +27,13 @@ import {
   Trash2Icon,
   WandSparklesIcon,
 } from "lucide-react";
+import { TextSelection } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import { useTranslations } from "use-intl";
 
 import { buildPositionalText, getTemplateDirectives } from "@stll/folio";
 import type { DirectiveRange, DocxEditorRef } from "@stll/folio";
+import { isFieldPath } from "@stll/template-conditions";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import { Input } from "@stll/ui/components/input";
@@ -202,6 +207,10 @@ export const TemplateStudioPage = ({
       save: () => actionsRef.current?.save(),
       suggestFieldConfig: async (path) =>
         (await actionsRef.current?.suggestFieldConfig(path)) ?? null,
+      renameFieldPath: (oldPath, newPath) =>
+        actionsRef.current?.renameFieldPath(oldPath, newPath) ?? false,
+      focusAdjacentField: (direction) =>
+        actionsRef.current?.focusAdjacentField(direction),
     });
     return () => setActions(null);
   }, [setActions]);
@@ -256,6 +265,17 @@ export const TemplateStudioPage = ({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once per template; the manifest is the fixed source doc for this templateId and re-seeding would discard edits made in the inspector tab.
   }, [templateId]);
+
+  // Warn before a tab close / hard navigation while there are unsaved edits.
+  useEffect(() => {
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (useTemplateStudioStore.getState().isDirty) {
+        event.preventDefault();
+      }
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, []);
 
   // Folio defers creating the ProseMirror view until first interaction, so
   // onEditorViewReady never fires and the selection->inspector binding can't
@@ -442,6 +462,77 @@ export const TemplateStudioPage = ({
     insertClauseSlot: (slotName) => insertInline(`{{@clause:${slotName}}}`),
     makeField,
     save: () => void handleSave(),
+    focusAdjacentField: (direction) => {
+      const view = editorViewRef.current;
+      if (!view) {
+        return;
+      }
+      const placeholders = getTemplateDirectives(view.state)
+        .filter((d) => d.kind === "placeholder")
+        .toSorted((a, b) => a.from - b.from);
+      if (placeholders.length === 0) {
+        return;
+      }
+      const head = view.state.selection.from;
+      const currentIndex = placeholders.findIndex(
+        (d) => head >= d.from && head <= d.to,
+      );
+      let nextIndex: number;
+      if (currentIndex === -1) {
+        nextIndex = direction > 0 ? 0 : placeholders.length - 1;
+      } else {
+        nextIndex =
+          (currentIndex + direction + placeholders.length) %
+          placeholders.length;
+      }
+      const target = placeholders.at(nextIndex);
+      if (!target) {
+        return;
+      }
+      const $pos = view.state.doc.resolve(
+        Math.min(target.from + 2, view.state.doc.content.size),
+      );
+      view.dispatch(
+        view.state.tr.setSelection(TextSelection.near($pos)).scrollIntoView(),
+      );
+      view.focus();
+    },
+    renameFieldPath: (oldPath, newPath) => {
+      const view = editorViewRef.current;
+      const trimmed = newPath.trim();
+      if (!view || trimmed === oldPath) {
+        return false;
+      }
+      const taken = useTemplateStudioStore
+        .getState()
+        .fields.some((f) => f.path === trimmed);
+      if (!isFieldPath(trimmed) || taken) {
+        return false;
+      }
+      // Rewrite every {{oldPath}} marker, last occurrence first so earlier
+      // positions stay valid while the transaction accumulates.
+      const positional = buildPositionalText(view.state.doc);
+      const literal = `{{${oldPath}}}`;
+      const ranges: { from: number; to: number }[] = [];
+      let idx = positional.text.indexOf(literal);
+      while (idx !== -1) {
+        ranges.push({
+          from: positional.pmPositionAt(idx),
+          to: positional.pmPositionAt(idx + literal.length - 1) + 1,
+        });
+        idx = positional.text.indexOf(literal, idx + literal.length);
+      }
+      if (ranges.length > 0) {
+        const tr = view.state.tr;
+        for (const range of ranges.toReversed()) {
+          tr.insertText(`{{${trimmed}}}`, range.from, range.to);
+        }
+        view.dispatch(tr);
+      }
+      useTemplateStudioStore.getState().renameField(oldPath, trimmed);
+      markDirty();
+      return true;
+    },
     suggestFieldConfig: async (path) => {
       const view = editorViewRef.current;
       if (!view) {
@@ -1015,7 +1106,7 @@ const ScopeHeader = ({
   action,
 }: {
   title: string;
-  subtitle?: string;
+  subtitle?: ReactNode;
   /** Right-aligned control (e.g. the field face's suggest wand). */
   action?: ReactNode;
 }) => (
@@ -1024,7 +1115,9 @@ const ScopeHeader = ({
       <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
         {title}
       </p>
-      {subtitle ? <code className="text-sm">{subtitle}</code> : null}
+      {subtitle === undefined ? null : (
+        <div className="text-sm">{subtitle}</div>
+      )}
     </div>
     {action}
   </div>
@@ -1079,22 +1172,51 @@ const FieldFace = ({
     <ScrollArea className="min-h-0 flex-1">
       <ScopeHeader
         action={
-          <Button
-            aria-label={t("templates.studio.suggestConfig")}
-            disabled={suggesting}
-            onClick={() => void handleSuggest()}
-            size="icon-sm"
-            title={t("templates.studio.suggestConfig")}
-            variant="ghost"
-          >
-            {suggesting ? (
-              <Loader2Icon className="animate-spin" />
-            ) : (
-              <WandSparklesIcon />
-            )}
-          </Button>
+          <div className="flex items-center gap-0.5">
+            <Button
+              aria-label={t("common.previous")}
+              onClick={() => actions?.focusAdjacentField(-1)}
+              size="icon-sm"
+              variant="ghost"
+            >
+              <ChevronLeftIcon />
+            </Button>
+            <Button
+              aria-label={t("common.next")}
+              onClick={() => actions?.focusAdjacentField(1)}
+              size="icon-sm"
+              variant="ghost"
+            >
+              <ChevronRightIcon />
+            </Button>
+            <Button
+              aria-label={t("templates.studio.suggestConfig")}
+              disabled={suggesting}
+              onClick={() => void handleSuggest()}
+              size="icon-sm"
+              title={t("templates.studio.suggestConfig")}
+              variant="ghost"
+            >
+              {suggesting ? (
+                <Loader2Icon className="animate-spin" />
+              ) : (
+                <WandSparklesIcon />
+              )}
+            </Button>
+          </div>
         }
-        subtitle={field.path}
+        subtitle={
+          <FieldPathEditor
+            key={field.path}
+            onRename={(next) => {
+              if (!actions) {
+                return false;
+              }
+              return actions.renameFieldPath(field.path, next);
+            }}
+            path={field.path}
+          />
+        }
         title={t("templates.studio.scopeField")}
       />
       <p className="text-muted-foreground px-4 py-3 text-xs leading-relaxed">
@@ -1136,6 +1258,66 @@ const FieldFace = ({
   );
 };
 
+/** Click-to-edit field path: renames the {{markers}} in the document. */
+const FieldPathEditor = ({
+  path,
+  onRename,
+}: {
+  path: string;
+  onRename: (next: string) => boolean;
+}) => {
+  const t = useTranslations();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(path);
+
+  const commit = () => {
+    if (value.trim() === path) {
+      setEditing(false);
+      return;
+    }
+    if (onRename(value)) {
+      setEditing(false);
+      return;
+    }
+    stellaToast.add({
+      type: "error",
+      title: t("templates.studio.renameFieldInvalid"),
+    });
+  };
+
+  if (!editing) {
+    return (
+      <button
+        className="hover:bg-muted/60 group -ms-1 flex items-center gap-1.5 rounded px-1 py-0.5"
+        onClick={() => setEditing(true)}
+        title={t("templates.studio.renameField")}
+        type="button"
+      >
+        <code className="text-sm">{path}</code>
+        <PencilIcon className="text-muted-foreground size-3 opacity-0 transition-opacity group-hover:opacity-100" />
+      </button>
+    );
+  }
+  return (
+    <Input
+      autoFocus
+      className="h-7 font-mono text-sm"
+      onBlur={commit}
+      onChange={(e) => setValue(e.currentTarget.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          commit();
+        }
+        if (e.key === "Escape") {
+          setValue(path);
+          setEditing(false);
+        }
+      }}
+      value={value}
+    />
+  );
+};
+
 /** Live preview of the control this field becomes in the fill form. */
 const FieldPreview = ({
   field,
@@ -1149,7 +1331,7 @@ const FieldPreview = ({
   return (
     <div className="flex flex-col gap-2 border-t px-4 py-4">
       <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
-        {t("common.preview")}
+        {t("templates.studio.fillFormPreview")}
       </p>
       <div className="bg-muted/30 pointer-events-none flex flex-col gap-1.5 rounded-md border p-3">
         <Label className="text-xs">

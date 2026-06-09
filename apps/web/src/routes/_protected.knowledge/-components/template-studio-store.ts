@@ -51,6 +51,11 @@ export type StudioActions = {
   save: () => void;
   /** Ask the model to propose label/type/example for one field. */
   suggestFieldConfig: (path: string) => Promise<SuggestedFieldConfig | null>;
+  /** Rewrite {{oldPath}} markers in the document and rename the field.
+   *  Returns false when the new path is invalid or already taken. */
+  renameFieldPath: (oldPath: string, newPath: string) => boolean;
+  /** Move the document caret to the next/previous field marker. */
+  focusAdjacentField: (direction: 1 | -1) => void;
 };
 
 /** Page-owned UI state the inspector's action row reflects. */
@@ -86,6 +91,7 @@ type TemplateStudioState = {
   /** Clear the session on page unmount, but only if it still owns it. */
   reset: (templateId: string) => void;
   upsertField: (path: string, patch: Partial<StudioField>) => void;
+  renameField: (oldPath: string, newPath: string) => void;
   setConditions: (conditions: NameExpr[]) => void;
   setComputed: (computed: NameExpr[]) => void;
   setSelected: (selected: DirectiveRange | null) => void;
@@ -136,6 +142,13 @@ export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
         : [...state.fields, { ...defaultStudioField(path), ...patch }];
       return { fields, isDirty: true };
     }),
+  renameField: (oldPath, newPath) =>
+    set((state) => ({
+      fields: state.fields.map((f) =>
+        f.path === oldPath ? { ...f, path: newPath } : f,
+      ),
+      isDirty: true,
+    })),
   setConditions: (conditions) => set({ conditions, isDirty: true }),
   setComputed: (computed) => set({ computed, isDirty: true }),
   setSelected: (selected) => set({ selected }),
