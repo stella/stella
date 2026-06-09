@@ -2065,6 +2065,7 @@
       "clauseSlotHelp": "Une clause de la bibliothèque est insérée ici lors du remplissage. Gérez les clauses liées dans l'onglet Clauses.",
       "computed": "Calculé",
       "conditionBlockHelp": "Ce bloc s'affiche uniquement lorsque :",
+      "emptyClauseSlot": "Emplacement de clause vide",
       "expressionPlaceholder": "expression",
       "insert": "Insérer",
       "loop": "Boucle",

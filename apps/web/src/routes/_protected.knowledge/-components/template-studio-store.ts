@@ -37,6 +37,8 @@ export type StudioActions = {
   insertCondition: () => void;
   insertLoop: () => void;
   insertClause: () => void;
+  /** Insert a `{{@clause:Name}}` slot bound to a linked clause's slot name. */
+  insertClauseSlot: (slotName: string) => void;
   makeField: () => void;
   save: () => void;
 };

@@ -2065,6 +2065,7 @@
       "clauseSlotHelp": "Täitmisel lisatakse siia teegist klausel. Seotud klausleid haldate vahekaardil Klauslid.",
       "computed": "Arvutatud",
       "conditionBlockHelp": "See plokk kuvatakse ainult siis, kui:",
+      "emptyClauseSlot": "Tühi klausli pesa",
       "expressionPlaceholder": "avaldis",
       "insert": "Sisesta",
       "loop": "Tsükkel",

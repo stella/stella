@@ -2065,6 +2065,7 @@
       "clauseSlotHelp": "Hier wird beim Ausfüllen eine Klausel aus der Bibliothek eingefügt. Verknüpfte Klauseln verwalten Sie im Tab Klauseln.",
       "computed": "Berechnet",
       "conditionBlockHelp": "Dieser Block wird nur angezeigt, wenn:",
+      "emptyClauseSlot": "Leerer Klausel-Slot",
       "expressionPlaceholder": "Ausdruck",
       "insert": "Einfügen",
       "loop": "Schleife",

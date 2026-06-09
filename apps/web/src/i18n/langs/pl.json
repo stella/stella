@@ -2065,6 +2065,7 @@
       "clauseSlotHelp": "Tutaj podczas wypełniania wstawiana jest klauzula z biblioteki. Powiązanymi klauzulami zarządzaj w zakładce Klauzule.",
       "computed": "Obliczane",
       "conditionBlockHelp": "Ten blok jest widoczny tylko gdy:",
+      "emptyClauseSlot": "Puste miejsce na klauzulę",
       "expressionPlaceholder": "wyrażenie",
       "insert": "Wstaw",
       "loop": "Pętla",

@@ -2065,6 +2065,7 @@
       "clauseSlotHelp": "Kitöltéskor ide a könyvtárból beszúrt kikötés kerül. A kapcsolt kikötéseket a Kikötések lapon kezelheti.",
       "computed": "Számított",
       "conditionBlockHelp": "Ez a blokk csak akkor jelenik meg, ha:",
+      "emptyClauseSlot": "Üres záradékhely",
       "expressionPlaceholder": "kifejezés",
       "insert": "Beszúrás",
       "loop": "Ciklus",

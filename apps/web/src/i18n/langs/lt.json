@@ -2065,6 +2065,7 @@
       "clauseSlotHelp": "Pildant čia įterpiama sąlyga iš bibliotekos. Susietas sąlygas tvarkykite skirtuke Sąlygos.",
       "computed": "Apskaičiuota",
       "conditionBlockHelp": "Šis blokas rodomas tik kai:",
+      "emptyClauseSlot": "Tuščias sąlygos laukelis",
       "expressionPlaceholder": "išraiška",
       "insert": "Įterpti",
       "loop": "Ciklas",

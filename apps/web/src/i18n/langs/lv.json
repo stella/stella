@@ -2065,6 +2065,7 @@
       "clauseSlotHelp": "Aizpildot šeit tiek ievietota klauzula no bibliotēkas. Saistītās klauzulas pārvaldiet cilnē Klauzulas.",
       "computed": "Aprēķināts",
       "conditionBlockHelp": "Šis bloks tiek rādīts tikai tad, ja:",
+      "emptyClauseSlot": "Tukšs klauzulas slots",
       "expressionPlaceholder": "izteiksme",
       "insert": "Ievietot",
       "loop": "Cilpa",

@@ -2065,6 +2065,7 @@
       "clauseSlotHelp": "Zde se při vyplnění vloží vzorové ustanovení z knihovny. Propojená ustanovení spravujte na kartě Vzorová ustanovení.",
       "computed": "Vypočítané",
       "conditionBlockHelp": "Tento blok se zobrazí pouze když:",
+      "emptyClauseSlot": "Prázdný slot pro klauzuli",
       "expressionPlaceholder": "výraz",
       "insert": "Vložit",
       "loop": "Smyčka",

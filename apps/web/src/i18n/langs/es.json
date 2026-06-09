@@ -2065,6 +2065,7 @@
       "clauseSlotHelp": "Aquí se inserta una cláusula de la biblioteca al rellenar. Gestiona las cláusulas vinculadas en la pestaña Cláusulas.",
       "computed": "Calculado",
       "conditionBlockHelp": "Este bloque solo se muestra cuando:",
+      "emptyClauseSlot": "Hueco de cláusula vacío",
       "expressionPlaceholder": "expresión",
       "insert": "Insertar",
       "loop": "Bucle",
