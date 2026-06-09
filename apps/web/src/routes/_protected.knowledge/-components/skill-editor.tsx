@@ -951,29 +951,31 @@ function FolderCreateActions({
             </Button>
           }
         />
-        <PopoverContent className="flex w-64 flex-col gap-2 p-2">
-          <Input
-            autoFocus
-            onChange={(event) => setFilename(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                submitNewFile();
-              }
-              if (event.key === "Escape") {
-                setNewFileOpen(false);
-              }
-            }}
-            placeholder={tSkills("newFileFilenamePlaceholder")}
-            value={filename}
-          />
-          <Button
-            disabled={createPending || filename.trim().length === 0}
-            onClick={submitNewFile}
-            size="sm"
-          >
-            {tSkills("newFile")}
-          </Button>
+        <PopoverContent className="w-64">
+          <div className="flex flex-col gap-2">
+            <Input
+              autoFocus
+              onChange={(event) => setFilename(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  submitNewFile();
+                }
+                if (event.key === "Escape") {
+                  setNewFileOpen(false);
+                }
+              }}
+              placeholder={tSkills("newFileFilenamePlaceholder")}
+              value={filename}
+            />
+            <Button
+              disabled={createPending || filename.trim().length === 0}
+              onClick={submitNewFile}
+              size="sm"
+            >
+              {tSkills("newFile")}
+            </Button>
+          </div>
         </PopoverContent>
       </Popover>
     </>
@@ -1089,29 +1091,31 @@ function RootCreateButton({
           </Button>
         }
       />
-      <PopoverContent className="flex w-72 flex-col gap-2 p-2">
-        <Input
-          autoFocus
-          onChange={(event) => setPath(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              submit();
-            }
-            if (event.key === "Escape") {
-              setOpen(false);
-            }
-          }}
-          placeholder={tSkills("newFilePathPlaceholder")}
-          value={path}
-        />
-        <Button
-          disabled={createPending || path.trim().length === 0}
-          onClick={submit}
-          size="sm"
-        >
-          {tSkills("newFile")}
-        </Button>
+      <PopoverContent className="w-72">
+        <div className="flex flex-col gap-2">
+          <Input
+            autoFocus
+            onChange={(event) => setPath(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                submit();
+              }
+              if (event.key === "Escape") {
+                setOpen(false);
+              }
+            }}
+            placeholder={tSkills("newFilePathPlaceholder")}
+            value={path}
+          />
+          <Button
+            disabled={createPending || path.trim().length === 0}
+            onClick={submit}
+            size="sm"
+          >
+            {tSkills("newFile")}
+          </Button>
+        </div>
       </PopoverContent>
     </Popover>
   );
