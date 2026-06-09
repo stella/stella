@@ -17,7 +17,10 @@ import type {
 } from "@/api/handlers/docx/types";
 import { isFieldMeta, isNamedCondition } from "@/api/handlers/docx/types";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type {
+  HandlerConfig,
+  SafeHandlerGenerator,
+} from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -58,6 +61,16 @@ const buildS3Key = (
   organizationId: SafeId<"organization">,
   templateId: SafeId<"template">,
 ) => `${organizationId}/templates/${templateId}.docx`;
+
+/** The created template row returned to the client (drives the detail view). */
+type CreatedTemplate = {
+  id: SafeId<"template">;
+  name: string;
+  fileName: string;
+  fieldCount: number;
+  sizeBytes: number;
+  createdAt: Date;
+};
 
 /** Accept a string (JSON body) or already-parsed object
  *  (FormData auto-parsed by Elysia). */
@@ -101,7 +114,7 @@ const createTemplateHandler = async function* ({
   userId,
   body: { file, name, categoryId, manifest: manifestJson },
   recordAuditEvent,
-}: CreateTemplateProps) {
+}: CreateTemplateProps): SafeHandlerGenerator<CreatedTemplate> {
   if (file.type !== DOCX_MIME_TYPE) {
     return Result.err(
       new HandlerError({
@@ -269,6 +282,14 @@ const createTemplateHandler = async function* ({
       new HandlerError({
         status: 400,
         message: "Templates limit reached",
+      }),
+    );
+  }
+  if (!txResult.row) {
+    return Result.err(
+      new HandlerError({
+        status: 500,
+        message: "Template insert returned no row",
       }),
     );
   }
