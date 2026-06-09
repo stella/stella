@@ -20,9 +20,13 @@ test("chat thread page renders for an entitlement-less owner", async ({
   await expect(page.getByText("Something went wrong")).toBeHidden();
 
   // The smoke org has no AI provider credentials, so RequireAIKey
-  // legitimately gates the thread with "Connect AI provider" instead
-  // of the composer. Either state proves the route rendered.
+  // legitimately gates the thread with the connect-provider card
+  // instead of the composer. Either state proves the route rendered.
+  // The gate renders its heading twice (inline card plus an
+  // auto-opened dialog), so first() collapses that duplicate; it
+  // cannot mask a composer-vs-gate bug because those states are
+  // mutually exclusive.
   const composer = page.getByRole("textbox", { name: /type your question/iu });
-  const aiKeyGate = page.getByText("Connect AI provider");
-  await expect(composer.or(aiKeyGate)).toBeVisible();
+  const aiKeyGate = page.getByRole("heading", { name: "Connect AI provider" });
+  await expect(composer.or(aiKeyGate).first()).toBeVisible();
 });
