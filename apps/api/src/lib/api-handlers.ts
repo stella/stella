@@ -185,13 +185,27 @@ type SafeHandlerResult<TResult> =
   | TResult
   | SafeStatusResponse<HandlerErrorStatusCode>;
 
-type SafeHandlerFn<TContext, TResult extends SafeHandlerPayload> = (
-  ctx: TContext,
-) => AsyncGenerator<
+/**
+ * The async-generator a safe handler runs: it may `yield*` intermediate
+ * `Result.await(...)` failures (the `Err` yield) and finally returns a
+ * `Result<TResult, …>`.
+ *
+ * Annotate an *extracted* handler generator with this whenever its result must
+ * reach the client typed. TypeScript cannot infer an async generator's return
+ * type across `yield*` delegation, so a handler written as
+ * `createSafeRootHandler(cfg, (ctx) => yield* myHandler(ctx))` silently widens
+ * `TResult` (and the Eden response type) to `unknown` unless `myHandler` is
+ * declared `: SafeHandlerGenerator<MyResult>`.
+ */
+export type SafeHandlerGenerator<TResult> = AsyncGenerator<
   Err<never, SafeHandlerError>,
   Result<TResult, SafeHandlerError>,
   unknown
 >;
+
+type SafeHandlerFn<TContext, TResult extends SafeHandlerPayload> = (
+  ctx: TContext,
+) => SafeHandlerGenerator<TResult>;
 
 type SafeHandlerDefinition<
   TConfig extends InputSchema = InputSchema,
