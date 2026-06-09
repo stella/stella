@@ -92,6 +92,14 @@ describe("evaluateField dates and unsupported types", () => {
     expect(evalInstr('DATE \\@ "yyyy-MM-dd"', ctx)).toBe("2026-06-08");
   });
 
+  test("DATE/TIME pictures do not re-tokenize formatted literals", () => {
+    const ctx = baseContext();
+    expect(evalInstr('TIME \\@ "h:mm AM/PM"', ctx)).toBe("2:30 PM");
+    expect(evalInstr('DATE \\@ "dddd, MMMM d, yyyy"', ctx)).toBe(
+      "Monday, June 8, 2026",
+    );
+  });
+
   test("DATE \\* MERGEFORMAT (no date picture) uses the locale date, not the switch", () => {
     const ctx = baseContext();
     // \* is a general format switch, not a date picture: must fall back to the
