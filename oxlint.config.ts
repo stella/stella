@@ -836,9 +836,6 @@ export default defineConfig({
               "apps/api/src/lib/business-registries/dispatch.ts",
               "apps/api/src/lib/db/assert-migrations-applied.ts",
               "apps/api/src/lib/runtime-worker-path.ts",
-              // Reads NODE_ENV to hard-disable the route on production,
-              // same precedent as the health route.
-              "apps/api/src/handlers/smoke/routes.ts",
               "apps/api/src/lib/s3.ts",
               "apps/api/src/lib/scheduler/runner.ts",
               "apps/api/src/lib/subprocess.ts",

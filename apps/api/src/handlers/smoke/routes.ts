@@ -7,10 +7,13 @@
  * authenticated routes right after a deploy.
  *
  * Security model:
- *  - Hard-disabled on production: NODE_ENV === "production" returns
- *    404 before any other check, independent of configuration.
- *  - Disabled unless SMOKE_SESSION_SECRET is configured (staging
- *    sets it via SSM; environments without it have no such route).
+ *  - The route exists only when SMOKE_SESSION_SECRET is configured.
+ *    That presence check is the environment gate: infrastructure
+ *    injects the secret on non-production deployments only, and
+ *    production must never configure it. A NODE_ENV guard would be
+ *    meaningless here — the deployed binary is compiled with
+ *    NODE_ENV=production and Bun inlines that read at build time,
+ *    so it cannot distinguish staging from production at runtime.
  *  - The caller must present the secret in `x-smoke-secret`;
  *    comparison is constant-time over digests so neither length
  *    nor prefix leaks. Failures return the same 404 as "disabled"
@@ -42,9 +45,6 @@ const isAuthorizedSmokeCaller = (headerSecret: string | null): boolean => {
 export const smokeRoute = new Elysia({ prefix: "/smoke" }).post(
   "/session",
   async ({ request }) => {
-    if (process.env.NODE_ENV === "production") {
-      return notAvailable();
-    }
     if (!isAuthorizedSmokeCaller(request.headers.get("x-smoke-secret"))) {
       return notAvailable();
     }
