@@ -2060,6 +2060,14 @@ const parseFields = (manifest: unknown): StudioField[] => {
       if (typeof raw["optionsFrom"] === "string") {
         field.optionsFrom = raw["optionsFrom"];
       }
+      if (isRecord(raw["lookup"]) && raw["lookup"]["registry"] === "krs") {
+        field.lookup = {
+          registry: "krs",
+          ...(typeof raw["lookup"]["aiFormat"] === "string"
+            ? { aiFormat: raw["lookup"]["aiFormat"] }
+            : {}),
+        };
+      }
       if (Array.isArray(raw["parts"]) && typeof raw["format"] === "string") {
         field.parts = parseEditableParts(raw["parts"]);
         field.format = raw["format"];
@@ -2131,6 +2139,7 @@ const buildManifest = (
           parts?: EditablePart[];
           format?: string;
           optionsFrom?: string;
+          lookup?: EditableField["lookup"];
         } = { path: f.path, inputType: f.inputType };
         if (f.label) {
           field.label = f.label;
@@ -2149,6 +2158,9 @@ const buildManifest = (
         }
         if (f.optionsFrom !== undefined && f.inputType === "select") {
           field.optionsFrom = f.optionsFrom;
+        }
+        if (f.lookup !== undefined) {
+          field.lookup = f.lookup;
         }
         if (f.parts !== undefined && f.parts.length > 0 && f.format) {
           field.parts = f.parts;
