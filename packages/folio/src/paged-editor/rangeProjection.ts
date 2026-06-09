@@ -131,6 +131,68 @@ export const measureContentLeft = (
   return Number.isFinite(min) ? (min - overlayLeft) / zoom : null;
 };
 
+/**
+ * Computed text style of the painted run at a PM position. Overlays
+ * that paint substituted text over the pages (template fill preview,
+ * AI suggestion replacement) copy these so the injected text matches
+ * the surrounding run instead of the overlay container's base font.
+ */
+export type ProjectedRunFont = {
+  fontFamily: string;
+  fontSize: string;
+  fontWeight: string;
+  fontStyle: string;
+  letterSpacing: string;
+  color: string;
+};
+
+/**
+ * Sample the painted-run text style at each position in a single walk
+ * over the rendered run spans. Positions outside the rendered buffer
+ * (virtualized pages) simply stay absent from the result; callers fall
+ * back to the overlay's inherited font.
+ */
+export const collectRunFontsAtPmPositions = (
+  pagesContainer: HTMLElement,
+  positions: readonly number[],
+): Map<number, ProjectedRunFont> => {
+  const fonts = new Map<number, ProjectedRunFont>();
+  if (positions.length === 0) {
+    return fonts;
+  }
+  const remaining = new Set(positions);
+  for (const spanEl of findBodyPmSpans(pagesContainer)) {
+    if (remaining.size === 0) {
+      break;
+    }
+    const pmStart = Number(spanEl.dataset["pmStart"]);
+    const pmEnd = Number(spanEl.dataset["pmEnd"]);
+    if (Number.isNaN(pmStart) || Number.isNaN(pmEnd)) {
+      continue;
+    }
+    for (const pos of remaining) {
+      if (!(pmStart <= pos && pos < pmEnd)) {
+        continue;
+      }
+      const win = spanEl.ownerDocument.defaultView;
+      if (!win) {
+        continue;
+      }
+      const style = win.getComputedStyle(spanEl);
+      fonts.set(pos, {
+        fontFamily: style.fontFamily,
+        fontSize: style.fontSize,
+        fontWeight: style.fontWeight,
+        fontStyle: style.fontStyle,
+        letterSpacing: style.letterSpacing,
+        color: style.color,
+      });
+      remaining.delete(pos);
+    }
+  }
+  return fonts;
+};
+
 export const projectRangesToRects = async <T extends ProjectableRange>(
   ranges: readonly T[],
   ctx: RangeProjectionContext,

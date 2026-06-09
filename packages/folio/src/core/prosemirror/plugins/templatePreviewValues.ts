@@ -29,8 +29,25 @@ export type TemplatePreviewValues = {
   mode: "highlighted" | "plain";
 };
 
+/**
+ * One `{{path}}` marker matched by an active preview value. Exposed on
+ * the plugin state so the paged editor (whose visible pages never see
+ * PM decorations) can project the same substitutions onto its overlay.
+ */
+export type TemplatePreviewEntry = {
+  /** Inclusive PM doc position of the marker start. */
+  from: number;
+  /** Exclusive PM doc position of the marker end. */
+  to: number;
+  /** Field path the marker resolves to. */
+  expr: string;
+  /** The typed value displayed in place of the marker. */
+  value: string;
+};
+
 type TemplatePreviewState = {
   preview: TemplatePreviewValues | null;
+  entries: TemplatePreviewEntry[];
   decorationSet: DecorationSet;
 };
 
@@ -54,15 +71,15 @@ function buildValueWidget(
   };
 }
 
-function buildDecorationSet(
+function collectPreviewEntries(
   doc: PMNode,
   preview: TemplatePreviewValues | null,
-): DecorationSet {
+): TemplatePreviewEntry[] {
   if (!preview || Object.keys(preview.values).length === 0) {
-    return DecorationSet.empty;
+    return [];
   }
 
-  const decorations: Decoration[] = [];
+  const entries: TemplatePreviewEntry[] = [];
   for (const range of scanDirectives(doc)) {
     if (range.kind !== "placeholder") {
       continue;
@@ -71,18 +88,34 @@ function buildDecorationSet(
     if (value === undefined || value === "") {
       continue;
     }
+    entries.push({ from: range.from, to: range.to, expr: range.expr, value });
+  }
+  return entries;
+}
+
+function buildDecorationSet(
+  doc: PMNode,
+  entries: TemplatePreviewEntry[],
+  mode: TemplatePreviewValues["mode"],
+): DecorationSet {
+  if (entries.length === 0) {
+    return DecorationSet.empty;
+  }
+
+  const decorations: Decoration[] = [];
+  for (const entry of entries) {
     decorations.push(
       Decoration.inline(
-        range.from,
-        range.to,
+        entry.from,
+        entry.to,
         { class: "folio-template-preview-original" },
         { inclusiveStart: false, inclusiveEnd: false },
       ),
-      Decoration.widget(range.from, buildValueWidget(value, preview.mode), {
+      Decoration.widget(entry.from, buildValueWidget(entry.value, mode), {
         side: 1,
         marks: [],
         ignoreSelection: true,
-        key: `folio-template-preview-${range.expr}-${range.from}-${preview.mode}-${value}`,
+        key: `folio-template-preview-${entry.expr}-${entry.from}-${mode}-${entry.value}`,
       }),
     );
   }
@@ -94,22 +127,38 @@ export function createTemplatePreviewValuesPlugin(): Plugin<TemplatePreviewState
     key: templatePreviewValuesKey,
     state: {
       init(): TemplatePreviewState {
-        return { preview: null, decorationSet: DecorationSet.empty };
+        return {
+          preview: null,
+          entries: [],
+          decorationSet: DecorationSet.empty,
+        };
       },
       apply(tr, prev, _oldState, newState): TemplatePreviewState {
         const meta = tr.getMeta(templatePreviewValuesKey) as
           | { preview: TemplatePreviewValues | null }
           | undefined;
         if (meta !== undefined) {
+          const entries = collectPreviewEntries(newState.doc, meta.preview);
           return {
             preview: meta.preview,
-            decorationSet: buildDecorationSet(newState.doc, meta.preview),
+            entries,
+            decorationSet: buildDecorationSet(
+              newState.doc,
+              entries,
+              meta.preview?.mode ?? "plain",
+            ),
           };
         }
         if (tr.docChanged && prev.preview) {
+          const entries = collectPreviewEntries(newState.doc, prev.preview);
           return {
             preview: prev.preview,
-            decorationSet: buildDecorationSet(newState.doc, prev.preview),
+            entries,
+            decorationSet: buildDecorationSet(
+              newState.doc,
+              entries,
+              prev.preview.mode,
+            ),
           };
         }
         return prev;

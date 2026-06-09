@@ -34,7 +34,14 @@ type AISuggestionDecorationState = {
   decorationSet: DecorationSet;
 };
 
-const SEVERITY_CLASS: Record<AISuggestionSeverity, string> = {
+/**
+ * Severity → CSS modifier class. Shared with the paged editor's
+ * suggestion overlay so both renderers stay on the same class names.
+ */
+export const AI_SUGGESTION_SEVERITY_CLASS: Record<
+  AISuggestionSeverity,
+  string
+> = {
   typo: "folio-ai-suggestion--typo",
   style: "folio-ai-suggestion--style",
   substantive: "folio-ai-suggestion--substantive",
@@ -86,7 +93,7 @@ function buildDecorationSet(
         {
           class: [
             "folio-ai-suggestion",
-            SEVERITY_CLASS[suggestion.severity],
+            AI_SUGGESTION_SEVERITY_CLASS[suggestion.severity],
             isFocused ? "folio-ai-suggestion--focused" : "",
             isFocused ? "folio-ai-suggestion--focused-original" : "",
           ]
@@ -167,10 +174,27 @@ export function createAISuggestionDecorationsPlugin(): Plugin<AISuggestionDecora
         }
 
         if (tr.docChanged) {
+          if (prev.suggestions.length === 0) {
+            return prev;
+          }
           // oxlint-disable-next-line unicorn/no-array-method-this-argument -- DecorationSet.map is not Array#map
           const mapped = prev.decorationSet.map(tr.mapping, tr.doc);
+          // Remap the suggestion ranges alongside the decoration set
+          // (same bias as the non-inclusive inline decorations) so
+          // consumers that project the ranges themselves — the paged
+          // editor's suggestion overlay — keep pointing at the moved
+          // text after edits.
+          const suggestions = prev.suggestions.map((suggestion) => ({
+            ...suggestion,
+            range: {
+              // oxlint-disable-next-line unicorn/no-array-method-this-argument -- Mapping#map is not Array#map
+              from: tr.mapping.map(suggestion.range.from, 1),
+              // oxlint-disable-next-line unicorn/no-array-method-this-argument -- Mapping#map is not Array#map
+              to: tr.mapping.map(suggestion.range.to, -1),
+            },
+          }));
           return {
-            suggestions: prev.suggestions,
+            suggestions,
             focusedId: prev.focusedId,
             decorationSet: mapped,
           };

@@ -38,24 +38,34 @@
   cursor: pointer;
 }
 
+/* The severity color is hoisted into --folio-ai-underline-color so the
+   paged-canvas projection (see editor.css) can reuse it as a border
+   color (text-decoration cannot paint on the overlay's empty rects). */
 .folio-ai-suggestion--typo {
-  text-decoration-color: color-mix(
+  --folio-ai-underline-color: color-mix(
     in oklch,
     var(--doc-text-muted) 65%,
     transparent
   );
+  text-decoration-color: var(--folio-ai-underline-color);
 }
 
 .folio-ai-suggestion--style {
-  text-decoration-color: color-mix(in oklch, var(--doc-text) 35%, transparent);
+  --folio-ai-underline-color: color-mix(
+    in oklch,
+    var(--doc-text) 35%,
+    transparent
+  );
+  text-decoration-color: var(--folio-ai-underline-color);
 }
 
 .folio-ai-suggestion--substantive {
-  text-decoration-color: color-mix(
+  --folio-ai-underline-color: color-mix(
     in oklch,
     var(--doc-error, currentColor) 60%,
     transparent
   );
+  text-decoration-color: var(--folio-ai-underline-color);
   text-decoration-thickness: 1.5px;
 }
 
@@ -72,26 +82,28 @@
  * injected right after it as a tinted insertion widget, so stepping
  * through suggestions previews each change in the document itself. */
 .folio-ai-suggestion--focused-original {
-  text-decoration-line: line-through;
-  text-decoration-style: solid;
-  text-decoration-thickness: 1px;
-  text-decoration-color: color-mix(
+  --folio-ai-strike-color: color-mix(
     in oklch,
     var(--doc-text-muted) 75%,
     transparent
   );
+  text-decoration-line: line-through;
+  text-decoration-style: solid;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--folio-ai-strike-color);
   opacity: 0.55;
 }
 
 .folio-ai-suggestion--focused-replacement {
-  margin-inline-start: 3px;
-  padding: 0 3px;
-  border-radius: 4px;
-  background-color: color-mix(
+  --folio-ai-replacement-bg: color-mix(
     in oklch,
     var(--doc-success, var(--doc-text)) 16%,
     transparent
   );
+  margin-inline-start: 3px;
+  padding: 0 3px;
+  border-radius: 4px;
+  background-color: var(--folio-ai-replacement-bg);
   box-shadow: inset 0 0 0 1px
     color-mix(in oklch, var(--doc-success, var(--doc-text)) 30%, transparent);
   white-space: pre-wrap;

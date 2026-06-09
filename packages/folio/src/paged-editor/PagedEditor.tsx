@@ -35,6 +35,7 @@ import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 
 import { HiddenHeaderFooterPMs } from "../components/HiddenHeaderFooterPMs";
 import type { HiddenHeaderFooterPMsRef } from "../components/HiddenHeaderFooterPMs";
+import type { AISuggestion } from "../core/ai-suggestions/types";
 import { getFootnoteText } from "../core/docx/footnoteParser";
 import { buildBookmarkPageMap } from "../core/fields/bookmarkPages";
 import { buildBookmarkText } from "../core/fields/bookmarkText";
@@ -143,12 +144,18 @@ import {
   mergeTableRowAttrs,
 } from "../core/prosemirror/attrs";
 import type { ExtensionManager } from "../core/prosemirror/extensions/ExtensionManager";
+import { aiSuggestionDecorationsKey } from "../core/prosemirror/plugins/aiSuggestionDecorations";
 import { anonymizationDecorationsKey } from "../core/prosemirror/plugins/anonymizationDecorations";
 import type { AnonymizationMatch } from "../core/prosemirror/plugins/anonymizationDecorations";
 import { autocompleteSuggestionKey } from "../core/prosemirror/plugins/autocompleteSuggestion";
 import type { AutocompleteSuggestionState } from "../core/prosemirror/plugins/autocompleteSuggestion";
 import { templateDirectivesKey } from "../core/prosemirror/plugins/templateDirectives";
 import type { DirectiveRange } from "../core/prosemirror/plugins/templateDirectives";
+import { templatePreviewValuesKey } from "../core/prosemirror/plugins/templatePreviewValues";
+import type {
+  TemplatePreviewEntry,
+  TemplatePreviewValues,
+} from "../core/prosemirror/plugins/templatePreviewValues";
 import type { ImagePositionAttrs } from "../core/prosemirror/schema/nodes";
 import type { Footnote } from "../core/types/content";
 // Types
@@ -168,6 +175,8 @@ import {
 } from "../core/utils/domGuards";
 import { getDocumentWatermark } from "../core/watermark";
 // Internal components
+import { AISuggestionRectsOverlay } from "./AISuggestionRectsOverlay";
+import type { AISuggestionRectGroup } from "./AISuggestionRectsOverlay";
 import { AnonymizationRectsOverlay } from "./AnonymizationRectsOverlay";
 import type { AnonymizationRectGroup } from "./AnonymizationRectsOverlay";
 import { AutocompleteCaretOverlay } from "./AutocompleteCaretOverlay";
@@ -195,7 +204,11 @@ import {
 import type { DirtyRange } from "./incrementalMeasure";
 // Selection sync
 import { LayoutSelectionGate } from "./LayoutSelectionGate";
-import { measureContentLeft, projectRangesToRects } from "./rangeProjection";
+import {
+  collectRunFontsAtPmPositions,
+  measureContentLeft,
+  projectRangesToRects,
+} from "./rangeProjection";
 import { isReadOnlyEditKey } from "./readOnlyEditAttempt";
 import { getPageScrollTarget } from "./scrollNavigation";
 import {
@@ -212,6 +225,8 @@ import {
 import { SelectionOverlay } from "./SelectionOverlay";
 import { TemplateDirectivesOverlay } from "./TemplateDirectivesOverlay";
 import type { DirectiveRectGroup } from "./TemplateDirectivesOverlay";
+import { TemplatePreviewValuesOverlay } from "./TemplatePreviewValuesOverlay";
+import type { TemplatePreviewRectGroup } from "./TemplatePreviewValuesOverlay";
 import { getTransactionDirtyRange } from "./transactionDirtyRange";
 import { useDragAutoScroll } from "./useDragAutoScroll";
 // Visual line navigation hook
@@ -446,6 +461,12 @@ const TRANSACTION_LAYOUT_MAX_DELAY_MS = 96;
 const SELECTION_REVEAL_AFTER_INPUT_DELAY = 120;
 // Stable empty array to avoid re-creating on each render
 const EMPTY_PLUGINS: Plugin[] = [];
+
+// Stable empty fallbacks for plugin-state reads, so transactions on
+// editors without the corresponding plugin don't churn the overlay refs
+// (a fresh `[]` per transaction would fail every identity comparison).
+const EMPTY_TEMPLATE_PREVIEW_ENTRIES: readonly TemplatePreviewEntry[] = [];
+const EMPTY_AI_SUGGESTIONS: readonly AISuggestion[] = [];
 
 const DEFERRED_KEYDOWN_REPLAY_KEYS = new Set([
   "ArrowDown",
@@ -1901,6 +1922,28 @@ export function PagedEditor(
   >(null);
   const directivesRef = useRef<readonly DirectiveRange[]>([]);
   const directivesOverlayRequestSeqRef = useRef(0);
+  // Template fill preview — mirrors the directives pattern: the hidden
+  // editor's plugin keeps marker↔value entries in sync, a ref tracks the
+  // latest list, and the projected rect groups live in state.
+  const [templatePreviewOverlay, setTemplatePreviewOverlay] = useState<{
+    groups: TemplatePreviewRectGroup[];
+    mode: TemplatePreviewValues["mode"];
+  }>({ groups: [], mode: "plain" });
+  const templatePreviewRef = useRef<{
+    entries: readonly TemplatePreviewEntry[];
+    mode: TemplatePreviewValues["mode"];
+  }>({ entries: EMPTY_TEMPLATE_PREVIEW_ENTRIES, mode: "plain" });
+  const templatePreviewOverlayRequestSeqRef = useRef(0);
+  // AI suggestion review — same pattern for the suggestion list and the
+  // focused suggestion's in-text diff preview.
+  const [aiSuggestionRectGroups, setAiSuggestionRectGroups] = useState<
+    AISuggestionRectGroup[]
+  >([]);
+  const aiSuggestionsRef = useRef<{
+    suggestions: readonly AISuggestion[];
+    focusedId: string | null;
+  }>({ suggestions: EMPTY_AI_SUGGESTIONS, focusedId: null });
+  const aiSuggestionsOverlayRequestSeqRef = useRef(0);
   const [remoteSelections, setRemoteSelections] = useState<
     HiddenProseMirrorRemoteSelection[]
   >([]);
@@ -3805,6 +3848,99 @@ export function PagedEditor(
     })();
   }, [layout, blocks, measures, zoom]);
 
+  // Project the template fill preview (kept in sync by the
+  // templatePreviewValues plugin) onto container-space rects: an opaque
+  // cover hides each painted {{marker}} and the typed value renders in
+  // its place. Same projection pipeline as the directive overlay.
+  const updateTemplatePreviewOverlay = useCallback(() => {
+    const requestSeq = templatePreviewOverlayRequestSeqRef.current + 1;
+    templatePreviewOverlayRequestSeqRef.current = requestSeq;
+    const { entries, mode } = templatePreviewRef.current;
+    const pagesContainer = pagesContainerRef.current;
+    if (entries.length === 0 || !pagesContainer) {
+      setTemplatePreviewOverlay((prev) =>
+        prev.groups.length === 0 ? prev : { groups: [], mode },
+      );
+      return;
+    }
+    void (async () => {
+      const projected = await projectRangesToRects(entries, {
+        pagesContainer,
+        zoom,
+        layout,
+        blocks,
+        measures,
+      });
+      if (templatePreviewOverlayRequestSeqRef.current !== requestSeq) {
+        return;
+      }
+      const fonts = collectRunFontsAtPmPositions(
+        pagesContainer,
+        projected.map(({ range }) => range.from),
+      );
+      setTemplatePreviewOverlay({
+        mode,
+        groups: projected.map(({ range, rects }) => ({
+          entry: range,
+          rects,
+          font: fonts.get(range.from) ?? null,
+        })),
+      });
+    })();
+  }, [layout, blocks, measures, zoom]);
+
+  // Project pending AI suggestions (kept in sync by the
+  // aiSuggestionDecorations plugin) onto container-space rects: dotted
+  // severity underlines, plus the focused suggestion's in-text diff
+  // (struck-through original + adjacent replacement text).
+  const updateAISuggestionsOverlay = useCallback(() => {
+    const requestSeq = aiSuggestionsOverlayRequestSeqRef.current + 1;
+    aiSuggestionsOverlayRequestSeqRef.current = requestSeq;
+    const { suggestions, focusedId } = aiSuggestionsRef.current;
+    const pending = suggestions.filter(
+      (suggestion) =>
+        suggestion.status === "pending" &&
+        suggestion.range.from >= 0 &&
+        suggestion.range.to > suggestion.range.from,
+    );
+    const pagesContainer = pagesContainerRef.current;
+    if (pending.length === 0 || !pagesContainer) {
+      setAiSuggestionRectGroups((prev) => (prev.length === 0 ? prev : []));
+      return;
+    }
+    void (async () => {
+      const projected = await projectRangesToRects(
+        pending.map((suggestion) => ({
+          from: suggestion.range.from,
+          to: suggestion.range.to,
+          suggestion,
+        })),
+        { pagesContainer, zoom, layout, blocks, measures },
+      );
+      if (aiSuggestionsOverlayRequestSeqRef.current !== requestSeq) {
+        return;
+      }
+      const focused = projected.find(
+        ({ range }) => range.suggestion.id === focusedId,
+      );
+      const fonts = collectRunFontsAtPmPositions(
+        pagesContainer,
+        focused ? [focused.range.from] : [],
+      );
+      setAiSuggestionRectGroups(
+        projected.map(({ range, rects }) => ({
+          suggestion: range.suggestion,
+          rects,
+          focused: range.suggestion.id === focusedId,
+          font:
+            range.suggestion.id === focusedId
+              ? (fonts.get(range.from) ?? null)
+              : null,
+        })),
+      );
+    })();
+  }, [layout, blocks, measures, zoom]);
+
   const hideSelectionOverlayDuringInput = useCallback(
     (state: EditorState) => {
       selectionOverlayRequestSeqRef.current += 1;
@@ -3885,6 +4021,45 @@ export function PagedEditor(
         }
       }
 
+      // Template fill preview: same ref-mirror + deferred-projection
+      // pattern as the directives above (the plugin rebuilds its entry
+      // list on meta pushes and doc edits).
+      const nextPreviewState = templatePreviewValuesKey.getState(newState);
+      const nextPreviewEntries =
+        nextPreviewState?.entries ?? EMPTY_TEMPLATE_PREVIEW_ENTRIES;
+      const nextPreviewMode = nextPreviewState?.preview?.mode ?? "plain";
+      if (
+        nextPreviewEntries !== templatePreviewRef.current.entries ||
+        nextPreviewMode !== templatePreviewRef.current.mode
+      ) {
+        templatePreviewRef.current = {
+          entries: nextPreviewEntries,
+          mode: nextPreviewMode,
+        };
+        if (!transaction.docChanged) {
+          updateTemplatePreviewOverlay();
+        }
+      }
+
+      // AI suggestions: the plugin remaps its ranges through doc edits,
+      // so the ref always holds projectable positions.
+      const nextAiState = aiSuggestionDecorationsKey.getState(newState);
+      const nextAiSuggestions =
+        nextAiState?.suggestions ?? EMPTY_AI_SUGGESTIONS;
+      const nextAiFocusedId = nextAiState?.focusedId ?? null;
+      if (
+        nextAiSuggestions !== aiSuggestionsRef.current.suggestions ||
+        nextAiFocusedId !== aiSuggestionsRef.current.focusedId
+      ) {
+        aiSuggestionsRef.current = {
+          suggestions: nextAiSuggestions,
+          focusedId: nextAiFocusedId,
+        };
+        if (!transaction.docChanged) {
+          updateAISuggestionsOverlay();
+        }
+      }
+
       if (transaction.docChanged) {
         // Increment state sequence to signal document changed
         syncCoordinator.incrementStateSeq();
@@ -3917,6 +4092,8 @@ export function PagedEditor(
       updateAnonymizationOverlay,
       updateAutocompleteOverlay,
       updateDirectivesOverlay,
+      updateTemplatePreviewOverlay,
+      updateAISuggestionsOverlay,
       syncCoordinator,
     ],
     // NOTE: onDocumentChange removed from dependencies - accessed via ref to prevent infinite loops
@@ -6323,6 +6500,16 @@ export function PagedEditor(
       updateAutocompleteOverlay();
       directivesRef.current =
         templateDirectivesKey.getState(view.state)?.ranges ?? [];
+      const previewState = templatePreviewValuesKey.getState(view.state);
+      templatePreviewRef.current = {
+        entries: previewState?.entries ?? EMPTY_TEMPLATE_PREVIEW_ENTRIES,
+        mode: previewState?.preview?.mode ?? "plain",
+      };
+      const aiState = aiSuggestionDecorationsKey.getState(view.state);
+      aiSuggestionsRef.current = {
+        suggestions: aiState?.suggestions ?? EMPTY_AI_SUGGESTIONS,
+        focusedId: aiState?.focusedId ?? null,
+      };
 
       const focusReadyView = () => {
         if (readOnly || !shouldFocusHiddenEditorOnReadyRef.current) {
@@ -6344,6 +6531,8 @@ export function PagedEditor(
         updateSelectionOverlay(view.state);
         updateAnonymizationOverlay();
         updateDirectivesOverlay();
+        updateTemplatePreviewOverlay();
+        updateAISuggestionsOverlay();
         focusReadyView();
         return;
       }
@@ -6353,6 +6542,8 @@ export function PagedEditor(
         updateSelectionOverlay(currentView.state);
         updateAnonymizationOverlay();
         updateDirectivesOverlay();
+        updateTemplatePreviewOverlay();
+        updateAISuggestionsOverlay();
       };
 
       pendingInitialFontReadyLayoutRef.current = true;
@@ -6391,6 +6582,8 @@ export function PagedEditor(
       updateSelectionOverlay,
       updateAnonymizationOverlay,
       updateDirectivesOverlay,
+      updateTemplatePreviewOverlay,
+      updateAISuggestionsOverlay,
       document,
       updateAutocompleteOverlay,
       readOnly,
@@ -6413,6 +6606,18 @@ export function PagedEditor(
   useEffect(() => {
     updateDirectivesOverlay();
   }, [updateDirectivesOverlay]);
+
+  // Re-paint the template fill preview on every fresh layout so the
+  // marker covers and substituted values track reflow.
+  useEffect(() => {
+    updateTemplatePreviewOverlay();
+  }, [updateTemplatePreviewOverlay]);
+
+  // Re-paint the AI suggestion underlines + focused in-text diff on
+  // every fresh layout.
+  useEffect(() => {
+    updateAISuggestionsOverlay();
+  }, [updateAISuggestionsOverlay]);
 
   // Compute anchor Y positions for comments/revisions sidebar from the current
   // layout artifacts. Opening the sidebar or switching anchor modes does not
@@ -6865,6 +7070,12 @@ export function PagedEditor(
             isStreaming={autocompleteIsStreaming}
           />
 
+          {/* AI suggestion review — dotted severity underlines for
+              pending suggestions plus the focused suggestion's in-text
+              diff. Always mounted, renders nothing until the host
+              pushes a suggestion list into the hidden editor. */}
+          <AISuggestionRectsOverlay groups={aiSuggestionRectGroups} />
+
           {/* Template-directive widgets — rich chips over {{...}}
               markers in the template editor. Renders nothing when
               the directives plugin isn't installed. */}
@@ -6874,6 +7085,16 @@ export function PagedEditor(
               groups={directiveRectGroups}
             />
           )}
+
+          {/* Template fill preview — opaque covers over matched
+              {{markers}} with the typed values rendered in place.
+              Rendered after the directive overlay so the covers hide
+              the marker tint, mirroring how the inline preview
+              supersedes the raw marker visual. */}
+          <TemplatePreviewValuesOverlay
+            groups={templatePreviewOverlay.groups}
+            mode={templatePreviewOverlay.mode}
+          />
 
           {/* Selection overlay */}
           <SelectionOverlay
