@@ -16,7 +16,6 @@ import {
   ChevronDownIcon,
   EyeIcon,
   EyeOffIcon,
-  PlayIcon,
   PlusIcon,
   RepeatIcon,
   SaveIcon,
@@ -57,6 +56,7 @@ import { api } from "@/lib/api";
 import { DOCX_MIME, SIDE_RAIL_TAB_ICON_SIZE_PX } from "@/lib/consts";
 import { toSafeId } from "@/lib/safe-id";
 import { TemplateClausesTab } from "@/routes/_protected.knowledge/-components/template-clauses-tab";
+import { TemplateForm } from "@/routes/_protected.knowledge/-components/template-form";
 import {
   defaultStudioField,
   type NameExpr,
@@ -70,6 +70,7 @@ import {
 } from "@/routes/_protected.knowledge/-components/template-wizard";
 import {
   knowledgeKeys,
+  templateDetailOptions,
   templateDocxBufferOptions,
 } from "@/routes/_protected.knowledge/-queries";
 
@@ -105,7 +106,6 @@ export const TemplateStudioPage = ({
   nameSlot,
   metaLabel,
   onBack,
-  onTestFill,
 }: {
   templateId: string;
   presignedUrl: string;
@@ -118,7 +118,6 @@ export const TemplateStudioPage = ({
   /** Field-count + date summary line. */
   metaLabel: string;
   onBack: () => void;
-  onTestFill: () => void;
 }) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -433,10 +432,6 @@ export const TemplateStudioPage = ({
           <BracesIcon />
           {t("templates.studio.makeField")}
         </Button>
-        <Button onClick={onTestFill} size="sm" variant="outline">
-          <PlayIcon />
-          {t("templates.testFill")}
-        </Button>
         <Button
           disabled={!isDirty || isSaving}
           onClick={() => void handleSave()}
@@ -485,9 +480,14 @@ export const TemplateStudioPage = ({
 // inspector. The page (above) owns the document + actions and seeds the shared
 // session store this view reads from. `close-on-route-leave` is a backstop; the
 // page also closes the tab on unmount.
-type StudioFacet = "fields" | "clauses" | "history";
+type StudioFacet = "fields" | "clauses" | "history" | "fill";
 
-const STUDIO_FACETS: readonly StudioFacet[] = ["fields", "clauses", "history"];
+const STUDIO_FACETS: readonly StudioFacet[] = [
+  "fields",
+  "clauses",
+  "history",
+  "fill",
+];
 
 function TemplateStudioInspectorView({
   tab,
@@ -509,6 +509,7 @@ function TemplateStudioInspectorView({
     fields: t("templates.fields"),
     clauses: t("common.clauses"),
     history: t("common.history"),
+    fill: t("templates.testFill"),
   };
 
   // The page seeds the session on mount; until then (or after it unmounts and
@@ -551,9 +552,74 @@ function TemplateStudioInspectorView({
           <TemplateVersionsTab templateId={templateId} />
         </div>
       )}
+      {ready && facet === "fill" && (
+        <TemplateFillFacet templateId={templateId} />
+      )}
     </div>
   );
 }
+
+// Filling happens in-place as the "Fill" subtab. It targets the *saved*
+// template (the fill endpoint reads from S3), so it reads the persisted
+// manifest via the detail query, not the live/unsaved session store.
+const TemplateFillFacet = ({ templateId }: { templateId: string }) => {
+  const t = useTranslations();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const { data: detailData } = useQuery(
+    templateDetailOptions(activeOrganizationId, templateId),
+  );
+  const detail =
+    detailData && !(detailData instanceof Response) && "manifest" in detailData
+      ? detailData
+      : null;
+
+  if (!detail) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-8">
+        <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
+      </div>
+    );
+  }
+
+  const { manifest } = detail;
+  // Computed fields and namespace parents (a path that is only a dotted prefix
+  // of others) are not fillable inputs — keep them out of the form.
+  const allFields = manifest?.fields ?? [];
+  const computedNames = new Set((manifest?.computed ?? []).map((c) => c.name));
+  const fieldPaths = allFields.map((f) => f.path);
+  const fields = allFields
+    .filter(
+      (f) =>
+        !computedNames.has(f.path) &&
+        !fieldPaths.some((p) => p !== f.path && p.startsWith(`${f.path}.`)),
+    )
+    .map((f) => ({
+      path: f.path,
+      kind:
+        f.inputType === "boolean" ? ("boolean" as const) : ("string" as const),
+      count: 1,
+      label: f.label,
+      inputType: f.inputType,
+      options: f.options,
+      validation: f.validation,
+      required: f.required,
+    }));
+  const conditions = manifest?.conditions ?? [];
+
+  return (
+    <TemplateForm
+      conditions={conditions}
+      fields={fields}
+      fileName={detail.fileName}
+      onBack={() => undefined}
+      onDone={() => undefined}
+      structureErrors={[]}
+      templateId={templateId}
+    />
+  );
+};
 
 const TemplateStudioRailIcon = (
   _props: InspectorRailIconProps<TemplateStudioPayload>,
