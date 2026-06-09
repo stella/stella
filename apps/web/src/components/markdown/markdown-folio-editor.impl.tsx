@@ -205,8 +205,10 @@ const ModeButton = ({ icon, label, onClick }: ModeControlProps) => (
   </Button>
 );
 
+// Mirror Folio's toolbar (h-12, border-b, px-2 sm:px-4, toggle on the right) so
+// switching raw ⇄ formatted keeps the top row exactly the same size and position.
 const ModeBar = ({ icon, label, onClick }: ModeControlProps) => (
-  <div className="border-border flex shrink-0 items-center justify-end border-b px-2 py-1">
+  <div className="border-border flex h-12 w-full shrink-0 items-center justify-end border-b px-2 sm:px-4">
     <ModeButton icon={icon} label={label} onClick={onClick} />
   </div>
 );
