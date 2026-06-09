@@ -38,6 +38,7 @@ export const buildAiFieldGenerator = ({
           promptCachingEnabled: false,
           scopeKey: organizationId,
           organizationId,
+          serviceTier: "standard",
         }),
         prompt: `You are drafting a single field of a legal document. Instruction: ${prompt}
 
