@@ -198,7 +198,7 @@ const ModeButton = ({ icon, label, onClick }: ModeControlProps) => (
     onMouseDown={(event) => event.preventDefault()}
     size="xs"
     type="button"
-    variant="ghost"
+    variant="outline"
   >
     {icon}
     <span className="whitespace-nowrap">{label}</span>
