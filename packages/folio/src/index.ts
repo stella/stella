@@ -73,6 +73,10 @@ export {
   type ResolvedAnchor,
 } from "./core/ai-suggestions/conflict";
 export {
+  buildPositionalText,
+  type PositionalText,
+} from "./core/ai-suggestions/text-positions";
+export {
   setAISuggestionsMeta,
   setFocusedSuggestionMeta,
 } from "./core/prosemirror/plugins/aiSuggestionDecorations";
