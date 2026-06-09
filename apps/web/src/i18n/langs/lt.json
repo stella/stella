@@ -2027,10 +2027,6 @@
     "generating": "Generuojama...",
     "inputTypes": {
       "boolean": "Taip / Ne",
-      "date": "Data",
-      "number": "Skaičius",
-      "select": "Išskleidžiamasis sąrašas",
-      "text": "Tekstas",
       "textarea": "Tekstas (kelių eilučių)"
     },
     "invalidFileType": "Įkelkite .docx failą",
