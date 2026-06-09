@@ -16,6 +16,8 @@
  * same literals; recognizers should prefer the high-level scanner.
  */
 
+import { panic } from "better-result";
+
 // ── Directive kinds ──────────────────────────────────────
 
 export const DIRECTIVE_KINDS = [
@@ -68,7 +70,9 @@ export type MarkerMeta =
 // Each returns a fresh RegExp so callers never share `lastIndex` state.
 
 /** Any `{{...}}` marker; group 1 is the inner text (untrimmed). */
-export const markerPattern = (): RegExp => /\{\{\s*([^{}]*?)\s*\}\}/gu;
+export const markerPattern = (): RegExp =>
+  // oxlint-disable-next-line sonarjs/slow-regex -- bounded to one marker's inner text
+  /\{\{\s*([^{}]*?)\s*\}\}/gu;
 
 /** Inline field / clause / numbering marker (inner allows the directive sigils). */
 export const placeholderPattern = (): RegExp =>
@@ -104,6 +108,7 @@ const FIELD_PATH_RE = /^[\p{L}\p{N}_.-]+$/u;
 const CLAUSE_INNER_RE = /^@clause:([^:}\s]+)(?::([^}\s]+))?$/u;
 const NUM_INNER_RE = /^@num:([\p{L}\p{N}_.-]+)$/u;
 const REF_INNER_RE = /^@ref:([\p{L}\p{N}_.-]+)$/u;
+// oxlint-disable-next-line sonarjs/slow-regex -- bounded to one marker's inner text
 const BLOCK_INNER_RE = /^(#if|#elseif|#else|#each|\/if|\/each)\b\s*(.*)$/u;
 
 /**
@@ -117,12 +122,24 @@ export const classifyMarker = (innerRaw: string): MarkerMeta | null => {
   if (block) {
     const token = block[1] ?? "";
     const expr = (block[2] ?? "").trim();
-    if (token === "#if") return { kind: "if", expr };
-    if (token === "#elseif") return { kind: "elseif", expr };
-    if (token === "#each") return { kind: "each", expr };
-    if (token === "#else") return { kind: "else" };
-    if (token === "/if") return { kind: "endif" };
-    if (token === "/each") return { kind: "endeach" };
+    if (token === "#if") {
+      return { kind: "if", expr };
+    }
+    if (token === "#elseif") {
+      return { kind: "elseif", expr };
+    }
+    if (token === "#each") {
+      return { kind: "each", expr };
+    }
+    if (token === "#else") {
+      return { kind: "else" };
+    }
+    if (token === "/if") {
+      return { kind: "endif" };
+    }
+    if (token === "/each") {
+      return { kind: "endeach" };
+    }
   }
 
   const clause = CLAUSE_INNER_RE.exec(inner);
@@ -131,12 +148,18 @@ export const classifyMarker = (innerRaw: string): MarkerMeta | null => {
   }
 
   const num = NUM_INNER_RE.exec(inner);
-  if (num) return { kind: "num", key: num[1] ?? "" };
+  if (num) {
+    return { kind: "num", key: num[1] ?? "" };
+  }
 
   const ref = REF_INNER_RE.exec(inner);
-  if (ref) return { kind: "ref", key: ref[1] ?? "" };
+  if (ref) {
+    return { kind: "ref", key: ref[1] ?? "" };
+  }
 
-  if (FIELD_PATH_RE.test(inner)) return { kind: "placeholder", expr: inner };
+  if (FIELD_PATH_RE.test(inner)) {
+    return { kind: "placeholder", expr: inner };
+  }
 
   return null;
 };
@@ -181,6 +204,5 @@ export const scanMarkers = (text: string): ScannedMarker[] => {
 };
 
 /** Exhaustiveness guard — pass the discriminant in a `switch` default branch. */
-export const assertNever = (value: never): never => {
-  throw new Error(`Unhandled template directive: ${JSON.stringify(value)}`);
-};
+export const assertNever = (value: never): never =>
+  panic(`Unhandled template directive: ${JSON.stringify(value)}`);

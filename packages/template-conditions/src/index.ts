@@ -1,7 +1,7 @@
 /**
- * Shared condition evaluation for DOCX template
- * conditionals. Pure functions with no runtime dependencies;
- * usable on both backend (Bun) and frontend (browser).
+ * Shared condition evaluation + marker grammar for DOCX templates. Small,
+ * side-effect-free functions usable on both backend (Bun) and frontend
+ * (browser); the only runtime dependency is better-result (panic).
  */
 
 // ── Types ─────────────────────────────────────────────────

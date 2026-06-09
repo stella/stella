@@ -61,11 +61,13 @@ export const TemplateUpload = ({ onDiscovered }: TemplateUploadProps) => {
       if (response.error) {
         throw toAPIError(response.error);
       }
-      // /prepare returns the marked-up docx bytes (Blob); discover its fields.
-      // SAFETY: a 200 from /prepare is the docx body, typed as a BlobPart.
-      const prepared = new File([response.data as BlobPart], file.name, {
-        type: DOCX_MIME,
-      });
+      // /prepare returns the marked-up docx as base64 JSON (binary responses
+      // get corrupted by Eden); decode it back to bytes, then discover.
+      const bytes = Uint8Array.from(
+        atob(response.data.docxBase64),
+        (ch) => ch.codePointAt(0) ?? 0,
+      );
+      const prepared = new File([bytes], file.name, { type: DOCX_MIME });
       const discovered = await api.templates.discover.post({ file: prepared });
       if (discovered.error) {
         throw toAPIError(discovered.error);
