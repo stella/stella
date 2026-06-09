@@ -73,7 +73,14 @@ jobs:
             STELLA_VERSION=${{ steps.ref.outputs.release_ref }}
             STELLA_COMMIT_SHA=${{ github.sha }}
 
+      # Best-effort on staging: the provenance action already retries
+      # transient Sigstore blips, but a sustained Rekor outage must not
+      # wedge continuous deploys (the image is built and pushed; only
+      # the transparency-log attestation is unavailable). The step still
+      # surfaces as failed in the UI. Production keeps attestation
+      # blocking in release.yml.
       - name: Attest image provenance
+        continue-on-error: true
         uses: ./.github/actions/provenance
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
