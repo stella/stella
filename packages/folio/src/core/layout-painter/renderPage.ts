@@ -2812,8 +2812,14 @@ function runContentKey(run: Run): string {
     parts.push(`mx:${run.ommlXml}`);
   } else {
     parts.push(`ft:${run.fieldType}`);
+    if (run.instruction !== undefined) {
+      parts.push(`fi:${run.instruction}`);
+    }
     if (run.fallback !== undefined) {
       parts.push(`fb:${run.fallback}`);
+    }
+    if (run.fldLock) {
+      parts.push("fl");
     }
   }
 

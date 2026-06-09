@@ -38,17 +38,18 @@ describe("buildBookmarkText", () => {
     expect(map.size).toBe(3);
   });
 
-  test("concatenates only text runs, skipping fields and the like", () => {
+  test("includes cached field results in paragraph text", () => {
     const field: FieldRun = {
       kind: "field",
       fieldType: "OTHER",
       instruction: "SEQ Figure",
+      fallback: "1",
     };
     const blocks: FlowBlock[] = [
       para("h", [text("Figure "), field, text(": Caption")], ["_Ref1"]),
     ];
 
-    expect(buildBookmarkText(blocks).get("_Ref1")).toBe("Figure : Caption");
+    expect(buildBookmarkText(blocks).get("_Ref1")).toBe("Figure 1: Caption");
   });
 
   test("includes visible list markers in paragraph text", () => {

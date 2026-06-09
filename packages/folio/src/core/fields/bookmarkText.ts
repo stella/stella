@@ -46,6 +46,8 @@ function paragraphText(block: ParagraphBlock): string {
   for (const run of block.runs) {
     if (run.kind === "text") {
       text += run.text;
+    } else if (run.kind === "field") {
+      text += run.fallback ?? "";
     }
   }
   return `${visibleListMarker(block)}${text}`.trim();
