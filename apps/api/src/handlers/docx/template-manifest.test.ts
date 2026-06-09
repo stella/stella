@@ -864,6 +864,56 @@ describe("round-trip", () => {
     ]);
   });
 
+  test("optionsFrom round-trips; an invalid value is dropped on read", async () => {
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "lead_party",
+          inputType: "select",
+          options: ["Acme"],
+          optionsFrom: "parties.name",
+        },
+      ],
+      conditions: [],
+    };
+
+    const docx = await createMinimalDocx();
+    const withManifest = await writeManifest(docx, manifest);
+    const readBack = await readManifest(withManifest);
+    expect(readBack?.fields.at(0)?.optionsFrom).toBe("parties.name");
+
+    // Hand-edited XML with a non-path value must not leak past the parser.
+    const tampered = await writeManifest(docx, {
+      ...manifest,
+      fields: [{ path: "lead_party", optionsFrom: "bad path!" }],
+    });
+    const tamperedBack = await readManifest(tampered);
+    expect(tamperedBack?.fields.at(0)?.optionsFrom).toBeUndefined();
+  });
+
+  test("optionsFrom survives mergeManifestWithDiscovery", async () => {
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        { path: "lead_party", inputType: "select", optionsFrom: "parties" },
+        { path: "manifest_only", optionsFrom: "parties" },
+      ],
+      conditions: [],
+    };
+    const discovered: DiscoveredTemplate = {
+      placeholders: [{ name: "lead_party", count: 1 }],
+      fields: [{ path: "lead_party", kind: "string", count: 1 }],
+      structureErrors: [],
+    };
+
+    const resolved = mergeManifestWithDiscovery(manifest, discovered);
+    const discoveredField = resolved.find((f) => f.path === "lead_party");
+    const manifestOnly = resolved.find((f) => f.path === "manifest_only");
+    expect(discoveredField?.optionsFrom).toBe("parties");
+    expect(manifestOnly?.optionsFrom).toBe("parties");
+  });
+
   test("composite parts survive mergeManifestWithDiscovery", async () => {
     const manifest: TemplateManifest = {
       version: 1,

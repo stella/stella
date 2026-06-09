@@ -9,6 +9,7 @@ import {
   buildAiOccurrenceAdapter,
 } from "@/api/handlers/docx/ai-field-generator";
 import { applyCompositeFields } from "@/api/handlers/docx/composite-fields";
+import { checkDependentFields } from "@/api/handlers/docx/dependent-fields";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
 import { resolveAiFields } from "@/api/handlers/docx/resolve-ai-fields";
 import { readManifest } from "@/api/handlers/docx/template-manifest";
@@ -129,6 +130,16 @@ export const fillHandler = async ({
   const compositeError = applyCompositeFields(fillData, manifest);
   if (compositeError !== null) {
     return new Response(JSON.stringify({ error: compositeError }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  // Dependent (optionsFrom) selects must hold one of the source field's
+  // submitted values; reject before any AI step or substitution.
+  const dependentError = checkDependentFields(fillData, manifest);
+  if (dependentError !== null) {
+    return new Response(JSON.stringify({ error: dependentError }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
     });
