@@ -72,6 +72,7 @@ import type { ChatEditorController } from "@/components/chat-editor-provider";
 import { PromptEditorContent } from "@/components/prompt-editor";
 import { usePulse } from "@/hooks/use-pulse";
 import type { TranslationKey } from "@/i18n/types";
+import { isValueTypeKind, VALUE_TYPE_META } from "@/lib/value-types";
 
 import type {
   AssistantThreadMessage,
@@ -2067,9 +2068,14 @@ function SuggestionCard(props: SuggestionCardProps) {
   const t = useTranslations();
   const { suggestion, focused, showAcceptUI, onAccept, onReject, onFocus } =
     props;
+  const { display } = suggestion;
   const isResolvable =
     suggestion.status === "pending" || suggestion.status === "stale";
-  const severityLabel = t(SEVERITY_LABEL_KEYS[suggestion.severity]);
+  // For display-carrying (field) suggestions the rationale is often just
+  // the field path again — the header and replacement row already show it.
+  const showRationale =
+    suggestion.rationale.length > 0 &&
+    (!display || suggestion.rationale !== suggestion.topic);
 
   return (
     <div
@@ -2085,16 +2091,24 @@ function SuggestionCard(props: SuggestionCardProps) {
         onClick={() => onFocus(suggestion.id)}
         aria-label={t("chat.focusSuggestion", { topic: suggestion.topic })}
       >
-        <span
-          className={cn(
-            "size-1.5 shrink-0 rounded-full",
-            SEVERITY_DOT_CLASS[suggestion.severity],
-          )}
-          aria-hidden="true"
-        />
-        <span className="text-foreground font-medium">{suggestion.topic}</span>
-        <span aria-hidden="true">·</span>
-        <span>{severityLabel}</span>
+        {display ? (
+          <SuggestionDisplayBadges display={display} />
+        ) : (
+          <>
+            <span
+              className={cn(
+                "size-1.5 shrink-0 rounded-full",
+                SEVERITY_DOT_CLASS[suggestion.severity],
+              )}
+              aria-hidden="true"
+            />
+            <span className="text-foreground font-medium">
+              {suggestion.topic}
+            </span>
+            <span aria-hidden="true">·</span>
+            <span>{t(SEVERITY_LABEL_KEYS[suggestion.severity])}</span>
+          </>
+        )}
         {suggestion.status === "stale" && (
           <span className="bg-destructive/12 text-destructive ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium tracking-wider uppercase">
             {t("chat.suggestionStatus.stale")}
@@ -2112,36 +2126,51 @@ function SuggestionCard(props: SuggestionCardProps) {
         )}
       </button>
 
-      <div className="bg-muted text-muted-foreground mt-2 flex flex-col gap-0.5 rounded-md px-2.5 py-1.5 text-[12.5px] leading-snug text-pretty break-words">
-        <div className="flex gap-1.5">
-          <span
-            className="text-muted-foreground w-3 shrink-0 text-center tabular-nums"
-            aria-hidden="true"
-          >
-            −
-          </span>
-          <span className="decoration-foreground-ghost line-through">
-            {suggestion.originalText}
-          </span>
-        </div>
-      </div>
-      <div className="bg-muted text-foreground mt-1 flex flex-col gap-0.5 rounded-md px-2.5 py-1.5 text-[12.5px] leading-snug text-pretty break-words">
-        <div className="flex gap-1.5">
-          <span
-            className="text-muted-foreground w-3 shrink-0 text-center tabular-nums"
-            aria-hidden="true"
-          >
-            +
-          </span>
-          <span>
-            {suggestion.suggestedText.length === 0
-              ? t("chat.removeSuggestion")
-              : suggestion.suggestedText}
-          </span>
-        </div>
-      </div>
+      {display ? (
+        <>
+          <div className="bg-muted text-foreground mt-2 rounded-md px-2.5 py-1.5 text-[13px] leading-snug text-pretty break-words">
+            <span className="decoration-foreground-ghost line-through">
+              {suggestion.originalText}
+            </span>
+          </div>
+          <div className="text-muted-foreground mt-1 px-2.5 font-mono text-[11px] leading-snug break-all">
+            {suggestion.suggestedText}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="bg-muted text-muted-foreground mt-2 flex flex-col gap-0.5 rounded-md px-2.5 py-1.5 text-[12.5px] leading-snug text-pretty break-words">
+            <div className="flex gap-1.5">
+              <span
+                className="text-muted-foreground w-3 shrink-0 text-center tabular-nums"
+                aria-hidden="true"
+              >
+                −
+              </span>
+              <span className="decoration-foreground-ghost line-through">
+                {suggestion.originalText}
+              </span>
+            </div>
+          </div>
+          <div className="bg-muted text-foreground mt-1 flex flex-col gap-0.5 rounded-md px-2.5 py-1.5 text-[12.5px] leading-snug text-pretty break-words">
+            <div className="flex gap-1.5">
+              <span
+                className="text-muted-foreground w-3 shrink-0 text-center tabular-nums"
+                aria-hidden="true"
+              >
+                +
+              </span>
+              <span>
+                {suggestion.suggestedText.length === 0
+                  ? t("chat.removeSuggestion")
+                  : suggestion.suggestedText}
+              </span>
+            </div>
+          </div>
+        </>
+      )}
 
-      {suggestion.rationale && (
+      {showRationale && (
         <p className="text-muted-foreground mt-1.5 text-xs leading-snug text-pretty">
           {suggestion.rationale}
         </p>
@@ -2171,5 +2200,48 @@ function SuggestionCard(props: SuggestionCardProps) {
         </div>
       )}
     </div>
+  );
+}
+
+type SuggestionDisplayBadgesProps = {
+  display: NonNullable<AISuggestion["display"]>;
+};
+
+/** Header badges for display-carrying suggestions: the payload's value
+ *  type plus who fills it (replaces the severity dot + label). */
+function SuggestionDisplayBadges({ display }: SuggestionDisplayBadgesProps) {
+  const t = useTranslations();
+  return (
+    <>
+      {display.valueKind !== undefined && (
+        <ValueKindChip valueKind={display.valueKind} />
+      )}
+      {display.filledBy === "ai" && (
+        <span className="bg-info/10 text-info inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium">
+          <WandSparklesIcon aria-hidden="true" className="size-3 shrink-0" />
+          {t("templates.studio.draftedByAi")}
+        </span>
+      )}
+      {display.filledBy === "person" && (
+        <span className="bg-muted text-muted-foreground inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium">
+          {t("templates.studio.filledByPerson")}
+        </span>
+      )}
+    </>
+  );
+}
+
+function ValueKindChip({ valueKind }: { valueKind: string }) {
+  const t = useTranslations();
+  if (!isValueTypeKind(valueKind)) {
+    return null;
+  }
+  const meta = VALUE_TYPE_META[valueKind];
+  const Icon = meta.icon;
+  return (
+    <span className="text-foreground inline-flex min-w-0 items-center gap-1 font-medium">
+      <Icon aria-hidden="true" className="size-3.5 shrink-0 opacity-70" />
+      <span className="truncate">{t(meta.labelKey)}</span>
+    </span>
   );
 }
