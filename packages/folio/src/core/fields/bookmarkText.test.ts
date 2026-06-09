@@ -4,6 +4,7 @@ import type {
   FieldRun,
   FlowBlock,
   ParagraphBlock,
+  TextBoxBlock,
   TextRun,
 } from "../layout-engine/types";
 import { buildBookmarkText } from "./bookmarkText";
@@ -48,6 +49,17 @@ describe("buildBookmarkText", () => {
     ];
 
     expect(buildBookmarkText(blocks).get("_Ref1")).toBe("Figure : Caption");
+  });
+
+  test("maps bookmarks inside text boxes", () => {
+    const textBox: TextBoxBlock = {
+      kind: "textBox",
+      id: "box",
+      width: 240,
+      content: [para("inside", [text("Inside shape")], ["_ShapeRef"])],
+    };
+
+    expect(buildBookmarkText([textBox]).get("_ShapeRef")).toBe("Inside shape");
   });
 
   test("returns empty when no paragraph carries a bookmark", () => {

@@ -11,15 +11,9 @@ export function buildBookmarkPageMap(
   pages: readonly Page[],
   blocks: readonly FlowBlock[],
 ): Map<string, number> {
-  const bookmarksByBlockId = new Map<BlockId, readonly string[]>();
+  const bookmarksByBlockId = new Map<BlockId, string[]>();
   for (const block of blocks) {
-    if (
-      block.kind === "paragraph" &&
-      block.bookmarks &&
-      block.bookmarks.length > 0
-    ) {
-      bookmarksByBlockId.set(block.id, block.bookmarks);
-    }
+    collectBookmarksByTopLevelBlock(block, block.id, bookmarksByBlockId);
   }
 
   const pageByBookmark = new Map<string, number>();
@@ -42,4 +36,44 @@ export function buildBookmarkPageMap(
   }
 
   return pageByBookmark;
+}
+
+function collectBookmarksByTopLevelBlock(
+  block: FlowBlock,
+  topLevelId: BlockId,
+  bookmarksByBlockId: Map<BlockId, string[]>,
+): void {
+  if (block.kind === "paragraph") {
+    if (!block.bookmarks || block.bookmarks.length === 0) {
+      return;
+    }
+    let names = bookmarksByBlockId.get(topLevelId);
+    if (!names) {
+      names = [];
+      bookmarksByBlockId.set(topLevelId, names);
+    }
+    names.push(...block.bookmarks);
+    return;
+  }
+
+  if (block.kind === "table") {
+    for (const row of block.rows) {
+      for (const cell of row.cells) {
+        for (const child of cell.blocks) {
+          collectBookmarksByTopLevelBlock(
+            child,
+            topLevelId,
+            bookmarksByBlockId,
+          );
+        }
+      }
+    }
+    return;
+  }
+
+  if (block.kind === "textBox") {
+    for (const child of block.content) {
+      collectBookmarksByTopLevelBlock(child, topLevelId, bookmarksByBlockId);
+    }
+  }
 }

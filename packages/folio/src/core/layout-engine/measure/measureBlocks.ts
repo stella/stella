@@ -654,10 +654,13 @@ export function measureBlock(
       // and contentWidth (both captured in the cache key). When floating zones
       // ARE present, we always measure fresh since zones depend on inter-block
       // layout context (cumulative Y, neighboring floating tables/images).
-      // Resolved field values also change the measured width and are not part
-      // of the cache key, so bypass the cache when they are supplied.
+      // Resolved field values change measured field width and are not part of
+      // the cache key. Only paragraphs with field runs need a fresh measure in
+      // the stabilization pass; field-free paragraphs stay cacheable.
+      const hasFieldRuns = pBlock.runs.some((run) => run.kind === "field");
       const cacheable =
-        (!floatingZones || floatingZones.length === 0) && !fieldValues;
+        (!floatingZones || floatingZones.length === 0) &&
+        (!fieldValues || !hasFieldRuns);
       if (cacheable) {
         const cached = getCachedParagraphMeasure(pBlock, contentWidth);
         if (cached) {

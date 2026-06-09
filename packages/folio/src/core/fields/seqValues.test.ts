@@ -54,6 +54,22 @@ describe("buildSeqValues", () => {
     expect(values.get(40)).toBe(6);
   });
 
+  test("SEQ switches are case-insensitive", () => {
+    const blocks: FlowBlock[] = [
+      para("p1", [seq(10, "SEQ Figure")]),
+      para("p2", [seq(20, "SEQ Figure \\R 7")]),
+      para("p3", [seq(30, "SEQ Figure \\C")]),
+      para("p4", [seq(40, "SEQ Figure")]),
+    ];
+
+    const values = buildSeqValues(blocks);
+
+    expect(values.get(10)).toBe(1);
+    expect(values.get(20)).toBe(7);
+    expect(values.get(30)).toBe(7);
+    expect(values.get(40)).toBe(8);
+  });
+
   test("counts SEQ fields inside table cells in document order", () => {
     const table: TableBlock = {
       kind: "table",

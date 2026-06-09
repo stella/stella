@@ -35,6 +35,8 @@ function walkBlocks(
           walkBlocks(cell.blocks, map);
         }
       }
+    } else if (block.kind === "textBox") {
+      walkBlocks(block.content, map);
     }
   }
 }

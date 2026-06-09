@@ -34,8 +34,12 @@ function walkBlocks(
           continue;
         }
         const id = parsed.argument ?? "";
-        const reset = parsed.switches.find((s) => s.switch === "r")?.value;
-        const repeat = parsed.switches.some((s) => s.switch === "c");
+        const reset = parsed.switches.find(
+          (s) => s.switch.toLowerCase() === "r",
+        )?.value;
+        const repeat = parsed.switches.some(
+          (s) => s.switch.toLowerCase() === "c",
+        );
 
         let value: number;
         if (reset !== undefined) {

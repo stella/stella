@@ -2562,6 +2562,7 @@ type PageContainerState = {
   pageStates: PageShellState[];
   totalPages: number;
   optionsHash: string;
+  fieldContextHash: string;
   pageDataMap: Map<
     HTMLElement,
     { page: Page; index: number; rendered: boolean }
@@ -3003,6 +3004,33 @@ function computeOptionsHash(options: RenderPageOptions): string {
   return parts.join("|");
 }
 
+function sortedMapFingerprint<K, V>(
+  prefix: string,
+  map: ReadonlyMap<K, V> | undefined,
+): string[] {
+  if (!map || map.size === 0) {
+    return [];
+  }
+
+  const entries: string[] = [];
+  for (const [key, value] of map) {
+    entries.push(`${String(key)}=${String(value)}`);
+  }
+  entries.sort();
+  return [`${prefix}:${entries.join(",")}`];
+}
+
+function computeFieldContextHash(options: RenderPageOptions): string {
+  const parts: string[] = [];
+  parts.push(...sortedMapFingerprint("bm-page", options.bookmarkPages));
+  parts.push(...sortedMapFingerprint("bm-text", options.bookmarkText));
+  parts.push(...sortedMapFingerprint("seq", options.seqValues));
+  parts.push(
+    ...sortedMapFingerprint("section-pages", options.sectionPageCounts),
+  );
+  return parts.join("|");
+}
+
 /**
  * Apply standard container styles for the pages wrapper.
  */
@@ -3053,6 +3081,7 @@ export function renderPages(
   const pc = container as PageContainer;
   const prevState = pc.__pageRenderState;
   const currentOptionsHash = computeOptionsHash(options);
+  const currentFieldContextHash = computeFieldContextHash(options);
   const useVirtualization = totalPages >= VIRTUALIZATION_THRESHOLD;
 
   // Determine if we can do an incremental update
@@ -3070,6 +3099,8 @@ export function renderPages(
     // If total page count changed, NUMPAGES fields in headers/footers are stale.
     // Force re-render of all currently-rendered pages.
     const totalPagesChanged = prevState.totalPages !== totalPages;
+    const fieldContextChanged =
+      prevState.fieldContextHash !== currentFieldContextHash;
 
     // Update existing pages
     const commonCount = Math.min(prevShells.length, pages.length);
@@ -3100,20 +3131,39 @@ export function renderPages(
 
       const newFp = computePageFingerprint(page, options.blockLookup);
 
-      if (prev.fingerprint === newFp && !totalPagesChanged) {
+      if (
+        prev.fingerprint === newFp &&
+        !totalPagesChanged &&
+        !fieldContextChanged
+      ) {
         // Page unchanged — data map already points at the fresh page object.
         continue;
       }
 
       // Page changed — update the shell
       const shell = prev.element;
+      const pageContextChanged = totalPagesChanged || fieldContextChanged;
+      if (pageContextChanged) {
+        shell.innerHTML = "";
+        data.rendered = false;
+        populatePageShell(shell, prevDataMap, totalPages, options);
+        applyPageStyles(shell, page.size.w, page.size.h, options);
+        syncPageBorderOverlay(
+          shell,
+          page,
+          options,
+          options.document ?? document,
+        );
+        shell.dataset["pageNumber"] = String(page.number);
+        continue;
+      }
+
       const newRenderFp = computePageRenderFingerprint(
         page,
         options.blockLookup,
       );
 
-      const renderChanged =
-        totalPagesChanged || prev.renderFingerprint !== newRenderFp;
+      const renderChanged = prev.renderFingerprint !== newRenderFp;
       const positionsSynced =
         !renderChanged && syncRenderedPmPositionData(shell, oldPage, data.page);
 
@@ -3181,6 +3231,7 @@ export function renderPages(
 
     // Update stored state with fresh options (blockLookup, footnotes, etc.)
     prevState.totalPages = totalPages;
+    prevState.fieldContextHash = currentFieldContextHash;
     prevState.currentOptions = options;
 
     // Incremental path: existing shells were repopulated in place; fire
@@ -3370,6 +3421,7 @@ export function renderPages(
     })),
     totalPages,
     optionsHash: currentOptionsHash,
+    fieldContextHash: currentFieldContextHash,
     pageDataMap,
     currentOptions: options,
   };

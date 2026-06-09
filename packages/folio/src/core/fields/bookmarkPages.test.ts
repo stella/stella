@@ -6,6 +6,8 @@ import type {
   ParagraphBlock,
   ParagraphFragment,
   Page,
+  TableBlock,
+  TextBoxBlock,
 } from "../layout-engine/types";
 import { buildBookmarkPageMap } from "./bookmarkPages";
 
@@ -58,6 +60,32 @@ describe("buildBookmarkPageMap", () => {
     const pages = [page(2, ["a"]), page(3, ["a"])];
 
     expect(buildBookmarkPageMap(pages, blocks).get("long")).toBe(2);
+  });
+
+  test("maps bookmarks inside tables and text boxes to their container page", () => {
+    const table: TableBlock = {
+      kind: "table",
+      id: "table",
+      rows: [
+        {
+          id: "row",
+          cells: [{ id: "cell", blocks: [para("nested", ["in-table"])] }],
+        },
+      ],
+    };
+    const textBox: TextBoxBlock = {
+      kind: "textBox",
+      id: "box",
+      width: 200,
+      content: [para("inside-box", ["in-box"])],
+    };
+    const blocks: FlowBlock[] = [table, textBox];
+    const pages = [page(4, ["table"]), page(5, ["box"])];
+
+    const map = buildBookmarkPageMap(pages, blocks);
+
+    expect(map.get("in-table")).toBe(4);
+    expect(map.get("in-box")).toBe(5);
   });
 
   test("returns an empty map when no block carries a bookmark", () => {
