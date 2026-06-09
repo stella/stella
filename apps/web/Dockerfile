@@ -3,7 +3,9 @@ FROM oven/bun:1.3.14-slim@sha256:d56a2534ffd262e92c12fd3249d3924d296d97086da773f
 WORKDIR /app
 
 FROM base AS pruner
-RUN bun install -g turbo@^2
+# Keep in sync with the turbo version in the root package.json; an unpinned
+# major lets a new turbo release change `turbo prune` lockfile output mid-flight.
+RUN bun install -g turbo@2.9.16
 COPY . .
 RUN turbo prune @stll/web --docker
 

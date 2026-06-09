@@ -1,0 +1,38 @@
+name: Attest image provenance
+description: >
+  Attest build provenance for an image digest and push the attestation to the
+  registry. Sigstore endpoints can time out transiently, so a failed attempt is
+  retried once before failing the job.
+
+inputs:
+  subject-name:
+    description: Fully qualified image name (registry/repository)
+    required: true
+  subject-digest:
+    description: Image digest (sha256:...) to attest
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Attest
+      id: attest
+      continue-on-error: true
+      uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+      with:
+        subject-name: ${{ inputs.subject-name }}
+        subject-digest: ${{ inputs.subject-digest }}
+        push-to-registry: true
+
+    - name: Wait before retry
+      if: steps.attest.outcome == 'failure'
+      shell: bash
+      run: sleep 10
+
+    - name: Attest (retry)
+      if: steps.attest.outcome == 'failure'
+      uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+      with:
+        subject-name: ${{ inputs.subject-name }}
+        subject-digest: ${{ inputs.subject-digest }}
+        push-to-registry: true
