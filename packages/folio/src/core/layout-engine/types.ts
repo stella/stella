@@ -247,6 +247,8 @@ export type FieldRun = RunFormatting & {
   instruction?: string;
   /** Fallback text if field can't be resolved */
   fallback?: string;
+  /** Whether OOXML marked this field as locked (`w:fldLock`). */
+  fldLock?: boolean;
   pmStart?: number;
   pmEnd?: number;
 };

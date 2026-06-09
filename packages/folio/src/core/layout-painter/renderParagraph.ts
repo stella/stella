@@ -982,6 +982,7 @@ function resolveFieldText(
     {
       fallback: run.fallback ?? "",
       ...(run.pmStart === undefined ? {} : { instanceId: run.pmStart }),
+      ...(run.fldLock ? { locked: true } : {}),
     },
   );
 }

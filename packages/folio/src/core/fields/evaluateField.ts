@@ -17,6 +17,8 @@ type EvaluateFieldOptions = {
   fallback?: string;
   /** Run identity (`pmStart`) used to look up a precomputed SEQ value. */
   instanceId?: number;
+  /** Locked fields preserve their cached result instead of recalculating. */
+  locked?: boolean;
 };
 
 /**
@@ -33,6 +35,9 @@ export function evaluateField(
   options: EvaluateFieldOptions = {},
 ): string {
   const fallback = options.fallback ?? "";
+  if (options.locked) {
+    return fallback;
+  }
 
   switch (parsed.type) {
     case "PAGE":

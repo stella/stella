@@ -34,6 +34,16 @@ describe("evaluateField page-number family", () => {
     expect(evalInstr("SECTIONPAGES", ctx)).toBe("5");
   });
 
+  test("locked fields preserve their cached fallback", () => {
+    const ctx = baseContext();
+    expect(
+      evaluateField(parseFieldInstruction("PAGEREF _Ref1"), ctx, {
+        fallback: "cached",
+        locked: true,
+      }),
+    ).toBe("cached");
+  });
+
   test("numeric format switches apply", () => {
     const ctx = baseContext();
     expect(evalInstr("PAGE \\* ROMAN", ctx)).toBe("III");

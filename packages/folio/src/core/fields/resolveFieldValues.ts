@@ -77,7 +77,11 @@ export function resolveFieldValues(
     const value = evaluateField(
       parseFieldInstruction(run.instruction || run.fieldType),
       context,
-      { fallback: run.fallback ?? "", instanceId: run.pmStart },
+      {
+        fallback: run.fallback ?? "",
+        instanceId: run.pmStart,
+        ...(run.fldLock ? { locked: true } : {}),
+      },
     );
     values.set(run.pmStart, value);
     if (value !== (run.fallback || "1")) {
@@ -139,6 +143,7 @@ export function buildHeaderFooterFieldValues(
         evaluateField(parsed, context, {
           fallback: run.fallback ?? "",
           instanceId: run.pmStart,
+          ...(run.fldLock ? { locked: true } : {}),
         }),
       );
     }

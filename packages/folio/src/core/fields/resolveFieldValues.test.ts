@@ -109,6 +109,30 @@ describe("resolveFieldValues", () => {
     expect(values.get(20)).toBe("3");
   });
 
+  test("preserves locked field fallback values", () => {
+    const lockedPage: FieldRun = {
+      ...field(10, "PAGE"),
+      fallback: "cached page",
+      fldLock: true,
+    };
+    const lockedReference: FieldRun = {
+      ...field(20, "PAGEREF _Ref1 \\h"),
+      fallback: "cached ref",
+      fldLock: true,
+    };
+    const blocks: FlowBlock[] = [para("a", [lockedPage, lockedReference])];
+    const pages = [page(3, ["a"])];
+
+    const { values } = resolveFieldValues(
+      blocks,
+      pages,
+      shared({ bookmarkPages: new Map([["_Ref1", 9]]) }),
+    );
+
+    expect(values.get(10)).toBe("cached page");
+    expect(values.get(20)).toBe("cached ref");
+  });
+
   test("evaluates fields inside split tables for their row page", () => {
     const table: TableBlock = {
       kind: "table",

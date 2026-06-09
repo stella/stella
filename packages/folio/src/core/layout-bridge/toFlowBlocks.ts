@@ -1063,6 +1063,7 @@ function paragraphToRuns(
         fieldType: mappedType,
         instruction: attrs.instruction,
         fallback: attrs.displayText || "",
+        ...(attrs.fldLock ? { fldLock: true } : {}),
         pmStart: childPos,
         pmEnd: childPos + child.nodeSize,
         ...fieldFormatting,
