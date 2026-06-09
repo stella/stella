@@ -30,6 +30,32 @@ type TemplateStudioSession = {
   computed: NameExpr[];
 };
 
+/** Document actions the page owns; the inspector tab renders the buttons. */
+export type StudioActions = {
+  toggleDirectives: () => void;
+  insertField: () => void;
+  insertCondition: () => void;
+  insertLoop: () => void;
+  insertClause: () => void;
+  makeField: () => void;
+  save: () => void;
+};
+
+/** Page-owned UI state the inspector's action row reflects. */
+export type StudioUiState = {
+  metaLabel: string;
+  showDirectives: boolean;
+  hasSelection: boolean;
+  isSaving: boolean;
+};
+
+const DEFAULT_UI: StudioUiState = {
+  metaLabel: "",
+  showDirectives: true,
+  hasSelection: false,
+  isSaving: false,
+};
+
 type TemplateStudioState = {
   /** Null until a template page mounts and seeds the session. */
   templateId: string | null;
@@ -40,6 +66,10 @@ type TemplateStudioState = {
   selected: DirectiveRange | null;
   /** Unsaved manifest or document edits since the last load/save. */
   isDirty: boolean;
+  actions: StudioActions | null;
+  ui: StudioUiState;
+  setActions: (actions: StudioActions | null) => void;
+  patchUi: (patch: Partial<StudioUiState>) => void;
   init: (session: TemplateStudioSession) => void;
   /** Clear the session on page unmount, but only if it still owns it. */
   reset: (templateId: string) => void;
@@ -58,6 +88,10 @@ export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
   computed: [],
   selected: null,
   isDirty: false,
+  actions: null,
+  ui: DEFAULT_UI,
+  setActions: (actions) => set({ actions }),
+  patchUi: (patch) => set((state) => ({ ui: { ...state.ui, ...patch } })),
   init: (session) =>
     set({
       templateId: session.templateId,
@@ -77,6 +111,8 @@ export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
             computed: [],
             selected: null,
             isDirty: false,
+            actions: null,
+            ui: DEFAULT_UI,
           }
         : state,
     ),

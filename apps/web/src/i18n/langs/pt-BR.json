@@ -545,6 +545,7 @@
       "run-stella-query": "Lendo dados do caso",
       "search-across-matters": "Pesquisando casos",
       "search-chat-history": "Pesquisando no histórico do chat",
+      "suggest_template_fields": "Sugerindo campos do modelo",
       "unknown": "Usando ferramenta",
       "update-entity-fields": "Atualizando metadados",
       "web_search": "Pesquisando na web"

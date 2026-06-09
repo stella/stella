@@ -548,6 +548,7 @@ type Messages = {
       "run-stella-query": "Reading workspace data";
       "search-across-matters": "Searching across matters";
       "search-chat-history": "Searching chat history";
+      "suggest_template_fields": "Suggesting template fields";
       "unknown": "Using tool";
       "update-entity-fields": "Updating metadata";
       "web_search": "Searching the web";
