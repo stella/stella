@@ -2,15 +2,9 @@ import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
-import {
-  ArrowLeftIcon,
-  CheckCircle2Icon,
-  FileTextIcon,
-  PencilIcon,
-} from "lucide-react";
+import { PencilIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
@@ -18,7 +12,6 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
-import { TemplateForm } from "@/routes/_protected.knowledge/-components/template-form";
 import { TemplateList } from "@/routes/_protected.knowledge/-components/template-list";
 import { TemplateStudioPage } from "@/routes/_protected.knowledge/-components/template-studio";
 import {
@@ -38,26 +31,9 @@ type TemplateItem = {
   createdAt: Date;
 };
 
-type DetailResponse = Awaited<
-  ReturnType<ReturnType<typeof api.templates>["get"]>
->;
-
-type DetailData = Exclude<
-  NonNullable<Extract<DetailResponse, { data: unknown }>["data"]>,
-  Response
->;
-
 const DOCX_EXTENSION_RE = /\.docx$/iu;
 
-type View =
-  | { kind: "list" }
-  | { kind: "detail"; template: TemplateItem }
-  | {
-      kind: "fill";
-      template: TemplateItem;
-      detail: DetailData;
-    }
-  | { kind: "fillDone"; filename: string };
+type View = { kind: "list" } | { kind: "detail"; template: TemplateItem };
 
 export const Route = createFileRoute("/_protected/knowledge/templates")({
   component: RouteComponent,
@@ -207,13 +183,6 @@ function RouteComponent() {
           setView({ kind: "list" });
           invalidateTemplates();
         }}
-        onFill={(detail) =>
-          setView({
-            kind: "fill",
-            template: view.template,
-            detail,
-          })
-        }
         onRenamed={(newName) =>
           setView((prev) =>
             prev.kind === "detail"
@@ -226,98 +195,6 @@ function RouteComponent() {
         }
         template={view.template}
       />
-    );
-  }
-
-  if (view.kind === "fill") {
-    const { manifest } = view.detail;
-    // Computed fields and namespace parents (a path that is only a dotted
-    // prefix of others) are not fillable inputs — keep them out of the form.
-    const allFields = manifest?.fields ?? [];
-    const computedNames = new Set(
-      (manifest?.computed ?? []).map((c) => c.name),
-    );
-    const fieldPaths = allFields.map((f) => f.path);
-    const fields = allFields
-      .filter(
-        (f) =>
-          !computedNames.has(f.path) &&
-          !fieldPaths.some((p) => p !== f.path && p.startsWith(`${f.path}.`)),
-      )
-      .map((f) => ({
-        path: f.path,
-        kind:
-          f.inputType === "boolean"
-            ? ("boolean" as const)
-            : ("string" as const),
-        count: 1,
-        label: f.label,
-        inputType: f.inputType,
-        options: f.options,
-        validation: f.validation,
-        required: f.required,
-      }));
-
-    const conditions = manifest?.conditions ?? [];
-
-    return (
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex items-center gap-2 border-b px-4 py-2">
-          <Button
-            onClick={() =>
-              setView({
-                kind: "detail",
-                template: view.template,
-              })
-            }
-            size="sm"
-            variant="ghost"
-          >
-            <ArrowLeftIcon />
-            {view.template.name}
-          </Button>
-        </div>
-        <TemplateForm
-          conditions={conditions}
-          fields={fields}
-          fileName={view.detail.fileName}
-          onBack={() =>
-            setView({
-              kind: "detail",
-              template: view.template,
-            })
-          }
-          onDone={(filename) => setView({ kind: "fillDone", filename })}
-          structureErrors={[]}
-          templateId={view.template.id}
-        />
-      </div>
-    );
-  }
-
-  if (view.kind === "fillDone") {
-    return (
-      <div className="flex flex-1 items-center justify-center p-8">
-        <div className="flex w-full max-w-md flex-col items-center gap-4 text-center">
-          <div className="bg-success/15 dark:bg-success/15 flex size-12 items-center justify-center rounded-lg">
-            <CheckCircle2Icon className="text-success size-6" />
-          </div>
-          <div>
-            <h2 className="text-base font-semibold">
-              {t("templates.downloadReady")}
-            </h2>
-            <p className="text-muted-foreground mt-1 flex items-center justify-center gap-1.5 text-sm">
-              <FileTextIcon className="size-3.5" />
-              {view.filename}
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={() => setView({ kind: "list" })} variant="outline">
-              {t("templates.backToList")}
-            </Button>
-          </div>
-        </div>
-      </div>
     );
   }
 
@@ -422,12 +299,10 @@ const renameReducer = (
 const TemplateDetail = ({
   template,
   onBack,
-  onFill,
   onRenamed,
 }: {
   template: TemplateItem;
   onBack: () => void;
-  onFill: (detail: DetailData) => void;
   onRenamed: (newName: string) => void;
 }) => {
   const t = useTranslations();
@@ -542,12 +417,6 @@ const TemplateDetail = ({
     [saveRename, cancelRename],
   );
 
-  const handleTestFill = useCallback(() => {
-    if (state !== "ready" || !detail) {
-      return;
-    }
-    onFill(detail);
-  }, [state, detail, onFill]);
 
   const fieldCount = detail?.manifest?.fields.length ?? template.fieldCount;
 
@@ -605,7 +474,6 @@ const TemplateDetail = ({
             )
           }
           onBack={onBack}
-          onTestFill={handleTestFill}
           presignedUrl={detail.presignedUrl}
           templateId={template.id}
         />
