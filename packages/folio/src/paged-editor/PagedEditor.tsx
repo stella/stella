@@ -5769,9 +5769,15 @@ export function PagedEditor(
               const pmAlignedText = pmAlignedParts.join("");
               const offset = $pos.parentOffset;
 
+              // A word character is any Unicode letter, number, combining mark
+              // (so decomposed accents stay attached) or underscore. Plain
+              // `\w` — even with the `u` flag — is ASCII-only, so it split
+              // "Gdańsk" at the "ń" and double-click selected just "Gda".
+              const wordChar = /[\p{L}\p{N}\p{M}_]/u;
+
               // Find word start (go back until whitespace/punctuation)
               let start = offset;
-              while (start > 0 && /\w/u.test(pmAlignedText[start - 1]!)) {
+              while (start > 0 && wordChar.test(pmAlignedText[start - 1]!)) {
                 // SAFETY: start > 0
                 start--;
               }
@@ -5780,7 +5786,7 @@ export function PagedEditor(
               let end = offset;
               while (
                 end < pmAlignedText.length &&
-                /\w/u.test(pmAlignedText[end]!)
+                wordChar.test(pmAlignedText[end]!)
               ) {
                 // SAFETY: end < pmAlignedText.length
                 end++;
