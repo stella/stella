@@ -208,6 +208,7 @@ export type DocxEditorProps = {
         id: string;
         label: string;
         requiresSelection?: boolean;
+        icon?: ReactNode;
       }[]
     | undefined;
   onCustomContextAction?:
