@@ -767,7 +767,7 @@ const paragraphsAround = (text: string, marker: string): string => {
 /** Folds the flat directive scan into the document's nesting: if/each
  *  markers open groups that own everything up to their closer, so the
  *  panel mirrors which fields only appear under a condition or repeat. */
-const buildOutline = (directives: DirectiveRange[]): OutlineNode[] => {
+const buildOutline = (directives: readonly DirectiveRange[]): OutlineNode[] => {
   const root: OutlineNode[] = [];
   const stack: OutlineNode[][] = [root];
   const top = () => stack.at(-1) ?? root;
