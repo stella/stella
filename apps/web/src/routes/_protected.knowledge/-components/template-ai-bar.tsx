@@ -42,7 +42,10 @@ const CONTEXT_CHARS = 24;
 
 const SUGGEST_FIELDS_PRESET_ID = "suggest-template-fields";
 
-type SuggestedFieldMeta = Pick<StudioField, "path" | "inputType" | "aiPrompt">;
+type SuggestedFieldMeta = Pick<
+  StudioField,
+  "path" | "inputType" | "aiPrompt" | "aiAdapt"
+>;
 
 type TemplateStudioAIBarProps = {
   editorView: EditorView | null;
@@ -178,6 +181,7 @@ export const TemplateStudioAIBar = ({
         upsertField(meta.path, {
           inputType: meta.inputType,
           aiPrompt: meta.aiPrompt,
+          aiAdapt: meta.aiAdapt,
         });
         markDirty();
       },
@@ -269,6 +273,21 @@ const buildReplacementSuggestions = (
   return suggestions.toSorted((a, b) => a.range.from - b.range.from);
 };
 
+/** Mirrors the Studio inspector's who-fills derivation: aiAdapt wins
+ *  (person writes a stub, AI adapts it), then a drafting prompt, else
+ *  a person fills the value directly. */
+const filledByForMeta = (
+  meta: SuggestedFieldMeta,
+): NonNullable<NonNullable<AISuggestion["display"]>["filledBy"]> => {
+  if (meta.aiAdapt) {
+    return "personAi";
+  }
+  if (meta.aiPrompt !== undefined) {
+    return "ai";
+  }
+  return "person";
+};
+
 /** Field flow: each literal becomes its `{{field}}` marker; collision-free
  *  path decided at generation time so every occurrence shares one marker. */
 const buildFieldSuggestions = (
@@ -278,6 +297,7 @@ const buildFieldSuggestions = (
     fieldPath: string;
     inputType?: string | undefined;
     aiPrompt?: string | undefined;
+    aiAdapt?: boolean | undefined;
   }[],
   bounds: { from: number; to: number } | null,
   fieldMeta: Map<string, SuggestedFieldMeta>,
@@ -299,6 +319,7 @@ const buildFieldSuggestions = (
           ? item.inputType
           : "text",
       aiPrompt: item.aiPrompt,
+      aiAdapt: item.aiAdapt === true,
     };
     specs.push({
       literalText: item.literalText,
@@ -307,7 +328,7 @@ const buildFieldSuggestions = (
       rationale: path,
       display: {
         valueKind: meta.inputType,
-        filledBy: meta.aiPrompt !== undefined ? "ai" : "person",
+        filledBy: filledByForMeta(meta),
       },
       registerMeta: (id) => {
         fieldMeta.set(id, meta);

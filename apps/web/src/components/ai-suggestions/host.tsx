@@ -31,6 +31,7 @@ import {
   RotateCcwIcon,
   SquareIcon,
   SquarePenIcon,
+  UserIcon,
   WandSparklesIcon,
 } from "lucide-react";
 import type { EditorView } from "prosemirror-view";
@@ -39,6 +40,7 @@ import { useTranslations } from "use-intl";
 import {
   applySuggestions,
   resolveSuggestionAnchor,
+  scrollFolioPositionIntoView,
   setActiveCitationMeta,
   setAICitationsMeta,
   setAISuggestionsMeta,
@@ -921,17 +923,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
       if (!anchor) {
         return;
       }
-      const scrollContainer = editorView.dom.closest("[data-folio-scroll]");
-      if (scrollContainer === null) {
-        return;
-      }
-      const coords = editorView.coordsAtPos(anchor.from);
-      const rect = scrollContainer.getBoundingClientRect();
-      const targetTop = coords.top - rect.top + scrollContainer.scrollTop;
-      scrollContainer.scrollTo({
-        top: targetTop - rect.height / 3,
-        behavior: "smooth",
-      });
+      scrollEditorToPos(editorView, anchor.from);
     },
     [editorView, findSuggestion],
   );
@@ -1022,17 +1014,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
       onCitationActivate?.(citation);
       // Folio: scroll the editor to the cited range.
       if (citation.source.kind === "folio-range" && editorView) {
-        const scrollContainer = editorView.dom.closest("[data-folio-scroll]");
-        if (scrollContainer === null) {
-          return;
-        }
-        const coords = editorView.coordsAtPos(citation.source.from);
-        const rect = scrollContainer.getBoundingClientRect();
-        const targetTop = coords.top - rect.top + scrollContainer.scrollTop;
-        scrollContainer.scrollTo({
-          top: targetTop - rect.height / 3,
-          behavior: "smooth",
-        });
+        scrollEditorToPos(editorView, citation.source.from);
       }
     },
     [editorView, onCitationActivate],
@@ -1158,6 +1140,34 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
 // ===========================================================================
 // View helpers
 // ===========================================================================
+
+/**
+ * Scroll the document so the given PM position is centered in view.
+ *
+ * Folio's paged editor keeps its editing PM view hidden off-screen;
+ * `coordsAtPos` on that view yields coordinates of the hidden mirror,
+ * not the visible pages — scrolling by them moves a near-constant step
+ * per call instead of jumping to the target. Prefer the paged-layout
+ * scroll (anchors on the painted pages, page shells under
+ * virtualization); fall back to coordinate math only when no paged
+ * layout is mounted around the view.
+ */
+function scrollEditorToPos(view: EditorView, pos: number): void {
+  if (scrollFolioPositionIntoView(view, pos)) {
+    return;
+  }
+  const scrollContainer = view.dom.closest("[data-folio-scroll]");
+  if (scrollContainer === null) {
+    return;
+  }
+  const coords = view.coordsAtPos(pos);
+  const rect = scrollContainer.getBoundingClientRect();
+  const targetTop = coords.top - rect.top + scrollContainer.scrollTop;
+  scrollContainer.scrollTo({
+    top: targetTop - rect.height / 3,
+    behavior: "smooth",
+  });
+}
 
 /**
  * Best-effort PM range of what the user is currently looking at,
@@ -2171,10 +2181,24 @@ function SuggestionCard(props: SuggestionCardProps) {
     (!display || suggestion.rationale !== suggestion.topic);
 
   return (
+    // The whole card is a click target for focus-and-jump (the header
+    // button stays the keyboard/AT path); clicks owned by interior
+    // buttons (header, accept, reject) are skipped so they don't
+    // double-fire.
+    // oxlint-disable-next-line jsx_a11y/no-static-element-interactions, jsx_a11y/click-events-have-key-events
     <div
       data-status={suggestion.status}
+      onClick={(event) => {
+        if (
+          event.target instanceof Element &&
+          event.target.closest("button") !== null
+        ) {
+          return;
+        }
+        onFocus(suggestion.id);
+      }}
       className={cn(
-        "border-border/60 bg-background/60 rounded-lg border px-3 py-2 transition-colors",
+        "border-border/60 bg-background/60 cursor-pointer rounded-lg border px-3 py-2 transition-colors",
         focused && "border-foreground-disabled bg-muted/40",
       )}
     >
@@ -2303,24 +2327,48 @@ type SuggestionDisplayBadgesProps = {
 /** Header badges for display-carrying suggestions: the payload's value
  *  type plus who fills it (replaces the severity dot + label). */
 function SuggestionDisplayBadges({ display }: SuggestionDisplayBadgesProps) {
-  const t = useTranslations();
   return (
     <>
       {display.valueKind !== undefined && (
         <ValueKindChip valueKind={display.valueKind} />
       )}
-      {display.filledBy === "ai" && (
-        <span className="bg-info/10 text-info inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium">
-          <WandSparklesIcon aria-hidden="true" className="size-3 shrink-0" />
-          {t("templates.studio.draftedByAi")}
-        </span>
-      )}
-      {display.filledBy === "person" && (
-        <span className="bg-muted text-muted-foreground inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium">
-          {t("templates.studio.filledByPerson")}
-        </span>
+      {display.filledBy !== undefined && (
+        <FilledByBadge filledBy={display.filledBy} />
       )}
     </>
+  );
+}
+
+type FilledByBadgeProps = {
+  filledBy: NonNullable<NonNullable<AISuggestion["display"]>["filledBy"]>;
+};
+
+/** Who fills the proposed field: a person, AI, or a person whose stub
+ *  AI adapts in place (`personAi`). */
+function FilledByBadge({ filledBy }: FilledByBadgeProps) {
+  const t = useTranslations();
+  if (filledBy === "ai") {
+    return (
+      <span className="bg-info/10 text-info inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium">
+        <WandSparklesIcon aria-hidden="true" className="size-3 shrink-0" />
+        {t("templates.studio.draftedByAi")}
+      </span>
+    );
+  }
+  if (filledBy === "personAi") {
+    return (
+      <span className="bg-info/10 text-info inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium">
+        <UserIcon aria-hidden="true" className="size-3 shrink-0" />
+        <WandSparklesIcon aria-hidden="true" className="size-3 shrink-0" />
+        {t("templates.studio.textPlusAi")}
+      </span>
+    );
+  }
+  return (
+    <span className="bg-muted text-muted-foreground inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium">
+      <UserIcon aria-hidden="true" className="size-3 shrink-0" />
+      {t("templates.studio.filledByPerson")}
+    </span>
   );
 }
 

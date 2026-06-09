@@ -80,6 +80,7 @@ export {
   setAISuggestionsMeta,
   setFocusedSuggestionMeta,
 } from "./core/prosemirror/plugins/aiSuggestionDecorations";
+export { scrollFolioPositionIntoView } from "./paged-editor/scrollToPmPosition";
 export {
   createAICitationDecorationsPlugin,
   setAICitationsMeta,
