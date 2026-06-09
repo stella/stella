@@ -8,7 +8,7 @@ import {
   PlusIcon,
   Trash2Icon,
 } from "lucide-react";
-import { useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import {
   AlertDialog,
@@ -30,11 +30,11 @@ import {
 import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { cn } from "@stll/ui/lib/utils";
 
-import { UserAvatar } from "@/components/user-avatar";
+import { VersionList, VersionRow } from "@/components/versions/version-list";
+import type { VersionDiffSegment } from "@/components/versions/version-list";
 import { api } from "@/lib/api";
-import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { ClientOperationError, toAPIError } from "@/lib/errors";
-import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import { entityVersionsKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
 
@@ -98,7 +98,6 @@ export function VersionsSidebar({
   isComparing,
 }: VersionsSidebarProps) {
   const t = useTranslations();
-  const locale = useLocale();
 
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -230,6 +229,34 @@ export function VersionsSidebar({
     }
   };
 
+  // Diff + AI summary loaders for the shared VersionRow. Only DOCX
+  // versions can be diffed; non-DOCX rows get neither control.
+  const buildLoadDiff =
+    (versionId: string) => async (): Promise<VersionDiffSegment[]> => {
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .entity({ entityId: toSafeId<"entity">(entityId) })
+        .versions({ versionId: toSafeId<"entityVersion">(versionId) })
+        .diff.get();
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data.segments;
+    };
+
+  const buildSummarize =
+    (versionId: string) => async (): Promise<string | null> => {
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .entity({ entityId: toSafeId<"entity">(entityId) })
+        .versions({ versionId: toSafeId<"entityVersion">(versionId) })
+        .summarize.post({});
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data.summary;
+    };
+
   // Render oldest → newest top-to-bottom so the timeline reads
   // naturally (v1 at the top, latest at the bottom). The upload
   // sits in the same bottom-row slot as "Extract entity type" on
@@ -257,35 +284,38 @@ export function VersionsSidebar({
 
       {/* Version list */}
       <ScrollArea className="flex-1">
-        <div className="flex flex-col gap-px p-1">
-          {orderedVersions.map((version, idx) => (
-            <VersionItem
-              key={version.id}
-              canDelete={versions.length > 1}
-              currentFieldId={currentFieldId}
-              currentVersionId={currentVersionId}
-              hideDiffStats={isComparing}
-              locale={locale}
-              prevVersion={orderedVersions[idx - 1]}
-              showPhaseDivider={
-                idx > 0 &&
-                version.label !== orderedVersions[idx - 1]?.label &&
-                (version.label !== null ||
-                  orderedVersions[idx - 1]?.label !== null)
-              }
-              version={version}
-              onDelete={handleDeleteVersion}
-              onDownload={(fid) => {
-                void handleDownload(fid);
-              }}
-              onRestore={(vid) => {
-                void handleRestore(vid);
-              }}
-              onSetLabel={handleSetLabel}
-              onSwitchVersion={onSwitchVersion}
-            />
-          ))}
-        </div>
+        <VersionList>
+          {orderedVersions.map((version, idx) => {
+            const isDocx = version.file?.mimeType === DOCX_MIME;
+            return (
+              <VersionItem
+                key={version.id}
+                canDelete={versions.length > 1}
+                currentFieldId={currentFieldId}
+                currentVersionId={currentVersionId}
+                hideDiffStats={isComparing}
+                loadDiff={isDocx ? buildLoadDiff(version.id) : null}
+                showPhaseDivider={
+                  idx > 0 &&
+                  version.label !== orderedVersions[idx - 1]?.label &&
+                  (version.label !== null ||
+                    orderedVersions[idx - 1]?.label !== null)
+                }
+                summarize={isDocx ? buildSummarize(version.id) : null}
+                version={version}
+                onDelete={handleDeleteVersion}
+                onDownload={(fid) => {
+                  void handleDownload(fid);
+                }}
+                onRestore={(vid) => {
+                  void handleRestore(vid);
+                }}
+                onSetLabel={handleSetLabel}
+                onSwitchVersion={onSwitchVersion}
+              />
+            );
+          })}
+        </VersionList>
       </ScrollArea>
 
       {/* TODO: Restore version comparison controls once the feature is finalized. */}
@@ -317,13 +347,13 @@ export function VersionsSidebar({
 
 type VersionItemProps = {
   version: Version;
-  prevVersion: Version | undefined;
   currentFieldId: string;
   currentVersionId: string | null;
   hideDiffStats: boolean;
-  locale: string;
   showPhaseDivider: boolean;
   canDelete: boolean;
+  loadDiff: (() => Promise<VersionDiffSegment[]>) | null;
+  summarize: (() => Promise<string | null>) | null;
   onSwitchVersion: (fieldId: string, versionId: string) => Promise<void> | void;
   onDelete: (versionId: string) => Promise<void>;
   onSetLabel: (versionId: string, label: string | null) => Promise<void>;
@@ -337,8 +367,9 @@ function VersionItem({
   currentFieldId,
   currentVersionId,
   hideDiffStats,
-  locale,
   canDelete,
+  loadDiff,
+  summarize,
   onSwitchVersion,
   onDelete,
   onSetLabel,
@@ -362,11 +393,13 @@ function VersionItem({
       ? (labelColorMap.get(version.label) ?? DEFAULT_LABEL_COLOR)
       : DEFAULT_LABEL_COLOR;
 
-  const hasDiff =
+  const stats =
     !hideDiffStats &&
     version.diffWordsAdded !== null &&
     version.diffWordsRemoved !== null &&
-    (version.diffWordsAdded > 0 || version.diffWordsRemoved > 0);
+    (version.diffWordsAdded > 0 || version.diffWordsRemoved > 0)
+      ? { added: version.diffWordsAdded, removed: version.diffWordsRemoved }
+      : null;
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -380,85 +413,33 @@ function VersionItem({
   return (
     <div key={version.id}>
       {showPhaseDivider && <div className="border-border my-1 border-t" />}
-      <button
-        className={cn(
-          "relative flex w-full flex-col gap-1.5 rounded-md px-3 py-2 text-start transition-colors",
-          // The selected version gets a stronger fill + an accent
-          // bar on the leading edge so the active row stays
-          // unmistakable even when scrolled. The bar uses a logical
-          // start position so RTL keeps it on the leading side.
-          isSelected
-            ? "bg-accent text-accent-foreground ring-primary/40 ring-1"
-            : "hover:bg-muted/50",
-        )}
-        type="button"
-        onClick={() => {
+      <VersionRow
+        author={version.author}
+        createdAt={version.createdAt}
+        isCurrent={isCurrent}
+        isSelected={isSelected}
+        isViewing={isSelected && !isCurrent}
+        loadDiff={loadDiff}
+        meta={
+          version.label && (
+            <span className="text-accent-foreground inline-flex w-fit items-center gap-1.5 truncate text-[10px] font-medium">
+              <span
+                className={cn("size-2 shrink-0 rounded-full", labelDotColor)}
+              />
+              {version.label}
+            </span>
+          )
+        }
+        stats={stats}
+        summarize={summarize}
+        title={`v${version.versionNumber}`}
+        onActivate={() => {
           if (version.file) {
             void onSwitchVersion(version.file.fieldId, version.id);
           }
         }}
         onContextMenu={handleContextMenu}
-      >
-        {isSelected && (
-          <span
-            aria-hidden="true"
-            className="bg-primary absolute inset-y-1 start-0 w-0.5 rounded-full"
-          />
-        )}
-        {/* Row 1: version number + badges */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-sm font-medium">v{version.versionNumber}</span>
-          {isCurrent && (
-            <span className="bg-primary/10 text-primary flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium">
-              <CheckIcon className="size-2.5" />
-              {t("fileDetail.current")}
-            </span>
-          )}
-          {isSelected && !isCurrent && (
-            <span className="bg-primary text-primary-foreground flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium">
-              {t("fileDetail.viewing")}
-            </span>
-          )}
-          {hasDiff && (
-            <span className="ms-auto flex items-center gap-1 text-[10px] tabular-nums">
-              <span className="text-success">+{version.diffWordsAdded}</span>
-              <span className="text-destructive">
-                −{version.diffWordsRemoved}
-              </span>
-            </span>
-          )}
-        </div>
-
-        {/* Row 2: label with color dot */}
-        {version.label && (
-          <span className="text-accent-foreground inline-flex w-fit items-center gap-1.5 truncate text-[10px] font-medium">
-            <span
-              className={cn("size-2 shrink-0 rounded-full", labelDotColor)}
-            />
-            {version.label}
-          </span>
-        )}
-
-        {/* Row 3: author + time */}
-        <div className="flex items-center gap-1.5">
-          {version.author && (
-            <UserAvatar
-              className="size-4 shrink-0 text-[8px]"
-              image={version.author.image}
-              name={version.author.name}
-            />
-          )}
-          <span className="text-muted-foreground truncate text-xs">
-            {version.author ? firstName(version.author.name) : ""}
-          </span>
-          <span
-            className="text-muted-foreground shrink-0 text-xs"
-            title={formatFullTimestamp(version.createdAt, locale)}
-          >
-            {formatRelativeTime(version.createdAt, locale)}
-          </span>
-        </div>
-      </button>
+      />
 
       <Menu
         open={isContextOpen}
@@ -588,10 +569,5 @@ function VersionItem({
     </div>
   );
 }
-
-// -- Utilities --
-
-const firstName = (fullName: string) =>
-  fullName.split(/\s+/u).at(0) ?? fullName;
 
 const DEFAULT_LABEL_COLOR = "bg-foreground-disabled";

@@ -1,15 +1,16 @@
-import { useCallback } from "react";
-
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { DownloadIcon } from "lucide-react";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { VersionList, VersionRow } from "@/components/versions/version-list";
+import type { VersionDiffSegment } from "@/components/versions/version-list";
 import { api } from "@/lib/api";
-import { userErrorMessage } from "@/lib/errors";
+import { toAPIError, userErrorMessage } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import { templateVersionsOptions } from "@/routes/_protected.knowledge/-queries";
 
 // ── Types ────────────────────────────────────────────
@@ -26,50 +27,73 @@ export const TemplateVersionsTab = ({
   templateId,
 }: TemplateVersionsTabProps) => {
   const t = useTranslations();
-  const format = useFormatter();
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
 
   const {
-    data: versionsData,
+    data,
     isLoading,
     isError,
-  } = useQuery(templateVersionsOptions(activeOrganizationId, templateId));
-
-  const versions =
-    versionsData && "versions" in versionsData ? versionsData.versions : [];
-
-  const handleView = useCallback(
-    async (versionId: string) => {
-      const response = await api
-        .templates({ templateId })
-        .versions({ versionId })
-        .get();
-
-      if (response.error) {
-        stellaToast.add({
-          type: "error",
-          title: t("templates.loadFailed"),
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
-        });
-        return;
-      }
-
-      const { data } = response;
-      if (data instanceof Response) {
-        return;
-      }
-
-      if ("downloadUrl" in data && typeof data.downloadUrl === "string") {
-        window.open(data.downloadUrl, "_blank");
-      }
-    },
-    [templateId, t],
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery(
+    templateVersionsOptions(activeOrganizationId, templateId),
   );
+
+  const versions = data?.pages.flatMap((page) => page.items) ?? [];
+  // Pages are newest-first; the first loaded row is the current
+  // version (saves always append the highest version number).
+  const currentVersionId = data?.pages.at(0)?.items.at(0)?.id;
+
+  const handleDownload = async (versionId: string) => {
+    const response = await api
+      .templates({ templateId: toSafeId<"template">(templateId) })
+      .versions({ versionId: toSafeId<"templateVersion">(versionId) })
+      .get();
+
+    if (response.error) {
+      stellaToast.add({
+        type: "error",
+        title: t("templates.loadFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+
+    const { data: version } = response;
+    if ("downloadUrl" in version && typeof version.downloadUrl === "string") {
+      window.open(version.downloadUrl, "_blank");
+    }
+  };
+
+  const buildLoadDiff =
+    (versionId: string) => async (): Promise<VersionDiffSegment[]> => {
+      const response = await api
+        .templates({ templateId: toSafeId<"template">(templateId) })
+        .versions({ versionId: toSafeId<"templateVersion">(versionId) })
+        .diff.get();
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data.segments;
+    };
+
+  const buildSummarize =
+    (versionId: string) => async (): Promise<string | null> => {
+      const response = await api
+        .templates({ templateId: toSafeId<"template">(templateId) })
+        .versions({ versionId: toSafeId<"templateVersion">(versionId) })
+        .summarize.post({});
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data.summary;
+    };
 
   if (isLoading) {
     return (
@@ -101,44 +125,54 @@ export const TemplateVersionsTab = ({
 
   return (
     <div className="mt-4 rounded-lg border">
-      <ul className="divide-y">
-        {versions.map((ver) => (
-          <li
-            className="flex items-center justify-between px-4 py-3 text-sm"
-            key={ver.id}
-          >
-            <div>
-              <span className="font-medium">
-                {t("templates.versionLabel", {
-                  version: String(ver.version),
-                })}
-              </span>
-              <span className="text-muted-foreground ms-2">
-                {t("templates.fieldCount", {
-                  count: ver.fieldCount,
-                })}
-              </span>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-muted-foreground">
-                {format.dateTime(new Date(ver.createdAt), {
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                })}
-              </span>
+      <VersionList>
+        {versions.map((version) => (
+          <VersionRow
+            key={version.id}
+            actions={
               <Button
+                aria-label={t("common.download")}
                 onClick={() => {
-                  void handleView(ver.id);
+                  void handleDownload(version.id);
                 }}
                 size="icon-xs"
+                title={t("common.download")}
                 variant="ghost"
               >
                 <DownloadIcon className="size-3.5" />
               </Button>
-            </div>
-          </li>
+            }
+            author={version.author}
+            createdAt={version.createdAt}
+            isCurrent={version.id === currentVersionId}
+            loadDiff={buildLoadDiff(version.id)}
+            meta={
+              <span className="text-muted-foreground text-xs">
+                {t("templates.fieldCount", { count: version.fieldCount })}
+              </span>
+            }
+            summarize={buildSummarize(version.id)}
+            title={t("templates.versionLabel", {
+              version: String(version.version),
+            })}
+          />
         ))}
-      </ul>
+      </VersionList>
+      {hasNextPage && (
+        <div className="border-t p-1">
+          <Button
+            className="text-muted-foreground w-full"
+            disabled={isFetchingNextPage}
+            onClick={() => {
+              void fetchNextPage();
+            }}
+            size="sm"
+            variant="ghost"
+          >
+            {t("common.loadMore")}
+          </Button>
+        </div>
+      )}
     </div>
   );
 };
