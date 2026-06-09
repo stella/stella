@@ -65,6 +65,8 @@ export type StudioActions = {
   focusField: (path: string) => void;
   /** Move the document caret to an exact document position. */
   focusPosition: (pos: number) => void;
+  /** Live fill preview in the document: path → value, or null to clear. */
+  setFillPreview: (values: Record<string, string> | null) => void;
 };
 
 /** Page-owned UI state the inspector's action row reflects. */
