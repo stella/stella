@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { Result } from "better-result";
 import { eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -294,12 +294,7 @@ const createTemplateHandler = async function* ({
     );
   }
 
-  const row = txResult.row;
-  if (!row) {
-    panic("Failed to create template");
-  }
-
-  return Result.ok(row);
+  return Result.ok(txResult.row);
 };
 
 const config = {
