@@ -1,5 +1,7 @@
 // Shared types for DOCX generation modes (b) and (c).
 
+import { isFieldPath } from "@stll/template-conditions";
+
 // ── Common ────────────────────────────────────────────────
 
 export type RevisionAuthor = {
@@ -231,6 +233,20 @@ export type InputType =
   | "date"
   | "select";
 
+export type PartInputType = "text" | "select";
+
+/** One part of a composite field's value (see {@link FieldMeta.parts}). */
+export type FieldPart = {
+  /** Part key referenced by the field's format; same charset as field paths. */
+  key: string;
+  label?: string | undefined;
+  inputType: PartInputType;
+  /** Allowed values when {@link inputType} is "select". */
+  options?: string[] | undefined;
+  /** Regex matched against the whole part value at fill time. */
+  pattern?: string | undefined;
+};
+
 export type FieldValidation = {
   required?: boolean;
   minLength?: number;
@@ -261,6 +277,17 @@ export type FieldMeta = {
    * provider, or on any model failure, the stub fills every occurrence as-is.
    */
   aiAdapt?: boolean | undefined;
+  /**
+   * Composite field: the value is entered as several parts (e.g. a select for
+   * a professional title plus a free-text name) that are validated and joined
+   * by {@link format} into the single string the document's one {{marker}} is
+   * filled with. Present iff `format` is present; a field with parts ignores
+   * its own inputType for input rendering.
+   */
+  parts?: FieldPart[] | undefined;
+  /** Join template over part keys, `{{key}}` syntax (e.g. "{{position}} {{name}}").
+   *  Present iff `parts` is present. */
+  format?: string | undefined;
 };
 
 /**
@@ -327,8 +354,28 @@ const isFieldValidation = (value: unknown): value is FieldValidation => {
   );
 };
 
+const isPartInputType = (value: unknown): value is PartInputType =>
+  value === "text" || value === "select";
+
+export const isFieldPart = (value: unknown): value is FieldPart =>
+  isRecordLike(value) &&
+  typeof value["key"] === "string" &&
+  isFieldPath(value["key"]) &&
+  (value["label"] === undefined || typeof value["label"] === "string") &&
+  isPartInputType(value["inputType"]) &&
+  (value["options"] === undefined ||
+    (Array.isArray(value["options"]) &&
+      value["options"].every((option) => typeof option === "string"))) &&
+  (value["pattern"] === undefined || typeof value["pattern"] === "string");
+
 export const isFieldMeta = (value: unknown): value is FieldMeta => {
   if (!isRecordLike(value) || typeof value["path"] !== "string") {
+    return false;
+  }
+
+  // parts and format describe one composite value together: parts without a
+  // join format (or vice versa) cannot be rendered, so reject the half-shape.
+  if ((value["parts"] === undefined) !== (value["format"] === undefined)) {
     return false;
   }
 
@@ -344,7 +391,12 @@ export const isFieldMeta = (value: unknown): value is FieldMeta => {
       typeof value["required"] === "boolean") &&
     (value["aiPrompt"] === undefined ||
       typeof value["aiPrompt"] === "string") &&
-    (value["aiAdapt"] === undefined || typeof value["aiAdapt"] === "boolean")
+    (value["aiAdapt"] === undefined || typeof value["aiAdapt"] === "boolean") &&
+    (value["parts"] === undefined ||
+      (Array.isArray(value["parts"]) &&
+        value["parts"].length > 0 &&
+        value["parts"].every(isFieldPart))) &&
+    (value["format"] === undefined || typeof value["format"] === "string")
   );
 };
 
@@ -443,6 +495,10 @@ export type ResolvedField = {
   /** Mirrors {@link FieldMeta.aiAdapt}: the fill form shows an AI-adaptation
    *  hint next to the field's input when set. */
   aiAdapt?: boolean | undefined;
+  /** Mirrors {@link FieldMeta.parts}: the fill form renders one input per part. */
+  parts?: FieldPart[] | undefined;
+  /** Mirrors {@link FieldMeta.format}. */
+  format?: string | undefined;
   itemFields?: ResolvedField[] | undefined;
   /** Condition expression that must be true for this
    *  field to be visible in the fill form. */
