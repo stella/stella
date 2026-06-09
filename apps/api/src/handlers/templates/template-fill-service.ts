@@ -7,6 +7,10 @@
  */
 
 import type { ScopedDb } from "@/api/db";
+import {
+  adaptAiFields,
+  type AiOccurrenceAdapter,
+} from "@/api/handlers/docx/adapt-ai-fields";
 import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
 import { extractText } from "@/api/handlers/docx/extract-text";
@@ -116,6 +120,7 @@ export const fillStoredTemplate = async ({
   scopedDb,
   organizationId,
   generateAiValue,
+  adaptAiValue,
 }: {
   templateId: SafeId<"template">;
   values: FillValues;
@@ -123,6 +128,8 @@ export const fillStoredTemplate = async ({
   organizationId: SafeId<"organization">;
   /** Optional model-backed generator for AI-fillable fields (aiPrompt). */
   generateAiValue?: AiFieldGenerator | undefined;
+  /** Optional model-backed per-occurrence adapter for aiAdapt fields. */
+  adaptAiValue?: AiOccurrenceAdapter | undefined;
 }): Promise<FillTemplateResult> => {
   const loaded = await loadTemplate(templateId, scopedDb);
   if (!loaded) {
@@ -145,6 +152,8 @@ export const fillStoredTemplate = async ({
   }
 
   // Draft AI-fillable fields (manifest fields with an aiPrompt) before fill.
+  let fillBuffer = loaded.buffer;
+  let adaptedPaths: readonly string[] = [];
   const manifest = await readManifest(loaded.buffer);
   if (manifest) {
     record = await resolveAiFields({
@@ -152,6 +161,17 @@ export const fillStoredTemplate = async ({
       fields: manifest.fields,
       generate: generateAiValue,
     });
+    // Rewrite each aiAdapt marker occurrence to fit its surrounding text;
+    // the stub stays in `record` so uncovered occurrences still get the
+    // plain global substitution below.
+    const adapted = await adaptAiFields({
+      buffer: loaded.buffer,
+      fields: manifest.fields,
+      values: record,
+      adapt: adaptAiValue,
+    });
+    fillBuffer = adapted.buffer;
+    adaptedPaths = adapted.adaptedPaths;
   }
 
   if (!isTemplateData(record)) {
@@ -161,7 +181,7 @@ export const fillStoredTemplate = async ({
     };
   }
 
-  const result = await fillTemplate(loaded.buffer, record);
+  const result = await fillTemplate(fillBuffer, record);
   const { paragraphs } = await extractText(result.buffer);
 
   return {
@@ -170,6 +190,10 @@ export const fillStoredTemplate = async ({
       .join("\n")
       .trim(),
     unmatchedPlaceholders: result.unmatchedPlaceholders,
-    unusedValues: result.unusedValues,
+    // Adapted stubs no longer match a marker (each occurrence was already
+    // substituted), so they are not "unused" in any user-meaningful sense.
+    unusedValues: result.unusedValues.filter(
+      (name) => !adaptedPaths.includes(name),
+    ),
   };
 };

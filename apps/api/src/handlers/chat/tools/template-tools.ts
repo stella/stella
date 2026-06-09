@@ -3,7 +3,10 @@ import { tool } from "ai";
 import * as v from "valibot";
 
 import type { ScopedDb } from "@/api/db";
-import { buildAiFieldGenerator } from "@/api/handlers/docx/ai-field-generator";
+import {
+  buildAiFieldGenerator,
+  buildAiOccurrenceAdapter,
+} from "@/api/handlers/docx/ai-field-generator";
 import { suggestTemplateFields } from "@/api/handlers/templates/suggest-template-fields";
 import {
   describeStoredTemplate,
@@ -47,19 +50,35 @@ export const createTemplateTools = ({
     orgAIConfig: orgAIConfig ?? null,
     organizationId,
   });
+  // Per-occurrence adapter for aiAdapt fields (stub rewritten to fit each
+  // marker's surrounding text); same fallback semantics as generateAiValue.
+  const adaptAiValue = buildAiOccurrenceAdapter({
+    orgAIConfig: orgAIConfig ?? null,
+    organizationId,
+  });
 
   return {
     [LIST_TEMPLATES_TOOL_NAME]: tool({
       description:
         "List the document templates in this workspace (NDAs, powers of " +
-        "attorney, leases, and so on). Returns each template's id, name and " +
-        "number of fillable fields. Call this first so you know which " +
-        "templates exist and their ids before describing or filling one.",
+        "attorney, leases, and so on). Returns each template's id, name, " +
+        "number of fillable fields, tags, and usage guidance (whenToUse / " +
+        "whenNotToUse). Call this first so you know which templates exist " +
+        "and their ids before describing or filling one. When picking a " +
+        "template, prefer one whose whenToUse matches the request and skip " +
+        "any whose whenNotToUse applies.",
       inputSchema: valibotSchema(v.strictObject({})),
       execute: async () => {
         const rows = await scopedDb((tx) =>
           tx.query.templates.findMany({
-            columns: { id: true, name: true, fieldCount: true },
+            columns: {
+              id: true,
+              name: true,
+              fieldCount: true,
+              tags: true,
+              whenToUse: true,
+              whenNotToUse: true,
+            },
             orderBy: { createdAt: "desc" },
             limit: LIMITS.templatesCount,
           }),
@@ -115,6 +134,7 @@ export const createTemplateTools = ({
           scopedDb,
           organizationId,
           generateAiValue,
+          adaptAiValue,
         }),
     }),
 
