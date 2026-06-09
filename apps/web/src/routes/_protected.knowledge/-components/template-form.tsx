@@ -1141,12 +1141,17 @@ export const TemplateForm = ({
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
       <div className="mx-auto w-full max-w-2xl p-6">
-        <div className="mb-6 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{t("templates.fillForm")}</h2>
-          <Button onClick={onBack} variant="ghost">
-            {t("templates.uploadDifferent")}
-          </Button>
-        </div>
+        {/* Transient (upload) fill shows the form header + "upload different";
+            server-side fill is embedded in the Studio's Fill tab, which labels
+            itself, so the header would be redundant chrome. */}
+        {file !== undefined && (
+          <div className="mb-6 flex items-center justify-between">
+            <h2 className="text-lg font-semibold">{t("templates.fillForm")}</h2>
+            <Button onClick={onBack} variant="ghost">
+              {t("templates.uploadDifferent")}
+            </Button>
+          </div>
+        )}
 
         {structureErrors.length > 0 && (
           <div className="border-warning/30 bg-warning/10 dark:bg-warning/10 mb-6 flex items-start gap-2 rounded-lg border p-3">
