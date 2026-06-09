@@ -19,6 +19,8 @@ const suggestEditsBodySchema = t.Object({
 });
 
 const editsSchema = v.strictObject({
+  // Set for questions/comments that need no document change.
+  answer: v.nullable(v.string()),
   edits: v.array(
     v.strictObject({
       originalText: v.string(),
@@ -29,19 +31,22 @@ const editsSchema = v.strictObject({
 });
 
 const SYSTEM_PROMPT =
-  "You edit legal documents. You propose precise text replacements that carry " +
-  "out the user's instruction. originalText must be copied VERBATIM from the " +
+  "You assist with legal documents. Not every message asks for a change: " +
+  "questions and comments get a reply in `answer` (same language as the " +
+  "user) and zero edits. Propose text replacements only when the user wants " +
+  "the document changed. originalText must be copied VERBATIM from the " +
   "document — never paraphrase it — and must be long enough to be unambiguous. " +
   "In multilingual documents, propose a separate edit per language version. " +
   "Keep {{...}} template markers intact unless the instruction targets them.";
 
 const buildPrompt = (documentText: string, instruction: string): string =>
-  `Instruction: ${instruction}
+  `User message: ${instruction}
 
-For each place the instruction applies, return:
+If it requests a change, return one edit per place it applies:
 - originalText: the EXACT text to replace, copied verbatim from the document
 - replacementText: the new text
 - note: a one-line explanation when helpful, else null
+Otherwise answer the message and return no edits.
 
 Document:
 ${documentText}`;
@@ -63,10 +68,10 @@ const suggestEdits = createSafeRootHandler(
     const { text, instruction } = body;
     const trimmed = text.trim();
     if (trimmed.length === 0 || instruction.trim().length === 0) {
-      return Result.ok({ edits: [] });
+      return Result.ok({ answer: undefined, edits: [] });
     }
 
-    const edits = yield* Result.await(
+    const response = yield* Result.await(
       Result.tryPromise({
         try: async () => {
           const orgAIConfig = await loadOrgAIConfig(
@@ -86,12 +91,15 @@ const suggestEdits = createSafeRootHandler(
             output: Output.object({ schema: strictOutputSchema(editsSchema) }),
             system: SYSTEM_PROMPT,
           });
-          const { edits: raw } = await result.output;
-          return raw.map((edit) => ({
-            originalText: edit.originalText,
-            replacementText: edit.replacementText,
-            note: edit.note ?? undefined,
-          }));
+          const { edits: raw, answer } = await result.output;
+          return {
+            answer: answer ?? undefined,
+            edits: raw.map((edit) => ({
+              originalText: edit.originalText,
+              replacementText: edit.replacementText,
+              note: edit.note ?? undefined,
+            })),
+          };
         },
         catch: (cause) =>
           new HandlerError({
@@ -102,7 +110,7 @@ const suggestEdits = createSafeRootHandler(
       }),
     );
 
-    return Result.ok({ edits });
+    return Result.ok(response);
   },
 );
 
