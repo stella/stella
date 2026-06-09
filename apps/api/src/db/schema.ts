@@ -1606,6 +1606,11 @@ export const templates = p.pgTable(
     manifest: jsonb().$type<TemplateManifest>(),
     fieldCount: p.integer("field_count").notNull().default(0),
     currentVersion: p.integer("current_version").notNull().default(1),
+    tags: p.text().array(),
+    whenToUse: p.text("when_to_use"),
+    whenNotToUse: p.text("when_not_to_use"),
+    useCount: p.integer("use_count").notNull().default(0),
+    lastUsedAt: p.timestamp("last_used_at"),
     createdBy: p
       .text("created_by")
       .notNull()
