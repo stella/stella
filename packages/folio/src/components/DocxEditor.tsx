@@ -472,6 +472,8 @@ export function DocxEditor({
   selectedAnonymizationCanonical = null,
   anonymizationSelectionSeq,
   showTemplateDirectives = false,
+  customContextMenuItems,
+  onCustomContextAction,
   collaboration,
   featureFlags,
   onSelectiveSaveTripwire,
@@ -2273,11 +2275,24 @@ export function DocxEditor({
       label: t("selectAll"),
       shortcut: `${mod}+A`,
     });
+    const custom = (customContextMenuItems ?? []).filter(
+      (item) => !item.requiresSelection || contextMenu.hasSelection,
+    );
+    if (custom.length > 0) {
+      const last = items.at(-1);
+      if (last) {
+        last.dividerAfter = true;
+      }
+      for (const item of custom) {
+        items.push({ action: `custom:${item.id}`, label: item.label });
+      }
+    }
     return items;
   }, [
     contextMenu.hasSelection,
     contextMenu.cursorInTable,
     contextMenu.cursorInTrackedChange,
+    customContextMenuItems,
     readOnly,
     t,
   ]);
@@ -2293,6 +2308,15 @@ export function DocxEditor({
       focusActiveEditor();
 
       if (readOnly && action !== "copy" && action !== "selectAll") {
+        return;
+      }
+
+      if (action.startsWith("custom:")) {
+        const { from, to } =
+          contextMenu.selectionRange.from !== contextMenu.selectionRange.to
+            ? contextMenu.selectionRange
+            : view.state.selection;
+        onCustomContextAction?.(action.slice("custom:".length), { from, to });
         return;
       }
 
@@ -2465,6 +2489,7 @@ export function DocxEditor({
     [
       getActiveEditorView,
       focusActiveEditor,
+      onCustomContextAction,
       readOnly,
       contextMenu.selectionRange.from,
       contextMenu.selectionRange.to,
