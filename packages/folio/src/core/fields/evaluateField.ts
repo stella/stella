@@ -13,18 +13,31 @@ function dateFormatSwitch(parsed: ParsedFieldInstruction): string | undefined {
 }
 
 function hasRefNumberingSwitch(parsed: ParsedFieldInstruction): boolean {
-  return parsed.switches.some((s) => {
-    const name = s.switch.toLowerCase();
-    return name === "n" || name === "r" || name === "w";
-  });
+  return hasAnySwitch(parsed, ["n", "r", "w"]);
 }
 
 function hasPageRefPositionSwitch(parsed: ParsedFieldInstruction): boolean {
-  return parsed.switches.some((s) => s.switch.toLowerCase() === "p");
+  return hasAnySwitch(parsed, ["p"]);
 }
 
 function hasSeqHiddenSwitch(parsed: ParsedFieldInstruction): boolean {
-  return parsed.switches.some((s) => s.switch.toLowerCase() === "h");
+  return hasAnySwitch(parsed, ["h"]);
+}
+
+function hasAnySwitch(
+  parsed: ParsedFieldInstruction,
+  names: readonly string[],
+): boolean {
+  return names.some((name) => hasSwitch(parsed, name));
+}
+
+function hasSwitch(parsed: ParsedFieldInstruction, name: string): boolean {
+  const normalized = name.toLowerCase();
+  if (parsed.switches.some((s) => s.switch.toLowerCase() === normalized)) {
+    return true;
+  }
+  const pattern = new RegExp(`\\\\${normalized}\\b`, "iu");
+  return pattern.test(parsed.raw);
 }
 
 type EvaluateFieldOptions = {

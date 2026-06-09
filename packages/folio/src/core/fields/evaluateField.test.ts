@@ -62,6 +62,7 @@ describe("evaluateField references", () => {
   test("PAGEREF position switches preserve the cached result", () => {
     const ctx = baseContext({ bookmarkPages: new Map([["_Ref1", 7]]) });
     expect(evalInstr("PAGEREF _Ref1 \\p", ctx)).toBe("FB");
+    expect(evalInstr("PAGEREF _Ref1 \\h \\p", ctx)).toBe("FB");
   });
 
   test("REF resolves a bookmark to its text", () => {
