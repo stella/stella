@@ -2061,8 +2061,11 @@
       "clauseSlotHelp": "Une clause de la bibliothèque est insérée ici lors du remplissage. Gérez les clauses liées dans l'onglet Clauses.",
       "computed": "Calculé",
       "conditionBlockHelp": "Ce bloc s'affiche uniquement lorsque :",
+      "draftedByAi": "L'IA le rédige",
       "emptyClauseSlot": "Emplacement de clause vide",
       "expressionPlaceholder": "expression",
+      "fieldHelp": "Cet espace réservé devient un champ vide lors du remplissage du modèle — vos réglages ici déterminent la question du formulaire.",
+      "filledByPerson": "La personne qui remplit le formulaire",
       "insert": "Insérer",
       "loop": "Boucle",
       "makeField": "Créer un champ",
@@ -2074,7 +2077,9 @@
       "scopeClause": "Emplacement de clause",
       "scopeCondition": "Condition",
       "scopeField": "Champ",
-      "scopeTemplate": "Modèle"
+      "scopeTemplate": "Modèle",
+      "suggestConfig": "Suggérer la configuration",
+      "whoFills": "Qui le remplit ?"
     },
     "templateDeleted": "Modèle supprimé",
     "templateName": "Nom du modèle",

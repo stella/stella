@@ -2061,8 +2061,11 @@
       "clauseSlotHelp": "Aquí se inserta una cláusula de la biblioteca al rellenar. Gestiona las cláusulas vinculadas en la pestaña Cláusulas.",
       "computed": "Calculado",
       "conditionBlockHelp": "Este bloque solo se muestra cuando:",
+      "draftedByAi": "La IA lo redacta",
       "emptyClauseSlot": "Hueco de cláusula vacío",
       "expressionPlaceholder": "expresión",
+      "fieldHelp": "Este marcador se convierte en un espacio en blanco al rellenar la plantilla — lo que configures aquí da forma a la pregunta del formulario.",
+      "filledByPerson": "Persona que rellena el formulario",
       "insert": "Insertar",
       "loop": "Bucle",
       "makeField": "Crear campo",
@@ -2074,7 +2077,9 @@
       "scopeClause": "Espacio de cláusula",
       "scopeCondition": "Condición",
       "scopeField": "Campo",
-      "scopeTemplate": "Plantilla"
+      "scopeTemplate": "Plantilla",
+      "suggestConfig": "Sugerir configuración",
+      "whoFills": "¿Quién lo rellena?"
     },
     "templateDeleted": "Plantilla eliminada",
     "templateName": "Nombre de la plantilla",

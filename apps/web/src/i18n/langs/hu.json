@@ -2061,8 +2061,11 @@
       "clauseSlotHelp": "Kitöltéskor ide a könyvtárból beszúrt kikötés kerül. A kapcsolt kikötéseket a Kikötések lapon kezelheti.",
       "computed": "Számított",
       "conditionBlockHelp": "Ez a blokk csak akkor jelenik meg, ha:",
+      "draftedByAi": "Az MI fogalmazza meg",
       "emptyClauseSlot": "Üres záradékhely",
       "expressionPlaceholder": "kifejezés",
+      "fieldHelp": "Ez a helyőrző a sablon kitöltésekor üres mezővé válik — az itteni beállítások alakítják az űrlap kérdését.",
+      "filledByPerson": "Az űrlapot kitöltő személy",
       "insert": "Beszúrás",
       "loop": "Ciklus",
       "makeField": "Mező létrehozása",
@@ -2074,7 +2077,9 @@
       "scopeClause": "Kikötéshely",
       "scopeCondition": "Feltétel",
       "scopeField": "Mező",
-      "scopeTemplate": "Sablon"
+      "scopeTemplate": "Sablon",
+      "suggestConfig": "Beállítás javaslása",
+      "whoFills": "Ki tölti ki?"
     },
     "templateDeleted": "Sablon törölve",
     "templateName": "Sablon neve",

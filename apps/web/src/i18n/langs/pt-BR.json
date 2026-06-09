@@ -2061,8 +2061,11 @@
       "clauseSlotHelp": "Uma cláusula da biblioteca é inserida aqui no preenchimento. Gerencie as cláusulas vinculadas na aba Cláusulas.",
       "computed": "Calculado",
       "conditionBlockHelp": "Este bloco aparece apenas quando:",
+      "draftedByAi": "A IA redige",
       "emptyClauseSlot": "Espaço de cláusula vazio",
       "expressionPlaceholder": "expressão",
+      "fieldHelp": "Este marcador se torna um campo em branco ao preencher o modelo — o que você define aqui molda a pergunta do formulário.",
+      "filledByPerson": "Pessoa que preenche o formulário",
       "insert": "Inserir",
       "loop": "Laço",
       "makeField": "Criar campo",
@@ -2074,7 +2077,9 @@
       "scopeClause": "Espaço de cláusula",
       "scopeCondition": "Condição",
       "scopeField": "Campo",
-      "scopeTemplate": "Modelo"
+      "scopeTemplate": "Modelo",
+      "suggestConfig": "Sugerir configuração",
+      "whoFills": "Quem preenche isto?"
     },
     "templateDeleted": "Modelo excluído",
     "templateName": "Nome do modelo",

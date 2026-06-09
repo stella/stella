@@ -2061,8 +2061,11 @@
       "clauseSlotHelp": "Aizpildot šeit tiek ievietota klauzula no bibliotēkas. Saistītās klauzulas pārvaldiet cilnē Klauzulas.",
       "computed": "Aprēķināts",
       "conditionBlockHelp": "Šis bloks tiek rādīts tikai tad, ja:",
+      "draftedByAi": "MI sagatavo",
       "emptyClauseSlot": "Tukšs klauzulas slots",
       "expressionPlaceholder": "izteiksme",
+      "fieldHelp": "Aizpildot veidni, šis vietturis kļūst par tukšu lauku — šeit iestatītais veido jautājumu formā.",
+      "filledByPerson": "Persona, kas aizpilda formu",
       "insert": "Ievietot",
       "loop": "Cilpa",
       "makeField": "Izveidot lauku",
@@ -2074,7 +2077,9 @@
       "scopeClause": "Klauzulas vieta",
       "scopeCondition": "Nosacījums",
       "scopeField": "Lauks",
-      "scopeTemplate": "Veidne"
+      "scopeTemplate": "Veidne",
+      "suggestConfig": "Ieteikt konfigurāciju",
+      "whoFills": "Kas to aizpildīs?"
     },
     "templateDeleted": "Veidne dzēsta",
     "templateName": "Veidnes nosaukums",

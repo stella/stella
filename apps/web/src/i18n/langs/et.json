@@ -2061,8 +2061,11 @@
       "clauseSlotHelp": "Täitmisel lisatakse siia teegist klausel. Seotud klausleid haldate vahekaardil Klauslid.",
       "computed": "Arvutatud",
       "conditionBlockHelp": "See plokk kuvatakse ainult siis, kui:",
+      "draftedByAi": "AI koostab",
       "emptyClauseSlot": "Tühi klausli pesa",
       "expressionPlaceholder": "avaldis",
+      "fieldHelp": "See kohatäide muutub malli täitmisel tühjaks väljaks — siinsed seaded kujundavad vormi küsimuse.",
+      "filledByPerson": "Vormi täitev isik",
       "insert": "Sisesta",
       "loop": "Tsükkel",
       "makeField": "Loo väli",
@@ -2074,7 +2077,9 @@
       "scopeClause": "Klausli koht",
       "scopeCondition": "Tingimus",
       "scopeField": "Väli",
-      "scopeTemplate": "Mall"
+      "scopeTemplate": "Mall",
+      "suggestConfig": "Paku seadistust",
+      "whoFills": "Kes selle täidab?"
     },
     "templateDeleted": "Mall kustutatud",
     "templateName": "Malli nimi",

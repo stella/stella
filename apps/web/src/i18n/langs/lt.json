@@ -2061,8 +2061,11 @@
       "clauseSlotHelp": "Pildant čia įterpiama sąlyga iš bibliotekos. Susietas sąlygas tvarkykite skirtuke Sąlygos.",
       "computed": "Apskaičiuota",
       "conditionBlockHelp": "Šis blokas rodomas tik kai:",
+      "draftedByAi": "DI parengia",
       "emptyClauseSlot": "Tuščias sąlygos laukelis",
       "expressionPlaceholder": "išraiška",
+      "fieldHelp": "Pildant šabloną šis žymeklis tampa tuščiu lauku — čia pasirinkti nustatymai formuoja formos klausimą.",
+      "filledByPerson": "Formą pildantis asmuo",
       "insert": "Įterpti",
       "loop": "Ciklas",
       "makeField": "Sukurti lauką",
@@ -2074,7 +2077,9 @@
       "scopeClause": "Sąlygos vieta",
       "scopeCondition": "Sąlyga",
       "scopeField": "Laukas",
-      "scopeTemplate": "Šablonas"
+      "scopeTemplate": "Šablonas",
+      "suggestConfig": "Pasiūlyti konfigūraciją",
+      "whoFills": "Kas tai užpildys?"
     },
     "templateDeleted": "Šablonas ištrintas",
     "templateName": "Šablono pavadinimas",

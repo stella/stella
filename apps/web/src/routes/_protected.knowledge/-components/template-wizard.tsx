@@ -442,17 +442,22 @@ const OptionsTagInput = ({
 export const FieldConfigEditor = ({
   field,
   onUpdate,
+  showPath = true,
 }: {
   field: EditableField;
   onUpdate: (patch: Partial<EditableField>) => void;
+  /** The Studio face shows the path in its header already. */
+  showPath?: boolean;
 }) => {
   const t = useTranslations();
 
   return (
     <div className="bg-muted/30 flex flex-col gap-4 border-t px-4 py-4 ps-11">
-      <p className="bg-muted/60 text-muted-foreground rounded px-3 py-2 text-xs leading-relaxed">
-        <code>{field.path}</code>
-      </p>
+      {showPath && (
+        <p className="bg-muted/60 text-muted-foreground rounded px-3 py-2 text-xs leading-relaxed">
+          <code>{field.path}</code>
+        </p>
+      )}
 
       <Field>
         <FieldLabel>{t("templates.fieldLabel")}</FieldLabel>

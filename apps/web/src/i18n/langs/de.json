@@ -2061,8 +2061,11 @@
       "clauseSlotHelp": "Hier wird beim Ausfüllen eine Klausel aus der Bibliothek eingefügt. Verknüpfte Klauseln verwalten Sie im Tab Klauseln.",
       "computed": "Berechnet",
       "conditionBlockHelp": "Dieser Block wird nur angezeigt, wenn:",
+      "draftedByAi": "KI entwirft es",
       "emptyClauseSlot": "Leerer Klausel-Slot",
       "expressionPlaceholder": "Ausdruck",
+      "fieldHelp": "Dieser Platzhalter wird beim Ausfüllen der Vorlage zu einem Leerfeld — die Einstellungen hier bestimmen die Frage im Formular.",
+      "filledByPerson": "Person, die das Formular ausfüllt",
       "insert": "Einfügen",
       "loop": "Schleife",
       "makeField": "Feld erstellen",
@@ -2074,7 +2077,9 @@
       "scopeClause": "Klausel-Slot",
       "scopeCondition": "Bedingung",
       "scopeField": "Feld",
-      "scopeTemplate": "Vorlage"
+      "scopeTemplate": "Vorlage",
+      "suggestConfig": "Konfiguration vorschlagen",
+      "whoFills": "Wer füllt das aus?"
     },
     "templateDeleted": "Vorlage gelöscht",
     "templateName": "Vorlagenname",

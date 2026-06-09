@@ -2061,8 +2061,11 @@
       "clauseSlotHelp": "Tutaj podczas wypełniania wstawiana jest klauzula z biblioteki. Powiązanymi klauzulami zarządzaj w zakładce Klauzule.",
       "computed": "Obliczane",
       "conditionBlockHelp": "Ten blok jest widoczny tylko gdy:",
+      "draftedByAi": "AI to zredaguje",
       "emptyClauseSlot": "Puste miejsce na klauzulę",
       "expressionPlaceholder": "wyrażenie",
+      "fieldHelp": "Ten symbol zastępczy staje się pustym polem podczas wypełniania szablonu — ustawienia tutaj kształtują pytanie w formularzu.",
+      "filledByPerson": "Osoba wypełniająca formularz",
       "insert": "Wstaw",
       "loop": "Pętla",
       "makeField": "Utwórz pole",
@@ -2074,7 +2077,9 @@
       "scopeClause": "Miejsce klauzuli",
       "scopeCondition": "Warunek",
       "scopeField": "Pole",
-      "scopeTemplate": "Szablon"
+      "scopeTemplate": "Szablon",
+      "suggestConfig": "Zaproponuj konfigurację",
+      "whoFills": "Kto to wypełni?"
     },
     "templateDeleted": "Szablon usunięty",
     "templateName": "Nazwa szablonu",

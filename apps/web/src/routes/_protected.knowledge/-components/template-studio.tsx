@@ -14,6 +14,7 @@ import { panic } from "better-result";
 import {
   BracesIcon,
   EyeIcon,
+  Loader2Icon,
   EyeOffIcon,
   PlusIcon,
   RepeatIcon,
@@ -25,7 +26,7 @@ import {
 import type { EditorView } from "prosemirror-view";
 import { useTranslations } from "use-intl";
 
-import { getTemplateDirectives } from "@stll/folio";
+import { buildPositionalText, getTemplateDirectives } from "@stll/folio";
 import type { DirectiveRange, DocxEditorRef } from "@stll/folio";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
@@ -198,6 +199,8 @@ export const TemplateStudioPage = ({
         actionsRef.current?.insertClauseSlot(slotName),
       makeField: () => actionsRef.current?.makeField(),
       save: () => actionsRef.current?.save(),
+      suggestFieldConfig: async (path) =>
+        (await actionsRef.current?.suggestFieldConfig(path)) ?? null,
     });
     return () => setActions(null);
   }, [setActions]);
@@ -438,6 +441,38 @@ export const TemplateStudioPage = ({
     insertClauseSlot: (slotName) => insertInline(`{{@clause:${slotName}}}`),
     makeField,
     save: () => void handleSave(),
+    suggestFieldConfig: async (path) => {
+      const view = editorViewRef.current;
+      if (!view) {
+        return null;
+      }
+      const text = buildPositionalText(view.state.doc).text;
+      const response = await api.templates["suggest-fields"].post({
+        text,
+        instructions:
+          `Configure the existing field {{${path}}}: propose its label, ` +
+          `input type and a realistic exampleValue based on how it is used ` +
+          `in the document. Return that field first.`,
+      });
+      if (response.error) {
+        return null;
+      }
+      const match =
+        response.data.suggestions.find((s) => s.fieldPath === path) ??
+        response.data.suggestions.at(0);
+      if (!match) {
+        return null;
+      }
+      return {
+        label: match.label,
+        inputType:
+          match.inputType !== undefined && isInputType(match.inputType)
+            ? match.inputType
+            : undefined,
+        aiPrompt: match.aiPrompt,
+        exampleValue: match.exampleValue,
+      };
+    },
   };
 
   if (isError) {
@@ -887,20 +922,11 @@ const Inspector = ({
       fields.find((f) => f.path === selected.expr) ??
       defaultStudioField(selected.expr);
     return (
-      <ScrollArea className="min-h-0 flex-1">
-        <ScopeHeader
-          subtitle={field.path}
-          title={t("templates.studio.scopeField")}
-        />
-        <FieldConfigEditor
-          field={field}
-          onUpdate={(patch) => onFieldUpdate(field.path, patch)}
-        />
-        <AiDraftControl
-          aiPrompt={field.aiPrompt}
-          onChange={(aiPrompt) => onFieldUpdate(field.path, { aiPrompt })}
-        />
-      </ScrollArea>
+      <FieldFace
+        field={field}
+        key={field.path}
+        onUpdate={(patch) => onFieldUpdate(field.path, patch)}
+      />
     );
   }
 
@@ -997,37 +1023,159 @@ const ScopeHeader = ({
   </div>
 );
 
-const AiDraftControl = ({
-  aiPrompt,
-  onChange,
+/**
+ * Field settings face: leads with what the field IS (a blank in the fill
+ * form), lets the model propose a configuration, and previews the actual fill
+ * control so every setting shows its consequence.
+ */
+const FieldFace = ({
+  field,
+  onUpdate,
 }: {
-  aiPrompt: string | undefined;
-  onChange: (value: string | undefined) => void;
+  field: StudioField;
+  onUpdate: (patch: Partial<StudioField>) => void;
 }) => {
   const t = useTranslations();
-  const enabled = aiPrompt !== undefined;
+  const actions = useTemplateStudioStore((s) => s.actions);
+  const [suggesting, setSuggesting] = useState(false);
+  const [exampleValue, setExampleValue] = useState<string | undefined>(
+    undefined,
+  );
+
+  const handleSuggest = async () => {
+    if (!actions) {
+      return;
+    }
+    setSuggesting(true);
+    const config = await actions.suggestFieldConfig(field.path);
+    setSuggesting(false);
+    if (!config) {
+      stellaToast.add({
+        type: "error",
+        title: t("templates.studio.aiNoFields"),
+      });
+      return;
+    }
+    onUpdate({
+      ...(config.label !== undefined ? { label: config.label } : {}),
+      ...(config.inputType !== undefined
+        ? { inputType: config.inputType }
+        : {}),
+      ...(config.aiPrompt !== undefined ? { aiPrompt: config.aiPrompt } : {}),
+    });
+    setExampleValue(config.exampleValue);
+  };
+
+  const filledByAi = field.aiPrompt !== undefined;
+
+  return (
+    <ScrollArea className="min-h-0 flex-1">
+      <ScopeHeader
+        subtitle={field.path}
+        title={t("templates.studio.scopeField")}
+      />
+      <div className="flex flex-col gap-3 px-4 py-3">
+        <p className="text-muted-foreground text-xs leading-relaxed">
+          {t("templates.studio.fieldHelp")}
+        </p>
+        <Button
+          disabled={suggesting}
+          onClick={() => void handleSuggest()}
+          size="sm"
+          variant="outline"
+        >
+          {suggesting ? (
+            <Loader2Icon className="animate-spin" />
+          ) : (
+            <WandSparklesIcon />
+          )}
+          {t("templates.studio.suggestConfig")}
+        </Button>
+      </div>
+      <FieldConfigEditor field={field} onUpdate={onUpdate} showPath={false} />
+      <div className="flex flex-col gap-2 border-t px-4 py-4">
+        <Label className="text-sm">{t("templates.studio.whoFills")}</Label>
+        <div className="flex items-center gap-1">
+          <Button
+            className="flex-1"
+            onClick={() => onUpdate({ aiPrompt: undefined })}
+            size="sm"
+            variant={filledByAi ? "ghost" : "secondary"}
+          >
+            {t("templates.studio.filledByPerson")}
+          </Button>
+          <Button
+            className="flex-1"
+            onClick={() => onUpdate({ aiPrompt: field.aiPrompt ?? "" })}
+            size="sm"
+            variant={filledByAi ? "secondary" : "ghost"}
+          >
+            <WandSparklesIcon className="size-3.5" />
+            {t("templates.studio.draftedByAi")}
+          </Button>
+        </div>
+        {filledByAi ? (
+          <Textarea
+            onChange={(e) => onUpdate({ aiPrompt: e.target.value })}
+            placeholder={t("templates.studio.aiPromptPlaceholder")}
+            rows={3}
+            value={field.aiPrompt}
+          />
+        ) : null}
+      </div>
+      <FieldPreview exampleValue={exampleValue} field={field} />
+    </ScrollArea>
+  );
+};
+
+/** Live preview of the control this field becomes in the fill form. */
+const FieldPreview = ({
+  field,
+  exampleValue,
+}: {
+  field: StudioField;
+  exampleValue: string | undefined;
+}) => {
+  const t = useTranslations();
+  const label = field.label || field.path;
   return (
     <div className="flex flex-col gap-2 border-t px-4 py-4">
-      <div className="flex items-center gap-2">
-        <Checkbox
-          checked={enabled}
-          onCheckedChange={(checked) => onChange(checked ? "" : undefined)}
-        />
-        <Label className="flex items-center gap-1.5 text-sm">
-          <WandSparklesIcon className="size-3.5" />
-          {t("templates.studio.aiDrafted")}
+      <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+        {t("common.preview")}
+      </p>
+      <div className="bg-muted/30 pointer-events-none flex flex-col gap-1.5 rounded-md border p-3">
+        <Label className="text-xs">
+          {label}
+          {field.required ? " *" : ""}
         </Label>
+        <FieldPreviewControl exampleValue={exampleValue} field={field} />
       </div>
-      {enabled ? (
-        <Textarea
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={t("templates.studio.aiPromptPlaceholder")}
-          rows={3}
-          value={aiPrompt}
-        />
-      ) : null}
     </div>
   );
+};
+
+const FieldPreviewControl = ({
+  field,
+  exampleValue,
+}: {
+  field: StudioField;
+  exampleValue: string | undefined;
+}) => {
+  if (field.inputType === "textarea") {
+    return <Textarea placeholder={exampleValue} readOnly rows={3} />;
+  }
+  if (field.inputType === "boolean") {
+    return <Checkbox checked={false} />;
+  }
+  if (field.inputType === "select") {
+    return (
+      <Input placeholder={field.options.join(" / ") || exampleValue} readOnly />
+    );
+  }
+  if (field.inputType === "date") {
+    return <Input placeholder={exampleValue ?? "2026-01-31"} readOnly />;
+  }
+  return <Input placeholder={exampleValue} readOnly />;
 };
 
 const NameExprList = ({

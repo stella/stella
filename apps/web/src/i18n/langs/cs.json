@@ -2061,8 +2061,11 @@
       "clauseSlotHelp": "Zde se při vyplnění vloží vzorové ustanovení z knihovny. Propojená ustanovení spravujte na kartě Vzorová ustanovení.",
       "computed": "Vypočítané",
       "conditionBlockHelp": "Tento blok se zobrazí pouze když:",
+      "draftedByAi": "Navrhne AI",
       "emptyClauseSlot": "Prázdný slot pro klauzuli",
       "expressionPlaceholder": "výraz",
+      "fieldHelp": "Tento zástupný symbol se při vyplňování šablony stane prázdným polem — zdejší nastavení určuje podobu otázky ve formuláři.",
+      "filledByPerson": "Osoba vyplňující formulář",
       "insert": "Vložit",
       "loop": "Smyčka",
       "makeField": "Vytvořit pole",
@@ -2074,7 +2077,9 @@
       "scopeClause": "Vzorové ustanovení",
       "scopeCondition": "Podmínka",
       "scopeField": "Pole",
-      "scopeTemplate": "Šablona"
+      "scopeTemplate": "Šablona",
+      "suggestConfig": "Navrhnout nastavení",
+      "whoFills": "Kdo to vyplní?"
     },
     "templateDeleted": "Šablona smazána",
     "templateName": "Název šablony",

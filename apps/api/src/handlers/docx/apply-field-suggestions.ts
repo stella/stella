@@ -21,6 +21,10 @@ export type FieldSuggestion = {
   /** Target field path, e.g. "company.name" or "signatory.role". */
   fieldPath: string;
   inputType?: InputType | undefined;
+  /** Suggested user-facing label for the fill form. */
+  label?: string | undefined;
+  /** A realistic example of the value, for previews. Never inserted. */
+  exampleValue?: string | undefined;
   /** When set, the field becomes AI-fillable (drafted at fill time). */
   aiPrompt?: string | undefined;
 };

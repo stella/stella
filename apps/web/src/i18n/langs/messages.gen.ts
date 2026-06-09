@@ -2064,8 +2064,11 @@ type Messages = {
       "clauseSlotHelp": "A clause from the library is inserted here at fill time. Manage linked clauses in the Clauses tab.";
       "computed": "Computed";
       "conditionBlockHelp": "This block shows only when:";
+      "draftedByAi": "AI drafts it";
       "emptyClauseSlot": "Empty clause slot";
       "expressionPlaceholder": "expression";
+      "fieldHelp": "This placeholder becomes a blank when the template is filled — what you set here shapes the question in the fill form.";
+      "filledByPerson": "Person filling the form";
       "insert": "Insert";
       "loop": "Loop";
       "makeField": "Make field";
@@ -2078,6 +2081,8 @@ type Messages = {
       "scopeCondition": "Condition";
       "scopeField": "Field";
       "scopeTemplate": "Template";
+      "suggestConfig": "Suggest configuration";
+      "whoFills": "Who fills this?";
     };
     "templateDeleted": "Template deleted";
     "templateName": "Template name";
