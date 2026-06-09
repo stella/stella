@@ -10,6 +10,7 @@ type SmokeSession = {
 };
 
 const API_URL = process.env["E2E_API_URL"] ?? "https://api-staging.stll.app";
+const WEB_URL = process.env["E2E_WEB_URL"] ?? "https://staging.stll.app";
 
 const READINESS_TIMEOUT_MS = 300_000;
 const READINESS_INTERVAL_MS = 5000;
@@ -24,33 +25,72 @@ const sleep = async (ms: number) =>
     setTimeout(resolve, ms);
   });
 
-// Block until the deployed revision is stably serving. verify-staging
-// fires the moment the promote returns, while ECS is still rolling the
-// new task in; requests in that window hang or reset and the old task
-// keeps answering with the previous commit, which renders a blank page.
-// Time-bounded so a hanging endpoint can't exceed the budget; request
-// errors during rollover reset the streak. With no expected commit
-// (local runs) any healthy 200 counts.
+type Origin = {
+  label: string;
+  // Returns true when this origin is serving the expected revision.
+  // The web origin's version.json may be absent on the revision being
+  // replaced (it predates this marker), so a missing marker counts as
+  // ready: the API gate covers the dominant rollover race regardless.
+  isReady: (expectedCommit: string | undefined) => Promise<boolean>;
+};
+
+const fetchCommit = async (url: string): Promise<string | null | undefined> => {
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+    if (response.status === 404) {
+      return null;
+    }
+    if (!response.ok) {
+      return undefined;
+    }
+    const { commit } = (await response.json()) as { commit?: string };
+    return commit;
+  } catch {
+    // Connection reset/timeout during rollover; treated as not-ready.
+    return undefined;
+  }
+};
+
+const ORIGINS: Origin[] = [
+  {
+    label: "api",
+    isReady: async (expectedCommit) => {
+      const commit = await fetchCommit(`${API_URL}/health`);
+      if (commit === undefined) {
+        return false;
+      }
+      return !expectedCommit || commit === expectedCommit;
+    },
+  },
+  {
+    label: "web",
+    isReady: async (expectedCommit) => {
+      const commit = await fetchCommit(`${WEB_URL}/version.json`);
+      if (commit === undefined) {
+        return false;
+      }
+      return !expectedCommit || commit === null || commit === expectedCommit;
+    },
+  },
+];
+
+// Block until both the API and the web origin stably serve the deployed
+// revision. verify-staging fires the moment the promote returns, while
+// ECS is still rolling the new task in and the CDN may still front the
+// previous bundle; requests in that window render a blank page. Time-
+// bounded so a hanging endpoint can't exceed the budget; any non-ready
+// sample on either origin resets the streak. With no expected commit
+// (local runs) any healthy response counts.
 const waitForDeployedRevision = async (): Promise<void> => {
   const expectedCommit = process.env["EXPECTED_COMMIT"];
   const deadline = Date.now() + READINESS_TIMEOUT_MS;
   let consecutive = 0;
 
   while (Date.now() < deadline) {
-    let healthy = false;
-    try {
-      const response = await fetch(`${API_URL}/health`, {
-        signal: AbortSignal.timeout(10_000),
-      });
-      if (response.ok) {
-        const { commit } = (await response.json()) as { commit?: string };
-        healthy = !expectedCommit || commit === expectedCommit;
-      }
-    } catch {
-      // Connection reset/timeout during rollover; treated as not-ready.
-    }
-
-    consecutive = healthy ? consecutive + 1 : 0;
+    const readiness = await Promise.all(
+      ORIGINS.map(async (origin) => await origin.isReady(expectedCommit)),
+    );
+    consecutive = readiness.every(Boolean) ? consecutive + 1 : 0;
     if (consecutive >= READINESS_STABLE_SAMPLES) {
       return;
     }

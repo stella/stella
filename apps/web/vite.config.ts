@@ -7,7 +7,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { visualizer } from "rollup-plugin-visualizer";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 
 const APP_ROOT = import.meta.dirname;
 const ANALYZE_MODE = "analyze";
@@ -33,6 +33,23 @@ const readCommitSha = () => {
 };
 
 const APP_COMMIT_SHA = readCommitSha();
+
+// Emit a served version marker so deploy tooling can confirm which
+// frontend revision a CDN origin is actually serving (the commit is
+// otherwise only baked into the hashed JS bundles).
+const versionManifestPlugin = (): Plugin => ({
+  name: "stella-version-manifest",
+  generateBundle() {
+    this.emitFile({
+      type: "asset",
+      fileName: "version.json",
+      source: JSON.stringify({
+        commit: APP_COMMIT_SHA,
+        version: APP_VERSION,
+      }),
+    });
+  },
+});
 
 export default defineConfig(({ mode }) => {
   const shouldAnalyze = mode === ANALYZE_MODE || process.env["ANALYZE"] === "1";
@@ -162,6 +179,7 @@ export default defineConfig(({ mode }) => {
       ],
     },
     plugins: [
+      versionManifestPlugin(),
       devtools({ consolePiping: { enabled: false } }),
       tailwindcss(),
       tanstackStart({
