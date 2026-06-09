@@ -11,6 +11,7 @@ import {
   adaptAiFields,
   type AiOccurrenceAdapter,
 } from "@/api/handlers/docx/adapt-ai-fields";
+import { applyCompositeFields } from "@/api/handlers/docx/composite-fields";
 import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
 import { extractText } from "@/api/handlers/docx/extract-text";
@@ -157,6 +158,13 @@ export const fillStoredTemplate = async ({
   let adaptedPaths: readonly string[] = [];
   const manifest = await readManifest(loaded.buffer);
   if (manifest) {
+    // Assemble composite (multipart) field values into their final strings
+    // before any AI step or substitution sees them.
+    const compositeError = applyCompositeFields(record, manifest);
+    if (compositeError !== null) {
+      return { error: compositeError };
+    }
+
     record = await resolveAiFields({
       values: record,
       fields: manifest.fields,
