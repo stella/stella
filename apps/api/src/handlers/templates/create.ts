@@ -163,6 +163,7 @@ const createTemplateHandler = async function* ({
     required: f.required,
     parts: f.parts,
     format: f.format,
+    optionsFrom: f.optionsFrom,
   }));
 
   const clientManifest =

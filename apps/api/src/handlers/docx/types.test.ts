@@ -72,4 +72,21 @@ describe("isFieldMeta", () => {
       }),
     ).toBe(false);
   });
+
+  test("accepts optionsFrom holding a field path", () => {
+    expect(
+      isFieldMeta({
+        path: "lead_party",
+        inputType: "select",
+        optionsFrom: "parties.name",
+      }),
+    ).toBe(true);
+  });
+
+  test("rejects optionsFrom outside the field-path grammar", () => {
+    expect(
+      isFieldMeta({ path: "lead_party", optionsFrom: "parties[0].name" }),
+    ).toBe(false);
+    expect(isFieldMeta({ path: "lead_party", optionsFrom: 7 })).toBe(false);
+  });
 });

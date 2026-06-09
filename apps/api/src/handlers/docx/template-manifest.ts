@@ -123,6 +123,9 @@ const buildFieldXml = (field: FieldMeta): string => {
   if (field.format !== undefined) {
     attrs.push(`format="${escapeXml(field.format)}"`);
   }
+  if (field.optionsFrom !== undefined) {
+    attrs.push(`optionsFrom="${escapeXml(field.optionsFrom)}"`);
+  }
 
   const children: string[] = [];
 
@@ -311,6 +314,12 @@ const parseFieldMeta = (el: slimdom.Element): FieldMeta => {
   const aiAdapt = el.getAttribute("aiAdapt");
   if (aiAdapt !== null) {
     field.aiAdapt = aiAdapt === "true";
+  }
+  // A hand-edited value outside the field-path grammar is dropped so the
+  // isFieldMeta invariant holds downstream.
+  const optionsFrom = el.getAttribute("optionsFrom");
+  if (optionsFrom !== null && isFieldPath(optionsFrom)) {
+    field.optionsFrom = optionsFrom;
   }
 
   // Parse options
@@ -643,6 +652,7 @@ export const mergeManifestWithDiscovery = (
         aiAdapt: f.aiAdapt,
         parts: f.parts,
         format: f.format,
+        optionsFrom: f.optionsFrom,
       });
     }
   }
@@ -690,6 +700,9 @@ const mergeField = (
     if (meta.parts !== undefined && meta.format !== undefined) {
       resolved.parts = meta.parts;
       resolved.format = meta.format;
+    }
+    if (meta.optionsFrom !== undefined) {
+      resolved.optionsFrom = meta.optionsFrom;
     }
   }
 

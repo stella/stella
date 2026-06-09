@@ -95,7 +95,8 @@ type ValidationError =
   | { kind: "maxLength"; max: number }
   | { kind: "numberMin"; min: number }
   | { kind: "numberMax"; max: number }
-  | { kind: "pattern" };
+  | { kind: "pattern" }
+  | { kind: "optionNotInSource"; source: string };
 
 /** Validate a composite field's part values. */
 const validateCompositeField = (
@@ -234,6 +235,110 @@ const readArrayIndices = (values: FormValues, arrayKey: string): number[] => {
     return [];
   }
   return raw.filter((item): item is number => typeof item === "number");
+};
+
+/** Current values of the field referenced by `optionsFrom`, gathered from
+ *  live form state: a scalar sibling contributes its value, an array item
+ *  path (`parties.name`) contributes every item's entry. Deduplicated,
+ *  blanks dropped. */
+const collectSourceOptionValues = (
+  sourcePath: string,
+  fields: readonly ResolvedField[],
+  values: FormValues,
+): string[] => {
+  const out: string[] = [];
+  const push = (value: unknown) => {
+    if (
+      typeof value === "string" &&
+      value.trim() !== "" &&
+      !out.includes(value)
+    ) {
+      out.push(value);
+    }
+  };
+
+  for (const field of fields) {
+    if (field.kind === "array") {
+      const sub = (field.itemFields ?? []).find(
+        (item) => `${field.path}.${item.path}` === sourcePath,
+      );
+      if (!sub) {
+        continue;
+      }
+      const count = readArrayIndices(values, `__array_${field.path}`).length;
+      for (let i = 0; i < count; i++) {
+        push(values[`${field.path}[${String(i)}].${sub.path}`]);
+      }
+      return out;
+    }
+    if (field.path === sourcePath) {
+      push(values[field.path]);
+      return out;
+    }
+  }
+  return out;
+};
+
+/** Live options for a select with `optionsFrom`: the referenced field's
+ *  current values, falling back to the static options while the source is
+ *  empty. Null when the field has no source. */
+const dependentOptions = (
+  field: ResolvedField,
+  fields: readonly ResolvedField[],
+  values: FormValues,
+): string[] | null => {
+  if (field.optionsFrom === undefined) {
+    return null;
+  }
+  const sourceValues = collectSourceOptionValues(
+    field.optionsFrom,
+    fields,
+    values,
+  );
+  return sourceValues.length > 0 ? sourceValues : (field.options ?? []);
+};
+
+/** Label of the top-level field that supplies a dependent select's options
+ *  (the array field itself for an item path like `parties.name`). */
+const sourceFieldLabel = (
+  sourcePath: string,
+  fields: readonly ResolvedField[],
+): string => {
+  const source = fields.find(
+    (f) =>
+      f.path === sourcePath ||
+      (f.kind === "array" &&
+        (f.itemFields ?? []).some(
+          (item) => `${f.path}.${item.path}` === sourcePath,
+        )),
+  );
+  return source?.label ?? sourcePath;
+};
+
+/** Validate a dependent (optionsFrom) select against its source's current
+ *  values: a chosen value that the user has since removed from the source
+ *  must be re-picked before submitting. */
+const validateDependentSelection = (
+  field: ResolvedField,
+  value: unknown,
+  fields: readonly ResolvedField[],
+  values: FormValues,
+): ValidationError | undefined => {
+  if (
+    field.optionsFrom === undefined ||
+    typeof value !== "string" ||
+    value === ""
+  ) {
+    return undefined;
+  }
+  const options = dependentOptions(field, fields, values);
+  if (options === null || options.length === 0 || options.includes(value)) {
+    return undefined;
+  }
+  return {
+    kind: "optionNotInSource",
+    source: sourceFieldLabel(field.optionsFrom, fields),
+  };
 };
 
 const groupFieldsByPrefix = (fields: readonly ResolvedField[]) => {
@@ -409,12 +514,16 @@ const FieldRenderer = ({
   onChange,
   onBlur,
   error,
+  derivedOptions,
 }: {
   field: ResolvedField;
   value: unknown;
   onChange: (path: string, value?: unknown) => void;
   onBlur?: ((path: string) => void) | undefined;
   error?: string | undefined;
+  /** Live options for a dependent (optionsFrom) select, derived by the form
+   *  from the source field's current values; overrides `field.options`. */
+  derivedOptions?: string[] | undefined;
 }) => {
   const locale = useLocale();
   const inputType =
@@ -462,7 +571,14 @@ const FieldRenderer = ({
     );
   }
 
-  if (inputType === "select" && field.options && field.options.length > 0) {
+  // A dependent select keeps its select rendering even while it has no
+  // options yet (the source field is still empty): a text input would lift
+  // the subset constraint, so the trigger is disabled instead.
+  const selectOptions = derivedOptions ?? field.options ?? [];
+  if (
+    inputType === "select" &&
+    (selectOptions.length > 0 || field.optionsFrom !== undefined)
+  ) {
     return (
       <Field>
         <FieldLabel>
@@ -470,6 +586,7 @@ const FieldRenderer = ({
           {required && <RequiredIndicator />}
         </FieldLabel>
         <Select
+          disabled={selectOptions.length === 0}
           name={field.path}
           onValueChange={(val) => {
             onChange(field.path, val);
@@ -481,7 +598,7 @@ const FieldRenderer = ({
             <SelectValue placeholder={label} />
           </SelectTrigger>
           <SelectPopup>
-            {field.options.map((option: string) => (
+            {selectOptions.map((option: string) => (
               <SelectItem key={option} value={option}>
                 {option}
               </SelectItem>
@@ -1011,6 +1128,10 @@ export const TemplateForm = ({
           });
         case "pattern":
           return t("templates.validationPattern");
+        case "optionNotInSource":
+          return t("templates.validationOptionNotInSource", {
+            field: err.source,
+          });
         default:
           return undefined;
       }
@@ -1142,7 +1263,15 @@ export const TemplateForm = ({
 
       for (const { path, field } of all) {
         nextTouched[path] = true;
-        const msg = resolveError(validateField(field, currentValues[path]));
+        const msg = resolveError(
+          validateField(field, currentValues[path]) ??
+            validateDependentSelection(
+              field,
+              currentValues[path],
+              fields,
+              currentValues,
+            ),
+        );
         nextErrors[path] = msg;
         if (msg) {
           valid = false;
@@ -1184,7 +1313,10 @@ export const TemplateForm = ({
         // Scroll to the first errored field
         const all = collectValidatableFields(fields, values, conditions);
         for (const { path, field: f } of all) {
-          const msg = resolveError(validateField(f, values[path]));
+          const msg = resolveError(
+            validateField(f, values[path]) ??
+              validateDependentSelection(f, values[path], fields, values),
+          );
           if (msg) {
             const el = document.querySelector(`[name="${CSS.escape(path)}"]`);
             el?.scrollIntoView({
@@ -1408,6 +1540,9 @@ export const TemplateForm = ({
               )}
               {groupFields.map((field) => (
                 <FieldRenderer
+                  derivedOptions={
+                    dependentOptions(field, fields, values) ?? undefined
+                  }
                   error={touched[field.path] ? errors[field.path] : undefined}
                   field={field}
                   key={field.path}

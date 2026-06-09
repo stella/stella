@@ -12,6 +12,7 @@ import {
   type AiOccurrenceAdapter,
 } from "@/api/handlers/docx/adapt-ai-fields";
 import { applyCompositeFields } from "@/api/handlers/docx/composite-fields";
+import { checkDependentFields } from "@/api/handlers/docx/dependent-fields";
 import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
 import { extractText } from "@/api/handlers/docx/extract-text";
@@ -163,6 +164,13 @@ export const fillStoredTemplate = async ({
     const compositeError = applyCompositeFields(record, manifest);
     if (compositeError !== null) {
       return { error: compositeError };
+    }
+
+    // Dependent (optionsFrom) selects must hold one of the source field's
+    // submitted values; reject before any AI step or substitution.
+    const dependentError = checkDependentFields(record, manifest);
+    if (dependentError !== null) {
+      return { error: dependentError };
     }
 
     record = await resolveAiFields({

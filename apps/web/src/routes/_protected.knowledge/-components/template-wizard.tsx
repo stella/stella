@@ -85,6 +85,9 @@ export type EditableField = {
    *  rendering. */
   parts?: EditablePart[] | undefined;
   format?: string | undefined;
+  /** Dependent select: path of the field whose entered values supply this
+   *  select's options in the fill form; static options act as fallback. */
+  optionsFrom?: string | undefined;
 };
 
 const INPUT_TYPE_SET: ReadonlySet<string> = new Set(INPUT_TYPES);
@@ -137,6 +140,7 @@ export const buildEditableFields = (
       pattern: part.pattern,
     })),
     format: f.format,
+    optionsFrom: f.optionsFrom,
   }));
 
 type ManifestPart = {
@@ -217,6 +221,15 @@ export const ConfigureStep = ({
     [],
   );
 
+  // Source-field choices for a dependent select's "options from field"
+  // picker: every fillable path, with array fields contributing their item
+  // paths (`parties.name`) since the array itself holds objects, not values.
+  const fieldPathChoices = discoveredFields.flatMap((f) =>
+    f.kind === "array"
+      ? (f.itemFields ?? []).map((sub) => `${f.path}.${sub.path}`)
+      : [f.path],
+  );
+
   const handleSave = useCallback(
     async (e: React.SubmitEvent<HTMLFormElement>) => {
       e.preventDefault();
@@ -244,6 +257,10 @@ export const ConfigureStep = ({
             required: f.required || undefined,
             parts: composite.parts,
             format: composite.format,
+            optionsFrom:
+              f.inputType === "select" && f.optionsFrom
+                ? f.optionsFrom
+                : undefined,
           };
         }),
         conditions: [
@@ -373,6 +390,9 @@ export const ConfigureStep = ({
                       <FieldConfigEditor
                         field={field}
                         onUpdate={(patch) => updateField(field.path, patch)}
+                        siblingPaths={fieldPathChoices.filter(
+                          (p) => p !== field.path,
+                        )}
                       />
                     )}
                   </li>
@@ -641,16 +661,97 @@ const CompositePartsEditor = ({
   );
 };
 
+/** No-source choice in the dependent-select picker; "" never collides with a
+ *  real path because the field-path grammar requires at least one character. */
+const NO_SOURCE_FIELD = "";
+
+/** Picker for a dependent select's source field (`optionsFrom`): the fill
+ *  form derives the options from the values entered in that field, with the
+ *  static options as fallback while it is empty. Without a sibling-path list
+ *  (the Studio's embedded mode) it falls back to a typed path input limited
+ *  to the field-path charset. */
+const OptionsFromFieldControl = ({
+  field,
+  onUpdate,
+  siblingPaths,
+}: {
+  field: EditableField;
+  onUpdate: (patch: Partial<EditableField>) => void;
+  siblingPaths?: readonly string[] | undefined;
+}) => {
+  const t = useTranslations();
+
+  if (siblingPaths === undefined) {
+    return (
+      <Field>
+        <FieldLabel>{t("templates.fieldOptionsFrom")}</FieldLabel>
+        <FieldControl
+          render={
+            <Input
+              onChange={(e) => {
+                const next = e.target.value.replace(PART_KEY_DISALLOWED_RE, "");
+                onUpdate({ optionsFrom: next === "" ? undefined : next });
+              }}
+              value={field.optionsFrom ?? ""}
+            />
+          }
+        />
+        <p className="text-muted-foreground text-xs">
+          {t("templates.fieldOptionsFromHint")}
+        </p>
+      </Field>
+    );
+  }
+
+  return (
+    <Field>
+      <FieldLabel>{t("templates.fieldOptionsFrom")}</FieldLabel>
+      <Select
+        onValueChange={(val) =>
+          onUpdate({
+            optionsFrom:
+              typeof val === "string" && val !== NO_SOURCE_FIELD
+                ? val
+                : undefined,
+          })
+        }
+        value={field.optionsFrom ?? NO_SOURCE_FIELD}
+      >
+        <SelectTrigger>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectPopup>
+          <SelectItem value={NO_SOURCE_FIELD}>
+            {t("templates.fieldOptionsFromNone")}
+          </SelectItem>
+          {siblingPaths.map((path) => (
+            <SelectItem key={path} value={path}>
+              {path}
+            </SelectItem>
+          ))}
+        </SelectPopup>
+      </Select>
+      <p className="text-muted-foreground text-xs">
+        {t("templates.fieldOptionsFromHint")}
+      </p>
+    </Field>
+  );
+};
+
 export const FieldConfigEditor = ({
   field,
   onUpdate,
   embedded = false,
+  siblingPaths,
 }: {
   field: EditableField;
   onUpdate: (patch: Partial<EditableField>) => void;
   /** Embedded in the Studio's field face: the face header already shows the
    *  path, and the wizard's chevron-row indent doesn't apply. */
   embedded?: boolean;
+  /** Paths of the template's other fields, offered as sources for a
+   *  dependent select's options; a typed path input is shown when absent. */
+  siblingPaths?: readonly string[] | undefined;
 }) => {
   const t = useTranslations();
   const isComposite = field.parts !== undefined;
@@ -742,13 +843,20 @@ export const FieldConfigEditor = ({
       )}
 
       {!isComposite && field.inputType === "select" && (
-        <Field>
-          <FieldLabel>{t("templates.fieldOptions")}</FieldLabel>
-          <OptionsTagInput
-            onChange={(opts) => onUpdate({ options: opts })}
-            options={field.options}
+        <>
+          <Field>
+            <FieldLabel>{t("templates.fieldOptions")}</FieldLabel>
+            <OptionsTagInput
+              onChange={(opts) => onUpdate({ options: opts })}
+              options={field.options}
+            />
+          </Field>
+          <OptionsFromFieldControl
+            field={field}
+            onUpdate={onUpdate}
+            siblingPaths={siblingPaths}
           />
-        </Field>
+        </>
       )}
     </div>
   );
