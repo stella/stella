@@ -25,6 +25,7 @@ import type {
   IncomingActiveDecision,
   IncomingActiveExternal,
   IncomingActiveFile,
+  IncomingActiveTemplate,
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
 import {
@@ -225,7 +226,7 @@ const sendMessage = createSafeRootHandler(
         pinnedIds: [],
         accessibleWorkspaceIds,
       }),
-      hasActiveFileChat: true,
+      hasActiveDocxEditClient: true,
       webSearchEnabled: validationThreadState.webSearchEnabled,
       externalTools: validationExternalMcpTools?.tools,
       disabledNativeToolSlugs,
@@ -422,6 +423,7 @@ const sendMessage = createSafeRootHandler(
       activeDecision: body.activeDecision,
       activeExternal: body.activeExternal,
       activeFile: body.activeFile,
+      activeTemplate: body.activeTemplate,
       contextMatterIds: effectiveContextMatterIds,
       messageWindow: messagesForContextResult.value,
       organizationId: session.activeOrganizationId,
@@ -525,7 +527,9 @@ const sendMessage = createSafeRootHandler(
         pinnedIds: effectiveContextMatterIds,
         accessibleWorkspaceIds,
       }),
-      hasActiveFileChat: body.activeFile?.supportsDocxEdits === true,
+      hasActiveDocxEditClient:
+        body.activeFile?.supportsDocxEdits === true ||
+        body.activeTemplate !== undefined,
       webSearchEnabled: thread.data.webSearchEnabled,
       externalTools: externalMcpTools.tools,
       disabledNativeToolSlugs,
@@ -1378,6 +1382,7 @@ type PrepareChatContextProps = {
   activeDecision: IncomingActiveDecision | undefined;
   activeExternal: IncomingActiveExternal | undefined;
   activeFile: IncomingActiveFile | undefined;
+  activeTemplate: IncomingActiveTemplate | undefined;
   contextMatterIds: SafeId<"workspace">[];
   messageWindow: ChatMessage[];
   organizationId: SafeId<"organization">;
@@ -1413,6 +1418,7 @@ const prepareChatContext = async ({
   activeDecision,
   activeExternal,
   activeFile,
+  activeTemplate,
   contextMatterIds,
   messageWindow,
   organizationId,
@@ -1439,6 +1445,7 @@ const prepareChatContext = async ({
         activeDecision,
         activeExternal,
         activeFile,
+        activeTemplate,
         contextMatterIds,
         organizationId,
         practiceJurisdictions,

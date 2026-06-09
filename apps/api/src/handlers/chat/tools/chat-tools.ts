@@ -99,11 +99,12 @@ type GetChatToolsProps = {
   /**
    * `true` when the request comes from a surface that has the
    * apply-active-docx-edits client executor mounted (the file
-   * overlay). Other surfaces (standalone chat, global chat) MUST
-   * NOT see this tool: the server has no `execute` for it, the
-   * client never calls `addToolOutput`, and the call would hang.
+   * overlay or the Template Studio). Other surfaces (standalone
+   * chat, global chat) MUST NOT see this tool: the server has no
+   * `execute` for it, the client never calls `addToolOutput`, and
+   * the call would hang.
    */
-  hasActiveFileChat: boolean;
+  hasActiveDocxEditClient: boolean;
   /**
    * Per-thread opt-in for the web_search + fetch_url tools. Combined
    * with FEATURE_WEB_SEARCH (deploy gate), the org's
@@ -176,7 +177,7 @@ export const getChatTools = ({
   userId,
   toolWorkspaceIds,
   refRegistry,
-  hasActiveFileChat,
+  hasActiveDocxEditClient,
   webSearchEnabled,
   externalTools = {},
   disabledNativeToolSlugs,
@@ -224,7 +225,7 @@ export const getChatTools = ({
     webSearchEnabled && isWebSearchAvailable(disabledNativeToolSlugs)
       ? createWebSearchTools()
       : {};
-  const activeDocxEditTools = hasActiveFileChat
+  const activeDocxEditTools = hasActiveDocxEditClient
     ? createActiveDocxEditTools()
     : {};
   const historyTools = createChatHistoryTools({

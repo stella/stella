@@ -7,6 +7,7 @@ import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
 import {
   appendAnonymizedModeHintToChatSafePrompt,
   appendActiveFilePromptIfEntityExists,
+  buildActiveTemplatePrompt,
   buildChatPromptCacheKey,
   buildGlobalPrompt,
   buildGlobalPromptParts,
@@ -299,6 +300,44 @@ describe("chat prompt builders", () => {
       "only ids that appear in `applied` represent actual document changes",
     );
     expect(prompt).toContain("queued");
+    // Internal component names must not leak into user-facing prompt.
+    expect(prompt).not.toContain("Folio");
+  });
+
+  test("active-template prompt stays read-only until a snapshot exists", () => {
+    const prompt = buildActiveTemplatePrompt({
+      templateId: toSafeId<"template">("tpl_test"),
+      fileName: "Plna moc.docx",
+    });
+
+    expect(prompt).toContain("ACTIVE TEMPLATE");
+    expect(prompt).toContain("Plna moc.docx");
+    expect(prompt).not.toContain("apply-active-docx-edits");
+    expect(prompt).not.toContain("suggest_template_fields");
+  });
+
+  test("active-template prompt wires the suggest-fields and edit flows when a snapshot exists", () => {
+    const prompt = buildActiveTemplatePrompt({
+      templateId: toSafeId<"template">("tpl_test"),
+      fileName: "Plna moc.docx",
+      docxEditSnapshot: {
+        blocks: [
+          {
+            id: "b-1",
+            kind: "paragraph",
+            text: "Zmocnitel: Jan Novak, nar. 1.1.1990",
+          },
+        ],
+      },
+    });
+
+    expect(prompt).toContain("apply-active-docx-edits");
+    expect(prompt).toContain("suggest_template_fields");
+    expect(prompt).toContain('"blockId":"b-1"');
+    expect(prompt).toContain("Jan Novak");
+    // Only the text-replacement subset is honoured by the Studio.
+    expect(prompt).toContain("`replaceInBlock`");
+    expect(prompt).toContain("cannot honour `insertAfterBlock`");
     // Internal component names must not leak into user-facing prompt.
     expect(prompt).not.toContain("Folio");
   });
