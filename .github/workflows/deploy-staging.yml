@@ -193,6 +193,9 @@ jobs:
           E2E_WEB_URL: https://staging.stll.app
           E2E_API_URL: https://api-staging.stll.app
           SMOKE_SESSION_SECRET: ${{ secrets.SMOKE_SESSION_SECRET }}
+          # Block the smoke until staging actually serves this commit,
+          # so it doesn't race the ECS task rollover.
+          EXPECTED_COMMIT: ${{ github.sha }}
 
       - name: Upload Playwright report
         if: failure()
