@@ -12,6 +12,7 @@ import type { ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { panic } from "better-result";
+import type { LucideIcon } from "lucide-react";
 import {
   BracesIcon,
   ChevronLeftIcon,
@@ -23,6 +24,7 @@ import {
   PlusIcon,
   RepeatIcon,
   SaveIcon,
+  SigmaIcon,
   SplitIcon,
   Trash2Icon,
   WandSparklesIcon,
@@ -71,6 +73,7 @@ import {
 } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
+import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import { TemplateStudioAIBar } from "@/routes/_protected.knowledge/-components/template-ai-bar";
 import { TemplateClausesTab } from "@/routes/_protected.knowledge/-components/template-clauses-tab";
 import { TemplateForm } from "@/routes/_protected.knowledge/-components/template-form";
@@ -211,6 +214,7 @@ export const TemplateStudioPage = ({
         actionsRef.current?.renameFieldPath(oldPath, newPath) ?? false,
       focusAdjacentField: (direction) =>
         actionsRef.current?.focusAdjacentField(direction),
+      focusField: (path) => actionsRef.current?.focusField(path),
     });
     return () => setActions(null);
   }, [setActions]);
@@ -486,6 +490,26 @@ export const TemplateStudioPage = ({
           placeholders.length;
       }
       const target = placeholders.at(nextIndex);
+      if (!target) {
+        return;
+      }
+      const $pos = view.state.doc.resolve(
+        Math.min(target.from + 2, view.state.doc.content.size),
+      );
+      view.dispatch(
+        view.state.tr.setSelection(TextSelection.near($pos)).scrollIntoView(),
+      );
+      view.focus();
+    },
+    focusField: (path) => {
+      const view = editorViewRef.current;
+      if (!view) {
+        return;
+      }
+      const target = getTemplateDirectives(view.state)
+        .filter((d) => d.kind === "placeholder" && d.expr === path)
+        .toSorted((a, b) => a.from - b.from)
+        .at(0);
       if (!target) {
         return;
       }
@@ -1073,14 +1097,19 @@ const Inspector = ({
     );
   }
 
-  // Default: whole-template settings.
+  // Default: whole-template settings. Fields lead (they are what the template
+  // is made of); conditions and computed follow as supporting logic.
   return (
     <ScrollArea className="min-h-0 flex-1">
       <ScopeHeader title={t("templates.studio.scopeTemplate")} />
+      <FieldNavigator fields={fields} />
+      <Separator />
       <NameExprList
         addLabel={t("templates.addCondition")}
         emptyLabel={t("templates.studio.noConditions")}
         heading={t("templates.conditionsTitle")}
+        help={t("templates.studio.conditionsSectionHelp")}
+        icon={SplitIcon}
         items={conditions}
         onChange={onConditionsChange}
       />
@@ -1089,29 +1118,51 @@ const Inspector = ({
         addLabel={t("templates.studio.addComputedField")}
         emptyLabel={t("templates.studio.noComputed")}
         heading={t("templates.studio.computed")}
+        help={t("templates.studio.computedSectionHelp")}
+        icon={SigmaIcon}
         items={computed}
         onChange={onComputedChange}
       />
-      <Separator />
-      <div className="px-4 py-4">
-        <h3 className="text-muted-foreground mb-2 text-xs font-medium">
-          {t("templates.fieldCount", { count: fields.length })}
-        </h3>
-        <ul className="flex flex-col gap-1">
-          {fields.map((f) => (
-            <li
-              key={f.path}
-              className="flex items-center justify-between text-xs"
-            >
-              <code className="truncate">{f.path}</code>
-              <span className="text-muted-foreground shrink-0">
-                {f.aiPrompt ? "AI" : f.inputType}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
     </ScrollArea>
+  );
+};
+
+/** Clickable field index: each row jumps the document caret into the field's
+ *  first marker, which flips the inspector to that field's face. */
+const FieldNavigator = ({ fields }: { fields: StudioField[] }) => {
+  const t = useTranslations();
+  const actions = useTemplateStudioStore((s) => s.actions);
+  return (
+    <div className="px-4 py-4">
+      <h3 className="text-muted-foreground mb-2 text-xs font-medium">
+        {t("templates.fieldCount", { count: fields.length })}
+      </h3>
+      <ul className="flex flex-col">
+        {fields.map((f) => {
+          const Icon = VALUE_TYPE_META[inputTypeValueKind(f.inputType)].icon;
+          return (
+            <li key={f.path}>
+              <button
+                className="hover:bg-muted flex w-full items-center gap-2 rounded px-1.5 py-1 text-start text-xs"
+                onClick={() => actions?.focusField(f.path)}
+                type="button"
+              >
+                <Icon className="text-muted-foreground size-3.5 shrink-0" />
+                <span className="truncate">
+                  {f.label === "" ? f.path : f.label}
+                </span>
+                {f.aiPrompt === undefined ? null : (
+                  <WandSparklesIcon className="text-muted-foreground size-3 shrink-0" />
+                )}
+                <code className="text-muted-foreground ms-auto shrink-0 text-[10px]">
+                  {f.path}
+                </code>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 };
 
@@ -1388,12 +1439,16 @@ const FieldPreviewControl = ({
 
 const NameExprList = ({
   heading,
+  help,
+  icon: Icon,
   items,
   onChange,
   addLabel,
   emptyLabel,
 }: {
   heading: string;
+  help: string;
+  icon: LucideIcon;
   items: NameExpr[];
   onChange: (next: NameExpr[]) => void;
   addLabel: string;
@@ -1407,7 +1462,11 @@ const NameExprList = ({
 
   return (
     <div className="flex flex-col gap-2 px-4 py-4">
-      <h3 className="text-muted-foreground text-xs font-medium">{heading}</h3>
+      <h3 className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
+        <Icon className="size-3.5" />
+        {heading}
+      </h3>
+      <p className="text-muted-foreground text-xs leading-relaxed">{help}</p>
       {items.length === 0 ? (
         <p className="text-muted-foreground text-xs">{emptyLabel}</p>
       ) : null}
