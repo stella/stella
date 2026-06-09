@@ -3,8 +3,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import {
-  CheckIcon,
-  CircleIcon,
   FileCodeIcon,
   FileIcon,
   FilePlusIcon,
@@ -111,7 +109,6 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   const [selected, setSelected] = useState<SelectedFile>({ type: "body" });
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [version, setVersion] = useState("");
   const [enabled, setEnabled] = useState(false);
   const [command, setCommand] = useState("");
   const [autoInvokeHint, setAutoInvokeHint] = useState("");
@@ -142,7 +139,6 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     }
     setName(detail.data.name);
     setDescription(detail.data.description);
-    setVersion(detail.data.version ?? "");
     setEnabled(detail.data.enabled);
     setCommand(detail.data.command ?? "");
     setAutoInvokeHint(detail.data.autoInvokeHint ?? "");
@@ -336,8 +332,6 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     }
     return total;
   }, [bodyContent, resources]);
-  const triggerSet =
-    command.trim().length > 0 || autoInvokeHint.trim().length > 0;
 
   const onPublish = () => {
     if (enabled) {
@@ -365,17 +359,6 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       return;
     }
     patchMetadata.mutate({ description: trimmed });
-  };
-  const commitVersion = () => {
-    if (!detail.data) {
-      return;
-    }
-    const trimmed = version.trim();
-    const next = trimmed.length === 0 ? null : trimmed;
-    if (next === (detail.data.version ?? null)) {
-      return;
-    }
-    patchMetadata.mutate({ version: next });
   };
   const toggleEnabled = () => {
     const next = !enabled;
@@ -505,251 +488,180 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="border-b p-4">
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <Input
-              aria-label={tSkills("formName")}
-              className="max-w-sm"
-              onBlur={commitName}
-              onChange={(event) => setName(event.target.value)}
-              value={name}
-            />
-            {detail.data && (
-              <span className="text-muted-foreground rounded border px-1.5 py-0.5 text-xs">
-                {detail.data.scope === "team"
-                  ? tSkills("scopeTeam")
-                  : tSkills("scopePrivate")}
-              </span>
-            )}
+      {/* Brief settings: what the skill is and where/how it runs. The files
+          below are the main surface; editing happens in the inspector. */}
+      <div className="flex flex-col gap-3 border-b p-4">
+        <div className="flex items-center gap-2">
+          <Input
+            aria-label={tSkills("formName")}
+            className="max-w-sm"
+            onBlur={commitName}
+            onChange={(event) => setName(event.target.value)}
+            value={name}
+          />
+          {detail.data && (
+            <span className="text-muted-foreground rounded border px-1.5 py-0.5 text-xs">
+              {detail.data.scope === "team"
+                ? tSkills("scopeTeam")
+                : tSkills("scopePrivate")}
+            </span>
+          )}
+          <Button
+            aria-label={
+              enabled ? tSkills("disableSkill") : tSkills("enableSkill")
+            }
+            onClick={toggleEnabled}
+            size="icon-sm"
+            variant={enabled ? "secondary" : "ghost"}
+          >
+            <PowerIcon className="size-4" />
+          </Button>
+          {detail.data && !enabled && (
             <Button
-              aria-label={
-                enabled ? tSkills("disableSkill") : tSkills("enableSkill")
-              }
-              onClick={toggleEnabled}
-              size="icon-sm"
-              variant={enabled ? "secondary" : "ghost"}
+              className="ms-auto"
+              disabled={patchMetadata.isPending}
+              onClick={onPublish}
+              size="sm"
             >
-              <PowerIcon className="size-4" />
+              {tSkills("coaching.publish")}
             </Button>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
-            <Textarea
-              aria-label={tSkills("formDescription")}
-              className="min-h-12 flex-1 resize-y"
-              onBlur={commitDescription}
-              onChange={(event) => setDescription(event.target.value)}
-              value={description}
-            />
-            <Input
-              aria-label={tSkills("formVersion")}
-              className="sm:max-w-32"
-              onBlur={commitVersion}
-              onChange={(event) => setVersion(event.target.value)}
-              placeholder={tSkills("formVersionPlaceholder")}
-              value={version}
-            />
-          </div>
-          {/* Slash command + auto-invoke hint — the unified surface
-              treats both as optional capability flags on every
-              skill. Either, both, or neither can be set. */}
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
-            <div className="flex flex-1 flex-col gap-1">
-              <label
-                className="text-muted-foreground text-xs"
-                htmlFor="edit-skill-command"
-              >
-                {t("knowledge.skills.commandLabel")}
-              </label>
-              <div className="flex items-stretch">
-                <span className="bg-muted border-border flex items-center rounded-s-md border border-e-0 px-2 text-xs">
-                  /
-                </span>
-                <Input
-                  className={cn(
-                    "rounded-s-none",
-                    commandError && "border-destructive",
-                  )}
-                  id="edit-skill-command"
-                  onBlur={commitCommand}
-                  onChange={(event) => setCommand(event.target.value)}
-                  placeholder={t("knowledge.skills.commandPlaceholder")}
-                  value={command}
-                />
-              </div>
-              {commandError && (
-                <p className="text-destructive text-xs">{commandError}</p>
-              )}
-            </div>
-            <div className="flex flex-1 flex-col gap-1">
-              <label
-                className="text-muted-foreground text-xs"
-                htmlFor="edit-skill-auto-hint"
-              >
-                {t("knowledge.skills.autoInvokeHintLabel")}
-              </label>
-              <Textarea
-                className="min-h-12 resize-y"
-                id="edit-skill-auto-hint"
-                maxLength={2000}
-                onBlur={commitAutoInvokeHint}
-                onChange={(event) => setAutoInvokeHint(event.target.value)}
-                placeholder={t("knowledge.skills.autoInvokeHintPlaceholder")}
-                value={autoInvokeHint}
+          )}
+        </div>
+        <Textarea
+          aria-label={tSkills("formDescription")}
+          className="min-h-12 resize-y"
+          onBlur={commitDescription}
+          onChange={(event) => setDescription(event.target.value)}
+          value={description}
+        />
+        {/* Where/how the skill runs: an optional slash command and/or an
+            auto-invoke hint. Either, both, or neither can be set. */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+          <div className="flex flex-1 flex-col gap-1">
+            <label
+              className="text-muted-foreground text-xs"
+              htmlFor="edit-skill-command"
+            >
+              {t("knowledge.skills.commandLabel")}
+            </label>
+            <div className="flex items-stretch">
+              <span className="bg-muted border-border flex items-center rounded-s-md border border-e-0 px-2 text-xs">
+                /
+              </span>
+              <Input
+                className={cn(
+                  "rounded-s-none",
+                  commandError && "border-destructive",
+                )}
+                id="edit-skill-command"
+                onBlur={commitCommand}
+                onChange={(event) => setCommand(event.target.value)}
+                placeholder={t("knowledge.skills.commandPlaceholder")}
+                value={command}
               />
             </div>
+            {commandError && (
+              <p className="text-destructive text-xs">{commandError}</p>
+            )}
+          </div>
+          <div className="flex flex-1 flex-col gap-1">
+            <label
+              className="text-muted-foreground text-xs"
+              htmlFor="edit-skill-auto-hint"
+            >
+              {t("knowledge.skills.autoInvokeHintLabel")}
+            </label>
+            <Textarea
+              className="min-h-12 resize-y"
+              id="edit-skill-auto-hint"
+              maxLength={2000}
+              onBlur={commitAutoInvokeHint}
+              onChange={(event) => setAutoInvokeHint(event.target.value)}
+              placeholder={t("knowledge.skills.autoInvokeHintPlaceholder")}
+              value={autoInvokeHint}
+            />
           </div>
         </div>
       </div>
-      <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
-        <aside className="bg-muted/20 max-h-72 shrink-0 overflow-y-auto border-b sm:max-h-none sm:w-72 sm:border-e sm:border-b-0">
-          <div className="p-3">
-            <div className="mb-2 flex items-center justify-between gap-1 px-1">
-              <p className="text-muted-foreground me-auto text-xs font-semibold tracking-wider uppercase">
-                {tSkills("filesHeading")}
-              </p>
-              <RootCreateButton
-                createPending={createResource.isPending}
-                onCreateFile={onCreateFile}
-              />
-              <Button
-                aria-label={tSkills("uploadFile")}
-                disabled={createResource.isPending || uploadResource.isPending}
-                onClick={onTriggerUpload}
-                size="icon-sm"
-                variant="ghost"
-              >
-                <UploadIcon className="size-4" />
-              </Button>
-              <input
-                accept={UPLOAD_ACCEPT}
-                className="hidden"
-                onChange={onFilePickerChange}
-                ref={fileInputRef}
-                type="file"
-              />
-            </div>
-            {detail.isLoading && (
-              <p className="text-muted-foreground px-1 text-xs">
-                {t("common.loading")}
-              </p>
-            )}
-            {detail.data && (
-              <SkillFileTree
-                collapsedFolders={collapsedFolders}
-                createPending={createResource.isPending}
-                deletePending={deleteResource.isPending}
-                nodes={fileNodes}
-                onCancelRename={() => {
-                  setRenamingResourceId(null);
-                  setRenameValue("");
-                }}
-                onCreateFile={onCreateFile}
-                onDeleteFile={(entry) =>
-                  deleteResource.mutate({
-                    path: entry.path,
-                    resourceId: entry.id,
-                  })
-                }
-                onSelect={selectFile}
-                onStartRename={(entry) => {
-                  setRenamingResourceId(entry.id);
-                  setRenameValue(entry.path);
-                }}
-                onSubmitRename={onConfirmRename}
-                onToggleCollapsed={toggleCollapsed}
-                renamePending={renameResource.isPending}
-                renameValue={renameValue}
-                renamingResourceId={renamingResourceId}
-                resources={resources}
-                selected={selected}
-                setRenameValue={setRenameValue}
-              />
-            )}
-          </div>
-        </aside>
-        <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
-          {detail.isLoading && (
-            <p className="text-muted-foreground text-sm">
-              {t("common.loading")}
-            </p>
+      {/* Files — the skill's bundle, the main surface. Click a file to edit it
+          in the inspector. */}
+      <div className="flex min-h-0 flex-1 flex-col p-3">
+        <div className="mb-2 flex items-center gap-1 px-1">
+          <p className="text-muted-foreground me-auto text-xs font-semibold tracking-wider uppercase">
+            {tSkills("filesHeading")}
+          </p>
+          {guideCount > 0 && (
+            <span className="text-muted-foreground me-1 text-xs">
+              {tSkills("coaching.guidanceRemaining", { count: guideCount })}
+            </span>
           )}
-          {detail.error && (
-            <p className="text-destructive text-sm">
-              {userErrorFromThrown(detail.error, t("common.unexpectedError"))}
-            </p>
-          )}
-          {detail.data && (
-            <>
-              {(!enabled || guideCount > 0) && (
-                <div className="border-border bg-muted/20 flex flex-col gap-2 rounded-md border p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-foreground text-sm font-medium">
-                      {tSkills("coaching.title")}
-                    </p>
-                    {!enabled && (
-                      <Button
-                        disabled={patchMetadata.isPending}
-                        onClick={onPublish}
-                        size="sm"
-                      >
-                        {tSkills("coaching.publish")}
-                      </Button>
-                    )}
-                  </div>
-                  <ul className="flex flex-col gap-1 text-sm">
-                    <CoachingItem
-                      done={guideCount === 0}
-                      label={
-                        guideCount === 0
-                          ? tSkills("coaching.guidanceDone")
-                          : tSkills("coaching.guidanceRemaining", {
-                              count: guideCount,
-                            })
-                      }
-                    />
-                    <CoachingItem
-                      done={triggerSet}
-                      label={
-                        triggerSet
-                          ? tSkills("coaching.checkTriggerDone")
-                          : tSkills("coaching.checkTrigger")
-                      }
-                    />
-                  </ul>
-                  <p className="text-muted-foreground text-xs">
-                    {tSkills("coaching.hint")}
-                  </p>
-                </div>
-              )}
-              <div className="border-border flex flex-1 items-center justify-center rounded-md border border-dashed p-8 text-center">
-                <p className="text-muted-foreground max-w-sm text-sm">
-                  {tSkills("selectFileHint")}
-                </p>
-              </div>
-            </>
-          )}
+          <RootCreateButton
+            createPending={createResource.isPending}
+            onCreateFile={onCreateFile}
+          />
+          <Button
+            aria-label={tSkills("uploadFile")}
+            disabled={createResource.isPending || uploadResource.isPending}
+            onClick={onTriggerUpload}
+            size="icon-sm"
+            variant="ghost"
+          >
+            <UploadIcon className="size-4" />
+          </Button>
+          <input
+            accept={UPLOAD_ACCEPT}
+            className="hidden"
+            onChange={onFilePickerChange}
+            ref={fileInputRef}
+            type="file"
+          />
         </div>
+        {detail.isLoading && (
+          <p className="text-muted-foreground px-1 text-xs">
+            {t("common.loading")}
+          </p>
+        )}
+        {detail.error && (
+          <p className="text-destructive px-1 text-sm">
+            {userErrorFromThrown(detail.error, t("common.unexpectedError"))}
+          </p>
+        )}
+        {detail.data && (
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <SkillFileTree
+              collapsedFolders={collapsedFolders}
+              createPending={createResource.isPending}
+              deletePending={deleteResource.isPending}
+              nodes={fileNodes}
+              onCancelRename={() => {
+                setRenamingResourceId(null);
+                setRenameValue("");
+              }}
+              onCreateFile={onCreateFile}
+              onDeleteFile={(entry) =>
+                deleteResource.mutate({
+                  path: entry.path,
+                  resourceId: entry.id,
+                })
+              }
+              onSelect={selectFile}
+              onStartRename={(entry) => {
+                setRenamingResourceId(entry.id);
+                setRenameValue(entry.path);
+              }}
+              onSubmitRename={onConfirmRename}
+              onToggleCollapsed={toggleCollapsed}
+              renamePending={renameResource.isPending}
+              renameValue={renameValue}
+              renamingResourceId={renamingResourceId}
+              resources={resources}
+              selected={selected}
+              setRenameValue={setRenameValue}
+            />
+          </div>
+        )}
       </div>
     </div>
-  );
-}
-
-type CoachingItemProps = {
-  done: boolean;
-  label: string;
-};
-
-function CoachingItem({ done, label }: CoachingItemProps) {
-  return (
-    <li className="flex items-center gap-2">
-      {done ? (
-        <CheckIcon className="text-foreground size-4 shrink-0" />
-      ) : (
-        <CircleIcon className="text-muted-foreground size-4 shrink-0" />
-      )}
-      <span className={cn(done && "text-muted-foreground")}>{label}</span>
-    </li>
   );
 }
 
