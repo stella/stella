@@ -789,6 +789,7 @@
     "somethingWentWrong": "Kažkas nepavyko",
     "sort": "Rūšiuoti",
     "status": "Būsena",
+    "summarizeChanges": "Apibendrinti pakeitimus",
     "today": "Šiandien",
     "translate": "Versti",
     "tryAgain": "Bandyti dar kartą",
@@ -1952,6 +1953,7 @@
   "templates": {
     "addCondition": "Pridėti sąlygą",
     "addItem": "Pridėti elementą",
+    "addTag": "Pridėti žymą",
     "aiAdaptHint": "DI pritaikys šią formuluotę kiekvienai dokumento vietai, kurioje ji pasirodo.",
     "allTemplates": "Visi šablonai",
     "backToList": "Grįžti prie šablonų",
@@ -1975,6 +1977,7 @@
     "createCategory": "Nauja kategorija",
     "deleteCategory": "Ištrinti kategoriją",
     "deleteFailed": "Nepavyko ištrinti šablono",
+    "describeWhenToUse": "Aprašykite, kada naudoti šį šabloną",
     "directiveEach": "Kilpa: {expression}",
     "directiveElse": "Kitu atveju",
     "directiveElseIf": "Kitu atveju jei: {expression}",
@@ -2006,6 +2009,7 @@
       "textarea": "Tekstas (kelių eilučių)"
     },
     "invalidFileType": "Įkelkite .docx failą",
+    "lastUsedAgo": "Paskutinį kartą naudota {time}",
     "loadFailed": "Nepavyko įkelti šablonų",
     "newTemplate": "Naujas šablonas",
     "noTemplates": "Šablonų dar nėra",
@@ -2067,6 +2071,7 @@
       "suggestConfig": "Pasiūlyti konfigūraciją",
       "whoFills": "Kas tai užpildys?"
     },
+    "tagPlaceholder": "Įveskite žymą ir paspauskite Enter",
     "templateDeleted": "Šablonas ištrintas",
     "templateName": "Šablono pavadinimas",
     "templateNamePlaceholder": "pvz. Darbo sutartis",
@@ -2076,9 +2081,12 @@
     "unmatchedPlaceholders": "Kai kurie vietos žymekliai nebuvo užpildyti: {list}",
     "unsavedLeaveConfirm": "Turite neišsaugotų pakeitimų. Išeiti neišsaugojus?",
     "unusedValues": "Kai kurios reikšmės nebuvo panaudotos: {list}",
+    "updatedAgo": "Atnaujinta {time}",
     "uploadDescription": "Įkelkite .docx failą su '{{vietos žymėmis}}', kad sukurtumėte šabloną",
     "uploadDifferent": "Įkelti kitą šabloną",
     "uploadTitle": "Sukurti šabloną",
+    "usageGuidance": "Naudojimo gairės",
+    "usedTimes": "{count, plural, one {Naudotas # kartą} few {Naudotas # kartus} other {Naudota # kartų}}",
     "validationErrors": "Ištaisykite paryškintas klaidas",
     "validationMaxLength": "Daugiausiai {max} simbolių",
     "validationMinLength": "Mažiausiai {min} simbolių",
@@ -2088,7 +2096,11 @@
     "validationRequired": "Šis laukas yra privalomas",
     "versionLabel": "{version} versija",
     "versionsEmpty": "Nėra versijų istorijos",
-    "viewVersion": "Peržiūrėti"
+    "viewVersion": "Peržiūrėti",
+    "whenNotToUse": "Kada nenaudoti",
+    "whenNotToUsePlaceholder": "Kada šio šablono vengti?",
+    "whenToUse": "Kada naudoti",
+    "whenToUsePlaceholder": "Kada turėtų būti naudojamas šis šablonas? (padeda AI pasirinkti šabloną)"
   },
   "translate": {
     "dialog": {
