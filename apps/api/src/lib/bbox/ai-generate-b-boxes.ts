@@ -6,8 +6,9 @@ import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { strictOutputSchema } from "@/api/lib/ai-output-schema";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import {
+  BBOX_ARRAY_DESCRIPTION,
   BBOX_SYSTEM_PROMPT,
-  bboxSchema,
+  bboxItemSchema,
   buildBBoxUserMessage,
 } from "@/api/lib/bbox/ai-prompts";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -56,7 +57,7 @@ export const generateBBoxData = async ({
     traceId: Bun.randomUUIDv7(),
   });
 
-  return await Result.tryPromise({
+  const generated = await Result.tryPromise({
     try: async () => {
       const result = await generateText({
         model: getModelForRole("pdf", orgAIConfig, {
@@ -86,7 +87,10 @@ export const generateBBoxData = async ({
             ],
           },
         ],
-        output: Output.object({ schema: strictOutputSchema(bboxSchema) }),
+        output: Output.array({
+          element: strictOutputSchema(bboxItemSchema),
+          description: BBOX_ARRAY_DESCRIPTION,
+        }),
         abortSignal,
         ...aiAnalytics.stepCallbacks,
       });
@@ -102,4 +106,19 @@ export const generateBBoxData = async ({
       });
     },
   });
+
+  if (Result.isError(generated)) {
+    return generated;
+  }
+  // Previously enforced by `v.nonEmpty()` on the array schema;
+  // `Output.array` validates per element, so the emptiness invariant
+  // moves here.
+  if (generated.value.length === 0) {
+    const error = new WorkflowIntegrationError({
+      message: "BBox AI generation returned no bounding boxes",
+    });
+    aiAnalytics.captureError(error);
+    return Result.err(error);
+  }
+  return generated;
 };
