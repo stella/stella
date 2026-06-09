@@ -687,10 +687,10 @@ const ReadOnlyDocxDocumentViewer = ({
 }) => {
   const editorRef = useRef<DocxEditorRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const { containerRef: fitZoomRef, fitZoom: targetZoom } = useDocxFitZoom(
+  const { containerRef: fitZoomRef, fitZoom: targetZoom } = useDocxFitZoom({
     scaleOffset,
-    0.85,
-  );
+    maxAutoZoom: 0.85,
+  });
   const composedContainerRef = useMemo(
     () => composeRefs(containerRef, fitZoomRef),
     [fitZoomRef],

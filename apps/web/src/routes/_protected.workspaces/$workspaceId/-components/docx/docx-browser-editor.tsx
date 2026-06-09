@@ -560,10 +560,10 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       : null;
   const [autosaveStatus, setAutosaveStatus] =
     useState<AutosaveStatus>("synced");
-  const { containerRef: fitZoomRef, fitZoom: targetZoom } = useDocxFitZoom(
+  const { containerRef: fitZoomRef, fitZoom: targetZoom } = useDocxFitZoom({
     scaleOffset,
-    0.85,
-  );
+    maxAutoZoom: 0.85,
+  });
   const composedContainerRef = useMemo(
     () => composeRefs(containerRef, fitZoomRef),
     [fitZoomRef],

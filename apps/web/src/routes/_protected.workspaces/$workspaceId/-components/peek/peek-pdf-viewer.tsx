@@ -466,8 +466,9 @@ const PeekDocxViewer = ({
   const analytics = useAnalytics();
   const editorRef = useRef<DocxEditorRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const { containerRef: fitZoomRef, fitZoom: targetZoom } =
-    useDocxFitZoom(scaleOffset);
+  const { containerRef: fitZoomRef, fitZoom: targetZoom } = useDocxFitZoom({
+    scaleOffset,
+  });
   const composedContainerRef = useMemo(
     () => composeRefs(containerRef, fitZoomRef),
     [fitZoomRef],

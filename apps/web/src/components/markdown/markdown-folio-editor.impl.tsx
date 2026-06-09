@@ -12,6 +12,7 @@ import { Textarea } from "@stll/ui/components/textarea";
 import { cn } from "@stll/ui/lib/utils";
 
 import {
+  DOCX_PAGE_WIDTH,
   useDocxFitZoom,
   useDocxWheelZoom,
 } from "@/components/docx-preview-zoom";
@@ -31,6 +32,13 @@ const CLEAN_MARKDOWN: MarkdownOptions = {
 // Serialising the whole document on every keystroke is wasteful; coalesce edits
 // before emitting upward.
 const EMIT_DELAY_MS = 400;
+
+// Fit the whole page (not the ~624px text area, which would push the page's side
+// margins off the right edge) so it sits centred with breathing space on each side.
+// Inflating the fit target by the gutter reserves ~7.5% of the panel width as a
+// margin per side: DOCX_PAGE_WIDTH / (1 - 2 × 0.075) = 960.
+const PAGE_SIDE_GUTTER = 0.075;
+const PAGE_FIT_WIDTH = DOCX_PAGE_WIDTH / (1 - 2 * PAGE_SIDE_GUTTER);
 
 export type MarkdownFolioEditorProps = {
   /** The markdown to edit. Read once per mount; the editor owns its state after
@@ -109,15 +117,18 @@ export function MarkdownFolioEditor({
     setMode("wysiwyg");
   };
 
-  // Fit the page to the panel width with the same hook the DOCX inspector uses,
-  // so markdown fills the inspector (body text full-width) and re-fits on resize
-  // — identical behaviour to editing a .docx.
+  // Reuse the DOCX inspector's fit-to-width + ctrl/⌘-wheel pinch zoom, but fit the
+  // whole page rather than the text area: fitting the text area pushes the page's
+  // side margins off the right edge, whereas fitting the page (PAGE_FIT_WIDTH bakes
+  // in a gutter allowance) centres it with breathing space on each side and re-fits
+  // on resize. composeRefs merges the wheel-zoom container ref with the fit hook's
+  // callback ref onto one element.
   const editorRef = useRef<DocxEditorRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  // Same zoom behaviour as the DOCX inspector: fit-to-width (max auto-zoom 0.85)
-  // plus ctrl/⌘-wheel pinch zoom. composeRefs merges the wheel-zoom container
-  // ref with the fit hook's callback ref onto one element.
-  const { containerRef: fitZoomRef, fitZoom } = useDocxFitZoom(0, 0.85);
+  const { containerRef: fitZoomRef, fitZoom } = useDocxFitZoom({
+    maxAutoZoom: 1,
+    fitWidth: PAGE_FIT_WIDTH,
+  });
   const composedContainerRef = useMemo(
     () => composeRefs(containerRef, fitZoomRef),
     [fitZoomRef],
