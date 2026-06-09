@@ -30,6 +30,13 @@ const updateTemplateBodySchema = t.Object({
   name: t.Optional(tDefaultVarchar),
   categoryId: t.Optional(t.Nullable(tSafeId("templateCategory"))),
   manifest: t.Optional(t.String()),
+  tags: t.Optional(
+    t.Array(t.String({ minLength: 1, maxLength: 64 }), {
+      maxItems: 32,
+    }),
+  ),
+  whenToUse: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
+  whenNotToUse: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
 });
 
 const updateTemplateParamsSchema = t.Object({
@@ -115,11 +122,26 @@ const updateTemplateHandler = async function* ({
     sizeBytes: number;
     s3Key: string;
     currentVersion: number;
+    tags: string[];
+    whenToUse: string | null;
+    whenNotToUse: string | null;
     updatedAt: Date;
   }> = {
     ...pickDefined(body, ["name", "categoryId"]),
     updatedAt: new Date(),
   };
+
+  if (body.tags !== undefined) {
+    updates.tags = [
+      ...new Set(body.tags.map((tag) => tag.trim()).filter(Boolean)),
+    ];
+  }
+  if (body.whenToUse !== undefined) {
+    updates.whenToUse = body.whenToUse?.trim() || null;
+  }
+  if (body.whenNotToUse !== undefined) {
+    updates.whenNotToUse = body.whenNotToUse?.trim() || null;
+  }
 
   if (body.manifest !== undefined) {
     const manifest = parseManifest(body.manifest);
