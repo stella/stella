@@ -16,7 +16,12 @@
  * can fall back to leaving the field unfilled rather than emitting `NaN`.
  */
 
-import { resolvePath } from "./index.js";
+// oxlint-disable no-bare-error/no-bare-error -- this recursive-descent parser
+// throws to unwind on any parse/resolution failure; every throw is caught at the
+// evaluateNumericExpression boundary and converted to undefined (internal
+// control flow, not a surfaced error).
+
+import { resolvePath } from "./path.js";
 
 type Tok =
   | { t: "num"; v: number }
@@ -120,7 +125,7 @@ export const evaluateNumericExpression = (
       const raw = resolvePath(path, data);
       const num = typeof raw === "number" ? raw : Number(raw);
       if (!Number.isFinite(num)) {
-        throw new Error(`Non-numeric variable: ${path}`);
+        throw new TypeError(`Non-numeric variable: ${path}`);
       }
       return num;
     };
@@ -146,7 +151,6 @@ export const evaluateNumericExpression = (
 
       if (tok.t === "lp") {
         pos += 1;
-        // oxlint-disable-next-line no-use-before-define -- runtime-only forward ref
         const value = parseBinary(0);
         if (tokens[pos]?.t !== "rp") {
           throw new Error("Expected )");
@@ -161,11 +165,9 @@ export const evaluateNumericExpression = (
           pos += 1;
           const args: number[] = [];
           if (tokens[pos]?.t !== "rp") {
-            // oxlint-disable-next-line no-use-before-define -- runtime-only forward ref
             args.push(parseBinary(0));
             while (tokens[pos]?.t === "comma") {
               pos += 1;
-              // oxlint-disable-next-line no-use-before-define -- runtime-only forward ref
               args.push(parseBinary(0));
             }
           }

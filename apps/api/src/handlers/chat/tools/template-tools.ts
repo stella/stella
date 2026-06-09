@@ -80,7 +80,7 @@ export const createTemplateTools = ({
         }),
       ),
       execute: async ({ templateId }) =>
-        describeStoredTemplate({
+        await describeStoredTemplate({
           templateId: brandPersistedTemplateId(templateId),
           scopedDb,
         }),
@@ -107,7 +107,7 @@ export const createTemplateTools = ({
         }),
       ),
       execute: async ({ templateId, values }) =>
-        fillStoredTemplate({
+        await fillStoredTemplate({
           templateId: brandPersistedTemplateId(templateId),
           values,
           scopedDb,

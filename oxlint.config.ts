@@ -363,6 +363,22 @@ export default defineConfig({
       },
     },
     {
+      // TipTap v3 builds `Editor.chain()` (ChainedCommands) and `isActive`
+      // from a large intersection of module-augmented command interfaces.
+      // oxlint's type-aware pass resolves the editor to `error`-typed here
+      // (the only web consumer of toggleBold/toggleHeading/isActive), while
+      // tsc and tsgo --noEmit both type-check the file clean.
+      files: [
+        "apps/web/src/routes/_protected.knowledge/-components/clause-editor.tsx",
+      ],
+      rules: {
+        "typescript/no-unsafe-assignment": "off",
+        "typescript/no-unsafe-call": "off",
+        "typescript/no-unsafe-member-access": "off",
+        "typescript/strict-boolean-expressions": "off",
+      },
+    },
+    {
       // Load-test CLIs intentionally print progress/errors to the
       // terminal; keep product API code on structured logging.
       // (One-off DOCX fixture scripts now live under apps/api/src/scripts,

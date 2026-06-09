@@ -21,6 +21,7 @@ const buildDocxBuffer = async (paragraphs: string[]): Promise<Buffer> => {
 const docTextOf = async (buffer: Buffer): Promise<string> => {
   const zip = await JSZip.loadAsync(buffer);
   const xml = (await zip.file("word/document.xml")?.async("string")) ?? "";
+  // oxlint-disable-next-line sonarjs/slow-regex -- test helper on small, controlled document XML
   return xml.replace(/<[^>]+>/gu, "");
 };
 

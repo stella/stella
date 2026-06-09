@@ -10,13 +10,14 @@ const wt = (text: string) =>
 
 describe("applyFieldSuggestions", () => {
   test("replaces literals with markers and emits manifest fields (PoA values)", () => {
-    const docXml =
-      "<w:body>" +
-      wt("Acting on behalf of ROKA NIERUCHOMOŚCI Sp. z o.o.") +
-      wt("Jan Kowalski") +
-      wt("Prezes Zarządu") +
-      wt("Scope: registration matters") +
-      "</w:body>";
+    const docXml = [
+      "<w:body>",
+      wt("Acting on behalf of ROKA NIERUCHOMOŚCI Sp. z o.o."),
+      wt("Jan Kowalski"),
+      wt("Prezes Zarządu"),
+      wt("Scope: registration matters"),
+      "</w:body>",
+    ].join("");
 
     const suggestions: FieldSuggestion[] = [
       {

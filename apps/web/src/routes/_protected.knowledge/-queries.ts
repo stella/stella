@@ -197,6 +197,7 @@ export const templateDocxBufferOptions = (
   templateId: string,
   presignedUrl: string,
 ) =>
+  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- presignedUrl rotates; intentionally keyed on the stable template id so the cache survives URL refresh (see comment above).
   queryOptions({
     queryKey: knowledgeKeys.templates.docxBuffer(organizationId, templateId),
     queryFn: async ({ signal }) => {

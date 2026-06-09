@@ -12,6 +12,9 @@ import { Input } from "@stll/ui/components/input";
 
 const OPERATORS: ConditionOperator[] = ["==", "!=", ">", "<", ">=", "<="];
 
+const isConditionOperator = (value: string): value is ConditionOperator =>
+  OPERATORS.some((op) => op === value);
+
 const emptyRule = (): ConditionRule => ({
   kind: "rule",
   variable: "",
@@ -100,7 +103,6 @@ const ConditionGroupEditor = ({
 
       {rules.map((rule, index) => (
         // Rules have no stable id; index key is fine for this small, local list.
-        // eslint-disable-next-line react/no-array-index-key
         <div className="flex items-center gap-2" key={index}>
           <select
             aria-label={t("templates.conditionField")}
@@ -118,11 +120,11 @@ const ConditionGroupEditor = ({
           <select
             aria-label={t("templates.conditionOperator")}
             className={inputClass}
-            onChange={(e) =>
-              setRule(index, {
-                operator: e.target.value as ConditionOperator,
-              })
-            }
+            onChange={(e) => {
+              if (isConditionOperator(e.target.value)) {
+                setRule(index, { operator: e.target.value });
+              }
+            }}
             value={rule.operator}
           >
             {OPERATORS.map((op) => (
