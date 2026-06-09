@@ -2,9 +2,11 @@
  * AI Suggestion Decorations Plugin
  *
  * Renders pending AI suggestions as non-mutating ProseMirror decorations
- * — subtle dotted underlines on the suggested ranges. The document
- * itself is never modified by the suggestion queue; decorations live
- * purely in the view layer.
+ * — subtle dotted underlines on the suggested ranges. The focused
+ * suggestion additionally previews its change in the text: the original
+ * range is struck through and the suggested text is injected after it
+ * as a widget. The document itself is never modified by the suggestion
+ * queue; decorations live purely in the view layer.
  *
  * The plugin keeps a `DecorationSet` derived from the suggestion list.
  * Updates are pushed via the `setAISuggestions` meta key, which the
@@ -38,6 +40,23 @@ const SEVERITY_CLASS: Record<AISuggestionSeverity, string> = {
   substantive: "folio-ai-suggestion--substantive",
 };
 
+/**
+ * Lazy DOM factory for the focused suggestion's in-text replacement
+ * preview. Returned as a closure so the element is only created when
+ * the view draws the widget (keeps the build side-effect free for
+ * headless state updates).
+ */
+function buildReplacementWidget(suggestion: AISuggestion): () => HTMLElement {
+  return () => {
+    const span = document.createElement("span");
+    span.className = "folio-ai-suggestion--focused-replacement";
+    span.dataset["folioAiSuggestionId"] = suggestion.id;
+    span.contentEditable = "false";
+    span.textContent = suggestion.suggestedText;
+    return span;
+  };
+}
+
 function buildDecorationSet(
   doc: PMNode,
   suggestions: AISuggestion[],
@@ -69,6 +88,7 @@ function buildDecorationSet(
             "folio-ai-suggestion",
             SEVERITY_CLASS[suggestion.severity],
             isFocused ? "folio-ai-suggestion--focused" : "",
+            isFocused ? "folio-ai-suggestion--focused-original" : "",
           ]
             .filter(Boolean)
             .join(" "),
@@ -77,6 +97,22 @@ function buildDecorationSet(
         { inclusiveStart: false, inclusiveEnd: false },
       ),
     );
+    // The focused suggestion previews its change in the document
+    // itself: the original range reads as deleted (see the
+    // `--focused-original` class above) and the proposed text is
+    // injected right after it as a widget. A pure deletion (empty
+    // suggestedText) has nothing to inject — the strikethrough alone
+    // carries the preview.
+    if (isFocused && suggestion.suggestedText.length > 0) {
+      decorations.push(
+        Decoration.widget(to, buildReplacementWidget(suggestion), {
+          side: 1,
+          marks: [],
+          ignoreSelection: true,
+          key: `folio-ai-suggestion-replacement-${suggestion.id}`,
+        }),
+      );
+    }
   }
 
   return DecorationSet.create(doc, decorations);
