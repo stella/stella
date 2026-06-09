@@ -10,10 +10,10 @@ import {
   CheckIcon,
   ChevronDownIcon,
   GlobeIcon,
+  GraduationCapIcon,
   LoaderIcon,
   PlusIcon,
   SearchIcon,
-  SparklesIcon,
   XIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -424,7 +424,7 @@ export const CatalogueBrowser = ({
                 {t("catalogue.addCustomMcp")}
               </MenuItem>
               <MenuItem onClick={() => setBlueprintGalleryOpen(true)}>
-                <SparklesIcon className="size-4" />
+                <GraduationCapIcon className="size-4" />
                 {t("catalogue.addCustomSkill")}
               </MenuItem>
             </MenuPopup>
