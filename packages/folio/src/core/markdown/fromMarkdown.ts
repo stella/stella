@@ -240,8 +240,13 @@ const applyMarkdownPageGeometry = (document: Document): void => {
   if (!section) {
     return;
   }
+  // A markdown surface has no use for Word's 1-inch print margins; tighten all
+  // four to a thin uniform gutter so body text fills the page, and zero the
+  // header/footer distances since markdown has no running head/foot.
   section.marginTop = 480;
   section.marginBottom = 480;
+  section.marginLeft = 480;
+  section.marginRight = 480;
   section.headerDistance = 0;
   section.footerDistance = 0;
 };
