@@ -33,9 +33,9 @@ const saveDocumentBodySchema = t.Object({
   // Optional edited manifest (the Studio's field settings, conditions,
   // computed). When present it is the base manifest, so the editor's field
   // metadata is persisted without a separate binary re-embed round-trip.
-  // t.Any() because Elysia auto-parses JSON-looking multipart fields into
-  // objects (the manifest endpoint hits the same gotcha).
-  manifest: t.Optional(t.Any()),
+  // t.Unknown() (not t.String()) because Elysia auto-parses JSON-looking
+  // multipart fields into objects; the handler validates the shape below.
+  manifest: t.Optional(t.Unknown()),
 });
 
 const saveDocumentParamsSchema = t.Object({

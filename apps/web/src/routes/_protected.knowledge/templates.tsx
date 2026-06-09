@@ -420,7 +420,6 @@ const TemplateDetail = ({
 }) => {
   const t = useTranslations();
   const format = useFormatter();
-  const queryClient = useQueryClient();
 
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,

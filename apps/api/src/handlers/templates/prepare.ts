@@ -48,8 +48,8 @@ const prepareTemplate = createSafeRootHandler(
           const buffer = Buffer.from(await file.arrayBuffer());
           return await prepareTemplateFromDocument({
             buffer,
-            suggest: (documentText) =>
-              suggestTemplateFields({
+            suggest: async (documentText) =>
+              await suggestTemplateFields({
                 documentText,
                 orgAIConfig,
                 organizationId: session.activeOrganizationId,
@@ -65,16 +65,14 @@ const prepareTemplate = createSafeRootHandler(
       }),
     );
 
-    return Result.ok(
-      new Response(new Uint8Array(prepared.buffer), {
-        status: 200,
-        headers: {
-          "Content-Type": DOCX_MIME_TYPE,
-          "Content-Disposition": 'attachment; filename="template.docx"',
-          "X-Unapplied-Count": String(prepared.unapplied.length),
-        },
-      }),
-    );
+    // Return the prepared docx as base64 in JSON, NOT a binary Response: Eden
+    // parses binary responses as text and corrupts the zip (the same failure
+    // the save round-trip hit). The client decodes this back to bytes.
+    return Result.ok({
+      docxBase64: prepared.buffer.toString("base64"),
+      fieldCount: prepared.fields.length,
+      unappliedCount: prepared.unapplied.length,
+    });
   },
 );
 
