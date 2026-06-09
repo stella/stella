@@ -148,3 +148,49 @@ jobs:
             --repo "$INFRA_REPO" \
             --compact \
             --exit-status
+
+  # Post-deploy verification: authenticate via the secret-guarded
+  # /smoke/session endpoint and click through the deployed app so a
+  # render-breaking regression turns this workflow red instead of
+  # waiting for a human to stumble over it.
+  verify-staging:
+    name: Verify staging deploy
+    needs: build-and-deploy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Install Playwright browser
+        run: cd apps/web && bunx playwright install --with-deps chromium
+
+      - name: Run staging smoke
+        run: bun --filter @stll/web test:e2e:staging
+        env:
+          E2E_WEB_URL: https://staging.stll.app
+          E2E_API_URL: https://api-staging.stll.app
+          SMOKE_SESSION_SECRET: ${{ secrets.SMOKE_SESSION_SECRET }}
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: staging-smoke-report
+          path: apps/web/playwright-report/
+          retention-days: 7

@@ -81,6 +81,13 @@ const envApi = createEnv({
         ),
       ),
     ),
+    /**
+     * Enables the post-deploy synthetic-monitoring session endpoint
+     * (handlers/smoke). Set only on non-production deployments; the
+     * route additionally refuses to exist when NODE_ENV is
+     * "production" regardless of this value.
+     */
+    SMOKE_SESSION_SECRET: v.optional(v.pipe(v.string(), v.minLength(32))),
     EMAIL_PROVIDER: v.pipe(
       v.picklist(["ses", "smtp"]),
       v.check((provider) => {
