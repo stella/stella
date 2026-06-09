@@ -138,7 +138,7 @@ const ConditionGroupEditor = ({
             className="w-28"
             onChange={(e) => setRule(index, { value: e.target.value })}
             placeholder={t("templates.conditionValue")}
-            value={typeof rule.value === "string" ? rule.value : ""}
+            value={String(rule.value)}
           />
           <Button
             disabled={rules.length === 1}
