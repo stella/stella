@@ -2084,6 +2084,11 @@ export function PagedEditor(
   const cellDragAnchorPosRef = useRef<number | null>(null);
   const cellDragLastPmPosRef = useRef<number | null>(null);
   const cellDragOverflowXRef = useRef<number | null>(null);
+  // Last text position inside the cell the drag started in. Overflow→whole-cell
+  // escalation is only allowed once the drag actually reaches this position, so
+  // a tiny initial nudge (pmPos hasn't crossed a glyph yet) can't be mistaken
+  // for "dragged past the cell's text".
+  const cellDragContentEndRef = useRef<number | null>(null);
   const CELL_SELECT_OVERFLOW_PX = 5; // px of continued drag after text selection maxes out
 
   // Table quick action insert button state
@@ -4374,6 +4379,18 @@ export function PagedEditor(
       if (pmPos !== null) {
         const cellPos = findCellPosFromPmPos(pmPos);
         cellDragAnchorPosRef.current = cellPos;
+        cellDragContentEndRef.current = null;
+        if (cellPos !== null) {
+          const cellNode = hiddenPMRef.current
+            ?.getView()
+            ?.state.doc.nodeAt(cellPos);
+          if (cellNode) {
+            // `cellPos` is the cell's `before` position; the last cursor
+            // position inside it is `cellPos + nodeSize - 2` (just before the
+            // cell's closing token and its last child's closing token).
+            cellDragContentEndRef.current = cellPos + cellNode.nodeSize - 2;
+          }
+        }
         isCellDraggingRef.current = false;
         cellDragLastPmPosRef.current = null;
         cellDragOverflowXRef.current = null;
@@ -4387,6 +4404,7 @@ export function PagedEditor(
         }
       } else {
         cellDragAnchorPosRef.current = null;
+        cellDragContentEndRef.current = null;
         isCellDraggingRef.current = false;
         const view = hiddenPMRef.current?.getView();
         if (view) {
@@ -5060,9 +5078,16 @@ export function PagedEditor(
           return;
         }
 
-        // Detect when text selection has maxed out within the cell:
-        // If pmPos stops changing but mouse keeps moving, user has dragged past text content
+        // Escalate to a whole-cell selection only once the drag has reached the
+        // cell's last text position and the user keeps dragging past it. Gating
+        // on the content end is what separates "dragged past the text"
+        // (intended) from the sub-glyph stickiness at the very start of any drag
+        // (pmPos hasn't advanced to the next character yet) — without it, a <5px
+        // nudge inside a cell grabbed the entire cell.
+        const contentEnd = cellDragContentEndRef.current;
+        const atContentEnd = contentEnd !== null && pmPos >= contentEnd;
         if (
+          atContentEnd &&
           cellDragLastPmPosRef.current !== null &&
           pmPos === cellDragLastPmPosRef.current
         ) {
@@ -5082,7 +5107,7 @@ export function PagedEditor(
             return;
           }
         } else {
-          // Position is still advancing — reset overflow tracking
+          // Still selecting text within the cell — reset overflow tracking.
           cellDragOverflowXRef.current = null;
           cellDragLastPmPosRef.current = pmPos;
         }
@@ -5312,6 +5337,7 @@ export function PagedEditor(
     isCellDraggingRef.current = false;
     cellDragLastPmPosRef.current = null;
     cellDragOverflowXRef.current = null;
+    cellDragContentEndRef.current = null;
     activeHfDragSurfaceRef.current = null;
     stopDragAutoScroll();
     // Keep dragAnchorRef for potential shift-click extension
