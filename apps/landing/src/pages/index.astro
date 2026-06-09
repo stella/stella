@@ -564,6 +564,7 @@ const selfHostingDocsUrl =
   <style>
     #site-header.is-scrolled {
       background: color-mix(in srgb, var(--background) 80%, transparent);
+      -webkit-backdrop-filter: blur(14px);
       backdrop-filter: blur(14px);
       border-bottom-color: var(--border);
     }
@@ -637,7 +638,9 @@ const selfHostingDocsUrl =
       var header = document.getElementById("site-header");
       if (!header) return;
       var heroCta = document.getElementById("hero-cta");
+      var ticking = false;
       function update() {
+        ticking = false;
         header.classList.toggle("is-scrolled", window.scrollY > 8);
         // Reveal the header CTA only once the hero's own CTA has scrolled up
         // behind the fixed bar, so the two "Start free" buttons never overlap.
@@ -646,9 +649,16 @@ const selfHostingDocsUrl =
           : window.scrollY > 8;
         header.classList.toggle("show-cta", revealCta);
       }
+      // Coalesce scroll/resize into one layout read per frame (avoids
+      // forced synchronous layout from getBoundingClientRect on every tick).
+      function onScroll() {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(update);
+      }
       update();
-      window.addEventListener("scroll", update, { passive: true });
-      window.addEventListener("resize", update, { passive: true });
+      window.addEventListener("scroll", onScroll, { passive: true });
+      window.addEventListener("resize", onScroll, { passive: true });
     })();
   </script>
 
