@@ -42,7 +42,8 @@ export type AISuggestion = {
    */
   display?: {
     valueKind?: string;
-    filledBy?: "person" | "ai";
+    /** `personAi`: a person writes a stub and AI adapts it in place. */
+    filledBy?: "person" | "ai" | "personAi";
   };
 };
 
