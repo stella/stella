@@ -51,6 +51,11 @@ export const VALUE_TYPE_META = {
   multiSelect: { icon: TagsIcon, labelKey: "workspaces.properties.chipMulti" },
 } as const satisfies Record<ValueTypeKind, ValueTypeMeta>;
 
+/** Narrows opaque strings (e.g., from `AISuggestion.display.valueKind`)
+ *  to registry keys; unknown strings render no chip. */
+export const isValueTypeKind = (value: string): value is ValueTypeKind =>
+  Object.hasOwn(VALUE_TYPE_META, value);
+
 /** Template field input types map 1:1 onto value kinds. */
 export const inputTypeValueKind = (
   inputType: "text" | "textarea" | "number" | "boolean" | "date" | "select",

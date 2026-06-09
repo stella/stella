@@ -212,6 +212,8 @@ type ReplacementSpec = {
   suggestedText: string;
   topic: string;
   rationale: string;
+  /** Badges describing the suggestion's payload (field flow only). */
+  display?: AISuggestion["display"];
   /** Registers field metadata for this suggestion id (field flow only). */
   registerMeta?: (id: string) => void;
 };
@@ -240,7 +242,7 @@ const buildReplacementSuggestions = (
         occupied.push({ from, to });
         const id = crypto.randomUUID();
         spec.registerMeta?.(id);
-        suggestions.push({
+        const suggestion: AISuggestion = {
           id,
           topic: spec.topic,
           severity: "substantive",
@@ -254,7 +256,11 @@ const buildReplacementSuggestions = (
           ),
           rationale: spec.rationale,
           status: "pending",
-        });
+        };
+        if (spec.display !== undefined) {
+          suggestion.display = spec.display;
+        }
+        suggestions.push(suggestion);
       }
       idx = haystack.indexOf(spec.literalText, idx + spec.literalText.length);
     }
@@ -299,6 +305,10 @@ const buildFieldSuggestions = (
       suggestedText: `{{${path}}}`,
       topic: path,
       rationale: path,
+      display: {
+        valueKind: meta.inputType,
+        filledBy: meta.aiPrompt !== undefined ? "ai" : "person",
+      },
       registerMeta: (id) => {
         fieldMeta.set(id, meta);
       },
