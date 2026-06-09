@@ -274,7 +274,7 @@ const deleteWorkspace = createSafeHandler(
       );
     }
 
-    return Result.ok(undefined);
+    return Result.ok({});
   },
 );
 

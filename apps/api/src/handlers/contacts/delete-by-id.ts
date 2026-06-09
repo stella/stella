@@ -127,7 +127,7 @@ const deleteContactById = createSafeRootHandler(
       captureError,
     );
 
-    return Result.ok(undefined);
+    return Result.ok({});
   },
 );
 

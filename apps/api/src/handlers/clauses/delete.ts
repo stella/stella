@@ -88,7 +88,7 @@ const deleteClauseHandler = async function* ({
     }),
   );
 
-  return Result.ok(undefined);
+  return Result.ok({});
 };
 
 const config = {

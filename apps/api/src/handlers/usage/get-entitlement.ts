@@ -47,7 +47,7 @@ const getEntitlement = createSafeRootHandler(
 
         const entitlement = rows.at(0);
         if (!entitlement) {
-          return null;
+          return { entitlement: null } as const;
         }
 
         const remainingUsageUnits = await getRemainingUsageUnits({

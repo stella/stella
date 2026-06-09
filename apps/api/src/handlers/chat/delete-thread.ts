@@ -58,7 +58,7 @@ const deleteThread = createSafeRootHandler(
     );
 
     if (!thread) {
-      return Result.ok();
+      return Result.ok({});
     }
 
     const files = yield* Result.await(
@@ -143,7 +143,7 @@ const deleteThread = createSafeRootHandler(
       }, defaultDatabaseRetry),
     );
 
-    return Result.ok();
+    return Result.ok({});
   },
 );
 

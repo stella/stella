@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -154,6 +154,10 @@ const createClauseHandler = async function* ({
   );
   if (Result.isError(searchVectorResult)) {
     captureError(searchVectorResult.error, { clauseId });
+  }
+
+  if (!inserted) {
+    panic("Failed to create clause");
   }
 
   return Result.ok(inserted);

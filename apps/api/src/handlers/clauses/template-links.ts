@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
@@ -346,7 +347,7 @@ export const unlinkClauseHandler = async ({
     });
   });
 
-  return undefined;
+  return {};
 };
 
 // ── Sync to latest version ──────────────────────────
@@ -464,6 +465,10 @@ export const syncClauseHandler = async ({
 
     return row;
   });
+
+  if (!updated) {
+    panic("Failed to sync template clause link");
+  }
 
   return updated;
 };

@@ -295,7 +295,7 @@ const upsertField = createSafeHandler(
     }
 
     reindex();
-    return Result.ok(undefined);
+    return Result.ok({});
   },
 );
 

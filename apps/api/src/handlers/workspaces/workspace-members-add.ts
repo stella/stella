@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -130,7 +130,11 @@ const addWorkspaceMember = createSafeHandler(
       );
     }
 
-    const [created] = txResult.value.rows;
+    const created = txResult.value.rows.at(0);
+    if (!created) {
+      panic("Failed to add workspace member");
+    }
+
     return Result.ok(created);
   },
 );

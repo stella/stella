@@ -339,7 +339,7 @@ const updateProperty = createSafeHandler(
       );
     }
 
-    return Result.ok(undefined);
+    return Result.ok({});
   },
 );
 
