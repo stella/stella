@@ -123,7 +123,7 @@ describe("chat tool schemas", () => {
         pinnedIds: [],
         accessibleWorkspaceIds: [workspaceId],
       }),
-      hasActiveFileChat: false,
+      hasActiveDocxEditClient: false,
       webSearchEnabled: false,
     });
 
@@ -233,7 +233,7 @@ describe("chat tool schemas", () => {
         pinnedIds: [],
         accessibleWorkspaceIds: [workspaceId],
       }),
-      hasActiveFileChat: false,
+      hasActiveDocxEditClient: false,
       webSearchEnabled: false,
     });
 
