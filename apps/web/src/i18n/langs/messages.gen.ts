@@ -2045,6 +2045,7 @@ type Messages = {
       "clauseSlotHelp": "A clause from the library is inserted here at fill time. Manage linked clauses in the Clauses tab.";
       "computed": "Computed";
       "conditionBlockHelp": "This block shows only when:";
+      "emptyClauseSlot": "Empty clause slot";
       "expressionPlaceholder": "expression";
       "insert": "Insert";
       "loop": "Loop";
