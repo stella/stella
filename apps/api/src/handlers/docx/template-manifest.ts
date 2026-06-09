@@ -84,6 +84,9 @@ const buildFieldXml = (field: FieldMeta): string => {
   if (field.aiPrompt !== undefined) {
     attrs.push(`aiPrompt="${escapeXml(field.aiPrompt)}"`);
   }
+  if (field.aiAdapt !== undefined) {
+    attrs.push(`aiAdapt="${field.aiAdapt}"`);
+  }
 
   const children: string[] = [];
 
@@ -231,6 +234,10 @@ const parseFieldMeta = (el: slimdom.Element): FieldMeta => {
   const aiPrompt = el.getAttribute("aiPrompt");
   if (aiPrompt !== null) {
     field.aiPrompt = aiPrompt;
+  }
+  const aiAdapt = el.getAttribute("aiAdapt");
+  if (aiAdapt !== null) {
+    field.aiAdapt = aiAdapt === "true";
   }
 
   // Parse options
@@ -545,6 +552,7 @@ export const mergeManifestWithDiscovery = (
         options: f.options,
         validation: f.validation,
         required: f.required,
+        aiAdapt: f.aiAdapt,
       });
     }
   }
@@ -585,6 +593,9 @@ const mergeField = (
     }
     if (meta.required !== undefined) {
       resolved.required = meta.required;
+    }
+    if (meta.aiAdapt !== undefined) {
+      resolved.aiAdapt = meta.aiAdapt;
     }
   }
 
