@@ -558,6 +558,44 @@ describe("mergeManifestWithDiscovery", () => {
     expect(hidden?.count).toBe(0);
   });
 
+  test("excludes computed-field markers from input fields", () => {
+    const discovery: DiscoveredTemplate = {
+      placeholders: [],
+      fields: [
+        { path: "rent", kind: "string", count: 1 },
+        { path: "rent_annual", kind: "string", count: 1 },
+      ],
+      structureErrors: [],
+    };
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [],
+      conditions: [],
+      computed: [{ name: "rent_annual", expression: "rent * 12" }],
+    };
+    const resolved = mergeManifestWithDiscovery(manifest, discovery);
+    expect(resolved.map((f) => f.path)).toEqual(["rent"]);
+  });
+
+  test("drops namespace parents (a path that is only a prefix of others)", () => {
+    const discovery: DiscoveredTemplate = {
+      placeholders: [],
+      fields: [
+        { path: "tenant", kind: "object", count: 0 },
+        { path: "tenant.name", kind: "string", count: 1 },
+        { path: "tenant.krs", kind: "string", count: 1 },
+        { path: "rent", kind: "string", count: 1 },
+      ],
+      structureErrors: [],
+    };
+    const resolved = mergeManifestWithDiscovery(null, discovery);
+    expect(resolved.map((f) => f.path).sort()).toEqual([
+      "rent",
+      "tenant.krs",
+      "tenant.name",
+    ]);
+  });
+
   test("preserves discovered fields without manifest entries", () => {
     const manifest: TemplateManifest = {
       version: 1,
