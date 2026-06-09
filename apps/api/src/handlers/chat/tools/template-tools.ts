@@ -4,6 +4,7 @@ import * as v from "valibot";
 
 import type { ScopedDb } from "@/api/db";
 import { buildAiFieldGenerator } from "@/api/handlers/docx/ai-field-generator";
+import { suggestTemplateFields } from "@/api/handlers/templates/suggest-template-fields";
 import {
   describeStoredTemplate,
   fillStoredTemplate,
@@ -16,6 +17,7 @@ import { brandPersistedTemplateId } from "@/api/lib/safe-id-boundaries";
 const LIST_TEMPLATES_TOOL_NAME = "list_templates" as const;
 const DESCRIBE_TEMPLATE_TOOL_NAME = "describe_template" as const;
 const FILL_TEMPLATE_TOOL_NAME = "fill_template" as const;
+const SUGGEST_TEMPLATE_FIELDS_TOOL_NAME = "suggest_template_fields" as const;
 
 type CreateTemplateToolsArgs = {
   scopedDb: ScopedDb;
@@ -114,6 +116,44 @@ export const createTemplateTools = ({
           organizationId,
           generateAiValue,
         }),
+    }),
+
+    [SUGGEST_TEMPLATE_FIELDS_TOOL_NAME]: tool({
+      description:
+        "Suggest which literal values in a template document being authored " +
+        "should become {{field}} placeholders (party names, addresses, " +
+        "registration numbers, amounts, dates, signatories). Pass the " +
+        "document text (or the part the user asked about). Returns suggested " +
+        "fields: the exact literalText, a dotted fieldPath, an inputType and " +
+        "an optional AI-draft prompt. After reviewing the suggestions, apply " +
+        "the ones that make sense with apply-active-docx-edits, replacing " +
+        "each literalText occurrence with its {{fieldPath}} marker verbatim.",
+      inputSchema: valibotSchema(
+        v.strictObject({
+          text: v.pipe(
+            v.string(),
+            v.maxLength(200_000),
+            v.description("The document text to analyze, copied verbatim."),
+          ),
+          instructions: v.nullable(
+            v.pipe(
+              v.string(),
+              v.description(
+                "Extra user guidance, e.g. which kinds of values to focus on.",
+              ),
+            ),
+          ),
+        }),
+      ),
+      execute: async ({ text, instructions }) => {
+        const suggestions = await suggestTemplateFields({
+          documentText: text,
+          instructions: instructions ?? undefined,
+          orgAIConfig: orgAIConfig ?? null,
+          organizationId,
+        });
+        return { suggestions };
+      },
     }),
   };
 };

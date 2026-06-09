@@ -1351,19 +1351,21 @@ export function PromptBar(props: PromptBarProps) {
     },
     [canSubmitNow, onSubmit],
   );
+  // Tab with an empty input writes the first preset INTO the composer (the
+  // user can edit before sending); clicking a chip accepts and sends as-is.
   const handleShellKeyDown = useCallback(
     (event: ReactKeyboardEvent) => {
       if (event.key !== "Tab" || event.shiftKey || !presetChipsVisible) {
         return;
       }
       const first = presets.at(0);
-      if (!first) {
+      if (!first || !editor) {
         return;
       }
       event.preventDefault();
-      submitPreset(first);
+      editor.chain().focus().insertContent(first.prompt).run();
     },
-    [presetChipsVisible, presets, submitPreset],
+    [presetChipsVisible, presets, editor],
   );
 
   return (
