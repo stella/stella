@@ -442,6 +442,7 @@ export {
   hasBlockDirectivePattern,
   hasNumberingPattern,
   isBlockDirectiveKind,
+  isFieldPath,
   markerPattern,
   numPattern,
   placeholderPattern,

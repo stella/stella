@@ -13,6 +13,8 @@ import { valibotSchema } from "@ai-sdk/valibot";
 import { Output, streamText } from "ai";
 import * as v from "valibot";
 
+import { isFieldPath } from "@stll/template-conditions";
+
 import type { FieldSuggestion } from "@/api/handlers/docx/apply-field-suggestions";
 import { getModelForRole } from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
@@ -46,9 +48,23 @@ const FIELD_SUGGESTION_SPEC = `Identify the values in this document that should 
 
 For each, return:
 - literalText: the EXACT text in the document to replace, copied verbatim
-- fieldPath: a dot-separated name, e.g. company.name, company.krs, signatory.name, signatory.role, signing_date, scope
+- fieldPath: a dot-separated name, e.g. company.name, company.krs, signatory.name, signatory.role, signing_date, scope. Only letters, digits, underscores, dashes and dots — for list positions use dots (attorneys.0.name), NEVER brackets
 - inputType: one of text, textarea, number, boolean, date, select
 - aiPrompt: ONLY for free-text sections that should be drafted by AI at fill time (e.g. the scope of the power of attorney) — an instruction describing what to draft. Use null for ordinary fields.`;
+
+// The model occasionally invents bracket-indexed paths (attorneys[0].name)
+// despite the prompt; the marker grammar only knows dotted segments, and
+// resolvePath walks numeric segments into arrays, so rewrite [N] -> .N and
+// drop any suggestion whose path still falls outside the grammar — an invalid
+// path would insert a {{marker}} nothing can highlight, discover, or fill.
+const sanitizeFieldPath = (raw: string): string | null => {
+  const dotted = raw
+    .replaceAll(/\[(\d+)\]/gu, ".$1")
+    .replaceAll(/\.{2,}/gu, ".")
+    .replace(/^\./u, "")
+    .replace(/\.$/u, "");
+  return dotted.length > 0 && isFieldPath(dotted) ? dotted : null;
+};
 
 const buildPrompt = (documentText: string, instructions?: string): string => {
   const extra = instructions
@@ -86,12 +102,20 @@ export const suggestTemplateFields = async ({
     const { suggestions } = await result.output;
     // The schema models "absent" as null (OpenAI strict mode); FieldSuggestion
     // uses optional members.
-    return suggestions.map((s) => ({
-      literalText: s.literalText,
-      fieldPath: s.fieldPath,
-      inputType: s.inputType ?? undefined,
-      aiPrompt: s.aiPrompt ?? undefined,
-    }));
+    return suggestions.flatMap((s) => {
+      const fieldPath = sanitizeFieldPath(s.fieldPath);
+      if (fieldPath === null) {
+        return [];
+      }
+      return [
+        {
+          literalText: s.literalText,
+          fieldPath,
+          inputType: s.inputType ?? undefined,
+          aiPrompt: s.aiPrompt ?? undefined,
+        },
+      ];
+    });
   } catch {
     return [];
   }
