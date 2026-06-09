@@ -3782,17 +3782,18 @@ export function PagedEditor(
       return;
     }
     setDirectiveContentLeft(measureContentLeft(pagesContainer, zoom));
-    void projectRangesToRects(ranges, {
-      pagesContainer,
-      zoom,
-      layout,
-      blocks,
-      measures,
-    }).then((projected) => {
+    void (async () => {
+      const projected = await projectRangesToRects(ranges, {
+        pagesContainer,
+        zoom,
+        layout,
+        blocks,
+        measures,
+      });
       if (directivesOverlayRequestSeqRef.current === requestSeq) {
         setDirectiveRectGroups(projected);
       }
-    });
+    })();
   }, [layout, blocks, measures, zoom]);
 
   const hideSelectionOverlayDuringInput = useCallback(
