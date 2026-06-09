@@ -8,6 +8,19 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import {
+  ArrowDownToLine as ArrowDownToLineIcon,
+  ArrowLeftToLine as ArrowLeftToLineIcon,
+  ArrowRightToLine as ArrowRightToLineIcon,
+  ArrowUpToLine as ArrowUpToLineIcon,
+  ClipboardPaste as ClipboardPasteIcon,
+  Copy as CopyIcon,
+  MessageSquarePlus as MessageSquarePlusIcon,
+  Scissors as ScissorsIcon,
+  TextSelect as TextSelectIcon,
+  Trash2 as Trash2Icon,
+} from "lucide-react";
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -55,6 +68,10 @@ export type TextContextMenuItem = {
   disabled?: boolean;
   /** Whether to show divider after this item */
   dividerAfter?: boolean;
+  /** Icon override (host-provided entries pass their own lucide icon). */
+  icon?: React.ReactNode;
+  /** Highlight as the primary action of the menu. */
+  emphasis?: boolean;
 };
 
 /**
@@ -142,372 +159,6 @@ const DEFAULT_MENU_ITEMS: TextContextMenuItem[] = [
 // ICONS
 // ============================================================================
 
-const CutIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 16 16"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <circle cx="4" cy="12" r="2" stroke="currentColor" strokeWidth="1.5" />
-    <circle cx="12" cy="12" r="2" stroke="currentColor" strokeWidth="1.5" />
-    <path
-      d="M5.5 10.5L10.5 3M10.5 10.5L5.5 3"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-    />
-  </svg>
-);
-
-const CopyIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 16 16"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <rect
-      x="5"
-      y="5"
-      width="8"
-      height="9"
-      rx="1"
-      stroke="currentColor"
-      strokeWidth="1.5"
-    />
-    <path
-      d="M11 5V3a1 1 0 00-1-1H4a1 1 0 00-1 1v8a1 1 0 001 1h2"
-      stroke="currentColor"
-      strokeWidth="1.5"
-    />
-  </svg>
-);
-
-const PasteIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 16 16"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <rect
-      x="3"
-      y="3"
-      width="10"
-      height="11"
-      rx="1"
-      stroke="currentColor"
-      strokeWidth="1.5"
-    />
-    <path
-      d="M6 3V2a1 1 0 011-1h2a1 1 0 011 1v1"
-      stroke="currentColor"
-      strokeWidth="1.5"
-    />
-    <path
-      d="M6 8h4M6 11h4"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-    />
-  </svg>
-);
-
-const DeleteIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 16 16"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <path
-      d="M4 4l8 8M12 4l-8 8"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-    />
-  </svg>
-);
-
-const SelectAllIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 16 16"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <rect
-      x="2"
-      y="2"
-      width="12"
-      height="12"
-      rx="1"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeDasharray="2 2"
-    />
-    <rect x="4" y="4" width="8" height="8" fill="currentColor" opacity="0.3" />
-  </svg>
-);
-
-const AddRowAboveIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 16 16"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <rect
-      x="2"
-      y="6"
-      width="12"
-      height="4"
-      rx="0.5"
-      stroke="currentColor"
-      strokeWidth="1.2"
-    />
-    <rect
-      x="2"
-      y="10"
-      width="12"
-      height="4"
-      rx="0.5"
-      stroke="currentColor"
-      strokeWidth="1.2"
-    />
-    <path
-      d="M8 1v3M6.5 2.5h3"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinecap="round"
-    />
-  </svg>
-);
-
-const AddRowBelowIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 16 16"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <rect
-      x="2"
-      y="2"
-      width="12"
-      height="4"
-      rx="0.5"
-      stroke="currentColor"
-      strokeWidth="1.2"
-    />
-    <rect
-      x="2"
-      y="6"
-      width="12"
-      height="4"
-      rx="0.5"
-      stroke="currentColor"
-      strokeWidth="1.2"
-    />
-    <path
-      d="M8 12v3M6.5 13.5h3"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinecap="round"
-    />
-  </svg>
-);
-
-const DeleteRowIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 16 16"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <rect
-      x="2"
-      y="2"
-      width="12"
-      height="4"
-      rx="0.5"
-      stroke="currentColor"
-      strokeWidth="1.2"
-    />
-    <rect
-      x="2"
-      y="6"
-      width="12"
-      height="4"
-      rx="0.5"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      opacity="0.3"
-    />
-    <rect
-      x="2"
-      y="10"
-      width="12"
-      height="4"
-      rx="0.5"
-      stroke="currentColor"
-      strokeWidth="1.2"
-    />
-    <path
-      d="M5 8h6"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-    />
-  </svg>
-);
-
-const AddColumnLeftIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 16 16"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <rect
-      x="6"
-      y="2"
-      width="4"
-      height="12"
-      rx="0.5"
-      stroke="currentColor"
-      strokeWidth="1.2"
-    />
-    <rect
-      x="10"
-      y="2"
-      width="4"
-      height="12"
-      rx="0.5"
-      stroke="currentColor"
-      strokeWidth="1.2"
-    />
-    <path
-      d="M3 8H0.5M1.75 6.5v3"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinecap="round"
-    />
-  </svg>
-);
-
-const AddColumnRightIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 16 16"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <rect
-      x="2"
-      y="2"
-      width="4"
-      height="12"
-      rx="0.5"
-      stroke="currentColor"
-      strokeWidth="1.2"
-    />
-    <rect
-      x="6"
-      y="2"
-      width="4"
-      height="12"
-      rx="0.5"
-      stroke="currentColor"
-      strokeWidth="1.2"
-    />
-    <path
-      d="M13 8h2.5M14.25 6.5v3"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinecap="round"
-    />
-  </svg>
-);
-
-const DeleteColumnIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 16 16"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <rect
-      x="2"
-      y="2"
-      width="4"
-      height="12"
-      rx="0.5"
-      stroke="currentColor"
-      strokeWidth="1.2"
-    />
-    <rect
-      x="6"
-      y="2"
-      width="4"
-      height="12"
-      rx="0.5"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      opacity="0.3"
-    />
-    <rect
-      x="10"
-      y="2"
-      width="4"
-      height="12"
-      rx="0.5"
-      stroke="currentColor"
-      strokeWidth="1.2"
-    />
-    <path
-      d="M8 5v6"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-    />
-  </svg>
-);
-
-const CommentIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 16 16"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <path
-      d="M3 3h10a1 1 0 011 1v6a1 1 0 01-1 1H6l-3 2.5V11H3a1 1 0 01-1-1V4a1 1 0 011-1z"
-      stroke="currentColor"
-      strokeWidth="1.3"
-    />
-    <path
-      d="M5 6h6M5 8.5h4"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinecap="round"
-    />
-  </svg>
-);
-
 /**
  * Get icon for action
  */
@@ -515,32 +166,33 @@ function getActionIcon(action: TextContextAction): React.ReactNode {
   if (!isBuiltInAction(action)) {
     return null;
   }
+  const ICON_SIZE = 14;
   switch (action) {
     case "cut":
-      return <CutIcon />;
+      return <ScissorsIcon size={ICON_SIZE} />;
     case "copy":
-      return <CopyIcon />;
+      return <CopyIcon size={ICON_SIZE} />;
     case "paste":
     case "pasteAsPlainText":
-      return <PasteIcon />;
+      return <ClipboardPasteIcon size={ICON_SIZE} />;
     case "delete":
-      return <DeleteIcon />;
+      return <Trash2Icon size={ICON_SIZE} />;
     case "selectAll":
-      return <SelectAllIcon />;
+      return <TextSelectIcon size={ICON_SIZE} />;
     case "addRowAbove":
-      return <AddRowAboveIcon />;
+      return <ArrowUpToLineIcon size={ICON_SIZE} />;
     case "addRowBelow":
-      return <AddRowBelowIcon />;
+      return <ArrowDownToLineIcon size={ICON_SIZE} />;
     case "deleteRow":
-      return <DeleteRowIcon />;
+      return <Trash2Icon size={ICON_SIZE} />;
     case "addColumnLeft":
-      return <AddColumnLeftIcon />;
+      return <ArrowLeftToLineIcon size={ICON_SIZE} />;
     case "addColumnRight":
-      return <AddColumnRightIcon />;
+      return <ArrowRightToLineIcon size={ICON_SIZE} />;
     case "deleteColumn":
-      return <DeleteColumnIcon />;
+      return <Trash2Icon size={ICON_SIZE} />;
     case "addComment":
-      return <CommentIcon />;
+      return <MessageSquarePlusIcon size={ICON_SIZE} />;
     case "acceptChange":
     case "rejectChange":
     case "separator":
@@ -549,6 +201,28 @@ function getActionIcon(action: TextContextAction): React.ReactNode {
       // iconless.
       return null;
   }
+}
+
+const EMPHASIS_COLOR = "var(--primary, var(--doc-primary, #2563eb))";
+
+function itemTextColor(item: TextContextMenuItem): string {
+  if (item.disabled) {
+    return "var(--muted-foreground, var(--doc-text-subtle, #737373))";
+  }
+  if (item.emphasis) {
+    return EMPHASIS_COLOR;
+  }
+  return "var(--popover-foreground, var(--doc-text, #171717))";
+}
+
+function itemIconColor(item: TextContextMenuItem): string {
+  if (item.disabled) {
+    return "var(--border, var(--doc-border, #d4d4d4))";
+  }
+  if (item.emphasis) {
+    return EMPHASIS_COLOR;
+  }
+  return "var(--muted-foreground, var(--doc-text-muted, #737373))";
 }
 
 // ============================================================================
@@ -604,9 +278,8 @@ const MenuItemComponent: React.FC<MenuItemComponentProps> = ({
               : "transparent",
           cursor: item.disabled ? "not-allowed" : "pointer",
           fontSize: "13px",
-          color: item.disabled
-            ? "var(--muted-foreground, var(--doc-text-subtle, #737373))"
-            : "var(--popover-foreground, var(--doc-text, #171717))",
+          color: itemTextColor(item),
+          fontWeight: item.emphasis ? 500 : 400,
           textAlign: "left",
           opacity: item.disabled ? 0.6 : 1,
         }}
@@ -614,12 +287,10 @@ const MenuItemComponent: React.FC<MenuItemComponentProps> = ({
         <span
           style={{
             display: "flex",
-            color: item.disabled
-              ? "var(--border, var(--doc-border, #d4d4d4))"
-              : "var(--muted-foreground, var(--doc-text-muted, #737373))",
+            color: itemIconColor(item),
           }}
         >
-          {getActionIcon(item.action)}
+          {item.icon ?? getActionIcon(item.action)}
         </span>
         <span style={{ flex: 1 }}>{item.label}</span>
         {item.shortcut && (
