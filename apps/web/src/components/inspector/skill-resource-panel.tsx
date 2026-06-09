@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { PencilIcon, SaveIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -119,11 +119,14 @@ export const SkillResourcePanel = ({
   // Autosave path for the Folio editor. The editor emits debounced markdown with
   // skill frontmatter stripped and guide comments shown as callouts; map it back
   // to the stored shape (frontmatter re-prepended, callouts → guide comments)
-  // before persisting.
+  // before persisting. Saves can resolve out of order; the counter lets a stale
+  // response (and its error toast) yield to the newer in-flight save.
+  const lastSaveId = useRef(0);
   const persistMarkdown = async (editorMarkdown: string) => {
     if (tab.skillId === null) {
       return;
     }
+    const saveId = ++lastSaveId.current;
     const stored = toStoredMarkdown(editorMarkdown, tab.content);
     const skill = api.skills({ skillId: toSafeId<"agentSkill">(tab.skillId) });
     const response =
@@ -134,6 +137,9 @@ export const SkillResourcePanel = ({
             content: stored,
             queryKey: ["skills"],
           });
+    if (saveId !== lastSaveId.current) {
+      return;
+    }
     if (response.error) {
       stellaToast.add({
         title: t("common.unexpectedError"),

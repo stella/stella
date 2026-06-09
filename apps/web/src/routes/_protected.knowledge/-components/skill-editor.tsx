@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
@@ -29,7 +29,10 @@ import { FileDropZone } from "@/components/file-drop-zone";
 import { FileTree } from "@/components/file-tree/file-tree";
 import type { FileTreeNode } from "@/components/file-tree/file-tree";
 import { FolderExpandToggle } from "@/components/file-tree/folder-expand-toggle";
-import { useInspectorStore } from "@/components/inspector/inspector-store";
+import {
+  buildSkillResourceTabId,
+  useInspectorStore,
+} from "@/components/inspector/inspector-store";
 import { api } from "@/lib/api";
 import { MARKDOWN_MIME, isMarkdownFile } from "@/lib/consts";
 import { APIError, toAPIError, userErrorFromThrown } from "@/lib/errors";
@@ -50,8 +53,12 @@ const FILENAME_PATTERN = /^[a-z0-9][a-z0-9._-]*$/u;
 
 // A skill is invoked in chat via /its-command; suggest the skill's name as that
 // command by default (lowercase, hyphenated) so the field reads as /skill-name.
+// Diacritics are decomposed and stripped first so a name like "Česká dovednost"
+// suggests "ceska-dovednost" rather than dropping the accented letters.
 const slugifyCommand = (name: string): string =>
   name
+    .normalize("NFD")
+    .replaceAll(/[\u0300-\u036f]/gu, "")
     .toLowerCase()
     .replaceAll(/[^a-z0-9]+/gu, "-")
     .replace(/^-/u, "")
@@ -163,6 +170,24 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   const skillName = detail.data?.name ?? "";
   const bodyContent = detail.data?.body ?? "";
 
+  const openResourceInInspector = (resource: {
+    path: string;
+    content: string;
+  }) => {
+    openSkillResourceTab({
+      skillName,
+      skillId,
+      origin: "upload",
+      target: "resource",
+      resourcePath: resource.path,
+      label: resource.path.split("/").at(-1) ?? resource.path,
+      mimeType: isMarkdownFile({ fileName: resource.path })
+        ? MARKDOWN_MIME
+        : "text/plain",
+      content: resource.content,
+    });
+  };
+
   // Clicking a file opens it in the right-side Inspector (the matters Files-view
   // pattern). Markdown files render in the Folio WYSIWYG editor there; other text
   // files use the raw editor — both handled inside the inspector panel.
@@ -185,19 +210,30 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     if (!resource) {
       return;
     }
+    openResourceInInspector(resource);
+  };
+
+  // Land with SKILL.md open in the inspector so the editor is immediately
+  // editable — blank and blueprint drafts arrive here straight from the
+  // gallery with nothing else to click first.
+  const autoOpenedSkillId = useRef<string | null>(null);
+  useEffect(() => {
+    if (!detail.data || autoOpenedSkillId.current === skillId) {
+      return;
+    }
+    autoOpenedSkillId.current = skillId;
+    setSelected({ type: "body" });
     openSkillResourceTab({
-      skillName,
+      skillName: detail.data.name,
       skillId,
       origin: "upload",
-      target: "resource",
-      resourcePath: resource.path,
-      label: resource.path.split("/").at(-1) ?? resource.path,
-      mimeType: isMarkdownFile({ fileName: resource.path })
-        ? MARKDOWN_MIME
-        : "text/plain",
-      content: resource.content,
+      target: "body",
+      resourcePath: SKILL_BODY_FILE_NAME,
+      label: SKILL_BODY_FILE_NAME,
+      mimeType: MARKDOWN_MIME,
+      content: detail.data.body,
     });
-  };
+  }, [detail.data, skillId, openSkillResourceTab]);
 
   // Mutations
   const patchMetadata = useMutation({
@@ -227,6 +263,12 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         return;
       }
       toastError(error, t("common.unexpectedError"));
+      // The power toggle flips `enabled` optimistically; snap it back so the
+      // UI doesn't show an enable/publish the server rejected. Text fields
+      // commit on blur and keep the user's draft for another attempt.
+      if (detail.data) {
+        setEnabled(detail.data.enabled);
+      }
     },
   });
 
@@ -243,8 +285,11 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     onSuccess: (data) => {
       onChanged();
       void detail.refetch();
-      // New files are always .md, so select straight into the main-pane editor.
-      selectFile({ type: "resource", resourceId: data.id, path: data.path });
+      // Open straight from the mutation response: the refetch has not landed
+      // yet, so the new file is not in `resources` and selectFile would miss
+      // it. New files are always .md, so this opens in the main-pane editor.
+      setSelected({ type: "resource", resourceId: data.id, path: data.path });
+      openResourceInInspector(data);
     },
     onError: (error) => toastError(error, t("common.unexpectedError")),
   });
@@ -308,7 +353,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       }
       return response.data;
     },
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       onChanged();
       void detail.refetch();
       setRenamingResourceId(null);
@@ -320,6 +365,19 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
           resourceId: data.id,
           path: data.path,
         });
+      }
+      // If the file is open in the inspector, reopen its tab under the new
+      // path; the tab id and save target both derive from the path, so a
+      // stale tab would keep saving to the old (now missing) path.
+      const oldTabId = buildSkillResourceTabId({
+        skillName,
+        resourcePath: variables.oldPath,
+      });
+      const { tabs, closeTab } = useInspectorStore.getState();
+      const openTab = tabs.find((tab) => tab.id === oldTabId);
+      if (openTab && openTab.type === "skill-resource") {
+        closeTab(oldTabId);
+        openResourceInInspector({ path: data.path, content: openTab.content });
       }
     },
     onError: (error) => toastError(error, t("common.unexpectedError")),
@@ -818,11 +876,7 @@ function SkillFileTree({
             <Input
               autoFocus
               className="h-7 flex-1 text-sm"
-              onBlur={() => {
-                if (renameValue.trim() === resource.path) {
-                  onCancelRename();
-                }
-              }}
+              onBlur={onCancelRename}
               onChange={(event) => setRenameValue(event.target.value)}
               onClick={(event) => event.stopPropagation()}
               onKeyDown={(event) => {

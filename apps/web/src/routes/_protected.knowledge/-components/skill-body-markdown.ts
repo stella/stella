@@ -29,22 +29,26 @@ type SplitBody = {
 };
 
 export const splitFrontmatter = (raw: string): SplitBody => {
-  if (!raw.startsWith("---\n")) {
-    return { frontmatter: "", content: raw };
+  // Normalize CRLF so the fence detection works for files authored on Windows.
+  // The editor and exporter both emit LF, so the normalized form is also what
+  // gets stored back on save.
+  const lf = raw.replaceAll("\r\n", "\n");
+  if (!lf.startsWith("---\n")) {
+    return { frontmatter: "", content: lf };
   }
-  const end = raw.indexOf("\n---", 4);
+  const end = lf.indexOf("\n---", 4);
   if (end === -1) {
-    return { frontmatter: "", content: raw };
+    return { frontmatter: "", content: lf };
   }
   // Include the closing fence line and the blank line after it, when present.
   let cut = end + "\n---".length;
-  if (raw[cut] === "\n") {
+  if (lf[cut] === "\n") {
     cut += 1;
   }
-  if (raw[cut] === "\n") {
+  if (lf[cut] === "\n") {
     cut += 1;
   }
-  return { frontmatter: raw.slice(0, cut), content: raw.slice(cut) };
+  return { frontmatter: lf.slice(0, cut), content: lf.slice(cut) };
 };
 
 const guidesToCallouts = (md: string): string =>
