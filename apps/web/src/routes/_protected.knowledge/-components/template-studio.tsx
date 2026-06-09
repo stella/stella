@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { ReactNode } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
@@ -1011,15 +1012,21 @@ const Inspector = ({
 const ScopeHeader = ({
   title,
   subtitle,
+  action,
 }: {
   title: string;
   subtitle?: string;
+  /** Right-aligned control (e.g. the field face's suggest wand). */
+  action?: ReactNode;
 }) => (
-  <div className="border-b px-4 py-3">
-    <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
-      {title}
-    </p>
-    {subtitle ? <code className="text-sm">{subtitle}</code> : null}
+  <div className="flex items-center justify-between gap-2 border-b px-4 py-3">
+    <div className="min-w-0">
+      <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+        {title}
+      </p>
+      {subtitle ? <code className="text-sm">{subtitle}</code> : null}
+    </div>
+    {action}
   </div>
 );
 
@@ -1071,28 +1078,29 @@ const FieldFace = ({
   return (
     <ScrollArea className="min-h-0 flex-1">
       <ScopeHeader
+        action={
+          <Button
+            aria-label={t("templates.studio.suggestConfig")}
+            disabled={suggesting}
+            onClick={() => void handleSuggest()}
+            size="icon-sm"
+            title={t("templates.studio.suggestConfig")}
+            variant="ghost"
+          >
+            {suggesting ? (
+              <Loader2Icon className="animate-spin" />
+            ) : (
+              <WandSparklesIcon />
+            )}
+          </Button>
+        }
         subtitle={field.path}
         title={t("templates.studio.scopeField")}
       />
-      <div className="flex flex-col gap-3 px-4 py-3">
-        <p className="text-muted-foreground text-xs leading-relaxed">
-          {t("templates.studio.fieldHelp")}
-        </p>
-        <Button
-          disabled={suggesting}
-          onClick={() => void handleSuggest()}
-          size="sm"
-          variant="outline"
-        >
-          {suggesting ? (
-            <Loader2Icon className="animate-spin" />
-          ) : (
-            <WandSparklesIcon />
-          )}
-          {t("templates.studio.suggestConfig")}
-        </Button>
-      </div>
-      <FieldConfigEditor field={field} onUpdate={onUpdate} showPath={false} />
+      <p className="text-muted-foreground px-4 py-3 text-xs leading-relaxed">
+        {t("templates.studio.fieldHelp")}
+      </p>
+      <FieldConfigEditor embedded field={field} onUpdate={onUpdate} />
       <div className="flex flex-col gap-2 border-t px-4 py-4">
         <Label className="text-sm">{t("templates.studio.whoFills")}</Label>
         <div className="flex items-center gap-1">

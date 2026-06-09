@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@stll/ui/components/select";
 import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
@@ -442,18 +443,24 @@ const OptionsTagInput = ({
 export const FieldConfigEditor = ({
   field,
   onUpdate,
-  showPath = true,
+  embedded = false,
 }: {
   field: EditableField;
   onUpdate: (patch: Partial<EditableField>) => void;
-  /** The Studio face shows the path in its header already. */
-  showPath?: boolean;
+  /** Embedded in the Studio's field face: the face header already shows the
+   *  path, and the wizard's chevron-row indent doesn't apply. */
+  embedded?: boolean;
 }) => {
   const t = useTranslations();
 
   return (
-    <div className="bg-muted/30 flex flex-col gap-4 border-t px-4 py-4 ps-11">
-      {showPath && (
+    <div
+      className={cn(
+        "bg-muted/30 flex flex-col gap-4 border-t px-4 py-4",
+        !embedded && "ps-11",
+      )}
+    >
+      {!embedded && (
         <p className="bg-muted/60 text-muted-foreground rounded px-3 py-2 text-xs leading-relaxed">
           <code>{field.path}</code>
         </p>
