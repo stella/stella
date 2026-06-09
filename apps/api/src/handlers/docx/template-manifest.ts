@@ -513,11 +513,18 @@ export const mergeManifestWithDiscovery = (
     }
   }
 
+  // Computed fields ({{rent_annual}} = rent * 12) are resolved at fill time,
+  // never user-entered, so they must not surface as input fields.
+  const computedNames = new Set((manifest?.computed ?? []).map((c) => c.name));
+
   // Start with discovered fields, enriching with manifest
   const resolved: ResolvedField[] = [];
   const seen = new Set<string>();
 
   for (const df of discovered.fields) {
+    if (computedNames.has(df.path)) {
+      continue;
+    }
     seen.add(df.path);
     const meta = metaByPath.get(df.path);
     resolved.push(mergeField(df, meta));
@@ -526,7 +533,7 @@ export const mergeManifestWithDiscovery = (
   // Add manifest-only fields (not discovered)
   if (manifest) {
     for (const f of manifest.fields) {
-      if (seen.has(f.path)) {
+      if (seen.has(f.path) || computedNames.has(f.path)) {
         continue;
       }
       resolved.push({
@@ -542,7 +549,13 @@ export const mergeManifestWithDiscovery = (
     }
   }
 
-  return resolved;
+  // Drop namespace parents: a path that is only a dotted prefix of others
+  // (e.g. "tenant" when "tenant.name"/"tenant.krs" exist) is structural, not a
+  // fillable field. Discovery registers such roots to infer object/array kinds.
+  const paths = resolved.map((f) => f.path);
+  return resolved.filter(
+    (f) => !paths.some((p) => p !== f.path && p.startsWith(`${f.path}.`)),
+  );
 };
 
 // ── Helpers ──────────────────────────────────────────────
