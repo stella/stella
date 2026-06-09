@@ -12,6 +12,13 @@ function dateFormatSwitch(parsed: ParsedFieldInstruction): string | undefined {
   return parsed.switches.find((s) => s.switch === "@")?.value;
 }
 
+function hasRefNumberingSwitch(parsed: ParsedFieldInstruction): boolean {
+  return parsed.switches.some((s) => {
+    const name = s.switch.toLowerCase();
+    return name === "n" || name === "r" || name === "w";
+  });
+}
+
 type EvaluateFieldOptions = {
   /** Shown for unsupported field types and unresolved references. */
   fallback?: string;
@@ -56,15 +63,17 @@ export function evaluateField(
         : ctx.now.toLocaleTimeString();
     }
 
-    case "DATE":
-    case "CREATEDATE":
-    case "SAVEDATE":
-    case "PRINTDATE": {
+    case "DATE": {
       const format = dateFormatSwitch(parsed);
       return format
         ? formatDate(ctx.now, format)
         : ctx.now.toLocaleDateString();
     }
+
+    case "CREATEDATE":
+    case "SAVEDATE":
+    case "PRINTDATE":
+      return fallback;
 
     case "PAGEREF": {
       const page = parsed.argument
@@ -74,6 +83,9 @@ export function evaluateField(
     }
 
     case "REF": {
+      if (hasRefNumberingSwitch(parsed)) {
+        return fallback;
+      }
       const text = parsed.argument
         ? ctx.bookmarkText.get(parsed.argument)
         : undefined;

@@ -66,6 +66,15 @@ describe("evaluateField references", () => {
     expect(evalInstr("REF _Ref1", ctx)).toBe("Schedule A");
   });
 
+  test("REF numbering switches preserve the cached result", () => {
+    const ctx = baseContext({
+      bookmarkText: new Map([["_Ref1", "1.2 Definitions"]]),
+    });
+    expect(evalInstr("REF _Ref1 \\r", ctx)).toBe("FB");
+    expect(evalInstr("REF _Ref1 \\n", ctx)).toBe("FB");
+    expect(evalInstr("REF _Ref1 \\w", ctx)).toBe("FB");
+  });
+
   test("unresolved references fall back", () => {
     const ctx = baseContext();
     expect(evalInstr("PAGEREF _Missing \\h", ctx)).toBe("FB");
@@ -107,6 +116,13 @@ describe("evaluateField dates and unsupported types", () => {
     expect(evalInstr("DATE \\* MERGEFORMAT", ctx)).toBe(
       ctx.now.toLocaleDateString(),
     );
+  });
+
+  test("document metadata date fields preserve cached fallback values", () => {
+    const ctx = baseContext();
+    expect(evalInstr('CREATEDATE \\@ "yyyy-MM-dd"', ctx)).toBe("FB");
+    expect(evalInstr('SAVEDATE \\@ "yyyy-MM-dd"', ctx)).toBe("FB");
+    expect(evalInstr('PRINTDATE \\@ "yyyy-MM-dd"', ctx)).toBe("FB");
   });
 
   test("unsupported field types return the fallback", () => {
