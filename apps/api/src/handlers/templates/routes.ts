@@ -20,6 +20,7 @@ import manifestTemplate from "@/api/handlers/templates/manifest";
 import prepareTemplate from "@/api/handlers/templates/prepare";
 import previewTemplate from "@/api/handlers/templates/preview";
 import saveTemplateDocument from "@/api/handlers/templates/save-document";
+import suggestEdits from "@/api/handlers/templates/suggest-edits";
 import suggestFields from "@/api/handlers/templates/suggest-fields";
 import updateTemplate from "@/api/handlers/templates/update";
 import getTemplateVersion from "@/api/handlers/templates/versions-get";
@@ -55,6 +56,10 @@ export const templatesRoute = new Elysia({
   .post("/suggest-fields", suggestFields.handler, {
     body: suggestFields.config.body,
     permissions: suggestFields.config.permissions,
+  })
+  .post("/suggest-edits", suggestEdits.handler, {
+    body: suggestEdits.config.body,
+    permissions: suggestEdits.config.permissions,
   })
   // ── CRUD endpoints ─────────────────────────────────
   .get("/", listTemplates.handler, {
