@@ -236,13 +236,26 @@ export function FileTree({
             key={node.id}
             style={{ height: `${FILE_TREE_ROW_HEIGHT_PX}px` }}
           >
-            <button
+            {/* Row is a div (not button) so a name slot can host an inline
+                rename input — interactive elements can't nest inside a button. */}
+            <div
               className={cn(
-                "hover:bg-muted flex h-full min-w-0 flex-1 items-center rounded px-2 text-start text-sm transition-colors duration-150",
+                "hover:bg-muted flex h-full min-w-0 flex-1 cursor-pointer items-center rounded px-2 text-start text-sm transition-colors duration-150",
                 selectedId === node.id && "bg-accent",
               )}
               onClick={() => (isFolder ? onToggle(node.id) : onSelect(node))}
-              type="button"
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  if (isFolder) {
+                    onToggle(node.id);
+                  } else {
+                    onSelect(node);
+                  }
+                }
+              }}
+              role="button"
+              tabIndex={0}
             >
               <FileTreeNameCell
                 depth={depth}
@@ -260,7 +273,7 @@ export function FileTree({
                   </span>
                 )}
               </FileTreeNameCell>
-            </button>
+            </div>
             {renderActions && (
               <span className="invisible absolute end-1 flex gap-0.5 group-hover/row:visible">
                 {renderActions(node)}
