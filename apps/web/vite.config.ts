@@ -136,6 +136,7 @@ export default defineConfig(({ mode }) => {
         "prosemirror-view",
         "jszip",
         "fast-xml-parser",
+        "marked",
       ],
       // @stll/*-wasm packages load their .wasm binaries via
       // `new URL("./foo.wasm32-wasi.wasm", import.meta.url)`. Vite's dep
