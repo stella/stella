@@ -1,39 +1,18 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
 
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
+import { FacetBar } from "@/components/inspector/inspector-facet-bar";
 import type { FileTab } from "@/components/inspector/inspector-store";
-import { usePulse } from "@/hooks/use-pulse";
-import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { DOCX_MIME } from "@/lib/consts";
 import { entityVersionsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
 
 export type Facet = NonNullable<FileTab["facet"]>;
-
-type FacetBarProps = {
-  facet: Facet;
-  facets: readonly Facet[];
-  /**
-   * Facets rendered but not interactive. Used for the AI
-   * suggestions chip when the document hasn't received any AI
-   * proposals yet — the chip stays visible (so users can find it)
-   * but clicking does nothing until there's something to review.
-   */
-  disabledFacets?: ReadonlySet<Facet> | undefined;
-  pulseSeq?: number | undefined;
-  /**
-   * Suffix appended to the active facet's label, e.g. `"v1"` →
-   * "Preview (v1)". Hidden on inactive chips so the row stays
-   * scannable. Omit when no version is meaningful.
-   */
-  activeBadge?: string | undefined;
-  onChange: (next: Facet) => void;
-};
 
 // Sidepeek shows every facet, including Preview (the file viewer
 // itself). Fullscreen drops Preview entirely — the main view IS
@@ -87,86 +66,8 @@ export const FullViewPreviewGuard = ({
   return null;
 };
 
-const FacetBar = ({
-  facet,
-  facets,
-  disabledFacets,
-  pulseSeq,
-  activeBadge,
-  onChange,
-}: FacetBarProps) => {
-  const t = useTranslations();
-  const { isPulsing: pulsing, pulse } = usePulse(1400);
-  const lastPulseSeq = useRef<number | undefined>(pulseSeq);
-
-  useEffect(() => {
-    if (pulseSeq === undefined || pulseSeq === lastPulseSeq.current) {
-      return;
-    }
-    lastPulseSeq.current = pulseSeq;
-    pulse();
-  }, [pulseSeq, pulse]);
-
-  const labels: Record<Facet, string> = {
-    preview: t("common.preview"),
-    metadata: t("common.metadata"),
-    versions: t("fileDetail.versionHistory"),
-    suggestions: t("docxReview.title"),
-    anonymization: t("inspector.facet.anonymization"),
-  };
-
-  return (
-    <div
-      className={cn(
-        // `whitespace-nowrap` on each chip stops multi-word
-        // labels like "Historie verzí" from breaking mid-row
-        // in narrow inspector panes. The row stays single
-        // line; the active version chip moved to the chip's
-        // tooltip / sibling chrome (no longer inline) so the
-        // strip fits without horizontal scroll.
-        "bg-background/85 supports-[backdrop-filter]:bg-background/65 sticky top-0 z-10 flex shrink-0 items-center gap-0.5 border-b px-1.5 backdrop-blur",
-        TOOLBAR_ROW_HEIGHT,
-      )}
-    >
-      {facets.map((value) => {
-        const active = value === facet;
-        const disabled = disabledFacets?.has(value) ?? false;
-        return (
-          <button
-            className={cn(
-              // Active chip never shrinks — its full label
-              // always reads. Inactive chips can shrink and
-              // ellipsis if the row gets tight (full label
-              // is still in the `title` tooltip).
-              "min-w-0 truncate rounded-md px-1.5 py-1 text-xs font-medium whitespace-nowrap transition-colors",
-              active
-                ? "bg-foreground text-background shrink-0"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground",
-              active &&
-                pulsing &&
-                "ring-foreground-disabled animate-pulse ring-2",
-              disabled && "cursor-not-allowed opacity-40 hover:bg-transparent",
-            )}
-            disabled={disabled}
-            key={value}
-            onClick={() => onChange(value)}
-            title={
-              active && activeBadge !== undefined
-                ? `${labels[value]} · ${activeBadge}`
-                : labels[value]
-            }
-            type="button"
-          >
-            {labels[value]}
-          </button>
-        );
-      })}
-    </div>
-  );
-};
-
 /**
- * Per-tab wrapper around `FacetBar`. Three jobs:
+ * Per-tab wrapper around the shared `FacetBar`. Three jobs:
  *  - Resolve the active version label ("v1", "v3", …) for the
  *    current field id and feed it as `activeBadge`.
  *  - Hide the AI-suggestions chip on tabs where the chat can't
@@ -180,31 +81,33 @@ const FacetBar = ({
  * stay scoped per tab — no conditional hooks inside the parent's
  * pdfTabs.map.
  */
-type TabFacetBarProps = Omit<
-  FacetBarProps,
-  "activeBadge" | "facets" | "disabledFacets"
-> & {
+type TabFacetBarProps = {
+  facet: Facet;
+  onChange: (next: Facet) => void;
+  pulseSeq?: number | undefined;
   workspaceId: string;
   entityId: string;
   fieldId: string;
   mimeType: string | undefined;
   /**
-   * Base list before this component drops/disables the
-   * suggestions chip. Sidepeek passes the full list (preview,
-   * metadata, versions, suggestions); fullscreen passes the
-   * preview-less variant.
+   * Base list before this component drops/disables the suggestions
+   * chip. Sidepeek passes the full list (preview, metadata, versions,
+   * suggestions); fullscreen passes the preview-less variant.
    */
   baseFacets: readonly Facet[];
 };
 
 export const TabFacetBar = ({
+  facet,
+  onChange,
+  pulseSeq,
   workspaceId,
   entityId,
   fieldId,
   mimeType,
   baseFacets,
-  ...rest
 }: TabFacetBarProps) => {
+  const t = useTranslations();
   const { data } = useQuery(entityVersionsOptions({ workspaceId, entityId }));
   const version = data?.versions.find((v) => v.file?.fieldId === fieldId);
   const activeBadge = version ? `v${String(version.versionNumber)}` : undefined;
@@ -229,12 +132,23 @@ export const TabFacetBar = ({
     return { facets: baseFacets, disabledFacets: undefined };
   }, [baseFacets, isDocx, suggestionCount]);
 
+  const labels: Record<Facet, string> = {
+    preview: t("common.preview"),
+    metadata: t("common.metadata"),
+    versions: t("fileDetail.versionHistory"),
+    suggestions: t("docxReview.title"),
+    anonymization: t("inspector.facet.anonymization"),
+  };
+
   return (
     <FacetBar
       activeBadge={activeBadge}
       disabledFacets={disabledFacets}
+      facet={facet}
       facets={facets}
-      {...rest}
+      labels={labels}
+      onChange={onChange}
+      pulseSeq={pulseSeq}
     />
   );
 };
