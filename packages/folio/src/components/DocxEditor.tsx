@@ -440,6 +440,7 @@ export function DocxEditor({
   theme,
   showToolbar = true,
   showZoomControl = true,
+  showReviewControls = true,
   showMarginGuides: _showMarginGuides = false,
   marginGuideColor: _marginGuideColor,
   initialZoom = 1,
@@ -2957,7 +2958,7 @@ export function DocxEditor({
     }
   };
 
-  const toolbarPriorityExtra = (
+  const toolbarPriorityExtra = !showReviewControls ? null : (
     <div className="flex shrink-0 items-center gap-1">
       <Button
         onClick={toggleTrackChanges}
