@@ -23,6 +23,10 @@ function hasPageRefPositionSwitch(parsed: ParsedFieldInstruction): boolean {
   return parsed.switches.some((s) => s.switch.toLowerCase() === "p");
 }
 
+function hasSeqHiddenSwitch(parsed: ParsedFieldInstruction): boolean {
+  return parsed.switches.some((s) => s.switch.toLowerCase() === "h");
+}
+
 type EvaluateFieldOptions = {
   /** Shown for unsupported field types and unresolved references. */
   fallback?: string;
@@ -100,6 +104,9 @@ export function evaluateField(
     }
 
     case "SEQ": {
+      if (hasSeqHiddenSwitch(parsed)) {
+        return fallback;
+      }
       const value =
         options.instanceId === undefined
           ? undefined

@@ -94,6 +94,11 @@ describe("evaluateField SEQ", () => {
     expect(evalInstr("SEQ Figure \\* ROMAN", ctx, 42)).toBe("IV");
   });
 
+  test("hidden SEQ fields preserve the cached result", () => {
+    const ctx = baseContext({ seqValues: new Map([[42, 4]]) });
+    expect(evalInstr("SEQ Figure \\h", ctx, 42)).toBe("FB");
+  });
+
   test("falls back when no precomputed value exists for the instance", () => {
     const ctx = baseContext();
     expect(evalInstr("SEQ Figure", ctx, 99)).toBe("FB");
