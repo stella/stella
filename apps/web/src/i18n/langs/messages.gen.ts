@@ -508,6 +508,7 @@ type Messages = {
       "rejected": "Rejected";
       "stale": "Stale";
     };
+    "suggestionStep": "{current} of {total}";
     "thinking": "Working with context";
     "tool": {
       "apply-active-docx-edits": "Preparing document edits";
@@ -2053,19 +2054,14 @@ type Messages = {
     "structureWarnings": "{count, plural, one {# structure warning} other {# structure warnings}}";
     "studio": {
       "addComputedField": "Add computed field";
-      "aiAccept": "Add field";
-      "aiAnalyzing": "Analyzing…";
+      "aiBarPlaceholder": "Instructions for field suggestions (optional)";
       "aiDrafted": "AI-drafted";
-      "aiInstructionsPlaceholder": "Extra instructions for the AI (optional)";
+      "aiFoundFields": "{count, plural, =1 {Suggested 1 field placement — review it in the document.} other {Suggested # field placements — step through them in the document.}}";
       "aiNoFields": "The AI didn't suggest any fields";
       "aiNoText": "There's no text to analyze";
+      "aiPresetPrompt": "Suggest fillable template fields";
       "aiPromptPlaceholder": "Describe what AI should draft for this field, e.g. the scope of this power of attorney.";
-      "aiReject": "Dismiss";
-      "aiScopeDocument": "Whole document";
-      "aiScopeSelection": "Selection";
-      "aiSpanNotFound": "Couldn't find that text in the document";
       "aiSuggest": "Suggest fields";
-      "aiSuggestFailed": "Couldn't get field suggestions";
       "clauseSlotHelp": "A clause from the library is inserted here at fill time. Manage linked clauses in the Clauses tab.";
       "computed": "Computed";
       "conditionBlockHelp": "This block shows only when:";

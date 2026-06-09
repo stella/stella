@@ -21,6 +21,8 @@ import {
   ArrowUpIcon,
   CheckIcon,
   ChevronDownIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
   LoaderCircleIcon,
   SquareIcon,
   SquarePenIcon,
@@ -530,6 +532,24 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
     [messages],
   );
 
+  // Report each successfully applied suggestion to the mounting surface
+  // (config.onSuggestionApplied), from whichever path applied it.
+  const notifyApplied = useCallback(
+    (candidates: AISuggestion[], appliedIds: readonly string[]) => {
+      const onApplied = config.onSuggestionApplied;
+      if (!onApplied) {
+        return;
+      }
+      const applied = new Set(appliedIds);
+      for (const suggestion of candidates) {
+        if (applied.has(suggestion.id)) {
+          onApplied(suggestion);
+        }
+      }
+    },
+    [config.onSuggestionApplied],
+  );
+
   // Apply a single suggestion at the given mode. Split out from
   // handleAcceptOne so resolveFirstAccept can re-run the deferred
   // accept against the *freshly chosen* mode without going back
@@ -561,6 +581,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
         author,
       });
       applyResultToMessages(result);
+      notifyApplied([target], result.applied);
     },
     [
       findSuggestion,
@@ -569,6 +590,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
       editorView,
       author,
       applyResultToMessages,
+      notifyApplied,
       setPendingAccepts,
     ],
   );
@@ -577,7 +599,8 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
     (suggestionId: string) => {
       // First-time accept: ask whether to apply with tracked changes,
       // remember the answer, and defer this accept until they pick.
-      if (applyModeStored === null) {
+      // Surfaces with a pinned mode (promptForApplyMode: false) skip the gate.
+      if (applyModeStored === null && config.promptForApplyMode !== false) {
         const target = findSuggestion(suggestionId);
         if (!target || target.status !== "pending") {
           return;
@@ -587,7 +610,13 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
       }
       acceptOneAtMode(suggestionId, applyMode);
     },
-    [applyModeStored, findSuggestion, acceptOneAtMode, applyMode],
+    [
+      applyModeStored,
+      config.promptForApplyMode,
+      findSuggestion,
+      acceptOneAtMode,
+      applyMode,
+    ],
   );
 
   const handleRejectOne = useCallback(
@@ -644,6 +673,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
         author,
       });
       applyResultToMessages(result);
+      notifyApplied(targets, result.applied);
     },
     [
       messages,
@@ -652,13 +682,14 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
       editorView,
       author,
       applyResultToMessages,
+      notifyApplied,
       setPendingAccepts,
     ],
   );
 
   const handleAcceptGroup = useCallback(
     (messageId: string) => {
-      if (applyModeStored === null) {
+      if (applyModeStored === null && config.promptForApplyMode !== false) {
         const message = messages.find(
           (m): m is AssistantThreadMessage =>
             m.role === "assistant" && m.id === messageId,
@@ -677,7 +708,13 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
       }
       acceptGroupAtMode(messageId, applyMode);
     },
-    [applyModeStored, messages, acceptGroupAtMode, applyMode],
+    [
+      applyModeStored,
+      config.promptForApplyMode,
+      messages,
+      acceptGroupAtMode,
+      applyMode,
+    ],
   );
 
   const handleRejectGroup = useCallback(
@@ -737,6 +774,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
       author,
     });
     applyResultToMessages(result);
+    notifyApplied(targets, result.applied);
   }, [
     readOnly,
     editorView,
@@ -745,6 +783,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
     applyMode,
     author,
     applyResultToMessages,
+    notifyApplied,
     setPendingAccepts,
   ]);
 
@@ -775,6 +814,83 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
     },
     [editorView, findSuggestion],
   );
+
+  // ---- suggestion stepper --------------------------------------------------
+
+  // Pending suggestions in document order — the go-over-the-doc review walks
+  // them top to bottom.
+  const orderedPending = useMemo(
+    () =>
+      allSuggestions
+        .filter((s) => s.status === "pending")
+        .toSorted((a, b) => a.range.from - b.range.from),
+    [allSuggestions],
+  );
+
+  const focusedPendingIndex = focusedId
+    ? orderedPending.findIndex((s) => s.id === focusedId)
+    : -1;
+  const stepperIndex = focusedPendingIndex === -1 ? 0 : focusedPendingIndex;
+
+  const stepBy = useCallback(
+    (delta: number) => {
+      if (orderedPending.length === 0) {
+        return;
+      }
+      const target = orderedPending.at(
+        (stepperIndex + delta + orderedPending.length) % orderedPending.length,
+      );
+      if (target) {
+        handleFocusSuggestion(target.id);
+      }
+    },
+    [orderedPending, stepperIndex, handleFocusSuggestion],
+  );
+
+  // Accept/dismiss the focused suggestion and advance to the next pending one
+  // (the one after it in document order, else the previous).
+  const resolveCurrent = useCallback(
+    (action: "accept" | "dismiss") => {
+      const current = orderedPending.at(stepperIndex);
+      if (!current) {
+        return;
+      }
+      const next =
+        orderedPending.at(stepperIndex + 1) ??
+        (stepperIndex > 0 ? orderedPending.at(stepperIndex - 1) : undefined);
+      if (action === "accept") {
+        handleAcceptOne(current.id);
+      } else {
+        handleRejectOne(current.id);
+      }
+      if (next) {
+        handleFocusSuggestion(next.id);
+      } else {
+        setFocusedId(null);
+      }
+    },
+    [
+      orderedPending,
+      stepperIndex,
+      handleAcceptOne,
+      handleRejectOne,
+      handleFocusSuggestion,
+    ],
+  );
+
+  // When a generation lands new suggestions, jump to the first one so the
+  // review starts immediately.
+  const seenSuggestionIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const seen = seenSuggestionIdsRef.current;
+    const fresh = orderedPending.find((s) => !seen.has(s.id));
+    for (const s of orderedPending) {
+      seen.add(s.id);
+    }
+    if (fresh) {
+      handleFocusSuggestion(fresh.id);
+    }
+  }, [orderedPending, handleFocusSuggestion]);
 
   // ---- citation activate ---------------------------------------------------
 
@@ -869,6 +985,22 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
     />
   );
 
+  // The go-over-the-doc review bar: floats above the prompt bar while there
+  // are pending suggestions, stepping through them in document order.
+  const stepperBar =
+    layout === "floating" &&
+    mode === "edit" &&
+    showAcceptUI &&
+    orderedPending.length > 0 ? (
+      <SuggestionStepper
+        index={stepperIndex}
+        total={orderedPending.length}
+        onStep={stepBy}
+        onAccept={() => resolveCurrent("accept")}
+        onDismiss={() => resolveCurrent("dismiss")}
+      />
+    ) : null;
+
   if (layout === "standalone") {
     return (
       <TooltipProvider delay={300}>
@@ -883,6 +1015,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
   return (
     <TooltipProvider delay={300}>
       {threadPanel}
+      {stepperBar}
       {promptBar}
     </TooltipProvider>
   );
@@ -1046,6 +1179,58 @@ export function PromptBarShell({
       )}
     >
       {children}
+    </div>
+  );
+}
+
+type SuggestionStepperProps = {
+  index: number;
+  total: number;
+  onStep: (delta: number) => void;
+  onAccept: () => void;
+  onDismiss: () => void;
+};
+
+/** Compact floating review bar: step through the pending suggestions in
+ *  document order and accept/dismiss each in place. */
+function SuggestionStepper({
+  index,
+  total,
+  onStep,
+  onAccept,
+  onDismiss,
+}: SuggestionStepperProps) {
+  const t = useTranslations();
+  return (
+    <div className="bg-background/75 border-foreground/15 absolute start-1/2 bottom-26 z-50 flex -translate-x-1/2 items-center gap-1 rounded-full border px-1.5 py-1 shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)] backdrop-blur-xl backdrop-saturate-150">
+      <Button
+        aria-label={t("common.previous")}
+        onClick={() => onStep(-1)}
+        size="icon-sm"
+        variant="ghost"
+      >
+        <ChevronLeftIcon />
+      </Button>
+      <span className="text-muted-foreground min-w-12 text-center text-xs tabular-nums">
+        {t("chat.suggestionStep", {
+          current: String(index + 1),
+          total: String(total),
+        })}
+      </span>
+      <Button
+        aria-label={t("common.next")}
+        onClick={() => onStep(1)}
+        size="icon-sm"
+        variant="ghost"
+      >
+        <ChevronRightIcon />
+      </Button>
+      <Button className="ms-1" onClick={onDismiss} size="sm" variant="ghost">
+        {t("folio.dismiss")}
+      </Button>
+      <Button onClick={onAccept} size="sm">
+        {t("common.accept")}
+      </Button>
     </div>
   );
 }
