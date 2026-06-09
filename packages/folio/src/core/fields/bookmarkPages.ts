@@ -13,7 +13,11 @@ export function buildBookmarkPageMap(
 ): Map<string, number> {
   const bookmarksByBlockId = new Map<BlockId, readonly string[]>();
   for (const block of blocks) {
-    if (block.kind === "paragraph" && block.bookmarks?.length) {
+    if (
+      block.kind === "paragraph" &&
+      block.bookmarks &&
+      block.bookmarks.length > 0
+    ) {
       bookmarksByBlockId.set(block.id, block.bookmarks);
     }
   }

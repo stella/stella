@@ -916,6 +916,40 @@ export const ParagraphExtension = createNodeExtension({
             );
 
             // TOC entries with hyperlinks
+            // Right tab with a dot leader so each entry's page number aligns at
+            // the section's content width (page width minus left/right margins,
+            // in twips). Read from the document's section properties; fall back
+            // to US Letter with 1in margins when none are present.
+            const DEFAULT_MARGIN_TWIPS = 1440;
+            let tocTabStopTwips = 12_240 - 2 * DEFAULT_MARGIN_TWIPS; // 9360
+            let tabStopResolved = false;
+            state.doc.descendants((node) => {
+              if (tabStopResolved || node.type.name !== "paragraph") {
+                return undefined;
+              }
+              const sp = node.attrs["_sectionProperties"] as {
+                pageWidth?: number;
+                marginLeft?: number;
+                marginRight?: number;
+              } | null;
+              if (sp && typeof sp.pageWidth === "number" && sp.pageWidth > 0) {
+                const left =
+                  typeof sp.marginLeft === "number"
+                    ? sp.marginLeft
+                    : DEFAULT_MARGIN_TWIPS;
+                const right =
+                  typeof sp.marginRight === "number"
+                    ? sp.marginRight
+                    : DEFAULT_MARGIN_TWIPS;
+                tocTabStopTwips = sp.pageWidth - left - right;
+                tabStopResolved = true;
+              }
+              return undefined;
+            });
+            // Each entry ends with a PAGEREF to the heading's bookmark, which
+            // resolves to the heading's live page number at paint.
+            const canPageNumber = Boolean(s.nodes["field"] && s.nodes["tab"]);
+
             for (const entry of bookmarkEntries) {
               const indent = entry.level * 720; // 0.5 inch per level in twips
               const tocStyleId = `TOC${entry.level + 1}`; // TOC1, TOC2, etc.
@@ -926,14 +960,40 @@ export const ParagraphExtension = createNodeExtension({
                 href: `#${entry.name}`,
               });
 
+              const content = [s.text(entry.text, [linkMark])];
+              if (canPageNumber) {
+                content.push(
+                  s.node("tab"),
+                  s.node("field", {
+                    fieldType: "PAGEREF",
+                    instruction: `PAGEREF ${entry.name} \\h`,
+                    displayText: "1",
+                    fieldKind: "complex",
+                    fldLock: false,
+                    dirty: true,
+                  }),
+                );
+              }
+
               tocNodes.push(
                 s.node(
                   "paragraph",
                   {
                     styleId: tocStyleId,
                     indentLeft: indent > 0 ? indent : null,
+                    ...(canPageNumber
+                      ? {
+                          tabs: [
+                            {
+                              position: tocTabStopTwips,
+                              alignment: "right",
+                              leader: "dot",
+                            },
+                          ],
+                        }
+                      : {}),
                   },
-                  [s.text(entry.text, [linkMark])],
+                  content,
                 ),
               );
             }
