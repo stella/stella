@@ -36,7 +36,11 @@ import type { Transaction } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import { useTranslations } from "use-intl";
 
-import { buildPositionalText, getTemplateDirectives } from "@stll/folio";
+import {
+  buildPositionalText,
+  getTemplateDirectives,
+  setTemplatePreviewValues,
+} from "@stll/folio";
 import type { DirectiveRange, DocxEditorRef } from "@stll/folio";
 import { isFieldPath } from "@stll/template-conditions";
 import { Button } from "@stll/ui/components/button";
@@ -165,6 +169,9 @@ export const TemplateStudioPage = ({
   const [hasSelection, setHasSelection] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showDirectives, setShowDirectives] = useState(true);
+  // Latest fill-preview values; re-dispatched when the eye toggles modes
+  // (eye on = orange preview accents, eye off = plain final-looking text).
+  const fillPreviewRef = useRef<Record<string, string> | null>(null);
   // Reactive twin of editorViewRef for children that re-render on view
   // creation (the floating AI bar needs a live prop, not a ref).
   const [liveEditorView, setLiveEditorView] = useState<EditorView | null>(null);
@@ -235,6 +242,7 @@ export const TemplateStudioPage = ({
         actionsRef.current?.focusAdjacentField(direction),
       focusField: (path) => actionsRef.current?.focusField(path),
       focusPosition: (pos) => actionsRef.current?.focusPosition(pos),
+      setFillPreview: (values) => actionsRef.current?.setFillPreview(values),
     });
     return () => setActions(null);
   }, [setActions]);
@@ -289,6 +297,19 @@ export const TemplateStudioPage = ({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once per template; the manifest is the fixed source doc for this templateId and re-seeding would discard edits made in the inspector tab.
   }, [templateId]);
+
+  // The eye toggles the preview between accented and plain rendering.
+  useEffect(() => {
+    const view = editorViewRef.current;
+    const values = fillPreviewRef.current;
+    if (!view || values === null) {
+      return;
+    }
+    setTemplatePreviewValues(view, {
+      values,
+      mode: showDirectives ? "highlighted" : "plain",
+    });
+  }, [showDirectives]);
 
   // Warn before a tab close / hard navigation while there are unsaved edits.
   useEffect(() => {
@@ -531,6 +552,19 @@ export const TemplateStudioPage = ({
 
   actionsRef.current = {
     toggleDirectives: () => setShowDirectives((v) => !v),
+    setFillPreview: (values) => {
+      fillPreviewRef.current = values;
+      const view = editorViewRef.current;
+      if (!view) {
+        return;
+      }
+      setTemplatePreviewValues(
+        view,
+        values === null
+          ? null
+          : { values, mode: showDirectives ? "highlighted" : "plain" },
+      );
+    },
     insertField,
     insertCondition,
     insertLoop,
@@ -1463,6 +1497,20 @@ const FieldFace = ({
   const [exampleValue, setExampleValue] = useState<string | undefined>(
     undefined,
   );
+  const [previewValue, setPreviewValue] = useState("");
+
+  const pushPreview = (value: string) => {
+    setPreviewValue(value);
+    actions?.setFillPreview(value === "" ? null : { [field.path]: value });
+  };
+
+  // Clear the in-document preview when the face leaves or switches fields.
+  useEffect(
+    () => () => {
+      useTemplateStudioStore.getState().actions?.setFillPreview(null);
+    },
+    [field.path],
+  );
 
   const handleSuggest = async () => {
     if (!actions) {
@@ -1486,6 +1534,9 @@ const FieldFace = ({
       ...(config.aiPrompt !== undefined ? { aiPrompt: config.aiPrompt } : {}),
     });
     setExampleValue(config.exampleValue);
+    if (config.exampleValue !== undefined && previewValue === "") {
+      pushPreview(config.exampleValue);
+    }
   };
 
   let fillMode: "person" | "textAi" | "ai" = "person";
@@ -1496,109 +1547,116 @@ const FieldFace = ({
   }
 
   return (
-    <ScrollArea className="min-h-0 flex-1">
-      <ScopeHeader
-        action={
-          <div className="flex items-center gap-0.5">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <ScrollArea className="min-h-0 flex-1">
+        <ScopeHeader
+          action={
+            <div className="flex items-center gap-0.5">
+              <Button
+                aria-label={t("common.previous")}
+                disabled={fieldCount < 2}
+                onClick={() => actions?.focusAdjacentField(-1)}
+                size="icon-sm"
+                variant="ghost"
+              >
+                <ChevronLeftIcon />
+              </Button>
+              <Button
+                aria-label={t("common.next")}
+                disabled={fieldCount < 2}
+                onClick={() => actions?.focusAdjacentField(1)}
+                size="icon-sm"
+                variant="ghost"
+              >
+                <ChevronRightIcon />
+              </Button>
+              <Button
+                aria-label={t("templates.studio.suggestConfig")}
+                disabled={suggesting}
+                onClick={() => void handleSuggest()}
+                size="icon-sm"
+                title={t("templates.studio.suggestConfig")}
+                variant="ghost"
+              >
+                {suggesting ? (
+                  <Loader2Icon className="animate-spin" />
+                ) : (
+                  <WandSparklesIcon />
+                )}
+              </Button>
+            </div>
+          }
+          subtitle={
+            <FieldPathEditor
+              key={field.path}
+              onRename={(next) => {
+                if (!actions) {
+                  return false;
+                }
+                return actions.renameFieldPath(field.path, next);
+              }}
+              path={field.path}
+            />
+          }
+          title={t("templates.studio.scopeField")}
+        />
+        <p className="text-muted-foreground px-4 py-3 text-xs leading-relaxed">
+          {t("templates.studio.fieldHelp")}
+        </p>
+        <FieldConfigEditor embedded field={field} onUpdate={onUpdate} />
+        <div className="flex flex-col gap-2 border-t px-4 py-4">
+          <Label className="text-sm">{t("templates.studio.whoFills")}</Label>
+          <div className="flex items-center gap-1">
             <Button
-              aria-label={t("common.previous")}
-              disabled={fieldCount < 2}
-              onClick={() => actions?.focusAdjacentField(-1)}
-              size="icon-sm"
-              variant="ghost"
+              className="flex-1"
+              onClick={() => onUpdate({ aiPrompt: undefined, aiAdapt: false })}
+              size="sm"
+              variant={fillMode === "person" ? "secondary" : "ghost"}
             >
-              <ChevronLeftIcon />
+              {t("templates.studio.filledByPerson")}
             </Button>
             <Button
-              aria-label={t("common.next")}
-              disabled={fieldCount < 2}
-              onClick={() => actions?.focusAdjacentField(1)}
-              size="icon-sm"
-              variant="ghost"
+              className="flex-1"
+              onClick={() => onUpdate({ aiPrompt: undefined, aiAdapt: true })}
+              size="sm"
+              variant={fillMode === "textAi" ? "secondary" : "ghost"}
             >
-              <ChevronRightIcon />
+              {t("templates.studio.textPlusAi")}
             </Button>
             <Button
-              aria-label={t("templates.studio.suggestConfig")}
-              disabled={suggesting}
-              onClick={() => void handleSuggest()}
-              size="icon-sm"
-              title={t("templates.studio.suggestConfig")}
-              variant="ghost"
+              className="flex-1"
+              onClick={() =>
+                onUpdate({ aiPrompt: field.aiPrompt ?? "", aiAdapt: false })
+              }
+              size="sm"
+              variant={fillMode === "ai" ? "secondary" : "ghost"}
             >
-              {suggesting ? (
-                <Loader2Icon className="animate-spin" />
-              ) : (
-                <WandSparklesIcon />
-              )}
+              <WandSparklesIcon className="size-3.5" />
+              {t("templates.studio.draftedByAi")}
             </Button>
           </div>
-        }
-        subtitle={
-          <FieldPathEditor
-            key={field.path}
-            onRename={(next) => {
-              if (!actions) {
-                return false;
-              }
-              return actions.renameFieldPath(field.path, next);
-            }}
-            path={field.path}
-          />
-        }
-        title={t("templates.studio.scopeField")}
-      />
-      <p className="text-muted-foreground px-4 py-3 text-xs leading-relaxed">
-        {t("templates.studio.fieldHelp")}
-      </p>
-      <FieldConfigEditor embedded field={field} onUpdate={onUpdate} />
-      <div className="flex flex-col gap-2 border-t px-4 py-4">
-        <Label className="text-sm">{t("templates.studio.whoFills")}</Label>
-        <div className="flex items-center gap-1">
-          <Button
-            className="flex-1"
-            onClick={() => onUpdate({ aiPrompt: undefined, aiAdapt: false })}
-            size="sm"
-            variant={fillMode === "person" ? "secondary" : "ghost"}
-          >
-            {t("templates.studio.filledByPerson")}
-          </Button>
-          <Button
-            className="flex-1"
-            onClick={() => onUpdate({ aiPrompt: undefined, aiAdapt: true })}
-            size="sm"
-            variant={fillMode === "textAi" ? "secondary" : "ghost"}
-          >
-            {t("templates.studio.textPlusAi")}
-          </Button>
-          <Button
-            className="flex-1"
-            onClick={() =>
-              onUpdate({ aiPrompt: field.aiPrompt ?? "", aiAdapt: false })
-            }
-            size="sm"
-            variant={fillMode === "ai" ? "secondary" : "ghost"}
-          >
-            <WandSparklesIcon className="size-3.5" />
-            {t("templates.studio.draftedByAi")}
-          </Button>
+          {fillMode === "textAi" ? (
+            <p className="text-muted-foreground text-xs leading-relaxed">
+              {t("templates.aiAdaptHint")}
+            </p>
+          ) : null}
+          {fillMode === "ai" ? (
+            <Textarea
+              onChange={(e) => onUpdate({ aiPrompt: e.target.value })}
+              placeholder={t("templates.studio.aiPromptPlaceholder")}
+              rows={3}
+              value={field.aiPrompt}
+            />
+          ) : null}
         </div>
-        {fillMode === "textAi" ? (
-          <p className="text-muted-foreground text-xs leading-relaxed">
-            {t("templates.aiAdaptHint")}
-          </p>
-        ) : null}
-        {fillMode === "ai" ? (
-          <Textarea
-            onChange={(e) => onUpdate({ aiPrompt: e.target.value })}
-            placeholder={t("templates.studio.aiPromptPlaceholder")}
-            rows={3}
-            value={field.aiPrompt}
-          />
-        ) : null}
-      </div>
-      <FieldPreview exampleValue={exampleValue} field={field} />
-    </ScrollArea>
+      </ScrollArea>
+      <FieldPreview
+        exampleValue={exampleValue}
+        field={field}
+        onValueChange={pushPreview}
+        value={previewValue}
+      />
+    </div>
   );
 };
 
@@ -1663,26 +1721,38 @@ const FieldPathEditor = ({
 };
 
 /** Live preview of the control this field becomes in the fill form. */
+/** Pinned under the field config: type here and the value shows live in the
+ *  document, replacing the {{marker}} (orange when the directive overlay is
+ *  on, plain when it's off). */
 const FieldPreview = ({
   field,
   exampleValue,
+  value,
+  onValueChange,
 }: {
   field: StudioField;
   exampleValue: string | undefined;
+  value: string;
+  onValueChange: (value: string) => void;
 }) => {
   const t = useTranslations();
   const label = field.label || field.path;
   return (
-    <div className="flex flex-col gap-2 border-t px-4 py-4">
+    <div className="flex shrink-0 flex-col gap-2 border-t px-4 py-4">
       <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
         {t("templates.studio.fillFormPreview")}
       </p>
-      <div className="bg-muted/30 pointer-events-none flex flex-col gap-1.5 rounded-md border p-3">
+      <div className="bg-muted/30 flex flex-col gap-1.5 rounded-md border p-3">
         <Label className="text-xs">
           {label}
           {field.required ? " *" : ""}
         </Label>
-        <FieldPreviewControl exampleValue={exampleValue} field={field} />
+        <FieldPreviewControl
+          exampleValue={exampleValue}
+          field={field}
+          onValueChange={onValueChange}
+          value={value}
+        />
       </div>
     </div>
   );
@@ -1691,25 +1761,52 @@ const FieldPreview = ({
 const FieldPreviewControl = ({
   field,
   exampleValue,
+  value,
+  onValueChange,
 }: {
   field: StudioField;
   exampleValue: string | undefined;
+  value: string;
+  onValueChange: (value: string) => void;
 }) => {
   if (field.inputType === "textarea") {
-    return <Textarea placeholder={exampleValue} readOnly rows={3} />;
+    return (
+      <Textarea
+        onChange={(e) => onValueChange(e.target.value)}
+        placeholder={exampleValue}
+        rows={3}
+        value={value}
+      />
+    );
   }
   if (field.inputType === "boolean") {
     return <Checkbox checked={false} />;
   }
   if (field.inputType === "select") {
     return (
-      <Input placeholder={field.options.join(" / ") || exampleValue} readOnly />
+      <Input
+        onChange={(e) => onValueChange(e.target.value)}
+        placeholder={field.options.join(" / ") || exampleValue}
+        value={value}
+      />
     );
   }
   if (field.inputType === "date") {
-    return <Input placeholder={exampleValue ?? "2026-01-31"} readOnly />;
+    return (
+      <Input
+        onChange={(e) => onValueChange(e.target.value)}
+        placeholder={exampleValue ?? "2026-01-31"}
+        value={value}
+      />
+    );
   }
-  return <Input placeholder={exampleValue} readOnly />;
+  return (
+    <Input
+      onChange={(e) => onValueChange(e.target.value)}
+      placeholder={exampleValue}
+      value={value}
+    />
+  );
 };
 
 const NameExprList = ({

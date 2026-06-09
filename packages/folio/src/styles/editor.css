@@ -933,3 +933,22 @@
   border-radius: 2px;
   background: color-mix(in srgb, #0000ff 50%, transparent);
 }
+
+/* ── Template fill preview ─────────────────────────────────────────────
+   Live fill preview: the {{marker}} text is hidden and the typed value
+   renders in its place. Highlighted mode paints the value orange so the
+   preview is unmistakable; plain mode approximates the final document. */
+.folio-template-preview-original {
+  display: none;
+}
+
+.folio-template-preview-value {
+  white-space: pre-wrap;
+}
+
+.folio-template-preview-value--highlighted {
+  padding: 0 2px;
+  border-radius: 3px;
+  background: color-mix(in srgb, #f97316 28%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #f97316 45%, transparent);
+}
