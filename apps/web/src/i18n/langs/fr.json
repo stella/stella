@@ -2179,7 +2179,7 @@
       "conditionsSectionHelp": "Sélectionnez du texte dans le document → clic droit → Afficher seulement si…",
       "draftedByAi": "IA",
       "emptyClauseSlot": "Emplacement de clause vide",
-      "existingCondition": "Existing condition…",
+      "existingCondition": "Condition existante…",
       "existingField": "Champ existant…",
       "expressionPlaceholder": "expression",
       "fieldHelp": "Quand quelqu'un remplit ce modèle, cette valeur lui est demandée. Vous décidez ici de l'apparence de cette question.",
