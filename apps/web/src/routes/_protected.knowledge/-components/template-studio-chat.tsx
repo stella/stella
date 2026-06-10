@@ -278,6 +278,45 @@ const TemplateStudioChatInner = ({
   // Field metadata per suggestion id, consumed on accept (AISuggestion
   // itself carries only text + range + display badges).
   const fieldMetaRef = useRef(new Map<string, SuggestedFieldMeta>());
+  // Accept side-effects per suggestion id (bilingual-mirror flow).
+  const mirrorAcceptRef = useRef(new Map<string, () => void>());
+
+  // The page queues bilingual-mirror proposals through the store; this
+  // surface places them because it is the Studio's only suggestion
+  // decoration writer (a second writer would clobber the decorations).
+  const pendingMirrorRequests = useTemplateStudioStore(
+    (s) => s.pendingMirrorRequests,
+  );
+  const clearMirrorRequests = useTemplateStudioStore(
+    (s) => s.clearMirrorRequests,
+  );
+  useEffect(() => {
+    if (pendingMirrorRequests.length === 0) {
+      return;
+    }
+    const view = getView() ?? editorView;
+    if (!view) {
+      // Keep the queue; the effect re-runs once the live view arrives.
+      return;
+    }
+    const specs = pendingMirrorRequests.map(({ spec, onAccepted }) => ({
+      ...spec,
+      registerMeta: (suggestionId: string) => {
+        spec.registerMeta?.(suggestionId);
+        if (onAccepted) {
+          mirrorAcceptRef.current.set(suggestionId, onAccepted);
+        }
+      },
+    }));
+    const { suggestions: created } = buildReplacementSuggestions(
+      view.state.doc,
+      specs,
+    );
+    if (created.length > 0) {
+      setSuggestions((prev) => [...prev, ...created]);
+    }
+    clearMirrorRequests();
+  }, [pendingMirrorRequests, editorView, getView, clearMirrorRequests]);
 
   // Push suggestion decorations into the live editor. This surface is
   // the only decoration writer in the Studio, so empty pushes (after
@@ -364,6 +403,7 @@ const TemplateStudioChatInner = ({
     );
     for (const id of result.applied) {
       registerAcceptedField(id);
+      mirrorAcceptRef.current.get(id)?.();
     }
     if (result.applied.length > 0) {
       markDirty();
