@@ -402,6 +402,17 @@ export type FieldMeta = {
    */
   formula?: string | undefined;
   /**
+   * Boolean rule condition: a yes/no value derived from a rule expression in
+   * the @stll/template-conditions grammar (e.g. `client_type == "company"`,
+   * `signing_date >= "2026-06-10" and amount > 1000`), evaluated at fill time.
+   * Meaningful only on a boolean field; markers reference it by field path
+   * (`{{#if field_path}}`). A derived value source, so it is mutually exclusive
+   * with the others ({@link formula}, {@link aiPrompt}, {@link aiAdapt},
+   * {@link lookup}, {@link parts}); a plain boolean field (no condition, no
+   * aiPrompt) is asked as a yes/no question in the fill form instead.
+   */
+  condition?: string | undefined;
+  /**
    * Locale-aware rendering for a "date" {@link inputType} field: the
    * submitted ISO date (the date input's value) is formatted in this locale
    * and style before substitution — and before any AI step, so a field that
@@ -411,20 +422,9 @@ export type FieldMeta = {
   dateFormat?: FieldDateFormat | undefined;
 };
 
-/**
- * Matches `NamedCondition` from `@stll/template-conditions`.
- * Kept here for co-location with `TemplateManifest`.
- */
-export type NamedCondition = {
-  name: string;
-  expression: string;
-  label?: string;
-};
-
 export type TemplateManifest = {
   version: number;
   fields: FieldMeta[];
-  conditions: NamedCondition[];
 };
 
 const isRecordLike = (value: unknown): value is Record<string, unknown> =>
@@ -520,6 +520,19 @@ export const isFieldMeta = (value: unknown): value is FieldMeta => {
     return false;
   }
 
+  // A condition field is a boolean derived by rule at fill time; like a
+  // formula it cannot also carry another value source.
+  if (
+    value["condition"] !== undefined &&
+    (value["formula"] !== undefined ||
+      value["aiPrompt"] !== undefined ||
+      value["aiAdapt"] !== undefined ||
+      value["lookup"] !== undefined ||
+      value["parts"] !== undefined)
+  ) {
+    return false;
+  }
+
   return (
     (value["label"] === undefined || typeof value["label"] === "string") &&
     (value["hint"] === undefined || typeof value["hint"] === "string") &&
@@ -544,16 +557,12 @@ export const isFieldMeta = (value: unknown): value is FieldMeta => {
         isFieldPath(value["optionsFrom"]))) &&
     (value["lookup"] === undefined || isFieldLookup(value["lookup"])) &&
     (value["formula"] === undefined || typeof value["formula"] === "string") &&
+    (value["condition"] === undefined ||
+      typeof value["condition"] === "string") &&
     (value["dateFormat"] === undefined ||
       isFieldDateFormat(value["dateFormat"]))
   );
 };
-
-export const isNamedCondition = (value: unknown): value is NamedCondition =>
-  isRecordLike(value) &&
-  typeof value["name"] === "string" &&
-  typeof value["expression"] === "string" &&
-  (value["label"] === undefined || typeof value["label"] === "string");
 
 const isRichRun = (value: unknown): value is RichRun =>
   isRecordLike(value) &&
@@ -615,9 +624,7 @@ export const isTemplateManifest = (value: unknown): value is TemplateManifest =>
   typeof value["version"] === "number" &&
   Number.isFinite(value["version"]) &&
   Array.isArray(value["fields"]) &&
-  value["fields"].every(isFieldMeta) &&
-  Array.isArray(value["conditions"]) &&
-  value["conditions"].every(isNamedCondition);
+  value["fields"].every(isFieldMeta);
 
 export type ResolvedField = {
   path: string;
@@ -650,6 +657,10 @@ export type ResolvedField = {
   /** Mirrors {@link FieldMeta.formula}: the value is derived at fill time, so
    *  the fill form renders no input for the field. */
   formula?: string | undefined;
+  /** Mirrors {@link FieldMeta.condition}: a boolean derived by rule at fill
+   *  time, so the fill form renders no input (computed/derived); a plain
+   *  boolean field without a condition is asked as a yes/no question instead. */
+  condition?: string | undefined;
   /** Mirrors {@link FieldMeta.dateFormat}: the fill form can preview how the
    *  entered date will render in the document's language. */
   dateFormat?: FieldDateFormat | undefined;

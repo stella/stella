@@ -31,8 +31,14 @@ export const resolveAiFields = async ({
   fields: readonly FieldMeta[];
   generate: AiFieldGenerator | undefined;
 }): Promise<Record<string, unknown>> => {
+  // A boolean field with an aiPrompt is a yes/no decision, not a string draft;
+  // it is resolved to a real boolean by resolveAiConditions instead, so it is
+  // excluded here.
   const aiFields = fields.filter(
-    (field) => field.aiPrompt !== undefined && field.aiPrompt !== "",
+    (field) =>
+      field.aiPrompt !== undefined &&
+      field.aiPrompt !== "" &&
+      field.inputType !== "boolean",
   );
   if (generate === undefined || aiFields.length === 0) {
     return values;

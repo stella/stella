@@ -330,7 +330,6 @@ describe("manifest stripped from filled output", () => {
           required: true,
         },
       ],
-      conditions: [],
     };
     buf = await writeManifest(buf, manifest);
 
@@ -361,7 +360,6 @@ describe("manifest stripped from filled output", () => {
         { path: "name", label: "Full Name" },
         { path: "date", label: "Contract Date" },
       ],
-      conditions: [],
     });
 
     const result = await fillTemplate(buf, {

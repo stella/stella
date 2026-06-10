@@ -4,6 +4,7 @@ import * as v from "valibot";
 
 import type { ScopedDb } from "@/api/db";
 import {
+  buildAiConditionDecider,
   buildAiFieldGenerator,
   buildAiOccurrenceAdapter,
 } from "@/api/handlers/docx/ai-field-generator";
@@ -48,6 +49,12 @@ export const createTemplateTools = ({
   // TODO(metering): wire createAIAnalyticsCallbacks so this nested generation
   // is metered alongside other model calls.
   const generateAiValue = buildAiFieldGenerator({
+    orgAIConfig: orgAIConfig ?? null,
+    organizationId,
+  });
+  // Decider for AI-decided boolean conditions (a boolean field with an
+  // aiPrompt); same fallback semantics as generateAiValue.
+  const decideAiCondition = buildAiConditionDecider({
     orgAIConfig: orgAIConfig ?? null,
     organizationId,
   });
@@ -135,6 +142,7 @@ export const createTemplateTools = ({
           scopedDb,
           organizationId,
           generateAiValue,
+          decideAiCondition,
           adaptAiValue,
         }),
     }),

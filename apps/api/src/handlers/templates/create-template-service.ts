@@ -19,11 +19,7 @@ import {
   readManifest,
   writeManifest,
 } from "@/api/handlers/docx/template-manifest";
-import type {
-  FieldMeta,
-  NamedCondition,
-  TemplateManifest,
-} from "@/api/handlers/docx/types";
+import type { FieldMeta, TemplateManifest } from "@/api/handlers/docx/types";
 import { detectTemplateLanguagesFromDocx } from "@/api/handlers/templates/template-languages";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -45,11 +41,10 @@ export type CreatedTemplate = {
   createdAt: Date;
 };
 
-/** Optional client field metadata + named conditions to overlay onto the
- *  discovered fields (from the configure step). */
+/** Optional client field metadata to overlay onto the discovered fields (from
+ *  the configure step). */
 export type ClientTemplateManifest = {
   fields: FieldMeta[];
-  conditions?: NamedCondition[] | undefined;
 };
 
 type CreateStoredTemplateOptions = {
@@ -156,8 +151,6 @@ export const createStoredTemplate = async function* ({
   const manifest: TemplateManifest = {
     version: existingManifest?.version ?? 1,
     fields: fieldMetas,
-    conditions:
-      clientManifest?.conditions ?? existingManifest?.conditions ?? [],
   };
 
   const docxWithManifest = await writeManifest(buffer, manifest);

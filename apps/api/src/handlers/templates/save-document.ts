@@ -146,7 +146,6 @@ const saveTemplateDocument = createSafeRootHandler(
     const manifest: TemplateManifest = {
       version: baseManifest?.version ?? 1,
       fields: fieldMetas,
-      conditions: baseManifest?.conditions ?? [],
     };
 
     // Re-embed the merged manifest so the stored DOCX stays in sync with the DB.
