@@ -141,10 +141,12 @@ const fillTemplateToWorkspace = createSafeHandler(
             generateAiValue: buildAiFieldGenerator({
               orgAIConfig,
               organizationId,
+              skillContext: { organizationId, safeDb, userId: user.id },
             }),
             adaptAiValue: buildAiOccurrenceAdapter({
               orgAIConfig,
               organizationId,
+              skillContext: { organizationId, safeDb, userId: user.id },
             }),
           }),
         catch: (cause) =>

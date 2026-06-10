@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
+import type { SafeDb, ScopedDb } from "@/api/db";
 import { templateFills } from "@/api/db/schema";
 import { adaptAiFields } from "@/api/handlers/docx/adapt-ai-fields";
 import {
@@ -37,6 +37,7 @@ const fillQuerySchema = t.Object({
 });
 
 type FillProps = {
+  safeDb: SafeDb;
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
@@ -58,6 +59,7 @@ export const containsNull = (value: unknown): boolean => {
 };
 
 export const fillHandler = async ({
+  safeDb,
   scopedDb,
   organizationId,
   userId,
@@ -153,7 +155,11 @@ export const fillHandler = async ({
       const resolved = await resolveAiFields({
         values: parsed,
         fields: manifest.fields,
-        generate: buildAiFieldGenerator({ orgAIConfig, organizationId }),
+        generate: buildAiFieldGenerator({
+          orgAIConfig,
+          organizationId,
+          skillContext: { organizationId, safeDb, userId },
+        }),
       });
       if (isTemplateData(resolved)) {
         fillData = resolved;
@@ -167,7 +173,11 @@ export const fillHandler = async ({
         buffer,
         fields: manifest.fields,
         values: fillData,
-        adapt: buildAiOccurrenceAdapter({ orgAIConfig, organizationId }),
+        adapt: buildAiOccurrenceAdapter({
+          orgAIConfig,
+          organizationId,
+          skillContext: { organizationId, safeDb, userId },
+        }),
       });
       fillBuffer = adapted.buffer;
       adaptedPaths = adapted.adaptedPaths;
@@ -278,11 +288,12 @@ const config = {
 
 const fillTemplateHandler = createSafeRootHandler(
   config,
-  async function* ({ scopedDb, session, user, body, query }) {
+  async function* ({ safeDb, scopedDb, session, user, body, query }) {
     const result = yield* Result.await(
       Result.tryPromise({
         try: async () =>
           await fillHandler({
+            safeDb,
             scopedDb,
             organizationId: session.activeOrganizationId,
             userId: user.id,
