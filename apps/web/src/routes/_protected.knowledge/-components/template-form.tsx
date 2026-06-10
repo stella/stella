@@ -3,7 +3,6 @@ import { useEffect, useCallback, useRef, useState } from "react";
 import { panic } from "better-result";
 import {
   AlertTriangleIcon,
-  EyeIcon,
   LandmarkIcon,
   PlusIcon,
   TrashIcon,
@@ -16,7 +15,6 @@ import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import {
   Dialog,
-  DialogClose,
   DialogFooter,
   DialogHeader,
   DialogPanel,
@@ -1775,62 +1773,6 @@ export const TemplateForm = ({
     handleDownload("docx").catch(() => {});
   };
 
-  // ── Fill preview ──────────────────────────────────
-  type PreviewState =
-    | { kind: "idle" }
-    | { kind: "loading" }
-    | {
-        kind: "ready";
-        paragraphs: { text: string; source?: string | undefined }[];
-        unmatchedPlaceholders: string[];
-        unusedValues: string[];
-      };
-
-  const [preview, setPreview] = useState<PreviewState>({
-    kind: "idle",
-  });
-
-  const handlePreview = useCallback(async () => {
-    if (!templateId) {
-      return;
-    }
-
-    if (!validateAll(values)) {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.validationErrors"),
-      });
-      return;
-    }
-
-    setPreview({ kind: "loading" });
-
-    const submitValues = buildSubmitValues(values, fields, conditions);
-    const response = await api.templates({ templateId })["fill-preview"].post({
-      values: JSON.stringify(submitValues),
-    });
-
-    if (response.error || response.data instanceof Response) {
-      setPreview({ kind: "idle" });
-      stellaToast.add({
-        type: "error",
-        title: t("templates.previewFailed"),
-        description: response.error
-          ? userErrorMessage(response.error, t("common.unexpectedError"))
-          : undefined,
-      });
-      return;
-    }
-
-    const { data } = response;
-    setPreview({
-      kind: "ready",
-      paragraphs: data.paragraphs,
-      unmatchedPlaceholders: data.unmatchedPlaceholders,
-      unusedValues: data.unusedValues,
-    });
-  }, [templateId, values, fields, conditions, validateAll, t]);
-
   // Filter visible non-array fields, then group
   const visibleScalarFields = fields.filter(
     (f) => f.kind !== "array" && isFieldVisible(f, values, conditions),
@@ -1925,23 +1867,6 @@ export const TemplateForm = ({
           ))}
 
           <div className="flex justify-end gap-2 pt-2">
-            {/* Hosts with a live in-document preview (the Studio taps
-                onValuesChange into Folio) need no preview modal. */}
-            {templateId && onValuesChange === undefined && (
-              <Button
-                disabled={loading || preview.kind === "loading"}
-                onClick={() => {
-                  void handlePreview();
-                }}
-                type="button"
-                variant="ghost"
-              >
-                <EyeIcon />
-                {preview.kind === "loading"
-                  ? t("templates.previewFillLoading")
-                  : t("common.preview")}
-              </Button>
-            )}
             {saveTarget?.kind !== "matter" && (
               <Button
                 disabled={loading || hasErrors}
@@ -2016,66 +1941,6 @@ export const TemplateForm = ({
                   ? t("templates.generating")
                   : t("templates.createDocument")}
               </Button>
-            </DialogFooter>
-          </DialogPopup>
-        </Dialog>
-
-        {/* Fill Preview Dialog */}
-        <Dialog
-          onOpenChange={(open) => {
-            if (!open) {
-              setPreview({ kind: "idle" });
-            }
-          }}
-          open={preview.kind === "ready"}
-        >
-          <DialogPopup className="sm:max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>{t("templates.previewFillTitle")}</DialogTitle>
-            </DialogHeader>
-            <DialogPanel>
-              {preview.kind === "ready" && (
-                <>
-                  {preview.unmatchedPlaceholders.length > 0 && (
-                    <div className="border-warning/30 bg-warning/10 dark:bg-warning/10 mb-3 flex items-start gap-2 rounded-lg border p-2.5">
-                      <AlertTriangleIcon className="text-warning-foreground mt-0.5 size-3.5 shrink-0" />
-                      <p className="text-warning-foreground text-xs">
-                        {t("templates.unmatchedPlaceholders", {
-                          list: preview.unmatchedPlaceholders.join(", "),
-                        })}
-                      </p>
-                    </div>
-                  )}
-                  {preview.unusedValues.length > 0 && (
-                    <div className="border-foreground/30 bg-accent dark:bg-accent/30 mb-3 flex items-start gap-2 rounded-lg border p-2.5">
-                      <AlertTriangleIcon className="text-foreground mt-0.5 size-3.5 shrink-0" />
-                      <p className="text-foreground text-xs">
-                        {t("templates.unusedValues", {
-                          list: preview.unusedValues.join(", "),
-                        })}
-                      </p>
-                    </div>
-                  )}
-                  <div className="bg-muted/30 max-h-96 overflow-y-auto rounded-lg border p-4">
-                    {preview.paragraphs.map((p, i) => (
-                      <p
-                        className={cn(
-                          "text-sm leading-relaxed",
-                          !p.text.trim() && "min-h-4",
-                        )}
-                        key={`${p.source ?? "body"}-${String(i)}`}
-                      >
-                        {p.text || "\u00a0"}
-                      </p>
-                    ))}
-                  </div>
-                </>
-              )}
-            </DialogPanel>
-            <DialogFooter>
-              <DialogClose render={<Button variant="ghost" />}>
-                {t("common.done")}
-              </DialogClose>
             </DialogFooter>
           </DialogPopup>
         </Dialog>
