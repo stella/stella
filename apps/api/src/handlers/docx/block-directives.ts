@@ -8,14 +8,27 @@
  *
  * Templates without block directives skip all processing
  * (fast-path check via regex on raw XML).
+ *
+ * Word list numbering (`w:numPr`) survives loop expansion
+ * untouched: every cloned paragraph keeps its original
+ * `w:numId`, so Word numbers all iterations as one continuous
+ * sequence (counters live on the abstract definition, not the
+ * paragraph) — the legal-document expectation. Restarting per
+ * iteration would require cloning `w:num`/`w:abstractNum`
+ * entries and would still leak shared counters through
+ * `w:numStyleLink`, so it is deliberately not offered. The only
+ * numbering.xml knowledge needed here is reference validity:
+ * see {@link collectValidNumIds} / {@link pruneDanglingNumPr}.
  */
 
-import type * as slimdom from "slimdom";
+import * as slimdom from "slimdom";
 
 import {
   blockDirectiveLinePattern,
   evaluateCondition,
   hasBlockDirectivePattern,
+  numPattern,
+  refPattern,
   resolvePath,
 } from "@stll/template-conditions";
 
@@ -408,6 +421,10 @@ export const processBlockDirectives = (
   const patchValues: Record<string, RichPatchValue> = {};
   const allErrors: TemplateStructureError[] = [];
 
+  // Distinguishes sibling loops (possibly over the same array) so
+  // their iteration-scoped numbering keys can never collide.
+  let eachExpansionCount = 0;
+
   // Flatten top-level nested objects for value substitution.
   Object.assign(patchValues, flattenTemplateData(data));
 
@@ -552,6 +569,16 @@ export const processBlockDirectives = (
     // directiveParagraphs always has opening + closing entries
     const closingIdx = block.directiveParagraphs.at(-1) ?? 0;
 
+    // {{@num:Key}} keys defined inside the loop body must number
+    // per expanded copy, not once for all iterations (a repeated
+    // key reuses its first number — see numbering.ts). Scope them
+    // with a per-expansion, per-iteration suffix. Keys defined
+    // outside the body are left alone so `@ref`s to shared
+    // clauses keep resolving from within the loop.
+    const localNumKeys = collectNumKeys(contentParagraphs);
+    const expansionId = eachExpansionCount;
+    eachExpansionCount += 1;
+
     // Create expanded paragraphs for each item
     const expandedGroups: slimdom.Element[][] = [];
     for (let itemIdx = 0; itemIdx < items.length; itemIdx++) {
@@ -563,6 +590,14 @@ export const processBlockDirectives = (
 
         // Rewrite {{arrayPath.field}} → {{__each_arrayPath_N_field}}
         rewriteEachPlaceholders(cloned, block.arrayPath, itemIdx);
+
+        if (localNumKeys.size > 0) {
+          scopeNumberingMarkers(cloned, {
+            localKeys: localNumKeys,
+            expansionId,
+            index: itemIdx,
+          });
+        }
 
         group.push(cloned);
       }
@@ -709,6 +744,30 @@ const registerItemPatchValues = (
   }
 };
 
+/** Apply `rewrite` to every `w:t` text node under `root`. */
+const rewriteTextNodes = (
+  root: slimdom.Element,
+  rewrite: (text: string) => string,
+): void => {
+  const walk = (node: slimdom.Node) => {
+    if (!isElement(node)) {
+      return;
+    }
+    if (node.localName === "t" && node.namespaceURI === W_NS) {
+      const text = node.textContent ?? "";
+      const rewritten = rewrite(text);
+      if (rewritten !== text) {
+        node.textContent = rewritten;
+      }
+      return;
+    }
+    for (const child of node.childNodes) {
+      walk(child);
+    }
+  };
+  walk(root);
+};
+
 /**
  * Rewrite `{{arrayPath.field}}` → `{{__each_arrayPath_N_field}}`
  * in all `w:t` nodes of a paragraph.
@@ -718,27 +777,146 @@ const rewriteEachPlaceholders = (
   arrayPath: string,
   index: number,
 ): void => {
-  const walk = (node: slimdom.Node) => {
-    if (isElement(node)) {
-      if (node.localName === "t" && node.namespaceURI === W_NS) {
-        const text = node.textContent ?? "";
-        const re = new RegExp(
-          `\\{\\{${escapeRegExp(arrayPath)}\\.([.\\p{L}\\p{N}_]+)\\}\\}`,
-          "gu",
-        );
-        const rewritten = text.replace(
-          re,
-          (_match, field: string) => `{{${eachKey(arrayPath, index, field)}}}`,
-        );
-        if (rewritten !== text) {
-          node.textContent = rewritten;
-        }
-      } else {
-        for (const child of node.childNodes) {
-          walk(child);
-        }
+  const re = new RegExp(
+    `\\{\\{${escapeRegExp(arrayPath)}\\.([.\\p{L}\\p{N}_]+)\\}\\}`,
+    "gu",
+  );
+  rewriteTextNodes(paragraph, (text) =>
+    text.replace(
+      re,
+      (_match, field: string) => `{{${eachKey(arrayPath, index, field)}}}`,
+    ),
+  );
+};
+
+// ── Loop-scoped clause numbering ─────────────────────────
+
+/** Collect `{{@num:Key}}` keys appearing in the given paragraphs. */
+const collectNumKeys = (
+  paragraphs: readonly slimdom.Element[],
+): Set<string> => {
+  const keys = new Set<string>();
+  for (const p of paragraphs) {
+    for (const match of paragraphText(p).matchAll(numPattern())) {
+      const key = match[1];
+      if (key !== undefined) {
+        keys.add(key);
       }
     }
-  };
-  walk(paragraph);
+  }
+  return keys;
+};
+
+/** Synthetic per-iteration key for a loop-local `@num`/`@ref`. */
+const iterationNumKey = (
+  key: string,
+  expansionId: number,
+  index: number,
+): string => `${key}__each${expansionId}_${index}`;
+
+type ScopeNumberingOptions = {
+  localKeys: ReadonlySet<string>;
+  expansionId: number;
+  index: number;
+};
+
+/**
+ * Rewrite loop-local `{{@num:Key}}` / `{{@ref:Key}}` markers to
+ * per-iteration keys so numbering.ts assigns each expanded copy
+ * its own number and intra-iteration refs follow it. Nested
+ * loops compose: each enclosing expansion appends its own
+ * suffix, so every (outer, inner) iteration pair stays unique.
+ * Operates per `w:t` node; markers split across runs are out of
+ * grammar, matching the raw-XML numbering pass.
+ */
+const scopeNumberingMarkers = (
+  paragraph: slimdom.Element,
+  { localKeys, expansionId, index }: ScopeNumberingOptions,
+): void => {
+  const numRe = numPattern();
+  const refRe = refPattern();
+  const rewriteSigil = (text: string, sigil: "num" | "ref", re: RegExp) =>
+    text.replace(re, (match, key: string) =>
+      localKeys.has(key)
+        ? `{{@${sigil}:${iterationNumKey(key, expansionId, index)}}}`
+        : match,
+    );
+  rewriteTextNodes(paragraph, (text) =>
+    rewriteSigil(rewriteSigil(text, "num", numRe), "ref", refRe),
+  );
+};
+
+// ── Word list-numbering integrity ────────────────────────
+
+/** slimdom can surface `w:` attributes either way; try both. */
+const readWAttr = (el: slimdom.Element, name: string): string | null =>
+  el.getAttributeNS(W_NS, name) ?? el.getAttribute(`w:${name}`);
+
+/** `w:numId="0"` is the explicit "no numbering" override — always valid. */
+const NUM_ID_NONE = "0";
+
+/**
+ * Collect `w:numId` values whose definition chain resolves
+ * (`w:num` → `w:abstractNum`). Loop expansion clones list
+ * paragraphs verbatim, so a numId left dangling in the template
+ * would be multiplied across iterations; callers prune those
+ * with {@link pruneDanglingNumPr} instead.
+ */
+export const collectValidNumIds = (
+  numberingXml: string | null,
+): ReadonlySet<string> => {
+  const valid = new Set<string>([NUM_ID_NONE]);
+  if (numberingXml === null) {
+    return valid;
+  }
+
+  const doc = slimdom.parseXmlDocument(numberingXml);
+  const abstractIds = new Set<string>();
+  for (const abstractNum of doc.getElementsByTagNameNS(W_NS, "abstractNum")) {
+    const id = readWAttr(abstractNum, "abstractNumId");
+    if (id !== null) {
+      abstractIds.add(id);
+    }
+  }
+
+  for (const num of doc.getElementsByTagNameNS(W_NS, "num")) {
+    const numId = readWAttr(num, "numId");
+    if (numId === null) {
+      continue;
+    }
+    const abstractRef = num.getElementsByTagNameNS(W_NS, "abstractNumId").at(0);
+    const abstractId = abstractRef ? readWAttr(abstractRef, "val") : null;
+    if (abstractId !== null && abstractIds.has(abstractId)) {
+      valid.add(numId);
+    }
+  }
+
+  return valid;
+};
+
+/**
+ * Remove `w:numPr` elements whose `w:numId` has no resolvable
+ * numbering definition. Word silently drops the numbering for
+ * such paragraphs while other consumers differ; removing the
+ * dangling reference makes the filled document render the same
+ * everywhere. Valid references are kept untouched so cloned
+ * iterations share the original numId (one continuous
+ * sequence — see the module doc).
+ */
+export const pruneDanglingNumPr = (
+  body: slimdom.Element,
+  validNumIds: ReadonlySet<string>,
+): void => {
+  for (const numPr of body.getElementsByTagNameNS(W_NS, "numPr")) {
+    const numIdEl = numPr.getElementsByTagNameNS(W_NS, "numId").at(0);
+    if (!numIdEl) {
+      // Style-inherited numbering; nothing to validate here.
+      continue;
+    }
+    const numId = readWAttr(numIdEl, "val");
+    if (numId === null || validNumIds.has(numId)) {
+      continue;
+    }
+    numPr.parentNode?.removeChild(numPr);
+  }
 };
