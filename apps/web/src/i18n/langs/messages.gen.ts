@@ -2028,6 +2028,7 @@ type Messages = {
     "confirmDelete": "This will permanently delete the template.";
     "createCategory": "New category";
     "createDocument": "Create document";
+    "createDocumentAnyway": "Create anyway";
     "dateChipFirstOfNextMonth": "First of next month";
     "dateChipPlus30Days": "In 30 days";
     "dateFormatStyle": "Date format";
@@ -2043,12 +2044,14 @@ type Messages = {
     "directiveIf": "If: {expression}";
     "discovering": "Analyzing...";
     "discoveryFailed": "Failed to analyze template";
+    "downloadAnyway": "Download anyway";
     "downloadDocx": "Download DOCX";
     "downloadPdf": "Download PDF";
     "downloadReady": "Document ready";
     "dragAndDrop": "or drag and drop";
     "editCategory": "Edit category";
     "editFields": "Edit fields";
+    "emptyFieldsWarning": "{count, plural, one {# field is} other {# fields are}} still empty: {names}";
     "fieldCount": "{count, plural, one {# field} other {# fields}}";
     "fieldFormat": "Output format";
     "fieldFormatHint": "Use '{{key}}' to insert a part.";
@@ -2092,6 +2095,7 @@ type Messages = {
     "loadFailed": "Failed to load templates";
     "lookupFieldHint": "Enter a KRS number; the company details are filled from the register.";
     "moveToMatter": "Move to matter";
+    "moveToMatterAnyway": "Move anyway";
     "newFromTemplate": "New document from template";
     "newFromTemplateFillHint": "Fill in the fields; the document is created in this matter.";
     "newTemplate": "New template";

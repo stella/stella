@@ -39,7 +39,7 @@ import { MatterTargetPicker } from "@/components/matter-target-picker";
 import type { MatterTarget } from "@/components/matter-target-picker";
 import Tooltip from "@/components/tooltip";
 import { api } from "@/lib/api";
-import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
+import { DOCX_MIME, PDF_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { userErrorMessage } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -1128,6 +1128,93 @@ const collectValidatableFields = (
   return result;
 };
 
+/** Every way the user can submit the fill form; the empty-fields gate is
+ *  armed per action so confirming one does not confirm the others. */
+type SubmitAction =
+  | "downloadDocx"
+  | "downloadPdf"
+  | "createDocument"
+  | "moveToMatter";
+
+/** Whether the user left this field without a value. Booleans never count
+ *  as empty: unchecked is a deliberate "no", not a gap. */
+const isFieldValueEmpty = (field: ResolvedField, value: unknown): boolean => {
+  if (field.kind === "boolean" || field.inputType === "boolean") {
+    return false;
+  }
+  const parts = compositeParts(field);
+  if (parts) {
+    const partValues = readPartValues(value);
+    return parts.every((part) => (partValues[part.key] ?? "").trim() === "");
+  }
+  return typeof value !== "string" || value.trim() === "";
+};
+
+const isFieldRequired = (field: ResolvedField): boolean =>
+  field.required ?? field.validation?.required ?? false;
+
+/** Report an array field's empty optional entries to `push`: the array
+ *  itself when it has no items, else each item's empty optional sub-fields. */
+const collectEmptyArrayFields = (
+  field: ResolvedField,
+  values: FormValues,
+  push: (field: ResolvedField) => void,
+) => {
+  const items = readArrayIndices(values, `__array_${field.path}`);
+  if (items.length === 0) {
+    if (!isFieldRequired(field)) {
+      push(field);
+    }
+    return;
+  }
+  for (let i = 0; i < items.length; i++) {
+    for (const sub of field.itemFields ?? []) {
+      if (isFieldRequired(sub)) {
+        continue;
+      }
+      const itemPath = `${field.path}[${i}].${sub.path}`;
+      if (isFieldValueEmpty(sub, values[itemPath])) {
+        push(sub);
+      }
+    }
+  }
+};
+
+/** Labels of visible optional fields the user left empty (an array with no
+ *  items counts once under its own label). Required empties never reach
+ *  this soft gate: hard validation blocks them first. The caller already
+ *  excludes derived (formula / AI-drafted) fields from `fields`. */
+const collectEmptyOptionalFields = (
+  fields: readonly ResolvedField[],
+  values: FormValues,
+  conditions: readonly NamedCondition[],
+): string[] => {
+  const labels: string[] = [];
+  const push = (field: ResolvedField) => {
+    const label = field.label ?? field.path;
+    if (!labels.includes(label)) {
+      labels.push(label);
+    }
+  };
+
+  for (const field of fields) {
+    if (!isFieldVisible(field, values, conditions)) {
+      continue;
+    }
+    if (field.kind === "array") {
+      collectEmptyArrayFields(field, values, push);
+      continue;
+    }
+    if (
+      !isFieldRequired(field) &&
+      isFieldValueEmpty(field, values[field.path])
+    ) {
+      push(field);
+    }
+  }
+  return labels;
+};
+
 // Registries offered for one-click party-block autofill. Slugs are a
 // subset of the unified lookup endpoint's supported registries; labels
 // are registry proper names (not translatable UI copy).
@@ -1557,6 +1644,41 @@ export const TemplateForm = ({
     [fields, conditions, resolveError],
   );
 
+  // Soft empty-fields gate: the warning shown in the action row after the
+  // first attempt of an action while optional fields are still empty.
+  const [emptyWarning, setEmptyWarning] = useState<{
+    action: SubmitAction;
+    count: number;
+    names: string;
+  } | null>(null);
+  const emptyWarningRef = useRef(emptyWarning);
+  emptyWarningRef.current = emptyWarning;
+
+  /** Gate every submit path: with optional fields still empty, the first
+   *  attempt arms the warning and aborts; repeating the same action (its
+   *  button now reads "… anyway") proceeds. Returns true to proceed. */
+  const confirmEmptyFields = useCallback(
+    (action: SubmitAction, currentValues: FormValues): boolean => {
+      const empty = collectEmptyOptionalFields(
+        fields,
+        currentValues,
+        conditions,
+      );
+      if (empty.length === 0 || emptyWarningRef.current?.action === action) {
+        setEmptyWarning(null);
+        return true;
+      }
+      const shown = empty.slice(0, 3).join(", ");
+      setEmptyWarning({
+        action,
+        count: empty.length,
+        names: empty.length > 3 ? `${shown}…` : shown,
+      });
+      return false;
+    },
+    [fields, conditions],
+  );
+
   // Only count errors for currently visible fields;
   // hidden fields may retain stale errors in state.
   const hasErrors = Object.entries(errors).some(([path, msg]) => {
@@ -1602,6 +1724,12 @@ export const TemplateForm = ({
           type: "error",
           title: t("templates.validationErrors"),
         });
+        return;
+      }
+
+      const action: SubmitAction =
+        format === "pdf" ? "downloadPdf" : "downloadDocx";
+      if (!confirmEmptyFields(action, values)) {
         return;
       }
 
@@ -1684,6 +1812,7 @@ export const TemplateForm = ({
       t,
       onDone,
       validateAll,
+      confirmEmptyFields,
       resolveError,
     ],
   );
@@ -1762,6 +1891,9 @@ export const TemplateForm = ({
       });
       return;
     }
+    if (!confirmEmptyFields("moveToMatter", values)) {
+      return;
+    }
     setMatterTarget(null);
     setMatterDialogOpen(true);
   };
@@ -1769,6 +1901,18 @@ export const TemplateForm = ({
   const handleSubmit = (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (saveTarget?.kind === "matter") {
+      // Validate + gate here so the empty-fields warning can interpose
+      // before fillToMatter fires (it re-validates internally).
+      if (!validateAll(values)) {
+        stellaToast.add({
+          type: "error",
+          title: t("templates.validationErrors"),
+        });
+        return;
+      }
+      if (!confirmEmptyFields("createDocument", values)) {
+        return;
+      }
       void fillToMatter(saveTarget.workspaceId, saveTarget.parentId ?? null);
       return;
     }
@@ -1787,169 +1931,208 @@ export const TemplateForm = ({
     (f) => f.kind === "array" && isFieldVisible(f, values, conditions),
   );
 
+  const submitAction: SubmitAction =
+    saveTarget?.kind === "matter" ? "createDocument" : "downloadDocx";
+
+  /** Action-row label: the busy label while generating, the "… anyway"
+   *  confirm variant while the empty-fields warning targets this action. */
+  const actionButtonLabel = (action: SubmitAction): string => {
+    if (loading && action !== "moveToMatter") {
+      return t("templates.generating");
+    }
+    if (emptyWarning?.action === action) {
+      if (action === "createDocument") {
+        return t("templates.createDocumentAnyway");
+      }
+      if (action === "moveToMatter") {
+        return t("templates.moveToMatterAnyway");
+      }
+      return t("templates.downloadAnyway");
+    }
+    if (action === "downloadPdf") {
+      return t("templates.downloadPdf");
+    }
+    if (action === "downloadDocx") {
+      return t("templates.downloadDocx");
+    }
+    if (action === "createDocument") {
+      return t("templates.createDocument");
+    }
+    return t("templates.moveToMatter");
+  };
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-      <div className="mx-auto w-full max-w-2xl p-6">
-        {/* Transient (upload) fill shows the form header + "upload different";
+    <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-2xl p-6">
+          {/* Transient (upload) fill shows the form header + "upload different";
             server-side fill is embedded in the Studio's Fill tab, which labels
             itself, so the header would be redundant chrome. */}
-        {file !== undefined && (
-          <div className="mb-6 flex items-center justify-between">
-            <h2 className="text-lg font-semibold">{t("templates.fillForm")}</h2>
-            <Button onClick={onBack} variant="ghost">
-              {t("templates.uploadDifferent")}
-            </Button>
-          </div>
-        )}
-
-        {structureErrors.length > 0 && (
-          <div className="border-warning/30 bg-warning/10 dark:bg-warning/10 mb-6 flex items-start gap-2 rounded-lg border p-3">
-            <AlertTriangleIcon className="text-warning-foreground mt-0.5 size-4 shrink-0" />
-            <span className="text-warning-foreground text-sm">
-              {t("templates.structureWarnings", {
-                count: structureErrors.length,
-              })}
-            </span>
-          </div>
-        )}
-
-        <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
-          {prefill !== undefined && templateId !== undefined && (
-            <TemplatePrefillPanel
-              matterWorkspaceId={prefill.workspaceId}
-              onApply={applyPrefill}
-              templateId={templateId}
-            />
+          {file !== undefined && (
+            <div className="mb-6 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">
+                {t("templates.fillForm")}
+              </h2>
+              <Button onClick={onBack} variant="ghost">
+                {t("templates.uploadDifferent")}
+              </Button>
+            </div>
           )}
 
-          {[...grouped.entries()].map(([prefix, groupFields]) => (
-            <fieldset
-              className={cn(
-                "flex flex-col gap-4",
-                prefix !== "" && "rounded-lg border p-4",
-              )}
-              key={prefix || "__root"}
-            >
-              {prefix !== "" && (
-                <legend className="text-muted-foreground px-1 text-sm font-medium">
-                  {prefix}
-                </legend>
-              )}
-              {prefix !== "" && groupSupportsRegistryAutofill(groupFields) && (
-                <RegistryAutofillControl
-                  groupFields={groupFields}
-                  onApply={applyAutofill}
-                />
-              )}
-              {groupFields.map((field) => (
-                <FieldRenderer
-                  derivedOptions={
-                    dependentOptions(field, fields, values) ?? undefined
-                  }
-                  error={touched[field.path] ? errors[field.path] : undefined}
-                  field={field}
-                  key={field.path}
-                  onBlur={handleBlur}
-                  onChange={handleChangeWithValidation}
-                  prefillSnippet={prefillSnippets[field.path]}
-                  value={values[field.path]}
-                />
-              ))}
-            </fieldset>
-          ))}
+          {structureErrors.length > 0 && (
+            <div className="border-warning/30 bg-warning/10 dark:bg-warning/10 mb-6 flex items-start gap-2 rounded-lg border p-3">
+              <AlertTriangleIcon className="text-warning-foreground mt-0.5 size-4 shrink-0" />
+              <span className="text-warning-foreground text-sm">
+                {t("templates.structureWarnings", {
+                  count: structureErrors.length,
+                })}
+              </span>
+            </div>
+          )}
 
-          {arrayFields.map((field) => (
-            <ArrayFieldRenderer
-              errors={errors}
-              field={field}
-              key={field.path}
-              onBlur={handleBlur}
-              onChange={handleChangeWithValidation}
-              onClearPaths={handleClearPaths}
-              touched={touched}
-              values={values}
-            />
-          ))}
-
-          <div className="flex justify-end gap-2 pt-2">
-            {saveTarget?.kind !== "matter" && (
-              <Button
-                disabled={loading || hasErrors}
-                onClick={() => {
-                  void handleDownload("pdf").catch(() => undefined);
-                }}
-                type="button"
-                variant="outline"
-              >
-                {loading
-                  ? t("templates.generating")
-                  : t("templates.downloadPdf")}
-              </Button>
-            )}
-            {saveTarget?.kind === "chooseMatter" && (
-              <Button
-                disabled={loading || hasErrors}
-                onClick={handleChooseMatter}
-                type="button"
-                variant="outline"
-              >
-                {t("templates.moveToMatter")}
-              </Button>
-            )}
-            {saveTarget?.kind === "matter" ? (
-              <Button disabled={loading || hasErrors} type="submit">
-                {loading
-                  ? t("templates.generating")
-                  : t("templates.createDocument")}
-              </Button>
-            ) : (
-              <Button disabled={loading || hasErrors} type="submit">
-                {loading
-                  ? t("templates.generating")
-                  : t("templates.downloadDocx")}
-              </Button>
-            )}
-          </div>
-        </form>
-
-        {/* "Move to matter" target picker */}
-        <Dialog onOpenChange={setMatterDialogOpen} open={matterDialogOpen}>
-          <DialogPopup className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle>{t("templates.moveToMatter")}</DialogTitle>
-            </DialogHeader>
-            <DialogPanel>
-              <MatterTargetPicker
-                onChange={setMatterTarget}
-                value={matterTarget}
+          <div className="flex flex-col gap-5">
+            {prefill !== undefined && templateId !== undefined && (
+              <TemplatePrefillPanel
+                matterWorkspaceId={prefill.workspaceId}
+                onApply={applyPrefill}
+                templateId={templateId}
               />
-            </DialogPanel>
-            <DialogFooter>
-              <Button
-                onClick={() => setMatterDialogOpen(false)}
-                variant="ghost"
+            )}
+
+            {[...grouped.entries()].map(([prefix, groupFields]) => (
+              <fieldset
+                className={cn(
+                  "flex flex-col gap-4",
+                  prefix !== "" && "rounded-lg border p-4",
+                )}
+                key={prefix || "__root"}
               >
-                {t("common.cancel")}
-              </Button>
-              <Button
-                disabled={matterTarget === null || loading}
-                onClick={() => {
-                  if (matterTarget !== null) {
-                    void fillToMatter(
-                      matterTarget.workspaceId,
-                      matterTarget.parentId,
-                    );
-                  }
-                }}
-              >
-                {loading
-                  ? t("templates.generating")
-                  : t("templates.createDocument")}
-              </Button>
-            </DialogFooter>
-          </DialogPopup>
-        </Dialog>
+                {prefix !== "" && (
+                  <legend className="text-muted-foreground px-1 text-sm font-medium">
+                    {prefix}
+                  </legend>
+                )}
+                {prefix !== "" &&
+                  groupSupportsRegistryAutofill(groupFields) && (
+                    <RegistryAutofillControl
+                      groupFields={groupFields}
+                      onApply={applyAutofill}
+                    />
+                  )}
+                {groupFields.map((field) => (
+                  <FieldRenderer
+                    derivedOptions={
+                      dependentOptions(field, fields, values) ?? undefined
+                    }
+                    error={touched[field.path] ? errors[field.path] : undefined}
+                    field={field}
+                    key={field.path}
+                    onBlur={handleBlur}
+                    onChange={handleChangeWithValidation}
+                    prefillSnippet={prefillSnippets[field.path]}
+                    value={values[field.path]}
+                  />
+                ))}
+              </fieldset>
+            ))}
+
+            {arrayFields.map((field) => (
+              <ArrayFieldRenderer
+                errors={errors}
+                field={field}
+                key={field.path}
+                onBlur={handleBlur}
+                onChange={handleChangeWithValidation}
+                onClearPaths={handleClearPaths}
+                touched={touched}
+                values={values}
+              />
+            ))}
+          </div>
+        </div>
       </div>
-    </div>
+
+      {emptyWarning !== null && (
+        <div className="border-warning/30 bg-warning/10 dark:bg-warning/10 flex shrink-0 items-start gap-2 border-t px-3 py-2">
+          <AlertTriangleIcon className="text-warning-foreground mt-0.5 size-4 shrink-0" />
+          <span className="text-warning-foreground text-sm">
+            {t("templates.emptyFieldsWarning", {
+              count: emptyWarning.count,
+              names: emptyWarning.names,
+            })}
+          </span>
+        </div>
+      )}
+
+      {/* Pinned action row, styled like the Studio's other chrome rows. */}
+      <div
+        className={cn(
+          "flex shrink-0 items-center justify-end gap-2 border-t px-2",
+          TOOLBAR_ROW_HEIGHT,
+        )}
+      >
+        {saveTarget?.kind !== "matter" && (
+          <Button
+            disabled={loading || hasErrors}
+            onClick={() => {
+              void handleDownload("pdf").catch(() => undefined);
+            }}
+            type="button"
+            variant="outline"
+          >
+            {actionButtonLabel("downloadPdf")}
+          </Button>
+        )}
+        {saveTarget?.kind === "chooseMatter" && (
+          <Button
+            disabled={loading || hasErrors}
+            onClick={handleChooseMatter}
+            type="button"
+            variant="outline"
+          >
+            {actionButtonLabel("moveToMatter")}
+          </Button>
+        )}
+        <Button disabled={loading || hasErrors} type="submit">
+          {actionButtonLabel(submitAction)}
+        </Button>
+      </div>
+
+      {/* "Move to matter" target picker; the popup portals out of the form,
+          so its buttons cannot implicitly submit it. */}
+      <Dialog onOpenChange={setMatterDialogOpen} open={matterDialogOpen}>
+        <DialogPopup className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("templates.moveToMatter")}</DialogTitle>
+          </DialogHeader>
+          <DialogPanel>
+            <MatterTargetPicker
+              onChange={setMatterTarget}
+              value={matterTarget}
+            />
+          </DialogPanel>
+          <DialogFooter>
+            <Button onClick={() => setMatterDialogOpen(false)} variant="ghost">
+              {t("common.cancel")}
+            </Button>
+            <Button
+              disabled={matterTarget === null || loading}
+              onClick={() => {
+                if (matterTarget !== null) {
+                  void fillToMatter(
+                    matterTarget.workspaceId,
+                    matterTarget.parentId,
+                  );
+                }
+              }}
+            >
+              {loading
+                ? t("templates.generating")
+                : t("templates.createDocument")}
+            </Button>
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
+    </form>
   );
 };
