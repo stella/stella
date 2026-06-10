@@ -3848,7 +3848,16 @@ export function PagedEditor(
   const updateDirectivesOverlay = useCallback(() => {
     const requestSeq = directivesOverlayRequestSeqRef.current + 1;
     directivesOverlayRequestSeqRef.current = requestSeq;
-    const ranges = directivesRef.current;
+    // A marker with an active fill-preview value already reads as filled
+    // (orange substituted run); suppress its blue marker tint so filled and
+    // to-be-filled markers are visually disjoint.
+    const previewedStarts = new Set(
+      templatePreviewRef.current.entries.map((entry) => entry.from),
+    );
+    const ranges = directivesRef.current.filter(
+      (range) =>
+        !(range.kind === "placeholder" && previewedStarts.has(range.from)),
+    );
     const pagesContainer = pagesContainerRef.current;
     if (ranges.length === 0 || !pagesContainer) {
       setDirectiveRectGroups([]);
