@@ -57,8 +57,15 @@ import type {
   TemplatePreviewSpan,
   TemplatePreviewValue,
 } from "@stll/folio";
-import { isFieldPath, serializeCondition } from "@stll/template-conditions";
-import type { ConditionGroup } from "@stll/template-conditions";
+import {
+  isFieldPath,
+  renderDeterministicFieldValue,
+  serializeCondition,
+} from "@stll/template-conditions";
+import type {
+  ConditionGroup,
+  DeterministicFieldConfig,
+} from "@stll/template-conditions";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import {
@@ -117,11 +124,7 @@ import {
 } from "@/routes/_protected.knowledge/-components/condition-builder";
 import { LinkClauseDialog } from "@/routes/_protected.knowledge/-components/link-clause-dialog";
 import { TemplateClausesTab } from "@/routes/_protected.knowledge/-components/template-clauses-tab";
-import {
-  DATE_FORMAT_STYLES,
-  formatDateValue,
-  type TemplateDateFormat,
-} from "@/routes/_protected.knowledge/-components/template-date-format";
+import { DATE_FORMAT_STYLES } from "@/routes/_protected.knowledge/-components/template-date-format";
 import { createTemplateFieldMention } from "@/routes/_protected.knowledge/-components/template-field-mention";
 import {
   ARRAY_INDEX_KEY_PREFIX,
@@ -2753,11 +2756,15 @@ const TemplateFillFacet = ({ templateId }: { templateId: string }) => {
   );
 };
 
-/** Typed fill values become the live in-document preview; composite part
- *  objects join with spaces (the server renders the real format). A lookup
- *  field with a plausible registry number previews the looked-up rendering
- *  instead of the raw number once the debounced lookup-preview response
- *  lands; until then (and on a miss) the raw number stays.
+/** Typed fill values become the live in-document preview, each field rendered
+ *  through the SAME deterministic dispatcher the API fill engine uses
+ *  (`renderDeterministicFieldValue`): composite joins via its `format`
+ *  template, a formula is computed, a date is rendered in its locale/style —
+ *  so the preview is byte-identical to the generated document. A lookup
+ *  field's value is resolved server-side, so it previews the raw registry
+ *  number until the debounced lookup-preview response lands (and on a miss the
+ *  raw number stays); that async overlay is the one exception to the shared
+ *  dispatcher.
  *
  *  Repeatable (array) fields preview with their FIRST item only: the form
  *  names item inputs `path[i].sub` while the `{{#each}}` body's markers use
@@ -2771,10 +2778,8 @@ const pushFillPreview = (
 ) => {
   cancelLookupPreviews();
   const preview: Record<string, TemplatePreviewValue> = {};
-  const dateFormats = new Map<string, TemplateDateFormat>(
-    (fields ?? []).flatMap((field) =>
-      field.dateFormat === undefined ? [] : [[field.path, field.dateFormat]],
-    ),
+  const fieldByPath = new Map<string, LookupPreviewField>(
+    (fields ?? []).map((field) => [field.path, field]),
   );
   // Linked clause slots preview their resolved text, keyed by slot name to
   // match the folio plugin's clause-range key.
@@ -2790,18 +2795,24 @@ const pushFillPreview = (
       continue;
     }
     const path = item ? `${item.path}.${item.sub}` : key;
-    if (typeof value === "string" && value !== "") {
-      preview[path] = previewScalarValue(value, dateFormats.get(path));
-    } else if (typeof value === "number" || typeof value === "boolean") {
-      preview[path] = String(value);
-    } else if (value !== null && typeof value === "object") {
-      const joined = Object.values(value)
-        .filter((part): part is string => typeof part === "string")
-        .filter((part) => part !== "")
-        .join(" ");
-      if (joined !== "") {
-        preview[path] = joined;
-      }
+    const previewValue = renderPreviewFieldValue(
+      fieldByPath.get(path),
+      value,
+      values,
+    );
+    if (previewValue !== null) {
+      preview[path] = previewValue;
+    }
+  }
+  // Formula fields are derived (no form input), so they never appear in the
+  // submitted values; render them from the field list directly.
+  for (const field of fields ?? []) {
+    if (field.formula === undefined || preview[field.path] !== undefined) {
+      continue;
+    }
+    const computed = renderDeterministicFieldValue(field, values);
+    if (computed !== null) {
+      preview[field.path] = computed;
     }
   }
   const pending = applyCachedLookupRenderings(preview, fields ?? []);
@@ -2864,23 +2875,37 @@ const lookupPreviewValue = (rendered: string): TemplatePreviewValue => {
 
 type StudioLookup = NonNullable<StudioField["lookup"]>;
 
-type LookupPreviewField = {
-  path: string;
+/** A field as the live preview needs it: the deterministic-transform config
+ *  the shared dispatcher reads (composite/formula/date), plus the lookup
+ *  config the async overlay handles itself. */
+type LookupPreviewField = DeterministicFieldConfig & {
   lookup?: StudioLookup | undefined;
-  dateFormat?: TemplateDateFormat | undefined;
 };
 
-/** A scalar's live preview, matched 1:1 to what the fill engine writes to the
- *  finished document: a date field is rendered in its configured locale/style
- *  (e.g. cs long → "13. června 2028") rather than the raw ISO the input holds.
- *  Non-date values and unparseable dates pass through unchanged. */
-const previewScalarValue = (
-  value: string,
-  dateFormat: TemplateDateFormat | undefined,
-): string =>
-  dateFormat === undefined
-    ? value
-    : (formatDateValue(value, dateFormat) ?? value);
+/** A single field's live preview string. A deterministic field (composite /
+ *  formula / date) renders through the shared dispatcher, so it matches the
+ *  generated document exactly; everything else (a scalar, or a lookup field
+ *  whose value the async overlay later replaces) falls back to the raw
+ *  string/number/boolean. Returns null when there is nothing to preview. */
+const renderPreviewFieldValue = (
+  field: LookupPreviewField | undefined,
+  value: unknown,
+  values: Record<string, unknown>,
+): TemplatePreviewValue | null => {
+  if (field !== undefined) {
+    const deterministic = renderDeterministicFieldValue(field, values);
+    if (deterministic !== null) {
+      return deterministic;
+    }
+  }
+  if (typeof value === "string") {
+    return value === "" ? null : value;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  return null;
+};
 
 type LookupPreviewRequest = {
   registry: StudioLookup["registry"];
@@ -3002,8 +3027,10 @@ const pushSingleFieldPreview = (field: StudioField, value: string) => {
     actions?.setFillPreview(null);
     return;
   }
+  const values: Record<string, unknown> = { [field.path]: value };
+  const rendered = renderPreviewFieldValue(field, value, values) ?? value;
   const preview: Record<string, TemplatePreviewValue> = {
-    [field.path]: previewScalarValue(value, field.dateFormat),
+    [field.path]: rendered,
   };
   const pending = applyCachedLookupRenderings(preview, [field]);
   actions?.setFillPreview(preview);
