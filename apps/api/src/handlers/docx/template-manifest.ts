@@ -23,6 +23,7 @@ import type {
   DiscoveredTemplate,
   FieldDateFormat,
   FieldLookup,
+  FieldLookupFormat,
   FieldMeta,
   FieldPart,
   FieldValidation,
@@ -33,7 +34,13 @@ import type {
   ResolvedField,
   TemplateManifest,
 } from "./types";
-import { isFieldDateFormat, LOOKUP_REGISTRIES } from "./types";
+import {
+  isFieldDateFormat,
+  isLookupFormatKey,
+  LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH,
+  LOOKUP_FORMATS_MAX,
+  LOOKUP_REGISTRIES,
+} from "./types";
 
 // ── Constants ────────────────────────────────────────────
 
@@ -113,6 +120,20 @@ const buildLookupXml = (lookup: FieldLookup): string => {
   const attrs: string[] = [`registry="${escapeXml(lookup.registry)}"`];
   if (lookup.aiFormat !== undefined) {
     attrs.push(`aiFormat="${escapeXml(lookup.aiFormat)}"`);
+  }
+  if (lookup.formats && lookup.formats.length > 0) {
+    const formatEls = lookup.formats
+      .map(
+        (f) =>
+          `<st:lookupFormat key="${escapeXml(f.key)}"` +
+          ` template="${escapeXml(f.template)}"/>`,
+      )
+      .join("");
+    return (
+      `<st:lookup ${attrs.join(" ")}>` +
+      `<st:lookupFormats>${formatEls}</st:lookupFormats>` +
+      "</st:lookup>"
+    );
   }
   return `<st:lookup ${attrs.join(" ")}/>`;
 };
@@ -399,6 +420,28 @@ const parseFieldMeta = (el: slimdom.Element): FieldMeta => {
       if (aiFormat !== null) {
         lookup.aiFormat = aiFormat;
       }
+      // Named output formats round-trip nested under the lookup element. A
+      // hand-edited key outside the segment grammar, an over-long template, or
+      // a count past the cap is dropped so the isFieldLookup invariant holds.
+      const formatsEl = getFirstElementChild(lookupEl, "lookupFormats");
+      if (formatsEl) {
+        const formats: FieldLookupFormat[] = [];
+        for (const formatEl of getElementChildren(formatsEl, "lookupFormat")) {
+          const key = formatEl.getAttribute("key");
+          const template = formatEl.getAttribute("template");
+          if (
+            key !== null &&
+            isLookupFormatKey(key) &&
+            template !== null &&
+            template.length <= LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH
+          ) {
+            formats.push({ key, template });
+          }
+        }
+        if (formats.length > 0) {
+          lookup.formats = formats.slice(0, LOOKUP_FORMATS_MAX);
+        }
+      }
       field.lookup = lookup;
     }
   }
@@ -656,9 +699,16 @@ export const mergeManifestWithDiscovery = (
 ): ResolvedField[] => {
   // Index manifest fields by path
   const metaByPath = new Map<string, FieldMeta>();
+  // Markers a lookup field's named formats own (`company.full`, …). These are
+  // rendered outputs of the one resolved hit, not separate fillable inputs, so
+  // discovery may surface them as dotted fields; the final filter drops them.
+  const lookupFormatMarkers = new Set<string>();
   if (manifest) {
     for (const f of manifest.fields) {
       metaByPath.set(f.path, f);
+      for (const format of f.lookup?.formats ?? []) {
+        lookupFormatMarkers.add(`${f.path}.${format.key}`);
+      }
     }
   }
 
@@ -715,10 +765,21 @@ export const mergeManifestWithDiscovery = (
   // Drop namespace parents: a path that is only a dotted prefix of others
   // (e.g. "tenant" when "tenant.name"/"tenant.krs" exist) is structural, not a
   // fillable field. Discovery registers such roots to infer object/array kinds.
+  //
+  // A lookup field is exempt: it is a real leaf input even when dotted format
+  // markers ({{company.full}}) sit "under" it. Those markers are named
+  // renderings of the one resolved hit, not separate fields, so the lookup
+  // root must survive the prefix filter.
   const paths = resolved.map((f) => f.path);
-  return resolved.filter(
-    (f) => !paths.some((p) => p !== f.path && p.startsWith(`${f.path}.`)),
-  );
+  return resolved.filter((f) => {
+    if (lookupFormatMarkers.has(f.path)) {
+      return false;
+    }
+    if (f.lookup !== undefined) {
+      return true;
+    }
+    return !paths.some((p) => p !== f.path && p.startsWith(`${f.path}.`));
+  });
 };
 
 // ── Helpers ──────────────────────────────────────────────

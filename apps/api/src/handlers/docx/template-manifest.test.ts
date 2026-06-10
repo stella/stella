@@ -602,6 +602,39 @@ describe("mergeManifestWithDiscovery", () => {
     ]);
   });
 
+  test("keeps a lookup field as a leaf despite dotted format markers under it", () => {
+    // {{company}} + {{company.full}} make discovery promote `company` to an
+    // object and register `company.full` as a string. The lookup field is a
+    // real leaf input, so it must survive the namespace-parent filter, and its
+    // declared format markers must be dropped (rendered outputs, not inputs).
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "company",
+          lookup: {
+            registry: "krs",
+            formats: [{ key: "full", template: "[company name], [seat]" }],
+          },
+        },
+      ],
+      conditions: [],
+    };
+    const discovery: DiscoveredTemplate = {
+      placeholders: [],
+      fields: [
+        { path: "company", kind: "object", count: 1 },
+        { path: "company.full", kind: "string", count: 1 },
+      ],
+      structureErrors: [],
+    };
+    const resolved = mergeManifestWithDiscovery(manifest, discovery);
+    expect(resolved.map((f) => f.path)).toEqual(["company"]);
+    expect(resolved.at(0)?.lookup?.formats).toEqual([
+      { key: "full", template: "[company name], [seat]" },
+    ]);
+  });
+
   test("preserves discovered fields without manifest entries", () => {
     const manifest: TemplateManifest = {
       version: 1,
@@ -1027,6 +1060,55 @@ describe("round-trip", () => {
     const tamperedBack = await readManifest(tampered);
     expect(tamperedBack?.fields.at(0)?.lookup).toBeUndefined();
     expect(tamperedBack?.fields.at(1)?.lookup).toBeUndefined();
+  });
+
+  test("lookup named formats round-trip; an out-of-grammar key is dropped on read", async () => {
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "company",
+          lookup: {
+            registry: "krs",
+            aiFormat: "[company name]",
+            formats: [
+              { key: "full", template: "[company name], seat in [seat]" },
+              { key: "short", template: "**[company name]**" },
+            ],
+          },
+        },
+      ],
+      conditions: [],
+    };
+
+    const docx = await createMinimalDocx();
+    const withManifest = await writeManifest(docx, manifest);
+    const readBack = await readManifest(withManifest);
+    expect(readBack?.fields.at(0)?.lookup).toEqual({
+      registry: "krs",
+      aiFormat: "[company name]",
+      formats: [
+        { key: "full", template: "[company name], seat in [seat]" },
+        { key: "short", template: "**[company name]**" },
+      ],
+    });
+
+    // Hand-edited XML with a dotted key (illegal segment) must not leak past
+    // the parser; the surviving valid format still round-trips.
+    const zip = await JSZip.loadAsync(withManifest);
+    const itemEntry = zip.file("customXml/item1.xml");
+    const itemXml = await itemEntry?.async("string");
+    zip.file(
+      "customXml/item1.xml",
+      (itemXml ?? "").replaceAll('key="short"', 'key="bad.key"'),
+    );
+    const tampered = Buffer.from(
+      await zip.generateAsync({ type: "nodebuffer" }),
+    );
+    const tamperedBack = await readManifest(tampered);
+    expect(tamperedBack?.fields.at(0)?.lookup?.formats).toEqual([
+      { key: "full", template: "[company name], seat in [seat]" },
+    ]);
   });
 
   test("formula round-trips; a hand-edited formula beside another value source is dropped", async () => {

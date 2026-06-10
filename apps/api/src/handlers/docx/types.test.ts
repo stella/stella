@@ -118,6 +118,52 @@ describe("isFieldMeta", () => {
     ).toBe(false);
   });
 
+  test("accepts a lookup with named output formats", () => {
+    expect(
+      isFieldMeta({
+        path: "company",
+        lookup: {
+          registry: "krs",
+          formats: [
+            { key: "full", template: "[company name], [seat]" },
+            { key: "short", template: "[company name]" },
+          ],
+        },
+      }),
+    ).toBe(true);
+  });
+
+  test("rejects lookup formats with a dotted key, bad shape, or past the cap", () => {
+    expect(
+      isFieldMeta({
+        path: "company",
+        lookup: { registry: "krs", formats: [{ key: "a.b", template: "x" }] },
+      }),
+    ).toBe(false);
+    expect(
+      isFieldMeta({
+        path: "company",
+        lookup: { registry: "krs", formats: [{ key: "full" }] },
+      }),
+    ).toBe(false);
+    expect(
+      isFieldMeta({
+        path: "company",
+        lookup: { registry: "krs", formats: "full" },
+      }),
+    ).toBe(false);
+    const tooMany = Array.from({ length: 11 }, (_, i) => ({
+      key: `f${i}`,
+      template: "x",
+    }));
+    expect(
+      isFieldMeta({
+        path: "company",
+        lookup: { registry: "krs", formats: tooMany },
+      }),
+    ).toBe(false);
+  });
+
   test("accepts a formula field", () => {
     expect(isFieldMeta({ path: "rent_annual", formula: "rent * 12" })).toBe(
       true,
