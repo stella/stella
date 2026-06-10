@@ -36,11 +36,13 @@ import type { NodeType, ResolvedPos } from "prosemirror-model";
 import { TextSelection } from "prosemirror-state";
 import type { EditorState, Transaction } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
+import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import type { TemplateRecipeDefinition } from "@stll/api/types";
 import {
   buildPositionalText,
+  getFolioSelectionViewportRect,
   getTemplateDirectives,
   setTemplatePreviewValues,
 } from "@stll/folio";
@@ -135,6 +137,42 @@ const templateStudioTabId = (templateId: string) =>
   `template-studio:${templateId}`;
 
 type TemplateStudioPayload = { templateId: string };
+
+// ── Selection gesture popover ────────────────────────────
+
+/** Selecting prose settles for this long before the popover shows; drag and
+ *  shift+arrow selections re-arm it instead of flashing mid-gesture. */
+const GESTURE_SHOW_DELAY_MS = 150;
+/** Pause on a stable selection before asking the model to enrich the
+ *  Make-field row. The instant buttons never wait for this. */
+const GESTURE_ENRICH_DELAY_MS = 500;
+const GESTURE_POPOVER_OFFSET_PX = 8;
+/** Half the popover's fixed width (w-56), for clamping inside the host. */
+const GESTURE_POPOVER_HALF_WIDTH_PX = 116;
+/** Rough rendered height of the three-row popover, for the flip decision. */
+const GESTURE_POPOVER_EST_HEIGHT_PX = 120;
+
+/** The live text selection in the document, as reported by Folio. */
+type GestureSelection = { from: number; to: number; text: string };
+
+/** A settled selection the gesture popover is anchored to; `left`/`top` are
+ *  relative to the page's document wrapper (the popover's offset parent). */
+type SelectionGesture = GestureSelection & {
+  left: number;
+  top: number;
+  placement: "above" | "below";
+};
+
+/** Progressive AI enrichment of the popover's Make-field row. */
+type GestureEnrichment =
+  | { status: "idle" }
+  | { status: "loading" }
+  | {
+      status: "ready";
+      label: string | undefined;
+      inputType: EditableField["inputType"] | undefined;
+      aiPrompt: string | undefined;
+    };
 
 /**
  * Template Studio page: the document (Folio) fills the surface, with a slim
@@ -373,14 +411,15 @@ export const TemplateStudioPage = ({
   // The hero gesture: turn the current text selection into a `{{field}}`,
   // deriving a unique field path from the selected text and registering it in
   // the session (the dispatched selection change re-runs syncSelection).
-  const makeField = (range?: { from: number; to: number }) => {
+  // Returns the created path so callers can apply extra config on top.
+  const makeField = (range?: { from: number; to: number }): string | null => {
     const view = editorViewRef.current;
     if (!view) {
-      return;
+      return null;
     }
     const { from, to } = range ?? view.state.selection;
     if (from === to) {
-      return;
+      return null;
     }
     const text = view.state.doc.textBetween(from, to, " ");
     const base = slugify(text);
@@ -394,6 +433,7 @@ export const TemplateStudioPage = ({
     );
     view.focus();
     upsertField(path, {});
+    return path;
   };
 
   // Folio creates its editable PM view lazily (on first focus), so the captured
@@ -499,6 +539,230 @@ export const TemplateStudioPage = ({
   const insertLoop = (range?: { from: number; to: number }) =>
     insertOrWrapBlock("{{#each items}}", "{{/each}}", "items", range);
   const insertClause = () => insertInline("{{@clause:Clause}}");
+
+  // ── Selection → gesture popover ──────────────────────────
+  // Selecting plain prose floats the structural gestures next to the
+  // selection: Make field leads, wrap-in-condition / wrap-in-loop follow.
+  // After the selection has been stable for a moment, the model proposes a
+  // configuration for the would-be field and the Make-field row enriches;
+  // the buttons themselves never wait for it.
+  const overlayHostRef = useRef<HTMLDivElement | null>(null);
+  const [gesture, setGestureState] = useState<SelectionGesture | null>(null);
+  // Mirror for handlers that fire outside the render cycle (debounced
+  // callbacks, in-flight enrichment) and need the freshest value.
+  const gestureRef = useRef<SelectionGesture | null>(null);
+  const setGesture = (next: SelectionGesture | null) => {
+    gestureRef.current = next;
+    setGestureState(next);
+  };
+  const [enrichment, setEnrichment] = useState<GestureEnrichment>({
+    status: "idle",
+  });
+  // Bumped on every hide/new fetch so stale enrichment responses are dropped.
+  const enrichSeqRef = useRef(0);
+
+  // useCallback (not React Compiler memoization) because the dismiss-listener
+  // effect depends on it.
+  const hideGesture = useCallback(() => {
+    enrichSeqRef.current++;
+    gestureRef.current = null;
+    setGestureState(null);
+    setEnrichment({ status: "idle" });
+  }, []);
+
+  const showGesture = useDebouncedCallback((sel: GestureSelection) => {
+    const view = editorViewRef.current;
+    const host = overlayHostRef.current;
+    if (!view || !host) {
+      return;
+    }
+    const { from, to } = view.state.selection;
+    if (from === to || from !== sel.from || to !== sel.to) {
+      return;
+    }
+    // Only for selections made in the document itself: while the AI chat bar
+    // (or any surface outside the editor) holds focus, stay away.
+    const scrollContainer = view.dom.closest("[data-folio-scroll]");
+    if (!scrollContainer || !scrollContainer.contains(document.activeElement)) {
+      return;
+    }
+    // Existing {{markers}} have their own inspector faces; the gesture
+    // popover is only for plain prose.
+    const overlapsDirective = getTemplateDirectives(view.state).some(
+      (range) => range.from < to && range.to > from,
+    );
+    if (overlapsDirective) {
+      return;
+    }
+    // Folio paints the selection highlights asynchronously after the
+    // selection change; retry across a few frames until they exist.
+    let attempts = 0;
+    const read = () => {
+      const liveView = editorViewRef.current;
+      if (!liveView) {
+        return;
+      }
+      const live = liveView.state.selection;
+      if (live.from !== sel.from || live.to !== sel.to) {
+        return;
+      }
+      const rect = getFolioSelectionViewportRect(liveView);
+      if (!rect) {
+        attempts++;
+        if (attempts < 10) {
+          requestAnimationFrame(read);
+        }
+        return;
+      }
+      const hostRect = host.getBoundingClientRect();
+      const fitsBelow =
+        rect.bottom -
+          hostRect.top +
+          GESTURE_POPOVER_OFFSET_PX +
+          GESTURE_POPOVER_EST_HEIGHT_PX <
+        host.clientHeight;
+      const placement = fitsBelow ? "below" : "above";
+      const center = rect.left + rect.width / 2 - hostRect.left;
+      setGesture({
+        ...sel,
+        left: Math.min(
+          Math.max(center, GESTURE_POPOVER_HALF_WIDTH_PX),
+          Math.max(
+            GESTURE_POPOVER_HALF_WIDTH_PX,
+            host.clientWidth - GESTURE_POPOVER_HALF_WIDTH_PX,
+          ),
+        ),
+        top:
+          placement === "below"
+            ? rect.bottom - hostRect.top
+            : rect.top - hostRect.top,
+        placement,
+      });
+    };
+    requestAnimationFrame(read);
+  }, GESTURE_SHOW_DELAY_MS);
+
+  const fetchGestureSuggestion = async (sel: GestureSelection) => {
+    const view = editorViewRef.current;
+    if (!view) {
+      return;
+    }
+    const seq = ++enrichSeqRef.current;
+    setEnrichment({ status: "loading" });
+    const response = await api.templates["suggest-fields"].post({
+      text: paragraphsAroundSelection(view.state, sel.from),
+      instructions:
+        `The user selected this exact text: "${sel.text}". Propose exactly ` +
+        `ONE field for that exact selection (literalText must equal it): ` +
+        `its label and input type, plus an aiPrompt only when the selection ` +
+        `is free-form prose that AI should draft at fill time.`,
+    });
+    if (seq !== enrichSeqRef.current) {
+      return;
+    }
+    const match = response.error ? null : response.data.suggestions.at(0);
+    if (!match) {
+      setEnrichment({ status: "idle" });
+      return;
+    }
+    setEnrichment({
+      status: "ready",
+      label: match.label,
+      inputType:
+        match.inputType !== undefined && isInputType(match.inputType)
+          ? match.inputType
+          : undefined,
+      aiPrompt: match.aiPrompt,
+    });
+  };
+
+  const enrichGesture = useDebouncedCallback((sel: GestureSelection) => {
+    const shown = gestureRef.current;
+    if (shown === null || shown.from !== sel.from || shown.to !== sel.to) {
+      return;
+    }
+    void fetchGestureSuggestion(sel);
+  }, GESTURE_ENRICH_DELAY_MS);
+
+  const onGestureSelectionChange = (sel: GestureSelection) => {
+    if (sel.text.trim() === "") {
+      showGesture.cancel();
+      enrichGesture.cancel();
+      hideGesture();
+      return;
+    }
+    const shown = gestureRef.current;
+    if (shown !== null && (shown.from !== sel.from || shown.to !== sel.to)) {
+      hideGesture();
+    }
+    showGesture(sel);
+    enrichGesture(sel);
+  };
+
+  // Each button acts on the selection captured when the popover anchored, so
+  // a click can never target a drifted live selection.
+  const applyGesture = (kind: "field" | "if" | "each") => {
+    const shown = gestureRef.current;
+    if (shown === null) {
+      return;
+    }
+    const range = { from: shown.from, to: shown.to };
+    if (kind === "field") {
+      const path = makeField(range);
+      if (path !== null && enrichment.status === "ready") {
+        upsertField(path, {
+          ...(enrichment.label !== undefined && enrichment.label !== ""
+            ? { label: enrichment.label }
+            : {}),
+          ...(enrichment.inputType !== undefined
+            ? { inputType: enrichment.inputType }
+            : {}),
+          ...(enrichment.aiPrompt !== undefined
+            ? { aiPrompt: enrichment.aiPrompt }
+            : {}),
+        });
+      }
+    } else if (kind === "if") {
+      insertCondition(range);
+    } else {
+      insertLoop(range);
+    }
+    showGesture.cancel();
+    enrichGesture.cancel();
+    hideGesture();
+  };
+
+  // Escape, any scroll, and the (custom) context menu all dismiss the
+  // popover: the selection survives, only the floating affordance leaves.
+  const gestureShown = gesture !== null;
+  useEffect(() => {
+    if (!gestureShown) {
+      return undefined;
+    }
+    const host = overlayHostRef.current;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        hideGesture();
+      }
+    };
+    const dismiss = () => hideGesture();
+    window.addEventListener("keydown", onKeyDown);
+    host?.addEventListener("scroll", dismiss, { capture: true });
+    host?.addEventListener("contextmenu", dismiss, { capture: true });
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      host?.removeEventListener("scroll", dismiss, { capture: true });
+      host?.removeEventListener("contextmenu", dismiss, { capture: true });
+    };
+  }, [gestureShown, hideGesture]);
+
+  useEffect(
+    () => () => {
+      showGesture.cancel();
+      enrichGesture.cancel();
+    },
+    [showGesture, enrichGesture],
+  );
 
   // Loop recipes mirror insertOrWrapBlock's caret branch: the opener, one
   // marker paragraph per field, and the closer land after the current
@@ -635,7 +899,9 @@ export const TemplateStudioPage = ({
     insertClause,
     insertRecipe,
     insertClauseSlot: (slotName) => insertInline(`{{@clause:${slotName}}}`),
-    makeField,
+    makeField: () => {
+      makeField();
+    },
     save: () => void handleSave(),
     focusAdjacentField: (direction) => {
       const view = editorViewRef.current;
@@ -787,8 +1053,9 @@ export const TemplateStudioPage = ({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* `relative` so the floating AI bar + stepper anchor over the doc. */}
-      <div className="relative min-h-0 flex-1">
+      {/* `relative` so the floating AI bar, stepper, and selection-gesture
+          popover anchor over the doc. */}
+      <div className="relative min-h-0 flex-1" ref={overlayHostRef}>
         <div
           className="h-full [scrollbar-gutter:stable] overflow-auto"
           ref={containerRef}
@@ -827,10 +1094,20 @@ export const TemplateStudioPage = ({
                 setHasSelection(state?.hasSelection ?? false);
                 syncSelection();
               }}
+              onSelectionTextChange={onGestureSelectionChange}
               showTemplateDirectives={showDirectives}
             />
           </Suspense>
         </div>
+        {gesture !== null && (
+          <SelectionGesturePopover
+            enrichment={enrichment}
+            gesture={gesture}
+            onMakeField={() => applyGesture("field")}
+            onWrapEach={() => applyGesture("each")}
+            onWrapIf={() => applyGesture("if")}
+          />
+        )}
         <TemplateStudioChat
           editorRef={editorRef}
           editorView={liveEditorView}
@@ -863,6 +1140,154 @@ const paragraphsAround = (text: string, marker: string): string => {
     .slice(Math.max(0, index - 1), index + 2)
     .filter((line) => line.trim() !== "")
     .join("\n");
+};
+
+/** The selection's containing paragraph plus one paragraph on each side —
+ *  the same context window `paragraphsAround` sends for an existing marker,
+ *  read from the live doc because the field marker does not exist yet. */
+const paragraphsAroundSelection = (
+  state: EditorState,
+  from: number,
+): string => {
+  const $from = state.doc.resolve(from);
+  if ($from.depth === 0) {
+    return $from.parent.textContent.slice(0, 4000);
+  }
+  const container = $from.node($from.depth - 1);
+  const index = $from.index($from.depth - 1);
+  const texts: string[] = [];
+  for (const i of [index - 1, index, index + 1]) {
+    if (i < 0 || i >= container.childCount) {
+      continue;
+    }
+    const text = container.child(i).textContent;
+    if (text.trim() !== "") {
+      texts.push(text);
+    }
+  }
+  return texts.join("\n");
+};
+
+/** Popover buttons act on the captured selection; preventing mousedown keeps
+ *  focus (and the painted selection) in the editor while clicking. */
+const keepEditorFocus = (event: { preventDefault: () => void }) => {
+  event.preventDefault();
+};
+
+/** Floating gesture menu anchored under (or above) the painted selection.
+ *  Instant structural actions first; the Make-field row enriches in place
+ *  once the model's proposal arrives. */
+const SelectionGesturePopover = ({
+  gesture,
+  enrichment,
+  onMakeField,
+  onWrapIf,
+  onWrapEach,
+}: {
+  gesture: SelectionGesture;
+  enrichment: GestureEnrichment;
+  onMakeField: () => void;
+  onWrapIf: () => void;
+  onWrapEach: () => void;
+}) => {
+  const t = useTranslations();
+  return (
+    <div
+      aria-label={t("templates.studio.insert")}
+      className="bg-popover text-popover-foreground absolute z-30 flex w-56 flex-col rounded-lg border p-1 shadow-lg/5 transition-opacity duration-100 starting:opacity-0"
+      role="group"
+      style={{
+        left: gesture.left,
+        top: gesture.top,
+        transform:
+          gesture.placement === "above"
+            ? `translate(-50%, calc(-100% - ${GESTURE_POPOVER_OFFSET_PX}px))`
+            : `translate(-50%, ${GESTURE_POPOVER_OFFSET_PX}px)`,
+      }}
+    >
+      <GestureMakeFieldRow enrichment={enrichment} onMakeField={onMakeField} />
+      <Button
+        className="justify-start gap-2 font-normal"
+        onClick={onWrapIf}
+        onMouseDown={keepEditorFocus}
+        size="sm"
+        variant="ghost"
+      >
+        <SplitIcon className="text-muted-foreground size-3.5 shrink-0" />
+        {t("templates.studio.showOnlyIf")}
+      </Button>
+      <Button
+        className="justify-start gap-2 font-normal"
+        onClick={onWrapEach}
+        onMouseDown={keepEditorFocus}
+        size="sm"
+        variant="ghost"
+      >
+        <RepeatIcon className="text-muted-foreground size-3.5 shrink-0" />
+        {t("templates.studio.repeatForEach")}
+      </Button>
+    </div>
+  );
+};
+
+/** The popover's primary row. Plain "Make field" instantly; once the model's
+ *  proposal lands it reads as the suggested label + type icon (wand = AI).
+ *  While the proposal is in flight only a subtle shimmer shows — the button
+ *  itself stays clickable throughout. */
+const GestureMakeFieldRow = ({
+  enrichment,
+  onMakeField,
+}: {
+  enrichment: GestureEnrichment;
+  onMakeField: () => void;
+}) => {
+  const t = useTranslations();
+  if (enrichment.status === "ready") {
+    const TypeIcon =
+      enrichment.inputType === undefined
+        ? null
+        : VALUE_TYPE_META[inputTypeValueKind(enrichment.inputType)].icon;
+    const label =
+      enrichment.label !== undefined && enrichment.label !== ""
+        ? enrichment.label
+        : t("templates.studio.makeField");
+    return (
+      <Button
+        className="justify-start gap-2 font-normal"
+        onClick={onMakeField}
+        onMouseDown={keepEditorFocus}
+        size="sm"
+        title={t("templates.studio.makeField")}
+        variant="ghost"
+      >
+        <WandSparklesIcon className="text-muted-foreground size-3.5 shrink-0" />
+        <span className="min-w-0 truncate">{label}</span>
+        {TypeIcon === null ? null : (
+          <TypeIcon className="text-muted-foreground ms-auto size-3.5 shrink-0" />
+        )}
+      </Button>
+    );
+  }
+  return (
+    <Button
+      className="justify-start gap-2 font-normal"
+      onClick={onMakeField}
+      onMouseDown={keepEditorFocus}
+      size="sm"
+      variant="ghost"
+    >
+      <BracesIcon className="text-muted-foreground size-3.5 shrink-0" />
+      <span className="min-w-0 truncate">
+        {t("templates.studio.makeField")}
+      </span>
+      {enrichment.status === "loading" ? (
+        <span
+          aria-hidden="true"
+          className="bg-muted ms-auto h-1.5 w-8 shrink-0 animate-pulse rounded-full"
+        />
+      ) : null}
+    </Button>
+  );
 };
 
 /** A paragraph node carrying marker text ("" for the empty body line). */
