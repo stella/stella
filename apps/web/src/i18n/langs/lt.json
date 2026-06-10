@@ -1310,6 +1310,7 @@
       "versionCurrent": "v{version} (dabartinė)"
     },
     "openChat": "Atidaryti pokalbį",
+    "reopenTab": "Iš naujo atidaryti {name}",
     "showPane": "Rodyti polangį"
   },
   "knowledge": {

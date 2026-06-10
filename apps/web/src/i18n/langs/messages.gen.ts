@@ -1346,6 +1346,7 @@ type Messages = {
       "versionCurrent": "v{version} (current)";
     };
     "openChat": "Open chat";
+    "reopenTab": "Reopen {name}";
     "showPane": "Show pane";
   };
   "knowledge": {
