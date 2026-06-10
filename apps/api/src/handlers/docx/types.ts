@@ -266,10 +266,10 @@ export type LookupRegistry = (typeof LOOKUP_REGISTRIES)[number];
 export type FieldLookup = {
   registry: LookupRegistry;
   /**
-   * Optional AI instruction that formats the registry hit into the final
-   * string (e.g. "[company name], with its seat in [seat], KRS [number]").
-   * Without it (or with no model provider) a deterministic "name, seat"
-   * rendering is used.
+   * Optional format template rendered deterministically from the registry
+   * hit: [token] slots are substituted from the hit (e.g. "[company name],
+   * with its seat in [seat], KRS [registry number]"). Without it a
+   * deterministic "name, seat" rendering is used.
    */
   aiFormat?: string | undefined;
 };

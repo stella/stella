@@ -4,13 +4,14 @@
  * A manifest field with `lookup` is filled by entering only the registry
  * number (e.g. a 10-digit KRS number); at fill time the company is resolved
  * via the shared business-registry dispatch and the marker is filled with the
- * rendered company details. With an `aiFormat` instruction and a model
- * provider, AI formats the hit per the instruction ("[company name], with its
- * seat in [seat], KRS [number]"); otherwise a deterministic "name, seat"
- * rendering is used.
+ * rendered company details. With an author's format template, the [token]
+ * slots ("[company name], with its seat in [seat], KRS [registry number]")
+ * are substituted deterministically from the hit; otherwise a deterministic
+ * "name, seat" rendering is used. Grammar and wording adjustments are not the
+ * lookup's job: they happen downstream in the per-occurrence aiAdapt pass.
  *
- * The resolution and formatting dependencies are injected so the module stays
- * testable without network or model access; {@link createDispatchLookupResolver}
+ * The resolution dependency is injected so the module stays testable
+ * without network access; {@link createDispatchLookupResolver}
  * wires the real dispatch table for the fill boundaries. A lookup that fails
  * (malformed number, no match, upstream error) rejects the request at the
  * boundary with a message naming the field — silently passing the raw number
@@ -68,17 +69,6 @@ export type LookupResolver = (input: {
 }) => Promise<LookupOutcome>;
 
 /**
- * AI formatter for a lookup hit (FieldMeta.lookup.aiFormat). Returns the
- * formatted string, or `undefined` when no model is available or the model
- * fails — callers fall back to {@link renderLookupHit}.
- */
-export type AiLookupFormatter = (input: {
-  instruction: string;
-  fieldPath: string;
-  hit: BusinessRegistryHit;
-}) => Promise<string | undefined>;
-
-/**
  * The real resolver over the shared registry dispatch. The per-registry
  * adapters own timeouts (`AbortSignal.timeout`) on their upstream calls.
  * The dispatch table is injectable for tests (mirroring how dispatch.test.ts
@@ -107,8 +97,8 @@ export const createDispatchLookupResolver =
 
 // ── Deterministic rendering ──────────────────────────────
 
-/** Deterministic "name, seat" rendering of a hit, used when no AI format
- *  instruction is set or no model is available. */
+/** Deterministic "name, seat" rendering of a hit, used when the field has no
+ *  format template (or the template renders empty). */
 export const renderLookupHit = (hit: BusinessRegistryHit): string => {
   const seat = hit.address?.textAddress ?? hit.address?.city ?? null;
   return [hit.name, seat].filter((part) => part !== null).join(", ");
@@ -178,12 +168,10 @@ export const resolveLookupFields = async ({
   values,
   fields,
   resolve,
-  formatWithAi,
 }: {
   values: Record<string, unknown>;
   fields: readonly FieldMeta[];
   resolve: LookupResolver;
-  formatWithAi?: AiLookupFormatter | undefined;
 }): Promise<LookupResolution> => {
   const lookupFields = fields.filter((field) => field.lookup !== undefined);
   if (lookupFields.length === 0) {
@@ -231,27 +219,16 @@ export const resolveLookupFields = async ({
       continue;
     }
 
-    // The author's format template renders deterministically by default
-    // ([tokens] substituted from the hit); AI applies it only when the field
-    // opts into contextual wording via aiAdapt (the Person + AI source).
+    // The author's format template renders deterministically ([tokens]
+    // substituted from the hit); grammar and wording adjustments happen
+    // downstream in the per-occurrence aiAdapt pass, never at lookup time.
     const template = lookup.aiFormat?.trim() ?? "";
-    let rendered: string | undefined;
-    if (template !== "") {
-      if (field.aiAdapt === true && formatWithAi !== undefined) {
-        rendered = await formatWithAi({
-          instruction: template,
-          fieldPath: field.path,
-          hit: outcome.hit,
-        });
-      }
-      rendered ??= renderLookupTemplate(template, outcome.hit);
-    }
+    const rendered =
+      template === "" ? "" : renderLookupTemplate(template, outcome.hit);
     replaceResolvedValue(
       resolved,
       field.path,
-      rendered !== undefined && rendered !== ""
-        ? rendered
-        : renderLookupHit(outcome.hit),
+      rendered !== "" ? rendered : renderLookupHit(outcome.hit),
     );
   }
 
@@ -271,7 +248,6 @@ export const applyLookupFields = async (
   manifest: { fields: FieldMeta[] } | null,
   options: {
     resolve: LookupResolver;
-    formatWithAi?: AiLookupFormatter | undefined;
   },
 ): Promise<string | null> => {
   if (!manifest) {
@@ -281,7 +257,6 @@ export const applyLookupFields = async (
     values,
     fields: manifest.fields,
     resolve: options.resolve,
-    formatWithAi: options.formatWithAi,
   });
   if (!resolution.ok) {
     return resolution.errors.map((e) => e.message).join(" ");

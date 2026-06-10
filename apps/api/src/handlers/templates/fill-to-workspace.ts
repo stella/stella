@@ -5,7 +5,6 @@ import { t } from "elysia";
 import { entities, templateFills } from "@/api/db/schema";
 import {
   buildAiFieldGenerator,
-  buildAiLookupFormatter,
   buildAiOccurrenceAdapter,
 } from "@/api/handlers/docx/ai-field-generator";
 import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
@@ -144,10 +143,6 @@ const fillTemplateToWorkspace = createSafeHandler(
               organizationId,
             }),
             adaptAiValue: buildAiOccurrenceAdapter({
-              orgAIConfig,
-              organizationId,
-            }),
-            formatLookupValue: buildAiLookupFormatter({
               orgAIConfig,
               organizationId,
             }),
