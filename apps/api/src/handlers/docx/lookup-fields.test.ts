@@ -16,6 +16,7 @@ import {
   lookupValueFromRendered,
   parseLookupMarkdown,
   renderLookupHit,
+  renderLookupOutput,
   resolveLookupFields,
   stripLookupMarkdown,
 } from "./lookup-fields";
@@ -80,6 +81,23 @@ describe("renderLookupHit", () => {
     expect(renderLookupHit({ ...KRS_HIT, address: null })).toBe(
       "Żabka Polska sp. z o.o.",
     );
+  });
+});
+
+describe("renderLookupOutput", () => {
+  test("renders the format template with its formatting markers intact", () => {
+    expect(
+      renderLookupOutput("**[company name]**, seat in *[seat]*", KRS_HIT),
+    ).toBe("**Żabka Polska sp. z o.o.**, seat in *Poznań*");
+  });
+
+  test("falls back to the deterministic name + seat without a template", () => {
+    const fallback =
+      "Żabka Polska sp. z o.o., ul. Stanisława Matyi 8, 61-586 Poznań";
+    expect(renderLookupOutput(null, KRS_HIT)).toBe(fallback);
+    expect(renderLookupOutput("  ", KRS_HIT)).toBe(fallback);
+    // A template of only unknown tokens renders empty → same fallback.
+    expect(renderLookupOutput("[no such token]", KRS_HIT)).toBe(fallback);
   });
 });
 

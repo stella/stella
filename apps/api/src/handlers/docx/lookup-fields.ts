@@ -151,6 +151,19 @@ export const renderLookupTemplate = (
     .trim();
 };
 
+/** The rendered output for a hit: the author's format template when present
+ *  (with its `**bold**` / `*italic*` markers intact — the consumer decides
+ *  how to interpret them), falling back to the deterministic "name, seat"
+ *  when there is no template or it renders empty. */
+export const renderLookupOutput = (
+  format: string | null | undefined,
+  hit: BusinessRegistryHit,
+): string => {
+  const template = format?.trim() ?? "";
+  const rendered = template === "" ? "" : renderLookupTemplate(template, hit);
+  return rendered !== "" ? rendered : renderLookupHit(hit);
+};
+
 // ── Inline markdown in the rendered output ───────────────
 
 /** `**bold**` / `*italic*` spans in the author's format template. Spans do
@@ -280,11 +293,7 @@ export const resolveLookupFields = async ({
     // The author's format template renders deterministically ([tokens]
     // substituted from the hit); grammar and wording adjustments happen
     // downstream in the per-occurrence aiAdapt pass, never at lookup time.
-    const template = lookup.aiFormat?.trim() ?? "";
-    const rendered =
-      template === "" ? "" : renderLookupTemplate(template, outcome.hit);
-    const renderedText =
-      rendered !== "" ? rendered : renderLookupHit(outcome.hit);
+    const renderedText = renderLookupOutput(lookup.aiFormat, outcome.hit);
     // The aiAdapt pass rewrites plain string stubs only, so a Person + AI
     // lookup keeps a plain value (formatting markers stripped); otherwise
     // **bold** / *italic* spans in the format become formatted runs.

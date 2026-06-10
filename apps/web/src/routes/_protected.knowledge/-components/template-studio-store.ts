@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 import type { TemplateRecipeDefinition } from "@stll/api/types";
-import type { DirectiveRange } from "@stll/folio";
+import type { DirectiveRange, TemplatePreviewValue } from "@stll/folio";
 
 import type { ReplacementSpec } from "@/routes/_protected.knowledge/-components/template-studio-suggestions";
 import type { EditableField } from "@/routes/_protected.knowledge/-components/template-wizard";
@@ -74,8 +74,9 @@ export type StudioActions = {
   focusField: (path: string) => void;
   /** Move the document caret to an exact document position. */
   focusPosition: (pos: number) => void;
-  /** Live fill preview in the document: path → value, or null to clear. */
-  setFillPreview: (values: Record<string, string> | null) => void;
+  /** Live fill preview in the document: path → value (plain text, or
+   *  formatted spans for lookup renderings), or null to clear. */
+  setFillPreview: (values: Record<string, TemplatePreviewValue> | null) => void;
   /** Replace the selection (or insert at the caret) with an existing field's
    *  marker; replacing text flips the field to AI-adapted wording. */
   insertExistingField: (path: string) => void;
