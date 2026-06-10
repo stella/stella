@@ -55,6 +55,7 @@ const CHECKPOINT_DEBOUNCE: Duration = Duration::from_millis(1200);
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(20);
 const REMOTE_SAVE_TIMEOUT: Duration = Duration::from_secs(60);
 const RETRY_INTERVAL: Duration = Duration::from_secs(15);
+const KEYCHAIN_RESTORE_TIMEOUT: Duration = Duration::from_secs(10);
 const OPEN_POLL_INTERVAL: Duration = Duration::from_secs(1);
 const CLOSED_RECHECK_COUNT: u8 = 5;
 const TAKEN_OVER_CODE: &str = "desktop_edit_session_taken_over";
@@ -387,8 +388,15 @@ impl SessionManager {
         continue;
       }
 
-      // Token lives in OS keychain; skip sessions without one
-      let session_token = match crate::keychain::get_token(&persisted.id) {
+      // Token lives in OS keychain; skip sessions without one. The timeout
+      // keeps a stalled keychain (pending authorization prompt) from holding
+      // the session manager lock indefinitely during startup.
+      let session_token = match crate::keychain::get_token_with_timeout(
+        &persisted.id,
+        KEYCHAIN_RESTORE_TIMEOUT,
+      )
+      .await
+      {
         Some(t) => t,
         None => {
           tracing::warn!(

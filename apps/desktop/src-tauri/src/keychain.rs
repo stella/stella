@@ -113,6 +113,30 @@ pub fn get_token(session_id: &str) -> Option<String> {
   }
 }
 
+/// Retrieve a session token without letting a blocked keychain call wedge the
+/// caller. Platform keychain reads can stall on user authorization (e.g. when
+/// the binary changed and the OS re-prompts); the read runs on a blocking
+/// thread and is abandoned after `timeout` so callers holding the session
+/// manager lock stay responsive.
+pub async fn get_token_with_timeout(
+  session_id: &str,
+  timeout: std::time::Duration,
+) -> Option<String> {
+  let id = session_id.to_string();
+  let read = tokio::task::spawn_blocking(move || get_token(&id));
+  match tokio::time::timeout(timeout, read).await {
+    Ok(Ok(token)) => token,
+    Ok(Err(e)) => {
+      tracing::warn!(session_id, error = %e, "keychain read task failed");
+      None
+    }
+    Err(_) => {
+      tracing::warn!(session_id, "keychain read timed out");
+      None
+    }
+  }
+}
+
 /// Delete a session token from the OS keychain.
 /// Silently succeeds if the entry does not exist.
 pub fn delete_token(session_id: &str) {
