@@ -36,6 +36,7 @@ import {
   draftToNamedCondition,
   emptyGroup,
   NamedConditionsEditor,
+  toRuleFields,
 } from "./condition-builder";
 import {
   DATE_FORMAT_STYLES,
@@ -636,7 +637,7 @@ export const ConfigureStep = ({
               <div className="p-4">
                 <NamedConditionsEditor
                   conditions={draftConditions}
-                  fields={fields.map((f) => f.path)}
+                  fields={toRuleFields(fields)}
                   onChange={setDraftConditions}
                 />
               </div>
