@@ -3162,7 +3162,7 @@ const FieldPreviewControl = ({
     return (
       <Textarea
         onChange={(e) => onValueChange(e.target.value)}
-        placeholder={exampleValue}
+        placeholder={field.hint ?? exampleValue}
         rows={3}
         value={value}
       />
@@ -3175,7 +3175,7 @@ const FieldPreviewControl = ({
     return (
       <Input
         onChange={(e) => onValueChange(e.target.value)}
-        placeholder={field.options.join(" / ") || exampleValue}
+        placeholder={field.hint ?? (field.options.join(" / ") || exampleValue)}
         value={value}
       />
     );
@@ -3184,7 +3184,7 @@ const FieldPreviewControl = ({
     return (
       <Input
         onChange={(e) => onValueChange(e.target.value)}
-        placeholder={exampleValue ?? "2026-01-31"}
+        placeholder={field.hint ?? exampleValue ?? "2026-01-31"}
         value={value}
       />
     );
@@ -3192,7 +3192,7 @@ const FieldPreviewControl = ({
   return (
     <Input
       onChange={(e) => onValueChange(e.target.value)}
-      placeholder={exampleValue}
+      placeholder={field.hint ?? exampleValue}
       value={value}
     />
   );
