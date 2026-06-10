@@ -58,6 +58,7 @@ import type {
   TableCellAttrs,
 } from "../schema/nodes";
 import { assertValidProseMirrorDocument } from "../validation";
+import { marksToTextFormatting } from "./fromProseDoc";
 import { shadingToRunShadingAttrs } from "./runShadingMark";
 
 /**
@@ -322,7 +323,9 @@ function convertParagraph(
       content.type === "simpleField" ||
       content.type === "complexField"
     ) {
-      emitInlineNode(convertField(content, getInheritedRunFormatting));
+      emitInlineNode(
+        convertField(content, getInheritedRunFormatting, styleResolver),
+      );
     } else if (content.type === "inlineSdt") {
       emitInlineNode(
         convertInlineSdt(content, getInheritedRunFormatting, styleResolver),
@@ -1780,6 +1783,7 @@ function convertTableCell(
 function convertField(
   field: SimpleField | ComplexField,
   getInheritedRunFormatting: RunFormattingResolver,
+  styleResolver?: StyleEngine | null,
 ): PMNode | null {
   // Extract display text and formatting from field content/result
   let displayText = "";
@@ -1801,11 +1805,11 @@ function convertField(
 
   // Merge style formatting with field run formatting (inline takes precedence)
   const inheritedFormatting = getInheritedRunFormatting(fieldFormatting);
-  const mergedFormatting = mergeTextFormatting(
-    inheritedFormatting,
+  const marks = buildRunMarks(
     fieldFormatting,
+    inheritedFormatting,
+    styleResolver,
   );
-  const marks = textFormattingToMarks(mergedFormatting);
 
   return schema.node(
     "field",
@@ -1867,7 +1871,11 @@ function convertInlineSdt(
       content.type === "simpleField" ||
       content.type === "complexField"
     ) {
-      const fieldNode = convertField(content, getInheritedRunFormatting);
+      const fieldNode = convertField(
+        content,
+        getInheritedRunFormatting,
+        styleResolver,
+      );
       if (fieldNode) {
         inlineNodes.push(fieldNode);
       }
@@ -1920,22 +1928,7 @@ function convertRun(
   styleResolver?: StyleEngine | null,
 ): PMNode[] {
   const nodes: PMNode[] = [];
-
-  // Merge style formatting with run's inline formatting
-  // Inline formatting takes precedence over style formatting
-  //
-  // Use getRunStyleOwnProperties (not resolveRunStyle) to avoid docDefaults
-  // from the character style overriding paragraph style properties.
-  // The styleFormatting parameter already includes docDefaults from paragraph
-  // style resolution, so we only need the character style's own properties.
-  const runStyleFormatting = run.formatting?.styleId
-    ? styleResolver?.getRunStyleOwnProperties(run.formatting.styleId)
-    : undefined;
-  const mergedFormatting = mergeTextFormatting(
-    mergeTextFormatting(styleFormatting, runStyleFormatting),
-    run.formatting,
-  );
-  const marks = textFormattingToMarks(mergedFormatting);
+  const marks = buildRunMarks(run.formatting, styleFormatting, styleResolver);
 
   for (const content of run.content) {
     const contentNodes = convertRunContent(content, marks);
@@ -1943,6 +1936,53 @@ function convertRun(
   }
 
   return nodes;
+}
+
+/**
+ * Build the marks for a run, layering per the OOXML cascade: inherited
+ * (docDefaults + paragraph style) formatting, then the run's character style
+ * (w:rStyle), then direct run formatting on top.
+ *
+ * Use getRunStyleOwnProperties (not resolveRunStyle) to avoid docDefaults
+ * from the character style overriding paragraph style properties.
+ * The inherited formatting already includes docDefaults from paragraph
+ * style resolution, so we only need the character style's own properties.
+ *
+ * When the run references a character style, a `characterStyle` mark carries
+ * the reference (plus a snapshot of the style's own properties in mark
+ * normal form) so `fromProseDoc` re-serializes `w:rStyle` instead of baking
+ * the style's formatting into the run. Unknown styleIds resolve to nothing:
+ * no formatting is flattened, and the reference round-trips verbatim.
+ */
+function buildRunMarks(
+  runFormatting: TextFormatting | undefined,
+  inheritedFormatting: TextFormatting | undefined,
+  styleResolver: StyleEngine | null | undefined,
+): ReturnType<typeof schema.mark>[] {
+  const styleId = runFormatting?.styleId;
+  const runStyleFormatting = styleId
+    ? styleResolver?.getRunStyleOwnProperties(styleId)
+    : undefined;
+  const mergedFormatting = mergeTextFormatting(
+    mergeTextFormatting(inheritedFormatting, runStyleFormatting),
+    runFormatting,
+  );
+  const marks = textFormattingToMarks(mergedFormatting);
+
+  if (styleId) {
+    const styleRPr = runStyleFormatting
+      ? marksToTextFormatting(textFormattingToMarks(runStyleFormatting))
+      : undefined;
+    marks.push(
+      schema.mark("characterStyle", {
+        styleId,
+        _styleRPr:
+          styleRPr && Object.keys(styleRPr).length > 0 ? styleRPr : null,
+      }),
+    );
+  }
+
+  return marks;
 }
 
 /**
@@ -2296,15 +2336,12 @@ function convertHyperlink(
   for (const child of hyperlink.children) {
     if (child.type === "run") {
       // Merge style formatting with run's inline formatting
-      const runStyleFormatting = child.formatting?.styleId
-        ? styleResolver?.getRunStyleOwnProperties(child.formatting.styleId)
-        : undefined;
       const inheritedFormatting = getInheritedRunFormatting(child.formatting);
-      const mergedFormatting = mergeTextFormatting(
-        mergeTextFormatting(inheritedFormatting, runStyleFormatting),
+      const runMarks = buildRunMarks(
         child.formatting,
+        inheritedFormatting,
+        styleResolver,
       );
-      const runMarks = textFormattingToMarks(mergedFormatting);
       // Add link mark to run marks
       const allMarks = [...runMarks, linkMark];
 

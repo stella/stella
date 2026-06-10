@@ -30,6 +30,7 @@ import {
 import type {
   BlockSdtAttrs,
   CharacterSpacingAttrs,
+  CharacterStyleAttrs,
   CommentAttrs,
   EmphasisMarkAttrs,
   FieldAttrs,
@@ -232,6 +233,7 @@ const runShadingAttrsCache = new WeakMap<Mark, RunShadingAttrs>();
 const fontSizeAttrsCache = new WeakMap<Mark, FontSizeAttrs>();
 const fontFamilyAttrsCache = new WeakMap<Mark, FontFamilyAttrs>();
 const characterSpacingAttrsCache = new WeakMap<Mark, CharacterSpacingAttrs>();
+const characterStyleAttrsCache = new WeakMap<Mark, CharacterStyleAttrs>();
 const emphasisMarkAttrsCache = new WeakMap<Mark, EmphasisMarkAttrs>();
 const textEffectAttrsCache = new WeakMap<Mark, TextEffectAttrs>();
 const footnoteRefAttrsCache = new WeakMap<Mark, FootnoteRefAttrs>();
@@ -1155,6 +1157,29 @@ export const expectRunShadingMarkAttrs = (mark: Mark): RunShadingAttrs =>
     runShadingAttrsCache,
     readRunShadingMarkAttrs,
     "run shading attrs",
+  );
+
+export const readCharacterStyleMarkAttrs = (
+  mark: Mark,
+): ReadProseMirrorAttrsResult<CharacterStyleAttrs> => {
+  const attrs = attrsRecord(mark.attrs);
+  const issues: ProseMirrorAttrIssue[] = [];
+  expectMarkType(mark, "characterStyle", issues);
+
+  requiredString(attrs, "styleId", "characterStyle.attrs.styleId", issues);
+  optionalRecord(attrs, "_styleRPr", "characterStyle.attrs._styleRPr", issues);
+
+  return attrsResult(attrs, issues);
+};
+
+export const expectCharacterStyleMarkAttrs = (
+  mark: Mark,
+): CharacterStyleAttrs =>
+  expectCachedMarkAttrs(
+    mark,
+    characterStyleAttrsCache,
+    readCharacterStyleMarkAttrs,
+    "character style attrs",
   );
 
 export const readFontSizeMarkAttrs = (

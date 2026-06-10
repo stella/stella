@@ -64,6 +64,7 @@ import {
 import { pixelsToEmu } from "../../utils/units";
 import {
   expectCharacterSpacingMarkAttrs,
+  expectCharacterStyleMarkAttrs,
   expectCommentMarkAttrs,
   expectEmphasisMarkAttrs,
   expectTextEffectMarkAttrs,
@@ -1834,8 +1835,9 @@ function createShapeRun(node: PMNode): Run {
 /**
  * Convert ProseMirror marks to TextFormatting
  */
-function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
+export function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
   const formatting: TextFormatting = {};
+  let characterStyleRPr: TextFormatting | undefined;
 
   for (const mark of marks) {
     switch (mark.type.name) {
@@ -2016,13 +2018,63 @@ function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
         );
         break;
 
+      case "characterStyle": {
+        const attrs = expectCharacterStyleMarkAttrs(mark);
+        formatting.styleId = attrs.styleId;
+        characterStyleRPr = attrs._styleRPr;
+        break;
+      }
+
       // hyperlink is handled separately
       default:
         break;
     }
   }
 
+  if (characterStyleRPr) {
+    return subtractCharacterStyleFormatting(formatting, characterStyleRPr);
+  }
+
   return formatting;
+}
+
+/**
+ * Drop run formatting values that the run's character style already provides
+ * (the `w:rStyle` reference re-imposes them on load), so a styled run
+ * serializes back to a style reference instead of baked direct formatting.
+ *
+ * `styleRPr` is the load-time snapshot from the characterStyle mark, captured
+ * in the same normal form this module produces from marks, so value equality
+ * is a faithful "came from the style and is unchanged" check. Values that
+ * differ (user edits, direct overrides from the source document) stay as
+ * direct formatting, which wins over the style per the OOXML cascade.
+ */
+function subtractCharacterStyleFormatting(
+  formatting: TextFormatting,
+  styleRPr: TextFormatting,
+): TextFormatting {
+  const result: TextFormatting = {};
+
+  // SAFETY: Object.keys over a TextFormatting yields its own keys.
+  for (const key of Object.keys(formatting) as (keyof TextFormatting)[]) {
+    const value = formatting[key];
+    if (value === undefined) {
+      continue;
+    }
+    const styleValue = key === "styleId" ? undefined : styleRPr[key];
+    // Both values come out of marksToTextFormatting, so equal values have
+    // identical key insertion order and stringify identically.
+    if (
+      styleValue !== undefined &&
+      JSON.stringify(value) === JSON.stringify(styleValue)
+    ) {
+      continue;
+    }
+    // SAFETY: dynamic property copy between identical TextFormatting keys.
+    (result as Record<string, unknown>)[key] = value;
+  }
+
+  return result;
 }
 
 function applyRunFormattingOverrideAttrs(

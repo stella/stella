@@ -27,6 +27,7 @@ export type {
   TextBoxAttrs,
 } from "./nodes";
 export type {
+  CharacterStyleAttrs,
   TextColorAttrs,
   UnderlineAttrs,
   StrikeAttrs,
