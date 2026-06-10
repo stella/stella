@@ -51,15 +51,25 @@ const loadTemplate = async (
   return { name: template.name, fileName: template.fileName, buffer };
 };
 
+type DescribedField = {
+  path: string;
+  label: string | null;
+  inputType: string;
+  required: boolean;
+  /** Short fill guidance (expected format, where to find the value). */
+  hint: string | null;
+  /**
+   * Lookup field output formats: the bare `{{path}}` marker renders the first
+   * format; later formats are addressed by `{{path.key}}`. Null for
+   * non-lookup fields so an agent knows which fields resolve from a registry.
+   */
+  formats: { key: string; template: string }[] | null;
+};
+
 export type DescribeTemplateResult =
   | {
       name: string;
-      fields: {
-        path: string;
-        label: string | null;
-        inputType: string;
-        required: boolean;
-      }[];
+      fields: DescribedField[];
       conditions: { name: string; expression: string }[];
       computed: { name: string; expression: string }[];
     }
@@ -90,6 +100,14 @@ export const describeStoredTemplate = async ({
           label: field.label ?? null,
           inputType: field.inputType ?? "text",
           required: field.required ?? false,
+          hint: field.hint ?? null,
+          formats:
+            field.lookup === undefined
+              ? null
+              : field.lookup.formats.map((format) => ({
+                  key: format.key,
+                  template: format.template,
+                })),
         })),
       conditions: manifest.conditions.map((c) => ({
         name: c.name,
@@ -112,6 +130,8 @@ export const describeStoredTemplate = async ({
       label: null,
       inputType: "text",
       required: false,
+      hint: null,
+      formats: null,
     })),
     conditions: [],
     computed: [],
@@ -240,6 +260,45 @@ export const fillStoredTemplateDocx = async ({
 export type FillTemplateResult =
   | { text: string; unmatchedPlaceholders: string[]; unusedValues: string[] }
   | { error: string };
+
+/**
+ * Fill result that carries both the rendered DOCX bytes and the assembled
+ * plain text. Backs the MCP `fill_template` tool, which returns the text for
+ * the agent to read plus the bytes (base64) for the agent to save.
+ */
+export type FillTemplateWithDocxResult =
+  | {
+      templateName: string;
+      fileName: string;
+      buffer: Buffer;
+      text: string;
+      unmatchedPlaceholders: string[];
+      unusedValues: string[];
+    }
+  | { error: string };
+
+export const fillStoredTemplateWithText = async (
+  options: FillServiceOptions,
+): Promise<FillTemplateWithDocxResult> => {
+  const filled = await fillStoredTemplateDocx(options);
+  if ("error" in filled) {
+    return filled;
+  }
+
+  const { paragraphs } = await extractText(filled.buffer);
+
+  return {
+    templateName: filled.templateName,
+    fileName: filled.fileName,
+    buffer: filled.buffer,
+    text: paragraphs
+      .map((paragraph) => paragraph.text)
+      .join("\n")
+      .trim(),
+    unmatchedPlaceholders: filled.unmatchedPlaceholders,
+    unusedValues: filled.unusedValues,
+  };
+};
 
 export const fillStoredTemplate = async (
   options: FillServiceOptions,
