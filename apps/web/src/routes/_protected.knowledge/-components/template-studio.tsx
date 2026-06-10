@@ -734,6 +734,7 @@ export const TemplateStudioPage = ({
     close: string,
     placeholder: string,
     range?: { from: number; to: number },
+    allowInline = false,
   ) =>
     withEditorView((view) => {
       const { state } = view;
@@ -750,6 +751,34 @@ export const TemplateStudioPage = ({
       };
       const { from, to } = range ?? state.selection;
       try {
+        // Inline condition: a partial selection inside one paragraph wraps the
+        // selected text in inline {{#if}}…{{/if}} markers (the fill engine
+        // resolves them mid-paragraph), instead of promoting whole paragraphs.
+        if (allowInline && from !== to) {
+          const $from = state.doc.resolve(from);
+          const $to = state.doc.resolve(to);
+          const wholeParagraph =
+            $from.parentOffset === 0 &&
+            $to.parentOffset === $to.parent.content.size;
+          if ($from.sameParent($to) && !wholeParagraph) {
+            const tr = state.tr.insertText(close, to).insertText(open, from);
+            const namePos = from + open.indexOf(placeholder);
+            view.dispatch(
+              tr
+                .setSelection(
+                  TextSelection.create(
+                    tr.doc,
+                    namePos,
+                    namePos + placeholder.length,
+                  ),
+                )
+                .scrollIntoView(),
+            );
+            view.focus();
+            markDirty();
+            return;
+          }
+        }
         if (from === to) {
           const $from = state.doc.resolve(from);
           const pos =
@@ -798,7 +827,7 @@ export const TemplateStudioPage = ({
   };
 
   const insertCondition = (range?: { from: number; to: number }) =>
-    insertOrWrapBlock("{{#if condition}}", "{{/if}}", "condition", range);
+    insertOrWrapBlock("{{#if condition}}", "{{/if}}", "condition", range, true);
   const insertLoop = (range?: { from: number; to: number }) =>
     insertOrWrapBlock("{{#each items}}", "{{/each}}", "items", range);
   const insertClause = () => insertInline("{{@clause:Clause}}");
@@ -822,7 +851,7 @@ export const TemplateStudioPage = ({
       return;
     }
     if (kind === "if") {
-      insertOrWrapBlock(`{{#if ${expr}}}`, "{{/if}}", expr, range);
+      insertOrWrapBlock(`{{#if ${expr}}}`, "{{/if}}", expr, range, true);
     } else {
       insertOrWrapBlock(`{{#each ${expr}}}`, "{{/each}}", expr, range);
     }
