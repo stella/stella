@@ -54,7 +54,6 @@ const listSkills = createSafeRootHandler(
             contentHash: agentSkills.contentHash,
             enabled: agentSkills.enabled,
             command: agentSkills.command,
-            autoInvokeHint: agentSkills.autoInvokeHint,
             userId: agentSkills.userId,
             createdAt: agentSkills.createdAt,
           })

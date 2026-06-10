@@ -42,11 +42,6 @@ const updateSkillBodySchema = t.Object({
   command: t.Optional(
     t.Union([t.String({ minLength: 1, maxLength: 50 }), t.Null()]),
   ),
-  // Optional auto-invocation hint. Same null-vs-undefined semantics
-  // as `command`.
-  autoInvokeHint: t.Optional(
-    t.Union([t.String({ maxLength: 2000 }), t.Null()]),
-  ),
 });
 
 const config = {
@@ -63,7 +58,6 @@ type SkillUpdateFields = {
   slug?: string;
   version?: string | null;
   command?: string | null;
-  autoInvokeHint?: string | null;
 };
 
 type SkillUpdateChange<T> = { old: T; new: T };
@@ -76,7 +70,6 @@ type SkillUpdateChanges = {
   slug?: SkillUpdateChange<string>;
   version?: SkillUpdateChange<string | null>;
   command?: SkillUpdateChange<string | null>;
-  autoInvokeHint?: SkillUpdateChange<string | null>;
 };
 
 type SkillUpdateExisting = {
@@ -87,7 +80,6 @@ type SkillUpdateExisting = {
   slug: string;
   version: string | null;
   command: string | null;
-  autoInvokeHint: string | null;
 };
 
 type SkillUpdateBody = {
@@ -97,25 +89,11 @@ type SkillUpdateBody = {
   body?: string | undefined;
   version?: string | null | undefined;
   command?: string | null | undefined;
-  autoInvokeHint?: string | null | undefined;
 };
 
 type SkillUpdateDiff = {
   updates: SkillUpdateFields;
   changes: SkillUpdateChanges;
-};
-
-const normaliseAutoInvokeHint = (
-  value: string | null | undefined,
-): string | null | undefined => {
-  if (value === undefined) {
-    return undefined;
-  }
-  if (value === null) {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length === 0 ? null : trimmed;
 };
 
 const validateRequestedCommand = (
@@ -183,14 +161,6 @@ const buildSkillUpdateDiff = (
     updates.command = body.command;
     changes.command = { old: existing.command, new: body.command };
   }
-  const nextHint = normaliseAutoInvokeHint(body.autoInvokeHint);
-  if (nextHint !== undefined && nextHint !== existing.autoInvokeHint) {
-    updates.autoInvokeHint = nextHint;
-    changes.autoInvokeHint = {
-      old: existing.autoInvokeHint,
-      new: nextHint,
-    };
-  }
 
   return { updates, changes };
 };
@@ -211,8 +181,7 @@ const updateSkill = createSafeRootHandler(
       body.description !== undefined ||
       body.body !== undefined ||
       body.version !== undefined ||
-      body.command !== undefined ||
-      body.autoInvokeHint !== undefined;
+      body.command !== undefined;
     if (body.enabled === undefined && !hasMetadataEdit) {
       return Result.err(
         new HandlerError({
@@ -242,7 +211,6 @@ const updateSkill = createSafeRootHandler(
             version: agentSkills.version,
             origin: agentSkills.origin,
             command: agentSkills.command,
-            autoInvokeHint: agentSkills.autoInvokeHint,
           })
           .from(agentSkills)
           .where(

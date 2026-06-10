@@ -1464,9 +1464,6 @@
     },
     "skills": {
       "addShortcut": "Añadir habilidad",
-      "autoInvokeHintLabel": "Pista para el modelo",
-      "autoInvokeHintPlaceholder": "¿Cuándo debería el modelo elegir esta habilidad automáticamente?",
-      "autoInvokeLabel": "Permitir que la IA lo ejecute automáticamente",
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {

@@ -1464,9 +1464,6 @@
     },
     "skills": {
       "addShortcut": "Ajouter une compétence",
-      "autoInvokeHintLabel": "Indication pour le modèle",
-      "autoInvokeHintPlaceholder": "Quand le modèle doit-il choisir automatiquement cette compétence ?",
-      "autoInvokeLabel": "Laisser l'IA l'exécuter automatiquement",
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {

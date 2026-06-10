@@ -1464,9 +1464,6 @@
     },
     "skills": {
       "addShortcut": "Skill hinzufügen",
-      "autoInvokeHintLabel": "Hinweis für das Modell",
-      "autoInvokeHintPlaceholder": "Wann soll das Modell diesen Skill automatisch wählen?",
-      "autoInvokeLabel": "KI darf diesen Skill automatisch ausführen",
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {

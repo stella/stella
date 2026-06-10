@@ -1464,9 +1464,6 @@
     },
     "skills": {
       "addShortcut": "Přidat dovednost",
-      "autoInvokeHintLabel": "Nápověda pro model",
-      "autoInvokeHintPlaceholder": "Kdy má model tuto dovednost spustit?",
-      "autoInvokeLabel": "Nechat AI spustit automaticky",
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {

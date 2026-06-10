@@ -27,7 +27,6 @@ const createSkillBodySchema = t.Object({
   }),
   body: t.String({ minLength: 1, maxLength: LIMITS.agentSkillBodyMaxChars }),
   command: t.Optional(t.String({ minLength: 1, maxLength: 50 })),
-  autoInvokeHint: t.Optional(t.String({ maxLength: 2000 })),
 });
 
 const config = {
@@ -106,10 +105,6 @@ const createSkill = createSafeRootHandler(
       .digest("hex")
       .slice(0, 64);
 
-    const trimmedHint = body.autoInvokeHint?.trim();
-    const autoInvokeHint =
-      trimmedHint !== undefined && trimmedHint.length > 0 ? trimmedHint : null;
-
     const insertResult = await safeDb(async (tx) => {
       const rows = await tx
         .insert(agentSkills)
@@ -126,7 +121,6 @@ const createSkill = createSafeRootHandler(
           body: body.body,
           enabled: true,
           command: body.command ?? null,
-          autoInvokeHint,
         })
         .returning({ id: agentSkills.id });
 
@@ -144,7 +138,6 @@ const createSkill = createSafeRootHandler(
                 slug,
                 origin: "authored",
                 ...(body.command !== undefined && { command: body.command }),
-                ...(autoInvokeHint !== null && { hasAutoInvokeHint: true }),
               },
             },
           },

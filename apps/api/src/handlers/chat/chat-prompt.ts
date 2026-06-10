@@ -82,9 +82,6 @@ export type UserContext = IncomingUserContext;
 
 type PromptSkillMetadata = SkillMetadata & {
   source?: "built-in" | "installed" | undefined;
-  /** Optional model-facing guidance from the skill author; surfaced
-   *  in the skill catalog so the model can decide when to invoke. */
-  autoInvokeHint?: string | null | undefined;
 };
 
 declare const __chatPromptPartBrand: unique symbol;
@@ -1062,10 +1059,7 @@ const buildSkillCatalogSection = (
   const skillLines = skillMetadata
     .map((skill) => {
       const version = skill.version ? ` (version ${skill.version})` : "";
-      const hint = skill.autoInvokeHint
-        ? `\n    Auto-invoke when: ${skill.autoInvokeHint}`
-        : "";
-      return `- ${skill.name}: ${skill.description}${version}${hint}`;
+      return `- ${skill.name}: ${skill.description}${version}`;
     })
     .join("\n");
 

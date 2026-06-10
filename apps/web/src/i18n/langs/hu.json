@@ -1464,9 +1464,6 @@
     },
     "skills": {
       "addShortcut": "Készség hozzáadása",
-      "autoInvokeHintLabel": "Tipp a modellnek",
-      "autoInvokeHintPlaceholder": "Mikor válassza ki a modell automatikusan ezt a készséget?",
-      "autoInvokeLabel": "Az MI futtassa automatikusan",
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {

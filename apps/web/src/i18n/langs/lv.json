@@ -1464,9 +1464,6 @@
     },
     "skills": {
       "addShortcut": "Pievienot prasmi",
-      "autoInvokeHintLabel": "Padoms modelim",
-      "autoInvokeHintPlaceholder": "Kad modelim šī prasme jāizvēlas automātiski?",
-      "autoInvokeLabel": "Ļaut MI palaist automātiski",
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {

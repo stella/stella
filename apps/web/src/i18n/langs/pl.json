@@ -1464,9 +1464,6 @@
     },
     "skills": {
       "addShortcut": "Dodaj umiejętność",
-      "autoInvokeHintLabel": "Wskazówka dla modelu",
-      "autoInvokeHintPlaceholder": "Kiedy model powinien automatycznie wybrać tę umiejętność?",
-      "autoInvokeLabel": "Pozwól AI uruchamiać automatycznie",
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {

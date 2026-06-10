@@ -1464,9 +1464,6 @@
     },
     "skills": {
       "addShortcut": "Pridėti įgūdį",
-      "autoInvokeHintLabel": "Užuomina modeliui",
-      "autoInvokeHintPlaceholder": "Kada modelis turėtų automatiškai pasirinkti šį įgūdį?",
-      "autoInvokeLabel": "Leisti DI vykdyti automatiškai",
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {

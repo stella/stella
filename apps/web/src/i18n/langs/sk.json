@@ -1464,9 +1464,6 @@
     },
     "skills": {
       "addShortcut": "Pridať zručnosť",
-      "autoInvokeHintLabel": "Pomôcka pre model",
-      "autoInvokeHintPlaceholder": "Kedy má model túto zručnosť automaticky vybrať?",
-      "autoInvokeLabel": "Nechať AI spustiť automaticky",
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {

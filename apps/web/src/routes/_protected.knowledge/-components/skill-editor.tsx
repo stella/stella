@@ -30,7 +30,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@stll/ui/components/popover";
-import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
@@ -130,7 +129,6 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   const [description, setDescription] = useState("");
   const [enabled, setEnabled] = useState(false);
   const [command, setCommand] = useState("");
-  const [autoInvokeHint, setAutoInvokeHint] = useState("");
   const [commandError, setCommandError] = useState<string | null>(null);
   const [renamingResourceId, setRenamingResourceId] = useState<string | null>(
     null,
@@ -160,7 +158,6 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     // Default the command to the skill's name (slugified) so it's written under
     // the / by default; the user can edit or clear it. Persisted on blur.
     setCommand(detail.data.command ?? slugifyCommand(detail.data.name));
-    setAutoInvokeHint(detail.data.autoInvokeHint ?? "");
   }, [detail.data]);
 
   const resources: SkillResource[] = useMemo(() => {
@@ -252,7 +249,6 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       version?: string | null;
       enabled?: boolean;
       command?: string | null;
-      autoInvokeHint?: string | null;
     }) => {
       const response = await api
         .skills({ skillId: safeSkillId })
@@ -467,19 +463,6 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     patchMetadata.mutate({ command: next });
   };
 
-  const commitAutoInvokeHint = () => {
-    if (!detail.data) {
-      return;
-    }
-    const trimmed = autoInvokeHint.trim();
-    const next = trimmed.length === 0 ? null : trimmed;
-    const previous = detail.data.autoInvokeHint ?? null;
-    if (next === previous) {
-      return;
-    }
-    patchMetadata.mutate({ autoInvokeHint: next });
-  };
-
   const handleUpload = async (file: File) => {
     const binary = isBinaryUpload(file);
     const maxBytes = binary ? UPLOAD_MAX_BYTES_BINARY : UPLOAD_MAX_BYTES_TEXT;
@@ -647,21 +630,6 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                 </p>
               )}
             </div>
-            <label
-              className="text-muted-foreground pt-1.5 text-xs"
-              htmlFor="edit-skill-auto-hint"
-            >
-              {t("knowledge.skills.autoInvokeHintLabel")}
-            </label>
-            <Textarea
-              className="min-h-12 resize-y"
-              id="edit-skill-auto-hint"
-              maxLength={2000}
-              onBlur={commitAutoInvokeHint}
-              onChange={(event) => setAutoInvokeHint(event.target.value)}
-              placeholder={t("knowledge.skills.autoInvokeHintPlaceholder")}
-              value={autoInvokeHint}
-            />
           </div>
         </div>
       </div>

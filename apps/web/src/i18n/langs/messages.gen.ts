@@ -1467,9 +1467,6 @@ type Messages = {
     };
     "skills": {
       "addShortcut": "Add skill";
-      "autoInvokeHintLabel": "Hint for the model";
-      "autoInvokeHintPlaceholder": "When should the model auto-pick this skill?";
-      "autoInvokeLabel": "Let the AI run this automatically";
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {

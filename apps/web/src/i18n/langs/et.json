@@ -1464,9 +1464,6 @@
     },
     "skills": {
       "addShortcut": "Lisa oskus",
-      "autoInvokeHintLabel": "Vihje mudelile",
-      "autoInvokeHintPlaceholder": "Millal peaks mudel selle oskuse automaatselt valima?",
-      "autoInvokeLabel": "Lase tehisintellektil automaatselt käivitada",
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {
