@@ -1950,6 +1950,7 @@
       "none": "Nėra",
       "urgent": "Skubu"
     },
+    "selectDate": "Pasirinkti datą…",
     "status": "Būsena",
     "statusValues": {
       "cancelled": "Atšaukta",

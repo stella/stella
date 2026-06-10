@@ -1955,6 +1955,7 @@
       "none": "Žádná",
       "urgent": "Urgentní"
     },
+    "selectDate": "Vybrat datum…",
     "status": "Stav",
     "statusValues": {
       "cancelled": "Zrušený",

@@ -1950,6 +1950,7 @@
       "none": "Brak",
       "urgent": "Pilne"
     },
+    "selectDate": "Wybierz datę…",
     "status": "Status",
     "statusValues": {
       "cancelled": "Anulowane",

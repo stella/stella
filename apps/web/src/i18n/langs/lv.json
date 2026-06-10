@@ -1950,6 +1950,7 @@
       "none": "Nav",
       "urgent": "Steidzams"
     },
+    "selectDate": "Izvēlēties datumu…",
     "status": "Statuss",
     "statusValues": {
       "cancelled": "Atcelts",
