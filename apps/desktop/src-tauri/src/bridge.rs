@@ -7,7 +7,11 @@ use axum::{
 };
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
+
+const BIND_RETRY_INITIAL_BACKOFF: Duration = Duration::from_secs(1);
+const BIND_RETRY_MAX_BACKOFF: Duration = Duration::from_secs(30);
 
 use crate::session_manager::SessionManager;
 use crate::types::{
@@ -264,16 +268,26 @@ pub async fn start_bridge(
   let addr = std::net::SocketAddr::from(([127, 0, 0, 1], bridge_port));
   tracing::info!(port = bridge_port, "HTTP bridge starting");
 
-  let listener = match tokio::net::TcpListener::bind(addr).await {
-    Ok(l) => l,
-    Err(e) => {
-      tracing::error!(error = %e, "failed to bind bridge port");
-      return;
+  // The bridge is the primary handoff transport while the app runs, so a
+  // transiently occupied port must not disable it for the whole app
+  // lifetime: keep retrying with capped backoff.
+  let mut backoff = BIND_RETRY_INITIAL_BACKOFF;
+  loop {
+    match tokio::net::TcpListener::bind(addr).await {
+      Ok(listener) => {
+        backoff = BIND_RETRY_INITIAL_BACKOFF;
+        tracing::info!(port = bridge_port, "HTTP bridge listening");
+        if let Err(e) = axum::serve(listener, app.clone()).await {
+          tracing::error!(error = %e, "bridge server error");
+        }
+      }
+      Err(e) => {
+        tracing::warn!(error = %e, port = bridge_port, "failed to bind bridge port, retrying");
+      }
     }
-  };
 
-  if let Err(e) = axum::serve(listener, app).await {
-    tracing::error!(error = %e, "bridge server error");
+    tokio::time::sleep(backoff).await;
+    backoff = (backoff * 2).min(BIND_RETRY_MAX_BACKOFF);
   }
 }
 
