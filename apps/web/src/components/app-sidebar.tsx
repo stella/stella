@@ -79,6 +79,7 @@ import {
 } from "@/components/sidebar";
 import { StellaWordmark } from "@/components/stella-wordmark";
 import { PALETTES, THEMES, useTheme } from "@/components/theme-provider";
+import Tooltip from "@/components/tooltip";
 import {
   getWorkspacePrimaryNavItems,
   type WorkspacePrimaryNavId,
@@ -849,15 +850,28 @@ export function AppSidebar(props: AppSidebarProps) {
           }
         >
           {!isCollapsed && <StellaWordmark className="h-5 w-auto" />}
-          <Button
-            className={cn("text-muted-foreground", SIDE_RAIL_ICON_BUTTON_SIZE)}
-            onClick={toggleSidebar}
-            size="icon"
-            variant="ghost"
+          <Tooltip
+            content={
+              isCollapsed ? t("inspector.showPane") : t("inspector.hidePane")
+            }
+            render={
+              <Button
+                className={cn(
+                  "text-muted-foreground",
+                  SIDE_RAIL_ICON_BUTTON_SIZE,
+                )}
+                onClick={toggleSidebar}
+                size="icon"
+                variant="ghost"
+              />
+            }
+            side="right"
           >
             <PanelLeftIcon className="size-4" />
-            <span className="sr-only">{t("navigation.toggleSidebar")}</span>
-          </Button>
+            <span className="sr-only">
+              {isCollapsed ? t("inspector.showPane") : t("inspector.hidePane")}
+            </span>
+          </Tooltip>
         </div>
       </SidebarHeader>
 
@@ -986,12 +1000,17 @@ export function AppSidebar(props: AppSidebarProps) {
           <FeedbackDialog userEmail={user.email} />
           <SidebarMenuItem>
             <Menu>
-              <MenuTrigger
-                className={cn(
-                  "hover:bg-sidebar-accent data-popup-open:bg-sidebar-accent flex w-full items-center overflow-hidden rounded-md p-2 text-start text-sm outline-hidden",
-                  isCollapsed ? "justify-center" : "gap-2",
-                )}
-                title={isCollapsed ? displayName : undefined}
+              <Tooltip
+                content={isCollapsed ? displayName : null}
+                render={
+                  <MenuTrigger
+                    className={cn(
+                      "hover:bg-sidebar-accent data-popup-open:bg-sidebar-accent flex w-full items-center overflow-hidden rounded-md p-2 text-start text-sm outline-hidden",
+                      isCollapsed ? "justify-center" : "gap-2",
+                    )}
+                  />
+                }
+                side="right"
               >
                 <Avatar className="size-7 rounded-full">
                   {user.image && <AvatarImage src={user.image} />}
@@ -1022,7 +1041,7 @@ export function AppSidebar(props: AppSidebarProps) {
                     <ChevronsUpDownIcon className="ms-auto size-4 opacity-50" />
                   </>
                 )}
-              </MenuTrigger>
+              </Tooltip>
               <MenuPopup align="end" className="w-56" side="top" sideOffset={8}>
                 {orgName && (
                   <>
