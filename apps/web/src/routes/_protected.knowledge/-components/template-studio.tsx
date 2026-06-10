@@ -583,11 +583,16 @@ export const TemplateStudioPage = ({
     withEditorView((view) => {
       const { from, to } = view.state.selection;
       // Inserting inside an existing {{marker}} would nest markers and break
-      // the grammar; refuse silently (the caret visibly sits in a marker).
+      // the grammar. Strict interior overlap only: a caret parked at a
+      // marker's edge is a legitimate insertion point.
       const intersects = getTemplateDirectives(view.state).some(
-        (range) => from <= range.to && to >= range.from,
+        (range) => from < range.to && to > range.from,
       );
       if (intersects) {
+        stellaToast.add({
+          type: "error",
+          title: t("templates.studio.noNestedMarkers"),
+        });
         return;
       }
       view.dispatch(view.state.tr.insertText(text, from, to).scrollIntoView());
@@ -2863,9 +2868,9 @@ const OutlineRow = ({
 
   if (node.type === "clause") {
     return (
-      <li>
+      <li className="group/row relative">
         <button
-          className="hover:bg-muted flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-start text-sm"
+          className="hover:bg-muted flex w-full items-center gap-2.5 rounded-md px-2 py-2 pe-10 text-start text-sm"
           onClick={jump}
           title={t("templates.studio.scopeClause")}
           type="button"
@@ -2875,6 +2880,19 @@ const OutlineRow = ({
           </span>
           <span className="truncate">{node.name}</span>
         </button>
+        <Button
+          aria-label={t("templates.studio.insertAtCaret")}
+          className="absolute end-1.5 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/row:opacity-100"
+          onClick={(e) => {
+            e.stopPropagation();
+            actions?.insertClauseSlot(node.name);
+          }}
+          size="icon-sm"
+          title={t("templates.studio.insertAtCaret")}
+          variant="outline"
+        >
+          <PlusIcon />
+        </Button>
       </li>
     );
   }

@@ -2159,6 +2159,7 @@
       "mirrorFieldRationale": "Utiliser le même champ pour la phrase correspondante dans la colonne parallèle.",
       "namePlaceholder": "nom",
       "newField": "Nouveau champ",
+      "noNestedMarkers": "Les marqueurs ne peuvent pas être imbriqués dans un autre marqueur",
       "prepareWithAi": "Préparer avec l'IA",
       "questions": "Questions",
       "recipeSaveFailed": "Impossible d'enregistrer la recette",

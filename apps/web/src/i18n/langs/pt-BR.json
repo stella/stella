@@ -2159,6 +2159,7 @@
       "mirrorFieldRationale": "Usar o mesmo campo para o trecho correspondente na coluna paralela.",
       "namePlaceholder": "nome",
       "newField": "Novo campo",
+      "noNestedMarkers": "Marcadores não podem ser aninhados dentro de outro marcador",
       "prepareWithAi": "Preparar com IA",
       "questions": "Perguntas",
       "recipeSaveFailed": "Falha ao salvar a receita",

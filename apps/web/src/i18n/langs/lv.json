@@ -2159,6 +2159,7 @@
       "mirrorFieldRationale": "Izmantot to pašu lauku atbilstošajai frāzei paralēlajā kolonnā.",
       "namePlaceholder": "nosaukums",
       "newField": "Jauns lauks",
+      "noNestedMarkers": "Marķierus nevar ievietot citā marķierī",
       "prepareWithAi": "Sagatavot ar MI",
       "questions": "Jautājumi",
       "recipeSaveFailed": "Neizdevās saglabāt recepti",

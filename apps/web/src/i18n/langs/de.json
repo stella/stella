@@ -2159,6 +2159,7 @@
       "mirrorFieldRationale": "Dasselbe Feld für die entsprechende Stelle in der parallelen Spalte verwenden.",
       "namePlaceholder": "Name",
       "newField": "Neues Feld",
+      "noNestedMarkers": "Marker können nicht in anderen Markern verschachtelt werden",
       "prepareWithAi": "Mit KI vorbereiten",
       "questions": "Fragen",
       "recipeSaveFailed": "Rezept konnte nicht gespeichert werden",

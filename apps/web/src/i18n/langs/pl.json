@@ -2159,6 +2159,7 @@
       "mirrorFieldRationale": "Użyj tego samego pola dla odpowiadającego fragmentu w równoległej kolumnie.",
       "namePlaceholder": "nazwa",
       "newField": "Nowe pole",
+      "noNestedMarkers": "Znaczniki nie mogą być zagnieżdżane w innym znaczniku",
       "prepareWithAi": "Przygotuj z AI",
       "questions": "Pytania",
       "recipeSaveFailed": "Nie udało się zapisać przepisu",

@@ -2159,6 +2159,7 @@
       "mirrorFieldRationale": "Naudoti tą patį lauką atitinkamai frazei lygiagrečiame stulpelyje.",
       "namePlaceholder": "pavadinimas",
       "newField": "Naujas laukas",
+      "noNestedMarkers": "Žymos negali būti įdėtos į kitą žymą",
       "prepareWithAi": "Paruošti su DI",
       "questions": "Klausimai",
       "recipeSaveFailed": "Nepavyko išsaugoti recepto",

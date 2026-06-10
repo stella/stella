@@ -2159,6 +2159,7 @@
       "mirrorFieldRationale": "Kasuta sama välja paralleelses veerus oleva vastava fraasi jaoks.",
       "namePlaceholder": "nimi",
       "newField": "Uus väli",
+      "noNestedMarkers": "Markereid ei saa teise markeri sisse paigutada",
       "prepareWithAi": "Valmista ette AI-ga",
       "questions": "Küsimused",
       "recipeSaveFailed": "Retsepti salvestamine ebaõnnestus",

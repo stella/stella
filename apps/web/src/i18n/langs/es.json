@@ -2159,6 +2159,7 @@
       "mirrorFieldRationale": "Usar el mismo campo para la frase correspondiente en la columna paralela.",
       "namePlaceholder": "nombre",
       "newField": "Nuevo campo",
+      "noNestedMarkers": "Los marcadores no pueden anidarse dentro de otro marcador",
       "prepareWithAi": "Preparar con IA",
       "questions": "Preguntas",
       "recipeSaveFailed": "No se pudo guardar la receta",

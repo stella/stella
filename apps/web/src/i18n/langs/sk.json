@@ -2159,6 +2159,7 @@
       "mirrorFieldRationale": "Použiť rovnaké pole pre zodpovedajúci text v paralelnom stĺpci.",
       "namePlaceholder": "názov",
       "newField": "Nové pole",
+      "noNestedMarkers": "Značky nemožno vnárať do inej značky",
       "prepareWithAi": "Pripraviť pomocou AI",
       "questions": "Otázky",
       "recipeSaveFailed": "Nepodarilo sa uložiť recept",

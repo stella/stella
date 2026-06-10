@@ -2162,6 +2162,7 @@ type Messages = {
       "mirrorFieldRationale": "Use the same field for the matching phrase in the parallel column.";
       "namePlaceholder": "name";
       "newField": "New field";
+      "noNestedMarkers": "Markers cannot nest inside another marker";
       "prepareWithAi": "Prepare with AI";
       "questions": "Questions";
       "recipeSaveFailed": "Failed to save recipe";
