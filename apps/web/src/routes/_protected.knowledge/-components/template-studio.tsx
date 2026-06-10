@@ -45,7 +45,12 @@ import {
   getTemplateDirectives,
   setTemplatePreviewValues,
 } from "@stll/folio";
-import type { DirectiveRange, DocxEditorRef } from "@stll/folio";
+import type {
+  DirectiveRange,
+  DocxEditorRef,
+  TemplatePreviewSpan,
+  TemplatePreviewValue,
+} from "@stll/folio";
 import { isFieldPath } from "@stll/template-conditions";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
@@ -235,7 +240,9 @@ export const TemplateStudioPage = ({
   const [showDirectives, setShowDirectives] = useState(true);
   // Latest fill-preview values; re-dispatched when the eye toggles modes
   // (eye on = orange preview accents, eye off = plain final-looking text).
-  const fillPreviewRef = useRef<Record<string, string> | null>(null);
+  const fillPreviewRef = useRef<Record<string, TemplatePreviewValue> | null>(
+    null,
+  );
   // Reactive twin of editorViewRef for children that re-render on view
   // creation (the floating AI bar needs a live prop, not a ref).
   const [liveEditorView, setLiveEditorView] = useState<EditorView | null>(null);
@@ -2030,7 +2037,7 @@ const pushFillPreview = (
   fields?: readonly LookupPreviewField[],
 ) => {
   cancelLookupPreviews();
-  const preview: Record<string, string> = {};
+  const preview: Record<string, TemplatePreviewValue> = {};
   for (const [path, value] of Object.entries(values)) {
     if (typeof value === "string" && value !== "") {
       preview[path] = value;
@@ -2058,8 +2065,10 @@ const pushFillPreview = (
 // ── Lookup live preview ──────────────────────────────────
 // A lookup field's live preview shows the deterministic looked-up rendering
 // (number → registry hit → the field's [token] format), not the raw number.
-// Plausible numbers debounce into POST /templates/lookup-preview; rendered
-// text substitutes into the preview map when the response lands.
+// Plausible numbers debounce into POST /templates/lookup-preview; the
+// rendered text (with the format's **bold** / *italic* markers intact)
+// substitutes into the preview map when the response lands, parsed into
+// formatted preview spans so the document preview shows the formatting.
 
 /** Mirrors the KRS shape check in template-form.tsx (and `validateKrsNumber`
  *  server-side): exactly 10 digits, whitespace-tolerant. */
@@ -2067,6 +2076,38 @@ const LOOKUP_PREVIEW_NUMBER_RE = /^\d{10}$/u;
 
 const normalizeLookupNumber = (value: string): string =>
   value.replaceAll(/\s/gu, "");
+
+/** Mirrors LOOKUP_MARKDOWN_RE in apps/api/src/handlers/docx/lookup-fields.ts
+ *  (the source of truth for the lookup format's inline markdown): `**bold**`
+ *  and `*italic*` spans, non-nesting, asterisk-free content, unmatched
+ *  asterisks stay literal. */
+const LOOKUP_PREVIEW_MARKDOWN_RE = /\*\*([^*]+)\*\*|(?<!\*)\*([^*]+)\*(?!\*)/gu;
+
+/** A rendered lookup output as a folio preview value: formatted spans when
+ *  the format used `**bold**` / `*italic*`, otherwise the plain string. */
+const lookupPreviewValue = (rendered: string): TemplatePreviewValue => {
+  const spans: TemplatePreviewSpan[] = [];
+  let cursor = 0;
+  for (const match of rendered.matchAll(LOOKUP_PREVIEW_MARKDOWN_RE)) {
+    if (match.index > cursor) {
+      spans.push({ text: rendered.slice(cursor, match.index) });
+    }
+    const [, bold, italic] = match;
+    if (bold !== undefined) {
+      spans.push({ text: bold, bold: true });
+    } else if (italic !== undefined) {
+      spans.push({ text: italic, italic: true });
+    }
+    cursor = match.index + match[0].length;
+  }
+  if (spans.length === 0) {
+    return rendered;
+  }
+  if (cursor < rendered.length) {
+    spans.push({ text: rendered.slice(cursor) });
+  }
+  return { runs: spans };
+};
 
 type StudioLookup = NonNullable<StudioField["lookup"]>;
 
@@ -2084,7 +2125,8 @@ type LookupPreviewRequest = {
 const lookupPreviewKey = (request: LookupPreviewRequest): string =>
   `${request.registry} ${request.number} ${request.format ?? ""}`;
 
-/** Rendered previews keyed registry+number+format so repeats are instant;
+/** Rendered previews (the endpoint's marked-up string, parsed at
+ *  substitution time) keyed registry+number+format so repeats are instant;
  *  null marks a known miss (typo'd number, registry outage) that keeps the
  *  raw number without refetch loops. Bounded: past the cap the oldest
  *  insertion is evicted, so a long studio session cannot grow it without
@@ -2114,17 +2156,20 @@ const cancelLookupPreviews = () => {
   clearTimeout(lookupPreviewTimer);
 };
 
-/** Substitute cached renderings into `preview` in place and return the
- *  requests that still need the endpoint. */
+/** Substitute cached renderings into `preview` in place (parsed into
+ *  formatted spans where the format carries markup) and return the requests
+ *  that still need the endpoint. */
 const applyCachedLookupRenderings = (
-  preview: Record<string, string>,
+  preview: Record<string, TemplatePreviewValue>,
   fields: readonly LookupPreviewField[],
 ): LookupPreviewRequest[] => {
   const pending: LookupPreviewRequest[] = [];
   for (const field of fields) {
     const lookup = field.lookup;
     const raw = preview[field.path];
-    if (lookup === undefined || raw === undefined) {
+    // The entered value is always a plain string (the registry number);
+    // anything else is a previous substitution and needs no lookup.
+    if (lookup === undefined || typeof raw !== "string") {
       continue;
     }
     const number = normalizeLookupNumber(raw);
@@ -2140,7 +2185,7 @@ const applyCachedLookupRenderings = (
     if (cached === undefined) {
       pending.push(request);
     } else if (cached !== null) {
-      preview[field.path] = cached;
+      preview[field.path] = lookupPreviewValue(cached);
     }
   }
   return pending;
@@ -2190,7 +2235,9 @@ const pushSingleFieldPreview = (field: StudioField, value: string) => {
     actions?.setFillPreview(null);
     return;
   }
-  const preview: Record<string, string> = { [field.path]: value };
+  const preview: Record<string, TemplatePreviewValue> = {
+    [field.path]: value,
+  };
   const pending = applyCachedLookupRenderings(preview, [field]);
   actions?.setFillPreview(preview);
   if (pending.length > 0) {

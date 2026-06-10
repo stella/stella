@@ -6,9 +6,7 @@ import {
   createDispatchLookupResolver,
   isPlausibleLookupValue,
   LOOKUP_REGISTRY_NAMES,
-  renderLookupHit,
-  renderLookupTemplate,
-  stripLookupMarkdown,
+  renderLookupOutput,
 } from "@/api/handlers/docx/lookup-fields";
 import { LOOKUP_REGISTRIES } from "@/api/handlers/docx/types";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -54,9 +52,10 @@ const resolveLookup = createDispatchLookupResolver();
 
 /**
  * Deterministic live preview of a registry-lookup field: number → registry
- * hit → the field's `[token]` format rendered as plain text (formatting
- * markers stripped — the in-document preview layer renders plain text only).
- * No AI is involved anywhere on this path.
+ * hit → the field's `[token]` format rendered as text. `rendered` carries the
+ * format's `**bold**` / `*italic*` markers verbatim (the marker grammar in
+ * docx/lookup-fields.ts); the client decides presentation — the studio
+ * parses them into formatted preview runs. No AI is involved on this path.
  */
 const lookupPreview = createSafeRootHandler(config, async function* ({ body }) {
   const { registry, format } = body;
@@ -107,14 +106,7 @@ const lookupPreview = createSafeRootHandler(config, async function* ({ body }) {
     );
   }
 
-  const template = format?.trim() ?? "";
-  const rendered =
-    template === "" ? "" : renderLookupTemplate(template, outcome.hit);
-  return Result.ok({
-    rendered: stripLookupMarkdown(
-      rendered !== "" ? rendered : renderLookupHit(outcome.hit),
-    ),
-  });
+  return Result.ok({ rendered: renderLookupOutput(format, outcome.hit) });
 });
 
 export default lookupPreview;
