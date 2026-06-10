@@ -2148,6 +2148,7 @@ type Messages = {
       "conditionsSectionHelp": "Select text in the document → right-click → Show only if…";
       "draftedByAi": "AI";
       "emptyClauseSlot": "Empty clause slot";
+      "existingField": "Existing field…";
       "expressionPlaceholder": "expression";
       "fieldHelp": "When someone fills this template, they'll be asked for this value. You decide here how that question looks.";
       "fillFormPreview": "How it appears in the fill form";
@@ -2182,6 +2183,7 @@ type Messages = {
       "showOnlyIf": "Show only if…";
       "suggestConfig": "Suggest configuration";
       "textPlusAi": "Person + AI";
+      "useExisting": "Use existing {name}";
       "whoFills": "Who fills this?";
     };
     "tagPlaceholder": "Type a tag and press Enter";
