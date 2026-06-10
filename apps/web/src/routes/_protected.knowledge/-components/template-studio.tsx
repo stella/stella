@@ -111,6 +111,7 @@ import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import {
   ConditionGroupEditor,
   emptyGroup,
+  toRuleFields,
 } from "@/routes/_protected.knowledge/-components/condition-builder";
 import { LinkClauseDialog } from "@/routes/_protected.knowledge/-components/link-clause-dialog";
 import { TemplateClausesTab } from "@/routes/_protected.knowledge/-components/template-clauses-tab";
@@ -3378,9 +3379,7 @@ const ConditionRuleBuilder = ({
   const t = useTranslations();
   const [open, setOpen] = useState(false);
   const [group, setGroup] = useState<ConditionGroup>(emptyGroup);
-  const ruleFields = fields
-    .filter((f) => f.inputType !== "boolean")
-    .map((f) => f.path);
+  const ruleFields = toRuleFields(fields);
 
   const apply = () => {
     const expression = serializeCondition(group);
