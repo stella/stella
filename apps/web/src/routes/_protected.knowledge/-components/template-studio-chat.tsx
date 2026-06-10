@@ -87,11 +87,14 @@ import type {
 } from "@/routes/_protected.chat/-queries";
 import { useTemplateStudioStore } from "@/routes/_protected.knowledge/-components/template-studio-store";
 import {
+  buildOperationSpecs,
   buildReplacementSuggestions,
   extractFieldMarkerPath,
   filledByForFieldMeta,
+  operationSpecId,
 } from "@/routes/_protected.knowledge/-components/template-studio-suggestions";
 import type {
+  BuildReplaceSpecArgs,
   ReplacementSpec,
   SuggestedFieldMeta,
 } from "@/routes/_protected.knowledge/-components/template-studio-suggestions";
@@ -631,6 +634,14 @@ const TemplateStudioChatInner = ({
       if (!available) {
         return;
       }
+      // This send bypasses the prompt bar's `canSubmitNow` (which
+      // normally records the sent snapshot), and after the rotate
+      // remount the transport's `getActiveTemplate` can be bound to a
+      // previous instance whose ref this one cannot see. Record the
+      // snapshot here so the apply path resolves the ops against the
+      // same blocks the model receives.
+      lastSentSnapshotRef.current =
+        editorRef.current?.createAIEditSnapshot() ?? null;
       setPanelOpen(true);
       void sendMessage(
         { text: request.text },
@@ -682,6 +693,26 @@ const TemplateStudioChatInner = ({
   // ---- tool execution ----------------------------------------------------------
 
   /**
+   * Block text by id for op→spec resolution. The snapshot most
+   * recently sent to the model wins (the ops' `find`/scope texts were
+   * written against it); a fresh snapshot fills the gaps. Block ids
+   * are paraId-derived and stable across snapshots, so ops survive a
+   * remount (dev HMR, the rotate flow's suspense retry) that left
+   * `lastSentSnapshotRef` empty or bound to another instance.
+   */
+  const collectOperationBlockTexts = (): Map<string, string> => {
+    const blockTextById = new Map<string, string>();
+    const freshSnapshot = editorRef.current?.createAIEditSnapshot() ?? null;
+    for (const block of freshSnapshot?.blocks ?? []) {
+      blockTextById.set(block.id, block.text);
+    }
+    for (const block of lastSentSnapshotRef.current?.blocks ?? []) {
+      blockTextById.set(block.id, block.text);
+    }
+    return blockTextById;
+  };
+
+  /**
    * Client executor for `apply-active-docx-edits`: convert the approved
    * operations into in-document AISuggestions anchored via positional
    * text, and report queued/skipped ids back to the model.
@@ -698,93 +729,23 @@ const TemplateStudioChatInner = ({
           applied: [],
           queued: [],
           skipped: input.operations.map((operation, index) => ({
-            id: `tpl-edit-${String(index + 1)}-${operation.blockId}`,
+            id: operationSpecId(operation, index),
             reason: "documentNotEditable",
           })),
         };
       }
 
-      const snapshotBlocks = lastSentSnapshotRef.current?.blocks ?? [];
-      const blockTextById = new Map(
-        snapshotBlocks.map((block) => [block.id, block.text]),
-      );
       const fieldMetaByPath = collectSuggestedFieldMeta(messages);
-
-      const specs: ReplacementSpec[] = [];
-      const skipped: ApplyActiveDocxEditsOutput["skipped"] = [];
-      for (const [index, operation] of input.operations.entries()) {
-        const id = `tpl-edit-${String(index + 1)}-${operation.blockId}`;
-        const blockText = blockTextById.get(operation.blockId);
-        if (blockText === undefined) {
-          skipped.push({ id, reason: "missingBlock" });
-          continue;
-        }
-        switch (operation.type) {
-          case "replaceInBlock": {
-            if (operation.find === operation.replace) {
-              skipped.push({ id, reason: "noopOperation" });
-              break;
-            }
-            specs.push(
-              buildSpecForReplace({
-                id,
-                find: operation.find,
-                replace: operation.replace,
-                scopeText: blockText,
-                comment: operation.comment?.text,
-                area: operation.area,
-                fieldMetaByPath,
-                fieldMeta: fieldMetaRef.current,
-              }),
-            );
-            break;
-          }
-          case "replaceBlock": {
-            if (operation.text === blockText) {
-              skipped.push({ id, reason: "noopOperation" });
-              break;
-            }
-            specs.push(
-              buildSpecForReplace({
-                id,
-                find: blockText,
-                replace: operation.text,
-                scopeText: blockText,
-                comment: operation.comment?.text,
-                area: operation.area,
-                fieldMetaByPath,
-                fieldMeta: fieldMetaRef.current,
-              }),
-            );
-            break;
-          }
-          case "deleteBlock": {
-            specs.push({
-              id,
-              literalText: blockText,
-              suggestedText: "",
-              topic: operation.comment?.text ?? operation.area,
-              rationale: operation.comment?.text ?? "",
-              scopeText: blockText,
-            });
-            break;
-          }
-          // The Studio renders suggestions as text replacements over the
-          // live document; structural inserts and comments have no such
-          // representation here. The prompt steers the model away from
-          // them; skip defensively when it emits one anyway.
-          case "insertAfterBlock":
-          case "insertBeforeBlock":
-          case "commentOnBlock":
-          case "insertSignatureTable": {
-            skipped.push({ id, reason: "unsupportedBlock" });
-            break;
-          }
-          default: {
-            operation satisfies never;
-          }
-        }
-      }
+      const { specs, skipped } = buildOperationSpecs({
+        operations: input.operations,
+        blockTextById: collectOperationBlockTexts(),
+        buildReplaceSpec: (args) =>
+          buildSpecForReplace({
+            ...args,
+            fieldMetaByPath,
+            fieldMeta: fieldMetaRef.current,
+          }),
+      });
 
       const { suggestions: created, placedSpecIds } =
         buildReplacementSuggestions(view.state.doc, specs);
@@ -1087,13 +1048,7 @@ const collectSuggestedFieldMeta = (
   return byPath;
 };
 
-type BuildSpecForReplaceOptions = {
-  id: string;
-  find: string;
-  replace: string;
-  scopeText: string;
-  comment: string | undefined;
-  area: string;
+type BuildSpecForReplaceOptions = BuildReplaceSpecArgs & {
   fieldMetaByPath: Map<string, SuggestedFieldMeta>;
   /** Sink for per-suggestion field metadata, consumed on accept. */
   fieldMeta: Map<string, SuggestedFieldMeta>;
@@ -1123,7 +1078,7 @@ const buildSpecForReplace = ({
       suggestedText: replace,
       topic: comment ?? area,
       rationale: comment ?? "",
-      scopeText,
+      ...(scopeText === undefined ? {} : { scopeText }),
     };
   }
 
@@ -1138,7 +1093,7 @@ const buildSpecForReplace = ({
     suggestedText: replace,
     topic: path,
     rationale: path,
-    scopeText,
+    ...(scopeText === undefined ? {} : { scopeText }),
     display: {
       valueKind: inputTypeValueKind(inputType),
       filledBy: filledByForFieldMeta(meta),

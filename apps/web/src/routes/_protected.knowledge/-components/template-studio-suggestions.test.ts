@@ -4,10 +4,15 @@ import { Schema } from "prosemirror-model";
 import { resolveSuggestionAnchor } from "@stll/folio";
 
 import {
+  buildOperationSpecs,
   buildReplacementSuggestions,
   extractFieldMarkerPath,
 } from "./template-studio-suggestions";
-import type { ReplacementSpec } from "./template-studio-suggestions";
+import type {
+  BuildReplaceSpecArgs,
+  DocxEditOperation,
+  ReplacementSpec,
+} from "./template-studio-suggestions";
 
 const schema = new Schema({
   nodes: {
@@ -106,6 +111,102 @@ describe("buildReplacementSuggestions", () => {
     expect(placedSpecIds.has("op-name")).toBe(true);
     expect(placedSpecIds.has("op-overlap")).toBe(false);
     expect(placedSpecIds.has("op-missing")).toBe(false);
+  });
+});
+
+const buildReplaceSpec = (args: BuildReplaceSpecArgs): ReplacementSpec =>
+  spec({
+    id: args.id,
+    literalText: args.find,
+    suggestedText: args.replace,
+    topic: args.area,
+    ...(args.scopeText === undefined ? {} : { scopeText: args.scopeText }),
+  });
+
+describe("buildOperationSpecs", () => {
+  test("replaceInBlock with an unknown blockId degrades to a whole-document literal search", () => {
+    const doc = makeDoc(["KRS register.", "Company KRS no. 0000592109."]);
+    const operation: DocxEditOperation = {
+      type: "replaceInBlock",
+      blockId: "not-in-any-snapshot",
+      find: "0000592109",
+      replace: "{{company.krs}}",
+      severity: "medium",
+      area: "Identifiers",
+    };
+
+    const { specs, skipped } = buildOperationSpecs({
+      operations: [operation],
+      blockTextById: new Map(),
+      buildReplaceSpec,
+    });
+
+    expect(skipped).toHaveLength(0);
+    expect(specs).toHaveLength(1);
+    expect(specs[0]?.scopeText).toBeUndefined();
+
+    const { suggestions, placedSpecIds } = buildReplacementSuggestions(
+      doc,
+      specs,
+    );
+    expect(placedSpecIds.has("tpl-edit-1-not-in-any-snapshot")).toBe(true);
+    expect(suggestions).toHaveLength(1);
+    expect(
+      doc.textBetween(
+        suggestions[0]?.range.from ?? 0,
+        suggestions[0]?.range.to ?? 0,
+        "\n",
+      ),
+    ).toBe("0000592109");
+  });
+
+  test("replaceBlock and deleteBlock still need the snapshot block for their literal", () => {
+    const { specs, skipped } = buildOperationSpecs({
+      operations: [
+        {
+          type: "replaceBlock",
+          blockId: "unknown-a",
+          text: "New text.",
+          severity: "high",
+          area: "General",
+        },
+        {
+          type: "deleteBlock",
+          blockId: "unknown-b",
+          severity: "low",
+          area: "General",
+        },
+      ],
+      blockTextById: new Map(),
+      buildReplaceSpec,
+    });
+
+    expect(specs).toHaveLength(0);
+    expect(skipped).toEqual([
+      { id: "tpl-edit-1-unknown-a", reason: "missingBlock" },
+      { id: "tpl-edit-2-unknown-b", reason: "missingBlock" },
+    ]);
+  });
+
+  test("startIndex keeps spec ids aligned with the full operation list", () => {
+    const { specs } = buildOperationSpecs({
+      operations: [
+        {
+          type: "replaceInBlock",
+          blockId: "B1",
+          find: "Acme",
+          replace: "{{seller.name}}",
+          severity: "low",
+          area: "Names",
+        },
+      ],
+      startIndex: 4,
+      blockTextById: new Map([["B1", "Acme delivers."]]),
+      buildReplaceSpec,
+    });
+
+    expect(specs[0]?.id).toBe("tpl-edit-5-B1");
+    expect(specs[0]?.scopeText).toBe("Acme delivers.");
   });
 });
 

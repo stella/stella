@@ -17,6 +17,11 @@ import { buildPositionalText } from "@stll/folio";
 import type { AISuggestion } from "@stll/folio";
 import { isFieldPath } from "@stll/template-conditions";
 
+import type {
+  ApplyActiveDocxEditsInput,
+  ApplyActiveDocxEditsOutput,
+} from "@/routes/_protected.chat/-queries";
+
 /** Chars of surrounding text recorded so suggestions survive document edits
  *  (the host re-anchors stale ranges via contextBefore/After). */
 const CONTEXT_CHARS = 24;
@@ -110,6 +115,143 @@ export const buildReplacementSuggestions = (
     suggestions: suggestions.toSorted((a, b) => a.range.from - b.range.from),
     placedSpecIds,
   };
+};
+
+export type DocxEditOperation = ApplyActiveDocxEditsInput["operations"][number];
+
+type SkippedOperation = ApplyActiveDocxEditsOutput["skipped"][number];
+
+/** Stable per-operation id echoed to the model in queued/skipped. */
+export const operationSpecId = (
+  operation: DocxEditOperation,
+  index: number,
+): string => `tpl-edit-${String(index + 1)}-${operation.blockId}`;
+
+export type BuildReplaceSpecArgs = {
+  id: string;
+  find: string;
+  replace: string;
+  /** Snapshot text of the targeted block; undefined widens the literal
+   *  search to the whole document. */
+  scopeText: string | undefined;
+  comment: string | undefined;
+  area: string;
+};
+
+export type BuildOperationSpecsOptions = {
+  operations: readonly DocxEditOperation[];
+  /** Index of `operations[0]` within the full tool input, so spec ids
+   *  stay stable when ops are processed in sub-batches. */
+  startIndex?: number;
+  /** Snapshot block text by id; the ops' `find`/scope texts were
+   *  written against these. */
+  blockTextById: ReadonlyMap<string, string>;
+  /** Builds the replacement spec for replace-type ops; the caller owns
+   *  the field-proposal enrichment (badges, accept-time registration)
+   *  so this module stays pure. */
+  buildReplaceSpec: (args: BuildReplaceSpecArgs) => ReplacementSpec;
+};
+
+export type BuildOperationSpecsResult = {
+  specs: ReplacementSpec[];
+  skipped: SkippedOperation[];
+};
+
+/**
+ * `apply-active-docx-edits` operations → replacement specs.
+ *
+ * A `replaceInBlock` whose blockId matches no snapshot block is NOT
+ * rejected: the op still carries the literal to find, so the spec is
+ * built without `scopeText` and the search degrades to the whole
+ * document (stale snapshot refs and editor remounts must not discard
+ * otherwise-anchorable edits). `replaceBlock`/`deleteBlock` need the
+ * block's text as the search literal, so those do skip when the block
+ * reference cannot be resolved.
+ */
+export const buildOperationSpecs = ({
+  operations,
+  startIndex = 0,
+  blockTextById,
+  buildReplaceSpec,
+}: BuildOperationSpecsOptions): BuildOperationSpecsResult => {
+  const specs: ReplacementSpec[] = [];
+  const skipped: SkippedOperation[] = [];
+
+  for (const [offset, operation] of operations.entries()) {
+    const id = operationSpecId(operation, startIndex + offset);
+    const blockText = blockTextById.get(operation.blockId);
+    switch (operation.type) {
+      case "replaceInBlock": {
+        if (operation.find === operation.replace) {
+          skipped.push({ id, reason: "noopOperation" });
+          break;
+        }
+        specs.push(
+          buildReplaceSpec({
+            id,
+            find: operation.find,
+            replace: operation.replace,
+            scopeText: blockText,
+            comment: operation.comment?.text,
+            area: operation.area,
+          }),
+        );
+        break;
+      }
+      case "replaceBlock": {
+        if (blockText === undefined) {
+          skipped.push({ id, reason: "missingBlock" });
+          break;
+        }
+        if (operation.text === blockText) {
+          skipped.push({ id, reason: "noopOperation" });
+          break;
+        }
+        specs.push(
+          buildReplaceSpec({
+            id,
+            find: blockText,
+            replace: operation.text,
+            scopeText: blockText,
+            comment: operation.comment?.text,
+            area: operation.area,
+          }),
+        );
+        break;
+      }
+      case "deleteBlock": {
+        if (blockText === undefined) {
+          skipped.push({ id, reason: "missingBlock" });
+          break;
+        }
+        specs.push({
+          id,
+          literalText: blockText,
+          suggestedText: "",
+          topic: operation.comment?.text ?? operation.area,
+          rationale: operation.comment?.text ?? "",
+          scopeText: blockText,
+        });
+        break;
+      }
+      // The Studio renders suggestions as text replacements over the
+      // live document; structural inserts and comments have no such
+      // representation here. The prompt steers the model away from
+      // them; skip defensively when it emits one anyway.
+      case "insertAfterBlock":
+      case "insertBeforeBlock":
+      case "commentOnBlock":
+      case "insertSignatureTable": {
+        skipped.push({ id, reason: "unsupportedBlock" });
+        break;
+      }
+      default: {
+        operation satisfies never;
+      }
+    }
+  }
+
+  return { specs, skipped };
 };
 
 /**
