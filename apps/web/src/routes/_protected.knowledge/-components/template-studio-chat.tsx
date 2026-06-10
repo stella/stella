@@ -23,8 +23,9 @@ import {
 } from "react";
 import type { RefObject } from "react";
 
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { LoaderCircleIcon } from "lucide-react";
 import type { EditorView } from "prosemirror-view";
 import { useTranslations } from "use-intl";
@@ -41,6 +42,7 @@ import type {
   FolioAIEditSnapshot,
 } from "@stll/folio";
 import { Button } from "@stll/ui/components/button";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import {
@@ -59,15 +61,23 @@ import type {
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 import { useAIKeyGate } from "@/components/require-ai-key";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
+import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { createChatThreadId } from "@/lib/chat-thread-ref";
+import { toChatThreadId } from "@/lib/chat-thread-ref";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useDevStore } from "@/lib/dev-store";
+import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import { inputTypeValueKind } from "@/lib/value-types";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
-import { chatThreadOptions } from "@/routes/_protected.chat/-queries";
+import {
+  chatKeys,
+  chatThreadOptions,
+  templateChatThreadOptions,
+} from "@/routes/_protected.chat/-queries";
 import type {
   ApplyActiveDocxEditsInput,
   ApplyActiveDocxEditsOutput,
@@ -101,32 +111,77 @@ type TemplateStudioChatProps = {
   ensureView: () => void;
 };
 
-export const TemplateStudioChat = (props: TemplateStudioChatProps) => {
-  // The Studio chat is a fresh global-scope thread per mount; "new
-  // chat" swaps the id and remounts the inner surface (which also
-  // drops the previous thread's in-document suggestions).
-  const [chatThreadId, setChatThreadId] = useState<ChatThreadId>(() =>
-    createChatThreadId(),
+export const TemplateStudioChat = (props: TemplateStudioChatProps) => (
+  <Suspense
+    fallback={
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 bottom-8 flex justify-center"
+      >
+        <LoaderCircleIcon className="text-muted-foreground size-4 animate-spin" />
+      </div>
+    }
+  >
+    <ResolvedTemplateStudioChat {...props} />
+  </Suspense>
+);
+
+/**
+ * Resolves the per-template thread mapping (org + user scoped,
+ * server-side) so reopening a template resumes its latest thread,
+ * mirroring how .docx file tabs resolve theirs via `file-thread`.
+ */
+const ResolvedTemplateStudioChat = (props: TemplateStudioChatProps) => {
+  const t = useTranslations();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const queryClient = useQueryClient();
+  const { data: chatThreadId } = useSuspenseQuery(
+    templateChatThreadOptions({
+      activeOrganizationId,
+      key: { templateId: props.templateId },
+    }),
   );
 
+  // "New chat" rotates the server-side mapping to a fresh thread and
+  // swaps the cached id; the key change remounts the inner surface
+  // (which also drops the previous thread's in-document suggestions).
+  const handleNewThread = async () => {
+    const rotated = await Result.tryPromise(
+      async () =>
+        await api.chat["template-thread"].rotate.post({
+          templateId: toSafeId<"template">(props.templateId),
+        }),
+    );
+    if (Result.isError(rotated)) {
+      getAnalytics().captureError(rotated.error);
+      stellaToast.add({ title: t("common.somethingWentWrong"), type: "error" });
+      return;
+    }
+    const { data, error } = rotated.value;
+    if (error) {
+      getAnalytics().captureError(toAPIError(error));
+      stellaToast.add({ title: t("common.somethingWentWrong"), type: "error" });
+      return;
+    }
+    queryClient.setQueryData(
+      chatKeys.templateThread(activeOrganizationId, {
+        templateId: props.templateId,
+      }),
+      toChatThreadId(data.threadId),
+    );
+  };
+
   return (
-    <Suspense
-      fallback={
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 bottom-8 flex justify-center"
-        >
-          <LoaderCircleIcon className="text-muted-foreground size-4 animate-spin" />
-        </div>
-      }
-    >
-      <TemplateStudioChatInner
-        key={chatThreadId}
-        chatThreadId={chatThreadId}
-        onNewThread={() => setChatThreadId(createChatThreadId())}
-        {...props}
-      />
-    </Suspense>
+    <TemplateStudioChatInner
+      key={chatThreadId}
+      chatThreadId={chatThreadId}
+      onNewThread={() => {
+        void handleNewThread();
+      }}
+      {...props}
+    />
   );
 };
 
