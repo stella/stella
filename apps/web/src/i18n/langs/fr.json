@@ -2063,6 +2063,7 @@
     "downloadPdf": "Télécharger en PDF",
     "downloadReady": "Document prêt",
     "dragAndDrop": "ou glisser-déposer",
+    "dropToCreate": "Déposez un fichier .docx pour créer un modèle",
     "editCategory": "Modifier la catégorie",
     "editFields": "Modifier les champs",
     "emptyFieldsWarning": "{count, plural, one {# champ est encore vide} other {# champs sont encore vides}} : {names}",
@@ -2234,6 +2235,7 @@
       "whoFills": "Qui le remplit ?"
     },
     "tagPlaceholder": "Saisissez une étiquette et appuyez sur Entrée",
+    "tags": "Étiquettes",
     "templateDeleted": "Modèle supprimé",
     "templateName": "Nom du modèle",
     "templateNamePlaceholder": "ex. Contrat de travail",

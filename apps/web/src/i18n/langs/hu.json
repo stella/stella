@@ -2063,6 +2063,7 @@
     "downloadPdf": "Letöltés PDF-ként",
     "downloadReady": "Dokumentum kész",
     "dragAndDrop": "vagy húzza ide",
+    "dropToCreate": "Húzzon ide egy .docx fájlt sablon létrehozásához",
     "editCategory": "Kategória szerkesztése",
     "editFields": "Mezők szerkesztése",
     "emptyFieldsWarning": "{count, plural, one {# mező még üres} other {# mező még üres}}: {names}",
@@ -2234,6 +2235,7 @@
       "whoFills": "Ki tölti ki?"
     },
     "tagPlaceholder": "Írjon be egy címkét, majd nyomjon Entert",
+    "tags": "Címkék",
     "templateDeleted": "Sablon törölve",
     "templateName": "Sablon neve",
     "templateNamePlaceholder": "pl. Munkaszerződés",

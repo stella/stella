@@ -2063,6 +2063,7 @@
     "downloadPdf": "Descargar PDF",
     "downloadReady": "Documento listo",
     "dragAndDrop": "o arrastre y suelte",
+    "dropToCreate": "Suelte un archivo .docx para crear una plantilla",
     "editCategory": "Editar categoría",
     "editFields": "Editar campos",
     "emptyFieldsWarning": "{count, plural, one {# campo sigue vacío} other {# campos siguen vacíos}}: {names}",
@@ -2234,6 +2235,7 @@
       "whoFills": "¿Quién lo rellena?"
     },
     "tagPlaceholder": "Escribe una etiqueta y pulsa Enter",
+    "tags": "Etiquetas",
     "templateDeleted": "Plantilla eliminada",
     "templateName": "Nombre de la plantilla",
     "templateNamePlaceholder": "p. ej. Contrato de trabajo",

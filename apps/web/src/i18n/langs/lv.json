@@ -2063,6 +2063,7 @@
     "downloadPdf": "Lejupielādēt PDF",
     "downloadReady": "Dokuments gatavs",
     "dragAndDrop": "vai velciet un nometiet",
+    "dropToCreate": "Velciet .docx failu, lai izveidotu veidni",
     "editCategory": "Rediģēt kategoriju",
     "editFields": "Rediģēt laukus",
     "emptyFieldsWarning": "{count, plural, zero {# lauku joprojām ir tukši} one {# lauks joprojām ir tukšs} other {# lauki joprojām ir tukši}}: {names}",
@@ -2234,6 +2235,7 @@
       "whoFills": "Kas to aizpildīs?"
     },
     "tagPlaceholder": "Ierakstiet birku un nospiediet Enter",
+    "tags": "Birkas",
     "templateDeleted": "Veidne dzēsta",
     "templateName": "Veidnes nosaukums",
     "templateNamePlaceholder": "piem., Darba līgums",

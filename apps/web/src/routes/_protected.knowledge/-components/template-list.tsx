@@ -43,10 +43,10 @@ import {
 } from "@stll/ui/components/menu";
 import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
 
 import { ContextMenu } from "@/components/context-menu";
 import type { ContextMenuAction } from "@/components/context-menu";
+import Tooltip from "@/components/tooltip";
 import { UserAvatar } from "@/components/user-avatar";
 import { usePermissions } from "@/hooks/use-permissions";
 import { supportedLanguages, useI18nStore } from "@/i18n/i18n-store";
@@ -116,6 +116,7 @@ export const TemplateList = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const [discovering, setDiscovering] = useState(false);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const discover = async (file: File) => {
     if (file.type !== DOCX_MIME) {
@@ -165,6 +166,41 @@ export const TemplateList = ({
     e.target.value = "";
   };
 
+  const handleDragOver = (e: React.DragEvent) => {
+    if (!canCreateTemplate) {
+      return;
+    }
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    if (!canCreateTemplate) {
+      return;
+    }
+    const file = e.dataTransfer.files.item(0);
+    if (!file) {
+      return;
+    }
+    if (file.type !== DOCX_MIME) {
+      stellaToast.add({
+        type: "error",
+        title: t("templates.invalidFileType"),
+      });
+      return;
+    }
+    // Errors are surfaced as toasts inside discover
+    // oxlint-disable-next-line no-empty-function
+    discover(file).catch(() => {});
+  };
+
   if (templates.length === 0 && !selectedCategoryId) {
     return <TemplateUpload onDiscovered={onDiscovered} />;
   }
@@ -178,12 +214,28 @@ export const TemplateList = ({
     : templates;
 
   return (
-    <div className="flex min-h-0 flex-1">
+    <div
+      className="relative flex min-h-0 flex-1"
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      {isDragOver && (
+        <div className="border-foreground/30 bg-background/80 pointer-events-none absolute inset-2 z-10 flex items-center justify-center rounded-xl border-2 border-dashed opacity-100 transition-opacity">
+          <p className="text-foreground text-sm font-medium">
+            {t("templates.dropToCreate")}
+          </p>
+        </div>
+      )}
+
       <TemplateCategorySidebar
         categories={categories}
         onCategoriesChanged={onCategoriesChanged}
         onSelect={onCategorySelect}
+        onSelectTag={setTagFilter}
         selectedId={selectedCategoryId}
+        selectedTag={tagFilter}
+        tags={allTags}
       />
 
       <div className="flex min-h-0 flex-1 flex-col border-s">
@@ -245,10 +297,6 @@ export const TemplateList = ({
                 key={template.id}
                 onDeleted={onDeleted}
                 onSelect={() => onSelect(template)}
-                onTagClick={(tag) =>
-                  setTagFilter((current) => (current === tag ? null : tag))
-                }
-                tagFilter={tagFilter}
                 template={template}
               />
             ))}
@@ -260,8 +308,6 @@ export const TemplateList = ({
 };
 
 // ── Row ──────────────────────────────────────────────
-
-const MAX_VISIBLE_TAGS = 3;
 
 /** The template detail returns an audited presigned URL for the source DOCX. */
 const downloadTemplateSource = async (
@@ -281,8 +327,6 @@ const downloadTemplateSource = async (
 type TemplateRowProps = {
   template: TemplateItem;
   allTags: string[];
-  tagFilter: string | null;
-  onTagClick: (tag: string) => void;
   onSelect: () => void;
   onDeleted: () => void;
 };
@@ -290,8 +334,6 @@ type TemplateRowProps = {
 const TemplateRow = ({
   template,
   allTags,
-  tagFilter,
-  onTagClick,
   onSelect,
   onDeleted,
 }: TemplateRowProps) => {
@@ -365,10 +407,6 @@ const TemplateRow = ({
     });
   }
 
-  const tags = template.tags ?? [];
-  const visibleTags = tags.slice(0, MAX_VISIBLE_TAGS);
-  const hiddenTagCount = tags.length - visibleTags.length;
-
   return (
     <li className="group">
       <ContextMenu actions={contextActions}>
@@ -386,31 +424,6 @@ const TemplateRow = ({
                 {template.name}
               </span>
             </button>
-
-            {tags.length > 0 && (
-              <span className="flex shrink-0 items-center gap-1">
-                {visibleTags.map((tag) => (
-                  <button
-                    className={cn(
-                      "rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors",
-                      tag === tagFilter
-                        ? "bg-primary/10 text-primary"
-                        : "bg-muted text-muted-foreground hover:text-foreground",
-                    )}
-                    key={tag}
-                    onClick={() => onTagClick(tag)}
-                    type="button"
-                  >
-                    {tag}
-                  </button>
-                ))}
-                {hiddenTagCount > 0 && (
-                  <span className="text-muted-foreground text-[11px]">
-                    +{String(hiddenTagCount)}
-                  </span>
-                )}
-              </span>
-            )}
           </div>
 
           <div className="flex shrink-0 items-center gap-3">
@@ -428,13 +441,16 @@ const TemplateRow = ({
               template={template}
             />
 
-            <span title={template.authorName ?? undefined}>
+            <Tooltip
+              content={template.authorName}
+              render={<span className="inline-flex" />}
+            >
               <UserAvatar
                 className="size-6 shrink-0 text-[0.5625rem]"
                 image={template.authorImage}
                 name={template.authorName}
               />
-            </span>
+            </Tooltip>
 
             {(canUpdateTemplate || canDeleteTemplate) && (
               <DropdownMenu>

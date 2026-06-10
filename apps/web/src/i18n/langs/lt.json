@@ -2063,6 +2063,7 @@
     "downloadPdf": "Atsisiųsti PDF",
     "downloadReady": "Dokumentas paruoštas",
     "dragAndDrop": "arba vilkite ir numeskite",
+    "dropToCreate": "Vilkite .docx failą, kad sukurtumėte šabloną",
     "editCategory": "Redaguoti kategoriją",
     "editFields": "Redaguoti laukus",
     "emptyFieldsWarning": "{count, plural, one {# laukas vis dar tuščias} few {# laukai vis dar tušti} many {# lauko vis dar tuščia} other {# laukų vis dar tušti}}: {names}",
@@ -2234,6 +2235,7 @@
       "whoFills": "Kas tai užpildys?"
     },
     "tagPlaceholder": "Įveskite žymą ir paspauskite Enter",
+    "tags": "Žymos",
     "templateDeleted": "Šablonas ištrintas",
     "templateName": "Šablono pavadinimas",
     "templateNamePlaceholder": "pvz. Darbo sutartis",

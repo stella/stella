@@ -2063,6 +2063,7 @@
     "downloadPdf": "Stáhnout PDF",
     "downloadReady": "Dokument připraven",
     "dragAndDrop": "nebo přetáhněte sem",
+    "dropToCreate": "Přetažením .docx vytvoříte šablonu",
     "editCategory": "Upravit kategorii",
     "editFields": "Upravit pole",
     "emptyFieldsWarning": "{count, plural, one {# pole je stále prázdné} few {# pole jsou stále prázdná} other {# polí je stále prázdných}}: {names}",
@@ -2234,6 +2235,7 @@
       "whoFills": "Kdo to vyplní?"
     },
     "tagPlaceholder": "Napište štítek a stiskněte Enter",
+    "tags": "Štítky",
     "templateDeleted": "Šablona smazána",
     "templateName": "Název šablony",
     "templateNamePlaceholder": "např. Pracovní smlouva",

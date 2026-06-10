@@ -2063,6 +2063,7 @@
     "downloadPdf": "Laadi alla PDF",
     "downloadReady": "Dokument on valmis",
     "dragAndDrop": "või lohistage siia",
+    "dropToCreate": "Lohistage .docx fail siia, et luua mall",
     "editCategory": "Muuda kategooriat",
     "editFields": "Muuda välju",
     "emptyFieldsWarning": "{count, plural, one {# väli on veel täitmata} other {# välja on veel täitmata}}: {names}",
@@ -2234,6 +2235,7 @@
       "whoFills": "Kes selle täidab?"
     },
     "tagPlaceholder": "Sisesta silt ja vajuta Enter",
+    "tags": "Sildid",
     "templateDeleted": "Mall kustutatud",
     "templateName": "Malli nimi",
     "templateNamePlaceholder": "nt Tööleping",

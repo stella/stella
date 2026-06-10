@@ -2063,6 +2063,7 @@
     "downloadPdf": "PDF herunterladen",
     "downloadReady": "Dokument bereit",
     "dragAndDrop": "oder per Drag & Drop",
+    "dropToCreate": "Ziehen Sie eine .docx-Datei hierher, um eine Vorlage zu erstellen",
     "editCategory": "Kategorie bearbeiten",
     "editFields": "Felder bearbeiten",
     "emptyFieldsWarning": "{count, plural, one {# Feld ist noch leer} other {# Felder sind noch leer}}: {names}",
@@ -2234,6 +2235,7 @@
       "whoFills": "Wer füllt das aus?"
     },
     "tagPlaceholder": "Schlagwort eingeben und Enter drücken",
+    "tags": "Schlagwörter",
     "templateDeleted": "Vorlage gelöscht",
     "templateName": "Vorlagenname",
     "templateNamePlaceholder": "z. B. Arbeitsvertrag",

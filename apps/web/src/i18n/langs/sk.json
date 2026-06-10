@@ -2063,6 +2063,7 @@
     "downloadPdf": "Stiahnuť PDF",
     "downloadReady": "Dokument pripravený",
     "dragAndDrop": "alebo presuňte sem",
+    "dropToCreate": "Presuňte sem .docx na vytvorenie šablóny",
     "editCategory": "Upraviť kategóriu",
     "editFields": "Upraviť polia",
     "emptyFieldsWarning": "{count, plural, one {# pole je stále prázdne} few {# polia sú stále prázdne} other {# polí je stále prázdnych}}: {names}",
@@ -2234,6 +2235,7 @@
       "whoFills": "Kto to vyplní?"
     },
     "tagPlaceholder": "Napíšte štítok a stlačte Enter",
+    "tags": "Štítky",
     "templateDeleted": "Šablóna vymazaná",
     "templateName": "Názov šablóny",
     "templateNamePlaceholder": "napr. Pracovná zmluva",

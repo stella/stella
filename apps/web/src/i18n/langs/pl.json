@@ -2063,6 +2063,7 @@
     "downloadPdf": "Pobierz PDF",
     "downloadReady": "Dokument gotowy",
     "dragAndDrop": "lub przeciągnij i upuść",
+    "dropToCreate": "Upuść plik .docx, aby utworzyć szablon",
     "editCategory": "Edytuj kategorię",
     "editFields": "Edytuj pola",
     "emptyFieldsWarning": "{count, plural, one {# pole jest nadal puste} few {# pola są nadal puste} many {# pól jest nadal pustych} other {# pola jest nadal puste}}: {names}",
@@ -2234,6 +2235,7 @@
       "whoFills": "Kto to wypełni?"
     },
     "tagPlaceholder": "Wpisz tag i naciśnij Enter",
+    "tags": "Tagi",
     "templateDeleted": "Szablon usunięty",
     "templateName": "Nazwa szablonu",
     "templateNamePlaceholder": "np. Umowa o pracę",

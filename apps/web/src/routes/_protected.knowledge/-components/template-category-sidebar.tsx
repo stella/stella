@@ -54,6 +54,9 @@ type TemplateCategorySidebarProps = {
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   onCategoriesChanged: () => void;
+  tags: string[];
+  selectedTag: string | null;
+  onSelectTag: (tag: string | null) => void;
 };
 
 // ── Sidebar ─────────────────────────────────────────
@@ -63,6 +66,9 @@ export const TemplateCategorySidebar = ({
   selectedId,
   onSelect,
   onCategoriesChanged,
+  tags,
+  selectedTag,
+  onSelectTag,
 }: TemplateCategorySidebarProps) => {
   const t = useTranslations();
   const canCreateTemplate = usePermissions({ template: ["create"] });
@@ -103,6 +109,28 @@ export const TemplateCategorySidebar = ({
             onSelect={() => onSelect(cat.id)}
           />
         ))}
+
+        {tags.length > 0 && (
+          <>
+            <div className="text-muted-foreground mt-3 mb-1 px-3 text-xs font-medium">
+              {t("templates.tags")}
+            </div>
+            {tags.map((tag) => (
+              <button
+                className={`w-full truncate rounded-md px-3 py-1.5 text-start text-sm ${
+                  selectedTag === tag
+                    ? "bg-muted font-medium"
+                    : "hover:bg-muted/50"
+                }`}
+                key={tag}
+                onClick={() => onSelectTag(selectedTag === tag ? null : tag)}
+                type="button"
+              >
+                {tag}
+              </button>
+            ))}
+          </>
+        )}
       </nav>
 
       {canCreateTemplate && (

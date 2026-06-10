@@ -2066,6 +2066,7 @@ type Messages = {
     "downloadPdf": "Download PDF";
     "downloadReady": "Document ready";
     "dragAndDrop": "or drag and drop";
+    "dropToCreate": "Drop a .docx to create a template";
     "editCategory": "Edit category";
     "editFields": "Edit fields";
     "emptyFieldsWarning": "{count, plural, one {# field is} other {# fields are}} still empty: {names}";
@@ -2237,6 +2238,7 @@ type Messages = {
       "whoFills": "Who fills this?";
     };
     "tagPlaceholder": "Type a tag and press Enter";
+    "tags": "Tags";
     "templateDeleted": "Template deleted";
     "templateName": "Template name";
     "templateNamePlaceholder": "e.g. Employment Agreement";
