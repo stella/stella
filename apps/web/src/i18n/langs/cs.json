@@ -816,6 +816,7 @@
     "scrollToTop": "Posunout nahoru",
     "search": "Hledat...",
     "selectARole": "Vyberte roli",
+    "selectDate": "Vybrat datum…",
     "sessions": "Sezení",
     "settings": "Nastavení",
     "showAll": "Zobrazit vše",
@@ -1972,7 +1973,6 @@
       "none": "Žádná",
       "urgent": "Urgentní"
     },
-    "selectDate": "Vybrat datum…",
     "status": "Stav",
     "statusValues": {
       "cancelled": "Zrušený",

@@ -816,6 +816,7 @@
     "scrollToTop": "Ritināt uz augšu",
     "search": "Meklēt...",
     "selectARole": "Izvēlieties lomu",
+    "selectDate": "Izvēlēties datumu…",
     "sessions": "Sesijas",
     "settings": "Iestatījumi",
     "showAll": "Rādīt visu",
@@ -1972,7 +1973,6 @@
       "none": "Nav",
       "urgent": "Steidzams"
     },
-    "selectDate": "Izvēlēties datumu…",
     "status": "Statuss",
     "statusValues": {
       "cancelled": "Atcelts",

@@ -816,6 +816,7 @@
     "scrollToTop": "Görgetés a tetejére",
     "search": "Keresés...",
     "selectARole": "Válasszon szerepkört",
+    "selectDate": "Dátum kiválasztása…",
     "sessions": "Munkamenetek",
     "settings": "Beállítások",
     "showAll": "Az összes megjelenítése",
@@ -1972,7 +1973,6 @@
       "none": "Nincs",
       "urgent": "Sürgős"
     },
-    "selectDate": "Dátum kiválasztása…",
     "status": "Állapot",
     "statusValues": {
       "cancelled": "Visszavonva",

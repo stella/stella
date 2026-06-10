@@ -816,6 +816,7 @@
     "scrollToTop": "Slinkti į viršų",
     "search": "Ieškoti...",
     "selectARole": "Pasirinkite rolę",
+    "selectDate": "Pasirinkti datą…",
     "sessions": "Sesijos",
     "settings": "Nustatymai",
     "showAll": "Rodyti viską",
@@ -1972,7 +1973,6 @@
       "none": "Nėra",
       "urgent": "Skubu"
     },
-    "selectDate": "Pasirinkti datą…",
     "status": "Būsena",
     "statusValues": {
       "cancelled": "Atšaukta",

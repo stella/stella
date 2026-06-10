@@ -816,6 +816,7 @@
     "scrollToTop": "Keri üles",
     "search": "Otsi...",
     "selectARole": "Valige roll",
+    "selectDate": "Vali kuupäev…",
     "sessions": "Seansid",
     "settings": "Seaded",
     "showAll": "Näita kõiki",
@@ -1972,7 +1973,6 @@
       "none": "Puudub",
       "urgent": "Kiire"
     },
-    "selectDate": "Vali kuupäev…",
     "status": "Staatus",
     "statusValues": {
       "cancelled": "Tühistatud",

@@ -819,6 +819,7 @@ type Messages = {
     "scrollToTop": "Scroll to top";
     "search": "Search...";
     "selectARole": "Select a role";
+    "selectDate": "Select date…";
     "sessions": "Sessions";
     "settings": "Settings";
     "showAll": "Show all";
@@ -1975,7 +1976,6 @@ type Messages = {
       "none": "None";
       "urgent": "Urgent";
     };
-    "selectDate": "Select date…";
     "status": "Status";
     "statusValues": {
       "cancelled": "Cancelled";

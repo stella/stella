@@ -816,6 +816,7 @@
     "scrollToTop": "Nach oben scrollen",
     "search": "Suchen...",
     "selectARole": "Rolle auswählen",
+    "selectDate": "Datum wählen…",
     "sessions": "Sitzungen",
     "settings": "Einstellungen",
     "showAll": "Alle anzeigen",
@@ -1972,7 +1973,6 @@
       "none": "Keine",
       "urgent": "Dringend"
     },
-    "selectDate": "Datum wählen…",
     "status": "Status",
     "statusValues": {
       "cancelled": "Abgebrochen",

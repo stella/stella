@@ -816,6 +816,7 @@
     "scrollToTop": "Rolar para o topo",
     "search": "Pesquisar...",
     "selectARole": "Selecione uma função",
+    "selectDate": "Selecionar data…",
     "sessions": "Sessões",
     "settings": "Configurações",
     "showAll": "Mostrar tudo",
@@ -1972,7 +1973,6 @@
       "none": "Nenhum",
       "urgent": "Urgente"
     },
-    "selectDate": "Selecionar data…",
     "status": "Status",
     "statusValues": {
       "cancelled": "Cancelado",
