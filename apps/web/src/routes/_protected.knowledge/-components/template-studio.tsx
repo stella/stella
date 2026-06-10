@@ -117,7 +117,11 @@ import {
 } from "@/routes/_protected.knowledge/-components/condition-builder";
 import { LinkClauseDialog } from "@/routes/_protected.knowledge/-components/link-clause-dialog";
 import { TemplateClausesTab } from "@/routes/_protected.knowledge/-components/template-clauses-tab";
-import { DATE_FORMAT_STYLES } from "@/routes/_protected.knowledge/-components/template-date-format";
+import {
+  DATE_FORMAT_STYLES,
+  formatDateValue,
+  type TemplateDateFormat,
+} from "@/routes/_protected.knowledge/-components/template-date-format";
 import { createTemplateFieldMention } from "@/routes/_protected.knowledge/-components/template-field-mention";
 import {
   ARRAY_INDEX_KEY_PREFIX,
@@ -2767,6 +2771,11 @@ const pushFillPreview = (
 ) => {
   cancelLookupPreviews();
   const preview: Record<string, TemplatePreviewValue> = {};
+  const dateFormats = new Map<string, TemplateDateFormat>(
+    (fields ?? []).flatMap((field) =>
+      field.dateFormat === undefined ? [] : [[field.path, field.dateFormat]],
+    ),
+  );
   // Linked clause slots preview their resolved text, keyed by slot name to
   // match the folio plugin's clause-range key.
   if (clauseTexts) {
@@ -2782,7 +2791,7 @@ const pushFillPreview = (
     }
     const path = item ? `${item.path}.${item.sub}` : key;
     if (typeof value === "string" && value !== "") {
-      preview[path] = value;
+      preview[path] = previewScalarValue(value, dateFormats.get(path));
     } else if (typeof value === "number" || typeof value === "boolean") {
       preview[path] = String(value);
     } else if (value !== null && typeof value === "object") {
@@ -2858,7 +2867,20 @@ type StudioLookup = NonNullable<StudioField["lookup"]>;
 type LookupPreviewField = {
   path: string;
   lookup?: StudioLookup | undefined;
+  dateFormat?: TemplateDateFormat | undefined;
 };
+
+/** A scalar's live preview, matched 1:1 to what the fill engine writes to the
+ *  finished document: a date field is rendered in its configured locale/style
+ *  (e.g. cs long → "13. června 2028") rather than the raw ISO the input holds.
+ *  Non-date values and unparseable dates pass through unchanged. */
+const previewScalarValue = (
+  value: string,
+  dateFormat: TemplateDateFormat | undefined,
+): string =>
+  dateFormat === undefined
+    ? value
+    : (formatDateValue(value, dateFormat) ?? value);
 
 type LookupPreviewRequest = {
   registry: StudioLookup["registry"];
@@ -2981,7 +3003,7 @@ const pushSingleFieldPreview = (field: StudioField, value: string) => {
     return;
   }
   const preview: Record<string, TemplatePreviewValue> = {
-    [field.path]: value,
+    [field.path]: previewScalarValue(value, field.dateFormat),
   };
   const pending = applyCachedLookupRenderings(preview, [field]);
   actions?.setFillPreview(preview);
