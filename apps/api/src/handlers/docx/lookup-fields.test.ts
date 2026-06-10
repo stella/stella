@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import JSZip from "jszip";
 
 import { KrsValidationError } from "@stll/business-registries/krs";
 
@@ -8,6 +9,7 @@ import type {
 } from "@/api/lib/business-registries/dispatch";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 
+import { discoverTemplate } from "./discover-template";
 import {
   applyLookupFields,
   createDispatchLookupResolver,
@@ -20,8 +22,11 @@ import {
   resolveLookupFields,
   stripLookupMarkdown,
 } from "./lookup-fields";
+import { applyManifestFillSteps } from "./manifest-fill-steps";
+import { fillTemplate } from "./patch-template";
 import { patchXmlPart } from "./rich-patch";
-import type { FieldMeta } from "./types";
+import { mergeManifestWithDiscovery, writeManifest } from "./template-manifest";
+import type { FieldMeta, TemplateData, TemplateManifest } from "./types";
 
 const KRS_ADDRESS = {
   line1: "ul. Stanisława Matyi 8",
@@ -582,5 +587,168 @@ describe("applyLookupFields — fill flow over a mocked dispatch", () => {
     });
     expect(error).toBeNull();
     expect(values["buyer_krs"]).toBe("0000592109");
+  });
+});
+
+// The full fill pipeline for a lookup with named output formats: the manifest
+// declares one lookup field (`company`) with a default + a named `full`
+// format. A document references the bare `{{company}}` (default rendering) and
+// the keyed `{{company.full}}` (the named rendering of the SAME hit). Both must
+// fill from one submitted registry number, in plain paragraphs, inside an
+// `{{#each}}` loop, and inside a table — the flat dotted `company.full` key the
+// resolver writes has to survive flattenTemplateData and block expansion so the
+// keyed marker is never left unmatched or surfaced as a separate field.
+describe("named-format lookup — end-to-end fill", () => {
+  const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+  const WRAP = (body: string) =>
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n` +
+    `<w:document xmlns:w="${W_NS}"><w:body>${body}</w:body></w:document>`;
+  const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
+  const CELL = (text: string) =>
+    `<w:tc><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
+
+  const makeDocx = async (documentXml: string): Promise<Buffer> => {
+    const zip = new JSZip();
+    zip.file("word/document.xml", documentXml);
+    zip.file(
+      "[Content_Types].xml",
+      `<?xml version="1.0" encoding="UTF-8"?>` +
+        `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+        `<Default Extension="xml" ContentType="application/xml"/>` +
+        `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        `</Types>`,
+    );
+    return Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
+  };
+
+  const docText = async (buffer: Buffer): Promise<string> => {
+    const zip = await JSZip.loadAsync(buffer);
+    return (await zip.file("word/document.xml")?.async("string")) ?? "";
+  };
+
+  const companyField: FieldMeta = {
+    path: "company",
+    inputType: "text",
+    lookup: {
+      registry: "krs",
+      formats: [
+        { key: "output_1", template: "[company name]" },
+        { key: "full", template: "[company name], seat in [seat]" },
+      ],
+    },
+  };
+  const manifest: TemplateManifest = {
+    version: 1,
+    fields: [companyField],
+    conditions: [],
+  };
+  const DEFAULT_RENDER = "Żabka Polska sp. z o.o.";
+  const FULL_RENDER = "Żabka Polska sp. z o.o., seat in Poznań";
+
+  test("discovery + merge keeps the lookup field, drops the format marker", async () => {
+    const docx = await makeDocx(
+      WRAP([P("{{company}}"), P("{{company.full}}")].join("")),
+    );
+    const discovered = await discoverTemplate(docx);
+    const resolved = mergeManifestWithDiscovery(manifest, discovered);
+
+    expect(resolved.find((f) => f.path === "company")?.lookup).toBeDefined();
+    // `company.full` is a rendering of the one resolved hit, not a separate
+    // fillable input, so it must not surface as its own ResolvedField.
+    expect(resolved.some((f) => f.path === "company.full")).toBe(false);
+  });
+
+  test("fills the bare and keyed markers from one submitted number", async () => {
+    const docx = await makeDocx(
+      WRAP([P("{{company}}"), P("{{company.full}}")].join("")),
+    );
+    const withManifest = await writeManifest(docx, manifest);
+    const values: TemplateData = { company: "0000592109" };
+
+    const stepError = await applyManifestFillSteps({
+      values,
+      manifest,
+      resolveLookup: hitResolver(KRS_HIT),
+    });
+    expect(stepError).toBeNull();
+
+    const result = await fillTemplate(withManifest, values);
+    expect(result.unmatchedPlaceholders).toEqual([]);
+    const text = await docText(result.buffer);
+    expect(text).toContain(DEFAULT_RENDER);
+    expect(text).toContain(FULL_RENDER);
+  });
+
+  test("the keyed marker survives #each block expansion", async () => {
+    const docx = await makeDocx(
+      WRAP(
+        [
+          P("{{#each items}}"),
+          P("{{items.label}}: {{company}} / {{company.full}}"),
+          P("{{/each}}"),
+        ].join(""),
+      ),
+    );
+    const withManifest = await writeManifest(docx, manifest);
+    const values: TemplateData = {
+      company: "0000592109",
+      items: [{ label: "A" }, { label: "B" }],
+    };
+
+    const stepError = await applyManifestFillSteps({
+      values,
+      manifest,
+      resolveLookup: hitResolver(KRS_HIT),
+    });
+    expect(stepError).toBeNull();
+
+    const result = await fillTemplate(withManifest, values);
+    expect(result.unmatchedPlaceholders).toEqual([]);
+    const text = await docText(result.buffer);
+    // One rendering per loop iteration: the flat company.full key resolves
+    // inside every expanded copy, not just the first.
+    expect(text.split(FULL_RENDER)).toHaveLength(3);
+  });
+
+  test("the keyed marker fills inside a table cell", async () => {
+    const docx = await makeDocx(
+      WRAP(
+        `<w:tbl><w:tr>${CELL("{{company}}")}${CELL("{{company.full}}")}</w:tr></w:tbl>`,
+      ),
+    );
+    const withManifest = await writeManifest(docx, manifest);
+    const values: TemplateData = { company: "0000592109" };
+
+    const stepError = await applyManifestFillSteps({
+      values,
+      manifest,
+      resolveLookup: hitResolver(KRS_HIT),
+    });
+    expect(stepError).toBeNull();
+
+    const result = await fillTemplate(withManifest, values);
+    expect(result.unmatchedPlaceholders).toEqual([]);
+    const text = await docText(result.buffer);
+    expect(text).toContain(DEFAULT_RENDER);
+    expect(text).toContain(FULL_RENDER);
+  });
+
+  test("a keyed marker with no declared format stays unmatched", async () => {
+    const docx = await makeDocx(WRAP(P("{{company.unknown}}")));
+    const withManifest = await writeManifest(docx, manifest);
+    const values: TemplateData = { company: "0000592109" };
+
+    const stepError = await applyManifestFillSteps({
+      values,
+      manifest,
+      resolveLookup: hitResolver(KRS_HIT),
+    });
+    expect(stepError).toBeNull();
+    // No value is emitted for an undeclared key, so the marker is reported
+    // unmatched rather than crashing the fill.
+    expect(values["company.unknown"]).toBeUndefined();
+
+    const result = await fillTemplate(withManifest, values);
+    expect(result.unmatchedPlaceholders).toEqual(["company.unknown"]);
   });
 });
