@@ -139,6 +139,7 @@ const saveTemplateDocument = createSafeRootHandler(
       optionsFrom: sourceFieldByPath.get(f.path)?.optionsFrom,
       lookup: sourceFieldByPath.get(f.path)?.lookup,
       formula: sourceFieldByPath.get(f.path)?.formula,
+      dateFormat: sourceFieldByPath.get(f.path)?.dateFormat,
     }));
 
     const manifest: TemplateManifest = {
