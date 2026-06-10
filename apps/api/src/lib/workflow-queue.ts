@@ -1949,6 +1949,13 @@ const broadcastWorkflowStatus = (
   broadcastInvalidation(workspaceId, ["workspaces", workspaceId, "workflow"]);
   if (!running) {
     broadcastInvalidation(workspaceId, ["entities", workspaceId]);
+    // Extraction writes new justifications alongside the field values;
+    // without this the provenance hover stays stale until a reload.
+    broadcastInvalidation(workspaceId, [
+      "workspaces",
+      workspaceId,
+      "justifications",
+    ]);
   }
 };
 

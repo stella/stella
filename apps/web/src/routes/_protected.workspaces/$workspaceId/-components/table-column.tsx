@@ -11,6 +11,7 @@ import type {
   WorkspaceProperty,
 } from "@/lib/types";
 import { ActiveEditBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge";
+import { AICellSourceCard } from "@/routes/_protected.workspaces/$workspaceId/-components/ai-cell-source-card";
 import {
   CellMetadataFlags,
   useCellMetadataFlags,
@@ -180,7 +181,7 @@ const PropertyCell = ({
     const filePropertyId = referencedFilePropertyId ?? firstFile?.propertyId;
 
     if (fileFieldId && filePropertyId) {
-      return (
+      const cell = (
         <WithOpenEntityButton
           entityId={entity.entityId}
           fieldId={fileFieldId}
@@ -210,6 +211,32 @@ const PropertyCell = ({
             workspaceId={property.workspaceId}
           />
         </WithOpenEntityButton>
+      );
+
+      if (!justification) {
+        return cell;
+      }
+      return (
+        <AICellSourceCard
+          cellMetadata={cellMetadata}
+          entity={entity}
+          justification={justification}
+          onOpen={() =>
+            useInspectorStore.getState().openFile({
+              id: fileFieldId,
+              entityId: entity.entityId,
+              label: fileName,
+              fileName,
+              mimeType,
+              pdfFileId: pdfFileId ?? null,
+              justificationFieldId: field.id,
+              propertyId: filePropertyId,
+              workspaceId: property.workspaceId,
+            })
+          }
+        >
+          {cell}
+        </AICellSourceCard>
       );
     }
   }
