@@ -1314,15 +1314,30 @@ type PromptBarShellProps = {
 } & Omit<ComponentProps<"div">, "children">;
 
 /**
+ * Background for chrome floating over the document page (prompt bar,
+ * suggestion stepper, preset chips). In light mode the rendered page
+ * reads as white paper in every accent palette, while `--popover`
+ * follows the palette (Flexoki `#fffcf0`, Nord `#eceff4`) — solid but
+ * visibly hue-tinted against the document. Anchor these surfaces to
+ * the document instead: white in light; in dark the page follows the
+ * theme, so the popover token stays correct. (`--doc-canvas` itself
+ * is scoped to `.folio-root` and does not reach these elements.)
+ */
+const DOC_FLOAT_SURFACE_CLASS =
+  "[--doc-float-surface:var(--color-white)] dark:[--doc-float-surface:var(--popover)] bg-(--doc-float-surface)";
+
+/**
  * Shared outer shell for the floating prompt bar. Both the live
  * `PromptBar` and the loading `PromptBarPlaceholder` (in the
  * inspector) render through this so they can never drift apart.
  *
- * The surface is solid `bg-popover` on purpose: a translucent
- * background lets document text bleed through, and backdrop-blur
- * cannot compensate for children of this shell — the shell's own
- * backdrop-filter makes it the backdrop root for its descendants
- * (the preset chips), whose blur then samples nothing.
+ * The surface is solid on purpose: a translucent background lets
+ * document text bleed through, and backdrop-blur cannot compensate
+ * for children of this shell — the shell's own backdrop-filter makes
+ * it the backdrop root for its descendants (the preset chips), whose
+ * blur then samples nothing. In floating mode the solid color is the
+ * document anchor (see `DOC_FLOAT_SURFACE_CLASS`); in standalone the
+ * bar sits on app chrome, so it keeps the theme popover surface.
  */
 export function PromptBarShell({
   layout,
@@ -1334,13 +1349,20 @@ export function PromptBarShell({
     <div
       {...rest}
       className={cn(
-        "group/bar bg-popover border-foreground/15 relative flex items-end gap-1 rounded-2xl border transition-[box-shadow,border-color]",
+        "group/bar border-foreground/15 relative flex items-end gap-1 rounded-2xl border transition-[box-shadow,border-color]",
         "shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
-        "after:pointer-events-none after:absolute after:-inset-6 after:-z-10 after:rounded-3xl after:bg-[radial-gradient(ellipse_at_center,var(--background)_0%,transparent_75%)] after:opacity-90",
+        "after:pointer-events-none after:absolute after:-inset-6 after:-z-10 after:rounded-3xl after:bg-[radial-gradient(ellipse_at_center,var(--doc-float-halo)_0%,transparent_75%)] after:opacity-90",
         "w-[min(560px,calc(100%-2rem))] py-1 ps-1.5 pe-1",
         layout === "floating"
-          ? "absolute start-1/2 bottom-8 z-50 -translate-x-1/2"
-          : "relative mb-8 shrink-0 self-center",
+          ? cn(
+              "absolute start-1/2 bottom-8 z-50 -translate-x-1/2",
+              DOC_FLOAT_SURFACE_CLASS,
+              // The halo fades document text around the bar, so it
+              // blends toward the page: white in light, the theme
+              // background (the folio canvas) in dark.
+              "[--doc-float-halo:var(--color-white)] dark:[--doc-float-halo:var(--background)]",
+            )
+          : "bg-popover relative mb-8 shrink-0 self-center [--doc-float-halo:var(--background)]",
         className,
       )}
     >
@@ -1369,7 +1391,12 @@ export function SuggestionStepper({
 }: SuggestionStepperProps) {
   const t = useTranslations();
   return (
-    <div className="bg-popover border-foreground/15 absolute start-1/2 bottom-26 z-50 flex -translate-x-1/2 items-center gap-1 rounded-full border px-1.5 py-1 shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]">
+    <div
+      className={cn(
+        DOC_FLOAT_SURFACE_CLASS,
+        "border-foreground/15 absolute start-1/2 bottom-26 z-50 flex -translate-x-1/2 items-center gap-1 rounded-full border px-1.5 py-1 shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
+      )}
+    >
       <Button
         aria-label={t("common.previous")}
         onClick={() => onStep(-1)}
@@ -1552,10 +1579,13 @@ export function PromptBar(props: PromptBarProps) {
             // the ghost variant swaps `background-color` to the
             // translucent `--accent` on hover, which over the bare
             // document would make the chip see-through under the
-            // cursor. Over the wrapper's solid popover the same swap
+            // cursor. Over the wrapper's solid surface the same swap
             // is the standard menu-item tint.
             <span
-              className="bg-popover border-foreground/15 inline-flex rounded-full border shadow-[0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]"
+              className={cn(
+                DOC_FLOAT_SURFACE_CLASS,
+                "border-foreground/15 inline-flex rounded-full border shadow-[0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
+              )}
               key={preset.id}
             >
               <Button
