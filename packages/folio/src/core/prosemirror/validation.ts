@@ -3,6 +3,7 @@ import type { Mark, Node as PMNode } from "prosemirror-model";
 import type { ProseMirrorAttrIssue, ReadProseMirrorAttrsResult } from "./attrs";
 import {
   readCharacterSpacingMarkAttrs,
+  readCharacterStyleMarkAttrs,
   readCommentMarkAttrs,
   readEmphasisMarkAttrs,
   readFieldAttrs,
@@ -254,6 +255,10 @@ const validateMarks = (
 
       case "characterSpacing":
         appendAttrIssues(markPath, readCharacterSpacingMarkAttrs(mark), issues);
+        continue;
+
+      case "characterStyle":
+        appendAttrIssues(markPath, readCharacterStyleMarkAttrs(mark), issues);
         continue;
 
       case "emphasisMark":

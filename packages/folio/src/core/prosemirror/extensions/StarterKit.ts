@@ -33,6 +33,7 @@ import { AllCapsExtension } from "./marks/AllCapsExtension";
 // Marks
 import { BoldExtension } from "./marks/BoldExtension";
 import { CharacterSpacingExtension } from "./marks/CharacterSpacingExtension";
+import { CharacterStyleExtension } from "./marks/CharacterStyleExtension";
 import { CommentExtension } from "./marks/CommentExtension";
 import { FontFamilyExtension } from "./marks/FontFamilyExtension";
 import { FontSizeExtension } from "./marks/FontSizeExtension";
@@ -151,6 +152,7 @@ export function createStarterKit(
   add("rtl", RtlExtension());
   add("textEffect", TextEffectExtension());
   add("runFormattingOverride", RunFormattingOverrideExtension());
+  add("characterStyle", CharacterStyleExtension());
   add("comment", CommentExtension());
   add("insertion", InsertionExtension());
   add("deletion", DeletionExtension());
