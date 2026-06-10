@@ -1762,10 +1762,13 @@ export function PromptBar(props: PromptBarProps) {
         <Tooltip>
           <TooltipTrigger
             render={
+              // Stays enabled while a response streams: starting a
+              // fresh thread is the escape hatch when a turn hangs
+              // or errors, so owners abort any live stream in their
+              // `onNewThread` and rotate regardless of bar state.
               <Button
                 aria-label={newThreadLabel}
                 className="rounded-full"
-                disabled={busy}
                 onClick={onNewThread}
                 size="icon-sm"
                 type="button"

@@ -19,7 +19,7 @@ import type {
 import {
   hasApprovalResponseAwaitingModelStep,
   hasApprovedActiveDocxEditAwaitingClientOutput,
-  hasRunningToolCallInLatestAssistantMessage,
+  isChatTurnInFlight,
 } from "@/components/chat/chat-ui-tools";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -809,15 +809,14 @@ export type ChatThreadOptionsArgs = ChatThreadOptionsInput & {
 };
 
 /**
- * Whether the Chat instance still has a turn in flight: an active
- * request, or a tool call on the latest assistant message that is
- * still collecting input/awaiting its output (the windows between
- * response streams in multi-step tool turns).
+ * Whether the Chat instance still has a turn in flight (an active
+ * request, or the windows between response streams in multi-step
+ * tool turns). An errored Chat is never in flight: reusing a dead
+ * instance here would keep serving its stuck state on every refetch,
+ * so it gets replaced by a fresh one built from persisted messages.
  */
-const isChatTurnInFlight = (chat: Chat<PersistedChatMessage>): boolean =>
-  chat.status === "submitted" ||
-  chat.status === "streaming" ||
-  hasRunningToolCallInLatestAssistantMessage({ messages: chat.messages });
+const isChatInstanceInFlight = (chat: Chat<PersistedChatMessage>): boolean =>
+  isChatTurnInFlight({ status: chat.status, messages: chat.messages });
 
 export const chatThreadOptions = ({
   activeOrganizationId,
@@ -857,7 +856,7 @@ export const chatThreadOptions = ({
       // threads recreate below as before (message resync + fresh
       // auto-send predicate state).
       const previous = queryClient.getQueryData<ChatThreadFetched>(queryKey);
-      if (previous !== undefined && isChatTurnInFlight(previous.chat)) {
+      if (previous !== undefined && isChatInstanceInFlight(previous.chat)) {
         return {
           chat: previous.chat,
           contextMatterIds,

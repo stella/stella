@@ -3,6 +3,7 @@
  * source of truth) and provides frontend-only helpers.
  */
 
+import type { ChatStatus } from "ai";
 import { panic } from "better-result";
 
 import type { ChatMessage, ChatPart, ChatUITools } from "@stll/api/types";
@@ -396,6 +397,44 @@ export const hasRunningToolCallInLatestAssistantMessage = ({
   }
 
   return message.parts.some(isRunningToolPart);
+};
+
+type ChatTurnInFlightOptions = {
+  status: ChatStatus;
+  messages: PersistedChatMessage[];
+  /**
+   * Set when the user explicitly stopped the turn. The AI SDK's
+   * `stop()` only aborts a live request; it never rewrites message
+   * parts, so a tool part caught mid-input stays in a running state
+   * and would otherwise keep the turn "in flight" forever.
+   */
+  turnAbandoned?: boolean;
+};
+
+/**
+ * Whether a chat turn is still in flight: an active request, or a
+ * tool call on the latest assistant message that is still collecting
+ * input or awaiting its output (the windows between response streams
+ * in multi-step tool turns).
+ *
+ * An errored turn is never in flight. When the stream dies mid tool
+ * call (network drop, server restart) the AI SDK flips its status to
+ * `"error"` but leaves the partial tool part in a running state; the
+ * SDK never auto-continues after an error, so treating that tail as
+ * in-flight would wedge the session as "generating" until reload.
+ */
+export const isChatTurnInFlight = ({
+  status,
+  messages,
+  turnAbandoned = false,
+}: ChatTurnInFlightOptions): boolean => {
+  if (status === "submitted" || status === "streaming") {
+    return true;
+  }
+  if (status === "error" || turnAbandoned) {
+    return false;
+  }
+  return hasRunningToolCallInLatestAssistantMessage({ messages });
 };
 
 export const getUserMessageHtmlHistory = (
