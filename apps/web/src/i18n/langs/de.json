@@ -2149,6 +2149,7 @@
       "filledByPerson": "Person",
       "formula": "Formel",
       "insert": "Einfügen",
+      "insertAtCaret": "An der Cursorposition einfügen",
       "invalidExpression": "Dieser Ausdruck ist ungültig",
       "loop": "Schleife",
       "makeField": "Feld erstellen",

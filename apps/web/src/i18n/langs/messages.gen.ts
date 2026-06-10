@@ -2152,6 +2152,7 @@ type Messages = {
       "filledByPerson": "Person";
       "formula": "Formula";
       "insert": "Insert";
+      "insertAtCaret": "Insert at cursor";
       "invalidExpression": "That expression is invalid";
       "loop": "Loop";
       "makeField": "Make field";

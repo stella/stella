@@ -2149,6 +2149,7 @@
       "filledByPerson": "Persona",
       "formula": "Fórmula",
       "insert": "Insertar",
+      "insertAtCaret": "Insertar en el cursor",
       "invalidExpression": "Esa expresión no es válida",
       "loop": "Bucle",
       "makeField": "Crear campo",

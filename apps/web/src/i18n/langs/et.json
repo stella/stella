@@ -2149,6 +2149,7 @@
       "filledByPerson": "Isik",
       "formula": "Valem",
       "insert": "Sisesta",
+      "insertAtCaret": "Sisesta kursori kohale",
       "invalidExpression": "See avaldis on vigane",
       "loop": "Tsükkel",
       "makeField": "Loo väli",

@@ -2149,6 +2149,7 @@
       "filledByPerson": "Személy",
       "formula": "Képlet",
       "insert": "Beszúrás",
+      "insertAtCaret": "Beszúrás a kurzorhoz",
       "invalidExpression": "Ez a kifejezés érvénytelen",
       "loop": "Ciklus",
       "makeField": "Mező létrehozása",

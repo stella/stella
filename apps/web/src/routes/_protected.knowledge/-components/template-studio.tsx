@@ -2824,9 +2824,9 @@ const OutlineRow = ({
         ? VALUE_TYPE_META.text.icon
         : VALUE_TYPE_META[inputTypeValueKind(field.inputType)].icon;
     return (
-      <li>
+      <li className="group/row relative">
         <button
-          className="hover:bg-muted group flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-start text-sm"
+          className="hover:bg-muted group flex w-full items-center gap-2.5 rounded-md px-2 py-2 pe-10 text-start text-sm"
           onClick={jump}
           title={node.path}
           type="button"
@@ -2842,6 +2842,21 @@ const OutlineRow = ({
             </span>
           )}
         </button>
+        {field === undefined ? null : (
+          <Button
+            aria-label={t("templates.studio.insertAtCaret")}
+            className="absolute end-1.5 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/row:opacity-100"
+            onClick={(e) => {
+              e.stopPropagation();
+              actions?.insertExistingField(node.path);
+            }}
+            size="icon-sm"
+            title={t("templates.studio.insertAtCaret")}
+            variant="outline"
+          >
+            <PlusIcon />
+          </Button>
+        )}
       </li>
     );
   }
