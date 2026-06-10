@@ -33,7 +33,6 @@ type TemplateStudioSession = {
   templateId: string;
   fields: StudioField[];
   conditions: NameExpr[];
-  computed: NameExpr[];
 };
 
 /** What the model proposes for a single field's configuration. */
@@ -60,6 +59,14 @@ export type StudioActions = {
   /** Rewrite {{oldPath}} markers in the document and rename the field.
    *  Returns false when the new path is invalid or already taken. */
   renameFieldPath: (oldPath: string, newPath: string) => boolean;
+  /** Rewrite the selected `{{#if …}}` / `{{#elseif …}}` opener with a new
+   *  expression. Returns false when nothing suitable is selected or the
+   *  expression is invalid. */
+  rewriteConditionExpr: (next: string) => boolean;
+  /** Return to the template overview: move the document caret just past the
+   *  selected marker (so selection sync doesn't immediately re-derive the
+   *  same face) and clear the selection. */
+  deselect: () => void;
   /** Move the document caret to the next/previous field marker. */
   focusAdjacentField: (direction: 1 | -1) => void;
   /** Move the document caret into the first marker of the given field. */
@@ -109,7 +116,6 @@ type TemplateStudioState = {
   templateId: string | null;
   fields: StudioField[];
   conditions: NameExpr[];
-  computed: NameExpr[];
   /** The directive the document caret currently sits in, or null. */
   selected: DirectiveRange | null;
   /** Unsaved manifest or document edits since the last load/save. */
@@ -124,7 +130,6 @@ type TemplateStudioState = {
   upsertField: (path: string, patch: Partial<StudioField>) => void;
   renameField: (oldPath: string, newPath: string) => void;
   setConditions: (conditions: NameExpr[]) => void;
-  setComputed: (computed: NameExpr[]) => void;
   /** Document structure tree, rebuilt by the editor on every scan. */
   outline: OutlineNode[];
   setOutline: (outline: OutlineNode[]) => void;
@@ -137,7 +142,6 @@ export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
   templateId: null,
   fields: [],
   conditions: [],
-  computed: [],
   outline: [],
   setOutline: (outline) => set({ outline }),
   selected: null,
@@ -151,7 +155,6 @@ export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
       templateId: session.templateId,
       fields: session.fields,
       conditions: session.conditions,
-      computed: session.computed,
       selected: null,
       isDirty: false,
     }),
@@ -162,7 +165,6 @@ export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
             templateId: null,
             fields: [],
             conditions: [],
-            computed: [],
             selected: null,
             isDirty: false,
             actions: null,
@@ -186,7 +188,6 @@ export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
       isDirty: true,
     })),
   setConditions: (conditions) => set({ conditions, isDirty: true }),
-  setComputed: (computed) => set({ computed, isDirty: true }),
   setSelected: (selected) => set({ selected }),
   markDirty: () => set({ isDirty: true }),
   markSaved: () => set({ isDirty: false }),

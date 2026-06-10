@@ -12,7 +12,6 @@ import type { ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { panic } from "better-result";
-import type { LucideIcon } from "lucide-react";
 import {
   BookmarkIcon,
   BookmarkPlusIcon,
@@ -21,6 +20,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   EyeIcon,
+  LandmarkIcon,
   Loader2Icon,
   PencilIcon,
   EyeOffIcon,
@@ -30,6 +30,7 @@ import {
   SigmaIcon,
   SplitIcon,
   Trash2Icon,
+  UserIcon,
   WandSparklesIcon,
 } from "lucide-react";
 import type { NodeType, ResolvedPos } from "prosemirror-model";
@@ -280,6 +281,9 @@ export const TemplateStudioPage = ({
         (await actionsRef.current?.suggestFieldConfig(path)) ?? null,
       renameFieldPath: (oldPath, newPath) =>
         actionsRef.current?.renameFieldPath(oldPath, newPath) ?? false,
+      rewriteConditionExpr: (next) =>
+        actionsRef.current?.rewriteConditionExpr(next) ?? false,
+      deselect: () => actionsRef.current?.deselect(),
       focusAdjacentField: (direction) =>
         actionsRef.current?.focusAdjacentField(direction),
       focusField: (path) => actionsRef.current?.focusField(path),
@@ -327,8 +331,7 @@ export const TemplateStudioPage = ({
     init({
       templateId,
       fields: parseFields(manifest),
-      conditions: parseNameExprs(manifest, "conditions"),
-      computed: parseNameExprs(manifest, "computed"),
+      conditions: parseConditions(manifest),
     });
     openView({
       type: TEMPLATE_STUDIO_VIEW,
@@ -831,15 +834,12 @@ export const TemplateStudioPage = ({
       // Persist the edited manifest alongside the bytes in one call; the server
       // re-embeds it (avoids a binary re-embed round-trip that Eden would parse
       // as text and corrupt).
-      const { fields, conditions, computed } =
-        useTemplateStudioStore.getState();
+      const { fields, conditions } = useTemplateStudioStore.getState();
       const stored = await api
         .templates({ templateId: toSafeId<"template">(templateId) })
         .document.post({
           file,
-          manifest: JSON.stringify(
-            buildManifest(manifest, fields, conditions, computed),
-          ),
+          manifest: JSON.stringify(buildManifest(manifest, fields, conditions)),
         });
       if (stored.error) {
         stellaToast.add({ title: t("templates.saveFailed"), type: "error" });
@@ -999,6 +999,54 @@ export const TemplateStudioPage = ({
       useTemplateStudioStore.getState().renameField(oldPath, trimmed);
       markDirty();
       return true;
+    },
+    rewriteConditionExpr: (next) => {
+      const view = editorViewRef.current;
+      const { selected } = useTemplateStudioStore.getState();
+      const trimmed = next.trim();
+      if (
+        !view ||
+        !selected ||
+        (selected.kind !== "if" && selected.kind !== "elseif") ||
+        trimmed === "" ||
+        /[{}]/u.test(trimmed)
+      ) {
+        return false;
+      }
+      if (trimmed === selected.expr) {
+        return true;
+      }
+      const token = selected.kind === "if" ? "#if" : "#elseif";
+      const tr = view.state.tr.insertText(
+        `{{${token} ${trimmed}}}`,
+        selected.from,
+        selected.to,
+      );
+      // Keep the caret inside the rewritten opener so the condition face
+      // stays open on the (re-scanned) directive.
+      tr.setSelection(
+        TextSelection.near(
+          tr.doc.resolve(Math.min(selected.from + 2, tr.doc.content.size)),
+        ),
+      );
+      view.dispatch(tr);
+      markDirty();
+      return true;
+    },
+    deselect: () => {
+      const view = editorViewRef.current;
+      const { selected } = useTemplateStudioStore.getState();
+      if (view && selected) {
+        // A caret anywhere inside (or at the edge of) the marker would make
+        // syncSelection re-derive the same face; park it just past the range.
+        const pos = Math.min(selected.to + 1, view.state.doc.content.size);
+        view.dispatch(
+          view.state.tr.setSelection(
+            TextSelection.near(view.state.doc.resolve(pos), 1),
+          ),
+        );
+      }
+      setSelected(null);
     },
     suggestFieldConfig: async (path) => {
       const view = editorViewRef.current;
@@ -1372,6 +1420,26 @@ const outlineFieldPaths = (nodes: OutlineNode[]): Set<string> => {
   return paths;
 };
 
+/** First marker position per field path, for jump-to-marker rows rendered
+ *  outside the outline (the Conditions disclosure's questions). */
+const outlineFieldFirstPositions = (
+  nodes: OutlineNode[],
+): Map<string, number> => {
+  const positions = new Map<string, number>();
+  const walk = (list: OutlineNode[]) => {
+    for (const node of list) {
+      if (node.type === "field" && !positions.has(node.path)) {
+        positions.set(node.path, node.from);
+      }
+      if (node.type === "group") {
+        walk(node.children);
+      }
+    }
+  };
+  walk(nodes);
+  return positions;
+};
+
 type StudioFacet = "fields" | "clauses" | "history" | "fill";
 
 const STUDIO_FACETS: readonly StudioFacet[] = [
@@ -1391,12 +1459,10 @@ function TemplateStudioInspectorView({
   const sessionTemplateId = useTemplateStudioStore((s) => s.templateId);
   const fields = useTemplateStudioStore((s) => s.fields);
   const conditions = useTemplateStudioStore((s) => s.conditions);
-  const computed = useTemplateStudioStore((s) => s.computed);
   const outline = useTemplateStudioStore((s) => s.outline);
   const selected = useTemplateStudioStore((s) => s.selected);
   const upsertField = useTemplateStudioStore((s) => s.upsertField);
   const setConditions = useTemplateStudioStore((s) => s.setConditions);
-  const setComputed = useTemplateStudioStore((s) => s.setComputed);
 
   const queryClient = useQueryClient();
   const activeOrganizationId = protectedRouteApi.useRouteContext({
@@ -1478,10 +1544,8 @@ function TemplateStudioInspectorView({
       {ready && facet === "fields" && (
         <Inspector
           conditions={conditions}
-          computed={computed}
           fields={fields}
           outline={outline}
-          onComputedChange={setComputed}
           onConditionsChange={setConditions}
           onFieldUpdate={upsertField}
           selected={selected}
@@ -1808,10 +1872,8 @@ type InspectorProps = {
   fields: StudioField[];
   outline: OutlineNode[];
   conditions: NameExpr[];
-  computed: NameExpr[];
   onFieldUpdate: (path: string, patch: Partial<StudioField>) => void;
   onConditionsChange: (next: NameExpr[]) => void;
-  onComputedChange: (next: NameExpr[]) => void;
 };
 
 const Inspector = ({
@@ -1819,10 +1881,8 @@ const Inspector = ({
   fields,
   outline,
   conditions,
-  computed,
   onFieldUpdate,
   onConditionsChange,
-  onComputedChange,
 }: InspectorProps) => {
   const t = useTranslations();
   if (selected && selected.kind === "placeholder") {
@@ -1839,74 +1899,292 @@ const Inspector = ({
   }
 
   if (selected && (selected.kind === "if" || selected.kind === "elseif")) {
-    return (
-      <ScrollArea className="min-h-0 flex-1">
-        <ScopeHeader
-          subtitle={selected.kind}
-          title={t("templates.studio.scopeCondition")}
-        />
-        <div className="px-4 py-4">
-          <p className="text-muted-foreground text-xs leading-relaxed">
-            {t("templates.studio.conditionBlockHelp")}
-          </p>
-          <code className="bg-muted mt-2 block rounded px-3 py-2 text-xs">
-            {selected.expr || "—"}
-          </code>
-          <p className="text-muted-foreground mt-3 text-xs leading-relaxed">
-            {t("templates.studio.namedConditionsHelp")}
-          </p>
-        </div>
-      </ScrollArea>
-    );
+    return <ConditionFace conditions={conditions} selected={selected} />;
   }
 
   if (selected && selected.kind === "clause") {
-    return (
-      <ScrollArea className="min-h-0 flex-1">
-        <ScopeHeader
-          subtitle={selected.expr}
-          title={t("templates.studio.scopeClause")}
-        />
-        <div className="text-muted-foreground px-4 py-4 text-xs leading-relaxed">
-          {t("templates.studio.clauseSlotHelp")}
-        </div>
-      </ScrollArea>
-    );
+    return <ClauseFace selected={selected} />;
   }
 
-  // Default: whole-template settings. Fields lead (they are what the template
-  // is made of); conditions and computed follow as supporting logic.
+  // Default: whole-template overview. Fields lead (they are what the template
+  // is made of); conditions fold into a disclosure of supporting logic.
+  const questions = fields.filter((f) => f.inputType === "boolean");
   return (
     <ScrollArea className="min-h-0 flex-1">
-      <ScopeHeader title={t("templates.studio.scopeTemplate")} />
+      <div className="text-muted-foreground flex items-center gap-3 border-b px-4 py-2.5 text-xs">
+        <span>
+          {t("templates.fields")} · {fields.length - questions.length}
+        </span>
+        <span>
+          {t("templates.conditionsTitle")} ·{" "}
+          {conditions.length + questions.length}
+        </span>
+      </div>
       <FieldNavigator fields={fields} outline={outline} />
       <Separator />
-      <NameExprList
-        addLabel={t("templates.addCondition")}
-        emptyLabel={t("templates.studio.noConditions")}
-        heading={t("templates.conditionsTitle")}
-        help={t("templates.studio.conditionsSectionHelp")}
-        icon={SplitIcon}
-        items={conditions}
-        onChange={onConditionsChange}
-      />
-      <Separator />
-      <NameExprList
-        addLabel={t("templates.studio.addComputedField")}
-        emptyLabel={t("templates.studio.noComputed")}
-        heading={t("templates.studio.computed")}
-        help={t("templates.studio.computedSectionHelp")}
-        icon={SigmaIcon}
-        items={computed}
-        onChange={onComputedChange}
+      <ConditionsDisclosure
+        conditions={conditions}
+        onConditionsChange={onConditionsChange}
+        outline={outline}
+        questions={questions}
       />
     </ScrollArea>
   );
 };
 
+/** Settings face for a `{{#if}}` / `{{#elseif}}` opener: the expression is
+ *  click-to-edit (rewriting the marker in the document), named conditions
+ *  insert as one-click chips, and managing those names happens back on the
+ *  template overview. */
+const ConditionFace = ({
+  selected,
+  conditions,
+}: {
+  selected: DirectiveRange;
+  conditions: NameExpr[];
+}) => {
+  const t = useTranslations();
+  const actions = useTemplateStudioStore((s) => s.actions);
+  const named = conditions.filter((c) => c.name !== "");
+  return (
+    <ScrollArea className="min-h-0 flex-1">
+      <ScopeHeader
+        onBack={() => actions?.deselect()}
+        subtitle={selected.kind}
+        title={t("templates.studio.scopeCondition")}
+      />
+      <div className="flex flex-col gap-3 px-4 py-4">
+        <p className="text-muted-foreground text-xs leading-relaxed">
+          {t("templates.studio.conditionBlockHelp")}
+        </p>
+        <ConditionExprEditor
+          expr={selected.expr}
+          key={`${selected.from}:${selected.expr}`}
+          onRewrite={(next) => actions?.rewriteConditionExpr(next) ?? false}
+        />
+        {named.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {named.map((c) => (
+              <Button
+                className="h-6 px-2 text-xs"
+                key={c.name}
+                onClick={() => {
+                  actions?.rewriteConditionExpr(c.name);
+                }}
+                size="sm"
+                title={c.expression}
+                variant="outline"
+              >
+                {c.name}
+              </Button>
+            ))}
+          </div>
+        )}
+        <Button
+          className="text-muted-foreground self-start"
+          onClick={() => actions?.deselect()}
+          size="sm"
+          variant="ghost"
+        >
+          {t("templates.studio.manageNamedConditions")}
+        </Button>
+      </div>
+    </ScrollArea>
+  );
+};
+
+/** Click-to-edit condition expression: commits by rewriting the block
+ *  opener's `{{#if …}}` text in the document. */
+const ConditionExprEditor = ({
+  expr,
+  onRewrite,
+}: {
+  expr: string;
+  onRewrite: (next: string) => boolean;
+}) => {
+  const t = useTranslations();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(expr);
+
+  const commit = () => {
+    if (value.trim() === expr) {
+      setEditing(false);
+      return;
+    }
+    if (onRewrite(value)) {
+      setEditing(false);
+      return;
+    }
+    stellaToast.add({
+      type: "error",
+      title: t("templates.studio.invalidExpression"),
+    });
+  };
+
+  if (!editing) {
+    return (
+      <button
+        className="hover:bg-muted/60 group flex w-full items-center gap-1.5 rounded border px-3 py-2 text-start"
+        onClick={() => setEditing(true)}
+        title={t("common.edit")}
+        type="button"
+      >
+        <code className="min-w-0 flex-1 truncate text-xs">{expr || "—"}</code>
+        <PencilIcon className="text-muted-foreground size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
+      </button>
+    );
+  }
+  return (
+    <Input
+      autoFocus
+      className="h-8 font-mono text-xs"
+      onBlur={commit}
+      onChange={(e) => setValue(e.currentTarget.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          commit();
+        }
+        if (e.key === "Escape") {
+          setValue(expr);
+          setEditing(false);
+        }
+      }}
+      value={value}
+    />
+  );
+};
+
+const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
+  const t = useTranslations();
+  const actions = useTemplateStudioStore((s) => s.actions);
+  return (
+    <ScrollArea className="min-h-0 flex-1">
+      <ScopeHeader
+        onBack={() => actions?.deselect()}
+        subtitle={selected.expr}
+        title={t("templates.studio.scopeClause")}
+      />
+      <div className="text-muted-foreground px-4 py-4 text-xs leading-relaxed">
+        {t("templates.studio.clauseSlotHelp")}
+      </div>
+    </ScrollArea>
+  );
+};
+
+/** Collapsed "Conditions · N" row on the template overview: expands to the
+ *  template's yes/no questions (boolean fields) and the named-condition
+ *  editor; the ghost plus adds a named condition right away. */
+const ConditionsDisclosure = ({
+  conditions,
+  onConditionsChange,
+  outline,
+  questions,
+}: {
+  conditions: NameExpr[];
+  onConditionsChange: (next: NameExpr[]) => void;
+  outline: OutlineNode[];
+  questions: StudioField[];
+}) => {
+  const t = useTranslations();
+  const [open, setOpen] = useState(false);
+  const count = conditions.length + questions.length;
+
+  const addCondition = () => {
+    onConditionsChange([...conditions, { name: "", expression: "" }]);
+    setOpen(true);
+  };
+
+  return (
+    <div className="px-4 py-3">
+      <div className="flex items-center">
+        <button
+          aria-expanded={open}
+          className="hover:bg-muted flex min-w-0 flex-1 items-center gap-1.5 rounded px-1.5 py-1 text-start text-xs"
+          onClick={() => setOpen((v) => !v)}
+          type="button"
+        >
+          {open ? (
+            <ChevronDownIcon className="text-muted-foreground size-3.5 shrink-0" />
+          ) : (
+            <ChevronRightIcon className="text-muted-foreground size-3.5 shrink-0" />
+          )}
+          <span className="text-muted-foreground font-medium">
+            {t("templates.conditionsTitle")} · {count}
+          </span>
+        </button>
+        <Button
+          aria-label={t("templates.addCondition")}
+          onClick={addCondition}
+          size="icon-sm"
+          variant="ghost"
+        >
+          <PlusIcon />
+        </Button>
+      </div>
+      {open && (
+        <div className="mt-1 flex flex-col gap-2">
+          {questions.length > 0 && (
+            <div className="flex flex-col">
+              <h4 className="text-muted-foreground px-1.5 py-1 text-[11px] font-medium">
+                {t("templates.studio.questions")}
+              </h4>
+              <ul className="flex flex-col">
+                {questions.map((field) => (
+                  <QuestionRow
+                    field={field}
+                    key={field.path}
+                    outline={outline}
+                  />
+                ))}
+              </ul>
+            </div>
+          )}
+          <NameExprList
+            emptyLabel={t("templates.studio.conditionsSectionHelp")}
+            items={conditions}
+            onChange={onConditionsChange}
+          />
+        </div>
+      )}
+    </div>
+  );
+};
+
+/** A yes/no field listed among the conditions: it is a question in the fill
+ *  form, but in the document it exists to switch blocks on and off. */
+const QuestionRow = ({
+  field,
+  outline,
+}: {
+  field: StudioField;
+  outline: OutlineNode[];
+}) => {
+  const actions = useTemplateStudioStore((s) => s.actions);
+  const from = outlineFieldFirstPositions(outline).get(field.path) ?? -1;
+  const ToggleIcon = VALUE_TYPE_META.boolean.icon;
+  return (
+    <li>
+      <button
+        className="hover:bg-muted group flex w-full items-center gap-2 rounded px-1.5 py-1 text-start text-xs"
+        onClick={() => {
+          if (from >= 0) {
+            actions?.focusPosition(from);
+          }
+        }}
+        title={field.path}
+        type="button"
+      >
+        <ToggleIcon className="text-muted-foreground size-3.5 shrink-0" />
+        <FieldRowLabel label={field.label} path={field.path} />
+      </button>
+    </li>
+  );
+};
+
 /** Document outline: fields where they sit, condition/loop blocks as
  *  collapsible groups owning what's inside them, clause slots inline.
- *  Every row jumps the document caret to its marker. */
+ *  Every row jumps the document caret to its marker. Yes/no fields are not
+ *  listed here; they show under the Conditions disclosure as questions. */
 const FieldNavigator = ({
   fields,
   outline,
@@ -1914,16 +2192,14 @@ const FieldNavigator = ({
   fields: StudioField[];
   outline: OutlineNode[];
 }) => {
-  const t = useTranslations();
   // Fields registered in the session but not (yet) placed in the document
   // still deserve a row, appended at root level.
   const placed = outlineFieldPaths(outline);
-  const unplaced = fields.filter((f) => !placed.has(f.path));
+  const unplaced = fields.filter(
+    (f) => !placed.has(f.path) && f.inputType !== "boolean",
+  );
   return (
-    <div className="px-4 py-4">
-      <h3 className="text-muted-foreground mb-2 text-xs font-medium">
-        {t("templates.fieldCount", { count: fields.length })}
-      </h3>
+    <div className="px-4 py-3">
       <ul className="flex flex-col">
         {outline.map((node, index) => (
           <OutlineRow fields={fields} key={index} node={node} />
@@ -1959,27 +2235,29 @@ const OutlineRow = ({
 
   if (node.type === "field") {
     const field = fields.find((f) => f.path === node.path);
+    // Yes/no fields live under the Conditions disclosure as questions.
+    if (field !== undefined && field.inputType === "boolean") {
+      return null;
+    }
     const Icon =
       field === undefined
         ? VALUE_TYPE_META.text.icon
         : VALUE_TYPE_META[inputTypeValueKind(field.inputType)].icon;
-    const label =
-      field === undefined || field.label === "" ? node.path : field.label;
     return (
       <li>
         <button
-          className="hover:bg-muted flex w-full items-center gap-2 rounded px-1.5 py-1 text-start text-xs"
+          className="hover:bg-muted group flex w-full items-center gap-2 rounded px-1.5 py-1 text-start text-xs"
           onClick={jump}
+          title={node.path}
           type="button"
         >
           <Icon className="text-muted-foreground size-3.5 shrink-0" />
-          <span className="truncate">{label}</span>
-          {field?.aiPrompt === undefined ? null : (
-            <WandSparklesIcon className="text-muted-foreground size-3 shrink-0" />
+          <FieldRowLabel label={field?.label ?? ""} path={node.path} />
+          {field === undefined ? null : (
+            <span className="text-muted-foreground ms-auto flex shrink-0 items-center gap-1">
+              <FieldCapabilityIcons field={field} />
+            </span>
           )}
-          <code className="text-muted-foreground ms-auto shrink-0 text-[10px]">
-            {node.path}
-          </code>
         </button>
       </li>
     );
@@ -2047,28 +2325,89 @@ const OutlineRow = ({
   );
 };
 
+/** Row text for an outline/question entry: the label leads; the mono path is
+ *  secondary (revealed on hover next to it). A field without a label shows
+ *  its path once instead, with a quiet pencil hinting that clicking through
+ *  leads to rename. */
+const FieldRowLabel = ({ label, path }: { label: string; path: string }) => {
+  if (label === "") {
+    return (
+      <>
+        <code className="truncate">{path}</code>
+        <PencilIcon className="text-muted-foreground size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
+      </>
+    );
+  }
+  return (
+    <>
+      <span className="truncate">{label}</span>
+      <code className="text-muted-foreground min-w-0 truncate text-[10px] opacity-0 transition-opacity group-hover:opacity-100">
+        {path}
+      </code>
+    </>
+  );
+};
+
+/** Mini-icons marking what a field can do: registry lookup, AI involvement,
+ *  formula derivation, and a quiet dot for required. */
+const FieldCapabilityIcons = ({ field }: { field: StudioField }) => (
+  <>
+    {field.lookup === undefined ? null : <LandmarkIcon className="size-3" />}
+    {field.aiAdapt ? (
+      <span className="flex items-center gap-0.5">
+        <UserIcon className="size-3" />
+        <WandSparklesIcon className="size-3" />
+      </span>
+    ) : null}
+    {!field.aiAdapt && field.aiPrompt !== undefined ? (
+      <WandSparklesIcon className="size-3" />
+    ) : null}
+    {field.formula === undefined ? null : <SigmaIcon className="size-3" />}
+    {field.required ? (
+      <span aria-hidden="true" className="size-1 rounded-full bg-current" />
+    ) : null}
+  </>
+);
+
 const ScopeHeader = ({
   title,
   subtitle,
   action,
+  onBack,
 }: {
   title: string;
   subtitle?: ReactNode;
   /** Right-aligned control (e.g. the field face's suggest wand). */
   action?: ReactNode;
-}) => (
-  <div className="flex items-center justify-between gap-2 border-b px-4 py-3">
-    <div className="min-w-0">
-      <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
-        {title}
-      </p>
-      {subtitle === undefined ? null : (
-        <div className="text-sm">{subtitle}</div>
+  /** Renders a leading chevron returning to the template overview. */
+  onBack?: () => void;
+}) => {
+  const t = useTranslations();
+  return (
+    <div className="flex items-center justify-between gap-2 border-b px-4 py-3">
+      {onBack === undefined ? null : (
+        <Button
+          aria-label={t("common.goBack")}
+          className="-ms-1.5 shrink-0 self-start"
+          onClick={onBack}
+          size="icon-sm"
+          variant="ghost"
+        >
+          <ChevronLeftIcon />
+        </Button>
       )}
+      <div className="min-w-0 flex-1">
+        <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+          {title}
+        </p>
+        {subtitle === undefined ? null : (
+          <div className="text-sm">{subtitle}</div>
+        )}
+      </div>
+      {action}
     </div>
-    {action}
-  </div>
-);
+  );
+};
 
 /**
  * Field settings face: leads with what the field IS (a blank in the fill
@@ -2132,11 +2471,15 @@ const FieldFace = ({
     }
   };
 
-  let fillMode: "person" | "textAi" | "ai" = "person";
-  if (field.aiAdapt) {
-    fillMode = "textAi";
+  // The four value sources are mutually exclusive (the manifest validator
+  // rejects combinations), so each picker button clears the other three.
+  let valueSource: "person" | "textAi" | "ai" | "formula" = "person";
+  if (field.formula !== undefined) {
+    valueSource = "formula";
+  } else if (field.aiAdapt) {
+    valueSource = "textAi";
   } else if (field.aiPrompt !== undefined) {
-    fillMode = "ai";
+    valueSource = "ai";
   }
 
   return (
@@ -2188,6 +2531,7 @@ const FieldFace = ({
               </Button>
             </div>
           }
+          onBack={() => actions?.deselect()}
           subtitle={
             <FieldPathEditor
               key={field.path}
@@ -2211,44 +2555,89 @@ const FieldFace = ({
           <div className="flex items-center gap-1">
             <Button
               className="flex-1"
-              onClick={() => onUpdate({ aiPrompt: undefined, aiAdapt: false })}
+              onClick={() =>
+                onUpdate({
+                  aiPrompt: undefined,
+                  aiAdapt: false,
+                  formula: undefined,
+                })
+              }
               size="sm"
-              variant={fillMode === "person" ? "secondary" : "ghost"}
+              variant={valueSource === "person" ? "secondary" : "ghost"}
             >
               {t("templates.studio.filledByPerson")}
             </Button>
             <Button
               className="flex-1"
-              onClick={() => onUpdate({ aiPrompt: undefined, aiAdapt: true })}
+              onClick={() =>
+                onUpdate({
+                  aiPrompt: undefined,
+                  aiAdapt: true,
+                  formula: undefined,
+                })
+              }
               size="sm"
-              variant={fillMode === "textAi" ? "secondary" : "ghost"}
+              variant={valueSource === "textAi" ? "secondary" : "ghost"}
             >
               {t("templates.studio.textPlusAi")}
             </Button>
             <Button
               className="flex-1"
               onClick={() =>
-                onUpdate({ aiPrompt: field.aiPrompt ?? "", aiAdapt: false })
+                onUpdate({
+                  aiPrompt: field.aiPrompt ?? "",
+                  aiAdapt: false,
+                  formula: undefined,
+                })
               }
               size="sm"
-              variant={fillMode === "ai" ? "secondary" : "ghost"}
+              variant={valueSource === "ai" ? "secondary" : "ghost"}
             >
               <WandSparklesIcon className="size-3.5" />
               {t("templates.studio.draftedByAi")}
             </Button>
+            <Button
+              className="flex-1"
+              onClick={() =>
+                onUpdate({
+                  formula: field.formula ?? "",
+                  aiPrompt: undefined,
+                  aiAdapt: false,
+                  lookup: undefined,
+                })
+              }
+              size="sm"
+              variant={valueSource === "formula" ? "secondary" : "ghost"}
+            >
+              <SigmaIcon className="size-3.5" />
+              {t("templates.studio.formula")}
+            </Button>
           </div>
-          {fillMode === "textAi" ? (
+          {valueSource === "textAi" ? (
             <p className="text-muted-foreground text-xs leading-relaxed">
               {t("templates.aiAdaptHint")}
             </p>
           ) : null}
-          {fillMode === "ai" ? (
+          {valueSource === "ai" ? (
             <Textarea
               onChange={(e) => onUpdate({ aiPrompt: e.target.value })}
               placeholder={t("templates.studio.aiPromptPlaceholder")}
               rows={3}
               value={field.aiPrompt}
             />
+          ) : null}
+          {valueSource === "formula" ? (
+            <>
+              <Input
+                className="h-8 font-mono text-xs"
+                onChange={(e) => onUpdate({ formula: e.target.value })}
+                placeholder={t("templates.fieldFormulaExpression")}
+                value={field.formula}
+              />
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                {t("templates.fieldFormulaExpressionHint")}
+              </p>
+            </>
           ) : null}
         </div>
       </ScrollArea>
@@ -2485,6 +2874,15 @@ const FieldPreviewControl = ({
   value: string;
   onValueChange: (value: string) => void;
 }) => {
+  // A formula field is derived at fill time; the fill form shows no input.
+  if (field.formula !== undefined) {
+    return (
+      <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
+        <SigmaIcon className="size-3.5 shrink-0" />
+        <code className="min-w-0 truncate">{field.formula || "—"}</code>
+      </p>
+    );
+  }
   if (field.inputType === "textarea") {
     return (
       <Textarea
@@ -2525,21 +2923,15 @@ const FieldPreviewControl = ({
   );
 };
 
+/** Editable name/expression pairs (named conditions). Adding rows is the
+ *  enclosing disclosure's job; an empty list shows the teaching hint. */
 const NameExprList = ({
-  heading,
-  help,
-  icon: Icon,
   items,
   onChange,
-  addLabel,
   emptyLabel,
 }: {
-  heading: string;
-  help: string;
-  icon: LucideIcon;
   items: NameExpr[];
   onChange: (next: NameExpr[]) => void;
-  addLabel: string;
   emptyLabel: string;
 }) => {
   const t = useTranslations();
@@ -2548,16 +2940,15 @@ const NameExprList = ({
       items.map((item, i) => (i === index ? { ...item, ...patch } : item)),
     );
 
+  if (items.length === 0) {
+    return (
+      <p className="text-muted-foreground px-1.5 text-xs leading-relaxed">
+        {emptyLabel}
+      </p>
+    );
+  }
   return (
-    <div className="flex flex-col gap-2 px-4 py-4">
-      <h3 className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
-        <Icon className="size-3.5" />
-        {heading}
-      </h3>
-      <p className="text-muted-foreground text-xs leading-relaxed">{help}</p>
-      {items.length === 0 ? (
-        <p className="text-muted-foreground text-xs">{emptyLabel}</p>
-      ) : null}
+    <div className="flex flex-col gap-2">
       {items.map((item, index) => (
         <div key={index} className="flex flex-col gap-1.5 rounded border p-2">
           <div className="flex items-center gap-1.5">
@@ -2584,15 +2975,6 @@ const NameExprList = ({
           />
         </div>
       ))}
-      <Button
-        className="justify-start gap-2"
-        onClick={() => onChange([...items, { name: "", expression: "" }])}
-        size="sm"
-        variant="outline"
-      >
-        <PlusIcon />
-        {addLabel}
-      </Button>
     </div>
   );
 };
@@ -2717,20 +3099,18 @@ const parseFields = (manifest: unknown): StudioField[] => {
         field.parts = parseEditableParts(raw["parts"]);
         field.format = raw["format"];
       }
+      if (typeof raw["formula"] === "string") {
+        field.formula = raw["formula"];
+      }
       return field;
     });
 
-  // Mirror the server merge: computed fields and namespace parents (a path that
-  // is only a dotted prefix of others) are not fillable inputs. This keeps the
-  // display clean for templates saved before the server fix landed.
-  const computedNames = new Set(
-    parseNameExprs(manifest, "computed").map((c) => c.name),
-  );
+  // Mirror the server merge: namespace parents (a path that is only a dotted
+  // prefix of others) are not fillable inputs. This keeps the display clean
+  // for templates saved before the server fix landed.
   const paths = fields.map((f) => f.path);
   return fields.filter(
-    (f) =>
-      !computedNames.has(f.path) &&
-      !paths.some((p) => p !== f.path && p.startsWith(`${f.path}.`)),
+    (f) => !paths.some((p) => p !== f.path && p.startsWith(`${f.path}.`)),
   );
 };
 
@@ -2745,14 +3125,11 @@ const parseEditableParts = (raw: unknown[]): EditablePart[] =>
     pattern: typeof part["pattern"] === "string" ? part["pattern"] : undefined,
   }));
 
-const parseNameExprs = (
-  manifest: unknown,
-  key: "conditions" | "computed",
-): NameExpr[] => {
-  if (!isRecord(manifest) || !Array.isArray(manifest[key])) {
+const parseConditions = (manifest: unknown): NameExpr[] => {
+  if (!isRecord(manifest) || !Array.isArray(manifest["conditions"])) {
     return [];
   }
-  return manifest[key].filter(isRecord).map((raw) => ({
+  return manifest["conditions"].filter(isRecord).map((raw) => ({
     name: typeof raw["name"] === "string" ? raw["name"] : "",
     expression: typeof raw["expression"] === "string" ? raw["expression"] : "",
   }));
@@ -2770,6 +3147,7 @@ type ManifestField = {
   format?: string;
   optionsFrom?: string;
   lookup?: EditableField["lookup"];
+  formula?: string;
 };
 
 /** One session field as it is persisted: only the settings that are
@@ -2785,6 +3163,14 @@ const studioFieldToManifestField = (f: StudioField): ManifestField => {
   }
   if (f.options.length > 0) {
     field.options = f.options;
+  }
+  // A formula is one of the mutually exclusive value sources; the manifest
+  // validator rejects it next to aiPrompt/aiAdapt/lookup/parts, and a
+  // composite configuration takes precedence (mirrors the wizard's emit).
+  const formula = f.parts === undefined ? (f.formula?.trim() ?? "") : "";
+  if (formula !== "") {
+    field.formula = formula;
+    return field;
   }
   if (f.aiPrompt) {
     field.aiPrompt = f.aiPrompt;
@@ -2809,7 +3195,6 @@ const buildManifest = (
   original: unknown,
   fields: StudioField[],
   conditions: NameExpr[],
-  computed: NameExpr[],
 ) => {
   const version =
     isRecord(original) && typeof original["version"] === "number"
@@ -2819,7 +3204,6 @@ const buildManifest = (
     version,
     fields: fields.filter((f) => f.path).map(studioFieldToManifestField),
     conditions: conditions.filter((c) => c.name && c.expression),
-    computed: computed.filter((c) => c.name && c.expression),
   };
 };
 
@@ -2868,7 +3252,13 @@ const buildRecipeDefinition = (
   const recipeFields = paths.map((path) => {
     const field =
       fields.find((f) => f.path === path) ?? defaultStudioField(path);
-    return studioFieldToManifestField(field);
+    // The recipe schema is a strict FieldMeta subset without formula; strip
+    // it so saving a recipe from a formula field passes boundary validation
+    // (the snapshot keeps the field's label and type, the formula stays
+    // template-local).
+    const { formula: _formula, ...recipeField } =
+      studioFieldToManifestField(field);
+    return recipeField;
   });
   if (loopPath === null) {
     return { fields: recipeFields };

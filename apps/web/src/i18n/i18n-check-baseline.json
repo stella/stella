@@ -792,6 +792,12 @@
     "templates.studio.expressionPlaceholder": [
       "fr"
     ],
+    "templates.studio.formula": [
+      "lv"
+    ],
+    "templates.studio.questions": [
+      "fr"
+    ],
     "templates.studio.scopeCondition": [
       "fr"
     ],
