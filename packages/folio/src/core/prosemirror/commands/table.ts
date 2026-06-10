@@ -8,13 +8,17 @@
 
 import type { EditorState, Transaction } from "prosemirror-state";
 
-import type { BorderPreset } from "../extensions/nodes/TableExtension";
+import type {
+  BorderPreset,
+  TableBorderPreset,
+} from "../extensions/nodes/TableExtension";
 import { singletonManager } from "../schema";
 
 // Re-export types and query helpers from TableExtension
 export type {
   TableContextInfo,
   BorderPreset,
+  TableBorderPreset,
 } from "../extensions/nodes/TableExtension";
 export { getTableContext, isInTable } from "../extensions/nodes/TableExtension";
 
@@ -124,6 +128,13 @@ export function setCellBorder(
   clearOthers?: boolean,
 ): (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean {
   return cmds["setCellBorder"]!(side, spec, clearOthers);
+}
+
+// Whole-table border presets (applied to the table under the caret)
+export function setTableBorderPreset(
+  preset: TableBorderPreset,
+): (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean {
+  return cmds["setTableBorderPreset"]!(preset);
 }
 
 // Borders

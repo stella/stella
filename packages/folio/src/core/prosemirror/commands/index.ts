@@ -89,6 +89,7 @@ export {
   selectColumn,
   mergeCells,
   splitCell,
+  setTableBorderPreset,
   setTableBorders,
   removeTableBorders,
   setAllTableBorders,
@@ -109,7 +110,11 @@ export {
   setTableBorderColor,
   setTableBorderWidth,
 } from "./table";
-export type { TableContextInfo, BorderPreset } from "./table";
+export type {
+  TableContextInfo,
+  BorderPreset,
+  TableBorderPreset,
+} from "./table";
 
 // Page break
 export { insertPageBreak } from "./pageBreak";

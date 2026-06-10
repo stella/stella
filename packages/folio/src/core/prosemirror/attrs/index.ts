@@ -499,6 +499,14 @@ export const readTableAttrs = (
   optionalRecord(attrs, "floating", "table.attrs.floating", issues);
   optionalInsetMap(attrs, "cellMargins", "table.attrs.cellMargins", issues);
   optionalRecord(attrs, "look", "table.attrs.look", issues);
+  optionalBorderMap(attrs, "borders", "table.attrs.borders", issues, [
+    "top",
+    "bottom",
+    "left",
+    "right",
+    "insideH",
+    "insideV",
+  ]);
   optionalRecord(
     attrs,
     "_originalFormatting",
