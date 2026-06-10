@@ -19,11 +19,9 @@ import {
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  EyeIcon,
   LandmarkIcon,
   Loader2Icon,
   PencilIcon,
-  EyeOffIcon,
   PlusIcon,
   RepeatIcon,
   SaveIcon,
@@ -1823,6 +1821,7 @@ function TemplateStudioInspectorView({
   return (
     <div className="bg-background flex h-full flex-1 flex-col overflow-hidden">
       <InspectorTabHeader
+        actions={<StudioSaveAction />}
         label={tab.label}
         onClose={onClose}
         onStartRename={() => setRename({ active: true, value: tab.label })}
@@ -1834,7 +1833,6 @@ function TemplateStudioInspectorView({
           onCancel: () => setRename({ active: false, value: "" }),
         }}
       />
-      <StudioActionRow />
       <FacetBar
         facet={facet}
         facets={STUDIO_FACETS}
@@ -1869,9 +1867,27 @@ function TemplateStudioInspectorView({
       {ready && facet === "fill" && (
         <TemplateFillFacet templateId={templateId} />
       )}
+      {ready && facet === "fields" && <StudioInsertRow />}
     </div>
   );
 }
+
+/** Save lives in the tab's title row; enabled only with unsaved edits. */
+const StudioSaveAction = () => {
+  const t = useTranslations();
+  const actions = useTemplateStudioStore((s) => s.actions);
+  const ui = useTemplateStudioStore((s) => s.ui);
+  const isDirty = useTemplateStudioStore((s) => s.isDirty);
+  if (!actions) {
+    return null;
+  }
+  return (
+    <Button disabled={!isDirty || ui.isSaving} onClick={actions.save} size="xs">
+      <SaveIcon className="size-3.5" />
+      {t("common.save")}
+    </Button>
+  );
+};
 
 // Filling happens in-place as the "Fill" subtab. It targets the *saved*
 // template (the fill endpoint reads from S3). The persisted manifest carries no
@@ -2007,7 +2023,7 @@ const pushFillPreview = (values: Record<string, unknown>) => {
 
 /** Document actions row — rendered in the inspector tab's top area; the page
  *  registers the handlers + UI state in the session store. */
-const StudioActionRow = () => {
+const StudioInsertRow = () => {
   const t = useTranslations();
   const actions = useTemplateStudioStore((s) => s.actions);
   const ui = useTemplateStudioStore((s) => s.ui);
@@ -2054,33 +2070,27 @@ const StudioActionRow = () => {
   return (
     <div
       className={cn(
-        "flex shrink-0 items-center gap-1 border-b px-3",
+        "flex shrink-0 items-center gap-1 border-t px-2",
         TOOLBAR_ROW_HEIGHT,
       )}
     >
-      <span className="text-muted-foreground min-w-0 flex-1 truncate text-xs">
-        {ui.metaLabel}
-      </span>
       <Button
-        aria-label={t("common.preview")}
-        onClick={actions.toggleDirectives}
-        size="icon-sm"
+        className="flex-1 justify-start"
+        onClick={actions.insertField}
+        size="sm"
         variant="ghost"
       >
-        {ui.showDirectives ? <EyeIcon /> : <EyeOffIcon />}
+        <PlusIcon />
+        {t("templates.studio.newField")}
       </Button>
       <Menu>
         <MenuTrigger
           aria-label={t("templates.studio.insert")}
           render={<Button size="icon-sm" variant="ghost" />}
         >
-          <PlusIcon />
+          <ChevronDownIcon />
         </MenuTrigger>
         <MenuPopup align="end">
-          <MenuItem onClick={actions.insertField}>
-            <BracesIcon />
-            {t("templates.studio.scopeField")}
-          </MenuItem>
           {fields.length > 0 && (
             <MenuSub>
               <MenuSubTrigger>
@@ -2156,15 +2166,6 @@ const StudioActionRow = () => {
           </MenuSub>
         </MenuPopup>
       </Menu>
-      <Button
-        aria-label={t("templates.studio.makeField")}
-        disabled={!ui.hasSelection}
-        onClick={actions.makeField}
-        size="icon-sm"
-        variant="ghost"
-      >
-        <BracesIcon />
-      </Button>
       <Button
         disabled={!isDirty || ui.isSaving}
         onClick={actions.save}
