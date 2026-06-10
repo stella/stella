@@ -1,7 +1,11 @@
 import { createElement } from "react";
 
 import MentionExtension from "@tiptap/extension-mention";
-import { mergeAttributes, NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
+import {
+  mergeAttributes,
+  NodeViewWrapper,
+  ReactNodeViewRenderer,
+} from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
 
 import { cn } from "@stll/ui/lib/utils";
@@ -37,7 +41,9 @@ export const TemplateFieldMention = MentionExtension.extend({
   },
 });
 
-export const createTemplateFieldMention = (fields: TemplateFieldMentionOption[]) =>
+export const createTemplateFieldMention = (
+  fields: TemplateFieldMentionOption[],
+) =>
   TemplateFieldMention.configure({
     suggestion: createSuggestion(fields),
     deleteTriggerWithBackspace: true,

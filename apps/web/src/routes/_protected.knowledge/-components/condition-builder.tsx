@@ -1,11 +1,10 @@
 import { PlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import {
-  type ConditionGroup,
-  type ConditionOperator,
-  type ConditionRule,
-  serializeCondition,
+import type {
+  ConditionGroup,
+  ConditionOperator,
+  ConditionRule,
 } from "@stll/template-conditions";
 import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
@@ -143,36 +142,11 @@ const emptyRule = (): ConditionRule => ({
   value: "",
 });
 
-/** A reusable named condition built in the wizard, e.g. NPF = `npf == true`. */
-export type DraftCondition = {
-  id: string;
-  name: string;
-  group: ConditionGroup;
-};
-
 export const emptyGroup = (): ConditionGroup => ({
   kind: "group",
   match: "all",
   children: [emptyRule()],
 });
-
-/**
- * Convert a draft condition into a NamedCondition the manifest stores, or
- * `null` when it has no name or no usable rules (so callers can drop it).
- */
-export const draftToNamedCondition = (
-  draft: DraftCondition,
-): { name: string; expression: string } | null => {
-  const name = draft.name.trim();
-  if (!name) {
-    return null;
-  }
-  const expression = serializeCondition(draft.group);
-  if (!expression) {
-    return null;
-  }
-  return { name, expression };
-};
 
 const inputClass =
   "flex h-9 rounded-md border bg-transparent px-3 py-1 text-sm";
@@ -409,57 +383,5 @@ const RuleValueInput = ({
       placeholder={t("templates.conditionValue")}
       value={stringValue}
     />
-  );
-};
-
-// ── Named conditions list (wizard section) ───────────────
-
-export const NamedConditionsEditor = ({
-  fields,
-  conditions,
-  onChange,
-}: {
-  fields: readonly RuleField[];
-  conditions: DraftCondition[];
-  onChange: (conditions: DraftCondition[]) => void;
-}) => {
-  const t = useTranslations();
-
-  const update = (id: string, patch: Partial<DraftCondition>) =>
-    onChange(conditions.map((c) => (c.id === id ? { ...c, ...patch } : c)));
-
-  return (
-    <div className="flex flex-col gap-4">
-      {conditions.map((condition) => (
-        <div
-          className="flex flex-col gap-2 rounded-lg border p-3"
-          key={condition.id}
-        >
-          <div className="flex items-center gap-2">
-            <Input
-              className="flex-1"
-              onChange={(e) => update(condition.id, { name: e.target.value })}
-              placeholder={t("templates.conditionNamePlaceholder")}
-              value={condition.name}
-            />
-            <Button
-              onClick={() =>
-                onChange(conditions.filter((c) => c.id !== condition.id))
-              }
-              size="icon-xs"
-              type="button"
-              variant="ghost"
-            >
-              <TrashIcon />
-            </Button>
-          </div>
-          <ConditionGroupEditor
-            fields={fields}
-            group={condition.group}
-            onChange={(group) => update(condition.id, { group })}
-          />
-        </div>
-      ))}
-    </div>
   );
 };

@@ -3,6 +3,7 @@ import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
 import { fillTemplate } from "./patch-template";
+import { writeManifest } from "./template-manifest";
 
 // SPA fixture is ~177KB; template filling needs time.
 setDefaultTimeout(15_000);
@@ -382,5 +383,54 @@ describe("fillTemplate — output stays well-formed in every part", () => {
     expect(texts).toContain("first");
     expect(texts).toContain("second");
     expect(texts).not.toContain("{{");
+  });
+});
+
+// ── Boolean condition-field as a {{#if}} target ──────────
+
+describe("fillTemplate — {{#if field_path}} resolves a condition-field rule", () => {
+  const makeConditionDocx = async (): Promise<Buffer> => {
+    const xml = WRAP(
+      [
+        P("Before"),
+        P("{{#if is_company}}"),
+        P("Company clause for {{client.name}}"),
+        P("{{/if}}"),
+        P("After"),
+      ].join(""),
+    );
+    const docx = await makeDocx(xml);
+    // The condition-field carries no marker; its rule is evaluated by name.
+    return await writeManifest(docx, {
+      version: 1,
+      fields: [
+        {
+          path: "is_company",
+          inputType: "boolean",
+          condition: 'client.type == "company"',
+        },
+      ],
+    });
+  };
+
+  test("includes the block when the field's rule is true", async () => {
+    const { buffer } = await fillTemplate(await makeConditionDocx(), {
+      client: { type: "company", name: "ACME" },
+    });
+    const joined = (await extractTexts(buffer)).join(" ");
+    expect(joined).toContain("Company clause for");
+    expect(joined).toContain("ACME");
+    expect(joined).toContain("After");
+    expect(joined).not.toContain("{{#if");
+  });
+
+  test("excludes the block when the field's rule is false", async () => {
+    const { buffer } = await fillTemplate(await makeConditionDocx(), {
+      client: { type: "individual", name: "Jan Novák" },
+    });
+    const joined = (await extractTexts(buffer)).join(" ");
+    expect(joined).toContain("Before");
+    expect(joined).toContain("After");
+    expect(joined).not.toContain("Company clause");
   });
 });

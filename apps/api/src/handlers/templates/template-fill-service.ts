@@ -15,8 +15,13 @@ import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
 import { extractText } from "@/api/handlers/docx/extract-text";
 import { createDispatchLookupResolver } from "@/api/handlers/docx/lookup-fields";
+import { manifestNamedConditions } from "@/api/handlers/docx/manifest-conditions";
 import { applyManifestFillSteps } from "@/api/handlers/docx/manifest-fill-steps";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
+import {
+  type AiConditionDecider,
+  resolveAiConditions,
+} from "@/api/handlers/docx/resolve-ai-conditions";
 import {
   type AiFieldGenerator,
   resolveAiFields,
@@ -113,11 +118,16 @@ export const describeStoredTemplate = async ({
   const manifest = await readManifest(loaded.buffer);
   if (manifest) {
     // Formula fields are derived at fill time, never user-submitted, so they
-    // are reported as computed values rather than fillable fields.
+    // are reported as computed values rather than fillable fields. A boolean
+    // condition-field is likewise derived (a rule, not a question), so it is
+    // reported in `conditions`, not as a fillable field.
     return {
       name: loaded.name,
       fields: manifest.fields
-        .filter((field) => field.formula === undefined)
+        .filter(
+          (field) =>
+            field.formula === undefined && field.condition === undefined,
+        )
         .map((field) => ({
           path: field.path,
           label: field.label ?? null,
@@ -139,7 +149,9 @@ export const describeStoredTemplate = async ({
           parts: field.parts ?? null,
           format: field.format ?? null,
         })),
-      conditions: manifest.conditions.map((c) => ({
+      // Synthesized so each boolean condition-field (name = path) appears here
+      // as a rule rather than a fillable field.
+      conditions: manifestNamedConditions(manifest).map((c) => ({
         name: c.name,
         expression: c.expression,
       })),
@@ -182,6 +194,9 @@ type FillServiceOptions = {
   organizationId: SafeId<"organization">;
   /** Optional model-backed generator for AI-fillable fields (aiPrompt). */
   generateAiValue?: AiFieldGenerator | undefined;
+  /** Optional model-backed decider for AI-decided boolean fields (a boolean
+   *  field with an aiPrompt). */
+  decideAiCondition?: AiConditionDecider | undefined;
   /** Optional model-backed per-occurrence adapter for aiAdapt fields. */
   adaptAiValue?: AiOccurrenceAdapter | undefined;
 };
@@ -209,6 +224,7 @@ export const fillStoredTemplateDocx = async ({
   scopedDb,
   organizationId,
   generateAiValue,
+  decideAiCondition,
   adaptAiValue,
 }: FillServiceOptions): Promise<FilledDocx | { error: string }> => {
   const loaded = await loadTemplate(templateId, scopedDb);
@@ -253,6 +269,13 @@ export const fillStoredTemplateDocx = async ({
       values: record,
       fields: manifest.fields,
       generate: generateAiValue,
+    });
+    // Decide AI-decided boolean conditions (a boolean field with an aiPrompt)
+    // before substitution so its {{#if field_path}} block resolves correctly.
+    record = await resolveAiConditions({
+      values: record,
+      fields: manifest.fields,
+      decide: decideAiCondition,
     });
     // Rewrite each aiAdapt marker occurrence to fit its surrounding text;
     // the stub stays in `record` so uncovered occurrences still get the

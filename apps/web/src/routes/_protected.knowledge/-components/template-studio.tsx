@@ -21,6 +21,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   CircleHelpIcon,
+  CopyIcon,
   LandmarkIcon,
   ListFilterIcon,
   Loader2Icon,
@@ -128,7 +129,6 @@ import { useTemplateNavStore } from "@/routes/_protected.knowledge/-components/t
 import { TemplateStudioChat } from "@/routes/_protected.knowledge/-components/template-studio-chat";
 import {
   defaultStudioField,
-  type NameExpr,
   type OutlineNode,
   type StudioActions,
   type StudioField,
@@ -447,7 +447,6 @@ export const TemplateStudioPage = ({
     init({
       templateId,
       fields: parseFields(manifest),
-      conditions: parseConditions(manifest),
     });
     openView({
       type: TEMPLATE_STUDIO_VIEW,
@@ -1277,12 +1276,12 @@ export const TemplateStudioPage = ({
       // Persist the edited manifest alongside the bytes in one call; the server
       // re-embeds it (avoids a binary re-embed round-trip that Eden would parse
       // as text and corrupt).
-      const { fields, conditions } = useTemplateStudioStore.getState();
+      const { fields } = useTemplateStudioStore.getState();
       const stored = await api
         .templates({ templateId: toSafeId<"template">(templateId) })
         .document.post({
           file,
-          manifest: JSON.stringify(buildManifest(manifest, fields, conditions)),
+          manifest: JSON.stringify(buildManifest(manifest, fields)),
         });
       if (stored.error) {
         stellaToast.add({
@@ -2498,11 +2497,9 @@ function TemplateStudioInspectorView({
   const [facet, setFacet] = useState<StudioFacet>("fields");
   const sessionTemplateId = useTemplateStudioStore((s) => s.templateId);
   const fields = useTemplateStudioStore((s) => s.fields);
-  const conditions = useTemplateStudioStore((s) => s.conditions);
   const outline = useTemplateStudioStore((s) => s.outline);
   const selected = useTemplateStudioStore((s) => s.selected);
   const upsertField = useTemplateStudioStore((s) => s.upsertField);
-  const setConditions = useTemplateStudioStore((s) => s.setConditions);
 
   const queryClient = useQueryClient();
   const activeOrganizationId = protectedRouteApi.useRouteContext({
@@ -2589,11 +2586,9 @@ function TemplateStudioInspectorView({
       )}
       {ready && facet === "fields" && (
         <Inspector
-          conditions={conditions}
           fields={fields}
           name={tab.label}
           outline={outline}
-          onConditionsChange={setConditions}
           onFieldUpdate={upsertField}
           selected={selected}
           templateId={templateId}
@@ -3210,9 +3205,7 @@ type InspectorProps = {
   selected: DirectiveRange | null;
   fields: StudioField[];
   outline: OutlineNode[];
-  conditions: NameExpr[];
   onFieldUpdate: (path: string, patch: Partial<StudioField>) => void;
-  onConditionsChange: (next: NameExpr[]) => void;
 };
 
 const Inspector = ({
@@ -3221,9 +3214,7 @@ const Inspector = ({
   selected,
   fields,
   outline,
-  conditions,
   onFieldUpdate,
-  onConditionsChange,
 }: InspectorProps) => {
   if (selected && selected.kind === "placeholder") {
     const field =
@@ -3239,13 +3230,7 @@ const Inspector = ({
   }
 
   if (selected && (selected.kind === "if" || selected.kind === "elseif")) {
-    return (
-      <ConditionFace
-        conditions={conditions}
-        fields={fields}
-        selected={selected}
-      />
-    );
+    return <ConditionFace fields={fields} selected={selected} />;
   }
 
   if (selected && selected.kind === "clause") {
@@ -3254,12 +3239,13 @@ const Inspector = ({
 
   // Default: whole-template overview. The identity block leads (what this
   // template IS), fields follow (they are what the template is made of);
-  // conditions fold into a disclosure of supporting logic.
-  const questions = fields.filter((f) => f.inputType === "boolean");
+  // conditions fold into a disclosure of supporting logic. Conditions ARE
+  // boolean fields.
+  const booleanFields = fields.filter((f) => f.inputType === "boolean");
   return (
     <ScrollArea className="min-h-0 flex-1">
       <TemplateIdentity
-        conditionCount={conditions.length + questions.length}
+        conditionCount={booleanFields.length}
         fieldCount={fields.length}
         name={name}
         templateId={templateId}
@@ -3267,12 +3253,7 @@ const Inspector = ({
       <Separator />
       <FieldNavigator fields={fields} outline={outline} />
       <Separator />
-      <ConditionsDisclosure
-        conditions={conditions}
-        onConditionsChange={onConditionsChange}
-        outline={outline}
-        questions={questions}
-      />
+      <ConditionsDisclosure fields={fields} outline={outline} />
     </ScrollArea>
   );
 };
@@ -3477,29 +3458,132 @@ const booleanFieldForExpr = (
   return field?.inputType === "boolean" ? field : undefined;
 };
 
+// ── Conditions = boolean fields ──────────────────────────
+
+/** How a boolean field's yes/no value arises. The three are mutually
+ *  exclusive (backend-validated):
+ *   - asked: a plain boolean, answered Yes/No in the fill form (a question).
+ *   - rule:  DERIVED from `condition` (a `@stll/template-conditions` rule).
+ *   - ai:    decided by the model from `aiPrompt`.
+ *  A boolean field is always a reusable condition; this discriminates only
+ *  *how* it resolves. */
+type ConditionSource =
+  | { kind: "asked" }
+  | { kind: "rule"; expr: string }
+  | { kind: "ai"; prompt: string };
+
+const conditionSourceOf = (field: StudioField): ConditionSource => {
+  if (field.condition !== undefined && field.condition.trim() !== "") {
+    return { kind: "rule", expr: field.condition };
+  }
+  if (field.aiPrompt !== undefined && field.aiPrompt.trim() !== "") {
+    return { kind: "ai", prompt: field.aiPrompt };
+  }
+  return { kind: "asked" };
+};
+
+const isBooleanField = (field: StudioField): boolean =>
+  field.inputType === "boolean";
+
+/** One reusable condition the picker can insert: every boolean field (its bare
+ *  path is the gate). Shown in plain language; inserting references it by path
+ *  so editing the source once updates every `{{#if}}` that points at it. */
+type ReusableCondition = {
+  /** The token a marker references: the field path. */
+  ref: string;
+  /** Plain-language reading for the list. */
+  label: string;
+  source: "asked" | "rule" | "ai";
+};
+
+/** Plain-language label for a condition-field: its own label, else the
+ *  humanized rule, else the field path. */
+const conditionFieldLabel = (
+  field: StudioField,
+  fields: readonly StudioField[],
+  operatorWord: (key: OperatorWordKey) => string,
+): string => {
+  if (field.label.trim() !== "") {
+    return field.label;
+  }
+  const source = conditionSourceOf(field);
+  if (source.kind === "rule") {
+    return humanizeConditionExpr(source.expr, fields, operatorWord);
+  }
+  return field.path;
+};
+
+/** Enumerate reusable conditions from the session: every boolean field is a
+ *  condition addressed by its own path. */
+const reusableConditions = (
+  fields: readonly StudioField[],
+  operatorWord: (key: OperatorWordKey) => string,
+): ReusableCondition[] => {
+  const out: ReusableCondition[] = [];
+  for (const field of fields) {
+    if (!isBooleanField(field)) {
+      continue;
+    }
+    const source = conditionSourceOf(field);
+    out.push({
+      ref: field.path,
+      label: conditionFieldLabel(field, fields, operatorWord),
+      source: source.kind,
+    });
+  }
+  return out;
+};
+
+/** Auto-derive a human label for a freshly built condition-field from its
+ *  expression ("Client type is company"), so the reuse picker reads in plain
+ *  language without the author naming it. */
+const labelForConditionExpr = (
+  expr: string,
+  fields: readonly StudioField[],
+  operatorWord: (key: OperatorWordKey) => string,
+): string => {
+  const friendly = humanizeConditionExpr(expr, fields, operatorWord);
+  return friendly.charAt(0).toUpperCase() + friendly.slice(1);
+};
+
+/** Freeze a stable, collision-safe slug `path` for a new condition-field from
+ *  its derived label (or expression). Mirrors the question path freezing. */
+const freezeConditionPath = (
+  seed: string,
+  fields: readonly StudioField[],
+): string => {
+  const base = sanitizeFieldPath(seed) || "condition";
+  return nextFreePath(base, (candidate) =>
+    fields.some((f) => f.path === candidate),
+  );
+};
+
 /**
  * Settings face for a `{{#if}}` / `{{#elseif}}` opener. Teaches the two real
  * ways a condition is expressed, cheapest first:
  *   1. Ask a yes/no question — creates a boolean field and points the block at
  *      its bare name, so the filler sees a Yes/No toggle (zero syntax).
  *   2. Only when a field matches — a visual `field operator value` rule builder.
- *   3. Advanced (collapsed) — the raw expression editor, named-condition chips,
- *      and a jump back to manage named conditions.
+ *   3. Advanced (collapsed) — the raw expression editor.
  */
 const ConditionFace = ({
   selected,
-  conditions,
   fields,
 }: {
   selected: DirectiveRange;
-  conditions: NameExpr[];
   fields: StudioField[];
 }) => {
   const t = useTranslations();
   const actions = useTemplateStudioStore((s) => s.actions);
   const rewrite = (next: string) =>
     actions?.rewriteConditionExpr(next) ?? false;
-  const humanEcho = booleanFieldForExpr(selected.expr, fields)?.label;
+  // A block that already references a boolean condition-field edits the FIELD's
+  // source (asked / rule / AI), so the single field is the source of truth and
+  // every `{{#if path}}` pointing at it follows. Otherwise (a raw expression)
+  // fall back to the builder, which also lets the author repoint the block at a
+  // reusable condition.
+  const conditionField = booleanFieldForExpr(selected.expr, fields);
+  const humanEcho = conditionField?.label;
   return (
     <ScrollArea className="min-h-0 flex-1">
       <ScopeHeader
@@ -3524,15 +3608,161 @@ const ConditionFace = ({
         title={t("templates.studio.scopeCondition")}
       />
       <div className="flex flex-col gap-5 px-4 py-4">
-        <ConditionBuilder
-          conditions={conditions}
-          expr={selected.expr}
-          fields={fields}
-          fromKey={`${selected.from}:${selected.expr}`}
-          onRewrite={rewrite}
-        />
+        {conditionField === undefined ? (
+          <ConditionBuilder
+            expr={selected.expr}
+            fields={fields}
+            fromKey={`${selected.from}:${selected.expr}`}
+            onRewrite={rewrite}
+          />
+        ) : (
+          <ConditionFieldEditor field={conditionField} fields={fields} />
+        )}
       </div>
     </ScrollArea>
+  );
+};
+
+/** Edit a boolean condition-field's SOURCE — how its yes/no value arises —
+ *  writing back to the single field so every `{{#if path}}` that references it
+ *  updates at once. The three sources are mutually exclusive:
+ *   - asked: plain boolean, answered in the fill form (clears condition + AI).
+ *   - rule:  a `condition` expression, DERIVED at fill time.
+ *   - ai:    an `aiPrompt`, decided by the model.
+ *  The label is editable inline; the path is frozen at creation. */
+const ConditionFieldEditor = ({
+  field,
+  fields,
+}: {
+  field: StudioField;
+  fields: StudioField[];
+}) => {
+  const t = useTranslations();
+  const upsertField = useTemplateStudioStore((s) => s.upsertField);
+  const derived = conditionSourceOf(field);
+  const [group, setGroup] = useState<ConditionGroup>(emptyGroup);
+  // Clicking "Rule" with no expression yet keeps the derived source at "asked"
+  // (no `condition` is written until Done), so track the picked tab locally to
+  // reveal the right editor immediately.
+  const [pick, setPick] = useState<ConditionSource["kind"] | null>(null);
+  const sourceKind = pick ?? derived.kind;
+  const ruleFields = toRuleFields(fields);
+
+  const fieldMention = createTemplateFieldMention(
+    fields
+      .filter((f) => f.path !== field.path)
+      .map((f) => ({ id: f.path, label: f.label || f.path })),
+  );
+
+  const setAsked = () => {
+    setPick("asked");
+    upsertField(field.path, { condition: undefined, aiPrompt: undefined });
+  };
+  const setAi = () => {
+    setPick("ai");
+    upsertField(field.path, {
+      condition: undefined,
+      aiPrompt: field.aiPrompt ?? "",
+    });
+  };
+  const applyRule = () => {
+    const expression = serializeCondition(group);
+    if (expression === "") {
+      return;
+    }
+    upsertField(field.path, { condition: expression, aiPrompt: undefined });
+    setGroup(emptyGroup());
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1.5">
+        <Label className="text-sm">{t("common.name")}</Label>
+        <Input
+          className="h-9 text-sm"
+          defaultValue={field.label}
+          key={field.path}
+          onBlur={(e) => {
+            const next = e.currentTarget.value.trim();
+            if (next !== field.label) {
+              upsertField(field.path, { label: next });
+            }
+          }}
+          placeholder={t("templates.studio.conditionLabelPlaceholder")}
+        />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label className="text-sm">
+          {t("templates.studio.conditionSource")}
+        </Label>
+        <div className="flex items-center gap-1">
+          <Button
+            className="flex-1"
+            onClick={setAsked}
+            size="sm"
+            variant={sourceKind === "asked" ? "secondary" : "ghost"}
+          >
+            <MessageCircleQuestionIcon className="size-3.5" />
+            {t("templates.studio.conditionSourceAsked")}
+          </Button>
+          <Button
+            className="flex-1"
+            onClick={() => {
+              setPick("rule");
+              upsertField(field.path, { aiPrompt: undefined });
+            }}
+            size="sm"
+            variant={sourceKind === "rule" ? "secondary" : "ghost"}
+          >
+            <ListFilterIcon className="size-3.5" />
+            {t("templates.studio.conditionSourceRule")}
+          </Button>
+          <Button
+            className="flex-1"
+            onClick={setAi}
+            size="sm"
+            variant={sourceKind === "ai" ? "secondary" : "ghost"}
+          >
+            <WandSparklesIcon className="size-3.5" />
+            {t("templates.studio.conditionSourceAi")}
+          </Button>
+        </div>
+      </div>
+      {sourceKind === "asked" ? (
+        <p className="text-muted-foreground text-xs leading-relaxed">
+          {t("templates.studio.conditionAskQuestionHelp")}
+        </p>
+      ) : null}
+      {sourceKind === "rule" ? (
+        <div className="flex flex-col gap-2">
+          {derived.kind === "rule" && derived.expr.trim() !== "" ? (
+            <p className="text-foreground text-sm">
+              {humanizeConditionExpr(derived.expr, fields, (key) => t(key))}
+            </p>
+          ) : null}
+          <ConditionGroupEditor
+            fields={ruleFields}
+            group={group}
+            onChange={setGroup}
+          />
+          <Button className="self-start" onClick={applyRule} size="sm">
+            {t("common.done")}
+          </Button>
+        </div>
+      ) : null}
+      {sourceKind === "ai" ? (
+        <AIPromptInput
+          mentionExtension={fieldMention}
+          onChange={(value) =>
+            upsertField(field.path, { aiPrompt: value, condition: undefined })
+          }
+          placeholder={t("templates.studio.conditionAiPlaceholder")}
+          value={field.aiPrompt ?? ""}
+          valueFormat="text"
+          variant="minimal"
+        />
+      ) : null}
+    </div>
   );
 };
 
@@ -3546,17 +3776,20 @@ const ConditionFace = ({
 const ConditionBuilder = ({
   expr,
   fields,
-  conditions,
   fromKey,
   onRewrite,
 }: {
   expr: string;
   fields: StudioField[];
-  conditions: NameExpr[];
   fromKey: string;
   onRewrite: (next: string) => boolean;
 }) => (
   <>
+    <ConditionReusePicker
+      currentRef={expr}
+      fields={fields}
+      onRewrite={onRewrite}
+    />
     <ConditionQuestionBuilder
       expr={expr}
       fields={fields}
@@ -3564,14 +3797,90 @@ const ConditionBuilder = ({
       onRewrite={onRewrite}
     />
     <ConditionRuleBuilder fields={fields} onRewrite={onRewrite} />
-    <ConditionAdvanced
-      conditions={conditions}
-      expr={expr}
-      fromKey={fromKey}
-      onRewrite={onRewrite}
-    />
+    <ConditionAdvanced expr={expr} fromKey={fromKey} onRewrite={onRewrite} />
   </>
 );
+
+/** "Reuse a condition" affordance: every existing reusable condition (boolean
+ *  fields), in plain language. Picking one points this block at it by reference
+ *  (`{{#if <ref>}}`), so editing that condition's source once updates every
+ *  block that reuses it. Quiet by convention: a single collapsed row, and
+ *  nothing at all when there is nothing to reuse. */
+const ConditionReusePicker = ({
+  fields,
+  currentRef,
+  onRewrite,
+}: {
+  fields: StudioField[];
+  /** The block's current expression; the matching reusable entry is hidden so
+   *  the list only offers *other* conditions. */
+  currentRef: string;
+  onRewrite: (next: string) => boolean;
+}) => {
+  const t = useTranslations();
+  const [open, setOpen] = useState(false);
+  const current = currentRef.trim();
+  const options = reusableConditions(fields, (key) => t(key)).filter(
+    (c) => c.ref !== current,
+  );
+
+  if (options.length === 0) {
+    return null;
+  }
+
+  if (!open) {
+    return (
+      <section className="flex flex-col gap-2">
+        <h4 className="flex items-center gap-1.5 text-sm font-medium">
+          <CopyIcon className="text-muted-foreground size-4 shrink-0" />
+          {t("templates.studio.conditionReuse")}
+        </h4>
+        <Button
+          className="self-start"
+          onClick={() => setOpen(true)}
+          size="sm"
+          variant="outline"
+        >
+          {t("templates.studio.conditionReusePick")}
+        </Button>
+      </section>
+    );
+  }
+  return (
+    <section className="flex flex-col gap-2">
+      <h4 className="flex items-center gap-1.5 text-sm font-medium">
+        <CopyIcon className="text-muted-foreground size-4 shrink-0" />
+        {t("templates.studio.conditionReuse")}
+      </h4>
+      <ul className="flex flex-col">
+        {options.map((option) => (
+          <li key={option.ref}>
+            <button
+              className="hover:bg-muted flex w-full items-center gap-2 rounded px-1.5 py-1.5 text-start text-sm"
+              onClick={() => {
+                if (!onRewrite(option.ref)) {
+                  stellaToast.add({
+                    type: "error",
+                    title: t("templates.studio.invalidExpression"),
+                  });
+                  return;
+                }
+                setOpen(false);
+              }}
+              title={option.ref}
+              type="button"
+            >
+              <span className="min-w-0 flex-1 truncate">{option.label}</span>
+              <code className="text-muted-foreground shrink-0 text-[10px]">
+                {option.ref}
+              </code>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+};
 
 /** Primary, no-syntax path: a question label becomes a boolean field whose
  *  bare name is the block's condition. The filler answers Yes/No; the block
@@ -3656,16 +3965,28 @@ const ConditionRuleBuilder = ({
   onRewrite: (next: string) => boolean;
 }) => {
   const t = useTranslations();
+  const upsertField = useTemplateStudioStore((s) => s.upsertField);
   const [open, setOpen] = useState(false);
   const [group, setGroup] = useState<ConditionGroup>(emptyGroup);
   const ruleFields = toRuleFields(fields);
 
+  // Building a rule does not point the block at a raw expression; it creates a
+  // reusable boolean condition-field whose value is DERIVED by that rule, then
+  // points the block at the field's path. The field is then in the reuse
+  // picker and edit-once-propagates to every `{{#if path}}` referencing it.
   const apply = () => {
     const expression = serializeCondition(group);
     if (expression === "") {
       return;
     }
-    if (onRewrite(expression)) {
+    const label = labelForConditionExpr(expression, fields, (key) => t(key));
+    const path = freezeConditionPath(label, fields);
+    upsertField(path, {
+      inputType: "boolean",
+      label,
+      condition: expression,
+    });
+    if (onRewrite(path)) {
       setGroup(emptyGroup());
       setOpen(false);
       return;
@@ -3729,23 +4050,18 @@ const ConditionRuleBuilder = ({
 };
 
 /** Power-user / reference path, collapsed by default: the raw expression
- *  editor, one-click chips for the manifest's named conditions, and a jump
- *  back to the overview to manage those names. */
+ *  editor for the block opener. */
 const ConditionAdvanced = ({
   expr,
   fromKey,
-  conditions,
   onRewrite,
 }: {
   expr: string;
   fromKey: string;
-  conditions: NameExpr[];
   onRewrite: (next: string) => boolean;
 }) => {
   const t = useTranslations();
-  const actions = useTemplateStudioStore((s) => s.actions);
   const [open, setOpen] = useState(false);
-  const named = conditions.filter((c) => c.name !== "");
   return (
     <section className="border-t pt-3">
       <button
@@ -3770,32 +4086,6 @@ const ConditionAdvanced = ({
             key={fromKey}
             onRewrite={onRewrite}
           />
-          {named.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {named.map((c) => (
-                <Button
-                  className="h-6 px-2 text-xs"
-                  key={c.name}
-                  onClick={() => {
-                    onRewrite(c.name);
-                  }}
-                  size="sm"
-                  title={c.expression}
-                  variant="outline"
-                >
-                  {c.name}
-                </Button>
-              ))}
-            </div>
-          )}
-          <Button
-            className="text-muted-foreground self-start"
-            onClick={() => actions?.deselect()}
-            size="sm"
-            variant="ghost"
-          >
-            {t("templates.studio.manageNamedConditions")}
-          </Button>
         </div>
       )}
     </section>
@@ -3932,97 +4222,141 @@ const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
   );
 };
 
-/** Collapsed "Conditions · N" row on the template overview: expands to the
- *  template's yes/no questions (boolean fields) and the named-condition
- *  editor; the ghost plus adds a named condition right away. */
+/** First `{{#if}}` / `{{#elseif}}` opener position whose expression references
+ *  a given condition by name/path (bare reference or inside a rule). Lets a
+ *  condition-field — which has no `{{placeholder}}` marker — still jump to
+ *  where it gates the document. */
+const outlineConditionFirstPositions = (
+  nodes: OutlineNode[],
+): Map<string, number> => {
+  const positions = new Map<string, number>();
+  const referencedPaths = (expr: string): string[] => {
+    const trimmed = expr.trim();
+    if (trimmed === "") {
+      return [];
+    }
+    if (isFieldPath(trimmed)) {
+      return [trimmed];
+    }
+    // A rule references its left-hand field paths; match whole-token paths so
+    // `client_type` does not match `client_type_2`.
+    return [...trimmed.matchAll(/[\p{L}_][\p{L}\p{N}_.]*/gu)].map((m) => m[0]);
+  };
+  const walk = (list: OutlineNode[]) => {
+    for (const node of list) {
+      if (
+        node.type === "group" &&
+        (node.kind === "if" || node.kind === "elseif")
+      ) {
+        for (const ref of referencedPaths(node.expr)) {
+          if (!positions.has(ref)) {
+            positions.set(ref, node.from);
+          }
+        }
+      }
+      if (node.type === "group") {
+        walk(node.children);
+      }
+    }
+  };
+  walk(nodes);
+  return positions;
+};
+
+/** Collapsed "Conditions · N" row on the template overview. Conditions ARE
+ *  boolean fields: every boolean field is listed here (its source — asked /
+ *  rule / AI — shown as an icon). New conditions are authored inline in the
+ *  document or in a field's "Show only if…", never as standalone entries. */
 const ConditionsDisclosure = ({
-  conditions,
-  onConditionsChange,
   outline,
-  questions,
+  fields,
 }: {
-  conditions: NameExpr[];
-  onConditionsChange: (next: NameExpr[]) => void;
   outline: OutlineNode[];
-  questions: StudioField[];
+  fields: StudioField[];
 }) => {
   const t = useTranslations();
   const [open, setOpen] = useState(false);
-  const count = conditions.length + questions.length;
-
-  const addCondition = () => {
-    onConditionsChange([...conditions, { name: "", expression: "" }]);
-    setOpen(true);
-  };
+  const booleanFields = fields.filter(isBooleanField);
+  const count = booleanFields.length;
 
   return (
     <div className="px-4 py-3">
-      <div className="flex items-center">
-        <button
-          aria-expanded={open}
-          className="hover:bg-muted flex min-w-0 flex-1 items-center gap-1.5 rounded px-1.5 py-1 text-start text-xs"
-          onClick={() => setOpen((v) => !v)}
-          type="button"
-        >
-          {open ? (
-            <ChevronDownIcon className="text-muted-foreground size-3.5 shrink-0" />
-          ) : (
-            <ChevronRightIcon className="text-muted-foreground size-3.5 shrink-0" />
-          )}
-          <span className="text-muted-foreground font-medium">
-            {t("templates.conditionsTitle")} · {count}
-          </span>
-        </button>
-        <Button
-          aria-label={t("templates.addCondition")}
-          onClick={addCondition}
-          size="icon-sm"
-          variant="ghost"
-        >
-          <PlusIcon />
-        </Button>
-      </div>
+      <button
+        aria-expanded={open}
+        className="hover:bg-muted flex min-w-0 flex-1 items-center gap-1.5 rounded px-1.5 py-1 text-start text-xs"
+        onClick={() => setOpen((v) => !v)}
+        type="button"
+      >
+        {open ? (
+          <ChevronDownIcon className="text-muted-foreground size-3.5 shrink-0" />
+        ) : (
+          <ChevronRightIcon className="text-muted-foreground size-3.5 shrink-0" />
+        )}
+        <span className="text-muted-foreground font-medium">
+          {t("templates.conditionsTitle")} · {count}
+        </span>
+      </button>
       {open && (
         <div className="mt-1 flex flex-col gap-2">
-          {questions.length > 0 && (
-            <div className="flex flex-col">
-              <h4 className="text-muted-foreground px-1.5 py-1 text-[11px] font-medium">
-                {t("templates.studio.questions")}
-              </h4>
-              <ul className="flex flex-col">
-                {questions.map((field) => (
-                  <QuestionRow
-                    field={field}
-                    key={field.path}
-                    outline={outline}
-                  />
-                ))}
-              </ul>
-            </div>
+          {count === 0 ? (
+            <p className="text-muted-foreground px-1.5 text-xs leading-relaxed">
+              {t("templates.studio.conditionsSectionHelp")}
+            </p>
+          ) : (
+            <ul className="flex flex-col">
+              {booleanFields.map((field) => (
+                <ConditionRow
+                  field={field}
+                  fields={fields}
+                  key={field.path}
+                  outline={outline}
+                />
+              ))}
+            </ul>
           )}
-          <NameExprList
-            emptyLabel={t("templates.studio.conditionsSectionHelp")}
-            items={conditions}
-            onChange={onConditionsChange}
-          />
         </div>
       )}
     </div>
   );
 };
 
-/** A yes/no field listed among the conditions: it is a question in the fill
- *  form, but in the document it exists to switch blocks on and off. */
-const QuestionRow = ({
+/** Source-marking icon for a condition-field: a question mark when asked, a
+ *  filter when ruled, a wand when AI decides. */
+const ConditionSourceIcon = ({ source }: { source: ConditionSource }) => {
+  if (source.kind === "rule") {
+    return (
+      <ListFilterIcon className="text-muted-foreground size-3.5 shrink-0" />
+    );
+  }
+  if (source.kind === "ai") {
+    return (
+      <WandSparklesIcon className="text-muted-foreground size-3.5 shrink-0" />
+    );
+  }
+  const ToggleIcon = VALUE_TYPE_META.boolean.icon;
+  return <ToggleIcon className="text-muted-foreground size-3.5 shrink-0" />;
+};
+
+/** A boolean field listed as a condition. Asked-source fields are also a
+ *  question in the fill form; rule/AI fields are derived. Clicking jumps to
+ *  where it gates the document (its placeholder if asked-and-placed, else its
+ *  first `{{#if}}` reference). */
+const ConditionRow = ({
   field,
+  fields,
   outline,
 }: {
   field: StudioField;
+  fields: StudioField[];
   outline: OutlineNode[];
 }) => {
+  const t = useTranslations();
   const actions = useTemplateStudioStore((s) => s.actions);
-  const from = outlineFieldFirstPositions(outline).get(field.path) ?? -1;
-  const ToggleIcon = VALUE_TYPE_META.boolean.icon;
+  const source = conditionSourceOf(field);
+  const placed = outlineFieldFirstPositions(outline).get(field.path);
+  const gate = outlineConditionFirstPositions(outline).get(field.path);
+  const from = placed ?? gate ?? -1;
+  const label = conditionFieldLabel(field, fields, (key) => t(key));
   return (
     <li>
       <button
@@ -4035,8 +4369,8 @@ const QuestionRow = ({
         title={field.path}
         type="button"
       >
-        <ToggleIcon className="text-muted-foreground size-3.5 shrink-0" />
-        <FieldRowLabel label={field.label} path={field.path} />
+        <ConditionSourceIcon source={source} />
+        <FieldRowLabel label={label} path={field.path} />
       </button>
     </li>
   );
@@ -4545,7 +4879,6 @@ const FieldConditionSection = ({
 }) => {
   const t = useTranslations();
   const actions = useTemplateStudioStore((s) => s.actions);
-  const conditions = useTemplateStudioStore((s) => s.conditions);
   const rewrite = (next: string) =>
     actions?.rewriteFieldConditionExpr(field.path, next) ?? false;
 
@@ -4586,7 +4919,6 @@ const FieldConditionSection = ({
         <p className="text-foreground text-sm">{friendly}</p>
       </div>
       <ConditionBuilder
-        conditions={conditions}
         expr={condition.expr}
         fields={fields}
         fromKey={`${field.path}:${condition.expr}`}
@@ -5258,62 +5590,6 @@ const FieldPreviewControl = ({
   );
 };
 
-/** Editable name/expression pairs (named conditions). Adding rows is the
- *  enclosing disclosure's job; an empty list shows the teaching hint. */
-const NameExprList = ({
-  items,
-  onChange,
-  emptyLabel,
-}: {
-  items: NameExpr[];
-  onChange: (next: NameExpr[]) => void;
-  emptyLabel: string;
-}) => {
-  const t = useTranslations();
-  const update = (index: number, patch: Partial<NameExpr>) =>
-    onChange(
-      items.map((item, i) => (i === index ? { ...item, ...patch } : item)),
-    );
-
-  if (items.length === 0) {
-    return (
-      <p className="text-muted-foreground px-1.5 text-xs leading-relaxed">
-        {emptyLabel}
-      </p>
-    );
-  }
-  return (
-    <div className="flex flex-col gap-2">
-      {items.map((item, index) => (
-        <div key={index} className="flex flex-col gap-1.5 rounded border p-2">
-          <div className="flex items-center gap-1.5">
-            <Input
-              className="h-8"
-              onChange={(e) => update(index, { name: e.target.value })}
-              placeholder={t("templates.studio.namePlaceholder")}
-              value={item.name}
-            />
-            <Button
-              aria-label={t("common.remove")}
-              onClick={() => onChange(items.filter((_, i) => i !== index))}
-              size="sm"
-              variant="ghost"
-            >
-              <Trash2Icon />
-            </Button>
-          </div>
-          <Input
-            className="h-8 font-mono text-xs"
-            onChange={(e) => update(index, { expression: e.target.value })}
-            placeholder={t("templates.studio.expressionPlaceholder")}
-            value={item.expression}
-          />
-        </div>
-      ))}
-    </div>
-  );
-};
-
 // ── Fit-to-width ─────────────────────────────────────────
 
 // Letter width at 96 DPI (816px); a touch wider than A4 so either page size
@@ -5451,6 +5727,11 @@ const parseFields = (manifest: unknown): StudioField[] => {
       if (typeof raw["formula"] === "string") {
         field.formula = raw["formula"];
       }
+      // A boolean field's value rule: derived by this expression rather than
+      // asked. Only meaningful on boolean fields (a condition-field).
+      if (typeof raw["condition"] === "string" && inputType === "boolean") {
+        field.condition = raw["condition"];
+      }
       if (typeof raw["hint"] === "string") {
         field.hint = raw["hint"];
       }
@@ -5509,16 +5790,6 @@ const parseEditableLookupFormats = (raw: unknown): EditableLookupFormat[] => {
   return formats;
 };
 
-const parseConditions = (manifest: unknown): NameExpr[] => {
-  if (!isRecord(manifest) || !Array.isArray(manifest["conditions"])) {
-    return [];
-  }
-  return manifest["conditions"].filter(isRecord).map((raw) => ({
-    name: typeof raw["name"] === "string" ? raw["name"] : "",
-    expression: typeof raw["expression"] === "string" ? raw["expression"] : "",
-  }));
-};
-
 type ManifestField = {
   path: string;
   inputType: EditableField["inputType"];
@@ -5532,6 +5803,7 @@ type ManifestField = {
   optionsFrom?: string;
   lookup?: EditableField["lookup"];
   formula?: string;
+  condition?: string;
   hint?: string;
   dateFormat?: EditableField["dateFormat"];
 };
@@ -5564,6 +5836,14 @@ const studioFieldToManifestField = (f: StudioField): ManifestField => {
     field.formula = formula;
     return field;
   }
+  // A boolean condition-field DERIVED by rule: the `condition` expression is
+  // mutually exclusive with the other value sources (backend-validated).
+  const condition =
+    f.inputType === "boolean" ? (f.condition?.trim() ?? "") : "";
+  if (condition !== "") {
+    field.condition = condition;
+    return field;
+  }
   if (f.aiPrompt) {
     field.aiPrompt = f.aiPrompt;
   }
@@ -5589,11 +5869,7 @@ const studioFieldToManifestField = (f: StudioField): ManifestField => {
   return field;
 };
 
-const buildManifest = (
-  original: unknown,
-  fields: StudioField[],
-  conditions: NameExpr[],
-) => {
+const buildManifest = (original: unknown, fields: StudioField[]) => {
   const version =
     isRecord(original) && typeof original["version"] === "number"
       ? original["version"]
@@ -5601,7 +5877,6 @@ const buildManifest = (
   return {
     version,
     fields: fields.filter((f) => f.path).map(studioFieldToManifestField),
-    conditions: conditions.filter((c) => c.name && c.expression),
   };
 };
 

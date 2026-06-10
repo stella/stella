@@ -187,7 +187,6 @@ describe("manifest aiAdapt round-trip", () => {
     const withManifest = await writeManifest(docx, {
       version: 1,
       fields: [lawField, { path: "buyer" }],
-      conditions: [],
     });
     const manifest = await readManifest(withManifest);
     expect(manifest?.fields).toEqual([

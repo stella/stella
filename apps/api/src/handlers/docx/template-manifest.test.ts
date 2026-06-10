@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import type { NamedCondition } from "@stll/template-conditions";
+
 import {
   MANIFEST_NS,
   mergeManifestWithDiscovery,
@@ -8,11 +10,7 @@ import {
   stripManifest,
   writeManifest,
 } from "./template-manifest";
-import type {
-  DiscoveredTemplate,
-  NamedCondition,
-  TemplateManifest,
-} from "./types";
+import type { DiscoveredTemplate, TemplateManifest } from "./types";
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -79,17 +77,6 @@ const sampleManifest: TemplateManifest = {
       },
     },
   ],
-  conditions: [
-    {
-      name: "HasNDA",
-      expression: 'contractType == "NDA"',
-      label: "NDA selected",
-    },
-    {
-      name: "IsLongTerm",
-      expression: "duration > 12",
-    },
-  ],
 };
 
 // ── readManifest ─────────────────────────────────────────
@@ -109,7 +96,6 @@ describe("readManifest", () => {
     expect(result).not.toBeNull();
     expect(result?.version).toBe(1);
     expect(result?.fields).toHaveLength(4);
-    expect(result?.conditions).toHaveLength(2);
   });
 
   test("parses field metadata correctly", async () => {
@@ -151,19 +137,24 @@ describe("readManifest", () => {
     });
   });
 
-  test("parses named conditions correctly", async () => {
+  test("round-trips a boolean condition-field's rule", async () => {
     const docx = await createMinimalDocx();
-    const withManifest = await writeManifest(docx, sampleManifest);
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "is_company",
+          inputType: "boolean",
+          condition: 'client_type == "company"',
+        },
+      ],
+    };
+    const withManifest = await writeManifest(docx, manifest);
     const result = await readManifest(withManifest);
 
-    const ndaCond = result?.conditions.find((c) => c.name === "HasNDA");
-    expect(ndaCond).toBeDefined();
-    expect(ndaCond?.expression).toBe('contractType == "NDA"');
-    expect(ndaCond?.label).toBe("NDA selected");
-
-    const longTerm = result?.conditions.find((c) => c.name === "IsLongTerm");
-    expect(longTerm?.expression).toBe("duration > 12");
-    expect(longTerm?.label).toBeUndefined();
+    const field = result?.fields.find((f) => f.path === "is_company");
+    expect(field?.inputType).toBe("boolean");
+    expect(field?.condition).toBe('client_type == "company"');
   });
 
   test("preserves empty-string labels", async () => {
@@ -171,13 +162,11 @@ describe("readManifest", () => {
     const manifest: TemplateManifest = {
       version: 1,
       fields: [{ path: "field", label: "" }],
-      conditions: [{ name: "cond", expression: "x", label: "" }],
     };
     const withManifest = await writeManifest(docx, manifest);
     const result = await readManifest(withManifest);
 
     expect(result?.fields[0]?.label).toBe("");
-    expect(result?.conditions[0]?.label).toBe("");
   });
 
   test("falls back to default version for non-numeric attribute", async () => {
@@ -213,7 +202,6 @@ describe("readManifest", () => {
           validation: { pattern: "" },
         },
       ],
-      conditions: [],
     };
     const withManifest = await writeManifest(docx, manifest);
     const result = await readManifest(withManifest);
@@ -319,7 +307,6 @@ describe("writeManifest", () => {
     const updatedManifest: TemplateManifest = {
       version: 1,
       fields: [{ path: "newField", label: "New Field" }],
-      conditions: [],
     };
     const v2 = await writeManifest(v1, updatedManifest);
 
@@ -342,14 +329,12 @@ describe("writeManifest", () => {
     const empty: TemplateManifest = {
       version: 1,
       fields: [],
-      conditions: [],
     };
     const withManifest = await writeManifest(docx, empty);
 
     const result = await readManifest(withManifest);
     expect(result).not.toBeNull();
     expect(result?.fields).toHaveLength(0);
-    expect(result?.conditions).toHaveLength(0);
   });
 
   test("escapes special XML characters", async () => {
@@ -362,7 +347,6 @@ describe("writeManifest", () => {
           label: 'Label with "quotes" & <brackets>',
         },
       ],
-      conditions: [],
     };
     const withManifest = await writeManifest(docx, manifest);
 
@@ -383,7 +367,6 @@ describe("writeManifest", () => {
           },
         },
       ],
-      conditions: [],
     };
     const withManifest = await writeManifest(docx, manifest);
 
@@ -520,7 +503,6 @@ describe("mergeManifestWithDiscovery", () => {
           inputType: "date",
         },
       ],
-      conditions: [],
     };
 
     const resolved = mergeManifestWithDiscovery(manifest, baseDiscovery);
@@ -547,7 +529,6 @@ describe("mergeManifestWithDiscovery", () => {
           inputType: "text",
         },
       ],
-      conditions: [],
     };
 
     const resolved = mergeManifestWithDiscovery(manifest, baseDiscovery);
@@ -573,7 +554,6 @@ describe("mergeManifestWithDiscovery", () => {
         { path: "rent_annual", formula: "rent * 12" },
         { path: "manifest_only", formula: "rent * 24" },
       ],
-      conditions: [],
     };
     const resolved = mergeManifestWithDiscovery(manifest, discovery);
     const discoveredField = resolved.find((f) => f.path === "rent_annual");
@@ -618,7 +598,6 @@ describe("mergeManifestWithDiscovery", () => {
           },
         },
       ],
-      conditions: [],
     };
     const discovery: DiscoveredTemplate = {
       placeholders: [],
@@ -644,7 +623,6 @@ describe("mergeManifestWithDiscovery", () => {
           label: "Client Name",
         },
       ],
-      conditions: [],
     };
 
     const resolved = mergeManifestWithDiscovery(manifest, baseDiscovery);
@@ -709,7 +687,6 @@ describe("mergeManifestWithDiscovery", () => {
           required: true,
         },
       ],
-      conditions: [],
     };
 
     const resolved = mergeManifestWithDiscovery(manifest, discovery);
@@ -743,7 +720,6 @@ describe("mergeManifestWithDiscovery", () => {
     const manifest: TemplateManifest = {
       version: 1,
       fields: [{ path: "lawyers.email", label: "Email", inputType: "text" }],
-      conditions: [],
     };
 
     const resolved = mergeManifestWithDiscovery(manifest, discovery);
@@ -757,7 +733,6 @@ describe("mergeManifestWithDiscovery", () => {
     const manifest: TemplateManifest = {
       version: 1,
       fields: [{ path: "clientName", label: "" }],
-      conditions: [],
     };
 
     const resolved = mergeManifestWithDiscovery(manifest, baseDiscovery);
@@ -777,7 +752,6 @@ describe("mergeManifestWithDiscovery", () => {
           options: ["100", "200", "500"],
         },
       ],
-      conditions: [],
     };
 
     const resolved = mergeManifestWithDiscovery(manifest, baseDiscovery);
@@ -923,7 +897,6 @@ describe("round-trip", () => {
     const readBack = await readManifest(withManifest);
     expect(readBack?.version).toBe(1);
     expect(readBack?.fields).toHaveLength(4);
-    expect(readBack?.conditions).toHaveLength(2);
 
     // Strip
     const stripped = await stripManifest(withManifest);
@@ -950,7 +923,6 @@ describe("round-trip", () => {
           format: "{{position}} {{name}}",
         },
       ],
-      conditions: [],
     };
 
     const docx = await createMinimalDocx();
@@ -981,7 +953,6 @@ describe("round-trip", () => {
           optionsFrom: "parties.name",
         },
       ],
-      conditions: [],
     };
 
     const docx = await createMinimalDocx();
@@ -1005,7 +976,6 @@ describe("round-trip", () => {
         { path: "lead_party", inputType: "select", optionsFrom: "parties" },
         { path: "manifest_only", optionsFrom: "parties" },
       ],
-      conditions: [],
     };
     const discovered: DiscoveredTemplate = {
       placeholders: [{ name: "lead_party", count: 1 }],
@@ -1044,7 +1014,6 @@ describe("round-trip", () => {
           },
         },
       ],
-      conditions: [],
     };
 
     const docx = await createMinimalDocx();
@@ -1097,7 +1066,6 @@ describe("round-trip", () => {
           },
         },
       ],
-      conditions: [],
     };
 
     const docx = await createMinimalDocx();
@@ -1148,7 +1116,6 @@ describe("round-trip", () => {
           },
         },
       ],
-      conditions: [],
     };
 
     const docx = await createMinimalDocx();
@@ -1195,7 +1162,6 @@ describe("round-trip", () => {
         },
         { path: "valid_until", inputType: "date" },
       ],
-      conditions: [],
     };
 
     const docx = await createMinimalDocx();
@@ -1234,7 +1200,6 @@ describe("round-trip", () => {
         },
         { path: "company.name" },
       ],
-      conditions: [],
     };
 
     const docx = await createMinimalDocx();
@@ -1274,7 +1239,6 @@ describe("round-trip", () => {
           dateFormat: { locale: "de", style: "medium" },
         },
       ],
-      conditions: [],
     };
     const discovered: DiscoveredTemplate = {
       placeholders: [{ name: "signature_date", count: 1 }],
@@ -1311,7 +1275,6 @@ describe("round-trip", () => {
           },
         },
       ],
-      conditions: [],
     };
     const discovered: DiscoveredTemplate = {
       placeholders: [{ name: "buyer_krs", count: 1 }],
@@ -1342,7 +1305,6 @@ describe("round-trip", () => {
           format: "{{name}}",
         },
       ],
-      conditions: [],
     };
     const discovered: DiscoveredTemplate = {
       placeholders: [{ name: "lawyer", count: 1 }],
@@ -1363,7 +1325,6 @@ describe("round-trip", () => {
     const newManifest: TemplateManifest = {
       version: 1,
       fields: [{ path: "fresh" }],
-      conditions: [],
     };
     const v2 = await writeManifest(stripped, newManifest);
 

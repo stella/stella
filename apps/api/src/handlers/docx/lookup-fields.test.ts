@@ -640,7 +640,6 @@ describe("named-format lookup — end-to-end fill", () => {
   const manifest: TemplateManifest = {
     version: 1,
     fields: [companyField],
-    conditions: [],
   };
   const DEFAULT_RENDER = "Żabka Polska sp. z o.o.";
   const FULL_RENDER = "Żabka Polska sp. z o.o., seat in Poznań";

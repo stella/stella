@@ -17,8 +17,6 @@ export type StudioField = EditableField & {
   /** Person fills a stub; AI rewords it per occurrence to fit the context. */
   aiAdapt: boolean;
 };
-export type NameExpr = { name: string; expression: string };
-
 export const defaultStudioField = (path: string): StudioField => ({
   path,
   kind: "string",
@@ -33,7 +31,6 @@ export const defaultStudioField = (path: string): StudioField => ({
 type TemplateStudioSession = {
   templateId: string;
   fields: StudioField[];
-  conditions: NameExpr[];
 };
 
 /** What the model proposes for a single field's configuration. */
@@ -148,7 +145,6 @@ type TemplateStudioState = {
   /** Null until a template page mounts and seeds the session. */
   templateId: string | null;
   fields: StudioField[];
-  conditions: NameExpr[];
   /** The directive the document caret currently sits in, or null. */
   selected: DirectiveRange | null;
   /** Unsaved manifest or document edits since the last load/save. */
@@ -163,7 +159,6 @@ type TemplateStudioState = {
   upsertField: (path: string, patch: Partial<StudioField>) => void;
   removeField: (path: string) => void;
   renameField: (oldPath: string, newPath: string) => void;
-  setConditions: (conditions: NameExpr[]) => void;
   /** Document structure tree, rebuilt by the editor on every scan. */
   outline: OutlineNode[];
   setOutline: (outline: OutlineNode[]) => void;
@@ -179,7 +174,6 @@ type TemplateStudioState = {
 export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
   templateId: null,
   fields: [],
-  conditions: [],
   outline: [],
   setOutline: (outline) => set({ outline }),
   selected: null,
@@ -192,7 +186,6 @@ export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
     set({
       templateId: session.templateId,
       fields: session.fields,
-      conditions: session.conditions,
       selected: null,
       isDirty: false,
       pendingMirrorRequests: [],
@@ -203,7 +196,6 @@ export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
         ? {
             templateId: null,
             fields: [],
-            conditions: [],
             selected: null,
             isDirty: false,
             actions: null,
@@ -237,7 +229,6 @@ export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
       ),
       isDirty: true,
     })),
-  setConditions: (conditions) => set({ conditions, isDirty: true }),
   setSelected: (selected) => set({ selected }),
   markDirty: () => set({ isDirty: true }),
   markSaved: () => set({ isDirty: false }),

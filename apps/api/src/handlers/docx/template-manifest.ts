@@ -1,8 +1,8 @@
 /**
  * Custom XML Manifest for DOCX templates.
  *
- * Stores field metadata (labels, input types, validation) and
- * named conditions inside the DOCX as a Custom XML Part
+ * Stores field metadata (labels, input types, validation)
+ * inside the DOCX as a Custom XML Part
  * (`customXml/item1.xml`) — standard OOXML mechanism, ignored
  * by Word, self-contained in one file.
  *
@@ -29,7 +29,6 @@ import type {
   FieldValidation,
   InputType,
   LookupRegistry,
-  NamedCondition,
   PartInputType,
   ResolvedField,
   TemplateManifest,
@@ -167,6 +166,9 @@ const buildFieldXml = (field: FieldMeta): string => {
   if (field.formula !== undefined) {
     attrs.push(`formula="${escapeXml(field.formula)}"`);
   }
+  if (field.condition !== undefined) {
+    attrs.push(`condition="${escapeXml(field.condition)}"`);
+  }
 
   const children: string[] = [];
 
@@ -214,27 +216,14 @@ const buildFieldXml = (field: FieldMeta): string => {
   return `<st:field ${attrs.join(" ")}>${children.join("")}</st:field>`;
 };
 
-const buildConditionXml = (condition: NamedCondition): string => {
-  const attrs: string[] = [
-    `name="${escapeXml(condition.name)}"`,
-    `expression="${escapeXml(condition.expression)}"`,
-  ];
-  if (condition.label !== undefined) {
-    attrs.push(`label="${escapeXml(condition.label)}"`);
-  }
-  return `<st:condition ${attrs.join(" ")}/>`;
-};
-
 const buildManifestXml = (manifest: TemplateManifest): string => {
   const fields = manifest.fields.map(buildFieldXml).join("");
-  const conditions = manifest.conditions.map(buildConditionXml).join("");
 
   return [
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
     `<st:template xmlns:st="${MANIFEST_NS}"`,
     ` version="${manifest.version}">`,
     fields ? `<st:fields>${fields}</st:fields>` : "",
-    conditions ? `<st:conditions>${conditions}</st:conditions>` : "",
     "</st:template>",
   ].join("");
 };
@@ -483,19 +472,22 @@ const parseFieldMeta = (el: slimdom.Element): FieldMeta => {
     field.formula = formula;
   }
 
-  return field;
-};
-
-const parseCondition = (el: slimdom.Element): NamedCondition => {
-  const name = el.getAttribute("name") ?? "";
-  const expression = el.getAttribute("expression") ?? "";
-  const label = el.getAttribute("label") ?? undefined;
-
-  const condition: NamedCondition = { name, expression };
-  if (label !== undefined) {
-    condition.label = label;
+  // A condition field is a boolean derived by rule; like a formula it cannot
+  // coexist with another value source. A hand-edited condition on a field that
+  // already has one is dropped so the isFieldMeta invariant holds downstream.
+  const condition = el.getAttribute("condition");
+  if (
+    condition !== null &&
+    field.formula === undefined &&
+    field.aiPrompt === undefined &&
+    field.aiAdapt === undefined &&
+    field.lookup === undefined &&
+    field.parts === undefined
+  ) {
+    field.condition = condition;
   }
-  return condition;
+
+  return field;
 };
 
 const parseManifestXml = (xml: string): TemplateManifest | null => {
@@ -524,7 +516,6 @@ const parseManifestXml = (xml: string): TemplateManifest | null => {
   const version = Number.isFinite(parsed) ? parsed : CURRENT_VERSION;
 
   const fields: FieldMeta[] = [];
-  const conditions: NamedCondition[] = [];
 
   const fieldsEl = getFirstElementChild(root, "fields");
   if (fieldsEl) {
@@ -534,15 +525,7 @@ const parseManifestXml = (xml: string): TemplateManifest | null => {
     }
   }
 
-  const conditionsEl = getFirstElementChild(root, "conditions");
-  if (conditionsEl) {
-    const condEls = getElementChildren(conditionsEl, "condition");
-    for (const c of condEls) {
-      conditions.push(parseCondition(c));
-    }
-  }
-
-  return { version, fields, conditions };
+  return { version, fields };
 };
 
 // ── Public API ───────────────────────────────────────────
@@ -751,6 +734,7 @@ export const mergeManifestWithDiscovery = (
         optionsFrom: f.optionsFrom,
         lookup: f.lookup,
         formula: f.formula,
+        condition: f.condition,
         dateFormat: f.dateFormat,
       });
     }
@@ -826,6 +810,9 @@ const mergeField = (
     }
     if (meta.formula !== undefined) {
       resolved.formula = meta.formula;
+    }
+    if (meta.condition !== undefined) {
+      resolved.condition = meta.condition;
     }
     if (meta.dateFormat !== undefined) {
       resolved.dateFormat = meta.dateFormat;

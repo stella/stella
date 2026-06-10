@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
+import { manifestNamedConditions } from "@/api/handlers/docx/manifest-conditions";
 import {
   mergeManifestWithDiscovery,
   readManifest,
@@ -43,7 +44,7 @@ export const discoverHandler = async ({ body: { file } }: DiscoverProps) => {
 
   return {
     fields,
-    conditions: manifest?.conditions ?? [],
+    conditions: manifest ? manifestNamedConditions(manifest) : [],
     structureErrors: discovered.structureErrors,
   };
 };

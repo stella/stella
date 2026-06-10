@@ -204,6 +204,48 @@ describe("isFieldMeta", () => {
     );
   });
 
+  test("accepts a boolean field with a condition rule", () => {
+    expect(
+      isFieldMeta({
+        path: "is_company",
+        inputType: "boolean",
+        condition: 'client_type == "company"',
+      }),
+    ).toBe(true);
+  });
+
+  test("rejects a non-string condition", () => {
+    expect(isFieldMeta({ path: "is_company", condition: 7 })).toBe(false);
+  });
+
+  test("rejects a condition combined with another value source", () => {
+    expect(
+      isFieldMeta({
+        path: "x",
+        inputType: "boolean",
+        condition: "a == b",
+        aiPrompt: "decide it",
+      }),
+    ).toBe(false);
+    expect(
+      isFieldMeta({
+        path: "x",
+        inputType: "boolean",
+        condition: "a == b",
+        formula: "rent * 12",
+      }),
+    ).toBe(false);
+    expect(
+      isFieldMeta({
+        path: "x",
+        inputType: "boolean",
+        condition: "a == b",
+        aiAdapt: true,
+      }),
+    ).toBe(false);
+    expect(isFieldMeta({ ...compositeField, condition: "a == b" })).toBe(false);
+  });
+
   test("accepts a string hint and rejects a non-string one", () => {
     expect(isFieldMeta({ path: "company.krs", hint: "10 digits" })).toBe(true);
     expect(isFieldMeta({ path: "company.krs", hint: 10 })).toBe(false);

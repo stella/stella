@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { entities, templateFills } from "@/api/db/schema";
 import {
+  buildAiConditionDecider,
   buildAiFieldGenerator,
   buildAiOccurrenceAdapter,
 } from "@/api/handlers/docx/ai-field-generator";
@@ -139,6 +140,11 @@ const fillTemplateToWorkspace = createSafeHandler(
             scopedDb,
             organizationId,
             generateAiValue: buildAiFieldGenerator({
+              orgAIConfig,
+              organizationId,
+              skillContext: { organizationId, safeDb, userId: user.id },
+            }),
+            decideAiCondition: buildAiConditionDecider({
               orgAIConfig,
               organizationId,
               skillContext: { organizationId, safeDb, userId: user.id },

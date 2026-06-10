@@ -5,6 +5,7 @@ import type { SafeDb, ScopedDb } from "@/api/db";
 import { templateFills } from "@/api/db/schema";
 import { adaptAiFields } from "@/api/handlers/docx/adapt-ai-fields";
 import {
+  buildAiConditionDecider,
   buildAiFieldGenerator,
   buildAiOccurrenceAdapter,
 } from "@/api/handlers/docx/ai-field-generator";
@@ -12,6 +13,7 @@ import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { createDispatchLookupResolver } from "@/api/handlers/docx/lookup-fields";
 import { applyManifestFillSteps } from "@/api/handlers/docx/manifest-fill-steps";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
+import { resolveAiConditions } from "@/api/handlers/docx/resolve-ai-conditions";
 import { resolveAiFields } from "@/api/handlers/docx/resolve-ai-fields";
 import { resolveClauseSlots } from "@/api/handlers/docx/resolve-clause-slots";
 import { readManifest } from "@/api/handlers/docx/template-manifest";
@@ -175,7 +177,18 @@ const fillByIdHandler = async function* ({
           skillContext: { organizationId, safeDb, userId },
         }),
       });
-      for (const [key, value] of Object.entries(aiResolved)) {
+      // Decide AI-decided boolean conditions (a boolean field with an aiPrompt)
+      // so the downloaded document matches the preview.
+      const aiDecided = await resolveAiConditions({
+        values: aiResolved,
+        fields: manifest.fields,
+        decide: buildAiConditionDecider({
+          orgAIConfig,
+          organizationId,
+          skillContext: { organizationId, safeDb, userId },
+        }),
+      });
+      for (const [key, value] of Object.entries(aiDecided)) {
         parsed[key] = value;
       }
     }

@@ -6,7 +6,10 @@
  * bounded list of typed findings before anyone hits them at fill time.
  */
 
+import type { NamedCondition } from "@stll/template-conditions";
+
 import type { ClauseSlot } from "@/api/handlers/docx/discover-clause-slots";
+import { manifestNamedConditions } from "@/api/handlers/docx/manifest-conditions";
 import type {
   DiscoveredTemplate,
   TemplateManifest,
@@ -232,7 +235,9 @@ const fieldMetadataFindings = (
       });
     }
     const rendersOwnInput =
-      field.formula === undefined && field.parts === undefined;
+      field.formula === undefined &&
+      field.parts === undefined &&
+      field.condition === undefined;
     if (rendersOwnInput && field.inputType === undefined) {
       findings.push({
         code: "fieldMissingInputType",
@@ -288,7 +293,12 @@ const expressionReferenceFindings = ({
     }
   }
 
-  const conditions = manifest?.conditions ?? [];
+  // A boolean condition-field is itself a named condition (addressed by its
+  // path), so validate both shapes against the synthesized list: their rules
+  // are checked, and a {{#if field_path}} reference resolves to the field.
+  const conditions: NamedCondition[] = manifest
+    ? manifestNamedConditions(manifest)
+    : [];
   const conditionNames = new Set(conditions.map((condition) => condition.name));
   for (const condition of conditions) {
     const seen = new Set<string>();

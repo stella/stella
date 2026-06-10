@@ -18,6 +18,7 @@ import {
   SKILL_REF_GENERATOR_GUIDANCE,
   type SkillToolsContext,
 } from "@/api/handlers/docx/ai-skill-tools";
+import type { AiConditionDecider } from "@/api/handlers/docx/resolve-ai-conditions";
 import type { AiFieldGenerator } from "@/api/handlers/docx/resolve-ai-fields";
 import { getModelForRole } from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
@@ -71,6 +72,71 @@ Reply with only the text for this field — no preamble, no quotes, no markdown.
       });
       const trimmed = text.trim();
       return trimmed.length > 0 ? trimmed : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+};
+
+const AI_CONDITION_TIMEOUT_MS = 20_000;
+const AI_CONDITION_MAX_TOKENS = 400;
+
+// strictObject + object root: OpenAI strict structured output rejects a bare
+// boolean root, so the yes/no answer rides in a single required boolean field.
+const conditionDecisionSchema = v.strictObject({
+  decision: v.boolean(),
+});
+
+/**
+ * Model-backed decider for AI-decided boolean fields (a boolean FieldMeta with
+ * an aiPrompt). Returns `undefined` when the org has no usable AI config or the
+ * model fails, so callers leave the condition unset — the referencing
+ * `{{#if}}` is then falsy and its block is excluded (the correct default).
+ */
+export const buildAiConditionDecider = ({
+  orgAIConfig,
+  organizationId,
+  skillContext,
+}: {
+  orgAIConfig: OrgAIConfig | null;
+  organizationId: SafeId<"organization">;
+  /** When present, prompts that reference a skill get load-skill tools. */
+  skillContext?: SkillToolsContext | undefined;
+}): AiConditionDecider | undefined => {
+  if (!orgAIConfig) {
+    return undefined;
+  }
+  return async ({ prompt, values }) => {
+    try {
+      const skillTools = maybeSkillTools(prompt, skillContext);
+      const result = streamText({
+        abortSignal: AbortSignal.timeout(AI_CONDITION_TIMEOUT_MS),
+        maxOutputTokens: AI_CONDITION_MAX_TOKENS,
+        model: getModelForRole("fast", orgAIConfig, {
+          promptCachingEnabled: false,
+          scopeKey: organizationId,
+          organizationId,
+          serviceTier: "standard",
+        }),
+        ...(skillTools
+          ? {
+              tools: skillTools,
+              stopWhen: stepCountIs(SKILL_TOOL_MAX_STEPS),
+              system: SKILL_REF_GENERATOR_GUIDANCE,
+            }
+          : {}),
+        output: Output.object({
+          schema: strictOutputSchema(conditionDecisionSchema),
+        }),
+        prompt: `You are deciding one yes/no condition of a legal document. Question: ${prompt}
+
+Known details (JSON):
+${JSON.stringify(values)}
+
+Decide true (yes) or false (no) for this condition.`,
+      });
+      const { decision } = await result.output;
+      return decision;
     } catch {
       return undefined;
     }

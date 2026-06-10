@@ -5,12 +5,14 @@ import type { SafeDb, ScopedDb } from "@/api/db";
 import { templateFills } from "@/api/db/schema";
 import { adaptAiFields } from "@/api/handlers/docx/adapt-ai-fields";
 import {
+  buildAiConditionDecider,
   buildAiFieldGenerator,
   buildAiOccurrenceAdapter,
 } from "@/api/handlers/docx/ai-field-generator";
 import { createDispatchLookupResolver } from "@/api/handlers/docx/lookup-fields";
 import { applyManifestFillSteps } from "@/api/handlers/docx/manifest-fill-steps";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
+import { resolveAiConditions } from "@/api/handlers/docx/resolve-ai-conditions";
 import { resolveAiFields } from "@/api/handlers/docx/resolve-ai-fields";
 import { readManifest } from "@/api/handlers/docx/template-manifest";
 import { isTemplateData, type TemplateData } from "@/api/handlers/docx/types";
@@ -160,8 +162,19 @@ export const fillHandler = async ({
           skillContext: { organizationId, safeDb, userId },
         }),
       });
-      if (isTemplateData(resolved)) {
-        fillData = resolved;
+      // Decide AI-decided boolean conditions (a boolean field with an aiPrompt)
+      // alongside the string drafts; resolveAiFields skips boolean fields.
+      const decided = await resolveAiConditions({
+        values: resolved,
+        fields: manifest.fields,
+        decide: buildAiConditionDecider({
+          orgAIConfig,
+          organizationId,
+          skillContext: { organizationId, safeDb, userId },
+        }),
+      });
+      if (isTemplateData(decided)) {
+        fillData = decided;
       }
     }
     if (hasAiAdaptFields) {

@@ -136,13 +136,6 @@ const sampleManifest: TemplateManifest = {
       required: true,
     },
   ],
-  conditions: [
-    {
-      name: "hasGuarantor",
-      expression: "has_guarantor",
-      label: "Has Guarantor?",
-    },
-  ],
 };
 
 // ── Discover ─────────────────────────────────────────────
@@ -188,14 +181,32 @@ describe("template discover", () => {
     expect(discovered.structureErrors).toEqual([]);
   });
 
-  test("returns conditions from manifest", async () => {
-    let buf = await makeEmptyDocx();
-    buf = await writeManifest(buf, sampleManifest);
+  test("discover synthesizes conditions from boolean condition-fields", async () => {
+    let buf = await makeDocx(WRAP(P("Client: {{clientName}}")));
+    buf = await writeManifest(buf, {
+      version: 1,
+      fields: [
+        { path: "clientName", label: "Client Name", inputType: "text" },
+        {
+          path: "hasGuarantor",
+          label: "Has Guarantor?",
+          inputType: "boolean",
+          condition: "has_guarantor",
+        },
+      ],
+    });
+    const file = await makeDocxFile(buf);
 
-    const manifest = await readManifest(buf);
-    expect(manifest).not.toBeNull();
-    expect(manifest?.conditions).toHaveLength(1);
-    expect(manifest?.conditions[0]?.name).toBe("hasGuarantor");
+    const result = await discoverHandler({
+      organizationId: fakeOrgId,
+      body: { file },
+    });
+    if (result instanceof Response) {
+      throw new TypeError("Expected discover data, got a Response");
+    }
+    expect(result.conditions).toHaveLength(1);
+    expect(result.conditions[0]?.name).toBe("hasGuarantor");
+    expect(result.conditions[0]?.expression).toBe("has_guarantor");
   });
 
   test("discovers placeholders in headers", async () => {
@@ -399,8 +410,6 @@ describe("template manifest", () => {
     expect(read?.fields).toHaveLength(1);
     expect(read?.fields[0]?.path).toBe("clientName");
     expect(read?.fields[0]?.label).toBe("Client Name");
-    expect(read?.conditions).toHaveLength(1);
-    expect(read?.conditions[0]?.name).toBe("hasGuarantor");
   });
 
   test("returns null for DOCX without manifest", async () => {
@@ -419,7 +428,6 @@ describe("template manifest", () => {
         manifest: JSON.stringify({
           version: 1,
           fields: [null, "bad"],
-          conditions: [],
         }),
       },
     });
@@ -431,28 +439,6 @@ describe("template manifest", () => {
     expect(body.error).toContain("'path'");
   });
 
-  test("rejects conditions with missing properties", async () => {
-    const buf = await makeEmptyDocx();
-    const file = await makeDocxFile(buf);
-    const result = await manifestHandler({
-      organizationId: fakeOrgId,
-      body: {
-        file,
-        manifest: JSON.stringify({
-          version: 1,
-          fields: [],
-          conditions: [{ name: "x" }],
-        }),
-      },
-    });
-
-    expect(result).toBeInstanceOf(Response);
-    const resp = result;
-    expect(resp.status).toBe(400);
-    const body = await readTestJson<{ error: string }>(resp);
-    expect(body.error).toContain("'expression'");
-  });
-
   test("overwrites existing stella manifest", async () => {
     const buf = await makeEmptyDocx();
     const first = await writeManifest(buf, sampleManifest);
@@ -460,14 +446,12 @@ describe("template manifest", () => {
     const updated: TemplateManifest = {
       version: 1,
       fields: [{ path: "newField", label: "New Field" }],
-      conditions: [],
     };
     const second = await writeManifest(first, updated);
     const read = await readManifest(second);
 
     expect(read?.fields).toHaveLength(1);
     expect(read?.fields[0]?.path).toBe("newField");
-    expect(read?.conditions).toHaveLength(0);
   });
 });
 
@@ -520,7 +504,6 @@ describe("handler MIME validation", () => {
         manifest: JSON.stringify({
           version: 1,
           fields: [],
-          conditions: [],
         }),
       },
     });
