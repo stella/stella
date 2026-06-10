@@ -19,6 +19,7 @@ import fillTemplatePreview from "@/api/handlers/templates/fill-preview";
 import fillTemplateToWorkspace from "@/api/handlers/templates/fill-to-workspace";
 import getTemplate from "@/api/handlers/templates/get";
 import listTemplates from "@/api/handlers/templates/list";
+import lookupPreview from "@/api/handlers/templates/lookup-preview";
 import manifestTemplate from "@/api/handlers/templates/manifest";
 import prefillTemplate from "@/api/handlers/templates/prefill";
 import prepareTemplate from "@/api/handlers/templates/prepare";
@@ -54,6 +55,10 @@ export const templatesRoute = new Elysia({
     body: fillTemplate.config.body,
     permissions: fillTemplate.config.permissions,
     query: fillTemplate.config.query,
+  })
+  .post("/lookup-preview", lookupPreview.handler, {
+    body: lookupPreview.config.body,
+    permissions: lookupPreview.config.permissions,
   })
   .post("/manifest", manifestTemplate.handler, {
     body: manifestTemplate.config.body,
