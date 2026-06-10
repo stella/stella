@@ -105,6 +105,10 @@ export type EditableField = {
   /** Registry lookup: the person filling enters only the registry number;
    *  the server resolves the company at fill time. Text fields only. */
   lookup?: EditableLookup | undefined;
+  /** Formula: the value is derived from other fields via an arithmetic
+   *  expression at fill time; the fill form renders no input for it.
+   *  Mutually exclusive with parts and lookup. */
+  formula?: string | undefined;
 };
 
 const INPUT_TYPE_SET: ReadonlySet<string> = new Set(INPUT_TYPES);
@@ -159,6 +163,7 @@ export const buildEditableFields = (
     format: f.format,
     optionsFrom: f.optionsFrom,
     lookup: f.lookup,
+    formula: f.formula,
   }));
 
 type ManifestPart = {
@@ -224,6 +229,22 @@ export const lookupManifestProps = (
   };
 };
 
+/**
+ * The manifest shape of a field's formula: the trimmed expression, with a
+ * blank one (the checkbox was ticked but no expression entered) normalized
+ * away. A formula field's value is derived, never user-entered, so a
+ * composite configuration takes precedence and suppresses the formula.
+ */
+export const formulaManifestProps = (
+  field: EditableField,
+): string | undefined => {
+  if (field.formula === undefined || field.parts !== undefined) {
+    return undefined;
+  }
+  const formula = field.formula.trim();
+  return formula === "" ? undefined : formula;
+};
+
 type ConfigureStepProps = {
   file: File;
   fields: ResolvedField[];
@@ -285,6 +306,18 @@ export const ConfigureStep = ({
       const manifest = {
         version: 1,
         fields: fields.map((f) => {
+          const formula = formulaManifestProps(f);
+          if (formula !== undefined) {
+            // Derived at fill time: no input is rendered, so the
+            // input-source configuration (options, parts, lookup,
+            // required) does not apply.
+            return {
+              path: f.path,
+              label: f.label || undefined,
+              inputType: f.inputType,
+              formula,
+            };
+          }
           const composite = compositeManifestProps(f);
           return {
             path: f.path,
@@ -840,6 +873,61 @@ const LookupConfigControl = ({
   );
 };
 
+/** Formula affordance: the field's value is derived from other fields via an
+ *  arithmetic expression at fill time, so the fill form asks for nothing.
+ *  Mutually exclusive with the other value sources; enabling it clears the
+ *  registry lookup. */
+const FormulaConfigControl = ({
+  field,
+  onUpdate,
+}: {
+  field: EditableField;
+  onUpdate: (patch: Partial<EditableField>) => void;
+}) => {
+  const t = useTranslations();
+
+  return (
+    <>
+      <Field>
+        <div className="flex items-center gap-2">
+          <Checkbox
+            checked={field.formula !== undefined}
+            onCheckedChange={(checked) =>
+              onUpdate(
+                checked
+                  ? { formula: field.formula ?? "", lookup: undefined }
+                  : { formula: undefined },
+              )
+            }
+          />
+          <FieldLabel>{t("templates.fieldFormulaEnable")}</FieldLabel>
+        </div>
+        <p className="text-muted-foreground text-xs">
+          {t("templates.fieldFormulaHint")}
+        </p>
+      </Field>
+
+      {field.formula !== undefined && (
+        <Field>
+          <FieldLabel>{t("templates.fieldFormulaExpression")}</FieldLabel>
+          <FieldControl
+            render={
+              <Input
+                className="font-mono"
+                onChange={(e) => onUpdate({ formula: e.target.value })}
+                value={field.formula}
+              />
+            }
+          />
+          <p className="text-muted-foreground text-xs">
+            {t("templates.fieldFormulaExpressionHint")}
+          </p>
+        </Field>
+      )}
+    </>
+  );
+};
+
 export const FieldConfigEditor = ({
   field,
   onUpdate,
@@ -857,6 +945,7 @@ export const FieldConfigEditor = ({
 }) => {
   const t = useTranslations();
   const isComposite = field.parts !== undefined;
+  const isFormula = field.formula !== undefined;
 
   return (
     <div
@@ -884,7 +973,7 @@ export const FieldConfigEditor = ({
         />
       </Field>
 
-      {!isComposite && (
+      {!isComposite && !isFormula && (
         <Field>
           <FieldLabel>{t("templates.fieldInputType")}</FieldLabel>
           <Select
@@ -911,44 +1000,52 @@ export const FieldConfigEditor = ({
         </Field>
       )}
 
-      <Field>
-        <div className="flex items-center gap-2">
-          <Checkbox
-            checked={field.required}
-            onCheckedChange={(checked) => onUpdate({ required: checked })}
-          />
-          <FieldLabel>{t("common.required")}</FieldLabel>
-        </div>
-      </Field>
+      {!isFormula && (
+        <Field>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              checked={field.required}
+              onCheckedChange={(checked) => onUpdate({ required: checked })}
+            />
+            <FieldLabel>{t("common.required")}</FieldLabel>
+          </div>
+        </Field>
+      )}
 
-      <Field>
-        <div className="flex items-center gap-2">
-          <Checkbox
-            checked={isComposite}
-            onCheckedChange={(checked) => {
-              if (checked) {
-                onUpdate({
-                  parts: field.parts ?? [emptyEditablePart()],
-                  format: field.format ?? "",
-                });
-                return;
-              }
-              onUpdate({ parts: undefined, format: undefined });
-            }}
-          />
-          <FieldLabel>{t("templates.fieldMultipleParts")}</FieldLabel>
-        </div>
-      </Field>
+      {!isFormula && (
+        <Field>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              checked={isComposite}
+              onCheckedChange={(checked) => {
+                if (checked) {
+                  onUpdate({
+                    parts: field.parts ?? [emptyEditablePart()],
+                    format: field.format ?? "",
+                  });
+                  return;
+                }
+                onUpdate({ parts: undefined, format: undefined });
+              }}
+            />
+            <FieldLabel>{t("templates.fieldMultipleParts")}</FieldLabel>
+          </div>
+        </Field>
+      )}
 
       {isComposite && (
         <CompositePartsEditor field={field} onUpdate={onUpdate} />
       )}
 
-      {!isComposite && field.inputType === "text" && (
+      {!isComposite && (
+        <FormulaConfigControl field={field} onUpdate={onUpdate} />
+      )}
+
+      {!isComposite && !isFormula && field.inputType === "text" && (
         <LookupConfigControl field={field} onUpdate={onUpdate} />
       )}
 
-      {!isComposite && field.inputType === "select" && (
+      {!isComposite && !isFormula && field.inputType === "select" && (
         <>
           <Field>
             <FieldLabel>{t("templates.fieldOptions")}</FieldLabel>

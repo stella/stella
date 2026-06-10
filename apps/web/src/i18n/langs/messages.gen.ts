@@ -2021,6 +2021,10 @@ type Messages = {
     "fieldCount": "{count, plural, one {# field} other {# fields}}";
     "fieldFormat": "Output format";
     "fieldFormatHint": "Use '{{key}}' to insert a part.";
+    "fieldFormulaEnable": "Formula (calculated value)";
+    "fieldFormulaExpression": "Expression";
+    "fieldFormulaExpressionHint": "Arithmetic over other field names, e.g. rent * 12. Functions: min, max, round, abs, floor, ceil.";
+    "fieldFormulaHint": "The value is calculated from other fields when the document is generated; the person filling is not asked for it.";
     "fieldInputType": "Input type";
     "fieldLabel": "Label";
     "fieldLabelPlaceholder": "e.g. Full Name";

@@ -558,7 +558,7 @@ describe("mergeManifestWithDiscovery", () => {
     expect(hidden?.count).toBe(0);
   });
 
-  test("excludes computed-field markers from input fields", () => {
+  test("threads formula through to resolved fields", () => {
     const discovery: DiscoveredTemplate = {
       placeholders: [],
       fields: [
@@ -569,12 +569,18 @@ describe("mergeManifestWithDiscovery", () => {
     };
     const manifest: TemplateManifest = {
       version: 1,
-      fields: [],
+      fields: [
+        { path: "rent_annual", formula: "rent * 12" },
+        { path: "manifest_only", formula: "rent * 24" },
+      ],
       conditions: [],
-      computed: [{ name: "rent_annual", expression: "rent * 12" }],
     };
     const resolved = mergeManifestWithDiscovery(manifest, discovery);
-    expect(resolved.map((f) => f.path)).toEqual(["rent"]);
+    const discoveredField = resolved.find((f) => f.path === "rent_annual");
+    const manifestOnly = resolved.find((f) => f.path === "manifest_only");
+    expect(discoveredField?.formula).toBe("rent * 12");
+    expect(manifestOnly?.formula).toBe("rent * 24");
+    expect(resolved.find((f) => f.path === "rent")?.formula).toBeUndefined();
   });
 
   test("drops namespace parents (a path that is only a prefix of others)", () => {
@@ -954,6 +960,50 @@ describe("round-trip", () => {
     const tamperedBack = await readManifest(tampered);
     expect(tamperedBack?.fields.at(0)?.lookup).toBeUndefined();
     expect(tamperedBack?.fields.at(1)?.lookup).toBeUndefined();
+  });
+
+  test("formula round-trips; a hand-edited formula beside another value source is dropped", async () => {
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "rent_indexed",
+          label: "Indexed rent",
+          formula: "min(rent * (1 + index / 100), rent * 1.05)",
+        },
+        { path: "seller_krs", lookup: { registry: "krs" } },
+      ],
+      conditions: [],
+    };
+
+    const docx = await createMinimalDocx();
+    const withManifest = await writeManifest(docx, manifest);
+    const readBack = await readManifest(withManifest);
+    expect(readBack?.fields.at(0)?.formula).toBe(
+      "min(rent * (1 + index / 100), rent * 1.05)",
+    );
+    expect(readBack?.fields.at(0)?.label).toBe("Indexed rent");
+    expect(readBack?.fields.at(1)?.formula).toBeUndefined();
+
+    // Hand-edited XML putting a formula on a lookup field (formula is
+    // mutually exclusive with the other value sources) must not leak past
+    // the parser.
+    const zip = await JSZip.loadAsync(withManifest);
+    const itemEntry = zip.file("customXml/item1.xml");
+    const itemXml = await itemEntry?.async("string");
+    zip.file(
+      "customXml/item1.xml",
+      (itemXml ?? "").replace(
+        'path="seller_krs"',
+        'path="seller_krs" formula="rent * 2"',
+      ),
+    );
+    const tampered = Buffer.from(
+      await zip.generateAsync({ type: "nodebuffer" }),
+    );
+    const tamperedBack = await readManifest(tampered);
+    expect(tamperedBack?.fields.at(1)?.formula).toBeUndefined();
+    expect(tamperedBack?.fields.at(1)?.lookup).toEqual({ registry: "krs" });
   });
 
   test("lookup survives mergeManifestWithDiscovery", async () => {

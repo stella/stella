@@ -117,4 +117,33 @@ describe("isFieldMeta", () => {
       }),
     ).toBe(false);
   });
+
+  test("accepts a formula field", () => {
+    expect(isFieldMeta({ path: "rent_annual", formula: "rent * 12" })).toBe(
+      true,
+    );
+  });
+
+  test("rejects a non-string formula", () => {
+    expect(isFieldMeta({ path: "rent_annual", formula: 12 })).toBe(false);
+  });
+
+  test("rejects a formula combined with another value source", () => {
+    expect(
+      isFieldMeta({ path: "x", formula: "rent * 12", aiPrompt: "draft it" }),
+    ).toBe(false);
+    expect(
+      isFieldMeta({ path: "x", formula: "rent * 12", aiAdapt: true }),
+    ).toBe(false);
+    expect(
+      isFieldMeta({
+        path: "x",
+        formula: "rent * 12",
+        lookup: { registry: "krs" },
+      }),
+    ).toBe(false);
+    expect(isFieldMeta({ ...compositeField, formula: "rent * 12" })).toBe(
+      false,
+    );
+  });
 });

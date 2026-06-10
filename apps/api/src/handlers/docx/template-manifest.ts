@@ -19,7 +19,6 @@ import { WorkflowValidationError } from "@/api/lib/errors/tagged-errors";
 
 import { isElement } from "./ooxml";
 import type {
-  ComputedField,
   DiscoveredField,
   DiscoveredTemplate,
   FieldLookup,
@@ -140,6 +139,9 @@ const buildFieldXml = (field: FieldMeta): string => {
   if (field.optionsFrom !== undefined) {
     attrs.push(`optionsFrom="${escapeXml(field.optionsFrom)}"`);
   }
+  if (field.formula !== undefined) {
+    attrs.push(`formula="${escapeXml(field.formula)}"`);
+  }
 
   const children: string[] = [];
 
@@ -194,21 +196,9 @@ const buildConditionXml = (condition: NamedCondition): string => {
   return `<st:condition ${attrs.join(" ")}/>`;
 };
 
-const buildComputedXml = (computed: ComputedField): string => {
-  const attrs: string[] = [
-    `name="${escapeXml(computed.name)}"`,
-    `expression="${escapeXml(computed.expression)}"`,
-  ];
-  if (computed.label !== undefined) {
-    attrs.push(`label="${escapeXml(computed.label)}"`);
-  }
-  return `<st:computed ${attrs.join(" ")}/>`;
-};
-
 const buildManifestXml = (manifest: TemplateManifest): string => {
   const fields = manifest.fields.map(buildFieldXml).join("");
   const conditions = manifest.conditions.map(buildConditionXml).join("");
-  const computed = (manifest.computed ?? []).map(buildComputedXml).join("");
 
   return [
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -216,7 +206,6 @@ const buildManifestXml = (manifest: TemplateManifest): string => {
     ` version="${manifest.version}">`,
     fields ? `<st:fields>${fields}</st:fields>` : "",
     conditions ? `<st:conditions>${conditions}</st:conditions>` : "",
-    computed ? `<st:computed-fields>${computed}</st:computed-fields>` : "",
     "</st:template>",
   ].join("");
 };
@@ -413,6 +402,21 @@ const parseFieldMeta = (el: slimdom.Element): FieldMeta => {
     field.format = format;
   }
 
+  // A formula field's value is derived, never user-entered; a hand-edited
+  // formula on a field that already has another value source (AI prompt or
+  // adapt, lookup, composite parts) is dropped so the isFieldMeta invariant
+  // holds downstream.
+  const formula = el.getAttribute("formula");
+  if (
+    formula !== null &&
+    field.aiPrompt === undefined &&
+    field.aiAdapt === undefined &&
+    field.lookup === undefined &&
+    field.parts === undefined
+  ) {
+    field.formula = formula;
+  }
+
   return field;
 };
 
@@ -426,18 +430,6 @@ const parseCondition = (el: slimdom.Element): NamedCondition => {
     condition.label = label;
   }
   return condition;
-};
-
-const parseComputed = (el: slimdom.Element): ComputedField => {
-  const name = el.getAttribute("name") ?? "";
-  const expression = el.getAttribute("expression") ?? "";
-  const label = el.getAttribute("label") ?? undefined;
-
-  const computed: ComputedField = { name, expression };
-  if (label !== undefined) {
-    computed.label = label;
-  }
-  return computed;
 };
 
 const parseManifestXml = (xml: string): TemplateManifest | null => {
@@ -467,7 +459,6 @@ const parseManifestXml = (xml: string): TemplateManifest | null => {
 
   const fields: FieldMeta[] = [];
   const conditions: NamedCondition[] = [];
-  const computed: ComputedField[] = [];
 
   const fieldsEl = getFirstElementChild(root, "fields");
   if (fieldsEl) {
@@ -485,15 +476,7 @@ const parseManifestXml = (xml: string): TemplateManifest | null => {
     }
   }
 
-  const computedEl = getFirstElementChild(root, "computed-fields");
-  if (computedEl) {
-    const computedEls = getElementChildren(computedEl, "computed");
-    for (const c of computedEls) {
-      computed.push(parseComputed(c));
-    }
-  }
-
-  return { version, fields, conditions, computed };
+  return { version, fields, conditions };
 };
 
 // ── Public API ───────────────────────────────────────────
@@ -650,18 +633,11 @@ export const mergeManifestWithDiscovery = (
     }
   }
 
-  // Computed fields ({{rent_annual}} = rent * 12) are resolved at fill time,
-  // never user-entered, so they must not surface as input fields.
-  const computedNames = new Set((manifest?.computed ?? []).map((c) => c.name));
-
   // Start with discovered fields, enriching with manifest
   const resolved: ResolvedField[] = [];
   const seen = new Set<string>();
 
   for (const df of discovered.fields) {
-    if (computedNames.has(df.path)) {
-      continue;
-    }
     seen.add(df.path);
     const meta = metaByPath.get(df.path);
     resolved.push(mergeField(df, meta));
@@ -670,7 +646,7 @@ export const mergeManifestWithDiscovery = (
   // Add manifest-only fields (not discovered)
   if (manifest) {
     for (const f of manifest.fields) {
-      if (seen.has(f.path) || computedNames.has(f.path)) {
+      if (seen.has(f.path)) {
         continue;
       }
       resolved.push({
@@ -687,6 +663,7 @@ export const mergeManifestWithDiscovery = (
         format: f.format,
         optionsFrom: f.optionsFrom,
         lookup: f.lookup,
+        formula: f.formula,
       });
     }
   }
@@ -740,6 +717,9 @@ const mergeField = (
     }
     if (meta.lookup !== undefined) {
       resolved.lookup = meta.lookup;
+    }
+    if (meta.formula !== undefined) {
+      resolved.formula = meta.formula;
     }
   }
 

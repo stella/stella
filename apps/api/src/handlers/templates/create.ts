@@ -165,6 +165,7 @@ const createTemplateHandler = async function* ({
     format: f.format,
     optionsFrom: f.optionsFrom,
     lookup: f.lookup,
+    formula: f.formula,
   }));
 
   const clientManifest =
@@ -191,9 +192,6 @@ const createTemplateHandler = async function* ({
     fields: fieldMetas,
     conditions:
       clientManifest?.conditions ?? existingManifest?.conditions ?? [],
-    // Computed fields are authored in the manifest embedded in the DOCX
-    // (no wizard UI yet), so they're preserved from the uploaded file.
-    computed: existingManifest?.computed ?? [],
   };
 
   const docxWithManifest = await writeManifest(buffer, manifest);

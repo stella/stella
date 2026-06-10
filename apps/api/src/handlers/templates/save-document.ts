@@ -30,8 +30,8 @@ const buildVersionS3Key = (
 
 const saveDocumentBodySchema = t.Object({
   file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
-  // Optional edited manifest (the Studio's field settings, conditions,
-  // computed). When present it is the base manifest, so the editor's field
+  // Optional edited manifest (the Studio's field settings and conditions).
+  // When present it is the base manifest, so the editor's field
   // metadata is persisted without a separate binary re-embed round-trip.
   // t.Unknown() (not t.String()) because Elysia auto-parses JSON-looking
   // multipart fields into objects; the handler validates the shape below.
@@ -120,8 +120,8 @@ const saveTemplateDocument = createSafeRootHandler(
     // aiPrompt, so recover each field's AI settings from the source manifest
     // by path. Without this, saving a template silently disables its
     // AI-fillable (aiPrompt) and AI-adapted (aiAdapt) fields. Composite
-    // parts + format, dependent optionsFrom, and registry lookup are
-    // restored the same way.
+    // parts + format, dependent optionsFrom, registry lookup, and formula
+    // are restored the same way.
     const sourceFieldByPath = new Map(
       (baseManifest?.fields ?? []).map((f) => [f.path, f]),
     );
@@ -138,13 +138,13 @@ const saveTemplateDocument = createSafeRootHandler(
       format: sourceFieldByPath.get(f.path)?.format,
       optionsFrom: sourceFieldByPath.get(f.path)?.optionsFrom,
       lookup: sourceFieldByPath.get(f.path)?.lookup,
+      formula: sourceFieldByPath.get(f.path)?.formula,
     }));
 
     const manifest: TemplateManifest = {
       version: baseManifest?.version ?? 1,
       fields: fieldMetas,
       conditions: baseManifest?.conditions ?? [],
-      computed: baseManifest?.computed ?? [],
     };
 
     // Re-embed the merged manifest so the stored DOCX stays in sync with the DB.

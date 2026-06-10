@@ -2,7 +2,7 @@
  * Resolve AI-fillable template fields.
  *
  * A manifest field with an `aiPrompt` has its value drafted by a model at fill
- * time (e.g. "the scope of this power of attorney"). This mirrors computed
+ * time (e.g. "the scope of this power of attorney"). This mirrors formula
  * fields, but the value comes from an injected generator rather than
  * arithmetic — keeping this module free of any model/provider dependency so it
  * stays pure and testable. The fill boundary supplies the generator (wired to

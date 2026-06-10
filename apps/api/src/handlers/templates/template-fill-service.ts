@@ -82,22 +82,27 @@ export const describeStoredTemplate = async ({
 
   const manifest = await readManifest(loaded.buffer);
   if (manifest) {
+    // Formula fields are derived at fill time, never user-submitted, so they
+    // are reported as computed values rather than fillable fields.
     return {
       name: loaded.name,
-      fields: manifest.fields.map((field) => ({
-        path: field.path,
-        label: field.label ?? null,
-        inputType: field.inputType ?? "text",
-        required: field.required ?? false,
-      })),
+      fields: manifest.fields
+        .filter((field) => field.formula === undefined)
+        .map((field) => ({
+          path: field.path,
+          label: field.label ?? null,
+          inputType: field.inputType ?? "text",
+          required: field.required ?? false,
+        })),
       conditions: manifest.conditions.map((c) => ({
         name: c.name,
         expression: c.expression,
       })),
-      computed: (manifest.computed ?? []).map((c) => ({
-        name: c.name,
-        expression: c.expression,
-      })),
+      computed: manifest.fields.flatMap((field) =>
+        field.formula === undefined
+          ? []
+          : [{ name: field.path, expression: field.formula }],
+      ),
     };
   }
 
@@ -166,9 +171,10 @@ export const fillStoredTemplate = async ({
   let adaptedPaths: readonly string[] = [];
   const manifest = await readManifest(loaded.buffer);
   if (manifest) {
-    // Resolve registry lookups, assemble composite (multipart) values, and
-    // check dependent (optionsFrom) selects before any AI step or
-    // substitution sees them; a failing step rejects naming the field.
+    // Resolve registry lookups, assemble composite (multipart) values,
+    // evaluate formula (derived) fields, and check dependent (optionsFrom)
+    // selects before any AI step or substitution sees them; a failing step
+    // rejects naming the field.
     const stepError = await applyManifestFillSteps({
       values: record,
       manifest,
