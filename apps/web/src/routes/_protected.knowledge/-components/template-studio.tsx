@@ -324,6 +324,29 @@ export const TemplateStudioPage = ({
   );
 
   const getEditorView = useCallback(() => editorViewRef.current, []);
+  // Folio creates the editing PM view lazily (on first interaction), so a
+  // freshly opened template has no view until something forces it. Resolve
+  // it asynchronously: ensure, then poll a few frames before giving up, so
+  // the chat apply path doesn't report "document not editable" on a doc the
+  // user never clicked into.
+  const awaitEditorView = useCallback(async (): Promise<EditorView | null> => {
+    if (editorViewRef.current) {
+      return editorViewRef.current;
+    }
+    editorRef.current?.ensureEditorView({ focus: false });
+    return await new Promise<EditorView | null>((resolve) => {
+      let frames = 0;
+      const poll = () => {
+        if (editorViewRef.current || frames >= 12) {
+          resolve(editorViewRef.current);
+          return;
+        }
+        frames += 1;
+        requestAnimationFrame(poll);
+      };
+      requestAnimationFrame(poll);
+    });
+  }, []);
   const forceEditorView = useCallback(() => {
     editorRef.current?.ensureEditorView({ focus: false });
   }, []);
@@ -1698,6 +1721,7 @@ export const TemplateStudioPage = ({
         <TemplateStudioChat
           editorRef={editorRef}
           editorView={liveEditorView}
+          awaitView={awaitEditorView}
           ensureView={forceEditorView}
           fileName={fileName}
           getView={getEditorView}
