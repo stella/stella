@@ -40,6 +40,14 @@ const TOKEN_RE =
 
 const STARTS_WITH_DIGIT_RE = /^\d/u;
 
+/** ISO calendar date (`YYYY-MM-DD`). ISO dates sort chronologically as plain
+ *  strings, so ordering comparisons are a lexicographic compare — no Date
+ *  parsing, no timezone. */
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/u;
+
+const isIsoDate = (value: unknown): value is string =>
+  typeof value === "string" && ISO_DATE_RE.test(value);
+
 const tokenize = (expr: string): Token[] => {
   const tokens: Token[] = [];
   for (const m of expr.matchAll(TOKEN_RE)) {
@@ -147,18 +155,30 @@ const compare = (left: unknown, op: string, right: unknown): boolean => {
     case "!=":
       return left !== right;
     case ">":
+      if (isIsoDate(left) && isIsoDate(right)) {
+        return left > right;
+      }
       return (
         typeof left === "number" && typeof right === "number" && left > right
       );
     case "<":
+      if (isIsoDate(left) && isIsoDate(right)) {
+        return left < right;
+      }
       return (
         typeof left === "number" && typeof right === "number" && left < right
       );
     case ">=":
+      if (isIsoDate(left) && isIsoDate(right)) {
+        return left >= right;
+      }
       return (
         typeof left === "number" && typeof right === "number" && left >= right
       );
     case "<=":
+      if (isIsoDate(left) && isIsoDate(right)) {
+        return left <= right;
+      }
       return (
         typeof left === "number" && typeof right === "number" && left <= right
       );

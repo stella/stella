@@ -59,6 +59,85 @@ describe("evaluateCondition", () => {
     expect(evaluateCondition("amount > 1000", { amount: 5000 })).toBe(true);
   });
 
+  // ── Date comparisons (ISO YYYY-MM-DD, lexicographic) ──
+
+  test("date >= (on or after, positive)", () => {
+    expect(
+      evaluateCondition('signed >= "2026-01-01"', { signed: "2026-06-13" }),
+    ).toBe(true);
+  });
+
+  test("date >= (on or after, boundary equal)", () => {
+    expect(
+      evaluateCondition('signed >= "2026-06-13"', { signed: "2026-06-13" }),
+    ).toBe(true);
+  });
+
+  test("date >= (negative)", () => {
+    expect(
+      evaluateCondition('signed >= "2026-06-13"', { signed: "2025-12-31" }),
+    ).toBe(false);
+  });
+
+  test("date <= (on or before, positive)", () => {
+    expect(
+      evaluateCondition('signed <= "2026-12-31"', { signed: "2026-06-13" }),
+    ).toBe(true);
+  });
+
+  test("date <= (negative)", () => {
+    expect(
+      evaluateCondition('signed <= "2026-01-01"', { signed: "2026-06-13" }),
+    ).toBe(false);
+  });
+
+  test("date > (after, positive + boundary negative)", () => {
+    expect(
+      evaluateCondition('signed > "2026-06-12"', { signed: "2026-06-13" }),
+    ).toBe(true);
+    expect(
+      evaluateCondition('signed > "2026-06-13"', { signed: "2026-06-13" }),
+    ).toBe(false);
+  });
+
+  test("date < (before, positive + boundary negative)", () => {
+    expect(
+      evaluateCondition('signed < "2026-06-14"', { signed: "2026-06-13" }),
+    ).toBe(true);
+    expect(
+      evaluateCondition('signed < "2026-06-13"', { signed: "2026-06-13" }),
+    ).toBe(false);
+  });
+
+  test("date == / != (string equality path, unchanged)", () => {
+    expect(
+      evaluateCondition('signed == "2026-06-13"', { signed: "2026-06-13" }),
+    ).toBe(true);
+    expect(
+      evaluateCondition('signed != "2026-06-13"', { signed: "2026-06-14" }),
+    ).toBe(true);
+  });
+
+  test("ordering on a non-ISO / mixed operand is false (no throw)", () => {
+    // Date string vs number → false
+    expect(
+      evaluateCondition('signed >= "2026-06-13"', { signed: 20_260_613 }),
+    ).toBe(false);
+    // Non-ISO date-ish string vs ISO → false (not chronologically comparable)
+    expect(
+      evaluateCondition('signed >= "2026-06-13"', { signed: "13/06/2026" }),
+    ).toBe(false);
+    // Plain word vs ISO → false
+    expect(evaluateCondition('signed < "2026-06-13"', { signed: "soon" })).toBe(
+      false,
+    );
+  });
+
+  test("numeric ordering still works alongside date support", () => {
+    expect(evaluateCondition("amount >= 1000", { amount: 1000 })).toBe(true);
+    expect(evaluateCondition("amount < 1000", { amount: 1000 })).toBe(false);
+  });
+
   // ── contains ──────────────────────────────────────────
 
   test("string contains (case-insensitive, positive)", () => {
