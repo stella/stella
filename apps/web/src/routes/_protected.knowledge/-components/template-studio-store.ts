@@ -64,6 +64,18 @@ export type StudioActions = {
    *  expression. Returns false when nothing suitable is selected or the
    *  expression is invalid. */
   rewriteConditionExpr: (next: string) => boolean;
+  /** Inline-wrap this field's own marker in `{{#if condition}}…{{/if}}` so the
+   *  field renders only when the condition holds. Returns false when the
+   *  field's marker could not be wrapped. */
+  wrapFieldInCondition: (path: string) => boolean;
+  /** Rewrite the `{{#if …}}` opener of the block that encloses this field's
+   *  marker. Returns false when no enclosing `if` block exists or the
+   *  expression is invalid. */
+  rewriteFieldConditionExpr: (path: string, next: string) => boolean;
+  /** Remove the `{{#if …}}` / `{{/if}}` pair around this field's marker (keep
+   *  the field). Returns false when the block holds more than this field's
+   *  marker or could not be rewritten. */
+  unwrapFieldCondition: (path: string) => boolean;
   /** Return to the template overview: move the document caret just past the
    *  selected marker (so selection sync doesn't immediately re-derive the
    *  same face) and clear the selection. */
