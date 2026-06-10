@@ -118,6 +118,9 @@ type TemplateStudioChatProps = {
   getView: () => EditorView | null;
   /** Force Folio's lazily created PM view (it defers until interaction). */
   ensureView: () => void;
+  /** Ensure + await the lazily created PM view (resolves null if it never
+   *  materialises within a few frames). */
+  awaitView: () => Promise<EditorView | null>;
 };
 
 export const TemplateStudioChat = (props: TemplateStudioChatProps) => (
@@ -241,6 +244,7 @@ const TemplateStudioChatInner = ({
   editorView,
   getView,
   ensureView,
+  awaitView,
   chatThreadId,
   onNewThread,
   onScopedPresetSend,
@@ -895,18 +899,16 @@ const TemplateStudioChatInner = ({
    * provisional suggestions are removed and their ops re-placed.
    */
   const handleActiveDocxEditToolCall = useEffectEvent(
-    (
+    async (
       input: ApplyActiveDocxEditsInput,
       toolCallId: string,
-    ): ApplyActiveDocxEditsOutput => {
+    ): Promise<ApplyActiveDocxEditsOutput> => {
       const record = streamingPlacementsRef.current.get(toolCallId);
       streamingPlacementsRef.current.delete(toolCallId);
 
-      let view = getView();
-      if (!view) {
-        ensureView();
-        view = getView();
-      }
+      // Folio creates the editing view lazily; wait for it rather than
+      // failing a doc the user never clicked into.
+      const view = getView() ?? (await awaitView());
       if (!view) {
         // Provisional placements were made against a view that has
         // since gone away; drop them so nothing dangles unreported.
@@ -997,7 +999,10 @@ const TemplateStudioChatInner = ({
         return;
       }
       handleApprove(approvalId, toolName);
-      const output = handleActiveDocxEditToolCall(part.input, part.toolCallId);
+      const output = await handleActiveDocxEditToolCall(
+        part.input,
+        part.toolCallId,
+      );
       await addToolOutput({
         output,
         tool: "apply-active-docx-edits",
