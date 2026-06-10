@@ -1837,7 +1837,13 @@ function TemplateStudioInspectorView({
         facet={facet}
         facets={STUDIO_FACETS}
         labels={facetLabels}
-        onChange={setFacet}
+        onChange={(next) => {
+          // Re-clicking Fields returns to the template overview.
+          if (next === facet && next === "fields") {
+            useTemplateStudioStore.getState().actions?.deselect();
+          }
+          setFacet(next);
+        }}
       />
       {!ready && (
         <div className="flex flex-1 items-center justify-center p-8">
