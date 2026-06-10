@@ -5,14 +5,14 @@ export const DEFAULT_DELAY_MS = 500;
 export const DEFAULT_TIMEOUT_MS = 15_000;
 export const DEFAULT_USER_AGENT =
   "infosoud/0.1.0 (+https://github.com/stella/stella/tree/main/packages/infosoud)";
-export const DEFAULT_CASE_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
-export const DEFAULT_HEARINGS_CACHE_TTL_MS = 60 * 60 * 1000;
-export const DEFAULT_EVENT_DETAIL_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
-export const DEFAULT_COURTS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-export const DEFAULT_DERIVED_COURT_MAP_CACHE_TTL_MS =
+export const DEFAULT_CASE_CACHE_TTL_MS: number = 6 * 60 * 60 * 1000;
+export const DEFAULT_HEARINGS_CACHE_TTL_MS: number = 60 * 60 * 1000;
+export const DEFAULT_EVENT_DETAIL_CACHE_TTL_MS: number = 6 * 60 * 60 * 1000;
+export const DEFAULT_COURTS_CACHE_TTL_MS: number = 24 * 60 * 60 * 1000;
+export const DEFAULT_DERIVED_COURT_MAP_CACHE_TTL_MS: number =
   DEFAULT_COURTS_CACHE_TTL_MS;
 
-export const NS_CASE_TYPES = new Set([
+export const NS_CASE_TYPES: ReadonlySet<string> = new Set([
   "CDO",
   "ICM",
   "NCU",
@@ -23,7 +23,7 @@ export const NS_CASE_TYPES = new Set([
   "TZ",
 ]);
 
-export const PRAGUE_DISTRICT_CODES = Array.from(
+export const PRAGUE_DISTRICT_CODES: readonly string[] = Array.from(
   { length: 10 },
   (_, index) => `OSPHA${String(index + 1).padStart(2, "0")}`,
 );
@@ -55,7 +55,7 @@ export const DEFAULT_EVENT_DETAIL_EVENT_TYPES = [
   "ZRUS_JED",
 ] as const;
 
-export const COURT_PREFIXES = [
+export const COURT_PREFIXES: readonly string[] = [
   "ks",
   "krajsky soud",
   "ms",
@@ -71,7 +71,7 @@ export const COURT_PREFIXES = [
   "vrchni soud",
 ];
 
-export const COURT_GENERIC_TOKENS = new Set([
+export const COURT_GENERIC_TOKENS: ReadonlySet<string> = new Set([
   "krajsky",
   "ks",
   "mestsky",
