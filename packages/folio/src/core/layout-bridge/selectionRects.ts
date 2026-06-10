@@ -155,16 +155,40 @@ function getMeasuredBlockHeight(measure: Measure | undefined): number {
   return 0;
 }
 
+/** Clamp a projected PM position to the run's own end position. */
+function clampToRunPmEnd(run: { pmEnd?: number }, position: number): number {
+  return run.pmEnd === undefined ? position : Math.min(position, run.pmEnd);
+}
+
 /**
  * Calculate the PM range for a line.
  * Note: ProseMirror positions include node boundaries:
  * - blockPmStart is the position of the paragraph node itself
  * - The actual text content starts at blockPmStart + 1 (after the opening tag)
+ *
+ * Prefers the runs' own PM metadata over cumulative character counting:
+ * template-preview value runs carry the source marker's PM range with a
+ * different text length, so the one-PM-position-per-character assumption
+ * the char-counting fallback makes does not hold for them.
  */
 function computeLinePmRange(
   block: ParagraphBlock,
   line: MeasuredLine,
 ): { pmStart: number | undefined; pmEnd: number | undefined } {
+  const fromRun = block.runs[line.fromRun];
+  const toRun = block.runs[line.toRun];
+  if (fromRun?.pmStart !== undefined && toRun?.pmStart !== undefined) {
+    const pmStart =
+      fromRun.kind === "text"
+        ? clampToRunPmEnd(fromRun, fromRun.pmStart + line.fromChar)
+        : fromRun.pmStart;
+    const pmEnd =
+      toRun.kind === "text"
+        ? clampToRunPmEnd(toRun, toRun.pmStart + line.toChar)
+        : (toRun.pmEnd ?? toRun.pmStart + 1);
+    return { pmStart, pmEnd };
+  }
+
   const blockPmStart = block.pmStart ?? 0;
   // Text content starts after the paragraph's opening tag
   const contentStart = blockPmStart + 1;
@@ -257,18 +281,61 @@ function findLinesInRange(
 
 /**
  * Convert a PM position to a character offset within a line.
+ *
+ * Walks the line's runs and maps through each run's own PM range, so runs
+ * whose text length differs from their PM span (template-preview value
+ * runs) keep the rest of the line aligned: positions inside the marker
+ * clamp to the value text, positions after it land after the value. Falls
+ * back to the legacy whole-line subtraction when a run lacks PM metadata.
  */
 function pmPosToCharOffset(
   block: ParagraphBlock,
   line: MeasuredLine,
   pmPos: number,
 ): number {
-  const range = computeLinePmRange(block, line);
-  if (range.pmStart === undefined) {
-    return 0;
+  let charOffset = 0;
+
+  for (
+    let runIndex = line.fromRun;
+    runIndex <= line.toRun && runIndex < block.runs.length;
+    runIndex++
+  ) {
+    const run = block.runs[runIndex];
+    if (!run) {
+      continue;
+    }
+    if (run.pmStart === undefined) {
+      const range = computeLinePmRange(block, line);
+      if (range.pmStart === undefined) {
+        return 0;
+      }
+      return Math.max(0, pmPos - range.pmStart);
+    }
+
+    if (run.kind === "text") {
+      const startChar = runIndex === line.fromRun ? line.fromChar : 0;
+      const endChar = runIndex === line.toRun ? line.toChar : run.text.length;
+      const sliceLength = Math.max(0, endChar - startChar);
+      const slicePmStart = clampToRunPmEnd(run, run.pmStart + startChar);
+      const slicePmEnd = clampToRunPmEnd(run, run.pmStart + endChar);
+      if (pmPos <= slicePmStart) {
+        return charOffset;
+      }
+      if (pmPos < slicePmEnd) {
+        return charOffset + Math.min(pmPos - slicePmStart, sliceLength);
+      }
+      charOffset += sliceLength;
+      continue;
+    }
+
+    // Non-text runs occupy one PM position and one character slot.
+    if (pmPos <= run.pmStart) {
+      return charOffset;
+    }
+    charOffset += 1;
   }
 
-  return Math.max(0, pmPos - range.pmStart);
+  return charOffset;
 }
 
 /**

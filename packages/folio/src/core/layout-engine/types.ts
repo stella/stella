@@ -141,6 +141,15 @@ export type TextRun = RunFormatting & {
   pmStart?: number;
   /** Absolute ProseMirror position (exclusive) after last character. */
   pmEnd?: number;
+  /**
+   * Set when this run is a template fill-preview substitution: the text is
+   * the typed value while [pmStart, pmEnd) still addresses the source
+   * `{{marker}}` range, so `text.length` may differ from the PM span. The
+   * painter adds the preview classes from this (`highlighted` paints the
+   * accent chip); pm↔char mappers must use the run's own pm bounds instead
+   * of assuming one PM position per character.
+   */
+  templatePreview?: "highlighted" | "plain";
 };
 
 /**

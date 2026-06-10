@@ -504,6 +504,16 @@ function renderTextRun(run: TextRun, doc: Document): HTMLElement {
   const span = doc.createElement("span");
   span.className = `${PARAGRAPH_CLASS_NAMES.run} ${PARAGRAPH_CLASS_NAMES.text}`;
 
+  // Template fill preview substitution: the run's text is the typed value
+  // already laid out in place of its {{marker}}, so only a class is needed —
+  // `highlighted` paints the accent chip without altering the flowed width.
+  if (run.templatePreview) {
+    span.classList.add("folio-template-preview-run");
+    if (run.templatePreview === "highlighted") {
+      span.classList.add("folio-template-preview-run--highlighted");
+    }
+  }
+
   applyRunStyles(span, run);
   applyPmPositions(span, run.pmStart, run.pmEnd);
 
@@ -1155,11 +1165,21 @@ export function sliceRunsForLine(
       // Slice the text if needed
       if (startChar > 0 || endChar < run.text.length) {
         const slicedText = run.text.slice(startChar, endChar);
+        // Clamp to the run's own pmEnd: template-preview value runs keep the
+        // source marker's PM range while carrying longer text, so a naive
+        // char-offset projection would claim PM positions past the marker
+        // and overlap the following runs' data-pm spans. A no-op for normal
+        // runs, where pmStart + text.length === pmEnd.
+        const clampPm = (position: number): number =>
+          run.pmEnd === undefined ? position : Math.min(position, run.pmEnd);
         result.push({
           ...run,
           text: slicedText,
           ...(run.pmStart !== undefined
-            ? { pmStart: run.pmStart + startChar, pmEnd: run.pmStart + endChar }
+            ? {
+                pmStart: clampPm(run.pmStart + startChar),
+                pmEnd: clampPm(run.pmStart + endChar),
+              }
             : {}),
         });
       } else {

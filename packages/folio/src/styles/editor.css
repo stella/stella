@@ -1040,28 +1040,15 @@
   box-shadow: inset 0 0 0 1px color-mix(in srgb, #f97316 45%, transparent);
 }
 
-/* ── Paged-canvas projection ───────────────────────────────────────────
-   The paged editor keeps the editing PM view hidden, so the preview
-   decorations never reach the painted pages. TemplatePreviewValuesOverlay
-   re-creates the substitution there: an opaque page-background cover
-   hides the painted marker text and the value renders on top. */
-.folio-template-preview-cover {
-  position: absolute;
-  background: var(--doc-canvas, #ffffff);
-}
-
-[data-folio-template-preview-overlay] .folio-template-preview-value {
-  /* Opaque base so a value longer than its marker stays legible over
-     the following painted text. */
-  background-color: var(--doc-canvas, #ffffff);
-}
-
-[data-folio-template-preview-overlay]
-  .folio-template-preview-value--highlighted {
-  background:
-    linear-gradient(
-      var(--folio-template-preview-accent-bg),
-      var(--folio-template-preview-accent-bg)
-    ),
-    var(--doc-canvas, #ffffff);
+/* ── Paged-canvas substitution ─────────────────────────────────────────
+   The paged editor substitutes the typed values into the flow blocks the
+   painter lays out, so the pages reflow as if the value were the text.
+   The painter marks each substituted run with these classes; highlighted
+   mode paints the accent chip on the run itself. No padding here — the
+   run's flowed width comes from the measurer, and horizontal padding
+   would push the following painted runs out of alignment. */
+.folio-template-preview-run--highlighted {
+  border-radius: 3px;
+  background: color-mix(in srgb, #f97316 28%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #f97316 45%, transparent);
 }

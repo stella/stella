@@ -566,3 +566,132 @@ describe("selection rect geometry", () => {
     expect(hit?.cellLocalY).toBe(50);
   });
 });
+
+describe("template fill preview pm↔char mapping", () => {
+  // A substituted value run keeps the source marker's PM range ([7, 22),
+  // 15 positions) while carrying 4 characters of text, so caret/selection
+  // geometry must map through each run's own PM bounds instead of assuming
+  // one PM position per character.
+  function previewFixture(): {
+    layout: Layout;
+    block: ParagraphBlock;
+    measures: Measure[];
+  } {
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      pmStart: 0,
+      pmEnd: 27,
+      runs: [
+        {
+          kind: "text",
+          text: "Name: ",
+          fontFamily: "Calibri",
+          fontSize: 11,
+          pmStart: 1,
+          pmEnd: 7,
+        },
+        {
+          kind: "text",
+          text: "1234",
+          fontFamily: "Calibri",
+          fontSize: 11,
+          pmStart: 7,
+          pmEnd: 22,
+          templatePreview: "plain",
+        },
+        {
+          kind: "text",
+          text: " end",
+          fontFamily: "Calibri",
+          fontSize: 11,
+          pmStart: 22,
+          pmEnd: 26,
+        },
+      ],
+    };
+    const measures: Measure[] = [
+      {
+        kind: "paragraph",
+        lines: [
+          {
+            fromRun: 0,
+            toRun: 2,
+            fromChar: 0,
+            toChar: 4,
+            width: 98,
+            lineHeight: 16,
+            ascent: 12,
+            descent: 4,
+          },
+        ],
+        width: 98,
+        height: 16,
+      },
+    ];
+    const layout: Layout = {
+      pageGap: 0,
+      pages: [
+        {
+          number: 1,
+          size: { w: 600, h: 800 },
+          margins: { top: 0, right: 0, bottom: 0, left: 0 },
+          fragments: [
+            {
+              kind: "paragraph",
+              blockId: "p1",
+              x: 0,
+              y: 0,
+              width: 500,
+              height: 16,
+              fromLine: 0,
+              toLine: 1,
+            },
+          ],
+        },
+      ],
+    };
+    return { layout, block, measures };
+  }
+
+  test("caret after the marker lands after the substituted value", () => {
+    const { layout, block, measures } = previewFixture();
+
+    // PM 22 is the first position after the marker; with the 4-char value
+    // laid out, that's 10 chars * 7px — not the marker's 15-char width.
+    const caret = getCaretPosition(layout, [block], measures, 22);
+
+    expect(caret?.x).toBe(70);
+  });
+
+  test("caret inside the marker clamps to the value text", () => {
+    const { layout, block, measures } = previewFixture();
+
+    const atStart = getCaretPosition(layout, [block], measures, 7);
+    const inside = getCaretPosition(layout, [block], measures, 9);
+    const deepInside = getCaretPosition(layout, [block], measures, 20);
+
+    expect(atStart?.x).toBe(42);
+    expect(inside?.x).toBe(56);
+    // Past the value's length: clamps to the end of the substituted text.
+    expect(deepInside?.x).toBe(70);
+  });
+
+  test("caret at the end of the line maps past the trailing run", () => {
+    const { layout, block, measures } = previewFixture();
+
+    const caret = getCaretPosition(layout, [block], measures, 26);
+
+    expect(caret?.x).toBe(98);
+  });
+
+  test("selecting the marker range highlights exactly the substituted value", () => {
+    const { layout, block, measures } = previewFixture();
+
+    const rects = selectionToRects(layout, [block], measures, 7, 22);
+
+    expect(rects).toHaveLength(1);
+    expect(rects[0]?.x).toBe(42);
+    expect(rects[0]?.width).toBe(28);
+  });
+});

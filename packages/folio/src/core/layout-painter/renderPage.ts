@@ -2801,6 +2801,11 @@ function runContentKey(run: Run): string {
   const parts: string[] = [run.kind];
   if (run.kind === "text") {
     parts.push(`t:${run.text}`);
+    if (run.templatePreview) {
+      // Highlighted ↔ plain preview toggles change only the run's classes,
+      // so the fingerprint must carry the mode for the page to repaint.
+      parts.push(`tp:${run.templatePreview}`);
+    }
   } else if (run.kind === "tab") {
     if (run.width !== undefined) {
       parts.push(`w:${run.width}`);
