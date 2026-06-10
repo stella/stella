@@ -20,8 +20,11 @@ import {
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  CircleHelpIcon,
   LandmarkIcon,
+  ListFilterIcon,
   Loader2Icon,
+  MessageCircleQuestionIcon,
   PencilIcon,
   PlusIcon,
   RepeatIcon,
@@ -53,7 +56,8 @@ import type {
   TemplatePreviewSpan,
   TemplatePreviewValue,
 } from "@stll/folio";
-import { isFieldPath } from "@stll/template-conditions";
+import { isFieldPath, serializeCondition } from "@stll/template-conditions";
+import type { ConditionGroup } from "@stll/template-conditions";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import {
@@ -92,6 +96,7 @@ import type {
   InspectorViewRenderProps,
 } from "@/components/inspector/view-registry";
 import { registerInspectorView } from "@/components/inspector/view-registry";
+import Tooltip from "@/components/tooltip";
 import { useI18nStore } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
@@ -103,6 +108,10 @@ import {
 import { toAPIError, userErrorMessage } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
+import {
+  ConditionGroupEditor,
+  emptyGroup,
+} from "@/routes/_protected.knowledge/-components/condition-builder";
 import { LinkClauseDialog } from "@/routes/_protected.knowledge/-components/link-clause-dialog";
 import { TemplateClausesTab } from "@/routes/_protected.knowledge/-components/template-clauses-tab";
 import { DATE_FORMAT_STYLES } from "@/routes/_protected.knowledge/-components/template-date-format";
@@ -2952,7 +2961,13 @@ const Inspector = ({
   }
 
   if (selected && (selected.kind === "if" || selected.kind === "elseif")) {
-    return <ConditionFace conditions={conditions} selected={selected} />;
+    return (
+      <ConditionFace
+        conditions={conditions}
+        fields={fields}
+        selected={selected}
+      />
+    );
   }
 
   if (selected && selected.kind === "clause") {
@@ -3169,64 +3184,314 @@ const languageChipLabel = (tag: string, uiLang: string): string =>
   new Intl.DisplayNames([uiLang], { type: "language" }).of(tag) ??
   tag.toUpperCase();
 
-/** Settings face for a `{{#if}}` / `{{#elseif}}` opener: the expression is
- *  click-to-edit (rewriting the marker in the document), named conditions
- *  insert as one-click chips, and managing those names happens back on the
- *  template overview. */
+/** A condition string that is exactly one field's bare name (the "is filled"
+ *  / yes-no truthy check) maps back to that field, so the question input can
+ *  prefill with its label for editing. */
+const booleanFieldForExpr = (
+  expr: string,
+  fields: readonly StudioField[],
+): StudioField | undefined => {
+  const trimmed = expr.trim();
+  if (trimmed === "" || !isFieldPath(trimmed)) {
+    return undefined;
+  }
+  const field = fields.find((f) => f.path === trimmed);
+  return field?.inputType === "boolean" ? field : undefined;
+};
+
+/**
+ * Settings face for a `{{#if}}` / `{{#elseif}}` opener. Teaches the two real
+ * ways a condition is expressed, cheapest first:
+ *   1. Ask a yes/no question — creates a boolean field and points the block at
+ *      its bare name, so the filler sees a Yes/No toggle (zero syntax).
+ *   2. Only when a field matches — a visual `field operator value` rule builder.
+ *   3. Advanced (collapsed) — the raw expression editor, named-condition chips,
+ *      and a jump back to manage named conditions.
+ */
 const ConditionFace = ({
   selected,
   conditions,
+  fields,
 }: {
   selected: DirectiveRange;
   conditions: NameExpr[];
+  fields: StudioField[];
 }) => {
   const t = useTranslations();
   const actions = useTemplateStudioStore((s) => s.actions);
-  const named = conditions.filter((c) => c.name !== "");
+  const rewrite = (next: string) =>
+    actions?.rewriteConditionExpr(next) ?? false;
+  const humanEcho = booleanFieldForExpr(selected.expr, fields)?.label;
   return (
     <ScrollArea className="min-h-0 flex-1">
       <ScopeHeader
+        action={
+          <Tooltip
+            content={t("templates.studio.conditionHelpTooltip")}
+            render={
+              <Button
+                aria-label={t("templates.studio.conditionHelpTooltip")}
+                size="icon-sm"
+                variant="ghost"
+              >
+                <CircleHelpIcon />
+              </Button>
+            }
+          />
+        }
         onBack={() => actions?.deselect()}
-        subtitle={selected.kind}
+        subtitle={
+          humanEcho === undefined || humanEcho === "" ? undefined : humanEcho
+        }
         title={t("templates.studio.scopeCondition")}
       />
-      <div className="flex flex-col gap-3 px-4 py-4">
-        <p className="text-muted-foreground text-xs leading-relaxed">
-          {t("templates.studio.conditionBlockHelp")}
-        </p>
-        <ConditionExprEditor
+      <div className="flex flex-col gap-5 px-4 py-4">
+        <ConditionQuestionBuilder
           expr={selected.expr}
+          fields={fields}
           key={`${selected.from}:${selected.expr}`}
-          onRewrite={(next) => actions?.rewriteConditionExpr(next) ?? false}
+          onRewrite={rewrite}
         />
-        {named.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {named.map((c) => (
-              <Button
-                className="h-6 px-2 text-xs"
-                key={c.name}
-                onClick={() => {
-                  actions?.rewriteConditionExpr(c.name);
-                }}
-                size="sm"
-                title={c.expression}
-                variant="outline"
-              >
-                {c.name}
-              </Button>
-            ))}
-          </div>
-        )}
+        <ConditionRuleBuilder fields={fields} onRewrite={rewrite} />
+        <ConditionAdvanced
+          conditions={conditions}
+          expr={selected.expr}
+          fromKey={`${selected.from}:${selected.expr}`}
+          onRewrite={rewrite}
+        />
+      </div>
+    </ScrollArea>
+  );
+};
+
+/** Primary, no-syntax path: a question label becomes a boolean field whose
+ *  bare name is the block's condition. The filler answers Yes/No; the block
+ *  shows on Yes. Prefilled with the current boolean field's label when the
+ *  condition already points at one. */
+const ConditionQuestionBuilder = ({
+  expr,
+  fields,
+  onRewrite,
+}: {
+  expr: string;
+  fields: StudioField[];
+  onRewrite: (next: string) => boolean;
+}) => {
+  const t = useTranslations();
+  const upsertField = useTemplateStudioStore((s) => s.upsertField);
+  const existing = booleanFieldForExpr(expr, fields);
+  const [label, setLabel] = useState(existing?.label ?? "");
+
+  const commit = () => {
+    const trimmed = label.trim();
+    if (trimmed === "") {
+      return;
+    }
+    // Editing an existing question: keep its field/path, just relabel.
+    if (existing !== undefined) {
+      if (trimmed !== existing.label) {
+        upsertField(existing.path, { label: trimmed });
+      }
+      return;
+    }
+    const base = sanitizeFieldPath(trimmed) || "question";
+    const taken = (candidate: string) =>
+      useTemplateStudioStore
+        .getState()
+        .fields.some((f) => f.path === candidate);
+    const path = nextFreePath(base, taken);
+    upsertField(path, { inputType: "boolean", label: trimmed });
+    onRewrite(path);
+  };
+
+  return (
+    <section className="flex flex-col gap-2">
+      <h4 className="flex items-center gap-1.5 text-sm font-medium">
+        <MessageCircleQuestionIcon className="text-muted-foreground size-4 shrink-0" />
+        {t("templates.studio.conditionAskQuestion")}
+      </h4>
+      <p className="text-muted-foreground text-xs leading-relaxed">
+        {t("templates.studio.conditionAskQuestionHelp")}
+      </p>
+      <Input
+        className="h-9 text-sm"
+        onBlur={commit}
+        onChange={(e) => setLabel(e.currentTarget.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.currentTarget.blur();
+            return;
+          }
+          if (e.key === "Escape") {
+            setLabel(existing?.label ?? "");
+            e.currentTarget.blur();
+          }
+        }}
+        placeholder={t("templates.studio.conditionAskQuestionPlaceholder")}
+        value={label}
+      />
+    </section>
+  );
+};
+
+/** Secondary path: a visual `field operator value` rule (All/Any of several),
+ *  populated from the template's non-boolean fields. Serialization is one-way
+ *  (building sets the raw expression); the builder does not parse an existing
+ *  expression back, so it always starts empty — the current expression still
+ *  shows in Advanced below. */
+const ConditionRuleBuilder = ({
+  fields,
+  onRewrite,
+}: {
+  fields: StudioField[];
+  onRewrite: (next: string) => boolean;
+}) => {
+  const t = useTranslations();
+  const [open, setOpen] = useState(false);
+  const [group, setGroup] = useState<ConditionGroup>(emptyGroup);
+  const ruleFields = fields
+    .filter((f) => f.inputType !== "boolean")
+    .map((f) => f.path);
+
+  const apply = () => {
+    const expression = serializeCondition(group);
+    if (expression === "") {
+      return;
+    }
+    if (onRewrite(expression)) {
+      setGroup(emptyGroup());
+      setOpen(false);
+      return;
+    }
+    stellaToast.add({
+      type: "error",
+      title: t("templates.studio.invalidExpression"),
+    });
+  };
+
+  if (!open) {
+    return (
+      <section className="flex flex-col gap-2">
+        <h4 className="flex items-center gap-1.5 text-sm font-medium">
+          <ListFilterIcon className="text-muted-foreground size-4 shrink-0" />
+          {t("templates.studio.conditionMatchField")}
+        </h4>
+        <p className="text-muted-foreground text-xs leading-relaxed">
+          {t("templates.studio.conditionMatchFieldHelp")}
+        </p>
         <Button
-          className="text-muted-foreground self-start"
-          onClick={() => actions?.deselect()}
+          className="self-start"
+          onClick={() => setOpen(true)}
+          size="sm"
+          variant="outline"
+        >
+          <PlusIcon />
+          {t("templates.studio.conditionBuildRule")}
+        </Button>
+      </section>
+    );
+  }
+  return (
+    <section className="flex flex-col gap-2">
+      <h4 className="flex items-center gap-1.5 text-sm font-medium">
+        <ListFilterIcon className="text-muted-foreground size-4 shrink-0" />
+        {t("templates.studio.conditionMatchField")}
+      </h4>
+      <ConditionGroupEditor
+        fields={ruleFields}
+        group={group}
+        onChange={setGroup}
+      />
+      <div className="flex items-center gap-2">
+        <Button onClick={apply} size="sm">
+          {t("common.done")}
+        </Button>
+        <Button
+          onClick={() => {
+            setGroup(emptyGroup());
+            setOpen(false);
+          }}
           size="sm"
           variant="ghost"
         >
-          {t("templates.studio.manageNamedConditions")}
+          {t("common.cancel")}
         </Button>
       </div>
-    </ScrollArea>
+    </section>
+  );
+};
+
+/** Power-user / reference path, collapsed by default: the raw expression
+ *  editor, one-click chips for the manifest's named conditions, and a jump
+ *  back to the overview to manage those names. */
+const ConditionAdvanced = ({
+  expr,
+  fromKey,
+  conditions,
+  onRewrite,
+}: {
+  expr: string;
+  fromKey: string;
+  conditions: NameExpr[];
+  onRewrite: (next: string) => boolean;
+}) => {
+  const t = useTranslations();
+  const actions = useTemplateStudioStore((s) => s.actions);
+  const [open, setOpen] = useState(false);
+  const named = conditions.filter((c) => c.name !== "");
+  return (
+    <section className="border-t pt-3">
+      <button
+        aria-expanded={open}
+        className="hover:bg-muted flex w-full items-center gap-1.5 rounded px-1.5 py-1 text-start text-xs"
+        onClick={() => setOpen((v) => !v)}
+        type="button"
+      >
+        {open ? (
+          <ChevronDownIcon className="text-muted-foreground size-3.5 shrink-0" />
+        ) : (
+          <ChevronRightIcon className="text-muted-foreground size-3.5 shrink-0" />
+        )}
+        <span className="text-muted-foreground font-medium">
+          {t("templates.studio.conditionAdvanced")}
+        </span>
+      </button>
+      {open && (
+        <div className="mt-2 flex flex-col gap-3">
+          <ConditionExprEditor
+            expr={expr}
+            key={fromKey}
+            onRewrite={onRewrite}
+          />
+          {named.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {named.map((c) => (
+                <Button
+                  className="h-6 px-2 text-xs"
+                  key={c.name}
+                  onClick={() => {
+                    onRewrite(c.name);
+                  }}
+                  size="sm"
+                  title={c.expression}
+                  variant="outline"
+                >
+                  {c.name}
+                </Button>
+              ))}
+            </div>
+          )}
+          <Button
+            className="text-muted-foreground self-start"
+            onClick={() => actions?.deselect()}
+            size="sm"
+            variant="ghost"
+          >
+            {t("templates.studio.manageNamedConditions")}
+          </Button>
+        </div>
+      )}
+    </section>
   );
 };
 
