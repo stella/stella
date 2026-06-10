@@ -122,30 +122,44 @@ export const SkillResourcePanel = ({
   // before persisting. Saves are serialized: one PATCH in flight at a time, the
   // newest markdown coalesced behind it. Concurrent PATCHes could be applied by
   // the server out of order, silently persisting stale content even when the
-  // client discards the stale response.
-  const saveQueue = useRef<{ inFlight: boolean; pending: string | null }>({
-    inFlight: false,
-    pending: null,
-  });
+  // client discards the stale response. Queues are keyed per tab — the panel
+  // is not remounted on tab switch, so a single queue would let an in-flight
+  // save for one file consume markdown queued for another.
+  const saveQueues = useRef(
+    new Map<string, { inFlight: boolean; pending: string | null }>(),
+  );
+  const saveQueueFor = (tabId: string) => {
+    const existing = saveQueues.current.get(tabId);
+    if (existing) {
+      return existing;
+    }
+    const fresh = { inFlight: false, pending: null };
+    saveQueues.current.set(tabId, fresh);
+    return fresh;
+  };
   const runSaveLoop = async (editorMarkdown: string) => {
     if (tab.skillId === null) {
       return;
     }
+    // Snapshot the tab now: the loop may outlive a tab switch, and `tab` would
+    // then point at a different file.
+    const { content, id: tabId, resourcePath, target } = tab;
     const skill = api.skills({ skillId: toSafeId<"agentSkill">(tab.skillId) });
-    saveQueue.current.inFlight = true;
+    const queue = saveQueueFor(tabId);
+    queue.inFlight = true;
     let next: string | null = editorMarkdown;
     while (next !== null) {
-      const stored = toStoredMarkdown(next, tab.content);
+      const stored = toStoredMarkdown(next, content);
       const response =
-        tab.target === "body"
+        target === "body"
           ? await skill.patch({ body: stored, queryKey: ["skills"] })
           : await skill.resources.patch({
-              path: tab.resourcePath,
+              path: resourcePath,
               content: stored,
               queryKey: ["skills"],
             });
-      next = saveQueue.current.pending;
-      saveQueue.current.pending = null;
+      next = queue.pending;
+      queue.pending = null;
       if (response.error) {
         // Superseded by newer markdown: retry with that instead of toasting.
         if (next !== null) {
@@ -158,13 +172,14 @@ export const SkillResourcePanel = ({
         });
         break;
       }
-      updateSkillResourceTabContent(tab.id, stored);
+      updateSkillResourceTabContent(tabId, stored);
     }
-    saveQueue.current.inFlight = false;
+    queue.inFlight = false;
   };
   const persistMarkdown = (editorMarkdown: string) => {
-    if (saveQueue.current.inFlight) {
-      saveQueue.current.pending = editorMarkdown;
+    const queue = saveQueueFor(tab.id);
+    if (queue.inFlight) {
+      queue.pending = editorMarkdown;
       return;
     }
     void runSaveLoop(editorMarkdown);
