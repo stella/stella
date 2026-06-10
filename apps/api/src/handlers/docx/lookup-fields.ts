@@ -290,20 +290,31 @@ export const resolveLookupFields = async ({
       continue;
     }
 
-    // The author's format template renders deterministically ([tokens]
-    // substituted from the hit); grammar and wording adjustments happen
-    // downstream in the per-occurrence aiAdapt pass, never at lookup time.
-    const renderedText = renderLookupOutput(lookup.aiFormat, outcome.hit);
-    // The aiAdapt pass rewrites plain string stubs only, so a Person + AI
-    // lookup keeps a plain value (formatting markers stripped); otherwise
-    // **bold** / *italic* spans in the format become formatted runs.
-    replaceResolvedValue(
-      resolved,
-      field.path,
-      field.aiAdapt === true
-        ? stripLookupMarkdown(renderedText)
-        : lookupValueFromRendered(renderedText),
-    );
+    // The registry is resolved once; the default format and every named
+    // format render that one hit. The author's templates render
+    // deterministically ([tokens] substituted from the hit); grammar and
+    // wording adjustments happen downstream in the per-occurrence aiAdapt
+    // pass, never at lookup time.
+    const renderHit = (format: string | null | undefined): RichPatchValue => {
+      const text = renderLookupOutput(format, outcome.hit);
+      // The aiAdapt pass rewrites plain string stubs only, so a Person + AI
+      // lookup keeps a plain value (formatting markers stripped); otherwise
+      // **bold** / *italic* spans in the format become formatted runs.
+      return field.aiAdapt === true
+        ? stripLookupMarkdown(text)
+        : lookupValueFromRendered(text);
+    };
+
+    // `{{company}}` (or `company.value` nested) → the default rendering.
+    replaceResolvedValue(resolved, field.path, renderHit(lookup.aiFormat));
+
+    // `{{company.<key>}}` for each declared named format → that format's
+    // rendering of the SAME hit. Written as a FLAT dotted key so the marker
+    // resolves it directly (the base value at `field.path` is a string, so a
+    // nested walk would miss `<key>`); duplicate keys keep the last template.
+    for (const format of lookup.formats ?? []) {
+      resolved[`${field.path}.${format.key}`] = renderHit(format.template);
+    }
   }
 
   if (errors.length > 0) {
