@@ -109,9 +109,12 @@ const NON_DIRECTIVE_RULES = [
     title: "Markers vs. field configuration",
     detail:
       "Markers decide only WHICH values are fillable. How each field behaves " +
-      "(input type, options, who fills it — a person, AI, or a lookup — and " +
-      "date format) is configured AFTER creation in Template Studio or via the " +
-      "REST manifest overlay, never inside the DOCX.",
+      "is set as a separate field configuration, never inside the DOCX: " +
+      "input type, select options, dependent options, date format, composite " +
+      "parts, hint, required, and who fills the field — a person (default), AI " +
+      "(aiPrompt), Person+AI (aiAdapt), a formula, or a company-register " +
+      "lookup. Configure fields over MCP via create_template's `fields` overlay " +
+      "or the configure_template_fields tool.",
   },
 ] as const;
 
