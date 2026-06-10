@@ -85,6 +85,12 @@ export type StudioActions = {
    *  markers inline; the pre-configured fields register in the session
    *  (existing paths are kept and the recipe's get a `_2` suffix). */
   insertRecipe: (definition: TemplateRecipeDefinition) => void;
+  /** Make the field repeat per loop item (wrap its marker's containing
+   *  paragraph in `{{#each path}}` / `{{/each}}` and re-path the field to
+   *  the loop-item convention, `path` → `path.value`), or undo it (remove
+   *  the enclosing each markers and re-path back to the loop's name).
+   *  Returns false when the document could not be rewritten. */
+  setFieldRepeatable: (path: string, repeatable: boolean) => boolean;
 };
 
 /** A bilingual-mirror proposal the page queues for the chat surface — the

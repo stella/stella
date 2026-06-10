@@ -653,6 +653,73 @@ describe("mergeManifestWithDiscovery", () => {
     expect(resolved[0]?.itemFields?.[0]?.path).toBe("name");
   });
 
+  test("dotted manifest entries enrich array item fields without shadowing the array root", () => {
+    const discovery: DiscoveredTemplate = {
+      placeholders: [],
+      fields: [
+        {
+          path: "lawyers",
+          kind: "array",
+          count: 1,
+          itemFields: [{ path: "name", kind: "string", count: 1 }],
+        },
+      ],
+      structureErrors: [],
+    };
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "lawyers.name",
+          label: "Lawyer name",
+          inputType: "text",
+          required: true,
+        },
+      ],
+      conditions: [],
+    };
+
+    const resolved = mergeManifestWithDiscovery(manifest, discovery);
+
+    // The array root must survive (a flat "lawyers.name" field would shadow
+    // it in the namespace-parent filter and break the array fill form).
+    expect(resolved).toHaveLength(1);
+    const lawyers = resolved.at(0);
+    expect(lawyers?.path).toBe("lawyers");
+    expect(lawyers?.kind).toBe("array");
+    const item = lawyers?.itemFields?.at(0);
+    expect(item?.path).toBe("name");
+    expect(item?.label).toBe("Lawyer name");
+    expect(item?.inputType).toBe("text");
+    expect(item?.required).toBe(true);
+  });
+
+  test("manifest entries under an array root never emit flat fields, even unplaced ones", () => {
+    const discovery: DiscoveredTemplate = {
+      placeholders: [],
+      fields: [
+        {
+          path: "lawyers",
+          kind: "array",
+          count: 1,
+          itemFields: [{ path: "name", kind: "string", count: 1 }],
+        },
+      ],
+      structureErrors: [],
+    };
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [{ path: "lawyers.email", label: "Email", inputType: "text" }],
+      conditions: [],
+    };
+
+    const resolved = mergeManifestWithDiscovery(manifest, discovery);
+
+    expect(resolved).toHaveLength(1);
+    expect(resolved.at(0)?.path).toBe("lawyers");
+    expect(resolved.at(0)?.kind).toBe("array");
+  });
+
   test("merge preserves empty-string label from manifest", () => {
     const manifest: TemplateManifest = {
       version: 1,
