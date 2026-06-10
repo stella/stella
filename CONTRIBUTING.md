@@ -63,8 +63,12 @@ to explore the codebase.
 2. Make your changes, following the conventions below.
 3. Run checks before pushing:
    ```bash
-   bun run lint && bun run format && bun run typecheck && bun run test
+   bun run verify
    ```
+   This mirrors the required CI checks (lint, format, typecheck,
+   tests, i18n, dependency hygiene): green here means green on the
+   `ci-result` status. Use `bun run verify --all` to check every
+   package instead of only those affected by your branch.
 4. Open a pull request against `main`.
 5. Fill in the PR template and link a related issue.
 
