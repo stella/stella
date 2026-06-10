@@ -449,6 +449,20 @@ export const evaluateCondition = (
 // single entry point.
 export { evaluateNumericExpression } from "./compute.js";
 
+// Single source of truth for the deterministic field-value transforms
+// (composite, formula, date). Both the api fill engine and the web live
+// preview render through renderDeterministicFieldValue so they cannot drift.
+export {
+  formatDate,
+  renderComposite,
+  renderDeterministicFieldValue,
+} from "./field-values.js";
+export type {
+  DeterministicFieldConfig,
+  FieldDateFormat,
+  PartConfig,
+} from "./field-values.js";
+
 // Structured condition model for a no-code condition builder; serializes to
 // the expression syntax `evaluateCondition` consumes.
 export { serializeCondition } from "./condition-builder.js";

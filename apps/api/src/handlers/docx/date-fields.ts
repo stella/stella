@@ -19,10 +19,10 @@
  * Pure: no IO, no model/provider dependency.
  */
 
-import { resolvePath } from "@stll/template-conditions";
+import { formatDate, resolvePath } from "@stll/template-conditions";
 
 import { replaceResolvedValue } from "./composite-fields";
-import type { DateFormatStyle, FieldDateFormat, FieldMeta } from "./types";
+import type { FieldDateFormat, FieldMeta } from "./types";
 
 export type DateFieldError = {
   /** Manifest path of the date field. */
@@ -30,59 +30,15 @@ export type DateFieldError = {
   message: string;
 };
 
-const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
-
-/**
- * Parse a strict YYYY-MM-DD calendar date; null when malformed or not a real
- * date. UTC-anchored so the rendered day never shifts with the server
- * timezone. `Date` rolls out-of-range components over (2028-02-30 → March
- * 1), so the round-trip comparison catches non-existent dates.
- */
-const parseIsoDate = (value: string): Date | null => {
-  if (!ISO_DATE_PATTERN.test(value)) {
-    return null;
-  }
-  const date = new Date(`${value}T00:00:00Z`);
-  if (Number.isNaN(date.getTime()) || !date.toISOString().startsWith(value)) {
-    return null;
-  }
-  return date;
-};
-
-const STYLE_OPTIONS: Record<
-  Exclude<DateFormatStyle, "iso">,
-  Intl.DateTimeFormatOptions
-> = {
-  long: { dateStyle: "long" },
-  medium: { dateStyle: "medium" },
-  short: { dateStyle: "short" },
-};
-
-const formatStyled = (
-  date: Date,
-  locale: string,
-  style: Exclude<DateFormatStyle, "iso">,
-): string =>
-  new Intl.DateTimeFormat(locale, {
-    ...STYLE_OPTIONS[style],
-    timeZone: "UTC",
-  }).format(date);
-
 /** Format an ISO date per the field's locale + style; null when the value is
- *  not a valid calendar date. The "iso" style returns the value unchanged. */
+ *  not a valid calendar date. The "iso" style returns the value unchanged.
+ *  Thin wrapper over the canonical `formatDate` in @stll/template-conditions
+ *  so the api fill engine and the web preview share ONE implementation; keep
+ *  the name for existing importers. */
 export const formatIsoDate = (
   value: string,
   dateFormat: FieldDateFormat,
-): string | null => {
-  const date = parseIsoDate(value);
-  if (date === null) {
-    return null;
-  }
-  if (dateFormat.style === "iso") {
-    return value;
-  }
-  return formatStyled(date, dateFormat.locale, dateFormat.style);
-};
+): string | null => formatDate(value, dateFormat);
 
 /** Exemplar date for configuration previews; day > 12 so day/month order is
  *  unambiguous in every locale. */
@@ -90,16 +46,8 @@ export const DATE_FORMAT_EXAMPLE_ISO = "2028-06-13";
 
 /** Render the exemplar date in the given locale + style — the template
  *  config UI shows this as a live preview next to the style picker. */
-export const formatDateExample = (dateFormat: FieldDateFormat): string => {
-  if (dateFormat.style === "iso") {
-    return DATE_FORMAT_EXAMPLE_ISO;
-  }
-  return formatStyled(
-    new Date(`${DATE_FORMAT_EXAMPLE_ISO}T00:00:00Z`),
-    dateFormat.locale,
-    dateFormat.style,
-  );
-};
+export const formatDateExample = (dateFormat: FieldDateFormat): string =>
+  formatDate(DATE_FORMAT_EXAMPLE_ISO, dateFormat) ?? DATE_FORMAT_EXAMPLE_ISO;
 
 /**
  * Format every date field's submitted ISO value per its `dateFormat`,

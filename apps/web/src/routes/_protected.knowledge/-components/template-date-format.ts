@@ -1,12 +1,14 @@
 /**
- * Client-side mirror of the fill engine's locale-aware date rendering
- * (apps/api/src/handlers/docx/date-fields.ts): the wizard previews how a
- * style renders, and the fill form previews how the entered date will appear
- * in the generated document. `Intl.DateTimeFormat` with the same style map
- * and UTC anchoring produces the identical string on both sides; Eden
- * exposes types only, so the style list is mirrored here — extend together
- * with `DATE_FORMAT_STYLES` in apps/api/src/handlers/docx/types.ts.
+ * Date helpers for the template wizard and fill form.
+ *
+ * The locale-aware date RENDERING (style map, UTC anchoring, "iso"
+ * passthrough) is single-sourced in @stll/template-conditions
+ * (`formatDate`) — the SAME function the API fill engine renders through, so
+ * the preview and the generated document are byte-identical. This module only
+ * adds the web-only quick-pick date helpers and the config-preview exemplar.
  */
+
+import { formatDate } from "@stll/template-conditions";
 
 /** Mirrors `DATE_FORMAT_STYLES` from apps/api/src/handlers/docx/types.ts. */
 export const DATE_FORMAT_STYLES = ["long", "medium", "short", "iso"] as const;
@@ -19,72 +21,20 @@ export type TemplateDateFormat = {
   style: DateFormatStyle;
 };
 
-const STYLE_OPTIONS: Record<
-  Exclude<DateFormatStyle, "iso">,
-  Intl.DateTimeFormatOptions
-> = {
-  long: { dateStyle: "long" },
-  medium: { dateStyle: "medium" },
-  short: { dateStyle: "short" },
-};
-
-const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
-
-/** Strict YYYY-MM-DD calendar date, UTC-anchored; the round-trip check
- *  rejects rolled-over dates (2028-02-30). Same rule the fill applies. */
-const parseIsoDate = (value: string): Date | null => {
-  if (!ISO_DATE_PATTERN.test(value)) {
-    return null;
-  }
-  const date = new Date(`${value}T00:00:00Z`);
-  if (Number.isNaN(date.getTime()) || !date.toISOString().startsWith(value)) {
-    return null;
-  }
-  return date;
-};
-
-const formatStyled = (
-  date: Date,
-  locale: string,
-  style: Exclude<DateFormatStyle, "iso">,
-): string =>
-  new Intl.DateTimeFormat(locale, {
-    ...STYLE_OPTIONS[style],
-    timeZone: "UTC",
-  }).format(date);
-
 /** Exemplar date for configuration previews; day > 12 so day/month order is
  *  unambiguous in every locale. Mirrors `DATE_FORMAT_EXAMPLE_ISO`. */
 export const DATE_FORMAT_EXAMPLE_ISO = "2028-06-13";
 
 /** Render the exemplar date in the given locale + style; the style picker
  *  shows this so each choice is self-describing. */
-export const formatDateExample = (dateFormat: TemplateDateFormat): string => {
-  if (dateFormat.style === "iso") {
-    return DATE_FORMAT_EXAMPLE_ISO;
-  }
-  return formatStyled(
-    new Date(`${DATE_FORMAT_EXAMPLE_ISO}T00:00:00Z`),
-    dateFormat.locale,
-    dateFormat.style,
-  );
-};
+export const formatDateExample = (dateFormat: TemplateDateFormat): string =>
+  formatDate(DATE_FORMAT_EXAMPLE_ISO, dateFormat) ?? DATE_FORMAT_EXAMPLE_ISO;
 
 /** Format an entered ISO date as the document will render it; null when the
- *  value is not a valid calendar date. "iso" returns the value unchanged. */
-export const formatDateValue = (
-  value: string,
-  dateFormat: TemplateDateFormat,
-): string | null => {
-  const date = parseIsoDate(value);
-  if (date === null) {
-    return null;
-  }
-  if (dateFormat.style === "iso") {
-    return value;
-  }
-  return formatStyled(date, dateFormat.locale, dateFormat.style);
-};
+ *  value is not a valid calendar date. "iso" returns the value unchanged.
+ *  Re-exported from the shared package so the preview cannot drift from the
+ *  fill engine. */
+export const formatDateValue = formatDate;
 
 // ── Quick-pick dates for the fill form ────────────────────
 
