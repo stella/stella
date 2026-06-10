@@ -14,10 +14,7 @@ import {
 import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
 import { extractText } from "@/api/handlers/docx/extract-text";
-import {
-  type AiLookupFormatter,
-  createDispatchLookupResolver,
-} from "@/api/handlers/docx/lookup-fields";
+import { createDispatchLookupResolver } from "@/api/handlers/docx/lookup-fields";
 import { applyManifestFillSteps } from "@/api/handlers/docx/manifest-fill-steps";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
 import {
@@ -130,9 +127,6 @@ type FillServiceOptions = {
   generateAiValue?: AiFieldGenerator | undefined;
   /** Optional model-backed per-occurrence adapter for aiAdapt fields. */
   adaptAiValue?: AiOccurrenceAdapter | undefined;
-  /** Optional model-backed formatter for registry-lookup fields with an
-   *  aiFormat instruction; without it the deterministic rendering is used. */
-  formatLookupValue?: AiLookupFormatter | undefined;
 };
 
 type FilledDocx = {
@@ -159,7 +153,6 @@ export const fillStoredTemplateDocx = async ({
   organizationId,
   generateAiValue,
   adaptAiValue,
-  formatLookupValue,
 }: FillServiceOptions): Promise<FilledDocx | { error: string }> => {
   const loaded = await loadTemplate(templateId, scopedDb);
   if (!loaded) {
@@ -194,7 +187,6 @@ export const fillStoredTemplateDocx = async ({
       values: record,
       manifest,
       resolveLookup: createDispatchLookupResolver(),
-      formatLookupWithAi: formatLookupValue,
     });
     if (stepError !== null) {
       return { error: stepError };
