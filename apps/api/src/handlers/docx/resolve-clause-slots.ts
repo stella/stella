@@ -6,8 +6,12 @@
  */
 
 import type { ScopedDb } from "@/api/db";
-import { clauseBodyToRichPatch } from "@/api/handlers/clauses/clause-to-patch";
+import {
+  clauseBodyToPlainText,
+  clauseBodyToRichPatch,
+} from "@/api/handlers/clauses/clause-to-patch";
 import { isVariantDeleted } from "@/api/handlers/clauses/template-links";
+import type { ClauseBody } from "@/api/handlers/clauses/types";
 import type { SafeId } from "@/api/lib/branded-types";
 
 import type { ClauseSlot } from "./discover-clause-slots";
@@ -42,52 +46,108 @@ export const resolveClauseSlots = async (
   const patches: Record<string, RichPatchValue> = {};
 
   for (const slot of slots) {
-    const link = await scopedDb((tx) =>
-      tx.query.templateClauses.findFirst({
-        where: {
-          templateId: { eq: templateId },
-          slotName: slot.name,
-          organizationId: { eq: organizationId },
-        },
-        columns: {
-          clauseId: true,
-          clauseVariantId: true,
-          clauseVariantLabel: true,
-          clauseVersionId: true,
-        },
-      }),
-    );
-
-    if (!link || !link.clauseId) {
-      continue;
-    }
-
-    // A deleted variant must not silently fall back to the clause
-    // head. Leaving the marker unfilled reports it as an unmatched
-    // placeholder (named after the slot) in fill diagnostics. An
-    // explicit :latest / :vN modifier never used the variant, so it
-    // still resolves.
-    if (slot.versionModifier === undefined && isVariantDeleted(link)) {
-      continue;
-    }
-
-    const versionRow = await resolveVersion({
-      clauseId: link.clauseId,
-      variantId: link.clauseVariantId,
-      pinnedVersionId: link.clauseVersionId,
-      modifier: slot.versionModifier,
+    const body = await resolveSlotBody(
+      templateId,
+      slot,
       scopedDb,
       organizationId,
-    });
-
-    if (!versionRow) {
-      continue;
+    );
+    if (body) {
+      patches[slot.patchKey] = clauseBodyToRichPatch(body);
     }
-
-    patches[slot.patchKey] = clauseBodyToRichPatch(versionRow.body);
   }
 
   return patches;
+};
+
+/**
+ * Resolve each clause slot to its linked clause's PLAIN TEXT, keyed by
+ * slot NAME (not the patch key) so the live fill preview can match the
+ * folio clause-slot directive (`scanDirectives` exposes the slot name as
+ * a clause range's `expr`). Uses the same version/variant resolution as
+ * {@link resolveClauseSlots} so the preview matches what fill produces.
+ *
+ * Multi-paragraph clauses are joined with newlines; the preview renders
+ * this as one wrapping run (full multi-paragraph layout is a future item).
+ */
+export const resolveClauseSlotTexts = async (
+  templateId: SafeId<"template">,
+  slots: ClauseSlot[],
+  scopedDb: ScopedDb,
+  organizationId: SafeId<"organization">,
+): Promise<Record<string, string>> => {
+  if (slots.length === 0) {
+    return {};
+  }
+
+  const texts: Record<string, string> = {};
+
+  for (const slot of slots) {
+    const body = await resolveSlotBody(
+      templateId,
+      slot,
+      scopedDb,
+      organizationId,
+    );
+    if (body) {
+      texts[slot.name] = clauseBodyToPlainText(body);
+    }
+  }
+
+  return texts;
+};
+
+/**
+ * Look up the clause linked to a slot and resolve its body via the
+ * version/variant rules. Returns undefined when the slot is unlinked,
+ * its variant is deleted (without an explicit modifier), or the target
+ * version cannot be found.
+ */
+const resolveSlotBody = async (
+  templateId: SafeId<"template">,
+  slot: ClauseSlot,
+  scopedDb: ScopedDb,
+  organizationId: SafeId<"organization">,
+): Promise<ClauseBody | undefined> => {
+  const link = await scopedDb((tx) =>
+    tx.query.templateClauses.findFirst({
+      where: {
+        templateId: { eq: templateId },
+        slotName: slot.name,
+        organizationId: { eq: organizationId },
+      },
+      columns: {
+        clauseId: true,
+        clauseVariantId: true,
+        clauseVariantLabel: true,
+        clauseVersionId: true,
+      },
+    }),
+  );
+
+  if (!link || !link.clauseId) {
+    return undefined;
+  }
+
+  // A deleted variant must not silently fall back to the clause
+  // head. Leaving the marker unfilled reports it as an unmatched
+  // placeholder (named after the slot) in fill diagnostics. An
+  // explicit :latest / :vN modifier never used the variant, so it
+  // still resolves.
+  if (slot.versionModifier === undefined && isVariantDeleted(link)) {
+    return undefined;
+  }
+
+  const versionRow = await resolveVersion({
+    clauseId: link.clauseId,
+    variantId: link.clauseVariantId,
+    pinnedVersionId: link.clauseVersionId,
+    modifier: slot.versionModifier,
+    scopedDb,
+    organizationId,
+  });
+
+  return versionRow?.body;
 };
 
 // ── Helpers ──────────────────────────────────────────
