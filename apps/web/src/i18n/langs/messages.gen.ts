@@ -2010,6 +2010,7 @@ type Messages = {
     "configureFields": "Configure fields";
     "confirmDelete": "This will permanently delete the template.";
     "createCategory": "New category";
+    "createDocument": "Create document";
     "deleteCategory": "Delete category";
     "deleteFailed": "Failed to delete template";
     "describeWhenToUse": "Describe when to use this";
@@ -2064,9 +2065,24 @@ type Messages = {
     "lastUsedAgo": "Last used {time}";
     "loadFailed": "Failed to load templates";
     "lookupFieldHint": "Enter a KRS number; the company details are filled from the register.";
+    "moveToMatter": "Move to matter";
+    "newFromTemplate": "New document from template";
+    "newFromTemplateFillHint": "Fill in the fields; the document is created in this matter.";
     "newTemplate": "New template";
     "noTemplates": "No templates yet";
     "pdfConversionFailed": "Failed to convert to PDF";
+    "pickTemplate": "Choose a template to start from.";
+    "prefillApplied": "{count, plural, one {# field prefilled} other {# fields prefilled}}";
+    "prefillBadgeLabel": "Prefilled from a source";
+    "prefillDescription": "Add a source document or pasted text; values found for the fields are proposed for your review.";
+    "prefillDropHint": "Drop a DOCX or PDF here, or click to browse";
+    "prefillFailed": "Prefill failed";
+    "prefillMatterDocuments": "Documents from this matter";
+    "prefillNoValues": "No matching values were found in the sources.";
+    "prefillPasteText": "Paste text";
+    "prefillPasteTextPlaceholder": "Paste source text…";
+    "prefillRun": "Prefill";
+    "prefillTitle": "Prefill from documents";
     "previewEmpty": "No content to preview";
     "previewFailed": "Failed to generate preview";
     "previewFillLoading": "Generating preview...";
@@ -2081,6 +2097,7 @@ type Messages = {
     "registryNotFound": "No company found for that ID";
     "renameFailed": "Failed to rename template";
     "saveFailed": "Failed to save template";
+    "searchTemplates": "Search templates…";
     "structureWarnings": "{count, plural, one {# structure warning} other {# structure warnings}}";
     "studio": {
       "aiDrafted": "AI-drafted";
@@ -2091,12 +2108,12 @@ type Messages = {
       "clauseSlotHelp": "A clause from the library is inserted here at fill time. Manage linked clauses in the Clauses tab.";
       "conditionBlockHelp": "This block shows only when:";
       "conditionsSectionHelp": "Select text in the document → right-click → Show only if…";
-      "draftedByAi": "AI drafts it";
+      "draftedByAi": "AI";
       "emptyClauseSlot": "Empty clause slot";
       "expressionPlaceholder": "expression";
       "fieldHelp": "When someone fills this template, they'll be asked for this value. You decide here how that question looks.";
       "fillFormPreview": "How it appears in the fill form";
-      "filledByPerson": "Person filling the form";
+      "filledByPerson": "Person";
       "formula": "Formula";
       "insert": "Insert";
       "invalidExpression": "That expression is invalid";
@@ -2119,7 +2136,7 @@ type Messages = {
       "scopeTemplate": "Template";
       "showOnlyIf": "Show only if…";
       "suggestConfig": "Suggest configuration";
-      "textPlusAi": "Text + AI";
+      "textPlusAi": "Person + AI";
       "whoFills": "Who fills this?";
     };
     "tagPlaceholder": "Type a tag and press Enter";
@@ -2137,6 +2154,8 @@ type Messages = {
     "uploadDifferent": "Upload a different template";
     "uploadTitle": "Create a template";
     "usageGuidance": "Usage guidance";
+    "useTemplate": "Use template";
+    "useTemplateHint": "Fill in the fields, then download the document or save it to a matter.";
     "usedTimes": "Used {count, plural, one {# time} other {# times}}";
     "validationErrors": "Please fix the highlighted errors";
     "validationKrsFormat": "Enter a 10-digit KRS number";
