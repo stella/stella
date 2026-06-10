@@ -225,13 +225,16 @@ export type DiscoveredTemplate = {
 
 // ── Custom XML Manifest ─────────────────────────────────
 
-export type InputType =
-  | "text"
-  | "textarea"
-  | "number"
-  | "boolean"
-  | "date"
-  | "select";
+export const INPUT_TYPES = [
+  "text",
+  "textarea",
+  "number",
+  "boolean",
+  "date",
+  "select",
+] as const;
+
+export type InputType = (typeof INPUT_TYPES)[number];
 
 export type PartInputType = "text" | "select";
 
@@ -359,19 +362,8 @@ export type TemplateManifest = {
 const isRecordLike = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const isInputType = (value: unknown): value is InputType => {
-  switch (value) {
-    case "text":
-    case "textarea":
-    case "number":
-    case "boolean":
-    case "date":
-    case "select":
-      return true;
-    default:
-      return false;
-  }
-};
+const isInputType = (value: unknown): value is InputType =>
+  INPUT_TYPES.some((inputType) => inputType === value);
 
 const isFieldValidation = (value: unknown): value is FieldValidation => {
   if (!isRecordLike(value)) {

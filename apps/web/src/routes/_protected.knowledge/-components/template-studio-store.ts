@@ -1,5 +1,6 @@
 import { create } from "zustand";
 
+import type { TemplateRecipeDefinition } from "@stll/api/types";
 import type { DirectiveRange } from "@stll/folio";
 
 import type { EditableField } from "@/routes/_protected.knowledge/-components/template-wizard";
@@ -70,6 +71,11 @@ export type StudioActions = {
   /** Replace the selection (or insert at the caret) with an existing field's
    *  marker; replacing text flips the field to AI-adapted wording. */
   insertExistingField: (path: string) => void;
+  /** Insert a saved recipe at the caret: loop recipes add the `{{#each}}`
+   *  block with one marker paragraph per field, plain recipes add the
+   *  markers inline; the pre-configured fields register in the session
+   *  (existing paths are kept and the recipe's get a `_2` suffix). */
+  insertRecipe: (definition: TemplateRecipeDefinition) => void;
 };
 
 /** Page-owned UI state the inspector's action row reflects. */

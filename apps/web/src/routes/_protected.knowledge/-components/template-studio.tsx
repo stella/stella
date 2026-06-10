@@ -14,6 +14,8 @@ import { getRouteApi } from "@tanstack/react-router";
 import { panic } from "better-result";
 import type { LucideIcon } from "lucide-react";
 import {
+  BookmarkIcon,
+  BookmarkPlusIcon,
   BracesIcon,
   ChevronDownIcon,
   ChevronLeftIcon,
@@ -30,12 +32,13 @@ import {
   Trash2Icon,
   WandSparklesIcon,
 } from "lucide-react";
-import type { ResolvedPos } from "prosemirror-model";
+import type { NodeType, ResolvedPos } from "prosemirror-model";
 import { TextSelection } from "prosemirror-state";
-import type { Transaction } from "prosemirror-state";
+import type { EditorState, Transaction } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import { useTranslations } from "use-intl";
 
+import type { TemplateRecipeDefinition } from "@stll/api/types";
 import {
   buildPositionalText,
   getTemplateDirectives,
@@ -45,6 +48,15 @@ import type { DirectiveRange, DocxEditorRef } from "@stll/folio";
 import { isFieldPath } from "@stll/template-conditions";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
+import {
+  Dialog,
+  DialogClose,
+  DialogFooter,
+  DialogHeader,
+  DialogPanel,
+  DialogPopup,
+  DialogTitle,
+} from "@stll/ui/components/dialog";
 import { Input } from "@stll/ui/components/input";
 import { Label } from "@stll/ui/components/label";
 import {
@@ -104,6 +116,7 @@ import {
   templateClausesOptions,
   templateDetailOptions,
   templateDocxBufferOptions,
+  templateRecipesOptions,
 } from "@/routes/_protected.knowledge/-queries";
 
 const DocxEditor = lazy(async () => {
@@ -236,6 +249,8 @@ export const TemplateStudioPage = ({
       setFillPreview: (values) => actionsRef.current?.setFillPreview(values),
       insertExistingField: (path) =>
         actionsRef.current?.insertExistingField(path),
+      insertRecipe: (definition) =>
+        actionsRef.current?.insertRecipe(definition),
     });
     return () => setActions(null);
   }, [setActions]);
@@ -423,28 +438,12 @@ export const TemplateStudioPage = ({
       if (!paragraph) {
         return;
       }
-      const para = (text: string) =>
-        paragraph.create(
-          null,
-          text.length > 0 ? state.schema.text(text) : null,
-        );
+      const para = (text: string) => markerParagraph(state, paragraph, text);
       const selectPlaceholder = (tr: Transaction, openStart: number) => {
         const namePos = openStart + 1 + open.indexOf(placeholder);
         return tr.setSelection(
           TextSelection.create(tr.doc, namePos, namePos + placeholder.length),
         );
-      };
-      // Anchor at the nearest enclosing paragraph, not the top-level block:
-      // inside a table, depth 1 is the whole table and wrapping there would
-      // swallow it. The fill engine expands per paragraph wherever it lives
-      // (including inside a cell), so the markers belong next to the lines.
-      const paragraphDepth = ($pos: ResolvedPos): number => {
-        for (let depth = $pos.depth; depth >= 1; depth--) {
-          if ($pos.node(depth).type === paragraph) {
-            return depth;
-          }
-        }
-        return 1;
       };
       const { from, to } = range ?? state.selection;
       try {
@@ -452,7 +451,7 @@ export const TemplateStudioPage = ({
           const $from = state.doc.resolve(from);
           const pos =
             $from.depth >= 1
-              ? $from.after(paragraphDepth($from))
+              ? $from.after(paragraphDepth($from, paragraph))
               : state.doc.content.size;
           view.dispatch(
             selectPlaceholder(
@@ -464,10 +463,12 @@ export const TemplateStudioPage = ({
           const $from = state.doc.resolve(from);
           const $to = state.doc.resolve(to);
           const start =
-            $from.depth >= 1 ? $from.before(paragraphDepth($from)) : 0;
+            $from.depth >= 1
+              ? $from.before(paragraphDepth($from, paragraph))
+              : 0;
           const end =
             $to.depth >= 1
-              ? $to.after(paragraphDepth($to))
+              ? $to.after(paragraphDepth($to, paragraph))
               : state.doc.content.size;
           const tr = state.tr
             .insert(end, para(close))
@@ -498,6 +499,56 @@ export const TemplateStudioPage = ({
   const insertLoop = (range?: { from: number; to: number }) =>
     insertOrWrapBlock("{{#each items}}", "{{/each}}", "items", range);
   const insertClause = () => insertInline("{{@clause:Clause}}");
+
+  // Loop recipes mirror insertOrWrapBlock's caret branch: the opener, one
+  // marker paragraph per field, and the closer land after the current
+  // paragraph (block directives must occupy their own paragraph).
+  const insertRecipeLoopBlock = (loopPath: string, fieldPaths: string[]) =>
+    withEditorView((view) => {
+      const { state } = view;
+      const paragraph = state.schema.nodes["paragraph"];
+      if (!paragraph) {
+        return;
+      }
+      const para = (text: string) => markerParagraph(state, paragraph, text);
+      const { from } = state.selection;
+      const $from = state.doc.resolve(from);
+      const pos =
+        $from.depth >= 1
+          ? $from.after(paragraphDepth($from, paragraph))
+          : state.doc.content.size;
+      try {
+        view.dispatch(
+          state.tr
+            .insert(pos, [
+              para(`{{#each ${loopPath}}}`),
+              ...fieldPaths.map((path) => para(`{{${path}}}`)),
+              para("{{/each}}"),
+            ])
+            .scrollIntoView(),
+        );
+        view.focus();
+        markDirty();
+      } catch {
+        // Selection wasn't in an insertable block context; ignore.
+      }
+    });
+
+  const insertRecipe = (definition: TemplateRecipeDefinition) => {
+    const existing = useTemplateStudioStore.getState().fields;
+    const prepared = prepareRecipeInsert(definition, existing);
+    if (prepared.loopPath !== null) {
+      insertRecipeLoopBlock(
+        prepared.loopPath,
+        prepared.fields.map((f) => f.path),
+      );
+    } else {
+      insertInline(prepared.fields.map((f) => `{{${f.path}}}`).join(" "));
+    }
+    for (const field of prepared.fields) {
+      upsertField(field.path, field.config);
+    }
+  };
 
   const handleSave = async () => {
     const editor = editorRef.current;
@@ -582,6 +633,7 @@ export const TemplateStudioPage = ({
     insertCondition,
     insertLoop,
     insertClause,
+    insertRecipe,
     insertClauseSlot: (slotName) => insertInline(`{{@clause:${slotName}}}`),
     makeField,
     save: () => void handleSave(),
@@ -811,6 +863,26 @@ const paragraphsAround = (text: string, marker: string): string => {
     .slice(Math.max(0, index - 1), index + 2)
     .filter((line) => line.trim() !== "")
     .join("\n");
+};
+
+/** A paragraph node carrying marker text ("" for the empty body line). */
+const markerParagraph = (
+  state: EditorState,
+  paragraph: NodeType,
+  text: string,
+) => paragraph.create(null, text.length > 0 ? state.schema.text(text) : null);
+
+/** Anchor at the nearest enclosing paragraph, not the top-level block:
+ *  inside a table, depth 1 is the whole table and wrapping there would
+ *  swallow it. The fill engine expands per paragraph wherever it lives
+ *  (including inside a cell), so the markers belong next to the lines. */
+const paragraphDepth = ($pos: ResolvedPos, paragraph: NodeType): number => {
+  for (let depth = $pos.depth; depth >= 1; depth--) {
+    if ($pos.node(depth).type === paragraph) {
+      return depth;
+    }
+  }
+  return 1;
 };
 
 /** Folds the flat directive scan into the document's nesting: if/each
@@ -1139,6 +1211,12 @@ const StudioActionRow = () => {
     ...templateClausesOptions(activeOrganizationId, sessionTemplateId ?? ""),
     enabled: sessionTemplateId !== null,
   });
+  // Saved recipes (org-wide) feed the Insert > Recipes submenu.
+  const { data: recipesData } = useQuery(
+    templateRecipesOptions(activeOrganizationId),
+  );
+  const recipes =
+    recipesData && "recipes" in recipesData ? recipesData.recipes : [];
   const linkedClauses =
     clausesData && "links" in clausesData && Array.isArray(clausesData.links)
       ? clausesData.links.flatMap(
@@ -1222,6 +1300,24 @@ const StudioActionRow = () => {
             <RepeatIcon />
             {t("templates.studio.loop")}
           </MenuItem>
+          {recipes.length > 0 && (
+            <MenuSub>
+              <MenuSubTrigger>
+                <BookmarkIcon />
+                {t("templates.studio.recipes")}
+              </MenuSubTrigger>
+              <MenuSubPopup>
+                {recipes.map((recipe) => (
+                  <MenuItem
+                    key={recipe.id}
+                    onClick={() => actions.insertRecipe(recipe.definition)}
+                  >
+                    <span className="min-w-0 truncate">{recipe.name}</span>
+                  </MenuItem>
+                ))}
+              </MenuSubPopup>
+            </MenuSub>
+          )}
           <MenuSub>
             <MenuSubTrigger>
               <span className="text-sm font-semibold">{"\u00a7"}</span>
@@ -1565,6 +1661,7 @@ const FieldFace = ({
   const actions = useTemplateStudioStore((s) => s.actions);
   const fieldCount = useTemplateStudioStore((s) => s.fields.length);
   const [suggesting, setSuggesting] = useState(false);
+  const [recipeDialogOpen, setRecipeDialogOpen] = useState(false);
   const [exampleValue, setExampleValue] = useState<string | undefined>(
     undefined,
   );
@@ -1655,6 +1752,15 @@ const FieldFace = ({
                   <WandSparklesIcon />
                 )}
               </Button>
+              <Button
+                aria-label={t("templates.studio.saveAsRecipe")}
+                onClick={() => setRecipeDialogOpen(true)}
+                size="icon-sm"
+                title={t("templates.studio.saveAsRecipe")}
+                variant="ghost"
+              >
+                <BookmarkPlusIcon />
+              </Button>
             </div>
           }
           subtitle={
@@ -1727,7 +1833,121 @@ const FieldFace = ({
         onValueChange={pushPreview}
         value={previewValue}
       />
+      <SaveRecipeDialog
+        fieldPath={field.path}
+        onOpenChange={setRecipeDialogOpen}
+        open={recipeDialogOpen}
+      />
     </div>
+  );
+};
+
+/**
+ * Save the field's configuration as an org-wide recipe, insertable into any
+ * template. When the field's marker sits inside a `{{#each}}` block, the
+ * whole block is the recipe: the loop path plus every field used inside it.
+ */
+const SaveRecipeDialog = ({
+  fieldPath,
+  open,
+  onOpenChange,
+}: {
+  fieldPath: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) => {
+  const t = useTranslations();
+  const queryClient = useQueryClient();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const outline = useTemplateStudioStore((s) => s.outline);
+  const fields = useTemplateStudioStore((s) => s.fields);
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const definition = buildRecipeDefinition(fieldPath, outline, fields);
+
+  const save = async () => {
+    const trimmed = name.trim();
+    if (trimmed === "") {
+      return;
+    }
+    setSaving(true);
+    const response = await api["template-recipes"].put({
+      name: trimmed,
+      definition,
+    });
+    setSaving(false);
+    if (response.error) {
+      stellaToast.add({
+        type: "error",
+        title: t("templates.studio.recipeSaveFailed"),
+      });
+      return;
+    }
+    stellaToast.add({
+      type: "success",
+      title: t("templates.studio.recipeSaved"),
+    });
+    void queryClient.invalidateQueries({
+      queryKey: knowledgeKeys.templateRecipes.all(activeOrganizationId),
+    });
+    setName("");
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogPopup className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{t("templates.studio.saveAsRecipe")}</DialogTitle>
+        </DialogHeader>
+        <DialogPanel className="flex flex-col gap-3">
+          <div className="text-muted-foreground flex items-center gap-2 text-xs">
+            {definition.loop === undefined ? null : (
+              <span className="flex items-center gap-1">
+                <RepeatIcon className="size-3.5 shrink-0" />
+                <code>{definition.loop.path}</code>
+              </span>
+            )}
+            <span>
+              {t("templates.fieldCount", { count: definition.fields.length })}
+            </span>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="recipe-name">{t("common.name")}</Label>
+            <Input
+              autoFocus
+              id="recipe-name"
+              onChange={(e) => setName(e.currentTarget.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  void save();
+                }
+              }}
+              value={name}
+            />
+          </div>
+        </DialogPanel>
+        <DialogFooter>
+          <DialogClose render={<Button variant="ghost" />}>
+            {t("common.cancel")}
+          </DialogClose>
+          <Button
+            disabled={name.trim() === "" || saving}
+            onClick={() => void save()}
+          >
+            {saving ? (
+              <Loader2Icon className="animate-spin" />
+            ) : (
+              <BookmarkPlusIcon />
+            )}
+            {t("common.save")}
+          </Button>
+        </DialogFooter>
+      </DialogPopup>
+    </Dialog>
   );
 };
 
@@ -2113,6 +2333,53 @@ const parseNameExprs = (
   }));
 };
 
+type ManifestField = {
+  path: string;
+  inputType: EditableField["inputType"];
+  label?: string;
+  required?: boolean;
+  options?: string[];
+  aiPrompt?: string;
+  aiAdapt?: boolean;
+  parts?: EditablePart[];
+  format?: string;
+  optionsFrom?: string;
+  lookup?: EditableField["lookup"];
+};
+
+/** One session field as it is persisted: only the settings that are
+ *  actually set, in the manifest's `FieldMeta` shape. Shared by the
+ *  template manifest build and recipe snapshots. */
+const studioFieldToManifestField = (f: StudioField): ManifestField => {
+  const field: ManifestField = { path: f.path, inputType: f.inputType };
+  if (f.label) {
+    field.label = f.label;
+  }
+  if (f.required) {
+    field.required = true;
+  }
+  if (f.options.length > 0) {
+    field.options = f.options;
+  }
+  if (f.aiPrompt) {
+    field.aiPrompt = f.aiPrompt;
+  }
+  if (f.aiAdapt) {
+    field.aiAdapt = true;
+  }
+  if (f.optionsFrom !== undefined && f.inputType === "select") {
+    field.optionsFrom = f.optionsFrom;
+  }
+  if (f.lookup !== undefined) {
+    field.lookup = f.lookup;
+  }
+  if (f.parts !== undefined && f.parts.length > 0 && f.format) {
+    field.parts = f.parts;
+    field.format = f.format;
+  }
+  return field;
+};
+
 const buildManifest = (
   original: unknown,
   fields: StudioField[],
@@ -2125,50 +2392,151 @@ const buildManifest = (
       : 1;
   return {
     version,
-    fields: fields
-      .filter((f) => f.path)
-      .map((f) => {
-        const field: {
-          path: string;
-          inputType: EditableField["inputType"];
-          label?: string;
-          required?: boolean;
-          options?: string[];
-          aiPrompt?: string;
-          aiAdapt?: boolean;
-          parts?: EditablePart[];
-          format?: string;
-          optionsFrom?: string;
-          lookup?: EditableField["lookup"];
-        } = { path: f.path, inputType: f.inputType };
-        if (f.label) {
-          field.label = f.label;
-        }
-        if (f.required) {
-          field.required = true;
-        }
-        if (f.options.length > 0) {
-          field.options = f.options;
-        }
-        if (f.aiPrompt) {
-          field.aiPrompt = f.aiPrompt;
-        }
-        if (f.aiAdapt) {
-          field.aiAdapt = true;
-        }
-        if (f.optionsFrom !== undefined && f.inputType === "select") {
-          field.optionsFrom = f.optionsFrom;
-        }
-        if (f.lookup !== undefined) {
-          field.lookup = f.lookup;
-        }
-        if (f.parts !== undefined && f.parts.length > 0 && f.format) {
-          field.parts = f.parts;
-          field.format = f.format;
-        }
-        return field;
-      }),
+    fields: fields.filter((f) => f.path).map(studioFieldToManifestField),
     conditions: conditions.filter((c) => c.name && c.expression),
     computed: computed.filter((c) => c.name && c.expression),
   };
+};
+
+// ── Recipes (saved structural blocks) ────────────────────
+
+type RecipeField = TemplateRecipeDefinition["fields"][number];
+
+type OutlineGroup = Extract<OutlineNode, { type: "group" }>;
+
+/** Innermost `{{#each}}` group whose subtree contains the field's marker. */
+const findEnclosingEachGroup = (
+  nodes: OutlineNode[],
+  path: string,
+  enclosing: OutlineGroup | null,
+): OutlineGroup | null => {
+  for (const node of nodes) {
+    if (node.type === "field" && node.path === path && enclosing !== null) {
+      return enclosing;
+    }
+    if (node.type === "group") {
+      const next = node.kind === "each" ? node : enclosing;
+      const found = findEnclosingEachGroup(node.children, path, next);
+      if (found !== null) {
+        return found;
+      }
+    }
+  }
+  return null;
+};
+
+/** Snapshot a recipe from the live session: when the field's marker sits
+ *  inside a `{{#each}}` block, the recipe is the whole block (loop path +
+ *  every field used inside it); otherwise just this field's config. */
+const buildRecipeDefinition = (
+  fieldPath: string,
+  outline: OutlineNode[],
+  fields: StudioField[],
+): TemplateRecipeDefinition => {
+  const group = findEnclosingEachGroup(outline, fieldPath, null);
+  const loopPath =
+    group !== null && isFieldPath(group.expr) ? group.expr : null;
+  const paths =
+    group !== null && loopPath !== null
+      ? [...outlineFieldPaths(group.children)]
+      : [fieldPath];
+  const recipeFields = paths.map((path) => {
+    const field =
+      fields.find((f) => f.path === path) ?? defaultStudioField(path);
+    return studioFieldToManifestField(field);
+  });
+  if (loopPath === null) {
+    return { fields: recipeFields };
+  }
+  return { fields: recipeFields, loop: { path: loopPath } };
+};
+
+const nextFreePath = (
+  base: string,
+  isTaken: (candidate: string) => boolean,
+): string => {
+  let path = base;
+  for (let n = 2; isTaken(path); n++) {
+    path = `${base}_${n}`;
+  }
+  return path;
+};
+
+type PreparedRecipeField = { path: string; config: Partial<StudioField> };
+
+type PreparedRecipe = {
+  loopPath: string | null;
+  fields: PreparedRecipeField[];
+};
+
+/** Resolve the recipe's paths against the session so inserting never
+ *  clobbers existing fields: a conflicting loop renames its whole namespace
+ *  at once (`persons` -> `persons_2`, fields move with it), conflicting
+ *  plain fields get a `_2` suffix individually (like makeField). */
+const prepareRecipeInsert = (
+  definition: TemplateRecipeDefinition,
+  existing: StudioField[],
+): PreparedRecipe => {
+  const taken = new Set(existing.map((f) => f.path));
+
+  let loopPath: string | null = null;
+  let mapPath = (path: string): string => path;
+  if (definition.loop !== undefined) {
+    const base = definition.loop.path;
+    loopPath = nextFreePath(base, (candidate) =>
+      existing.some(
+        (f) => f.path === candidate || f.path.startsWith(`${candidate}.`),
+      ),
+    );
+    const renamed = loopPath;
+    mapPath = (path) => {
+      if (path === base) {
+        return renamed;
+      }
+      if (path.startsWith(`${base}.`)) {
+        return `${renamed}${path.slice(base.length)}`;
+      }
+      return path;
+    };
+  }
+
+  const fields: PreparedRecipeField[] = [];
+  for (const field of definition.fields) {
+    const path = nextFreePath(mapPath(field.path), (candidate) =>
+      taken.has(candidate),
+    );
+    taken.add(path);
+    fields.push({ path, config: recipeFieldToStudioPatch(field) });
+  }
+  return { loopPath, fields };
+};
+
+/** The saved recipe field config as an upsertField patch (path excluded:
+ *  the prepared, conflict-free path is passed separately). */
+const recipeFieldToStudioPatch = (field: RecipeField): Partial<StudioField> => {
+  const patch: Partial<StudioField> = {
+    label: field.label ?? "",
+    inputType: field.inputType ?? "text",
+    required: field.required === true,
+    options: field.options ?? [],
+    aiPrompt: field.aiPrompt,
+    aiAdapt: field.aiAdapt === true,
+  };
+  if (field.optionsFrom !== undefined) {
+    patch.optionsFrom = field.optionsFrom;
+  }
+  if (field.lookup !== undefined) {
+    patch.lookup = field.lookup;
+  }
+  if (field.parts !== undefined && field.format !== undefined) {
+    patch.parts = field.parts.map((part) => ({
+      key: part.key,
+      label: part.label,
+      inputType: part.inputType,
+      options: part.options ?? [],
+      pattern: part.pattern,
+    }));
+    patch.format = field.format;
+  }
+  return patch;
 };

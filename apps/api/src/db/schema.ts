@@ -57,6 +57,7 @@ import type {
 import type { ClauseMetadata } from "@/api/handlers/clauses/metadata";
 import type { ClauseBody } from "@/api/handlers/clauses/types";
 import type { TemplateManifest } from "@/api/handlers/docx/types";
+import type { TemplateRecipeDefinition } from "@/api/handlers/template-recipes/definition";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import type { CentsAmount } from "@/api/lib/money";
@@ -2495,6 +2496,37 @@ export const templateCategories = p.pgTable(
   ],
 );
 
+/**
+ * Saved structural-block recipes: a named, org-wide snapshot of
+ * pre-configured template fields (optionally wrapped in a `{{#each}}`
+ * loop) that can be inserted into any template in one click.
+ */
+export const templateRecipes = p.pgTable(
+  "template_recipes",
+  {
+    id: pUuid<"templateRecipe">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: p.varchar({ length: 256 }).notNull(),
+    description: p.text(),
+    definition: jsonb().$type<TemplateRecipeDefinition>().notNull(),
+    createdBy: p
+      .text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.index("template_recipes_organization_id_idx").on(table.organizationId),
+    p
+      .index("template_recipes_organization_id_name_idx")
+      .on(table.organizationId, table.name),
+    ...orgPolicies(),
+  ],
+);
+
 export const templateClauses = p.pgTable(
   "template_clauses",
   {
@@ -3981,6 +4013,7 @@ export const relations = defineRelations(
     clauseVersions,
     templateCategories,
     templateClauses,
+    templateRecipes,
     templateFills,
     searchDocuments,
     extractedContent,

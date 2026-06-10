@@ -42,6 +42,7 @@ import { skillsRoute } from "@/api/handlers/skills/routes";
 import { smokeRoute } from "@/api/handlers/smoke/routes";
 import { myTasksRoute } from "@/api/handlers/tasks/my-tasks-route";
 import { tasksRoute } from "@/api/handlers/tasks/routes";
+import { templateRecipesRoute } from "@/api/handlers/template-recipes/routes";
 import {
   templateCategoriesRoute,
   templatesRoute,
@@ -351,6 +352,7 @@ const api = new Elysia()
       .use(fieldsRoute)
       .use(templatesRoute)
       .use(templateCategoriesRoute)
+      .use(templateRecipesRoute)
       .use(timeEntriesRoute)
       .use(billingCodesRoute)
       .use(ratesRoute)
