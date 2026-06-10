@@ -2635,10 +2635,12 @@ const ScopeHeader = ({
           {title}
         </p>
         {subtitle === undefined ? null : (
-          <div className="text-sm">{subtitle}</div>
+          <div className="min-w-0 overflow-hidden text-sm">{subtitle}</div>
         )}
       </div>
-      {action}
+      {action === undefined ? null : (
+        <div className="shrink-0 self-start">{action}</div>
+      )}
     </div>
   );
 };
@@ -2799,6 +2801,7 @@ const FieldFace = ({
               size="sm"
               variant={valueSource === "person" ? "secondary" : "ghost"}
             >
+              <UserIcon className="size-3.5" />
               {t("templates.studio.filledByPerson")}
             </Button>
             <Button
@@ -2813,6 +2816,8 @@ const FieldFace = ({
               size="sm"
               variant={valueSource === "textAi" ? "secondary" : "ghost"}
             >
+              <UserIcon className="size-3.5" />
+              <WandSparklesIcon className="size-3.5" />
               {t("templates.studio.textPlusAi")}
             </Button>
             <Button
@@ -3029,12 +3034,14 @@ const FieldPathEditor = ({
   if (!editing) {
     return (
       <button
-        className="hover:bg-muted/60 group -ms-1 flex items-center gap-1.5 rounded px-1 py-0.5"
+        className="hover:bg-muted/60 group -ms-1 flex w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5"
         onClick={() => setEditing(true)}
         title={t("templates.studio.renameField")}
         type="button"
       >
-        <code className="text-sm">{path}</code>
+        <code className="truncate text-sm" title={path}>
+          {path}
+        </code>
         <PencilIcon className="text-muted-foreground size-3 opacity-0 transition-opacity group-hover:opacity-100" />
       </button>
     );
