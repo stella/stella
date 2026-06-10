@@ -1252,6 +1252,8 @@ type Messages = {
     "somethingWentWrong": "Something went wrong";
     "synced": "Synced";
     "syncing": "Syncing";
+    "tableBordersAll": "All borders";
+    "tableBordersNone": "No borders";
     "textEditingMenu": "Text editing menu";
     "textFormattingGroup": "Text formatting";
     "toggleTrackChanges": "Toggle Track Changes";
@@ -2172,7 +2174,7 @@ type Messages = {
     "templateNamePlaceholder": "e.g. Employment Agreement";
     "templateRenamed": "Template renamed";
     "templateSaved": "Template saved";
-    "testFill": "Test fill";
+    "testFill": "Fill";
     "unmatchedPlaceholders": "Some placeholders were not filled: {list}";
     "unsavedLeaveConfirm": "You have unsaved changes. Leave without saving?";
     "unusedValues": "Some values were not used: {list}";
