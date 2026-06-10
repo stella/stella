@@ -83,6 +83,17 @@ describe("serializeCondition", () => {
       serializeCondition({ kind: "group", match: "all", children: [] }),
     ).toBe("");
   });
+
+  test("contains emits a quoted value like the other operators", () => {
+    expect(
+      serializeCondition({
+        kind: "rule",
+        variable: "parties",
+        operator: "contains",
+        value: "guarantor",
+      }),
+    ).toBe('parties contains "guarantor"');
+  });
 });
 
 describe("serializeCondition → evaluateCondition round-trip", () => {
@@ -112,6 +123,24 @@ describe("serializeCondition → evaluateCondition round-trip", () => {
     ).toBe(false);
     expect(
       evaluateCondition(expr, { npf: false, married: true, unmarried: true }),
+    ).toBe(false);
+  });
+
+  test("a contains rule round-trips through the evaluator", () => {
+    const node: ConditionNode = {
+      kind: "rule",
+      variable: "parties",
+      operator: "contains",
+      value: "guarantor",
+    };
+    const containsExpr = serializeCondition(node);
+    expect(
+      evaluateCondition(containsExpr, {
+        parties: ["buyer", "guarantor"],
+      }),
+    ).toBe(true);
+    expect(
+      evaluateCondition(containsExpr, { parties: ["buyer", "seller"] }),
     ).toBe(false);
   });
 });
