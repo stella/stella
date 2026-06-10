@@ -206,6 +206,10 @@ const createInlineRuns = (
     return [createRun(doc, value, sourceRunProps)];
   }
 
+  // Single-paragraph values stay inline; multi-paragraph values are handled
+  // by the paragraph-splitting path (see splitParagraphForBlockValues) and
+  // never reach this function. If one does (defensive), join its text so the
+  // run-replacement path stays well-formed rather than dropping content.
   if (value.paragraphs.length <= 1) {
     return (value.paragraphs.at(0)?.runs ?? []).map((run) =>
       createRun(doc, run.text, sourceRunProps, run),
@@ -214,6 +218,9 @@ const createInlineRuns = (
 
   return [createRun(doc, valueText(value), sourceRunProps)];
 };
+
+const isMultiParagraphValue = (value: RichPatchValue): boolean =>
+  typeof value !== "string" && value.paragraphs.length > 1;
 
 const paragraphProps = (paragraph: slimdom.Element): slimdom.Element | null => {
   for (const child of paragraph.childNodes) {
@@ -510,6 +517,97 @@ export const replaceParagraphTextRanges = (
   }
 };
 
+/**
+ * Inline injection of a multi-paragraph value (e.g. a multi-paragraph library
+ * clause filling a mid-paragraph `{{@clause:Name}}` slot). The host paragraph
+ * is split: text before the first multi-paragraph marker stays in a leading
+ * paragraph, each clause paragraph becomes its own `w:p`, and text after the
+ * marker trails into a final paragraph. Every produced paragraph clones the
+ * host `pPr` (style ref, numbering, alignment, spacing) and the host's first
+ * run `rPr`, so the injected block inherits the target paragraph's style.
+ *
+ * Single-paragraph and string matches in the same paragraph are still rendered
+ * inline (as runs) within whichever produced paragraph they fall into; only a
+ * multi-paragraph match introduces a paragraph break. Markers without a value
+ * stay as literal text.
+ */
+const splitParagraphForBlockValues = (
+  paragraph: slimdom.Element,
+  text: string,
+  matches: PlaceholderMatch[],
+): boolean => {
+  const doc = paragraph.ownerDocument;
+  const parent = paragraph.parentNode;
+  if (!doc || !parent) {
+    return false;
+  }
+
+  const pPr = paragraphProps(paragraph);
+  const sourceRunProps = firstRunProps(paragraph);
+
+  const newParagraph = (): slimdom.Element => {
+    const next = doc.createElementNS(W_NS, "w:p");
+    const props = cloneElement(pPr);
+    if (props) {
+      next.append(props);
+    }
+    return next;
+  };
+
+  const built: slimdom.Element[] = [];
+  // The paragraph being accumulated. Leading/trailing/inline text and
+  // single-paragraph values append runs here; a multi-paragraph value flushes
+  // it, emits the clause paragraphs, then opens a fresh accumulator.
+  let current = newParagraph();
+
+  const appendText = (chunk: string) => {
+    if (chunk.length === 0) {
+      return;
+    }
+    current.append(createRun(doc, chunk, sourceRunProps));
+  };
+
+  let cursor = 0;
+  for (const match of matches) {
+    appendText(text.slice(cursor, match.start));
+    cursor = match.end;
+
+    const { value } = match;
+    if (typeof value === "string" || value.paragraphs.length <= 1) {
+      for (const run of createInlineRuns(doc, value, sourceRunProps)) {
+        current.append(run);
+      }
+      continue;
+    }
+
+    built.push(current);
+    for (const clauseParagraph of value.paragraphs) {
+      const next = newParagraph();
+      for (const run of clauseParagraph.runs) {
+        next.append(createRun(doc, run.text, sourceRunProps, run));
+      }
+      built.push(next);
+    }
+    current = newParagraph();
+  }
+  appendText(text.slice(cursor));
+  built.push(current);
+
+  // Drop empty leading/trailing fragments (e.g. an empty clause value, or a
+  // marker that opened/closed the paragraph) but never collapse to nothing:
+  // an all-empty result still leaves one paragraph to preserve structure.
+  const nonEmpty = built.filter(
+    (candidate) => candidate.getElementsByTagNameNS(W_NS, "r").length > 0,
+  );
+  const emit = nonEmpty.length > 0 ? nonEmpty : built.slice(0, 1);
+
+  for (const produced of emit) {
+    parent.insertBefore(produced, paragraph);
+  }
+  parent.removeChild(paragraph);
+  return true;
+};
+
 const patchInlinePlaceholders = (
   paragraph: slimdom.Element,
   values: Record<string, RichPatchValue>,
@@ -519,6 +617,10 @@ const patchInlinePlaceholders = (
   const matches = findPlaceholderMatches(text, values);
   if (matches.length === 0) {
     return false;
+  }
+
+  if (matches.some((match) => isMultiParagraphValue(match.value))) {
+    return splitParagraphForBlockValues(paragraph, text, matches);
   }
 
   for (const match of matches.toReversed()) {
