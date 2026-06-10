@@ -356,7 +356,7 @@ export const registerOAuthClient = async ({
   }
 
   const registrationBody = {
-    client_name: "Stella",
+    client_name: "stella",
     client_uri: env.FRONTEND_URL,
     grant_types: ["authorization_code", "refresh_token"],
     redirect_uris: [redirectUri],
