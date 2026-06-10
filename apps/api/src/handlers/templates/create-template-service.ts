@@ -127,6 +127,19 @@ export const createStoredTemplate = async function* ({
   }));
 
   if (clientManifest) {
+    const fieldPaths = new Set(fieldMetas.map((f) => f.path));
+    const unknown = clientManifest.fields.find((f) => !fieldPaths.has(f.path));
+    if (unknown) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message:
+            `No field "${unknown.path}" was discovered in the DOCX. ` +
+            "Configure only paths that exist as {{markers}}.",
+        }),
+      );
+    }
+
     const metaByPath = new Map<string, FieldMeta>();
     for (const f of clientManifest.fields) {
       metaByPath.set(f.path, f);

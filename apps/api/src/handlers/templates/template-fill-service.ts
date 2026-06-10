@@ -23,6 +23,11 @@ import {
 } from "@/api/handlers/docx/resolve-ai-fields";
 import { resolveClauseSlots } from "@/api/handlers/docx/resolve-clause-slots";
 import { readManifest } from "@/api/handlers/docx/template-manifest";
+import type {
+  FieldDateFormat,
+  FieldPart,
+  InputType,
+} from "@/api/handlers/docx/types";
 import { isTemplateData } from "@/api/handlers/docx/types";
 import { recordTemplateUse } from "@/api/handlers/templates/record-use";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -54,16 +59,34 @@ const loadTemplate = async (
 type DescribedField = {
   path: string;
   label: string | null;
-  inputType: string;
+  inputType: InputType;
   required: boolean;
   /** Short fill guidance (expected format, where to find the value). */
   hint: string | null;
+  /** Allowed values for a select; null when the field is not a select. */
+  options: string[] | null;
   /**
    * Lookup field output formats: the bare `{{path}}` marker renders the first
    * format; later formats are addressed by `{{path.key}}`. Null for
    * non-lookup fields so an agent knows which fields resolve from a registry.
    */
   formats: { key: string; template: string }[] | null;
+  /** AI-drafting instruction (this field is written by AI at fill time when
+   *  the value is omitted); null when the field is not AI-drafted. */
+  aiPrompt: string | null;
+  /** True when the entered value is a stub AI rewrites per occurrence to fit
+   *  the surrounding text; false otherwise. */
+  aiAdapt: boolean;
+  /** Path of another field that supplies this select's options live at fill
+   *  time (dependent select); null when the options are static/none. */
+  optionsFrom: string | null;
+  /** Locale-aware date rendering for a date field; null when unset. */
+  dateFormat: FieldDateFormat | null;
+  /** Composite parts joined by {@link DescribedField.format}; null when the
+   *  field is not composite. */
+  parts: FieldPart[] | null;
+  /** Join template over the composite part keys; null when not composite. */
+  format: string | null;
 };
 
 export type DescribeTemplateResult =
@@ -101,6 +124,7 @@ export const describeStoredTemplate = async ({
           inputType: field.inputType ?? "text",
           required: field.required ?? false,
           hint: field.hint ?? null,
+          options: field.options ?? null,
           formats:
             field.lookup === undefined
               ? null
@@ -108,6 +132,12 @@ export const describeStoredTemplate = async ({
                   key: format.key,
                   template: format.template,
                 })),
+          aiPrompt: field.aiPrompt ?? null,
+          aiAdapt: field.aiAdapt ?? false,
+          optionsFrom: field.optionsFrom ?? null,
+          dateFormat: field.dateFormat ?? null,
+          parts: field.parts ?? null,
+          format: field.format ?? null,
         })),
       conditions: manifest.conditions.map((c) => ({
         name: c.name,
@@ -131,7 +161,14 @@ export const describeStoredTemplate = async ({
       inputType: "text",
       required: false,
       hint: null,
+      options: null,
       formats: null,
+      aiPrompt: null,
+      aiAdapt: false,
+      optionsFrom: null,
+      dateFormat: null,
+      parts: null,
+      format: null,
     })),
     conditions: [],
     computed: [],
