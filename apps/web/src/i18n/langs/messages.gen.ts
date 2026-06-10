@@ -2149,7 +2149,14 @@ type Messages = {
       "aiScopeSelectionPrompt": "Only suggest fields within this selected part of the document:";
       "aiSuggest": "Suggest fields";
       "clauseSlotHelp": "A clause from the library is inserted here at fill time. Manage linked clauses in the Clauses tab.";
-      "conditionBlockHelp": "This block shows only when:";
+      "conditionAdvanced": "Advanced";
+      "conditionAskQuestion": "Ask a yes/no question";
+      "conditionAskQuestionHelp": "The person filling the template answers Yes or No. This block appears when they answer Yes.";
+      "conditionAskQuestionPlaceholder": "Is there a representative?";
+      "conditionBuildRule": "Build a rule";
+      "conditionHelpTooltip": "This block appears in the filled document only when its condition is true.";
+      "conditionMatchField": "Only when a field matches";
+      "conditionMatchFieldHelp": "Show this block based on what someone enters in another field.";
       "conditionsSectionHelp": "Select text in the document → right-click → Show only if…";
       "draftedByAi": "AI";
       "emptyClauseSlot": "Empty clause slot";

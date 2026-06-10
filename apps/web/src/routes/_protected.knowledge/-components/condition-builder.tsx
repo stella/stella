@@ -58,7 +58,7 @@ const inputClass =
 
 // ── Flat all/any rule editor ─────────────────────────────
 
-const ConditionGroupEditor = ({
+export const ConditionGroupEditor = ({
   fields,
   group,
   onChange,
