@@ -85,6 +85,9 @@ export const knowledgeKeys = {
   templateCategories: {
     all: (organizationId: string) => ["template-categories", organizationId],
   },
+  templateRecipes: {
+    all: (organizationId: string) => ["template-recipes", organizationId],
+  },
   clauses: {
     all: (organizationId: string) => ["clauses", organizationId],
     list: (
@@ -259,6 +262,26 @@ export const templateClausesOptions = (
       const response = await api
         .templates({ templateId: toSafeId<"template">(templateId) })
         .clauses.get({ fetch: { signal } });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    staleTime: STALE_TIME.FIVE.MINUTES,
+  });
+
+// ── Recipe queries ──────────────────────────────────
+
+// The full org-wide recipe set: bounded server-side, no pagination.
+export const templateRecipesOptions = (organizationId: string) =>
+  queryOptions({
+    queryKey: knowledgeKeys.templateRecipes.all(organizationId),
+    queryFn: async ({ signal }) => {
+      const response = await api["template-recipes"].get({
+        fetch: { signal },
+      });
 
       if (response.error) {
         throw toAPIError(response.error);
