@@ -24,6 +24,7 @@ describe("buildPrefillTargets", () => {
         path: "company.name",
         partKey: null,
         label: "Company name",
+        hint: null,
         inputType: "text",
         options: null,
       },
@@ -32,6 +33,7 @@ describe("buildPrefillTargets", () => {
         path: "signing_date",
         partKey: null,
         label: null,
+        hint: null,
         inputType: "date",
         options: null,
       },
@@ -72,6 +74,7 @@ describe("buildPrefillTargets", () => {
         path: "seat",
         partKey: "street",
         label: "Street",
+        hint: null,
         inputType: "text",
         options: null,
       },
@@ -80,6 +83,7 @@ describe("buildPrefillTargets", () => {
         path: "seat",
         partKey: "city",
         label: "Registered seat (city)",
+        hint: null,
         inputType: "select",
         options: ["Praha", "Brno"],
       },
@@ -100,6 +104,7 @@ describe("buildPrefillTargets", () => {
         path: "seat",
         partKey: null,
         label: null,
+        hint: null,
         inputType: "text",
         options: null,
       },
@@ -148,6 +153,21 @@ describe("renderPrefillTargets", () => {
       ]),
     );
     expect(rendered).toContain("seat [part street]");
+  });
+
+  test("includes the field's fill hint when set", () => {
+    const rendered = renderPrefillTargets(
+      buildPrefillTargets([
+        field({
+          path: "company.krs",
+          label: "KRS number",
+          hint: "10-digit number from the register",
+        }),
+      ]),
+    );
+    expect(rendered).toBe(
+      'f1: company.krs — "KRS number" (text) — hint: "10-digit number from the register"',
+    );
   });
 });
 
