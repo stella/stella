@@ -589,6 +589,9 @@ export type ResolvedField = {
   /** Mirrors {@link FieldMeta.aiAdapt}: the fill form shows an AI-adaptation
    *  hint next to the field's input when set. */
   aiAdapt?: boolean | undefined;
+  /** Mirrors {@link FieldMeta.aiPrompt}: AI-drafted fields render no
+   *  fill-form input (the model writes them at fill time). */
+  aiPrompt?: string | undefined;
   /** Mirrors {@link FieldMeta.parts}: the fill form renders one input per part. */
   parts?: FieldPart[] | undefined;
   /** Mirrors {@link FieldMeta.format}. */
