@@ -1256,6 +1256,71 @@ describe("round-trip", () => {
     expect(manifestOnly?.dateFormat).toEqual({ locale: "de", style: "medium" });
   });
 
+  test("array-container validation (minItems/maxItems) reaches the resolved array field", () => {
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "lawyers",
+          label: "Lawyers",
+          validation: { minItems: 1, maxItems: 3 },
+        },
+      ],
+    };
+    const discovered: DiscoveredTemplate = {
+      placeholders: [],
+      fields: [
+        {
+          path: "lawyers",
+          kind: "array",
+          count: 1,
+          itemFields: [{ path: "name", kind: "string", count: 1 }],
+        },
+      ],
+      structureErrors: [],
+    };
+
+    const resolved = mergeManifestWithDiscovery(manifest, discovered);
+
+    const lawyers = resolved.find((f) => f.path === "lawyers");
+    expect(lawyers?.kind).toBe("array");
+    expect(lawyers?.label).toBe("Lawyers");
+    expect(lawyers?.validation).toEqual({ minItems: 1, maxItems: 3 });
+    // The array root must survive the namespace-parent filter.
+    expect(lawyers?.itemFields).toHaveLength(1);
+  });
+
+  test("array-container validation round-trips through write/read + merge", async () => {
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [{ path: "lawyers", validation: { minItems: 2, maxItems: 5 } }],
+    };
+    const written = await writeManifest(await createMinimalDocx(), manifest);
+    const readBack = await readManifest(written);
+    expect(readBack?.fields.at(0)?.validation).toEqual({
+      minItems: 2,
+      maxItems: 5,
+    });
+
+    const discovered: DiscoveredTemplate = {
+      placeholders: [],
+      fields: [
+        {
+          path: "lawyers",
+          kind: "array",
+          count: 1,
+          itemFields: [{ path: "name", kind: "string", count: 1 }],
+        },
+      ],
+      structureErrors: [],
+    };
+    const resolved = mergeManifestWithDiscovery(readBack, discovered);
+    expect(resolved.find((f) => f.path === "lawyers")?.validation).toEqual({
+      minItems: 2,
+      maxItems: 5,
+    });
+  });
+
   test("lookup survives mergeManifestWithDiscovery", async () => {
     const manifest: TemplateManifest = {
       version: 1,

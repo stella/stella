@@ -339,6 +339,12 @@ export type FieldValidation = {
   min?: number;
   max?: number;
   pattern?: string;
+  /** Minimum repeats for an `{{#each}}` loop; lives on the FieldMeta whose
+   *  path equals the loop's array (container) path. */
+  minItems?: number;
+  /** Maximum repeats for an `{{#each}}` loop; lives on the loop-container
+   *  FieldMeta alongside {@link minItems}. */
+  maxItems?: number;
 };
 
 export type FieldMeta = {
@@ -447,7 +453,13 @@ const isFieldValidation = (value: unknown): value is FieldValidation => {
       typeof value["maxLength"] === "number") &&
     (value["min"] === undefined || typeof value["min"] === "number") &&
     (value["max"] === undefined || typeof value["max"] === "number") &&
-    (value["pattern"] === undefined || typeof value["pattern"] === "string")
+    (value["pattern"] === undefined || typeof value["pattern"] === "string") &&
+    (value["minItems"] === undefined ||
+      (typeof value["minItems"] === "number" &&
+        Number.isFinite(value["minItems"]))) &&
+    (value["maxItems"] === undefined ||
+      (typeof value["maxItems"] === "number" &&
+        Number.isFinite(value["maxItems"])))
   );
 };
 
