@@ -111,6 +111,20 @@ Small, almost invisible touches. Linear is a good reference.
   visually until they *look* centred, even if that means offset
   from the geometric centre.
 
+## Empty States & Inline Help
+
+- An empty state earns one line, and that line is an **action**
+  (the gesture that fills it), not a definition. Teach
+  "Select text → right-click → Make field", not what a field is.
+  Conceptual education lives in tooltips or docs, never as
+  permanent panel prose.
+- Full-width buttons are reserved for a surface's single primary
+  action. Structural or secondary adds use quiet ghost
+  affordances (small `+`, text button).
+- Side-panel sections with zero items collapse to a single row
+  (heading + count + add affordance) by default; they expand on
+  demand or when they gain content.
+
 ## Loading States
 
 - **Skeleton loaders must match the real layout.** The skeleton's
