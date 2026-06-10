@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
+import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { ArrowLeftIcon, LayoutTemplateIcon, SearchIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -207,6 +207,7 @@ const FillStep = ({
 }) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const fill = useTemplateFillSchema(template.id);
 
   if (fill.state === "loading") {
@@ -234,13 +235,22 @@ const FillStep = ({
         kind: "matter",
         workspaceId,
         parentId,
-        onCreated: () => {
+        onCreated: (entityId) => {
           queryClient
             .invalidateQueries({ queryKey: entitiesKeys.all(workspaceId) })
             .catch(() => {
               /* fire-and-forget */
             });
           onCreated();
+          // Open the just-created document in the editable Folio editor (the
+          // entities route resolves the file field and redirects into the
+          // document view) so the user can hand-edit it right away.
+          navigate({
+            to: "/workspaces/$workspaceId/entities/$entityId",
+            params: { workspaceId, entityId },
+          }).catch(() => {
+            /* navigation is best-effort; the document is already saved */
+          });
         },
       }}
       structureErrors={fill.schema.structureErrors}

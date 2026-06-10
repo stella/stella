@@ -1,5 +1,7 @@
 import { useEffect, useCallback, useRef, useState } from "react";
 
+import { useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { panic } from "better-result";
 import {
   AlertTriangleIcon,
@@ -42,6 +44,7 @@ import { api } from "@/lib/api";
 import { DOCX_MIME, PDF_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { userErrorMessage } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
+import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
 import {
   buildAutofillUpdates,
@@ -2188,4 +2191,39 @@ export const TemplateForm = ({
       </Dialog>
     </form>
   );
+};
+
+/**
+ * A `chooseMatter` {@link SaveTarget} whose `onCreated` opens the filled DOCX
+ * in the editable Folio editor: it invalidates the destination matter's entity
+ * list, then navigates to the entities route, which resolves the document's
+ * file field and redirects into the document view. Reused by every "fill into
+ * a matter the user picks" surface (the Knowledge "Use template" dialog and the
+ * Template Studio Fill facet) so the post-fill behaviour stays identical.
+ *
+ * `onDone` runs after the entity is created and navigation is kicked off (the
+ * Studio facet has no use for it; the dialog uses it to close itself).
+ */
+export const useFillToMatterSaveTarget = (
+  onDone?: () => void,
+): Extract<SaveTarget, { kind: "chooseMatter" }> => {
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  return {
+    kind: "chooseMatter",
+    onCreated: ({ workspaceId, entityId }) => {
+      queryClient
+        .invalidateQueries({ queryKey: entitiesKeys.all(workspaceId) })
+        .catch(() => {
+          /* fire-and-forget */
+        });
+      onDone?.();
+      navigate({
+        to: "/workspaces/$workspaceId/entities/$entityId",
+        params: { workspaceId, entityId },
+      }).catch(() => {
+        /* navigation is best-effort; the document is already saved */
+      });
+    },
+  };
 };

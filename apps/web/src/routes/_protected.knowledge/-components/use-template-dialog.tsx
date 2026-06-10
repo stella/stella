@@ -1,4 +1,3 @@
-import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import {
@@ -10,9 +9,11 @@ import {
   DialogTitle,
 } from "@stll/ui/components/dialog";
 
-import { TemplateForm } from "@/routes/_protected.knowledge/-components/template-form";
+import {
+  TemplateForm,
+  useFillToMatterSaveTarget,
+} from "@/routes/_protected.knowledge/-components/template-form";
 import { useTemplateFillSchema } from "@/routes/_protected.knowledge/-components/use-template-fill-schema";
-import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
 /**
  * "Use template" from the Knowledge templates list: fill the saved template
@@ -52,8 +53,9 @@ const UseTemplateDialogBody = ({
   templateName,
 }: Omit<UseTemplateDialogProps, "open">) => {
   const t = useTranslations();
-  const queryClient = useQueryClient();
   const fill = useTemplateFillSchema(templateId);
+  // Fill into a matter the user picks, then open the result editable.
+  const saveTarget = useFillToMatterSaveTarget(() => onOpenChange(false));
 
   return (
     <DialogPopup className="sm:max-w-3xl">
@@ -80,19 +82,7 @@ const UseTemplateDialogBody = ({
             onBack={() => undefined}
             onDone={() => undefined}
             prefill={{}}
-            saveTarget={{
-              kind: "chooseMatter",
-              onCreated: ({ workspaceId }) => {
-                queryClient
-                  .invalidateQueries({
-                    queryKey: entitiesKeys.all(workspaceId),
-                  })
-                  .catch(() => {
-                    /* fire-and-forget */
-                  });
-                onOpenChange(false);
-              },
-            }}
+            saveTarget={saveTarget}
             structureErrors={fill.schema.structureErrors}
             templateId={templateId}
           />
