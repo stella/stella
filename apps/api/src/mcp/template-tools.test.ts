@@ -46,15 +46,13 @@ void mock.module(
 
 // Stubbed so the fill handler never reaches the real (DB-backed) config
 // loader or AI model chain; a null config makes AI fields a no-op.
+// A null org AI config (the mock returns undefined) makes the real
+// ai-field-generator builders return undefined, so AI fields/conditions are a
+// no-op without mocking the generator module — which would bleed process-wide
+// into ai-field-generator.test.ts (Bun's mock.module is global).
 void mock.module("@/api/lib/ai-config-loader", () => ({
   loadOrgAIConfig: loadOrgAIConfigMock,
   loadPromptCachingPreference: mock(async () => false),
-}));
-
-void mock.module("@/api/handlers/docx/ai-field-generator", () => ({
-  buildAiFieldGenerator: mock(() => undefined),
-  buildAiConditionDecider: mock(() => undefined),
-  buildAiOccurrenceAdapter: mock(() => undefined),
 }));
 
 const { getMcpToolDefinition, handleMcpToolCall, listMcpTools } =
