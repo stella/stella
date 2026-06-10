@@ -274,6 +274,22 @@ export type FieldLookup = {
   aiFormat?: string | undefined;
 };
 
+export const DATE_FORMAT_STYLES = ["long", "medium", "short", "iso"] as const;
+
+export type DateFormatStyle = (typeof DATE_FORMAT_STYLES)[number];
+
+/**
+ * Locale-aware date rendering (see {@link FieldMeta.dateFormat}): the
+ * submitted ISO date is formatted via `Intl.DateTimeFormat` in the document's
+ * language at fill time (e.g. cs long → "13. června 2028"); "iso" leaves the
+ * submitted value as-is.
+ */
+export type FieldDateFormat = {
+  /** BCP-47 language tag of the document, e.g. "cs", "de", "pl". */
+  locale: string;
+  style: DateFormatStyle;
+};
+
 export type FieldValidation = {
   required?: boolean;
   minLength?: number;
@@ -336,6 +352,14 @@ export type FieldMeta = {
    * ({@link aiPrompt}, {@link aiAdapt}, {@link lookup}, {@link parts}).
    */
   formula?: string | undefined;
+  /**
+   * Locale-aware rendering for a "date" {@link inputType} field: the
+   * submitted ISO date (the date input's value) is formatted in this locale
+   * and style before substitution — and before any AI step, so a field that
+   * also sets {@link aiAdapt} hands the formatted date to the per-occurrence
+   * adapter as the stub.
+   */
+  dateFormat?: FieldDateFormat | undefined;
 };
 
 /**
@@ -395,6 +419,27 @@ export const isFieldPart = (value: unknown): value is FieldPart =>
 const isLookupRegistry = (value: unknown): value is LookupRegistry =>
   LOOKUP_REGISTRIES.some((registry) => registry === value);
 
+const isDateFormatStyle = (value: unknown): value is DateFormatStyle =>
+  DATE_FORMAT_STYLES.some((style) => style === value);
+
+/** Structurally malformed BCP-47 tags make `Intl` throw a RangeError; a
+ *  well-formed but unknown tag passes and merely falls back to the default
+ *  locale at format time. */
+const isPlausibleLocale = (value: string): boolean => {
+  try {
+    Intl.DateTimeFormat.supportedLocalesOf(value);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+export const isFieldDateFormat = (value: unknown): value is FieldDateFormat =>
+  isRecordLike(value) &&
+  typeof value["locale"] === "string" &&
+  isPlausibleLocale(value["locale"]) &&
+  isDateFormatStyle(value["style"]);
+
 export const isFieldLookup = (value: unknown): value is FieldLookup =>
   isRecordLike(value) &&
   isLookupRegistry(value["registry"]) &&
@@ -445,7 +490,9 @@ export const isFieldMeta = (value: unknown): value is FieldMeta => {
       (typeof value["optionsFrom"] === "string" &&
         isFieldPath(value["optionsFrom"]))) &&
     (value["lookup"] === undefined || isFieldLookup(value["lookup"])) &&
-    (value["formula"] === undefined || typeof value["formula"] === "string")
+    (value["formula"] === undefined || typeof value["formula"] === "string") &&
+    (value["dateFormat"] === undefined ||
+      isFieldDateFormat(value["dateFormat"]))
   );
 };
 
@@ -544,6 +591,9 @@ export type ResolvedField = {
   /** Mirrors {@link FieldMeta.formula}: the value is derived at fill time, so
    *  the fill form renders no input for the field. */
   formula?: string | undefined;
+  /** Mirrors {@link FieldMeta.dateFormat}: the fill form can preview how the
+   *  entered date will render in the document's language. */
+  dateFormat?: FieldDateFormat | undefined;
   itemFields?: ResolvedField[] | undefined;
   /** Condition expression that must be true for this
    *  field to be visible in the fill form. */
