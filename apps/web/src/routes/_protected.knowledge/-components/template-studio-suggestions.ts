@@ -52,15 +52,28 @@ export type BuildReplacementSuggestionsResult = {
   placedSpecIds: Set<string>;
 };
 
+export type BuildReplacementSuggestionsOptions = {
+  /**
+   * Ranges already claimed by existing pending suggestions; new
+   * suggestions never overlap them. Progressive (streamed) placement
+   * passes the current pending set so a later batch cannot double-mark
+   * a span an earlier batch already covered.
+   */
+  occupiedRanges?: readonly { from: number; to: number }[];
+};
+
 export const buildReplacementSuggestions = (
   doc: PMNode,
   specs: readonly ReplacementSpec[],
+  options?: BuildReplacementSuggestionsOptions,
 ): BuildReplacementSuggestionsResult => {
   const positional = buildPositionalText(doc);
   const haystack = positional.text;
   const suggestions: AISuggestion[] = [];
   const placedSpecIds = new Set<string>();
-  const occupied: { from: number; to: number }[] = [];
+  const occupied: { from: number; to: number }[] = [
+    ...(options?.occupiedRanges ?? []),
+  ];
 
   for (const spec of specs) {
     if (spec.literalText.length === 0) {
@@ -252,6 +265,115 @@ export const buildOperationSpecs = ({
   }
 
   return { specs, skipped };
+};
+
+/**
+ * Completed operations from a partially streamed tool input. The AI
+ * SDK exposes incremental partial-JSON parses of the call input while
+ * it streams; every element of `operations` except the last is
+ * structurally complete JSON, so those are safe to act on before the
+ * call finishes. Elements are still shape-checked (the tool schema
+ * only runs once the input is complete) and extraction stops at the
+ * first malformed element so indices stay aligned with the final
+ * validated input.
+ */
+export const extractCompletedStreamingOperations = (
+  input: unknown,
+): DocxEditOperation[] => {
+  if (
+    typeof input !== "object" ||
+    input === null ||
+    !("operations" in input) ||
+    !Array.isArray(input.operations)
+  ) {
+    return [];
+  }
+  const completed = input.operations.slice(0, -1);
+  const operations: DocxEditOperation[] = [];
+  for (const candidate of completed) {
+    if (!isStreamedOperation(candidate)) {
+      break;
+    }
+    operations.push(candidate);
+  }
+  return operations;
+};
+
+const OPERATION_SEVERITIES = new Set(["low", "medium", "high"]);
+
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === "string" && value.length > 0;
+
+const isStreamedOperation = (value: unknown): value is DocxEditOperation => {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const type: unknown = Reflect.get(value, "type");
+  const severity: unknown = Reflect.get(value, "severity");
+  if (
+    !isNonEmptyString(Reflect.get(value, "blockId")) ||
+    !isNonEmptyString(Reflect.get(value, "area")) ||
+    typeof severity !== "string" ||
+    !OPERATION_SEVERITIES.has(severity)
+  ) {
+    return false;
+  }
+  switch (type) {
+    case "replaceInBlock":
+      return (
+        isNonEmptyString(Reflect.get(value, "find")) &&
+        typeof Reflect.get(value, "replace") === "string"
+      );
+    case "replaceBlock":
+    case "insertAfterBlock":
+    case "insertBeforeBlock":
+      return typeof Reflect.get(value, "text") === "string";
+    case "deleteBlock":
+      return true;
+    case "commentOnBlock": {
+      const comment: unknown = Reflect.get(value, "comment");
+      return (
+        typeof comment === "object" &&
+        comment !== null &&
+        isNonEmptyString(Reflect.get(comment, "text"))
+      );
+    }
+    case "insertSignatureTable": {
+      const parties: unknown = Reflect.get(value, "parties");
+      return Array.isArray(parties) && parties.length > 0;
+    }
+    default:
+      return false;
+  }
+};
+
+/**
+ * Key-order-insensitive fingerprint, so an operation captured from the
+ * input stream and its final schema-validated counterpart compare
+ * equal. A mismatch means the finalized op no longer matches what was
+ * provisionally placed (e.g. the schema stripped a stray key), and the
+ * provisional suggestion must be replaced.
+ */
+export const operationFingerprint = (operation: DocxEditOperation): string =>
+  stableStringify(operation);
+
+const stableStringify = (value: unknown): string => {
+  if (value === undefined) {
+    return "undefined";
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringify(item)).join(",")}]`;
+  }
+  if (typeof value === "object" && value !== null) {
+    const entries = Object.keys(value)
+      .toSorted()
+      .map(
+        (key) =>
+          `${JSON.stringify(key)}:${stableStringify(Reflect.get(value, key))}`,
+      );
+    return `{${entries.join(",")}}`;
+  }
+  return JSON.stringify(value);
 };
 
 /**
