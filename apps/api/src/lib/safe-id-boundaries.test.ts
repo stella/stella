@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { toSafeId } from "@/api/lib/branded-types";
+
 import { parsePickedEntityIdsJson } from "./safe-id-boundaries";
 
 const UUID_A = "0196d7a8-1111-7777-8888-0123456789ab";
@@ -8,8 +10,8 @@ const UUID_B = "0196d7a8-2222-7777-8888-0123456789ab";
 describe("parsePickedEntityIdsJson", () => {
   test("parses a JSON array of uuids", () => {
     expect(parsePickedEntityIdsJson(`["${UUID_A}", "${UUID_B}"]`, 5)).toEqual([
-      UUID_A,
-      UUID_B,
+      toSafeId<"entity">(UUID_A),
+      toSafeId<"entity">(UUID_B),
     ]);
   });
 
