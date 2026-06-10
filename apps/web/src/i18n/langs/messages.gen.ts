@@ -2187,6 +2187,7 @@ type Messages = {
       "insert": "Insert";
       "insertAtCaret": "Insert at cursor";
       "insertFormatDefault": "Default";
+      "insertOutput": "Insert in document";
       "invalidExpression": "That expression is invalid";
       "loop": "Loop";
       "makeField": "Make field";
