@@ -80,6 +80,8 @@ export type StudioActions = {
   /** Replace the selection (or insert at the caret) with an existing field's
    *  marker; replacing text flips the field to AI-adapted wording. */
   insertExistingField: (path: string) => void;
+  /** Remove every {{path}} marker from the document and drop the field. */
+  deleteField: (path: string) => void;
   /** Insert a saved recipe at the caret: loop recipes add the `{{#each}}`
    *  block with one marker paragraph per field, plain recipes add the
    *  markers inline; the pre-configured fields register in the session
@@ -145,6 +147,7 @@ type TemplateStudioState = {
   /** Clear the session on page unmount, but only if it still owns it. */
   reset: (templateId: string) => void;
   upsertField: (path: string, patch: Partial<StudioField>) => void;
+  removeField: (path: string) => void;
   renameField: (oldPath: string, newPath: string) => void;
   setConditions: (conditions: NameExpr[]) => void;
   /** Document structure tree, rebuilt by the editor on every scan. */
@@ -209,6 +212,10 @@ export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
         : [...state.fields, { ...defaultStudioField(path), ...patch }];
       return { fields, isDirty: true };
     }),
+  removeField: (path) =>
+    set((state) => ({
+      fields: state.fields.filter((f) => f.path !== path),
+    })),
   renameField: (oldPath, newPath) =>
     set((state) => ({
       fields: state.fields.map((f) =>
