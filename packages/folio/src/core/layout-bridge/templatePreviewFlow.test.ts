@@ -90,6 +90,46 @@ describe("applyTemplatePreviewToBlocks", () => {
     expect(value.templatePreview).toBe("highlighted");
   });
 
+  test("a rich value emits one run per span, layering bold/italic over the host formatting", () => {
+    const source = paragraph("p1", 0, [
+      textRun("{{company}}", 1, { bold: true, fontSize: 14 }),
+    ]);
+    const [block] = applyTemplatePreviewToBlocks([source], {
+      entries: [
+        {
+          from: 1,
+          to: 12,
+          value: {
+            runs: [
+              { text: "Acme", bold: true },
+              { text: ", seat in " },
+              { text: "Poznań", italic: true },
+            ],
+          },
+        },
+      ],
+      mode: "highlighted",
+    });
+
+    expect(runTexts(block!)).toEqual(["Acme", ", seat in ", "Poznań"]);
+    if (block!.kind !== "paragraph") {
+      throw new Error("expected paragraph");
+    }
+    const [first, middle, last] = block!.runs as [TextRun, TextRun, TextRun];
+    // Host bold stays on every span; the span's own flags OR in.
+    expect(first.bold).toBe(true);
+    expect(middle.bold).toBe(true);
+    expect(middle.italic).toBeUndefined();
+    expect(last.bold).toBe(true);
+    expect(last.italic).toBe(true);
+    for (const run of [first, middle, last]) {
+      // Host formatting and the marker's PM range carry onto each span run.
+      expect(run.fontSize).toBe(14);
+      expect([run.pmStart, run.pmEnd]).toEqual([1, 12]);
+      expect(run.templatePreview).toBe("highlighted");
+    }
+  });
+
   test("collapses a marker split across formatting boundaries into one value run", () => {
     const source = paragraph("p1", 0, [
       textRun("{{cli", 1, { italic: true }),
@@ -235,6 +275,29 @@ describe("templatePreviewDirtyRange", () => {
         [entryA, { ...entryB, value: "b2" }],
       ),
     ).toEqual({ from: 40, to: 55 });
+  });
+
+  test("distinguishes rich values by formatting, not just text", () => {
+    const richBold = {
+      from: 5,
+      to: 12,
+      value: { runs: [{ text: "Acme", bold: true }] },
+    };
+    expect(templatePreviewDirtyRange([richBold], [richBold])).toBe(null);
+    // Same text, different formatting → the marker's blocks must re-lay out.
+    expect(
+      templatePreviewDirtyRange(
+        [richBold],
+        [{ ...richBold, value: { runs: [{ text: "Acme", italic: true }] } }],
+      ),
+    ).toEqual({ from: 5, to: 12 });
+    // A plain string and a rich value with the same text are not identical.
+    expect(
+      templatePreviewDirtyRange(
+        [{ from: 5, to: 12, value: "Acme" }],
+        [{ from: 5, to: 12, value: { runs: [{ text: "Acme" }] } }],
+      ),
+    ).toEqual({ from: 5, to: 12 });
   });
 
   test("covers added and removed entries", () => {

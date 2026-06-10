@@ -22,9 +22,45 @@ import { Decoration, DecorationSet } from "prosemirror-view";
 
 import { scanDirectives } from "./templateDirectives";
 
+/** One formatted span of a rich preview value. The flags layer over the
+ *  marker's host formatting: a host-bold marker keeps its bold, a span's
+ *  own bold/italic ORs in on top. */
+export type TemplatePreviewSpan = {
+  text: string;
+  bold?: boolean;
+  italic?: boolean;
+};
+
+/** A preview value: plain text, or formatted spans when the value carries
+ *  its own bold/italic (e.g. a registry lookup's formatted rendering). */
+export type TemplatePreviewValue = string | { runs: TemplatePreviewSpan[] };
+
+/** Concatenated plain text of a preview value. */
+export const templatePreviewValueText = (value: TemplatePreviewValue): string =>
+  typeof value === "string"
+    ? value
+    : value.runs.map((run) => run.text).join("");
+
+/** Stable identity of a preview value (text + formatting), for decoration
+ *  keys and change detection. Distinguishes a plain string from a rich
+ *  value with the same text. */
+export const templatePreviewValueFingerprint = (
+  value: TemplatePreviewValue,
+): string => {
+  if (typeof value === "string") {
+    return value;
+  }
+  return value.runs
+    .map(
+      (run) =>
+        `${run.bold === true ? "b" : ""}${run.italic === true ? "i" : ""}:${run.text}`,
+    )
+    .join("\u0000");
+};
+
 export type TemplatePreviewValues = {
   /** Field path → value to display in place of `{{path}}` markers. */
-  values: Record<string, string>;
+  values: Record<string, TemplatePreviewValue>;
   /** `highlighted` marks substitutions with the preview accent. */
   mode: "highlighted" | "plain";
 };
@@ -42,7 +78,7 @@ export type TemplatePreviewEntry = {
   /** Field path the marker resolves to. */
   expr: string;
   /** The typed value displayed in place of the marker. */
-  value: string;
+  value: TemplatePreviewValue;
 };
 
 type TemplatePreviewState = {
@@ -55,8 +91,24 @@ export const templatePreviewValuesKey = new PluginKey<TemplatePreviewState>(
   "templatePreviewValues",
 );
 
+/** A rich span as DOM: text wrapped in `<em>` / `<strong>` per its flags. */
+function buildSpanNode(span: TemplatePreviewSpan): Node {
+  let node: Node = document.createTextNode(span.text);
+  if (span.italic === true) {
+    const em = document.createElement("em");
+    em.append(node);
+    node = em;
+  }
+  if (span.bold === true) {
+    const strong = document.createElement("strong");
+    strong.append(node);
+    node = strong;
+  }
+  return node;
+}
+
 function buildValueWidget(
-  value: string,
+  value: TemplatePreviewValue,
   mode: TemplatePreviewValues["mode"],
 ): () => HTMLElement {
   return () => {
@@ -66,7 +118,13 @@ function buildValueWidget(
         ? "folio-template-preview-value folio-template-preview-value--highlighted"
         : "folio-template-preview-value";
     span.contentEditable = "false";
-    span.textContent = value;
+    if (typeof value === "string") {
+      span.textContent = value;
+      return span;
+    }
+    for (const run of value.runs) {
+      span.append(buildSpanNode(run));
+    }
     return span;
   };
 }
@@ -85,7 +143,7 @@ function collectPreviewEntries(
       continue;
     }
     const value = preview.values[range.expr];
-    if (value === undefined || value === "") {
+    if (value === undefined || templatePreviewValueText(value) === "") {
       continue;
     }
     entries.push({ from: range.from, to: range.to, expr: range.expr, value });
@@ -115,7 +173,7 @@ function buildDecorationSet(
         side: 1,
         marks: [],
         ignoreSelection: true,
-        key: `folio-template-preview-${entry.expr}-${entry.from}-${mode}-${entry.value}`,
+        key: `folio-template-preview-${entry.expr}-${entry.from}-${mode}-${templatePreviewValueFingerprint(entry.value)}`,
       }),
     );
   }

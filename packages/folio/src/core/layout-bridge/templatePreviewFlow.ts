@@ -30,6 +30,8 @@ import type {
   TextBoxBlock,
   TextRun,
 } from "../layout-engine/types";
+import type { TemplatePreviewValue } from "../prosemirror/plugins/templatePreviewValues";
+import { templatePreviewValueFingerprint } from "../prosemirror/plugins/templatePreviewValues";
 
 /** One marker→value substitution, in PM doc positions. */
 export type TemplatePreviewFlowEntry = {
@@ -38,7 +40,7 @@ export type TemplatePreviewFlowEntry = {
   /** Exclusive PM doc position of the marker end. */
   to: number;
   /** The typed value displayed in place of the marker. */
-  value: string;
+  value: TemplatePreviewValue;
 };
 
 export type TemplatePreviewFlowOptions = {
@@ -199,7 +201,7 @@ function transformRun(
     // value run; runs the marker merely continues through are dropped (the
     // value was already emitted at the marker start).
     if (entry.from >= pmStart) {
-      out.push(buildValueRun(run, entry, mode));
+      out.push(...buildValueRuns(run, entry, mode));
     }
     cursor = Math.min(entry.to, pmEnd);
   }
@@ -224,22 +226,49 @@ function sliceTextRun(
   };
 }
 
-function buildValueRun(
+/**
+ * The value run(s) replacing a marker. A plain value is one run carrying the
+ * host run's formatting; a rich value emits one run per span, each layering
+ * its own bold/italic over the host formatting (host bold stays bold, a
+ * span's flags OR in). Every run keeps the marker's full PM range so
+ * click-to-position keeps resolving into the marker.
+ */
+function buildValueRuns(
   host: TextRun,
   entry: TemplatePreviewFlowEntry,
   mode: TemplatePreviewFlowOptions["mode"],
-): TextRun {
-  return {
-    ...host,
-    text: entry.value,
-    pmStart: entry.from,
-    pmEnd: entry.to,
-    templatePreview: mode,
-  };
+): TextRun[] {
+  if (typeof entry.value === "string") {
+    return [
+      {
+        ...host,
+        text: entry.value,
+        pmStart: entry.from,
+        pmEnd: entry.to,
+        templatePreview: mode,
+      },
+    ];
+  }
+  return entry.value.runs.map((span) => {
+    const valueRun: TextRun = {
+      ...host,
+      text: span.text,
+      pmStart: entry.from,
+      pmEnd: entry.to,
+      templatePreview: mode,
+    };
+    if (span.bold === true) {
+      valueRun.bold = true;
+    }
+    if (span.italic === true) {
+      valueRun.italic = true;
+    }
+    return valueRun;
+  });
 }
 
 const entryKey = (entry: TemplatePreviewFlowEntry): string =>
-  `${entry.from}:${entry.to}:${entry.value}`;
+  `${entry.from}:${entry.to}:${templatePreviewValueFingerprint(entry.value)}`;
 
 /**
  * PM range covering every substitution that differs between two preview

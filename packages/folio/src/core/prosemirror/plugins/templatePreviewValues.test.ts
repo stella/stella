@@ -14,6 +14,7 @@ import { schema } from "../schema";
 import {
   createTemplatePreviewValuesPlugin,
   templatePreviewValuesKey,
+  templatePreviewValueText,
 } from "./templatePreviewValues";
 import type {
   TemplatePreviewEntry,
@@ -56,7 +57,9 @@ describe("templatePreviewValues: entry tracking", () => {
     });
 
     const entries = getEntries(state);
-    expect(entries.map((e) => `${e.expr}=${e.value}`)).toEqual([
+    expect(
+      entries.map((e) => `${e.expr}=${templatePreviewValueText(e.value)}`),
+    ).toEqual([
       "tenant.name=Pavel Novák",
       "signing_date=2026-06-10",
     ]);
@@ -65,6 +68,22 @@ describe("templatePreviewValues: entry tracking", () => {
         `{{${entry.expr}}}`,
       );
     }
+  });
+
+  test("rich values surface on entries verbatim; rich values with no text are skipped", () => {
+    const doc = docOf("Company {{company}} and {{empty}} sign.");
+    const richValue = {
+      runs: [{ text: "Acme", bold: true }, { text: ", Poznań" }],
+    };
+    const state = makeState(doc, {
+      values: { company: richValue, empty: { runs: [{ text: "" }] } },
+      mode: "plain",
+    });
+
+    const entries = getEntries(state);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.expr).toBe("company");
+    expect(entries[0]!.value).toEqual(richValue);
   });
 
   test("skips empty values, unmatched fields, and non-placeholder markers", () => {

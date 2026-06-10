@@ -103,6 +103,8 @@ export {
 } from "./core/prosemirror/plugins/templateDirectives";
 export {
   setTemplatePreviewValues,
+  type TemplatePreviewSpan,
+  type TemplatePreviewValue,
   type TemplatePreviewValues,
 } from "./core/prosemirror/plugins/templatePreviewValues";
 export {
