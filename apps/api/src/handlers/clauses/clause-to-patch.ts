@@ -14,3 +14,11 @@ export const clauseBodyToRichPatch = (body: ClauseBody): RichPatchValue => ({
       runs: p.runs ?? [{ text: p.text }],
     })),
 });
+
+/**
+ * Flatten a ClauseBody to plain text (one line per paragraph) for
+ * version diffing. Directive paragraphs are kept: a changed `{{#if}}`
+ * condition alters fill behaviour and must show up in the diff.
+ */
+export const clauseBodyToPlainText = (body: ClauseBody): string =>
+  body.map((p) => p.text).join("\n");

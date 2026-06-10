@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
@@ -16,6 +16,13 @@ import {
   DialogTitle,
 } from "@stll/ui/components/dialog";
 import { Input } from "@stll/ui/components/input";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/components/select";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
@@ -25,6 +32,8 @@ import { toSafeId } from "@/lib/safe-id";
 import {
   clauseCategoriesOptions,
   clausesOptions,
+  templateClausesOptions,
+  templatePreviewOptions,
 } from "@/routes/_protected.knowledge/-queries";
 
 // ── Types ────────────────────────────────────────────
@@ -33,10 +42,15 @@ type LinkClauseDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   templateId: string;
-  /** Available slot names from the template preview. */
-  availableSlots?: string[] | undefined;
   onLinked: () => void;
 };
+
+// Select values for the slot picker. Discovered slot names are
+// prefixed so the "none"/"custom" sentinels can never collide with
+// a real slot that happens to carry one of those names.
+const SLOT_VALUE_NONE = "none";
+const SLOT_VALUE_CUSTOM = "custom";
+const SLOT_VALUE_PREFIX = "slot:";
 
 // ── Component ────────────────────────────────────────
 
@@ -46,7 +60,6 @@ export const LinkClauseDialog = ({
   open,
   onOpenChange,
   templateId,
-  availableSlots,
   onLinked,
 }: LinkClauseDialogProps) => {
   const t = useTranslations();
@@ -59,7 +72,10 @@ export const LinkClauseDialog = ({
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(
     null,
   );
-  const [slotName, setSlotName] = useState("");
+  // null = not yet initialized; the effect below preselects the first
+  // unfilled discovered slot once the template preview loads.
+  const [slotValue, setSlotValue] = useState<string | null>(null);
+  const [customSlotName, setCustomSlotName] = useState("");
   const [linking, setLinking] = useState(false);
 
   const { data: catData } = useQuery({
@@ -74,6 +90,52 @@ export const LinkClauseDialog = ({
     ...clausesOptions(activeOrganizationId, { limit: 200 }),
     enabled: open,
   });
+
+  // Slots discovered in the template document ({{@clause:...}}
+  // markers) and slots already taken by existing links.
+  const { data: previewData } = useQuery({
+    ...templatePreviewOptions(activeOrganizationId, templateId),
+    enabled: open,
+  });
+  const { data: linksData } = useQuery({
+    ...templateClausesOptions(activeOrganizationId, templateId),
+    enabled: open,
+  });
+
+  const discoveredSlots =
+    previewData && "clauseSlots" in previewData ? previewData.clauseSlots : [];
+  const takenSlots = new Set(
+    linksData && "links" in linksData
+      ? linksData.links.flatMap((link) =>
+          link.slotName === null ? [] : [link.slotName],
+        )
+      : [],
+  );
+
+  useEffect(() => {
+    if (!open) {
+      setSlotValue(null);
+      setCustomSlotName("");
+      return;
+    }
+    if (slotValue !== null || previewData === undefined) {
+      return;
+    }
+    const slots = "clauseSlots" in previewData ? previewData.clauseSlots : [];
+    const taken = new Set(
+      linksData && "links" in linksData
+        ? linksData.links.flatMap((link) =>
+            link.slotName === null ? [] : [link.slotName],
+          )
+        : [],
+    );
+    const firstUnfilled = slots.find((slot) => !taken.has(slot));
+    setSlotValue(
+      firstUnfilled === undefined
+        ? SLOT_VALUE_NONE
+        : SLOT_VALUE_PREFIX + firstUnfilled,
+    );
+  }, [open, slotValue, previewData, linksData]);
 
   const categories =
     catData && "categories" in catData ? catData.categories : [];
@@ -114,7 +176,20 @@ export const LinkClauseDialog = ({
     return true;
   });
 
-  const handleLink = useCallback(async () => {
+  const resolveSlotName = (): string | undefined => {
+    if (slotValue === SLOT_VALUE_CUSTOM) {
+      const trimmed = customSlotName.trim();
+      return trimmed === "" ? undefined : trimmed;
+    }
+    if (slotValue !== null && slotValue.startsWith(SLOT_VALUE_PREFIX)) {
+      return slotValue.slice(SLOT_VALUE_PREFIX.length);
+    }
+    return undefined;
+  };
+
+  // No useCallback: React Compiler handles memoization, and the
+  // closure depends on half the dialog state anyway.
+  const handleLink = async () => {
     if (!selectedClauseId) {
       return;
     }
@@ -129,8 +204,9 @@ export const LinkClauseDialog = ({
     if (selectedVariantId) {
       body.variantId = toSafeId<"clauseVariant">(selectedVariantId);
     }
-    if (slotName.trim()) {
-      body.slotName = slotName.trim();
+    const slotName = resolveSlotName();
+    if (slotName !== undefined) {
+      body.slotName = slotName;
     }
 
     const response = await api
@@ -159,18 +235,9 @@ export const LinkClauseDialog = ({
     setSelectedClauseId(null);
     setSelectedVariantId(null);
     setSearch("");
-    setSlotName("");
     onOpenChange(false);
     onLinked();
-  }, [
-    selectedClauseId,
-    selectedVariantId,
-    slotName,
-    templateId,
-    t,
-    onOpenChange,
-    onLinked,
-  ]);
+  };
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
@@ -274,26 +341,45 @@ export const LinkClauseDialog = ({
             </div>
           )}
 
-          <div>
-            <label
-              className="mb-1 block text-sm font-medium"
-              htmlFor="slot-name-input"
+          <div className="grid gap-1">
+            <span className="text-sm font-medium">{t("clauses.slotName")}</span>
+            <Select
+              onValueChange={(value: string | null) =>
+                setSlotValue(value ?? SLOT_VALUE_NONE)
+              }
+              value={slotValue ?? SLOT_VALUE_NONE}
             >
-              {t("clauses.slotName")}
-            </label>
-            <Input
-              id="slot-name-input"
-              list="available-slots"
-              onChange={(e) => setSlotName(e.target.value)}
-              placeholder={t("clauses.slotNamePlaceholder")}
-              value={slotName}
-            />
-            {availableSlots && availableSlots.length > 0 && (
-              <datalist id="available-slots">
-                {availableSlots.map((s) => (
-                  <option key={s} value={s} />
-                ))}
-              </datalist>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder={t("clauses.slotNone")} />
+              </SelectTrigger>
+              <SelectPopup>
+                <SelectItem value={SLOT_VALUE_NONE}>
+                  {t("clauses.slotNone")}
+                </SelectItem>
+                {discoveredSlots.map((slot) => {
+                  const isTaken = takenSlots.has(slot);
+                  return (
+                    <SelectItem
+                      disabled={isTaken}
+                      key={slot}
+                      value={SLOT_VALUE_PREFIX + slot}
+                    >
+                      {isTaken ? t("clauses.slotTaken", { slot }) : slot}
+                    </SelectItem>
+                  );
+                })}
+                <SelectItem value={SLOT_VALUE_CUSTOM}>
+                  {t("clauses.slotCustom")}
+                </SelectItem>
+              </SelectPopup>
+            </Select>
+            {slotValue === SLOT_VALUE_CUSTOM && (
+              <Input
+                aria-label={t("clauses.slotName")}
+                onChange={(e) => setCustomSlotName(e.target.value)}
+                placeholder={t("clauses.slotNamePlaceholder")}
+                value={customSlotName}
+              />
             )}
           </div>
         </DialogPanel>

@@ -16,6 +16,8 @@ import createVariant from "@/api/handlers/clauses/variants-create";
 import deleteVariant from "@/api/handlers/clauses/variants-delete";
 import listVariants from "@/api/handlers/clauses/variants-list";
 import updateVariant from "@/api/handlers/clauses/variants-update";
+import clauseVersionDiff from "@/api/handlers/clauses/versions-diff";
+import clauseVersionSummarize from "@/api/handlers/clauses/versions-summarize";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 
 // ── Categories ──────────────────────────────────────
@@ -85,6 +87,18 @@ export const clausesRoute = new Elysia({
     params: getClauseVersion.config.params,
     permissions: getClauseVersion.config.permissions,
   })
+  .get("/:clauseId/versions/:versionId/diff", clauseVersionDiff.handler, {
+    params: clauseVersionDiff.config.params,
+    permissions: clauseVersionDiff.config.permissions,
+  })
+  .post(
+    "/:clauseId/versions/:versionId/summarize",
+    clauseVersionSummarize.handler,
+    {
+      params: clauseVersionSummarize.config.params,
+      permissions: clauseVersionSummarize.config.permissions,
+    },
+  )
   // ── Variants ────────────────────────────────────
   .get("/:clauseId/variants", listVariants.handler, {
     params: listVariants.config.params,

@@ -2543,6 +2543,10 @@ export const templateClauses = p.pgTable(
         onDelete: "set null",
       },
     ),
+    /** Label snapshot taken at link time. Survives variant deletion
+     *  (the FK nulls `clauseVariantId`) so dangling variant links can
+     *  be surfaced instead of silently falling back to the clause. */
+    clauseVariantLabel: p.varchar("clause_variant_label", { length: 256 }),
     clauseVersionId: safeUuid<"clauseVersion">("clause_version_id").references(
       () => clauseVersions.id,
       {

@@ -61,7 +61,7 @@ type VersionRowProps = {
   summarize?: (() => Promise<string | null>) | null;
 };
 
-type AsyncContent<T> =
+export type AsyncContent<T> =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "ready"; value: T }
@@ -276,7 +276,10 @@ export const VersionRow = ({
 
 // ── Diff block ───────────────────────────────────────
 
-const VersionDiffBlock = ({
+// Also consumed standalone by the template Clauses tab, which renders
+// the same diff/summary visuals for outdated clause links without the
+// full VersionRow chrome.
+export const VersionDiffBlock = ({
   state,
 }: {
   state: AsyncContent<VersionDiffSegment[]>;
@@ -335,7 +338,7 @@ const DiffSegmentLine = ({ segment }: { segment: VersionDiffSegment }) => {
 
 // ── AI summary block ─────────────────────────────────
 
-const VersionSummaryBlock = ({
+export const VersionSummaryBlock = ({
   state,
 }: {
   state: AsyncContent<string | null>;
