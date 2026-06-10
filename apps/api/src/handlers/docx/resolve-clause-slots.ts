@@ -7,6 +7,7 @@
 
 import type { ScopedDb } from "@/api/db";
 import { clauseBodyToRichPatch } from "@/api/handlers/clauses/clause-to-patch";
+import { isVariantDeleted } from "@/api/handlers/clauses/template-links";
 import type { SafeId } from "@/api/lib/branded-types";
 
 import type { ClauseSlot } from "./discover-clause-slots";
@@ -51,12 +52,22 @@ export const resolveClauseSlots = async (
         columns: {
           clauseId: true,
           clauseVariantId: true,
+          clauseVariantLabel: true,
           clauseVersionId: true,
         },
       }),
     );
 
     if (!link || !link.clauseId) {
+      continue;
+    }
+
+    // A deleted variant must not silently fall back to the clause
+    // head. Leaving the marker unfilled reports it as an unmatched
+    // placeholder (named after the slot) in fill diagnostics. An
+    // explicit :latest / :vN modifier never used the variant, so it
+    // still resolves.
+    if (slot.versionModifier === undefined && isVariantDeleted(link)) {
       continue;
     }
 
