@@ -119,36 +119,55 @@ export const SkillResourcePanel = ({
   // Autosave path for the Folio editor. The editor emits debounced markdown with
   // skill frontmatter stripped and guide comments shown as callouts; map it back
   // to the stored shape (frontmatter re-prepended, callouts → guide comments)
-  // before persisting. Saves can resolve out of order; the counter lets a stale
-  // response (and its error toast) yield to the newer in-flight save.
-  const lastSaveId = useRef(0);
-  const persistMarkdown = async (editorMarkdown: string) => {
+  // before persisting. Saves are serialized: one PATCH in flight at a time, the
+  // newest markdown coalesced behind it. Concurrent PATCHes could be applied by
+  // the server out of order, silently persisting stale content even when the
+  // client discards the stale response.
+  const saveQueue = useRef<{ inFlight: boolean; pending: string | null }>({
+    inFlight: false,
+    pending: null,
+  });
+  const runSaveLoop = async (editorMarkdown: string) => {
     if (tab.skillId === null) {
       return;
     }
-    const saveId = ++lastSaveId.current;
-    const stored = toStoredMarkdown(editorMarkdown, tab.content);
     const skill = api.skills({ skillId: toSafeId<"agentSkill">(tab.skillId) });
-    const response =
-      tab.target === "body"
-        ? await skill.patch({ body: stored, queryKey: ["skills"] })
-        : await skill.resources.patch({
-            path: tab.resourcePath,
-            content: stored,
-            queryKey: ["skills"],
-          });
-    if (saveId !== lastSaveId.current) {
+    saveQueue.current.inFlight = true;
+    let next: string | null = editorMarkdown;
+    while (next !== null) {
+      const stored = toStoredMarkdown(next, tab.content);
+      const response =
+        tab.target === "body"
+          ? await skill.patch({ body: stored, queryKey: ["skills"] })
+          : await skill.resources.patch({
+              path: tab.resourcePath,
+              content: stored,
+              queryKey: ["skills"],
+            });
+      next = saveQueue.current.pending;
+      saveQueue.current.pending = null;
+      if (response.error) {
+        // Superseded by newer markdown: retry with that instead of toasting.
+        if (next !== null) {
+          continue;
+        }
+        stellaToast.add({
+          title: t("common.unexpectedError"),
+          description: toAPIError(response.error).message,
+          type: "error",
+        });
+        break;
+      }
+      updateSkillResourceTabContent(tab.id, stored);
+    }
+    saveQueue.current.inFlight = false;
+  };
+  const persistMarkdown = (editorMarkdown: string) => {
+    if (saveQueue.current.inFlight) {
+      saveQueue.current.pending = editorMarkdown;
       return;
     }
-    if (response.error) {
-      stellaToast.add({
-        title: t("common.unexpectedError"),
-        description: toAPIError(response.error).message,
-        type: "error",
-      });
-      return;
-    }
-    updateSkillResourceTabContent(tab.id, stored);
+    void runSaveLoop(editorMarkdown);
   };
 
   return (
@@ -213,7 +232,7 @@ export const SkillResourcePanel = ({
         <MarkdownFolioEditor
           key={tab.id}
           markdown={toEditorMarkdown(tab.content)}
-          onMarkdownChange={(md) => void persistMarkdown(md)}
+          onMarkdownChange={persistMarkdown}
         />
       ) : (
         <SkillResourceBody
