@@ -10,13 +10,13 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 
-const BIND_RETRY_INITIAL_BACKOFF: Duration = Duration::from_secs(1);
-const BIND_RETRY_MAX_BACKOFF: Duration = Duration::from_secs(30);
-
 use crate::session_manager::SessionManager;
 use crate::types::{
   is_safe_session_id, OpenDocxRequest, BRIDGE_CAPABILITIES, BRIDGE_VERSION,
 };
+
+const BIND_RETRY_INITIAL_BACKOFF: Duration = Duration::from_secs(1);
+const BIND_RETRY_MAX_BACKOFF: Duration = Duration::from_secs(30);
 
 #[derive(Clone)]
 pub struct BridgeState {
