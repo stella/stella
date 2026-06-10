@@ -92,22 +92,6 @@ const PreviewCanvas = ({ kind, workspaceId }: PreviewCanvasProps) => {
 
 const KanbanPreview = ({ workspaceId }: { workspaceId: string }) => {
   const t = useTranslations();
-  const staying = mockTask({
-    entityId: "preview-kanban-staying",
-    name: SAMPLE_NAMES.draft,
-    status: "in_progress",
-    priority: "high",
-  });
-  const movingInProgress = mockTask({
-    entityId: "preview-kanban-moving",
-    name: SAMPLE_NAMES.review,
-    status: "in_progress",
-  });
-  const movingDone = mockTask({
-    entityId: "preview-kanban-moved",
-    name: SAMPLE_NAMES.review,
-    status: "done",
-  });
 
   return (
     <div className="h-[150%] w-[150%] origin-top-left scale-[0.667]">
@@ -116,13 +100,19 @@ const KanbanPreview = ({ workspaceId }: { workspaceId: string }) => {
           label={t(STATUS_LABEL_KEYS.in_progress)}
           status="in_progress"
         >
-          <KanbanCard entity={staying} workspaceId={workspaceId} />
+          <KanbanCard entity={KANBAN_STAYING_TASK} workspaceId={workspaceId} />
           <div className="view-layout-preview-move relative">
             <div className="view-layout-preview-fade-out">
-              <KanbanCard entity={movingInProgress} workspaceId={workspaceId} />
+              <KanbanCard
+                entity={KANBAN_MOVING_IN_PROGRESS_TASK}
+                workspaceId={workspaceId}
+              />
             </div>
             <div className="view-layout-preview-fade-in absolute inset-0">
-              <KanbanCard entity={movingDone} workspaceId={workspaceId} />
+              <KanbanCard
+                entity={KANBAN_MOVING_DONE_TASK}
+                workspaceId={workspaceId}
+              />
             </div>
           </div>
         </PreviewKanbanColumn>
@@ -154,48 +144,32 @@ const PreviewKanbanColumn = ({
   </div>
 );
 
-const CalendarPreview = ({ workspaceId }: { workspaceId: string }) => {
-  const days = [6, 7, 8, 9, 10, 13, 14, 15, 16, 17];
-  const chips: Record<number, CalendarTask> = {
-    7: mockCalendarTask({
-      taskId: "preview-calendar-draft",
-      name: SAMPLE_NAMES.draft,
-      status: "in_progress",
-    }),
-    15: mockCalendarTask({
-      taskId: "preview-calendar-review",
-      name: SAMPLE_NAMES.review,
-      status: "done",
-    }),
-  };
-
-  return (
-    <div className="h-[133%] w-[133%] origin-top-left scale-75">
-      <div className="grid h-full grid-cols-5 grid-rows-2 gap-1">
-        {days.map((day) => {
-          const chip = chips[day];
-          return (
-            <div
-              className="bg-card flex min-w-0 flex-col gap-0.5 rounded-sm border p-1"
-              key={day}
-            >
-              <span className="text-muted-foreground text-[10px] leading-none">
-                {day}
-              </span>
-              {chip && (
-                <CalendarEntityChip
-                  entity={chip}
-                  isEditable={false}
-                  workspaceId={workspaceId}
-                />
-              )}
-            </div>
-          );
-        })}
-      </div>
+const CalendarPreview = ({ workspaceId }: { workspaceId: string }) => (
+  <div className="h-[133%] w-[133%] origin-top-left scale-75">
+    <div className="grid h-full grid-cols-5 grid-rows-2 gap-1">
+      {CALENDAR_DAYS.map((day) => {
+        const chip = CALENDAR_CHIPS[day];
+        return (
+          <div
+            className="bg-card flex min-w-0 flex-col gap-0.5 rounded-sm border p-1"
+            key={day}
+          >
+            <span className="text-muted-foreground text-[10px] leading-none">
+              {day}
+            </span>
+            {chip && (
+              <CalendarEntityChip
+                entity={chip}
+                isEditable={false}
+                workspaceId={workspaceId}
+              />
+            )}
+          </div>
+        );
+      })}
     </div>
-  );
-};
+  </div>
+);
 
 const TablePreview = () => {
   const t = useTranslations();
@@ -424,3 +398,37 @@ const mockCalendarTask = ({
   occurredAt: null,
   fields: [],
 });
+
+const KANBAN_STAYING_TASK = mockTask({
+  entityId: "preview-kanban-staying",
+  name: SAMPLE_NAMES.draft,
+  status: "in_progress",
+  priority: "high",
+});
+
+const KANBAN_MOVING_IN_PROGRESS_TASK = mockTask({
+  entityId: "preview-kanban-moving",
+  name: SAMPLE_NAMES.review,
+  status: "in_progress",
+});
+
+const KANBAN_MOVING_DONE_TASK = mockTask({
+  entityId: "preview-kanban-moved",
+  name: SAMPLE_NAMES.review,
+  status: "done",
+});
+
+const CALENDAR_DAYS = [6, 7, 8, 9, 10, 13, 14, 15, 16, 17];
+
+const CALENDAR_CHIPS: Record<number, CalendarTask> = {
+  7: mockCalendarTask({
+    taskId: "preview-calendar-draft",
+    name: SAMPLE_NAMES.draft,
+    status: "in_progress",
+  }),
+  15: mockCalendarTask({
+    taskId: "preview-calendar-review",
+    name: SAMPLE_NAMES.review,
+    status: "done",
+  }),
+};
