@@ -937,9 +937,12 @@ export const useChatEditor = ({
           return true;
         }
 
-        // Tab + empty editor + suggested followup: accept and send the suggestion.
+        // ArrowRight + empty editor + suggested followup: accept the suggestion
+        // without auto-submitting (so the user can review and press Enter).
+        // Tab is intentionally avoided — it is a standard navigation key that
+        // keyboard-only and screen-reader users depend on to move focus.
         if (
-          event.key === "Tab" &&
+          event.key === "ArrowRight" &&
           !event.shiftKey &&
           !event.altKey &&
           !event.ctrlKey &&
@@ -951,7 +954,6 @@ export const useChatEditor = ({
           if (suggestion && targetEditor && targetEditor.isEmpty) {
             event.preventDefault();
             targetEditor.commands.setContent(suggestion);
-            void submitHandlerRef.current?.();
             return true;
           }
         }

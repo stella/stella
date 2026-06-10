@@ -50,13 +50,15 @@ const cleanLine = (line: string): string => {
   return result.trim();
 };
 
-export const cleanSuggestionsText = (text: string): string[] =>
-  text
+export const cleanSuggestionsText = (text: string): string[] => {
+  const lines = text
     .split("\n")
     .map((line) => line.trim())
     .map(cleanLine)
-    .filter((line) => line.length > 0)
-    .slice(0, 3);
+    .filter((line) => line.length > 0);
+
+  return Array.from(new Set(lines)).slice(0, 3);
+};
 
 const getSuggestedPrompts = createSafeRootHandler(
   config,
@@ -139,7 +141,6 @@ const getSuggestedPrompts = createSafeRootHandler(
         const recentMessagesDesc = await tx.query.chatMessages.findMany({
           where: {
             threadId: { eq: threadId },
-            userId: { eq: user.id },
           },
           columns: {
             id: true,

@@ -241,7 +241,7 @@ export const ChatTabPanel = ({
   const { data: suggestedPromptsData } = useQuery(
     chatThreadSuggestedPromptsOptions({
       activeOrganizationId,
-      enabled: eligibleForSuggestions,
+      enabled: !isGenerating && eligibleForSuggestions,
       lastMessageId: lastMessageId ?? "",
       threadRef,
     }),
