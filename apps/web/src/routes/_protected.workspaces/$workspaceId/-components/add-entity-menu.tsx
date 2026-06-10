@@ -1,8 +1,9 @@
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
   FolderPlusIcon,
+  LayoutTemplateIcon,
   PlusIcon,
   SquareCheckIcon,
   UploadIcon,
@@ -21,6 +22,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import { NewDocumentFromTemplateDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/new-document-from-template-dialog";
 import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
 import { useEntitiesCountLimit } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-limits";
 import { useCreateEntities } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
@@ -70,6 +72,7 @@ export const AddEntityMenu = ({
   uploadOnly = false,
 }: AddEntityMenuProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const isWorkflowRunning = useIsWorkflowRunning(workspaceId);
   const isEntitiesLimitReached = useEntitiesCountLimit(workspaceId);
   const [isUploadPending, createFileEntities] =
@@ -199,6 +202,13 @@ export const AddEntityMenu = ({
                 <UploadIcon />
                 {t("common.uploadFiles")}
               </MenuItem>
+              <MenuItem
+                disabled={isWorkflowRunning}
+                onClick={() => setTemplateDialogOpen(true)}
+              >
+                <LayoutTemplateIcon />
+                {t("templates.newFromTemplate")}
+              </MenuItem>
               <MenuSeparator />
             </>
           )}
@@ -222,6 +232,12 @@ export const AddEntityMenu = ({
         </MenuPopup>
       </Menu>
       {fileInput}
+      <NewDocumentFromTemplateDialog
+        onOpenChange={setTemplateDialogOpen}
+        open={templateDialogOpen}
+        parentId={parentId}
+        workspaceId={workspaceId}
+      />
     </>
   );
 };
