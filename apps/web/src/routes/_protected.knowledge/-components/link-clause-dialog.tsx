@@ -43,6 +43,8 @@ type LinkClauseDialogProps = {
   onOpenChange: (open: boolean) => void;
   templateId: string;
   onLinked: () => void;
+  /** Preselect this slot (e.g. opened from the slot's inspector face). */
+  defaultSlotName?: string | undefined;
 };
 
 // Select values for the slot picker. Discovered slot names are
@@ -61,6 +63,7 @@ export const LinkClauseDialog = ({
   onOpenChange,
   templateId,
   onLinked,
+  defaultSlotName,
 }: LinkClauseDialogProps) => {
   const t = useTranslations();
   const activeOrganizationId = protectedRouteApi.useRouteContext({
@@ -118,6 +121,10 @@ export const LinkClauseDialog = ({
       setCustomSlotName("");
       return;
     }
+    if (slotValue === null && defaultSlotName !== undefined) {
+      setSlotValue(SLOT_VALUE_PREFIX + defaultSlotName);
+      return;
+    }
     if (slotValue !== null || previewData === undefined) {
       return;
     }
@@ -135,7 +142,7 @@ export const LinkClauseDialog = ({
         ? SLOT_VALUE_NONE
         : SLOT_VALUE_PREFIX + firstUnfilled,
     );
-  }, [open, slotValue, previewData, linksData]);
+  }, [open, slotValue, previewData, linksData, defaultSlotName]);
 
   const categories =
     catData && "categories" in catData ? catData.categories : [];

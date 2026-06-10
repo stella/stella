@@ -96,6 +96,7 @@ import {
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
+import { LinkClauseDialog } from "@/routes/_protected.knowledge/-components/link-clause-dialog";
 import { TemplateClausesTab } from "@/routes/_protected.knowledge/-components/template-clauses-tab";
 import { DATE_FORMAT_STYLES } from "@/routes/_protected.knowledge/-components/template-date-format";
 import { TemplateForm } from "@/routes/_protected.knowledge/-components/template-form";
@@ -2354,6 +2355,25 @@ const ConditionExprEditor = ({
 const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
   const t = useTranslations();
   const actions = useTemplateStudioStore((s) => s.actions);
+  const templateId = useTemplateStudioStore((s) => s.templateId);
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const queryClient = useQueryClient();
+  const [linkOpen, setLinkOpen] = useState(false);
+  const clausesOptions = templateClausesOptions(
+    activeOrganizationId,
+    templateId ?? "",
+  );
+  const { data: linksData } = useQuery({
+    ...clausesOptions,
+    enabled: templateId !== null,
+  });
+  const link =
+    linksData && "links" in linksData
+      ? linksData.links.find((l) => l.slotName === selected.expr)
+      : undefined;
+
   return (
     <ScrollArea className="min-h-0 flex-1">
       <ScopeHeader
@@ -2361,9 +2381,42 @@ const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
         subtitle={selected.expr}
         title={t("templates.studio.scopeClause")}
       />
-      <div className="text-muted-foreground px-4 py-4 text-xs leading-relaxed">
-        {t("templates.studio.clauseSlotHelp")}
+      <div className="flex flex-col gap-3 px-4 py-4">
+        <p className="text-muted-foreground text-xs leading-relaxed">
+          {t("templates.studio.clauseSlotHelp")}
+        </p>
+        {link === undefined ? (
+          <p className="text-muted-foreground text-xs">
+            {t("clauses.noLinkedClauses")}
+          </p>
+        ) : (
+          <div className="rounded-md border p-2.5 text-sm">
+            {link.clause === null ? (
+              <span className="text-destructive">
+                {t("clauses.clauseDeleted")}
+              </span>
+            ) : (
+              link.clause.title
+            )}
+          </div>
+        )}
+        <Button onClick={() => setLinkOpen(true)} size="sm" variant="outline">
+          {t("clauses.linkClause")}
+        </Button>
       </div>
+      {templateId === null ? null : (
+        <LinkClauseDialog
+          defaultSlotName={selected.expr}
+          onLinked={() => {
+            void queryClient.invalidateQueries({
+              queryKey: clausesOptions.queryKey,
+            });
+          }}
+          onOpenChange={setLinkOpen}
+          open={linkOpen}
+          templateId={templateId}
+        />
+      )}
     </ScrollArea>
   );
 };
