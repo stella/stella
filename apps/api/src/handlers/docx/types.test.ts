@@ -146,4 +146,57 @@ describe("isFieldMeta", () => {
       false,
     );
   });
+
+  test("accepts a date field with a dateFormat", () => {
+    expect(
+      isFieldMeta({
+        path: "signature_date",
+        inputType: "date",
+        dateFormat: { locale: "cs", style: "long" },
+      }),
+    ).toBe(true);
+    expect(
+      isFieldMeta({
+        path: "signature_date",
+        inputType: "date",
+        dateFormat: { locale: "pt-BR", style: "iso" },
+      }),
+    ).toBe(true);
+  });
+
+  test("rejects a dateFormat with an unknown style or bad shape", () => {
+    expect(
+      isFieldMeta({
+        path: "signature_date",
+        dateFormat: { locale: "cs", style: "fancy" },
+      }),
+    ).toBe(false);
+    expect(
+      isFieldMeta({ path: "signature_date", dateFormat: { locale: "cs" } }),
+    ).toBe(false);
+    expect(isFieldMeta({ path: "signature_date", dateFormat: "long" })).toBe(
+      false,
+    );
+  });
+
+  test("rejects a dateFormat whose locale is not a plausible BCP-47 tag", () => {
+    expect(
+      isFieldMeta({
+        path: "signature_date",
+        dateFormat: { locale: "not a locale", style: "long" },
+      }),
+    ).toBe(false);
+    expect(
+      isFieldMeta({
+        path: "signature_date",
+        dateFormat: { locale: "", style: "long" },
+      }),
+    ).toBe(false);
+    expect(
+      isFieldMeta({
+        path: "signature_date",
+        dateFormat: { locale: 7, style: "long" },
+      }),
+    ).toBe(false);
+  });
 });

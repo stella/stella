@@ -166,6 +166,7 @@ const createTemplateHandler = async function* ({
     optionsFrom: f.optionsFrom,
     lookup: f.lookup,
     formula: f.formula,
+    dateFormat: f.dateFormat,
   }));
 
   const clientManifest =
