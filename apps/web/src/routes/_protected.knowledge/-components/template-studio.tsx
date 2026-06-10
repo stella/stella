@@ -97,6 +97,7 @@ import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import { TemplateClausesTab } from "@/routes/_protected.knowledge/-components/template-clauses-tab";
+import { DATE_FORMAT_STYLES } from "@/routes/_protected.knowledge/-components/template-date-format";
 import { TemplateForm } from "@/routes/_protected.knowledge/-components/template-form";
 import { useTemplateNavStore } from "@/routes/_protected.knowledge/-components/template-nav-store";
 import { TemplateStudioChat } from "@/routes/_protected.knowledge/-components/template-studio-chat";
@@ -2785,7 +2786,12 @@ const FieldFace = ({
         <p className="text-muted-foreground px-4 py-3 text-xs leading-relaxed">
           {t("templates.studio.fieldHelp")}
         </p>
-        <FieldConfigEditor embedded field={field} onUpdate={onUpdate} />
+        <FieldConfigEditor
+          embedded
+          field={field}
+          hideFormulaControl
+          onUpdate={onUpdate}
+        />
         <div className="flex flex-col gap-2 border-t px-4 py-4">
           <Label className="text-sm">{t("templates.studio.whoFills")}</Label>
           <div className="flex items-center gap-1">
@@ -3343,6 +3349,21 @@ const parseFields = (manifest: unknown): StudioField[] => {
       if (typeof raw["formula"] === "string") {
         field.formula = raw["formula"];
       }
+      if (typeof raw["hint"] === "string") {
+        field.hint = raw["hint"];
+      }
+      const rawDateFormat = raw["dateFormat"];
+      if (
+        isRecord(rawDateFormat) &&
+        typeof rawDateFormat["locale"] === "string"
+      ) {
+        const style = DATE_FORMAT_STYLES.find(
+          (s) => s === rawDateFormat["style"],
+        );
+        if (style !== undefined) {
+          field.dateFormat = { locale: rawDateFormat["locale"], style };
+        }
+      }
       return field;
     });
 
@@ -3389,6 +3410,8 @@ type ManifestField = {
   optionsFrom?: string;
   lookup?: EditableField["lookup"];
   formula?: string;
+  hint?: string;
+  dateFormat?: EditableField["dateFormat"];
 };
 
 /** One session field as it is persisted: only the settings that are
@@ -3404,6 +3427,12 @@ const studioFieldToManifestField = (f: StudioField): ManifestField => {
   }
   if (f.options.length > 0) {
     field.options = f.options;
+  }
+  if (f.hint !== undefined && f.hint.trim() !== "") {
+    field.hint = f.hint.trim();
+  }
+  if (f.dateFormat !== undefined && f.inputType === "date") {
+    field.dateFormat = f.dateFormat;
   }
   // A formula is one of the mutually exclusive value sources; the manifest
   // validator rejects it next to aiPrompt/aiAdapt/lookup/parts, and a
