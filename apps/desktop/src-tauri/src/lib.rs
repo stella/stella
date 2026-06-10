@@ -66,37 +66,34 @@ pub fn run() {
     .setup(move |app| {
       let handle = app.handle().clone();
 
-      // Set app handle on session manager and restore sessions
+      // Restore sessions and build the initial tray menu off the main thread.
+      // Session restore reads the OS keychain, which can block on user
+      // authorization; the event loop is not running yet, so blocking setup
+      // makes macOS report the app as not responding. The guard is acquired
+      // synchronously here so every other manager consumer (bridge, deep
+      // links, tray actions) queues behind the restore instead of racing it.
       {
         let manager = Arc::clone(&manager);
+        let mut mgr = Arc::clone(&manager)
+          .try_lock_owned()
+          .expect("session manager is uncontended during setup");
         let handle = handle.clone();
-        tauri::async_runtime::block_on(async {
-          let session_ids = {
-            let mut mgr = manager.lock().await;
-            mgr.set_app_handle(handle);
-            mgr.initialize().await;
-            mgr.session_ids_needing_watchers()
-          };
+        tauri::async_runtime::spawn(async move {
+          mgr.set_app_handle(handle.clone());
+          mgr.initialize().await;
+          let session_ids = mgr.session_ids_needing_watchers();
+          drop(mgr);
 
           // Attach file watchers and SSE listeners outside the lock
           for sid in &session_ids {
             SessionManager::attach_watcher(&manager, sid).await;
           }
-          {
-            let mut mgr = manager.lock().await;
-            for sid in &session_ids {
-              mgr.ensure_sse_listener(&manager, sid);
-            }
-          }
-        });
-      }
 
-      // Build initial tray menu
-      {
-        let manager = Arc::clone(&manager);
-        let handle = handle.clone();
-        tauri::async_runtime::block_on(async {
-          let mgr = manager.lock().await;
+          let mut mgr = manager.lock().await;
+          for sid in &session_ids {
+            mgr.ensure_sse_listener(&manager, sid);
+          }
+
           let snapshot = mgr.get_snapshot();
           if let Ok(menu) = tray::build_tray_menu(&handle, &snapshot) {
             if let Some(tray) = handle.tray_by_id("main") {
