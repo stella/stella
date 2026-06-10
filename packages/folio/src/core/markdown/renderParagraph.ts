@@ -97,8 +97,7 @@ function resolveTemplateMarker(
   list: ListRendering,
 ): string {
   const counters =
-    ctx.listCounters.get(list.numId) ??
-    (Array.from({ length: 9 }, () => 0) as number[]);
+    ctx.listCounters.get(list.numId) ?? Array.from({ length: 9 }, () => 0);
   const level = list.level;
   const seenKey = `${list.numId}:${level}`;
   if (!ctx.listSeenLevels.has(seenKey)) {
