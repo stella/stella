@@ -15,6 +15,7 @@ import {
   CalendarIcon,
   CircleDotIcon,
   HashIcon,
+  LandmarkIcon,
   TagsIcon,
   TextIcon,
   ToggleLeftIcon,
@@ -30,7 +31,8 @@ export type ValueTypeKind =
   | "boolean"
   | "date"
   | "select"
-  | "multiSelect";
+  | "multiSelect"
+  | "company";
 
 export type ValueTypeMeta = {
   icon: LucideIcon;
@@ -49,6 +51,7 @@ export const VALUE_TYPE_META = {
   date: { icon: CalendarIcon, labelKey: "common.date" },
   select: { icon: CircleDotIcon, labelKey: "workspaces.properties.chipSingle" },
   multiSelect: { icon: TagsIcon, labelKey: "workspaces.properties.chipMulti" },
+  company: { icon: LandmarkIcon, labelKey: "templates.inputTypes.company" },
 } as const satisfies Record<ValueTypeKind, ValueTypeMeta>;
 
 /** Narrows opaque strings (e.g., from `AISuggestion.display.valueKind`)
@@ -56,9 +59,18 @@ export const VALUE_TYPE_META = {
 export const isValueTypeKind = (value: string): value is ValueTypeKind =>
   Object.hasOwn(VALUE_TYPE_META, value);
 
-/** Template field input types map 1:1 onto value kinds. */
+/** Template field input types map 1:1 onto value kinds. "company" is a
+ *  UI-level type (a registry-lookup text field), not a manifest input type;
+ *  see FIELD_TYPE_CHOICES in the template wizard. */
 export const inputTypeValueKind = (
-  inputType: "text" | "textarea" | "number" | "boolean" | "date" | "select",
+  inputType:
+    | "text"
+    | "textarea"
+    | "number"
+    | "boolean"
+    | "date"
+    | "select"
+    | "company",
 ): ValueTypeKind => inputType;
 
 /** Matter-property content types → value kinds. */
