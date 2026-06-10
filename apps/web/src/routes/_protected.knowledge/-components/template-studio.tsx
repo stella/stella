@@ -33,7 +33,7 @@ import {
   UserIcon,
   WandSparklesIcon,
 } from "lucide-react";
-import type { NodeType, ResolvedPos } from "prosemirror-model";
+import type { Node as PMNode, NodeType, ResolvedPos } from "prosemirror-model";
 import { TextSelection } from "prosemirror-state";
 import type { EditorState, Transaction } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
@@ -108,6 +108,7 @@ import {
   type StudioField,
   useTemplateStudioStore,
 } from "@/routes/_protected.knowledge/-components/template-studio-store";
+import { filledByForFieldMeta } from "@/routes/_protected.knowledge/-components/template-studio-suggestions";
 import { TemplateVersionsTab } from "@/routes/_protected.knowledge/-components/template-versions-tab";
 import {
   type EditablePart,
@@ -152,6 +153,11 @@ const GESTURE_POPOVER_OFFSET_PX = 8;
 const GESTURE_POPOVER_HALF_WIDTH_PX = 116;
 /** Rough rendered height of the three-row popover, for the flip decision. */
 const GESTURE_POPOVER_EST_HEIGHT_PX = 120;
+/** Source-phrase cap for the bilingual-mirror instruction (the suggest
+ *  endpoint bounds `instructions` at 2000 chars). */
+const MIRROR_SOURCE_MAX_CHARS = 400;
+/** Mirror-offer toasts stay long enough to rename the placeholder first. */
+const MIRROR_OFFER_TOAST_MS = 10_000;
 
 /** The live text selection in the document, as reported by Folio. */
 type GestureSelection = { from: number; to: number; text: string };
@@ -411,6 +417,90 @@ export const TemplateStudioPage = ({
     setOutline(buildOutline(directives));
   }, [setSelected, setOutline]);
 
+  // ── Bilingual mirroring ──────────────────────────────────
+  // A structural gesture inside a table cell with exactly one text-bearing
+  // sibling cell (two-column bilingual documents) offers repeating the
+  // gesture on the parallel cell. Never silent: a field mirror lands as an
+  // accept/reject in-document suggestion, a block mirror as a toast action.
+
+  /** Bilingual mirror for Make field: ask the model for the EXACT verbatim
+   *  substring of the parallel cell that corresponds to the source phrase,
+   *  then queue an accept/reject in-document suggestion replacing it with
+   *  the same `{{path}}` marker. No confident verbatim hit, no proposal. */
+  const proposeFieldMirror = async ({
+    path,
+    sourceText,
+    sibling,
+  }: {
+    path: string;
+    sourceText: string;
+    sibling: SiblingCell;
+  }) => {
+    const phrase = sourceText.slice(0, MIRROR_SOURCE_MAX_CHARS);
+    const response = await api.templates["suggest-fields"].post({
+      text: sibling.text,
+      instructions:
+        `This text is the parallel-language twin of a clause in which the ` +
+        `exact phrase "${phrase}" became the field {{${path}}}. Return ` +
+        `exactly ONE suggestion: fieldPath must be "${path}" and ` +
+        `literalText must be the EXACT verbatim substring of this text ` +
+        `that corresponds to that phrase. If there is no clear ` +
+        `correspondence, return no suggestions.`,
+    });
+    if (response.error) {
+      return;
+    }
+    const literal = response.data.suggestions.at(0)?.literalText ?? "";
+    // Anchor only on a verbatim hit inside the sibling cell that is not
+    // itself marker text; anything else means no confident match.
+    if (
+      literal === "" ||
+      literal.includes("{{") ||
+      literal.includes("}}") ||
+      !sibling.text.includes(literal)
+    ) {
+      return;
+    }
+    const { fields, enqueueMirrorRequests } = useTemplateStudioStore.getState();
+    const field =
+      fields.find((f) => f.path === path) ?? defaultStudioField(path);
+    enqueueMirrorRequests([
+      {
+        spec: {
+          id: `mirror-field-${path}`,
+          literalText: literal,
+          suggestedText: `{{${path}}}`,
+          topic: path,
+          rationale: t("templates.studio.mirrorFieldRationale"),
+          scopeText: sibling.text,
+          display: {
+            valueKind: inputTypeValueKind(field.inputType),
+            filledBy: filledByForFieldMeta({ path, aiPrompt: field.aiPrompt }),
+          },
+        },
+        onAccepted: () => {
+          // One field now fills two languages, so AI adapts the wording
+          // per occurrence — unless the value is structural (lookup /
+          // formula / composite) or not prose (no letters: IDs, amounts).
+          const current = useTemplateStudioStore
+            .getState()
+            .fields.find((f) => f.path === path);
+          if (current === undefined || current.aiAdapt) {
+            return;
+          }
+          const structural =
+            current.lookup !== undefined ||
+            current.formula !== undefined ||
+            current.parts !== undefined;
+          if (structural || !/\p{L}/u.test(sourceText)) {
+            return;
+          }
+          upsertField(path, { aiAdapt: true });
+        },
+      },
+    ]);
+  };
+
   // The hero gesture: turn the current text selection into a `{{field}}`,
   // deriving a unique field path from the selected text and registering it in
   // the session (the dispatched selection change re-runs syncSelection).
@@ -425,6 +515,8 @@ export const TemplateStudioPage = ({
       return null;
     }
     const text = view.state.doc.textBetween(from, to, " ");
+    // Detect the parallel cell before the marker insert shifts positions.
+    const sibling = findSiblingCell(view.state, from);
     const base = slugify(text);
     const existing = useTemplateStudioStore.getState().fields;
     let path = base;
@@ -436,6 +528,9 @@ export const TemplateStudioPage = ({
     );
     view.focus();
     upsertField(path, {});
+    if (sibling !== null) {
+      void proposeFieldMirror({ path, sourceText: text, sibling });
+    }
     return path;
   };
 
@@ -542,6 +637,65 @@ export const TemplateStudioPage = ({
   const insertLoop = (range?: { from: number; to: number }) =>
     insertOrWrapBlock("{{#each items}}", "{{/each}}", "items", range);
   const insertClause = () => insertInline("{{@clause:Clause}}");
+
+  /** Explicit-click block mirror: wrap the parallel cell's paragraphs in
+   *  the same block. The opener's live expression is read at click time via
+   *  the synced selected directive (the user typically renames the
+   *  placeholder before clicking), so the mirror uses the final name. */
+  const applyBlockMirror = (kind: "if" | "each") => {
+    const view = editorViewRef.current;
+    const { selected } = useTemplateStudioStore.getState();
+    const expr = selected?.expr.trim() ?? "";
+    if (!view || !selected || selected.kind !== kind || expr === "") {
+      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      return;
+    }
+    const sibling = findSiblingCell(view.state, selected.from);
+    const range = sibling === null ? null : siblingWrapRange(sibling);
+    if (range === null) {
+      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      return;
+    }
+    if (kind === "if") {
+      insertOrWrapBlock(`{{#if ${expr}}}`, "{{/if}}", expr, range);
+    } else {
+      insertOrWrapBlock(`{{#each ${expr}}}`, "{{/each}}", expr, range);
+    }
+  };
+
+  const offerBlockMirror = (kind: "if" | "each") => {
+    stellaToast.add({
+      title: t("templates.studio.mirrorBlockOffer"),
+      type: "info",
+      timeout: MIRROR_OFFER_TOAST_MS,
+      action: {
+        label: t("templates.studio.mirrorBlockAction"),
+        onClick: () => applyBlockMirror(kind),
+      },
+    });
+  };
+
+  /** Wrap-in-condition/loop with the bilingual-mirror offer on top: detect
+   *  the parallel cell before the wrap shifts positions, then toast. */
+  const wrapBlockWithMirrorOffer = (
+    kind: "if" | "each",
+    range?: { from: number; to: number },
+  ) => {
+    const view = editorViewRef.current;
+    const anchor = range ?? view?.state.selection;
+    const sibling =
+      view && anchor !== undefined && anchor.from !== anchor.to
+        ? findSiblingCell(view.state, anchor.from)
+        : null;
+    if (kind === "if") {
+      insertCondition(range);
+    } else {
+      insertLoop(range);
+    }
+    if (sibling !== null) {
+      offerBlockMirror(kind);
+    }
+  };
 
   // ── Selection → gesture popover ──────────────────────────
   // Selecting plain prose floats the structural gestures next to the
@@ -726,9 +880,9 @@ export const TemplateStudioPage = ({
         });
       }
     } else if (kind === "if") {
-      insertCondition(range);
+      wrapBlockWithMirrorOffer("if", range);
     } else {
-      insertLoop(range);
+      wrapBlockWithMirrorOffer("each", range);
     }
     showGesture.cancel();
     enrichGesture.cancel();
@@ -1142,10 +1296,10 @@ export const TemplateStudioPage = ({
                   makeField(range);
                 }
                 if (id === WRAP_IF_CONTEXT_ID) {
-                  insertCondition(range);
+                  wrapBlockWithMirrorOffer("if", range);
                 }
                 if (id === WRAP_EACH_CONTEXT_ID) {
-                  insertLoop(range);
+                  wrapBlockWithMirrorOffer("each", range);
                 }
               }}
               customContextMenuItems={makeFieldContextItems}
@@ -1367,6 +1521,75 @@ const paragraphDepth = ($pos: ResolvedPos, paragraph: NodeType): number => {
     }
   }
   return 1;
+};
+
+// ── Bilingual mirroring: sibling-cell detection ──────────
+
+/** A text-bearing cell parallel to a gesture's cell — same table row,
+ *  and the only other cell in it with text (two-column bilingual docs).
+ *  `from`/`to` span the cell's content; `text` is built from the same
+ *  positional-text model the suggestion anchoring searches, so it can be
+ *  used as a scope/needle there verbatim. */
+type SiblingCell = { cell: PMNode; from: number; to: number; text: string };
+
+const isTableCellNodeName = (name: string) =>
+  name === "tableCell" || name === "tableHeader";
+
+const findSiblingCell = (
+  state: EditorState,
+  pos: number,
+): SiblingCell | null => {
+  const $pos = state.doc.resolve(pos);
+  let cellDepth = 0;
+  for (let depth = $pos.depth; depth >= 1; depth--) {
+    if (isTableCellNodeName($pos.node(depth).type.name)) {
+      cellDepth = depth;
+      break;
+    }
+  }
+  if (cellDepth < 2 || $pos.node(cellDepth - 1).type.name !== "tableRow") {
+    return null;
+  }
+  const row = $pos.node(cellDepth - 1);
+  const rowStart = $pos.start(cellDepth - 1);
+  const cellIndex = $pos.index(cellDepth - 1);
+  const siblings: SiblingCell[] = [];
+  let offset = 0;
+  for (let index = 0; index < row.childCount; index++) {
+    const cell = row.child(index);
+    if (index !== cellIndex && cell.textContent.trim() !== "") {
+      const from = rowStart + offset + 1;
+      const to = from + cell.content.size;
+      siblings.push({
+        cell,
+        from,
+        to,
+        text: buildPositionalText(state.doc, from, to).text,
+      });
+    }
+    offset += cell.nodeSize;
+  }
+  // Only an unambiguous twin qualifies: with several text-bearing siblings
+  // the parallel column can't be picked reliably.
+  if (siblings.length !== 1) {
+    return null;
+  }
+  return siblings.at(0) ?? null;
+};
+
+/** Positions inside the sibling cell's first and last paragraphs, so
+ *  `insertOrWrapBlock` expands the wrap to exactly the cell's paragraphs. */
+const siblingWrapRange = (
+  sibling: SiblingCell,
+): { from: number; to: number } | null => {
+  const { cell } = sibling;
+  if (
+    cell.firstChild?.type.name !== "paragraph" ||
+    cell.lastChild?.type.name !== "paragraph"
+  ) {
+    return null;
+  }
+  return { from: sibling.from + 1, to: sibling.to - 1 };
 };
 
 /** Folds the flat directive scan into the document's nesting: if/each

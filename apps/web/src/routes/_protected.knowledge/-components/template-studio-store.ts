@@ -3,6 +3,7 @@ import { create } from "zustand";
 import type { TemplateRecipeDefinition } from "@stll/api/types";
 import type { DirectiveRange } from "@stll/folio";
 
+import type { ReplacementSpec } from "@/routes/_protected.knowledge/-components/template-studio-suggestions";
 import type { EditableField } from "@/routes/_protected.knowledge/-components/template-wizard";
 
 // The Studio's editable manifest data + live document selection. Lives in a
@@ -85,6 +86,15 @@ export type StudioActions = {
   insertRecipe: (definition: TemplateRecipeDefinition) => void;
 };
 
+/** A bilingual-mirror proposal the page queues for the chat surface — the
+ *  Studio's only AISuggestion decoration writer — to place in-document as
+ *  an accept/reject suggestion. */
+export type MirrorSuggestionRequest = {
+  spec: ReplacementSpec;
+  /** Runs once when the placed suggestion is accepted. */
+  onAccepted?: (() => void) | undefined;
+};
+
 /** Page-owned UI state the inspector's action row reflects. */
 export type StudioUiState = {
   metaLabel: string;
@@ -136,6 +146,10 @@ type TemplateStudioState = {
   setSelected: (selected: DirectiveRange | null) => void;
   markDirty: () => void;
   markSaved: () => void;
+  /** Bilingual-mirror proposals waiting for the chat surface to place. */
+  pendingMirrorRequests: MirrorSuggestionRequest[];
+  enqueueMirrorRequests: (requests: MirrorSuggestionRequest[]) => void;
+  clearMirrorRequests: () => void;
 };
 
 export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
@@ -157,6 +171,7 @@ export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
       conditions: session.conditions,
       selected: null,
       isDirty: false,
+      pendingMirrorRequests: [],
     }),
   reset: (templateId) =>
     set((state) =>
@@ -169,9 +184,16 @@ export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
             isDirty: false,
             actions: null,
             ui: DEFAULT_UI,
+            pendingMirrorRequests: [],
           }
         : state,
     ),
+  pendingMirrorRequests: [],
+  enqueueMirrorRequests: (requests) =>
+    set((state) => ({
+      pendingMirrorRequests: [...state.pendingMirrorRequests, ...requests],
+    })),
+  clearMirrorRequests: () => set({ pendingMirrorRequests: [] }),
   upsertField: (path, patch) =>
     set((state) => {
       const exists = state.fields.some((f) => f.path === path);

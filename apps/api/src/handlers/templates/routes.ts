@@ -4,6 +4,7 @@ import createTemplateCategory from "@/api/handlers/templates/categories-create";
 import deleteTemplateCategory from "@/api/handlers/templates/categories-delete";
 import listTemplateCategories from "@/api/handlers/templates/categories-list";
 import updateTemplateCategory from "@/api/handlers/templates/categories-update";
+import checkTemplate from "@/api/handlers/templates/check";
 import linkTemplateClause from "@/api/handlers/templates/clauses-link";
 import listTemplateClauses from "@/api/handlers/templates/clauses-list";
 import syncTemplateClause from "@/api/handlers/templates/clauses-sync";
@@ -78,6 +79,10 @@ export const templatesRoute = new Elysia({
   .get("/:templateId/preview", previewTemplate.handler, {
     params: previewTemplate.config.params,
     permissions: previewTemplate.config.permissions,
+  })
+  .get("/:templateId/check", checkTemplate.handler, {
+    params: checkTemplate.config.params,
+    permissions: checkTemplate.config.permissions,
   })
   .post("/:templateId/fill-preview", fillTemplatePreview.handler, {
     body: fillTemplatePreview.config.body,

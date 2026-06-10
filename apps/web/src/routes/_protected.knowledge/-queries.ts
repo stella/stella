@@ -76,6 +76,11 @@ export const knowledgeKeys = {
       templateId,
       "clauses",
     ],
+    check: (organizationId: string, templateId: string) => [
+      ...knowledgeKeys.templates.all(organizationId),
+      templateId,
+      "check",
+    ],
     docxBuffer: (organizationId: string, templateId: string) => [
       ...knowledgeKeys.templates.all(organizationId),
       templateId,
@@ -270,6 +275,27 @@ export const templateClausesOptions = (
       return response.data;
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
+  });
+
+// Pre-flight validation findings. No staleTime: the author typically edits
+// the template and re-opens the check, so each mount refetches.
+export const templateCheckOptions = (
+  organizationId: string,
+  templateId: string,
+) =>
+  queryOptions({
+    queryKey: knowledgeKeys.templates.check(organizationId, templateId),
+    queryFn: async ({ signal }) => {
+      const response = await api
+        .templates({ templateId: toSafeId<"template">(templateId) })
+        .check.get({ fetch: { signal } });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
   });
 
 // ── Recipe queries ──────────────────────────────────
