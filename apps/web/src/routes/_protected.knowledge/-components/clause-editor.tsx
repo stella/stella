@@ -20,6 +20,11 @@ import {
 
 import { Button } from "@stll/ui/components/button";
 
+import {
+  CLAUSE_DIRECTIVE_NODE,
+  ClauseDirectiveNode,
+  isBlockDirectiveKind,
+} from "./clause-directive-node";
 import "./clause-editor.css";
 import type { ClauseParagraph, ClauseRun } from "./clause-editor-types";
 
@@ -28,52 +33,83 @@ const isUsableEditor = (editor: Editor | null | undefined): editor is Editor =>
 
 // ── Conversion: ClauseBody → TipTap JSON ────────────
 
-const clauseBodyToTipTap = (body: readonly ClauseParagraph[]): JSONContent => ({
+const directiveToNode = (p: ClauseParagraph): JSONContent => ({
+  type: CLAUSE_DIRECTIVE_NODE,
+  attrs: {
+    kind: p.directiveKind ?? "if",
+    expression: p.directiveExpression ?? "",
+    text: p.text,
+  },
+});
+
+export const clauseBodyToTipTap = (
+  body: readonly ClauseParagraph[],
+): JSONContent => ({
   type: "doc",
-  content: body
-    .filter((p) => !p.isDirective)
-    .map((p): JSONContent => {
-      const isHeading = p.style === "heading" && p.level !== undefined;
-      const runs = p.runs ?? [{ text: p.text }];
+  content: body.map((p): JSONContent => {
+    // Directives ride in the document as atomic nodes, so their position is
+    // the editor's truth rather than something reconstructed on save.
+    if (p.isDirective) {
+      return directiveToNode(p);
+    }
 
-      const content: JSONContent[] = runs.map((run): JSONContent => {
-        const marks: { type: string }[] = [];
-        if (run.bold) {
-          marks.push({ type: "bold" });
-        }
-        if (run.italic) {
-          marks.push({ type: "italic" });
-        }
-        const node: JSONContent = {
-          type: "text",
-          text: run.text || " ",
-        };
-        if (marks.length > 0) {
-          node.marks = marks;
-        }
-        return node;
-      });
+    const isHeading = p.style === "heading" && p.level !== undefined;
+    const runs = p.runs ?? [{ text: p.text }];
 
-      if (isHeading) {
-        return {
-          type: "heading",
-          attrs: {
-            level: Math.min(p.level ?? 1, 3),
-          },
-          content,
-        };
+    const content: JSONContent[] = runs.map((run): JSONContent => {
+      const marks: { type: string }[] = [];
+      if (run.bold) {
+        marks.push({ type: "bold" });
       }
+      if (run.italic) {
+        marks.push({ type: "italic" });
+      }
+      const node: JSONContent = {
+        type: "text",
+        text: run.text || " ",
+      };
+      if (marks.length > 0) {
+        node.marks = marks;
+      }
+      return node;
+    });
 
-      return { type: "paragraph", content };
-    }),
+    if (isHeading) {
+      return {
+        type: "heading",
+        attrs: {
+          level: Math.min(p.level ?? 1, 3),
+        },
+        content,
+      };
+    }
+
+    return { type: "paragraph", content };
+  }),
 });
 
 // ── Conversion: TipTap JSON → ClauseBody ────────────
 
-const tipTapToClauseBody = (json: JSONContent): ClauseParagraph[] => {
+const nodeToDirective = (node: JSONContent): ClauseParagraph => {
+  const attrs = node.attrs ?? {};
+  const kind = isBlockDirectiveKind(attrs["kind"]) ? attrs["kind"] : "if";
+  return {
+    text: typeof attrs["text"] === "string" ? attrs["text"] : "",
+    isDirective: true,
+    directiveKind: kind,
+    directiveExpression:
+      typeof attrs["expression"] === "string" ? attrs["expression"] : "",
+  };
+};
+
+export const tipTapToClauseBody = (json: JSONContent): ClauseParagraph[] => {
   const content = json.content ?? [];
 
   return content.map((node): ClauseParagraph => {
+    if (node.type === CLAUSE_DIRECTIVE_NODE) {
+      return nodeToDirective(node);
+    }
+
     const isHeading = node.type === "heading";
     const runs: ClauseRun[] = [];
     let plainText = "";
@@ -112,39 +148,18 @@ const tipTapToClauseBody = (json: JSONContent): ClauseParagraph[] => {
   });
 };
 
-/**
- * Merge edited (directive-free) paragraphs back into the original body,
- * keeping directive paragraphs ({{#if}}/{{#each}}…) verbatim at their
- * positions. The rich editor only renders non-directive paragraphs, so on
- * save we re-interleave the edits into the non-directive slots; otherwise
- * editing any conditional clause would silently strip its logic. Edits
- * beyond the original non-directive count are appended at the end.
- */
-export const mergeEditedBody = (
-  original: readonly ClauseParagraph[],
-  edited: readonly ClauseParagraph[],
-): ClauseParagraph[] => {
-  const result: ClauseParagraph[] = [];
-  let editIndex = 0;
-  for (const paragraph of original) {
-    if (paragraph.isDirective) {
-      result.push(paragraph);
-      continue;
-    }
-    const next = edited[editIndex];
-    if (next !== undefined) {
-      result.push(next);
-      editIndex += 1;
-    }
-  }
-  for (let i = editIndex; i < edited.length; i += 1) {
-    const extra = edited[i];
-    if (extra !== undefined) {
-      result.push(extra);
-    }
-  }
-  return result;
-};
+/** Stable identity of a body for detecting external resets vs. the editor's
+ *  own round-tripped edits (text + formatting + directive kind/expression). */
+const bodyKey = (body: readonly ClauseParagraph[]): string =>
+  body
+    .map((p) =>
+      p.isDirective
+        ? `D:${p.directiveKind ?? ""}:${p.directiveExpression ?? ""}`
+        : `P:${p.style ?? ""}:${p.level ?? ""}:${(p.runs ?? [{ text: p.text }])
+            .map((r) => `${r.bold ? "b" : ""}${r.italic ? "i" : ""}|${r.text}`)
+            .join("\u0001")}`,
+    )
+    .join("\u0000");
 
 // ── Editor Component ────────────────────────────────
 
@@ -159,10 +174,10 @@ export const ClauseEditor = ({
   onChange,
   placeholder,
 }: ClauseEditorProps) => {
-  // Keep the latest body (incl. its directive paragraphs) so save can
-  // re-interleave edits without dropping directives the editor never shows.
-  const contentRef = useRef(content);
-  contentRef.current = content;
+  // Last body the editor itself emitted, so the reset effect can tell an
+  // external content change (dialog reset, clause switch) from the round-trip
+  // of the user's own keystroke and avoid clobbering the cursor.
+  const lastEmittedKeyRef = useRef(bodyKey(content));
 
   const editor = useEditor({
     extensions: [
@@ -172,6 +187,7 @@ export const ClauseEditor = ({
       Bold,
       Italic,
       Heading.configure({ levels: [1, 2, 3] }),
+      ClauseDirectiveNode,
       History,
       Placeholder.configure({
         placeholder: placeholder ?? "",
@@ -179,29 +195,27 @@ export const ClauseEditor = ({
     ],
     content: clauseBodyToTipTap(content),
     onUpdate: ({ editor: e }) => {
-      onChange(
-        mergeEditedBody(contentRef.current, tipTapToClauseBody(e.getJSON())),
-      );
+      const body = tipTapToClauseBody(e.getJSON());
+      lastEmittedKeyRef.current = bodyKey(body);
+      onChange(body);
     },
   });
 
-  // Sync content when the dialog resets
-  const contentKey = content
-    .filter((p) => !p.isDirective)
-    .map((p) => p.text)
-    .join("\n");
+  // Re-seed the editor only on an external content change (not on the user's
+  // own edits, whose key we already recorded above).
+  const contentKey = bodyKey(content);
   const editorReady = isUsableEditor(editor);
 
   useEffect(() => {
     if (!isUsableEditor(editor)) {
       return undefined;
     }
-    const currentText = editor.getText();
-    if (currentText !== contentKey) {
+    if (contentKey !== lastEmittedKeyRef.current) {
       editor.commands.setContent(clauseBodyToTipTap(content));
+      lastEmittedKeyRef.current = contentKey;
     }
     return undefined;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- editor and content are stable refs; only re-sync when contentKey changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- editor is a stable ref; only re-sync when contentKey changes
   }, [contentKey]);
 
   const toggleBold = useCallback(() => {
