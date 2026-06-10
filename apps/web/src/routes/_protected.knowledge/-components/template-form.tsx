@@ -1356,9 +1356,35 @@ export const TemplateForm = ({
   // the form renders no input for them and submits no value.
   // Derived fields never render as inputs: formulas compute from other
   // values, and AI-drafted fields (aiPrompt) are written by the model at
-  // fill time.
+  // fill time. Fields whose marker appears nowhere (count 0) are asked only
+  // when something still consumes the answer: condition questions
+  // (booleans), paths referenced by a named condition, or sources another
+  // field derives from (formula, optionsFrom).
+  const referencedPaths = new Set<string>();
+  for (const condition of conditions) {
+    for (const f of allFields) {
+      if (condition.expression.includes(f.path)) {
+        referencedPaths.add(f.path);
+      }
+    }
+  }
+  for (const f of allFields) {
+    if (f.optionsFrom !== undefined) {
+      referencedPaths.add(f.optionsFrom);
+    }
+    if (f.formula !== undefined) {
+      for (const other of allFields) {
+        if (f.formula.includes(other.path)) {
+          referencedPaths.add(other.path);
+        }
+      }
+    }
+  }
   const fields = allFields.filter(
-    (f) => f.formula === undefined && f.aiPrompt === undefined,
+    (f) =>
+      f.formula === undefined &&
+      f.aiPrompt === undefined &&
+      (f.count > 0 || f.inputType === "boolean" || referencedPaths.has(f.path)),
   );
   const [values, setValues] = useState<FormValues>(() =>
     buildInitialValues(fields),
