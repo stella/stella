@@ -2202,6 +2202,8 @@ type Messages = {
       "recipeSaveFailed": "Failed to save recipe";
       "recipeSaved": "Recipe saved";
       "recipes": "Recipes";
+      "removeCondition": "Remove condition";
+      "removeConditionBlocked": "This condition wraps more than this field; edit it in the document to remove it.";
       "renameField": "Rename field";
       "renameFieldInvalid": "That name is invalid or already taken";
       "repeatForEach": "Repeat for each…";
@@ -2215,6 +2217,8 @@ type Messages = {
       "scopeField": "Field";
       "scopeTemplate": "Template";
       "showOnlyIf": "Show only if…";
+      "showOnlyIfHelp": "Make this field appear in the document only when a condition holds.";
+      "showOnlyWhen": "This field shows only when:";
       "suggestConfig": "Suggest configuration";
       "textPlusAi": "Person + AI";
       "useExisting": "Use existing {name}";

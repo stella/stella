@@ -390,6 +390,12 @@ export const TemplateStudioPage = ({
         actionsRef.current?.renameFieldPath(oldPath, newPath) ?? false,
       rewriteConditionExpr: (next) =>
         actionsRef.current?.rewriteConditionExpr(next) ?? false,
+      wrapFieldInCondition: (path) =>
+        actionsRef.current?.wrapFieldInCondition(path) ?? false,
+      rewriteFieldConditionExpr: (path, next) =>
+        actionsRef.current?.rewriteFieldConditionExpr(path, next) ?? false,
+      unwrapFieldCondition: (path) =>
+        actionsRef.current?.unwrapFieldCondition(path) ?? false,
       deselect: () => actionsRef.current?.deselect(),
       focusAdjacentField: (direction) =>
         actionsRef.current?.focusAdjacentField(direction),
@@ -1449,6 +1455,164 @@ export const TemplateStudioPage = ({
     return actionsRef.current?.renameFieldPath(path, flatPath) ?? false;
   };
 
+  // Inline-wrap this field's own marker in `{{#if condition}}…{{/if}}`. The
+  // marker is text inside one paragraph, so insertCondition's inline branch
+  // wraps it in place; the field face stays open (the caret remains in the
+  // marker). The expression is set straight after via the shared condition
+  // builder, which targets the just-created enclosing block by field path.
+  const wrapFieldInCondition = (path: string): boolean => {
+    const view = editorViewRef.current;
+    if (!view) {
+      return false;
+    }
+    const marker = getTemplateDirectives(view.state)
+      .filter((d) => d.kind === "placeholder" && d.expr === path)
+      .toSorted((a, b) => a.from - b.from)
+      .at(0);
+    if (marker === undefined) {
+      return false;
+    }
+    insertCondition({ from: marker.from, to: marker.to });
+    // The wrap moves the caret into the new opener's placeholder name; park it
+    // back inside the field marker so the field face stays open. The opener
+    // adds `{{#if condition}}` (length below) before the marker's old start.
+    const reopened = getTemplateDirectives(view.state)
+      .filter((d) => d.kind === "placeholder" && d.expr === path)
+      .toSorted((a, b) => a.from - b.from)
+      .at(0);
+    if (reopened !== undefined) {
+      actionsRef.current?.focusPosition(reopened.from);
+    }
+    return true;
+  };
+
+  // The innermost `{{#if}}` / `{{/if}}` pair that encloses this field's marker,
+  // paired by walking the sorted directives like buildOutline does. Returns
+  // null when the marker is not inside any `if` block.
+  const enclosingIfPair = (
+    state: EditorState,
+    path: string,
+  ): { opener: DirectiveRange; closer: DirectiveRange } | null => {
+    const directives = getTemplateDirectives(state).toSorted(
+      (a, b) => a.from - b.from,
+    );
+    const marker = directives.find(
+      (d) => d.kind === "placeholder" && d.expr === path,
+    );
+    if (marker === undefined) {
+      return null;
+    }
+    const stack: DirectiveRange[] = [];
+    for (const d of directives) {
+      if (d.kind === "if") {
+        stack.push(d);
+      } else if (d.kind === "endif") {
+        const open = stack.pop();
+        if (
+          open !== undefined &&
+          open.to <= marker.from &&
+          d.from >= marker.to
+        ) {
+          return { opener: open, closer: d };
+        }
+      }
+    }
+    return null;
+  };
+
+  // Rewrite the `{{#if …}}` opener of the block that encloses this field's
+  // marker (re-derived from the live document, so it works whether the block
+  // was just created by wrapFieldInCondition or already existed).
+  const rewriteFieldConditionExpr = (path: string, next: string): boolean => {
+    const view = editorViewRef.current;
+    const trimmed = next.trim();
+    if (!view || trimmed === "" || /[{}]/u.test(trimmed)) {
+      return false;
+    }
+    const pair = enclosingIfPair(view.state, path);
+    if (pair === null) {
+      return false;
+    }
+    if (trimmed === pair.opener.expr.trim()) {
+      return true;
+    }
+    const tr = view.state.tr.insertText(
+      `{{#if ${trimmed}}}`,
+      pair.opener.from,
+      pair.opener.to,
+    );
+    // Keep the caret inside this field's marker so the field face stays open.
+    const marker = getTemplateDirectives(view.state)
+      .filter((d) => d.kind === "placeholder" && d.expr === path)
+      .toSorted((a, b) => a.from - b.from)
+      .at(0);
+    if (marker !== undefined) {
+      tr.setSelection(
+        TextSelection.near(
+          tr.doc.resolve(Math.min(marker.from + 2, tr.doc.content.size)),
+        ),
+      );
+    }
+    view.dispatch(tr);
+    markDirty();
+    return true;
+  };
+
+  // Remove the inline `{{#if …}}` / `{{/if}}` pair around this field's marker,
+  // keeping the field. Guarded: only when the block body holds nothing but
+  // this field's marker (the face disables Remove otherwise). Delete the
+  // closer first so the opener's positions stay valid.
+  const unwrapFieldCondition = (path: string): boolean => {
+    const view = editorViewRef.current;
+    if (!view) {
+      return false;
+    }
+    const { state } = view;
+    const pair = enclosingIfPair(state, path);
+    if (pair === null) {
+      return false;
+    }
+    const bodyOnlyHasThisField = getTemplateDirectives(state).every(
+      (d) =>
+        d.from < pair.opener.to ||
+        d.to > pair.closer.from ||
+        (d.kind === "placeholder" && d.expr === path),
+    );
+    if (!bodyOnlyHasThisField) {
+      return false;
+    }
+    const paragraph = state.schema.nodes["paragraph"];
+    // An inline wrap deletes just the marker text; a block wrap (the marker
+    // was the whole paragraph) deletes the opener/closer paragraphs, mirroring
+    // unmakeFieldRepeatable.
+    const removalBounds = (d: DirectiveRange) => {
+      if (!d.block || !paragraph) {
+        return { from: d.from, to: d.to };
+      }
+      const $pos = state.doc.resolve(d.from);
+      if ($pos.depth < 1) {
+        return { from: d.from, to: d.to };
+      }
+      const depth = paragraphDepth($pos, paragraph);
+      return { from: $pos.before(depth), to: $pos.after(depth) };
+    };
+    const closerBounds = removalBounds(pair.closer);
+    const openerBounds = removalBounds(pair.opener);
+    try {
+      // Closer first so the opener's positions stay valid.
+      view.dispatch(
+        state.tr
+          .delete(closerBounds.from, closerBounds.to)
+          .delete(openerBounds.from, openerBounds.to),
+      );
+    } catch {
+      return false;
+    }
+    markDirty();
+    actionsRef.current?.focusField(path);
+    return true;
+  };
+
   actionsRef.current = {
     toggleDirectives: () => setShowDirectives((v) => !v),
     deleteField: (path) => {
@@ -1648,6 +1812,9 @@ export const TemplateStudioPage = ({
       markDirty();
       return true;
     },
+    wrapFieldInCondition,
+    rewriteFieldConditionExpr,
+    unwrapFieldCondition,
     deselect: () => {
       const view = editorViewRef.current;
       const { selected } = useTemplateStudioStore.getState();
@@ -3357,16 +3524,10 @@ const ConditionFace = ({
         title={t("templates.studio.scopeCondition")}
       />
       <div className="flex flex-col gap-5 px-4 py-4">
-        <ConditionQuestionBuilder
-          expr={selected.expr}
-          fields={fields}
-          key={`${selected.from}:${selected.expr}`}
-          onRewrite={rewrite}
-        />
-        <ConditionRuleBuilder fields={fields} onRewrite={rewrite} />
-        <ConditionAdvanced
+        <ConditionBuilder
           conditions={conditions}
           expr={selected.expr}
+          fields={fields}
           fromKey={`${selected.from}:${selected.expr}`}
           onRewrite={rewrite}
         />
@@ -3374,6 +3535,43 @@ const ConditionFace = ({
     </ScrollArea>
   );
 };
+
+/** The three-tier condition-setting UI (ask-a-question, match-a-field rule,
+ *  advanced raw editor), shared by the ConditionFace (editing a selected
+ *  `{{#if}}` opener) and the FieldFace's "Show only if…" section (editing the
+ *  block that wraps the field's own marker). `onRewrite` is the only thing
+ *  that differs between callers: it points at whichever block this builder
+ *  targets. `fromKey` resets the question/advanced inputs when the target or
+ *  its expression changes. */
+const ConditionBuilder = ({
+  expr,
+  fields,
+  conditions,
+  fromKey,
+  onRewrite,
+}: {
+  expr: string;
+  fields: StudioField[];
+  conditions: NameExpr[];
+  fromKey: string;
+  onRewrite: (next: string) => boolean;
+}) => (
+  <>
+    <ConditionQuestionBuilder
+      expr={expr}
+      fields={fields}
+      key={fromKey}
+      onRewrite={onRewrite}
+    />
+    <ConditionRuleBuilder fields={fields} onRewrite={onRewrite} />
+    <ConditionAdvanced
+      conditions={conditions}
+      expr={expr}
+      fromKey={fromKey}
+      onRewrite={onRewrite}
+    />
+  </>
+);
 
 /** Primary, no-syntax path: a question label becomes a boolean field whose
  *  bare name is the block's condition. The filler answers Yes/No; the block
@@ -4306,6 +4504,117 @@ const fieldRepeatState = (
   return { kind: "off", disabledKey: null };
 };
 
+/** Whether this field's marker is already wrapped in an `{{#if}}` block, and
+ *  the block's live expression. `canRemove` mirrors the Repeatable guard: the
+ *  un-wrap is only offered while the branch holds nothing but this field's
+ *  marker (otherwise removing the `if` would expose the block's other
+ *  content unconditionally). */
+type FieldConditionState =
+  | { kind: "none" }
+  | { kind: "conditional"; expr: string; canRemove: boolean };
+
+const fieldConditionState = (
+  field: StudioField,
+  outline: OutlineNode[],
+): FieldConditionState => {
+  const group = findEnclosingIfGroup(outline, field.path, null);
+  if (group === null) {
+    return { kind: "none" };
+  }
+  const canRemove = group.children.every(
+    (child) => child.type === "field" && child.path === field.path,
+  );
+  return { kind: "conditional", expr: group.expr, canRemove };
+};
+
+/** "Show only if…" section of the field face (secondary, below the value
+ *  controls): conditions the field's own marker without leaving the face.
+ *  Not conditional yet → a ghost affordance that inline-wraps the marker in
+ *  `{{#if condition}}…{{/if}}` and reveals the shared condition builder so the
+ *  author sets the expression at once. Already conditional → the current
+ *  reading plus the same builder to edit it, and a Remove action that unwraps
+ *  the block (disabled when the block holds more than this field). */
+const FieldConditionSection = ({
+  field,
+  fields,
+  condition,
+}: {
+  field: StudioField;
+  fields: StudioField[];
+  condition: FieldConditionState;
+}) => {
+  const t = useTranslations();
+  const actions = useTemplateStudioStore((s) => s.actions);
+  const conditions = useTemplateStudioStore((s) => s.conditions);
+  const rewrite = (next: string) =>
+    actions?.rewriteFieldConditionExpr(field.path, next) ?? false;
+
+  if (condition.kind === "none") {
+    return (
+      <div className="flex flex-col gap-2 border-t px-4 py-4">
+        <Label className="text-sm">{t("templates.studio.showOnlyIf")}</Label>
+        <p className="text-muted-foreground text-xs leading-relaxed">
+          {t("templates.studio.showOnlyIfHelp")}
+        </p>
+        <Button
+          className="self-start"
+          onClick={() => {
+            if (actions?.wrapFieldInCondition(field.path) !== true) {
+              stellaToast.add({
+                type: "error",
+                title: t("errors.actionFailed"),
+              });
+            }
+          }}
+          size="sm"
+          variant="ghost"
+        >
+          <SplitIcon className="size-3.5" />
+          {t("templates.studio.showOnlyIf")}
+        </Button>
+      </div>
+    );
+  }
+
+  const friendly = humanizeConditionExpr(condition.expr, fields, (key) =>
+    t(key),
+  );
+  return (
+    <div className="flex flex-col gap-3 border-t px-4 py-4">
+      <div className="flex flex-col gap-1">
+        <Label className="text-sm">{t("templates.studio.showOnlyWhen")}</Label>
+        <p className="text-foreground text-sm">{friendly}</p>
+      </div>
+      <ConditionBuilder
+        conditions={conditions}
+        expr={condition.expr}
+        fields={fields}
+        fromKey={`${field.path}:${condition.expr}`}
+        onRewrite={rewrite}
+      />
+      <Button
+        className="text-muted-foreground self-start"
+        disabled={!condition.canRemove}
+        onClick={() => {
+          if (actions?.unwrapFieldCondition(field.path) !== true) {
+            stellaToast.add({ type: "error", title: t("errors.actionFailed") });
+          }
+        }}
+        size="sm"
+        title={
+          condition.canRemove
+            ? undefined
+            : t("templates.studio.removeConditionBlocked")
+        }
+        variant="ghost"
+      >
+        <Trash2Icon className="size-3.5" />
+        {t("templates.studio.removeCondition")}
+      </Button>
+    </div>
+  );
+};
+
 /**
  * Field settings face: leads with what the field IS (a blank in the fill
  * form), lets the model propose a configuration, and previews the actual fill
@@ -4386,6 +4695,8 @@ const FieldFace = ({
   };
 
   const repeat = fieldRepeatState(field, outline);
+  const condition = fieldConditionState(field, outline);
+  const fieldIsPlaced = outlineFieldPaths(outline).has(field.path);
   const toggleRepeatable = (next: boolean) => {
     const applied = actions?.setFieldRepeatable(field.path, next) ?? false;
     if (!applied) {
@@ -4653,6 +4964,13 @@ const FieldFace = ({
             </div>
           )}
         </div>
+        {fieldIsPlaced ? (
+          <FieldConditionSection
+            condition={condition}
+            field={field}
+            fields={fields}
+          />
+        ) : null}
       </ScrollArea>
       {valueSource === "ai" ? null : (
         <FieldPreview
@@ -5306,6 +5624,30 @@ const findEnclosingEachGroup = (
     if (node.type === "group") {
       const next = node.kind === "each" ? node : enclosing;
       const found = findEnclosingEachGroup(node.children, path, next);
+      if (found !== null) {
+        return found;
+      }
+    }
+  }
+  return null;
+};
+
+/** Innermost `if`/`elseif`/`else` group whose subtree contains the field's
+ *  marker. Mirrors findEnclosingEachGroup but for condition branches. */
+const findEnclosingIfGroup = (
+  nodes: OutlineNode[],
+  path: string,
+  enclosing: OutlineGroup | null,
+): OutlineGroup | null => {
+  for (const node of nodes) {
+    if (node.type === "field" && node.path === path && enclosing !== null) {
+      return enclosing;
+    }
+    if (node.type === "group") {
+      const branch =
+        node.kind === "if" || node.kind === "elseif" || node.kind === "else";
+      const next = branch ? node : enclosing;
+      const found = findEnclosingIfGroup(node.children, path, next);
       if (found !== null) {
         return found;
       }
