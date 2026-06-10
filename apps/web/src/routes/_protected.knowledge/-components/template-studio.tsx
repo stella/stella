@@ -3396,6 +3396,45 @@ const OutlineRow = ({
     );
   }
 
+  // A loop wrapping exactly one field IS that field, made repeatable: render
+  // it as the field's row (opens the face) with a repeats badge, so the user
+  // doesn't have to drill into the group to reach the only field inside.
+  if (node.kind === "each") {
+    const onlyChild = node.children.length === 1 ? node.children[0] : undefined;
+    if (onlyChild !== undefined && onlyChild.type === "field") {
+      const loopField = fields.find((f) => f.path === onlyChild.path);
+      const LoopIcon =
+        loopField === undefined
+          ? VALUE_TYPE_META.text.icon
+          : VALUE_TYPE_META[inputTypeValueKind(loopField.inputType)].icon;
+      return (
+        <li className="group/row relative">
+          <button
+            className="hover:bg-muted group flex w-full items-center gap-2.5 rounded-md px-2 py-2 pe-10 text-start text-sm"
+            onClick={() => actions?.focusPosition(onlyChild.from)}
+            title={onlyChild.path}
+            type="button"
+          >
+            <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
+              <LoopIcon className="size-4" />
+            </span>
+            <FieldRowLabel
+              label={loopField?.label ?? ""}
+              path={onlyChild.path}
+            />
+            <span className="text-muted-foreground ms-auto flex shrink-0 items-center gap-1.5">
+              <RepeatIcon className="size-3.5" />
+              {loopField === undefined ? null : (
+                <FieldCapabilityIcons field={loopField} />
+              )}
+              <ChevronRightIcon className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
+            </span>
+          </button>
+        </li>
+      );
+    }
+  }
+
   const GroupIcon = node.kind === "each" ? RepeatIcon : SplitIcon;
   const groupTitle =
     node.kind === "each"
