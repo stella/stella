@@ -1925,7 +1925,9 @@ export const TemplateForm = ({
           ))}
 
           <div className="flex justify-end gap-2 pt-2">
-            {templateId && (
+            {/* Hosts with a live in-document preview (the Studio taps
+                onValuesChange into Folio) need no preview modal. */}
+            {templateId && onValuesChange === undefined && (
               <Button
                 disabled={loading || preview.kind === "loading"}
                 onClick={() => {
