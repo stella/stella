@@ -241,7 +241,7 @@ describe("extract-text: real OOXML patterns", () => {
     );
   });
 
-  test("w:tbl — table paragraphs not indexed", async () => {
+  test("w:tbl — table paragraphs extracted in document order", async () => {
     const buf = await buildDocx(
       "<w:p><w:r><w:t>Before table</w:t></w:r></w:p>" +
         "<w:tbl>" +
@@ -253,12 +253,14 @@ describe("extract-text: real OOXML patterns", () => {
         "<w:p><w:r><w:t>After table</w:t></w:r></w:p>",
     );
     const result = await extractText(buf);
-    console.log(
-      "  table extract paragraphs:",
-      result.paragraphs.map((p) => p.text),
-    );
-    // Table paragraphs should NOT be included
-    // (only direct body children)
+    // Table paragraphs must be included: legal documents keep
+    // signature blocks and party details in tables, and version
+    // diffs / discovery index paragraphs the same way.
+    expect(result.paragraphs.map((p) => p.text)).toEqual([
+      "Before table",
+      "Cell A1",
+      "After table",
+    ]);
   });
 
   test("existing w:ins/w:del (prior tracked changes)", async () => {

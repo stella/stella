@@ -168,14 +168,12 @@ const extractParagraphsFromContainer = (
   let chars = 0;
   let index = startIndex;
 
-  for (const child of container.childNodes) {
-    if (!isElement(child)) {
-      continue;
-    }
-    if (child.localName !== "p" || child.namespaceURI !== W_NS) {
-      continue;
-    }
-
+  // Descendant paragraphs, not just direct children: document text
+  // commonly sits inside tables (w:tbl/w:tr/w:tc) or content controls
+  // (w:sdt), and discovery (`discover-template.ts`) already indexes
+  // paragraphs this way, so extraction must enumerate the same set or
+  // table content stays invisible to version diffs and AI context.
+  for (const child of container.getElementsByTagNameNS(W_NS, "p")) {
     const text = collectText(child);
     const { style, alignment } = readParagraphProps(child);
 
