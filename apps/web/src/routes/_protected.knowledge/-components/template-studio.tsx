@@ -3461,8 +3461,11 @@ const FieldNavigator = ({
   fields: StudioField[];
   outline: OutlineNode[];
 }) => {
-  // Fields registered in the session but not (yet) placed in the document
-  // still deserve a row, appended at root level.
+  const t = useTranslations();
+  const [showUnused, setShowUnused] = useState(false);
+  // Fields registered in the session but with no marker in the document:
+  // suggested but not placed. Tucked under a disclosure so the main list
+  // shows only what is actually in the document.
   const placed = outlineFieldPaths(outline);
   const unplaced = fields.filter(
     (f) => !placed.has(f.path) && f.inputType !== "boolean",
@@ -3473,14 +3476,35 @@ const FieldNavigator = ({
         {outline.map((node, index) => (
           <OutlineRow fields={fields} key={index} node={node} />
         ))}
-        {unplaced.map((f) => (
-          <OutlineRow
-            fields={fields}
-            key={`unplaced-${f.path}`}
-            node={{ type: "field", path: f.path, from: -1 }}
-          />
-        ))}
       </ul>
+      {unplaced.length > 0 && (
+        <div className="mt-1">
+          <button
+            aria-expanded={showUnused}
+            className="hover:bg-muted text-muted-foreground flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-start text-xs font-medium"
+            onClick={() => setShowUnused((v) => !v)}
+            type="button"
+          >
+            {showUnused ? (
+              <ChevronDownIcon className="size-3.5" />
+            ) : (
+              <ChevronRightIcon className="size-3.5" />
+            )}
+            {t("templates.unusedFields", { count: unplaced.length })}
+          </button>
+          {showUnused && (
+            <ul className="flex flex-col">
+              {unplaced.map((f) => (
+                <OutlineRow
+                  fields={fields}
+                  key={`unplaced-${f.path}`}
+                  node={{ type: "field", path: f.path, from: -1 }}
+                />
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -4020,13 +4044,11 @@ const FieldFace = ({
           }
           title={t("templates.studio.scopeField")}
         />
-        <p className="text-muted-foreground px-4 py-3 text-xs leading-relaxed">
-          {t("templates.studio.fieldHelp")}
-        </p>
         <FieldConfigEditor
           embedded
           field={field}
           hideFormulaControl
+          hideHint={valueSource === "ai"}
           onUpdate={onUpdate}
         />
         <div className="flex flex-col gap-2 border-t px-4 py-4">
@@ -4156,12 +4178,14 @@ const FieldFace = ({
           )}
         </div>
       </ScrollArea>
-      <FieldPreview
-        exampleValue={exampleValue}
-        field={field}
-        onValueChange={pushPreview}
-        value={previewValue}
-      />
+      {valueSource === "ai" ? null : (
+        <FieldPreview
+          exampleValue={exampleValue}
+          field={field}
+          onValueChange={pushPreview}
+          value={previewValue}
+        />
+      )}
       <SaveRecipeDialog
         fieldPath={field.path}
         onOpenChange={setRecipeDialogOpen}
