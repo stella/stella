@@ -1909,9 +1909,11 @@ const StudioSaveAction = () => {
 // fill endpoint uses) to get the real field shape — {{#each}} array fields
 // included — rather than reconstructing it from the flat manifest.
 const TemplateFillFacet = ({ templateId }: { templateId: string }) => {
-  // Leaving the facet clears the in-document preview.
+  // Leaving the facet clears the in-document preview (and drops any pending
+  // lookup-preview response so it cannot re-set a stale preview).
   useEffect(
     () => () => {
+      cancelLookupPreviews();
       useTemplateStudioStore.getState().actions?.setFillPreview(null);
     },
     [],
@@ -2003,7 +2005,7 @@ const TemplateFillFacet = ({ templateId }: { templateId: string }) => {
         fileName={detail.fileName}
         onBack={() => undefined}
         onDone={() => undefined}
-        onValuesChange={pushFillPreview}
+        onValuesChange={(values) => pushFillPreview(values, discovered.fields)}
         structureErrors={discovered.structureErrors}
         templateId={templateId}
       />
@@ -2012,8 +2014,15 @@ const TemplateFillFacet = ({ templateId }: { templateId: string }) => {
 };
 
 /** Typed fill values become the live in-document preview; composite part
- *  objects join with spaces (the server renders the real format). */
-const pushFillPreview = (values: Record<string, unknown>) => {
+ *  objects join with spaces (the server renders the real format). A lookup
+ *  field with a plausible registry number previews the looked-up rendering
+ *  instead of the raw number once the debounced lookup-preview response
+ *  lands; until then (and on a miss) the raw number stays. */
+const pushFillPreview = (
+  values: Record<string, unknown>,
+  fields?: readonly LookupPreviewField[],
+) => {
+  cancelLookupPreviews();
   const preview: Record<string, string> = {};
   for (const [path, value] of Object.entries(values)) {
     if (typeof value === "string" && value !== "") {
@@ -2030,9 +2039,156 @@ const pushFillPreview = (values: Record<string, unknown>) => {
       }
     }
   }
+  const pending = applyCachedLookupRenderings(preview, fields ?? []);
   useTemplateStudioStore
     .getState()
     .actions?.setFillPreview(Object.keys(preview).length > 0 ? preview : null);
+  if (pending.length > 0) {
+    queueLookupPreviews(pending, () => pushFillPreview(values, fields));
+  }
+};
+
+// ── Lookup live preview ──────────────────────────────────
+// A lookup field's live preview shows the deterministic looked-up rendering
+// (number → registry hit → the field's [token] format), not the raw number.
+// Plausible numbers debounce into POST /templates/lookup-preview; rendered
+// text substitutes into the preview map when the response lands.
+
+/** Mirrors the KRS shape check in template-form.tsx (and `validateKrsNumber`
+ *  server-side): exactly 10 digits, whitespace-tolerant. */
+const LOOKUP_PREVIEW_NUMBER_RE = /^\d{10}$/u;
+
+const normalizeLookupNumber = (value: string): string =>
+  value.replaceAll(/\s/gu, "");
+
+type StudioLookup = NonNullable<StudioField["lookup"]>;
+
+type LookupPreviewField = {
+  path: string;
+  lookup?: StudioLookup | undefined;
+};
+
+type LookupPreviewRequest = {
+  registry: StudioLookup["registry"];
+  number: string;
+  format: string | null;
+};
+
+const lookupPreviewKey = (request: LookupPreviewRequest): string =>
+  `${request.registry} ${request.number} ${request.format ?? ""}`;
+
+/** Rendered previews keyed registry+number+format so repeats are instant;
+ *  null marks a known miss (typo'd number, registry outage) that keeps the
+ *  raw number without refetch loops. Bounded: past the cap the oldest
+ *  insertion is evicted, so a long studio session cannot grow it without
+ *  limit. */
+const LOOKUP_PREVIEW_CACHE_MAX = 100;
+const lookupPreviewCache = new Map<string, string | null>();
+
+const rememberLookupRendering = (key: string, rendered: string | null) => {
+  if (lookupPreviewCache.size >= LOOKUP_PREVIEW_CACHE_MAX) {
+    const oldest = lookupPreviewCache.keys().next().value;
+    if (oldest !== undefined) {
+      lookupPreviewCache.delete(oldest);
+    }
+  }
+  lookupPreviewCache.set(key, rendered);
+};
+
+const LOOKUP_PREVIEW_DEBOUNCE_MS = 500;
+let lookupPreviewSeq = 0;
+let lookupPreviewTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Invalidate the debounce and any in-flight responses; every preview push
+ *  (and preview-surface unmount) starts here so only the latest push can
+ *  apply its renderings. */
+const cancelLookupPreviews = () => {
+  lookupPreviewSeq += 1;
+  clearTimeout(lookupPreviewTimer);
+};
+
+/** Substitute cached renderings into `preview` in place and return the
+ *  requests that still need the endpoint. */
+const applyCachedLookupRenderings = (
+  preview: Record<string, string>,
+  fields: readonly LookupPreviewField[],
+): LookupPreviewRequest[] => {
+  const pending: LookupPreviewRequest[] = [];
+  for (const field of fields) {
+    const lookup = field.lookup;
+    const raw = preview[field.path];
+    if (lookup === undefined || raw === undefined) {
+      continue;
+    }
+    const number = normalizeLookupNumber(raw);
+    if (!LOOKUP_PREVIEW_NUMBER_RE.test(number)) {
+      continue;
+    }
+    const request: LookupPreviewRequest = {
+      registry: lookup.registry,
+      number,
+      format: lookup.aiFormat ?? null,
+    };
+    const cached = lookupPreviewCache.get(lookupPreviewKey(request));
+    if (cached === undefined) {
+      pending.push(request);
+    } else if (cached !== null) {
+      preview[field.path] = cached;
+    }
+  }
+  return pending;
+};
+
+/** Debounced fetch of the pending renderings into the cache; `onResolved`
+ *  re-runs the push (which now substitutes synchronously) unless a newer
+ *  push superseded this one. */
+const queueLookupPreviews = (
+  requests: readonly LookupPreviewRequest[],
+  onResolved: () => void,
+) => {
+  const seq = lookupPreviewSeq;
+  clearTimeout(lookupPreviewTimer);
+  lookupPreviewTimer = setTimeout(() => {
+    void (async () => {
+      const resolved = await Promise.all(
+        requests.map(async (request) => {
+          const response = await api.templates["lookup-preview"].post({
+            registry: request.registry,
+            number: request.number,
+            format: request.format,
+          });
+          // A miss keeps the raw number in the preview (cached as null so
+          // it is not refetched); the fill submit reports the real error.
+          const rendered =
+            !response.error && !(response.data instanceof Response)
+              ? response.data.rendered
+              : null;
+          rememberLookupRendering(lookupPreviewKey(request), rendered);
+          return rendered !== null;
+        }),
+      );
+      if (seq === lookupPreviewSeq && resolved.some(Boolean)) {
+        onResolved();
+      }
+    })();
+  }, LOOKUP_PREVIEW_DEBOUNCE_MS);
+};
+
+/** Single-field variant for the field face: a lookup field's preview shows
+ *  the looked-up rendering via the same debounce + cache as the fill facet. */
+const pushSingleFieldPreview = (field: StudioField, value: string) => {
+  cancelLookupPreviews();
+  const { actions } = useTemplateStudioStore.getState();
+  if (value === "") {
+    actions?.setFillPreview(null);
+    return;
+  }
+  const preview: Record<string, string> = { [field.path]: value };
+  const pending = applyCachedLookupRenderings(preview, [field]);
+  actions?.setFillPreview(preview);
+  if (pending.length > 0) {
+    queueLookupPreviews(pending, () => pushSingleFieldPreview(field, value));
+  }
 };
 
 /** Document actions row — rendered in the inspector tab's top area; the page
@@ -2212,7 +2368,6 @@ const Inspector = ({
   onFieldUpdate,
   onConditionsChange,
 }: InspectorProps) => {
-  const t = useTranslations();
   if (selected && selected.kind === "placeholder") {
     const field =
       fields.find((f) => f.path === selected.expr) ??
@@ -2239,15 +2394,6 @@ const Inspector = ({
   const questions = fields.filter((f) => f.inputType === "boolean");
   return (
     <ScrollArea className="min-h-0 flex-1">
-      <div className="text-muted-foreground flex items-center gap-3 border-b px-4 py-2.5 text-xs">
-        <span>
-          {t("templates.fields")} · {fields.length - questions.length}
-        </span>
-        <span>
-          {t("templates.conditionsTitle")} ·{" "}
-          {conditions.length + questions.length}
-        </span>
-      </div>
       <FieldNavigator fields={fields} outline={outline} />
       <Separator />
       <ConditionsDisclosure
@@ -2626,16 +2772,19 @@ const OutlineRow = ({
     return (
       <li>
         <button
-          className="hover:bg-muted group flex w-full items-center gap-2 rounded px-1.5 py-1 text-start text-xs"
+          className="hover:bg-muted group flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-start text-sm"
           onClick={jump}
           title={node.path}
           type="button"
         >
-          <Icon className="text-muted-foreground size-3.5 shrink-0" />
+          <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
+            <Icon className="size-4" />
+          </span>
           <FieldRowLabel label={field?.label ?? ""} path={node.path} />
           {field === undefined ? null : (
-            <span className="text-muted-foreground ms-auto flex shrink-0 items-center gap-1">
+            <span className="text-muted-foreground ms-auto flex shrink-0 items-center gap-1.5">
               <FieldCapabilityIcons field={field} />
+              <ChevronRightIcon className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
             </span>
           )}
         </button>
@@ -2647,12 +2796,12 @@ const OutlineRow = ({
     return (
       <li>
         <button
-          className="hover:bg-muted flex w-full items-center gap-2 rounded px-1.5 py-1 text-start text-xs"
+          className="hover:bg-muted flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-start text-sm"
           onClick={jump}
           title={t("templates.studio.scopeClause")}
           type="button"
         >
-          <span className="text-muted-foreground w-3.5 shrink-0 text-center text-xs font-semibold">
+          <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md text-sm font-semibold">
             {"\u00a7"}
           </span>
           <span className="truncate">{node.name}</span>
@@ -2815,12 +2964,14 @@ const FieldFace = ({
 
   const pushPreview = (value: string) => {
     setPreviewValue(value);
-    actions?.setFillPreview(value === "" ? null : { [field.path]: value });
+    pushSingleFieldPreview(field, value);
   };
 
-  // Clear the in-document preview when the face leaves or switches fields.
+  // Clear the in-document preview when the face leaves or switches fields
+  // (cancelling any pending lookup preview so it cannot re-set it).
   useEffect(
     () => () => {
+      cancelLookupPreviews();
       useTemplateStudioStore.getState().actions?.setFillPreview(null);
     },
     [field.path],
