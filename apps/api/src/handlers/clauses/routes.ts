@@ -11,6 +11,7 @@ import importClauses from "@/api/handlers/clauses/import";
 import getClause from "@/api/handlers/clauses/read-by-id";
 import listClauses from "@/api/handlers/clauses/read-list";
 import getClauseVersion from "@/api/handlers/clauses/read-version";
+import getTemplateClausePreview from "@/api/handlers/clauses/template-slot-preview";
 import updateClause from "@/api/handlers/clauses/update";
 import createVariant from "@/api/handlers/clauses/variants-create";
 import deleteVariant from "@/api/handlers/clauses/variants-delete";
@@ -68,6 +69,11 @@ export const clausesRoute = new Elysia({
   .put("/import", importClauses.handler, {
     body: importClauses.config.body,
     permissions: importClauses.config.permissions,
+  })
+  // Live fill preview: resolve a template's linked clause slots to plain text.
+  .get("/template-slot-preview/:templateId", getTemplateClausePreview.handler, {
+    params: getTemplateClausePreview.config.params,
+    permissions: getTemplateClausePreview.config.permissions,
   })
   .get("/:clauseId", getClause.handler, {
     params: getClause.config.params,
