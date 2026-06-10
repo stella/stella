@@ -6,6 +6,7 @@ import type { DatePickerPopoverProps } from "@stll/ui/components/date-picker-pop
 const DatePickerPopover = ({
   clearLabel,
   locale,
+  placeholderLabel,
   todayLabel,
   ...props
 }: DatePickerPopoverProps) => {
@@ -17,6 +18,7 @@ const DatePickerPopover = ({
       {...props}
       clearLabel={clearLabel ?? t("common.clearDate")}
       locale={locale ?? appLocale}
+      placeholderLabel={placeholderLabel ?? t("common.selectDate")}
       todayLabel={todayLabel ?? t("common.today")}
     />
   );
