@@ -513,3 +513,91 @@ describe("property: evaluateCondition consistency", () => {
     );
   });
 });
+
+describe("property: loop-expanded @num markers number sequentially", () => {
+  test("n items yield clause numbers exactly 1..n in document order", async () => {
+    // Bug: assignNumbers reuses the first number for a repeated key,
+    // so cloned {{@num:item}} markers all rendered the same number.
+    // Expansion now scopes loop-local keys per iteration.
+    await fc.assert(
+      fc.asyncProperty(
+        fc.array(leafValue, { minLength: 1, maxLength: 6 }),
+        async (names) => {
+          const xml = WRAP(
+            [
+              P("{{#each items}}"),
+              P("Clause {{@num:item}}. {{items.name}}"),
+              P("{{/each}}"),
+            ].join(""),
+          );
+          const docx = await makeDocx(xml);
+          const { buffer } = await fillTemplate(docx, {
+            items: names.map((name) => ({ name })),
+          });
+
+          const joined = (await extractTexts(buffer)).join(" ");
+          const numbers = [...joined.matchAll(/Clause (\d+)\./gu)].map((m) =>
+            Number(m[1]),
+          );
+          expect(numbers).toEqual(names.map((_, i) => i + 1));
+        },
+      ),
+      { numRuns: 20 },
+    );
+  });
+
+  test("intra-iteration @ref always equals that iteration's @num", async () => {
+    await fc.assert(
+      fc.asyncProperty(fc.integer({ min: 1, max: 6 }), async (count) => {
+        const xml = WRAP(
+          [
+            P("{{#each items}}"),
+            P("Clause {{@num:x}} refers to {{@ref:x}} end"),
+            P("{{/each}}"),
+          ].join(""),
+        );
+        const docx = await makeDocx(xml);
+        const { buffer } = await fillTemplate(docx, {
+          items: Array.from({ length: count }, (_, i) => ({ v: String(i) })),
+        });
+
+        const joined = (await extractTexts(buffer)).join(" ");
+        const pairs = [
+          ...joined.matchAll(/Clause (\d+) refers to (\d+) end/gu),
+        ];
+        expect(pairs).toHaveLength(count);
+        for (const [i, pair] of pairs.entries()) {
+          expect(pair[1]).toBe(String(i + 1));
+          expect(pair[2]).toBe(String(i + 1));
+        }
+      }),
+      { numRuns: 20 },
+    );
+  });
+
+  test("a @ref to a clause outside the loop resolves identically in every iteration", async () => {
+    await fc.assert(
+      fc.asyncProperty(fc.integer({ min: 1, max: 6 }), async (count) => {
+        const xml = WRAP(
+          [
+            P("Clause {{@num:base}}. Base."),
+            P("{{#each items}}"),
+            P("Item under {{@ref:base}} end"),
+            P("{{/each}}"),
+          ].join(""),
+        );
+        const docx = await makeDocx(xml);
+        const { buffer } = await fillTemplate(docx, {
+          items: Array.from({ length: count }, (_, i) => ({ v: String(i) })),
+        });
+
+        const joined = (await extractTexts(buffer)).join(" ");
+        const refs = [...joined.matchAll(/Item under (\d+) end/gu)].map(
+          (m) => m[1],
+        );
+        expect(refs).toEqual(Array.from({ length: count }, () => "1"));
+      }),
+      { numRuns: 20 },
+    );
+  });
+});

@@ -11,6 +11,13 @@
  * clause is dropped by a `{{#if}}`, the reference is left unresolved rather
  * than pointing at a stale number.
  *
+ * Keys inside an `{{#each}}` body are rewritten by loop expansion (see
+ * block-directives.ts) to per-iteration synthetic keys, so each expanded copy
+ * is numbered as its own item and `@ref`s within the same iteration resolve
+ * to that copy's number. A `@ref` that crosses a loop boundary inward (a bare
+ * key whose only `@num` lives inside a loop) stays unresolved by design:
+ * there is no single number to point at.
+ *
  * Operates on raw WordprocessingML text. Markers are kept out of the
  * user-facing field schema by discovery (it skips `@`-prefixed names).
  */

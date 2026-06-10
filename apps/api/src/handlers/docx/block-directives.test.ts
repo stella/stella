@@ -1,11 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import * as slimdom from "slimdom";
 
+import { numPattern, refPattern } from "@stll/template-conditions";
+
 import {
+  collectValidNumIds,
   evaluateCondition,
   flattenTemplateData,
   parseBlockTree,
   processBlockDirectives,
+  pruneDanglingNumPr,
   resolvePath,
   scanBlockDirectives,
 } from "./block-directives";
@@ -1013,5 +1017,161 @@ describe("processBlockDirectives — edge cases", () => {
 
     expect(errors.length).toBeGreaterThan(0);
     expect(errors[0]?.message).toContain("Unclosed");
+  });
+});
+
+// ── Loop-scoped clause numbering ─────────────────────────
+
+const numKeysOf = (text: string): string[] =>
+  [...text.matchAll(numPattern())].flatMap((m) => (m[1] ? [m[1]] : []));
+
+const refKeysOf = (text: string): string[] =>
+  [...text.matchAll(refPattern())].flatMap((m) => (m[1] ? [m[1]] : []));
+
+describe("processBlockDirectives — loop-scoped @num/@ref", () => {
+  test("each iteration gets a distinct @num key; intra-iteration @ref follows it", () => {
+    const xml = WRAP(
+      [
+        P("{{#each items}}"),
+        P("Clause {{@num:item}}. {{items.name}} (see {{@ref:item}})"),
+        P("{{/each}}"),
+      ].join(""),
+    );
+    const body = parseBody(xml);
+    processBlockDirectives(body, {
+      items: [{ name: "A" }, { name: "B" }, { name: "C" }],
+    });
+
+    const texts = bodyTexts(body);
+    expect(texts).toHaveLength(3);
+
+    const numKeys = texts.flatMap(numKeysOf);
+    expect(numKeys).toHaveLength(3);
+    expect(new Set(numKeys).size).toBe(3);
+
+    // The rewritten ref in each paragraph targets that paragraph's num key
+    for (const text of texts) {
+      expect(refKeysOf(text)).toEqual(numKeysOf(text));
+    }
+  });
+
+  test("@ref to a key defined outside the loop body is left untouched", () => {
+    const xml = WRAP(
+      [
+        P("Clause {{@num:base}}. Base."),
+        P("{{#each items}}"),
+        P("Item {{@num:item}} under {{@ref:base}}"),
+        P("{{/each}}"),
+      ].join(""),
+    );
+    const body = parseBody(xml);
+    processBlockDirectives(body, { items: [{ x: "1" }, { x: "2" }] });
+
+    const texts = bodyTexts(body);
+    // Both expanded paragraphs still reference the shared outer key
+    const refKeys = texts.flatMap(refKeysOf);
+    expect(refKeys).toEqual(["base", "base"]);
+    // While their own @num keys are iteration-scoped and distinct
+    const itemNumKeys = texts.flatMap(numKeysOf).filter((k) => k !== "base");
+    expect(itemNumKeys).toHaveLength(2);
+    expect(new Set(itemNumKeys).size).toBe(2);
+  });
+
+  test("sibling loops over the same array never share numbering keys", () => {
+    const xml = WRAP(
+      [
+        P("{{#each items}}"),
+        P("First {{@num:item}}"),
+        P("{{/each}}"),
+        P("{{#each items}}"),
+        P("Second {{@num:item}}"),
+        P("{{/each}}"),
+      ].join(""),
+    );
+    const body = parseBody(xml);
+    processBlockDirectives(body, { items: [{ x: "1" }, { x: "2" }] });
+
+    const numKeys = bodyTexts(body).flatMap(numKeysOf);
+    expect(numKeys).toHaveLength(4);
+    expect(new Set(numKeys).size).toBe(4);
+  });
+
+  test("nested loops compose suffixes so every occurrence is unique", () => {
+    const xml = WRAP(
+      [
+        P("{{#each groups}}"),
+        P("{{#each subitems}}"),
+        P("Item {{@num:sub}}"),
+        P("{{/each}}"),
+        P("{{/each}}"),
+      ].join(""),
+    );
+    const body = parseBody(xml);
+    processBlockDirectives(body, {
+      groups: [{ subitems: ["a", "b"] }, { subitems: ["c"] }],
+    });
+
+    const numKeys = bodyTexts(body).flatMap(numKeysOf);
+    expect(numKeys).toHaveLength(3);
+    expect(new Set(numKeys).size).toBe(3);
+  });
+});
+
+// ── Word list-numbering integrity ────────────────────────
+
+/** Paragraph carrying a w:numPr (numId omitted = style-inherited). */
+const NP = (text: string, numId?: string) => {
+  const numIdXml = numId === undefined ? "" : `<w:numId w:val="${numId}"/>`;
+  return (
+    `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/>${numIdXml}</w:numPr></w:pPr>` +
+    `<w:r><w:t>${text}</w:t></w:r></w:p>`
+  );
+};
+
+const NUMBERING_XML =
+  `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+  `<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +
+  `<w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:numFmt w:val="decimal"/></w:lvl></w:abstractNum>` +
+  `<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>` +
+  `<w:num w:numId="2"><w:abstractNumId w:val="99"/></w:num>` +
+  `</w:numbering>`;
+
+describe("collectValidNumIds", () => {
+  test("resolves the num → abstractNum chain", () => {
+    const valid = collectValidNumIds(NUMBERING_XML);
+    expect(valid.has("1")).toBe(true);
+    // numId 2 points at a missing abstractNum — not resolvable
+    expect(valid.has("2")).toBe(false);
+    // numId 0 is the explicit "no numbering" override
+    expect(valid.has("0")).toBe(true);
+  });
+
+  test("without numbering.xml only the explicit zero override is valid", () => {
+    const valid = collectValidNumIds(null);
+    expect(valid.has("0")).toBe(true);
+    expect(valid.has("1")).toBe(false);
+  });
+});
+
+describe("pruneDanglingNumPr", () => {
+  const numPrCounts = (body: slimdom.Element): number[] =>
+    body
+      .getElementsByTagNameNS(W_NS, "p")
+      .map((p) => p.getElementsByTagNameNS(W_NS, "numPr").length);
+
+  test("drops unresolvable numPr, keeps valid / zero / style-inherited ones", () => {
+    const xml = WRAP(
+      [
+        NP("valid", "1"),
+        NP("dangling abstract", "2"),
+        NP("unknown num", "7"),
+        NP("explicit none", "0"),
+        NP("style inherited"),
+      ].join(""),
+    );
+    const body = parseBody(xml);
+    pruneDanglingNumPr(body, collectValidNumIds(NUMBERING_XML));
+
+    expect(numPrCounts(body)).toEqual([1, 0, 0, 1, 1]);
   });
 });
