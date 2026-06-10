@@ -2058,7 +2058,7 @@
     "fieldLabel": "Etiketė",
     "fieldLabelPlaceholder": "pvz. Pilnas vardas",
     "fieldLookupAiFormat": "DI formatavimo nurodymas",
-    "fieldLookupAiFormatHint": "Žymos [skliaustuose] užpildomos iš registro. DI performulavimas taikomas tik kai laukas yra Asmuo + DI.",
+    "fieldLookupAiFormatHint": "Žymos [skliaustuose] užpildomos iš registro. DI performulavimas taikomas tik kai laukas yra Asmuo + DI. Palaikomas **paryškintas** ir *pasvirasis* šriftas.",
     "fieldLookupAiFormatPlaceholder": "[įmonės pavadinimas], kurios buveinė [buveinė], KRS Nr. [numeris]",
     "fieldLookupInsertDetail": "Įterpti įmonės duomenis",
     "fieldLookupRegistry": "Įmonių registras",

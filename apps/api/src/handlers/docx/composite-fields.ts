@@ -15,7 +15,7 @@ import { markerPattern, resolvePath } from "@stll/template-conditions";
 
 import { isRecord } from "@/api/lib/type-guards";
 
-import type { FieldMeta, FieldPart } from "./types";
+import type { FieldMeta, FieldPart, RichPatchValue } from "./types";
 
 export type CompositeFieldError = {
   /** Manifest path of the composite field. */
@@ -96,7 +96,7 @@ export const renderCompositeFormat = (
 export const replaceResolvedValue = (
   values: Record<string, unknown>,
   path: string,
-  value: string,
+  value: RichPatchValue,
 ): void => {
   if (Object.hasOwn(values, path)) {
     values[path] = value;

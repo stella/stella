@@ -2058,7 +2058,7 @@
     "fieldLabel": "Etykieta",
     "fieldLabelPlaceholder": "np. Imię i nazwisko",
     "fieldLookupAiFormat": "Instrukcja formatowania AI",
-    "fieldLookupAiFormatHint": "Tokeny w [nawiasach] są wypełniane z rejestru. Przeredagowanie przez AI działa tylko przy Osoba + AI.",
+    "fieldLookupAiFormatHint": "Tokeny w [nawiasach] są wypełniane z rejestru. Przeredagowanie przez AI działa tylko przy Osoba + AI. Obsługiwane jest **pogrubienie** i *kursywa*.",
     "fieldLookupAiFormatPlaceholder": "[nazwa spółki], z siedzibą w [siedziba], KRS nr [numer]",
     "fieldLookupInsertDetail": "Wstaw informację o firmie",
     "fieldLookupRegistry": "Rejestr spółek",

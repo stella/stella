@@ -2058,7 +2058,7 @@
     "fieldLabel": "Etiķete",
     "fieldLabelPlaceholder": "piem., Pilns vārds",
     "fieldLookupAiFormat": "MI formatēšanas norādījums",
-    "fieldLookupAiFormatHint": "Marķieri [iekavās] tiek aizpildīti no reģistra. MI pārformulēšana attiecas tikai uz Persona + MI.",
+    "fieldLookupAiFormatHint": "Marķieri [iekavās] tiek aizpildīti no reģistra. MI pārformulēšana attiecas tikai uz Persona + MI. Tiek atbalstīts **treknraksts** un *slīpraksts*.",
     "fieldLookupAiFormatPlaceholder": "[uzņēmuma nosaukums], juridiskā adrese [adrese], KRS Nr. [numurs]",
     "fieldLookupInsertDetail": "Ievietot uzņēmuma datus",
     "fieldLookupRegistry": "Uzņēmumu reģistrs",

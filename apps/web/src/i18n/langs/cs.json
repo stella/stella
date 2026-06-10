@@ -2058,7 +2058,7 @@
     "fieldLabel": "Popisek",
     "fieldLabelPlaceholder": "např. Celé jméno",
     "fieldLookupAiFormat": "Pokyn pro AI formátování",
-    "fieldLookupAiFormatHint": "Tokeny v [závorkách] se doplní z rejstříku. AI přeformulování se použije, jen když je pole Osoba + AI.",
+    "fieldLookupAiFormatHint": "Tokeny v [závorkách] se doplní z rejstříku. AI přeformulování se použije, jen když je pole Osoba + AI. Podporováno je **tučné** písmo a *kurzíva*.",
     "fieldLookupAiFormatPlaceholder": "[název společnosti], se sídlem v [sídlo], KRS č. [číslo]",
     "fieldLookupInsertDetail": "Vložit údaj o společnosti",
     "fieldLookupRegistry": "Obchodní rejstřík",

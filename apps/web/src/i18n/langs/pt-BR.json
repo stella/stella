@@ -2058,7 +2058,7 @@
     "fieldLabel": "Rótulo",
     "fieldLabelPlaceholder": "ex.: Nome completo",
     "fieldLookupAiFormat": "Instrução de formatação da IA",
-    "fieldLookupAiFormatHint": "Os tokens entre [colchetes] são preenchidos a partir do registro. A reformulação por IA só se aplica com Pessoa + IA.",
+    "fieldLookupAiFormatHint": "Os tokens entre [colchetes] são preenchidos a partir do registro. A reformulação por IA só se aplica com Pessoa + IA. Há suporte a **negrito** e *itálico*.",
     "fieldLookupAiFormatPlaceholder": "[nome da empresa], com sede em [sede], KRS nº [número]",
     "fieldLookupInsertDetail": "Inserir um dado da empresa",
     "fieldLookupRegistry": "Registro de empresas",

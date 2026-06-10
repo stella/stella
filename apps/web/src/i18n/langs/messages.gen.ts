@@ -2061,7 +2061,7 @@ type Messages = {
     "fieldLabel": "Label";
     "fieldLabelPlaceholder": "e.g. Full Name";
     "fieldLookupAiFormat": "AI format instruction";
-    "fieldLookupAiFormatHint": "Tokens in [brackets] are filled from the register. AI rewording applies only when the field is Person + AI.";
+    "fieldLookupAiFormatHint": "Tokens in [brackets] are filled from the register. AI rewording applies only when the field is Person + AI. **Bold** and *italic* are supported.";
     "fieldLookupAiFormatPlaceholder": "[company name], with its registered seat in [seat], KRS no. [number]";
     "fieldLookupInsertDetail": "Insert a company detail";
     "fieldLookupRegistry": "Company register";
