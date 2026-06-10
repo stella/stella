@@ -1493,7 +1493,7 @@ export const TemplateForm = ({
           return t("templates.validationKrsFormat");
         case "minItems":
           return t("templates.validationMinItems", {
-            min: String(err.min),
+            min: err.min,
           });
         default:
           return undefined;
