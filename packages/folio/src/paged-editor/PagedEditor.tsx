@@ -88,6 +88,10 @@ import type {
   CaretPosition,
 } from "../core/layout-bridge/selectionRects";
 import type * as SelectionGeometry from "../core/layout-bridge/selectionRects";
+import {
+  applyTemplatePreviewToBlocks,
+  templatePreviewDirtyRange,
+} from "../core/layout-bridge/templatePreviewFlow";
 // Layout bridge
 import { toFlowBlocks } from "../core/layout-bridge/toFlowBlocks";
 import type { ToFlowBlocksOptions } from "../core/layout-bridge/toFlowBlocks";
@@ -225,8 +229,6 @@ import {
 import { SelectionOverlay } from "./SelectionOverlay";
 import { TemplateDirectivesOverlay } from "./TemplateDirectivesOverlay";
 import type { DirectiveRectGroup } from "./TemplateDirectivesOverlay";
-import { TemplatePreviewValuesOverlay } from "./TemplatePreviewValuesOverlay";
-import type { TemplatePreviewRectGroup } from "./TemplatePreviewValuesOverlay";
 import { getTransactionDirtyRange } from "./transactionDirtyRange";
 import { useDragAutoScroll } from "./useDragAutoScroll";
 // Visual line navigation hook
@@ -1922,18 +1924,20 @@ export function PagedEditor(
   >(null);
   const directivesRef = useRef<readonly DirectiveRange[]>([]);
   const directivesOverlayRequestSeqRef = useRef(0);
-  // Template fill preview — mirrors the directives pattern: the hidden
-  // editor's plugin keeps marker↔value entries in sync, a ref tracks the
-  // latest list, and the projected rect groups live in state.
-  const [templatePreviewOverlay, setTemplatePreviewOverlay] = useState<{
-    groups: TemplatePreviewRectGroup[];
-    mode: TemplatePreviewValues["mode"];
-  }>({ groups: [], mode: "plain" });
+  // Template fill preview — the hidden editor's plugin keeps marker↔value
+  // entries in sync; the layout pipeline substitutes them into the flow
+  // blocks so the painted pages reflow as if the values were the text.
+  // `templatePreviewRef` mirrors the latest plugin state (change detection),
+  // `lastLaidOutTemplatePreviewRef` records what the last pipeline run
+  // actually substituted.
   const templatePreviewRef = useRef<{
     entries: readonly TemplatePreviewEntry[];
     mode: TemplatePreviewValues["mode"];
   }>({ entries: EMPTY_TEMPLATE_PREVIEW_ENTRIES, mode: "plain" });
-  const templatePreviewOverlayRequestSeqRef = useRef(0);
+  const lastLaidOutTemplatePreviewRef = useRef<{
+    entries: readonly TemplatePreviewEntry[];
+    mode: TemplatePreviewValues["mode"];
+  }>({ entries: EMPTY_TEMPLATE_PREVIEW_ENTRIES, mode: "plain" });
   // AI suggestion review — same pattern for the suggestion list and the
   // focused suggestion's in-text diff preview.
   const [aiSuggestionRectGroups, setAiSuggestionRectGroups] = useState<
@@ -2300,7 +2304,25 @@ export function PagedEditor(
         if (defaultTabStop !== undefined) {
           flowOpts.defaultTabStopTwips = defaultTabStop;
         }
-        const newBlocks = toFlowBlocks(state.doc, flowOpts);
+        let newBlocks = toFlowBlocks(state.doc, flowOpts);
+        // Template fill preview: substitute each matched {{marker}} range
+        // with its typed value at the flow-block level so the pages lay out
+        // (wrap, paginate) as if the value were the document text. View-only:
+        // the PM doc — and with it the save path — is never modified.
+        const previewState = templatePreviewValuesKey.getState(state);
+        const previewEntries =
+          previewState?.entries ?? EMPTY_TEMPLATE_PREVIEW_ENTRIES;
+        const previewMode = previewState?.preview?.mode ?? "plain";
+        if (previewEntries.length > 0) {
+          newBlocks = applyTemplatePreviewToBlocks(newBlocks, {
+            entries: previewEntries,
+            mode: previewMode,
+          });
+        }
+        lastLaidOutTemplatePreviewRef.current = {
+          entries: previewEntries,
+          mode: previewMode,
+        };
         setBlocks(newBlocks);
         recordPhaseDuration("flow-blocks", phaseStartedAt);
 
@@ -3848,47 +3870,6 @@ export function PagedEditor(
     })();
   }, [layout, blocks, measures, zoom]);
 
-  // Project the template fill preview (kept in sync by the
-  // templatePreviewValues plugin) onto container-space rects: an opaque
-  // cover hides each painted {{marker}} and the typed value renders in
-  // its place. Same projection pipeline as the directive overlay.
-  const updateTemplatePreviewOverlay = useCallback(() => {
-    const requestSeq = templatePreviewOverlayRequestSeqRef.current + 1;
-    templatePreviewOverlayRequestSeqRef.current = requestSeq;
-    const { entries, mode } = templatePreviewRef.current;
-    const pagesContainer = pagesContainerRef.current;
-    if (entries.length === 0 || !pagesContainer) {
-      setTemplatePreviewOverlay((prev) =>
-        prev.groups.length === 0 ? prev : { groups: [], mode },
-      );
-      return;
-    }
-    void (async () => {
-      const projected = await projectRangesToRects(entries, {
-        pagesContainer,
-        zoom,
-        layout,
-        blocks,
-        measures,
-      });
-      if (templatePreviewOverlayRequestSeqRef.current !== requestSeq) {
-        return;
-      }
-      const fonts = collectRunFontsAtPmPositions(
-        pagesContainer,
-        projected.map(({ range }) => range.from),
-      );
-      setTemplatePreviewOverlay({
-        mode,
-        groups: projected.map(({ range, rects }) => ({
-          entry: range,
-          rects,
-          font: fonts.get(range.from) ?? null,
-        })),
-      });
-    })();
-  }, [layout, blocks, measures, zoom]);
-
   // Project pending AI suggestions (kept in sync by the
   // aiSuggestionDecorations plugin) onto container-space rects: dotted
   // severity underlines, plus the focused suggestion's in-text diff
@@ -4021,9 +4002,12 @@ export function PagedEditor(
         }
       }
 
-      // Template fill preview: same ref-mirror + deferred-projection
-      // pattern as the directives above (the plugin rebuilds its entry
-      // list on meta pushes and doc edits).
+      // Template fill preview: the substituted values are part of the flow
+      // blocks the painter lays out, so a preview change must re-run the
+      // layout pipeline (doc edits already do via scheduleLayout below).
+      // Value edits invalidate just the affected marker ranges so the
+      // incremental measure path can skip untouched blocks; a mode toggle
+      // restyles every substituted run, so it takes the full pass.
       const nextPreviewState = templatePreviewValuesKey.getState(newState);
       const nextPreviewEntries =
         nextPreviewState?.entries ?? EMPTY_TEMPLATE_PREVIEW_ENTRIES;
@@ -4032,12 +4016,23 @@ export function PagedEditor(
         nextPreviewEntries !== templatePreviewRef.current.entries ||
         nextPreviewMode !== templatePreviewRef.current.mode
       ) {
+        const previousPreview = templatePreviewRef.current;
         templatePreviewRef.current = {
           entries: nextPreviewEntries,
           mode: nextPreviewMode,
         };
         if (!transaction.docChanged) {
-          updateTemplatePreviewOverlay();
+          if (nextPreviewMode !== previousPreview.mode) {
+            scheduleLayout(newState, null);
+          } else {
+            const previewDirty = templatePreviewDirtyRange(
+              previousPreview.entries,
+              nextPreviewEntries,
+            );
+            if (previewDirty) {
+              scheduleLayout(newState, previewDirty);
+            }
+          }
         }
       }
 
@@ -4092,7 +4087,6 @@ export function PagedEditor(
       updateAnonymizationOverlay,
       updateAutocompleteOverlay,
       updateDirectivesOverlay,
-      updateTemplatePreviewOverlay,
       updateAISuggestionsOverlay,
       syncCoordinator,
     ],
@@ -6528,10 +6522,23 @@ export function PagedEditor(
       };
 
       if (lastLaidOutPmDocRef.current?.eq(view.state.doc)) {
+        // The doc is already laid out, but the painted pages may carry a
+        // fill preview the fresh view's plugin no longer holds (or vice
+        // versa) — the substituted values live in the flow blocks, so a
+        // mismatch needs a pipeline re-run, not just overlay repaints.
+        const lastPreview = lastLaidOutTemplatePreviewRef.current;
+        if (
+          templatePreviewRef.current.mode !== lastPreview.mode ||
+          templatePreviewDirtyRange(
+            lastPreview.entries,
+            templatePreviewRef.current.entries,
+          ) !== null
+        ) {
+          runLayoutPipeline(view.state, { reason: "manual" });
+        }
         updateSelectionOverlay(view.state);
         updateAnonymizationOverlay();
         updateDirectivesOverlay();
-        updateTemplatePreviewOverlay();
         updateAISuggestionsOverlay();
         focusReadyView();
         return;
@@ -6542,7 +6549,6 @@ export function PagedEditor(
         updateSelectionOverlay(currentView.state);
         updateAnonymizationOverlay();
         updateDirectivesOverlay();
-        updateTemplatePreviewOverlay();
         updateAISuggestionsOverlay();
       };
 
@@ -6582,7 +6588,6 @@ export function PagedEditor(
       updateSelectionOverlay,
       updateAnonymizationOverlay,
       updateDirectivesOverlay,
-      updateTemplatePreviewOverlay,
       updateAISuggestionsOverlay,
       document,
       updateAutocompleteOverlay,
@@ -6606,12 +6611,6 @@ export function PagedEditor(
   useEffect(() => {
     updateDirectivesOverlay();
   }, [updateDirectivesOverlay]);
-
-  // Re-paint the template fill preview on every fresh layout so the
-  // marker covers and substituted values track reflow.
-  useEffect(() => {
-    updateTemplatePreviewOverlay();
-  }, [updateTemplatePreviewOverlay]);
 
   // Re-paint the AI suggestion underlines + focused in-text diff on
   // every fresh layout.
@@ -7086,15 +7085,10 @@ export function PagedEditor(
             />
           )}
 
-          {/* Template fill preview — opaque covers over matched
-              {{markers}} with the typed values rendered in place.
-              Rendered after the directive overlay so the covers hide
-              the marker tint, mirroring how the inline preview
-              supersedes the raw marker visual. */}
-          <TemplatePreviewValuesOverlay
-            groups={templatePreviewOverlay.groups}
-            mode={templatePreviewOverlay.mode}
-          />
+          {/* Template fill preview needs no overlay: the layout pipeline
+              substitutes the typed values into the flow blocks, so the
+              painter lays out and paints them (with the accent chip in
+              highlighted mode) as part of the pages themselves. */}
 
           {/* Selection overlay */}
           <SelectionOverlay
