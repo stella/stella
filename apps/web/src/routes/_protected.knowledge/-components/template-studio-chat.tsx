@@ -38,6 +38,7 @@ import {
 } from "@stll/folio";
 import type {
   AISuggestion,
+  AISuggestionPreset,
   DocxEditorRef,
   FolioAIEditSnapshot,
 } from "@stll/folio";
@@ -51,6 +52,7 @@ import {
   SuggestionCard,
   SuggestionStepper,
 } from "@/components/ai-suggestions/host";
+import type { PromptBarPresetScope } from "@/components/ai-suggestions/host";
 import { useChatEditor } from "@/components/chat-editor-provider";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
@@ -76,6 +78,7 @@ import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-use
 import {
   chatKeys,
   chatThreadOptions,
+  SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE,
   templateChatThreadOptions,
 } from "@/routes/_protected.chat/-queries";
 import type {
@@ -131,6 +134,17 @@ export const TemplateStudioChat = (props: TemplateStudioChatProps) => (
  * server-side) so reopening a template resumes its latest thread,
  * mirroring how .docx file tabs resolve theirs via `file-thread`.
  */
+/**
+ * A scoped preset send waiting for its fresh thread. The rotate
+ * remounts the inner surface (key change); the new instance picks
+ * this up on mount and dispatches it with the named tool scope, so
+ * the preset turn always starts a clean thread and the backend
+ * restricts it to the suggest-template-fields allowlist.
+ */
+type ScopedPresetSend = {
+  text: string;
+};
+
 const ResolvedTemplateStudioChat = (props: TemplateStudioChatProps) => {
   const t = useTranslations();
   const activeOrganizationId = protectedRouteApi.useRouteContext({
@@ -143,11 +157,13 @@ const ResolvedTemplateStudioChat = (props: TemplateStudioChatProps) => {
       key: { templateId: props.templateId },
     }),
   );
+  const [pendingPresetSend, setPendingPresetSend] =
+    useState<ScopedPresetSend | null>(null);
 
   // "New chat" rotates the server-side mapping to a fresh thread and
   // swaps the cached id; the key change remounts the inner surface
   // (which also drops the previous thread's in-document suggestions).
-  const handleNewThread = async () => {
+  const rotateThread = async (): Promise<boolean> => {
     const rotated = await Result.tryPromise(
       async () =>
         await api.chat["template-thread"].rotate.post({
@@ -157,13 +173,13 @@ const ResolvedTemplateStudioChat = (props: TemplateStudioChatProps) => {
     if (Result.isError(rotated)) {
       getAnalytics().captureError(rotated.error);
       stellaToast.add({ title: t("common.somethingWentWrong"), type: "error" });
-      return;
+      return false;
     }
     const { data, error } = rotated.value;
     if (error) {
       getAnalytics().captureError(toAPIError(error));
       stellaToast.add({ title: t("common.somethingWentWrong"), type: "error" });
-      return;
+      return false;
     }
     queryClient.setQueryData(
       chatKeys.templateThread(activeOrganizationId, {
@@ -171,6 +187,18 @@ const ResolvedTemplateStudioChat = (props: TemplateStudioChatProps) => {
       }),
       toChatThreadId(data.threadId),
     );
+    return true;
+  };
+
+  // Scoped preset: rotate first so the turn ALWAYS starts a fresh
+  // thread, then hand the send to the remounted inner instance. The
+  // cache swap and the pending-send state land in the same commit,
+  // so only the new instance ever sees the request.
+  const handleScopedPresetSend = async (request: ScopedPresetSend) => {
+    const rotated = await rotateThread();
+    if (rotated) {
+      setPendingPresetSend(request);
+    }
   };
 
   return (
@@ -178,7 +206,14 @@ const ResolvedTemplateStudioChat = (props: TemplateStudioChatProps) => {
       key={chatThreadId}
       chatThreadId={chatThreadId}
       onNewThread={() => {
-        void handleNewThread();
+        void rotateThread();
+      }}
+      onScopedPresetSend={(request) => {
+        void handleScopedPresetSend(request);
+      }}
+      pendingPresetSend={pendingPresetSend}
+      onPendingPresetSendHandled={() => {
+        setPendingPresetSend(null);
       }}
       {...props}
     />
@@ -188,6 +223,9 @@ const ResolvedTemplateStudioChat = (props: TemplateStudioChatProps) => {
 type TemplateStudioChatInnerProps = TemplateStudioChatProps & {
   chatThreadId: ChatThreadId;
   onNewThread: () => void;
+  onScopedPresetSend: (request: ScopedPresetSend) => void;
+  pendingPresetSend: ScopedPresetSend | null;
+  onPendingPresetSendHandled: () => void;
 };
 
 const TemplateStudioChatInner = ({
@@ -199,6 +237,9 @@ const TemplateStudioChatInner = ({
   ensureView,
   chatThreadId,
   onNewThread,
+  onScopedPresetSend,
+  pendingPresetSend,
+  onPendingPresetSendHandled,
 }: TemplateStudioChatInnerProps) => {
   const t = useTranslations();
   const user = useAuthenticatedUser();
@@ -571,6 +612,68 @@ const TemplateStudioChatInner = ({
     openIfAIUnavailable();
   }, [openIfAIUnavailable]);
 
+  // Dispatch a scoped preset send queued by the rotate flow: this
+  // instance mounts already bound to the fresh thread, so the send
+  // lands there. The named tool scope rides the request body and the
+  // backend narrows the turn's tools to the suggest-template-fields
+  // allowlist. The local ref de-duplicates StrictMode's double
+  // effect invocation, which runs before the parent can commit the
+  // cleared pending-send state.
+  const presetSendDispatchedRef = useRef(false);
+  const dispatchPendingPresetSend = useEffectEvent(() => {
+    const request = pendingPresetSend;
+    if (request === null || presetSendDispatchedRef.current) {
+      return;
+    }
+    presetSendDispatchedRef.current = true;
+    onPendingPresetSendHandled();
+    void ensureAIAvailable().then((available) => {
+      if (!available) {
+        return;
+      }
+      setPanelOpen(true);
+      void sendMessage(
+        { text: request.text },
+        { body: { toolScope: SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE } },
+      );
+      return;
+    });
+  });
+  useEffect(() => {
+    dispatchPendingPresetSend();
+  }, []);
+
+  /**
+   * Scoped "Suggest fields" preset submit. For the selection scope
+   * the selected text is appended to the preset prompt so the model
+   * confines its proposals to that part; the document snapshot still
+   * rides along as context for anchoring the edits.
+   */
+  const submitScopedPreset = (
+    preset: AISuggestionPreset,
+    scope: PromptBarPresetScope,
+  ) => {
+    let text = preset.prompt;
+    if (scope === "selection") {
+      const view = getView();
+      const selectionText =
+        view !== null && !view.state.selection.empty
+          ? view.state.doc
+              .textBetween(
+                view.state.selection.from,
+                view.state.selection.to,
+                "\n",
+                "\n",
+              )
+              .trim()
+          : "";
+      if (selectionText.length > 0) {
+        text = `${preset.prompt}\n\n${t("templates.studio.aiScopeSelectionPrompt")}\n${selectionText}`;
+      }
+    }
+    onScopedPresetSend({ text });
+  };
+
   const editorController = useChatEditor({
     placeholder: t("chat.editableFilePlaceholder", { fileName }),
     threadRef,
@@ -914,6 +1017,15 @@ const TemplateStudioChatInner = ({
           onTogglePanel={() => setPanelOpen((v) => !v)}
           panelOpen={panelOpen}
           pendingCount={pendingCount}
+          presetScopeChooser={{
+            appliesTo: (preset) => preset.id === SUGGEST_FIELDS_PRESET_ID,
+            shouldAskForScope: () =>
+              useTemplateStudioStore.getState().ui.hasSelection,
+            question: t("templates.studio.aiScopeQuestion"),
+            selectionLabel: t("templates.studio.aiScopeSelection"),
+            documentLabel: t("templates.studio.aiScopeDocument"),
+            onSubmit: submitScopedPreset,
+          }}
           presets={[
             {
               id: SUGGEST_FIELDS_PRESET_ID,
