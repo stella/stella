@@ -21,6 +21,7 @@ import { isElement } from "./ooxml";
 import type {
   DiscoveredField,
   DiscoveredTemplate,
+  FieldDateFormat,
   FieldLookup,
   FieldMeta,
   FieldPart,
@@ -32,7 +33,7 @@ import type {
   ResolvedField,
   TemplateManifest,
 } from "./types";
-import { LOOKUP_REGISTRIES } from "./types";
+import { isFieldDateFormat, LOOKUP_REGISTRIES } from "./types";
 
 // ── Constants ────────────────────────────────────────────
 
@@ -116,6 +117,10 @@ const buildLookupXml = (lookup: FieldLookup): string => {
   return `<st:lookup ${attrs.join(" ")}/>`;
 };
 
+const buildDateFormatXml = (dateFormat: FieldDateFormat): string =>
+  `<st:dateFormat locale="${escapeXml(dateFormat.locale)}"` +
+  ` style="${escapeXml(dateFormat.style)}"/>`;
+
 const buildFieldXml = (field: FieldMeta): string => {
   const attrs: string[] = [`path="${escapeXml(field.path)}"`];
   if (field.label !== undefined) {
@@ -157,6 +162,10 @@ const buildFieldXml = (field: FieldMeta): string => {
 
   if (field.lookup) {
     children.push(buildLookupXml(field.lookup));
+  }
+
+  if (field.dateFormat) {
+    children.push(buildDateFormatXml(field.dateFormat));
   }
 
   if (field.validation) {
@@ -384,6 +393,19 @@ const parseFieldMeta = (el: slimdom.Element): FieldMeta => {
         lookup.aiFormat = aiFormat;
       }
       field.lookup = lookup;
+    }
+  }
+
+  // A hand-edited locale that is not a plausible BCP-47 tag (or an unknown
+  // style) is dropped so the isFieldMeta invariant holds downstream.
+  const dateFormatEl = getFirstElementChild(el, "dateFormat");
+  if (dateFormatEl) {
+    const candidate = {
+      locale: dateFormatEl.getAttribute("locale"),
+      style: dateFormatEl.getAttribute("style"),
+    };
+    if (isFieldDateFormat(candidate)) {
+      field.dateFormat = candidate;
     }
   }
 
@@ -664,6 +686,7 @@ export const mergeManifestWithDiscovery = (
         optionsFrom: f.optionsFrom,
         lookup: f.lookup,
         formula: f.formula,
+        dateFormat: f.dateFormat,
       });
     }
   }
@@ -720,6 +743,9 @@ const mergeField = (
     }
     if (meta.formula !== undefined) {
       resolved.formula = meta.formula;
+    }
+    if (meta.dateFormat !== undefined) {
+      resolved.dateFormat = meta.dateFormat;
     }
   }
 

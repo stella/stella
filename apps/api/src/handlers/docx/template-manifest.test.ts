@@ -1006,6 +1006,79 @@ describe("round-trip", () => {
     expect(tamperedBack?.fields.at(1)?.lookup).toEqual({ registry: "krs" });
   });
 
+  test("dateFormat round-trips; a hand-edited implausible locale is dropped", async () => {
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "signature_date",
+          inputType: "date",
+          dateFormat: { locale: "cs", style: "long" },
+        },
+        { path: "valid_until", inputType: "date" },
+      ],
+      conditions: [],
+    };
+
+    const docx = await createMinimalDocx();
+    const withManifest = await writeManifest(docx, manifest);
+    const readBack = await readManifest(withManifest);
+    expect(readBack?.fields.at(0)?.dateFormat).toEqual({
+      locale: "cs",
+      style: "long",
+    });
+    expect(readBack?.fields.at(0)?.inputType).toBe("date");
+    expect(readBack?.fields.at(1)?.dateFormat).toBeUndefined();
+
+    // Hand-edited XML with a structurally invalid BCP-47 tag must not leak
+    // past the parser (Intl.DateTimeFormat would throw on it at fill time).
+    const zip = await JSZip.loadAsync(withManifest);
+    const itemEntry = zip.file("customXml/item1.xml");
+    const itemXml = await itemEntry?.async("string");
+    zip.file(
+      "customXml/item1.xml",
+      (itemXml ?? "").replace('locale="cs"', 'locale="not a locale"'),
+    );
+    const tampered = Buffer.from(
+      await zip.generateAsync({ type: "nodebuffer" }),
+    );
+    const tamperedBack = await readManifest(tampered);
+    expect(tamperedBack?.fields.at(0)?.dateFormat).toBeUndefined();
+  });
+
+  test("dateFormat survives mergeManifestWithDiscovery", () => {
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "signature_date",
+          inputType: "date",
+          dateFormat: { locale: "cs", style: "long" },
+        },
+        {
+          path: "manifest_only",
+          inputType: "date",
+          dateFormat: { locale: "de", style: "medium" },
+        },
+      ],
+      conditions: [],
+    };
+    const discovered: DiscoveredTemplate = {
+      placeholders: [{ name: "signature_date", count: 1 }],
+      fields: [{ path: "signature_date", kind: "string", count: 1 }],
+      structureErrors: [],
+    };
+
+    const resolved = mergeManifestWithDiscovery(manifest, discovered);
+    const discoveredField = resolved.find((f) => f.path === "signature_date");
+    const manifestOnly = resolved.find((f) => f.path === "manifest_only");
+    expect(discoveredField?.dateFormat).toEqual({
+      locale: "cs",
+      style: "long",
+    });
+    expect(manifestOnly?.dateFormat).toEqual({ locale: "de", style: "medium" });
+  });
+
   test("lookup survives mergeManifestWithDiscovery", async () => {
     const manifest: TemplateManifest = {
       version: 1,
