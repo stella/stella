@@ -106,7 +106,11 @@ import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import { LinkClauseDialog } from "@/routes/_protected.knowledge/-components/link-clause-dialog";
 import { TemplateClausesTab } from "@/routes/_protected.knowledge/-components/template-clauses-tab";
 import { DATE_FORMAT_STYLES } from "@/routes/_protected.knowledge/-components/template-date-format";
-import { TemplateForm } from "@/routes/_protected.knowledge/-components/template-form";
+import {
+  ARRAY_INDEX_KEY_PREFIX,
+  parseArrayItemKey,
+  TemplateForm,
+} from "@/routes/_protected.knowledge/-components/template-form";
 import { useTemplateNavStore } from "@/routes/_protected.knowledge/-components/template-nav-store";
 import { TemplateStudioChat } from "@/routes/_protected.knowledge/-components/template-studio-chat";
 import {
@@ -120,6 +124,7 @@ import {
 import { filledByForFieldMeta } from "@/routes/_protected.knowledge/-components/template-studio-suggestions";
 import { TemplateVersionsTab } from "@/routes/_protected.knowledge/-components/template-versions-tab";
 import {
+  defaultCompositeFormat,
   type EditablePart,
   type EditableField,
   FieldConfigEditor,
@@ -2417,14 +2422,28 @@ const TemplateFillFacet = ({ templateId }: { templateId: string }) => {
  *  objects join with spaces (the server renders the real format). A lookup
  *  field with a plausible registry number previews the looked-up rendering
  *  instead of the raw number once the debounced lookup-preview response
- *  lands; until then (and on a miss) the raw number stays. */
+ *  lands; until then (and on a miss) the raw number stays.
+ *
+ *  Repeatable (array) fields preview with their FIRST item only: the form
+ *  names item inputs `path[i].sub` while the `{{#each}}` body's markers use
+ *  the bare item path (`path.sub`), so item 0's values map onto those paths
+ *  and the loop body previews with the first entry. Expanding the loop into
+ *  one preview per item is a known future item. */
 const pushFillPreview = (
   values: Record<string, unknown>,
   fields?: readonly LookupPreviewField[],
 ) => {
   cancelLookupPreviews();
   const preview: Record<string, TemplatePreviewValue> = {};
-  for (const [path, value] of Object.entries(values)) {
+  for (const [key, value] of Object.entries(values)) {
+    if (key.startsWith(ARRAY_INDEX_KEY_PREFIX)) {
+      continue;
+    }
+    const item = parseArrayItemKey(key);
+    if (item && item.index !== 0) {
+      continue;
+    }
+    const path = item ? `${item.path}.${item.sub}` : key;
     if (typeof value === "string" && value !== "") {
       preview[path] = value;
     } else if (typeof value === "number" || typeof value === "boolean") {
@@ -4426,9 +4445,15 @@ const studioFieldToManifestField = (f: StudioField): ManifestField => {
   if (f.lookup !== undefined) {
     field.lookup = f.lookup;
   }
-  if (f.parts !== undefined && f.parts.length > 0 && f.format) {
-    field.parts = f.parts;
-    field.format = f.format;
+  if (f.parts !== undefined && f.parts.length > 0) {
+    // Mirror the wizard: an untyped format defaults to the part keys joined
+    // by spaces, so a composite configured in the face never silently saves
+    // as a plain field.
+    const format = f.format?.trim() || defaultCompositeFormat(f.parts);
+    if (format !== undefined && format !== "") {
+      field.parts = f.parts;
+      field.format = format;
+    }
   }
   return field;
 };
