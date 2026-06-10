@@ -50,7 +50,6 @@ const makeDocx = async (documentXml: string): Promise<Buffer> => {
 const emptyManifest: TemplateManifest = {
   version: 1,
   fields: [],
-  conditions: [],
 };
 
 type CheckOptions = {
@@ -351,15 +350,23 @@ describe("template check: expression references", () => {
     expect(codesOf(findings)).not.toContain("formulaUnknownPath");
   });
 
-  test("flags a condition referencing a path that is neither a field nor a named condition", async () => {
+  test("flags a condition referencing a path that is neither a field nor a condition-field", async () => {
     const findings = await checkDocument({
       paragraphs: ["{{entityType}}"],
       manifest: {
         ...emptyManifest,
-        fields: [field("entityType")],
-        conditions: [
-          { name: "isCorp", expression: 'entityType == "corp"' },
-          { name: "isBigCorp", expression: "isCorp and employees > 250" },
+        fields: [
+          field("entityType"),
+          {
+            path: "isCorp",
+            inputType: "boolean",
+            condition: 'entityType == "corp"',
+          },
+          {
+            path: "isBigCorp",
+            inputType: "boolean",
+            condition: "isCorp and employees > 250",
+          },
         ],
       },
     });
@@ -370,12 +377,59 @@ describe("template check: expression references", () => {
       conditionName: "isBigCorp",
       reference: "employees",
     });
-    // isCorp resolves as a named condition, entityType as a field, and the
+    // isCorp resolves as a condition-field, entityType as a field, and the
     // string literal "corp" is never treated as a reference.
     const conditionFindings = findings.filter(
       (f) => f.code === "conditionUnknownPath",
     );
     expect(conditionFindings).toHaveLength(1);
+  });
+
+  test("a {{#if}} referencing a boolean condition-field resolves", async () => {
+    // is_corp is a boolean condition-field (a rule, not a marker); the #if
+    // references it by path and it must not be flagged as unknown.
+    const findings = await checkDocument({
+      paragraphs: ["{{entityType}}", "{{#if is_corp}}", "Corp", "{{/if}}"],
+      manifest: {
+        ...emptyManifest,
+        fields: [
+          field("entityType"),
+          {
+            path: "is_corp",
+            label: "Corp?",
+            inputType: "boolean",
+            condition: 'entityType == "corp"',
+          },
+        ],
+      },
+    });
+
+    expect(codesOf(findings)).not.toContain("conditionUnknownPath");
+  });
+
+  test("a condition-field's own rule is validated for unknown paths", async () => {
+    const findings = await checkDocument({
+      paragraphs: ["{{entityType}}"],
+      manifest: {
+        ...emptyManifest,
+        fields: [
+          field("entityType"),
+          {
+            path: "is_big",
+            label: "Big?",
+            inputType: "boolean",
+            condition: "employees > 250",
+          },
+        ],
+      },
+    });
+
+    expect(findings).toContainEqual({
+      code: "conditionUnknownPath",
+      severity: "error",
+      conditionName: "is_big",
+      reference: "employees",
+    });
   });
 
   test("discovery-inferred condition drivers count as known paths", async () => {
@@ -386,7 +440,6 @@ describe("template check: expression references", () => {
       manifest: {
         ...emptyManifest,
         fields: [field("name")],
-        conditions: [{ name: "guaranteed", expression: "hasGuarantor" }],
       },
     });
 
@@ -417,7 +470,6 @@ describe("template check: bounds", () => {
         { path: "clientName", label: "Client Name", inputType: "text" },
         { path: "ghost", label: "Ghost", inputType: "text" },
       ],
-      conditions: [],
     });
 
     const [discovered, manifest, clauseSlots] = await Promise.all([

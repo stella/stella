@@ -4,6 +4,7 @@ import * as v from "valibot";
 import { roles } from "@stll/permissions";
 
 import {
+  buildAiConditionDecider,
   buildAiFieldGenerator,
   buildAiOccurrenceAdapter,
 } from "@/api/handlers/docx/ai-field-generator";
@@ -75,6 +76,12 @@ const fieldConfigItemSchema = {
     },
     formula: stringProp(
       "Who-fills = formula: arithmetic expression over other fields, derived at fill time",
+    ),
+    condition: stringProp(
+      "Boolean field derived by rule: a condition expression (e.g. " +
+        'client_type == "company"), evaluated at fill time. A {{#if field_path}} ' +
+        "marker references it by path. Mutually exclusive with " +
+        "formula/aiPrompt/aiAdapt/lookup/parts.",
     ),
     parts: {
       type: "array",
@@ -347,6 +354,10 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
     orgAIConfig,
     organizationId: context.organizationId,
   });
+  const decideAiCondition = buildAiConditionDecider({
+    orgAIConfig,
+    organizationId: context.organizationId,
+  });
   const adaptAiValue = buildAiOccurrenceAdapter({
     orgAIConfig,
     organizationId: context.organizationId,
@@ -358,6 +369,7 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
     scopedDb: context.scopedDb,
     organizationId: context.organizationId,
     generateAiValue,
+    decideAiCondition,
     adaptAiValue,
   });
   if ("error" in filled) {

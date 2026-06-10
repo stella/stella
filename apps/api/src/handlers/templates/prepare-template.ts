@@ -64,7 +64,6 @@ export const prepareTemplateFromDocument = async ({
   const withManifest = await writeManifest(rewritten, {
     version: 1,
     fields,
-    conditions: [],
   });
 
   return { buffer: withManifest, fields, unapplied };

@@ -53,6 +53,7 @@ void mock.module("@/api/lib/ai-config-loader", () => ({
 
 void mock.module("@/api/handlers/docx/ai-field-generator", () => ({
   buildAiFieldGenerator: mock(() => undefined),
+  buildAiConditionDecider: mock(() => undefined),
   buildAiOccurrenceAdapter: mock(() => undefined),
 }));
 
@@ -522,7 +523,7 @@ describe("MCP template tools", () => {
     configureTemplateFieldsMock.mockImplementation(async function* () {
       yield* [];
       return Result.ok({
-        manifest: { version: 1, fields: [], conditions: [] },
+        manifest: { version: 1, fields: [] },
       });
     });
     describeStoredTemplateMock.mockResolvedValue({

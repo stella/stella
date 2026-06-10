@@ -1414,6 +1414,7 @@ export const TemplateForm = ({
     (f) =>
       f.formula === undefined &&
       f.aiPrompt === undefined &&
+      f.condition === undefined &&
       (f.count > 0 || f.inputType === "boolean" || referencedPaths.has(f.path)),
   );
   const [values, setValues] = useState<FormValues>(() =>

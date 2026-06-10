@@ -32,13 +32,6 @@ import { userErrorMessage } from "@/lib/errors";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 
 import {
-  type DraftCondition,
-  draftToNamedCondition,
-  emptyGroup,
-  NamedConditionsEditor,
-  toRuleFields,
-} from "./condition-builder";
-import {
   DATE_FORMAT_STYLES,
   formatDateExample,
   type TemplateDateFormat,
@@ -173,6 +166,12 @@ export type EditableField = {
    *  expression at fill time; the fill form renders no input for it.
    *  Mutually exclusive with parts and lookup. */
   formula?: string | undefined;
+  /** Condition rule (a `@stll/template-conditions` expression): a boolean
+   *  field whose yes/no value is DERIVED by this rule rather than asked. Only
+   *  meaningful on `inputType === "boolean"`; mutually exclusive with
+   *  formula/lookup/parts/aiPrompt/aiAdapt (backend-validated). A boolean
+   *  field with `condition` set is a "condition-field". */
+  condition?: string | undefined;
   /** Locale-aware rendering of a "date" field's submitted ISO value at fill
    *  time; absent = the ISO value is substituted as typed. */
   dateFormat?: TemplateDateFormat | undefined;
@@ -402,7 +401,6 @@ export const ConfigureStep = ({
     buildEditableFields(discoveredFields),
   );
   const [expandedField, setExpandedField] = useState<string | null>(null);
-  const [draftConditions, setDraftConditions] = useState<DraftCondition[]>([]);
   const [saving, setSaving] = useState(false);
 
   const updateField = useCallback(
@@ -471,14 +469,10 @@ export const ConfigureStep = ({
             dateFormat: dateFormatManifestProps(f),
           };
         }),
-        conditions: [
-          ...conditions,
-          ...draftConditions
-            .map(draftToNamedCondition)
-            .filter(
-              (c): c is { name: string; expression: string } => c !== null,
-            ),
-        ],
+        // Legacy named conditions from discovery are preserved read-only; new
+        // conditions are authored as boolean condition-fields in the Studio,
+        // not as standalone entries here.
+        conditions,
       };
 
       // Send the original DOCX + manifest to the create
@@ -509,7 +503,7 @@ export const ConfigureStep = ({
       });
       onSaved();
     },
-    [name, fields, conditions, draftConditions, file, t, onSaved],
+    [name, fields, conditions, file, t, onSaved],
   );
 
   return (
@@ -607,41 +601,6 @@ export const ConfigureStep = ({
                 );
               })}
             </ul>
-          </div>
-
-          <div className="rounded-lg border">
-            <div className="flex items-center justify-between border-b px-4 py-3">
-              <h3 className="text-muted-foreground text-sm font-medium">
-                {t("templates.conditionsTitle")}
-              </h3>
-              <Button
-                onClick={() =>
-                  setDraftConditions((prev) => [
-                    ...prev,
-                    {
-                      id: crypto.randomUUID(),
-                      name: "",
-                      group: emptyGroup(),
-                    },
-                  ])
-                }
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                <PlusIcon />
-                {t("templates.addCondition")}
-              </Button>
-            </div>
-            {draftConditions.length > 0 && (
-              <div className="p-4">
-                <NamedConditionsEditor
-                  conditions={draftConditions}
-                  fields={toRuleFields(fields)}
-                  onChange={setDraftConditions}
-                />
-              </div>
-            )}
           </div>
 
           <div className="flex justify-end gap-2 pt-2">

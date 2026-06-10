@@ -4,6 +4,7 @@ import { t } from "elysia";
 import type { SafeDb, ScopedDb } from "@/api/db";
 import { adaptAiFields } from "@/api/handlers/docx/adapt-ai-fields";
 import {
+  buildAiConditionDecider,
   buildAiFieldGenerator,
   buildAiOccurrenceAdapter,
 } from "@/api/handlers/docx/ai-field-generator";
@@ -12,6 +13,7 @@ import { extractText } from "@/api/handlers/docx/extract-text";
 import { createDispatchLookupResolver } from "@/api/handlers/docx/lookup-fields";
 import { applyManifestFillSteps } from "@/api/handlers/docx/manifest-fill-steps";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
+import { resolveAiConditions } from "@/api/handlers/docx/resolve-ai-conditions";
 import { resolveAiFields } from "@/api/handlers/docx/resolve-ai-fields";
 import { resolveClauseSlots } from "@/api/handlers/docx/resolve-clause-slots";
 import { readManifest } from "@/api/handlers/docx/template-manifest";
@@ -155,7 +157,18 @@ const fillPreviewHandler = async function* ({
           skillContext: { organizationId, safeDb, userId },
         }),
       });
-      for (const [key, value] of Object.entries(aiResolved)) {
+      // Decide AI-decided boolean conditions (a boolean field with an aiPrompt)
+      // so the preview reflects which {{#if field_path}} blocks resolve.
+      const aiDecided = await resolveAiConditions({
+        values: aiResolved,
+        fields: manifest.fields,
+        decide: buildAiConditionDecider({
+          orgAIConfig,
+          organizationId,
+          skillContext: { organizationId, safeDb, userId },
+        }),
+      });
+      for (const [key, value] of Object.entries(aiDecided)) {
         record[key] = value;
       }
     }

@@ -31,6 +31,7 @@ import {
   refPattern,
   resolvePath,
 } from "@stll/template-conditions";
+import type { NamedCondition } from "@stll/template-conditions";
 
 import { isElement, paragraphText, W_NS } from "./ooxml";
 import type {
@@ -40,7 +41,6 @@ import type {
   EachBlock,
   IfBlock,
   IfBranch,
-  NamedCondition,
   RichPatchValue,
   TemplateData,
   TemplateStructureError,
