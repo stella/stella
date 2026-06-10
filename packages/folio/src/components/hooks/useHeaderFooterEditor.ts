@@ -472,10 +472,7 @@ export const useHeaderFooterEditor = ({
         // brand-new Map so the previous Document referenced by every
         // earlier history entry stays untouched and undo can step
         // back to the pre-edit state.
-        const blocks: BlockContent[] = proseDocToBlocks(
-          view.state.doc,
-          pkg.styles,
-        );
+        const blocks: BlockContent[] = proseDocToBlocks(view.state.doc);
         const updated: HeaderFooter = {
           ...existing,
           type: hfEditPosition,

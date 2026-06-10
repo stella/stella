@@ -27,6 +27,7 @@ export type {
   TextBoxAttrs,
 } from "./nodes";
 export type {
+  CharacterStyleAttrs,
   TextColorAttrs,
   UnderlineAttrs,
   StrikeAttrs,
@@ -41,7 +42,6 @@ export type {
   TrackedChangeMarkAttrs,
   RunFormattingOverrideAttrs,
   RunShadingAttrs,
-  RunStyleAttrs,
   HyperlinkAttrs,
 } from "./marks";
 

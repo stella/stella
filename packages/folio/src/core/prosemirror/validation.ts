@@ -3,6 +3,7 @@ import type { Mark, Node as PMNode } from "prosemirror-model";
 import type { ProseMirrorAttrIssue, ReadProseMirrorAttrsResult } from "./attrs";
 import {
   readCharacterSpacingMarkAttrs,
+  readCharacterStyleMarkAttrs,
   readCommentMarkAttrs,
   readEmphasisMarkAttrs,
   readFieldAttrs,
@@ -18,7 +19,6 @@ import {
   readParagraphAttrs,
   readRunFormattingOverrideMarkAttrs,
   readRunShadingMarkAttrs,
-  readRunStyleMarkAttrs,
   readSdtAttrs,
   readShapeAttrs,
   readStrikeMarkAttrs,
@@ -245,10 +245,6 @@ const validateMarks = (
         appendAttrIssues(markPath, readRunShadingMarkAttrs(mark), issues);
         continue;
 
-      case "runStyle":
-        appendAttrIssues(markPath, readRunStyleMarkAttrs(mark), issues);
-        continue;
-
       case "fontSize":
         appendAttrIssues(markPath, readFontSizeMarkAttrs(mark), issues);
         continue;
@@ -259,6 +255,10 @@ const validateMarks = (
 
       case "characterSpacing":
         appendAttrIssues(markPath, readCharacterSpacingMarkAttrs(mark), issues);
+        continue;
+
+      case "characterStyle":
+        appendAttrIssues(markPath, readCharacterStyleMarkAttrs(mark), issues);
         continue;
 
       case "emphasisMark":
