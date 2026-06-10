@@ -15,9 +15,11 @@ import discoverTemplate from "@/api/handlers/templates/discover";
 import fillTemplate from "@/api/handlers/templates/fill";
 import fillTemplateById from "@/api/handlers/templates/fill-by-id";
 import fillTemplatePreview from "@/api/handlers/templates/fill-preview";
+import fillTemplateToWorkspace from "@/api/handlers/templates/fill-to-workspace";
 import getTemplate from "@/api/handlers/templates/get";
 import listTemplates from "@/api/handlers/templates/list";
 import manifestTemplate from "@/api/handlers/templates/manifest";
+import prefillTemplate from "@/api/handlers/templates/prefill";
 import prepareTemplate from "@/api/handlers/templates/prepare";
 import previewTemplate from "@/api/handlers/templates/preview";
 import saveTemplateDocument from "@/api/handlers/templates/save-document";
@@ -27,13 +29,18 @@ import templateVersionDiff from "@/api/handlers/templates/versions-diff";
 import getTemplateVersion from "@/api/handlers/templates/versions-get";
 import listTemplateVersions from "@/api/handlers/templates/versions-list";
 import templateVersionSummarize from "@/api/handlers/templates/versions-summarize";
-import { authMacro, permissionMacro } from "@/api/lib/auth";
+import {
+  authMacro,
+  permissionMacro,
+  workspaceAccessMacro,
+} from "@/api/lib/auth";
 
 export const templatesRoute = new Elysia({
   prefix: "/templates",
 })
   .use(authMacro)
   .use(permissionMacro)
+  .use(workspaceAccessMacro)
   .guard({
     validateAuth: true,
   })
@@ -82,6 +89,17 @@ export const templatesRoute = new Elysia({
     params: fillTemplateById.config.params,
     permissions: fillTemplateById.config.permissions,
     query: fillTemplateById.config.query,
+  })
+  .post("/:templateId/fill-to/:workspaceId", fillTemplateToWorkspace.handler, {
+    body: fillTemplateToWorkspace.config.body,
+    params: fillTemplateToWorkspace.config.params,
+    permissions: fillTemplateToWorkspace.config.permissions,
+    validateWorkspaceAccess: true,
+  })
+  .post("/:templateId/prefill", prefillTemplate.handler, {
+    body: prefillTemplate.config.body,
+    params: prefillTemplate.config.params,
+    permissions: prefillTemplate.config.permissions,
   })
   .get("/:templateId", getTemplate.handler, {
     params: getTemplate.config.params,
