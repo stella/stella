@@ -45,6 +45,7 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from "@stll/ui/components/menu";
+import { MenuPreviewLayout } from "@stll/ui/components/preview-pane";
 import { Tabs, TabsList, TabsTab } from "@stll/ui/components/tabs";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
@@ -247,61 +248,60 @@ export const ViewSwitcher = ({
             <PlusIcon />
           </MenuTrigger>
           <MenuPopup>
-            <div className="flex items-stretch">
-              <div className="flex min-w-32 flex-1 flex-col">
-                {createLayoutOptions.map((layoutType) => {
-                  const Icon = layoutIcons[layoutType];
-                  return (
-                    <MenuItem
-                      key={layoutType}
-                      onClick={() => {
-                        const viewId = crypto.randomUUID();
-                        createView.mutate(
-                          {
-                            id: viewId,
-                            name: t("workspaces.views.newView", {
-                              layout: t(LAYOUT_LABEL_KEYS[layoutType]),
-                            }),
-                            layout: defaultLayouts[layoutType],
-                          },
-                          {
-                            onSuccess: () => {
-                              onViewChange(viewId);
-                            },
-                            onError: () => {
-                              stellaToast.add({
-                                title: t("errors.failedToCreateView"),
-                                type: "error",
-                              });
-                            },
-                          },
-                        );
-                      }}
-                      onFocus={() => setPreviewKind(layoutType)}
-                      onMouseEnter={() => setPreviewKind(layoutType)}
-                    >
-                      <Icon />
-                      {t(LAYOUT_LABEL_KEYS[layoutType])}
-                    </MenuItem>
-                  );
-                })}
-                <MenuSeparator />
-                <MenuItem
-                  onClick={() => setIsTemplatePickerOpen(true)}
-                  onFocus={() => setPreviewKind("template")}
-                  onMouseEnter={() => setPreviewKind("template")}
-                >
-                  <BookmarkIcon />
-                  {t("workspaces.views.useTemplate")}
-                </MenuItem>
-              </div>
-              <div className="ms-1 hidden border-s ps-1 sm:block">
+            <MenuPreviewLayout
+              preview={
                 <ViewLayoutPreview
                   kind={previewKind}
                   workspaceId={workspaceId}
                 />
-              </div>
-            </div>
+              }
+            >
+              {createLayoutOptions.map((layoutType) => {
+                const Icon = layoutIcons[layoutType];
+                return (
+                  <MenuItem
+                    key={layoutType}
+                    onClick={() => {
+                      const viewId = crypto.randomUUID();
+                      createView.mutate(
+                        {
+                          id: viewId,
+                          name: t("workspaces.views.newView", {
+                            layout: t(LAYOUT_LABEL_KEYS[layoutType]),
+                          }),
+                          layout: defaultLayouts[layoutType],
+                        },
+                        {
+                          onSuccess: () => {
+                            onViewChange(viewId);
+                          },
+                          onError: () => {
+                            stellaToast.add({
+                              title: t("errors.failedToCreateView"),
+                              type: "error",
+                            });
+                          },
+                        },
+                      );
+                    }}
+                    onFocus={() => setPreviewKind(layoutType)}
+                    onMouseEnter={() => setPreviewKind(layoutType)}
+                  >
+                    <Icon />
+                    {t(LAYOUT_LABEL_KEYS[layoutType])}
+                  </MenuItem>
+                );
+              })}
+              <MenuSeparator />
+              <MenuItem
+                onClick={() => setIsTemplatePickerOpen(true)}
+                onFocus={() => setPreviewKind("template")}
+                onMouseEnter={() => setPreviewKind("template")}
+              >
+                <BookmarkIcon />
+                {t("workspaces.views.useTemplate")}
+              </MenuItem>
+            </MenuPreviewLayout>
           </MenuPopup>
         </Menu>
       )}
@@ -490,6 +490,9 @@ const ViewTabMenu = ({
   const convertView = useConvertView(workspaceId);
   const deleteView = useDeleteView(workspaceId);
   const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false);
+  const [convertPreview, setConvertPreview] = useState<ViewLayoutType | null>(
+    null,
+  );
 
   const Icon = layoutIcons[layout.type];
 
@@ -567,41 +570,58 @@ const ViewTabMenu = ({
             </MenuItem>
           )}
           {canUpdateView && (
-            <MenuSub>
+            <MenuSub
+              onOpenChange={(open) => {
+                if (!open) {
+                  setConvertPreview(null);
+                }
+              }}
+            >
               <MenuSubTrigger>
                 <Icon />
                 {t("common.convertTo")}
               </MenuSubTrigger>
               <MenuSubPopup>
-                {LAYOUT_OPTIONS.filter(
-                  (l) => l !== layout.type && l !== "overview",
-                ).map((l) => {
-                  const LayoutIcon = layoutIcons[l];
-                  return (
-                    <MenuItem
-                      key={l}
-                      onClick={() => {
-                        convertView.mutate(
-                          {
-                            viewId: id,
-                            targetType: l,
-                          },
-                          {
-                            onError: () => {
-                              stellaToast.add({
-                                title: t("errors.failedToChangeViewType"),
-                                type: "error",
-                              });
+                <MenuPreviewLayout
+                  preview={
+                    <ViewLayoutPreview
+                      kind={convertPreview}
+                      workspaceId={workspaceId}
+                    />
+                  }
+                >
+                  {LAYOUT_OPTIONS.filter(
+                    (l) => l !== layout.type && l !== "overview",
+                  ).map((l) => {
+                    const LayoutIcon = layoutIcons[l];
+                    return (
+                      <MenuItem
+                        key={l}
+                        onClick={() => {
+                          convertView.mutate(
+                            {
+                              viewId: id,
+                              targetType: l,
                             },
-                          },
-                        );
-                      }}
-                    >
-                      <LayoutIcon />
-                      {t(LAYOUT_LABEL_KEYS[l])}
-                    </MenuItem>
-                  );
-                })}
+                            {
+                              onError: () => {
+                                stellaToast.add({
+                                  title: t("errors.failedToChangeViewType"),
+                                  type: "error",
+                                });
+                              },
+                            },
+                          );
+                        }}
+                        onFocus={() => setConvertPreview(l)}
+                        onMouseEnter={() => setConvertPreview(l)}
+                      >
+                        <LayoutIcon />
+                        {t(LAYOUT_LABEL_KEYS[l])}
+                      </MenuItem>
+                    );
+                  })}
+                </MenuPreviewLayout>
               </MenuSubPopup>
             </MenuSub>
           )}

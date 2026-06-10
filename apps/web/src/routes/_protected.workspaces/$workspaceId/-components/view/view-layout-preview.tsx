@@ -8,6 +8,8 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { PreviewPane } from "@stll/ui/components/preview-pane";
+
 import type { TranslationKey } from "@/i18n/types";
 import { DOCX_MIME } from "@/lib/consts";
 import type { ViewLayoutType, WorkspaceEntity } from "@/lib/types";
@@ -56,14 +58,9 @@ export const ViewLayoutPreview = ({
   kind,
   workspaceId,
 }: ViewLayoutPreviewProps) => (
-  <div className="pointer-events-none w-64 p-2 select-none">
-    <div
-      aria-hidden
-      className="bg-muted/40 h-36 overflow-hidden rounded-md border p-2"
-    >
-      {kind && <PreviewCanvas kind={kind} workspaceId={workspaceId} />}
-    </div>
-  </div>
+  <PreviewPane>
+    {kind && <PreviewCanvas kind={kind} workspaceId={workspaceId} />}
+  </PreviewPane>
 );
 
 type PreviewCanvasProps = {
