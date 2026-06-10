@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import {
+  DownloadIcon,
   LayoutTemplateIcon,
   MoreHorizontalIcon,
   PencilLineIcon,
@@ -52,6 +53,7 @@ import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
 import { userErrorMessage } from "@/lib/errors";
 import { formatRelativeTime } from "@/lib/relative-time";
+import { toSafeId } from "@/lib/safe-id";
 import { TemplateCategorySidebar } from "@/routes/_protected.knowledge/-components/template-category-sidebar";
 import type { TemplateCategoryItem } from "@/routes/_protected.knowledge/-components/template-category-sidebar";
 import { TemplateUpload } from "@/routes/_protected.knowledge/-components/template-upload";
@@ -257,6 +259,21 @@ export const TemplateList = ({
 
 const MAX_VISIBLE_TAGS = 3;
 
+/** The template detail returns an audited presigned URL for the source DOCX. */
+const downloadTemplateSource = async (
+  templateId: string,
+  errorTitle: string,
+) => {
+  const response = await api
+    .templates({ templateId: toSafeId<"template">(templateId) })
+    .get();
+  if (response.error) {
+    stellaToast.add({ type: "error", title: errorTitle });
+    return;
+  }
+  window.open(response.data.presignedUrl, "_blank");
+};
+
 type TemplateRowProps = {
   template: TemplateItem;
   allTags: string[];
@@ -409,6 +426,17 @@ const TemplateRow = ({
                   <MoreHorizontalIcon />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent>
+                  <DropdownMenuItem
+                    onClick={() =>
+                      void downloadTemplateSource(
+                        template.id,
+                        t("common.unexpectedError"),
+                      )
+                    }
+                  >
+                    <DownloadIcon />
+                    {t("common.download")}
+                  </DropdownMenuItem>
                   {canUpdateTemplate && (
                     <>
                       <DropdownMenuItem onClick={() => setTagsOpen(true)}>
