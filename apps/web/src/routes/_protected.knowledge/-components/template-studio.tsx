@@ -91,7 +91,7 @@ import {
   SIDE_RAIL_TAB_ICON_SIZE_PX,
   TOOLBAR_ROW_HEIGHT,
 } from "@/lib/consts";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError, userErrorMessage } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import { LinkClauseDialog } from "@/routes/_protected.knowledge/-components/link-clause-dialog";
@@ -1056,7 +1056,14 @@ export const TemplateStudioPage = ({
           manifest: JSON.stringify(buildManifest(manifest, fields, conditions)),
         });
       if (stored.error) {
-        stellaToast.add({ title: t("templates.saveFailed"), type: "error" });
+        stellaToast.add({
+          title: t("templates.saveFailed"),
+          description: userErrorMessage(
+            stored.error,
+            t("common.unexpectedError"),
+          ),
+          type: "error",
+        });
         return;
       }
 
