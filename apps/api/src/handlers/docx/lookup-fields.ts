@@ -114,6 +114,48 @@ export const renderLookupHit = (hit: BusinessRegistryHit): string => {
   return [hit.name, seat].filter((part) => part !== null).join(", ");
 };
 
+/** The [token] names the config UI offers, mapped onto hit fields. The
+ *  baseline tokens come from the cross-registry hit; the rest narrow on the
+ *  per-registry details payload. */
+const lookupTemplateTokens = (
+  hit: BusinessRegistryHit,
+): Record<string, string | null | undefined> => {
+  const tokens: Record<string, string | null | undefined> = {
+    "company name": hit.name,
+    "legal form": hit.legalForm,
+    seat: hit.address?.city ?? null,
+    address: hit.address?.textAddress ?? null,
+  };
+  const details = hit.details;
+  if (details !== undefined && details.registry === "krs") {
+    const { entity } = details;
+    tokens["registry number"] = entity.krsNumber;
+    tokens["NIP"] = entity.identifiers.nip;
+    tokens["REGON"] = entity.identifiers.regon;
+    tokens["share capital"] =
+      entity.shareCapital === null
+        ? null
+        : `${entity.shareCapital.amount} ${entity.shareCapital.currency}`;
+  }
+  return tokens;
+};
+
+/** Deterministic rendering of the author's format template: [tokens] are
+ *  substituted from the hit; unknown or missing tokens render empty. */
+export const renderLookupTemplate = (
+  template: string,
+  hit: BusinessRegistryHit,
+): string => {
+  const tokens = lookupTemplateTokens(hit);
+  return template
+    .replace(
+      /\[([^[\]]{1,64})\]/gu,
+      (_match, raw: string) => tokens[raw.trim()] ?? "",
+    )
+    .replace(/ {2,}/gu, " ")
+    .trim();
+};
+
 // ── Resolution over manifest fields ──────────────────────
 
 export type LookupFieldError = {
@@ -189,20 +231,27 @@ export const resolveLookupFields = async ({
       continue;
     }
 
-    const aiFormatted =
-      lookup.aiFormat !== undefined &&
-      lookup.aiFormat.trim() !== "" &&
-      formatWithAi !== undefined
-        ? await formatWithAi({
-            instruction: lookup.aiFormat,
-            fieldPath: field.path,
-            hit: outcome.hit,
-          })
-        : undefined;
+    // The author's format template renders deterministically by default
+    // ([tokens] substituted from the hit); AI applies it only when the field
+    // opts into contextual wording via aiAdapt (the Person + AI source).
+    const template = lookup.aiFormat?.trim() ?? "";
+    let rendered: string | undefined;
+    if (template !== "") {
+      if (field.aiAdapt === true && formatWithAi !== undefined) {
+        rendered = await formatWithAi({
+          instruction: template,
+          fieldPath: field.path,
+          hit: outcome.hit,
+        });
+      }
+      rendered ??= renderLookupTemplate(template, outcome.hit);
+    }
     replaceResolvedValue(
       resolved,
       field.path,
-      aiFormatted ?? renderLookupHit(outcome.hit),
+      rendered !== undefined && rendered !== ""
+        ? rendered
+        : renderLookupHit(outcome.hit),
     );
   }
 

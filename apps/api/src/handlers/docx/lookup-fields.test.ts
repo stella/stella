@@ -183,6 +183,7 @@ describe("resolveLookupFields", () => {
       fields: [
         {
           path: "buyer_krs",
+          aiAdapt: true,
           lookup: {
             registry: "krs",
             aiFormat: "[name], with its seat in [seat], KRS [number]",
@@ -213,15 +214,23 @@ describe("resolveLookupFields", () => {
     const result = await resolveLookupFields({
       values: { buyer_krs: "0000592109" },
       fields: [
-        { path: "buyer_krs", lookup: { registry: "krs", aiFormat: "format" } },
+        {
+          path: "buyer_krs",
+          aiAdapt: true,
+          lookup: {
+            registry: "krs",
+            aiFormat: "[company name], seat: [seat]",
+          },
+        },
       ],
       resolve: hitResolver(KRS_HIT),
       formatWithAi: async () => undefined,
     });
     expect(result.ok).toBe(true);
     if (result.ok) {
+      // AI declined: the template still renders deterministically.
       expect(result.values["buyer_krs"]).toBe(
-        "Żabka Polska sp. z o.o., ul. Stanisława Matyi 8, 61-586 Poznań",
+        "Żabka Polska sp. z o.o., seat: Poznań",
       );
     }
   });
