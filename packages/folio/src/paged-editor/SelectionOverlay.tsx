@@ -138,6 +138,7 @@ const SelectionRectangle: React.FC<{
   <div
     style={selectionRectStyles(rect, color)}
     data-testid={`selection-rect-${index}`}
+    data-folio-selection-rect=""
     data-page-index={rect.pageIndex}
   />
 );
