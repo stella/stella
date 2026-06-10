@@ -67,9 +67,12 @@ export const resolveClauseSlots = async (
  * a clause range's `expr`). Uses the same version/variant resolution as
  * {@link resolveClauseSlots} so the preview matches what fill produces.
  *
- * Multi-paragraph clauses are joined with newlines; the preview renders
- * this as one wrapping run (full multi-paragraph layout is a future item).
+ * The preview is a single inline indicator of what the slot fills with:
+ * the clause text is flattened to one line and truncated. The actual fill
+ * inserts the full rich clause via {@link resolveClauseSlots}; faithful
+ * multi-paragraph layout in the live preview is a future item.
  */
+const PREVIEW_MAX_CHARS = 180;
 export const resolveClauseSlotTexts = async (
   templateId: SafeId<"template">,
   slots: ClauseSlot[],
@@ -90,7 +93,11 @@ export const resolveClauseSlotTexts = async (
       organizationId,
     );
     if (body) {
-      texts[slot.name] = clauseBodyToPlainText(body);
+      const flat = clauseBodyToPlainText(body).replace(/\s+/gu, " ").trim();
+      texts[slot.name] =
+        flat.length > PREVIEW_MAX_CHARS
+          ? `${flat.slice(0, PREVIEW_MAX_CHARS).trimEnd()}…`
+          : flat;
     }
   }
 
