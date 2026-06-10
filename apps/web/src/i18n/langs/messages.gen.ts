@@ -2137,6 +2137,9 @@ type Messages = {
       "loop": "Loop";
       "makeField": "Make field";
       "manageNamedConditions": "Manage named conditions";
+      "mirrorBlockAction": "Mirror";
+      "mirrorBlockOffer": "Wrap the matching lines in the parallel cell too?";
+      "mirrorFieldRationale": "Use the same field for the matching phrase in the parallel column.";
       "namePlaceholder": "name";
       "prepareWithAi": "Prepare with AI";
       "questions": "Questions";
