@@ -110,6 +110,7 @@ import {
   ARRAY_INDEX_KEY_PREFIX,
   parseArrayItemKey,
   TemplateForm,
+  useFillToMatterSaveTarget,
 } from "@/routes/_protected.knowledge/-components/template-form";
 import { useTemplateNavStore } from "@/routes/_protected.knowledge/-components/template-nav-store";
 import { TemplateStudioChat } from "@/routes/_protected.knowledge/-components/template-studio-chat";
@@ -2351,6 +2352,7 @@ const StudioSaveAction = () => {
 // fill endpoint uses) to get the real field shape — {{#each}} array fields
 // included — rather than reconstructing it from the flat manifest.
 const TemplateFillFacet = ({ templateId }: { templateId: string }) => {
+  const fillSaveTarget = useFillToMatterSaveTarget();
   // Leaving the facet clears the in-document preview (and drops any pending
   // lookup-preview response so it cannot re-set a stale preview).
   useEffect(
@@ -2448,6 +2450,7 @@ const TemplateFillFacet = ({ templateId }: { templateId: string }) => {
         onBack={() => undefined}
         onDone={() => undefined}
         onValuesChange={(values) => pushFillPreview(values, discovered.fields)}
+        saveTarget={fillSaveTarget}
         structureErrors={discovered.structureErrors}
         templateId={templateId}
       />
