@@ -72,7 +72,6 @@ export const resolveClauseSlots = async (
  * inserts the full rich clause via {@link resolveClauseSlots}; faithful
  * multi-paragraph layout in the live preview is a future item.
  */
-const PREVIEW_MAX_CHARS = 180;
 export const resolveClauseSlotTexts = async (
   templateId: SafeId<"template">,
   slots: ClauseSlot[],
@@ -93,11 +92,12 @@ export const resolveClauseSlotTexts = async (
       organizationId,
     );
     if (body) {
-      const flat = clauseBodyToPlainText(body).replace(/\s+/gu, " ").trim();
-      texts[slot.name] =
-        flat.length > PREVIEW_MAX_CHARS
-          ? `${flat.slice(0, PREVIEW_MAX_CHARS).trimEnd()}…`
-          : flat;
+      // Flatten paragraph breaks so the clause flows as one inline run in the
+      // preview (wraps within the column); the actual fill inserts the full
+      // multi-paragraph rich clause. Not truncated — the author sees it all.
+      texts[slot.name] = clauseBodyToPlainText(body)
+        .replace(/\s+/gu, " ")
+        .trim();
     }
   }
 
