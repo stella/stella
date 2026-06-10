@@ -13,6 +13,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { panic } from "better-result";
 import {
+  TextQuoteIcon,
   BookmarkIcon,
   BookmarkPlusIcon,
   BracesIcon,
@@ -1530,9 +1531,7 @@ const SelectionGesturePopover = ({
         size="sm"
         variant="ghost"
       >
-        <span className="text-muted-foreground w-3.5 shrink-0 text-center text-xs font-semibold">
-          {"\u00a7"}
-        </span>
+        <TextQuoteIcon className="text-muted-foreground size-3.5 shrink-0" />
         {t("templates.studio.scopeClause")}
       </Button>
     </div>
@@ -2369,7 +2368,7 @@ const StudioInsertRow = () => {
           )}
           <MenuSub>
             <MenuSubTrigger>
-              <span className="text-sm font-semibold">{"\u00a7"}</span>
+              <TextQuoteIcon />
               {t("templates.studio.scopeClause")}
             </MenuSubTrigger>
             <MenuSubPopup>
@@ -2875,8 +2874,8 @@ const OutlineRow = ({
           title={t("templates.studio.scopeClause")}
           type="button"
         >
-          <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md text-sm font-semibold">
-            {"\u00a7"}
+          <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
+            <TextQuoteIcon className="size-4" />
           </span>
           <span className="truncate">{node.name}</span>
         </button>
