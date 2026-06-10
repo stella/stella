@@ -325,6 +325,92 @@ describe("resolveLookupFields", () => {
     }
   });
 
+  test("renders two named formats off one hit alongside the default", async () => {
+    let calls = 0;
+    const result = await resolveLookupFields({
+      values: { company: "0000592109" },
+      fields: [
+        {
+          path: "company",
+          lookup: {
+            registry: "krs",
+            aiFormat: "[company name]",
+            formats: [
+              { key: "full", template: "[company name], seat in [seat]" },
+              { key: "short", template: "[company name]" },
+            ],
+          },
+        },
+      ],
+      resolve: async () => {
+        calls += 1;
+        return { type: "hit", hit: KRS_HIT };
+      },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      // The default marker {{company}} keeps the aiFormat rendering.
+      expect(result.values["company"]).toBe("Żabka Polska sp. z o.o.");
+      // Each named format renders the same hit through its own template,
+      // addressed by a flat dotted key matching the {{company.<key>}} marker.
+      expect(result.values["company.full"]).toBe(
+        "Żabka Polska sp. z o.o., seat in Poznań",
+      );
+      expect(result.values["company.short"]).toBe("Żabka Polska sp. z o.o.");
+    }
+    // Resolved once for the default + both named formats.
+    expect(calls).toBe(1);
+  });
+
+  test("emits no value for an undeclared format key (stays unmatched)", async () => {
+    const result = await resolveLookupFields({
+      values: { company: "0000592109" },
+      fields: [
+        {
+          path: "company",
+          lookup: {
+            registry: "krs",
+            formats: [{ key: "full", template: "[company name], [seat]" }],
+          },
+        },
+      ],
+      resolve: hitResolver(KRS_HIT),
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.values["company.full"]).toBe(
+        "Żabka Polska sp. z o.o., Poznań",
+      );
+      // An unknown key was never declared, so no value is emitted for it; the
+      // {{company.unknown}} marker stays unmatched (the fill's diagnostic).
+      expect(result.values["company.unknown"]).toBeUndefined();
+    }
+  });
+
+  test("named-format values inherit the field's bold/italic markdown", async () => {
+    const result = await resolveLookupFields({
+      values: { company: "0000592109" },
+      fields: [
+        {
+          path: "company",
+          lookup: {
+            registry: "krs",
+            formats: [{ key: "full", template: "**[company name]**" }],
+          },
+        },
+      ],
+      resolve: hitResolver(KRS_HIT),
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.values["company.full"]).toEqual({
+        paragraphs: [
+          { runs: [{ text: "Żabka Polska sp. z o.o.", bold: true }] },
+        ],
+      });
+    }
+  });
+
   test("strips formatting markers when the field is Person + AI", async () => {
     // The aiAdapt pass rewrites plain string stubs only, so the rendered
     // output stays a string with the markers removed.
