@@ -205,6 +205,12 @@ const buildFieldXml = (field: FieldMeta): string => {
     if (v.pattern !== undefined) {
       vAttrs.push(`pattern="${escapeXml(v.pattern)}"`);
     }
+    if (v.minItems !== undefined) {
+      vAttrs.push(`minItems="${v.minItems}"`);
+    }
+    if (v.maxItems !== undefined) {
+      vAttrs.push(`maxItems="${v.maxItems}"`);
+    }
     if (vAttrs.length > 0) {
       children.push(`<st:validation ${vAttrs.join(" ")}/>`);
     }
@@ -388,6 +394,20 @@ const parseFieldMeta = (el: slimdom.Element): FieldMeta => {
     const pattern = validationEl.getAttribute("pattern");
     if (pattern !== null) {
       validation.pattern = pattern;
+    }
+    const minItems = validationEl.getAttribute("minItems");
+    if (minItems !== null) {
+      const parsed = Number.parseInt(minItems, 10);
+      if (Number.isFinite(parsed)) {
+        validation.minItems = parsed;
+      }
+    }
+    const maxItems = validationEl.getAttribute("maxItems");
+    if (maxItems !== null) {
+      const parsed = Number.parseInt(maxItems, 10);
+      if (Number.isFinite(parsed)) {
+        validation.maxItems = parsed;
+      }
     }
     if (Object.keys(validation).length > 0) {
       field.validation = validation;

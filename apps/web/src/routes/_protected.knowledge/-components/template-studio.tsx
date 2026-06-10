@@ -141,6 +141,7 @@ import {
   type EditableLookupFormat,
   type EditablePart,
   type EditableField,
+  type FieldValidation,
   FieldConfigEditor,
 } from "@/routes/_protected.knowledge/-components/template-wizard";
 import {
@@ -3236,6 +3237,10 @@ const Inspector = ({
     return <ClauseFace selected={selected} />;
   }
 
+  if (selected && selected.kind === "each") {
+    return <LoopFace key={selected.expr} selected={selected} />;
+  }
+
   // Default: whole-template overview. The identity block leads (what this
   // template IS), fields follow (they are what the template is made of);
   // conditions fold into a disclosure of supporting logic. Conditions ARE
@@ -3620,6 +3625,133 @@ const ConditionFace = ({
       </div>
     </ScrollArea>
   );
+};
+
+/**
+ * Settings face for a `{{#each <path>}}` loop opener. Loops have no value of
+ * their own; the only thing to configure is how many times they may repeat.
+ * The bounds live on the loop-container FieldMeta whose path equals the array
+ * path (`selected.expr`), which {@link LoopBoundsInputs} upserts.
+ */
+const LoopFace = ({ selected }: { selected: DirectiveRange }) => {
+  const t = useTranslations();
+  const actions = useTemplateStudioStore((s) => s.actions);
+  const arrayPath = selected.expr.trim();
+  return (
+    <ScrollArea className="min-h-0 flex-1">
+      <ScopeHeader
+        onBack={() => actions?.deselect()}
+        subtitle={<code className="text-xs">{arrayPath}</code>}
+        title={t("templates.studio.scopeLoop")}
+      />
+      <div className="flex flex-col gap-4 px-4 py-4">
+        <p className="text-muted-foreground text-xs leading-relaxed">
+          {t("templates.studio.loopBoundsHint")}
+        </p>
+        <LoopBoundsInputs containerPath={arrayPath} />
+      </div>
+    </ScrollArea>
+  );
+};
+
+/**
+ * The two repeat-bound inputs (minimum / maximum repeats) for an `{{#each}}`
+ * loop. Reads the bounds from the loop-container FieldMeta (path =
+ * {@link containerPath}) and writes them back via `upsertField`, creating the
+ * container record when absent. Shared by {@link LoopFace} and the
+ * repeatable-field section of {@link FieldFace} so a single-field loop's author
+ * sets bounds without hunting for the `{{#each}}` marker. An empty input unsets
+ * the bound; min is clamped to ≤ max (and max to ≥ min) so an impossible range
+ * cannot be saved.
+ */
+const LoopBoundsInputs = ({ containerPath }: { containerPath: string }) => {
+  const t = useTranslations();
+  const upsertField = useTemplateStudioStore((s) => s.upsertField);
+  const validation = useTemplateStudioStore(
+    (s) => s.fields.find((f) => f.path === containerPath)?.validation,
+  );
+  const minItems = validation?.minItems;
+  const maxItems = validation?.maxItems;
+
+  const writeBounds = (next: FieldValidation) => {
+    const bounds: FieldValidation = {};
+    if (next.minItems !== undefined) {
+      bounds.minItems = next.minItems;
+    }
+    if (next.maxItems !== undefined) {
+      bounds.maxItems = next.maxItems;
+    }
+    upsertField(containerPath, {
+      validation: Object.keys(bounds).length > 0 ? bounds : undefined,
+    });
+  };
+
+  const onMin = (raw: string) => {
+    const value = parseBoundInput(raw);
+    if (value === undefined) {
+      writeBounds({ maxItems });
+      return;
+    }
+    const max = maxItems !== undefined && value > maxItems ? value : maxItems;
+    writeBounds({ minItems: value, maxItems: max });
+  };
+
+  const onMax = (raw: string) => {
+    const value = parseBoundInput(raw);
+    if (value === undefined) {
+      writeBounds({ minItems });
+      return;
+    }
+    const min = minItems !== undefined && value < minItems ? value : minItems;
+    writeBounds({ minItems: min, maxItems: value });
+  };
+
+  return (
+    <div className="flex items-end gap-3">
+      <div className="flex flex-1 flex-col gap-1.5">
+        <Label className="text-sm" htmlFor="loop-min-repeats">
+          {t("templates.studio.minRepeats")}
+        </Label>
+        <Input
+          className="h-8"
+          id="loop-min-repeats"
+          inputMode="numeric"
+          min={0}
+          onChange={(e) => onMin(e.target.value)}
+          type="number"
+          value={minItems === undefined ? "" : String(minItems)}
+        />
+      </div>
+      <div className="flex flex-1 flex-col gap-1.5">
+        <Label className="text-sm" htmlFor="loop-max-repeats">
+          {t("templates.studio.maxRepeats")}
+        </Label>
+        <Input
+          className="h-8"
+          id="loop-max-repeats"
+          inputMode="numeric"
+          min={0}
+          onChange={(e) => onMax(e.target.value)}
+          type="number"
+          value={maxItems === undefined ? "" : String(maxItems)}
+        />
+      </div>
+    </div>
+  );
+};
+
+/** Parse a repeat-bound input: a non-negative integer, or undefined when the
+ *  input is empty/invalid (which unsets the bound). */
+const parseBoundInput = (raw: string): number | undefined => {
+  const trimmed = raw.trim();
+  if (trimmed === "") {
+    return undefined;
+  }
+  const parsed = Number.parseInt(trimmed, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return undefined;
+  }
+  return parsed;
 };
 
 /** Edit a boolean condition-field's SOURCE — how its yes/no value arises —
@@ -4392,8 +4524,14 @@ const FieldNavigator = ({
   // suggested but not placed. Tucked under a disclosure so the main list
   // shows only what is actually in the document.
   const placed = outlineFieldPaths(outline);
+  // A loop-container record (carries `{{#each}}` repeat bounds, no marker of
+  // its own) is loop config, not a fillable field, so it never shows in the
+  // unplaced list even though its bare path is not "placed".
   const unplaced = fields.filter(
-    (f) => !placed.has(f.path) && f.inputType !== "boolean",
+    (f) =>
+      !placed.has(f.path) &&
+      f.inputType !== "boolean" &&
+      !fieldHasLoopBounds(f),
   );
   return (
     <div className="px-4 py-3">
@@ -4995,6 +5133,12 @@ const FieldFace = ({
   );
 
   const repeat = fieldRepeatState(field, outline);
+  // The loop-container path that carries this loop's repeat bounds: the
+  // enclosing `{{#each <path>}}` group's array path (which equals `<base>` for
+  // a single-field repeatable, where the item field is `<base>.value`).
+  const enclosingEach = findEnclosingEachGroup(outline, field.path, null);
+  const loopContainerPath =
+    enclosingEach === null ? null : enclosingEach.expr.trim() || null;
   const condition = fieldConditionState(field, outline);
   const fieldIsPlaced = outlineFieldPaths(outline).has(field.path);
   const toggleRepeatable = (next: boolean) => {
@@ -5248,6 +5392,9 @@ const FieldFace = ({
                 onCheckedChange={(checked) => toggleRepeatable(checked)}
               />
             </div>
+          )}
+          {repeat.kind === "on" && loopContainerPath !== null && (
+            <LoopBoundsInputs containerPath={loopContainerPath} />
           )}
         </div>
         {fieldIsPlaced ? (
@@ -5651,6 +5798,39 @@ const slugify = (text: string): string => {
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null;
 
+/** Read a non-negative integer attribute, or undefined when absent/invalid. */
+const parseBound = (value: unknown): number | undefined => {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    return undefined;
+  }
+  return Math.floor(value);
+};
+
+/** Parse just the loop repeat bounds the studio surfaces from a persisted
+ *  `validation` record; returns undefined when neither bound is set. */
+const parseLoopBounds = (raw: unknown): FieldValidation | undefined => {
+  if (!isRecord(raw)) {
+    return undefined;
+  }
+  const minItems = parseBound(raw["minItems"]);
+  const maxItems = parseBound(raw["maxItems"]);
+  if (minItems === undefined && maxItems === undefined) {
+    return undefined;
+  }
+  const bounds: FieldValidation = {};
+  if (minItems !== undefined) {
+    bounds.minItems = minItems;
+  }
+  if (maxItems !== undefined) {
+    bounds.maxItems = maxItems;
+  }
+  return bounds;
+};
+
+const fieldHasLoopBounds = (field: StudioField): boolean =>
+  field.validation?.minItems !== undefined ||
+  field.validation?.maxItems !== undefined;
+
 const parseFields = (manifest: unknown): StudioField[] => {
   if (!isRecord(manifest) || !Array.isArray(manifest["fields"])) {
     return [];
@@ -5710,15 +5890,24 @@ const parseFields = (manifest: unknown): StudioField[] => {
           field.dateFormat = { locale: rawDateFormat["locale"], style };
         }
       }
+      const validation = parseLoopBounds(raw["validation"]);
+      if (validation !== undefined) {
+        field.validation = validation;
+      }
       return field;
     });
 
   // Mirror the server merge: namespace parents (a path that is only a dotted
   // prefix of others) are not fillable inputs. This keeps the display clean
-  // for templates saved before the server fix landed.
+  // for templates saved before the server fix landed. A loop-container field
+  // (carries `validation.minItems`/`maxItems`) is exempt: it is the bounds
+  // record for an `{{#each <path>}}` and its only "child" is the loop body,
+  // so it must survive to round-trip the repeat bounds.
   const paths = fields.map((f) => f.path);
   return fields.filter(
-    (f) => !paths.some((p) => p !== f.path && p.startsWith(`${f.path}.`)),
+    (f) =>
+      fieldHasLoopBounds(f) ||
+      !paths.some((p) => p !== f.path && p.startsWith(`${f.path}.`)),
   );
 };
 
@@ -5769,6 +5958,7 @@ type ManifestField = {
   condition?: string;
   hint?: string;
   dateFormat?: EditableField["dateFormat"];
+  validation?: FieldValidation;
 };
 
 /** One session field as it is persisted: only the settings that are
@@ -5790,6 +5980,12 @@ const studioFieldToManifestField = (f: StudioField): ManifestField => {
   }
   if (f.dateFormat !== undefined && f.inputType === "date") {
     field.dateFormat = f.dateFormat;
+  }
+  // Loop repeat bounds ride on the array-container FieldMeta; emit them before
+  // the value-source early returns so a bounds-only container record (no
+  // marker of its own) still persists.
+  if (fieldHasLoopBounds(f) && f.validation !== undefined) {
+    field.validation = f.validation;
   }
   // A formula is one of the mutually exclusive value sources; the manifest
   // validator rejects it next to aiPrompt/aiAdapt/lookup/parts, and a
@@ -5912,12 +6108,15 @@ const buildRecipeDefinition = (
   const recipeFields = paths.map((path) => {
     const field =
       fields.find((f) => f.path === path) ?? defaultStudioField(path);
-    // The recipe schema is a strict FieldMeta subset without formula; strip
-    // it so saving a recipe from a formula field passes boundary validation
-    // (the snapshot keeps the field's label and type, the formula stays
-    // template-local).
-    const { formula: _formula, ...recipeField } =
-      studioFieldToManifestField(field);
+    // The recipe schema is a strict FieldMeta subset without formula or
+    // validation; strip both so saving a recipe passes boundary validation
+    // (the snapshot keeps the field's label and type; the formula and loop
+    // repeat bounds stay template-local).
+    const {
+      formula: _formula,
+      validation: _validation,
+      ...recipeField
+    } = studioFieldToManifestField(field);
     return recipeField;
   });
   if (loopPath === null) {

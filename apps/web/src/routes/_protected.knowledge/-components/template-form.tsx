@@ -118,7 +118,8 @@ type ValidationError =
   | { kind: "numberMax"; max: number }
   | { kind: "pattern" }
   | { kind: "optionNotInSource"; source: string }
-  | { kind: "lookupNumber" };
+  | { kind: "lookupNumber" }
+  | { kind: "minItems"; min: number };
 
 /** Validate a composite field's part values. */
 const validateCompositeField = (
@@ -923,8 +924,13 @@ const ArrayFieldRenderer = ({
   const itemFields: ResolvedField[] = field.itemFields ?? [];
   const arrayKey = arrayIndexKey(field.path);
   const items = readArrayIndices(values, arrayKey);
+  const maxItems = field.validation?.maxItems;
+  const atMax = maxItems !== undefined && items.length >= maxItems;
 
   const addItem = () => {
+    if (atMax) {
+      return;
+    }
     const nextIndex = items.length;
     const newItems = [...items, nextIndex];
     onChange(arrayKey, newItems);
@@ -978,11 +984,26 @@ const ArrayFieldRenderer = ({
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium">{label}</span>
-        <Button onClick={addItem} size="sm" variant="outline">
-          <PlusIcon />
-          {t("templates.addItem")}
-        </Button>
+        <div className="flex items-center gap-2">
+          {maxItems !== undefined && (
+            <span className="text-muted-foreground text-xs">
+              {t("templates.upToNItems", { max: String(maxItems) })}
+            </span>
+          )}
+          <Button
+            disabled={atMax}
+            onClick={addItem}
+            size="sm"
+            variant="outline"
+          >
+            <PlusIcon />
+            {t("templates.addItem")}
+          </Button>
+        </div>
       </div>
+      <FieldError
+        message={touched[field.path] ? errors[field.path] : undefined}
+      />
 
       {items.map((_, index) => (
         <div
@@ -1470,6 +1491,10 @@ export const TemplateForm = ({
           });
         case "lookupNumber":
           return t("templates.validationKrsFormat");
+        case "minItems":
+          return t("templates.validationMinItems", {
+            min: String(err.min),
+          });
         default:
           return undefined;
       }
@@ -1690,6 +1715,32 @@ export const TemplateForm = ({
         );
         nextErrors[path] = msg;
         if (msg) {
+          valid = false;
+        }
+      }
+
+      // Loop minimum-repeats: an array below its minItems blocks submit. The
+      // maxItems cap is enforced live by disabling "Add item", so only the
+      // lower bound needs a submit-time check. Keyed on the container path so
+      // the ArrayFieldRenderer surfaces it.
+      for (const field of fields) {
+        if (field.kind !== "array") {
+          continue;
+        }
+        if (!isFieldVisible(field, currentValues, conditions)) {
+          continue;
+        }
+        const min = field.validation?.minItems;
+        if (min === undefined || min <= 0) {
+          continue;
+        }
+        const count = readArrayIndices(
+          currentValues,
+          arrayIndexKey(field.path),
+        ).length;
+        if (count < min) {
+          nextTouched[field.path] = true;
+          nextErrors[field.path] = resolveError({ kind: "minItems", min });
           valid = false;
         }
       }

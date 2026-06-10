@@ -14,6 +14,7 @@
  * passed.
  */
 
+import { checkArrayBounds } from "./array-bounds";
 import { applyCompositeFields } from "./composite-fields";
 import { applyDateFields } from "./date-fields";
 import { checkDependentFields } from "./dependent-fields";
@@ -47,6 +48,11 @@ export const applyManifestFillSteps = async ({
   const dependentError = checkDependentFields(values, manifest);
   if (dependentError !== null) {
     return dependentError;
+  }
+
+  const arrayBoundsError = checkArrayBounds(values, manifest);
+  if (arrayBoundsError !== null) {
+    return arrayBoundsError;
   }
 
   return applyDateFields(values, manifest);

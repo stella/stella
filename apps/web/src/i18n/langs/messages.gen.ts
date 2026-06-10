@@ -2196,7 +2196,10 @@ type Messages = {
       "insertOutput": "Insert in document";
       "invalidExpression": "That expression is invalid";
       "loop": "Loop";
+      "loopBoundsHint": "Set how many times this block may repeat when the template is filled.";
       "makeField": "Make field";
+      "maxRepeats": "Maximum repeats";
+      "minRepeats": "Minimum repeats";
       "mirrorBlockAction": "Mirror";
       "mirrorBlockOffer": "Wrap the matching lines in the parallel cell too?";
       "mirrorFieldRationale": "Use the same field for the matching phrase in the parallel column.";
@@ -2223,6 +2226,7 @@ type Messages = {
       "scopeClause": "Clause slot";
       "scopeCondition": "Condition";
       "scopeField": "Field";
+      "scopeLoop": "Loop";
       "scopeTemplate": "Template";
       "showOnlyIf": "Show only if…";
       "showOnlyIfHelp": "Make this field appear in the document only when a condition holds.";
@@ -2242,6 +2246,7 @@ type Messages = {
     "unsavedLeaveConfirm": "You have unsaved changes. Leave without saving?";
     "unusedFields": "{count, plural, one {# unused field} other {# unused fields}}";
     "unusedValues": "Some values were not used: {list}";
+    "upToNItems": "Up to {max}";
     "updatedAgo": "Updated {time}";
     "uploadDescription": "Upload a .docx file with '{{placeholders}}' to create a template";
     "uploadDifferent": "Upload a different template";
@@ -2253,6 +2258,7 @@ type Messages = {
     "validationErrors": "Please fix the highlighted errors";
     "validationKrsFormat": "Enter a 10-digit KRS number";
     "validationMaxLength": "Maximum {max} characters";
+    "validationMinItems": "Add at least {min, plural, one {# item} other {# items}}";
     "validationMinLength": "Minimum {min} characters";
     "validationNumberMax": "Maximum value is {max}";
     "validationNumberMin": "Minimum value is {min}";
