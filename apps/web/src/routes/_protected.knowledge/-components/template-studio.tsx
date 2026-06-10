@@ -575,6 +575,14 @@ export const TemplateStudioPage = ({
   const insertInline = (text: string) =>
     withEditorView((view) => {
       const { from, to } = view.state.selection;
+      // Inserting inside an existing {{marker}} would nest markers and break
+      // the grammar; refuse silently (the caret visibly sits in a marker).
+      const intersects = getTemplateDirectives(view.state).some(
+        (range) => from <= range.to && to >= range.from,
+      );
+      if (intersects) {
+        return;
+      }
       view.dispatch(view.state.tr.insertText(text, from, to).scrollIntoView());
       view.focus();
       markDirty();
@@ -2032,9 +2040,7 @@ const pushFillPreview = (values: Record<string, unknown>) => {
 const StudioInsertRow = () => {
   const t = useTranslations();
   const actions = useTemplateStudioStore((s) => s.actions);
-  const ui = useTemplateStudioStore((s) => s.ui);
   const fields = useTemplateStudioStore((s) => s.fields);
-  const isDirty = useTemplateStudioStore((s) => s.isDirty);
   const sessionTemplateId = useTemplateStudioStore((s) => s.templateId);
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
@@ -2172,14 +2178,6 @@ const StudioInsertRow = () => {
           </MenuSub>
         </MenuPopup>
       </Menu>
-      <Button
-        disabled={!isDirty || ui.isSaving}
-        onClick={actions.save}
-        size="sm"
-      >
-        <SaveIcon />
-        {t("common.save")}
-      </Button>
     </div>
   );
 };
