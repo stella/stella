@@ -2054,6 +2054,7 @@
     "fillForm": "Vyplniť šablónu",
     "generate": "Vygenerovať dokument",
     "generating": "Generovanie...",
+    "goBackToEditing": "Späť k úpravám",
     "inputTypes": {
       "boolean": "Áno / Nie",
       "company": "ID spoločnosti",
@@ -2096,6 +2097,7 @@
     "registryLookup": "Vyhľadať",
     "registryNotFound": "Pre toto IČO sa nenašla žiadna spoločnosť",
     "renameFailed": "Premenovanie šablóny sa nepodarilo",
+    "saveAndLeave": "Uložiť a odísť",
     "saveFailed": "Nepodarilo sa uložiť šablónu",
     "searchTemplates": "Hľadať šablóny…",
     "structureWarnings": "{count, plural, one {# varovanie štruktúry} few {# varovania štruktúry} other {# varovaní štruktúry}}",

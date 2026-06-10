@@ -2104,6 +2104,7 @@ type Messages = {
     "fillForm": "Fill template";
     "generate": "Generate document";
     "generating": "Generating...";
+    "goBackToEditing": "Go back to editing";
     "inputTypes": {
       "boolean": "Yes / No";
       "company": "Company ID";
@@ -2146,6 +2147,7 @@ type Messages = {
     "registryLookup": "Look up";
     "registryNotFound": "No company found for that ID";
     "renameFailed": "Failed to rename template";
+    "saveAndLeave": "Save and leave";
     "saveFailed": "Failed to save template";
     "searchTemplates": "Search templates…";
     "structureWarnings": "{count, plural, one {# structure warning} other {# structure warnings}}";
