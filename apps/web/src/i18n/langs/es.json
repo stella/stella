@@ -2179,6 +2179,7 @@
       "conditionsSectionHelp": "Selecciona texto en el documento → clic derecho → Mostrar solo si…",
       "draftedByAi": "IA",
       "emptyClauseSlot": "Hueco de cláusula vacío",
+      "existingCondition": "Existing condition…",
       "existingField": "Campo existente…",
       "expressionPlaceholder": "expresión",
       "fieldHelp": "Cuando alguien rellene esta plantilla, se le pedirá este valor. Aquí decides cómo se verá esa pregunta.",
@@ -2223,7 +2224,6 @@
       "showOnlyIf": "Mostrar solo si…",
       "showOnlyIfHelp": "Haz que este campo aparezca en el documento solo cuando se cumpla una condición.",
       "showOnlyWhen": "Este campo se muestra solo cuando:",
-      "suggestConfig": "Sugerir configuración",
       "textPlusAi": "Persona + IA",
       "useExisting": "Usar el campo existente {name}",
       "whoFills": "¿Quién lo rellena?"

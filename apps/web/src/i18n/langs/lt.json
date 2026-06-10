@@ -2179,6 +2179,7 @@
       "conditionsSectionHelp": "Pažymėkite tekstą dokumente → dešinysis spustelėjimas → Rodyti tik jei…",
       "draftedByAi": "DI",
       "emptyClauseSlot": "Tuščias sąlygos laukelis",
+      "existingCondition": "Existing condition…",
       "existingField": "Esamas laukas…",
       "expressionPlaceholder": "išraiška",
       "fieldHelp": "Kai kas nors pildys šį šabloną, jo bus paprašyta šios reikšmės. Čia nusprendžiate, kaip atrodys tas klausimas.",
@@ -2223,7 +2224,6 @@
       "showOnlyIf": "Rodyti tik jei…",
       "showOnlyIfHelp": "Šis laukas dokumente rodomas tik tada, kai galioja sąlyga.",
       "showOnlyWhen": "Šis laukas rodomas tik tada, kai:",
-      "suggestConfig": "Pasiūlyti konfigūraciją",
       "textPlusAi": "Asmuo + DI",
       "useExisting": "Naudoti esamą lauką {name}",
       "whoFills": "Kas tai užpildys?"

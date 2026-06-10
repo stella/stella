@@ -2179,6 +2179,7 @@
       "conditionsSectionHelp": "Atlasiet tekstu dokumentā → labais klikšķis → Rādīt tikai tad, ja…",
       "draftedByAi": "MI",
       "emptyClauseSlot": "Tukšs klauzulas slots",
+      "existingCondition": "Existing condition…",
       "existingField": "Esošs lauks…",
       "expressionPlaceholder": "izteiksme",
       "fieldHelp": "Kad kāds aizpildīs šo veidni, viņam tiks prasīta šī vērtība. Šeit jūs nosakāt, kā šis jautājums izskatīsies.",
@@ -2223,7 +2224,6 @@
       "showOnlyIf": "Rādīt tikai tad, ja…",
       "showOnlyIfHelp": "Šis lauks dokumentā parādās tikai tad, kad ir izpildīts nosacījums.",
       "showOnlyWhen": "Šis lauks parādās tikai tad, kad:",
-      "suggestConfig": "Ieteikt konfigurāciju",
       "textPlusAi": "Persona + MI",
       "useExisting": "Izmantot esošo lauku {name}",
       "whoFills": "Kas to aizpildīs?"

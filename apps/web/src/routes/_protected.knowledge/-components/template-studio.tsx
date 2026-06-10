@@ -384,8 +384,6 @@ export const TemplateStudioPage = ({
         actionsRef.current?.insertClauseSlot(slotName),
       makeField: () => actionsRef.current?.makeField(),
       save: () => actionsRef.current?.save(),
-      suggestFieldConfig: async (path) =>
-        (await actionsRef.current?.suggestFieldConfig(path)) ?? null,
       renameFieldPath: (oldPath, newPath) =>
         actionsRef.current?.renameFieldPath(oldPath, newPath) ?? false,
       rewriteConditionExpr: (next) =>
@@ -1105,6 +1103,23 @@ export const TemplateStudioPage = ({
     insertExistingFieldAt(path, {
       range: { from: shown.from, to: shown.to },
     });
+    dismissGesture();
+  };
+
+  /** Wrap the captured selection in an existing condition (reuse), referencing
+   *  it by name so the gate shares the condition-field's single source. */
+  const applyExistingConditionGesture = (conditionName: string) => {
+    const shown = gestureRef.current;
+    if (shown === null) {
+      return;
+    }
+    insertOrWrapBlock(
+      `{{#if ${conditionName}}}`,
+      "{{/if}}",
+      conditionName,
+      { from: shown.from, to: shown.to },
+      true,
+    );
     dismissGesture();
   };
 
@@ -1829,38 +1844,6 @@ export const TemplateStudioPage = ({
       }
       setSelected(null);
     },
-    suggestFieldConfig: async (path) => {
-      const view = editorViewRef.current;
-      if (!view) {
-        return null;
-      }
-      const text = buildPositionalText(view.state.doc).text;
-      const response = await api.templates["suggest-fields"].post({
-        text: paragraphsAround(text, `{{${path}}}`),
-        instructions:
-          `Configure the existing field {{${path}}}: propose its label, ` +
-          `input type and a realistic exampleValue based on how it is used ` +
-          `in the document. Return that field first.`,
-      });
-      if (response.error) {
-        return null;
-      }
-      const match =
-        response.data.suggestions.find((s) => s.fieldPath === path) ??
-        response.data.suggestions.at(0);
-      if (!match) {
-        return null;
-      }
-      return {
-        label: match.label,
-        inputType:
-          match.inputType !== undefined && isInputType(match.inputType)
-            ? match.inputType
-            : undefined,
-        aiPrompt: match.aiPrompt,
-        exampleValue: match.exampleValue,
-      };
-    },
   };
 
   if (isError) {
@@ -1938,6 +1921,7 @@ export const TemplateStudioPage = ({
             onMakeField={() => applyGesture("field")}
             onWrapEach={() => applyGesture("each")}
             onWrapIf={() => applyGesture("if")}
+            onWrapIfExisting={applyExistingConditionGesture}
           />
         )}
         <TemplateStudioChat
@@ -1960,24 +1944,9 @@ export const TemplateStudioPage = ({
 // inspector. The page (above) owns the document + actions and seeds the shared
 // session store this view reads from. `close-on-route-leave` is a backstop; the
 // page also closes the tab on unmount.
-/** The paragraph containing the marker plus one paragraph on each side:
- *  enough context for the model to read how the field is used at the spot
- *  where it was created, without sending the whole document. */
-const paragraphsAround = (text: string, marker: string): string => {
-  const lines = text.split("\n");
-  const index = lines.findIndex((line) => line.includes(marker));
-  if (index === -1) {
-    return text;
-  }
-  return lines
-    .slice(Math.max(0, index - 1), index + 2)
-    .filter((line) => line.trim() !== "")
-    .join("\n");
-};
-
 /** The selection's containing paragraph plus one paragraph on each side —
- *  the same context window `paragraphsAround` sends for an existing marker,
- *  read from the live doc because the field marker does not exist yet. */
+ *  enough context for the model to read how a new field is used, read from
+ *  the live doc because the field marker does not exist yet. */
 const paragraphsAroundSelection = (
   state: EditorState,
   from: number,
@@ -2018,6 +1987,7 @@ const SelectionGesturePopover = ({
   onInsertExisting,
   onAcceptAi,
   onWrapIf,
+  onWrapIfExisting,
   onWrapEach,
   onMakeClause,
 }: {
@@ -2027,6 +1997,7 @@ const SelectionGesturePopover = ({
   onInsertExisting: (path: string) => void;
   onAcceptAi: () => void;
   onWrapIf: () => void;
+  onWrapIfExisting: (name: string) => void;
   onWrapEach: () => void;
   onMakeClause: () => void;
 }) => {
@@ -2046,32 +2017,33 @@ const SelectionGesturePopover = ({
             : `translate(-50%, ${GESTURE_POPOVER_OFFSET_PX}px)`,
       }}
     >
-      <Button
-        className="justify-start gap-2 font-normal"
-        onClick={onMakeField}
-        onMouseDown={keepEditorFocus}
-        size="sm"
-        variant="ghost"
-      >
-        <BracesIcon className="text-muted-foreground size-3.5 shrink-0" />
-        {t("templates.studio.makeField")}
-      </Button>
-      {fields.length > 0 && (
-        <GestureExistingFieldRow
-          fields={fields}
-          onInsertExisting={onInsertExisting}
-        />
-      )}
-      <Button
-        className="justify-start gap-2 font-normal"
-        onClick={onWrapIf}
-        onMouseDown={keepEditorFocus}
-        size="sm"
-        variant="ghost"
-      >
-        <SplitIcon className="text-muted-foreground size-3.5 shrink-0" />
-        {t("templates.studio.showOnlyIf")}
-      </Button>
+      <GestureSplitRow
+        existing={fields.map((field) => ({
+          key: field.path,
+          icon: VALUE_TYPE_META[inputTypeValueKind(field.inputType)].icon,
+          label: field.label === "" ? field.path : field.label,
+          sublabel: field.label === "" ? undefined : field.path,
+          onSelect: () => onInsertExisting(field.path),
+        }))}
+        icon={BracesIcon}
+        label={t("templates.studio.makeField")}
+        onDefault={onMakeField}
+        reuseLabel={t("templates.studio.existingField")}
+      />
+      <GestureSplitRow
+        existing={reusableConditions(fields, (key) => t(key)).map(
+          (condition) => ({
+            key: condition.ref,
+            icon: SplitIcon,
+            label: condition.label,
+            onSelect: () => onWrapIfExisting(condition.ref),
+          }),
+        )}
+        icon={SplitIcon}
+        label={t("templates.studio.showOnlyIf")}
+        onDefault={onWrapIf}
+        reuseLabel={t("templates.studio.existingCondition")}
+      />
       <Button
         className="justify-start gap-2 font-normal"
         onClick={onWrapEach}
@@ -2106,59 +2078,86 @@ const SelectionGesturePopover = ({
   );
 };
 
-/** "Existing field…" row: expands to an inline list of the template's
- *  fields; choosing one places that field's marker over the selection. */
-const GestureExistingFieldRow = ({
-  fields,
-  onInsertExisting,
+/** One reusable item in a {@link GestureSplitRow}'s expand list. */
+type GestureExistingOption = {
+  key: string;
+  icon: LucideIcon;
+  label: string;
+  /** Secondary muted text (e.g. a field's path), shown right-aligned. */
+  sublabel?: string | undefined;
+  onSelect: () => void;
+};
+
+/** A gesture-menu row whose primary click creates something new (the sensible
+ *  default); a trailing chevron expands an inline list of existing items to
+ *  reuse instead, so reuse is exactly one extra click. Used for both fields
+ *  ("Make field" + existing fields) and conditions ("Show only if" + existing
+ *  conditions), keeping the two symmetric. */
+const GestureSplitRow = ({
+  icon: Icon,
+  label,
+  reuseLabel,
+  onDefault,
+  existing,
 }: {
-  fields: StudioField[];
-  onInsertExisting: (path: string) => void;
+  icon: LucideIcon;
+  label: string;
+  reuseLabel: string;
+  onDefault: () => void;
+  existing: GestureExistingOption[];
 }) => {
-  const t = useTranslations();
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button
-        aria-expanded={open}
-        className="justify-start gap-2 font-normal"
-        onClick={() => setOpen((v) => !v)}
-        onMouseDown={keepEditorFocus}
-        size="sm"
-        variant="ghost"
-      >
-        <PlusIcon className="text-muted-foreground size-3.5 shrink-0" />
-        <span className="min-w-0 truncate">
-          {t("templates.studio.existingField")}
-        </span>
-        {open ? (
-          <ChevronDownIcon className="text-muted-foreground ms-auto size-3.5 shrink-0" />
-        ) : (
-          <ChevronRightIcon className="text-muted-foreground ms-auto size-3.5 shrink-0" />
+      <div className="flex items-center gap-0.5">
+        <Button
+          className="flex-1 justify-start gap-2 font-normal"
+          onClick={onDefault}
+          onMouseDown={keepEditorFocus}
+          size="sm"
+          variant="ghost"
+        >
+          <Icon className="text-muted-foreground size-3.5 shrink-0" />
+          {label}
+        </Button>
+        {existing.length > 0 && (
+          <Button
+            aria-expanded={open}
+            aria-label={reuseLabel}
+            className="shrink-0"
+            onClick={() => setOpen((v) => !v)}
+            onMouseDown={keepEditorFocus}
+            size="icon-sm"
+            title={reuseLabel}
+            variant="ghost"
+          >
+            {open ? (
+              <ChevronDownIcon className="text-muted-foreground size-3.5 shrink-0" />
+            ) : (
+              <ChevronRightIcon className="text-muted-foreground size-3.5 shrink-0" />
+            )}
+          </Button>
         )}
-      </Button>
+      </div>
       {open && (
         <div className="flex max-h-44 flex-col overflow-y-auto">
-          {fields.map((field) => {
-            const Icon =
-              VALUE_TYPE_META[inputTypeValueKind(field.inputType)].icon;
+          {existing.map((option) => {
+            const OptionIcon = option.icon;
             return (
               <Button
                 className="justify-start gap-2 ps-7 font-normal"
-                key={field.path}
-                onClick={() => onInsertExisting(field.path)}
+                key={option.key}
+                onClick={option.onSelect}
                 onMouseDown={keepEditorFocus}
                 size="sm"
-                title={field.path}
+                title={option.sublabel ?? option.label}
                 variant="ghost"
               >
-                <Icon className="text-muted-foreground size-3.5 shrink-0" />
-                <span className="min-w-0 truncate">
-                  {field.label === "" ? field.path : field.label}
-                </span>
-                {field.label === "" ? null : (
+                <OptionIcon className="text-muted-foreground size-3.5 shrink-0" />
+                <span className="min-w-0 truncate">{option.label}</span>
+                {option.sublabel === undefined ? null : (
                   <code className="text-muted-foreground ms-auto min-w-0 truncate text-[10px]">
-                    {field.path}
+                    {option.sublabel}
                   </code>
                 )}
               </Button>
@@ -4964,7 +4963,6 @@ const FieldFace = ({
   const fields = useTemplateStudioStore((s) => s.fields);
   const fieldCount = fields.length;
   const outline = useTemplateStudioStore((s) => s.outline);
-  const [suggesting, setSuggesting] = useState(false);
 
   // `@`-mention source for the AI-instruction inputs: every other field's
   // path/label, so an author can reference a sibling field. The mention node
@@ -4979,9 +4977,6 @@ const FieldFace = ({
     [fields, field.path],
   );
   const [recipeDialogOpen, setRecipeDialogOpen] = useState(false);
-  const [exampleValue, setExampleValue] = useState<string | undefined>(
-    undefined,
-  );
   const [previewValue, setPreviewValue] = useState("");
 
   const pushPreview = (value: string) => {
@@ -4998,33 +4993,6 @@ const FieldFace = ({
     },
     [field.path],
   );
-
-  const handleSuggest = async () => {
-    if (!actions) {
-      return;
-    }
-    setSuggesting(true);
-    const config = await actions.suggestFieldConfig(field.path);
-    setSuggesting(false);
-    if (!config) {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.studio.aiNoFields"),
-      });
-      return;
-    }
-    onUpdate({
-      ...(config.label !== undefined ? { label: config.label } : {}),
-      ...(config.inputType !== undefined
-        ? { inputType: config.inputType }
-        : {}),
-      ...(config.aiPrompt !== undefined ? { aiPrompt: config.aiPrompt } : {}),
-    });
-    setExampleValue(config.exampleValue);
-    if (config.exampleValue !== undefined && previewValue === "") {
-      pushPreview(config.exampleValue);
-    }
-  };
 
   const repeat = fieldRepeatState(field, outline);
   const condition = fieldConditionState(field, outline);
@@ -5079,20 +5047,6 @@ const FieldFace = ({
                 variant="ghost"
               >
                 <Trash2Icon className="text-muted-foreground" />
-              </Button>
-              <Button
-                aria-label={t("templates.studio.suggestConfig")}
-                disabled={suggesting}
-                onClick={() => void handleSuggest()}
-                size="icon-sm"
-                title={t("templates.studio.suggestConfig")}
-                variant="ghost"
-              >
-                {suggesting ? (
-                  <Loader2Icon className="animate-spin" />
-                ) : (
-                  <WandSparklesIcon />
-                )}
               </Button>
               <Button
                 aria-label={t("templates.studio.saveAsRecipe")}
@@ -5306,7 +5260,6 @@ const FieldFace = ({
       </ScrollArea>
       {valueSource === "ai" ? null : (
         <FieldPreview
-          exampleValue={exampleValue}
           field={field}
           onValueChange={pushPreview}
           value={previewValue}
@@ -5498,46 +5451,56 @@ const FieldPathEditor = ({
  *  on, plain when it's off). */
 const FieldPreview = ({
   field,
-  exampleValue,
   value,
   onValueChange,
 }: {
   field: StudioField;
-  exampleValue: string | undefined;
   value: string;
   onValueChange: (value: string) => void;
 }) => {
   const t = useTranslations();
+  const [open, setOpen] = useState(false);
   const label = field.label || field.path;
   return (
-    <div className="flex shrink-0 flex-col gap-2 border-t px-4 py-4">
-      <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+    <div className="flex shrink-0 flex-col border-t">
+      <button
+        aria-expanded={open}
+        className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 px-4 py-3 text-[11px] font-medium tracking-wide uppercase transition-colors"
+        onClick={() => setOpen((prev) => !prev)}
+        type="button"
+      >
+        {open ? (
+          <ChevronDownIcon className="size-3.5 shrink-0" />
+        ) : (
+          <ChevronRightIcon className="size-3.5 shrink-0" />
+        )}
         {t("templates.studio.fillFormPreview")}
-      </p>
-      <div className="bg-muted/30 flex flex-col gap-1.5 rounded-md border p-3">
-        <Label className="text-xs">
-          {label}
-          {field.required ? " *" : ""}
-        </Label>
-        <FieldPreviewControl
-          exampleValue={exampleValue}
-          field={field}
-          onValueChange={onValueChange}
-          value={value}
-        />
-      </div>
+      </button>
+      {open ? (
+        <div className="px-4 pb-4">
+          <div className="bg-muted/30 flex flex-col gap-1.5 rounded-md border p-3">
+            <Label className="text-xs">
+              {label}
+              {field.required ? " *" : ""}
+            </Label>
+            <FieldPreviewControl
+              field={field}
+              onValueChange={onValueChange}
+              value={value}
+            />
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };
 
 const FieldPreviewControl = ({
   field,
-  exampleValue,
   value,
   onValueChange,
 }: {
   field: StudioField;
-  exampleValue: string | undefined;
   value: string;
   onValueChange: (value: string) => void;
 }) => {
@@ -5554,7 +5517,7 @@ const FieldPreviewControl = ({
     return (
       <Textarea
         onChange={(e) => onValueChange(e.target.value)}
-        placeholder={field.hint ?? exampleValue}
+        placeholder={field.hint}
         rows={3}
         value={value}
       />
@@ -5567,7 +5530,7 @@ const FieldPreviewControl = ({
     return (
       <Input
         onChange={(e) => onValueChange(e.target.value)}
-        placeholder={field.hint ?? (field.options.join(" / ") || exampleValue)}
+        placeholder={field.hint ?? (field.options.join(" / ") || undefined)}
         value={value}
       />
     );
@@ -5576,7 +5539,7 @@ const FieldPreviewControl = ({
     return (
       <Input
         onChange={(e) => onValueChange(e.target.value)}
-        placeholder={field.hint ?? exampleValue ?? "2026-01-31"}
+        placeholder={field.hint ?? "2026-01-31"}
         value={value}
       />
     );
@@ -5584,7 +5547,7 @@ const FieldPreviewControl = ({
   return (
     <Input
       onChange={(e) => onValueChange(e.target.value)}
-      placeholder={field.hint ?? exampleValue}
+      placeholder={field.hint}
       value={value}
     />
   );
