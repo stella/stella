@@ -859,7 +859,7 @@ export const TemplateStudioPage = ({
 
   // Each button acts on the selection captured when the popover anchored, so
   // a click can never target a drifted live selection.
-  const applyGesture = (kind: "field" | "if" | "each") => {
+  const applyGesture = (kind: "field" | "if" | "each" | "clause") => {
     const shown = gestureRef.current;
     if (shown === null) {
       return;
@@ -880,6 +880,19 @@ export const TemplateStudioPage = ({
             : {}),
         });
       }
+    } else if (kind === "clause") {
+      withEditorView((view) => {
+        const name = slugify(
+          view.state.doc.textBetween(range.from, range.to, " "),
+        );
+        view.dispatch(
+          view.state.tr
+            .insertText(`{{@clause:${name}}}`, range.from, range.to)
+            .scrollIntoView(),
+        );
+        view.focus();
+        markDirty();
+      });
     } else if (kind === "if") {
       wrapBlockWithMirrorOffer("if", range);
     } else {
@@ -1317,6 +1330,7 @@ export const TemplateStudioPage = ({
           <SelectionGesturePopover
             enrichment={enrichment}
             gesture={gesture}
+            onMakeClause={() => applyGesture("clause")}
             onMakeField={() => applyGesture("field")}
             onWrapEach={() => applyGesture("each")}
             onWrapIf={() => applyGesture("if")}
@@ -1397,12 +1411,14 @@ const SelectionGesturePopover = ({
   onMakeField,
   onWrapIf,
   onWrapEach,
+  onMakeClause,
 }: {
   gesture: SelectionGesture;
   enrichment: GestureEnrichment;
   onMakeField: () => void;
   onWrapIf: () => void;
   onWrapEach: () => void;
+  onMakeClause: () => void;
 }) => {
   const t = useTranslations();
   return (
@@ -1439,6 +1455,18 @@ const SelectionGesturePopover = ({
       >
         <RepeatIcon className="text-muted-foreground size-3.5 shrink-0" />
         {t("templates.studio.repeatForEach")}
+      </Button>
+      <Button
+        className="justify-start gap-2 font-normal"
+        onClick={onMakeClause}
+        onMouseDown={keepEditorFocus}
+        size="sm"
+        variant="ghost"
+      >
+        <span className="text-muted-foreground w-3.5 shrink-0 text-center text-xs font-semibold">
+          {"\u00a7"}
+        </span>
+        {t("templates.studio.scopeClause")}
       </Button>
     </div>
   );
@@ -3301,7 +3329,13 @@ const slugify = (text: string): string => {
     .trim()
     .toLowerCase()
     .replace(/[^\p{L}\p{N}]+/gu, "_");
-  const slug = trimChar(collapsed, "_").slice(0, 40);
+  // Long selections make unwieldy paths; the first few words identify the
+  // field just as well (the label carries the rest).
+  const slug = trimChar(collapsed, "_")
+    .split("_")
+    .slice(0, 4)
+    .join("_")
+    .slice(0, 40);
   return slug.length > 0 ? slug : "field";
 };
 
