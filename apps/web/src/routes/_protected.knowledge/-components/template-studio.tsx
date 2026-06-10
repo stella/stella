@@ -355,6 +355,7 @@ export const TemplateStudioPage = ({
       setFillPreview: (values) => actionsRef.current?.setFillPreview(values),
       insertExistingField: (path) =>
         actionsRef.current?.insertExistingField(path),
+      deleteField: (path) => actionsRef.current?.deleteField(path),
       insertRecipe: (definition) =>
         actionsRef.current?.insertRecipe(definition),
       setFieldRepeatable: (path, repeatable) =>
@@ -1367,6 +1368,33 @@ export const TemplateStudioPage = ({
 
   actionsRef.current = {
     toggleDirectives: () => setShowDirectives((v) => !v),
+    deleteField: (path) => {
+      const view = editorViewRef.current;
+      if (!view) {
+        return;
+      }
+      const positional = buildPositionalText(view.state.doc);
+      const literal = `{{${path}}}`;
+      const ranges: { from: number; to: number }[] = [];
+      let idx = positional.text.indexOf(literal);
+      while (idx !== -1) {
+        ranges.push({
+          from: positional.pmPositionAt(idx),
+          to: positional.pmPositionAt(idx + literal.length - 1) + 1,
+        });
+        idx = positional.text.indexOf(literal, idx + literal.length);
+      }
+      if (ranges.length > 0) {
+        const tr = view.state.tr;
+        for (const range of ranges.toReversed()) {
+          tr.delete(range.from, range.to);
+        }
+        view.dispatch(tr);
+      }
+      useTemplateStudioStore.getState().removeField(path);
+      markDirty();
+      actionsRef.current?.deselect();
+    },
     insertExistingField: (path) => insertExistingFieldAt(path),
     setFieldRepeatable: (path, repeatable) =>
       repeatable ? makeFieldRepeatable(path) : unmakeFieldRepeatable(path),
@@ -3631,6 +3659,15 @@ const FieldFace = ({
                 variant="ghost"
               >
                 <ChevronRightIcon />
+              </Button>
+              <Button
+                aria-label={t("common.delete")}
+                onClick={() => actions?.deleteField(field.path)}
+                size="icon-sm"
+                title={t("common.delete")}
+                variant="ghost"
+              >
+                <Trash2Icon className="text-muted-foreground" />
               </Button>
               <Button
                 aria-label={t("templates.studio.suggestConfig")}
