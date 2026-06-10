@@ -482,6 +482,34 @@ const applyInlineMatch = (
   insertAfter(parent, startSpan.run, replacementRuns);
 };
 
+/**
+ * Text of one paragraph as the patcher's span walk sees it (every `w:t`
+ * inside a `w:r`, concatenated in document order). Offsets into this text
+ * are the coordinate space of {@link replaceParagraphTextRanges}; compute
+ * ranges from this, not from `paragraphText`, so they can never drift apart.
+ */
+export const paragraphSpanText = (paragraph: slimdom.Element): string =>
+  collectTextSpans(paragraph)
+    .map((span) => span.text)
+    .join("");
+
+/**
+ * Replace arbitrary non-overlapping, non-empty `[start, end)` ranges of a
+ * paragraph's span text (see {@link paragraphSpanText}) with plain-string
+ * values, reusing the same run-splitting machinery as placeholder patching:
+ * surrounding run formatting is preserved and ranges spanning split runs are
+ * handled. An empty value cuts the range. Ranges are applied descending by
+ * start so earlier offsets stay valid throughout.
+ */
+export const replaceParagraphTextRanges = (
+  paragraph: slimdom.Element,
+  ranges: readonly { start: number; end: number; value: string }[],
+): void => {
+  for (const range of [...ranges].toSorted((a, b) => b.start - a.start)) {
+    applyInlineMatch(paragraph, collectTextSpans(paragraph), range);
+  }
+};
+
 const patchInlinePlaceholders = (
   paragraph: slimdom.Element,
   values: Record<string, RichPatchValue>,

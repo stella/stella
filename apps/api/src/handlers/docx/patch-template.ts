@@ -20,6 +20,7 @@ import {
   pruneDanglingNumPr,
 } from "./block-directives";
 import { discoverPlaceholders } from "./discover-placeholders";
+import { processInlineConditions } from "./inline-conditions";
 import { applyNumbering, hasNumberingMarkers } from "./numbering";
 import { HEADER_FOOTER_RE, W_NS } from "./ooxml";
 import { patchXmlPart } from "./rich-patch";
@@ -110,6 +111,23 @@ const preProcessBlockDirectives = async (
     namedConditions,
   );
 
+  // Inline conditional spans resolve after the block pass (whole-paragraph
+  // directives and loop expansion are settled, so every surviving paragraph
+  // is final) and before this DOM serializes — which places them before
+  // numbering, placeholder discovery, and {{path}} substitution below. That
+  // ordering keeps the downstream passes clean: markers and @num keys inside
+  // a cut span are removed before they could be numbered, reported as
+  // unmatched, or filled. AI per-occurrence adaptation (adaptAiFields) runs
+  // even earlier, at the fill boundary on the raw template buffer: its
+  // context extraction and per-occurrence patching must see the same buffer
+  // so occurrence indices stay aligned, and a rendering patched into a
+  // branch that this pass later cuts is simply removed with the branch.
+  const inlineErrors = processInlineConditions(
+    body,
+    templateData,
+    namedConditions,
+  );
+
   // Loop expansion clones list paragraphs verbatim; prune numbering
   // references that do not resolve in word/numbering.xml so the
   // output renders identically in every consumer (Word ignores a
@@ -130,7 +148,7 @@ const preProcessBlockDirectives = async (
   return {
     buffer: Buffer.from(modifiedBuf),
     expandedValues: patchValues,
-    structureErrors: errors,
+    structureErrors: [...errors, ...inlineErrors],
   };
 };
 
