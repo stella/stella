@@ -2159,6 +2159,7 @@
       "insert": "Einfügen",
       "insertAtCaret": "An der Cursorposition einfügen",
       "insertFormatDefault": "Standard",
+      "insertOutput": "Ins Dokument einfügen",
       "invalidExpression": "Dieser Ausdruck ist ungültig",
       "loop": "Schleife",
       "makeField": "Feld erstellen",

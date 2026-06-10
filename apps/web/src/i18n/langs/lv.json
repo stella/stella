@@ -2159,6 +2159,7 @@
       "insert": "Ievietot",
       "insertAtCaret": "Ievietot pie kursora",
       "insertFormatDefault": "Noklusējuma",
+      "insertOutput": "Ievietot dokumentā",
       "invalidExpression": "Šī izteiksme nav derīga",
       "loop": "Cilpa",
       "makeField": "Izveidot lauku",

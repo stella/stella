@@ -2159,6 +2159,7 @@
       "insert": "Wstaw",
       "insertAtCaret": "Wstaw przy kursorze",
       "insertFormatDefault": "Domyślny",
+      "insertOutput": "Wstaw do dokumentu",
       "invalidExpression": "To wyrażenie jest nieprawidłowe",
       "loop": "Pętla",
       "makeField": "Utwórz pole",

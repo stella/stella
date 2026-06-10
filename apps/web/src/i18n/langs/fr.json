@@ -2159,6 +2159,7 @@
       "insert": "Insérer",
       "insertAtCaret": "Insérer au curseur",
       "insertFormatDefault": "Par défaut",
+      "insertOutput": "Insérer dans le document",
       "invalidExpression": "Cette expression n'est pas valide",
       "loop": "Boucle",
       "makeField": "Créer un champ",

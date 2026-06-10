@@ -2159,6 +2159,7 @@
       "insert": "Sisesta",
       "insertAtCaret": "Sisesta kursori kohale",
       "insertFormatDefault": "Vaikimisi",
+      "insertOutput": "Lisa dokumenti",
       "invalidExpression": "See avaldis on vigane",
       "loop": "Tsükkel",
       "makeField": "Loo väli",

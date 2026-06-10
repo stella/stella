@@ -4051,6 +4051,39 @@ const FieldFace = ({
           hideHint={valueSource === "ai"}
           onUpdate={onUpdate}
         />
+        {field.lookup !== undefined && field.lookup.formats.length > 0 ? (
+          <div className="flex flex-col gap-1.5 border-t px-4 py-4">
+            <Label className="text-sm">
+              {t("templates.studio.insertOutput")}
+            </Label>
+            {field.lookup.formats.map((format, index) => (
+              <Button
+                className="justify-between gap-2"
+                key={format.key}
+                onClick={() =>
+                  actions?.insertExistingField(
+                    field.path,
+                    index === 0 ? undefined : format.key,
+                  )
+                }
+                size="sm"
+                variant="outline"
+              >
+                <span className="flex items-center gap-2">
+                  <PlusIcon className="size-3.5" />
+                  {index === 0
+                    ? t("templates.studio.insertFormatDefault")
+                    : format.key}
+                </span>
+                <code className="text-muted-foreground text-[10px]">
+                  {index === 0
+                    ? `{{${field.path}}}`
+                    : `{{${field.path}.${format.key}}}`}
+                </code>
+              </Button>
+            ))}
+          </div>
+        ) : null}
         <div className="flex flex-col gap-2 border-t px-4 py-4">
           <Label className="text-sm">{t("templates.studio.whoFills")}</Label>
           <div className="flex items-center gap-1">

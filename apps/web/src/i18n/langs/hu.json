@@ -2159,6 +2159,7 @@
       "insert": "Beszúrás",
       "insertAtCaret": "Beszúrás a kurzorhoz",
       "insertFormatDefault": "Alapértelmezett",
+      "insertOutput": "Beszúrás a dokumentumba",
       "invalidExpression": "Ez a kifejezés érvénytelen",
       "loop": "Ciklus",
       "makeField": "Mező létrehozása",

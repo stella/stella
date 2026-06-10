@@ -2159,6 +2159,7 @@
       "insert": "Vložit",
       "insertAtCaret": "Vložit na pozici kurzoru",
       "insertFormatDefault": "Výchozí",
+      "insertOutput": "Vložit do dokumentu",
       "invalidExpression": "Tento výraz je neplatný",
       "loop": "Smyčka",
       "makeField": "Vytvořit pole",

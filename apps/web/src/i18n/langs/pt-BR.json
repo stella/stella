@@ -2159,6 +2159,7 @@
       "insert": "Inserir",
       "insertAtCaret": "Inserir no cursor",
       "insertFormatDefault": "Padrão",
+      "insertOutput": "Inserir no documento",
       "invalidExpression": "Essa expressão é inválida",
       "loop": "Laço",
       "makeField": "Criar campo",
