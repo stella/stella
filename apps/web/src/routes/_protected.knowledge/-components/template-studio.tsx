@@ -88,6 +88,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 import "@stll/folio/editor.css";
 
+import { AIPromptInput } from "@/components/ai-prompt-input/ai-prompt-input";
 import { FacetBar } from "@/components/inspector/inspector-facet-bar";
 import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
@@ -116,6 +117,7 @@ import {
 import { LinkClauseDialog } from "@/routes/_protected.knowledge/-components/link-clause-dialog";
 import { TemplateClausesTab } from "@/routes/_protected.knowledge/-components/template-clauses-tab";
 import { DATE_FORMAT_STYLES } from "@/routes/_protected.knowledge/-components/template-date-format";
+import { createTemplateFieldMention } from "@/routes/_protected.knowledge/-components/template-field-mention";
 import {
   ARRAY_INDEX_KEY_PREFIX,
   parseArrayItemKey,
@@ -4318,9 +4320,23 @@ const FieldFace = ({
 }) => {
   const t = useTranslations();
   const actions = useTemplateStudioStore((s) => s.actions);
-  const fieldCount = useTemplateStudioStore((s) => s.fields.length);
+  const fields = useTemplateStudioStore((s) => s.fields);
+  const fieldCount = fields.length;
   const outline = useTemplateStudioStore((s) => s.outline);
   const [suggesting, setSuggesting] = useState(false);
+
+  // `@`-mention source for the AI-instruction inputs: every other field's
+  // path/label, so an author can reference a sibling field. The mention node
+  // serializes back to `{{path}}` in the stored `aiPrompt` string.
+  const fieldMention = useMemo(
+    () =>
+      createTemplateFieldMention(
+        fields
+          .filter((f) => f.path !== field.path)
+          .map((f) => ({ id: f.path, label: f.label || f.path })),
+      ),
+    [fields, field.path],
+  );
   const [recipeDialogOpen, setRecipeDialogOpen] = useState(false);
   const [exampleValue, setExampleValue] = useState<string | undefined>(
     undefined,
@@ -4579,24 +4595,26 @@ const FieldFace = ({
               <p className="text-muted-foreground text-xs leading-relaxed">
                 {t("templates.aiAdaptHint")}
               </p>
-              <Textarea
-                onChange={(e) =>
-                  onUpdate({ aiPrompt: e.target.value || undefined })
-                }
+              <AIPromptInput
+                mentionExtension={fieldMention}
+                onChange={(value) => onUpdate({ aiPrompt: value || undefined })}
                 placeholder={t(
                   "templates.studio.aiAdaptInstructionPlaceholder",
                 )}
-                rows={2}
                 value={field.aiPrompt ?? ""}
+                valueFormat="text"
+                variant="minimal"
               />
             </>
           ) : null}
           {valueSource === "ai" ? (
-            <Textarea
-              onChange={(e) => onUpdate({ aiPrompt: e.target.value })}
+            <AIPromptInput
+              mentionExtension={fieldMention}
+              onChange={(value) => onUpdate({ aiPrompt: value })}
               placeholder={t("templates.studio.aiPromptPlaceholder")}
-              rows={3}
-              value={field.aiPrompt}
+              value={field.aiPrompt ?? ""}
+              valueFormat="text"
+              variant="minimal"
             />
           ) : null}
           {valueSource === "formula" ? (
