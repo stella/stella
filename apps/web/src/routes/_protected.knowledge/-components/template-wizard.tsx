@@ -8,7 +8,7 @@ import {
   PlusIcon,
   XIcon,
 } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
@@ -25,6 +25,7 @@ import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { LANG_ENDONYMS } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
@@ -35,6 +36,11 @@ import {
   emptyGroup,
   NamedConditionsEditor,
 } from "./condition-builder";
+import {
+  DATE_FORMAT_STYLES,
+  formatDateExample,
+  type TemplateDateFormat,
+} from "./template-date-format";
 
 type DiscoverResponse = Awaited<ReturnType<typeof api.templates.discover.post>>;
 
@@ -60,6 +66,32 @@ export const INPUT_TYPES = [
 ] as const;
 
 type InputType = (typeof INPUT_TYPES)[number];
+
+/**
+ * Input types offered when configuring a field. A UI-level list, not the
+ * manifest's `INPUT_TYPES`:
+ *
+ * - "boolean" is omitted — yes/no fields are condition questions, created via
+ *   conditions; existing boolean fields keep rendering and working, they are
+ *   just not offered for new configuration.
+ * - "company" is added — the manifest has no "company" inputType. A company
+ *   field is stored as inputType "text" plus `lookup` ({ registry, aiFormat }),
+ *   and the UI derives the "company" choice back from lookup presence, so the
+ *   manifest schema and the fill engine stay unchanged.
+ */
+export const FIELD_TYPE_CHOICES = [
+  "text",
+  "textarea",
+  "number",
+  "date",
+  "select",
+  "company",
+] as const;
+
+/** What the type picker (and the field row) shows: "company" when a lookup
+ *  is configured, the manifest input type otherwise. */
+const fieldTypeChoice = (field: EditableField): InputType | "company" =>
+  field.lookup === undefined ? field.inputType : "company";
 
 export const PART_INPUT_TYPES = ["text", "select"] as const;
 
@@ -91,6 +123,9 @@ export type EditableField = {
   path: string;
   kind: string;
   label: string;
+  /** Short guidance for the person filling (shown as the input's
+   *  placeholder in the fill form); empty/absent = none. */
+  hint?: string | undefined;
   inputType: InputType;
   required: boolean;
   options: string[];
@@ -109,13 +144,20 @@ export type EditableField = {
    *  expression at fill time; the fill form renders no input for it.
    *  Mutually exclusive with parts and lookup. */
   formula?: string | undefined;
+  /** Locale-aware rendering of a "date" field's submitted ISO value at fill
+   *  time; absent = the ISO value is substituted as typed. */
+  dateFormat?: TemplateDateFormat | undefined;
 };
 
 const INPUT_TYPE_SET: ReadonlySet<string> = new Set(INPUT_TYPES);
 
 /** Canonical icon + name for a field's value type (shared with the matter
  *  table's property chips via the value-type registry). */
-export const ValueTypeLabel = ({ inputType }: { inputType: InputType }) => {
+export const ValueTypeLabel = ({
+  inputType,
+}: {
+  inputType: InputType | "company";
+}) => {
   const t = useTranslations();
   const meta = VALUE_TYPE_META[inputTypeValueKind(inputType)];
   const Icon = meta.icon;
@@ -150,6 +192,7 @@ export const buildEditableFields = (
     path: f.path,
     kind: f.kind,
     label: f.label ?? "",
+    hint: f.hint,
     inputType: inferInputType(f),
     required: f.required ?? false,
     options: f.options ?? [],
@@ -164,6 +207,7 @@ export const buildEditableFields = (
     optionsFrom: f.optionsFrom,
     lookup: f.lookup,
     formula: f.formula,
+    dateFormat: f.dateFormat,
   }));
 
 type ManifestPart = {
@@ -227,6 +271,34 @@ export const lookupManifestProps = (
     registry: field.lookup.registry,
     aiFormat: aiFormat === "" ? undefined : aiFormat,
   };
+};
+
+/**
+ * The manifest shape of a field's fill hint: the trimmed text, with a blank
+ * one normalized away. Kept short — the input enforces {@link HINT_MAX_LENGTH}.
+ */
+export const hintManifestProps = (field: EditableField): string | undefined => {
+  const hint = field.hint?.trim() ?? "";
+  return hint === "" ? undefined : hint;
+};
+
+/**
+ * The manifest shape of a field's date format: only meaningful on a plain
+ * "date" input (composite, formula, and lookup fields collect or derive a
+ * different value).
+ */
+export const dateFormatManifestProps = (
+  field: EditableField,
+): TemplateDateFormat | undefined => {
+  if (
+    field.inputType !== "date" ||
+    field.parts !== undefined ||
+    field.formula !== undefined ||
+    field.lookup !== undefined
+  ) {
+    return undefined;
+  }
+  return field.dateFormat;
 };
 
 /**
@@ -322,6 +394,7 @@ export const ConfigureStep = ({
           return {
             path: f.path,
             label: f.label || undefined,
+            hint: hintManifestProps(f),
             inputType: f.inputType,
             options:
               f.inputType === "select" && f.options.length > 0
@@ -335,6 +408,7 @@ export const ConfigureStep = ({
                 ? f.optionsFrom
                 : undefined,
             lookup: lookupManifestProps(f),
+            dateFormat: dateFormatManifestProps(f),
           };
         }),
         conditions: [
@@ -452,7 +526,7 @@ export const ConfigureStep = ({
                         {field.label || field.path}
                       </span>
                       <span className="text-muted-foreground flex shrink-0 items-center gap-1 text-xs">
-                        <ValueTypeLabel inputType={field.inputType} />
+                        <ValueTypeLabel inputType={fieldTypeChoice(field)} />
                       </span>
                       {field.required && (
                         <span className="text-muted-foreground shrink-0 text-xs">
@@ -812,10 +886,39 @@ const OptionsFromFieldControl = ({
   );
 };
 
-/** Lookup affordance for text fields: enable a KRS registry lookup (the
- *  person filling enters only the KRS number) plus an optional AI format
- *  instruction shaping the resolved company details. */
-const LookupConfigControl = ({
+/** Registries offered for the "Company ID" field type, rendered as a
+ *  structured list so new registries slot in as one entry. Mirrors
+ *  `LOOKUP_REGISTRIES` in apps/api/src/handlers/docx/types.ts (itself a
+ *  subset of the API's `BUSINESS_REGISTRY_SLUGS`); Eden exposes types only,
+ *  so the slugs are mirrored here — extend together with the API. Labels are
+ *  registry proper names, not translatable UI copy. */
+const LOOKUP_REGISTRY_OPTIONS = [
+  { slug: "krs", label: "Poland — KRS" },
+] as const;
+
+/** Detail names a registry hit returns, offered as clickable [placeholder]
+ *  chips for the AI format instruction. The names follow the canonical
+ *  fields of the API's `BusinessRegistryHitDetails` entry for the registry
+ *  (`KrsEntity` for "krs": name, legalForm, registeredSeat, address,
+ *  krsNumber, NIP/REGON identifiers, shareCapital). */
+const REGISTRY_RETURN_FIELDS: Record<LookupRegistry, readonly string[]> = {
+  krs: [
+    "company name",
+    "legal form",
+    "seat",
+    "address",
+    "registry number",
+    "NIP",
+    "REGON",
+    "share capital",
+  ],
+};
+
+/** Configuration for the "Company ID" field type: pick the register the
+ *  entered number resolves against, and optionally an AI format instruction
+ *  shaping the resolved company details — with the registry's return fields
+ *  as clickable chips that insert [placeholder] tokens. */
+const CompanyLookupConfig = ({
   field,
   onUpdate,
 }: {
@@ -823,53 +926,172 @@ const LookupConfigControl = ({
   onUpdate: (patch: Partial<EditableField>) => void;
 }) => {
   const t = useTranslations();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const registry = field.lookup?.registry ?? "krs";
+  const aiFormat = field.lookup?.aiFormat ?? "";
+
+  const setLookup = (patch: Partial<EditableLookup>) =>
+    onUpdate({ lookup: { registry, aiFormat, ...patch } });
+
+  /** Insert a [detail] token at the textarea caret (appends when the
+   *  textarea has not been focused yet) and restore focus. */
+  const insertToken = (name: string) => {
+    const token = `[${name}]`;
+    const textarea = textareaRef.current;
+    const start = textarea?.selectionStart ?? aiFormat.length;
+    const end = textarea?.selectionEnd ?? aiFormat.length;
+    setLookup({
+      aiFormat: aiFormat.slice(0, start) + token + aiFormat.slice(end),
+    });
+    requestAnimationFrame(() => {
+      textarea?.focus();
+      textarea?.setSelectionRange(start + token.length, start + token.length);
+    });
+  };
 
   return (
     <>
       <Field>
-        <div className="flex items-center gap-2">
-          <Checkbox
-            checked={field.lookup !== undefined}
-            onCheckedChange={(checked) =>
-              onUpdate({
-                lookup: checked
-                  ? (field.lookup ?? { registry: "krs" })
-                  : undefined,
-              })
+        <FieldLabel>{t("templates.fieldLookupRegistry")}</FieldLabel>
+        <Select
+          onValueChange={(val) => {
+            const option = LOOKUP_REGISTRY_OPTIONS.find((o) => o.slug === val);
+            if (option) {
+              setLookup({ registry: option.slug });
             }
-          />
-          <FieldLabel>{t("templates.fieldLookupEnable")}</FieldLabel>
-        </div>
+          }}
+          value={registry}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectPopup>
+            {LOOKUP_REGISTRY_OPTIONS.map((option) => (
+              <SelectItem key={option.slug} value={option.slug}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectPopup>
+        </Select>
         <p className="text-muted-foreground text-xs">
           {t("templates.fieldLookupHint")}
         </p>
       </Field>
 
-      {field.lookup !== undefined && (
-        <Field>
-          <FieldLabel>{t("templates.fieldLookupAiFormat")}</FieldLabel>
-          <FieldControl
-            render={
-              <Textarea
-                onChange={(e) =>
-                  onUpdate({
-                    lookup: {
-                      registry: field.lookup?.registry ?? "krs",
-                      aiFormat: e.target.value,
-                    },
-                  })
-                }
-                placeholder={t("templates.fieldLookupAiFormatPlaceholder")}
-                value={field.lookup.aiFormat ?? ""}
-              />
-            }
-          />
-          <p className="text-muted-foreground text-xs">
-            {t("templates.fieldLookupAiFormatHint")}
-          </p>
-        </Field>
-      )}
+      <Field>
+        <FieldLabel>{t("templates.fieldLookupAiFormat")}</FieldLabel>
+        <FieldControl
+          render={
+            <Textarea
+              onChange={(e) => setLookup({ aiFormat: e.target.value })}
+              placeholder={t("templates.fieldLookupAiFormatPlaceholder")}
+              ref={textareaRef}
+              value={aiFormat}
+            />
+          }
+        />
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-muted-foreground text-xs">
+            {t("templates.fieldLookupInsertDetail")}
+          </span>
+          {REGISTRY_RETURN_FIELDS[registry].map((name) => (
+            <button
+              className="bg-accent text-accent-foreground hover:bg-accent/80 cursor-pointer rounded-md px-1.5 py-0.5 text-xs font-medium"
+              key={name}
+              onClick={() => insertToken(name)}
+              type="button"
+            >
+              [{name}]
+            </button>
+          ))}
+        </div>
+        <p className="text-muted-foreground text-xs">
+          {t("templates.fieldLookupAiFormatHint")}
+        </p>
+      </Field>
     </>
+  );
+};
+
+/** Locale + style picker for a "date" field's locale-aware rendering. The
+ *  style choices are self-describing: each shows the exemplar date rendered
+ *  in the selected locale. Picking the "iso" style with no stored format
+ *  keeps the format unset (both substitute the typed ISO value). */
+const DateFormatConfigControl = ({
+  field,
+  onUpdate,
+  defaultLocale,
+}: {
+  field: EditableField;
+  onUpdate: (patch: Partial<EditableField>) => void;
+  /** Locale preselected before the user picks one — the template's primary
+   *  language when the host knows it, the app locale otherwise. */
+  defaultLocale: string;
+}) => {
+  const t = useTranslations();
+  const locale = field.dateFormat?.locale ?? defaultLocale;
+  const style = field.dateFormat?.style ?? "iso";
+
+  // The supported UI languages, plus the stored locale when it is not one of
+  // them (a template's document language is not limited to UI languages).
+  const localeChoices: { tag: string; label: string }[] = Object.entries(
+    LANG_ENDONYMS,
+  ).map(([tag, label]) => ({ tag, label }));
+  if (!localeChoices.some((choice) => choice.tag === locale)) {
+    localeChoices.unshift({ tag: locale, label: locale });
+  }
+
+  const setDateFormat = (next: TemplateDateFormat) =>
+    onUpdate({ dateFormat: next });
+
+  return (
+    <div className="flex flex-wrap items-end gap-2">
+      <Field className="w-auto min-w-36">
+        <FieldLabel>{t("common.language")}</FieldLabel>
+        <Select
+          onValueChange={(val) => {
+            if (typeof val === "string" && val !== "") {
+              setDateFormat({ locale: val, style });
+            }
+          }}
+          value={locale}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectPopup>
+            {localeChoices.map((choice) => (
+              <SelectItem key={choice.tag} value={choice.tag}>
+                {choice.label}
+              </SelectItem>
+            ))}
+          </SelectPopup>
+        </Select>
+      </Field>
+      <Field className="w-auto min-w-44">
+        <FieldLabel>{t("templates.dateFormatStyle")}</FieldLabel>
+        <Select
+          onValueChange={(val) => {
+            const next = DATE_FORMAT_STYLES.find((s) => s === val);
+            if (next !== undefined) {
+              setDateFormat({ locale, style: next });
+            }
+          }}
+          value={style}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectPopup>
+            {DATE_FORMAT_STYLES.map((styleChoice) => (
+              <SelectItem key={styleChoice} value={styleChoice}>
+                {formatDateExample({ locale, style: styleChoice })}
+              </SelectItem>
+            ))}
+          </SelectPopup>
+        </Select>
+      </Field>
+    </div>
   );
 };
 
@@ -928,11 +1150,16 @@ const FormulaConfigControl = ({
   );
 };
 
+/** Hint length cap mirrored by the manifest's expectation of short hints. */
+const HINT_MAX_LENGTH = 200;
+
 export const FieldConfigEditor = ({
   field,
   onUpdate,
   embedded = false,
   siblingPaths,
+  hideFormulaControl = false,
+  defaultDateLocale,
 }: {
   field: EditableField;
   onUpdate: (patch: Partial<EditableField>) => void;
@@ -942,10 +1169,18 @@ export const FieldConfigEditor = ({
   /** Paths of the template's other fields, offered as sources for a
    *  dependent select's options; a typed path input is shown when absent. */
   siblingPaths?: readonly string[] | undefined;
+  /** The host renders its own formula affordance (the Studio's source
+   *  picker); drop the built-in control to avoid duplicating it. */
+  hideFormulaControl?: boolean;
+  /** Preselected locale for a date field's format picker — the template's
+   *  primary language when the host knows it; app locale otherwise. */
+  defaultDateLocale?: string | undefined;
 }) => {
   const t = useTranslations();
+  const appLocale = useLocale();
   const isComposite = field.parts !== undefined;
   const isFormula = field.formula !== undefined;
+  const typeChoice = fieldTypeChoice(field);
 
   return (
     <div
@@ -978,25 +1213,49 @@ export const FieldConfigEditor = ({
           <FieldLabel>{t("templates.fieldInputType")}</FieldLabel>
           <Select
             onValueChange={(val) => {
+              if (val === "company") {
+                // "company" maps to inputType "text" + lookup (see
+                // FIELD_TYPE_CHOICES); keep an existing lookup config.
+                onUpdate({
+                  inputType: "text",
+                  lookup: field.lookup ?? { registry: "krs" },
+                });
+                return;
+              }
               if (val && isInputType(val)) {
-                onUpdate({ inputType: val });
+                onUpdate({ inputType: val, lookup: undefined });
               }
             }}
-            value={field.inputType}
+            value={typeChoice}
           >
             <SelectTrigger>
               <SelectValue>
-                {() => <ValueTypeLabel inputType={field.inputType} />}
+                {() => <ValueTypeLabel inputType={typeChoice} />}
               </SelectValue>
             </SelectTrigger>
             <SelectPopup>
-              {INPUT_TYPES.map((type) => (
+              {FIELD_TYPE_CHOICES.map((type) => (
                 <SelectItem key={type} value={type}>
                   <ValueTypeLabel inputType={type} />
                 </SelectItem>
               ))}
             </SelectPopup>
           </Select>
+        </Field>
+      )}
+
+      {!isFormula && (
+        <Field>
+          <FieldLabel>{t("templates.fieldHint")}</FieldLabel>
+          <FieldControl
+            render={
+              <Input
+                maxLength={HINT_MAX_LENGTH}
+                onChange={(e) => onUpdate({ hint: e.target.value })}
+                value={field.hint ?? ""}
+              />
+            }
+          />
         </Field>
       )}
 
@@ -1012,7 +1271,7 @@ export const FieldConfigEditor = ({
         </Field>
       )}
 
-      {!isFormula && (
+      {!isFormula && typeChoice !== "company" && (
         <Field>
           <div className="flex items-center gap-2">
             <Checkbox
@@ -1037,12 +1296,20 @@ export const FieldConfigEditor = ({
         <CompositePartsEditor field={field} onUpdate={onUpdate} />
       )}
 
-      {!isComposite && (
+      {!isComposite && !hideFormulaControl && typeChoice !== "company" && (
         <FormulaConfigControl field={field} onUpdate={onUpdate} />
       )}
 
-      {!isComposite && !isFormula && field.inputType === "text" && (
-        <LookupConfigControl field={field} onUpdate={onUpdate} />
+      {!isComposite && !isFormula && typeChoice === "company" && (
+        <CompanyLookupConfig field={field} onUpdate={onUpdate} />
+      )}
+
+      {!isComposite && !isFormula && typeChoice === "date" && (
+        <DateFormatConfigControl
+          defaultLocale={defaultDateLocale ?? appLocale}
+          field={field}
+          onUpdate={onUpdate}
+        />
       )}
 
       {!isComposite && !isFormula && field.inputType === "select" && (

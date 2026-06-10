@@ -2026,6 +2026,7 @@ type Messages = {
     "confirmDelete": "This will permanently delete the template.";
     "createCategory": "New category";
     "createDocument": "Create document";
+    "dateFormatStyle": "Date format";
     "deleteCategory": "Delete category";
     "deleteFailed": "Failed to delete template";
     "describeWhenToUse": "Describe when to use this";
@@ -2050,14 +2051,16 @@ type Messages = {
     "fieldFormulaExpression": "Expression";
     "fieldFormulaExpressionHint": "Arithmetic over other field names, e.g. rent * 12. Functions: min, max, round, abs, floor, ceil.";
     "fieldFormulaHint": "The value is calculated from other fields when the document is generated; the person filling is not asked for it.";
+    "fieldHint": "Hint for the person filling";
     "fieldInputType": "Input type";
     "fieldLabel": "Label";
     "fieldLabelPlaceholder": "e.g. Full Name";
     "fieldLookupAiFormat": "AI format instruction";
     "fieldLookupAiFormatHint": "AI writes the company details following this instruction; leave it empty for a plain name and seat.";
     "fieldLookupAiFormatPlaceholder": "[company name], with its registered seat in [seat], KRS no. [number]";
-    "fieldLookupEnable": "Company lookup (KRS)";
     "fieldLookupHint": "At fill time, the entered KRS number is looked up in the register and replaced with the company's details.";
+    "fieldLookupInsertDetail": "Insert a company detail";
+    "fieldLookupRegistry": "Company register";
     "fieldMultipleParts": "Multiple parts";
     "fieldOptions": "Options";
     "fieldOptionsFrom": "Options from field";
@@ -2074,6 +2077,7 @@ type Messages = {
     "generating": "Generating...";
     "inputTypes": {
       "boolean": "Yes / No";
+      "company": "Company ID";
       "textarea": "Text (multiline)";
     };
     "invalidFileType": "Please upload a .docx file";
