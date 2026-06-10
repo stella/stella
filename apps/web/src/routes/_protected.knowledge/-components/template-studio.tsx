@@ -989,12 +989,23 @@ export const TemplateStudioPage = ({
         });
         idx = positional.text.indexOf(literal, idx + literal.length);
       }
-      if (ranges.length > 0) {
+      const first = ranges.at(0);
+      if (first !== undefined) {
         const tr = view.state.tr;
         for (const range of ranges.toReversed()) {
           tr.insertText(`{{${trimmed}}}`, range.from, range.to);
         }
+        // Park the caret inside the first rewritten marker (its `from` is
+        // unaffected by the later-position edits above) so the selection
+        // sync re-derives the inspector face with the new path right away;
+        // without this the face keeps showing the stale path.
+        tr.setSelection(
+          TextSelection.near(
+            tr.doc.resolve(Math.min(first.from + 2, tr.doc.content.size)),
+          ),
+        ).scrollIntoView();
         view.dispatch(tr);
+        view.focus();
       }
       useTemplateStudioStore.getState().renameField(oldPath, trimmed);
       markDirty();
