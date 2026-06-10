@@ -305,11 +305,9 @@ const NUMBERING_XML =
 
 const makeStructuralFixture = async (): Promise<Buffer> => {
   const cell = (content: string) => `<w:tc><w:tcPr/>${content}</w:tc>`;
-  const table =
-    `<w:tbl><w:tblPr/><w:tblGrid><w:gridCol/><w:gridCol/></w:tblGrid><w:tr>${ 
-    cell(SPLIT("Pełnomocnik: {", "{agent_", "name}} (PL)")) 
-    }${cell(SPLIT("Attorney: {{agent", "_name}", "} (EN)")) 
-    }</w:tr></w:tbl>`;
+  const table = `<w:tbl><w:tblPr/><w:tblGrid><w:gridCol/><w:gridCol/></w:tblGrid><w:tr>${cell(
+    SPLIT("Pełnomocnik: {", "{agent_", "name}} (PL)"),
+  )}${cell(SPLIT("Attorney: {{agent", "_name}", "} (EN)"))}</w:tr></w:tbl>`;
 
   const xml = WRAP(
     [
