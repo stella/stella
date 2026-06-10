@@ -74,11 +74,18 @@ pub fn run() {
       // links, tray actions) queues behind the restore instead of racing it.
       {
         let manager = Arc::clone(&manager);
-        let mut mgr = Arc::clone(&manager)
-          .try_lock_owned()
-          .expect("session manager is uncontended during setup");
+        // A second-instance notification can race this lock on Windows and
+        // Linux, so fall back to awaiting instead of panicking.
+        let setup_guard = Arc::clone(&manager).try_lock_owned();
         let handle = handle.clone();
         tauri::async_runtime::spawn(async move {
+          let mut mgr = match setup_guard {
+            Ok(guard) => guard,
+            Err(_) => {
+              tracing::warn!("session manager contended during setup");
+              Arc::clone(&manager).lock_owned().await
+            }
+          };
           mgr.set_app_handle(handle.clone());
           mgr.initialize().await;
           let session_ids = mgr.session_ids_needing_watchers();
