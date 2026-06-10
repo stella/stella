@@ -2063,11 +2063,8 @@ type Messages = {
     "fieldLookupAiFormat": "AI format instruction";
     "fieldLookupAiFormatHint": "AI writes the company details following this instruction; leave it empty for a plain name and seat.";
     "fieldLookupAiFormatPlaceholder": "[company name], with its registered seat in [seat], KRS no. [number]";
-    "fieldLookupAiFormatted": "AI-formatted";
-    "fieldLookupHint": "At fill time, the entered KRS number is looked up in the register and replaced with the company's details.";
     "fieldLookupInsertDetail": "Insert a company detail";
     "fieldLookupRegistry": "Company register";
-    "fieldLookupStandard": "Standard (name, seat)";
     "fieldMultipleParts": "Multiple parts";
     "fieldOptions": "Options";
     "fieldOptionsFrom": "Options from field";
@@ -2132,6 +2129,10 @@ type Messages = {
       "aiNoFields": "The AI didn't suggest any fields";
       "aiPresetPrompt": "Suggest fillable template fields";
       "aiPromptPlaceholder": "Describe what AI should draft for this field, e.g. the scope of this power of attorney.";
+      "aiScopeDocument": "Entire document";
+      "aiScopeQuestion": "Suggest fields in:";
+      "aiScopeSelection": "Selected part";
+      "aiScopeSelectionPrompt": "Only suggest fields within this selected part of the document:";
       "aiSuggest": "Suggest fields";
       "clauseSlotHelp": "A clause from the library is inserted here at fill time. Manage linked clauses in the Clauses tab.";
       "conditionBlockHelp": "This block shows only when:";

@@ -1,7 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 
 import {
-  WandSparklesIcon,
   AlertTriangleIcon,
   ArrowLeftIcon,
   ChevronDownIcon,
@@ -26,6 +25,7 @@ import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import Tooltip from "@/components/tooltip";
 import { LANG_ENDONYMS } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
@@ -970,6 +970,12 @@ const REGISTRY_RETURN_FIELDS: Record<LookupRegistry, readonly string[]> = {
 /** Hover examples per return field, from a well-known public registry entry
  *  (CD PROJEKT S.A., KRS 0000006865 — public KRS data), so authors see what
  *  a token resolves to before writing it into the format. */
+/** Pre-seeded format per registry — the standard notarial company recital;
+ *  the author can edit or clear it freely. */
+const REGISTRY_DEFAULT_FORMAT: Record<LookupRegistry, string> = {
+  krs: "[company name] with its registered office at [address], entered in the Register of Entrepreneurs under KRS no. [registry number], kept by Krajowy Rejestr Sądowy, share capital of [share capital], Tax Identification Number (NIP) [NIP], Statistical Identification Number (REGON) [REGON]",
+};
+
 const REGISTRY_FIELD_EXAMPLES: Record<
   LookupRegistry,
   Record<string, string>
@@ -1001,7 +1007,6 @@ const CompanyLookupConfig = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const registry = field.lookup?.registry ?? "krs";
   const aiFormat = field.lookup?.aiFormat ?? "";
-  const aiFormatting = field.lookup?.aiFormat !== undefined;
 
   const setLookup = (patch: Partial<EditableLookup>) =>
     onUpdate({ lookup: { registry, aiFormat, ...patch } });
@@ -1046,65 +1051,38 @@ const CompanyLookupConfig = ({
             ))}
           </SelectPopup>
         </Select>
-        <p className="text-muted-foreground text-xs">
-          {t("templates.fieldLookupHint")}
-        </p>
       </Field>
 
       <Field>
         <FieldLabel>{t("templates.fieldLookupAiFormat")}</FieldLabel>
-        <div className="flex items-center gap-1">
-          <Button
-            className="flex-1"
-            onClick={() => onUpdate({ lookup: { registry } })}
-            size="sm"
-            type="button"
-            variant={aiFormatting ? "ghost" : "secondary"}
-          >
-            {t("templates.fieldLookupStandard")}
-          </Button>
-          <Button
-            className="flex-1"
-            onClick={() => setLookup({ aiFormat })}
-            size="sm"
-            type="button"
-            variant={aiFormatting ? "secondary" : "ghost"}
-          >
-            <WandSparklesIcon className="size-3.5" />
-            {t("templates.fieldLookupAiFormatted")}
-          </Button>
-        </div>
-        {aiFormatting ? (
-          <FieldControl
-            render={
-              <Textarea
-                onChange={(e) => setLookup({ aiFormat: e.target.value })}
-                placeholder={t("templates.fieldLookupAiFormatPlaceholder")}
-                ref={textareaRef}
-                value={aiFormat}
-              />
-            }
-          />
-        ) : null}
-        <div
-          className={cn(
-            "flex flex-wrap items-center gap-1.5",
-            !aiFormatting && "hidden",
-          )}
-        >
+        <FieldControl
+          render={
+            <Textarea
+              onChange={(e) => setLookup({ aiFormat: e.target.value })}
+              placeholder={t("templates.fieldLookupAiFormatPlaceholder")}
+              ref={textareaRef}
+              value={aiFormat}
+            />
+          }
+        />
+        <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-muted-foreground text-xs">
             {t("templates.fieldLookupInsertDetail")}
           </span>
           {REGISTRY_RETURN_FIELDS[registry].map((name) => (
-            <button
-              className="bg-accent text-accent-foreground hover:bg-accent/80 cursor-pointer rounded-md px-1.5 py-0.5 text-xs font-medium"
+            <Tooltip
+              content={REGISTRY_FIELD_EXAMPLES[registry][name]}
               key={name}
-              onClick={() => insertToken(name)}
-              title={REGISTRY_FIELD_EXAMPLES[registry][name]}
-              type="button"
-            >
-              [{name}]
-            </button>
+              render={
+                <button
+                  className="bg-accent text-accent-foreground hover:bg-accent/80 cursor-pointer rounded-md px-1.5 py-0.5 text-xs font-medium"
+                  onClick={() => insertToken(name)}
+                  type="button"
+                >
+                  [{name}]
+                </button>
+              }
+            />
           ))}
         </div>
         <p className="text-muted-foreground text-xs">
@@ -1298,7 +1276,21 @@ export const FieldConfigEditor = ({
       )}
 
       <Field>
-        <FieldLabel>{t("templates.fieldLabel")}</FieldLabel>
+        <div className="flex items-center justify-between gap-2">
+          <FieldLabel>{t("templates.fieldLabel")}</FieldLabel>
+          {isFormula ? null : (
+            <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs">
+              <Checkbox
+                checked={field.required}
+                onCheckedChange={(checked) => onUpdate({ required: checked })}
+              />
+              {t("common.required")}
+              <span aria-hidden className="text-destructive">
+                *
+              </span>
+            </label>
+          )}
+        </div>
         <FieldControl
           render={
             <Input
@@ -1320,7 +1312,10 @@ export const FieldConfigEditor = ({
                 // FIELD_TYPE_CHOICES); keep an existing lookup config.
                 onUpdate({
                   inputType: "text",
-                  lookup: field.lookup ?? { registry: "krs" },
+                  lookup: field.lookup ?? {
+                    registry: "krs",
+                    aiFormat: REGISTRY_DEFAULT_FORMAT.krs,
+                  },
                 });
                 return;
               }
@@ -1358,18 +1353,6 @@ export const FieldConfigEditor = ({
               />
             }
           />
-        </Field>
-      )}
-
-      {!isFormula && (
-        <Field>
-          <div className="flex items-center gap-2">
-            <Checkbox
-              checked={field.required}
-              onCheckedChange={(checked) => onUpdate({ required: checked })}
-            />
-            <FieldLabel>{t("common.required")}</FieldLabel>
-          </div>
         </Field>
       )}
 

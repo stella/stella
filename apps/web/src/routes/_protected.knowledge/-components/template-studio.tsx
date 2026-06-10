@@ -1189,8 +1189,10 @@ export const TemplateStudioPage = ({
             tr.doc.resolve(Math.min(first.from + 2, tr.doc.content.size)),
           ),
         ).scrollIntoView();
+        // No view.focus(): the dispatched selection refreshes the face, and
+        // keeping DOM focus in the inspector lets Tab continue through the
+        // field's form instead of jumping into the document.
         view.dispatch(tr);
-        view.focus();
       }
       useTemplateStudioStore.getState().renameField(oldPath, trimmed);
       markDirty();
