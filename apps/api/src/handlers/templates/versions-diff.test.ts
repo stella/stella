@@ -172,8 +172,15 @@ describe("template version diff", () => {
       sources.currentText,
     );
     expect(segments.length).toBeGreaterThan(0);
-    const added = segments.filter((s) => s.kind === "added");
-    expect(added.some((s) => s.text.includes("{{krs_number}}"))).toBe(true);
+    // The edited table line pairs with its predecessor, so the marker
+    // arrives as an inserted run inside a merged "changed" segment.
+    const insertedText = segments
+      .filter((s) => s.kind === "changed")
+      .flatMap((s) => s.runs)
+      .filter((run) => run.kind === "ins")
+      .map((run) => run.text)
+      .join("");
+    expect(insertedText).toContain("{{krs_number}}");
   });
 
   test("first version diffs against the empty document", async () => {
