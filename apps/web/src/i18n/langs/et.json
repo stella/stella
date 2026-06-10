@@ -473,6 +473,7 @@
     "sources": "Allikad:",
     "stopResponse": "Peata",
     "stopped": "Peatatud",
+    "tabToAsk": "Tabeldusklahv küsimiseks: \"{prompt}\"",
     "suggestionSeverity": {
       "style": "Stiil",
       "substantive": "Sisuline",

@@ -473,6 +473,7 @@
     "sources": "Avoti:",
     "stopResponse": "Apturēt",
     "stopped": "Apturēts",
+    "tabToAsk": "Tab, lai jautātu: “{prompt}”",
     "suggestionSeverity": {
       "style": "Stils",
       "substantive": "Pēc būtības",

@@ -473,6 +473,7 @@
     "sources": "Zdroje:",
     "stopResponse": "Zastaviť",
     "stopped": "Zastavené",
+    "tabToAsk": "Tabulátor pre otázku: \"{prompt}\"",
     "suggestionSeverity": {
       "style": "Štýl",
       "substantive": "Vecné",

@@ -24,7 +24,10 @@ import {
 } from "react";
 import type { RefObject } from "react";
 
-import { useSuspenseQuery } from "@tanstack/react-query";
+import {
+  useQuery,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { LoaderCircleIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -67,9 +70,12 @@ import type {
 } from "@/routes/_protected.chat/-queries";
 import {
   chatThreadOptions,
+  chatThreadSuggestedPromptsOptions,
   fileChatThreadOptions,
 } from "@/routes/_protected.chat/-queries";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
+import { SuggestedFollowupChips } from "@/routes/_protected.chat/-components/suggested-followup-chips";
 
 type ActiveFile = {
   docxEditSnapshot?:
@@ -1011,10 +1017,29 @@ const FileChatOverlayInner = ({
     );
   }
 
-  const editorController = useChatEditor({
-    placeholder: filePlaceholder,
-    threadRef,
-  });
+// Check eligibility for suggested prompts using draft state (avoids
+   // unnecessary API calls when user is typing).
+   const lastMessageId = messages.at(-1)?.id ?? null;
+   const lastMessageRole = messages.at(-1)?.role ?? null;
+   const editorIsInitiallyEmpty = useIsChatDraftEmpty(threadRef);
+   const eligibleForSuggestions =
+     editorIsInitiallyEmpty && !isGenerating && lastMessageId !== null && lastMessageRole === "assistant";
+   const { data: suggestedPromptsData } = useQuery(
+     chatThreadSuggestedPromptsOptions({
+       activeOrganizationId,
+       enabled: eligibleForSuggestions,
+       lastMessageId: lastMessageId ?? "",
+       threadRef,
+     }),
+   );
+   const suggestedPrompts = suggestedPromptsData?.prompts ?? [];
+   const suggestedFollowupPrompt = suggestedPrompts.at(0) ?? undefined;
+
+   const editorController = useChatEditor({
+     placeholder: filePlaceholder,
+     suggestedFollowupPrompt,
+     threadRef,
+   });
   // Focus the composer when the user explicitly starts a new thread,
   // so they can type the first message without an extra click. The
   // initial mount is skipped (entering the document should not steal
@@ -1104,7 +1129,6 @@ const FileChatOverlayInner = ({
   const threadScrollRef = useRef<HTMLDivElement>(null);
   const hasMessages = messages.length > 0;
   const hasThreadContent = hasMessages || error !== undefined;
-  const lastMessageId = messages.at(-1)?.id ?? null;
   // Auto-open the thread panel as soon as the first message
   // lands so users see streaming without having to click the
   // chevron themselves.
@@ -1203,6 +1227,23 @@ const FileChatOverlayInner = ({
           editor={editorController.editor}
           enabled={false}
           workspaceId={workspaceId ?? threadRef.threadId}
+        />
+        <SuggestedFollowupChips
+          isGenerating={isGenerating}
+          isEmpty={editorController.isEmpty}
+          lastMessageId={messages.at(-1)?.id ?? null}
+          lastMessageRole={messages.at(-1)?.role ?? null}
+          messageCount={messages.length}
+          prompts={suggestedPrompts}
+          onSelect={(prompt) => {
+            editorController.setContent(prompt);
+          }}
+          onSend={async (prompt) => {
+            if (!(await ensureAIAvailable())) {
+              return;
+            }
+            await sendMessage({ text: prompt });
+          }}
         />
         <PromptBar
           attentionPulseSeq={attentionPulseSeq}

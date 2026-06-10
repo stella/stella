@@ -476,6 +476,7 @@ type Messages = {
     "sources": "Sources:";
     "stopResponse": "Stop";
     "stopped": "Stopped";
+    "tabToAsk": "Tab to ask: \"{prompt}\"";
     "suggestionSeverity": {
       "style": "Style";
       "substantive": "Substantive";

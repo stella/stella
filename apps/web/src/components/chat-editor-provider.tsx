@@ -472,17 +472,22 @@ export const useChatEditor = ({
   placeholder,
   sentMessageHistoryHtml,
   threadRef,
+  suggestedFollowupPrompt,
 }: {
   onDraftStart?: (() => void) | undefined;
   placeholder?: string | undefined;
   sentMessageHistoryHtml?: readonly string[] | undefined;
   threadRef: ChatThreadRef;
+  suggestedFollowupPrompt?: string | undefined;
 }): ChatEditorController => {
   const t = useTranslations();
   const defaultPlaceholder = t("chat.placeholder");
-  const resolvedPlaceholder = placeholder ?? defaultPlaceholder;
+  const tabToAskText = suggestedFollowupPrompt ? t("chat.tabToAsk", { prompt: suggestedFollowupPrompt }) : undefined;
+  const resolvedPlaceholder = tabToAskText ?? placeholder ?? defaultPlaceholder;
   const placeholderRef = useRef(resolvedPlaceholder);
   placeholderRef.current = resolvedPlaceholder;
+  const suggestedFollowupPromptRef = useRef(suggestedFollowupPrompt);
+  suggestedFollowupPromptRef.current = suggestedFollowupPrompt;
   const queryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -930,6 +935,25 @@ export const useChatEditor = ({
       handleKeyDown: (view, event) => {
         if (handleMessageHistoryKeyDown(view.state, event)) {
           return true;
+        }
+
+        // Tab + empty editor + suggested followup: accept and send the suggestion.
+        if (
+          event.key === "Tab" &&
+          !event.shiftKey &&
+          !event.altKey &&
+          !event.ctrlKey &&
+          !event.metaKey &&
+          !event.isComposing
+        ) {
+          const suggestion = suggestedFollowupPromptRef.current;
+          const targetEditor = editorRef.current;
+          if (suggestion && targetEditor && targetEditor.isEmpty) {
+            event.preventDefault();
+            targetEditor.commands.setContent(suggestion);
+            void submitHandlerRef.current?.();
+            return true;
+          }
         }
 
         // Submit on Enter or Cmd/Ctrl+Enter. Shift+Enter falls

@@ -473,6 +473,7 @@
     "sources": "Források:",
     "stopResponse": "Leállítás",
     "stopped": "Leállítva",
+    "tabToAsk": "Tab a kérdezéshez: „{prompt}”",
     "suggestionSeverity": {
       "style": "Stílus",
       "substantive": "Érdemi",

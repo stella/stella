@@ -473,6 +473,7 @@
     "sources": "Šaltiniai:",
     "stopResponse": "Stabdyti",
     "stopped": "Sustabdyta",
+    "tabToAsk": "Tab, kad paklaustumėte: „{prompt}“",
     "suggestionSeverity": {
       "style": "Stilius",
       "substantive": "Esminis",

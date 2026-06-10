@@ -4,6 +4,7 @@ import deleteThread from "@/api/handlers/chat/delete-thread";
 import getMessages from "@/api/handlers/chat/get-messages";
 import getOlderMessages from "@/api/handlers/chat/get-older-messages";
 import getThreadRecap from "@/api/handlers/chat/get-thread-recap";
+import getSuggestedPrompts from "@/api/handlers/chat/get-suggested-prompts";
 import getThreads from "@/api/handlers/chat/get-threads";
 import resolveFileThread from "@/api/handlers/chat/resolve-file-thread";
 import resolveTemplateThread from "@/api/handlers/chat/resolve-template-thread";
@@ -62,4 +63,9 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
     params: getThreadRecap.config.params,
     permissions: getThreadRecap.config.permissions,
     query: getThreadRecap.config.query,
+  })
+  .post("/threads/:threadId/suggested-prompts", getSuggestedPrompts.handler, {
+    params: getSuggestedPrompts.config.params,
+    permissions: getSuggestedPrompts.config.permissions,
+    query: getSuggestedPrompts.config.query,
   });

@@ -127,3 +127,25 @@ export const useChatDraftStore = create<ChatDraftStore>((set, get) => ({
 
 export const getChatDraft = (threadRef: ChatThreadRef): ChatDraftState | null =>
   useChatDraftStore.getState().getDraft(getChatThreadKey(threadRef));
+
+const isEmptyDoc = (draft: ChatDraftState): boolean =>
+  draft.doc.type === "doc" &&
+  (draft.doc.content?.length ?? 0) === 1 &&
+  draft.doc.content?.[0]?.type === "paragraph";
+
+const isDraftEmpty = (draft: ChatDraftState | null): boolean => {
+  if (!draft) {
+    return true;
+  }
+  return draft.attachments.length === 0 && isEmptyDoc(draft);
+};
+
+export const isChatDraftEmpty = (threadRef: ChatThreadRef): boolean =>
+  isDraftEmpty(getChatDraft(threadRef));
+
+export const useIsChatDraftEmpty = (threadRef: ChatThreadRef): boolean => {
+  const threadKey = getChatThreadKey(threadRef);
+  return useChatDraftStore((state) =>
+    isDraftEmpty(state.draftsByThreadKey[threadKey] ?? null),
+  );
+};

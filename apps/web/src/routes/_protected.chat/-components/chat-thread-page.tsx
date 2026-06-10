@@ -39,6 +39,7 @@ import {
   useSetChatAnonymized,
 } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { useDevStore } from "@/lib/dev-store";
 import { toAPIError } from "@/lib/errors";
@@ -49,12 +50,14 @@ import { roleOptions } from "@/routes/-queries";
 import { ChatAnonymizedToggle } from "@/routes/_protected.chat/-components/chat-anonymized-toggle";
 import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-thread-recap";
 import { ChatWebSearchToggle } from "@/routes/_protected.chat/-components/chat-web-search-toggle";
+import { SuggestedFollowupChips } from "@/routes/_protected.chat/-components/suggested-followup-chips";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/routes/_protected.chat/-lib/build-chat-request-message";
 import {
   chatThreadOptions,
+  chatThreadSuggestedPromptsOptions,
   invalidateChatThreadAcrossScopes,
 } from "@/routes/_protected.chat/-queries";
 import { managementRoles } from "@/routes/_protected.organization/-consts";
@@ -202,6 +205,25 @@ export const ChatThreadPage = ({
 
   const sentMessageHistoryHtml = getUserMessageHtmlHistory(messages);
 
+  // Fetch suggested follow-up prompts for Tab-to-ask (editor) and chips display.
+  // Gated by draft store emptiness so the query does not fire when the
+  // user is already typing a custom follow-up.
+  const lastMessageId = messages.at(-1)?.id ?? null;
+  const lastMessageRole = messages.at(-1)?.role ?? null;
+  const editorIsEmpty = useIsChatDraftEmpty(threadRef);
+  const eligibleForSuggestions =
+    editorIsEmpty && lastMessageId !== null && lastMessageRole === "assistant";
+  const { data: suggestedPromptsData } = useQuery(
+    chatThreadSuggestedPromptsOptions({
+      activeOrganizationId,
+      enabled: !isGenerating && eligibleForSuggestions,
+      lastMessageId: lastMessageId ?? "",
+      threadRef,
+    }),
+  );
+  const suggestedFollowupPrompts = suggestedPromptsData?.prompts ?? [];
+  const suggestedFollowupPrompt = suggestedFollowupPrompts.at(0) ?? undefined;
+
   // Seed brand-new (empty) threads from the persisted web-search
   // preference so the user doesn't have to flip the toggle every time
   // they start a chat. We only fire on the first render where the
@@ -251,12 +273,13 @@ export const ChatThreadPage = ({
     data.webSearchAvailable,
     data.webSearchEnabled,
     enabledPreference,
-    seedWebSearch,
-  ]);
-  const controller = useChatEditor({
-    sentMessageHistoryHtml,
-    threadRef,
-  });
+seedWebSearch,
+   ]);
+   const controller = useChatEditor({
+     sentMessageHistoryHtml,
+     suggestedFollowupPrompt,
+     threadRef,
+   });
 
   const openInspectorChat = useInspectorStore((s) => s.openChat);
   const navigate = useNavigate();
@@ -411,7 +434,24 @@ export const ChatThreadPage = ({
             enabled={anonymized}
             workspaceId={workspaceId ?? threadRef.threadId}
           />
-          <div className="mx-auto w-full max-w-5xl p-4">
+          <div className="mx-auto w-full max-w-5xl px-4 pb-4">
+<SuggestedFollowupChips
+              isGenerating={isGenerating}
+              isEmpty={controller.isEmpty}
+              lastMessageId={messages.at(-1)?.id ?? null}
+              lastMessageRole={messages.at(-1)?.role ?? null}
+              messageCount={messages.length}
+              prompts={suggestedFollowupPrompts}
+              onSelect={(prompt) => {
+                controller.setContent(prompt);
+              }}
+              onSend={async (prompt) => {
+                if (!(await ensureAIAvailable())) {
+                  return;
+                }
+                await sendMessage({ text: prompt });
+              }}
+            />
             <ChatInputSurface
               anonymized={anonymized}
               autoFocus

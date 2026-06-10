@@ -473,6 +473,7 @@
     "sources": "Quellen:",
     "stopResponse": "Stoppen",
     "stopped": "Gestoppt",
+    "tabToAsk": "Tab zum Fragen: „{prompt}“",
     "suggestionSeverity": {
       "style": "Stil",
       "substantive": "Inhaltlich",
