@@ -2012,6 +2012,7 @@
     "checkTemplate": "Comprobar plantilla",
     "checkWarnings": "{count, plural, one {# advertencia} other {# advertencias}}",
     "conditionAddRule": "Añadir regla",
+    "conditionCount": "{count, plural, one {# condición} other {# condiciones}}",
     "conditionField": "Campo",
     "conditionMatch": "Coincidencia",
     "conditionMatchAll": "Todas",

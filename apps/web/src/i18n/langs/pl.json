@@ -2012,6 +2012,7 @@
     "checkTemplate": "Sprawdź szablon",
     "checkWarnings": "{count, plural, one {# ostrzeżenie} few {# ostrzeżenia} many {# ostrzeżeń} other {# ostrzeżeń}}",
     "conditionAddRule": "Dodaj regułę",
+    "conditionCount": "{count, plural, one {# warunek} few {# warunki} other {# warunków}}",
     "conditionField": "Pole",
     "conditionMatch": "Dopasowanie",
     "conditionMatchAll": "Wszystkie",

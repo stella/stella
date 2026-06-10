@@ -2012,6 +2012,7 @@
     "checkTemplate": "Sablon ellenőrzése",
     "checkWarnings": "{count, plural, one {# figyelmeztetés} other {# figyelmeztetés}}",
     "conditionAddRule": "Szabály hozzáadása",
+    "conditionCount": "{count, plural, one {# feltétel} other {# feltétel}}",
     "conditionField": "Mező",
     "conditionMatch": "Egyezés",
     "conditionMatchAll": "Mind",

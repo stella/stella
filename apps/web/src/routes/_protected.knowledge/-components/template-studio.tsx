@@ -92,6 +92,7 @@ import type {
   InspectorViewRenderProps,
 } from "@/components/inspector/view-registry";
 import { registerInspectorView } from "@/components/inspector/view-registry";
+import { useI18nStore } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import {
@@ -2231,10 +2232,12 @@ function TemplateStudioInspectorView({
         <Inspector
           conditions={conditions}
           fields={fields}
+          name={tab.label}
           outline={outline}
           onConditionsChange={setConditions}
           onFieldUpdate={upsertField}
           selected={selected}
+          templateId={templateId}
         />
       )}
       {ready && facet === "clauses" && (
@@ -2761,6 +2764,10 @@ registerInspectorView<TemplateStudioPayload>({
 // ── Selection-scoped inspector ───────────────────────────
 
 type InspectorProps = {
+  templateId: string;
+  /** Template name, mirrored from the inspector tab label (rename updates
+   *  it immediately; the detail query may lag an invalidation behind). */
+  name: string;
   selected: DirectiveRange | null;
   fields: StudioField[];
   outline: OutlineNode[];
@@ -2770,6 +2777,8 @@ type InspectorProps = {
 };
 
 const Inspector = ({
+  templateId,
+  name,
   selected,
   fields,
   outline,
@@ -2798,11 +2807,19 @@ const Inspector = ({
     return <ClauseFace selected={selected} />;
   }
 
-  // Default: whole-template overview. Fields lead (they are what the template
-  // is made of); conditions fold into a disclosure of supporting logic.
+  // Default: whole-template overview. The identity block leads (what this
+  // template IS), fields follow (they are what the template is made of);
+  // conditions fold into a disclosure of supporting logic.
   const questions = fields.filter((f) => f.inputType === "boolean");
   return (
     <ScrollArea className="min-h-0 flex-1">
+      <TemplateIdentity
+        conditionCount={conditions.length + questions.length}
+        fieldCount={fields.length}
+        name={name}
+        templateId={templateId}
+      />
+      <Separator />
       <FieldNavigator fields={fields} outline={outline} />
       <Separator />
       <ConditionsDisclosure
@@ -2814,6 +2831,91 @@ const Inspector = ({
     </ScrollArea>
   );
 };
+
+/** Identity block at the top of the template overview: name, language
+ *  chips, a one-line content summary, and the when-to-use note (or a quiet
+ *  nudge to write one — the editing itself lives in the template list).
+ *  Display only. */
+const TemplateIdentity = ({
+  templateId,
+  name,
+  fieldCount,
+  conditionCount,
+}: {
+  templateId: string;
+  name: string;
+  fieldCount: number;
+  conditionCount: number;
+}) => {
+  const t = useTranslations();
+  const lang = useI18nStore((s) => s.lang);
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const { data: detailData } = useQuery(
+    templateDetailOptions(activeOrganizationId, templateId),
+  );
+  const detail =
+    detailData && !(detailData instanceof Response) && "manifest" in detailData
+      ? detailData
+      : null;
+  const { data: clausesData } = useQuery(
+    templateClausesOptions(activeOrganizationId, templateId),
+  );
+  const clauseCount =
+    clausesData && "links" in clausesData ? clausesData.links.length : 0;
+  const languages = detail?.languages ?? [];
+  const whenToUse = detail?.whenToUse ?? null;
+
+  const summary = [
+    t("templates.fieldCount", { count: fieldCount }),
+    t("templates.conditionCount", { count: conditionCount }),
+    t("clauses.clauseCount", { count: clauseCount }),
+  ].join(" · ");
+
+  return (
+    <div className="flex flex-col gap-1.5 px-4 py-3">
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="min-w-0 truncate text-sm font-medium">{name}</h3>
+        {languages.length > 0 && (
+          <span className="flex shrink-0 items-center gap-1">
+            {languages.map((tag) => (
+              <span
+                className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px] font-medium"
+                key={tag}
+                title={tag}
+              >
+                {languageChipLabel(tag, lang)}
+              </span>
+            ))}
+          </span>
+        )}
+      </div>
+      <p className="text-muted-foreground text-xs tabular-nums">{summary}</p>
+      {detail !== null &&
+        (whenToUse !== null && whenToUse !== "" ? (
+          <p
+            className="text-muted-foreground line-clamp-2 text-xs leading-relaxed"
+            title={whenToUse}
+          >
+            {whenToUse}
+          </p>
+        ) : (
+          <p className="text-foreground-placeholder text-xs">
+            {t("templates.describeWhenToUse")}
+          </p>
+        ))}
+    </div>
+  );
+};
+
+/** Localized language-chip text via Intl (no translation entries needed,
+ *  same as the template list); tags Intl cannot name fall back to the
+ *  uppercase tag. Stored tags are server-validated, so `of()` cannot
+ *  throw here. */
+const languageChipLabel = (tag: string, uiLang: string): string =>
+  new Intl.DisplayNames([uiLang], { type: "language" }).of(tag) ??
+  tag.toUpperCase();
 
 /** Settings face for a `{{#if}}` / `{{#elseif}}` opener: the expression is
  *  click-to-edit (rewriting the marker in the document), named conditions

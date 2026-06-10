@@ -2012,6 +2012,7 @@
     "checkTemplate": "Vérifier le modèle",
     "checkWarnings": "{count, plural, one {# avertissement} many {# avertissements} other {# avertissements}}",
     "conditionAddRule": "Ajouter une règle",
+    "conditionCount": "{count, plural, one {# condition} other {# conditions}}",
     "conditionField": "Champ",
     "conditionMatch": "Correspondance",
     "conditionMatchAll": "Toutes",

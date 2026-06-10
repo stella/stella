@@ -2012,6 +2012,7 @@
     "checkTemplate": "Skontrolovať šablónu",
     "checkWarnings": "{count, plural, one {# varovanie} few {# varovania} other {# varovaní}}",
     "conditionAddRule": "Pridať pravidlo",
+    "conditionCount": "{count, plural, one {# podmienka} few {# podmienky} other {# podmienok}}",
     "conditionField": "Pole",
     "conditionMatch": "Zhoda",
     "conditionMatchAll": "Všetky",

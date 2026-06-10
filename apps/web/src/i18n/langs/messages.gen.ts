@@ -2015,6 +2015,7 @@ type Messages = {
     "checkTemplate": "Check template";
     "checkWarnings": "{count, plural, one {# warning} other {# warnings}}";
     "conditionAddRule": "Add rule";
+    "conditionCount": "{count, plural, one {# condition} other {# conditions}}";
     "conditionField": "Field";
     "conditionMatch": "Match";
     "conditionMatchAll": "All";

@@ -2012,6 +2012,7 @@
     "checkTemplate": "Tikrinti šabloną",
     "checkWarnings": "{count, plural, one {# įspėjimas} few {# įspėjimai} many {# įspėjimo} other {# įspėjimų}}",
     "conditionAddRule": "Pridėti taisyklę",
+    "conditionCount": "{count, plural, one {# sąlyga} few {# sąlygos} other {# sąlygų}}",
     "conditionField": "Laukas",
     "conditionMatch": "Atitiktis",
     "conditionMatchAll": "Visi",

@@ -2012,6 +2012,7 @@
     "checkTemplate": "Pārbaudīt veidni",
     "checkWarnings": "{count, plural, zero {# brīdinājumu} one {# brīdinājums} other {# brīdinājumi}}",
     "conditionAddRule": "Pievienot noteikumu",
+    "conditionCount": "{count, plural, zero {# nosacījumu} one {# nosacījums} other {# nosacījumi}}",
     "conditionField": "Lauks",
     "conditionMatch": "Atbilstība",
     "conditionMatchAll": "Visi",

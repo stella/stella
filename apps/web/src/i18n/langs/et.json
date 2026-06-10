@@ -2012,6 +2012,7 @@
     "checkTemplate": "Kontrolli malli",
     "checkWarnings": "{count, plural, one {# hoiatus} other {# hoiatust}}",
     "conditionAddRule": "Lisa reegel",
+    "conditionCount": "{count, plural, one {# tingimus} other {# tingimust}}",
     "conditionField": "Väli",
     "conditionMatch": "Vastavus",
     "conditionMatchAll": "Kõik",
