@@ -10,7 +10,15 @@ import {
 import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
 
-const OPERATORS: ConditionOperator[] = ["==", "!=", ">", "<", ">=", "<="];
+const OPERATORS: ConditionOperator[] = [
+  "==",
+  "!=",
+  ">",
+  "<",
+  ">=",
+  "<=",
+  "contains",
+];
 
 const isConditionOperator = (value: string): value is ConditionOperator =>
   OPERATORS.some((op) => op === value);
