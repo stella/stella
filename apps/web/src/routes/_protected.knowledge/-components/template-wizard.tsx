@@ -1301,6 +1301,21 @@ export const FieldConfigEditor = ({
         />
       </Field>
 
+      {!isFormula && (
+        <Field>
+          <FieldLabel>{t("templates.fieldHint")}</FieldLabel>
+          <FieldControl
+            render={
+              <Input
+                maxLength={HINT_MAX_LENGTH}
+                onChange={(e) => onUpdate({ hint: e.target.value })}
+                value={field.hint ?? ""}
+              />
+            }
+          />
+        </Field>
+      )}
+
       {!isComposite && !isFormula && (
         <Field>
           <FieldLabel>{t("templates.fieldInputType")}</FieldLabel>
@@ -1337,21 +1352,6 @@ export const FieldConfigEditor = ({
               ))}
             </SelectPopup>
           </Select>
-        </Field>
-      )}
-
-      {!isFormula && (
-        <Field>
-          <FieldLabel>{t("templates.fieldHint")}</FieldLabel>
-          <FieldControl
-            render={
-              <Input
-                maxLength={HINT_MAX_LENGTH}
-                onChange={(e) => onUpdate({ hint: e.target.value })}
-                value={field.hint ?? ""}
-              />
-            }
-          />
         </Field>
       )}
 
