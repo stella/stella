@@ -788,6 +788,7 @@
     "scrollToTop": "Ir arriba",
     "search": "Buscar...",
     "selectARole": "Seleccione un rol",
+    "selectDate": "Seleccionar fecha…",
     "sessions": "Sesiones",
     "settings": "Configuración",
     "showAll": "Mostrar todo",
@@ -1950,7 +1951,6 @@
       "none": "Ninguna",
       "urgent": "Urgente"
     },
-    "selectDate": "Seleccionar fecha…",
     "status": "Estado",
     "statusValues": {
       "cancelled": "Cancelada",
