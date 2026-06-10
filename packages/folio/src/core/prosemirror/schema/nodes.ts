@@ -22,6 +22,7 @@ import type {
   TabStop,
   TextFormatting,
   NumberFormat,
+  TableBorders,
   TableFormatting,
   TableRowFormatting,
   TableCell,
@@ -513,6 +514,8 @@ export type TableAttrs = {
   };
   /** Table look flags for conditional formatting (w:tblLook) */
   look?: TableLook;
+  /** Table-level borders (w:tblBorders) — full BorderSpec per side */
+  borders?: TableBorders;
   /** Original table formatting from DOCX for lossless round-trip serialization */
   _originalFormatting?: TableFormatting;
 };

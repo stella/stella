@@ -102,6 +102,7 @@ import {
   mergeCells as pmMergeCells,
   splitCell as pmSplitCell,
   setCellBorder,
+  setTableBorderPreset,
   setCellVerticalAlign,
   setCellMargins,
   setCellTextDirection,
@@ -2264,6 +2265,12 @@ export function DocxEditor({
           label: t("deleteColumn"),
           dividerAfter: true,
         },
+        { action: "tableBordersAll", label: t("tableBordersAll") },
+        {
+          action: "tableBordersNone",
+          label: t("tableBordersNone"),
+          dividerAfter: true,
+        },
       );
     }
     if (contextMenu.cursorInTrackedChange) {
@@ -2420,6 +2427,12 @@ export function DocxEditor({
           break;
         case "deleteColumn":
           pmDeleteColumn(view.state, view.dispatch);
+          break;
+        case "tableBordersAll":
+          setTableBorderPreset("all")(view.state, view.dispatch);
+          break;
+        case "tableBordersNone":
+          setTableBorderPreset("none")(view.state, view.dispatch);
           break;
         // Comment — same flow as floating comment button
         case "addComment": {

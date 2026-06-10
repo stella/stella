@@ -114,7 +114,10 @@ function serializeBorder(
   border: BorderSpec | undefined,
   elementName: string,
 ): string {
-  if (!border || border.style === "none" || border.style === "nil") {
+  // Explicit "none"/"nil" borders are serialized: they negate borders
+  // inherited from the table style, so dropping them would resurrect
+  // style-provided lines (e.g. after the "No borders" preset).
+  if (!border) {
     return "";
   }
 

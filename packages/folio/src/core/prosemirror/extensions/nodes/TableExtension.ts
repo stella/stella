@@ -23,6 +23,7 @@ import {
   TABLE_CELL_TEXT_DIRECTION_VALUES,
   TABLE_WIDTH_TYPE_VALUES,
 } from "../../../types/documentEnumValues";
+import type { TableBorders } from "../../../types/formatting";
 import { resolveColor } from "../../../utils/colorResolver";
 import {
   expectTableAttrs,
@@ -297,6 +298,7 @@ const tableSpec: NodeSpec = {
     floating: { default: null },
     cellMargins: { default: null },
     look: { default: null },
+    borders: { default: null },
     _originalFormatting: { default: null },
   },
   parseDOM: [
@@ -966,6 +968,9 @@ export const TableHeaderExtension = createNodeExtension({
 // ============================================================================
 
 export type BorderPreset = "all" | "outside" | "inside" | "none";
+
+/** Whole-table border presets (Word's "All Borders" / "No Border"). */
+export type TableBorderPreset = "all" | "none";
 
 export const TablePluginExtension = createExtension({
   name: "tablePlugin",
@@ -1988,6 +1993,72 @@ export const TablePluginExtension = createExtension({
           for (const [pos, attrs] of modified) {
             tr.setNodeMarkup(tr.mapping.map(pos), undefined, attrs);
           }
+          dispatch(tr.scrollIntoView());
+        }
+
+        return true;
+      };
+    }
+
+    /**
+     * Apply a whole-table border preset (Word's "All Borders" / "No Border")
+     * to the table containing the caret. Updates the table node's `borders`
+     * attr (serialized as w:tblBorders) and bakes the same spec into every
+     * cell's `borders` attr so the paged painter reflects the change live.
+     */
+    function setTableBorderPreset(preset: TableBorderPreset): Command {
+      return (state, dispatch) => {
+        const context = getTableContext(state);
+        if (
+          !context.isInTable ||
+          context.tablePos === undefined ||
+          !context.table
+        ) {
+          return false;
+        }
+
+        if (dispatch) {
+          const tr = state.tr;
+          const table = context.table;
+          const tableStart = context.tablePos;
+
+          // Word's default table border: single, sz 4 (0.5pt), auto color.
+          const spec: BorderSpec =
+            preset === "all"
+              ? { style: "single", size: 4, space: 0, color: { auto: true } }
+              : { style: "none" };
+          const tableBorders: TableBorders = {
+            top: spec,
+            bottom: spec,
+            left: spec,
+            right: spec,
+            insideH: spec,
+            insideV: spec,
+          };
+
+          tr.setNodeMarkup(tableStart, undefined, {
+            ...expectTableAttrs(table),
+            borders: tableBorders,
+          });
+
+          // Both presets use one uniform spec for every edge, so each cell
+          // gets the same four sides; positions are stable because the
+          // transaction only changes attrs.
+          // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
+          table.forEach((row, rowOffset) => {
+            if (row.type.name !== "tableRow") {
+              return;
+            }
+            // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
+            row.forEach((cell, cellOffset) => {
+              const pos = tableStart + rowOffset + cellOffset + 2;
+              tr.setNodeMarkup(pos, undefined, {
+                ...expectTableCellAttrs(cell),
+                borders: { top: spec, bottom: spec, left: spec, right: spec },
+              });
+            });
+          });
+
           dispatch(tr.scrollIntoView());
         }
 
@@ -3049,6 +3120,8 @@ export const TablePluginExtension = createExtension({
           preset: BorderPreset,
           borderSpec?: { style: string; size: number; color: { rgb: string } },
         ) => setTableBorders(preset, borderSpec),
+        setTableBorderPreset: (preset: TableBorderPreset) =>
+          setTableBorderPreset(preset),
         setCellVerticalAlign: (align: "top" | "center" | "bottom") =>
           setCellVerticalAlign(align),
         setCellMargins: (margins: {

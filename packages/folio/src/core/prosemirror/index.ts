@@ -137,6 +137,7 @@ export {
   selectColumn,
   mergeCells,
   splitCell,
+  setTableBorderPreset,
   setTableBorders,
   removeTableBorders,
   setAllTableBorders,
@@ -161,4 +162,8 @@ export {
   // Table of Contents
   generateTOC,
 } from "./commands";
-export type { TableContextInfo, BorderPreset } from "./commands";
+export type {
+  TableContextInfo,
+  BorderPreset,
+  TableBorderPreset,
+} from "./commands";

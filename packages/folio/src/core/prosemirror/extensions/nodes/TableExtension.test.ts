@@ -135,3 +135,95 @@ describe("table border commands", () => {
     });
   });
 });
+
+describe("table border presets", () => {
+  const firstTable = (doc: PMNode) => {
+    const table = { value: null as PMNode | null };
+    doc.descendants((node) => {
+      if (table.value !== null || node.type.name !== "table") {
+        return;
+      }
+      table.value = node;
+      return false;
+    });
+
+    if (table.value === null) {
+      throw new Error("Expected table");
+    }
+
+    return table.value;
+  };
+
+  const allCells = (doc: PMNode) => {
+    const cells: PMNode[] = [];
+    doc.descendants((node) => {
+      if (node.type.name === "tableCell") {
+        cells.push(node);
+      }
+      return true;
+    });
+    return cells;
+  };
+
+  const wordDefaultBorder = {
+    style: "single",
+    size: 4,
+    space: 0,
+    color: { auto: true },
+  };
+
+  test("'all' sets w:tblBorders on the table and bakes every cell", () => {
+    const state = runTableCommand(
+      createTableStateWithNullBorders(),
+      "setTableBorderPreset",
+      "all",
+    );
+
+    expect(firstTable(state.doc).attrs["borders"]).toEqual({
+      top: wordDefaultBorder,
+      bottom: wordDefaultBorder,
+      left: wordDefaultBorder,
+      right: wordDefaultBorder,
+      insideH: wordDefaultBorder,
+      insideV: wordDefaultBorder,
+    });
+
+    const cells = allCells(state.doc);
+    expect(cells.length).toBe(2);
+    for (const cell of cells) {
+      expect(cell.attrs["borders"]).toEqual({
+        top: wordDefaultBorder,
+        bottom: wordDefaultBorder,
+        left: wordDefaultBorder,
+        right: wordDefaultBorder,
+      });
+    }
+  });
+
+  test("'none' replaces existing borders with explicit none on all sides", () => {
+    const withBorders = runTableCommand(
+      createTableStateWithNullBorders(),
+      "setTableBorderPreset",
+      "all",
+    );
+    const state = runTableCommand(withBorders, "setTableBorderPreset", "none");
+
+    const none = { style: "none" };
+    expect(firstTable(state.doc).attrs["borders"]).toEqual({
+      top: none,
+      bottom: none,
+      left: none,
+      right: none,
+      insideH: none,
+      insideV: none,
+    });
+    for (const cell of allCells(state.doc)) {
+      expect(cell.attrs["borders"]).toEqual({
+        top: none,
+        bottom: none,
+        left: none,
+        right: none,
+      });
+    }
+  });
+});

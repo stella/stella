@@ -1180,6 +1180,9 @@ function convertTable(
   if (table.formatting?.look) {
     attrs.look = table.formatting.look;
   }
+  if (table.formatting?.borders) {
+    attrs.borders = table.formatting.borders;
+  }
   if (table.formatting) {
     attrs._originalFormatting = table.formatting;
   }
