@@ -5,11 +5,13 @@ import {
 } from "@/api/mcp/compat-tools";
 import type { McpMode } from "@/api/mcp/constants";
 import { STELLA_TOOL_DEFINITIONS } from "@/api/mcp/stella-tools";
+import { TEMPLATE_TOOL_DEFINITIONS } from "@/api/mcp/template-tools";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
 
 const DEFAULT_TOOL_DEFINITIONS = [
   ...COMPAT_TOOL_DEFINITIONS,
   ...STELLA_TOOL_DEFINITIONS,
+  ...TEMPLATE_TOOL_DEFINITIONS,
 ] as const satisfies readonly McpToolDefinition[];
 
 const toAnonymizedToolDefinition = (
