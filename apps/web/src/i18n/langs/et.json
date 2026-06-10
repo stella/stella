@@ -2142,6 +2142,7 @@
       "conditionsSectionHelp": "Valige dokumendis tekst → paremklõps → Kuva ainult siis, kui…",
       "draftedByAi": "TI",
       "emptyClauseSlot": "Tühi klausli pesa",
+      "existingField": "Olemasolev väli…",
       "expressionPlaceholder": "avaldis",
       "fieldHelp": "Kui keegi seda malli täidab, küsitakse temalt seda väärtust. Siin otsustate, kuidas see küsimus välja näeb.",
       "fillFormPreview": "Nii kuvatakse see vormis",
@@ -2176,6 +2177,7 @@
       "showOnlyIf": "Kuva ainult siis, kui…",
       "suggestConfig": "Paku seadistust",
       "textPlusAi": "Isik + TI",
+      "useExisting": "Kasuta olemasolevat välja {name}",
       "whoFills": "Kes selle täidab?"
     },
     "tagPlaceholder": "Sisesta silt ja vajuta Enter",

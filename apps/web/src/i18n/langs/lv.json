@@ -2142,6 +2142,7 @@
       "conditionsSectionHelp": "Atlasiet tekstu dokumentā → labais klikšķis → Rādīt tikai tad, ja…",
       "draftedByAi": "MI",
       "emptyClauseSlot": "Tukšs klauzulas slots",
+      "existingField": "Esošs lauks…",
       "expressionPlaceholder": "izteiksme",
       "fieldHelp": "Kad kāds aizpildīs šo veidni, viņam tiks prasīta šī vērtība. Šeit jūs nosakāt, kā šis jautājums izskatīsies.",
       "fillFormPreview": "Tā tas izskatīsies formā",
@@ -2176,6 +2177,7 @@
       "showOnlyIf": "Rādīt tikai tad, ja…",
       "suggestConfig": "Ieteikt konfigurāciju",
       "textPlusAi": "Persona + MI",
+      "useExisting": "Izmantot esošo lauku {name}",
       "whoFills": "Kas to aizpildīs?"
     },
     "tagPlaceholder": "Ierakstiet birku un nospiediet Enter",

@@ -2142,6 +2142,7 @@
       "conditionsSectionHelp": "Zaznacz tekst w dokumencie → prawy przycisk myszy → Pokaż tylko, jeśli…",
       "draftedByAi": "AI",
       "emptyClauseSlot": "Puste miejsce na klauzulę",
+      "existingField": "Istniejące pole…",
       "expressionPlaceholder": "wyrażenie",
       "fieldHelp": "Gdy ktoś będzie wypełniać ten szablon, zostanie poproszony o tę wartość. Tutaj decydujesz, jak to pytanie będzie wyglądać.",
       "fillFormPreview": "Tak pojawi się w formularzu",
@@ -2176,6 +2177,7 @@
       "showOnlyIf": "Pokaż tylko, jeśli…",
       "suggestConfig": "Zaproponuj konfigurację",
       "textPlusAi": "Osoba + AI",
+      "useExisting": "Użyj istniejącego pola {name}",
       "whoFills": "Kto to wypełni?"
     },
     "tagPlaceholder": "Wpisz tag i naciśnij Enter",

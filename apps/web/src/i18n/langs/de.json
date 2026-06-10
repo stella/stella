@@ -2142,6 +2142,7 @@
       "conditionsSectionHelp": "Text im Dokument auswählen → Rechtsklick → Nur anzeigen, wenn…",
       "draftedByAi": "KI",
       "emptyClauseSlot": "Leerer Klausel-Slot",
+      "existingField": "Vorhandenes Feld…",
       "expressionPlaceholder": "Ausdruck",
       "fieldHelp": "Wer diese Vorlage ausfüllt, wird nach diesem Wert gefragt. Hier legen Sie fest, wie diese Frage aussieht.",
       "fillFormPreview": "So erscheint es im Formular",
@@ -2176,6 +2177,7 @@
       "showOnlyIf": "Nur anzeigen, wenn…",
       "suggestConfig": "Konfiguration vorschlagen",
       "textPlusAi": "Person + KI",
+      "useExisting": "Vorhandenes Feld {name} verwenden",
       "whoFills": "Wer füllt das aus?"
     },
     "tagPlaceholder": "Schlagwort eingeben und Enter drücken",

@@ -2142,6 +2142,7 @@
       "conditionsSectionHelp": "Jelöljön ki szöveget a dokumentumban → jobb kattintás → Csak akkor jelenjen meg, ha…",
       "draftedByAi": "MI",
       "emptyClauseSlot": "Üres záradékhely",
+      "existingField": "Meglévő mező…",
       "expressionPlaceholder": "kifejezés",
       "fieldHelp": "Amikor valaki kitölti ezt a sablont, ezt az értéket fogja megadni. Itt döntheti el, hogyan nézzen ki ez a kérdés.",
       "fillFormPreview": "Így jelenik meg az űrlapon",
@@ -2176,6 +2177,7 @@
       "showOnlyIf": "Csak akkor jelenjen meg, ha…",
       "suggestConfig": "Beállítás javaslása",
       "textPlusAi": "Személy + MI",
+      "useExisting": "A meglévő {name} mező használata",
       "whoFills": "Ki tölti ki?"
     },
     "tagPlaceholder": "Írjon be egy címkét, majd nyomjon Entert",

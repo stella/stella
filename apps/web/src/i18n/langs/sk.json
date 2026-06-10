@@ -2142,6 +2142,7 @@
       "conditionsSectionHelp": "Vyberte text v dokumente → pravé tlačidlo → Zobraziť, len ak…",
       "draftedByAi": "AI",
       "emptyClauseSlot": "Prázdny slot pre klauzulu",
+      "existingField": "Existujúce pole…",
       "expressionPlaceholder": "výraz",
       "fieldHelp": "Keď niekto šablónu vypĺňa, bude požiadaný o túto hodnotu. Tu určíte, ako bude otázka vyzerať.",
       "fillFormPreview": "Ako sa zobrazí vo formulári",
@@ -2176,6 +2177,7 @@
       "showOnlyIf": "Zobraziť, len ak…",
       "suggestConfig": "Navrhnúť nastavenie",
       "textPlusAi": "Osoba + AI",
+      "useExisting": "Použiť existujúce pole {name}",
       "whoFills": "Kto to vyplní?"
     },
     "tagPlaceholder": "Napíšte štítok a stlačte Enter",

@@ -32,6 +32,7 @@ import {
   UserIcon,
   WandSparklesIcon,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type { Node as PMNode, NodeType, ResolvedPos } from "prosemirror-model";
 import { TextSelection } from "prosemirror-state";
 import type { EditorState, Transaction } from "prosemirror-state";
@@ -157,8 +158,14 @@ const GESTURE_ENRICH_DELAY_MS = 500;
 const GESTURE_POPOVER_OFFSET_PX = 8;
 /** Half the popover's fixed width (w-56), for clamping inside the host. */
 const GESTURE_POPOVER_HALF_WIDTH_PX = 116;
-/** Rough rendered height of the three-row popover, for the flip decision. */
-const GESTURE_POPOVER_EST_HEIGHT_PX = 120;
+/** Rough rendered height of the five-row popover plus the AI slot, for the
+ *  flip decision. */
+const GESTURE_POPOVER_EST_HEIGHT_PX = 210;
+/** At most this many existing field paths ride along in the enrichment
+ *  instruction (the suggest endpoint bounds `instructions` at 2000 chars). */
+const GESTURE_ENRICH_MAX_PATHS = 30;
+/** Joined-paths character budget inside the enrichment instruction. */
+const GESTURE_ENRICH_PATHS_MAX_CHARS = 1000;
 /** Source-phrase cap for the bilingual-mirror instruction (the suggest
  *  endpoint bounds `instructions` at 2000 chars). */
 const MIRROR_SOURCE_MAX_CHARS = 400;
@@ -176,12 +183,16 @@ type SelectionGesture = GestureSelection & {
   placement: "above" | "below";
 };
 
-/** Progressive AI enrichment of the popover's Make-field row. */
 /** Session-lived answers for the selection popover, keyed by exact selection
- *  + surrounding context; bounded FIFO so it cannot grow unchecked. */
+ *  + surrounding context + the known-paths list; bounded FIFO so it cannot
+ *  grow unchecked. */
 const gestureEnrichmentCache = new Map<string, GestureEnrichment>();
 const GESTURE_ENRICHMENT_CACHE_MAX = 100;
 
+/** Progressive AI proposal for the popover's AI row. `fieldPath` carries the
+ *  model's claim that the selection is another occurrence of an existing
+ *  field; it is re-checked against the session's fields at render/accept
+ *  time. */
 type GestureEnrichment =
   | { status: "idle" }
   | { status: "loading" }
@@ -190,7 +201,35 @@ type GestureEnrichment =
       label: string | undefined;
       inputType: EditableField["inputType"] | undefined;
       aiPrompt: string | undefined;
+      fieldPath: string | undefined;
     };
+
+/** Tiny stable digest (a polynomial rolling hash over the joined list) so
+ *  the enrichment cache key reflects the known-paths list without storing
+ *  it verbatim. */
+const HASH_MODULUS = 2 ** 48;
+const hashStrings = (values: readonly string[]): string => {
+  let hash = 5381;
+  for (const char of values.join("\u0000")) {
+    hash = (hash * 31 + (char.codePointAt(0) ?? 0)) % HASH_MODULUS;
+  }
+  return hash.toString(36);
+};
+
+/** The session's field paths as they ride along in the enrichment
+ *  instruction: capped in count and joined length. */
+const enrichmentKnownPaths = (fields: readonly StudioField[]): string[] => {
+  const paths: string[] = [];
+  let budget = GESTURE_ENRICH_PATHS_MAX_CHARS;
+  for (const field of fields.slice(0, GESTURE_ENRICH_MAX_PATHS)) {
+    budget -= field.path.length + 2;
+    if (budget < 0) {
+      break;
+    }
+    paths.push(field.path);
+  }
+  return paths;
+};
 
 /**
  * Template Studio page: the document (Folio) fills the surface, with a slim
@@ -601,6 +640,32 @@ export const TemplateStudioPage = ({
       markDirty();
     });
 
+  // Replace the selection (or insert at the caret) with an existing field's
+  // marker; `range` pins a captured selection (the gesture popover's) so a
+  // click can never target a drifted live selection.
+  const insertExistingFieldAt = (
+    path: string,
+    range?: { from: number; to: number },
+  ) =>
+    withEditorView((view) => {
+      const { from, to } = range ?? view.state.selection;
+      view.dispatch(
+        view.state.tr.insertText(`{{${path}}}`, from, to).scrollIntoView(),
+      );
+      view.focus();
+      markDirty();
+      if (from !== to) {
+        // Replacing concrete text with a reused field means this spot's
+        // wording may need to differ (declension); let AI fit it.
+        const field = useTemplateStudioStore
+          .getState()
+          .fields.find((f) => f.path === path);
+        if (field && field.aiPrompt === undefined && !field.aiAdapt) {
+          upsertField(path, { aiAdapt: true });
+        }
+      }
+    });
+
   // Block directives must occupy their own paragraph (the fill engine anchors
   // them line-by-line). With a selection, wrap the paragraphs it covers in
   // opener/closer; with a caret, insert opener/body/closer after the current
@@ -848,23 +913,35 @@ export const TemplateStudioPage = ({
     }
     const seq = ++enrichSeqRef.current;
     const contextText = paragraphsAroundSelection(view.state, sel.from);
+    const knownPaths = enrichmentKnownPaths(
+      useTemplateStudioStore.getState().fields,
+    );
     // Re-selecting the same text in the same context is common (the popover
     // dismisses on any click); serve the model's previous answer instead of
-    // paying for it again.
-    const cacheKey = `${sel.text}\u0000${contextText}`;
+    // paying for it again. The known-paths list changes rarely; its hash
+    // keys the existing-field part of the answer.
+    const cacheKey = `${sel.text}\u0000${contextText}\u0000${hashStrings(knownPaths)}`;
     const cached = gestureEnrichmentCache.get(cacheKey);
     if (cached !== undefined) {
       setEnrichment(cached);
       return;
     }
     setEnrichment({ status: "loading" });
+    const existingFieldsClause =
+      knownPaths.length === 0
+        ? ""
+        : ` The template already has these fields: ${knownPaths.join(", ")}.` +
+          ` If the selection is just another occurrence of one of them, set` +
+          ` fieldPath to that exact existing path instead of inventing a` +
+          ` new field.`;
     const response = await api.templates["suggest-fields"].post({
       text: contextText,
       instructions:
         `The user selected this exact text: "${sel.text}". Propose exactly ` +
         `ONE field for that exact selection (literalText must equal it): ` +
         `its label and input type, plus an aiPrompt only when the selection ` +
-        `is free-form prose that AI should draft at fill time.`,
+        `is free-form prose that AI should draft at fill ` +
+        `time.${existingFieldsClause}`,
     });
     if (seq !== enrichSeqRef.current) {
       return;
@@ -882,6 +959,7 @@ export const TemplateStudioPage = ({
           ? match.inputType
           : undefined,
       aiPrompt: match.aiPrompt,
+      fieldPath: match.fieldPath,
     };
     if (gestureEnrichmentCache.size >= GESTURE_ENRICHMENT_CACHE_MAX) {
       const oldest = gestureEnrichmentCache.keys().next().value;
@@ -916,17 +994,43 @@ export const TemplateStudioPage = ({
     enrichGesture(sel);
   };
 
-  // Each button acts on the selection captured when the popover anchored, so
-  // a click can never target a drifted live selection.
-  const applyGesture = (kind: "field" | "if" | "each" | "clause") => {
+  const dismissGesture = () => {
+    showGesture.cancel();
+    enrichGesture.cancel();
+    hideGesture();
+  };
+
+  /** The popover's "Existing field…" list: reuse a field over the captured
+   *  selection. */
+  const applyExistingFieldGesture = (path: string) => {
     const shown = gestureRef.current;
     if (shown === null) {
       return;
     }
+    insertExistingFieldAt(path, { from: shown.from, to: shown.to });
+    dismissGesture();
+  };
+
+  /** Accept the AI proposal row: when the model recognized the selection as
+   *  another occurrence of an existing field, reuse that field; otherwise
+   *  make a new field carrying the proposed configuration. */
+  const applyAiGesture = () => {
+    const shown = gestureRef.current;
+    if (shown === null || enrichment.status !== "ready") {
+      return;
+    }
     const range = { from: shown.from, to: shown.to };
-    if (kind === "field") {
+    const existing =
+      enrichment.fieldPath === undefined
+        ? undefined
+        : useTemplateStudioStore
+            .getState()
+            .fields.find((f) => f.path === enrichment.fieldPath);
+    if (existing !== undefined) {
+      insertExistingFieldAt(existing.path, range);
+    } else {
       const path = makeField(range);
-      if (path !== null && enrichment.status === "ready") {
+      if (path !== null) {
         upsertField(path, {
           ...(enrichment.label !== undefined && enrichment.label !== ""
             ? { label: enrichment.label }
@@ -939,6 +1043,22 @@ export const TemplateStudioPage = ({
             : {}),
         });
       }
+    }
+    dismissGesture();
+  };
+
+  // Each button acts on the selection captured when the popover anchored, so
+  // a click can never target a drifted live selection.
+  const applyGesture = (kind: "field" | "if" | "each" | "clause") => {
+    const shown = gestureRef.current;
+    if (shown === null) {
+      return;
+    }
+    const range = { from: shown.from, to: shown.to };
+    if (kind === "field") {
+      // The plain row is deliberately generic; the AI proposal accepts via
+      // its own row below the separator.
+      makeField(range);
     } else if (kind === "clause") {
       withEditorView((view) => {
         const slotName = slugify(
@@ -957,9 +1077,7 @@ export const TemplateStudioPage = ({
     } else {
       wrapBlockWithMirrorOffer("each", range);
     }
-    showGesture.cancel();
-    enrichGesture.cancel();
-    hideGesture();
+    dismissGesture();
   };
 
   // Escape, any scroll, and the (custom) context menu all dismiss the
@@ -1094,26 +1212,7 @@ export const TemplateStudioPage = ({
 
   actionsRef.current = {
     toggleDirectives: () => setShowDirectives((v) => !v),
-    insertExistingField: (path) => {
-      withEditorView((view) => {
-        const { from, to } = view.state.selection;
-        view.dispatch(
-          view.state.tr.insertText(`{{${path}}}`, from, to).scrollIntoView(),
-        );
-        view.focus();
-        markDirty();
-        if (from !== to) {
-          // Replacing concrete text with a reused field means this spot's
-          // wording may need to differ (declension); let AI fit it.
-          const field = useTemplateStudioStore
-            .getState()
-            .fields.find((f) => f.path === path);
-          if (field && field.aiPrompt === undefined && !field.aiAdapt) {
-            upsertField(path, { aiAdapt: true });
-          }
-        }
-      });
-    },
+    insertExistingField: (path) => insertExistingFieldAt(path),
     setFillPreview: (values) => {
       fillPreviewRef.current = values;
       const view = editorViewRef.current;
@@ -1398,6 +1497,8 @@ export const TemplateStudioPage = ({
           <SelectionGesturePopover
             enrichment={enrichment}
             gesture={gesture}
+            onAcceptAi={applyAiGesture}
+            onInsertExisting={applyExistingFieldGesture}
             onMakeClause={() => applyGesture("clause")}
             onMakeField={() => applyGesture("field")}
             onWrapEach={() => applyGesture("each")}
@@ -1471,12 +1572,15 @@ const keepEditorFocus = (event: { preventDefault: () => void }) => {
 };
 
 /** Floating gesture menu anchored under (or above) the painted selection.
- *  Instant structural actions first; the Make-field row enriches in place
- *  once the model's proposal arrives. */
+ *  Instant rows first (plain Make field, the existing-field list, the
+ *  structural wraps); the AI proposal lands as its own row below a
+ *  separator once the model answers. */
 const SelectionGesturePopover = ({
   gesture,
   enrichment,
   onMakeField,
+  onInsertExisting,
+  onAcceptAi,
   onWrapIf,
   onWrapEach,
   onMakeClause,
@@ -1484,11 +1588,14 @@ const SelectionGesturePopover = ({
   gesture: SelectionGesture;
   enrichment: GestureEnrichment;
   onMakeField: () => void;
+  onInsertExisting: (path: string) => void;
+  onAcceptAi: () => void;
   onWrapIf: () => void;
   onWrapEach: () => void;
   onMakeClause: () => void;
 }) => {
   const t = useTranslations();
+  const fields = useTemplateStudioStore((s) => s.fields);
   return (
     <div
       aria-label={t("templates.studio.insert")}
@@ -1503,7 +1610,22 @@ const SelectionGesturePopover = ({
             : `translate(-50%, ${GESTURE_POPOVER_OFFSET_PX}px)`,
       }}
     >
-      <GestureMakeFieldRow enrichment={enrichment} onMakeField={onMakeField} />
+      <Button
+        className="justify-start gap-2 font-normal"
+        onClick={onMakeField}
+        onMouseDown={keepEditorFocus}
+        size="sm"
+        variant="ghost"
+      >
+        <BracesIcon className="text-muted-foreground size-3.5 shrink-0" />
+        {t("templates.studio.makeField")}
+      </Button>
+      {fields.length > 0 && (
+        <GestureExistingFieldRow
+          fields={fields}
+          onInsertExisting={onInsertExisting}
+        />
+      )}
       <Button
         className="justify-start gap-2 font-normal"
         onClick={onWrapIf}
@@ -1534,66 +1656,139 @@ const SelectionGesturePopover = ({
         <TextQuoteIcon className="text-muted-foreground size-3.5 shrink-0" />
         {t("templates.studio.scopeClause")}
       </Button>
+      {enrichment.status !== "idle" && (
+        <>
+          <Separator className="my-1" />
+          <GestureAiRow
+            enrichment={enrichment}
+            fields={fields}
+            onAcceptAi={onAcceptAi}
+          />
+        </>
+      )}
     </div>
   );
 };
 
-/** The popover's primary row. Plain "Make field" instantly; once the model's
- *  proposal lands it reads as the suggested label + type icon (wand = AI).
- *  While the proposal is in flight only a subtle shimmer shows — the button
- *  itself stays clickable throughout. */
-const GestureMakeFieldRow = ({
-  enrichment,
-  onMakeField,
+/** "Existing field…" row: expands to an inline list of the template's
+ *  fields; choosing one places that field's marker over the selection. */
+const GestureExistingFieldRow = ({
+  fields,
+  onInsertExisting,
 }: {
-  enrichment: GestureEnrichment;
-  onMakeField: () => void;
+  fields: StudioField[];
+  onInsertExisting: (path: string) => void;
 }) => {
   const t = useTranslations();
-  if (enrichment.status === "ready") {
-    const TypeIcon =
-      enrichment.inputType === undefined
-        ? null
-        : VALUE_TYPE_META[inputTypeValueKind(enrichment.inputType)].icon;
-    const label =
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button
+        aria-expanded={open}
+        className="justify-start gap-2 font-normal"
+        onClick={() => setOpen((v) => !v)}
+        onMouseDown={keepEditorFocus}
+        size="sm"
+        variant="ghost"
+      >
+        <PlusIcon className="text-muted-foreground size-3.5 shrink-0" />
+        <span className="min-w-0 truncate">
+          {t("templates.studio.existingField")}
+        </span>
+        {open ? (
+          <ChevronDownIcon className="text-muted-foreground ms-auto size-3.5 shrink-0" />
+        ) : (
+          <ChevronRightIcon className="text-muted-foreground ms-auto size-3.5 shrink-0" />
+        )}
+      </Button>
+      {open && (
+        <div className="flex max-h-44 flex-col overflow-y-auto">
+          {fields.map((field) => {
+            const Icon =
+              VALUE_TYPE_META[inputTypeValueKind(field.inputType)].icon;
+            return (
+              <Button
+                className="justify-start gap-2 ps-7 font-normal"
+                key={field.path}
+                onClick={() => onInsertExisting(field.path)}
+                onMouseDown={keepEditorFocus}
+                size="sm"
+                title={field.path}
+                variant="ghost"
+              >
+                <Icon className="text-muted-foreground size-3.5 shrink-0" />
+                <span className="min-w-0 truncate">
+                  {field.label === "" ? field.path : field.label}
+                </span>
+                {field.label === "" ? null : (
+                  <code className="text-muted-foreground ms-auto min-w-0 truncate text-[10px]">
+                    {field.path}
+                  </code>
+                )}
+              </Button>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+};
+
+/** The AI slot under the separator: a shimmer while the proposal is in
+ *  flight, then the proposal as a quietly accented row — proposed type icon
+ *  left, wand right. A proposal that points at an existing field reads as
+ *  "Use existing …" and reuses it instead of creating a duplicate. */
+const GestureAiRow = ({
+  enrichment,
+  fields,
+  onAcceptAi,
+}: {
+  enrichment: GestureEnrichment;
+  fields: StudioField[];
+  onAcceptAi: () => void;
+}) => {
+  const t = useTranslations();
+  if (enrichment.status !== "ready") {
+    return (
+      <div className="flex h-8 items-center px-2.5">
+        <span
+          aria-hidden="true"
+          className="bg-muted h-1.5 w-16 animate-pulse rounded-full"
+        />
+      </div>
+    );
+  }
+  const existing =
+    enrichment.fieldPath === undefined
+      ? undefined
+      : fields.find((f) => f.path === enrichment.fieldPath);
+  let label: string;
+  let TypeIcon: LucideIcon;
+  if (existing !== undefined) {
+    label = t("templates.studio.useExisting", {
+      name: existing.label === "" ? existing.path : existing.label,
+    });
+    TypeIcon = VALUE_TYPE_META[inputTypeValueKind(existing.inputType)].icon;
+  } else {
+    label =
       enrichment.label !== undefined && enrichment.label !== ""
         ? enrichment.label
         : t("templates.studio.makeField");
-    return (
-      <Button
-        className="justify-start gap-2 font-normal"
-        onClick={onMakeField}
-        onMouseDown={keepEditorFocus}
-        size="sm"
-        title={t("templates.studio.makeField")}
-        variant="ghost"
-      >
-        <WandSparklesIcon className="text-muted-foreground size-3.5 shrink-0" />
-        <span className="min-w-0 truncate">{label}</span>
-        {TypeIcon === null ? null : (
-          <TypeIcon className="text-muted-foreground ms-auto size-3.5 shrink-0" />
-        )}
-      </Button>
-    );
+    TypeIcon =
+      VALUE_TYPE_META[inputTypeValueKind(enrichment.inputType ?? "text")].icon;
   }
   return (
     <Button
-      className="justify-start gap-2 font-normal"
-      onClick={onMakeField}
+      className="bg-primary/5 text-primary hover:bg-primary/10 hover:text-primary justify-start gap-2 font-normal"
+      onClick={onAcceptAi}
       onMouseDown={keepEditorFocus}
       size="sm"
+      title={label}
       variant="ghost"
     >
-      <BracesIcon className="text-muted-foreground size-3.5 shrink-0" />
-      <span className="min-w-0 truncate">
-        {t("templates.studio.makeField")}
-      </span>
-      {enrichment.status === "loading" ? (
-        <span
-          aria-hidden="true"
-          className="bg-muted ms-auto h-1.5 w-8 shrink-0 animate-pulse rounded-full"
-        />
-      ) : null}
+      <TypeIcon className="size-3.5 shrink-0" />
+      <span className="min-w-0 truncate">{label}</span>
+      <WandSparklesIcon className="ms-auto size-3.5 shrink-0" />
     </Button>
   );
 };

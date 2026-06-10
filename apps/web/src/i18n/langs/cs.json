@@ -2142,6 +2142,7 @@
       "conditionsSectionHelp": "Vyberte text v dokumentu → pravé tlačítko → Zobrazit, jen pokud…",
       "draftedByAi": "AI",
       "emptyClauseSlot": "Prázdný slot pro klauzuli",
+      "existingField": "Existující pole…",
       "expressionPlaceholder": "výraz",
       "fieldHelp": "Když někdo šablonu vyplňuje, bude dotázán na tuto hodnotu. Zde určíte, jak bude otázka vypadat.",
       "fillFormPreview": "Jak se zobrazí ve formuláři",
@@ -2176,6 +2177,7 @@
       "showOnlyIf": "Zobrazit, jen pokud…",
       "suggestConfig": "Navrhnout nastavení",
       "textPlusAi": "Osoba + AI",
+      "useExisting": "Použít existující pole {name}",
       "whoFills": "Kdo to vyplní?"
     },
     "tagPlaceholder": "Napište štítek a stiskněte Enter",

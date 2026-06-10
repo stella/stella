@@ -2142,6 +2142,7 @@
       "conditionsSectionHelp": "Selecione um texto no documento → clique com o botão direito → Mostrar apenas se…",
       "draftedByAi": "IA",
       "emptyClauseSlot": "Espaço de cláusula vazio",
+      "existingField": "Campo existente…",
       "expressionPlaceholder": "expressão",
       "fieldHelp": "Quando alguém preencher este modelo, este valor será solicitado. Aqui você decide como essa pergunta vai aparecer.",
       "fillFormPreview": "Como aparece no formulário",
@@ -2176,6 +2177,7 @@
       "showOnlyIf": "Mostrar apenas se…",
       "suggestConfig": "Sugerir configuração",
       "textPlusAi": "Pessoa + IA",
+      "useExisting": "Usar o campo existente {name}",
       "whoFills": "Quem preenche isto?"
     },
     "tagPlaceholder": "Digite uma etiqueta e pressione Enter",

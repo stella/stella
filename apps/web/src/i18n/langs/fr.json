@@ -2142,6 +2142,7 @@
       "conditionsSectionHelp": "Sélectionnez du texte dans le document → clic droit → Afficher seulement si…",
       "draftedByAi": "IA",
       "emptyClauseSlot": "Emplacement de clause vide",
+      "existingField": "Champ existant…",
       "expressionPlaceholder": "expression",
       "fieldHelp": "Quand quelqu'un remplit ce modèle, cette valeur lui est demandée. Vous décidez ici de l'apparence de cette question.",
       "fillFormPreview": "Aperçu dans le formulaire",
@@ -2176,6 +2177,7 @@
       "showOnlyIf": "Afficher seulement si…",
       "suggestConfig": "Suggérer la configuration",
       "textPlusAi": "Personne + IA",
+      "useExisting": "Utiliser le champ existant {name}",
       "whoFills": "Qui le remplit ?"
     },
     "tagPlaceholder": "Saisissez une étiquette et appuyez sur Entrée",
