@@ -88,7 +88,6 @@ const seedSkills = createSafeRootHandler(
           body: skill.body,
           enabled: true,
           command: skill.command,
-          autoInvokeHint: null,
         }));
 
         const insertedRows = await tx

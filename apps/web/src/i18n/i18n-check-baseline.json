@@ -295,6 +295,19 @@
       "de",
       "fr"
     ],
+    "knowledge.agentSkills.coaching.publish": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
     "knowledge.agentSkills.formBody": [
       "fr"
     ],
@@ -307,6 +320,19 @@
     "knowledge.agentSkills.formVersion": [
       "de",
       "fr"
+    ],
+    "knowledge.agentSkills.howItRuns": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
     ],
     "knowledge.agentSkills.newFileFilenamePlaceholder": [
       "cs",
@@ -329,6 +355,19 @@
       "sk"
     ],
     "knowledge.agentSkills.newFolderFilenamePlaceholder": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "knowledge.agentSkills.selectFileHint": [
       "cs",
       "de",
       "es",
@@ -382,16 +421,190 @@
       "fr"
     ],
     "knowledge.sections.prompts.title": [
-      "de",
-      "es",
-      "fr",
-      "pt-BR"
-    ],
-    "knowledge.sections.skills.title": [
       "de"
     ],
     "knowledge.sections.tools.title": [
       "de"
+    ],
+    "knowledge.skills.blueprintGallery.cards.answerFromSources.blurb": [
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "knowledge.skills.blueprintGallery.cards.answerFromSources.inside": [
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "knowledge.skills.blueprintGallery.cards.answerFromSources.title": [
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "knowledge.skills.blueprintGallery.cards.checkAgainstRules.blurb": [
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "knowledge.skills.blueprintGallery.cards.checkAgainstRules.inside": [
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "knowledge.skills.blueprintGallery.cards.checkAgainstRules.title": [
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "knowledge.skills.blueprintGallery.cards.intakeToDraft.blurb": [
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "knowledge.skills.blueprintGallery.cards.intakeToDraft.inside": [
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "knowledge.skills.blueprintGallery.cards.intakeToDraft.title": [
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "knowledge.skills.blueprintGallery.insideLabel": [
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "knowledge.skills.blueprintGallery.startBlank": [
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "knowledge.skills.blueprintGallery.startBlankHint": [
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "knowledge.skills.blueprintGallery.subtitle": [
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "knowledge.skills.blueprintGallery.title": [
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "knowledge.skills.commandHelp": [
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
     ],
     "knowledge.skills.form.description": [
       "fr"
@@ -400,12 +613,43 @@
       "de"
     ],
     "knowledge.skills.form.prompt": [
+      "fr"
+    ],
+    "markdownEditor.rawLabel": [
       "cs",
       "de",
       "es",
       "et",
       "fr",
       "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "markdownEditor.showFormatted": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "markdownEditor.showRaw": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
       "pl",
       "pt-BR",
       "sk"

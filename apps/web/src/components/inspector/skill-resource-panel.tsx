@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { PencilIcon, SaveIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -9,10 +9,15 @@ import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { MarkdownPreview } from "@/components/markdown-preview";
+import { MarkdownFolioEditor } from "@/components/markdown/markdown-folio-editor";
 import { api } from "@/lib/api";
 import { PDF_MIME, isMarkdownFile } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
+import {
+  toEditorMarkdown,
+  toStoredMarkdown,
+} from "@/routes/_protected.knowledge/-components/skill-body-markdown";
 
 import type { SkillResourceTab } from "./inspector-store";
 import { useInspectorStore } from "./inspector-store";
@@ -56,6 +61,11 @@ export const SkillResourcePanel = ({
   const renderMode = detectRenderMode(tab.mimeType, tab.resourcePath);
   const isEditable =
     renderMode !== "pdf" && tab.origin !== "built-in" && tab.skillId !== null;
+  // Markdown edits in the shared Folio WYSIWYG editor (auto-saving), so the ICP
+  // never touches raw markdown (a "Show raw" toggle is there for power users).
+  // Other text files keep the raw editor below.
+  const useFolio =
+    renderMode === "markdown" && isEditable && tab.skillId !== null;
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(tab.content);
@@ -72,13 +82,17 @@ export const SkillResourcePanel = ({
     }
     setSaving(true);
     const nextContent = draft;
-    const response = await api
-      .skills({ skillId: toSafeId<"agentSkill">(tab.skillId) })
-      .resources.patch({
-        path: tab.resourcePath,
-        content: nextContent,
-        queryKey: ["skills"],
-      });
+    const skill = api.skills({ skillId: toSafeId<"agentSkill">(tab.skillId) });
+    // The SKILL.md body lives on the skill row; companion files are separate
+    // resource rows. Same panel, two save endpoints.
+    const response =
+      tab.target === "body"
+        ? await skill.patch({ body: nextContent, queryKey: ["skills"] })
+        : await skill.resources.patch({
+            path: tab.resourcePath,
+            content: nextContent,
+            queryKey: ["skills"],
+          });
     setSaving(false);
     if (response.error) {
       const apiError = toAPIError(response.error);
@@ -102,11 +116,80 @@ export const SkillResourcePanel = ({
     setEditing(false);
   };
 
+  // Autosave path for the Folio editor. The editor emits debounced markdown with
+  // skill frontmatter stripped and guide comments shown as callouts; map it back
+  // to the stored shape (frontmatter re-prepended, callouts → guide comments)
+  // before persisting. Saves are serialized: one PATCH in flight at a time, the
+  // newest markdown coalesced behind it. Concurrent PATCHes could be applied by
+  // the server out of order, silently persisting stale content even when the
+  // client discards the stale response. Queues are keyed per tab — the panel
+  // is not remounted on tab switch, so a single queue would let an in-flight
+  // save for one file consume markdown queued for another.
+  const saveQueues = useRef(
+    new Map<string, { inFlight: boolean; pending: string | null }>(),
+  );
+  const saveQueueFor = (tabId: string) => {
+    const existing = saveQueues.current.get(tabId);
+    if (existing) {
+      return existing;
+    }
+    const fresh = { inFlight: false, pending: null };
+    saveQueues.current.set(tabId, fresh);
+    return fresh;
+  };
+  const runSaveLoop = async (editorMarkdown: string) => {
+    if (tab.skillId === null) {
+      return;
+    }
+    // Snapshot the tab now: the loop may outlive a tab switch, and `tab` would
+    // then point at a different file.
+    const { content, id: tabId, resourcePath, target } = tab;
+    const skill = api.skills({ skillId: toSafeId<"agentSkill">(tab.skillId) });
+    const queue = saveQueueFor(tabId);
+    queue.inFlight = true;
+    let next: string | null = editorMarkdown;
+    while (next !== null) {
+      const stored = toStoredMarkdown(next, content);
+      const response =
+        target === "body"
+          ? await skill.patch({ body: stored, queryKey: ["skills"] })
+          : await skill.resources.patch({
+              path: resourcePath,
+              content: stored,
+              queryKey: ["skills"],
+            });
+      next = queue.pending;
+      queue.pending = null;
+      if (response.error) {
+        // Superseded by newer markdown: retry with that instead of toasting.
+        if (next !== null) {
+          continue;
+        }
+        stellaToast.add({
+          title: t("common.unexpectedError"),
+          description: toAPIError(response.error).message,
+          type: "error",
+        });
+        break;
+      }
+      updateSkillResourceTabContent(tabId, stored);
+    }
+    queue.inFlight = false;
+  };
+  const persistMarkdown = (editorMarkdown: string) => {
+    const queue = saveQueueFor(tab.id);
+    if (queue.inFlight) {
+      queue.pending = editorMarkdown;
+      return;
+    }
+    void runSaveLoop(editorMarkdown);
+  };
+
   return (
-    <div className="bg-background flex h-full min-h-0 flex-col">
+    <div className="bg-background flex h-full min-h-0 min-w-0 flex-1 flex-col">
       <InspectorTabHeader
         actions={
-          isEditable ? (
+          isEditable && !useFolio ? (
             <div className="flex items-center gap-1">
               {editing ? (
                 <>
@@ -160,15 +243,23 @@ export const SkillResourcePanel = ({
         }
         onClose={onClose}
       />
-      <SkillResourceBody
-        content={tab.content}
-        draft={draft}
-        editing={editing}
-        editLabel={t("common.edit")}
-        onDraftChange={setDraft}
-        pdfPlaceholder={t("knowledge.agentSkills.pdfPreviewSoon")}
-        renderMode={renderMode}
-      />
+      {useFolio && tab.skillId !== null ? (
+        <MarkdownFolioEditor
+          key={tab.id}
+          markdown={toEditorMarkdown(tab.content)}
+          onMarkdownChange={persistMarkdown}
+        />
+      ) : (
+        <SkillResourceBody
+          content={tab.content}
+          draft={draft}
+          editing={editing}
+          editLabel={t("common.edit")}
+          onDraftChange={setDraft}
+          pdfPlaceholder={t("knowledge.agentSkills.pdfPreviewSoon")}
+          renderMode={renderMode}
+        />
+      )}
     </div>
   );
 };

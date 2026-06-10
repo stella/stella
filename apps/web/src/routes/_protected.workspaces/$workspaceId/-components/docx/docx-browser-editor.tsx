@@ -53,6 +53,10 @@ import "@stll/folio/editor.css";
 import type { ActiveDocxRegistrationToken } from "@/components/ai-suggestions/active-docx-store";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import { useAutocompleteStream } from "@/components/autocomplete/use-autocomplete-stream";
+import {
+  useDocxFitZoom,
+  useDocxWheelZoom,
+} from "@/components/docx-preview-zoom";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { StatusMessage } from "@/components/route-components";
 import Tooltip from "@/components/tooltip";
@@ -60,10 +64,6 @@ import { env } from "@/env";
 import { anonymizeChatTextInWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
 import { composeRefs } from "@/lib/slot";
 import { DocxLoadingShell } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell";
-import {
-  useDocxFitZoom,
-  useDocxWheelZoom,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-preview-zoom";
 import { useDocxBlockScroll } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/use-docx-block-scroll";
 import { useFolioCollaborationSession } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/use-folio-collaboration-session";
 import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
@@ -560,10 +560,10 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       : null;
   const [autosaveStatus, setAutosaveStatus] =
     useState<AutosaveStatus>("synced");
-  const { containerRef: fitZoomRef, fitZoom: targetZoom } = useDocxFitZoom(
+  const { containerRef: fitZoomRef, fitZoom: targetZoom } = useDocxFitZoom({
     scaleOffset,
-    0.85,
-  );
+    maxAutoZoom: 0.85,
+  });
   const composedContainerRef = useMemo(
     () => composeRefs(containerRef, fitZoomRef),
     [fitZoomRef],

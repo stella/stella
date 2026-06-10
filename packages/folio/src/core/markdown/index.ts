@@ -35,6 +35,10 @@ export type {
   MarkdownResult,
 } from "./types";
 
+// Markdown → Document import — the inverse of toMarkdown (the skills bridge's
+// second half).
+export { fromMarkdown } from "./fromMarkdown";
+
 /**
  * Convert a parsed `Document` to a markdown string. Synchronous; pre-parse the
  * DOCX (e.g. via the editor or `parseDocx`) before calling.

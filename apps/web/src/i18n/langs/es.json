@@ -1316,6 +1316,9 @@
       "builtInBadge": "Integrado",
       "builtInSection": "Habilidades integradas",
       "chooseFile": "Elige un archivo o arrástralo aquí",
+      "coaching": {
+        "publish": "Publish skill"
+      },
       "deleteConfirmDescription": "“{name}” se eliminará de este espacio de trabajo.",
       "deleteConfirmTitle": "¿Eliminar habilidad?",
       "deleteFile": "Eliminar archivo",
@@ -1356,6 +1359,7 @@
       "generateSkill": "Generar con IA",
       "generateTitle": "Generar habilidad con IA",
       "generating": "Generando…",
+      "howItRuns": "How it runs",
       "importHelp": "Pega una URL directa de SKILL.md, una URL de archivo de GitHub o una URL de carpeta de GitHub que contenga SKILL.md.",
       "importSkill": "Importar desde URL",
       "importTitle": "Importar habilidad",
@@ -1365,8 +1369,6 @@
       "newFileFilenamePlaceholder": "notas.md",
       "newFilePathPlaceholder": "carpeta/notas.md",
       "newFolder": "Nueva carpeta",
-      "newFolderFilenamePlaceholder": "README.md",
-      "newFolderNamePlaceholder": "subcarpeta",
       "pdfPreviewSoon": "La vista previa de PDF estará disponible cuando se admitan recursos binarios en las habilidades.",
       "privateSection": "Tus habilidades",
       "regenerate": "Regenerar",
@@ -1375,6 +1377,7 @@
       "scope": "Visibilidad",
       "scopePrivate": "Solo yo",
       "scopeTeam": "Todos en la organización",
+      "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Seleccionado: {name}",
       "sourceUpload": "Subido",
       "sourceUrl": "URL pública",
@@ -1459,10 +1462,32 @@
     },
     "skills": {
       "addShortcut": "Añadir habilidad",
-      "autoInvokeHintLabel": "Pista para el modelo",
-      "autoInvokeHintPlaceholder": "¿Cuándo debería el modelo elegir esta habilidad automáticamente?",
-      "autoInvokeLabel": "Permitir que la IA lo ejecute automáticamente",
+      "blueprintGallery": {
+        "cards": {
+          "answerFromSources": {
+            "blurb": "Answer a question grounded in authoritative sources.",
+            "inside": "a source hierarchy · a research prompt",
+            "title": "Answer from sources"
+          },
+          "checkAgainstRules": {
+            "blurb": "Review a document and flag what fails, with citations.",
+            "inside": "references by jurisdiction · a checklist · a review prompt",
+            "title": "Check against rules"
+          },
+          "intakeToDraft": {
+            "blurb": "Ask for the facts, then draft a document.",
+            "inside": "an interview · model documents · a draft prompt",
+            "title": "Intake to draft"
+          }
+        },
+        "insideLabel": "Inside",
+        "startBlank": "Start from blank",
+        "startBlankHint": "An empty skill, for when you know exactly what you want.",
+        "subtitle": "Pick a starting shape. We set up the folders and walk you through filling them in.",
+        "title": "How should your skill work?"
+      },
       "commandConflict": "Ya existe una habilidad con este comando /",
+      "commandHelp": "Type it in chat to run this skill.",
       "commandLabel": "Comando con barra (opcional)",
       "commandPlaceholder": "p. ej. resumir",
       "createTitle": "Nueva habilidad",
@@ -1499,6 +1524,11 @@
       "shadowed": "Oculta por la habilidad del equipo",
       "teamSection": "Habilidades del equipo"
     }
+  },
+  "markdownEditor": {
+    "rawLabel": "Markdown source",
+    "showFormatted": "Formatted",
+    "showRaw": "Show raw"
   },
   "navigation": {
     "account": "Cuenta",

@@ -21,7 +21,6 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
-  ChevronRightIcon,
   EyeOffIcon,
   FileIcon,
   FolderIcon,
@@ -50,6 +49,7 @@ import {
   renderMultiDragPreview,
 } from "@/components/drag-preview";
 import type { DragPreviewData } from "@/components/drag-preview";
+import { FileTreeNameCell } from "@/components/file-tree/file-tree";
 import { HOTKEYS } from "@/lib/hotkeys";
 import { isFileDisplayable } from "@/lib/types";
 import type {
@@ -101,13 +101,6 @@ import type { InternalPropertyId } from "@/routes/_protected.workspaces/$workspa
 
 const FILESYSTEM_ROW_HEIGHT_PX = 36;
 const FILESYSTEM_ROW_OVERSCAN = 16;
-const FILESYSTEM_INDENT_PX = 20;
-const FILESYSTEM_DISCLOSURE_SLOT_PX = 14;
-const FILESYSTEM_NAME_GAP_PX = 6;
-const FILESYSTEM_GUIDE_COLUMN_OFFSET_PX = FILESYSTEM_DISCLOSURE_SLOT_PX / 2;
-const FILESYSTEM_FILE_GUIDE_TARGET_OFFSET_PX =
-  FILESYSTEM_DISCLOSURE_SLOT_PX + FILESYSTEM_NAME_GAP_PX;
-const FILESYSTEM_GUIDE_LINE_COLOR_CLASS = "bg-muted-foreground/30";
 const FILESYSTEM_CREATED_BY_ID = "_created-by" satisfies InternalPropertyId;
 const FILESYSTEM_UPDATED_AT_ID = "_updated-at" satisfies InternalPropertyId;
 const FILESYSTEM_VERSION_ID = "_version" satisfies InternalPropertyId;
@@ -879,8 +872,6 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                     getSelectedDragItems={getSelectedDragItems}
                     getSelectedEntities={getSelectedEntities}
                     gridTemplate={gridTemplate}
-                    guideDepths={row.guideDepths}
-                    isLast={row.isLast}
                     node={row.node}
                     onNavigateToFolder={(folderId) => {
                       void navigateToFolder(folderId);
@@ -1080,8 +1071,6 @@ const ColumnHeaderCell = ({
 type FilesystemRowProps = {
   node: TableTreeNode;
   depth: number | undefined;
-  guideDepths: number[];
-  isLast: boolean;
   workspaceId: string;
   extraColumns: ExtraColumn[];
   gridTemplate: string;
@@ -1104,8 +1093,6 @@ type FilesystemRowProps = {
 const FilesystemRow = ({
   node,
   depth = 0,
-  guideDepths,
-  isLast,
   workspaceId,
   extraColumns,
   gridTemplate,
@@ -1362,29 +1349,14 @@ const FilesystemRow = ({
     scheduleAutoExpand,
   ]);
 
-  // Shared cells: Name + Type
+  // Shared cells: Name + Type. The presentation (indent, guide lines, chevron,
+  // icon slot) is the shared FileTreeNameCell; this row supplies the workspace
+  // entity's mime icon and the inline-rename / active-edit content.
   const nameCell = (
-    <span
-      className="relative flex h-full min-w-0 items-center gap-1.5 self-stretch"
-      style={{ paddingLeft: `${depth * FILESYSTEM_INDENT_PX}px` }}
-    >
-      <TreeGuideLines
-        depth={depth}
-        guideDepths={guideDepths}
-        isFolder={isFolder}
-        isLast={isLast}
-      />
-      {isFolder ? (
-        <ChevronRightIcon
-          className={cn(
-            "size-3.5 shrink-0 transition-transform",
-            expanded && "rotate-90",
-          )}
-        />
-      ) : (
-        <span className="w-3.5 shrink-0" />
-      )}
-      {(() => {
+    <FileTreeNameCell
+      depth={depth}
+      expanded={expanded}
+      icon={(() => {
         if (isFolder) {
           if (expanded) {
             return (
@@ -1406,6 +1378,8 @@ const FilesystemRow = ({
         }
         return <FileIcon className="text-muted-foreground size-4 shrink-0" />;
       })()}
+      isFolder={isFolder}
+    >
       {isEditing ? (
         <InlineEdit
           inputClassName="w-48"
@@ -1433,7 +1407,7 @@ const FilesystemRow = ({
           )}
         </span>
       )}
-    </span>
+    </FileTreeNameCell>
   );
 
   const extraCells = extraColumns.map((col) => (
@@ -1638,78 +1612,6 @@ const FilesystemRow = ({
         />
       )}
     </>
-  );
-};
-
-type TreeGuideLinesProps = {
-  depth: number;
-  guideDepths: readonly number[];
-  isFolder: boolean;
-  isLast: boolean;
-};
-
-const TreeGuideLines = ({
-  depth,
-  guideDepths,
-  isFolder,
-  isLast,
-}: TreeGuideLinesProps) => {
-  if (depth === 0) {
-    return null;
-  }
-
-  const parentGuideLeft =
-    (depth - 1) * FILESYSTEM_INDENT_PX + FILESYSTEM_GUIDE_COLUMN_OFFSET_PX;
-  const folderGuideTargetLeft =
-    depth * FILESYSTEM_INDENT_PX + FILESYSTEM_GUIDE_COLUMN_OFFSET_PX;
-  const fileGuideTargetLeft =
-    depth * FILESYSTEM_INDENT_PX + FILESYSTEM_FILE_GUIDE_TARGET_OFFSET_PX;
-  const horizontalTargetLeft = isFolder
-    ? folderGuideTargetLeft
-    : fileGuideTargetLeft;
-  const horizontalWidth = horizontalTargetLeft - parentGuideLeft;
-  // The immediate parent's column is the same x as this row's own
-  // current line; rendering a full-height guide there would mask the
-  // half-height "L" stop on the last child.
-  const continuationGuideDepths = guideDepths.filter(
-    (guideDepth) => guideDepth !== depth - 1,
-  );
-
-  return (
-    <span
-      aria-hidden="true"
-      className="pointer-events-none absolute inset-y-0 start-0"
-    >
-      {continuationGuideDepths.map((guideDepth) => (
-        <span
-          className={cn(
-            FILESYSTEM_GUIDE_LINE_COLOR_CLASS,
-            "absolute top-0 bottom-0 w-px",
-          )}
-          key={guideDepth}
-          style={{
-            left:
-              guideDepth * FILESYSTEM_INDENT_PX +
-              FILESYSTEM_GUIDE_COLUMN_OFFSET_PX,
-          }}
-        />
-      ))}
-      <span
-        className={cn(
-          FILESYSTEM_GUIDE_LINE_COLOR_CLASS,
-          "absolute top-0 w-px",
-          isLast ? "h-1/2" : "bottom-0",
-        )}
-        style={{ left: parentGuideLeft }}
-      />
-      <span
-        className={cn(
-          FILESYSTEM_GUIDE_LINE_COLOR_CLASS,
-          "absolute top-1/2 h-px",
-        )}
-        style={{ left: parentGuideLeft, width: horizontalWidth }}
-      />
-    </span>
   );
 };
 

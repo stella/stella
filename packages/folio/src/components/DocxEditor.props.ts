@@ -94,6 +94,20 @@ export type DocxEditorProps = {
   showToolbar?: boolean;
   /** Whether to show zoom control (default: true) */
   showZoomControl?: boolean;
+  /**
+   * Whether to show the review controls — the track-changes toggle and the
+   * markup display-mode selector (All Markup / Simple / No Markup / Original)
+   * (default: true). Turn off for plain-markdown editing, where tracked changes
+   * and markup views are meaningless.
+   */
+  showReviewControls?: boolean;
+  /**
+   * Whether the page header/footer can be edited — the double-click-to-edit
+   * behavior and the "Double-click to add header/footer" hover hints
+   * (default: true). Turn off for plain-markdown editing, which has no running
+   * header/footer.
+   */
+  showHeaderFooterEditing?: boolean;
   /** Whether to show page margin guides/boundaries (default: false) */
   showMarginGuides?: boolean;
   /** Color for margin guides (default: '#c0c0c0') */

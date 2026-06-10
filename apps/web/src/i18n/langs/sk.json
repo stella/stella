@@ -1316,6 +1316,9 @@
       "builtInBadge": "Vstavané",
       "builtInSection": "Vstavané zručnosti",
       "chooseFile": "Vyberte súbor alebo ho sem presuňte",
+      "coaching": {
+        "publish": "Publish skill"
+      },
       "deleteConfirmDescription": "Zručnosť „{name}“ bude odstránená z tohto pracovného priestoru.",
       "deleteConfirmTitle": "Odstrániť zručnosť?",
       "deleteFile": "Vymazať súbor",
@@ -1356,6 +1359,7 @@
       "generateSkill": "Vygenerovať pomocou AI",
       "generateTitle": "Vygenerovať zručnosť pomocou AI",
       "generating": "Generovanie…",
+      "howItRuns": "How it runs",
       "importHelp": "Vložte priamu URL súboru SKILL.md, URL súboru na GitHube alebo URL priečinka na GitHube, ktorý obsahuje SKILL.md.",
       "importSkill": "Importovať z URL",
       "importTitle": "Importovať zručnosť",
@@ -1365,8 +1369,6 @@
       "newFileFilenamePlaceholder": "notes.md",
       "newFilePathPlaceholder": "folder/notes.md",
       "newFolder": "Nový priečinok",
-      "newFolderFilenamePlaceholder": "README.md",
-      "newFolderNamePlaceholder": "podpriečinok",
       "pdfPreviewSoon": "Náhľad PDF bude dostupný, keď budú podporované binárne zdroje zručností.",
       "privateSection": "Vaše zručnosti",
       "regenerate": "Vygenerovať znova",
@@ -1375,6 +1377,7 @@
       "scope": "Viditeľnosť",
       "scopePrivate": "Iba ja",
       "scopeTeam": "Všetci v organizácii",
+      "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Vybraté: {name}",
       "sourceUpload": "Nahraté",
       "sourceUrl": "Verejná URL",
@@ -1459,10 +1462,32 @@
     },
     "skills": {
       "addShortcut": "Pridať zručnosť",
-      "autoInvokeHintLabel": "Pomôcka pre model",
-      "autoInvokeHintPlaceholder": "Kedy má model túto zručnosť automaticky vybrať?",
-      "autoInvokeLabel": "Nechať AI spustiť automaticky",
+      "blueprintGallery": {
+        "cards": {
+          "answerFromSources": {
+            "blurb": "Answer a question grounded in authoritative sources.",
+            "inside": "a source hierarchy · a research prompt",
+            "title": "Answer from sources"
+          },
+          "checkAgainstRules": {
+            "blurb": "Review a document and flag what fails, with citations.",
+            "inside": "references by jurisdiction · a checklist · a review prompt",
+            "title": "Check against rules"
+          },
+          "intakeToDraft": {
+            "blurb": "Ask for the facts, then draft a document.",
+            "inside": "an interview · model documents · a draft prompt",
+            "title": "Intake to draft"
+          }
+        },
+        "insideLabel": "Inside",
+        "startBlank": "Start from blank",
+        "startBlankHint": "An empty skill, for when you know exactly what you want.",
+        "subtitle": "Pick a starting shape. We set up the folders and walk you through filling them in.",
+        "title": "How should your skill work?"
+      },
       "commandConflict": "Zručnosť s týmto / príkazom už existuje",
+      "commandHelp": "Type it in chat to run this skill.",
       "commandLabel": "Lomkový príkaz (voliteľné)",
       "commandPlaceholder": "napr. zhrnúť",
       "createTitle": "Nová zručnosť",
@@ -1499,6 +1524,11 @@
       "shadowed": "Prekryté tímovou zručnosťou",
       "teamSection": "Tímové zručnosti"
     }
+  },
+  "markdownEditor": {
+    "rawLabel": "Markdown source",
+    "showFormatted": "Formatted",
+    "showRaw": "Show raw"
   },
   "navigation": {
     "account": "Účet",

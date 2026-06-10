@@ -1316,6 +1316,9 @@
       "builtInBadge": "Built in",
       "builtInSection": "Built-in skills",
       "chooseFile": "Choose a file or drag it here",
+      "coaching": {
+        "publish": "Publish skill"
+      },
       "deleteConfirmDescription": "\"{name}\" will be removed from this workspace.",
       "deleteConfirmTitle": "Delete skill?",
       "deleteFile": "Delete file",
@@ -1356,6 +1359,7 @@
       "generateSkill": "Generate with AI",
       "generateTitle": "Generate skill with AI",
       "generating": "Generating…",
+      "howItRuns": "How it runs",
       "importHelp": "Paste a direct SKILL.md URL, a GitHub file URL, or a GitHub folder URL that contains SKILL.md.",
       "importSkill": "Import from URL",
       "importTitle": "Import skill",
@@ -1365,8 +1369,6 @@
       "newFileFilenamePlaceholder": "notes.md",
       "newFilePathPlaceholder": "folder/notes.md",
       "newFolder": "New folder",
-      "newFolderFilenamePlaceholder": "README.md",
-      "newFolderNamePlaceholder": "subfolder",
       "pdfPreviewSoon": "PDF preview will be available once binary skill resources are supported.",
       "privateSection": "Your skills",
       "regenerate": "Regenerate",
@@ -1375,6 +1377,7 @@
       "scope": "Visibility",
       "scopePrivate": "Only me",
       "scopeTeam": "Everyone in the organisation",
+      "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Selected: {name}",
       "sourceUpload": "Uploaded",
       "sourceUrl": "Public URL",
@@ -1459,11 +1462,33 @@
     },
     "skills": {
       "addShortcut": "Add skill",
-      "autoInvokeHintLabel": "Hint for the model",
-      "autoInvokeHintPlaceholder": "When should the model auto-pick this skill?",
-      "autoInvokeLabel": "Let the AI run this automatically",
+      "blueprintGallery": {
+        "cards": {
+          "answerFromSources": {
+            "blurb": "Answer a question grounded in authoritative sources.",
+            "inside": "a source hierarchy · a research prompt",
+            "title": "Answer from sources"
+          },
+          "checkAgainstRules": {
+            "blurb": "Review a document and flag what fails, with citations.",
+            "inside": "references by jurisdiction · a checklist · a review prompt",
+            "title": "Check against rules"
+          },
+          "intakeToDraft": {
+            "blurb": "Ask for the facts, then draft a document.",
+            "inside": "an interview · model documents · a draft prompt",
+            "title": "Intake to draft"
+          }
+        },
+        "insideLabel": "Inside",
+        "startBlank": "Start from blank",
+        "startBlankHint": "An empty skill, for when you know exactly what you want.",
+        "subtitle": "Pick a starting shape. We set up the folders and walk you through filling them in.",
+        "title": "How should your skill work?"
+      },
       "commandConflict": "A skill with this / command already exists",
-      "commandLabel": "Slash command (optional)",
+      "commandHelp": "Type it in chat to run this skill.",
+      "commandLabel": "Chat command (optional)",
       "commandPlaceholder": "e.g. summarize",
       "createTitle": "New skill",
       "defaultBadge": "Default",
@@ -1499,6 +1524,11 @@
       "shadowed": "Shadowed by team skill",
       "teamSection": "Team skills"
     }
+  },
+  "markdownEditor": {
+    "rawLabel": "Markdown source",
+    "showFormatted": "Formatted",
+    "showRaw": "Show raw"
   },
   "navigation": {
     "account": "Account",

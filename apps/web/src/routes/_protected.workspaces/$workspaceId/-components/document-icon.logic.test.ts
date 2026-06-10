@@ -21,8 +21,12 @@ describe("document icon MIME classification", () => {
     expect(getDocumentIconKind(PDF_MIME_TYPE)).toBe("pdf");
     expect(getDocumentIconKind(DOCX_MIME)).toBe("word");
     expect(getDocumentIconKind("text/plain")).toBe("text");
+  });
+
+  test("classifies markdown by MIME or extension", () => {
+    expect(getDocumentIconKind("text/markdown")).toBe("markdown");
     expect(getDocumentIconKind("application/octet-stream", "notes.md")).toBe(
-      "text",
+      "markdown",
     );
   });
 });

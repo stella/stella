@@ -129,4 +129,8 @@ export type RenderContext = {
   hyperlinkRefs: { href: string; refNumber: number }[];
   /** 1-based counter for default virtual paths. */
   imageCounter: number;
+  /** Live list counters per numId, for resolving `%N` marker templates. */
+  listCounters: Map<number, number[]>;
+  /** `numId:level` pairs already seen, so a start override applies once. */
+  listSeenLevels: Set<string>;
 };

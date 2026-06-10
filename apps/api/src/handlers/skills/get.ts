@@ -39,7 +39,6 @@ const getSkill = createSafeRootHandler(
             enabled: agentSkills.enabled,
             body: agentSkills.body,
             command: agentSkills.command,
-            autoInvokeHint: agentSkills.autoInvokeHint,
             createdAt: agentSkills.createdAt,
           })
           .from(agentSkills)

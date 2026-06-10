@@ -615,6 +615,26 @@
   padding: 4px 0;
 }
 
+/* Header/footer editing disabled (e.g. markdown editing): no hover affordance
+   and no "Double-click to add …" hint. */
+.folio-no-hf-edit .layout-page-header:hover,
+.folio-no-hf-edit .layout-page-footer:hover {
+  background-color: transparent;
+}
+
+.folio-no-hf-edit .layout-page-header:empty:hover::after,
+.folio-no-hf-edit .layout-page-footer:empty:hover::after {
+  content: none;
+}
+
+/* The editor root and the paged-editor both paint the same semi-transparent
+   canvas tint; stacked, they double it and leave a seam below the content. Let
+   the root be the sole painter on the markdown surface so it reads as one flat
+   colour. */
+.folio-no-hf-edit .paged-editor {
+  background-color: transparent !important;
+}
+
 /*
  * Post-eigenpal#611: the painter is the sole visible HF renderer in both
  * edit and non-edit modes. The .hf-editor-pm rule block (the styling for

@@ -29,6 +29,8 @@ export function newContext(opts: MarkdownOptions = {}): RenderContext {
     commentRefs: [],
     hyperlinkRefs: [],
     imageCounter: 0,
+    listCounters: new Map(),
+    listSeenLevels: new Set(),
   };
 }
 

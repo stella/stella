@@ -6,7 +6,6 @@ import { useNavigate } from "@tanstack/react-router";
 import {
   CheckIcon,
   DownloadIcon,
-  EyeIcon,
   LockOpenIcon,
   Maximize2Icon,
   Minimize2Icon,
@@ -44,11 +43,10 @@ import {
   InspectorTabHeader,
   MatterOriginLink,
 } from "@/components/inspector/inspector-tab-header";
-import { MarkdownFileViewer } from "@/components/inspector/markdown-file-viewer";
-import type { MarkdownMode } from "@/components/inspector/markdown-file-viewer";
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
 import { SuggestionsFacet } from "@/components/inspector/suggestions-facet";
 import { VersionsFacet } from "@/components/inspector/versions-facet";
+import { MarkdownFolioEditor } from "@/components/markdown/markdown-folio-editor";
 import Tooltip from "@/components/tooltip";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -185,7 +183,6 @@ export const FileTabPanel = ({
     ...textFileOptions({ workspaceId: tab.workspaceId, fieldId: tab.id }),
     enabled: isMarkdownDisplay,
   });
-  const [markdownMode, setMarkdownMode] = useState<MarkdownMode>("preview");
   const [markdownDraft, setMarkdownDraft] = useState("");
   const markdownDraftSourceFieldIdRef = useRef<string | null>(null);
   const markdownText = markdownTextQuery.data?.text ?? "";
@@ -228,7 +225,6 @@ export const FileTabPanel = ({
         pdfFileId: null,
         ...(variables.propertyId ? { propertyId: variables.propertyId } : {}),
       });
-      setMarkdownMode("preview");
       stellaToast.add({
         title: t("workspaces.files.versionUploaded"),
         type: "success",
@@ -269,9 +265,6 @@ export const FileTabPanel = ({
 
     markdownDraftSourceFieldIdRef.current = decision.fieldId;
     setMarkdownDraft(decision.text);
-    if (decision.resetMode) {
-      setMarkdownMode("preview");
-    }
   }, [
     isMarkdownDisplay,
     markdownIsDirty,
@@ -535,41 +528,14 @@ export const FileTabPanel = ({
       return null;
     }
 
-    const canEnterMarkdownEdit =
-      canUpdateEntity &&
-      !markdownTextQuery.isPending &&
-      !markdownTextQuery.error;
     return (
       <>
-        <Button
-          aria-pressed={markdownMode === "preview"}
-          disabled={markdownTextQuery.isPending}
-          onClick={() => setMarkdownMode("preview")}
-          size="xs"
-          variant={markdownMode === "preview" ? "secondary" : "ghost"}
-        >
-          <EyeIcon className="size-3.5" />
-          {t("common.preview")}
-        </Button>
-        <Button
-          aria-pressed={markdownMode === "edit"}
-          disabled={!canEnterMarkdownEdit}
-          onClick={() => {
-            setMarkdownMode("edit");
-          }}
-          size="xs"
-          variant={markdownMode === "edit" ? "secondary" : "ghost"}
-        >
-          <LockOpenIcon className="size-3.5" />
-          {t("common.edit")}
-        </Button>
         {markdownIsDirty && (
           <>
             <Button
               disabled={markdownSaveMutation.isPending}
               onClick={() => {
                 setMarkdownDraft(markdownText);
-                setMarkdownMode("preview");
               }}
               size="xs"
               variant="ghost"
@@ -738,17 +704,40 @@ export const FileTabPanel = ({
       return <EmailHtmlViewer fieldId={tab.id} workspaceId={tab.workspaceId} />;
     }
     if (isMarkdownDisplay) {
+      if (markdownTextQuery.isPending) {
+        return (
+          <div className="text-muted-foreground flex min-h-0 flex-1 items-center justify-center p-6 text-sm">
+            {t("common.loading")}
+          </div>
+        );
+      }
+      if (markdownTextQuery.error) {
+        return (
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+            <p className="text-muted-foreground max-w-sm text-sm">
+              {markdownTextQuery.error.message || t("errors.actionFailed")}
+            </p>
+            <Button
+              onClick={() => {
+                void markdownTextQuery.refetch();
+              }}
+              size="xs"
+              variant="secondary"
+            >
+              {t("common.retry")}
+            </Button>
+          </div>
+        );
+      }
+      // Unified on Folio: workspace .md edits in the same WYSIWYG editor as
+      // skills (with a "Show raw" escape hatch). Edits feed the draft; the
+      // existing Save button uploads a new file version.
       return (
-        <MarkdownFileViewer
-          draft={markdownDraft}
-          error={markdownTextQuery.error}
-          isLoading={markdownTextQuery.isPending}
-          mode={markdownMode}
-          onDraftChange={setMarkdownDraft}
-          onRetry={() => {
-            void markdownTextQuery.refetch();
-          }}
-          text={markdownDraft}
+        <MarkdownFolioEditor
+          key={tab.id}
+          markdown={markdownText}
+          onMarkdownChange={setMarkdownDraft}
+          readOnly={!canUpdateEntity}
         />
       );
     }

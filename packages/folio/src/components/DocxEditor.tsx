@@ -440,6 +440,8 @@ export function DocxEditor({
   theme,
   showToolbar = true,
   showZoomControl = true,
+  showReviewControls = true,
+  showHeaderFooterEditing = true,
   showMarginGuides: _showMarginGuides = false,
   marginGuideColor: _marginGuideColor,
   initialZoom = 1,
@@ -2957,7 +2959,7 @@ export function DocxEditor({
     }
   };
 
-  const toolbarPriorityExtra = (
+  const toolbarPriorityExtra = !showReviewControls ? null : (
     <div className="flex shrink-0 items-center gap-1">
       <Button
         onClick={toggleTrackChanges}
@@ -3196,7 +3198,7 @@ export function DocxEditor({
       <ErrorBoundary onError={handleEditorError}>
         <div
           ref={containerRef}
-          className={`folio-root folio-editor${displayMode !== "all-markup" ? ` folio-root--${displayMode}` : ""} ${className}`}
+          className={`folio-root folio-editor${displayMode !== "all-markup" ? ` folio-root--${displayMode}` : ""}${showHeaderFooterEditing ? "" : " folio-no-hf-edit"} ${className}`}
           style={containerStyle}
           data-testid="folio-editor"
         >
@@ -3315,7 +3317,11 @@ export function DocxEditor({
                       {...(history.state.package.styles
                         ? { styles: history.state.package.styles }
                         : {})}
-                      onHeaderFooterDoubleClick={handleHeaderFooterDoubleClick}
+                      onHeaderFooterDoubleClick={
+                        showHeaderFooterEditing
+                          ? handleHeaderFooterDoubleClick
+                          : undefined
+                      }
                       hfEditMode={hfEditPosition}
                       onBodyClick={handleBodyClick}
                       zoom={zoom}

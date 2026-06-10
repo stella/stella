@@ -1,6 +1,5 @@
-import { useState } from "react";
-
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -13,12 +12,7 @@ import type {
   InspectorViewRenderProps,
 } from "@/components/inspector/view-registry";
 import { SIDE_RAIL_TAB_ICON_SIZE_PX, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
-import { EditSkillSheet } from "@/routes/_protected.knowledge/-components/edit-skill-sheet";
-import { knowledgeKeys } from "@/routes/_protected.knowledge/-queries";
-import {
-  catalogueKeys,
-  catalogueOptions,
-} from "@/routes/_protected.knowledge/-queries/catalogue";
+import { catalogueOptions } from "@/routes/_protected.knowledge/-queries/catalogue";
 
 import { CatalogueDetailPanel } from "./catalogue-detail-panel";
 import { CatalogueEntryIcon } from "./catalogue-entry-icon";
@@ -61,13 +55,6 @@ export type ToolDetailPayload = {
     icon: string | null;
     iconUrl: string | null;
   };
-};
-
-type EditableSkillRef = {
-  id: string;
-  name: string;
-  scope: "team" | "private";
-  enabled: boolean;
 };
 
 export const ToolDetailView = ({
@@ -138,30 +125,17 @@ const ToolDetailContent = ({
   organizationId,
 }: ToolDetailContentProps) => {
   const t = useTranslations();
+  const navigate = useNavigate();
   const install = useInstallEntry(organizationId);
   const uninstall = useUninstallEntry(entry, organizationId);
-  const queryClient = useQueryClient();
-
-  const [editSkill, setEditSkill] = useState<EditableSkillRef | null>(null);
 
   const onEditSkill = () => {
     if (entry.kind !== "skill" || entry.installedSkillId === null) {
       return;
     }
-    setEditSkill({
-      id: entry.installedSkillId,
-      name: entry.displayName,
-      scope: "team",
-      enabled: entry.enabled ?? true,
-    });
-  };
-
-  const onSkillSheetChanged = () => {
-    void queryClient.invalidateQueries({
-      queryKey: knowledgeKeys.skills.all(organizationId),
-    });
-    void queryClient.invalidateQueries({
-      queryKey: catalogueKeys.list(organizationId),
+    void navigate({
+      to: "/knowledge/tools/$skillId",
+      params: { skillId: entry.installedSkillId },
     });
   };
 
@@ -186,27 +160,15 @@ const ToolDetailContent = ({
   };
 
   return (
-    <>
-      <CatalogueDetailPanel
-        entry={entry}
-        installing={install.isPending}
-        onClose={onClose}
-        onEditSkill={onEditSkill}
-        onInstall={onInstall}
-        onRemove={() => uninstall.mutate()}
-        removing={uninstall.isPending}
-      />
-      <EditSkillSheet
-        onChanged={onSkillSheetChanged}
-        onOpenChange={(open) => {
-          if (!open) {
-            setEditSkill(null);
-          }
-        }}
-        open={editSkill !== null && editSkill.id !== ""}
-        skill={editSkill !== null && editSkill.id !== "" ? editSkill : null}
-      />
-    </>
+    <CatalogueDetailPanel
+      entry={entry}
+      installing={install.isPending}
+      onClose={onClose}
+      onEditSkill={onEditSkill}
+      onInstall={onInstall}
+      onRemove={() => uninstall.mutate()}
+      removing={uninstall.isPending}
+    />
   );
 };
 

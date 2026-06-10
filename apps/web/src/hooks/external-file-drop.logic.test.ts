@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   collectDroppedFileTree,
   type DroppedDataTransferItem,
-} from "@/routes/_protected.workspaces/$workspaceId/-hooks/external-file-drop.logic";
+} from "@/hooks/external-file-drop.logic";
 
 type TestEntry = TestFileEntry | TestDirectoryEntry;
 

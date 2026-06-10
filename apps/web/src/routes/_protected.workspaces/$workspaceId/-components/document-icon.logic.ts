@@ -30,6 +30,7 @@ export type DocumentIconKind =
   | "spreadsheet"
   | "image"
   | "email"
+  | "markdown"
   | "text"
   | "file";
 
@@ -57,7 +58,11 @@ export const getDocumentIconKind = (
     return "email";
   }
 
-  if (mimeType.startsWith("text/") || isMarkdownFile({ fileName, mimeType })) {
+  if (isMarkdownFile({ fileName, mimeType })) {
+    return "markdown";
+  }
+
+  if (mimeType.startsWith("text/")) {
     return "text";
   }
 

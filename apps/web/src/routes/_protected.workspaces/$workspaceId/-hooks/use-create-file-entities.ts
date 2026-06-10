@@ -11,6 +11,7 @@ import { useTranslations } from "use-intl";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { MAX_PARALLEL_FILE_UPLOADS } from "@/consts";
+import type { DroppedFileTree } from "@/hooks/external-file-drop.logic";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { ClientOperationError, toAPIError } from "@/lib/errors";
@@ -21,7 +22,6 @@ import {
   type DroppedFolderUploadPlan,
 } from "@/routes/_protected.workspaces/$workspaceId/-hooks/create-file-tree-upload.logic";
 import { buildEntityCreatePresignPayload } from "@/routes/_protected.workspaces/$workspaceId/-hooks/create-file-upload-payload.logic";
-import type { DroppedFileTree } from "@/routes/_protected.workspaces/$workspaceId/-hooks/external-file-drop.logic";
 import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import {

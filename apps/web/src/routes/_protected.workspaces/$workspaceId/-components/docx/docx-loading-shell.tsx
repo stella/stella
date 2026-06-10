@@ -1,9 +1,10 @@
-import { useDocxFitZoom } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-preview-zoom";
+import {
+  DOCX_PAGE_HEIGHT,
+  DOCX_PAGE_WIDTH,
+  useDocxFitZoom,
+} from "@/components/docx-preview-zoom";
 
 export const DOCX_DOCUMENT_SHELL_WIDTH = "min(72vw, 52rem)";
-
-const DOCX_PAGE_WIDTH = 816;
-const DOCX_PAGE_HEIGHT = 1056;
 
 type DocxLoadingShellProps = {
   scaleOffset?: number | undefined;
@@ -14,7 +15,10 @@ export const DocxLoadingShell = ({
   scaleOffset = 0,
   zoom,
 }: DocxLoadingShellProps) => {
-  const { containerRef, fitZoom } = useDocxFitZoom(scaleOffset, 0.85);
+  const { containerRef, fitZoom } = useDocxFitZoom({
+    scaleOffset,
+    maxAutoZoom: 0.85,
+  });
   const effectiveZoom = zoom ?? fitZoom;
   const pageWidth = DOCX_PAGE_WIDTH * effectiveZoom;
   const pageHeight = DOCX_PAGE_HEIGHT * effectiveZoom;

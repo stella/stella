@@ -13,8 +13,8 @@
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
-    "generate": "bun scripts/generate-manifest.ts",
-    "test": "bun scripts/generate-manifest.ts --check && bun test src",
+    "generate": "bun scripts/generate-manifest.ts && bun scripts/generate-blueprints-manifest.ts",
+    "test": "bun scripts/generate-manifest.ts --check && bun scripts/generate-blueprints-manifest.ts --check && bun test src",
     "typecheck": "tsgo --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/skills",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/skills",

@@ -16,46 +16,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
 import { authorizeSkillInstallScope } from "./install";
-
-// Authored skills don't ship with a pre-validated slug — derive one
-// from the name so the rest of the skills surface (uniqueness,
-// references) keeps working unchanged. Trim invalid chars, collapse
-// runs of hyphens, and clip to fit the `slug` column.
-const slugify = (name: string): string => {
-  // Plain character-by-character pass — the previous regex pipeline
-  // tripped the slow-regex lint, and a single-pass loop is also
-  // easier to reason about. Collapse runs of non-slug chars into a
-  // single hyphen, then trim leading/trailing hyphens.
-  let buffer = "";
-  let lastWasSeparator = true;
-  for (const ch of name.toLowerCase()) {
-    const isSlugChar = (ch >= "a" && ch <= "z") || (ch >= "0" && ch <= "9");
-    if (isSlugChar) {
-      buffer += ch;
-      lastWasSeparator = false;
-      continue;
-    }
-    if (!lastWasSeparator) {
-      buffer += "-";
-      lastWasSeparator = true;
-    }
-  }
-  // Clip first, then trim trailing hyphens — slicing after trimming
-  // could re-introduce a trailing hyphen if the 56th char is one.
-  let clipped = buffer.slice(0, 56);
-  while (clipped.endsWith("-")) {
-    clipped = clipped.slice(0, -1);
-  }
-  if (clipped.length === 0) {
-    return "skill";
-  }
-  return clipped;
-};
-
-// Stable-ish suffix to break (org, scope, slug) collisions without
-// requiring a server-side counter. Date-encoded so users can spot the
-// authored-on timestamp at a glance in the URL.
-const collisionSuffix = (): string => Date.now().toString(36).slice(-7);
+import { uniqueSlug } from "./slug";
 
 const createSkillBodySchema = t.Object({
   scope: t.UnionEnum(AGENT_SKILL_SCOPES),
@@ -66,7 +27,6 @@ const createSkillBodySchema = t.Object({
   }),
   body: t.String({ minLength: 1, maxLength: LIMITS.agentSkillBodyMaxChars }),
   command: t.Optional(t.String({ minLength: 1, maxLength: 50 })),
-  autoInvokeHint: t.Optional(t.String({ maxLength: 2000 })),
 });
 
 const config = {
@@ -136,8 +96,7 @@ const createSkill = createSafeRootHandler(
       );
     }
 
-    const baseSlug = slugify(body.name);
-    const slug = `${baseSlug}-${collisionSuffix()}`.slice(0, 64);
+    const slug = uniqueSlug(body.name);
 
     // contentHash is an integrity marker; for authored skills it
     // derives from the body so future edits change the hash.
@@ -145,10 +104,6 @@ const createSkill = createSafeRootHandler(
       .update(body.body)
       .digest("hex")
       .slice(0, 64);
-
-    const trimmedHint = body.autoInvokeHint?.trim();
-    const autoInvokeHint =
-      trimmedHint !== undefined && trimmedHint.length > 0 ? trimmedHint : null;
 
     const insertResult = await safeDb(async (tx) => {
       const rows = await tx
@@ -166,7 +121,6 @@ const createSkill = createSafeRootHandler(
           body: body.body,
           enabled: true,
           command: body.command ?? null,
-          autoInvokeHint,
         })
         .returning({ id: agentSkills.id });
 
@@ -184,7 +138,6 @@ const createSkill = createSafeRootHandler(
                 slug,
                 origin: "authored",
                 ...(body.command !== undefined && { command: body.command }),
-                ...(autoInvokeHint !== null && { hasAutoInvokeHint: true }),
               },
             },
           },

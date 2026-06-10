@@ -1,8 +1,8 @@
-import { ClientOperationError } from "@/lib/errors";
 import type {
   DroppedFileTree,
   DroppedFileTreeFile,
-} from "@/routes/_protected.workspaces/$workspaceId/-hooks/external-file-drop.logic";
+} from "@/hooks/external-file-drop.logic";
+import { ClientOperationError } from "@/lib/errors";
 
 const DIRECTORY_PATH_SEPARATOR = "\0";
 

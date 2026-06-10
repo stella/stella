@@ -1316,6 +1316,9 @@
       "builtInBadge": "Wbudowana",
       "builtInSection": "Wbudowane umiejętności",
       "chooseFile": "Wybierz plik lub przeciągnij go tutaj",
+      "coaching": {
+        "publish": "Publish skill"
+      },
       "deleteConfirmDescription": "„{name}” zostanie usunięta z tego obszaru roboczego.",
       "deleteConfirmTitle": "Usunąć umiejętność?",
       "deleteFile": "Usuń plik",
@@ -1356,6 +1359,7 @@
       "generateSkill": "Wygeneruj z AI",
       "generateTitle": "Wygeneruj umiejętność z AI",
       "generating": "Generowanie…",
+      "howItRuns": "How it runs",
       "importHelp": "Wklej bezpośredni adres URL SKILL.md, adres URL pliku GitHub albo adres URL folderu GitHub zawierającego SKILL.md.",
       "importSkill": "Importuj z URL",
       "importTitle": "Importuj umiejętność",
@@ -1365,8 +1369,6 @@
       "newFileFilenamePlaceholder": "notes.md",
       "newFilePathPlaceholder": "folder/notes.md",
       "newFolder": "Nowy folder",
-      "newFolderFilenamePlaceholder": "README.md",
-      "newFolderNamePlaceholder": "podfolder",
       "pdfPreviewSoon": "Podgląd PDF będzie dostępny po wprowadzeniu obsługi binarnych zasobów umiejętności.",
       "privateSection": "Twoje umiejętności",
       "regenerate": "Wygeneruj ponownie",
@@ -1375,6 +1377,7 @@
       "scope": "Widoczność",
       "scopePrivate": "Tylko ja",
       "scopeTeam": "Wszyscy w organizacji",
+      "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Wybrano: {name}",
       "sourceUpload": "Przesłano",
       "sourceUrl": "Publiczny URL",
@@ -1459,10 +1462,32 @@
     },
     "skills": {
       "addShortcut": "Dodaj umiejętność",
-      "autoInvokeHintLabel": "Wskazówka dla modelu",
-      "autoInvokeHintPlaceholder": "Kiedy model powinien automatycznie wybrać tę umiejętność?",
-      "autoInvokeLabel": "Pozwól AI uruchamiać automatycznie",
+      "blueprintGallery": {
+        "cards": {
+          "answerFromSources": {
+            "blurb": "Answer a question grounded in authoritative sources.",
+            "inside": "a source hierarchy · a research prompt",
+            "title": "Answer from sources"
+          },
+          "checkAgainstRules": {
+            "blurb": "Review a document and flag what fails, with citations.",
+            "inside": "references by jurisdiction · a checklist · a review prompt",
+            "title": "Check against rules"
+          },
+          "intakeToDraft": {
+            "blurb": "Ask for the facts, then draft a document.",
+            "inside": "an interview · model documents · a draft prompt",
+            "title": "Intake to draft"
+          }
+        },
+        "insideLabel": "Inside",
+        "startBlank": "Start from blank",
+        "startBlankHint": "An empty skill, for when you know exactly what you want.",
+        "subtitle": "Pick a starting shape. We set up the folders and walk you through filling them in.",
+        "title": "How should your skill work?"
+      },
       "commandConflict": "Umiejętność z tym poleceniem / już istnieje",
+      "commandHelp": "Type it in chat to run this skill.",
       "commandLabel": "Polecenie ukośnikowe (opcjonalne)",
       "commandPlaceholder": "np. podsumuj",
       "createTitle": "Nowa umiejętność",
@@ -1499,6 +1524,11 @@
       "shadowed": "Przesłonięte przez umiejętność zespołu",
       "teamSection": "Umiejętności zespołu"
     }
+  },
+  "markdownEditor": {
+    "rawLabel": "Markdown source",
+    "showFormatted": "Formatted",
+    "showRaw": "Show raw"
   },
   "navigation": {
     "account": "Konto",

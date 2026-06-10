@@ -1316,6 +1316,9 @@
       "builtInBadge": "Vestavěné",
       "builtInSection": "Vestavěné dovednosti",
       "chooseFile": "Vyberte soubor nebo ho sem přetáhněte",
+      "coaching": {
+        "publish": "Publish skill"
+      },
       "deleteConfirmDescription": "Dovednost „{name}“ bude z tohoto pracovního prostoru odebrána.",
       "deleteConfirmTitle": "Smazat dovednost?",
       "deleteFile": "Smazat soubor",
@@ -1356,6 +1359,7 @@
       "generateSkill": "Vygenerovat pomocí AI",
       "generateTitle": "Vygenerovat dovednost pomocí AI",
       "generating": "Generuji…",
+      "howItRuns": "How it runs",
       "importHelp": "Vložte přímou URL souboru SKILL.md, URL souboru na GitHubu nebo URL složky na GitHubu, která obsahuje SKILL.md.",
       "importSkill": "Importovat z URL",
       "importTitle": "Importovat dovednost",
@@ -1365,8 +1369,6 @@
       "newFileFilenamePlaceholder": "notes.md",
       "newFilePathPlaceholder": "folder/notes.md",
       "newFolder": "Nová složka",
-      "newFolderFilenamePlaceholder": "README.md",
-      "newFolderNamePlaceholder": "podsložka",
       "pdfPreviewSoon": "Náhled PDF bude k dispozici, jakmile budou podporovány binární zdroje dovedností.",
       "privateSection": "Vaše dovednosti",
       "regenerate": "Vygenerovat znovu",
@@ -1375,6 +1377,7 @@
       "scope": "Viditelnost",
       "scopePrivate": "Jen já",
       "scopeTeam": "Všichni v organizaci",
+      "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Vybráno: {name}",
       "sourceUpload": "Nahráno",
       "sourceUrl": "Veřejná URL",
@@ -1459,11 +1462,33 @@
     },
     "skills": {
       "addShortcut": "Přidat dovednost",
-      "autoInvokeHintLabel": "Nápověda pro model",
-      "autoInvokeHintPlaceholder": "Kdy má model tuto dovednost spustit?",
-      "autoInvokeLabel": "Nechat AI spustit automaticky",
+      "blueprintGallery": {
+        "cards": {
+          "answerFromSources": {
+            "blurb": "Odpoví na otázku s oporou v autoritativních zdrojích.",
+            "inside": "hierarchie zdrojů · prompt pro rešerši",
+            "title": "Odpověď ze zdrojů"
+          },
+          "checkAgainstRules": {
+            "blurb": "Zkontroluje dokument a označí, co neprošlo, včetně citací.",
+            "inside": "reference podle jurisdikce · kontrolní seznam · kontrolní prompt",
+            "title": "Kontrola podle pravidel"
+          },
+          "intakeToDraft": {
+            "blurb": "Zeptá se na fakta a poté sepíše dokument.",
+            "inside": "rozhovor · vzorové dokumenty · prompt pro koncept",
+            "title": "Od podkladů k návrhu"
+          }
+        },
+        "insideLabel": "Uvnitř",
+        "startBlank": "Začít od nuly",
+        "startBlankHint": "Prázdná dovednost — když přesně víte, co chcete.",
+        "subtitle": "Vyberte výchozí podobu. Připravíme složky a provedeme vás jejich vyplněním.",
+        "title": "Jak má vaše dovednost fungovat?"
+      },
       "commandConflict": "Dovednost s tímto / příkazem už existuje",
-      "commandLabel": "Lomený příkaz (volitelné)",
+      "commandHelp": "Napsáním v chatu spustíte tuto dovednost.",
+      "commandLabel": "Příkaz v chatu (volitelné)",
       "commandPlaceholder": "např. shrnout",
       "createTitle": "Nová dovednost",
       "defaultBadge": "Výchozí",
@@ -1499,6 +1524,11 @@
       "shadowed": "Překryto týmovou dovedností",
       "teamSection": "Týmové dovednosti"
     }
+  },
+  "markdownEditor": {
+    "rawLabel": "Markdown source",
+    "showFormatted": "Formatted",
+    "showRaw": "Show raw"
   },
   "navigation": {
     "account": "Účet",

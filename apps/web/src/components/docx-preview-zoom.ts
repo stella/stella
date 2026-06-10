@@ -7,6 +7,13 @@ import type { RefObject } from "react";
 // leaving the page margins as dead whitespace. The page edges then
 // overflow horizontally and the user can scroll to inspect margins.
 const DOCX_TEXT_AREA_WIDTH = 624;
+
+// The full Letter page at 96 DPI (8.5 × 11 inches). Callers fitting the whole page
+// — margins included — divide their available width by DOCX_PAGE_WIDTH instead of
+// the text area, so the page sits centred rather than overflowing its side margins;
+// the loading shell sizes its placeholder page from both dimensions.
+export const DOCX_PAGE_WIDTH = 816;
+export const DOCX_PAGE_HEIGHT = 1056;
 const DOCX_FIT_PADDING = 4;
 const DOCX_DEFAULT_ZOOM = 1;
 const DOCX_MIN_ZOOM = 0.25;
@@ -26,10 +33,23 @@ type DocxFitZoomResult = {
   fitZoom: number;
 };
 
-export const useDocxFitZoom = (
-  scaleOffset: number = 0,
-  maxAutoZoom: number = DOCX_MAX_ZOOM,
-): DocxFitZoomResult => {
+type DocxFitZoomOptions = {
+  /** Added to the auto-fit zoom after clamping (a manual zoom nudge). */
+  scaleOffset?: number;
+  /** Ceiling for the auto-fit zoom. */
+  maxAutoZoom?: number;
+  /** Content width (px) fitted to the container. Defaults to the Word text area,
+   * so body text fills the panel and the page margins overflow horizontally. Pass
+   * a larger width (e.g. the full page plus a gutter allowance) to fit the whole
+   * page instead, leaving the container's spare width as symmetric side padding. */
+  fitWidth?: number;
+};
+
+export const useDocxFitZoom = ({
+  scaleOffset = 0,
+  maxAutoZoom = DOCX_MAX_ZOOM,
+  fitWidth = DOCX_TEXT_AREA_WIDTH,
+}: DocxFitZoomOptions = {}): DocxFitZoomResult => {
   const [fitZoom, setFitZoom] = useState(DOCX_DEFAULT_ZOOM);
 
   // Callback ref: React invokes this once when the container
@@ -52,7 +72,7 @@ export const useDocxFitZoom = (
           return;
         }
         const availableWidth = Math.max(1, clientWidth - DOCX_FIT_PADDING * 2);
-        const nextFitZoom = availableWidth / DOCX_TEXT_AREA_WIDTH;
+        const nextFitZoom = availableWidth / fitWidth;
         const cappedFitZoom = Math.min(maxAutoZoom, nextFitZoom);
         setFitZoom(clampDocxZoom(Math.round(cappedFitZoom * 100) / 100));
       };
@@ -71,7 +91,7 @@ export const useDocxFitZoom = (
         observer.disconnect();
       };
     },
-    [maxAutoZoom],
+    [maxAutoZoom, fitWidth],
   );
 
   return { containerRef, fitZoom: clampDocxZoom(fitZoom + scaleOffset) };

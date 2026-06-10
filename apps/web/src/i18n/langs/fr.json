@@ -1316,6 +1316,9 @@
       "builtInBadge": "Intégré",
       "builtInSection": "Compétences intégrées",
       "chooseFile": "Choisissez un fichier ou déposez-le ici",
+      "coaching": {
+        "publish": "Publish skill"
+      },
       "deleteConfirmDescription": "« {name} » sera supprimée de cet espace de travail.",
       "deleteConfirmTitle": "Supprimer la compétence ?",
       "deleteFile": "Supprimer le fichier",
@@ -1356,6 +1359,7 @@
       "generateSkill": "Générer avec l'IA",
       "generateTitle": "Générer une compétence avec l'IA",
       "generating": "Génération en cours…",
+      "howItRuns": "How it runs",
       "importHelp": "Collez une URL directe vers SKILL.md, une URL de fichier GitHub ou une URL de dossier GitHub contenant SKILL.md.",
       "importSkill": "Importer depuis une URL",
       "importTitle": "Importer une compétence",
@@ -1365,8 +1369,6 @@
       "newFileFilenamePlaceholder": "notes.md",
       "newFilePathPlaceholder": "dossier/notes.md",
       "newFolder": "Nouveau dossier",
-      "newFolderFilenamePlaceholder": "README.md",
-      "newFolderNamePlaceholder": "sous-dossier",
       "pdfPreviewSoon": "L'aperçu PDF sera disponible une fois les ressources de compétence binaires prises en charge.",
       "privateSection": "Vos compétences",
       "regenerate": "Régénérer",
@@ -1375,6 +1377,7 @@
       "scope": "Visibilité",
       "scopePrivate": "Moi uniquement",
       "scopeTeam": "Toute l’organisation",
+      "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Sélectionné : {name}",
       "sourceUpload": "Importé",
       "sourceUrl": "URL publique",
@@ -1459,10 +1462,32 @@
     },
     "skills": {
       "addShortcut": "Ajouter une compétence",
-      "autoInvokeHintLabel": "Indication pour le modèle",
-      "autoInvokeHintPlaceholder": "Quand le modèle doit-il choisir automatiquement cette compétence ?",
-      "autoInvokeLabel": "Laisser l'IA l'exécuter automatiquement",
+      "blueprintGallery": {
+        "cards": {
+          "answerFromSources": {
+            "blurb": "Answer a question grounded in authoritative sources.",
+            "inside": "a source hierarchy · a research prompt",
+            "title": "Answer from sources"
+          },
+          "checkAgainstRules": {
+            "blurb": "Review a document and flag what fails, with citations.",
+            "inside": "references by jurisdiction · a checklist · a review prompt",
+            "title": "Check against rules"
+          },
+          "intakeToDraft": {
+            "blurb": "Ask for the facts, then draft a document.",
+            "inside": "an interview · model documents · a draft prompt",
+            "title": "Intake to draft"
+          }
+        },
+        "insideLabel": "Inside",
+        "startBlank": "Start from blank",
+        "startBlankHint": "An empty skill, for when you know exactly what you want.",
+        "subtitle": "Pick a starting shape. We set up the folders and walk you through filling them in.",
+        "title": "How should your skill work?"
+      },
       "commandConflict": "Une compétence avec cette commande / existe déjà",
+      "commandHelp": "Type it in chat to run this skill.",
       "commandLabel": "Commande slash (facultatif)",
       "commandPlaceholder": "p. ex. résumer",
       "createTitle": "Nouvelle compétence",
@@ -1499,6 +1524,11 @@
       "shadowed": "Masquée par la compétence d’équipe",
       "teamSection": "Compétences d’équipe"
     }
+  },
+  "markdownEditor": {
+    "rawLabel": "Markdown source",
+    "showFormatted": "Formatted",
+    "showRaw": "Show raw"
   },
   "navigation": {
     "account": "Compte",

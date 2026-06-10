@@ -1,3 +1,5 @@
+export { BLUEPRINT_IDS, BLUEPRINTS, getBlueprint } from "./blueprints";
+export type { Blueprint, BlueprintId } from "./blueprints";
 export {
   getSkillResourceKind,
   isAllowedResourcePath,
