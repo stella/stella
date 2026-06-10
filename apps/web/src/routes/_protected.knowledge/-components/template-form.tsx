@@ -270,6 +270,36 @@ type TemplateFormProps = (TransientFillProps | ServerFillProps) & {
 
 type FormValues = Record<string, unknown>;
 
+/** Form-state key holding an array field's item index list (`number[]`),
+ *  bookkeeping rather than a field value. Single source of the array key
+ *  naming scheme; hosts tapping `onValuesChange` parse keys through this
+ *  and {@link parseArrayItemKey}. */
+export const ARRAY_INDEX_KEY_PREFIX = "__array_";
+
+const arrayIndexKey = (fieldPath: string): string =>
+  `${ARRAY_INDEX_KEY_PREFIX}${fieldPath}`;
+
+/** Array item inputs as named by ArrayFieldRenderer: `<path>[<index>].<sub>`. */
+const ARRAY_ITEM_KEY_RE = /^(.+)\[(\d+)\]\.(.+)$/u;
+
+export type ArrayItemKey = {
+  /** The array field's path. */
+  path: string;
+  index: number;
+  /** The item sub-field's path within the array field. */
+  sub: string;
+};
+
+/** Parse a form-state key into its array item parts; null for scalar keys. */
+export const parseArrayItemKey = (key: string): ArrayItemKey | null => {
+  const match = ARRAY_ITEM_KEY_RE.exec(key);
+  const [, path, index, sub] = match ?? [];
+  if (path === undefined || index === undefined || sub === undefined) {
+    return null;
+  }
+  return { path, index: Number(index), sub };
+};
+
 /**
  * Read an `__array_*` key from form state into a `number[]` index list.
  * Returns `[]` when the key is missing or holds a non-number-array value;
@@ -311,7 +341,7 @@ const collectSourceOptionValues = (
       if (!sub) {
         continue;
       }
-      const count = readArrayIndices(values, `__array_${field.path}`).length;
+      const count = readArrayIndices(values, arrayIndexKey(field.path)).length;
       for (let i = 0; i < count; i++) {
         push(values[`${field.path}[${String(i)}].${sub.path}`]);
       }
@@ -891,7 +921,7 @@ const ArrayFieldRenderer = ({
 }) => {
   const t = useTranslations();
   const itemFields: ResolvedField[] = field.itemFields ?? [];
-  const arrayKey = `__array_${field.path}`;
+  const arrayKey = arrayIndexKey(field.path);
   const items = readArrayIndices(values, arrayKey);
 
   const addItem = () => {
@@ -1004,7 +1034,7 @@ const buildSubmitValues = (
     }
 
     if (field.kind === "array") {
-      const arrayKey = `__array_${field.path}`;
+      const arrayKey = arrayIndexKey(field.path);
       const items = readArrayIndices(values, arrayKey);
       const itemFields: ResolvedField[] = field.itemFields ?? [];
       const arrayValues: Record<string, unknown>[] = [];
@@ -1109,7 +1139,7 @@ const collectValidatableFields = (
     }
 
     if (field.kind === "array") {
-      const arrayKey = `__array_${field.path}`;
+      const arrayKey = arrayIndexKey(field.path);
       const items = readArrayIndices(values, arrayKey);
       const itemFields: ResolvedField[] = field.itemFields ?? [];
 
@@ -1160,7 +1190,7 @@ const collectEmptyArrayFields = (
   values: FormValues,
   push: (field: ResolvedField) => void,
 ) => {
-  const items = readArrayIndices(values, `__array_${field.path}`);
+  const items = readArrayIndices(values, arrayIndexKey(field.path));
   if (items.length === 0) {
     if (!isFieldRequired(field)) {
       push(field);
