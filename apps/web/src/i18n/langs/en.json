@@ -2058,7 +2058,7 @@
     "fieldLabel": "Label",
     "fieldLabelPlaceholder": "e.g. Full Name",
     "fieldLookupAiFormat": "AI format instruction",
-    "fieldLookupAiFormatHint": "AI writes the company details following this instruction; leave it empty for a plain name and seat.",
+    "fieldLookupAiFormatHint": "Tokens in [brackets] are filled from the register. AI rewording applies only when the field is Person + AI.",
     "fieldLookupAiFormatPlaceholder": "[company name], with its registered seat in [seat], KRS no. [number]",
     "fieldLookupInsertDetail": "Insert a company detail",
     "fieldLookupRegistry": "Company register",

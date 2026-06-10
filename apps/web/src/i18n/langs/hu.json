@@ -2058,7 +2058,7 @@
     "fieldLabel": "Címke",
     "fieldLabelPlaceholder": "pl. Teljes név",
     "fieldLookupAiFormat": "MI formázási utasítás",
-    "fieldLookupAiFormatHint": "Az MI ezen utasítás szerint fogalmazza meg a cég adatait; hagyja üresen a név és székhely használatához.",
+    "fieldLookupAiFormatHint": "A [zárójeles] tokenek a cégjegyzékből töltődnek ki. Az MI-átfogalmazás csak Személy + MI esetén érvényesül.",
     "fieldLookupAiFormatPlaceholder": "[cégnév], székhelye: [székhely], KRS-szám: [szám]",
     "fieldLookupInsertDetail": "Cégadat beszúrása",
     "fieldLookupRegistry": "Cégnyilvántartás",

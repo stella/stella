@@ -70,6 +70,7 @@ import {
   buildExternalMcpSystemHint,
   loadExternalMcpToolsForUser,
 } from "@/api/handlers/chat/tools/external-mcp-tools";
+import { restrictChatToolsToScope } from "@/api/handlers/chat/tools/tool-scope";
 import type {
   ChatMessage,
   ChatMessageContent,
@@ -535,6 +536,14 @@ const sendMessage = createSafeRootHandler(
       disabledNativeToolSlugs,
       skillMetadata: chatContext.skillMetadata,
     });
+    // A named scope narrows the streaming turn to its server-defined
+    // allowlist (validation above stays broad so persisted tool parts
+    // keep validating). The scope name is schema-validated; unknown
+    // names never reach this point.
+    const streamingTools =
+      body.toolScope === undefined
+        ? chatTools
+        : restrictChatToolsToScope(chatTools, body.toolScope);
 
     const externalMcpSystemHint = buildExternalMcpSystemHint(
       externalMcpTools.connectors,
@@ -708,7 +717,7 @@ const sendMessage = createSafeRootHandler(
               safeDb,
               thirdPartyBoundary,
               threadId: body.threadId,
-              tools: chatTools,
+              tools: streamingTools,
               systemSafe,
               systemUntrusted,
               userId: user.id,

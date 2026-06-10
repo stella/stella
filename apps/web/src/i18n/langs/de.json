@@ -2058,7 +2058,7 @@
     "fieldLabel": "Bezeichnung",
     "fieldLabelPlaceholder": "z. B. Vollständiger Name",
     "fieldLookupAiFormat": "KI-Formatierungsanweisung",
-    "fieldLookupAiFormatHint": "Die KI formuliert die Unternehmensdaten nach dieser Anweisung; leer lassen für Name und Sitz.",
+    "fieldLookupAiFormatHint": "Token in [Klammern] werden aus dem Register befüllt. KI-Umformulierung greift nur bei Person + KI.",
     "fieldLookupAiFormatPlaceholder": "[Firmenname], mit Sitz in [Sitz], KRS-Nr. [Nummer]",
     "fieldLookupInsertDetail": "Firmenangabe einfügen",
     "fieldLookupRegistry": "Unternehmensregister",

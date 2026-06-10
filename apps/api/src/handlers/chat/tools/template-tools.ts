@@ -21,7 +21,8 @@ import { brandPersistedTemplateId } from "@/api/lib/safe-id-boundaries";
 const LIST_TEMPLATES_TOOL_NAME = "list_templates" as const;
 const DESCRIBE_TEMPLATE_TOOL_NAME = "describe_template" as const;
 const FILL_TEMPLATE_TOOL_NAME = "fill_template" as const;
-const SUGGEST_TEMPLATE_FIELDS_TOOL_NAME = "suggest_template_fields" as const;
+export const SUGGEST_TEMPLATE_FIELDS_TOOL_NAME =
+  "suggest_template_fields" as const;
 
 type CreateTemplateToolsArgs = {
   scopedDb: ScopedDb;

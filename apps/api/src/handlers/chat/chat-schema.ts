@@ -13,6 +13,7 @@ import {
   validateStoredFileRefs,
 } from "@/api/handlers/chat/attachment-validation";
 import { normalizeLegacyRawToolInputs } from "@/api/handlers/chat/legacy-tool-compat";
+import { CHAT_TOOL_SCOPE } from "@/api/handlers/chat/tools/tool-scope";
 import type { ChatMention, ChatMessage } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -110,6 +111,13 @@ export const sendMessageBodySchema = t.Object({
   contextMatterIds: t.Optional(t.Array(tSafeId("workspace"))),
   message: rawMessageSchema,
   truncateAfterMessageId: t.Optional(tSafeId("chatMessage")),
+  /**
+   * Optional named tool scope for this turn. Only server-defined
+   * scope names validate; the server maps the name to a fixed tool
+   * allowlist (see `tools/tool-scope.ts`), so a client can narrow
+   * but never widen the turn's tool surface.
+   */
+  toolScope: t.Optional(t.Literal(CHAT_TOOL_SCOPE.suggestTemplateFields)),
   userContext: t.Optional(userContextSchema),
   activeFile: t.Optional(activeFileSchema),
   activeTemplate: t.Optional(activeTemplateSchema),

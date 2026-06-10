@@ -2058,7 +2058,7 @@
     "fieldLabel": "Popisok",
     "fieldLabelPlaceholder": "napr. Celé meno",
     "fieldLookupAiFormat": "Pokyn pre AI formátovanie",
-    "fieldLookupAiFormatHint": "AI zapíše údaje o spoločnosti podľa tohto pokynu; ponechajte prázdne pre názov a sídlo.",
+    "fieldLookupAiFormatHint": "Tokeny v [zátvorkách] sa doplnia z registra. AI preformulovanie sa použije, len keď je pole Osoba + AI.",
     "fieldLookupAiFormatPlaceholder": "[názov spoločnosti], so sídlom v [sídlo], KRS č. [číslo]",
     "fieldLookupInsertDetail": "Vložiť údaj o spoločnosti",
     "fieldLookupRegistry": "Obchodný register",

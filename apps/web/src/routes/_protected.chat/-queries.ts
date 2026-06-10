@@ -100,6 +100,22 @@ const APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME = "apply-active-docx-edits";
 const CHAT_THREADS_PAGE_SIZE = 50;
 const CHAT_TRANSPORT_VERSION = 2;
 
+/**
+ * Named tool scope for the Template Studio's "Suggest fields" preset.
+ * Sent as `body.toolScope` on the preset turn; the backend maps the
+ * name to a fixed allowlist (`suggest_template_fields` +
+ * `apply-active-docx-edits`) so the scoped turn cannot wander into
+ * other tools. Must match `CHAT_TOOL_SCOPE.suggestTemplateFields` in
+ * `apps/api/src/handlers/chat/tools/tool-scope.ts`.
+ */
+export const SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE =
+  "suggest-template-fields" as const;
+
+type ChatToolScope = typeof SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE;
+
+const isChatToolScope = (value: unknown): value is ChatToolScope =>
+  value === SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE;
+
 export type ApplyActiveDocxEditsInput =
   ChatUITools[typeof APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME]["input"];
 
@@ -429,6 +445,7 @@ export const buildSendRequestBody = ({
     message: PersistedChatMessage;
     sendMode: ChatSendMode;
     threadId: string;
+    toolScope?: ChatToolScope | undefined;
     userContext?: ChatUserContext | undefined;
     workspaceId?: string | undefined;
   } = {
@@ -441,6 +458,11 @@ export const buildSendRequestBody = ({
     }),
     threadId: key.threadId,
   };
+
+  const toolScope = resolveChatRequestToolScope({ key, messages, requestBody });
+  if (toolScope !== null) {
+    body.toolScope = toolScope;
+  }
 
   if (key.scope === "workspace") {
     body.workspaceId = key.workspaceId;
@@ -528,6 +550,55 @@ const resolveChatRequestSendMode = ({
   return sendMode;
 };
 
+const getRequestToolScope = (
+  requestBody: object | undefined,
+): ChatToolScope | null => {
+  if (!requestBody || !("toolScope" in requestBody)) {
+    return null;
+  }
+
+  return isChatToolScope(requestBody.toolScope) ? requestBody.toolScope : null;
+};
+
+type ResolveChatRequestToolScopeProps = {
+  key: ChatThreadKey;
+  messages: readonly PersistedChatMessage[];
+  requestBody: object | undefined;
+};
+
+/**
+ * Same per-turn stickiness as `resolveChatRequestSendMode`: the AI
+ * SDK does not replay request options on automatic continuation
+ * sends (tool outputs, approval responses), so the scope chosen at
+ * send time is snapshotted per user message and reapplied while
+ * that turn is still the latest one. Without this, the continuation
+ * after `apply-active-docx-edits` would stream with the full tool
+ * surface again.
+ */
+const resolveChatRequestToolScope = ({
+  key,
+  messages,
+  requestBody,
+}: ResolveChatRequestToolScopeProps): ChatToolScope | null => {
+  const explicitToolScope = getRequestToolScope(requestBody);
+  const threadKey = getChatThreadKey(key);
+  const userMessageId = getLatestUserMessageId(messages);
+  const activeTurn = activeTurnToolScopes.get(threadKey);
+  const toolScope =
+    explicitToolScope ??
+    (activeTurn?.userMessageId === userMessageId ? activeTurn.toolScope : null);
+
+  if (userMessageId) {
+    if (toolScope === null) {
+      activeTurnToolScopes.delete(threadKey);
+    } else {
+      activeTurnToolScopes.set(threadKey, { toolScope, userMessageId });
+    }
+  }
+
+  return toolScope;
+};
+
 const getLatestUserMessageId = (
   messages: readonly PersistedChatMessage[],
 ): string | null => {
@@ -575,6 +646,10 @@ const activeTurnSendModes = new Map<
   string,
   { sendMode: ChatSendMode; userMessageId: string }
 >();
+const activeTurnToolScopes = new Map<
+  string,
+  { toolScope: ChatToolScope; userMessageId: string }
+>();
 
 /**
  * Test-only escape hatch. The module-level cache is intentionally
@@ -583,6 +658,7 @@ const activeTurnSendModes = new Map<
  */
 export const __resetChatRequestStateForTests = (): void => {
   activeTurnSendModes.clear();
+  activeTurnToolScopes.clear();
   threadAutoFireState.clear();
 };
 

@@ -2058,7 +2058,7 @@
     "fieldLabel": "Libellé",
     "fieldLabelPlaceholder": "ex. Nom complet",
     "fieldLookupAiFormat": "Instruction de mise en forme pour l'IA",
-    "fieldLookupAiFormatHint": "L'IA rédige les données de la société selon cette instruction ; laissez vide pour le nom et le siège.",
+    "fieldLookupAiFormatHint": "Les jetons entre [crochets] sont remplis depuis le registre. La reformulation par IA ne s'applique qu'avec Personne + IA.",
     "fieldLookupAiFormatPlaceholder": "[nom de la société], dont le siège est à [siège], KRS n° [numéro]",
     "fieldLookupInsertDetail": "Insérer une donnée de l'entreprise",
     "fieldLookupRegistry": "Registre des sociétés",

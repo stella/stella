@@ -1212,11 +1212,33 @@ function computeVisibleRange(
 // Prompt bar
 // ===========================================================================
 
+/** Document scope a preset send applies to. */
+export type PromptBarPresetScope = "selection" | "document";
+
+/**
+ * Opt-in scope step for selected presets. When `appliesTo` matches a
+ * clicked chip, the preset bypasses the plain `onSubmit` path and
+ * goes through `onSubmit` here with an explicit scope: if
+ * `shouldAskForScope()` is true (the editor has a live selection)
+ * the chip row swaps to a tiny inline two-option chooser first;
+ * otherwise the preset submits with the whole-document scope
+ * immediately.
+ */
+type PromptBarPresetScopeChooser = {
+  appliesTo: (preset: AISuggestionPreset) => boolean;
+  shouldAskForScope: () => boolean;
+  question: string;
+  selectionLabel: string;
+  documentLabel: string;
+  onSubmit: (preset: AISuggestionPreset, scope: PromptBarPresetScope) => void;
+};
+
 type PromptBarProps = {
   layout: FileAIChatLayout;
   status: FileAIChatStatus;
   canSubmitNow?: (() => boolean) | undefined;
   onSubmit: (input: { prompt: string; presetId?: string }) => void;
+  presetScopeChooser?: PromptBarPresetScopeChooser | undefined;
   /**
    * Pre-saved prompts surfaced as chips above the empty bar. Clicking a
    * chip — or pressing Tab while the input is empty (first preset) —
@@ -1438,6 +1460,7 @@ export function PromptBar(props: PromptBarProps) {
     showThreadToggle,
     canSubmitNow,
     onSubmit,
+    presetScopeChooser,
     presets,
     threadHasMessages = false,
     onStop,
@@ -1529,19 +1552,60 @@ export function PromptBar(props: PromptBarProps) {
     isEmpty &&
     !busy &&
     !isSendBlocked;
+  /**
+   * Scoped preset awaiting the inline "Selected part / Entire
+   * document" choice. While set, the chip row renders the two-option
+   * chooser instead of the chips; Escape or losing chip visibility
+   * cancels back to the chips.
+   */
+  const [scopePromptPreset, setScopePromptPreset] =
+    useState<AISuggestionPreset | null>(null);
+  useEffect(() => {
+    if (!presetChipsVisible && scopePromptPreset !== null) {
+      setScopePromptPreset(null);
+    }
+  }, [presetChipsVisible, scopePromptPreset]);
   const submitPreset = useCallback(
     (preset: AISuggestionPreset) => {
       if (canSubmitNow !== undefined && !canSubmitNow()) {
         return;
       }
+      if (
+        presetScopeChooser !== undefined &&
+        presetScopeChooser.appliesTo(preset)
+      ) {
+        if (presetScopeChooser.shouldAskForScope()) {
+          setScopePromptPreset(preset);
+          return;
+        }
+        presetScopeChooser.onSubmit(preset, "document");
+        return;
+      }
       onSubmit({ prompt: preset.prompt, presetId: preset.id });
     },
-    [canSubmitNow, onSubmit],
+    [canSubmitNow, onSubmit, presetScopeChooser],
+  );
+  const resolvePresetScope = useCallback(
+    (scope: PromptBarPresetScope) => {
+      const preset = scopePromptPreset;
+      setScopePromptPreset(null);
+      if (preset === null || presetScopeChooser === undefined) {
+        return;
+      }
+      presetScopeChooser.onSubmit(preset, scope);
+    },
+    [scopePromptPreset, presetScopeChooser],
   );
   // Tab with an empty input writes the first preset INTO the composer (the
   // user can edit before sending); clicking a chip accepts and sends as-is.
+  // Escape backs out of the inline preset-scope chooser.
   const handleShellKeyDown = useCallback(
     (event: ReactKeyboardEvent) => {
+      if (event.key === "Escape" && scopePromptPreset !== null) {
+        event.preventDefault();
+        setScopePromptPreset(null);
+        return;
+      }
       if (event.key !== "Tab" || event.shiftKey || !presetChipsVisible) {
         return;
       }
@@ -1552,7 +1616,7 @@ export function PromptBar(props: PromptBarProps) {
       event.preventDefault();
       editor.chain().focus().insertContent(first.prompt).run();
     },
-    [presetChipsVisible, presets, editor],
+    [presetChipsVisible, presets, editor, scopePromptPreset],
   );
 
   return (
@@ -1572,7 +1636,41 @@ export function PromptBar(props: PromptBarProps) {
       role="toolbar"
       tabIndex={-1}
     >
-      {presetChipsVisible && (
+      {presetChipsVisible &&
+        scopePromptPreset !== null &&
+        presetScopeChooser !== undefined && (
+          <div className="absolute start-1 bottom-full mb-3 flex items-start">
+            <span
+              className={cn(
+                DOC_FLOAT_SURFACE_CLASS,
+                "border-foreground/15 inline-flex items-center gap-1.5 rounded-full border py-1 ps-3 pe-1 shadow-[0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
+              )}
+            >
+              <span className="text-muted-foreground text-[12px] font-medium">
+                {presetScopeChooser.question}
+              </span>
+              <Button
+                className="h-7 rounded-full px-2.5 text-[12.5px]"
+                onClick={() => resolvePresetScope("selection")}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                {presetScopeChooser.selectionLabel}
+              </Button>
+              <Button
+                className="h-7 rounded-full px-2.5 text-[12.5px]"
+                onClick={() => resolvePresetScope("document")}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                {presetScopeChooser.documentLabel}
+              </Button>
+            </span>
+          </div>
+        )}
+      {presetChipsVisible && scopePromptPreset === null && (
         <div className="absolute start-1 bottom-full mb-3 flex flex-col items-start gap-1.5">
           {presets.map((preset) => (
             // The opaque surface lives on a wrapper, not the Button:

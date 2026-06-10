@@ -2058,7 +2058,7 @@
     "fieldLabel": "Etiqueta",
     "fieldLabelPlaceholder": "p. ej. Nombre completo",
     "fieldLookupAiFormat": "Instrucción de formato para la IA",
-    "fieldLookupAiFormatHint": "La IA redacta los datos de la empresa según esta instrucción; déjela vacía para usar el nombre y la sede.",
+    "fieldLookupAiFormatHint": "Los tokens entre [corchetes] se rellenan desde el registro. La reformulación por IA solo se aplica con Persona + IA.",
     "fieldLookupAiFormatPlaceholder": "[nombre de la empresa], con domicilio social en [sede], KRS n.º [número]",
     "fieldLookupInsertDetail": "Insertar un dato de la empresa",
     "fieldLookupRegistry": "Registro mercantil",

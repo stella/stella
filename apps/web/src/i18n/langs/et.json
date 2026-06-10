@@ -2058,7 +2058,7 @@
     "fieldLabel": "Silt",
     "fieldLabelPlaceholder": "nt Täisnimi",
     "fieldLookupAiFormat": "AI vormingu juhis",
-    "fieldLookupAiFormatHint": "AI vormistab ettevõtte andmed selle juhise järgi; jätke tühjaks, et kasutada nime ja asukohta.",
+    "fieldLookupAiFormatHint": "Tokenid [sulgudes] täidetakse registrist. TI sõnastust rakendatakse ainult siis, kui väli on Isik + TI.",
     "fieldLookupAiFormatPlaceholder": "[ettevõtte nimi], asukohaga [asukoht], KRS nr [number]",
     "fieldLookupInsertDetail": "Lisa ettevõtte andmed",
     "fieldLookupRegistry": "Äriregister",
