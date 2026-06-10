@@ -41,6 +41,7 @@ import {
   buildSkillResourceTabId,
   useInspectorStore,
 } from "@/components/inspector/inspector-store";
+import { MarkdownIcon } from "@/components/markdown-icon";
 import { api } from "@/lib/api";
 import { MARKDOWN_MIME, isMarkdownFile } from "@/lib/consts";
 import { APIError, toAPIError, userErrorFromThrown } from "@/lib/errors";
@@ -839,7 +840,7 @@ function SkillFileTree({
       }}
       renderIcon={(node) => {
         if (node.id === BODY_NODE_ID) {
-          return <FileTextIcon className="size-4 shrink-0" />;
+          return <MarkdownIcon className="size-4 shrink-0" />;
         }
         if (node.kind === "file") {
           return fileIcon(node.name);
@@ -1292,7 +1293,7 @@ const fileIcon = (fileName: string) => {
   // Recognise markdown via the shared MIME/extension helper so the file view,
   // the inspector rail, and the panel all agree on what counts as markdown.
   if (isMarkdownFile({ fileName })) {
-    return <FileTextIcon className="size-4 shrink-0" />;
+    return <MarkdownIcon className="size-4 shrink-0" />;
   }
   const dotIndex = fileName.lastIndexOf(".");
   const ext = dotIndex === -1 ? "" : fileName.slice(dotIndex + 1).toLowerCase();
