@@ -2129,6 +2129,7 @@
     "searchTemplates": "Sablonok keresése…",
     "structureWarnings": "{count, plural, one {# struktúra figyelmeztetés} other {# struktúra figyelmeztetés}}",
     "studio": {
+      "aiAdaptInstructionPlaceholder": "Választható: hogyan igazítsa az MI a megfogalmazást (pl. a környező nyelvtanhoz)",
       "aiDrafted": "MI által megfogalmazva",
       "aiNoFields": "Az MI nem javasolt egyetlen mezőt sem",
       "aiPresetPrompt": "Javasolj kitölthető sablonmezőket",

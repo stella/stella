@@ -2129,6 +2129,7 @@
     "searchTemplates": "Szukaj szablonów…",
     "structureWarnings": "{count, plural, one {# ostrzeżenie struktury} few {# ostrzeżenia struktury} many {# ostrzeżeń struktury} other {# ostrzeżeń struktury}}",
     "studio": {
+      "aiAdaptInstructionPlaceholder": "Opcjonalnie: jak AI ma dostosować sformułowanie (np. do otaczającej gramatyki)",
       "aiDrafted": "Redagowane przez AI",
       "aiNoFields": "AI nie zaproponowała żadnych pól",
       "aiPresetPrompt": "Zaproponuj wypełnialne pola szablonu",

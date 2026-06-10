@@ -2129,6 +2129,7 @@
     "searchTemplates": "Hledat šablony…",
     "structureWarnings": "{count, plural, one {# varování struktury} few {# varování struktury} other {# varování struktury}}",
     "studio": {
+      "aiAdaptInstructionPlaceholder": "Volitelné: jak má AI upravit znění (např. přizpůsobit okolní gramatice)",
       "aiDrafted": "Koncept od AI",
       "aiNoFields": "AI nenavrhla žádná pole",
       "aiPresetPrompt": "Navrhni vyplnitelná pole šablony",

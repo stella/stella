@@ -3767,7 +3767,6 @@ const FieldFace = ({
               className="flex-1"
               onClick={() =>
                 onUpdate({
-                  aiPrompt: undefined,
                   aiAdapt: true,
                   formula: undefined,
                 })
@@ -3812,9 +3811,21 @@ const FieldFace = ({
             </Button>
           </div>
           {valueSource === "textAi" ? (
-            <p className="text-muted-foreground text-xs leading-relaxed">
-              {t("templates.aiAdaptHint")}
-            </p>
+            <>
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                {t("templates.aiAdaptHint")}
+              </p>
+              <Textarea
+                onChange={(e) =>
+                  onUpdate({ aiPrompt: e.target.value || undefined })
+                }
+                placeholder={t(
+                  "templates.studio.aiAdaptInstructionPlaceholder",
+                )}
+                rows={2}
+                value={field.aiPrompt ?? ""}
+              />
+            </>
           ) : null}
           {valueSource === "ai" ? (
             <Textarea

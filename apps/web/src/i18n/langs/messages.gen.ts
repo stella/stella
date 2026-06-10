@@ -2132,6 +2132,7 @@ type Messages = {
     "searchTemplates": "Search templates…";
     "structureWarnings": "{count, plural, one {# structure warning} other {# structure warnings}}";
     "studio": {
+      "aiAdaptInstructionPlaceholder": "Optional: how AI should adapt the wording (e.g. match the surrounding grammar)";
       "aiDrafted": "AI-drafted";
       "aiNoFields": "The AI didn't suggest any fields";
       "aiPresetPrompt": "Suggest fillable template fields";

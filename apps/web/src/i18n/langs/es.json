@@ -2129,6 +2129,7 @@
     "searchTemplates": "Buscar plantillas…",
     "structureWarnings": "{count, plural, one {# advertencia de estructura} other {# advertencias de estructura}}",
     "studio": {
+      "aiAdaptInstructionPlaceholder": "Opcional: cómo debe la IA adaptar la redacción (p. ej., ajustarse a la gramática del entorno)",
       "aiDrafted": "Redactado por IA",
       "aiNoFields": "La IA no sugirió ningún campo",
       "aiPresetPrompt": "Sugerir campos rellenables de la plantilla",

@@ -2129,6 +2129,7 @@
     "searchTemplates": "Pesquisar modelos…",
     "structureWarnings": "{count, plural, one {# aviso de estrutura} many {# avisos de estrutura} other {# avisos de estrutura}}",
     "studio": {
+      "aiAdaptInstructionPlaceholder": "Opcional: como a IA deve adaptar a redação (ex.: combinar com a gramática ao redor)",
       "aiDrafted": "Redigido por IA",
       "aiNoFields": "A IA não sugeriu nenhum campo",
       "aiPresetPrompt": "Sugerir campos preenchíveis do modelo",

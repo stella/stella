@@ -2129,6 +2129,7 @@
     "searchTemplates": "Ieškoti šablonų…",
     "structureWarnings": "{count, plural, one {# struktūros įspėjimas} few {# struktūros įspėjimai} many {# struktūros įspėjimo} other {# struktūros įspėjimų}}",
     "studio": {
+      "aiAdaptInstructionPlaceholder": "Neprivaloma: kaip DI turėtų pritaikyti formuluotę (pvz., derinti prie aplinkinės gramatikos)",
       "aiDrafted": "DI parengta",
       "aiNoFields": "DI nepasiūlė jokių laukų",
       "aiPresetPrompt": "Pasiūlyk užpildomus šablono laukus",

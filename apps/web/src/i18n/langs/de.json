@@ -2129,6 +2129,7 @@
     "searchTemplates": "Vorlagen durchsuchen…",
     "structureWarnings": "{count, plural, one {# Strukturwarnung} other {# Strukturwarnungen}}",
     "studio": {
+      "aiAdaptInstructionPlaceholder": "Optional: wie die KI die Formulierung anpassen soll (z. B. an die umgebende Grammatik)",
       "aiDrafted": "KI-Entwurf",
       "aiNoFields": "Die KI hat keine Felder vorgeschlagen",
       "aiPresetPrompt": "Ausfüllbare Vorlagenfelder vorschlagen",

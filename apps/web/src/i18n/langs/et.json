@@ -2129,6 +2129,7 @@
     "searchTemplates": "Otsi malle…",
     "structureWarnings": "{count, plural, one {# struktuurihoiatus} other {# struktuurihoiatust}}",
     "studio": {
+      "aiAdaptInstructionPlaceholder": "Valikuline: kuidas TI peaks sõnastust kohandama (nt vastama ümbritsevale grammatikale)",
       "aiDrafted": "AI koostatud",
       "aiNoFields": "AI ei pakkunud ühtegi välja",
       "aiPresetPrompt": "Paku malli täidetavaid välju",

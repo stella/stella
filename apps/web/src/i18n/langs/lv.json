@@ -2129,6 +2129,7 @@
     "searchTemplates": "Meklēt veidnes…",
     "structureWarnings": "{count, plural, zero {# struktūras brīdinājumu} one {# struktūras brīdinājums} other {# struktūras brīdinājumi}}",
     "studio": {
+      "aiAdaptInstructionPlaceholder": "Neobligāti: kā MI jāpielāgo formulējums (piem., atbilstoši apkārtējai gramatikai)",
       "aiDrafted": "MI sagatavots",
       "aiNoFields": "MI neieteica nevienu lauku",
       "aiPresetPrompt": "Ieteikt aizpildāmus veidnes laukus",

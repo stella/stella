@@ -2129,6 +2129,7 @@
     "searchTemplates": "Hľadať šablóny…",
     "structureWarnings": "{count, plural, one {# varovanie štruktúry} few {# varovania štruktúry} other {# varovaní štruktúry}}",
     "studio": {
+      "aiAdaptInstructionPlaceholder": "Voliteľné: ako má AI upraviť znenie (napr. prispôsobiť okolitej gramatike)",
       "aiDrafted": "Koncept od AI",
       "aiNoFields": "AI nenavrhla žiadne polia",
       "aiPresetPrompt": "Navrhni vyplniteľné polia šablóny",
