@@ -146,7 +146,10 @@ const para = (runs: Run[], styleId?: string): Paragraph => ({
 
 const listPara = (runs: Run[], rendering: ListRendering): Paragraph => ({
   type: "paragraph",
-  formatting: {},
+  // Real numbering properties, not just display metadata: the editor's list
+  // commands (Enter continues the list, Tab indents, toggle) and the live
+  // marker counters all key off `numPr`.
+  formatting: { numPr: { numId: rendering.numId, ilvl: rendering.level } },
   listRendering: rendering,
   content: runs.length > 0 ? runs : [textRun("")],
 });
@@ -172,22 +175,35 @@ const tableFromToken = (token: Tokens.Table): Table => ({
   ],
 });
 
-// Real list paragraphs: bullets carry the "•" marker and `isBullet`; ordered
-// items carry their computed "N." marker. toMarkdown normalises bullets to "- "
-// and preserves the ordered marker, so the markdown round-trips exactly.
-const listBlocks = (list: Tokens.List, level: number): BlockContent[] => {
+// Real list paragraphs with Word-style template markers ("%1." resolves to the
+// live counter at level 0), so inserted/split items renumber instead of
+// repeating a baked-in number. Each top-level markdown list gets its own numId
+// so separate lists restart at 1; nested lists share the parent's numId at a
+// deeper ilvl. toMarkdown resolves the templates back to concrete "N." markers
+// and normalises bullets to "- ", so the markdown round-trips exactly.
+const listBlocks = (
+  list: Tokens.List,
+  level: number,
+  numId: number,
+): BlockContent[] => {
   const out: BlockContent[] = [];
   const start = Number(list.start) || 1;
-  for (const [index, item] of list.items.entries()) {
+  const decimalLevels = Array.from(
+    { length: level + 1 },
+    () => "decimal" as const,
+  );
+  for (const item of list.items) {
     const rendering: ListRendering = list.ordered
       ? {
-          marker: `${start + index}.`,
+          marker: `%${level + 1}.`,
           level,
-          numId: 1,
+          numId,
           isBullet: false,
           numFmt: "decimal",
+          levelNumFmts: decimalLevels,
+          ...(start !== 1 && { startOverride: start }),
         }
-      : { marker: "•", level, numId: 1, isBullet: true };
+      : { marker: "•", level, numId, isBullet: true };
     const inlineTokens: Token[] = [];
     const nestedLists: Tokens.List[] = [];
     for (const child of item.tokens) {
@@ -199,13 +215,19 @@ const listBlocks = (list: Tokens.List, level: number): BlockContent[] => {
     }
     out.push(listPara(inlineToRuns(inlineTokens, item.text, {}), rendering));
     for (const nested of nestedLists) {
-      out.push(...listBlocks(nested, level + 1));
+      out.push(...listBlocks(nested, level + 1, numId));
     }
   }
   return out;
 };
 
-const blocksFromTokens = (tokens: Token[] | undefined): BlockContent[] => {
+/** Allocates one numId per markdown list so each list counts independently. */
+type NumIdAllocator = { next: number };
+
+const blocksFromTokens = (
+  tokens: Token[] | undefined,
+  numIds: NumIdAllocator,
+): BlockContent[] => {
   const blocks: BlockContent[] = [];
   for (const token of tokens ?? []) {
     if (isTokenType(token, "heading")) {
@@ -216,7 +238,7 @@ const blocksFromTokens = (tokens: Token[] | undefined): BlockContent[] => {
     } else if (isTokenType(token, "paragraph")) {
       blocks.push(para(inlineToRuns(token.tokens, token.text, {})));
     } else if (isTokenType(token, "list")) {
-      blocks.push(...listBlocks(token, 0));
+      blocks.push(...listBlocks(token, 0, numIds.next++));
     } else if (isTokenType(token, "table")) {
       blocks.push(tableFromToken(token));
     } else if (isTokenType(token, "code")) {
@@ -226,7 +248,7 @@ const blocksFromTokens = (tokens: Token[] | undefined): BlockContent[] => {
         );
       }
     } else if (isTokenType(token, "blockquote")) {
-      for (const inner of blocksFromTokens(token.tokens)) {
+      for (const inner of blocksFromTokens(token.tokens, numIds)) {
         const styled: BlockContent =
           inner.type === "paragraph"
             ? {
@@ -277,7 +299,7 @@ const applyMarkdownPageGeometry = (document: Document): void => {
  */
 export function fromMarkdown(markdown: string): Document {
   const document = createEmptyDocument();
-  const blocks = blocksFromTokens(marked.lexer(markdown));
+  const blocks = blocksFromTokens(marked.lexer(markdown), { next: 1 });
   if (blocks.length > 0) {
     document.package.document.content = blocks;
   }

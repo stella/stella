@@ -236,7 +236,7 @@ function toLetter(value: number, upper: boolean): string {
   return letter.repeat(Math.floor(zeroBased / 26) + 1);
 }
 
-function formatCounter(
+export function formatCounter(
   value: number,
   format: NumberFormat | undefined,
 ): string {
@@ -265,7 +265,7 @@ function formatCounter(
   }
 }
 
-function resolveListTemplate(
+export function resolveListTemplate(
   template: string,
   counters: number[],
   levelFormats: NumberFormat[] | undefined,
