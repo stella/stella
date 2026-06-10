@@ -104,11 +104,36 @@ const LOOKUP_REGISTRIES = ["krs"] as const;
 
 type LookupRegistry = (typeof LOOKUP_REGISTRIES)[number];
 
+/** One named output format for a lookup field: the author enters the registry
+ *  number once and addresses this rendering of the resolved hit via the dotted
+ *  marker `{{path.key}}`. */
+export type EditableLookupFormat = {
+  key: string;
+  template: string;
+};
+
+/** Marker segment grammar (letters, digits, underscore, dash; no dots) shared
+ *  with the manifest's `isLookupFormatKey`. */
+const LOOKUP_FORMAT_KEY_RE = /^[\p{L}\p{N}_-]+$/u;
+
+/** Characters disallowed in a format key as the author types: anything outside
+ *  the segment grammar, including the dot (the marker's path/key separator). */
+const LOOKUP_FORMAT_KEY_DISALLOWED_RE = /[^\p{L}\p{N}_-]/gu;
+
+/** Caps mirroring the manifest's `LOOKUP_FORMATS_MAX` /
+ *  `LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH`. */
+const LOOKUP_FORMATS_MAX = 10;
+const LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH = 2000;
+
 export type EditableLookup = {
   registry: LookupRegistry;
   /** AI instruction shaping the resolved company details; empty = the
-   *  deterministic "name, seat" rendering. */
+   *  deterministic "name, seat" rendering. This is the DEFAULT format for the
+   *  bare `{{path}}` marker. */
   aiFormat?: string | undefined;
+  /** Additional named renderings of the same resolved hit, each addressed by a
+   *  `{{path.key}}` marker. */
+  formats?: EditableLookupFormat[] | undefined;
 };
 
 export type EditablePart = {
@@ -285,9 +310,22 @@ export const lookupManifestProps = (
     return undefined;
   }
   const aiFormat = field.lookup.aiFormat?.trim() ?? "";
+  // Drop rows with an empty key or template, enforce the segment grammar and
+  // caps; an empty list normalizes away so the manifest stays minimal.
+  const formats = (field.lookup.formats ?? [])
+    .map((f) => ({ key: f.key.trim(), template: f.template.trim() }))
+    .filter(
+      (f) =>
+        f.key !== "" &&
+        f.template !== "" &&
+        LOOKUP_FORMAT_KEY_RE.test(f.key) &&
+        f.template.length <= LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH,
+    )
+    .slice(0, LOOKUP_FORMATS_MAX);
   return {
     registry: field.lookup.registry,
     aiFormat: aiFormat === "" ? undefined : aiFormat,
+    formats: formats.length > 0 ? formats : undefined,
   };
 };
 
@@ -992,6 +1030,33 @@ const REGISTRY_FIELD_EXAMPLES: Record<
   },
 };
 
+type InsertTokenResult = {
+  value: string;
+  restoreCaret: () => void;
+};
+
+/** Insert `token` at the textarea's caret (appending when it has not been
+ *  focused yet), returning the next value plus a deferred caret restore so
+ *  every format editor shares one caret-insertion mechanism. */
+const insertTokenAtCaret = (
+  textarea: HTMLTextAreaElement | null,
+  current: string,
+  token: string,
+): InsertTokenResult => {
+  const start = textarea?.selectionStart ?? current.length;
+  const end = textarea?.selectionEnd ?? current.length;
+  const value = current.slice(0, start) + token + current.slice(end);
+  return {
+    value,
+    restoreCaret: () => {
+      requestAnimationFrame(() => {
+        textarea?.focus();
+        textarea?.setSelectionRange(start + token.length, start + token.length);
+      });
+    },
+  };
+};
+
 /** Configuration for the "Company ID" field type: pick the register the
  *  entered number resolves against, and optionally an AI format instruction
  *  shaping the resolved company details — with the registry's return fields
@@ -1007,25 +1072,29 @@ const CompanyLookupConfig = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const registry = field.lookup?.registry ?? "krs";
   const aiFormat = field.lookup?.aiFormat ?? "";
+  const formats = field.lookup?.formats ?? [];
 
   const setLookup = (patch: Partial<EditableLookup>) =>
-    onUpdate({ lookup: { registry, aiFormat, ...patch } });
+    onUpdate({ lookup: { registry, aiFormat, formats, ...patch } });
 
-  /** Insert a [detail] token at the textarea caret (appends when the
-   *  textarea has not been focused yet) and restore focus. */
+  /** Insert a [detail] token at the default-format textarea caret (appends
+   *  when the textarea has not been focused yet) and restore focus. */
   const insertToken = (name: string) => {
-    const token = `[${name}]`;
-    const textarea = textareaRef.current;
-    const start = textarea?.selectionStart ?? aiFormat.length;
-    const end = textarea?.selectionEnd ?? aiFormat.length;
-    setLookup({
-      aiFormat: aiFormat.slice(0, start) + token + aiFormat.slice(end),
-    });
-    requestAnimationFrame(() => {
-      textarea?.focus();
-      textarea?.setSelectionRange(start + token.length, start + token.length);
-    });
+    const next = insertTokenAtCaret(textareaRef.current, aiFormat, `[${name}]`);
+    setLookup({ aiFormat: next.value });
+    next.restoreCaret();
   };
+
+  const updateFormat = (index: number, patch: Partial<EditableLookupFormat>) =>
+    setLookup({
+      formats: formats.map((f, i) => (i === index ? { ...f, ...patch } : f)),
+    });
+
+  const addFormat = () =>
+    setLookup({ formats: [...formats, { key: "", template: "" }] });
+
+  const removeFormat = (index: number) =>
+    setLookup({ formats: formats.filter((_, i) => i !== index) });
 
   return (
     <>
@@ -1065,31 +1134,157 @@ const CompanyLookupConfig = ({
             />
           }
         />
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-muted-foreground text-xs">
-            {t("templates.fieldLookupInsertDetail")}
-          </span>
-          {REGISTRY_RETURN_FIELDS[registry].map((name) => (
-            <Tooltip
-              content={REGISTRY_FIELD_EXAMPLES[registry][name]}
-              key={name}
-              render={
-                <button
-                  className="bg-accent text-accent-foreground hover:bg-accent/80 cursor-pointer rounded-md px-1.5 py-0.5 text-xs font-medium"
-                  onClick={() => insertToken(name)}
-                  type="button"
-                >
-                  [{name}]
-                </button>
-              }
-            />
-          ))}
-        </div>
+        <LookupTokenChips onInsert={insertToken} registry={registry} />
         <p className="text-muted-foreground text-xs">
           {t("templates.fieldLookupAiFormatHint")}
         </p>
       </Field>
+
+      <Field>
+        <FieldLabel>{t("templates.fieldLookupFormats")}</FieldLabel>
+        <p className="text-muted-foreground text-xs">
+          {t("templates.fieldLookupFormatsHint")}
+        </p>
+        <div className="flex flex-col gap-3">
+          {formats.map((format, index) => (
+            <LookupFormatRow
+              fieldPath={field.path}
+              format={format}
+              // Rows have no stable identity while their keys are edited.
+              key={`lookup-format-${String(index)}`}
+              onChange={(patch) => updateFormat(index, patch)}
+              onRemove={() => removeFormat(index)}
+              registry={registry}
+            />
+          ))}
+        </div>
+        <Button
+          className="self-start"
+          disabled={formats.length >= LOOKUP_FORMATS_MAX}
+          onClick={addFormat}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          {t("templates.fieldLookupAddFormat")}
+        </Button>
+      </Field>
     </>
+  );
+};
+
+/** The registry's return fields as clickable chips that insert [token] slots
+ *  at the active format editor's caret. Shared by the default format and every
+ *  named-format row. */
+const LookupTokenChips = ({
+  registry,
+  onInsert,
+}: {
+  registry: LookupRegistry;
+  onInsert: (name: string) => void;
+}) => {
+  const t = useTranslations();
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="text-muted-foreground text-xs">
+        {t("templates.fieldLookupInsertDetail")}
+      </span>
+      {REGISTRY_RETURN_FIELDS[registry].map((name) => (
+        <Tooltip
+          content={REGISTRY_FIELD_EXAMPLES[registry][name]}
+          key={name}
+          render={
+            <button
+              className="bg-accent text-accent-foreground hover:bg-accent/80 cursor-pointer rounded-md px-1.5 py-0.5 text-xs font-medium"
+              onClick={() => onInsert(name)}
+              type="button"
+            >
+              [{name}]
+            </button>
+          }
+        />
+      ))}
+    </div>
+  );
+};
+
+/** One named-format row: a key input, the template Textarea with the same
+ *  return-field token chips, a remove button, and muted helper text showing
+ *  the marker the author types to use this rendering (`{{path.key}}`). */
+const LookupFormatRow = ({
+  fieldPath,
+  format,
+  registry,
+  onChange,
+  onRemove,
+}: {
+  fieldPath: string;
+  format: EditableLookupFormat;
+  registry: LookupRegistry;
+  onChange: (patch: Partial<EditableLookupFormat>) => void;
+  onRemove: () => void;
+}) => {
+  const t = useTranslations();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const insertToken = (name: string) => {
+    const next = insertTokenAtCaret(
+      textareaRef.current,
+      format.template,
+      `[${name}]`,
+    );
+    onChange({ template: next.value });
+    next.restoreCaret();
+  };
+
+  const trimmedKey = format.key.trim();
+
+  return (
+    <div className="border-border flex flex-col gap-2 rounded-md border p-2">
+      <div className="flex items-center gap-2">
+        <Input
+          aria-label={t("templates.fieldLookupFormatKey")}
+          className="flex-1"
+          onChange={(e) =>
+            onChange({
+              key: e.target.value.replace(LOOKUP_FORMAT_KEY_DISALLOWED_RE, ""),
+            })
+          }
+          placeholder={t("templates.fieldLookupFormatKey")}
+          value={format.key}
+        />
+        <Button
+          aria-label={t("common.remove")}
+          onClick={onRemove}
+          size="icon-xs"
+          type="button"
+          variant="ghost"
+        >
+          <XIcon />
+        </Button>
+      </div>
+      <FieldControl
+        render={
+          <Textarea
+            aria-label={t("templates.fieldLookupFormatTemplate")}
+            maxLength={LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH}
+            onChange={(e) => onChange({ template: e.target.value })}
+            placeholder={t("templates.fieldLookupAiFormatPlaceholder")}
+            ref={textareaRef}
+            value={format.template}
+          />
+        }
+      />
+      <LookupTokenChips onInsert={insertToken} registry={registry} />
+      {trimmedKey !== "" && (
+        <p className="text-muted-foreground text-xs">
+          {t("templates.fieldLookupFormatMarker")}
+          <code className="bg-muted ms-1 rounded px-1 py-0.5">
+            {`{{${fieldPath}.${trimmedKey}}}`}
+          </code>
+        </p>
+      )}
+    </div>
   );
 };
 
