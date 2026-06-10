@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 
 import {
+  WandSparklesIcon,
   AlertTriangleIcon,
   ArrowLeftIcon,
   ChevronDownIcon,
@@ -981,6 +982,7 @@ const CompanyLookupConfig = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const registry = field.lookup?.registry ?? "krs";
   const aiFormat = field.lookup?.aiFormat ?? "";
+  const aiFormatting = field.lookup?.aiFormat !== undefined;
 
   const setLookup = (patch: Partial<EditableLookup>) =>
     onUpdate({ lookup: { registry, aiFormat, ...patch } });
@@ -1032,17 +1034,45 @@ const CompanyLookupConfig = ({
 
       <Field>
         <FieldLabel>{t("templates.fieldLookupAiFormat")}</FieldLabel>
-        <FieldControl
-          render={
-            <Textarea
-              onChange={(e) => setLookup({ aiFormat: e.target.value })}
-              placeholder={t("templates.fieldLookupAiFormatPlaceholder")}
-              ref={textareaRef}
-              value={aiFormat}
-            />
-          }
-        />
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex items-center gap-1">
+          <Button
+            className="flex-1"
+            onClick={() => onUpdate({ lookup: { registry } })}
+            size="sm"
+            type="button"
+            variant={aiFormatting ? "ghost" : "secondary"}
+          >
+            {t("templates.fieldLookupStandard")}
+          </Button>
+          <Button
+            className="flex-1"
+            onClick={() => setLookup({ aiFormat })}
+            size="sm"
+            type="button"
+            variant={aiFormatting ? "secondary" : "ghost"}
+          >
+            <WandSparklesIcon className="size-3.5" />
+            {t("templates.fieldLookupAiFormatted")}
+          </Button>
+        </div>
+        {aiFormatting ? (
+          <FieldControl
+            render={
+              <Textarea
+                onChange={(e) => setLookup({ aiFormat: e.target.value })}
+                placeholder={t("templates.fieldLookupAiFormatPlaceholder")}
+                ref={textareaRef}
+                value={aiFormat}
+              />
+            }
+          />
+        ) : null}
+        <div
+          className={cn(
+            "flex flex-wrap items-center gap-1.5",
+            !aiFormatting && "hidden",
+          )}
+        >
           <span className="text-muted-foreground text-xs">
             {t("templates.fieldLookupInsertDetail")}
           </span>
