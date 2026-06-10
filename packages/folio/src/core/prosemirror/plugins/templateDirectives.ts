@@ -94,11 +94,15 @@ export const scanDirectives = (doc: PMNode): DirectiveRange[] => {
       continue;
     }
 
-    // Otherwise, inline markers (fields, clause slots, numbering). Block
-    // directives only count when they own the whole paragraph, matching the
-    // fill engine, so skip any found mid-line here.
+    // Otherwise, inline markers. Mid-line if/elseif/else/endif are emitted
+    // with `block:false`: the fill engine resolves inline conditional spans
+    // within a paragraph, so they get the marker tint and join the outline,
+    // while the gutter-rail bands stay block-only (the overlay checks
+    // `block`). Mid-line {{#each}}/{{/each}} stay unhighlighted: inline
+    // loops are a structure error in the fill engine, and tinting them
+    // would suggest support.
     for (const marker of scanMarkers(joined)) {
-      if (isBlockDirectiveKind(marker.meta.kind)) {
+      if (marker.meta.kind === "each" || marker.meta.kind === "endeach") {
         continue;
       }
       const clauseVersion =

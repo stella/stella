@@ -71,7 +71,12 @@ const computeBands = (
 ): Band[] => {
   const blocks = groups
     .filter(
-      (g) => BLOCK_OPENERS.has(g.range.kind) || BLOCK_CLOSERS.has(g.range.kind),
+      // Inline if/endif markers (block:false, resolved within one paragraph)
+      // get the tint only; pairing them into rails would draw a band for a
+      // phrase-level span.
+      (g) =>
+        g.range.block &&
+        (BLOCK_OPENERS.has(g.range.kind) || BLOCK_CLOSERS.has(g.range.kind)),
     )
     .sort((a, b) => a.range.from - b.range.from);
 
