@@ -53,6 +53,7 @@ const listTemplatesHandler = async function* ({
           lastUsedAt: templates.lastUsedAt,
           useCount: templates.useCount,
           tags: templates.tags,
+          languages: templates.languages,
           whenToUse: templates.whenToUse,
           whenNotToUse: templates.whenNotToUse,
           authorName: user.name,
