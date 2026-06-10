@@ -35,6 +35,7 @@ export const fieldSuggestionsSchema = v.strictObject({
         v.picklist(["text", "textarea", "number", "boolean", "date", "select"]),
       ),
       label: v.nullable(v.string()),
+      hint: v.nullable(v.string()),
       exampleValue: v.nullable(v.string()),
       aiPrompt: v.nullable(v.string()),
     }),
@@ -53,6 +54,7 @@ For each, return:
 - fieldPath: a dot-separated name, e.g. company.name, company.krs, signatory.name, signatory.role, signing_date, scope. Only letters, digits, underscores, dashes and dots — for list positions use dots (attorneys.0.name), NEVER brackets
 - inputType: one of text, textarea, number, boolean, date, select
 - label: a short user-facing question or name for the fill form, in the document's language (e.g. "Company name")
+- hint: a short hint for the person filling the field — the expected format or where to find the value (e.g. "10-digit KRS number from the company register"), in the document's language, under 200 characters. Use null when the label is self-explanatory
 - exampleValue: a realistic example of the value, copied or derived from the document
 - aiPrompt: ONLY for free-text sections that should be drafted by AI at fill time (e.g. the scope of the power of attorney) — an instruction describing what to draft. Use null for ordinary fields.`;
 
@@ -77,6 +79,13 @@ const buildPrompt = (documentText: string, instructions?: string): string => {
   return `${FIELD_SUGGESTION_SPEC}\n\n${extra}Document:\n${documentText}`;
 };
 
+/** A model field suggestion plus the proposed fill hint (FieldMeta.hint).
+ *  Structurally a FieldSuggestion, so existing consumers keep working;
+ *  hint-aware callers persist it into the manifest. */
+export type SuggestedTemplateField = FieldSuggestion & {
+  hint?: string | undefined;
+};
+
 export const suggestTemplateFields = async ({
   documentText,
   instructions,
@@ -87,7 +96,7 @@ export const suggestTemplateFields = async ({
   instructions?: string | undefined;
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
-}): Promise<FieldSuggestion[]> => {
+}): Promise<SuggestedTemplateField[]> => {
   try {
     const result = streamText({
       abortSignal: AbortSignal.timeout(SUGGEST_TIMEOUT_MS),
@@ -119,6 +128,7 @@ export const suggestTemplateFields = async ({
           fieldPath,
           inputType: s.inputType ?? undefined,
           label: s.label ?? undefined,
+          hint: s.hint ?? undefined,
           exampleValue: s.exampleValue ?? undefined,
           aiPrompt: s.aiPrompt ?? undefined,
         },

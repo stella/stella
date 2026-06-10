@@ -1046,6 +1046,41 @@ describe("round-trip", () => {
     expect(tamperedBack?.fields.at(0)?.dateFormat).toBeUndefined();
   });
 
+  test("hint round-trips and survives mergeManifestWithDiscovery", async () => {
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "company.krs",
+          hint: 'KRS <number> from the "register"',
+        },
+        { path: "company.name" },
+      ],
+      conditions: [],
+    };
+
+    const docx = await createMinimalDocx();
+    const withManifest = await writeManifest(docx, manifest);
+    const readBack = await readManifest(withManifest);
+    expect(readBack?.fields.at(0)?.hint).toBe(
+      'KRS <number> from the "register"',
+    );
+    expect(readBack?.fields.at(1)?.hint).toBeUndefined();
+
+    const discovered: DiscoveredTemplate = {
+      placeholders: [{ name: "company.krs", count: 1 }],
+      fields: [{ path: "company.krs", kind: "string", count: 1 }],
+      structureErrors: [],
+    };
+    const resolved = mergeManifestWithDiscovery(manifest, discovered);
+    expect(resolved.find((f) => f.path === "company.krs")?.hint).toBe(
+      'KRS <number> from the "register"',
+    );
+    expect(
+      resolved.find((f) => f.path === "company.name")?.hint,
+    ).toBeUndefined();
+  });
+
   test("dateFormat survives mergeManifestWithDiscovery", () => {
     const manifest: TemplateManifest = {
       version: 1,

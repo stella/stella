@@ -147,6 +147,11 @@ describe("isFieldMeta", () => {
     );
   });
 
+  test("accepts a string hint and rejects a non-string one", () => {
+    expect(isFieldMeta({ path: "company.krs", hint: "10 digits" })).toBe(true);
+    expect(isFieldMeta({ path: "company.krs", hint: 10 })).toBe(false);
+  });
+
   test("accepts a date field with a dateFormat", () => {
     expect(
       isFieldMeta({

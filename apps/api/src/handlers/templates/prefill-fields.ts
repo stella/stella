@@ -19,6 +19,9 @@ export type PrefillTarget = {
   /** Composite part key when the target is one part of a composite field. */
   partKey: string | null;
   label: string | null;
+  /** The field's fill hint (FieldMeta.hint); helps the model map source
+   *  text to the right field. */
+  hint: string | null;
   inputType: string;
   /** Allowed values for select inputs; free-form otherwise. */
   options: string[] | null;
@@ -53,6 +56,7 @@ export const buildPrefillTargets = (
           path: field.path,
           partKey: part.key,
           label: part.label ?? `${field.label ?? field.path} (${part.key})`,
+          hint: field.hint ?? null,
           inputType: part.inputType,
           options:
             part.inputType === "select" &&
@@ -71,6 +75,7 @@ export const buildPrefillTargets = (
       path: field.path,
       partKey: null,
       label: field.label ?? null,
+      hint: field.hint ?? null,
       inputType,
       options:
         inputType === "select" && field.options && field.options.length > 0
@@ -108,7 +113,8 @@ export const renderPrefillTargets = (
         ? `${target.path} [part ${target.partKey}]`
         : target.path;
       const label = target.label ? ` — "${target.label}"` : "";
-      return `${target.id}: ${pathLabel}${label} (${targetFormatHint(target)})`;
+      const hint = target.hint ? ` — hint: ${JSON.stringify(target.hint)}` : "";
+      return `${target.id}: ${pathLabel}${label} (${targetFormatHint(target)})${hint}`;
     })
     .join("\n");
 
