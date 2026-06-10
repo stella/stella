@@ -92,6 +92,7 @@ import type {
   InspectorViewRenderProps,
 } from "@/components/inspector/view-registry";
 import { registerInspectorView } from "@/components/inspector/view-registry";
+import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import {
   DOCX_MIME,
@@ -171,6 +172,10 @@ const GESTURE_ENRICH_PATHS_MAX_CHARS = 1000;
 const MIRROR_SOURCE_MAX_CHARS = 400;
 /** Mirror-offer toasts stay long enough to rename the placeholder first. */
 const MIRROR_OFFER_TOAST_MS = 10_000;
+/** Item key a field gets when it turns repeatable: `lawyer` re-paths to
+ *  `lawyer.value` under `{{#each lawyer}}` — the engine's object-item
+ *  convention (bare `{{lawyer}}` inside its own loop never substitutes). */
+const LOOP_ITEM_KEY = "value";
 
 /** The live text selection in the document, as reported by Folio. */
 type GestureSelection = { from: number; to: number; text: string };
@@ -351,6 +356,8 @@ export const TemplateStudioPage = ({
         actionsRef.current?.insertExistingField(path),
       insertRecipe: (definition) =>
         actionsRef.current?.insertRecipe(definition),
+      setFieldRepeatable: (path, repeatable) =>
+        actionsRef.current?.setFieldRepeatable(path, repeatable) ?? false,
     });
     return () => setActions(null);
   }, [setActions]);
@@ -1210,9 +1217,158 @@ export const TemplateStudioPage = ({
     }
   };
 
+  // Repeatable ON: rename the field to the loop-item convention
+  // (`lawyer` → `lawyer.value`, every marker rewritten), then wrap the first
+  // marker's containing paragraph in `{{#each lawyer}}` / `{{/each}}`. The
+  // wrap is paragraph-anchored like insertOrWrapBlock (works inside table
+  // cells) but keeps the caret in the marker so the field face stays open.
+  const makeFieldRepeatable = (path: string): boolean => {
+    const view = editorViewRef.current;
+    if (!view || path.includes(".")) {
+      return false;
+    }
+    const placed = getTemplateDirectives(view.state).some(
+      (d) => d.kind === "placeholder" && d.expr === path,
+    );
+    if (!placed) {
+      return false;
+    }
+    const fields = useTemplateStudioStore.getState().fields;
+    const itemPath = nextFreePath(`${path}.${LOOP_ITEM_KEY}`, (candidate) =>
+      fields.some((f) => f.path === candidate),
+    );
+    if (actionsRef.current?.renameFieldPath(path, itemPath) !== true) {
+      return false;
+    }
+    const { state } = view;
+    const paragraph = state.schema.nodes["paragraph"];
+    const marker = getTemplateDirectives(state)
+      .filter((d) => d.kind === "placeholder" && d.expr === itemPath)
+      .toSorted((a, b) => a.from - b.from)
+      .at(0);
+    if (!paragraph || marker === undefined) {
+      return false;
+    }
+    const $from = state.doc.resolve(marker.from);
+    const $to = state.doc.resolve(marker.to);
+    if ($from.depth < 1 || $to.depth < 1) {
+      return false;
+    }
+    const start = $from.before(paragraphDepth($from, paragraph));
+    const end = $to.after(paragraphDepth($to, paragraph));
+    try {
+      view.dispatch(
+        state.tr
+          .insert(end, markerParagraph(state, paragraph, "{{/each}}"))
+          .insert(start, markerParagraph(state, paragraph, `{{#each ${path}}}`))
+          .scrollIntoView(),
+      );
+    } catch {
+      return false;
+    }
+    markDirty();
+    return true;
+  };
+
+  // Repeatable OFF: delete the enclosing each's opener/closer paragraphs
+  // (only when the loop body holds nothing but this field's markers; the
+  // face disables the toggle otherwise) and re-path back to the loop's name.
+  const unmakeFieldRepeatable = (path: string): boolean => {
+    const view = editorViewRef.current;
+    if (!view) {
+      return false;
+    }
+    const { state } = view;
+    const directives = getTemplateDirectives(state).toSorted(
+      (a, b) => a.from - b.from,
+    );
+    const marker = directives.find(
+      (d) => d.kind === "placeholder" && d.expr === path,
+    );
+    if (marker === undefined) {
+      return false;
+    }
+    // The first closer whose popped opener encloses the marker is the
+    // innermost enclosing loop.
+    const stack: DirectiveRange[] = [];
+    let opener: DirectiveRange | undefined;
+    let closer: DirectiveRange | undefined;
+    for (const d of directives) {
+      if (d.kind === "each") {
+        stack.push(d);
+      } else if (d.kind === "endeach") {
+        const open = stack.pop();
+        if (
+          open !== undefined &&
+          open.to <= marker.from &&
+          d.from >= marker.to
+        ) {
+          opener = open;
+          closer = d;
+          break;
+        }
+      }
+    }
+    if (opener === undefined || closer === undefined) {
+      return false;
+    }
+    const loopPath = opener.expr.trim();
+    if (!path.startsWith(`${loopPath}.`)) {
+      return false;
+    }
+    // Re-verify the unwrap guard against the live document: any directive
+    // inside the pair other than this field's markers aborts.
+    const openerEnd = opener.to;
+    const closerStart = closer.from;
+    const bodyOnlyHasThisField = directives.every(
+      (d) =>
+        d.from < openerEnd ||
+        d.to > closerStart ||
+        (d.kind === "placeholder" && d.expr === path),
+    );
+    if (!bodyOnlyHasThisField) {
+      return false;
+    }
+    const paragraph = state.schema.nodes["paragraph"];
+    if (!paragraph) {
+      return false;
+    }
+    const paragraphBounds = (d: DirectiveRange) => {
+      const $pos = state.doc.resolve(d.from);
+      if ($pos.depth < 1) {
+        return null;
+      }
+      const depth = paragraphDepth($pos, paragraph);
+      return { from: $pos.before(depth), to: $pos.after(depth) };
+    };
+    const closerBounds = paragraphBounds(closer);
+    const openerBounds = paragraphBounds(opener);
+    if (closerBounds === null || openerBounds === null) {
+      return false;
+    }
+    try {
+      // Closer first so the opener's positions stay valid.
+      view.dispatch(
+        state.tr
+          .delete(closerBounds.from, closerBounds.to)
+          .delete(openerBounds.from, openerBounds.to),
+      );
+    } catch {
+      return false;
+    }
+    markDirty();
+    const fields = useTemplateStudioStore.getState().fields;
+    const flatPath = nextFreePath(loopPath, (candidate) =>
+      fields.some((f) => f.path === candidate),
+    );
+    return actionsRef.current?.renameFieldPath(path, flatPath) ?? false;
+  };
+
   actionsRef.current = {
     toggleDirectives: () => setShowDirectives((v) => !v),
     insertExistingField: (path) => insertExistingFieldAt(path),
+    setFieldRepeatable: (path, repeatable) =>
+      repeatable ? makeFieldRepeatable(path) : unmakeFieldRepeatable(path),
     setFillPreview: (values) => {
       fillPreviewRef.current = values;
       const view = editorViewRef.current;
@@ -3221,6 +3377,51 @@ const ScopeHeader = ({
   );
 };
 
+/** Why the Repeatable switch is locked; `TranslationKey` keeps the stored
+ *  keys honest against the message catalogue. */
+type RepeatDisabledKey = TranslationKey &
+  (
+    | "templates.studio.repeatableLoopHasOtherContent"
+    | "templates.studio.repeatableNested"
+  );
+
+/** What the Repeatable toggle can show for a field: hidden for object
+ *  subfields (e.g. `tenant.name`) and unplaced fields, otherwise on/off
+ *  with an optional reason the switch is locked. */
+type FieldRepeatState =
+  | { kind: "hidden" }
+  | { kind: "off" | "on"; disabledKey: RepeatDisabledKey | null };
+
+const fieldRepeatState = (
+  field: StudioField,
+  outline: OutlineNode[],
+): FieldRepeatState => {
+  const group = findEnclosingEachGroup(outline, field.path, null);
+  if (group !== null) {
+    const loopPath = group.expr.trim();
+    if (loopPath !== "" && field.path.startsWith(`${loopPath}.`)) {
+      // The loop's own item field: ON; unwrapping is only offered while the
+      // loop body holds nothing but this field's markers.
+      const exclusive = group.children.every(
+        (child) => child.type === "field" && child.path === field.path,
+      );
+      return {
+        kind: "on",
+        disabledKey: exclusive
+          ? null
+          : "templates.studio.repeatableLoopHasOtherContent",
+      };
+    }
+    // A constant field inside someone else's loop; wrapping again would
+    // nest loops the fill form cannot ask about.
+    return { kind: "off", disabledKey: "templates.studio.repeatableNested" };
+  }
+  if (field.path.includes(".") || !outlineFieldPaths(outline).has(field.path)) {
+    return { kind: "hidden" };
+  }
+  return { kind: "off", disabledKey: null };
+};
+
 /**
  * Field settings face: leads with what the field IS (a blank in the fill
  * form), lets the model propose a configuration, and previews the actual fill
@@ -3236,6 +3437,7 @@ const FieldFace = ({
   const t = useTranslations();
   const actions = useTemplateStudioStore((s) => s.actions);
   const fieldCount = useTemplateStudioStore((s) => s.fields.length);
+  const outline = useTemplateStudioStore((s) => s.outline);
   const [suggesting, setSuggesting] = useState(false);
   const [recipeDialogOpen, setRecipeDialogOpen] = useState(false);
   const [exampleValue, setExampleValue] = useState<string | undefined>(
@@ -3282,6 +3484,14 @@ const FieldFace = ({
     setExampleValue(config.exampleValue);
     if (config.exampleValue !== undefined && previewValue === "") {
       pushPreview(config.exampleValue);
+    }
+  };
+
+  const repeat = fieldRepeatState(field, outline);
+  const toggleRepeatable = (next: boolean) => {
+    const applied = actions?.setFieldRepeatable(field.path, next) ?? false;
+    if (!applied) {
+      stellaToast.add({ type: "error", title: t("errors.actionFailed") });
     }
   };
 
@@ -3469,6 +3679,28 @@ const FieldFace = ({
               </p>
             </>
           ) : null}
+          {repeat.kind !== "hidden" && (
+            <div
+              className="mt-1 flex items-center justify-between gap-2"
+              title={
+                repeat.disabledKey === null ? undefined : t(repeat.disabledKey)
+              }
+            >
+              <Label
+                className="flex items-center gap-1.5 text-sm"
+                htmlFor="field-repeatable"
+              >
+                <RepeatIcon className="text-muted-foreground size-3.5" />
+                {t("templates.studio.repeatable")}
+              </Label>
+              <Checkbox
+                checked={repeat.kind === "on"}
+                disabled={repeat.disabledKey !== null}
+                id="field-repeatable"
+                onCheckedChange={(checked) => toggleRepeatable(checked)}
+              />
+            </div>
+          )}
         </div>
       </ScrollArea>
       <FieldPreview

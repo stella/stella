@@ -2175,6 +2175,9 @@ type Messages = {
       "renameField": "Rename field";
       "renameFieldInvalid": "That name is invalid or already taken";
       "repeatForEach": "Repeat for each…";
+      "repeatable": "Repeatable";
+      "repeatableLoopHasOtherContent": "The repeating block around this field contains other content; remove it in the document.";
+      "repeatableNested": "This field already sits inside a repeating block.";
       "saveAsRecipe": "Save as recipe";
       "scopeClause": "Clause slot";
       "scopeCondition": "Condition";
