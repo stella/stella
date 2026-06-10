@@ -1,5 +1,6 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import JSZip from "jszip";
+import * as slimdom from "slimdom";
 
 import { fillTemplate } from "./patch-template";
 
@@ -274,5 +275,114 @@ describe("fillTemplate — block directives e2e", () => {
     expect(buffer).toBeInstanceOf(Buffer);
     expect(unmatchedPlaceholders).toEqual([]);
     expect(unusedValues).toEqual([]);
+  });
+});
+
+// ── Structural invariant: filled output stays well-formed ─
+
+/**
+ * Representative template exercising every DOM-mutating fill stage at once:
+ * a two-column table with markers split across runs, an inline {{#if}} span
+ * whose markers straddle run boundaries, an {{#each}} loop over numbered
+ * list paragraphs (one valid numId, one dangling), and a whole-paragraph
+ * {{#if}} block. The assertion is the invariant that matters for Word
+ * compatibility, not an example: every XML part of the output must parse as
+ * well-formed XML and no part may disappear from the package.
+ */
+const SPLIT = (...chunks: string[]) =>
+  `<w:p>${chunks.map((chunk) => `<w:r><w:t xml:space="preserve">${chunk}</w:t></w:r>`).join("")}</w:p>`;
+
+const NUMBERED = (numId: number, text: string) =>
+  `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="${numId}"/></w:numPr></w:pPr>` +
+  `<w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
+
+const NUMBERING_XML =
+  `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+  `<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +
+  `<w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:numFmt w:val="decimal"/></w:lvl></w:abstractNum>` +
+  `<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>` +
+  `</w:numbering>`;
+
+const makeStructuralFixture = async (): Promise<Buffer> => {
+  const cell = (content: string) => `<w:tc><w:tcPr/>${content}</w:tc>`;
+  const table =
+    `<w:tbl><w:tblPr/><w:tblGrid><w:gridCol/><w:gridCol/></w:tblGrid><w:tr>${ 
+    cell(SPLIT("Pełnomocnik: {", "{agent_", "name}} (PL)")) 
+    }${cell(SPLIT("Attorney: {{agent", "_name}", "} (EN)")) 
+    }</w:tr></w:tbl>`;
+
+  const xml = WRAP(
+    [
+      SPLIT(
+        "The Buyer{{#if has",
+        "Spouse}} and their spouse{",
+        "{/if}} agrees.",
+      ),
+      table,
+      P("{{#if showClause}}"),
+      P("Optional clause for {{client}}"),
+      P("{{/if}}"),
+      P("{{#each items}}"),
+      NUMBERED(1, "Item {{items.label}} (kept numbering)"),
+      NUMBERED(99, "Item {{items.label}} (dangling numbering)"),
+      P("{{/each}}"),
+      P("Done."),
+    ].join(""),
+  );
+
+  const zip = new JSZip();
+  zip.file("word/document.xml", xml);
+  zip.file("word/numbering.xml", NUMBERING_XML);
+  zip.file(
+    "[Content_Types].xml",
+    `<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+</Types>`,
+  );
+  return Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
+};
+
+describe("fillTemplate — output stays well-formed in every part", () => {
+  test("table + inline if + loop numbering + split-run markers", async () => {
+    const fixture = await makeStructuralFixture();
+
+    const { buffer, structureErrors, unmatchedPlaceholders } =
+      await fillTemplate(fixture, {
+        agent_name: "Maciej Kuropatwiński",
+        hasSpouse: true,
+        showClause: true,
+        client: "rč & co.",
+        items: [{ label: "first" }, { label: "second" }],
+      });
+
+    expect(structureErrors).toEqual([]);
+    expect(unmatchedPlaceholders).toEqual([]);
+
+    const inZip = await JSZip.loadAsync(fixture);
+    const outZip = await JSZip.loadAsync(buffer);
+    const partNames = (zip: JSZip) =>
+      Object.keys(zip.files)
+        .filter((name) => !zip.files[name]?.dir)
+        .toSorted();
+    // Package integrity: no part may be lost or invented by the fill.
+    expect(partNames(outZip)).toEqual(partNames(inZip));
+
+    for (const name of partNames(outZip)) {
+      const xml = await outZip.files[name]?.async("string");
+      if (xml === undefined) {
+        throw new Error(`part ${name} unreadable`);
+      }
+      // Well-formedness of every part — parseXmlDocument throws otherwise.
+      expect(() => slimdom.parseXmlDocument(xml)).not.toThrow();
+    }
+
+    const texts = (await extractTexts(buffer)).join(" ");
+    expect(texts).toContain("and their spouse");
+    expect(texts).toContain("Maciej Kuropatwiński");
+    expect(texts).toContain("first");
+    expect(texts).toContain("second");
+    expect(texts).not.toContain("{{");
   });
 });

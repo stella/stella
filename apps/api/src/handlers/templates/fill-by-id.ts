@@ -31,7 +31,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 import { DOCX_EXT_RE } from "@/api/lib/sanitize-filename";
 import { isRecord } from "@/api/lib/type-guards";
-import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { DOCX_MIME_TYPE, OCTET_STREAM_MIME_TYPE } from "@/api/mime-types";
 
 import { containsNull } from "./fill";
 
@@ -46,8 +46,6 @@ const fillByIdQuerySchema = t.Object({
 const fillByIdParamsSchema = t.Object({
   templateId: tSafeId("template"),
 });
-
-const PDF_MIME_TYPE = "application/pdf";
 
 type FillByIdProps = {
   safeDb: SafeDb;
@@ -289,7 +287,8 @@ const fillByIdHandler = async function* ({
       new Response(new Uint8Array(pdfResult.value.buffer), {
         status: 200,
         headers: {
-          "Content-Type": PDF_MIME_TYPE,
+          // Octet-stream, not application/pdf: see OCTET_STREAM_MIME_TYPE.
+          "Content-Type": OCTET_STREAM_MIME_TYPE,
           "Content-Disposition": contentDisposition(pdfName),
         },
       }),
@@ -297,7 +296,11 @@ const fillByIdHandler = async function* ({
   }
 
   const headers = new Headers({
-    "Content-Type": DOCX_MIME_TYPE,
+    // Octet-stream, not the DOCX mime type: the Eden treaty client
+    // text-decodes unrecognized content types, which corrupts the ZIP
+    // container (Word then reports unreadable content). See
+    // OCTET_STREAM_MIME_TYPE in mime-types.ts.
+    "Content-Type": OCTET_STREAM_MIME_TYPE,
     "Content-Disposition": contentDisposition(baseName),
   });
 

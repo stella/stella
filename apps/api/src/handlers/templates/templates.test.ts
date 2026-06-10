@@ -695,6 +695,38 @@ describe("fill handler diagnostic headers", () => {
   });
 });
 
+// ── Handler: fill download stays binary-safe ─────────────
+
+describe("fill handler download response", () => {
+  test("serves the DOCX as application/octet-stream with intact ZIP bytes", async () => {
+    const xml = WRAP(P("Pełnomocnik: {{name}}"));
+    const buf = await makeDocx(xml);
+    const file = await makeDocxFile(buf);
+
+    const result = await fillHandler({
+      scopedDb: stubScopedDb,
+      organizationId: fakeOrgId,
+      userId: fakeUserId,
+      query: {},
+      body: { file, values: JSON.stringify({ name: "Maciej Kuropatwiński" }) },
+    });
+
+    expect(result).toBeInstanceOf(Response);
+    const resp = result;
+    expect(resp.status).toBe(200);
+    // The Eden treaty client maps only application/octet-stream to
+    // arrayBuffer() and text-decodes every other content type, which
+    // UTF-8-mangles the ZIP container (Word: "unreadable content").
+    expect(resp.headers.get("Content-Type")).toBe("application/octet-stream");
+    expect(resp.headers.get("Content-Disposition")).toContain("attachment");
+
+    const bytes = Buffer.from(await resp.arrayBuffer());
+    const zip = await JSZip.loadAsync(bytes);
+    const docXml = await zip.file("word/document.xml")?.async("string");
+    expect(docXml).toContain("Maciej Kuropatwiński");
+  });
+});
+
 // ── Integration: discover → fill round-trip ──────────────
 
 describe("discover → fill round-trip", () => {
