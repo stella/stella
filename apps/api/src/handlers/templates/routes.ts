@@ -7,6 +7,7 @@ import updateTemplateCategory from "@/api/handlers/templates/categories-update";
 import linkTemplateClause from "@/api/handlers/templates/clauses-link";
 import listTemplateClauses from "@/api/handlers/templates/clauses-list";
 import syncTemplateClause from "@/api/handlers/templates/clauses-sync";
+import syncAllTemplateClauses from "@/api/handlers/templates/clauses-sync-all";
 import unlinkTemplateClause from "@/api/handlers/templates/clauses-unlink";
 import createTemplate from "@/api/handlers/templates/create";
 import deleteTemplate from "@/api/handlers/templates/delete";
@@ -135,6 +136,10 @@ export const templatesRoute = new Elysia({
   .delete("/:templateId/clauses/:linkId", unlinkTemplateClause.handler, {
     params: unlinkTemplateClause.config.params,
     permissions: unlinkTemplateClause.config.permissions,
+  })
+  .post("/:templateId/clauses/sync", syncAllTemplateClauses.handler, {
+    params: syncAllTemplateClauses.config.params,
+    permissions: syncAllTemplateClauses.config.permissions,
   })
   .post("/:templateId/clauses/:linkId/sync", syncTemplateClause.handler, {
     params: syncTemplateClause.config.params,

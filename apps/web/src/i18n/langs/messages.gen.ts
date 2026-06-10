@@ -589,6 +589,7 @@ type Messages = {
     "clauseCount": "{count, plural, one {# clause} other {# clauses}}";
     "clauseCreated": "Clause created";
     "clauseDeleted": "Clause deleted";
+    "clauseDeletedHint": "This link no longer fills anything; unlink it to tidy the template.";
     "clauseDeletedTombstone": "Clause deleted";
     "clauseUpdated": "Clause updated";
     "compareWithCurrent": "Compared with current version";
@@ -631,11 +632,16 @@ type Messages = {
     "selectFile": "Select JSON file";
     "selectVariant": "Select variant";
     "selectVersionToCompare": "Select a version to compare with current";
+    "slotCustom": "Custom slot name…";
     "slotName": "Slot name";
     "slotNamePlaceholder": "e.g. NonCompete";
+    "slotNone": "No slot";
+    "slotTaken": "{slot} (already linked)";
+    "syncAllOutdated": "Sync all outdated";
     "syncFailed": "Failed to sync";
     "syncVersion": "Sync to latest";
     "synced": "Synced to latest version";
+    "syncedAllResult": "{count, plural, =0 {Already up to date} one {# clause synced} other {# clauses synced}}";
     "titleLabel": "Title";
     "titlePlaceholder": "e.g. Confidentiality clause";
     "unlinkClause": "Unlink";
@@ -650,6 +656,8 @@ type Messages = {
     "variantCreated": "Variant created";
     "variantDefault": "Standard (no variant)";
     "variantDeleted": "Variant deleted";
+    "variantDeletedNoFill": "The {slot} slot will stay unfilled until you relink the clause or remove this link.";
+    "variantDeletedWithLabel": "Variant “{label}” was deleted";
     "variantLabel": "Variant label";
     "variantLabelPlaceholder": "e.g. Standard";
     "variants": "Variants";
