@@ -2065,14 +2065,13 @@ type Messages = {
     "fieldLabel": "Label";
     "fieldLabelPlaceholder": "e.g. Full Name";
     "fieldLookupAddFormat": "Add format";
-    "fieldLookupAiFormat": "AI format instruction";
-    "fieldLookupAiFormatHint": "Tokens in [brackets] are filled from the register. AI rewording applies only when the field is Person + AI. **Bold** and *italic* are supported.";
     "fieldLookupAiFormatPlaceholder": "[company name], with its registered seat in [seat], KRS no. [number]";
+    "fieldLookupFormatDefaultMarker": "The default rendering for the bare marker";
     "fieldLookupFormatKey": "Format name";
     "fieldLookupFormatMarker": "Use it in the document with the marker";
     "fieldLookupFormatTemplate": "Format template";
     "fieldLookupFormats": "Output formats";
-    "fieldLookupFormatsHint": "One company, several renderings of the same lookup. Each named format adds a marker (the field path, a dot, then the name) that the document can use alongside the default.";
+    "fieldLookupFormatsHint": "One company, several renderings of the same lookup. The first format is the default for the bare marker; each later format adds a marker (the field path, a dot, then the name) the document can use alongside it.";
     "fieldLookupInsertDetail": "Insert a company detail";
     "fieldLookupRegistry": "Company register";
     "fieldMultipleParts": "Multiple parts";
@@ -2162,6 +2161,7 @@ type Messages = {
       "formula": "Formula";
       "insert": "Insert";
       "insertAtCaret": "Insert at cursor";
+      "insertFormatDefault": "Default";
       "invalidExpression": "That expression is invalid";
       "loop": "Loop";
       "makeField": "Make field";

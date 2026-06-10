@@ -584,8 +584,8 @@ const DateRenderPreview = ({
 };
 
 /** Shown under registry-lookup fields: the entered number (e.g. KRS) is
- *  resolved against the register at fill time and replaced with the company
- *  details; the wand marks an AI format instruction shaping that text. */
+ *  resolved against the register at fill time and replaced with the rendered
+ *  company details. */
 const LookupHint = ({ lookup }: { lookup: ResolvedField["lookup"] }) => {
   const t = useTranslations();
   if (!lookup) {
@@ -595,9 +595,6 @@ const LookupHint = ({ lookup }: { lookup: ResolvedField["lookup"] }) => {
     <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
       <LandmarkIcon aria-hidden="true" className="size-3.5 shrink-0" />
       {t("templates.lookupFieldHint")}
-      {lookup.aiFormat !== undefined && lookup.aiFormat !== "" && (
-        <WandSparklesIcon aria-hidden="true" className="size-3.5 shrink-0" />
-      )}
     </p>
   );
 };

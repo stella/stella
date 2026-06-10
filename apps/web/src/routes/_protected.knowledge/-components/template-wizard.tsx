@@ -76,7 +76,7 @@ type InputType = (typeof INPUT_TYPES)[number];
  *   conditions; existing boolean fields keep rendering and working, they are
  *   just not offered for new configuration.
  * - "company" is added — the manifest has no "company" inputType. A company
- *   field is stored as inputType "text" plus `lookup` ({ registry, aiFormat }),
+ *   field is stored as inputType "text" plus `lookup` ({ registry, formats }),
  *   and the UI derives the "company" choice back from lookup presence, so the
  *   manifest schema and the fill engine stay unchanged.
  */
@@ -104,13 +104,18 @@ const LOOKUP_REGISTRIES = ["krs"] as const;
 
 type LookupRegistry = (typeof LOOKUP_REGISTRIES)[number];
 
-/** One named output format for a lookup field: the author enters the registry
- *  number once and addresses this rendering of the resolved hit via the dotted
- *  marker `{{path.key}}`. */
+/** One output format for a lookup field: the author enters the registry
+ *  number once and addresses this rendering of the resolved hit by a marker.
+ *  The first format is the default (`{{path}}`); the rest are keyed
+ *  (`{{path.key}}`). */
 export type EditableLookupFormat = {
   key: string;
   template: string;
 };
+
+/** Default key seeded for the first format of a freshly switched Company ID
+ *  field; the author can rename it. */
+const LOOKUP_DEFAULT_FORMAT_KEY = "output_1";
 
 /** Marker segment grammar (letters, digits, underscore, dash; no dots) shared
  *  with the manifest's `isLookupFormatKey`. */
@@ -127,13 +132,10 @@ const LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH = 2000;
 
 export type EditableLookup = {
   registry: LookupRegistry;
-  /** AI instruction shaping the resolved company details; empty = the
-   *  deterministic "name, seat" rendering. This is the DEFAULT format for the
-   *  bare `{{path}}` marker. */
-  aiFormat?: string | undefined;
-  /** Additional named renderings of the same resolved hit, each addressed by a
-   *  `{{path.key}}` marker. */
-  formats?: EditableLookupFormat[] | undefined;
+  /** Output formats for the resolved hit. The first is the default for the
+   *  bare `{{path}}` marker; the rest are addressed by `{{path.key}}`. Always
+   *  non-empty once the field is a Company ID. */
+  formats: EditableLookupFormat[];
 };
 
 export type EditablePart = {
@@ -297,7 +299,10 @@ export const compositeManifestProps = (
 /**
  * The manifest shape of a field's lookup configuration: only meaningful on a
  * plain text field (composite parts and other input types collect a different
- * value), with a blank AI format instruction normalized away.
+ * value). The formats list is the whole config; the first format is the
+ * default for the bare marker. Returns undefined when no valid format survives
+ * normalization, so the field falls back to a plain text field rather than an
+ * invalid empty lookup.
  */
 export const lookupManifestProps = (
   field: EditableField,
@@ -309,10 +314,9 @@ export const lookupManifestProps = (
   ) {
     return undefined;
   }
-  const aiFormat = field.lookup.aiFormat?.trim() ?? "";
   // Drop rows with an empty key or template, enforce the segment grammar and
-  // caps; an empty list normalizes away so the manifest stays minimal.
-  const formats = (field.lookup.formats ?? [])
+  // caps. The order is preserved so the first surviving row stays the default.
+  const formats = field.lookup.formats
     .map((f) => ({ key: f.key.trim(), template: f.template.trim() }))
     .filter(
       (f) =>
@@ -322,11 +326,10 @@ export const lookupManifestProps = (
         f.template.length <= LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH,
     )
     .slice(0, LOOKUP_FORMATS_MAX);
-  return {
-    registry: field.lookup.registry,
-    aiFormat: aiFormat === "" ? undefined : aiFormat,
-    formats: formats.length > 0 ? formats : undefined,
-  };
+  if (formats.length === 0) {
+    return undefined;
+  }
+  return { registry: field.lookup.registry, formats };
 };
 
 /**
@@ -1058,9 +1061,11 @@ const insertTokenAtCaret = (
 };
 
 /** Configuration for the "Company ID" field type: pick the register the
- *  entered number resolves against, and optionally an AI format instruction
- *  shaping the resolved company details — with the registry's return fields
- *  as clickable chips that insert [placeholder] tokens. */
+ *  entered number resolves against, then edit the output formats. The formats
+ *  list is the whole config: the first row is the default rendering for the
+ *  bare `{{path}}` marker, every later row is a named rendering addressed by
+ *  `{{path.key}}`. Each row's template uses the registry's return fields as
+ *  clickable chips that insert [placeholder] tokens. */
 const CompanyLookupConfig = ({
   field,
   onUpdate,
@@ -1069,21 +1074,11 @@ const CompanyLookupConfig = ({
   onUpdate: (patch: Partial<EditableField>) => void;
 }) => {
   const t = useTranslations();
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const registry = field.lookup?.registry ?? "krs";
-  const aiFormat = field.lookup?.aiFormat ?? "";
   const formats = field.lookup?.formats ?? [];
 
   const setLookup = (patch: Partial<EditableLookup>) =>
-    onUpdate({ lookup: { registry, aiFormat, formats, ...patch } });
-
-  /** Insert a [detail] token at the default-format textarea caret (appends
-   *  when the textarea has not been focused yet) and restore focus. */
-  const insertToken = (name: string) => {
-    const next = insertTokenAtCaret(textareaRef.current, aiFormat, `[${name}]`);
-    setLookup({ aiFormat: next.value });
-    next.restoreCaret();
-  };
+    onUpdate({ lookup: { registry, formats, ...patch } });
 
   const updateFormat = (index: number, patch: Partial<EditableLookupFormat>) =>
     setLookup({
@@ -1123,24 +1118,6 @@ const CompanyLookupConfig = ({
       </Field>
 
       <Field>
-        <FieldLabel>{t("templates.fieldFormat")}</FieldLabel>
-        <FieldControl
-          render={
-            <Textarea
-              onChange={(e) => setLookup({ aiFormat: e.target.value })}
-              placeholder={t("templates.fieldLookupAiFormatPlaceholder")}
-              ref={textareaRef}
-              value={aiFormat}
-            />
-          }
-        />
-        <LookupTokenChips onInsert={insertToken} registry={registry} />
-        <p className="text-muted-foreground text-xs">
-          {t("templates.fieldLookupAiFormatHint")}
-        </p>
-      </Field>
-
-      <Field>
         <FieldLabel>{t("templates.fieldLookupFormats")}</FieldLabel>
         <p className="text-muted-foreground text-xs">
           {t("templates.fieldLookupFormatsHint")}
@@ -1150,10 +1127,14 @@ const CompanyLookupConfig = ({
             <LookupFormatRow
               fieldPath={field.path}
               format={format}
+              isDefault={index === 0}
               // Rows have no stable identity while their keys are edited.
               key={`lookup-format-${String(index)}`}
               onChange={(patch) => updateFormat(index, patch)}
-              onRemove={() => removeFormat(index)}
+              // The list must stay non-empty: never offer to remove the last.
+              onRemove={
+                formats.length > 1 ? () => removeFormat(index) : undefined
+              }
               registry={registry}
             />
           ))}
@@ -1208,21 +1189,27 @@ const LookupTokenChips = ({
   );
 };
 
-/** One named-format row: a key input, the template Textarea with the same
- *  return-field token chips, a remove button, and muted helper text showing
- *  the marker the author types to use this rendering (`{{path.key}}`). */
+/** One output-format row: a key input, the template Textarea with the
+ *  return-field token chips, an optional remove button, and muted helper text
+ *  showing the marker the author types to use this rendering. The first
+ *  (default) row renders for the bare `{{path}}` marker; later rows are keyed
+ *  `{{path.key}}`. */
 const LookupFormatRow = ({
   fieldPath,
   format,
+  isDefault,
   registry,
   onChange,
   onRemove,
 }: {
   fieldPath: string;
   format: EditableLookupFormat;
+  /** The first format in the list: rendered for the bare `{{path}}` marker. */
+  isDefault: boolean;
   registry: LookupRegistry;
   onChange: (patch: Partial<EditableLookupFormat>) => void;
-  onRemove: () => void;
+  /** Absent on the last remaining row, which must not be removable. */
+  onRemove?: (() => void) | undefined;
 }) => {
   const t = useTranslations();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1253,15 +1240,17 @@ const LookupFormatRow = ({
           placeholder={t("templates.fieldLookupFormatKey")}
           value={format.key}
         />
-        <Button
-          aria-label={t("common.remove")}
-          onClick={onRemove}
-          size="icon-xs"
-          type="button"
-          variant="ghost"
-        >
-          <XIcon />
-        </Button>
+        {onRemove !== undefined && (
+          <Button
+            aria-label={t("common.remove")}
+            onClick={onRemove}
+            size="icon-xs"
+            type="button"
+            variant="ghost"
+          >
+            <XIcon />
+          </Button>
+        )}
       </div>
       <FieldControl
         render={
@@ -1276,15 +1265,47 @@ const LookupFormatRow = ({
         }
       />
       <LookupTokenChips onInsert={insertToken} registry={registry} />
-      {trimmedKey !== "" && (
-        <p className="text-muted-foreground text-xs">
-          {t("templates.fieldLookupFormatMarker")}
-          <code className="bg-muted ms-1 rounded px-1 py-0.5">
-            {`{{${fieldPath}.${trimmedKey}}}`}
-          </code>
-        </p>
-      )}
+      <FormatMarkerHint
+        fieldPath={fieldPath}
+        isDefault={isDefault}
+        trimmedKey={trimmedKey}
+      />
     </div>
+  );
+};
+
+/** Muted helper text naming the marker that renders a format: `{{path}}` for
+ *  the default row, `{{path.key}}` for keyed rows (shown once the key is set). */
+const FormatMarkerHint = ({
+  fieldPath,
+  isDefault,
+  trimmedKey,
+}: {
+  fieldPath: string;
+  isDefault: boolean;
+  trimmedKey: string;
+}) => {
+  const t = useTranslations();
+  if (isDefault) {
+    return (
+      <p className="text-muted-foreground text-xs">
+        {t("templates.fieldLookupFormatDefaultMarker")}
+        <code className="bg-muted ms-1 rounded px-1 py-0.5">
+          {`{{${fieldPath}}}`}
+        </code>
+      </p>
+    );
+  }
+  if (trimmedKey === "") {
+    return null;
+  }
+  return (
+    <p className="text-muted-foreground text-xs">
+      {t("templates.fieldLookupFormatMarker")}
+      <code className="bg-muted ms-1 rounded px-1 py-0.5">
+        {`{{${fieldPath}.${trimmedKey}}}`}
+      </code>
+    </p>
   );
 };
 
@@ -1524,7 +1545,12 @@ export const FieldConfigEditor = ({
                   inputType: "text",
                   lookup: field.lookup ?? {
                     registry: "krs",
-                    aiFormat: REGISTRY_DEFAULT_FORMAT.krs,
+                    formats: [
+                      {
+                        key: LOOKUP_DEFAULT_FORMAT_KEY,
+                        template: REGISTRY_DEFAULT_FORMAT.krs,
+                      },
+                    ],
                   },
                 });
                 return;

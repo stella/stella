@@ -125,6 +125,7 @@ import { filledByForFieldMeta } from "@/routes/_protected.knowledge/-components/
 import { TemplateVersionsTab } from "@/routes/_protected.knowledge/-components/template-versions-tab";
 import {
   defaultCompositeFormat,
+  type EditableLookupFormat,
   type EditablePart,
   type EditableField,
   FieldConfigEditor,
@@ -381,8 +382,8 @@ export const TemplateStudioPage = ({
       focusField: (path) => actionsRef.current?.focusField(path),
       focusPosition: (pos) => actionsRef.current?.focusPosition(pos),
       setFillPreview: (values) => actionsRef.current?.setFillPreview(values),
-      insertExistingField: (path) =>
-        actionsRef.current?.insertExistingField(path),
+      insertExistingField: (path, formatKey) =>
+        actionsRef.current?.insertExistingField(path, formatKey),
       deleteField: (path) => actionsRef.current?.deleteField(path),
       insertRecipe: (definition) =>
         actionsRef.current?.insertRecipe(definition),
@@ -682,12 +683,21 @@ export const TemplateStudioPage = ({
   // click can never target a drifted live selection.
   const insertExistingFieldAt = (
     path: string,
-    range?: { from: number; to: number },
+    options?: {
+      range?: { from: number; to: number } | undefined;
+      formatKey?: string | undefined;
+    },
   ) =>
     withEditorView((view) => {
-      const { from, to } = range ?? view.state.selection;
+      const { from, to } = options?.range ?? view.state.selection;
+      // A lookup field's non-default output is addressed by `{{path.key}}`;
+      // the bare `{{path}}` renders the default (first) format.
+      const marker =
+        options?.formatKey === undefined
+          ? `{{${path}}}`
+          : `{{${path}.${options.formatKey}}}`;
       view.dispatch(
-        view.state.tr.insertText(`{{${path}}}`, from, to).scrollIntoView(),
+        view.state.tr.insertText(marker, from, to).scrollIntoView(),
       );
       view.focus();
       markDirty();
@@ -1044,7 +1054,9 @@ export const TemplateStudioPage = ({
     if (shown === null) {
       return;
     }
-    insertExistingFieldAt(path, { from: shown.from, to: shown.to });
+    insertExistingFieldAt(path, {
+      range: { from: shown.from, to: shown.to },
+    });
     dismissGesture();
   };
 
@@ -1064,7 +1076,7 @@ export const TemplateStudioPage = ({
             .getState()
             .fields.find((f) => f.path === enrichment.fieldPath);
     if (existing !== undefined) {
-      insertExistingFieldAt(existing.path, range);
+      insertExistingFieldAt(existing.path, { range });
     } else {
       const path = makeField(range);
       if (path !== null) {
@@ -1423,7 +1435,8 @@ export const TemplateStudioPage = ({
       markDirty();
       actionsRef.current?.deselect();
     },
-    insertExistingField: (path) => insertExistingFieldAt(path),
+    insertExistingField: (path, formatKey) =>
+      insertExistingFieldAt(path, { formatKey }),
     setFieldRepeatable: (path, repeatable) =>
       repeatable ? makeFieldRepeatable(path) : unmakeFieldRepeatable(path),
     setFillPreview: (values) => {
@@ -2608,7 +2621,8 @@ const applyCachedLookupRenderings = (
     const request: LookupPreviewRequest = {
       registry: lookup.registry,
       number,
-      format: lookup.aiFormat ?? null,
+      // The bare `{{path}}` preview renders the default (first) format.
+      format: lookup.formats.at(0)?.template ?? null,
     };
     const cached = lookupPreviewCache.get(lookupPreviewKey(request));
     if (cached === undefined) {
@@ -2672,6 +2686,59 @@ const pushSingleFieldPreview = (field: StudioField, value: string) => {
   if (pending.length > 0) {
     queueLookupPreviews(pending, () => pushSingleFieldPreview(field, value));
   }
+};
+
+/** One field entry in an "Existing field…" insert list. A lookup field with
+ *  more than one output format expands into a submenu so the author picks WHICH
+ *  rendering to insert: the first format as the default (`{{path}}`), each
+ *  later format keyed (`{{path.key}}`). Single-format lookups and non-lookup
+ *  fields insert with one click as `{{path}}`. */
+const InsertExistingFieldItem = ({
+  field,
+  onInsert,
+}: {
+  field: StudioField;
+  onInsert: (path: string, formatKey?: string) => void;
+}) => {
+  const t = useTranslations();
+  const label = field.label === "" ? field.path : field.label;
+  const formats = field.lookup?.formats ?? [];
+  if (formats.length <= 1) {
+    return (
+      <MenuItem onClick={() => onInsert(field.path)}>
+        <span className="min-w-0 truncate">{label}</span>
+        <code className="text-muted-foreground ms-auto ps-3 text-[10px]">
+          {field.path}
+        </code>
+      </MenuItem>
+    );
+  }
+  return (
+    <MenuSub>
+      <MenuSubTrigger>
+        <span className="min-w-0 truncate">{label}</span>
+        <code className="text-muted-foreground ms-auto ps-3 text-[10px]">
+          {field.path}
+        </code>
+      </MenuSubTrigger>
+      <MenuSubPopup>
+        {formats.map((format, index) => (
+          <MenuItem
+            key={`${format.key}-${String(index)}`}
+            onClick={() =>
+              onInsert(field.path, index === 0 ? undefined : format.key)
+            }
+          >
+            <span className="min-w-0 truncate">
+              {index === 0
+                ? t("templates.studio.insertFormatDefault")
+                : format.key}
+            </span>
+          </MenuItem>
+        ))}
+      </MenuSubPopup>
+    </MenuSub>
+  );
 };
 
 /** Document actions row — rendered in the inspector tab's top area; the page
@@ -2750,17 +2817,11 @@ const StudioInsertRow = () => {
               </MenuSubTrigger>
               <MenuSubPopup>
                 {fields.map((f) => (
-                  <MenuItem
+                  <InsertExistingFieldItem
+                    field={f}
                     key={f.path}
-                    onClick={() => actions.insertExistingField(f.path)}
-                  >
-                    <span className="min-w-0 truncate">
-                      {f.label === "" ? f.path : f.label}
-                    </span>
-                    <code className="text-muted-foreground ms-auto ps-3 text-[10px]">
-                      {f.path}
-                    </code>
-                  </MenuItem>
+                    onInsert={actions.insertExistingField}
+                  />
                 ))}
               </MenuSubPopup>
             </MenuSub>
@@ -2963,20 +3024,120 @@ const TemplateIdentity = ({
         )}
       </div>
       <p className="text-muted-foreground text-xs tabular-nums">{summary}</p>
-      {detail !== null &&
-        (whenToUse !== null && whenToUse !== "" ? (
-          <p
-            className="text-muted-foreground line-clamp-2 text-xs leading-relaxed"
-            title={whenToUse}
-          >
-            {whenToUse}
-          </p>
-        ) : (
-          <p className="text-foreground-placeholder text-xs">
-            {t("templates.describeWhenToUse")}
-          </p>
-        ))}
+      {detail !== null && (
+        <WhenToUseEditor
+          languages={languages}
+          organizationId={activeOrganizationId}
+          templateId={templateId}
+          whenNotToUse={detail.whenNotToUse ?? null}
+          whenToUse={whenToUse}
+        />
+      )}
     </div>
+  );
+};
+
+/** Click-to-edit `whenToUse` guidance in the overview identity block: shows
+ *  the text (or a nudge when empty) until clicked, then a textarea that commits
+ *  on blur or Enter and cancels on Escape, persisting via the template update
+ *  endpoint (the same `whenToUse` field the list's guidance dialog writes). */
+const WhenToUseEditor = ({
+  organizationId,
+  templateId,
+  whenToUse,
+  whenNotToUse,
+  languages,
+}: {
+  organizationId: string;
+  templateId: string;
+  whenToUse: string | null;
+  whenNotToUse: string | null;
+  languages: string[];
+}) => {
+  const t = useTranslations();
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(whenToUse ?? "");
+
+  const startEditing = () => {
+    setDraft(whenToUse ?? "");
+    setEditing(true);
+  };
+
+  const commit = async () => {
+    setEditing(false);
+    const next = draft.trim() || null;
+    if (next === (whenToUse ?? null)) {
+      return;
+    }
+    // Send every field explicitly: the update endpoint replaces guidance
+    // wholesale, so omitting siblings would clear them.
+    const response = await api.templates({ templateId }).post({
+      whenToUse: next,
+      whenNotToUse,
+      languages,
+    });
+    if (response.error) {
+      stellaToast.add({
+        type: "error",
+        title: t("templates.saveFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+    await queryClient.invalidateQueries({
+      queryKey: knowledgeKeys.templates.detail(organizationId, templateId),
+    });
+  };
+
+  if (editing) {
+    return (
+      <Textarea
+        aria-label={t("templates.whenToUse")}
+        autoFocus
+        className="min-h-[60px] text-xs"
+        maxLength={2000}
+        onBlur={() => void commit()}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            e.currentTarget.blur();
+            return;
+          }
+          if (e.key === "Escape") {
+            setEditing(false);
+          }
+        }}
+        placeholder={t("templates.whenToUsePlaceholder")}
+        value={draft}
+      />
+    );
+  }
+
+  if (whenToUse !== null && whenToUse !== "") {
+    return (
+      <button
+        className="text-muted-foreground line-clamp-2 cursor-text text-start text-xs leading-relaxed"
+        onClick={startEditing}
+        title={whenToUse}
+        type="button"
+      >
+        {whenToUse}
+      </button>
+    );
+  }
+  return (
+    <button
+      className="text-foreground-placeholder cursor-text text-start text-xs"
+      onClick={startEditing}
+      type="button"
+    >
+      {t("templates.describeWhenToUse")}
+    </button>
   );
 };
 
@@ -3324,6 +3485,73 @@ const FieldNavigator = ({
   );
 };
 
+/** The field row's hover "+" that inserts the field's marker at the document
+ *  caret. A lookup field with more than one output format opens a menu so the
+ *  author picks WHICH rendering (default `{{path}}` or keyed `{{path.key}}`);
+ *  otherwise a single click inserts `{{path}}`. */
+const InsertAtCaretButton = ({
+  field,
+  onInsert,
+}: {
+  field: StudioField;
+  onInsert: (formatKey?: string) => void;
+}) => {
+  const t = useTranslations();
+  const formats = field.lookup?.formats ?? [];
+  const className =
+    "absolute end-1.5 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/row:opacity-100";
+  if (formats.length <= 1) {
+    return (
+      <Button
+        aria-label={t("templates.studio.insertAtCaret")}
+        className={className}
+        onClick={(e) => {
+          e.stopPropagation();
+          onInsert();
+        }}
+        size="icon-sm"
+        title={t("templates.studio.insertAtCaret")}
+        variant="outline"
+      >
+        <PlusIcon />
+      </Button>
+    );
+  }
+  return (
+    <Menu>
+      <MenuTrigger
+        aria-label={t("templates.studio.insertAtCaret")}
+        render={
+          <Button
+            className={className}
+            onClick={(e) => e.stopPropagation()}
+            size="icon-sm"
+            title={t("templates.studio.insertAtCaret")}
+            variant="outline"
+          />
+        }
+      >
+        <PlusIcon />
+      </MenuTrigger>
+      <MenuPopup align="end">
+        {formats.map((format, index) => (
+          <MenuItem
+            key={`${format.key}-${String(index)}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onInsert(index === 0 ? undefined : format.key);
+            }}
+          >
+            {index === 0
+              ? t("templates.studio.insertFormatDefault")
+              : format.key}
+          </MenuItem>
+        ))}
+      </MenuPopup>
+    </Menu>
+  );
+};
+
 const OutlineRow = ({
   node,
   fields,
@@ -3371,19 +3599,12 @@ const OutlineRow = ({
           )}
         </button>
         {field === undefined ? null : (
-          <Button
-            aria-label={t("templates.studio.insertAtCaret")}
-            className="absolute end-1.5 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/row:opacity-100"
-            onClick={(e) => {
-              e.stopPropagation();
-              actions?.insertExistingField(node.path);
-            }}
-            size="icon-sm"
-            title={t("templates.studio.insertAtCaret")}
-            variant="outline"
-          >
-            <PlusIcon />
-          </Button>
+          <InsertAtCaretButton
+            field={field}
+            onInsert={(formatKey) =>
+              actions?.insertExistingField(node.path, formatKey)
+            }
+          />
         )}
       </li>
     );
@@ -4400,12 +4621,10 @@ const parseFields = (manifest: unknown): StudioField[] => {
         field.optionsFrom = raw["optionsFrom"];
       }
       if (isRecord(raw["lookup"]) && raw["lookup"]["registry"] === "krs") {
-        field.lookup = {
-          registry: "krs",
-          ...(typeof raw["lookup"]["aiFormat"] === "string"
-            ? { aiFormat: raw["lookup"]["aiFormat"] }
-            : {}),
-        };
+        const formats = parseEditableLookupFormats(raw["lookup"]["formats"]);
+        if (formats.length > 0) {
+          field.lookup = { registry: "krs", formats };
+        }
       }
       if (Array.isArray(raw["parts"]) && typeof raw["format"] === "string") {
         field.parts = parseEditableParts(raw["parts"]);
@@ -4451,6 +4670,26 @@ const parseEditableParts = (raw: unknown[]): EditablePart[] =>
       : [],
     pattern: typeof part["pattern"] === "string" ? part["pattern"] : undefined,
   }));
+
+/** Parse the persisted lookup `formats` list (the sole carrier of renderings;
+ *  the first entry is the default). Rows missing a key or template are
+ *  dropped; an empty result drops the lookup entirely upstream. */
+const parseEditableLookupFormats = (raw: unknown): EditableLookupFormat[] => {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const formats: EditableLookupFormat[] = [];
+  for (const entry of raw) {
+    if (
+      isRecord(entry) &&
+      typeof entry["key"] === "string" &&
+      typeof entry["template"] === "string"
+    ) {
+      formats.push({ key: entry["key"], template: entry["template"] });
+    }
+  }
+  return formats;
+};
 
 const parseConditions = (manifest: unknown): NameExpr[] => {
   if (!isRecord(manifest) || !Array.isArray(manifest["conditions"])) {
