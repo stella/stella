@@ -1,35 +1,23 @@
 import { Result } from "better-result";
-import { eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db";
-import { templates, templateVersions } from "@/api/db/schema";
-import { discoverTemplate } from "@/api/handlers/docx/discover-template";
-import {
-  mergeManifestWithDiscovery,
-  readManifest,
-  writeManifest,
-} from "@/api/handlers/docx/template-manifest";
-import type {
-  FieldMeta,
-  NamedCondition,
-  TemplateManifest,
-} from "@/api/handlers/docx/types";
 import { isFieldMeta, isNamedCondition } from "@/api/handlers/docx/types";
-import { detectTemplateLanguagesFromDocx } from "@/api/handlers/templates/template-languages";
+import {
+  type ClientTemplateManifest,
+  type CreatedTemplate,
+  createStoredTemplate,
+} from "@/api/handlers/templates/create-template-service";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type {
   HandlerConfig,
   SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
-import { getS3 } from "@/api/lib/s3";
+import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -45,41 +33,8 @@ const createTemplateBodySchema = t.Object({
   manifest: t.Optional(t.Any()),
 });
 
-type CreateTemplateProps = {
-  safeDb: SafeDb;
-  organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
-  body: {
-    file: File;
-    name: string;
-    categoryId?: SafeId<"templateCategory">;
-    manifest?: unknown;
-  };
-  recordAuditEvent: AuditRecorder;
-};
-
-const buildS3Key = (
-  organizationId: SafeId<"organization">,
-  templateId: SafeId<"template">,
-) => `${organizationId}/templates/${templateId}.docx`;
-
-/** The created template row returned to the client (drives the detail view). */
-type CreatedTemplate = {
-  id: SafeId<"template">;
-  name: string;
-  fileName: string;
-  fieldCount: number;
-  sizeBytes: number;
-  createdAt: Date;
-};
-
 /** Accept a string (JSON body) or already-parsed object
  *  (FormData auto-parsed by Elysia). */
-type ClientTemplateManifest = {
-  fields: FieldMeta[];
-  conditions?: NamedCondition[] | undefined;
-};
-
 const parseClientManifest = (value: unknown): ClientTemplateManifest | null => {
   let parsed: unknown = value;
   if (typeof value === "string") {
@@ -109,6 +64,19 @@ const parseClientManifest = (value: unknown): ClientTemplateManifest | null => {
   };
 };
 
+type CreateTemplateProps = {
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  body: {
+    file: File;
+    name: string;
+    categoryId?: SafeId<"templateCategory">;
+    manifest?: unknown;
+  };
+  recordAuditEvent: AuditRecorder;
+};
+
 const createTemplateHandler = async function* ({
   safeDb,
   organizationId,
@@ -125,186 +93,22 @@ const createTemplateHandler = async function* ({
     );
   }
 
-  if (categoryId) {
-    const category = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.templateCategories.findFirst({
-          where: {
-            id: { eq: categoryId },
-            organizationId: { eq: organizationId },
-          },
-          columns: { id: true },
-        }),
-      ),
-    );
-    if (!category) {
-      return Result.err(
-        new HandlerError({ status: 400, message: "Category not found" }),
-      );
-    }
-  }
-
-  const buffer = Buffer.from(await file.arrayBuffer());
-
-  // Language detection is best-effort metadata: it guesses the document
-  // languages from the text so bilingual templates are tagged from day
-  // one; users can correct the result via the update endpoint.
-  const [discovered, existingManifest, detectedLanguages] = await Promise.all([
-    discoverTemplate(buffer),
-    readManifest(buffer),
-    detectTemplateLanguagesFromDocx(buffer),
-  ]);
-
-  const fields = mergeManifestWithDiscovery(existingManifest, discovered);
-
-  // If the client supplied field metadata (from the configure
-  // step), overlay it onto the discovered fields.
-  let fieldMetas: FieldMeta[] = fields.map((f) => ({
-    path: f.path,
-    label: f.label,
-    hint: f.hint,
-    inputType: f.inputType,
-    options: f.options,
-    validation: f.validation,
-    required: f.required,
-    parts: f.parts,
-    format: f.format,
-    optionsFrom: f.optionsFrom,
-    lookup: f.lookup,
-    formula: f.formula,
-    dateFormat: f.dateFormat,
-  }));
-
   const clientManifest =
     manifestJson !== null && manifestJson !== undefined
       ? parseClientManifest(manifestJson)
       : null;
 
-  if (clientManifest) {
-    const metaByPath = new Map<string, FieldMeta>();
-    for (const f of clientManifest.fields) {
-      metaByPath.set(f.path, f);
-    }
-    fieldMetas = fieldMetas.map((f) => {
-      const override = metaByPath.get(f.path);
-      if (!override) {
-        return f;
-      }
-      return { ...f, ...override };
-    });
-  }
-
-  const manifest: TemplateManifest = {
-    version: existingManifest?.version ?? 1,
-    fields: fieldMetas,
-    conditions:
-      clientManifest?.conditions ?? existingManifest?.conditions ?? [],
-  };
-
-  const docxWithManifest = await writeManifest(buffer, manifest);
-
-  // Pre-generate the ID so the S3 key and DB row stay in sync.
-  const templateId = createSafeId<"template">();
-  const s3Key = buildS3Key(organizationId, templateId);
-
-  await getS3().write(s3Key, new Uint8Array(docxWithManifest));
-
-  const versionId = createSafeId<"templateVersion">();
-
-  // Advisory lock + count + insert in one transaction to
-  // prevent TOCTOU on the template limit.
-  const txResult = yield* Result.await(
-    safeDb(async (tx) => {
-      await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtext(${organizationId}))`,
-      );
-
-      const existingCount = await tx.$count(
-        templates,
-        eq(templates.organizationId, organizationId),
-      );
-
-      if (existingCount >= LIMITS.templatesCount) {
-        return { ok: false as const };
-      }
-
-      const [row] = await tx
-        .insert(templates)
-        .values({
-          id: templateId,
-          organizationId,
-          categoryId: categoryId ?? null,
-          name,
-          fileName: sanitizeFilename(file.name),
-          s3Key,
-          sizeBytes: docxWithManifest.byteLength,
-          manifest,
-          fieldCount: fields.length,
-          currentVersion: 1,
-          languages: detectedLanguages,
-          createdBy: userId,
-        })
-        .returning({
-          id: templates.id,
-          name: templates.name,
-          fileName: templates.fileName,
-          fieldCount: templates.fieldCount,
-          sizeBytes: templates.sizeBytes,
-          createdAt: templates.createdAt,
-        });
-
-      await tx.insert(templateVersions).values({
-        id: versionId,
-        organizationId,
-        templateId,
-        version: 1,
-        s3Key,
-        manifest,
-        fieldCount: fields.length,
-        createdBy: userId,
-      });
-
-      await recordAuditEvent(tx, {
-        action: AUDIT_ACTION.CREATE,
-        resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
-        resourceId: templateId,
-        workspaceId: null,
-        changes: {
-          created: {
-            old: null,
-            new: {
-              name,
-              categoryId: categoryId ?? null,
-              fileName: row?.fileName ?? null,
-              fieldCount: fields.length,
-              currentVersion: 1,
-            },
-          },
-        },
-      });
-
-      return { ok: true as const, row };
-    }),
-  );
-
-  if (!txResult.ok) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "Templates limit reached",
-      }),
-    );
-  }
-  if (!txResult.row) {
-    return Result.err(
-      new HandlerError({
-        status: 500,
-        message: "Template insert returned no row",
-      }),
-    );
-  }
-
-  return Result.ok(txResult.row);
+  return yield* createStoredTemplate({
+    safeDb,
+    organizationId,
+    userId,
+    buffer: Buffer.from(await file.arrayBuffer()),
+    name,
+    fileName: sanitizeFilename(file.name),
+    categoryId,
+    clientManifest,
+    recordAuditEvent,
+  });
 };
 
 const config = {
