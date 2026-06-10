@@ -816,6 +816,7 @@
     "scrollToTop": "Przewiń do góry",
     "search": "Szukaj...",
     "selectARole": "Wybierz rolę",
+    "selectDate": "Wybierz datę…",
     "sessions": "Sesje",
     "settings": "Ustawienia",
     "showAll": "Pokaż wszystko",
@@ -1975,7 +1976,6 @@
       "none": "Brak",
       "urgent": "Pilne"
     },
-    "selectDate": "Wybierz datę…",
     "status": "Status",
     "statusValues": {
       "cancelled": "Anulowane",
