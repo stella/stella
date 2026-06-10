@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { DIRECTIVE_KINDS } from "@stll/template-conditions";
+
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -106,7 +108,7 @@ describe("MCP template tools", () => {
     mock.restore();
   });
 
-  test("registers the four template tools under the templates scope", async () => {
+  test("registers the template tools under the templates scope", async () => {
     const names = (await listMcpTools(createContext())).map(
       (tool) => tool.name,
     );
@@ -114,12 +116,14 @@ describe("MCP template tools", () => {
     expect(names).toContain("describe_template");
     expect(names).toContain("fill_template");
     expect(names).toContain("create_template");
+    expect(names).toContain("template_marker_reference");
 
     for (const name of [
       "list_templates",
       "describe_template",
       "fill_template",
       "create_template",
+      "template_marker_reference",
     ]) {
       expect((await getMcpToolDefinition(name, createContext()))?.scope).toBe(
         "stella:templates",
@@ -133,6 +137,50 @@ describe("MCP template tools", () => {
     );
     expect(names).not.toContain("list_templates");
     expect(names).not.toContain("create_template");
+    expect(names).not.toContain("template_marker_reference");
+  });
+
+  test("template_marker_reference covers every canonical directive kind", async () => {
+    const result = await handleMcpToolCall({
+      args: {},
+      context: createContext(),
+      toolName: "template_marker_reference",
+    });
+
+    expect(result.isError).toBeFalsy();
+    const payload = parseToolPayload(result);
+    if (
+      typeof payload !== "object" ||
+      payload === null ||
+      !("reference" in payload) ||
+      typeof payload.reference !== "string"
+    ) {
+      throw new Error("Expected a { reference: string } payload");
+    }
+    const { reference } = payload;
+
+    // Every canonical directive kind from markers.ts must be documented, so the
+    // reference can never silently drift from the grammar.
+    for (const kind of DIRECTIVE_KINDS) {
+      expect(reference).toContain(kind);
+    }
+
+    // The create_template description points agents at this tool first.
+    const createTemplate = await getMcpToolDefinition(
+      "create_template",
+      createContext(),
+    );
+    expect(createTemplate?.description).toContain("template_marker_reference");
+  });
+
+  test("template_marker_reference rejects unexpected arguments", async () => {
+    const result = await handleMcpToolCall({
+      args: { unexpected: true },
+      context: createContext(),
+      toolName: "template_marker_reference",
+    });
+
+    expect(result.isError).toBe(true);
   });
 
   test("list_templates returns the org's templates", async () => {

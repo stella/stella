@@ -16,6 +16,7 @@ import {
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { brandPersistedTemplateId } from "@/api/lib/safe-id-boundaries";
+import { buildMarkerReference } from "@/api/mcp/template-marker-reference";
 import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
 import { errorResult, stringProp, textResult } from "@/api/mcp/tool-utils";
 
@@ -23,7 +24,8 @@ type TemplateToolName =
   | "list_templates"
   | "describe_template"
   | "fill_template"
-  | "create_template";
+  | "create_template"
+  | "template_marker_reference";
 
 /** Max assembled-text length returned inline; full bytes ride along as base64. */
 const TEMPLATE_FILL_TEXT_MAX_CHARS = 16_000;
@@ -89,10 +91,26 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
     scope: "stella:templates",
   },
   {
+    annotations: { readOnlyHint: true },
+    description:
+      "Return stella's `{{...}}` template marker grammar: how to write " +
+      "fillable values, conditional and repeating blocks, clause slots, and " +
+      "numbering inside a DOCX. Takes no arguments. Call this before " +
+      "create_template whenever you are unsure of the marker syntax.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+    name: "template_marker_reference",
+    scope: "stella:templates",
+  },
+  {
     description:
       "Create a document template from a DOCX file containing {{markers}}. " +
       "'docx_base64' is the base64-encoded bytes of a .docx (Office Open XML) " +
       "file; the {{field}} markers in it become the template's fillable fields. " +
+      "If you are unsure how to write the markers, call " +
+      "template_marker_reference first. " +
       "Max ~10 MB decoded. Returns the new template id and the number of " +
       "discovered fields. Use describe_template afterwards to inspect the fields.",
     inputSchema: {
@@ -134,6 +152,20 @@ const handleListTemplatesTool: McpToolHandler = async ({ args, context }) => {
   );
 
   return textResult({ templates: rows });
+};
+
+const markerReferenceArgsSchema = v.strictObject({});
+
+// eslint-disable-next-line require-await -- McpToolHandler is async; this handler has no I/O to await
+const handleMarkerReferenceTool: McpToolHandler = async ({ args }) => {
+  const parsed = v.safeParse(markerReferenceArgsSchema, args);
+  if (!parsed.success) {
+    return errorResult(
+      "Invalid input: template_marker_reference takes no parameters",
+    );
+  }
+
+  return textResult({ reference: buildMarkerReference() });
 };
 
 const describeTemplateArgsSchema = v.strictObject({
@@ -280,4 +312,5 @@ export const TEMPLATE_TOOL_HANDLERS = {
   describe_template: handleDescribeTemplateTool,
   fill_template: handleFillTemplateTool,
   list_templates: handleListTemplatesTool,
+  template_marker_reference: handleMarkerReferenceTool,
 } satisfies Record<TemplateToolName, McpToolHandler>;

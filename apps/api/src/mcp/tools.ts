@@ -48,6 +48,10 @@ const MCP_TOOL_HANDLERS = new Map<string, McpToolHandler>([
   ["describe_template", TEMPLATE_TOOL_HANDLERS.describe_template],
   ["fill_template", TEMPLATE_TOOL_HANDLERS.fill_template],
   ["create_template", TEMPLATE_TOOL_HANDLERS.create_template],
+  [
+    "template_marker_reference",
+    TEMPLATE_TOOL_HANDLERS.template_marker_reference,
+  ],
 ]);
 
 export const getMcpToolDefinition = async (
