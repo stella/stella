@@ -35,6 +35,8 @@ export const LIMITS = {
   templatesCount: 50,
   clauseCategoriesCount: 100,
   templateCategoriesCount: 100,
+  templateRecipesCount: 100,
+  templateRecipeFieldsMax: 50,
   clausesPerOrganization: 500,
   clausesPageSizeDefault: 50,
   clausesPageSizeMax: 200,
