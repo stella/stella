@@ -1,17 +1,24 @@
 /**
- * Line-level diff between two plain-text document versions,
- * rendered as compact segments for version-history UIs and as
- * unified-diff text for AI change summaries. Long unchanged runs
- * are collapsed to a couple of context lines around each change so
+ * Two-pass diff between two plain-text document versions, rendered as
+ * compact segments for version-history UIs and as unified-diff text
+ * for AI change summaries. The first pass diffs line-by-line; the
+ * second pass zips adjacent removed/added lines by index and word-diffs
+ * each pair into a single "changed" paragraph of inline same/del/ins
+ * runs, the granularity lawyers know from track changes. Long unchanged
+ * runs are collapsed to a couple of context lines around each change so
  * responses stay bounded even for large documents.
  */
 
-import { diffArrays } from "diff";
+import { diffArrays, diffWordsWithSpace } from "diff";
 
-export type VersionDiffSegment = {
-  kind: "added" | "removed" | "unchanged" | "gap";
+export type VersionDiffRun = {
+  kind: "same" | "del" | "ins";
   text: string;
 };
+
+export type VersionDiffSegment =
+  | { kind: "added" | "removed" | "unchanged" | "gap"; text: string }
+  | { kind: "changed"; runs: VersionDiffRun[] };
 
 /** Unchanged lines kept on each side of a change. */
 const CONTEXT_LINES = 2;
@@ -30,10 +37,37 @@ const clampSegmentText = (text: string): string =>
     ? text.slice(0, MAX_SEGMENT_CHARS) + TRUNCATION_SUFFIX
     : text;
 
+const segmentLength = (segment: VersionDiffSegment): number => {
+  if (segment.kind === "changed") {
+    let length = 0;
+    for (const run of segment.runs) {
+      length += run.text.length;
+    }
+    return length;
+  }
+  return segment.text.length;
+};
+
+const toRunKind = (part: {
+  added: boolean;
+  removed: boolean;
+}): VersionDiffRun["kind"] => {
+  if (part.added) {
+    return "ins";
+  }
+  if (part.removed) {
+    return "del";
+  }
+  return "same";
+};
+
 /**
- * Diff two texts line-by-line. Returns an empty array when nothing
- * changed; otherwise returns added/removed segments interleaved with
- * trimmed unchanged context ("gap" marks elided unchanged lines).
+ * Diff two texts line-by-line, then word-by-word within changed line
+ * pairs. Returns an empty array when nothing changed; otherwise
+ * returns segments interleaved with trimmed unchanged context:
+ * "changed" merges an edited line pair into inline same/del/ins runs,
+ * "added"/"removed" carry whole inserted/deleted lines, and "gap"
+ * marks elided unchanged lines.
  */
 export const buildLineDiffSegments = (
   prevText: string,
@@ -48,27 +82,73 @@ export const buildLineDiffSegments = (
   const segments: VersionDiffSegment[] = [];
   let totalChars = 0;
 
-  const push = (segment: VersionDiffSegment): boolean => {
+  const push = (segment: VersionDiffSegment): void => {
     if (totalChars >= MAX_TOTAL_CHARS) {
       const last = segments.at(-1);
       if (last?.kind !== "gap") {
         segments.push({ kind: "gap", text: "" });
       }
-      return false;
+      return;
     }
-    const text = clampSegmentText(segment.text);
-    totalChars += text.length;
-    segments.push({ kind: segment.kind, text });
-    return true;
+    // "changed" segments are bounded by construction (a pair only gets
+    // word-diffed when its combined length fits the per-segment cap).
+    const bounded: VersionDiffSegment =
+      segment.kind === "changed"
+        ? segment
+        : { kind: segment.kind, text: clampSegmentText(segment.text) };
+    totalChars += segmentLength(bounded);
+    segments.push(bounded);
   };
 
-  for (const [index, change] of changes.entries()) {
+  /** Zip a removed run with the added run that follows it: line pairs
+   *  matched by index merge into word-level "changed" segments; the
+   *  longer side's leftover lines stay plain removed/added. */
+  const pushChangedPairs = (oldLines: string[], newLines: string[]): void => {
+    const pairCount = Math.min(oldLines.length, newLines.length);
+    for (const [i, oldLine] of oldLines.slice(0, pairCount).entries()) {
+      const newLine = newLines.at(i) ?? "";
+      if (oldLine.length + newLine.length > MAX_SEGMENT_CHARS) {
+        push({ kind: "removed", text: oldLine });
+        push({ kind: "added", text: newLine });
+        continue;
+      }
+      push({
+        kind: "changed",
+        runs: diffWordsWithSpace(oldLine, newLine).map((part) => ({
+          kind: toRunKind(part),
+          text: part.value,
+        })),
+      });
+    }
+    if (oldLines.length > pairCount) {
+      push({ kind: "removed", text: oldLines.slice(pairCount).join("\n") });
+    }
+    if (newLines.length > pairCount) {
+      push({ kind: "added", text: newLines.slice(pairCount).join("\n") });
+    }
+  };
+
+  let index = 0;
+  while (index < changes.length) {
+    const change = changes.at(index);
+    if (!change) {
+      break;
+    }
+    const next = changes.at(index + 1);
+
+    if (change.removed && next?.added) {
+      pushChangedPairs(change.value, next.value);
+      index += 2;
+      continue;
+    }
     if (change.added) {
       push({ kind: "added", text: change.value.join("\n") });
+      index += 1;
       continue;
     }
     if (change.removed) {
       push({ kind: "removed", text: change.value.join("\n") });
+      index += 1;
       continue;
     }
 
@@ -81,6 +161,7 @@ export const buildLineDiffSegments = (
 
     if (head.length + tail.length >= lines.length) {
       push({ kind: "unchanged", text: lines.join("\n") });
+      index += 1;
       continue;
     }
     if (head.length > 0) {
@@ -90,21 +171,37 @@ export const buildLineDiffSegments = (
     if (tail.length > 0) {
       push({ kind: "unchanged", text: tail.join("\n") });
     }
+    index += 1;
   }
 
   return segments;
 };
 
-const SEGMENT_PREFIX: Record<VersionDiffSegment["kind"], string> = {
+const SEGMENT_PREFIX: Record<"added" | "removed" | "unchanged", string> = {
   added: "+ ",
   removed: "- ",
   unchanged: "  ",
-  gap: "",
+};
+
+/** Reassemble one side of a merged "changed" pair from its runs. */
+const joinRunsExcluding = (
+  runs: readonly VersionDiffRun[],
+  excluded: "ins" | "del",
+): string => {
+  let text = "";
+  for (const run of runs) {
+    if (run.kind !== excluded) {
+      text += run.text;
+    }
+  }
+  return text;
 };
 
 /**
  * Render segments as unified-diff-style text for an AI prompt
  * ("+ " added, "- " removed, "  " context, "@@" elided run).
+ * Merged "changed" pairs are re-expanded into a -/+ line pair so the
+ * prompt stays plain unified-diff text.
  */
 export const diffSegmentsToText = (
   segments: readonly VersionDiffSegment[],
@@ -113,6 +210,11 @@ export const diffSegmentsToText = (
     .map((segment) => {
       if (segment.kind === "gap") {
         return "@@";
+      }
+      if (segment.kind === "changed") {
+        const oldText = joinRunsExcluding(segment.runs, "ins");
+        const newText = joinRunsExcluding(segment.runs, "del");
+        return `- ${oldText}\n+ ${newText}`;
       }
       const prefix = SEGMENT_PREFIX[segment.kind];
       return segment.text
