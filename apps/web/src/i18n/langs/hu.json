@@ -1972,6 +1972,7 @@
       "none": "Nincs",
       "urgent": "Sürgős"
     },
+    "selectDate": "Dátum kiválasztása…",
     "status": "Állapot",
     "statusValues": {
       "cancelled": "Visszavonva",

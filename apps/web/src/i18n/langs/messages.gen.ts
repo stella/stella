@@ -1975,6 +1975,7 @@ type Messages = {
       "none": "None";
       "urgent": "Urgent";
     };
+    "selectDate": "Select date…";
     "status": "Status";
     "statusValues": {
       "cancelled": "Cancelled";

@@ -1972,6 +1972,7 @@
       "none": "Keine",
       "urgent": "Dringend"
     },
+    "selectDate": "Datum wählen…",
     "status": "Status",
     "statusValues": {
       "cancelled": "Abgebrochen",

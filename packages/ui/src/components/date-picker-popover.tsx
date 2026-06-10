@@ -176,6 +176,10 @@ type DatePickerPopoverProps = {
   locale?: string;
   isOverdue?: boolean;
   showIcon?: boolean;
+  /** Shown in the trigger when no date is set. Falls back to an em dash so
+   *  the control still has height; pass a call-to-action ("Select date…") to
+   *  make the empty state self-explanatory. */
+  placeholderLabel?: string;
   clearLabel?: string;
   defaultOpen?: boolean;
   /** Label for the "go to today" button. Auto-localized from the locale when omitted. */
@@ -192,6 +196,7 @@ function DatePickerPopover({
   locale: localeProp,
   isOverdue = false,
   showIcon = true,
+  placeholderLabel,
   clearLabel = "Clear date",
   defaultOpen = false,
   todayLabel: todayLabelProp,
@@ -252,7 +257,7 @@ function DatePickerPopover({
         year: "numeric",
         timeZone: "UTC",
       })
-    : "\u2014";
+    : (placeholderLabel ?? "\u2014");
 
   const formatDayLabel = useCallback(
     (iso: string): string =>

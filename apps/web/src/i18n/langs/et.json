@@ -1972,6 +1972,7 @@
       "none": "Puudub",
       "urgent": "Kiire"
     },
+    "selectDate": "Vali kuupäev…",
     "status": "Staatus",
     "statusValues": {
       "cancelled": "Tühistatud",
