@@ -134,6 +134,7 @@ import {
 import {
   knowledgeKeys,
   templateClausesOptions,
+  templateClausePreviewOptions,
   templateDetailOptions,
   templateDocxBufferOptions,
   templateRecipesOptions,
@@ -2353,6 +2354,12 @@ const StudioSaveAction = () => {
 // included — rather than reconstructing it from the flat manifest.
 const TemplateFillFacet = ({ templateId }: { templateId: string }) => {
   const fillSaveTarget = useFillToMatterSaveTarget();
+  const facetOrgId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const { data: clausePreview } = useQuery({
+    ...templateClausePreviewOptions(facetOrgId, templateId),
+  });
   // Leaving the facet clears the in-document preview (and drops any pending
   // lookup-preview response so it cannot re-set a stale preview).
   useEffect(
@@ -2449,7 +2456,9 @@ const TemplateFillFacet = ({ templateId }: { templateId: string }) => {
         fileName={detail.fileName}
         onBack={() => undefined}
         onDone={() => undefined}
-        onValuesChange={(values) => pushFillPreview(values, discovered.fields)}
+        onValuesChange={(values) =>
+          pushFillPreview(values, discovered.fields, clausePreview?.slotTexts)
+        }
         saveTarget={fillSaveTarget}
         structureErrors={discovered.structureErrors}
         templateId={templateId}
@@ -2472,9 +2481,15 @@ const TemplateFillFacet = ({ templateId }: { templateId: string }) => {
 const pushFillPreview = (
   values: Record<string, unknown>,
   fields?: readonly LookupPreviewField[],
+  clauseTexts?: Record<string, string>,
 ) => {
   cancelLookupPreviews();
   const preview: Record<string, TemplatePreviewValue> = {};
+  // Linked clause slots preview their resolved text, keyed by slot name to
+  // match the folio plugin's clause-range key.
+  if (clauseTexts) {
+    Object.assign(preview, clauseTexts);
+  }
   for (const [key, value] of Object.entries(values)) {
     if (key.startsWith(ARRAY_INDEX_KEY_PREFIX)) {
       continue;
@@ -2503,7 +2518,9 @@ const pushFillPreview = (
     .getState()
     .actions?.setFillPreview(Object.keys(preview).length > 0 ? preview : null);
   if (pending.length > 0) {
-    queueLookupPreviews(pending, () => pushFillPreview(values, fields));
+    queueLookupPreviews(pending, () =>
+      pushFillPreview(values, fields, clauseTexts),
+    );
   }
 };
 
