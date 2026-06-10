@@ -2051,7 +2051,10 @@ type Messages = {
     "confirmDelete": "This will permanently delete the template.";
     "createCategory": "New category";
     "createDocument": "Create document";
+    "dateChipFirstOfNextMonth": "First of next month";
+    "dateChipPlus30Days": "In 30 days";
     "dateFormatStyle": "Date format";
+    "dateRenderPreview": "In the document: {value}";
     "deleteCategory": "Delete category";
     "deleteFailed": "Failed to delete template";
     "describeWhenToUse": "Describe when to use this";
