@@ -173,6 +173,11 @@ type SelectionGesture = GestureSelection & {
 };
 
 /** Progressive AI enrichment of the popover's Make-field row. */
+/** Session-lived answers for the selection popover, keyed by exact selection
+ *  + surrounding context; bounded FIFO so it cannot grow unchecked. */
+const gestureEnrichmentCache = new Map<string, GestureEnrichment>();
+const GESTURE_ENRICHMENT_CACHE_MAX = 100;
+
 type GestureEnrichment =
   | { status: "idle" }
   | { status: "loading" }
@@ -823,9 +828,19 @@ export const TemplateStudioPage = ({
       return;
     }
     const seq = ++enrichSeqRef.current;
+    const contextText = paragraphsAroundSelection(view.state, sel.from);
+    // Re-selecting the same text in the same context is common (the popover
+    // dismisses on any click); serve the model's previous answer instead of
+    // paying for it again.
+    const cacheKey = `${sel.text}\u0000${contextText}`;
+    const cached = gestureEnrichmentCache.get(cacheKey);
+    if (cached !== undefined) {
+      setEnrichment(cached);
+      return;
+    }
     setEnrichment({ status: "loading" });
     const response = await api.templates["suggest-fields"].post({
-      text: paragraphsAroundSelection(view.state, sel.from),
+      text: contextText,
       instructions:
         `The user selected this exact text: "${sel.text}". Propose exactly ` +
         `ONE field for that exact selection (literalText must equal it): ` +
@@ -840,7 +855,7 @@ export const TemplateStudioPage = ({
       setEnrichment({ status: "idle" });
       return;
     }
-    setEnrichment({
+    const ready: GestureEnrichment = {
       status: "ready",
       label: match.label,
       inputType:
@@ -848,7 +863,15 @@ export const TemplateStudioPage = ({
           ? match.inputType
           : undefined,
       aiPrompt: match.aiPrompt,
-    });
+    };
+    if (gestureEnrichmentCache.size >= GESTURE_ENRICHMENT_CACHE_MAX) {
+      const oldest = gestureEnrichmentCache.keys().next().value;
+      if (oldest !== undefined) {
+        gestureEnrichmentCache.delete(oldest);
+      }
+    }
+    gestureEnrichmentCache.set(cacheKey, ready);
+    setEnrichment(ready);
   };
 
   const enrichGesture = useDebouncedCallback((sel: GestureSelection) => {
