@@ -28,8 +28,8 @@ import {
   getExternalMcpConnectorApprovalGrant,
   getExternalMcpConnectorSlugFromToolName,
   getToolApprovalGrant,
-  hasRunningToolCallInLatestAssistantMessage,
   isApprovalToolName,
+  isChatTurnInFlight,
   isExternalMcpToolName,
   isToolApprovalGrant,
 } from "@/components/chat/chat-ui-tools";
@@ -154,6 +154,13 @@ export const useChatSession = ({
   const wasGeneratingRef = useRef(false);
   const conversationIdRef = useRef(conversationId);
   const [queuedMessages, setQueuedMessages] = useState<QueuedChatEntry[]>([]);
+  /**
+   * Set when the user stops a turn whose request the SDK can no
+   * longer abort (the stream already died, leaving a tool part stuck
+   * in a running state). Suppresses the running-tool-call signal in
+   * `isGenerating`; lifted as soon as a new request starts.
+   */
+  const [turnAbandoned, setTurnAbandoned] = useState(false);
 
   const replaceQueuedMessages = useCallback((next: QueuedChatEntry[]) => {
     queueRef.current = next;
@@ -254,6 +261,19 @@ export const useChatSession = ({
     },
     [regenerate],
   );
+
+  /**
+   * Stop the current turn. The SDK's `stop()` only aborts a live
+   * request (`submitted`/`streaming`); for a turn whose stream is
+   * already dead it resolves without changing anything, so the
+   * abandoned mark is what guarantees the session returns to idle.
+   * Marked before awaiting so the UI resets even if the abort
+   * settles late.
+   */
+  const stopGenerating = useCallback(async () => {
+    setTurnAbandoned(true);
+    await stop();
+  }, [stop]);
 
   const handleApprove = useCallback(
     (id: string, _toolName?: ApprovalToolName) => {
@@ -546,15 +566,18 @@ export const useChatSession = ({
     [messages],
   );
 
-  const hasRunningToolCall = useMemo(
-    () => hasRunningToolCallInLatestAssistantMessage({ messages }),
-    [messages],
-  );
-  const isGenerating =
-    status === "submitted" || status === "streaming" || hasRunningToolCall;
+  const isGenerating = isChatTurnInFlight({ status, messages, turnAbandoned });
   useEffect(() => {
     isGeneratingRef.current = isGenerating;
   }, [isGenerating]);
+  // A fresh request (manual send, regenerate, or the SDK's automatic
+  // continuation) starts a new turn; lift the abandoned mark so its
+  // tool calls count as in-flight again.
+  useEffect(() => {
+    if (status === "submitted" || status === "streaming") {
+      setTurnAbandoned(false);
+    }
+  }, [status]);
   useEffect(() => {
     queueRef.current = queuedMessages;
   }, [queuedMessages]);
@@ -564,6 +587,7 @@ export const useChatSession = ({
     isGeneratingRef.current = false;
     replaceQueuedMessages([]);
     wasGeneratingRef.current = false;
+    setTurnAbandoned(false);
   }, [conversationId, replaceQueuedMessages]);
 
   // Drain the queue one message per turn. When the response
@@ -662,7 +686,7 @@ export const useChatSession = ({
     sendMessage,
     queuedMessages,
     removeQueuedMessage,
-    stop,
+    stop: stopGenerating,
     isGenerating,
     alwaysApprovedTools,
     conversationApprovedTools,
