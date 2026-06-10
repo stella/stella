@@ -2127,6 +2127,7 @@
       "filledByPerson": "Osoba",
       "formula": "Vzorec",
       "insert": "Vložiť",
+      "insertAtCaret": "Vložiť na pozíciu kurzora",
       "invalidExpression": "Tento výraz je neplatný",
       "loop": "Slučka",
       "makeField": "Vytvoriť pole",

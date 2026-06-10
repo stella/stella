@@ -2127,6 +2127,7 @@
       "filledByPerson": "Persona",
       "formula": "Formula",
       "insert": "Ievietot",
+      "insertAtCaret": "Ievietot pie kursora",
       "invalidExpression": "Šī izteiksme nav derīga",
       "loop": "Cilpa",
       "makeField": "Izveidot lauku",

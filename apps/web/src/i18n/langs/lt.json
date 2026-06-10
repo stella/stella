@@ -2127,6 +2127,7 @@
       "filledByPerson": "Asmuo",
       "formula": "Formulė",
       "insert": "Įterpti",
+      "insertAtCaret": "Įterpti ties žymekliu",
       "invalidExpression": "Ši išraiška neteisinga",
       "loop": "Ciklas",
       "makeField": "Sukurti lauką",
