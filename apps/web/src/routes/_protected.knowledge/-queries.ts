@@ -76,6 +76,14 @@ export const knowledgeKeys = {
       templateId,
       "clauses",
     ],
+    // Resolved plain text of each linked clause slot, for the Fill subtab's
+    // live in-document preview. Lives in the templates subtree so editing a
+    // clause link (which invalidates templates) refreshes the preview text.
+    clausePreview: (organizationId: string, templateId: string) => [
+      ...knowledgeKeys.templates.all(organizationId),
+      templateId,
+      "clause-preview",
+    ],
     check: (organizationId: string, templateId: string) => [
       ...knowledgeKeys.templates.all(organizationId),
       templateId,
@@ -267,6 +275,29 @@ export const templateClausesOptions = (
       const response = await api
         .templates({ templateId: toSafeId<"template">(templateId) })
         .clauses.get({ fetch: { signal } });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    staleTime: STALE_TIME.FIVE.MINUTES,
+  });
+
+// Resolved plain text for each linked clause slot (slotName -> text). The
+// Fill subtab merges this into its preview values map so linked clause slots
+// preview their clause body, mirroring what download/fill produces.
+export const templateClausePreviewOptions = (
+  organizationId: string,
+  templateId: string,
+) =>
+  queryOptions({
+    queryKey: knowledgeKeys.templates.clausePreview(organizationId, templateId),
+    queryFn: async ({ signal }) => {
+      const response = await api.clauses["template-slot-preview"]({
+        templateId: toSafeId<"template">(templateId),
+      }).get({ fetch: { signal } });
 
       if (response.error) {
         throw toAPIError(response.error);
