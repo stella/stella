@@ -302,9 +302,7 @@ const ensureOAuthClient = async ({
         ? {
             clientId: getMcpClientMetadataDocumentUrl(),
             clientSecret: null,
-            registrationResponse: redactMcpOAuthRegistrationResponse(
-              buildMcpClientMetadataDocument(),
-            ),
+            registrationResponse: buildMcpClientMetadataDocument(),
           }
         : yield* Result.await(
             registerOAuthClient({
