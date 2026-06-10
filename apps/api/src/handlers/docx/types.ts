@@ -328,6 +328,14 @@ export type FieldMeta = {
    * fill time and replaced with the rendered company details.
    */
   lookup?: FieldLookup | undefined;
+  /**
+   * Formula field: the value is derived from other fields via an arithmetic
+   * expression (evaluated by `evaluateNumericExpression`) at fill time, e.g.
+   * `min(rent * (1 + index / 100), rent * 1.05)`. Derived, never
+   * user-submitted; mutually exclusive with the other value sources
+   * ({@link aiPrompt}, {@link aiAdapt}, {@link lookup}, {@link parts}).
+   */
+  formula?: string | undefined;
 };
 
 /**
@@ -340,23 +348,10 @@ export type NamedCondition = {
   label?: string;
 };
 
-/**
- * A field whose value is derived from other fields via an arithmetic
- * expression (evaluated by `evaluateNumericExpression`) at fill time, e.g.
- * `{ name: "rent_indexed", expression: "min(rent*(1+index/100), rent*1.05)" }`.
- */
-export type ComputedField = {
-  name: string;
-  expression: string;
-  label?: string;
-};
-
 export type TemplateManifest = {
   version: number;
   fields: FieldMeta[];
   conditions: NamedCondition[];
-  // Optional: manifests authored before computed fields existed omit it.
-  computed?: ComputedField[];
 };
 
 const isRecordLike = (value: unknown): value is Record<string, unknown> =>
@@ -416,6 +411,18 @@ export const isFieldMeta = (value: unknown): value is FieldMeta => {
     return false;
   }
 
+  // A formula field's value is derived at fill time, never user-entered, so
+  // the other value-source mechanisms cannot coexist with it.
+  if (
+    value["formula"] !== undefined &&
+    (value["aiPrompt"] !== undefined ||
+      value["aiAdapt"] !== undefined ||
+      value["lookup"] !== undefined ||
+      value["parts"] !== undefined)
+  ) {
+    return false;
+  }
+
   return (
     (value["label"] === undefined || typeof value["label"] === "string") &&
     (value["inputType"] === undefined || isInputType(value["inputType"])) &&
@@ -437,23 +444,16 @@ export const isFieldMeta = (value: unknown): value is FieldMeta => {
     (value["optionsFrom"] === undefined ||
       (typeof value["optionsFrom"] === "string" &&
         isFieldPath(value["optionsFrom"]))) &&
-    (value["lookup"] === undefined || isFieldLookup(value["lookup"]))
+    (value["lookup"] === undefined || isFieldLookup(value["lookup"])) &&
+    (value["formula"] === undefined || typeof value["formula"] === "string")
   );
 };
 
-// NamedCondition and ComputedField share the { name, expression, label? }
-// shape, so one predicate backs both guards (each narrows to its own type).
-const hasNameExpressionLabel = (value: unknown): boolean =>
+export const isNamedCondition = (value: unknown): value is NamedCondition =>
   isRecordLike(value) &&
   typeof value["name"] === "string" &&
   typeof value["expression"] === "string" &&
   (value["label"] === undefined || typeof value["label"] === "string");
-
-export const isNamedCondition = (value: unknown): value is NamedCondition =>
-  hasNameExpressionLabel(value);
-
-export const isComputedField = (value: unknown): value is ComputedField =>
-  hasNameExpressionLabel(value);
 
 const isRichRun = (value: unknown): value is RichRun =>
   isRecordLike(value) &&
@@ -517,12 +517,7 @@ export const isTemplateManifest = (value: unknown): value is TemplateManifest =>
   Array.isArray(value["fields"]) &&
   value["fields"].every(isFieldMeta) &&
   Array.isArray(value["conditions"]) &&
-  value["conditions"].every(isNamedCondition) &&
-  // `computed` is optional for backward compatibility with manifests
-  // authored before computed fields existed.
-  (value["computed"] === undefined ||
-    (Array.isArray(value["computed"]) &&
-      value["computed"].every(isComputedField)));
+  value["conditions"].every(isNamedCondition);
 
 export type ResolvedField = {
   path: string;
@@ -546,6 +541,9 @@ export type ResolvedField = {
   /** Mirrors {@link FieldMeta.lookup}: the fill form shows a registry-lookup
    *  hint and checks the registry-number format before submit. */
   lookup?: FieldLookup | undefined;
+  /** Mirrors {@link FieldMeta.formula}: the value is derived at fill time, so
+   *  the fill form renders no input for the field. */
+  formula?: string | undefined;
   itemFields?: ResolvedField[] | undefined;
   /** Condition expression that must be true for this
    *  field to be visible in the fill form. */

@@ -136,10 +136,11 @@ export const fillHandler = async ({
       ? await loadOrgAIConfig(organizationId)
       : null;
 
-  // Resolve registry lookups, assemble composite (multipart) values, and
-  // check dependent (optionsFrom) selects before any AI step or substitution
-  // sees them (in place: a resolved value is a plain string, so the data
-  // stays valid TemplateData); a failing step rejects naming the field.
+  // Resolve registry lookups, assemble composite (multipart) values,
+  // evaluate formula (derived) fields, and check dependent (optionsFrom)
+  // selects before any AI step or substitution sees them (in place: a
+  // resolved value is a plain string, so the data stays valid TemplateData);
+  // a failing step rejects naming the field.
   const stepError = await applyManifestFillSteps({
     values: fillData,
     manifest,

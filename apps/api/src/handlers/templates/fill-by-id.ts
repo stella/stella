@@ -156,9 +156,10 @@ const fillByIdHandler = async function* ({
       ? await loadOrgAIConfig(organizationId)
       : null;
 
-  // Resolve registry lookups, assemble composite (multipart) values, and
-  // check dependent (optionsFrom) selects before any AI step or substitution
-  // sees them; a failing step rejects the request naming the field.
+  // Resolve registry lookups, assemble composite (multipart) values,
+  // evaluate formula (derived) fields, and check dependent (optionsFrom)
+  // selects before any AI step or substitution sees them; a failing step
+  // rejects the request naming the field.
   const stepError = await applyManifestFillSteps({
     values: parsed,
     manifest,
