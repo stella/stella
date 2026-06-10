@@ -689,6 +689,7 @@ export const mergeManifestWithDiscovery = (
         validation: f.validation,
         required: f.required,
         aiAdapt: f.aiAdapt,
+        aiPrompt: f.aiPrompt,
         parts: f.parts,
         format: f.format,
         optionsFrom: f.optionsFrom,
@@ -741,6 +742,9 @@ const mergeField = (
     }
     if (meta.aiAdapt !== undefined) {
       resolved.aiAdapt = meta.aiAdapt;
+    }
+    if (meta.aiPrompt !== undefined) {
+      resolved.aiPrompt = meta.aiPrompt;
     }
     if (meta.parts !== undefined && meta.format !== undefined) {
       resolved.parts = meta.parts;
