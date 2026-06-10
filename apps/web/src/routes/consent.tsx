@@ -59,6 +59,7 @@ export const Route = createFileRoute("/consent")({
 const SCOPE_LABELS = {
   "stella:search": "consent.scopeSearch",
   "stella:read": "consent.scopeRead",
+  "stella:templates": "consent.scopeTemplates",
   "stella:skills": "consent.scopeSkills",
   "stella:external_mcps": "consent.scopeExternalMcps",
   "stella:search_anonymized": "consent.scopeSearchAnonymized",
