@@ -124,6 +124,9 @@ const buildFieldXml = (field: FieldMeta): string => {
   if (field.label !== undefined) {
     attrs.push(`label="${escapeXml(field.label)}"`);
   }
+  if (field.hint !== undefined) {
+    attrs.push(`hint="${escapeXml(field.hint)}"`);
+  }
   if (field.inputType) {
     attrs.push(`inputType="${escapeXml(field.inputType)}"`);
   }
@@ -314,6 +317,10 @@ const parseFieldMeta = (el: slimdom.Element): FieldMeta => {
   const field: FieldMeta = { path };
   if (label !== undefined) {
     field.label = label;
+  }
+  const hint = el.getAttribute("hint");
+  if (hint !== null) {
+    field.hint = hint;
   }
   if (inputType) {
     field.inputType = inputType;
@@ -674,6 +681,7 @@ export const mergeManifestWithDiscovery = (
         kind: inputTypeToFieldKind(f.inputType),
         count: 0,
         label: f.label,
+        hint: f.hint,
         inputType: f.inputType,
         options: f.options,
         validation: f.validation,
@@ -713,6 +721,9 @@ const mergeField = (
   if (meta) {
     if (meta.label !== undefined) {
       resolved.label = meta.label;
+    }
+    if (meta.hint !== undefined) {
+      resolved.hint = meta.hint;
     }
     if (meta.inputType) {
       resolved.inputType = meta.inputType;
