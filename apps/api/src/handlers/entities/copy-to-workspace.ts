@@ -7,12 +7,12 @@ import type { SafeDb } from "@/api/db";
 import { entities, workspaces } from "@/api/db/schema";
 import type { EntitySnapshot } from "@/api/handlers/entities/copy-utils";
 import {
+  collectFileMappings,
   copyEntities,
   getFolderSubtree,
+  remapFileIds,
+  rollbackS3Copies,
 } from "@/api/handlers/entities/copy-utils";
-import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
-import { thumbnailDerivativeStateForFile } from "@/api/handlers/files/image-derivative";
-import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -39,14 +39,6 @@ const copyToWorkspaceBodySchema = t.Object({
 });
 
 type CopyToWorkspaceBody = Static<typeof copyToWorkspaceBodySchema>;
-
-type FileMapping = {
-  sourceKey: string;
-  targetKey: string;
-  newFileId: string;
-  sourceFileId: string;
-  mimeType: string;
-};
 
 type CopyToWorkspaceHandlerProps = {
   safeDb: SafeDb;
@@ -82,113 +74,6 @@ const collectPropertyIds = (
 };
 
 /**
- * Collect all file mappings from entities for S3 copy.
- * Creates new file IDs for the target workspace.
- */
-const collectFileMappings = (
-  sourceEntities: EntitySnapshot[],
-  organizationId: SafeId<"organization">,
-  sourceWorkspaceId: SafeId<"workspace">,
-  targetWorkspaceId: SafeId<"workspace">,
-): FileMapping[] => {
-  const mappings: FileMapping[] = [];
-
-  for (const entity of sourceEntities) {
-    if (!entity.currentVersion) {
-      continue;
-    }
-    for (const field of entity.currentVersion.fields) {
-      if (field.content.type === "file" && field.content.id) {
-        const newFileId = Bun.randomUUIDv7();
-        const { mimeType } = field.content;
-        mappings.push({
-          sourceFileId: field.content.id,
-          newFileId,
-          mimeType,
-          sourceKey: createFileKey({
-            organizationId,
-            workspaceId: sourceWorkspaceId,
-            fileId: field.content.id,
-            mimeType,
-          }),
-          targetKey: createFileKey({
-            organizationId,
-            workspaceId: targetWorkspaceId,
-            fileId: newFileId,
-            mimeType,
-          }),
-        });
-      }
-    }
-  }
-
-  return mappings;
-};
-
-/**
- * Remap file IDs in entity snapshots for cross-workspace copy.
- * S3 keys include workspaceId, so files copied to another workspace
- * get new IDs. This updates field content to reference those new IDs
- * and resets PDF derivative state (each workspace needs its own).
- */
-const remapFileIds = (
-  sourceEntities: EntitySnapshot[],
-  fileMappings: FileMapping[],
-): EntitySnapshot[] => {
-  const idMap = new Map(fileMappings.map((m) => [m.sourceFileId, m.newFileId]));
-
-  return sourceEntities.map((entity) => {
-    if (!entity.currentVersion) {
-      return entity;
-    }
-
-    const remappedFields = entity.currentVersion.fields.map((field) => {
-      if (field.content.type !== "file" || !field.content.id) {
-        return field;
-      }
-
-      const newFileId = idMap.get(field.content.id);
-      if (!newFileId) {
-        return field;
-      }
-
-      const {
-        pdfDerivative: _pdfDerivative,
-        placeholder: _placeholder,
-        thumbnailDerivative: _thumbnailDerivative,
-        ...restContent
-      } = field.content;
-
-      return {
-        ...field,
-        content: {
-          ...restContent,
-          id: newFileId,
-          pdfFileId: null,
-          pdfDerivative: pdfDerivativeStateForFile({
-            encrypted: field.content.encrypted,
-            mimeType: field.content.mimeType,
-          }),
-          thumbnailFileId: null,
-          thumbnailDerivative: thumbnailDerivativeStateForFile({
-            encrypted: field.content.encrypted,
-            mimeType: field.content.mimeType,
-          }),
-        },
-      };
-    });
-
-    return {
-      ...entity,
-      currentVersion: {
-        ...entity.currentVersion,
-        fields: remappedFields,
-      },
-    };
-  });
-};
-
-/**
  * Remap property IDs in entity snapshots for cross-workspace copy.
  * Properties are workspace-scoped, so we match by name+type and remap
  * to the target workspace's property IDs. Fields with no matching
@@ -220,21 +105,6 @@ const remapPropertyIds = (
       },
     };
   });
-
-/**
- * Best-effort cleanup of S3 keys. Failures are silently ignored
- * since this is rollback/cleanup code.
- */
-const rollbackS3Copies = async (keys: string[]): Promise<void> => {
-  const s3 = getS3();
-  await Promise.all(
-    keys.map(async (key) => {
-      await s3.delete(key).catch(() => {
-        // Intentional no-op: best-effort cleanup
-      });
-    }),
-  );
-};
 
 const copyToWorkspaceHandler = async function* ({
   safeDb,
@@ -397,12 +267,12 @@ const copyToWorkspaceHandler = async function* ({
 
   // Collect file mappings for S3 copy after property remapping, so
   // files from dropped fields do not leave orphaned target objects.
-  const fileMappings = collectFileMappings(
-    propertyRemappedEntities,
+  const fileMappings = collectFileMappings({
+    sourceEntities: propertyRemappedEntities,
     organizationId,
     sourceWorkspaceId,
     targetWorkspaceId,
-  );
+  });
 
   // S3 copy phase: copy all files before DB transaction
   const s3 = getS3();

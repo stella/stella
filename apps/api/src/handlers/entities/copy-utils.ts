@@ -3,6 +3,9 @@ import { and, eq, isNull, like } from "drizzle-orm";
 import type { Transaction } from "@/api/db";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
+import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
+import { thumbnailDerivativeStateForFile } from "@/api/handlers/files/image-derivative";
+import { createFileKey } from "@/api/handlers/files/utils";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -10,6 +13,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
+import { getS3 } from "@/api/lib/s3";
 
 export type EntityFieldSnapshot = {
   propertyId: SafeId<"property">;
@@ -41,6 +45,145 @@ export type CopiedFileField = {
   fieldId: SafeId<"field">;
   mimeType: string;
   encrypted: boolean;
+};
+
+export type FileMapping = {
+  sourceKey: string;
+  targetKey: string;
+  newFileId: string;
+  sourceFileId: string;
+  mimeType: string;
+};
+
+type CollectFileMappingsOptions = {
+  sourceEntities: EntitySnapshot[];
+  organizationId: SafeId<"organization">;
+  sourceWorkspaceId: SafeId<"workspace">;
+  targetWorkspaceId: SafeId<"workspace">;
+};
+
+/**
+ * Collect all file mappings from entities for S3 copy.
+ * Creates new file IDs for the copies. Copies must never share
+ * storage objects with their source: S3 keys are derived from the
+ * file ID, and entity deletion deletes the underlying objects, so a
+ * shared ID would let deleting the copy destroy the original's file.
+ */
+export const collectFileMappings = ({
+  sourceEntities,
+  organizationId,
+  sourceWorkspaceId,
+  targetWorkspaceId,
+}: CollectFileMappingsOptions): FileMapping[] => {
+  const mappings: FileMapping[] = [];
+
+  for (const entity of sourceEntities) {
+    if (!entity.currentVersion) {
+      continue;
+    }
+    for (const field of entity.currentVersion.fields) {
+      if (field.content.type === "file" && field.content.id) {
+        const newFileId = Bun.randomUUIDv7();
+        const { mimeType } = field.content;
+        mappings.push({
+          sourceFileId: field.content.id,
+          newFileId,
+          mimeType,
+          sourceKey: createFileKey({
+            organizationId,
+            workspaceId: sourceWorkspaceId,
+            fileId: field.content.id,
+            mimeType,
+          }),
+          targetKey: createFileKey({
+            organizationId,
+            workspaceId: targetWorkspaceId,
+            fileId: newFileId,
+            mimeType,
+          }),
+        });
+      }
+    }
+  }
+
+  return mappings;
+};
+
+/**
+ * Remap file IDs in entity snapshots so copied fields reference the
+ * new S3 objects, and reset PDF/thumbnail derivative state (each copy
+ * generates its own derivatives).
+ */
+export const remapFileIds = (
+  sourceEntities: EntitySnapshot[],
+  fileMappings: FileMapping[],
+): EntitySnapshot[] => {
+  const idMap = new Map(fileMappings.map((m) => [m.sourceFileId, m.newFileId]));
+
+  return sourceEntities.map((entity) => {
+    if (!entity.currentVersion) {
+      return entity;
+    }
+
+    const remappedFields = entity.currentVersion.fields.map((field) => {
+      if (field.content.type !== "file" || !field.content.id) {
+        return field;
+      }
+
+      const newFileId = idMap.get(field.content.id);
+      if (!newFileId) {
+        return field;
+      }
+
+      const {
+        pdfDerivative: _pdfDerivative,
+        placeholder: _placeholder,
+        thumbnailDerivative: _thumbnailDerivative,
+        ...restContent
+      } = field.content;
+
+      return {
+        ...field,
+        content: {
+          ...restContent,
+          id: newFileId,
+          pdfFileId: null,
+          pdfDerivative: pdfDerivativeStateForFile({
+            encrypted: field.content.encrypted,
+            mimeType: field.content.mimeType,
+          }),
+          thumbnailFileId: null,
+          thumbnailDerivative: thumbnailDerivativeStateForFile({
+            encrypted: field.content.encrypted,
+            mimeType: field.content.mimeType,
+          }),
+        },
+      };
+    });
+
+    return {
+      ...entity,
+      currentVersion: {
+        ...entity.currentVersion,
+        fields: remappedFields,
+      },
+    };
+  });
+};
+
+/**
+ * Best-effort cleanup of S3 keys. Failures are silently ignored
+ * since this is rollback/cleanup code.
+ */
+export const rollbackS3Copies = async (keys: string[]): Promise<void> => {
+  const s3 = getS3();
+  await Promise.all(
+    keys.map(async (key) => {
+      await s3.delete(key).catch(() => {
+        // Intentional no-op: best-effort cleanup
+      });
+    }),
+  );
 };
 
 /** Escape regex metacharacters. */
