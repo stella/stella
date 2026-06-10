@@ -2151,6 +2151,7 @@
       "mirrorBlockOffer": "Wrap the matching lines in the parallel cell too?",
       "mirrorFieldRationale": "Use the same field for the matching phrase in the parallel column.",
       "namePlaceholder": "name",
+      "newField": "New field",
       "prepareWithAi": "Prepare with AI",
       "questions": "Questions",
       "recipeSaveFailed": "Failed to save recipe",

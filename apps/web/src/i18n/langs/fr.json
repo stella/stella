@@ -2151,6 +2151,7 @@
       "mirrorBlockOffer": "Encadrer aussi les lignes correspondantes dans la cellule parallèle ?",
       "mirrorFieldRationale": "Utiliser le même champ pour la phrase correspondante dans la colonne parallèle.",
       "namePlaceholder": "nom",
+      "newField": "Nouveau champ",
       "prepareWithAi": "Préparer avec l'IA",
       "questions": "Questions",
       "recipeSaveFailed": "Impossible d'enregistrer la recette",

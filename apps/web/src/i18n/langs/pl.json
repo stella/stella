@@ -2151,6 +2151,7 @@
       "mirrorBlockOffer": "Objąć odpowiadające wiersze także w równoległej komórce?",
       "mirrorFieldRationale": "Użyj tego samego pola dla odpowiadającego fragmentu w równoległej kolumnie.",
       "namePlaceholder": "nazwa",
+      "newField": "Nowe pole",
       "prepareWithAi": "Przygotuj z AI",
       "questions": "Pytania",
       "recipeSaveFailed": "Nie udało się zapisać przepisu",

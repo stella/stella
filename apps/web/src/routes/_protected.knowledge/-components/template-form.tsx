@@ -1267,7 +1267,12 @@ export const TemplateForm = ({
   const t = useTranslations();
   // Formula fields are derived server-side at fill time, never user-entered:
   // the form renders no input for them and submits no value.
-  const fields = allFields.filter((f) => f.formula === undefined);
+  // Derived fields never render as inputs: formulas compute from other
+  // values, and AI-drafted fields (aiPrompt) are written by the model at
+  // fill time.
+  const fields = allFields.filter(
+    (f) => f.formula === undefined && f.aiPrompt === undefined,
+  );
   const [values, setValues] = useState<FormValues>(() =>
     buildInitialValues(fields),
   );

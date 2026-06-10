@@ -2061,7 +2061,7 @@ type Messages = {
     "fieldLabel": "Label";
     "fieldLabelPlaceholder": "e.g. Full Name";
     "fieldLookupAiFormat": "AI format instruction";
-    "fieldLookupAiFormatHint": "AI writes the company details following this instruction; leave it empty for a plain name and seat.";
+    "fieldLookupAiFormatHint": "Tokens in [brackets] are filled from the register. AI rewording applies only when the field is Person + AI.";
     "fieldLookupAiFormatPlaceholder": "[company name], with its registered seat in [seat], KRS no. [number]";
     "fieldLookupInsertDetail": "Insert a company detail";
     "fieldLookupRegistry": "Company register";
@@ -2154,6 +2154,7 @@ type Messages = {
       "mirrorBlockOffer": "Wrap the matching lines in the parallel cell too?";
       "mirrorFieldRationale": "Use the same field for the matching phrase in the parallel column.";
       "namePlaceholder": "name";
+      "newField": "New field";
       "prepareWithAi": "Prepare with AI";
       "questions": "Questions";
       "recipeSaveFailed": "Failed to save recipe";

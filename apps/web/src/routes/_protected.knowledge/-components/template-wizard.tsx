@@ -1054,7 +1054,7 @@ const CompanyLookupConfig = ({
       </Field>
 
       <Field>
-        <FieldLabel>{t("templates.fieldLookupAiFormat")}</FieldLabel>
+        <FieldLabel>{t("templates.fieldFormat")}</FieldLabel>
         <FieldControl
           render={
             <Textarea
