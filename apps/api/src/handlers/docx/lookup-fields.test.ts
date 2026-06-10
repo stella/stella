@@ -42,9 +42,11 @@ const KRS_HIT: BusinessRegistryHit = {
   registryUrl: "https://example.invalid/krs/0000592109",
 };
 
+// An empty default template falls back to the deterministic "name, address"
+// rendering of the hit.
 const krsField: FieldMeta = {
   path: "buyer_krs",
-  lookup: { registry: "krs" },
+  lookup: { registry: "krs", formats: [{ key: "output_1", template: "" }] },
 };
 
 const hitResolver =
@@ -258,7 +260,15 @@ describe("resolveLookupFields", () => {
   test("replaces a nested value where resolvePath found it", async () => {
     const result = await resolveLookupFields({
       values: { buyer: { krs: "0000592109" } },
-      fields: [{ path: "buyer.krs", lookup: { registry: "krs" } }],
+      fields: [
+        {
+          path: "buyer.krs",
+          lookup: {
+            registry: "krs",
+            formats: [{ key: "output_1", template: "" }],
+          },
+        },
+      ],
       resolve: hitResolver(KRS_HIT),
     });
     expect(result.ok).toBe(true);
@@ -281,7 +291,9 @@ describe("resolveLookupFields", () => {
           aiAdapt: true,
           lookup: {
             registry: "krs",
-            aiFormat: "[company name], seat: [seat]",
+            formats: [
+              { key: "output_1", template: "[company name], seat: [seat]" },
+            ],
           },
         },
       ],
@@ -303,7 +315,12 @@ describe("resolveLookupFields", () => {
           path: "buyer_krs",
           lookup: {
             registry: "krs",
-            aiFormat: "**[company name]**, with its seat in *[seat]*",
+            formats: [
+              {
+                key: "output_1",
+                template: "**[company name]**, with its seat in *[seat]*",
+              },
+            ],
           },
         },
       ],
@@ -334,8 +351,10 @@ describe("resolveLookupFields", () => {
           path: "company",
           lookup: {
             registry: "krs",
-            aiFormat: "[company name]",
+            // The first format is the default for the bare {{company}} marker;
+            // the rest are keyed {{company.<key>}}.
             formats: [
+              { key: "output_1", template: "[company name]" },
               { key: "full", template: "[company name], seat in [seat]" },
               { key: "short", template: "[company name]" },
             ],
@@ -349,7 +368,7 @@ describe("resolveLookupFields", () => {
     });
     expect(result.ok).toBe(true);
     if (result.ok) {
-      // The default marker {{company}} keeps the aiFormat rendering.
+      // The default marker {{company}} renders the first format.
       expect(result.values["company"]).toBe("Żabka Polska sp. z o.o.");
       // Each named format renders the same hit through its own template,
       // addressed by a flat dotted key matching the {{company.<key>}} marker.
@@ -370,7 +389,10 @@ describe("resolveLookupFields", () => {
           path: "company",
           lookup: {
             registry: "krs",
-            formats: [{ key: "full", template: "[company name], [seat]" }],
+            formats: [
+              { key: "output_1", template: "[company name]" },
+              { key: "full", template: "[company name], [seat]" },
+            ],
           },
         },
       ],
@@ -395,7 +417,10 @@ describe("resolveLookupFields", () => {
           path: "company",
           lookup: {
             registry: "krs",
-            formats: [{ key: "full", template: "**[company name]**" }],
+            formats: [
+              { key: "output_1", template: "[company name]" },
+              { key: "full", template: "**[company name]**" },
+            ],
           },
         },
       ],
@@ -422,7 +447,12 @@ describe("resolveLookupFields", () => {
           aiAdapt: true,
           lookup: {
             registry: "krs",
-            aiFormat: "**[company name]**, seat: [seat]",
+            formats: [
+              {
+                key: "output_1",
+                template: "**[company name]**, seat: [seat]",
+              },
+            ],
           },
         },
       ],

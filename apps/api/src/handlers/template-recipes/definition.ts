@@ -5,6 +5,9 @@ import { isFieldPath } from "@stll/template-conditions";
 import {
   DATE_FORMAT_STYLES,
   INPUT_TYPES,
+  isLookupFormatKey,
+  LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH,
+  LOOKUP_FORMATS_MAX,
   LOOKUP_REGISTRIES,
 } from "@/api/handlers/docx/types";
 import { LIMITS } from "@/api/lib/limits";
@@ -40,9 +43,18 @@ const recipeFieldPartSchema = v.strictObject({
   pattern: v.optional(v.pipe(v.string(), v.maxLength(512))),
 });
 
+const recipeLookupFormatSchema = v.strictObject({
+  key: v.pipe(v.string(), v.check(isLookupFormatKey, "Invalid format key")),
+  template: v.pipe(v.string(), v.maxLength(LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH)),
+});
+
 const recipeLookupSchema = v.strictObject({
   registry: v.picklist(LOOKUP_REGISTRIES),
-  aiFormat: v.optional(v.pipe(v.string(), v.maxLength(2000))),
+  formats: v.pipe(
+    v.array(recipeLookupFormatSchema),
+    v.minLength(1),
+    v.maxLength(LOOKUP_FORMATS_MAX),
+  ),
 });
 
 const recipeFieldSchema = v.pipe(

@@ -90,30 +90,41 @@ describe("isFieldMeta", () => {
     expect(isFieldMeta({ path: "lead_party", optionsFrom: 7 })).toBe(false);
   });
 
-  test("accepts a lookup with a supported registry, aiFormat optional", () => {
-    expect(
-      isFieldMeta({ path: "buyer_krs", lookup: { registry: "krs" } }),
-    ).toBe(true);
+  test("accepts a lookup with a supported registry and at least one format", () => {
     expect(
       isFieldMeta({
         path: "buyer_krs",
-        lookup: { registry: "krs", aiFormat: "[name], KRS [number]" },
+        lookup: {
+          registry: "krs",
+          formats: [{ key: "output_1", template: "[name], KRS [number]" }],
+        },
       }),
     ).toBe(true);
   });
 
-  test("rejects a lookup with an unsupported registry or bad shape", () => {
+  test("rejects a lookup with an unsupported registry, bad shape, or no format", () => {
     expect(
-      isFieldMeta({ path: "buyer_krs", lookup: { registry: "unknown" } }),
+      isFieldMeta({
+        path: "buyer_krs",
+        lookup: {
+          registry: "unknown",
+          formats: [{ key: "output_1", template: "x" }],
+        },
+      }),
     ).toBe(false);
     expect(isFieldMeta({ path: "buyer_krs", lookup: { registry: 7 } })).toBe(
       false,
     );
     expect(isFieldMeta({ path: "buyer_krs", lookup: "krs" })).toBe(false);
+    // The formats list is the sole carrier of renderings: an empty or absent
+    // list is not a valid lookup.
+    expect(
+      isFieldMeta({ path: "buyer_krs", lookup: { registry: "krs" } }),
+    ).toBe(false);
     expect(
       isFieldMeta({
         path: "buyer_krs",
-        lookup: { registry: "krs", aiFormat: 7 },
+        lookup: { registry: "krs", formats: [] },
       }),
     ).toBe(false);
   });

@@ -265,16 +265,19 @@ export type LookupRegistry = (typeof LOOKUP_REGISTRIES)[number];
  */
 /**
  * One named output format for a lookup field (see {@link FieldLookup.formats}).
- * The author enters the registry number once; each named format renders the
- * SAME resolved hit through its own [token] template, addressed by a dotted
- * marker `{{path.key}}` in the document.
+ * The author enters the registry number once; each format renders the SAME
+ * resolved hit through its own [token] template. The FIRST format is the
+ * default, addressed by the bare marker `{{path}}`; every later format is
+ * addressed by a dotted marker `{{path.key}}` in the document.
  */
 export type FieldLookupFormat = {
-  /** Marker segment after the field path: `{{company.<key>}}`. Validated like
-   *  a single field-path segment (letters, digits, underscore, dash; no dots). */
+  /** Marker segment after the field path: `{{company.<key>}}` (the first
+   *  format is the default and is addressed by the bare `{{company}}`).
+   *  Validated like a single field-path segment (letters, digits, underscore,
+   *  dash; no dots). */
   key: string;
-  /** [token]-substituted template rendered against the hit, same grammar as
-   *  {@link FieldLookup.aiFormat} (supports `**bold**` / `*italic*`). */
+  /** [token]-substituted template rendered against the hit (supports
+   *  `**bold**` / `*italic*`). */
   template: string;
 };
 
@@ -295,20 +298,13 @@ export const isLookupFormatKey = (value: string): boolean =>
 export type FieldLookup = {
   registry: LookupRegistry;
   /**
-   * Optional format template rendered deterministically from the registry
-   * hit: [token] slots are substituted from the hit (e.g. "[company name],
-   * with its seat in [seat], KRS [registry number]"). Without it a
-   * deterministic "name, seat" rendering is used. This is the DEFAULT/base
-   * format for the bare `{{path}}` marker.
+   * Named renderings of the registry hit. The registry is resolved once per
+   * fill; every format renders that one hit through its own [token] template
+   * (e.g. "[company name], with its seat in [seat], KRS [registry number]").
+   * Always non-empty: the FIRST format is the default for the bare `{{path}}`
+   * marker; every later format is addressed by a dotted marker `{{path.key}}`.
    */
-  aiFormat?: string | undefined;
-  /**
-   * Additional named renderings of the SAME registry hit, each addressed by a
-   * dotted marker `{{path.key}}`. The registry is resolved once per fill; every
-   * declared format renders that one hit through its own template. Distinct
-   * from {@link aiFormat}, which is the default for the bare `{{path}}` marker.
-   */
-  formats?: FieldLookupFormat[] | undefined;
+  formats: FieldLookupFormat[];
 };
 
 export const isFieldLookupFormat = (
@@ -496,11 +492,10 @@ export const isFieldDateFormat = (value: unknown): value is FieldDateFormat =>
 export const isFieldLookup = (value: unknown): value is FieldLookup =>
   isRecordLike(value) &&
   isLookupRegistry(value["registry"]) &&
-  (value["aiFormat"] === undefined || typeof value["aiFormat"] === "string") &&
-  (value["formats"] === undefined ||
-    (Array.isArray(value["formats"]) &&
-      value["formats"].length <= LOOKUP_FORMATS_MAX &&
-      value["formats"].every(isFieldLookupFormat)));
+  Array.isArray(value["formats"]) &&
+  value["formats"].length >= 1 &&
+  value["formats"].length <= LOOKUP_FORMATS_MAX &&
+  value["formats"].every(isFieldLookupFormat);
 
 export const isFieldMeta = (value: unknown): value is FieldMeta => {
   if (!isRecordLike(value) || typeof value["path"] !== "string") {

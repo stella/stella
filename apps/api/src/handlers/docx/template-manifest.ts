@@ -117,25 +117,21 @@ const buildPartXml = (part: FieldPart): string => {
 };
 
 const buildLookupXml = (lookup: FieldLookup): string => {
-  const attrs: string[] = [`registry="${escapeXml(lookup.registry)}"`];
-  if (lookup.aiFormat !== undefined) {
-    attrs.push(`aiFormat="${escapeXml(lookup.aiFormat)}"`);
-  }
-  if (lookup.formats && lookup.formats.length > 0) {
-    const formatEls = lookup.formats
-      .map(
-        (f) =>
-          `<st:lookupFormat key="${escapeXml(f.key)}"` +
-          ` template="${escapeXml(f.template)}"/>`,
-      )
-      .join("");
-    return (
-      `<st:lookup ${attrs.join(" ")}>` +
-      `<st:lookupFormats>${formatEls}</st:lookupFormats>` +
-      "</st:lookup>"
-    );
-  }
-  return `<st:lookup ${attrs.join(" ")}/>`;
+  const registryAttr = `registry="${escapeXml(lookup.registry)}"`;
+  // The formats list is the sole carrier of renderings; the first child is the
+  // default for the bare marker, the rest are keyed `{{path.key}}` renderings.
+  const formatEls = lookup.formats
+    .map(
+      (f) =>
+        `<st:lookupFormat key="${escapeXml(f.key)}"` +
+        ` template="${escapeXml(f.template)}"/>`,
+    )
+    .join("");
+  return (
+    `<st:lookup ${registryAttr}>` +
+    `<st:lookupFormats>${formatEls}</st:lookupFormats>` +
+    "</st:lookup>"
+  );
 };
 
 const buildDateFormatXml = (dateFormat: FieldDateFormat): string =>
@@ -415,17 +411,13 @@ const parseFieldMeta = (el: slimdom.Element): FieldMeta => {
   if (lookupEl) {
     const registry = lookupEl.getAttribute("registry");
     if (registry !== null && isLookupRegistry(registry)) {
-      const lookup: FieldLookup = { registry };
-      const aiFormat = lookupEl.getAttribute("aiFormat");
-      if (aiFormat !== null) {
-        lookup.aiFormat = aiFormat;
-      }
-      // Named output formats round-trip nested under the lookup element. A
-      // hand-edited key outside the segment grammar, an over-long template, or
-      // a count past the cap is dropped so the isFieldLookup invariant holds.
+      // Output formats round-trip nested under the lookup element; the first
+      // child is the default for the bare marker. A hand-edited key outside the
+      // segment grammar or an over-long template is dropped, and a lookup with
+      // no valid format is itself dropped so the isFieldLookup invariant holds.
+      const formats: FieldLookupFormat[] = [];
       const formatsEl = getFirstElementChild(lookupEl, "lookupFormats");
       if (formatsEl) {
-        const formats: FieldLookupFormat[] = [];
         for (const formatEl of getElementChildren(formatsEl, "lookupFormat")) {
           const key = formatEl.getAttribute("key");
           const template = formatEl.getAttribute("template");
@@ -438,11 +430,13 @@ const parseFieldMeta = (el: slimdom.Element): FieldMeta => {
             formats.push({ key, template });
           }
         }
-        if (formats.length > 0) {
-          lookup.formats = formats.slice(0, LOOKUP_FORMATS_MAX);
-        }
       }
-      field.lookup = lookup;
+      if (formats.length > 0) {
+        field.lookup = {
+          registry,
+          formats: formats.slice(0, LOOKUP_FORMATS_MAX),
+        };
+      }
     }
   }
 

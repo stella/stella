@@ -1028,10 +1028,21 @@ describe("round-trip", () => {
           path: "buyer_krs",
           lookup: {
             registry: "krs",
-            aiFormat: "[name], with its seat in [seat], KRS [number]",
+            formats: [
+              {
+                key: "output_1",
+                template: "[name], with its seat in [seat], KRS [number]",
+              },
+            ],
           },
         },
-        { path: "seller_krs", lookup: { registry: "krs" } },
+        {
+          path: "seller_krs",
+          lookup: {
+            registry: "krs",
+            formats: [{ key: "output_1", template: "[name]" }],
+          },
+        },
       ],
       conditions: [],
     };
@@ -1041,9 +1052,17 @@ describe("round-trip", () => {
     const readBack = await readManifest(withManifest);
     expect(readBack?.fields.at(0)?.lookup).toEqual({
       registry: "krs",
-      aiFormat: "[name], with its seat in [seat], KRS [number]",
+      formats: [
+        {
+          key: "output_1",
+          template: "[name], with its seat in [seat], KRS [number]",
+        },
+      ],
     });
-    expect(readBack?.fields.at(1)?.lookup).toEqual({ registry: "krs" });
+    expect(readBack?.fields.at(1)?.lookup).toEqual({
+      registry: "krs",
+      formats: [{ key: "output_1", template: "[name]" }],
+    });
 
     // Hand-edited XML with a registry outside the supported set must not
     // leak past the parser.
@@ -1070,8 +1089,8 @@ describe("round-trip", () => {
           path: "company",
           lookup: {
             registry: "krs",
-            aiFormat: "[company name]",
             formats: [
+              { key: "output_1", template: "[company name]" },
               { key: "full", template: "[company name], seat in [seat]" },
               { key: "short", template: "**[company name]**" },
             ],
@@ -1086,8 +1105,8 @@ describe("round-trip", () => {
     const readBack = await readManifest(withManifest);
     expect(readBack?.fields.at(0)?.lookup).toEqual({
       registry: "krs",
-      aiFormat: "[company name]",
       formats: [
+        { key: "output_1", template: "[company name]" },
         { key: "full", template: "[company name], seat in [seat]" },
         { key: "short", template: "**[company name]**" },
       ],
@@ -1107,6 +1126,7 @@ describe("round-trip", () => {
     );
     const tamperedBack = await readManifest(tampered);
     expect(tamperedBack?.fields.at(0)?.lookup?.formats).toEqual([
+      { key: "output_1", template: "[company name]" },
       { key: "full", template: "[company name], seat in [seat]" },
     ]);
   });
@@ -1120,7 +1140,13 @@ describe("round-trip", () => {
           label: "Indexed rent",
           formula: "min(rent * (1 + index / 100), rent * 1.05)",
         },
-        { path: "seller_krs", lookup: { registry: "krs" } },
+        {
+          path: "seller_krs",
+          lookup: {
+            registry: "krs",
+            formats: [{ key: "output_1", template: "[name]" }],
+          },
+        },
       ],
       conditions: [],
     };
@@ -1152,7 +1178,10 @@ describe("round-trip", () => {
     );
     const tamperedBack = await readManifest(tampered);
     expect(tamperedBack?.fields.at(1)?.formula).toBeUndefined();
-    expect(tamperedBack?.fields.at(1)?.lookup).toEqual({ registry: "krs" });
+    expect(tamperedBack?.fields.at(1)?.lookup).toEqual({
+      registry: "krs",
+      formats: [{ key: "output_1", template: "[name]" }],
+    });
   });
 
   test("dateFormat round-trips; a hand-edited implausible locale is dropped", async () => {
@@ -1267,8 +1296,20 @@ describe("round-trip", () => {
     const manifest: TemplateManifest = {
       version: 1,
       fields: [
-        { path: "buyer_krs", lookup: { registry: "krs", aiFormat: "fmt" } },
-        { path: "manifest_only", lookup: { registry: "krs" } },
+        {
+          path: "buyer_krs",
+          lookup: {
+            registry: "krs",
+            formats: [{ key: "output_1", template: "fmt" }],
+          },
+        },
+        {
+          path: "manifest_only",
+          lookup: {
+            registry: "krs",
+            formats: [{ key: "output_1", template: "[name]" }],
+          },
+        },
       ],
       conditions: [],
     };
@@ -1283,9 +1324,12 @@ describe("round-trip", () => {
     const manifestOnly = resolved.find((f) => f.path === "manifest_only");
     expect(discoveredField?.lookup).toEqual({
       registry: "krs",
-      aiFormat: "fmt",
+      formats: [{ key: "output_1", template: "fmt" }],
     });
-    expect(manifestOnly?.lookup).toEqual({ registry: "krs" });
+    expect(manifestOnly?.lookup).toEqual({
+      registry: "krs",
+      formats: [{ key: "output_1", template: "[name]" }],
+    });
   });
 
   test("composite parts survive mergeManifestWithDiscovery", async () => {
