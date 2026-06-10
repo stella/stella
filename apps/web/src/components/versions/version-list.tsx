@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useLocale, useTranslations } from "use-intl";
 
+import { markerPattern } from "@stll/template-conditions";
 import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
 
@@ -29,10 +30,14 @@ export const VersionList = ({ children }: React.PropsWithChildren) => (
   <div className="flex flex-col gap-px p-1">{children}</div>
 );
 
-export type VersionDiffSegment = {
-  kind: "added" | "removed" | "unchanged" | "gap";
+export type VersionDiffRun = {
+  kind: "same" | "del" | "ins";
   text: string;
 };
+
+export type VersionDiffSegment =
+  | { kind: "added" | "removed" | "unchanged" | "gap"; text: string }
+  | { kind: "changed"; runs: VersionDiffRun[] };
 
 export type VersionRowAuthor = {
   name: string;
@@ -311,29 +316,123 @@ export const VersionDiffBlock = ({
     );
   }
   return (
-    <div className="bg-muted/50 max-h-64 overflow-y-auto rounded-md p-2 font-mono text-xs whitespace-pre-wrap">
+    <div className="bg-muted/50 flex max-h-64 flex-col gap-1 overflow-y-auto rounded-md px-2.5 py-2 text-xs leading-5 whitespace-pre-wrap">
       {state.value.map((segment, index) => (
-        <DiffSegmentLine key={index} segment={segment} />
+        <DiffSegmentParagraph key={index} segment={segment} />
       ))}
     </div>
   );
 };
 
-const DiffSegmentLine = ({ segment }: { segment: VersionDiffSegment }) => {
+// Track-changes styling, matched to folio's suggestion preview
+// (.folio-ai-suggestion--focused-original/-replacement): deletions
+// read as dimmed muted strikethrough with a faint destructive tint,
+// insertions as a low-saturation success wash with an inset ring.
+// color-mix over semantic tokens keeps both theme-aware without
+// importing folio's stylesheet.
+const DEL_STYLE: React.CSSProperties = {
+  color: "color-mix(in oklch, var(--destructive) 35%, var(--muted-foreground))",
+  textDecorationLine: "line-through",
+  textDecorationThickness: "1px",
+  textDecorationColor:
+    "color-mix(in oklch, var(--destructive) 30%, var(--muted-foreground))",
+};
+
+const INS_STYLE: React.CSSProperties = {
+  borderRadius: "3px",
+  padding: "0 2px",
+  backgroundColor: "color-mix(in oklch, var(--success) 14%, transparent)",
+  boxShadow:
+    "inset 0 0 0 1px color-mix(in oklch, var(--success) 28%, transparent)",
+  textDecorationLine: "none",
+  boxDecorationBreak: "clone",
+  WebkitBoxDecorationBreak: "clone",
+};
+
+const DiffSegmentParagraph = ({ segment }: { segment: VersionDiffSegment }) => {
   if (segment.kind === "gap") {
+    // The API elides long unchanged runs server-side and sends only the
+    // context lines, so this stays a quiet marker, not an expander.
     return (
-      <div aria-hidden="true" className="text-muted-foreground select-none">
-        ⋯
+      <div
+        aria-hidden="true"
+        className="text-foreground-placeholder text-center text-[10px] leading-3 tracking-[0.25em] select-none"
+      >
+        ···
       </div>
     );
   }
+  if (segment.kind === "changed") {
+    return (
+      <p>
+        {segment.runs.map((run, index) => (
+          <DiffRunSpan key={index} run={run} />
+        ))}
+      </p>
+    );
+  }
   if (segment.kind === "added") {
-    return <div className="text-success">{segment.text}</div>;
+    return (
+      <ins style={INS_STYLE}>
+        <MarkerAwareText text={segment.text} />
+      </ins>
+    );
   }
   if (segment.kind === "removed") {
-    return <div className="text-destructive line-through">{segment.text}</div>;
+    return (
+      <del style={DEL_STYLE}>
+        <MarkerAwareText text={segment.text} />
+      </del>
+    );
   }
-  return <div className="text-muted-foreground">{segment.text}</div>;
+  return (
+    <p className="text-muted-foreground">
+      <MarkerAwareText text={segment.text} />
+    </p>
+  );
+};
+
+const DiffRunSpan = ({ run }: { run: VersionDiffRun }) => {
+  if (run.kind === "del") {
+    return (
+      <del style={DEL_STYLE}>
+        <MarkerAwareText text={run.text} />
+      </del>
+    );
+  }
+  if (run.kind === "ins") {
+    return (
+      <ins style={INS_STYLE}>
+        <MarkerAwareText text={run.text} />
+      </ins>
+    );
+  }
+  return <MarkerAwareText text={run.text} />;
+};
+
+/** Renders text in the reading font, with `{{...}}` template markers
+ *  set off as inline mono code spans. */
+const MarkerAwareText = ({ text }: { text: string }) => {
+  const nodes: React.ReactNode[] = [];
+  let cursor = 0;
+  for (const match of text.matchAll(markerPattern())) {
+    if (match.index > cursor) {
+      nodes.push(text.slice(cursor, match.index));
+    }
+    nodes.push(
+      <code className="font-mono text-[11px]" key={match.index}>
+        {match[0]}
+      </code>,
+    );
+    cursor = match.index + match[0].length;
+  }
+  if (nodes.length === 0) {
+    return text;
+  }
+  if (cursor < text.length) {
+    nodes.push(text.slice(cursor));
+  }
+  return nodes;
 };
 
 // ── AI summary block ─────────────────────────────────
