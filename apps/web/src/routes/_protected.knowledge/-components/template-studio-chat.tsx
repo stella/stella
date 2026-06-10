@@ -502,8 +502,6 @@ const TemplateStudioChatInner = ({
       scrollEditorToPos(view, anchor.from);
     }
   };
-  const focusSuggestionEvent = useEffectEvent(focusSuggestion);
-
   const orderedPending = useMemo(
     () =>
       suggestions
@@ -550,19 +548,11 @@ const TemplateStudioChatInner = ({
     }
   };
 
-  // When a tool call lands new suggestions, jump to the first fresh one
-  // so the in-document review starts immediately.
-  const seenSuggestionIdsRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    const seen = seenSuggestionIdsRef.current;
-    const fresh = orderedPending.find((s) => !seen.has(s.id));
-    for (const s of orderedPending) {
-      seen.add(s.id);
-    }
-    if (fresh) {
-      focusSuggestionEvent(fresh.id);
-    }
-  }, [orderedPending]);
+  // Arriving suggestions never scroll or steal focus: with progressive
+  // placement they land one by one while the input streams, and jumping
+  // to each would whip the document around. The editor moves only on an
+  // explicit card click or the stepper's prev/next; until then the
+  // stepper simply counts up and rests on the first pending suggestion.
 
   // ---- chat session -----------------------------------------------------------
 
