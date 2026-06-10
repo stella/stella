@@ -12,6 +12,7 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 const describeStoredTemplateMock = mock();
 const fillStoredTemplateWithTextMock = mock();
 const createStoredTemplateMock = mock();
+const configureTemplateFieldsMock = mock();
 const validateDocxBufferMock = mock();
 const loadOrgAIConfigMock = mock();
 const captureErrorMock = mock();
@@ -22,14 +23,26 @@ void mock.module("@/api/lib/analytics", () => ({
   getAnalytics: () => ({ capture: mock(), flush: mock(async () => undefined) }),
 }));
 
+// Stub every export this service has, not only the two the MCP tools use, so
+// the module mock stays complete when another test file that imports the other
+// fill helpers (e.g. the chat template tools) is run in the same process.
 void mock.module("@/api/handlers/templates/template-fill-service", () => ({
   describeStoredTemplate: describeStoredTemplateMock,
   fillStoredTemplateWithText: fillStoredTemplateWithTextMock,
+  fillStoredTemplate: mock(),
+  fillStoredTemplateDocx: mock(),
 }));
 
 void mock.module("@/api/handlers/templates/create-template-service", () => ({
   createStoredTemplate: createStoredTemplateMock,
 }));
+
+void mock.module(
+  "@/api/handlers/templates/configure-template-fields-service",
+  () => ({
+    configureTemplateFields: configureTemplateFieldsMock,
+  }),
+);
 
 void mock.module("@/api/handlers/entities/validate-docx-buffer", () => ({
   validateDocxBuffer: validateDocxBufferMock,
@@ -98,6 +111,7 @@ describe("MCP template tools", () => {
     describeStoredTemplateMock.mockReset();
     fillStoredTemplateWithTextMock.mockReset();
     createStoredTemplateMock.mockReset();
+    configureTemplateFieldsMock.mockReset();
     validateDocxBufferMock.mockReset();
     loadOrgAIConfigMock.mockReset();
     loadOrgAIConfigMock.mockResolvedValue(null);
@@ -116,6 +130,7 @@ describe("MCP template tools", () => {
     expect(names).toContain("describe_template");
     expect(names).toContain("fill_template");
     expect(names).toContain("create_template");
+    expect(names).toContain("configure_template_fields");
     expect(names).toContain("template_marker_reference");
 
     for (const name of [
@@ -123,6 +138,7 @@ describe("MCP template tools", () => {
       "describe_template",
       "fill_template",
       "create_template",
+      "configure_template_fields",
       "template_marker_reference",
     ]) {
       expect((await getMcpToolDefinition(name, createContext()))?.scope).toBe(
@@ -137,6 +153,7 @@ describe("MCP template tools", () => {
     );
     expect(names).not.toContain("list_templates");
     expect(names).not.toContain("create_template");
+    expect(names).not.toContain("configure_template_fields");
     expect(names).not.toContain("template_marker_reference");
   });
 
@@ -202,7 +219,7 @@ describe("MCP template tools", () => {
     expect(parseToolPayload(result)).toEqual({ templates: rows });
   });
 
-  test("describe_template surfaces field hints and lookup formats", async () => {
+  test("describe_template surfaces the full field config for round-tripping", async () => {
     describeStoredTemplateMock.mockResolvedValue({
       name: "Company POA",
       fields: [
@@ -212,11 +229,48 @@ describe("MCP template tools", () => {
           inputType: "text",
           required: true,
           hint: "Enter the KRS number",
+          options: null,
           formats: [{ key: "default", template: "[name], KRS [krs]" }],
+          aiPrompt: null,
+          aiAdapt: false,
+          optionsFrom: null,
+          dateFormat: null,
+          parts: null,
+          format: null,
+        },
+        {
+          path: "scope",
+          label: "Scope",
+          inputType: "textarea",
+          required: false,
+          hint: null,
+          options: null,
+          formats: null,
+          aiPrompt: "Draft the scope of this power of attorney",
+          aiAdapt: false,
+          optionsFrom: null,
+          dateFormat: null,
+          parts: null,
+          format: null,
+        },
+        {
+          path: "role",
+          label: "Role",
+          inputType: "select",
+          required: false,
+          hint: null,
+          options: ["director", "proxy"],
+          formats: null,
+          aiPrompt: null,
+          aiAdapt: false,
+          optionsFrom: "parties",
+          dateFormat: null,
+          parts: null,
+          format: null,
         },
       ],
       conditions: [{ name: "isCorp", expression: "type == 'corp'" }],
-      computed: [],
+      computed: [{ name: "total", expression: "rent * 12" }],
     });
 
     const result = await handleMcpToolCall({
@@ -235,7 +289,15 @@ describe("MCP template tools", () => {
           hint: "Enter the KRS number",
           formats: [{ key: "default", template: "[name], KRS [krs]" }],
         }),
+        expect.objectContaining({
+          aiPrompt: "Draft the scope of this power of attorney",
+        }),
+        expect.objectContaining({
+          options: ["director", "proxy"],
+          optionsFrom: "parties",
+        }),
       ],
+      computed: [{ name: "total", expression: "rent * 12" }],
     });
   });
 
@@ -357,5 +419,208 @@ describe("MCP template tools", () => {
     expect(result.content).toEqual([{ type: "text", text: "Forbidden" }]);
     expect(validateDocxBufferMock).not.toHaveBeenCalled();
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
+  });
+
+  test("create_template passes a validated fields overlay (incl. a lookup field) to the service", async () => {
+    validateDocxBufferMock.mockResolvedValue({ valid: true });
+    createStoredTemplateMock.mockImplementation(async function* () {
+      yield* [];
+      return Result.ok({ id: "tmpl_new", name: "Company POA", fieldCount: 1 });
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        name: "Company POA",
+        docx_base64: Buffer.from("PK docx").toString("base64"),
+        fields: [
+          {
+            path: "company",
+            label: "Company",
+            inputType: "text",
+            required: true,
+            lookup: {
+              registry: "krs",
+              formats: [
+                { key: "default", template: "[name], KRS [krs]" },
+                { key: "address", template: "[seat]" },
+              ],
+            },
+          },
+        ],
+      },
+      context: createContext(),
+      toolName: "create_template",
+    });
+
+    expect(result.isError).toBeFalsy();
+    expect(createStoredTemplateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clientManifest: {
+          fields: [
+            expect.objectContaining({
+              path: "company",
+              lookup: {
+                registry: "krs",
+                formats: [
+                  { key: "default", template: "[name], KRS [krs]" },
+                  { key: "address", template: "[seat]" },
+                ],
+              },
+            }),
+          ],
+        },
+      }),
+    );
+  });
+
+  test("create_template rejects a malformed field config before inserting", async () => {
+    validateDocxBufferMock.mockResolvedValue({ valid: true });
+
+    const result = await handleMcpToolCall({
+      args: {
+        name: "NDA",
+        docx_base64: Buffer.from("PK docx").toString("base64"),
+        // formula is mutually exclusive with aiPrompt, so isFieldMeta rejects it.
+        fields: [{ path: "fee", formula: "rent * 12", aiPrompt: "draft it" }],
+      },
+      context: createContext(),
+      toolName: "create_template",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(createStoredTemplateMock).not.toHaveBeenCalled();
+    const message = result.content.at(0);
+    expect(message?.type === "text" && message.text).toContain("fields[0]");
+  });
+
+  test("create_template surfaces the service's unknown-path rejection", async () => {
+    validateDocxBufferMock.mockResolvedValue({ valid: true });
+    createStoredTemplateMock.mockImplementation(async function* () {
+      yield* [];
+      return Result.err({
+        message: 'No field "ghost" was discovered in the DOCX.',
+      });
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        name: "NDA",
+        docx_base64: Buffer.from("PK docx").toString("base64"),
+        fields: [{ path: "ghost", label: "Ghost" }],
+      },
+      context: createContext(),
+      toolName: "create_template",
+    });
+
+    expect(result.isError).toBe(true);
+    const message = result.content.at(0);
+    expect(message?.type === "text" && message.text).toContain("ghost");
+  });
+
+  test("configure_template_fields applies the overlay and returns the updated fields", async () => {
+    configureTemplateFieldsMock.mockImplementation(async function* () {
+      yield* [];
+      return Result.ok({
+        manifest: { version: 1, fields: [], conditions: [] },
+      });
+    });
+    describeStoredTemplateMock.mockResolvedValue({
+      name: "Company POA",
+      fields: [
+        {
+          path: "company",
+          label: "Company",
+          inputType: "text",
+          required: true,
+          hint: null,
+          options: null,
+          formats: [{ key: "default", template: "[name], KRS [krs]" }],
+          aiPrompt: null,
+          aiAdapt: false,
+          optionsFrom: null,
+          dateFormat: null,
+          parts: null,
+          format: null,
+        },
+      ],
+      conditions: [],
+      computed: [],
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        template_id: "t1",
+        fields: [
+          {
+            path: "company",
+            lookup: {
+              registry: "krs",
+              formats: [{ key: "default", template: "[name], KRS [krs]" }],
+            },
+          },
+        ],
+      },
+      context: createContext(),
+      toolName: "configure_template_fields",
+    });
+
+    expect(result.isError).toBeFalsy();
+    expect(configureTemplateFieldsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        templateId: "t1",
+        organizationId: toSafeId<"organization">("org_1"),
+        fields: [
+          expect.objectContaining({
+            path: "company",
+            lookup: expect.objectContaining({ registry: "krs" }),
+          }),
+        ],
+      }),
+    );
+    // The tool echoes describe_template's shape so describe → configure round-trips.
+    expect(parseToolPayload(result)).toMatchObject({
+      name: "Company POA",
+      fields: [
+        expect.objectContaining({
+          path: "company",
+          formats: [{ key: "default", template: "[name], KRS [krs]" }],
+        }),
+      ],
+    });
+    expect(describeStoredTemplateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ templateId: "t1" }),
+    );
+  });
+
+  test("configure_template_fields rejects a config whose path is unknown", async () => {
+    configureTemplateFieldsMock.mockImplementation(async function* () {
+      yield* [];
+      return Result.err({
+        message: 'No field "ghost" in this template.',
+      });
+    });
+
+    const result = await handleMcpToolCall({
+      args: { template_id: "t1", fields: [{ path: "ghost", label: "Ghost" }] },
+      context: createContext(),
+      toolName: "configure_template_fields",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(describeStoredTemplateMock).not.toHaveBeenCalled();
+    const message = result.content.at(0);
+    expect(message?.type === "text" && message.text).toContain("ghost");
+  });
+
+  test("configure_template_fields forbids members without template:create permission", async () => {
+    const result = await handleMcpToolCall({
+      args: { template_id: "t1", fields: [{ path: "company" }] },
+      context: createContext({ memberRole: "intern" }),
+      toolName: "configure_template_fields",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content).toEqual([{ type: "text", text: "Forbidden" }]);
+    expect(configureTemplateFieldsMock).not.toHaveBeenCalled();
   });
 });

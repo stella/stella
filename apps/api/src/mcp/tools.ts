@@ -49,6 +49,10 @@ const MCP_TOOL_HANDLERS = new Map<string, McpToolHandler>([
   ["fill_template", TEMPLATE_TOOL_HANDLERS.fill_template],
   ["create_template", TEMPLATE_TOOL_HANDLERS.create_template],
   [
+    "configure_template_fields",
+    TEMPLATE_TOOL_HANDLERS.configure_template_fields,
+  ],
+  [
     "template_marker_reference",
     TEMPLATE_TOOL_HANDLERS.template_marker_reference,
   ],
