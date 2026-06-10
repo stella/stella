@@ -37,14 +37,20 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import { MatterTargetPicker } from "@/components/matter-target-picker";
+import type { MatterTarget } from "@/components/matter-target-picker";
+import Tooltip from "@/components/tooltip";
 import { api } from "@/lib/api";
 import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
 import { userErrorMessage } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 
 import {
   buildAutofillUpdates,
   groupSupportsRegistryAutofill,
 } from "./registry-autofill";
+import { TemplatePrefillPanel } from "./template-prefill-panel";
+import type { PrefillSuggestionDto } from "./template-prefill-panel";
 
 type FillFormat = "docx" | "pdf";
 
@@ -233,9 +239,29 @@ type ServerFillProps = TemplateFormBaseProps & {
   file?: undefined;
 };
 
+/** Where the filled document can land (server-side fill only): a fixed
+ *  matter (the form was opened from one) or a matter the user picks at the
+ *  end. Without it the form offers the existing downloads only. */
+type SaveTarget =
+  | {
+      kind: "matter";
+      workspaceId: string;
+      parentId?: string | null | undefined;
+      onCreated: (entityId: string) => void;
+    }
+  | {
+      kind: "chooseMatter";
+      onCreated: (created: { workspaceId: string; entityId: string }) => void;
+    };
+
 type TemplateFormProps = (TransientFillProps | ServerFillProps) & {
   /** Live values tap for hosts that preview the fill elsewhere. */
   onValuesChange?: (values: Record<string, unknown>) => void;
+  /** Persist the filled DOCX as a matter document (server-side fill only). */
+  saveTarget?: SaveTarget | undefined;
+  /** Show the AI "prefill from documents" panel (server-side fill only);
+   *  pass the current matter's id to also offer its stored documents. */
+  prefill?: { workspaceId?: string | undefined } | undefined;
 };
 
 type FormValues = Record<string, unknown>;
@@ -415,6 +441,29 @@ const RequiredIndicator = () => (
   <span className="text-destructive-foreground">{REQUIRED_MARKER}</span>
 );
 
+/** Wand badge on an AI-prefilled input; hovering shows the source snippet
+ *  that supports the proposed value. Clearing the value removes it. */
+const PrefillBadge = ({ snippet }: { snippet?: string | null | undefined }) => {
+  const t = useTranslations();
+  if (snippet === undefined) {
+    return null;
+  }
+  return (
+    <Tooltip
+      className="text-wrap"
+      content={snippet ?? t("templates.prefillBadgeLabel")}
+      render={
+        <span className="text-muted-foreground ms-1 inline-flex align-middle" />
+      }
+    >
+      <WandSparklesIcon
+        aria-label={t("templates.prefillBadgeLabel")}
+        className="size-3.5"
+      />
+    </Tooltip>
+  );
+};
+
 const FieldError = ({ message }: { message?: string | undefined }) => {
   if (!message) {
     return null;
@@ -468,6 +517,7 @@ const CompositeFieldRow = ({
   onChange,
   onBlur,
   error,
+  prefillSnippet,
 }: {
   field: ResolvedField;
   parts: CompositePart[];
@@ -477,6 +527,7 @@ const CompositeFieldRow = ({
   onChange: (path: string, value?: unknown) => void;
   onBlur?: ((path: string) => void) | undefined;
   error?: string | undefined;
+  prefillSnippet?: string | null | undefined;
 }) => {
   const partValues = readPartValues(value);
   const setPart = (key: string, partValue: string) =>
@@ -487,6 +538,7 @@ const CompositeFieldRow = ({
       <FieldLabel>
         {label}
         {required && <RequiredIndicator />}
+        <PrefillBadge snippet={prefillSnippet} />
       </FieldLabel>
       <div className="flex flex-wrap items-start gap-2">
         {parts.map((part) => {
@@ -550,6 +602,7 @@ const FieldRenderer = ({
   onBlur,
   error,
   derivedOptions,
+  prefillSnippet,
 }: {
   field: ResolvedField;
   value: unknown;
@@ -559,6 +612,9 @@ const FieldRenderer = ({
   /** Live options for a dependent (optionsFrom) select, derived by the form
    *  from the source field's current values; overrides `field.options`. */
   derivedOptions?: string[] | undefined;
+  /** Set when the value was AI-prefilled: the supporting source snippet
+   *  (null when the model gave none). Undefined hides the badge. */
+  prefillSnippet?: string | null | undefined;
 }) => {
   const locale = useLocale();
   const inputType =
@@ -579,6 +635,7 @@ const FieldRenderer = ({
         onBlur={onBlur}
         onChange={onChange}
         parts={parts}
+        prefillSnippet={prefillSnippet}
         required={required}
         value={value}
       />
@@ -599,6 +656,7 @@ const FieldRenderer = ({
           <FieldLabel>
             {label}
             {required && <RequiredIndicator />}
+            <PrefillBadge snippet={prefillSnippet} />
           </FieldLabel>
         </div>
         <FieldError message={error} />
@@ -619,6 +677,7 @@ const FieldRenderer = ({
         <FieldLabel>
           {label}
           {required && <RequiredIndicator />}
+          <PrefillBadge snippet={prefillSnippet} />
         </FieldLabel>
         <Select
           disabled={selectOptions.length === 0}
@@ -651,6 +710,7 @@ const FieldRenderer = ({
         <FieldLabel>
           {label}
           {required && <RequiredIndicator />}
+          <PrefillBadge snippet={prefillSnippet} />
         </FieldLabel>
         <FieldControl
           render={
@@ -674,6 +734,7 @@ const FieldRenderer = ({
         <FieldLabel>
           {label}
           {required && <RequiredIndicator />}
+          <PrefillBadge snippet={prefillSnippet} />
         </FieldLabel>
         <FieldControl
           render={
@@ -697,6 +758,7 @@ const FieldRenderer = ({
         <FieldLabel>
           {label}
           {required && <RequiredIndicator />}
+          <PrefillBadge snippet={prefillSnippet} />
         </FieldLabel>
         <DatePickerPopover
           locale={locale}
@@ -713,6 +775,7 @@ const FieldRenderer = ({
       <FieldLabel>
         {label}
         {required && <RequiredIndicator />}
+        <PrefillBadge snippet={prefillSnippet} />
       </FieldLabel>
       <FieldControl
         render={
@@ -1121,6 +1184,8 @@ export const TemplateForm = ({
   onBack,
   onDone,
   onValuesChange,
+  saveTarget,
+  prefill,
 }: TemplateFormProps) => {
   const t = useTranslations();
   // Formula fields are derived server-side at fill time, never user-entered:
@@ -1135,6 +1200,12 @@ export const TemplateForm = ({
   const [loading, setLoading] = useState(false);
   const [touched, setTouched] = useState<TouchedFields>({});
   const [errors, setErrors] = useState<FieldErrors>({});
+  // Source snippets for AI-prefilled fields, keyed by field path. Presence
+  // drives the wand badge; entries are dropped when the user clears the
+  // value. Null means "prefilled, but the model gave no snippet".
+  const [prefillSnippets, setPrefillSnippets] = useState<
+    Record<string, string | null>
+  >({});
   const touchedRef = useRef(touched);
   touchedRef.current = touched;
   const valuesRef = useRef(values);
@@ -1210,12 +1281,40 @@ export const TemplateForm = ({
     setValues((prev) => ({ ...prev, [path]: value }));
   }, []);
 
+  /** Drop a field's prefill badge once its value is cleared (empty string,
+   *  unchecked boolean, or every composite part blank). Edits keep it. */
+  const clearPrefillSnippetIfEmptied = useCallback(
+    (path: string, value: unknown) => {
+      const isEmpty =
+        value === "" ||
+        value === false ||
+        value === undefined ||
+        (typeof value === "object" &&
+          value !== null &&
+          Object.values(readPartValues(value)).every(
+            (part) => part.trim() === "",
+          ));
+      if (!isEmpty) {
+        return;
+      }
+      setPrefillSnippets((prev) => {
+        if (!(path in prev)) {
+          return prev;
+        }
+        const { [path]: _, ...rest } = prev;
+        return rest;
+      });
+    },
+    [],
+  );
+
   /** Re-validate on change when the field was already
    *  touched. Uses a ref so the touched check is never
    *  stale between blur and the next render. */
   const handleChangeWithValidation = useCallback(
     (path: string, value: unknown) => {
       handleChange(path, value);
+      clearPrefillSnippetIfEmptied(path, value);
 
       // Only re-validate if already touched
       if (!touchedRef.current[path]) {
@@ -1232,7 +1331,7 @@ export const TemplateForm = ({
         });
       }
     },
-    [handleChange, findFieldDef, resolveError],
+    [handleChange, clearPrefillSnippetIfEmptied, findFieldDef, resolveError],
   );
 
   const handleBlur = useCallback(
@@ -1293,6 +1392,56 @@ export const TemplateForm = ({
     },
     [handleChangeWithValidation],
   );
+
+  /** Apply AI prefill proposals to the form: set values, remember the
+   *  supporting snippets for the wand badges, and report how many landed.
+   *  Everything stays freely editable; nothing is submitted. */
+  const applyPrefill = (suggestions: PrefillSuggestionDto[]): number => {
+    let applied = 0;
+    const nextSnippets: Record<string, string | null> = {};
+
+    for (const suggestion of suggestions) {
+      const def = fields.find((f) => f.path === suggestion.path);
+      if (!def || def.kind === "array") {
+        continue;
+      }
+      const parts = compositeParts(def);
+
+      if (suggestion.partKey !== null) {
+        if (!parts || !parts.some((part) => part.key === suggestion.partKey)) {
+          continue;
+        }
+        const current = readPartValues(valuesRef.current[suggestion.path]);
+        handleChangeWithValidation(suggestion.path, {
+          ...current,
+          [suggestion.partKey]: suggestion.value,
+        });
+      } else if (parts) {
+        // A composite field only accepts per-part proposals.
+        continue;
+      } else if (def.kind === "boolean" || def.inputType === "boolean") {
+        handleChangeWithValidation(
+          suggestion.path,
+          suggestion.value === "true",
+        );
+      } else {
+        handleChangeWithValidation(suggestion.path, suggestion.value);
+      }
+
+      if (
+        !(suggestion.path in nextSnippets) ||
+        suggestion.sourceSnippet !== null
+      ) {
+        nextSnippets[suggestion.path] = suggestion.sourceSnippet;
+      }
+      applied++;
+    }
+
+    if (applied > 0) {
+      setPrefillSnippets((prev) => ({ ...prev, ...nextSnippets }));
+    }
+    return applied;
+  };
 
   /** Validate all fields; returns true if valid. */
   const validateAll = useCallback(
@@ -1457,16 +1606,95 @@ export const TemplateForm = ({
     ],
   );
 
-  const handleSubmit = useCallback(
-    (e: React.SubmitEvent<HTMLFormElement>) => {
-      e.preventDefault();
-      // Errors are surfaced as toasts inside handleDownload
-      // TODO: fix this
-      // oxlint-disable-next-line no-empty-function
-      handleDownload("docx").catch(() => {});
-    },
-    [handleDownload],
-  );
+  // ── Save to matter ────────────────────────────────
+  const [matterDialogOpen, setMatterDialogOpen] = useState(false);
+  const [matterTarget, setMatterTarget] = useState<MatterTarget | null>(null);
+
+  /** Fill server-side and persist the result as a document entity in the
+   *  given matter (the fill-to endpoint). Validates like a download. */
+  const fillToMatter = async (workspaceId: string, parentId: string | null) => {
+    if (!templateId || !saveTarget) {
+      return;
+    }
+    if (!validateAll(values)) {
+      stellaToast.add({
+        type: "error",
+        title: t("templates.validationErrors"),
+      });
+      return;
+    }
+
+    setLoading(true);
+    const submitValues = buildSubmitValues(values, fields, conditions);
+    const response = await api
+      .templates({ templateId })
+      ["fill-to"]({ workspaceId })
+      .post({
+        values: JSON.stringify(submitValues),
+        ...(parentId !== null && { parentId: toSafeId<"entity">(parentId) }),
+      });
+    setLoading(false);
+
+    if (response.error) {
+      stellaToast.add({
+        type: "error",
+        title: t("templates.fillFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+
+    const created = response.data;
+    stellaToast.add({
+      type: "success",
+      title: t("success.documentCreated"),
+    });
+    if (created.unmatchedPlaceholders.length > 0) {
+      stellaToast.add({
+        type: "warning",
+        title: t("templates.unmatchedPlaceholders", {
+          list: created.unmatchedPlaceholders.join(", "),
+        }),
+      });
+    }
+
+    setMatterDialogOpen(false);
+    if (saveTarget.kind === "matter") {
+      saveTarget.onCreated(created.entityId);
+    } else {
+      saveTarget.onCreated({ workspaceId, entityId: created.entityId });
+    }
+    onDone(created.fileName);
+  };
+
+  /** "Move to matter": validate first so the picker only opens over a
+   *  submittable form. */
+  const handleChooseMatter = () => {
+    if (!validateAll(values)) {
+      stellaToast.add({
+        type: "error",
+        title: t("templates.validationErrors"),
+      });
+      return;
+    }
+    setMatterTarget(null);
+    setMatterDialogOpen(true);
+  };
+
+  const handleSubmit = (e: React.SubmitEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (saveTarget?.kind === "matter") {
+      void fillToMatter(saveTarget.workspaceId, saveTarget.parentId ?? null);
+      return;
+    }
+    // Errors are surfaced as toasts inside handleDownload
+    // TODO: fix this
+    // oxlint-disable-next-line no-empty-function
+    handleDownload("docx").catch(() => {});
+  };
 
   // ── Fill preview ──────────────────────────────────
   type PreviewState =
@@ -1560,6 +1788,14 @@ export const TemplateForm = ({
         )}
 
         <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
+          {prefill !== undefined && templateId !== undefined && (
+            <TemplatePrefillPanel
+              matterWorkspaceId={prefill.workspaceId}
+              onApply={applyPrefill}
+              templateId={templateId}
+            />
+          )}
+
           {[...grouped.entries()].map(([prefix, groupFields]) => (
             <fieldset
               className={cn(
@@ -1589,6 +1825,7 @@ export const TemplateForm = ({
                   key={field.path}
                   onBlur={handleBlur}
                   onChange={handleChangeWithValidation}
+                  prefillSnippet={prefillSnippets[field.path]}
                   value={values[field.path]}
                 />
               ))}
@@ -1624,23 +1861,83 @@ export const TemplateForm = ({
                   : t("common.preview")}
               </Button>
             )}
-            <Button
-              disabled={loading || hasErrors}
-              onClick={() => {
-                void handleDownload("pdf").catch(() => undefined);
-              }}
-              type="button"
-              variant="outline"
-            >
-              {loading ? t("templates.generating") : t("templates.downloadPdf")}
-            </Button>
-            <Button disabled={loading || hasErrors} type="submit">
-              {loading
-                ? t("templates.generating")
-                : t("templates.downloadDocx")}
-            </Button>
+            {saveTarget?.kind !== "matter" && (
+              <Button
+                disabled={loading || hasErrors}
+                onClick={() => {
+                  void handleDownload("pdf").catch(() => undefined);
+                }}
+                type="button"
+                variant="outline"
+              >
+                {loading
+                  ? t("templates.generating")
+                  : t("templates.downloadPdf")}
+              </Button>
+            )}
+            {saveTarget?.kind === "chooseMatter" && (
+              <Button
+                disabled={loading || hasErrors}
+                onClick={handleChooseMatter}
+                type="button"
+                variant="outline"
+              >
+                {t("templates.moveToMatter")}
+              </Button>
+            )}
+            {saveTarget?.kind === "matter" ? (
+              <Button disabled={loading || hasErrors} type="submit">
+                {loading
+                  ? t("templates.generating")
+                  : t("templates.createDocument")}
+              </Button>
+            ) : (
+              <Button disabled={loading || hasErrors} type="submit">
+                {loading
+                  ? t("templates.generating")
+                  : t("templates.downloadDocx")}
+              </Button>
+            )}
           </div>
         </form>
+
+        {/* "Move to matter" target picker */}
+        <Dialog onOpenChange={setMatterDialogOpen} open={matterDialogOpen}>
+          <DialogPopup className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>{t("templates.moveToMatter")}</DialogTitle>
+            </DialogHeader>
+            <DialogPanel>
+              <MatterTargetPicker
+                onChange={setMatterTarget}
+                value={matterTarget}
+              />
+            </DialogPanel>
+            <DialogFooter>
+              <Button
+                onClick={() => setMatterDialogOpen(false)}
+                variant="ghost"
+              >
+                {t("common.cancel")}
+              </Button>
+              <Button
+                disabled={matterTarget === null || loading}
+                onClick={() => {
+                  if (matterTarget !== null) {
+                    void fillToMatter(
+                      matterTarget.workspaceId,
+                      matterTarget.parentId,
+                    );
+                  }
+                }}
+              >
+                {loading
+                  ? t("templates.generating")
+                  : t("templates.createDocument")}
+              </Button>
+            </DialogFooter>
+          </DialogPopup>
+        </Dialog>
 
         {/* Fill Preview Dialog */}
         <Dialog
