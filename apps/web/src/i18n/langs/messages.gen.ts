@@ -2195,6 +2195,8 @@ type Messages = {
       "namePlaceholder": "name";
       "newField": "New field";
       "noNestedMarkers": "Markers cannot nest inside another marker";
+      "otherwise": "Otherwise";
+      "otherwiseIf": "Otherwise if {condition}";
       "prepareWithAi": "Prepare with AI";
       "questions": "Questions";
       "recipeSaveFailed": "Failed to save recipe";
@@ -2206,6 +2208,7 @@ type Messages = {
       "repeatable": "Repeatable";
       "repeatableLoopHasOtherContent": "The repeating block around this field contains other content; remove it in the document.";
       "repeatableNested": "This field already sits inside a repeating block.";
+      "repeats": "Repeats: {item}";
       "saveAsRecipe": "Save as recipe";
       "scopeClause": "Clause slot";
       "scopeCondition": "Condition";
