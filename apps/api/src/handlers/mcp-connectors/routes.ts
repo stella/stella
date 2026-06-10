@@ -8,6 +8,7 @@ import deleteMcpConnector from "@/api/handlers/mcp-connectors/delete-connector";
 import listMcpConnections from "@/api/handlers/mcp-connectors/list-connections";
 import listMcpConnectors from "@/api/handlers/mcp-connectors/list-connectors";
 import mcpOAuthCallback from "@/api/handlers/mcp-connectors/oauth-callback";
+import { mcpOAuthClientMetadataRoute } from "@/api/handlers/mcp-connectors/oauth-client-metadata-route";
 import probeMcpConnector from "@/api/handlers/mcp-connectors/probe-connector";
 import updateMcpConnection from "@/api/handlers/mcp-connectors/update-connection";
 import updateNativeTool from "@/api/handlers/mcp-connectors/update-native-tool";
@@ -71,6 +72,6 @@ const authenticatedMcpConnectorsRoute = new Elysia({ prefix: "/mcp" })
     permissions: updateNativeTool.config.permissions,
   });
 
-export const mcpConnectorsRoute = new Elysia().use(
-  authenticatedMcpConnectorsRoute,
-);
+export const mcpConnectorsRoute = new Elysia()
+  .use(mcpOAuthClientMetadataRoute)
+  .use(authenticatedMcpConnectorsRoute);

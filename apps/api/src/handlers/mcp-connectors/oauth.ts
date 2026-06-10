@@ -49,6 +49,7 @@ const authorizationServerMetadataSchema = v.looseObject({
   code_challenge_methods_supported: v.optional(v.array(v.string())),
   token_endpoint_auth_methods_supported: v.optional(v.array(v.string())),
   grant_types_supported: v.optional(v.array(v.string())),
+  client_id_metadata_document_supported: v.optional(v.boolean()),
 });
 
 const dynamicClientRegistrationResponseSchema = v.intersect([
@@ -247,6 +248,54 @@ export const getMcpOAuthRedirectUri = (): string => {
   const publicUrl = env.PUBLIC_URL ?? env.BETTER_AUTH_URL;
   return new URL("/v1/mcp/oauth/callback", publicUrl).toString();
 };
+
+export type McpClientRegistrationMode = "cimd" | "dcr" | "unsupported";
+
+// Client ID Metadata Documents are the MCP spec's preferred registration
+// mechanism; Dynamic Client Registration is retained for authorization
+// servers that have not adopted CIMD yet.
+export const clientRegistrationMode = (
+  authorizationServer: AuthorizationServerMetadata,
+): McpClientRegistrationMode => {
+  if (authorizationServer.client_id_metadata_document_supported === true) {
+    return "cimd";
+  }
+  if (authorizationServer.registration_endpoint) {
+    return "dcr";
+  }
+  return "unsupported";
+};
+
+const MCP_CLIENT_METADATA_DOCUMENT_PATH = "/v1/mcp/oauth/client-metadata.json";
+
+export const getMcpClientMetadataDocumentUrl = (): string => {
+  const publicUrl = env.PUBLIC_URL ?? env.BETTER_AUTH_URL;
+  return new URL(MCP_CLIENT_METADATA_DOCUMENT_PATH, publicUrl).toString();
+};
+
+export type McpClientMetadataDocument = {
+  client_id: string;
+  client_name: string;
+  client_uri: string;
+  grant_types: string[];
+  redirect_uris: string[];
+  response_types: string[];
+  token_endpoint_auth_method: "none";
+};
+
+// draft-ietf-oauth-client-id-metadata-document: the document's `client_id`
+// must equal the URL it is served from, and it must not carry any shared
+// secret (stella is a public client; PKCE protects the code exchange).
+export const buildMcpClientMetadataDocument =
+  (): McpClientMetadataDocument => ({
+    client_id: getMcpClientMetadataDocumentUrl(),
+    client_name: "stella",
+    client_uri: env.FRONTEND_URL,
+    grant_types: ["authorization_code", "refresh_token"],
+    redirect_uris: [getMcpOAuthRedirectUri()],
+    response_types: ["code"],
+    token_endpoint_auth_method: "none",
+  });
 
 export const buildAuthorizeUrl = ({
   authorizationServer,

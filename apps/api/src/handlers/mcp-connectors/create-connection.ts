@@ -4,6 +4,10 @@ import { t } from "elysia";
 
 import { mcpConnectors, mcpUserConnections } from "@/api/db/schema";
 import { encryptMcpSecret } from "@/api/handlers/mcp-connectors/crypto";
+import {
+  clientRegistrationMode,
+  discoverOAuthMetadata,
+} from "@/api/handlers/mcp-connectors/oauth";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -28,6 +32,7 @@ const createMcpConnection = createSafeRootHandler(
           .select({
             id: mcpConnectors.id,
             authType: mcpConnectors.authType,
+            url: mcpConnectors.url,
           })
           .from(mcpConnectors)
           .where(
@@ -50,14 +55,12 @@ const createMcpConnection = createSafeRootHandler(
       );
     }
 
-    if (connector.authType !== "bearer") {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "MCP connector does not accept a static token",
-        }),
-      );
-    }
+    yield* Result.await(
+      assertStaticTokenAccepted({
+        authType: connector.authType,
+        url: connector.url,
+      }),
+    );
 
     const encrypted = await encryptMcpSecret({
       connectorId: connector.id,
@@ -137,3 +140,44 @@ const createMcpConnection = createSafeRootHandler(
 );
 
 export default createMcpConnection;
+
+const staticTokenRejected = () =>
+  Result.err(
+    new HandlerError({
+      status: 400,
+      message: "MCP connector does not accept a static token",
+    }),
+  );
+
+// OAuth connectors normally must not bypass the consent flow with a
+// pasted token. The exception is an authorization server with no client
+// registration path (neither CIMD nor dynamic registration): stella
+// cannot obtain a client_id there, so a pre-issued static token is the
+// only way to connect. Re-checked here at the boundary instead of
+// trusting state the connect endpoint derived earlier.
+const assertStaticTokenAccepted = async ({
+  authType,
+  url,
+}: {
+  authType: typeof mcpConnectors.$inferSelect.authType;
+  url: string;
+}): Promise<Result<void, HandlerError<400>>> => {
+  if (authType === "bearer") {
+    return Result.ok(undefined);
+  }
+  if (authType !== "oauth2") {
+    return staticTokenRejected();
+  }
+
+  const metadata = await discoverOAuthMetadata(url);
+  if (Result.isError(metadata)) {
+    return staticTokenRejected();
+  }
+  if (
+    clientRegistrationMode(metadata.value.authorizationServer) !== "unsupported"
+  ) {
+    return staticTokenRejected();
+  }
+
+  return Result.ok(undefined);
+};

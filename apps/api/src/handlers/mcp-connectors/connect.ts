@@ -12,13 +12,17 @@ import {
 import { encryptMcpSecret } from "@/api/handlers/mcp-connectors/crypto";
 import {
   buildAuthorizeUrl,
+  buildMcpClientMetadataDocument,
+  clientRegistrationMode,
   createOAuthState,
   createPkce,
   discoverOAuthMetadata,
+  getMcpClientMetadataDocumentUrl,
   getMcpOAuthRedirectUri,
   pickRequestedScopes,
   registerOAuthClient,
 } from "@/api/handlers/mcp-connectors/oauth";
+import type { McpClientRegistrationMode } from "@/api/handlers/mcp-connectors/oauth";
 import { redactMcpOAuthRegistrationResponse } from "@/api/handlers/mcp-connectors/oauth-registration-response";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -114,6 +118,20 @@ const connectMcpConnector = createSafeRootHandler(
     }
 
     const metadata = yield* Result.await(discoverOAuthMetadata(connector.url));
+
+    // Servers that advertise OAuth but offer no client registration path
+    // (neither CIMD nor dynamic registration) cannot complete stella's
+    // OAuth flow; a pre-issued static token is the only way to connect.
+    const registrationMode = clientRegistrationMode(
+      metadata.authorizationServer,
+    );
+    if (registrationMode === "unsupported") {
+      return Result.ok<ConnectMcpConnectorResult>({
+        type: "bearer",
+        requiresToken: true,
+      });
+    }
+
     const redirectUri = getMcpOAuthRedirectUri();
     const requestedScopes = pickRequestedScopes({
       connectorScopes: connector.oauthRequestedScopes,
@@ -127,6 +145,7 @@ const connectMcpConnector = createSafeRootHandler(
         organizationId: session.activeOrganizationId,
         redirectUri,
         authorizationServer: metadata.authorizationServer,
+        registrationMode,
         requestedScopes,
       }),
     );
@@ -223,15 +242,7 @@ const loadConnector = async ({
   return Result.ok(connector);
 };
 
-const ensureOAuthClient = async ({
-  authorizationServer,
-  connectorId,
-  connectorSlug,
-  organizationId,
-  redirectUri,
-  requestedScopes,
-  safeDb,
-}: {
+type EnsureOAuthClientOptions = {
   authorizationServer: Parameters<
     typeof registerOAuthClient
   >[0]["authorizationServer"];
@@ -239,9 +250,21 @@ const ensureOAuthClient = async ({
   connectorSlug: string;
   organizationId: NonNullable<typeof mcpConnectors.$inferSelect.organizationId>;
   redirectUri: string;
+  registrationMode: Exclude<McpClientRegistrationMode, "unsupported">;
   requestedScopes: string[];
   safeDb: SafeDb;
-}): Promise<
+};
+
+const ensureOAuthClient = async ({
+  authorizationServer,
+  connectorId,
+  connectorSlug,
+  organizationId,
+  redirectUri,
+  registrationMode,
+  requestedScopes,
+  safeDb,
+}: EnsureOAuthClientOptions): Promise<
   Result<
     { clientId: string; clientSecret: string | null },
     HandlerError<502> | SafeDbError
@@ -272,14 +295,25 @@ const ensureOAuthClient = async ({
       });
     }
 
-    const registered = yield* Result.await(
-      registerOAuthClient({
-        authorizationServer,
-        connectorSlug,
-        redirectUri,
-        requestedScopes,
-      }),
-    );
+    // CIMD: the document URL is the client_id; the authorization server
+    // fetches the metadata itself, so no registration round-trip happens.
+    const registered =
+      registrationMode === "cimd"
+        ? {
+            clientId: getMcpClientMetadataDocumentUrl(),
+            clientSecret: null,
+            registrationResponse: redactMcpOAuthRegistrationResponse(
+              buildMcpClientMetadataDocument(),
+            ),
+          }
+        : yield* Result.await(
+            registerOAuthClient({
+              authorizationServer,
+              connectorSlug,
+              redirectUri,
+              requestedScopes,
+            }),
+          );
     const encryptedSecret = registered.clientSecret
       ? await encryptMcpSecret({
           connectorId,
