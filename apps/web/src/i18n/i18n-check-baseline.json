@@ -27,6 +27,7 @@
     "templates.conditionMatchAll",
     "templates.fieldOptions",
     "templates.inputTypes.date",
+    "templates.studio.filledByPerson",
     "translate.settings.remove",
     "translate.settings.save",
     "workspaces.properties.optionsLabel"
@@ -789,8 +790,16 @@
       "de",
       "sk"
     ],
+    "templates.studio.draftedByAi": [
+      "cs",
+      "pl",
+      "sk"
+    ],
     "templates.studio.expressionPlaceholder": [
       "fr"
+    ],
+    "templates.studio.filledByPerson": [
+      "de"
     ],
     "templates.studio.formula": [
       "lv"
