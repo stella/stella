@@ -302,6 +302,13 @@ export type FieldValidation = {
 export type FieldMeta = {
   path: string;
   label?: string | undefined;
+  /**
+   * Short guidance for the person filling the field (expected format, where
+   * to find the value, …). Shown as the input's placeholder in the fill form
+   * and included in AI prompts so prefill maps source text to the right
+   * field. Kept short (~200 chars, enforced by the config UI).
+   */
+  hint?: string | undefined;
   inputType?: InputType | undefined;
   options?: string[] | undefined;
   validation?: FieldValidation | undefined;
@@ -470,6 +477,7 @@ export const isFieldMeta = (value: unknown): value is FieldMeta => {
 
   return (
     (value["label"] === undefined || typeof value["label"] === "string") &&
+    (value["hint"] === undefined || typeof value["hint"] === "string") &&
     (value["inputType"] === undefined || isInputType(value["inputType"])) &&
     (value["options"] === undefined ||
       (Array.isArray(value["options"]) &&
@@ -571,6 +579,9 @@ export type ResolvedField = {
   kind: TemplateFieldKind;
   count: number;
   label?: string | undefined;
+  /** Mirrors {@link FieldMeta.hint}: the fill form shows it as the input's
+   *  placeholder; AI prefill includes it when mapping source text. */
+  hint?: string | undefined;
   inputType?: InputType | undefined;
   options?: string[] | undefined;
   validation?: FieldValidation | undefined;

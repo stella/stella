@@ -157,6 +157,7 @@ const createTemplateHandler = async function* ({
   let fieldMetas: FieldMeta[] = fields.map((f) => ({
     path: f.path,
     label: f.label,
+    hint: f.hint,
     inputType: f.inputType,
     options: f.options,
     validation: f.validation,
