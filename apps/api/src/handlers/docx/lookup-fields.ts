@@ -31,7 +31,12 @@ import {
 } from "@/api/lib/business-registries/dispatch";
 
 import { replaceResolvedValue } from "./composite-fields";
-import type { FieldMeta, LookupRegistry } from "./types";
+import type {
+  FieldMeta,
+  LookupRegistry,
+  RichPatchValue,
+  RichRun,
+} from "./types";
 
 // ── Registry-number plausibility ─────────────────────────
 
@@ -45,7 +50,7 @@ const LOOKUP_VALUE_VALIDATORS: Record<
 };
 
 /** Human-readable registry names for error messages. */
-const LOOKUP_REGISTRY_NAMES: Record<LookupRegistry, string> = {
+export const LOOKUP_REGISTRY_NAMES: Record<LookupRegistry, string> = {
   krs: "KRS",
 };
 
@@ -146,6 +151,59 @@ export const renderLookupTemplate = (
     .trim();
 };
 
+// ── Inline markdown in the rendered output ───────────────
+
+/** `**bold**` / `*italic*` spans in the author's format template. Spans do
+ *  not nest and cannot contain asterisks, and an italic `*` never pairs
+ *  against a `**` delimiter (lookarounds); anything unmatched (a stray `*`,
+ *  empty `****`, an asterisk inside a substituted value) stays literal. */
+const LOOKUP_MARKDOWN_RE = /\*\*([^*]+)\*\*|(?<!\*)\*([^*]+)\*(?!\*)/gu;
+
+/**
+ * Parse a rendered lookup output into formatted runs: `**bold**` and
+ * `*italic*` spans become correspondingly formatted runs, everything else
+ * stays a plain run. Unmatched asterisks are left literal.
+ */
+export const parseLookupMarkdown = (text: string): RichRun[] => {
+  const runs: RichRun[] = [];
+  let cursor = 0;
+  for (const match of text.matchAll(LOOKUP_MARKDOWN_RE)) {
+    if (match.index > cursor) {
+      runs.push({ text: text.slice(cursor, match.index) });
+    }
+    const [, bold, italic] = match;
+    if (bold !== undefined) {
+      runs.push({ text: bold, bold: true });
+    } else if (italic !== undefined) {
+      runs.push({ text: italic, italic: true });
+    }
+    cursor = match.index + match[0].length;
+  }
+  if (cursor < text.length) {
+    runs.push({ text: text.slice(cursor) });
+  }
+  return runs;
+};
+
+/** Plain text of a rendered lookup output with the `**` / `*` formatting
+ *  markers removed — the live-preview path renders plain text only. */
+export const stripLookupMarkdown = (text: string): string =>
+  parseLookupMarkdown(text)
+    .map((run) => run.text)
+    .join("");
+
+/** The fill value for a rendered lookup output: a rich multi-run patch when
+ *  the author used `**bold**` / `*italic*` in the format template (the patch
+ *  engine renders the runs with the marker run's other formatting intact),
+ *  otherwise the plain string. */
+export const lookupValueFromRendered = (text: string): RichPatchValue => {
+  const runs = parseLookupMarkdown(text);
+  if (!runs.some((run) => run.bold === true || run.italic === true)) {
+    return text;
+  }
+  return { paragraphs: [{ runs }] };
+};
+
 // ── Resolution over manifest fields ──────────────────────
 
 export type LookupFieldError = {
@@ -225,10 +283,17 @@ export const resolveLookupFields = async ({
     const template = lookup.aiFormat?.trim() ?? "";
     const rendered =
       template === "" ? "" : renderLookupTemplate(template, outcome.hit);
+    const renderedText =
+      rendered !== "" ? rendered : renderLookupHit(outcome.hit);
+    // The aiAdapt pass rewrites plain string stubs only, so a Person + AI
+    // lookup keeps a plain value (formatting markers stripped); otherwise
+    // **bold** / *italic* spans in the format become formatted runs.
     replaceResolvedValue(
       resolved,
       field.path,
-      rendered !== "" ? rendered : renderLookupHit(outcome.hit),
+      field.aiAdapt === true
+        ? stripLookupMarkdown(renderedText)
+        : lookupValueFromRendered(renderedText),
     );
   }
 

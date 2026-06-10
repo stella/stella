@@ -13,9 +13,13 @@ import {
   createDispatchLookupResolver,
   isPlausibleLookupValue,
   type LookupResolver,
+  lookupValueFromRendered,
+  parseLookupMarkdown,
   renderLookupHit,
   resolveLookupFields,
+  stripLookupMarkdown,
 } from "./lookup-fields";
+import { patchXmlPart } from "./rich-patch";
 import type { FieldMeta } from "./types";
 
 const KRS_ADDRESS = {
@@ -76,6 +80,77 @@ describe("renderLookupHit", () => {
     expect(renderLookupHit({ ...KRS_HIT, address: null })).toBe(
       "Żabka Polska sp. z o.o.",
     );
+  });
+});
+
+describe("parseLookupMarkdown", () => {
+  test("parses **bold** spans into bold runs", () => {
+    expect(parseLookupMarkdown("**Acme** Ltd")).toEqual([
+      { text: "Acme", bold: true },
+      { text: " Ltd" },
+    ]);
+  });
+
+  test("parses *italic* spans into italic runs", () => {
+    expect(parseLookupMarkdown("seat in *Poznań*")).toEqual([
+      { text: "seat in " },
+      { text: "Poznań", italic: true },
+    ]);
+  });
+
+  test("parses mixed bold and italic spans in one string", () => {
+    expect(
+      parseLookupMarkdown("**Acme**, with its seat in *Poznań*, KRS 123"),
+    ).toEqual([
+      { text: "Acme", bold: true },
+      { text: ", with its seat in " },
+      { text: "Poznań", italic: true },
+      { text: ", KRS 123" },
+    ]);
+  });
+
+  test("leaves unmatched and empty asterisks literal", () => {
+    expect(parseLookupMarkdown("a * b")).toEqual([{ text: "a * b" }]);
+    expect(parseLookupMarkdown("a ** b")).toEqual([{ text: "a ** b" }]);
+    expect(parseLookupMarkdown("****")).toEqual([{ text: "****" }]);
+    expect(parseLookupMarkdown("**dangling")).toEqual([{ text: "**dangling" }]);
+  });
+
+  test("keeps a stray asterisk inside a substituted value literal", () => {
+    // Span content is asterisk-free and italic `*` cannot pair against a
+    // `**` delimiter, so a `*` inside a company name defuses the whole span
+    // instead of producing surprise italics.
+    expect(parseLookupMarkdown("**A*B Corp**")).toEqual([
+      { text: "**A*B Corp**" },
+    ]);
+  });
+});
+
+describe("stripLookupMarkdown", () => {
+  test("strips formatting markers for the plain-text preview", () => {
+    expect(stripLookupMarkdown("**Acme**, seat in *Poznań*")).toBe(
+      "Acme, seat in Poznań",
+    );
+  });
+
+  test("keeps unmatched asterisks", () => {
+    expect(stripLookupMarkdown("2 * 3 = 6")).toBe("2 * 3 = 6");
+  });
+});
+
+describe("lookupValueFromRendered", () => {
+  test("returns the plain string when no formatting is present", () => {
+    expect(lookupValueFromRendered("Acme Ltd, Poznań")).toBe(
+      "Acme Ltd, Poznań",
+    );
+    // Unmatched asterisks stay literal, so the value stays a plain string.
+    expect(lookupValueFromRendered("a * b")).toBe("a * b");
+  });
+
+  test("returns a rich patch value when formatting is present", () => {
+    expect(lookupValueFromRendered("**Acme** Ltd")).toEqual({
+      paragraphs: [{ runs: [{ text: "Acme", bold: true }, { text: " Ltd" }] }],
+    });
   });
 });
 
@@ -200,6 +275,92 @@ describe("resolveLookupFields", () => {
         "Żabka Polska sp. z o.o., seat: Poznań",
       );
     }
+  });
+
+  test("turns **bold** / *italic* in the format into a rich patch value", async () => {
+    const result = await resolveLookupFields({
+      values: { buyer_krs: "0000592109" },
+      fields: [
+        {
+          path: "buyer_krs",
+          lookup: {
+            registry: "krs",
+            aiFormat: "**[company name]**, with its seat in *[seat]*",
+          },
+        },
+      ],
+      resolve: hitResolver(KRS_HIT),
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.values["buyer_krs"]).toEqual({
+        paragraphs: [
+          {
+            runs: [
+              { text: "Żabka Polska sp. z o.o.", bold: true },
+              { text: ", with its seat in " },
+              { text: "Poznań", italic: true },
+            ],
+          },
+        ],
+      });
+    }
+  });
+
+  test("strips formatting markers when the field is Person + AI", async () => {
+    // The aiAdapt pass rewrites plain string stubs only, so the rendered
+    // output stays a string with the markers removed.
+    const result = await resolveLookupFields({
+      values: { buyer_krs: "0000592109" },
+      fields: [
+        {
+          path: "buyer_krs",
+          aiAdapt: true,
+          lookup: {
+            registry: "krs",
+            aiFormat: "**[company name]**, seat: [seat]",
+          },
+        },
+      ],
+      resolve: hitResolver(KRS_HIT),
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.values["buyer_krs"]).toBe(
+        "Żabka Polska sp. z o.o., seat: Poznań",
+      );
+    }
+  });
+});
+
+describe("engine substitution of formatted lookup values", () => {
+  const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+  const WRAP = (body: string) =>
+    `<w:document xmlns:w="${W_NS}"><w:body>${body}</w:body></w:document>`;
+
+  test("renders multiple runs with bold/italic rPr inline", () => {
+    const xml = WRAP(
+      [
+        "<w:p>",
+        '<w:r><w:rPr><w:sz w:val="24"/></w:rPr>',
+        '<w:t xml:space="preserve">Between {{buyer_krs}} and others</w:t>',
+        "</w:r>",
+        "</w:p>",
+      ].join(""),
+    );
+    const value = lookupValueFromRendered("**Acme**, seat in *Poznań*");
+
+    const result = patchXmlPart(xml, { buyer_krs: value });
+
+    expect(result.changed).toBe(true);
+    expect(result.xml).toContain("<w:b");
+    expect(result.xml).toContain("<w:i");
+    expect(result.xml).toContain("Acme");
+    expect(result.xml).toContain(", seat in ");
+    expect(result.xml).toContain("Poznań");
+    // Each replacement run inherits the marker run's other formatting:
+    // the source run + 3 replacement runs + the trailing-text run.
+    expect(result.xml.match(/<w:sz /gu)).toHaveLength(5);
   });
 });
 
