@@ -89,6 +89,10 @@ type FileChatThreadKey = {
   workspaceId: string;
 };
 
+type TemplateChatThreadKey = {
+  templateId: string;
+};
+
 type GroupedChatThreadsPage = Awaited<
   ReturnType<typeof fetchGroupedChatThreads>
 >;
@@ -179,6 +183,15 @@ export const chatKeys = {
     key.workspaceId,
     key.entityId,
     key.fieldId,
+  ],
+  templateThread: (
+    activeOrganizationId: string,
+    key: TemplateChatThreadKey,
+  ) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    "template-thread",
+    key.templateId,
   ],
   groupedThreads: (activeOrganizationId: string) => [
     ...chatKeys.all,
@@ -330,6 +343,20 @@ const fetchFileChatThread = async ({
       entityId: toSafeId<"entity">(entityId),
       fieldId: toSafeId<"field">(fieldId),
     });
+
+  if (response.error) {
+    throw toAPIError(response.error);
+  }
+
+  return toChatThreadId(response.data.threadId);
+};
+
+const fetchTemplateChatThread = async ({
+  templateId,
+}: TemplateChatThreadKey): Promise<ChatThreadId> => {
+  const response = await api.chat["template-thread"].post({
+    templateId: toSafeId<"template">(templateId),
+  });
 
   if (response.error) {
     throw toAPIError(response.error);
@@ -696,6 +723,25 @@ export const fileChatThreadOptions = ({
     gcTime: STALE_TIME.FIVETEEN.MINUTES,
     queryKey: chatKeys.fileThread(activeOrganizationId, key),
     queryFn: async () => await fetchFileChatThread(key),
+  });
+
+type TemplateChatThreadOptionsArgs = {
+  activeOrganizationId: string;
+  key: TemplateChatThreadKey;
+};
+
+/** Latest Template Studio thread for a template (server creates the
+ *  thread + mapping on first visit). "New chat" rotates the mapping
+ *  server-side and writes the fresh id into this cache entry. */
+export const templateChatThreadOptions = ({
+  activeOrganizationId,
+  key,
+}: TemplateChatThreadOptionsArgs) =>
+  queryOptions({
+    staleTime: STALE_TIME.FIVETEEN.MINUTES,
+    gcTime: STALE_TIME.FIVETEEN.MINUTES,
+    queryKey: chatKeys.templateThread(activeOrganizationId, key),
+    queryFn: async () => await fetchTemplateChatThread(key),
   });
 
 export type ChatThreadOptionsArgs = ChatThreadOptionsInput & {
