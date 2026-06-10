@@ -1321,6 +1321,7 @@
       "versionCurrent": "v{version} (aktuális)"
     },
     "openChat": "Chat megnyitása",
+    "reopenTab": "{name} újranyitása",
     "showPane": "Panel megjelenítése"
   },
   "knowledge": {

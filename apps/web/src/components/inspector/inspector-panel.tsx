@@ -8,7 +8,7 @@ import {
 } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMatch, useNavigate } from "@tanstack/react-router";
+import { useMatch, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
@@ -147,6 +147,33 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   });
   const pdfRouteJustification = pdfRouteMatch?.search.justification ?? null;
 
+  // A revive suggestion for a route-owned view is only meaningful
+  // while its owner route stays presented — leaving the route takes
+  // the bound main view away, so the ghost goes with it. File-tab
+  // suggestions don't need this watcher: the document route clears
+  // them itself via its `setFileMetadataLane(id, "closed")` unmount
+  // hook.
+  const suggestionOwnerRouteId = useInspectorStore((s) =>
+    s.reviveSuggestion !== null && isGenericInspectorTab(s.reviveSuggestion)
+      ? s.reviveSuggestion.ownerRouteId
+      : undefined,
+  );
+  const clearReviveSuggestion = useInspectorStore(
+    (s) => s.clearReviveSuggestion,
+  );
+  const suggestionOwnerRouteActive = useRouterState({
+    select: (routerState) =>
+      suggestionOwnerRouteId === undefined ||
+      routerState.matches.some(
+        (match) => match.routeId === suggestionOwnerRouteId,
+      ),
+  });
+  useEffect(() => {
+    if (!suggestionOwnerRouteActive) {
+      clearReviveSuggestion();
+    }
+  }, [suggestionOwnerRouteActive, clearReviveSuggestion]);
+
   const activeTab = tabs.find((tab) => tab.id === activeId);
   const activeMatterPanelColor =
     activeTab?.type === "matter"
@@ -203,7 +230,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
             current === tabId ? null : current,
           );
           clearAnonymization(tabId);
-          closeTab(tabId);
+          closeTab(tabId, { suggestRevive: true });
         });
         return;
       }
@@ -213,7 +240,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         setEditingDocxTabId(null);
       }
       clearAnonymization(tabId);
-      closeTab(tabId);
+      closeTab(tabId, { suggestRevive: true });
     },
     [closeTab, docxActionsRef.current, editingDocxTabId, setEditingDocxTabId],
   );
