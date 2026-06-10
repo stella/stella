@@ -36,7 +36,7 @@ type Token =
   | { type: "string"; raw: string };
 
 const TOKEN_RE =
-  /("(?:[^"\\]|\\.)*"|==|!=|>=|<=|>|<|!(?!=)|and\b|or\b|[()]|[\p{L}\p{N}_.]+)/gu;
+  /("(?:[^"\\]|\\.)*"|==|!=|>=|<=|>|<|!(?!=)|and\b|or\b|contains\b|[()]|[\p{L}\p{N}_.]+)/gu;
 
 const STARTS_WITH_DIGIT_RE = /^\d/u;
 
@@ -56,7 +56,8 @@ const tokenize = (expr: string): Token[] => {
       raw === ">" ||
       raw === "<" ||
       raw === ">=" ||
-      raw === "<="
+      raw === "<=" ||
+      raw === "contains"
     ) {
       tokens.push({ type: "op", raw });
     } else if (raw === "(") {
@@ -161,6 +162,14 @@ const compare = (left: unknown, op: string, right: unknown): boolean => {
       return (
         typeof left === "number" && typeof right === "number" && left <= right
       );
+    case "contains":
+      if (typeof left === "string") {
+        return left.toLowerCase().includes(String(right).toLowerCase());
+      }
+      if (Array.isArray(left)) {
+        return left.map(String).includes(String(right));
+      }
+      return false;
     default:
       return false;
   }
@@ -367,7 +376,7 @@ const evaluateTokens = (
  * Evaluate a Liquid-style condition expression.
  *
  * Supports truthiness, negation (`!`), comparisons
- * (`==`, `!=`, `>`, `<`, `>=`, `<=`), logical operators
+ * (`==`, `!=`, `>`, `<`, `>=`, `<=`, `contains`), logical operators
  * (`and`, `or`), dotted paths, and numeric underscores.
  *
  * Operator precedence (highest to lowest):

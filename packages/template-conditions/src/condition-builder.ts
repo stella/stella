@@ -8,7 +8,14 @@
  * never hand-writes expression syntax.
  */
 
-export type ConditionOperator = "==" | "!=" | ">" | "<" | ">=" | "<=";
+export type ConditionOperator =
+  | "=="
+  | "!="
+  | ">"
+  | "<"
+  | ">="
+  | "<="
+  | "contains";
 
 export type ConditionRule = {
   kind: "rule";
