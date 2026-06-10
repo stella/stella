@@ -3141,7 +3141,15 @@ const FieldFace = ({
                 if (!actions) {
                   return false;
                 }
-                return actions.renameFieldPath(field.path, next);
+                const safe = sanitizeFieldPath(next);
+                const renamed = actions.renameFieldPath(field.path, safe);
+                // A human-looking name doubles as the label while none is
+                // set: typing "Name of lawyer" yields path name_of_lawyer
+                // and that label in one go.
+                if (renamed && field.label === "" && next.trim() !== safe) {
+                  onUpdate({ label: next.trim() });
+                }
+                return renamed;
               }}
               path={field.path}
             />
@@ -3661,6 +3669,16 @@ const trimChar = (value: string, ch: string): string => {
 };
 
 // Derive a field path from selected prose: "Jan Kowalski" -> "jan_kowalski".
+/** Lowercase + underscore a typed field name without word-count capping —
+ *  "Name of lawyer" becomes a valid path instead of a validation error. */
+const sanitizeFieldPath = (text: string): string => {
+  const collapsed = text
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}.]+/gu, "_");
+  return trimChar(collapsed, "_").slice(0, 64);
+};
+
 const slugify = (text: string): string => {
   const collapsed = text
     .trim()
