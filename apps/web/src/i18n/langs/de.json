@@ -1990,6 +1990,7 @@
     "checkTemplate": "Vorlage prüfen",
     "checkWarnings": "{count, plural, one {# Warnung} other {# Warnungen}}",
     "conditionAddRule": "Regel hinzufügen",
+    "conditionCount": "{count, plural, one {# Bedingung} other {# Bedingungen}}",
     "conditionField": "Feld",
     "conditionMatch": "Übereinstimmung",
     "conditionMatchAll": "Alle",

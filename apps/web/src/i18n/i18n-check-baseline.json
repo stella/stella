@@ -1013,6 +1013,9 @@
       "pl",
       "pt-BR"
     ],
+    "templates.conditionCount": [
+      "fr"
+    ],
     "templates.conditionOperator": [
       "de",
       "pl"
