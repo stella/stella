@@ -2059,6 +2059,8 @@
       "textarea": "Szöveg (többsoros)"
     },
     "invalidFileType": "Kérjük, töltsön fel egy .docx fájlt",
+    "languages": "Nyelvek",
+    "languagesPlaceholder": "Nyelv hozzáadása (például pl, en-GB)",
     "lastUsedAgo": "Utoljára használva {time}",
     "loadFailed": "Nem sikerült betölteni a sablonokat",
     "lookupFieldHint": "Adja meg a KRS-számot; a cég adatai a nyilvántartásból kerülnek kitöltésre.",

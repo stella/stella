@@ -2059,6 +2059,8 @@
       "textarea": "Text (mehrzeilig)"
     },
     "invalidFileType": "Bitte laden Sie eine .docx-Datei hoch",
+    "languages": "Sprachen",
+    "languagesPlaceholder": "Sprache hinzufügen (z. B. pl, en-GB)",
     "lastUsedAgo": "Zuletzt verwendet {time}",
     "loadFailed": "Vorlagen konnten nicht geladen werden",
     "lookupFieldHint": "KRS-Nummer eingeben; die Unternehmensdaten werden aus dem Register übernommen.",

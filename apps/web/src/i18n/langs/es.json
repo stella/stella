@@ -2059,6 +2059,8 @@
       "textarea": "Texto (multilínea)"
     },
     "invalidFileType": "Suba un archivo .docx",
+    "languages": "Idiomas",
+    "languagesPlaceholder": "Añadir idioma (p. ej. pl, en-GB)",
     "lastUsedAgo": "Último uso {time}",
     "loadFailed": "No se pudieron cargar las plantillas",
     "lookupFieldHint": "Introduzca un número KRS; los datos de la empresa se rellenan desde el registro.",

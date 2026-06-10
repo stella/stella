@@ -2059,6 +2059,8 @@
       "textarea": "Texto (multilinha)"
     },
     "invalidFileType": "Faça upload de um arquivo .docx",
+    "languages": "Idiomas",
+    "languagesPlaceholder": "Adicionar idioma (ex.: pl, en-GB)",
     "lastUsedAgo": "Usado pela última vez {time}",
     "loadFailed": "Falha ao carregar modelos",
     "lookupFieldHint": "Informe um número KRS; os dados da empresa são preenchidos a partir do registro.",

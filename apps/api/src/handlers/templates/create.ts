@@ -16,6 +16,7 @@ import type {
   TemplateManifest,
 } from "@/api/handlers/docx/types";
 import { isFieldMeta, isNamedCondition } from "@/api/handlers/docx/types";
+import { detectTemplateLanguagesFromDocx } from "@/api/handlers/templates/template-languages";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type {
   HandlerConfig,
@@ -145,9 +146,13 @@ const createTemplateHandler = async function* ({
 
   const buffer = Buffer.from(await file.arrayBuffer());
 
-  const [discovered, existingManifest] = await Promise.all([
+  // Language detection is best-effort metadata: it guesses the document
+  // languages from the text so bilingual templates are tagged from day
+  // one; users can correct the result via the update endpoint.
+  const [discovered, existingManifest, detectedLanguages] = await Promise.all([
     discoverTemplate(buffer),
     readManifest(buffer),
+    detectTemplateLanguagesFromDocx(buffer),
   ]);
 
   const fields = mergeManifestWithDiscovery(existingManifest, discovered);
@@ -236,6 +241,7 @@ const createTemplateHandler = async function* ({
           manifest,
           fieldCount: fields.length,
           currentVersion: 1,
+          languages: detectedLanguages,
           createdBy: userId,
         })
         .returning({

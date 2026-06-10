@@ -2059,6 +2059,8 @@
       "textarea": "Teksts (vairāku rindu)"
     },
     "invalidFileType": "Lūdzu, augšupielādējiet .docx failu",
+    "languages": "Valodas",
+    "languagesPlaceholder": "Pievienot valodu (piem., pl, en-GB)",
     "lastUsedAgo": "Pēdējoreiz izmantots {time}",
     "loadFailed": "Neizdevās ielādēt veidnes",
     "lookupFieldHint": "Ievadiet KRS numuru; uzņēmuma dati tiek aizpildīti no reģistra.",

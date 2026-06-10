@@ -145,15 +145,22 @@ const ADAPT_SYSTEM_PROMPT =
   '(e.g. "czech law" may become "according to the laws of the Czech ' +
   'Republic"). Never add or change facts.';
 
-const buildAdaptPrompt = ({
-  stub,
-  fieldPath,
-  label,
-  prompt,
-  occurrences,
-}: Parameters<AiOccurrenceAdapter>[0]): string => {
+const buildAdaptPrompt = (
+  {
+    stub,
+    fieldPath,
+    label,
+    prompt,
+    occurrences,
+  }: Parameters<AiOccurrenceAdapter>[0],
+  documentLanguages: readonly string[],
+): string => {
   const fieldLine = label ? `${fieldPath} (${label})` : fieldPath;
   const guidance = prompt ? `Field instruction: ${prompt}\n` : "";
+  const languagesLine =
+    documentLanguages.length > 0
+      ? `Document languages: ${documentLanguages.join(", ")}\n`
+      : "";
   const contexts = occurrences
     .map(
       (occurrence, index) =>
@@ -161,7 +168,7 @@ const buildAdaptPrompt = ({
     )
     .join("\n\n");
   return `Field: ${fieldLine}
-${guidance}Value to adapt: ${stub}
+${guidance}${languagesLine}Value to adapt: ${stub}
 
 Each occurrence below shows the surrounding document text with the {{${fieldPath}}} marker where the value goes. Return exactly ${String(occurrences.length)} renderings, in order — rendering N replaces the marker in occurrence N. Each rendering is the replacement text only: no quotes, no markdown, no surrounding sentence.
 
@@ -176,9 +183,14 @@ ${contexts}`;
 export const buildAiOccurrenceAdapter = ({
   orgAIConfig,
   organizationId,
+  documentLanguages = [],
 }: {
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
+  /** Template-level BCP-47 tags (primary first); when present the model
+   *  is told which languages the document uses, which improves
+   *  inflection in bilingual templates. */
+  documentLanguages?: readonly string[];
 }): AiOccurrenceAdapter | undefined => {
   if (!orgAIConfig) {
     return undefined;
@@ -197,7 +209,7 @@ export const buildAiOccurrenceAdapter = ({
         output: Output.object({
           schema: strictOutputSchema(occurrenceRenderingsSchema),
         }),
-        prompt: buildAdaptPrompt(input),
+        prompt: buildAdaptPrompt(input, documentLanguages),
         system: ADAPT_SYSTEM_PROMPT,
       });
       const { renderings } = await result.output;

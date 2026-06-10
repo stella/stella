@@ -1609,6 +1609,9 @@ export const templates = p.pgTable(
     fieldCount: p.integer("field_count").notNull().default(0),
     currentVersion: p.integer("current_version").notNull().default(1),
     tags: p.text().array(),
+    /** Ordered BCP-47 tags of the document text (bilingual templates list
+     *  every language, primary first). */
+    languages: p.text().array().notNull().default([]),
     whenToUse: p.text("when_to_use"),
     whenNotToUse: p.text("when_not_to_use"),
     useCount: p.integer("use_count").notNull().default(0),

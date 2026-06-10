@@ -42,6 +42,7 @@ const getTemplate = createSafeRootHandler(
             manifest: true,
             fieldCount: true,
             tags: true,
+            languages: true,
             whenToUse: true,
             whenNotToUse: true,
             useCount: true,

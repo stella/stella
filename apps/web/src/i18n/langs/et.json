@@ -2059,6 +2059,8 @@
       "textarea": "Tekst (mitmerealne)"
     },
     "invalidFileType": "Palun laadige üles .docx fail",
+    "languages": "Keeled",
+    "languagesPlaceholder": "Lisa keel (nt pl, en-GB)",
     "lastUsedAgo": "Viimati kasutatud {time}",
     "loadFailed": "Mallide laadimine ebaõnnestus",
     "lookupFieldHint": "Sisestage KRS-number; ettevõtte andmed täidetakse registrist.",

@@ -2059,6 +2059,8 @@
       "textarea": "Tekst (wielowierszowy)"
     },
     "invalidFileType": "Prześlij plik .docx",
+    "languages": "Języki",
+    "languagesPlaceholder": "Dodaj język (np. pl, en-GB)",
     "lastUsedAgo": "Ostatnio użyto {time}",
     "loadFailed": "Nie udało się załadować szablonów",
     "lookupFieldHint": "Wpisz numer KRS; dane spółki zostaną uzupełnione z rejestru.",

@@ -2062,6 +2062,8 @@ type Messages = {
       "textarea": "Text (multiline)";
     };
     "invalidFileType": "Please upload a .docx file";
+    "languages": "Languages";
+    "languagesPlaceholder": "Add a language (e.g. pl, en-GB)";
     "lastUsedAgo": "Last used {time}";
     "loadFailed": "Failed to load templates";
     "lookupFieldHint": "Enter a KRS number; the company details are filled from the register.";

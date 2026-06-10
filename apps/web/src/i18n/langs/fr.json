@@ -2059,6 +2059,8 @@
       "textarea": "Texte (multiligne)"
     },
     "invalidFileType": "Veuillez importer un fichier .docx",
+    "languages": "Langues",
+    "languagesPlaceholder": "Ajouter une langue (p. ex. pl, en-GB)",
     "lastUsedAgo": "Dernière utilisation {time}",
     "loadFailed": "Impossible de charger les modèles",
     "lookupFieldHint": "Saisissez un numéro KRS ; les données de la société sont remplies depuis le registre.",

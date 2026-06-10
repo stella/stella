@@ -432,7 +432,7 @@ const isDateFormatStyle = (value: unknown): value is DateFormatStyle =>
 /** Structurally malformed BCP-47 tags make `Intl` throw a RangeError; a
  *  well-formed but unknown tag passes and merely falls back to the default
  *  locale at format time. */
-const isPlausibleLocale = (value: string): boolean => {
+export const isPlausibleLocale = (value: string): boolean => {
   try {
     Intl.DateTimeFormat.supportedLocalesOf(value);
     return true;

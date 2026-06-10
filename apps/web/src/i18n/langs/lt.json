@@ -2059,6 +2059,8 @@
       "textarea": "Tekstas (kelių eilučių)"
     },
     "invalidFileType": "Įkelkite .docx failą",
+    "languages": "Kalbos",
+    "languagesPlaceholder": "Pridėti kalbą (pvz., pl, en-GB)",
     "lastUsedAgo": "Paskutinį kartą naudota {time}",
     "loadFailed": "Nepavyko įkelti šablonų",
     "lookupFieldHint": "Įveskite KRS numerį; įmonės duomenys užpildomi iš registro.",

@@ -2059,6 +2059,8 @@
       "textarea": "Text (víceřádkový)"
     },
     "invalidFileType": "Nahrajte prosím soubor .docx",
+    "languages": "Jazyky",
+    "languagesPlaceholder": "Přidat jazyk (např. pl, en-GB)",
     "lastUsedAgo": "Naposledy použito {time}",
     "loadFailed": "Nepodařilo se načíst šablony",
     "lookupFieldHint": "Zadejte číslo KRS; údaje o společnosti se doplní z rejstříku.",
