@@ -967,6 +967,25 @@ const REGISTRY_RETURN_FIELDS: Record<LookupRegistry, readonly string[]> = {
   ],
 };
 
+/** Hover examples per return field, from a well-known public registry entry
+ *  (CD PROJEKT S.A., KRS 0000006865 — public KRS data), so authors see what
+ *  a token resolves to before writing it into the format. */
+const REGISTRY_FIELD_EXAMPLES: Record<
+  LookupRegistry,
+  Record<string, string>
+> = {
+  krs: {
+    "company name": "CD PROJEKT S.A.",
+    "legal form": "spółka akcyjna",
+    seat: "Warszawa",
+    address: "ul. Jagiellońska 74, 03-301 Warszawa",
+    "registry number": "0000006865",
+    NIP: "7342867148",
+    REGON: "492707333",
+    "share capital": "100 000 000,00 PLN",
+  },
+};
+
 /** Configuration for the "Company ID" field type: pick the register the
  *  entered number resolves against, and optionally an AI format instruction
  *  shaping the resolved company details — with the registry's return fields
@@ -1081,6 +1100,7 @@ const CompanyLookupConfig = ({
               className="bg-accent text-accent-foreground hover:bg-accent/80 cursor-pointer rounded-md px-1.5 py-0.5 text-xs font-medium"
               key={name}
               onClick={() => insertToken(name)}
+              title={REGISTRY_FIELD_EXAMPLES[registry][name]}
               type="button"
             >
               [{name}]
