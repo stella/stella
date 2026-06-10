@@ -10,23 +10,136 @@ import {
 import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
 
-const OPERATORS: ConditionOperator[] = [
-  "==",
-  "!=",
-  ">",
-  "<",
-  ">=",
-  "<=",
-  "contains",
+import { DatePickerPopover } from "@/components/date-picker-popover";
+import type { TranslationKey } from "@/i18n/types";
+
+/** The subset of a template field the rule builder needs to render a typed
+ *  row. `inputType` drives the operator set and value control; `options` feed
+ *  a select's value dropdown. Built by the caller from its richer field model;
+ *  boolean fields are the yes/no question path and are excluded upstream. */
+export type RuleField = {
+  path: string;
+  label: string;
+  inputType: "text" | "textarea" | "number" | "date" | "select";
+  options: readonly string[];
+};
+
+type RuleInputType = RuleField["inputType"];
+
+/** Source field shape both callers already have. Boolean fields are the yes/no
+ *  question path and are dropped here, so the rule builder never offers them. */
+type SourceField = {
+  path: string;
+  label: string;
+  inputType: RuleInputType | "boolean";
+  options: readonly string[];
+};
+
+const isRuleField = (
+  field: SourceField,
+): field is SourceField & { inputType: RuleInputType } =>
+  field.inputType !== "boolean";
+
+/** Project a caller's editable fields onto the rule builder's `RuleField`
+ *  shape, excluding boolean (question) fields. */
+export const toRuleFields = (
+  fields: readonly SourceField[],
+): readonly RuleField[] =>
+  fields.filter(isRuleField).map((f) => ({
+    path: f.path,
+    label: f.label,
+    inputType: f.inputType,
+    options: f.options,
+  }));
+
+/** Operator-label keys, narrowed against the catalogue. All are plain (no ICU
+ *  arguments), so `t(labelKey)` is callable with a single argument. */
+type OperatorLabelKey = TranslationKey &
+  (
+    | "templates.conditionOpAfter"
+    | "templates.conditionOpAtLeast"
+    | "templates.conditionOpAtMost"
+    | "templates.conditionOpBefore"
+    | "templates.conditionOpContains"
+    | "templates.conditionOpEquals"
+    | "templates.conditionOpGreaterThan"
+    | "templates.conditionOpIs"
+    | "templates.conditionOpIsNot"
+    | "templates.conditionOpLessThan"
+    | "templates.conditionOpNotEquals"
+    | "templates.conditionOpOn"
+    | "templates.conditionOpOnOrAfter"
+    | "templates.conditionOpOnOrBefore"
+  );
+
+/** A friendly operator label mapped to the canonical engine operator that
+ *  `serializeCondition` emits. */
+type OperatorChoice = {
+  operator: ConditionOperator;
+  labelKey: OperatorLabelKey;
+};
+
+// Per-type operator menus. The canonical operator strings are unchanged; only
+// the labels and the offered set adapt to the field's type. The first entry is
+// the default operator for that type.
+const TEXT_OPERATORS: readonly OperatorChoice[] = [
+  { operator: "==", labelKey: "templates.conditionOpIs" },
+  { operator: "!=", labelKey: "templates.conditionOpIsNot" },
+  { operator: "contains", labelKey: "templates.conditionOpContains" },
 ];
 
-const isConditionOperator = (value: string): value is ConditionOperator =>
-  OPERATORS.some((op) => op === value);
+const NUMBER_OPERATORS: readonly OperatorChoice[] = [
+  { operator: "==", labelKey: "templates.conditionOpEquals" },
+  { operator: "!=", labelKey: "templates.conditionOpNotEquals" },
+  { operator: ">", labelKey: "templates.conditionOpGreaterThan" },
+  { operator: "<", labelKey: "templates.conditionOpLessThan" },
+  { operator: ">=", labelKey: "templates.conditionOpAtLeast" },
+  { operator: "<=", labelKey: "templates.conditionOpAtMost" },
+];
+
+const DATE_OPERATORS: readonly OperatorChoice[] = [
+  { operator: "<", labelKey: "templates.conditionOpBefore" },
+  { operator: "<=", labelKey: "templates.conditionOpOnOrBefore" },
+  { operator: "==", labelKey: "templates.conditionOpOn" },
+  { operator: ">=", labelKey: "templates.conditionOpOnOrAfter" },
+  { operator: ">", labelKey: "templates.conditionOpAfter" },
+];
+
+const SELECT_OPERATORS: readonly OperatorChoice[] = [
+  { operator: "==", labelKey: "templates.conditionOpIs" },
+  { operator: "!=", labelKey: "templates.conditionOpIsNot" },
+  { operator: "contains", labelKey: "templates.conditionOpContains" },
+];
+
+const operatorsForType = (
+  inputType: RuleInputType,
+): readonly OperatorChoice[] => {
+  switch (inputType) {
+    case "number":
+      return NUMBER_OPERATORS;
+    case "date":
+      return DATE_OPERATORS;
+    case "select":
+      return SELECT_OPERATORS;
+    default:
+      return TEXT_OPERATORS;
+  }
+};
+
+/** Default operator when no field is chosen, matching the canonical default. */
+const DEFAULT_OPERATOR: ConditionOperator = "==";
+
+const defaultOperatorForType = (
+  inputType: RuleInputType,
+): ConditionOperator => {
+  const first = operatorsForType(inputType).at(0);
+  return first ? first.operator : DEFAULT_OPERATOR;
+};
 
 const emptyRule = (): ConditionRule => ({
   kind: "rule",
   variable: "",
-  operator: "==",
+  operator: DEFAULT_OPERATOR,
   value: "",
 });
 
@@ -71,7 +184,7 @@ export const ConditionGroupEditor = ({
   group,
   onChange,
 }: {
-  fields: readonly string[];
+  fields: readonly RuleField[];
   group: ConditionGroup;
   onChange: (group: ConditionGroup) => void;
 }) => {
@@ -85,6 +198,25 @@ export const ConditionGroupEditor = ({
       i === index ? { ...rule, ...patch } : rule,
     );
     onChange({ ...group, children: next });
+  };
+
+  // Changing the field can change its type, which changes the valid operator
+  // set and value control. Reset the operator to the new type's default and
+  // clear a value that no longer fits the new control.
+  const setField = (index: number, path: string) => {
+    const nextType = fields.find((f) => f.path === path)?.inputType;
+    const prevType = fields.find(
+      (f) => f.path === rules[index]?.variable,
+    )?.inputType;
+    if (nextType === undefined || nextType === prevType) {
+      setRule(index, { variable: path });
+      return;
+    }
+    setRule(index, {
+      variable: path,
+      operator: defaultOperatorForType(nextType),
+      value: "",
+    });
   };
 
   return (
@@ -111,58 +243,20 @@ export const ConditionGroupEditor = ({
 
       {rules.map((rule, index) => (
         // Rules have no stable id; index key is fine for this small, local list.
-        <div className="flex items-center gap-2" key={index}>
-          <select
-            aria-label={t("templates.conditionField")}
-            className={`${inputClass} min-w-32 flex-1`}
-            onChange={(e) => setRule(index, { variable: e.target.value })}
-            value={rule.variable}
-          >
-            <option value="">{t("templates.conditionField")}</option>
-            {fields.map((field) => (
-              <option key={field} value={field}>
-                {field}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label={t("templates.conditionOperator")}
-            className={inputClass}
-            onChange={(e) => {
-              if (isConditionOperator(e.target.value)) {
-                setRule(index, { operator: e.target.value });
-              }
-            }}
-            value={rule.operator}
-          >
-            {OPERATORS.map((op) => (
-              <option key={op} value={op}>
-                {op}
-              </option>
-            ))}
-          </select>
-          <Input
-            aria-label={t("templates.conditionValue")}
-            className="w-28"
-            onChange={(e) => setRule(index, { value: e.target.value })}
-            placeholder={t("templates.conditionValue")}
-            value={String(rule.value)}
-          />
-          <Button
-            disabled={rules.length === 1}
-            onClick={() =>
-              onChange({
-                ...group,
-                children: rules.filter((_, i) => i !== index),
-              })
-            }
-            size="icon-xs"
-            type="button"
-            variant="ghost"
-          >
-            <TrashIcon />
-          </Button>
-        </div>
+        <RuleRow
+          fields={fields}
+          key={index}
+          onRemove={() =>
+            onChange({
+              ...group,
+              children: rules.filter((_, i) => i !== index),
+            })
+          }
+          onSetField={(path) => setField(index, path)}
+          onSetRule={(patch) => setRule(index, patch)}
+          removable={rules.length > 1}
+          rule={rule}
+        />
       ))}
 
       <Button
@@ -181,6 +275,143 @@ export const ConditionGroupEditor = ({
   );
 };
 
+// ── One field | operator | value row ─────────────────────
+
+const RuleRow = ({
+  fields,
+  rule,
+  removable,
+  onSetField,
+  onSetRule,
+  onRemove,
+}: {
+  fields: readonly RuleField[];
+  rule: ConditionRule;
+  removable: boolean;
+  onSetField: (path: string) => void;
+  onSetRule: (patch: Partial<ConditionRule>) => void;
+  onRemove: () => void;
+}) => {
+  const t = useTranslations();
+  const selected = fields.find((f) => f.path === rule.variable);
+  const inputType = selected?.inputType ?? "text";
+  const operators = operatorsForType(inputType);
+
+  return (
+    <div className="flex items-center gap-2">
+      <select
+        aria-label={t("templates.conditionField")}
+        className={`${inputClass} min-w-32 flex-1`}
+        onChange={(e) => onSetField(e.target.value)}
+        value={rule.variable}
+      >
+        <option value="">{t("templates.conditionField")}</option>
+        {fields.map((field) => (
+          <option key={field.path} value={field.path}>
+            {field.label || field.path}
+          </option>
+        ))}
+      </select>
+      <select
+        aria-label={t("templates.conditionOperator")}
+        className={inputClass}
+        onChange={(e) => {
+          const choice = operators.find((o) => o.operator === e.target.value);
+          if (choice) {
+            onSetRule({ operator: choice.operator });
+          }
+        }}
+        value={rule.operator}
+      >
+        {operators.map((choice) => (
+          <option key={choice.operator} value={choice.operator}>
+            {t(choice.labelKey)}
+          </option>
+        ))}
+      </select>
+      <RuleValueInput
+        field={selected}
+        onChange={(value) => onSetRule({ value })}
+        value={rule.value}
+      />
+      <Button
+        disabled={!removable}
+        onClick={onRemove}
+        size="icon-xs"
+        type="button"
+        variant="ghost"
+      >
+        <TrashIcon />
+      </Button>
+    </div>
+  );
+};
+
+// ── Value control, typed to the selected field ───────────
+
+const RuleValueInput = ({
+  field,
+  value,
+  onChange,
+}: {
+  field: RuleField | undefined;
+  value: string | number | boolean;
+  onChange: (value: string) => void;
+}) => {
+  const t = useTranslations();
+  const stringValue = String(value);
+
+  if (field?.inputType === "select") {
+    return (
+      <select
+        aria-label={t("templates.conditionValue")}
+        className={`${inputClass} w-28`}
+        onChange={(e) => onChange(e.target.value)}
+        value={stringValue}
+      >
+        <option value="">{t("templates.conditionValue")}</option>
+        {field.options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  if (field?.inputType === "date") {
+    return (
+      <DatePickerPopover
+        onChange={(v) => onChange(v ?? "")}
+        value={stringValue}
+      />
+    );
+  }
+
+  if (field?.inputType === "number") {
+    return (
+      <Input
+        aria-label={t("templates.conditionValue")}
+        className="w-28"
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={t("templates.conditionValue")}
+        type="number"
+        value={stringValue}
+      />
+    );
+  }
+
+  return (
+    <Input
+      aria-label={t("templates.conditionValue")}
+      className="w-28"
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={t("templates.conditionValue")}
+      value={stringValue}
+    />
+  );
+};
+
 // ── Named conditions list (wizard section) ───────────────
 
 export const NamedConditionsEditor = ({
@@ -188,7 +419,7 @@ export const NamedConditionsEditor = ({
   conditions,
   onChange,
 }: {
-  fields: readonly string[];
+  fields: readonly RuleField[];
   conditions: DraftCondition[];
   onChange: (conditions: DraftCondition[]) => void;
 }) => {
