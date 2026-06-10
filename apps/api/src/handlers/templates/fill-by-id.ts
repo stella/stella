@@ -302,11 +302,13 @@ const fillByIdHandler = async function* ({
   if (result.unmatchedPlaceholders.length > 0) {
     headers.set(
       "X-Unmatched-Placeholders",
-      result.unmatchedPlaceholders.join(","),
+      // Headers are ISO-8859-1; field paths carry diacritics (Polish/Czech),
+      // so the diagnostic lists travel URI-encoded.
+      encodeURIComponent(result.unmatchedPlaceholders.join(",")),
     );
   }
   if (unusedValues.length > 0) {
-    headers.set("X-Unused-Values", unusedValues.join(","));
+    headers.set("X-Unused-Values", encodeURIComponent(unusedValues.join(",")));
   }
   if (result.structureErrors.length > 0) {
     headers.set("X-Structure-Errors", JSON.stringify(result.structureErrors));

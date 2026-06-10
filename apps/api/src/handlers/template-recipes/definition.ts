@@ -2,7 +2,11 @@ import * as v from "valibot";
 
 import { isFieldPath } from "@stll/template-conditions";
 
-import { INPUT_TYPES, LOOKUP_REGISTRIES } from "@/api/handlers/docx/types";
+import {
+  DATE_FORMAT_STYLES,
+  INPUT_TYPES,
+  LOOKUP_REGISTRIES,
+} from "@/api/handlers/docx/types";
 import { LIMITS } from "@/api/lib/limits";
 
 /**
@@ -65,6 +69,13 @@ const recipeFieldSchema = v.pipe(
     format: v.optional(v.pipe(v.string(), v.maxLength(2000))),
     optionsFrom: v.optional(fieldPathSchema),
     lookup: v.optional(recipeLookupSchema),
+    hint: v.optional(v.pipe(v.string(), v.maxLength(200))),
+    dateFormat: v.optional(
+      v.strictObject({
+        locale: v.pipe(v.string(), v.maxLength(35)),
+        style: v.picklist(DATE_FORMAT_STYLES),
+      }),
+    ),
   }),
   v.check(
     (field) => (field.parts === undefined) === (field.format === undefined),
