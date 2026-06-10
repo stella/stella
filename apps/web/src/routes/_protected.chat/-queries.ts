@@ -19,6 +19,7 @@ import type {
 import {
   hasApprovalResponseAwaitingModelStep,
   hasApprovedActiveDocxEditAwaitingClientOutput,
+  hasRunningToolCallInLatestAssistantMessage,
 } from "@/components/chat/chat-ui-tools";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -807,6 +808,17 @@ export type ChatThreadOptionsArgs = ChatThreadOptionsInput & {
   activeOrganizationId: string;
 };
 
+/**
+ * Whether the Chat instance still has a turn in flight: an active
+ * request, or a tool call on the latest assistant message that is
+ * still collecting input/awaiting its output (the windows between
+ * response streams in multi-step tool turns).
+ */
+const isChatTurnInFlight = (chat: Chat<PersistedChatMessage>): boolean =>
+  chat.status === "submitted" ||
+  chat.status === "streaming" ||
+  hasRunningToolCallInLatestAssistantMessage({ messages: chat.messages });
+
 export const chatThreadOptions = ({
   activeOrganizationId,
   key,
@@ -820,7 +832,10 @@ export const chatThreadOptions = ({
       allowMissingThread: context.allowMissingThread,
       contextKind: getChatRuntimeContextKind(context),
     }),
-    queryFn: async ({ client: queryClient }): Promise<ChatThreadFetched> => {
+    queryFn: async ({
+      client: queryClient,
+      queryKey,
+    }): Promise<ChatThreadFetched> => {
       const {
         messages,
         contextMatterIds,
@@ -830,6 +845,27 @@ export const chatThreadOptions = ({
       } = await fetchThreadMessages(key, {
         allowMissingThread: context.allowMissingThread,
       });
+
+      // `Chat.onFinish` invalidates this query after EVERY response
+      // stream, and multi-step tool turns (tool output → approval
+      // response → automatic continuation) keep generating on the
+      // instance this query already holds while the refetch runs.
+      // Swapping in a fresh idle instance mid-flight would orphan
+      // the running stream: the surfaces rebind to a Chat whose
+      // status is "ready", the stop control disappears and streamed
+      // parts stop rendering. Reuse the live instance instead; idle
+      // threads recreate below as before (message resync + fresh
+      // auto-send predicate state).
+      const previous = queryClient.getQueryData<ChatThreadFetched>(queryKey);
+      if (previous !== undefined && isChatTurnInFlight(previous.chat)) {
+        return {
+          chat: previous.chat,
+          contextMatterIds,
+          lastActivityAt,
+          webSearchAvailable,
+          webSearchEnabled,
+        };
+      }
 
       const chat = new Chat<PersistedChatMessage>({
         generateId: uuidv7,
