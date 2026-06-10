@@ -90,7 +90,7 @@ export const AICellSourceCard = ({
           )}
           {visibleStatements.map((statement) => (
             <span className="flex w-full flex-col gap-1" key={statement.key}>
-              <p className="line-clamp-3 text-justify text-xs leading-relaxed text-wrap hyphens-auto">
+              <span className="line-clamp-3 text-justify text-xs leading-relaxed text-wrap hyphens-auto">
                 {statement.text}
                 {statement.pages.map((page) => (
                   <span
@@ -100,14 +100,14 @@ export const AICellSourceCard = ({
                     p.&nbsp;{page.pageNumber}
                   </span>
                 ))}
-              </p>
+              </span>
               {statement.quotes.map((quote) => (
-                <p
+                <span
                   className="text-muted-foreground line-clamp-3 text-justify text-xs leading-relaxed text-wrap hyphens-auto italic"
                   key={quote.key}
                 >
                   "{quote.text}"
-                </p>
+                </span>
               ))}
             </span>
           ))}
