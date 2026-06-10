@@ -78,8 +78,10 @@ export type StudioActions = {
    *  formatted spans for lookup renderings), or null to clear. */
   setFillPreview: (values: Record<string, TemplatePreviewValue> | null) => void;
   /** Replace the selection (or insert at the caret) with an existing field's
-   *  marker; replacing text flips the field to AI-adapted wording. */
-  insertExistingField: (path: string) => void;
+   *  marker; replacing text flips the field to AI-adapted wording. For a
+   *  multi-format lookup field, `formatKey` selects a non-default output
+   *  (`{{path.key}}`); omit it to insert the default (`{{path}}`). */
+  insertExistingField: (path: string, formatKey?: string) => void;
   /** Remove every {{path}} marker from the document and drop the field. */
   deleteField: (path: string) => void;
   /** Insert a saved recipe at the caret: loop recipes add the `{{#each}}`
