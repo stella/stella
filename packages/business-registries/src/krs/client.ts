@@ -126,22 +126,22 @@ qJZ9ZPskWkoDbGs4xugDQ5r3V7mzKWmTOPQD8rv7gmsHINFSH5pkAnuYZttcTVoP
 E2Efv4WstK2tBZQIgx51F9NxO5NQI1mg7TyRVJ12AMXDuDjb
 -----END CERTIFICATE-----`;
 
+/** Bun extends RequestInit with a `tls` option that standard lib types do
+ *  not model; the runtime guard below scopes its use to Bun. */
+type BunTlsRequestInit = RequestInit & {
+  tls?: { ca: string[] };
+};
+
 const krsFetchOptions = (): RequestInit => {
-  const base: RequestInit = {
+  const base: BunTlsRequestInit = {
     signal: AbortSignal.timeout(TIMEOUT_MS),
     headers: { Accept: "application/json" },
   };
   if (typeof Bun === "undefined") {
     return base;
   }
-  return {
-    ...base,
-    // SAFETY: Bun extends RequestInit with a `tls` option that standard lib
-    // types do not model; the runtime guard above scopes this to Bun.
-    ...({
-      tls: { ca: [CERTUM_OV_TLS_G2_R39_CA, CERTUM_TRUSTED_ROOT_CA] },
-    } as RequestInit),
-  };
+  base.tls = { ca: [CERTUM_OV_TLS_G2_R39_CA, CERTUM_TRUSTED_ROOT_CA] };
+  return base;
 };
 
 const krsGet = async (
