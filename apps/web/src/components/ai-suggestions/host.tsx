@@ -1,7 +1,7 @@
 /**
  * File-anchored AI chat host.
  *
- * Renders a glass prompt bar at the bottom of the file viewer plus,
+ * Renders a floating prompt bar at the bottom of the file viewer plus,
  * when expanded, a thread panel above it. The thread is the primary
  * UI — same interaction model as Stella's regular chat, but bound to
  * a single file in view. Each user prompt yields one assistant
@@ -1314,9 +1314,15 @@ type PromptBarShellProps = {
 } & Omit<ComponentProps<"div">, "children">;
 
 /**
- * Shared outer shell for the glass prompt bar. Both the live
+ * Shared outer shell for the floating prompt bar. Both the live
  * `PromptBar` and the loading `PromptBarPlaceholder` (in the
  * inspector) render through this so they can never drift apart.
+ *
+ * The surface is solid `bg-popover` on purpose: a translucent
+ * background lets document text bleed through, and backdrop-blur
+ * cannot compensate for children of this shell — the shell's own
+ * backdrop-filter makes it the backdrop root for its descendants
+ * (the preset chips), whose blur then samples nothing.
  */
 export function PromptBarShell({
   layout,
@@ -1328,7 +1334,7 @@ export function PromptBarShell({
     <div
       {...rest}
       className={cn(
-        "group/bar bg-background/85 focus-within:bg-background/97 hover:bg-background/97 border-foreground/15 relative flex items-end gap-1 rounded-2xl border backdrop-blur-xl transition-[box-shadow,border-color,background-color]",
+        "group/bar bg-popover border-foreground/15 relative flex items-end gap-1 rounded-2xl border transition-[box-shadow,border-color]",
         "shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
         "after:pointer-events-none after:absolute after:-inset-6 after:-z-10 after:rounded-3xl after:bg-[radial-gradient(ellipse_at_center,var(--background)_0%,transparent_75%)] after:opacity-90",
         "w-[min(560px,calc(100%-2rem))] py-1 ps-1.5 pe-1",
@@ -1363,7 +1369,7 @@ export function SuggestionStepper({
 }: SuggestionStepperProps) {
   const t = useTranslations();
   return (
-    <div className="bg-background/85 hover:bg-background/97 border-foreground/15 absolute start-1/2 bottom-26 z-50 flex -translate-x-1/2 items-center gap-1 rounded-full border px-1.5 py-1 shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)] backdrop-blur-xl transition-[background-color] duration-150">
+    <div className="bg-popover border-foreground/15 absolute start-1/2 bottom-26 z-50 flex -translate-x-1/2 items-center gap-1 rounded-full border px-1.5 py-1 shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]">
       <Button
         aria-label={t("common.previous")}
         onClick={() => onStep(-1)}
@@ -1542,18 +1548,28 @@ export function PromptBar(props: PromptBarProps) {
       {presetChipsVisible && (
         <div className="absolute start-1 bottom-full mb-3 flex flex-col items-start gap-1.5">
           {presets.map((preset) => (
-            <Button
-              aria-keyshortcuts="Tab"
-              className="bg-background/85 hover:bg-background/97 text-foreground h-9 gap-2.5 rounded-full border-none px-3 text-[13px] font-medium shadow-[0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)] backdrop-blur-xl transition-[background-color] duration-150"
+            // The opaque surface lives on a wrapper, not the Button:
+            // the ghost variant swaps `background-color` to the
+            // translucent `--accent` on hover, which over the bare
+            // document would make the chip see-through under the
+            // cursor. Over the wrapper's solid popover the same swap
+            // is the standard menu-item tint.
+            <span
+              className="bg-popover border-foreground/15 inline-flex rounded-full border shadow-[0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]"
               key={preset.id}
-              onClick={() => submitPreset(preset)}
-              size="sm"
-              type="button"
-              variant="ghost"
             >
-              <WandSparklesIcon aria-hidden="true" className="size-4" />
-              {preset.label}
-            </Button>
+              <Button
+                aria-keyshortcuts="Tab"
+                className="text-foreground h-9 gap-2.5 rounded-full px-3 text-[13px] font-medium transition-[background-color] duration-150"
+                onClick={() => submitPreset(preset)}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                <WandSparklesIcon aria-hidden="true" className="size-4" />
+                {preset.label}
+              </Button>
+            </span>
           ))}
         </div>
       )}
