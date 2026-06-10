@@ -175,6 +175,17 @@ export type EditableField = {
   /** Locale-aware rendering of a "date" field's submitted ISO value at fill
    *  time; absent = the ISO value is substituted as typed. */
   dateFormat?: TemplateDateFormat | undefined;
+  /** Field-level validation. For an `{{#each}}` loop, `minItems`/`maxItems`
+   *  are the repeat bounds and live on the FieldMeta whose path equals the
+   *  loop's array (container) path. */
+  validation?: FieldValidation | undefined;
+};
+
+/** Subset of the backend `FieldValidation` the studio surfaces today: only
+ *  the `{{#each}}` repeat bounds. Extend as more validation lands in the UI. */
+export type FieldValidation = {
+  minItems?: number | undefined;
+  maxItems?: number | undefined;
 };
 
 const INPUT_TYPE_SET: ReadonlySet<string> = new Set(INPUT_TYPES);
