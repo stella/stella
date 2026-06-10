@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import JSZip from "jszip";
 
 import { DIRECTIVE_KINDS } from "@stll/template-conditions";
 
@@ -13,7 +14,6 @@ const describeStoredTemplateMock = mock();
 const fillStoredTemplateWithTextMock = mock();
 const createStoredTemplateMock = mock();
 const configureTemplateFieldsMock = mock();
-const validateDocxBufferMock = mock();
 const loadOrgAIConfigMock = mock();
 const captureErrorMock = mock();
 
@@ -43,10 +43,6 @@ void mock.module(
     configureTemplateFields: configureTemplateFieldsMock,
   }),
 );
-
-void mock.module("@/api/handlers/entities/validate-docx-buffer", () => ({
-  validateDocxBuffer: validateDocxBufferMock,
-}));
 
 // Stubbed so the fill handler never reaches the real (DB-backed) config
 // loader or AI model chain; a null config makes AI fields a no-op.
@@ -106,13 +102,28 @@ const createContext = ({
   userId: toSafeId<"user">("user_1"),
 });
 
+const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+
+/** A real, minimal valid DOCX (well-formed word/document.xml) as base64, so
+ *  create_template exercises the real validateDocxBuffer — no module mock to
+ *  leak across test files. */
+const makeValidDocxBase64 = async (): Promise<string> => {
+  const zip = new JSZip();
+  zip.file(
+    "word/document.xml",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+      `<w:document xmlns:w="${W_NS}"><w:body><w:p><w:r><w:t>{{name}}</w:t></w:r></w:p></w:body></w:document>`,
+  );
+  const bytes = await zip.generateAsync({ type: "uint8array" });
+  return Buffer.from(bytes).toString("base64");
+};
+
 describe("MCP template tools", () => {
   beforeEach(() => {
     describeStoredTemplateMock.mockReset();
     fillStoredTemplateWithTextMock.mockReset();
     createStoredTemplateMock.mockReset();
     configureTemplateFieldsMock.mockReset();
-    validateDocxBufferMock.mockReset();
     loadOrgAIConfigMock.mockReset();
     loadOrgAIConfigMock.mockResolvedValue(null);
     captureErrorMock.mockReset();
@@ -354,7 +365,6 @@ describe("MCP template tools", () => {
   });
 
   test("create_template validates the DOCX and returns the new template id", async () => {
-    validateDocxBufferMock.mockResolvedValue({ valid: true });
     createStoredTemplateMock.mockImplementation(async function* () {
       yield* [];
       return Result.ok({
@@ -364,14 +374,13 @@ describe("MCP template tools", () => {
       });
     });
 
-    const docxBase64 = Buffer.from("PK docx").toString("base64");
+    const docxBase64 = await makeValidDocxBase64();
     const result = await handleMcpToolCall({
       args: { name: "NDA", docx_base64: docxBase64 },
       context: createContext(),
       toolName: "create_template",
     });
 
-    expect(validateDocxBufferMock).toHaveBeenCalledTimes(1);
     expect(createStoredTemplateMock).toHaveBeenCalledWith(
       expect.objectContaining({
         name: "NDA",
@@ -387,11 +396,6 @@ describe("MCP template tools", () => {
   });
 
   test("create_template rejects an invalid DOCX before inserting", async () => {
-    validateDocxBufferMock.mockResolvedValue({
-      valid: false,
-      error: "Missing word/document.xml",
-    });
-
     const result = await handleMcpToolCall({
       args: {
         name: "NDA",
@@ -417,12 +421,10 @@ describe("MCP template tools", () => {
 
     expect(result.isError).toBe(true);
     expect(result.content).toEqual([{ type: "text", text: "Forbidden" }]);
-    expect(validateDocxBufferMock).not.toHaveBeenCalled();
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
   });
 
   test("create_template passes a validated fields overlay (incl. a lookup field) to the service", async () => {
-    validateDocxBufferMock.mockResolvedValue({ valid: true });
     createStoredTemplateMock.mockImplementation(async function* () {
       yield* [];
       return Result.ok({ id: "tmpl_new", name: "Company POA", fieldCount: 1 });
@@ -431,7 +433,7 @@ describe("MCP template tools", () => {
     const result = await handleMcpToolCall({
       args: {
         name: "Company POA",
-        docx_base64: Buffer.from("PK docx").toString("base64"),
+        docx_base64: await makeValidDocxBase64(),
         fields: [
           {
             path: "company",
@@ -474,12 +476,12 @@ describe("MCP template tools", () => {
   });
 
   test("create_template rejects a malformed field config before inserting", async () => {
-    validateDocxBufferMock.mockResolvedValue({ valid: true });
+    const docxBase64 = await makeValidDocxBase64();
 
     const result = await handleMcpToolCall({
       args: {
         name: "NDA",
-        docx_base64: Buffer.from("PK docx").toString("base64"),
+        docx_base64: docxBase64,
         // formula is mutually exclusive with aiPrompt, so isFieldMeta rejects it.
         fields: [{ path: "fee", formula: "rent * 12", aiPrompt: "draft it" }],
       },
@@ -494,7 +496,6 @@ describe("MCP template tools", () => {
   });
 
   test("create_template surfaces the service's unknown-path rejection", async () => {
-    validateDocxBufferMock.mockResolvedValue({ valid: true });
     createStoredTemplateMock.mockImplementation(async function* () {
       yield* [];
       return Result.err({
@@ -505,7 +506,7 @@ describe("MCP template tools", () => {
     const result = await handleMcpToolCall({
       args: {
         name: "NDA",
-        docx_base64: Buffer.from("PK docx").toString("base64"),
+        docx_base64: await makeValidDocxBase64(),
         fields: [{ path: "ghost", label: "Ghost" }],
       },
       context: createContext(),
