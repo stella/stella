@@ -15,8 +15,10 @@ import {
   ArrowUpToLine as ArrowUpToLineIcon,
   ClipboardPaste as ClipboardPasteIcon,
   Copy as CopyIcon,
+  Grid3x3 as Grid3x3Icon,
   MessageSquarePlus as MessageSquarePlusIcon,
   Scissors as ScissorsIcon,
+  SquareDashed as SquareDashedIcon,
   TextSelect as TextSelectIcon,
   Trash2 as Trash2Icon,
 } from "lucide-react";
@@ -42,6 +44,8 @@ export type TextContextAction =
   | "addColumnLeft"
   | "addColumnRight"
   | "deleteColumn"
+  | "tableBordersAll"
+  | "tableBordersNone"
   | "addComment"
   | "acceptChange"
   | "rejectChange"
@@ -191,6 +195,10 @@ function getActionIcon(action: TextContextAction): React.ReactNode {
       return <ArrowRightToLineIcon size={ICON_SIZE} />;
     case "deleteColumn":
       return <Trash2Icon size={ICON_SIZE} />;
+    case "tableBordersAll":
+      return <Grid3x3Icon size={ICON_SIZE} />;
+    case "tableBordersNone":
+      return <SquareDashedIcon size={ICON_SIZE} />;
     case "addComment":
       return <MessageSquarePlusIcon size={ICON_SIZE} />;
     case "acceptChange":
@@ -365,6 +373,8 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
         case "addColumnLeft":
         case "addColumnRight":
         case "deleteColumn":
+        case "tableBordersAll":
+        case "tableBordersNone":
           // Caller controls these enable states via the explicit
           // `disabled` field on TextContextMenuItem — fall through to
           // enabled.
@@ -667,6 +677,8 @@ export function useTextContextMenu(
         case "addColumnLeft":
         case "addColumnRight":
         case "deleteColumn":
+        case "tableBordersAll":
+        case "tableBordersNone":
         case "addComment":
         case "acceptChange":
         case "rejectChange":
@@ -740,6 +752,8 @@ export function getTextActionLabel(action: TextContextAction): string {
     addColumnLeft: "Insert column left",
     addColumnRight: "Insert column right",
     deleteColumn: "Delete column",
+    tableBordersAll: "All borders",
+    tableBordersNone: "No borders",
     addComment: "Comment",
     acceptChange: "Accept Change",
     rejectChange: "Reject Change",
@@ -765,6 +779,8 @@ export function getTextActionShortcut(action: TextContextAction): string {
     addColumnLeft: "",
     addColumnRight: "",
     deleteColumn: "",
+    tableBordersAll: "",
+    tableBordersNone: "",
     addComment: "",
     acceptChange: "",
     rejectChange: "",
@@ -811,6 +827,8 @@ export function isTextActionAvailable(
     case "addColumnLeft":
     case "addColumnRight":
     case "deleteColumn":
+    case "tableBordersAll":
+    case "tableBordersNone":
     case "separator":
       // Availability of table-edit actions is determined by the menu
       // builder based on whether the cursor is inside a table cell.

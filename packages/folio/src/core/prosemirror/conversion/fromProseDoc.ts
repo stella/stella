@@ -2370,6 +2370,15 @@ function tableAttrsToFormatting(
         delete result.look;
       }
     }
+    // Borders: toProseDoc seeds attrs.borders with the same reference as
+    // orig.borders, so a difference means a border command replaced them.
+    if (attrs.borders !== (orig.borders ?? undefined)) {
+      if (attrs.borders) {
+        result.borders = attrs.borders;
+      } else {
+        delete result.borders;
+      }
+    }
     // Width: check if changed
     const tableWidth = attrs.width;
     const tableWidthType = attrs.widthType;
@@ -2404,7 +2413,8 @@ function tableAttrsToFormatting(
     attrs.justification ||
     attrs.floating ||
     attrs.cellMargins ||
-    attrs.look;
+    attrs.look ||
+    attrs.borders;
 
   if (!hasFormatting) {
     return undefined;
@@ -2442,6 +2452,9 @@ function tableAttrsToFormatting(
   }
   if (attrs.look) {
     f.look = attrs.look;
+  }
+  if (attrs.borders) {
+    f.borders = attrs.borders;
   }
   return f;
 }
