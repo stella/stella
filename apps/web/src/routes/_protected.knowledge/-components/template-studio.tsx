@@ -414,7 +414,23 @@ export const TemplateStudioPage = ({
     const covering = directives.find(
       (range) => head >= range.from && head <= range.to,
     );
-    setSelected(covering ?? null);
+    // Clicking plain text keeps the current face open — mid-configuration
+    // clicks into the document (selecting text to copy into a field's
+    // settings) must not hide the work in progress. Only landing in another
+    // marker switches; the face's back chevron leaves deliberately.
+    if (covering !== undefined) {
+      setSelected(covering);
+    } else {
+      // Refresh a stale range for the still-shown directive (its position
+      // may have shifted with edits) without dropping the face.
+      const current = useTemplateStudioStore.getState().selected;
+      if (current !== null) {
+        const samePath = directives.find(
+          (range) => range.kind === current.kind && range.expr === current.expr,
+        );
+        setSelected(samePath ?? null);
+      }
+    }
     setOutline(buildOutline(directives));
   }, [setSelected, setOutline]);
 
