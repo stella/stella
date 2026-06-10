@@ -11,7 +11,7 @@
  * and rejects the request when any part fails validation.
  */
 
-import { markerPattern, resolvePath } from "@stll/template-conditions";
+import { renderComposite, resolvePath } from "@stll/template-conditions";
 
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -79,14 +79,19 @@ const validatePart = (
 };
 
 /** Render a `{{key}}` format over part values. Markers without a matching
- *  part key are left as-is (a visible authoring artifact, not user error). */
+ *  part key are left as-is (a visible authoring artifact, not user error).
+ *  Routes through the canonical `renderComposite` in @stll/template-conditions
+ *  (the single source of truth shared with the web preview); the declared
+ *  parts are exactly the supplied value keys, so a marker is substituted iff a
+ *  value exists for it. */
 export const renderCompositeFormat = (
   format: string,
   partValues: Readonly<Record<string, string>>,
 ): string =>
-  format.replace(
-    markerPattern(),
-    (raw, inner: string) => partValues[inner.trim()] ?? raw,
+  renderComposite(
+    Object.keys(partValues).map((key) => ({ key })),
+    format,
+    partValues,
   );
 
 /** Replace the value at `path` where {@link resolvePath} found it: the exact
