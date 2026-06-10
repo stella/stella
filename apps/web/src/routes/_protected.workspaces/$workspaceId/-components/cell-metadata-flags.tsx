@@ -91,7 +91,7 @@ const CELL_FLAGS = [
   VERIFIED_CELL_FLAG,
 ] as const satisfies readonly CellFlagDefinition[];
 
-const cellFlagsById = new Map<string, CellFlagDefinition>(
+export const cellFlagsById = new Map<string, CellFlagDefinition>(
   CELL_FLAGS.map((flag) => [flag.id, flag]),
 );
 
@@ -120,7 +120,7 @@ type FlagProvenance = NonNullable<
 
 type LockProvenance = NonNullable<WorkspaceCellMetadata["lockProvenance"]>;
 
-const useFlagLabel = () => {
+export const useFlagLabel = () => {
   const t = useTranslations();
   return (flagId: CellFlagId) => t(FLAG_LABEL_KEYS[flagId]);
 };
