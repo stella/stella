@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db";
-import { isFieldMeta, isNamedCondition } from "@/api/handlers/docx/types";
+import { isFieldMeta } from "@/api/handlers/docx/types";
 import {
   type ClientTemplateManifest,
   type CreatedTemplate,
@@ -51,17 +51,7 @@ const parseClientManifest = (value: unknown): ClientTemplateManifest | null => {
   if (!Array.isArray(fields) || !fields.every(isFieldMeta)) {
     return null;
   }
-  const conditions = parsed["conditions"];
-  if (
-    conditions !== undefined &&
-    (!Array.isArray(conditions) || !conditions.every(isNamedCondition))
-  ) {
-    return null;
-  }
-  return {
-    fields,
-    conditions,
-  };
+  return { fields };
 };
 
 type CreateTemplateProps = {

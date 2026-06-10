@@ -12,6 +12,8 @@ import { panic } from "better-result";
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
+import type { NamedCondition } from "@stll/template-conditions";
+
 import {
   collectValidNumIds,
   flattenTemplateData,
@@ -21,13 +23,13 @@ import {
 } from "./block-directives";
 import { discoverPlaceholders } from "./discover-placeholders";
 import { processInlineConditions } from "./inline-conditions";
+import { manifestNamedConditions } from "./manifest-conditions";
 import { applyNumbering, hasNumberingMarkers } from "./numbering";
 import { HEADER_FOOTER_RE, W_NS } from "./ooxml";
 import { patchXmlPart } from "./rich-patch";
 import { readManifestFromZip, stripManifest } from "./template-manifest";
 import type {
   FillTemplateResult,
-  NamedCondition,
   RichPatchValue,
   TemplateData,
   TemplateDataValue,
@@ -165,10 +167,11 @@ export const fillTemplate = async (
   const zip = await JSZip.loadAsync(data);
 
   const manifest = await readManifestFromZip(zip);
-  const namedConditions =
-    manifest && manifest.conditions.length > 0
-      ? manifest.conditions
-      : undefined;
+  // A boolean condition-field IS a named condition (addressed by its path), so
+  // synthesize both shapes into one list the evaluator resolves bare names
+  // against — `{{#if field_path}}` then resolves the field's rule.
+  const synthesized = manifest ? manifestNamedConditions(manifest) : [];
+  const namedConditions = synthesized.length > 0 ? synthesized : undefined;
 
   let effectiveValues: PatchValues;
   let structureErrors: TemplateStructureError[] = [];

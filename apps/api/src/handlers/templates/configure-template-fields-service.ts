@@ -113,7 +113,6 @@ export const configureTemplateFields = async function* ({
   const manifest: TemplateManifest = {
     version: baseManifest?.version ?? 1,
     fields: mergedFields,
-    conditions: baseManifest?.conditions ?? [],
   };
 
   // Re-embed the manifest into the same object; markers and every other part

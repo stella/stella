@@ -19,6 +19,8 @@
 
 import JSZip from "jszip";
 
+import type { NamedCondition } from "@stll/template-conditions";
+
 import { rootDb } from "@/api/db/root";
 import {
   clauseCategories,
@@ -32,11 +34,7 @@ import {
 } from "@/api/db/schema";
 import type { ClauseBody, ClauseParagraph } from "@/api/handlers/clauses/types";
 import { writeManifest } from "@/api/handlers/docx/template-manifest";
-import type {
-  FieldMeta,
-  NamedCondition,
-  TemplateManifest,
-} from "@/api/handlers/docx/types";
+import type { FieldMeta, TemplateManifest } from "@/api/handlers/docx/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getS3 } from "@/api/lib/s3";
 
@@ -2270,11 +2268,30 @@ export async function seedTemplates(
     const templateId = scopedSeedId(t.label);
     const versionId = scopedSeedId(`${t.label}-v1`);
 
+    // Conditions are boolean fields: a self-referential entry (expression ===
+    // name) is a yes/no question, otherwise the expression is the field's
+    // derived rule. Existing fields keep precedence on a path collision.
+    const fieldPaths = new Set(t.fields.map((f) => f.path));
+    const conditionFields: FieldMeta[] = [];
+    for (const condition of t.conditions) {
+      if (fieldPaths.has(condition.name)) {
+        continue;
+      }
+      const field: FieldMeta = {
+        path: condition.name,
+        inputType: "boolean",
+        label: condition.label,
+      };
+      if (condition.expression !== condition.name) {
+        field.condition = condition.expression;
+      }
+      conditionFields.push(field);
+    }
+
     // Build manifest
     const manifest: TemplateManifest = {
       version: 1,
-      fields: t.fields,
-      conditions: t.conditions,
+      fields: [...t.fields, ...conditionFields],
     };
 
     // Generate DOCX with body content

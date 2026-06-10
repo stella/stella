@@ -3,7 +3,7 @@ import { t } from "elysia";
 
 import { writeManifest } from "@/api/handlers/docx/template-manifest";
 import type { TemplateManifest } from "@/api/handlers/docx/types";
-import { isFieldMeta, isNamedCondition } from "@/api/handlers/docx/types";
+import { isFieldMeta } from "@/api/handlers/docx/types";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -80,15 +80,6 @@ export const manifestHandler = async ({
     );
   }
 
-  if (!("conditions" in parsed) || !Array.isArray(parsed["conditions"])) {
-    return new Response(
-      JSON.stringify({
-        error: "'manifest.conditions' must be an array.",
-      }),
-      { status: 400, headers: { "Content-Type": "application/json" } },
-    );
-  }
-
   const fields = parsed["fields"];
   if (!fields.every(isFieldMeta)) {
     return new Response(
@@ -101,22 +92,9 @@ export const manifestHandler = async ({
     );
   }
 
-  const conditions = parsed["conditions"];
-  if (!conditions.every(isNamedCondition)) {
-    return new Response(
-      JSON.stringify({
-        error:
-          "Every element in 'manifest.conditions' must be an " +
-          "object with string 'name' and 'expression' properties.",
-      }),
-      { status: 400, headers: { "Content-Type": "application/json" } },
-    );
-  }
-
   const manifest: TemplateManifest = {
     version: parsed["version"],
     fields,
-    conditions,
   };
 
   const buffer = Buffer.from(await file.arrayBuffer());
