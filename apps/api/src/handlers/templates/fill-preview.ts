@@ -39,6 +39,7 @@ type FillPreviewProps = {
   safeDb: SafeDb;
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
   templateId: SafeId<"template">;
   body: { values: string };
 };
@@ -47,6 +48,7 @@ const fillPreviewHandler = async function* ({
   safeDb,
   scopedDb,
   organizationId,
+  userId,
   templateId,
   body: { values: valuesJson },
 }: FillPreviewProps) {
@@ -147,7 +149,11 @@ const fillPreviewHandler = async function* ({
       const aiResolved = await resolveAiFields({
         values: record,
         fields: manifest.fields,
-        generate: buildAiFieldGenerator({ orgAIConfig, organizationId }),
+        generate: buildAiFieldGenerator({
+          orgAIConfig,
+          organizationId,
+          skillContext: { organizationId, safeDb, userId },
+        }),
       });
       for (const [key, value] of Object.entries(aiResolved)) {
         record[key] = value;
@@ -161,7 +167,11 @@ const fillPreviewHandler = async function* ({
         buffer,
         fields: manifest.fields,
         values: record,
-        adapt: buildAiOccurrenceAdapter({ orgAIConfig, organizationId }),
+        adapt: buildAiOccurrenceAdapter({
+          orgAIConfig,
+          organizationId,
+          skillContext: { organizationId, safeDb, userId },
+        }),
       });
       fillBuffer = adapted.buffer;
       adaptedPaths = adapted.adaptedPaths;
@@ -205,11 +215,12 @@ const config = {
 
 const fillTemplatePreview = createSafeRootHandler(
   config,
-  async function* ({ safeDb, scopedDb, session, params, body }) {
+  async function* ({ safeDb, scopedDb, session, user, params, body }) {
     return yield* fillPreviewHandler({
       safeDb,
       scopedDb,
       organizationId: session.activeOrganizationId,
+      userId: user.id,
       templateId: params.templateId,
       body,
     });

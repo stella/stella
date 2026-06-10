@@ -169,7 +169,11 @@ const fillByIdHandler = async function* ({
       const aiResolved = await resolveAiFields({
         values: parsed,
         fields: manifest.fields,
-        generate: buildAiFieldGenerator({ orgAIConfig, organizationId }),
+        generate: buildAiFieldGenerator({
+          orgAIConfig,
+          organizationId,
+          skillContext: { organizationId, safeDb, userId },
+        }),
       });
       for (const [key, value] of Object.entries(aiResolved)) {
         parsed[key] = value;
@@ -187,6 +191,7 @@ const fillByIdHandler = async function* ({
           orgAIConfig,
           organizationId,
           documentLanguages: template.languages,
+          skillContext: { organizationId, safeDb, userId },
         }),
       });
       fillBuffer = adapted.buffer;

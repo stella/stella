@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
-import type { ScopedDb } from "@/api/db";
+import type { SafeDb, ScopedDb } from "@/api/db";
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
 import { extractText } from "@/api/handlers/docx/extract-text";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
@@ -117,6 +117,11 @@ const stubScopedDb = (async (fn: unknown) => {
   }
   return;
 }) as unknown as ScopedDb;
+
+// SAFETY: test stub; these fill cases reject before reaching any AI generator
+// (non-DOCX file or empty values), so the safeDb is never invoked.
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion
+const stubSafeDb = (async () => undefined) as unknown as SafeDb;
 
 const makeDocxFile = async (buf: Buffer) =>
   new File([new Uint8Array(buf)], "test.docx", { type: DOCX_MIME });
@@ -492,6 +497,7 @@ describe("handler MIME validation", () => {
 
   test("fill rejects non-DOCX file", async () => {
     const result = await fillHandler({
+      safeDb: stubSafeDb,
       scopedDb: stubScopedDb,
       organizationId: fakeOrgId,
       userId: fakeUserId,
@@ -534,6 +540,7 @@ describe("fill handler validation", () => {
     const buf = await makeEmptyDocx();
     const file = await makeDocxFile(buf);
     const result = await fillHandler({
+      safeDb: stubSafeDb,
       scopedDb: stubScopedDb,
       organizationId: fakeOrgId,
       userId: fakeUserId,
@@ -552,6 +559,7 @@ describe("fill handler validation", () => {
     const buf = await makeEmptyDocx();
     const file = await makeDocxFile(buf);
     const result = await fillHandler({
+      safeDb: stubSafeDb,
       scopedDb: stubScopedDb,
       organizationId: fakeOrgId,
       userId: fakeUserId,
@@ -570,6 +578,7 @@ describe("fill handler validation", () => {
     const buf = await makeEmptyDocx();
     const file = await makeDocxFile(buf);
     const result = await fillHandler({
+      safeDb: stubSafeDb,
       scopedDb: stubScopedDb,
       organizationId: fakeOrgId,
       userId: fakeUserId,
@@ -588,6 +597,7 @@ describe("fill handler validation", () => {
     const buf = await makeEmptyDocx();
     const file = await makeDocxFile(buf);
     const result = await fillHandler({
+      safeDb: stubSafeDb,
       scopedDb: stubScopedDb,
       organizationId: fakeOrgId,
       userId: fakeUserId,
@@ -606,6 +616,7 @@ describe("fill handler validation", () => {
     const buf = await makeEmptyDocx();
     const file = await makeDocxFile(buf);
     const result = await fillHandler({
+      safeDb: stubSafeDb,
       scopedDb: stubScopedDb,
       organizationId: fakeOrgId,
       userId: fakeUserId,
@@ -633,6 +644,7 @@ describe("fill handler diagnostic headers", () => {
     const file = await makeDocxFile(buf);
 
     const result = await fillHandler({
+      safeDb: stubSafeDb,
       scopedDb: stubScopedDb,
       organizationId: fakeOrgId,
       userId: fakeUserId,
@@ -653,6 +665,7 @@ describe("fill handler diagnostic headers", () => {
     const file = await makeDocxFile(buf);
 
     const result = await fillHandler({
+      safeDb: stubSafeDb,
       scopedDb: stubScopedDb,
       organizationId: fakeOrgId,
       userId: fakeUserId,
@@ -676,6 +689,7 @@ describe("fill handler diagnostic headers", () => {
     const file = await makeDocxFile(buf);
 
     const result = await fillHandler({
+      safeDb: stubSafeDb,
       scopedDb: stubScopedDb,
       organizationId: fakeOrgId,
       userId: fakeUserId,
@@ -704,6 +718,7 @@ describe("fill handler download response", () => {
     const file = await makeDocxFile(buf);
 
     const result = await fillHandler({
+      safeDb: stubSafeDb,
       scopedDb: stubScopedDb,
       organizationId: fakeOrgId,
       userId: fakeUserId,
