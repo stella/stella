@@ -13,9 +13,11 @@ import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
 import {
+  collectValidNumIds,
   flattenTemplateData,
   HAS_BLOCK_DIRECTIVES_RE,
   processBlockDirectives,
+  pruneDanglingNumPr,
 } from "./block-directives";
 import { discoverPlaceholders } from "./discover-placeholders";
 import { applyNumbering, hasNumberingMarkers } from "./numbering";
@@ -107,6 +109,16 @@ const preProcessBlockDirectives = async (
     templateData,
     namedConditions,
   );
+
+  // Loop expansion clones list paragraphs verbatim; prune numbering
+  // references that do not resolve in word/numbering.xml so the
+  // output renders identically in every consumer (Word ignores a
+  // dangling numId, other processors may not).
+  if (body.getElementsByTagNameNS(W_NS, "numPr").length > 0) {
+    const numberingXml =
+      (await zip.file("word/numbering.xml")?.async("string")) ?? null;
+    pruneDanglingNumPr(body, collectValidNumIds(numberingXml));
+  }
 
   // Serialize modified DOM back into the ZIP
   const serialized = slimdom.serializeToWellFormedString(doc);
