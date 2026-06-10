@@ -148,7 +148,10 @@ export const createTemplateTools = ({
         "fields: the exact literalText, a dotted fieldPath, an inputType and " +
         "an optional AI-draft prompt. After reviewing the suggestions, apply " +
         "the ones that make sense with apply-active-docx-edits, replacing " +
-        "each literalText occurrence with its {{fieldPath}} marker verbatim.",
+        "each literalText occurrence with its {{fieldPath}} marker verbatim. " +
+        "In bilingual or multi-column documents apply the marker in EVERY " +
+        "language column (one edit per parallel occurrence), so the same " +
+        "value is never a field in one language and hardcoded in the other.",
       inputSchema: valibotSchema(
         v.strictObject({
           text: v.pipe(
