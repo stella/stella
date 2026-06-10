@@ -2098,6 +2098,7 @@
       "copied": "Copié dans le dossier",
       "copyOption": "Copier (conserver l'original)",
       "description": "Copier ou déplacer \"{name}\" vers un autre dossier",
+      "descriptionCount": "Copier ou déplacer {count, plural, one {# élément} other {# éléments}} vers un autre dossier",
       "menuItem": "Copier/Déplacer vers un dossier",
       "moveButton": "Déplacer",
       "moveOption": "Déplacer (supprimer l'original)",

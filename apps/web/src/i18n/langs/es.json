@@ -2098,6 +2098,7 @@
       "copied": "Copiado al asunto",
       "copyOption": "Copiar (mantener original)",
       "description": "Copiar o mover \"{name}\" a otro asunto",
+      "descriptionCount": "Copiar o mover {count, plural, one {# elemento} other {# elementos}} a otro asunto",
       "menuItem": "Copiar/Mover a asunto",
       "moveButton": "Mover",
       "moveOption": "Mover (eliminar original)",

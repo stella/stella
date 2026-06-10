@@ -137,6 +137,7 @@ export const RowActions = ({
   const name = getEntityName(entity);
   const isFolder = entity.kind === "folder";
   const isBulk = selectedEntities !== undefined && selectedEntities.length > 1;
+  const bulkTargets = isBulk ? selectedEntities : [entity];
   const isCellContext =
     !isBulk && cellMetadataTarget !== null && cellMetadataTarget !== undefined;
   const isDocx = !isBulk && file?.mimeType === DOCX_MIME;
@@ -393,8 +394,7 @@ export const RowActions = ({
   };
 
   const handleChatAbout = () => {
-    const targets = isBulk ? selectedEntities : [entity];
-    const mentions = targets.map((e) => {
+    const mentions = bulkTargets.map((e) => {
       const f = getFirstFile(e);
       return {
         id: e.entityId,
@@ -408,11 +408,10 @@ export const RowActions = ({
   };
 
   const handleDuplicate = async () => {
-    const allTargets = isBulk ? selectedEntities : [entity];
     // Folders cannot be duplicated server-side; silently skip them so a
     // mixed selection (folders + files) does not surface as a generic
     // failure to the user.
-    const targets = allTargets.filter((e) => e.kind !== "folder");
+    const targets = bulkTargets.filter((e) => e.kind !== "folder");
 
     if (targets.length === 0) {
       stellaToast.add({
@@ -699,16 +698,14 @@ export const RowActions = ({
               <CopyIcon />
               {t("common.duplicate")}
             </MenuItem>
-            {!isBulk && (
-              <MenuItem
-                onClick={() => {
-                  setCopyToMatterOpen(true);
-                }}
-              >
-                <FolderSyncIcon />
-                {t("workspaces.copyToMatter.menuItem")}
-              </MenuItem>
-            )}
+            <MenuItem
+              onClick={() => {
+                setCopyToMatterOpen(true);
+              }}
+            >
+              <FolderSyncIcon />
+              {t("workspaces.copyToMatter.menuItem")}
+            </MenuItem>
 
             <MenuSeparator />
 
@@ -756,15 +753,12 @@ export const RowActions = ({
           </>
         )}
       </MenuPopup>
-      {!isBulk && (
-        <CopyToMatterDialog
-          entityId={entity.entityId}
-          entityName={name}
-          onOpenChange={setCopyToMatterOpen}
-          open={copyToMatterOpen}
-          sourceWorkspaceId={workspaceId}
-        />
-      )}
+      <CopyToMatterDialog
+        entities={toCopyToMatterEntities(bulkTargets)}
+        onOpenChange={setCopyToMatterOpen}
+        open={copyToMatterOpen}
+        sourceWorkspaceId={workspaceId}
+      />
       {/* Hidden file input for upload new version */}
       {canUploadVersion && (
         <input
@@ -838,6 +832,12 @@ const CreateSubfolderMenuItem = ({
 };
 
 // -- Helpers (avoid duplicating logic between single/bulk) --
+
+const toCopyToMatterEntities = (targets: WorkspaceEntity[]) =>
+  targets.map((e) => ({
+    entityId: e.entityId,
+    entityName: getEntityName(e),
+  }));
 
 type FileRef = { fieldId: string; fileName: string; mimeType: string | null };
 type Msg = { downloading: string; failed: string };

@@ -2098,6 +2098,7 @@
       "copied": "In Akte kopiert",
       "copyOption": "Kopieren (Original behalten)",
       "description": "\"{name}\" in eine andere Akte kopieren oder verschieben",
+      "descriptionCount": "{count, plural, one {# Element} other {# Elemente}} in eine andere Akte kopieren oder verschieben",
       "menuItem": "In Akte kopieren/verschieben",
       "moveButton": "Verschieben",
       "moveOption": "Verschieben (Original löschen)",

@@ -43,10 +43,16 @@ import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { apiUrl } from "@/lib/api-url";
 import { ClientOperationError } from "@/lib/errors";
-import type { ViewLayout, WorkspaceProperty, WorkspaceView } from "@/lib/types";
+import type {
+  ViewLayout,
+  WorkspaceEntity,
+  WorkspaceProperty,
+  WorkspaceView,
+} from "@/lib/types";
 import { BulkAddColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/bulk-add-columns";
 import { ExistingFileOrganizerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog";
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
+import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
 import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { FilterChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters";
 import { SortChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-sorts";
@@ -75,6 +81,7 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
   const { filters, sorts, hiddenProperties } = view.layout;
   const folderState = useWorkspaceStore((s) => s.folderState);
   const toggleAllFolders = useWorkspaceStore((s) => s.toggleAllFolders);
+  const selectedEntities = useTableStore((s) => s.selectedEntities[view.id]);
 
   // Generic helper preserves the union discriminant. A bare
   // `{ ...layout, ...partial }` would collapse to an invalid union.
@@ -204,6 +211,52 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
           <BulkAddColumns triggerVariant="labelled" workspaceId={workspaceId} />
         </>
       )}
+
+      {view.layout.type === "table" && (
+        <SelectionActions
+          selectedEntities={selectedEntities}
+          workspaceId={workspaceId}
+        />
+      )}
+    </div>
+  );
+};
+
+type SelectionActionsProps = {
+  selectedEntities: WorkspaceEntity[] | undefined;
+  workspaceId: string;
+};
+
+/**
+ * Secondary actions for the current row selection (delete, copy/move
+ * to matter, download, …). Reuses the row actions menu so the
+ * toolbar and the row context menu cannot drift apart.
+ */
+const SelectionActions = ({
+  selectedEntities,
+  workspaceId,
+}: SelectionActionsProps) => {
+  const t = useTranslations();
+  const firstSelected = selectedEntities?.at(0);
+  if (!firstSelected || selectedEntities === undefined) {
+    return null;
+  }
+
+  return (
+    <div className="ms-auto flex items-center gap-1.5">
+      <span className="text-muted-foreground text-xs">
+        {t("workspaces.views.fieldsSelected", {
+          count: selectedEntities.length,
+        })}
+      </span>
+      <RowActions
+        entity={firstSelected}
+        selectedEntities={
+          selectedEntities.length > 1 ? selectedEntities : undefined
+        }
+        triggerClassName=""
+        workspaceId={workspaceId}
+      />
     </div>
   );
 };

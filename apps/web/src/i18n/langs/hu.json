@@ -2098,6 +2098,7 @@
       "copied": "Másolva az ügyiratba",
       "copyOption": "Másolás (eredeti megtartása)",
       "description": "\"{name}\" másolása vagy áthelyezése másik ügyiratba",
+      "descriptionCount": "{count, plural, one {# elem} other {# elem}} másolása vagy áthelyezése másik ügyiratba",
       "menuItem": "Másolás/Áthelyezés ügyiratba",
       "moveButton": "Áthelyezés",
       "moveOption": "Áthelyezés (eredeti törlése)",

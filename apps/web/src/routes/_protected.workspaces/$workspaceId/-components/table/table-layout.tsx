@@ -26,8 +26,10 @@ import type {
   TableCellContext,
   TableColumnDef,
   TableHeaderContext,
+  TableTreeNode,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import { WorkspaceTable } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table";
+import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import { useSyncJustificationChunks } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
 import { useTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state";
 import {
@@ -143,6 +145,25 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
     workspaceId,
     entityIdChunks: justificationEntityIdChunks,
   });
+
+  // Resolve the row selection to entities for chrome outside the
+  // table (the view toolbar's bulk actions menu).
+  const rowSelection = useTableStore((s) => s.rowSelection[view.id]);
+  const setSelectedEntities = useTableStore((s) => s.setSelectedEntities);
+  useEffect(() => {
+    const selected = rowSelection ?? {};
+    const result: TableTreeNode[] = [];
+    const visit = (nodes: TableTreeNode[]) => {
+      for (const node of nodes) {
+        if (selected[node.entityId]) {
+          result.push(node);
+        }
+        visit(node.children);
+      }
+    };
+    visit(treeData);
+    setSelectedEntities(view.id, result);
+  }, [rowSelection, treeData, view.id, setSelectedEntities]);
 
   const columns = useMemo(() => {
     const columnDefs: TableColumnDef[] = [

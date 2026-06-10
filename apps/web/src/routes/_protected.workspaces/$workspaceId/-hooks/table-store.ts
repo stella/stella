@@ -9,6 +9,8 @@ import { persist } from "zustand/middleware";
 import type { PersistStorage, StorageValue } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
 
+import type { WorkspaceEntity } from "@/lib/types";
+
 const MAP_TAG = "__map";
 const TABLE_CONTENT_MODES = ["tight", "fit-content"] as const;
 
@@ -100,6 +102,13 @@ type TableStore = {
     viewId: string,
     updater: Updater<RowSelectionState>,
   ) => void;
+  /**
+   * Selected entities resolved from `rowSelection`, synced by the
+   * table layout so chrome outside the table (view toolbar) can
+   * offer bulk actions without rebuilding the entities query.
+   */
+  selectedEntities: Record<string, WorkspaceEntity[]>;
+  setSelectedEntities: (viewId: string, entities: WorkspaceEntity[]) => void;
   pruneStaleViews: (activeViewIds: string[]) => void;
 };
 
@@ -109,6 +118,7 @@ export const useTableStore = create<TableStore>()(
       columnSizing: new Map<string, ColumnSizingState>(),
       contentMode: {},
       rowSelection: {},
+      selectedEntities: {},
 
       setContentMode: (viewId, mode) => {
         set((state) => {
@@ -129,6 +139,16 @@ export const useTableStore = create<TableStore>()(
           const prev = state.rowSelection[viewId] ?? {};
           const next = typeof updater === "function" ? updater(prev) : updater;
           state.rowSelection[viewId] = next;
+        });
+      },
+
+      setSelectedEntities: (viewId, entities) => {
+        set((state) => {
+          const prev = state.selectedEntities[viewId];
+          if (entities.length === 0 && (!prev || prev.length === 0)) {
+            return;
+          }
+          state.selectedEntities[viewId] = entities;
         });
       },
 
@@ -154,6 +174,15 @@ export const useTableStore = create<TableStore>()(
             }
           }
           state.rowSelection = pruned;
+          const prunedSelectedEntities: Record<string, WorkspaceEntity[]> = {};
+          for (const [vid, entities] of Object.entries(
+            state.selectedEntities,
+          )) {
+            if (active.has(vid)) {
+              prunedSelectedEntities[vid] = entities;
+            }
+          }
+          state.selectedEntities = prunedSelectedEntities;
         });
       },
     })),

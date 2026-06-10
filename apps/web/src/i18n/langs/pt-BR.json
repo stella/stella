@@ -2098,6 +2098,7 @@
       "copied": "Copiado para o caso",
       "copyOption": "Copiar (manter original)",
       "description": "Copiar ou mover \"{name}\" para outro caso",
+      "descriptionCount": "Copiar ou mover {count, plural, one {# item} other {# itens}} para outro caso",
       "menuItem": "Copiar/Mover para caso",
       "moveButton": "Mover",
       "moveOption": "Mover (excluir original)",
