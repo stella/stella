@@ -6,7 +6,9 @@ import { resolveSuggestionAnchor } from "@stll/folio";
 import {
   buildOperationSpecs,
   buildReplacementSuggestions,
+  extractCompletedStreamingOperations,
   extractFieldMarkerPath,
+  operationFingerprint,
 } from "./template-studio-suggestions";
 import type {
   BuildReplaceSpecArgs,
@@ -207,6 +209,95 @@ describe("buildOperationSpecs", () => {
 
     expect(specs[0]?.id).toBe("tpl-edit-5-B1");
     expect(specs[0]?.scopeText).toBe("Acme delivers.");
+  });
+});
+
+describe("buildReplacementSuggestions occupiedRanges", () => {
+  test("pre-claimed spans are skipped so progressive batches stay duplicate-free", () => {
+    const doc = makeDoc(["Acme Inc. delivers. Acme Inc. signs."]);
+    const firstPass = buildReplacementSuggestions(doc, [
+      spec({ id: "op-1", literalText: "Acme Inc." }),
+    ]);
+    expect(firstPass.suggestions).toHaveLength(2);
+
+    const secondPass = buildReplacementSuggestions(
+      doc,
+      [spec({ id: "op-1-again", literalText: "Acme Inc." })],
+      { occupiedRanges: firstPass.suggestions.map((s) => s.range) },
+    );
+    expect(secondPass.suggestions).toHaveLength(0);
+    expect(secondPass.placedSpecIds.size).toBe(0);
+  });
+});
+
+describe("extractCompletedStreamingOperations", () => {
+  const completeOp: DocxEditOperation = {
+    type: "replaceInBlock",
+    blockId: "B1",
+    find: "Acme",
+    replace: "{{seller.name}}",
+    severity: "low",
+    area: "Names",
+  };
+
+  test("returns every element except the trailing (possibly partial) one", () => {
+    const operations = extractCompletedStreamingOperations({
+      operations: [
+        completeOp,
+        { ...completeOp, blockId: "B2" },
+        { type: "replaceInBlock", blockId: "B3", find: "Bet" },
+      ],
+    });
+    expect(operations).toHaveLength(2);
+    expect(operations[1]?.blockId).toBe("B2");
+  });
+
+  test("stops at the first malformed element to keep indices aligned", () => {
+    const operations = extractCompletedStreamingOperations({
+      operations: [
+        { type: "replaceInBlock", blockId: "B1" },
+        completeOp,
+        { trailing: true },
+      ],
+    });
+    expect(operations).toHaveLength(0);
+  });
+
+  test("non-object input and missing operations yield nothing", () => {
+    expect(extractCompletedStreamingOperations(undefined)).toEqual([]);
+    expect(extractCompletedStreamingOperations("{")).toEqual([]);
+    expect(extractCompletedStreamingOperations({})).toEqual([]);
+    expect(extractCompletedStreamingOperations({ operations: "x" })).toEqual(
+      [],
+    );
+    expect(extractCompletedStreamingOperations({ operations: [] })).toEqual([]);
+  });
+});
+
+describe("operationFingerprint", () => {
+  test("is key-order insensitive and value sensitive", () => {
+    const streamed: DocxEditOperation = {
+      type: "replaceInBlock",
+      blockId: "B1",
+      find: "Acme",
+      replace: "{{seller.name}}",
+      severity: "low",
+      area: "Names",
+    };
+    const finalized: DocxEditOperation = {
+      area: "Names",
+      severity: "low",
+      replace: "{{seller.name}}",
+      find: "Acme",
+      blockId: "B1",
+      type: "replaceInBlock",
+    };
+    expect(operationFingerprint(streamed)).toBe(
+      operationFingerprint(finalized),
+    );
+    expect(operationFingerprint({ ...streamed, replace: "other" })).not.toBe(
+      operationFingerprint(finalized),
+    );
   });
 });
 

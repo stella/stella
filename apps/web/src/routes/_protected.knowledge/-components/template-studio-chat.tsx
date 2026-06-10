@@ -89,12 +89,15 @@ import { useTemplateStudioStore } from "@/routes/_protected.knowledge/-component
 import {
   buildOperationSpecs,
   buildReplacementSuggestions,
+  extractCompletedStreamingOperations,
   extractFieldMarkerPath,
   filledByForFieldMeta,
+  operationFingerprint,
   operationSpecId,
 } from "@/routes/_protected.knowledge/-components/template-studio-suggestions";
 import type {
   BuildReplaceSpecArgs,
+  DocxEditOperation,
   ReplacementSpec,
   SuggestedFieldMeta,
 } from "@/routes/_protected.knowledge/-components/template-studio-suggestions";
@@ -713,18 +716,215 @@ const TemplateStudioChatInner = ({
   };
 
   /**
-   * Client executor for `apply-active-docx-edits`: convert the approved
-   * operations into in-document AISuggestions anchored via positional
-   * text, and report queued/skipped ids back to the model.
+   * Place one operation as in-document suggestions and classify it the
+   * way the tool output reports it. `occupiedRanges` is extended in
+   * place with the spans this op claims, so a sequence of calls within
+   * one pass stays overlap-free.
    */
-  const handleActiveDocxEditToolCall = useEffectEvent(
-    (input: ApplyActiveDocxEditsInput): ApplyActiveDocxEditsOutput => {
+  const placeOperation = ({
+    operation,
+    index,
+    view,
+    blockTextById,
+    fieldMetaByPath,
+    occupiedRanges,
+  }: PlaceOperationOptions): OperationPlacementOutcome => {
+    const fingerprint = operationFingerprint(operation);
+    const { specs, skipped } = buildOperationSpecs({
+      operations: [operation],
+      startIndex: index,
+      blockTextById,
+      buildReplaceSpec: (args) =>
+        buildSpecForReplace({
+          ...args,
+          fieldMetaByPath,
+          fieldMeta: fieldMetaRef.current,
+        }),
+    });
+    const skippedReason = skipped.at(0)?.reason;
+    if (skippedReason !== undefined) {
+      return {
+        fingerprint,
+        suggestionIds: [],
+        result: { queued: false, reason: skippedReason },
+      };
+    }
+    const suggestionIds: string[] = [];
+    // The specs are freshly built above; wrap each registerMeta in
+    // place so created suggestion ids are recorded for reconciliation.
+    for (const spec of specs) {
+      const registerMeta = spec.registerMeta;
+      spec.registerMeta = (suggestionId: string) => {
+        registerMeta?.(suggestionId);
+        suggestionIds.push(suggestionId);
+      };
+    }
+    const { suggestions: created, placedSpecIds } = buildReplacementSuggestions(
+      view.state.doc,
+      specs,
+      { occupiedRanges },
+    );
+    if (placedSpecIds.size === 0) {
+      return {
+        fingerprint,
+        suggestionIds: [],
+        result: { queued: false, reason: "missingFind" },
+      };
+    }
+    for (const suggestion of created) {
+      occupiedRanges.push(suggestion.range);
+    }
+    setSuggestions((prev) => [...prev, ...created]);
+    return { fingerprint, suggestionIds, result: { queued: true } };
+  };
+
+  /** Remove suggestions that are still pending (accepted/rejected ones
+   *  represent user decisions and stay). */
+  const removePendingSuggestions = (ids: readonly string[]) => {
+    if (ids.length === 0) {
+      return;
+    }
+    const idSet = new Set(ids);
+    setSuggestions((prev) =>
+      prev.filter(
+        (suggestion) =>
+          !(idSet.has(suggestion.id) && suggestion.status === "pending"),
+      ),
+    );
+    for (const id of ids) {
+      fieldMetaRef.current.delete(id);
+    }
+  };
+
+  // Provisional placements per streaming tool call id. The executor
+  // pass reconciles each record exactly once and deletes it; denied or
+  // abandoned calls are cleaned up by the watcher below.
+  const streamingPlacementsRef = useRef(
+    new Map<string, StreamingPlacementRecord>(),
+  );
+
+  /**
+   * Progressive placement: ops land as in-document suggestions while
+   * the tool input is still streaming, one per completed array
+   * element. Idempotent per tool call — each op index is processed at
+   * most once (`outcomes` is contiguous from 0), so delta re-runs and
+   * StrictMode double-invocations are no-ops.
+   */
+  const placeStreamedOperations = useEffectEvent(
+    (toolCallId: string, operations: readonly DocxEditOperation[]) => {
+      const record = streamingPlacementsRef.current.get(toolCallId) ?? {
+        outcomes: new Map<number, OperationPlacementOutcome>(),
+      };
+      if (operations.length <= record.outcomes.size) {
+        return;
+      }
       let view = getView();
       if (!view) {
         ensureView();
         view = getView();
       }
       if (!view) {
+        // Record nothing; the next input delta retries.
+        return;
+      }
+      streamingPlacementsRef.current.set(toolCallId, record);
+      const blockTextById = collectOperationBlockTexts();
+      const fieldMetaByPath = collectSuggestedFieldMeta(messages);
+      const occupiedRanges = suggestions
+        .filter((suggestion) => suggestion.status === "pending")
+        .map((suggestion) => suggestion.range);
+      for (
+        let index = record.outcomes.size;
+        index < operations.length;
+        index += 1
+      ) {
+        const operation = operations.at(index);
+        if (!operation) {
+          break;
+        }
+        record.outcomes.set(
+          index,
+          placeOperation({
+            operation,
+            index,
+            view,
+            blockTextById,
+            fieldMetaByPath,
+            occupiedRanges,
+          }),
+        );
+      }
+    },
+  );
+
+  /** Drop a tool call's provisional suggestions (denied call). */
+  const discardStreamedPlacements = useEffectEvent((toolCallId: string) => {
+    const record = streamingPlacementsRef.current.get(toolCallId);
+    if (!record) {
+      return;
+    }
+    streamingPlacementsRef.current.delete(toolCallId);
+    const ids: string[] = [];
+    for (const outcome of record.outcomes.values()) {
+      ids.push(...outcome.suggestionIds);
+    }
+    removePendingSuggestions(ids);
+  });
+
+  // Watch the latest assistant message for streaming apply-tool input
+  // and surface completed ops immediately; placements for calls that
+  // end denied are discarded.
+  useEffect(() => {
+    const message = messages.at(-1);
+    if (!message || message.role !== "assistant") {
+      return;
+    }
+    for (const part of message.parts) {
+      if (part.type !== "tool-apply-active-docx-edits") {
+        continue;
+      }
+      if (part.state === "input-streaming") {
+        const operations = extractCompletedStreamingOperations(part.input);
+        if (operations.length > 0) {
+          placeStreamedOperations(part.toolCallId, operations);
+        }
+        continue;
+      }
+      if (part.state === "output-denied") {
+        discardStreamedPlacements(part.toolCallId);
+      }
+    }
+  }, [messages]);
+
+  /**
+   * Client executor for `apply-active-docx-edits`: convert the approved
+   * operations into in-document AISuggestions anchored via positional
+   * text, and report queued/skipped ids back to the model. Reconciles
+   * with the streaming pass exactly once: outcomes whose op matches the
+   * finalized input are reused (no duplicate suggestions); drifted
+   * provisional suggestions are removed and their ops re-placed.
+   */
+  const handleActiveDocxEditToolCall = useEffectEvent(
+    (
+      input: ApplyActiveDocxEditsInput,
+      toolCallId: string,
+    ): ApplyActiveDocxEditsOutput => {
+      const record = streamingPlacementsRef.current.get(toolCallId);
+      streamingPlacementsRef.current.delete(toolCallId);
+
+      let view = getView();
+      if (!view) {
+        ensureView();
+        view = getView();
+      }
+      if (!view) {
+        // Provisional placements were made against a view that has
+        // since gone away; drop them so nothing dangles unreported.
+        const provisionalIds: string[] = [];
+        for (const outcome of record?.outcomes.values() ?? []) {
+          provisionalIds.push(...outcome.suggestionIds);
+        }
+        removePendingSuggestions(provisionalIds);
         return {
           applied: [],
           queued: [],
@@ -735,34 +935,59 @@ const TemplateStudioChatInner = ({
         };
       }
 
-      const fieldMetaByPath = collectSuggestedFieldMeta(messages);
-      const { specs, skipped } = buildOperationSpecs({
-        operations: input.operations,
-        blockTextById: collectOperationBlockTexts(),
-        buildReplaceSpec: (args) =>
-          buildSpecForReplace({
-            ...args,
-            fieldMetaByPath,
-            fieldMeta: fieldMetaRef.current,
-          }),
-      });
-
-      const { suggestions: created, placedSpecIds } =
-        buildReplacementSuggestions(view.state.doc, specs);
-      for (const spec of specs) {
-        if (!placedSpecIds.has(spec.id)) {
-          skipped.push({ id: spec.id, reason: "missingFind" });
+      // Pass 1: match provisional outcomes against the finalized ops;
+      // drifted suggestions are removed first so their spans free up
+      // for re-placement.
+      const reusable = new Map<number, OperationPlacementOutcome>();
+      const driftedIds = new Set<string>();
+      for (const [index, prior] of record?.outcomes ?? []) {
+        const operation = input.operations.at(index);
+        if (
+          operation !== undefined &&
+          prior.fingerprint === operationFingerprint(operation)
+        ) {
+          reusable.set(index, prior);
+          continue;
+        }
+        for (const id of prior.suggestionIds) {
+          driftedIds.add(id);
         }
       }
-      if (created.length > 0) {
-        setSuggestions((prev) => [...prev, ...created]);
+      if (driftedIds.size > 0) {
+        removePendingSuggestions([...driftedIds]);
       }
 
-      return {
-        applied: [],
-        queued: [...placedSpecIds].map((id) => ({ id })),
-        skipped,
-      };
+      const blockTextById = collectOperationBlockTexts();
+      const fieldMetaByPath = collectSuggestedFieldMeta(messages);
+      const occupiedRanges = suggestions
+        .filter(
+          (suggestion) =>
+            suggestion.status === "pending" && !driftedIds.has(suggestion.id),
+        )
+        .map((suggestion) => suggestion.range);
+
+      const queued: { id: string }[] = [];
+      const skipped: ApplyActiveDocxEditsOutput["skipped"] = [];
+      for (const [index, operation] of input.operations.entries()) {
+        const id = operationSpecId(operation, index);
+        const outcome =
+          reusable.get(index) ??
+          placeOperation({
+            operation,
+            index,
+            view,
+            blockTextById,
+            fieldMetaByPath,
+            occupiedRanges,
+          });
+        if (outcome.result.queued) {
+          queued.push({ id });
+        } else {
+          skipped.push({ id, reason: outcome.result.reason });
+        }
+      }
+
+      return { applied: [], queued, skipped };
     },
   );
 
@@ -782,7 +1007,7 @@ const TemplateStudioChatInner = ({
         return;
       }
       handleApprove(approvalId, toolName);
-      const output = handleActiveDocxEditToolCall(part.input);
+      const output = handleActiveDocxEditToolCall(part.input, part.toolCallId);
       await addToolOutput({
         output,
         tool: "apply-active-docx-edits",
@@ -1008,6 +1233,41 @@ const TemplateStudioChatInner = ({
       </ChatApprovalContext>
     </ChatMattersContext>
   );
+};
+
+// ---------------------------------------------------------------------------
+// Progressive (streamed) placement types
+// ---------------------------------------------------------------------------
+
+type SkippedOperationReason =
+  ApplyActiveDocxEditsOutput["skipped"][number]["reason"];
+
+/** Result of placing one operation, in tool-output terms. */
+type OperationPlacementOutcome = {
+  /** Fingerprint of the operation this outcome was computed for; the
+   *  reconcile pass reuses the outcome only when the finalized op
+   *  still matches it. */
+  fingerprint: string;
+  /** In-document suggestion ids the op produced (empty when skipped). */
+  suggestionIds: string[];
+  result: { queued: true } | { queued: false; reason: SkippedOperationReason };
+};
+
+/** Provisional placements for one streaming tool call, keyed by op
+ *  index (contiguous from 0; the map's size is the next index). */
+type StreamingPlacementRecord = {
+  outcomes: Map<number, OperationPlacementOutcome>;
+};
+
+type PlaceOperationOptions = {
+  operation: DocxEditOperation;
+  /** Index within the full tool input (drives the reported op id). */
+  index: number;
+  view: EditorView;
+  blockTextById: ReadonlyMap<string, string>;
+  fieldMetaByPath: Map<string, SuggestedFieldMeta>;
+  /** Spans already claimed; extended in place with new placements. */
+  occupiedRanges: { from: number; to: number }[];
 };
 
 // ---------------------------------------------------------------------------
