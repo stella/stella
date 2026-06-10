@@ -10,6 +10,7 @@ import {
   PlusIcon,
   TagIcon,
   Trash2Icon,
+  WandSparklesIcon,
   XIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -57,6 +58,7 @@ import { toSafeId } from "@/lib/safe-id";
 import { TemplateCategorySidebar } from "@/routes/_protected.knowledge/-components/template-category-sidebar";
 import type { TemplateCategoryItem } from "@/routes/_protected.knowledge/-components/template-category-sidebar";
 import { TemplateUpload } from "@/routes/_protected.knowledge/-components/template-upload";
+import { UseTemplateDialog } from "@/routes/_protected.knowledge/-components/use-template-dialog";
 import { knowledgeKeys } from "@/routes/_protected.knowledge/-queries";
 
 type DiscoverResponse = Awaited<ReturnType<typeof api.templates.discover.post>>;
@@ -299,6 +301,7 @@ const TemplateRow = ({
   const [deleting, setDeleting] = useState(false);
   const [tagsOpen, setTagsOpen] = useState(false);
   const [guidanceOpen, setGuidanceOpen] = useState(false);
+  const [useOpen, setUseOpen] = useState(false);
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -330,7 +333,13 @@ const TemplateRow = ({
     onDeleted();
   };
 
-  const contextActions: ContextMenuAction[] = [];
+  const contextActions: ContextMenuAction[] = [
+    {
+      label: t("templates.useTemplate"),
+      icon: <WandSparklesIcon />,
+      onClick: () => setUseOpen(true),
+    },
+  ];
   if (canUpdateTemplate) {
     contextActions.push(
       {
@@ -403,6 +412,13 @@ const TemplateRow = ({
           </div>
 
           <div className="flex shrink-0 items-center gap-3">
+            <Button
+              onClick={() => setUseOpen(true)}
+              size="xs"
+              variant="outline"
+            >
+              {t("templates.useTemplate")}
+            </Button>
             <RowMeta
               canUpdate={canUpdateTemplate}
               lang={lang}
@@ -500,6 +516,12 @@ const TemplateRow = ({
         onOpenChange={setGuidanceOpen}
         open={guidanceOpen}
         template={template}
+      />
+      <UseTemplateDialog
+        onOpenChange={setUseOpen}
+        open={useOpen}
+        templateId={template.id}
+        templateName={template.name}
       />
     </li>
   );
