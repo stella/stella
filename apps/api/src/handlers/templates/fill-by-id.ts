@@ -80,6 +80,7 @@ const fillByIdHandler = async function* ({
         columns: {
           s3Key: true,
           fileName: true,
+          languages: true,
         },
       }),
     ),
@@ -189,7 +190,11 @@ const fillByIdHandler = async function* ({
         buffer,
         fields: manifest.fields,
         values: parsed,
-        adapt: buildAiOccurrenceAdapter({ orgAIConfig, organizationId }),
+        adapt: buildAiOccurrenceAdapter({
+          orgAIConfig,
+          organizationId,
+          documentLanguages: template.languages,
+        }),
       });
       fillBuffer = adapted.buffer;
       adaptedPaths = adapted.adaptedPaths;
