@@ -1321,6 +1321,7 @@
       "versionCurrent": "v{version} (atual)"
     },
     "openChat": "Abrir bate-papo",
+    "reopenTab": "Reabrir {name}",
     "showPane": "Mostrar painel"
   },
   "knowledge": {

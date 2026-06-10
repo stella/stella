@@ -6,6 +6,7 @@ import {
   initializeInspectorTabBroadcast,
   useInspectorStore,
 } from "@/components/inspector/inspector-store";
+import { registerInspectorView } from "@/components/inspector/view-registry";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 
 let cleanupInspectorBroadcast: (() => void) | null = null;
@@ -33,6 +34,7 @@ afterEach(() => {
     pendingRenameTabId: null,
     minimized: false,
     pendingBlockScroll: null,
+    reviveSuggestion: null,
   });
 });
 
@@ -441,6 +443,135 @@ describe("replaceFileFieldId", () => {
     expect(tab.mimeType).toBe("application/pdf");
     expect(tab.pdfFileId).toBe("pdf-1");
     expect(tab.propertyId).toBe("property-2");
+  });
+});
+
+const openFullscreenFileTab = () => {
+  useInspectorStore.getState().openFile({
+    id: "field-1",
+    entityId: "entity-1",
+    label: "Contract.docx",
+    fileName: "Contract.docx",
+    mimeType:
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    metadataLane: "expanded",
+    pdfFileId: null,
+    propertyId: "property-1",
+    workspaceId: "workspace-1",
+  });
+};
+
+describe("revive suggestion", () => {
+  test("user close of a fullscreen file tab leaves a suggestion; revive restores the exact tab", () => {
+    openFullscreenFileTab();
+    const before = useInspectorStore
+      .getState()
+      .tabs.find((tab) => tab.id === "field-1");
+    if (before?.type !== "pdf") {
+      throw new Error("expected pdf tab");
+    }
+
+    useInspectorStore.getState().closeTab("field-1", { suggestRevive: true });
+    expect(useInspectorStore.getState().tabs).toHaveLength(0);
+    expect(useInspectorStore.getState().reviveSuggestion?.id).toBe("field-1");
+
+    useInspectorStore.getState().reviveSuggestedTab();
+    const after = useInspectorStore
+      .getState()
+      .tabs.find((tab) => tab.id === "field-1");
+    // Same renderId = same tab identity; the viewer subtree and any
+    // per-tab state reconnect instead of remounting fresh.
+    expect(after).toEqual(before);
+    expect(useInspectorStore.getState().activeId).toBe("field-1");
+    expect(useInspectorStore.getState().reviveSuggestion).toBeNull();
+  });
+
+  test("programmatic close (route unmount) leaves no suggestion", () => {
+    openFullscreenFileTab();
+    useInspectorStore.getState().closeTab("field-1");
+    expect(useInspectorStore.getState().reviveSuggestion).toBeNull();
+  });
+
+  test("closing a side-peek file tab leaves no suggestion", () => {
+    useInspectorStore.getState().openFile({
+      id: "field-1",
+      entityId: "entity-1",
+      label: "Contract.docx",
+      fileName: "Contract.docx",
+      mimeType: "application/pdf",
+      pdfFileId: null,
+      propertyId: "property-1",
+      workspaceId: "workspace-1",
+    });
+    useInspectorStore.getState().closeTab("field-1", { suggestRevive: true });
+    expect(useInspectorStore.getState().reviveSuggestion).toBeNull();
+  });
+
+  test("document route unmount clears the suggestion via lane demotion", () => {
+    openFullscreenFileTab();
+    useInspectorStore.getState().closeTab("field-1", { suggestRevive: true });
+    expect(useInspectorStore.getState().reviveSuggestion).not.toBeNull();
+
+    useInspectorStore.getState().setFileMetadataLane("field-1", "closed");
+    expect(useInspectorStore.getState().reviveSuggestion).toBeNull();
+  });
+
+  test("reopening another version of the same entity supersedes the suggestion", () => {
+    openFullscreenFileTab();
+    useInspectorStore.getState().closeTab("field-1", { suggestRevive: true });
+
+    useInspectorStore.getState().openFileForEntity({
+      id: "field-2",
+      entityId: "entity-1",
+      label: "Contract.docx",
+      fileName: "Contract.docx",
+      mimeType: "application/pdf",
+      pdfFileId: null,
+      propertyId: "property-1",
+      workspaceId: "workspace-1",
+    });
+    expect(useInspectorStore.getState().reviveSuggestion).toBeNull();
+  });
+
+  test("closeAll keeps a suggestion for the swept-away bound tab", () => {
+    openFullscreenFileTab();
+    useInspectorStore.getState().openChat({ id: toChatThreadId("thread-1") });
+
+    useInspectorStore.getState().closeAll();
+    expect(useInspectorStore.getState().tabs).toHaveLength(0);
+    expect(useInspectorStore.getState().reviveSuggestion?.id).toBe("field-1");
+  });
+
+  test("route-owned view tab: user close suggests, owner unmount close clears", () => {
+    registerInspectorView<{ templateId: string }>({
+      type: "test-bound-view",
+      navigationPolicy: "close-on-route-leave",
+      railIcon: () => null,
+      render: () => null,
+    });
+    useInspectorStore.getState().openView({
+      type: "test-bound-view",
+      id: "test-bound-view:tpl-1",
+      label: "NDA template",
+      payload: { templateId: "tpl-1" },
+      ownerRouteId: "/_protected/knowledge/templates",
+    });
+
+    useInspectorStore
+      .getState()
+      .closeTab("test-bound-view:tpl-1", { suggestRevive: true });
+    const suggestion = useInspectorStore.getState().reviveSuggestion;
+    expect(suggestion?.id).toBe("test-bound-view:tpl-1");
+    if (suggestion?.type !== "view") {
+      throw new Error("expected view suggestion");
+    }
+    expect(suggestion.payload).toEqual({ templateId: "tpl-1" });
+
+    // The owner page unmounts (user leaves the studio) and runs its
+    // cleanup close for a tab that is already gone — the suggestion
+    // must not outlive the main view it points at.
+    useInspectorStore.getState().closeTab("test-bound-view:tpl-1");
+    expect(useInspectorStore.getState().reviveSuggestion).toBeNull();
   });
 });
 

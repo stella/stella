@@ -1321,6 +1321,7 @@
       "versionCurrent": "v{version} (praegune)"
     },
     "openChat": "Ava vestlus",
+    "reopenTab": "Ava {name} uuesti",
     "showPane": "Kuva paneel"
   },
   "knowledge": {

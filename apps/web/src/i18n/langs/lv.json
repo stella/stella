@@ -1321,6 +1321,7 @@
       "versionCurrent": "v{version} (pašreizējā)"
     },
     "openChat": "Atvērt tērzēšanu",
+    "reopenTab": "Atkārtoti atvērt {name}",
     "showPane": "Rādīt paneli"
   },
   "knowledge": {

@@ -1321,6 +1321,7 @@
       "versionCurrent": "v{version} (actual)"
     },
     "openChat": "Abrir chat",
+    "reopenTab": "Reabrir {name}",
     "showPane": "Mostrar panel"
   },
   "knowledge": {

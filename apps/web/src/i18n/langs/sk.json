@@ -1321,6 +1321,7 @@
       "versionCurrent": "v{version} (aktuálna)"
     },
     "openChat": "Otvoriť chat",
+    "reopenTab": "Znova otvoriť {name}",
     "showPane": "Zobraziť panel"
   },
   "knowledge": {

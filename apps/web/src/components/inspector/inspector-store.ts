@@ -1,3 +1,4 @@
+import { current } from "immer";
 import { v7 as uuidv7 } from "uuid";
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
@@ -261,6 +262,30 @@ type State = {
    * `handleStartDocxEdit`, and clears it.
    */
   pendingDocxEditTabId: string | null;
+  /**
+   * Snapshot of a main-view-bound tab the user closed by hand while
+   * its document/template stays open in the main view. The rail
+   * renders it as a muted ghost chip; activating it restores the
+   * exact tab (same id, payload, ownerRouteId) so per-tab state —
+   * chat threads, facets, the template-studio session — reconnects.
+   * Cleared when the owning main view goes away or a tab with the
+   * same identity is opened again. Local to this browser tab; it is
+   * never broadcast.
+   */
+  reviveSuggestion: InspectorTab | null;
+};
+
+type CloseTabOptions = {
+  /**
+   * Marks a user-initiated close (rail middle-click, context menu,
+   * tab-header X). When the closed tab is bound to the open main
+   * view — a fullscreen file tab or a route-owned registry view —
+   * the store keeps a snapshot as `reviveSuggestion` so the rail
+   * can offer the way back. Programmatic closes (route unmount)
+   * omit this and instead clear a matching suggestion, because the
+   * main view the suggestion pointed at is going away.
+   */
+  suggestRevive?: boolean;
 };
 
 type Actions = {
@@ -366,9 +391,17 @@ type Actions = {
    * Called from the protected layout when the active route changes.
    */
   closeTabsForRoute: (routeId: string) => void;
-  closeTab: (id: string) => void;
+  closeTab: (id: string, options?: CloseTabOptions) => void;
   /** Close every tab except the one with the given id. */
   closeOthers: (id: string) => void;
+  /**
+   * Reopen the tab held in `reviveSuggestion` with its exact
+   * previous identity and activate it. No-op when no suggestion is
+   * pending.
+   */
+  reviveSuggestedTab: () => void;
+  /** Drop the pending revive suggestion (e.g. its owner route left). */
+  clearReviveSuggestion: () => void;
   setActive: (id: string) => void;
   closeAll: () => void;
   /** Ask the active tab's ribbon to start renaming. */
@@ -717,39 +750,47 @@ const createInspectorBroadcastSession = (
 };
 
 const applySharedInspectorTabs = (tabs: InspectorTab[]) => {
-  const current = useInspectorStore.getState();
+  const currentState = useInspectorStore.getState();
   // Generic registry-backed `view` tabs (e.g. `tool-detail`) are
   // local-only — `postTabs` strips them from the broadcast because
   // their payloads can hold non-cloneable values. Preserve the
   // receiver's local view tabs so a peer's pdf/chat/task update
   // doesn't silently close them.
-  const localViewTabs = current.tabs.filter((tab) => tab.type === "view");
+  const localViewTabs = currentState.tabs.filter((tab) => tab.type === "view");
   const mergedTabs: InspectorTab[] = [...tabs, ...localViewTabs];
   const activeId =
-    current.activeId !== null &&
-    mergedTabs.some((tab) => tab.id === current.activeId)
-      ? current.activeId
+    currentState.activeId !== null &&
+    mergedTabs.some((tab) => tab.id === currentState.activeId)
+      ? currentState.activeId
       : (mergedTabs.at(0)?.id ?? null);
   const pendingRenameTabId =
-    current.pendingRenameTabId !== null &&
-    mergedTabs.some((tab) => tab.id === current.pendingRenameTabId)
-      ? current.pendingRenameTabId
+    currentState.pendingRenameTabId !== null &&
+    mergedTabs.some((tab) => tab.id === currentState.pendingRenameTabId)
+      ? currentState.pendingRenameTabId
       : null;
   const pendingBlockScroll =
-    current.pendingBlockScroll !== null &&
-    mergedTabs.some((tab) => tab.id === current.pendingBlockScroll?.tabId)
-      ? current.pendingBlockScroll
+    currentState.pendingBlockScroll !== null &&
+    mergedTabs.some((tab) => tab.id === currentState.pendingBlockScroll?.tabId)
+      ? currentState.pendingBlockScroll
       : null;
+  // A peer reopened the suggested tab — the local ghost would now
+  // duplicate a live tab, so it yields.
+  const reviveSuggestion =
+    currentState.reviveSuggestion !== null &&
+    mergedTabs.some((tab) => tab.id === currentState.reviveSuggestion?.id)
+      ? null
+      : currentState.reviveSuggestion;
 
   useInspectorStore.setState({
     tabs: mergedTabs,
     activeId,
     pendingRenameTabId,
     pendingBlockScroll,
+    reviveSuggestion,
     activationSeq:
-      activeId === current.activeId
-        ? current.activationSeq
-        : current.activationSeq + 1,
+      activeId === currentState.activeId
+        ? currentState.activationSeq
+        : currentState.activationSeq + 1,
   });
 };
 
@@ -923,6 +964,51 @@ const isInspectorBroadcastMessage = (
   );
 };
 
+/**
+ * A tab is bound to the main view when closing it would leave the
+ * centered document/template without an inspector counterpart:
+ * either a file tab in fullscreen persona (the document route is
+ * presenting the file itself), or a registry view owned by a route
+ * with `close-on-route-leave` teardown — such tabs are opened on
+ * mount and closed on unmount by their owner page, so while one
+ * exists its owner page is on screen.
+ */
+const isMainViewBoundTab = (tab: InspectorTab): boolean => {
+  if (tab.type === "pdf") {
+    return tab.metadataLane === "expanded";
+  }
+  if (tab.type === "view") {
+    return (
+      tab.ownerRouteId !== undefined &&
+      getInspectorView(tab.viewType)?.navigationPolicy ===
+        "close-on-route-leave"
+    );
+  }
+  return false;
+};
+
+/**
+ * A (re)opened file supersedes any pending revive suggestion for
+ * the same field — or any version of the same entity, since the
+ * document route re-opens the tab under a new field id when the
+ * user pages versions while the tab is closed.
+ */
+const dropSupersededFileSuggestion = (
+  state: Pick<State, "reviveSuggestion">,
+  tab: Pick<FileTab, "id" | "entityId">,
+) => {
+  const suggestion = state.reviveSuggestion;
+  if (suggestion === null) {
+    return;
+  }
+  if (
+    suggestion.id === tab.id ||
+    (suggestion.type === "pdf" && suggestion.entityId === tab.entityId)
+  ) {
+    state.reviveSuggestion = null;
+  }
+};
+
 export const useInspectorStore = create<State & Actions>()(
   immer((set) => ({
     tabs: [],
@@ -932,6 +1018,7 @@ export const useInspectorStore = create<State & Actions>()(
     minimized: false,
     pendingBlockScroll: null,
     pendingDocxEditTabId: null,
+    reviveSuggestion: null,
 
     openFile: (tab) =>
       set((state) => {
@@ -992,6 +1079,7 @@ export const useInspectorStore = create<State & Actions>()(
         // bring it back into view; otherwise the user's click
         // appears to do nothing.
         state.minimized = false;
+        dropSupersededFileSuggestion(state, tab);
       }),
 
     openFileForEntity: (tab) =>
@@ -1043,6 +1131,7 @@ export const useInspectorStore = create<State & Actions>()(
         }
         state.activationSeq += 1;
         state.minimized = false;
+        dropSupersededFileSuggestion(state, tab);
       }),
 
     openTask: ({ taskId, workspaceId, label = "", isNew = false }) =>
@@ -1256,6 +1345,9 @@ export const useInspectorStore = create<State & Actions>()(
         state.activeId = id;
         state.activationSeq += 1;
         state.minimized = false;
+        if (state.reviveSuggestion?.id === id) {
+          state.reviveSuggestion = null;
+        }
       }),
 
     closeTabsForRoute: (routeId) =>
@@ -1283,11 +1375,28 @@ export const useInspectorStore = create<State & Actions>()(
         }
       }),
 
-    closeTab: (id) =>
+    closeTab: (id, options) =>
       set((state) => {
         const index = state.tabs.findIndex((t) => t.id === id);
         if (index === -1) {
+          // Programmatic close from a route unmount whose tab the
+          // user already closed by hand: the main view is going
+          // away, so the revive suggestion goes with it.
+          if (state.reviveSuggestion?.id === id) {
+            state.reviveSuggestion = null;
+          }
           return;
+        }
+
+        const closing = state.tabs[index];
+        if (
+          closing !== undefined &&
+          options?.suggestRevive === true &&
+          isMainViewBoundTab(closing)
+        ) {
+          state.reviveSuggestion = current(closing);
+        } else if (state.reviveSuggestion?.id === id) {
+          state.reviveSuggestion = null;
         }
 
         state.tabs.splice(index, 1);
@@ -1304,8 +1413,38 @@ export const useInspectorStore = create<State & Actions>()(
         if (!target) {
           return;
         }
+        // closeOthers is only reachable from the tab context menu,
+        // so it is always a user gesture: a bound tab swept away
+        // with the others earns the same revive suggestion as a
+        // direct close.
+        const closingBound = state.tabs.find(
+          (t) => t.id !== id && isMainViewBoundTab(t),
+        );
+        if (closingBound !== undefined) {
+          state.reviveSuggestion = current(closingBound);
+        }
         state.tabs = [target];
         state.activeId = id;
+      }),
+
+    reviveSuggestedTab: () =>
+      set((state) => {
+        const suggestion = state.reviveSuggestion;
+        if (suggestion === null) {
+          return;
+        }
+        state.reviveSuggestion = null;
+        if (!state.tabs.some((t) => t.id === suggestion.id)) {
+          state.tabs.push(suggestion);
+        }
+        state.activeId = suggestion.id;
+        state.activationSeq += 1;
+        state.minimized = false;
+      }),
+
+    clearReviveSuggestion: () =>
+      set((state) => {
+        state.reviveSuggestion = null;
       }),
 
     setActive: (id) =>
@@ -1338,6 +1477,11 @@ export const useInspectorStore = create<State & Actions>()(
 
     closeAll: () =>
       set((state) => {
+        // Like closeOthers, only reachable from user gestures.
+        const closingBound = state.tabs.find(isMainViewBoundTab);
+        if (closingBound !== undefined) {
+          state.reviveSuggestion = current(closingBound);
+        }
         state.tabs = [];
         state.activeId = null;
       }),
@@ -1398,6 +1542,18 @@ export const useInspectorStore = create<State & Actions>()(
         const tab = state.tabs.find((t) => t.id === tabId);
         if (tab?.type === "pdf") {
           tab.metadataLane = metadataLane;
+          return;
+        }
+        // The document route demotes its tab to side-peek persona
+        // on unmount even when the user already closed the tab; the
+        // pending revive suggestion for that file dies with the
+        // main view it pointed at.
+        if (
+          metadataLane !== "expanded" &&
+          state.reviveSuggestion?.type === "pdf" &&
+          state.reviveSuggestion.id === tabId
+        ) {
+          state.reviveSuggestion = null;
         }
       }),
 
