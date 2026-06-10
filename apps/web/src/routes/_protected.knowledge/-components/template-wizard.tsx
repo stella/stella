@@ -228,11 +228,28 @@ type CompositeManifestProps = {
  * are emitted together, or not at all (a half-configured composite — no parts
  * yet, or no format yet — saves as a plain field).
  */
+export const defaultCompositeFormat = (
+  parts: readonly EditablePart[],
+): string | undefined => {
+  const keys = parts.map((p) => p.key.trim()).filter((k) => k !== "");
+  if (keys.length === 0) {
+    return undefined;
+  }
+  return keys.map((k) => `{{${k}}}`).join(" ");
+};
+
 export const compositeManifestProps = (
   field: EditableField,
 ): CompositeManifestProps => {
   const parts = (field.parts ?? []).filter((part) => part.key.trim() !== "");
-  const format = field.format?.trim() ?? "";
+  // An untyped format defaults to all parts joined by spaces, so a composite
+  // never silently degrades to a plain field just because the author skipped
+  // the format input.
+  const trimmedFormat = field.format?.trim() ?? "";
+  const format =
+    trimmedFormat === ""
+      ? (defaultCompositeFormat(parts) ?? "")
+      : trimmedFormat;
   if (parts.length === 0 || format === "") {
     return { parts: undefined, format: undefined };
   }
@@ -713,6 +730,24 @@ const CompositePartsEditor = ({
     .map((part) => `{{${part.key}}}`)
     .join(" ");
 
+  const formatInputRef = useRef<HTMLInputElement | null>(null);
+
+  /** Insert a part token at the format input's caret (appends when the
+   *  input has no focus memory) — nobody should need to type braces. */
+  const insertPartToken = (key: string) => {
+    const input = formatInputRef.current;
+    const current = field.format ?? defaultCompositeFormat(parts) ?? "";
+    const start = input?.selectionStart ?? current.length;
+    const end = input?.selectionEnd ?? current.length;
+    const token = `{{${key}}}`;
+    const next = `${current.slice(0, start)}${token}${current.slice(end)}`;
+    onUpdate({ format: next });
+    requestAnimationFrame(() => {
+      input?.focus();
+      input?.setSelectionRange(start + token.length, start + token.length);
+    });
+  };
+
   return (
     <>
       <div className="flex flex-col gap-2">
@@ -797,10 +832,27 @@ const CompositePartsEditor = ({
             <Input
               onChange={(e) => onUpdate({ format: e.target.value })}
               placeholder={formatPlaceholder}
-              value={field.format ?? ""}
+              ref={formatInputRef}
+              value={field.format ?? defaultCompositeFormat(parts) ?? ""}
             />
           }
         />
+        <div className="flex flex-wrap items-center gap-1">
+          {parts
+            .map((part) => part.key.trim())
+            .filter((key) => key !== "")
+            .map((key) => (
+              <Button
+                key={key}
+                onClick={() => insertPartToken(key)}
+                size="xs"
+                type="button"
+                variant="outline"
+              >
+                {key}
+              </Button>
+            ))}
+        </div>
         <p className="text-muted-foreground text-xs">
           {t("templates.fieldFormatHint")}
         </p>
