@@ -2200,6 +2200,7 @@
     "testFill": "Täida",
     "unmatchedPlaceholders": "Mõned kohatäitjad jäid täitmata: {list}",
     "unsavedLeaveConfirm": "Teil on salvestamata muudatusi. Kas lahkuda salvestamata?",
+    "unusedFields": "{count, plural, one {# kasutamata väli} other {# kasutamata välja}}",
     "unusedValues": "Mõned väärtused jäid kasutamata: {list}",
     "updatedAgo": "Uuendatud {time}",
     "uploadDescription": "Laadige üles .docx fail '{{kohatäitjatega}}', et luua mall",

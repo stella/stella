@@ -2200,6 +2200,7 @@
     "testFill": "Preencher",
     "unmatchedPlaceholders": "Alguns espaços reservados não foram preenchidos: {list}",
     "unsavedLeaveConfirm": "Você tem alterações não salvas. Sair sem salvar?",
+    "unusedFields": "{count, plural, one {# campo não usado} other {# campos não usados}}",
     "unusedValues": "Alguns valores não foram utilizados: {list}",
     "updatedAgo": "Atualizado {time}",
     "uploadDescription": "Faça upload de um arquivo .docx com '{{placeholders}}' para criar um modelo",

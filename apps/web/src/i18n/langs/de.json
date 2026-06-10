@@ -2200,6 +2200,7 @@
     "testFill": "Ausfüllen",
     "unmatchedPlaceholders": "Einige Platzhalter wurden nicht ausgefüllt: {list}",
     "unsavedLeaveConfirm": "Sie haben ungespeicherte Änderungen. Ohne Speichern verlassen?",
+    "unusedFields": "{count, plural, one {# ungenutztes Feld} other {# ungenutzte Felder}}",
     "unusedValues": "Einige Werte wurden nicht verwendet: {list}",
     "updatedAgo": "Aktualisiert {time}",
     "uploadDescription": "Laden Sie eine .docx-Datei mit '{{placeholders}}' hoch, um eine Vorlage zu erstellen",

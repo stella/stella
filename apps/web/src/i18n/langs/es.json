@@ -2200,6 +2200,7 @@
     "testFill": "Rellenar",
     "unmatchedPlaceholders": "Algunos marcadores no se han rellenado: {list}",
     "unsavedLeaveConfirm": "Tienes cambios sin guardar. ¿Salir sin guardar?",
+    "unusedFields": "{count, plural, one {# campo sin usar} other {# campos sin usar}}",
     "unusedValues": "Algunos valores no se han utilizado: {list}",
     "updatedAgo": "Actualizado {time}",
     "uploadDescription": "Suba un archivo .docx con '{{placeholders}}' para crear una plantilla",

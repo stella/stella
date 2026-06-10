@@ -2200,6 +2200,7 @@
     "testFill": "Vyplnit",
     "unmatchedPlaceholders": "Některé zástupné texty nebyly vyplněny: {list}",
     "unsavedLeaveConfirm": "Máte neuložené změny. Odejít bez uložení?",
+    "unusedFields": "{count, plural, one {# nepoužité pole} few {# nepoužitá pole} other {# nepoužitých polí}}",
     "unusedValues": "Některé hodnoty nebyly použity: {list}",
     "updatedAgo": "Aktualizováno {time}",
     "uploadDescription": "Nahrajte soubor .docx s '{{placeholders}}' pro vytvoření šablony",

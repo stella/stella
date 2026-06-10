@@ -2200,6 +2200,7 @@
     "testFill": "Kitöltés",
     "unmatchedPlaceholders": "Egyes helykitöltők nem lettek kitöltve: {list}",
     "unsavedLeaveConfirm": "Mentetlen módosításai vannak. Kilép mentés nélkül?",
+    "unusedFields": "{count, plural, other {# nem használt mező}}",
     "unusedValues": "Egyes értékek nem kerültek felhasználásra: {list}",
     "updatedAgo": "Frissítve {time}",
     "uploadDescription": "Töltsön fel egy .docx fájlt '{{placeholders}}' jelölőkkel sablon létrehozásához",

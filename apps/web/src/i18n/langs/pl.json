@@ -2200,6 +2200,7 @@
     "testFill": "Wypełnij",
     "unmatchedPlaceholders": "Niektóre symbole zastępcze nie zostały wypełnione: {list}",
     "unsavedLeaveConfirm": "Masz niezapisane zmiany. Wyjść bez zapisywania?",
+    "unusedFields": "{count, plural, one {# nieużywane pole} few {# nieużywane pola} many {# nieużywanych pól} other {# nieużywanych pól}}",
     "unusedValues": "Niektóre wartości nie zostały użyte: {list}",
     "updatedAgo": "Zaktualizowano {time}",
     "uploadDescription": "Prześlij plik .docx z '{{placeholders}}', aby utworzyć szablon",

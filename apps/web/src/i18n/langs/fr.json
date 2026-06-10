@@ -2200,6 +2200,7 @@
     "testFill": "Remplir",
     "unmatchedPlaceholders": "Certains champs n'ont pas été remplis : {list}",
     "unsavedLeaveConfirm": "Vous avez des modifications non enregistrées. Quitter sans enregistrer ?",
+    "unusedFields": "{count, plural, one {# champ inutilisé} other {# champs inutilisés}}",
     "unusedValues": "Certaines valeurs n'ont pas été utilisées : {list}",
     "updatedAgo": "Mis à jour {time}",
     "uploadDescription": "Importez un fichier .docx avec des '{{espaces réservés}}' pour créer un modèle",

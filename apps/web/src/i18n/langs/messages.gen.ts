@@ -2203,6 +2203,7 @@ type Messages = {
     "testFill": "Fill";
     "unmatchedPlaceholders": "Some placeholders were not filled: {list}";
     "unsavedLeaveConfirm": "You have unsaved changes. Leave without saving?";
+    "unusedFields": "{count, plural, one {# unused field} other {# unused fields}}";
     "unusedValues": "Some values were not used: {list}";
     "updatedAgo": "Updated {time}";
     "uploadDescription": "Upload a .docx file with '{{placeholders}}' to create a template";

@@ -2200,6 +2200,7 @@
     "testFill": "Aizpildīt",
     "unmatchedPlaceholders": "Daži vietturi netika aizpildīti: {list}",
     "unsavedLeaveConfirm": "Jums ir nesaglabātas izmaiņas. Vai iziet bez saglabāšanas?",
+    "unusedFields": "{count, plural, zero {# neizmantotu lauku} one {# neizmantots lauks} other {# neizmantoti lauki}}",
     "unusedValues": "Dažas vērtības netika izmantotas: {list}",
     "updatedAgo": "Atjaunināts {time}",
     "uploadDescription": "Augšupielādējiet .docx failu ar '{{vietturiem}}', lai izveidotu veidni",

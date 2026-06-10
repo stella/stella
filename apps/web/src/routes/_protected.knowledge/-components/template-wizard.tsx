@@ -1453,6 +1453,7 @@ export const FieldConfigEditor = ({
   field,
   onUpdate,
   embedded = false,
+  hideHint = false,
   siblingPaths,
   hideFormulaControl = false,
   defaultDateLocale,
@@ -1462,6 +1463,8 @@ export const FieldConfigEditor = ({
   /** Embedded in the Studio's field face: the face header already shows the
    *  path, and the wizard's chevron-row indent doesn't apply. */
   embedded?: boolean;
+  /** Hide the fill-form hint input (AI-drafted fields have no question). */
+  hideHint?: boolean;
   /** Paths of the template's other fields, offered as sources for a
    *  dependent select's options; a typed path input is shown when absent. */
   siblingPaths?: readonly string[] | undefined;
@@ -1518,7 +1521,7 @@ export const FieldConfigEditor = ({
         />
       </Field>
 
-      {!isFormula && (
+      {!isFormula && !hideHint && (
         <Field>
           <FieldLabel>{t("templates.fieldHint")}</FieldLabel>
           <FieldControl
