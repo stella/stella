@@ -59,7 +59,7 @@
       "version": "3.0.81"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/azure@3.0.68",
+      "bom-ref": "pkg:npm/@ai-sdk/azure@3.0.69",
       "evidence": {
         "identity": [
           {
@@ -107,13 +107,13 @@
           "value": "node_modules/@ai-sdk/azure/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/azure@3.0.68",
+      "purl": "pkg:npm/%40ai-sdk/azure@3.0.69",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.0.68"
+      "version": "3.0.69"
     },
     {
       "bom-ref": "pkg:npm/@ai-sdk/devtools@0.0.18",
@@ -173,7 +173,7 @@
       "version": "0.0.18"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/google-vertex@4.0.140",
+      "bom-ref": "pkg:npm/@ai-sdk/google-vertex@4.0.142",
       "evidence": {
         "identity": [
           {
@@ -191,7 +191,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/ai-models.ts#29"
+            "location": "apps/api/src/lib/ai-models.ts#30"
           }
         ]
       },
@@ -221,13 +221,13 @@
           "value": "node_modules/@ai-sdk/google-vertex/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/google-vertex@4.0.140",
+      "purl": "pkg:npm/%40ai-sdk/google-vertex@4.0.142",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "4.0.140"
+      "version": "4.0.142"
     },
     {
       "bom-ref": "pkg:npm/@ai-sdk/google@3.0.80",
@@ -249,6 +249,9 @@
         "occurrences": [
           {
             "location": "apps/api/src/lib/ai-models.ts#28"
+          },
+          {
+            "location": "apps/api/src/lib/ai-models.ts#29"
           }
         ]
       },
@@ -287,7 +290,7 @@
       "version": "3.0.80"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/mcp@1.0.45",
+      "bom-ref": "pkg:npm/@ai-sdk/mcp@1.0.46",
       "evidence": {
         "identity": [
           {
@@ -344,13 +347,13 @@
           "value": "node_modules/@ai-sdk/mcp/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/mcp@1.0.45",
+      "purl": "pkg:npm/%40ai-sdk/mcp@1.0.46",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "1.0.45"
+      "version": "1.0.46"
     },
     {
       "bom-ref": "pkg:npm/@ai-sdk/mistral@3.0.37",
@@ -371,7 +374,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/ai-models.ts#30"
+            "location": "apps/api/src/lib/ai-models.ts#31"
           }
         ]
       },
@@ -428,7 +431,10 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/ai-models.ts#31"
+            "location": "apps/api/src/lib/ai-models.ts#32"
+          },
+          {
+            "location": "apps/api/src/lib/ai-models.ts#33"
           }
         ]
       },
@@ -543,7 +549,16 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/ai-models.ts#32"
+            "location": "apps/api/src/dev/register-mock-ai.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/ai-models.ts#34"
+          },
+          {
+            "location": "apps/api/src/lib/ai-models.ts#41"
+          },
+          {
+            "location": "apps/api/src/lib/ai-output-schema.ts#25"
           }
         ]
       },
@@ -582,7 +597,7 @@
       "version": "3.0.10"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/react@3.0.195",
+      "bom-ref": "pkg:npm/@ai-sdk/react@3.0.198",
       "evidence": {
         "identity": [
           {
@@ -1605,6 +1620,12 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-service-tier-prompt.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-service-tier-prompt.tsx#9"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt.tsx#8"
           },
           {
@@ -1956,13 +1977,13 @@
           "value": "node_modules/@ai-sdk/react/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/react@3.0.195",
+      "purl": "pkg:npm/%40ai-sdk/react@3.0.198",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.0.195"
+      "version": "3.0.198"
     },
     {
       "bom-ref": "pkg:npm/@ai-sdk/valibot@2.0.28",
@@ -1998,7 +2019,7 @@
             "location": "apps/api/src/env.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#13"
+            "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#12"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/active-docx-edit-tool.ts#3"
@@ -2049,7 +2070,7 @@
             "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#5"
           },
           {
-            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#7"
+            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#6"
           },
           {
             "location": "apps/api/src/handlers/hosted-usage-webhook/event-schemas.ts#14"
@@ -2061,13 +2082,16 @@
             "location": "apps/api/src/handlers/mcp-connectors/oauth.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/search/ai.ts#7"
+            "location": "apps/api/src/handlers/search/ai.ts#6"
           },
           {
-            "location": "apps/api/src/handlers/skills/generate-draft.ts#5"
+            "location": "apps/api/src/handlers/skills/generate-draft.ts#4"
           },
           {
             "location": "apps/api/src/lib/ai-config-crypto.ts#10"
+          },
+          {
+            "location": "apps/api/src/lib/ai-output-schema.ts#29"
           },
           {
             "location": "apps/api/src/lib/bbox/ai-prompts.ts#1"
@@ -2252,7 +2276,7 @@
           "name": "withastro"
         }
       ],
-      "bom-ref": "pkg:npm/@astrojs/react@5.0.6",
+      "bom-ref": "pkg:npm/@astrojs/react@5.0.7",
       "description": "Use React components within Astro",
       "evidence": {
         "identity": [
@@ -3276,6 +3300,12 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-service-tier-prompt.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-service-tier-prompt.tsx#9"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt.tsx#8"
           },
           {
@@ -3627,70 +3657,10 @@
           "value": "node_modules/@astrojs/react/package.json"
         }
       ],
-      "purl": "pkg:npm/%40astrojs/react@5.0.6",
+      "purl": "pkg:npm/%40astrojs/react@5.0.7",
       "scope": "required",
       "type": "library",
-      "version": "5.0.6"
-    },
-    {
-      "authors": [
-        {
-          "name": "withastro"
-        }
-      ],
-      "bom-ref": "pkg:npm/@astrojs/sitemap@3.7.2",
-      "description": "Generate a sitemap for your Astro site",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@astrojs/starlight/node_modules/@astrojs/sitemap/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@astrojs/starlight/node_modules/@astrojs/sitemap/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/landing/astro.config.mjs#2"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://docs.astro.build/en/guides/integrations-guide/sitemap/"
-        },
-        {
-          "type": "vcs",
-          "url": "git+https://github.com/withastro/astro.git"
-        }
-      ],
-      "group": "@astrojs",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-          }
-        }
-      ],
-      "name": "sitemap",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@astrojs/starlight/node_modules/@astrojs/sitemap/package.json"
-        }
-      ],
-      "purl": "pkg:npm/%40astrojs/sitemap@3.7.2",
-      "scope": "required",
-      "type": "library",
-      "version": "3.7.2"
+      "version": "5.0.7"
     },
     {
       "authors": [
@@ -3949,7 +3919,7 @@
           "name": "Atlassian Pty Ltd"
         }
       ],
-      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop-hitbox@1.1.0",
+      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop-hitbox@1.2.0",
       "description": "An optional package for Pragmatic drag and drop that enables the attaching of interaction information to a drop target",
       "evidence": {
         "identity": [
@@ -4012,10 +3982,10 @@
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox/package.json"
         }
       ],
-      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop-hitbox@1.1.0",
+      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop-hitbox@1.2.0",
       "scope": "required",
       "type": "library",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop/combine",
@@ -4064,10 +4034,6 @@
       "group": "@atlaskit",
       "name": "pragmatic-drag-and-drop/combine",
       "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox/node_modules/@atlaskit/pragmatic-drag-and-drop/combine/package.json"
-        },
         {
           "name": "SrcFile",
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-auto-scroll/node_modules/@atlaskit/pragmatic-drag-and-drop/combine/package.json"
@@ -4146,10 +4112,6 @@
       "properties": [
         {
           "name": "SrcFile",
-          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox/node_modules/@atlaskit/pragmatic-drag-and-drop/element/adapter/package.json"
-        },
-        {
-          "name": "SrcFile",
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-auto-scroll/node_modules/@atlaskit/pragmatic-drag-and-drop/element/adapter/package.json"
         },
         {
@@ -4191,10 +4153,6 @@
       "group": "@atlaskit",
       "name": "pragmatic-drag-and-drop/element/center-under-pointer",
       "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox/node_modules/@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer/package.json"
-        },
         {
           "name": "SrcFile",
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-auto-scroll/node_modules/@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer/package.json"
@@ -4249,10 +4207,6 @@
       "properties": [
         {
           "name": "SrcFile",
-          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox/node_modules/@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview/package.json"
-        },
-        {
-          "name": "SrcFile",
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-auto-scroll/node_modules/@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview/package.json"
         },
         {
@@ -4299,10 +4253,6 @@
       "properties": [
         {
           "name": "SrcFile",
-          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox/node_modules/@atlaskit/pragmatic-drag-and-drop/external/adapter/package.json"
-        },
-        {
-          "name": "SrcFile",
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-auto-scroll/node_modules/@atlaskit/pragmatic-drag-and-drop/external/adapter/package.json"
         },
         {
@@ -4344,10 +4294,6 @@
       "group": "@atlaskit",
       "name": "pragmatic-drag-and-drop/external/file",
       "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox/node_modules/@atlaskit/pragmatic-drag-and-drop/external/file/package.json"
-        },
         {
           "name": "SrcFile",
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-auto-scroll/node_modules/@atlaskit/pragmatic-drag-and-drop/external/file/package.json"
@@ -4501,10 +4447,6 @@
       ],
       "name": "pragmatic-drag-and-drop",
       "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox/node_modules/@atlaskit/pragmatic-drag-and-drop/package.json"
-        },
         {
           "name": "SrcFile",
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-auto-scroll/node_modules/@atlaskit/pragmatic-drag-and-drop/package.json"
@@ -4670,7 +4612,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1057.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1061.0",
       "description": "AWS SDK for JavaScript S3 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -4719,13 +4661,13 @@
           "value": "node_modules/@aws-sdk/client-s3/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1057.0",
+      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1061.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1057.0"
+      "version": "3.1061.0"
     },
     {
       "authors": [
@@ -4733,7 +4675,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1057.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1061.0",
       "description": "AWS SDK for JavaScript Sesv2 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -4782,13 +4724,13 @@
           "value": "node_modules/@aws-sdk/client-sesv2/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1057.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1061.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1057.0"
+      "version": "3.1061.0"
     },
     {
       "authors": [
@@ -4796,7 +4738,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1057.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1061.0",
       "description": "AWS SDK for JavaScript Sts Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -4845,13 +4787,13 @@
           "value": "node_modules/@aws-sdk/client-sts/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1057.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1061.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1057.0"
+      "version": "3.1061.0"
     },
     {
       "authors": [
@@ -4859,7 +4801,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1057.0",
+      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1061.0",
       "evidence": {
         "identity": [
           {
@@ -4907,13 +4849,13 @@
           "value": "node_modules/@aws-sdk/s3-request-presigner/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1057.0",
+      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1061.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1057.0"
+      "version": "3.1061.0"
     },
     {
       "authors": [
@@ -5945,6 +5887,12 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-service-tier-prompt.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-service-tier-prompt.tsx#9"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt.tsx#8"
           },
           {
@@ -6965,7 +6913,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/ai-models.ts#33"
+            "location": "apps/api/src/lib/ai-models.ts#42"
           }
         ]
       },
@@ -6999,77 +6947,6 @@
       "scope": "required",
       "type": "library",
       "version": "2.9.0"
-    },
-    {
-      "authors": [
-        {
-          "name": "OpenTelemetry Authors"
-        }
-      ],
-      "bom-ref": "pkg:npm/@opentelemetry/api-logs@0.208.0",
-      "description": "Public logs API for OpenTelemetry",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@opentelemetry/exporter-logs-otlp-http/node_modules/@opentelemetry/api-logs/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@opentelemetry/exporter-logs-otlp-http/node_modules/@opentelemetry/api-logs/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/api/src/lib/observability/logger.ts#2"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/open-telemetry/opentelemetry-js/tree/main/experimental/packages/api-logs"
-        }
-      ],
-      "group": "@opentelemetry",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0",
-            "url": "https://opensource.org/licenses/Apache-2.0"
-          }
-        }
-      ],
-      "name": "api-logs",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/posthog-js/node_modules/@opentelemetry/api-logs/package.json"
-        },
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@opentelemetry/sdk-logs/node_modules/@opentelemetry/api-logs/package.json"
-        },
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@opentelemetry/otlp-transformer/node_modules/@opentelemetry/api-logs/package.json"
-        },
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@opentelemetry/exporter-logs-otlp-http/node_modules/@opentelemetry/api-logs/package.json"
-        }
-      ],
-      "purl": "pkg:npm/%40opentelemetry/api-logs@0.208.0",
-      "scope": "required",
-      "tags": [
-        "api"
-      ],
-      "type": "library",
-      "version": "0.208.0"
     },
     {
       "authors": [
@@ -7201,7 +7078,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/@posthog/react@1.9.1",
+      "bom-ref": "pkg:npm/@posthog/react@1.10.0",
       "description": "Provides components and hooks for React integrations of PostHog.",
       "evidence": {
         "identity": [
@@ -8225,6 +8102,12 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-service-tier-prompt.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-service-tier-prompt.tsx#9"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt.tsx#8"
           },
           {
@@ -8576,10 +8459,10 @@
           "value": "node_modules/@posthog/react/package.json"
         }
       ],
-      "purl": "pkg:npm/%40posthog/react@1.9.1",
+      "purl": "pkg:npm/%40posthog/react@1.10.0",
       "scope": "required",
       "type": "library",
-      "version": "1.9.1"
+      "version": "1.10.0"
     },
     {
       "authors": [
@@ -9421,7 +9304,7 @@
           "name": "tannerlinsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-query-devtools@5.100.14",
+      "bom-ref": "pkg:npm/@tanstack/react-query-devtools@5.101.0",
       "description": "Developer tools to interact with and visualize the TanStack/react-query cache",
       "evidence": {
         "identity": [
@@ -9470,13 +9353,13 @@
           "value": "node_modules/@tanstack/react-query-devtools/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-query-devtools@5.100.14",
+      "purl": "pkg:npm/%40tanstack/react-query-devtools@5.101.0",
       "scope": "required",
       "tags": [
         "tools"
       ],
       "type": "library",
-      "version": "5.100.14"
+      "version": "5.101.0"
     },
     {
       "authors": [
@@ -9484,7 +9367,7 @@
           "name": "tannerlinsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-query@5.100.14",
+      "bom-ref": "pkg:npm/@tanstack/react-query@5.101.0",
       "description": "Hooks for managing, caching and syncing asynchronous and remote data in React",
       "evidence": {
         "identity": [
@@ -10187,10 +10070,10 @@
           "value": "node_modules/@tanstack/react-query/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-query@5.100.14",
+      "purl": "pkg:npm/%40tanstack/react-query@5.101.0",
       "scope": "required",
       "type": "library",
-      "version": "5.100.14"
+      "version": "5.101.0"
     },
     {
       "authors": [
@@ -10318,7 +10201,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.10",
+      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.11",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -10802,10 +10685,10 @@
           "value": "node_modules/@tanstack/react-router/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-router@1.170.10",
+      "purl": "pkg:npm/%40tanstack/react-router@1.170.11",
       "scope": "required",
       "type": "library",
-      "version": "1.170.10"
+      "version": "1.170.11"
     },
     {
       "authors": [
@@ -10813,7 +10696,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-start@1.168.18",
+      "bom-ref": "pkg:npm/@tanstack/react-start@1.168.19",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -10868,10 +10751,10 @@
           "value": "node_modules/@tanstack/react-start/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-start@1.168.18",
+      "purl": "pkg:npm/%40tanstack/react-start@1.168.19",
       "scope": "required",
       "type": "library",
-      "version": "1.168.18"
+      "version": "1.168.19"
     },
     {
       "authors": [
@@ -11206,7 +11089,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-virtual@3.13.26",
+      "bom-ref": "pkg:npm/@tanstack/react-virtual@3.14.2",
       "description": "Headless UI for virtualizing scrollable elements in React",
       "evidence": {
         "identity": [
@@ -11264,10 +11147,10 @@
           "value": "node_modules/@tanstack/react-virtual/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-virtual@3.13.26",
+      "purl": "pkg:npm/%40tanstack/react-virtual@3.14.2",
       "scope": "required",
       "type": "library",
-      "version": "3.13.26"
+      "version": "3.14.2"
     },
     {
       "bom-ref": "pkg:npm/@tauri-apps/api@2.11.0",
@@ -13081,6 +12964,12 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-service-tier-prompt.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-service-tier-prompt.tsx#9"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt.tsx#8"
           },
           {
@@ -13541,6 +13430,9 @@
             "location": "apps/api/src/handlers/chat/tools/execute/readonly-manifest.ts#2"
           },
           {
+            "location": "apps/api/src/lib/ai-output-schema.ts#26"
+          },
+          {
             "location": "apps/api/src/lib/json-schema/json-schema-to-type.ts#1"
           }
         ]
@@ -13580,7 +13472,7 @@
       "version": "1.7.0"
     },
     {
-      "bom-ref": "pkg:npm/ai@6.0.193",
+      "bom-ref": "pkg:npm/ai@6.0.196",
       "description": "AI SDK by Vercel - build apps like ChatGPT, Claude, Gemini, and more with a single interface for any model using the Vercel AI Gateway or go direct to OpenAI, Anthropic, Google, or any other model provider.",
       "evidence": {
         "identity": [
@@ -13605,13 +13497,19 @@
             "location": "apps/api/scripts/benchmark-chat-read-surface.ts#14"
           },
           {
+            "location": "apps/api/src/dev/register-mock-ai.ts#2"
+          },
+          {
+            "location": "apps/api/src/dev/register-mock-ai.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/ai-autocomplete/stream.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/case-law/analysis/generate.ts#10"
+            "location": "apps/api/src/handlers/case-law/analysis/generate.ts#9"
           },
           {
-            "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#11"
+            "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#10"
           },
           {
             "location": "apps/api/src/handlers/chat/attachment-validation.ts#1"
@@ -13707,16 +13605,16 @@
             "location": "apps/api/src/handlers/chat/upload-files.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#2"
+            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#1"
           },
           {
             "location": "apps/api/src/handlers/properties/suggest-prompt.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/search/ai.ts#2"
+            "location": "apps/api/src/handlers/search/ai.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/skills/generate-draft.ts#2"
+            "location": "apps/api/src/handlers/skills/generate-draft.ts#1"
           },
           {
             "location": "apps/api/src/handlers/skills/resources/rewrite.ts#1"
@@ -13728,22 +13626,28 @@
             "location": "apps/api/src/lib/ai-error.ts#9"
           },
           {
-            "location": "apps/api/src/lib/ai-models.ts#34"
+            "location": "apps/api/src/lib/ai-models.ts#43"
           },
           {
-            "location": "apps/api/src/lib/ai-models.ts#35"
+            "location": "apps/api/src/lib/ai-models.ts#44"
+          },
+          {
+            "location": "apps/api/src/lib/ai-output-schema.ts#27"
+          },
+          {
+            "location": "apps/api/src/lib/ai-output-schema.ts#28"
           },
           {
             "location": "apps/api/src/lib/analytics/ai.ts#6"
           },
           {
-            "location": "apps/api/src/lib/bbox/ai-generate-b-boxes.ts#2"
+            "location": "apps/api/src/lib/bbox/ai-generate-b-boxes.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/workflow/ai-generate-batch.ts#1"
           },
           {
             "location": "apps/api/src/lib/workflow/ai-generate-batch.ts#2"
-          },
-          {
-            "location": "apps/api/src/lib/workflow/ai-generate-batch.ts#3"
           },
           {
             "location": "apps/api/src/mcp/tool-utils.ts#2"
@@ -13780,6 +13684,9 @@
           },
           {
             "location": "apps/web/src/components/chat/tool-call-card.tsx#4"
+          },
+          {
+            "location": "apps/api/src/dev/register-mock-ai.ts#3"
           }
         ]
       },
@@ -13809,13 +13716,13 @@
           "value": "node_modules/ai/package.json"
         }
       ],
-      "purl": "pkg:npm/ai@6.0.193",
+      "purl": "pkg:npm/ai@6.0.196",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "6.0.193"
+      "version": "6.0.196"
     },
     {
       "authors": [
@@ -13823,7 +13730,7 @@
           "name": "withastro"
         }
       ],
-      "bom-ref": "pkg:npm/astro@6.4.2",
+      "bom-ref": "pkg:npm/astro@6.4.4",
       "description": "Astro is a modern site builder with web best practices, performance, and DX front-of-mind.",
       "evidence": {
         "identity": [
@@ -13878,13 +13785,13 @@
           "value": "node_modules/astro/package.json"
         }
       ],
-      "purl": "pkg:npm/astro@6.4.2",
+      "purl": "pkg:npm/astro@6.4.4",
       "scope": "required",
       "tags": [
         "web"
       ],
       "type": "library",
-      "version": "6.4.2"
+      "version": "6.4.4"
     },
     {
       "bom-ref": "pkg:npm/better-auth@1.6.12",
@@ -14107,7 +14014,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/pipeline.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#12"
+            "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#11"
           },
           {
             "location": "apps/api/src/handlers/case-law/public-routes.ts#1"
@@ -14254,6 +14161,9 @@
             "location": "apps/api/src/handlers/clauses/search-vector.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/clauses/template-links.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/clauses/update.ts#1"
           },
           {
@@ -14344,7 +14254,7 @@
             "location": "apps/api/src/handlers/entities/open-folio-collab-session.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#3"
+            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#2"
           },
           {
             "location": "apps/api/src/handlers/entities/query-entities.ts#1"
@@ -14656,7 +14566,7 @@
             "location": "apps/api/src/handlers/rates/update.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/search/ai.ts#3"
+            "location": "apps/api/src/handlers/search/ai.ts#2"
           },
           {
             "location": "apps/api/src/handlers/search/routes.ts#1"
@@ -14671,7 +14581,7 @@
             "location": "apps/api/src/handlers/skills/delete.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/skills/generate-draft.ts#3"
+            "location": "apps/api/src/handlers/skills/generate-draft.ts#2"
           },
           {
             "location": "apps/api/src/handlers/skills/get.ts#1"
@@ -14762,6 +14672,9 @@
           },
           {
             "location": "apps/api/src/handlers/templates/categories-update.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/templates/categories.ts#1"
           },
           {
             "location": "apps/api/src/handlers/templates/clauses-link.ts#1"
@@ -15004,7 +14917,7 @@
             "location": "apps/api/src/handlers/workspaces/workspace-members-remove.ts#1"
           },
           {
-            "location": "apps/api/src/lib/ai-models.ts#36"
+            "location": "apps/api/src/lib/ai-models.ts#45"
           },
           {
             "location": "apps/api/src/lib/ai-provider-probe.ts#8"
@@ -15028,7 +14941,7 @@
             "location": "apps/api/src/lib/azure-foundry.ts#1"
           },
           {
-            "location": "apps/api/src/lib/bbox/ai-generate-b-boxes.ts#3"
+            "location": "apps/api/src/lib/bbox/ai-generate-b-boxes.ts#2"
           },
           {
             "location": "apps/api/src/lib/bbox/generate-b-boxes-shared.ts#2"
@@ -15127,7 +15040,7 @@
             "location": "apps/api/src/lib/web-search/types.ts#1"
           },
           {
-            "location": "apps/api/src/lib/workflow/ai-generate-batch.ts#4"
+            "location": "apps/api/src/lib/workflow/ai-generate-batch.ts#3"
           },
           {
             "location": "apps/api/src/lib/workflow/ai-validators.ts#1"
@@ -15471,7 +15384,7 @@
           "name": "Taskforce.sh Inc."
         }
       ],
-      "bom-ref": "pkg:npm/bullmq@5.77.7",
+      "bom-ref": "pkg:npm/bullmq@5.78.0",
       "description": "Queue for messages and jobs based on Redis",
       "evidence": {
         "identity": [
@@ -15529,10 +15442,10 @@
           "value": "node_modules/bullmq/package.json"
         }
       ],
-      "purl": "pkg:npm/bullmq@5.77.7",
+      "purl": "pkg:npm/bullmq@5.78.0",
       "scope": "required",
       "type": "library",
-      "version": "5.77.7"
+      "version": "5.78.0"
     },
     {
       "authors": [
@@ -16391,7 +16304,7 @@
             "location": "apps/api/src/handlers/billing-codes/update.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/case-law/analysis/generate.ts#11"
+            "location": "apps/api/src/handlers/case-law/analysis/generate.ts#10"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/facets.ts#1"
@@ -16517,7 +16430,7 @@
             "location": "apps/api/src/handlers/clauses/search-vector.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/clauses/template-links.ts#1"
+            "location": "apps/api/src/handlers/clauses/template-links.ts#2"
           },
           {
             "location": "apps/api/src/handlers/clauses/update.ts#2"
@@ -16613,7 +16526,7 @@
             "location": "apps/api/src/handlers/entities/open-folio-collab-session.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#4"
+            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#3"
           },
           {
             "location": "apps/api/src/handlers/entities/query-entities.ts#2"
@@ -16808,7 +16721,7 @@
             "location": "apps/api/src/handlers/rates/update.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/search/ai.ts#4"
+            "location": "apps/api/src/handlers/search/ai.ts#3"
           },
           {
             "location": "apps/api/src/handlers/shortcuts/list.ts#2"
@@ -16871,7 +16784,7 @@
             "location": "apps/api/src/handlers/tasks/update.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/templates/categories.ts#1"
+            "location": "apps/api/src/handlers/templates/categories.ts#2"
           },
           {
             "location": "apps/api/src/handlers/templates/create.ts#2"
@@ -17507,10 +17420,10 @@
             "location": "apps/api/src/handlers/clauses/shared-schemas.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/clauses/template-links.ts#2"
+            "location": "apps/api/src/handlers/clauses/template-links.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/clauses/template-links.ts#3"
+            "location": "apps/api/src/handlers/clauses/template-links.ts#4"
           },
           {
             "location": "apps/api/src/handlers/clauses/update.ts#3"
@@ -17651,10 +17564,10 @@
             "location": "apps/api/src/handlers/entities/open-folio-collab-session.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#5"
+            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#6"
+            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#5"
           },
           {
             "location": "apps/api/src/handlers/entities/read-filesystem-tree.ts#2"
@@ -17924,10 +17837,10 @@
             "location": "apps/api/src/handlers/rates/update.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/search/ai.ts#5"
+            "location": "apps/api/src/handlers/search/ai.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/search/ai.ts#6"
+            "location": "apps/api/src/handlers/search/ai.ts#5"
           },
           {
             "location": "apps/api/src/handlers/search/facets.ts#1"
@@ -17954,7 +17867,7 @@
             "location": "apps/api/src/handlers/skills/delete.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/skills/generate-draft.ts#4"
+            "location": "apps/api/src/handlers/skills/generate-draft.ts#3"
           },
           {
             "location": "apps/api/src/handlers/skills/get.ts#3"
@@ -17993,6 +17906,9 @@
             "location": "apps/api/src/handlers/skills/upload.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/smoke/routes.ts#26"
+          },
+          {
             "location": "apps/api/src/handlers/tasks/assignees-add.ts#2"
           },
           {
@@ -18026,10 +17942,10 @@
             "location": "apps/api/src/handlers/templates/categories-update.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/templates/categories.ts#2"
+            "location": "apps/api/src/handlers/templates/categories.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/templates/categories.ts#3"
+            "location": "apps/api/src/handlers/templates/categories.ts#4"
           },
           {
             "location": "apps/api/src/handlers/templates/clauses-link.ts#2"
@@ -19787,7 +19703,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-js@1.376.6",
+      "bom-ref": "pkg:npm/posthog-js@1.379.2",
       "description": "Posthog-js allows you to automatically capture usage and send events to PostHog.",
       "evidence": {
         "identity": [
@@ -19836,10 +19752,10 @@
           "value": "node_modules/posthog-js/lib/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-js@1.376.6",
+      "purl": "pkg:npm/posthog-js@1.379.2",
       "scope": "required",
       "type": "library",
-      "version": "1.376.6"
+      "version": "1.379.2"
     },
     {
       "authors": [
@@ -19847,7 +19763,7 @@
           "name": "PostHog <engineering@posthog.com> (https://posthog.com)"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-node@5.35.8",
+      "bom-ref": "pkg:npm/posthog-node@5.35.14",
       "description": "PostHog Node.js integration",
       "evidence": {
         "identity": [
@@ -19892,10 +19808,10 @@
           "value": "node_modules/posthog-node/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-node@5.35.8",
+      "purl": "pkg:npm/posthog-node@5.35.14",
       "scope": "required",
       "type": "library",
-      "version": "5.35.8"
+      "version": "5.35.14"
     },
     {
       "bom-ref": "pkg:npm/prosemirror-commands@1.7.1",
@@ -20954,7 +20870,7 @@
       "version": "0.32.0"
     },
     {
-      "bom-ref": "pkg:npm/react-dom@19.2.6",
+      "bom-ref": "pkg:npm/react-dom@19.2.7",
       "description": "React package for working with the DOM.",
       "evidence": {
         "identity": [
@@ -21057,16 +20973,16 @@
           "value": "node_modules/react-dom/package.json"
         }
       ],
-      "purl": "pkg:npm/react-dom@19.2.6",
+      "purl": "pkg:npm/react-dom@19.2.7",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "19.2.6"
+      "version": "19.2.7"
     },
     {
-      "bom-ref": "pkg:npm/react@19.2.6",
+      "bom-ref": "pkg:npm/react@19.2.7",
       "description": "React is a JavaScript library for building user interfaces.",
       "evidence": {
         "identity": [
@@ -22090,6 +22006,12 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-service-tier-prompt.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-service-tier-prompt.tsx#9"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt.tsx#8"
           },
           {
@@ -22441,13 +22363,13 @@
           "value": "node_modules/react/package.json"
         }
       ],
-      "purl": "pkg:npm/react@19.2.6",
+      "purl": "pkg:npm/react@19.2.7",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "19.2.6"
+      "version": "19.2.7"
     },
     {
       "authors": [
@@ -23582,6 +23504,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#20"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-service-tier-prompt.tsx#11"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt.tsx#11"
           },
           {
@@ -23930,7 +23855,7 @@
             "location": "apps/api/src/env.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#13"
+            "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#12"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/active-docx-edit-tool.ts#3"
@@ -23981,7 +23906,7 @@
             "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#5"
           },
           {
-            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#7"
+            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#6"
           },
           {
             "location": "apps/api/src/handlers/hosted-usage-webhook/event-schemas.ts#14"
@@ -23993,13 +23918,16 @@
             "location": "apps/api/src/handlers/mcp-connectors/oauth.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/search/ai.ts#7"
+            "location": "apps/api/src/handlers/search/ai.ts#6"
           },
           {
-            "location": "apps/api/src/handlers/skills/generate-draft.ts#5"
+            "location": "apps/api/src/handlers/skills/generate-draft.ts#4"
           },
           {
             "location": "apps/api/src/lib/ai-config-crypto.ts#10"
+          },
+          {
+            "location": "apps/api/src/lib/ai-output-schema.ts#29"
           },
           {
             "location": "apps/api/src/lib/bbox/ai-prompts.ts#1"
