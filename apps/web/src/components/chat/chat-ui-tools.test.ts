@@ -10,6 +10,7 @@ import {
   hasApprovedActiveDocxEditAwaitingClientOutput,
   hasRunningToolCallInLatestAssistantMessage,
   isApprovalPart,
+  isChatTurnInFlight,
   isPublicOfficialChatToolName,
   isToolApprovedByGrant,
 } from "@/components/chat/chat-ui-tools";
@@ -353,6 +354,68 @@ describe("hasRunningToolCallInLatestAssistantMessage", () => {
     expect(hasRunningToolCallInLatestAssistantMessage({ messages })).toBe(
       false,
     );
+  });
+});
+
+describe("isChatTurnInFlight", () => {
+  const messagesWithRunningToolCall = [
+    {
+      id: "message-1",
+      parts: [
+        {
+          input: { query: "consumer credit" },
+          state: "input-streaming",
+          toolCallId: "tool-call-1",
+          toolName: "mcp__salvia__search_decisions",
+          type: "dynamic-tool",
+        },
+      ],
+      role: "assistant",
+    },
+  ] satisfies Parameters<typeof isChatTurnInFlight>[0]["messages"];
+
+  test("treats an active request as in flight regardless of the message tail", () => {
+    expect(isChatTurnInFlight({ status: "submitted", messages: [] })).toBe(
+      true,
+    );
+    expect(isChatTurnInFlight({ status: "streaming", messages: [] })).toBe(
+      true,
+    );
+  });
+
+  test("keeps a ready chat with a running tool call in flight (between-steps window)", () => {
+    expect(
+      isChatTurnInFlight({
+        status: "ready",
+        messages: messagesWithRunningToolCall,
+      }),
+    ).toBe(true);
+  });
+
+  test("never treats an errored turn as in flight, even with a stuck running tool part", () => {
+    // A stream that dies mid tool call leaves the part in a running
+    // state while the SDK flips to "error" and never continues the
+    // turn; counting that tail as in-flight wedges the session.
+    expect(
+      isChatTurnInFlight({
+        status: "error",
+        messages: messagesWithRunningToolCall,
+      }),
+    ).toBe(false);
+  });
+
+  test("does not treat an abandoned turn as in flight despite a stuck running tool part", () => {
+    expect(
+      isChatTurnInFlight({
+        status: "ready",
+        messages: messagesWithRunningToolCall,
+        turnAbandoned: true,
+      }),
+    ).toBe(false);
+  });
+
+  test("is idle without an active request or running tool call", () => {
+    expect(isChatTurnInFlight({ status: "ready", messages: [] })).toBe(false);
   });
 });
 

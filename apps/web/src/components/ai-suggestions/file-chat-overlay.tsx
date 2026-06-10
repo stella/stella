@@ -1202,6 +1202,10 @@ const FileChatOverlayInner = ({
           layout="floating"
           newThreadLabel={t("chat.newChat")}
           onNewThread={() => {
+            // Abort any live stream first: the rotation remount only
+            // swaps the surface, while the old Chat instance would
+            // keep streaming inside the query cache.
+            void stop();
             shouldFocusComposerAfterNewThreadRef.current = true;
             setPanelOpen(false);
             onNewThread();
