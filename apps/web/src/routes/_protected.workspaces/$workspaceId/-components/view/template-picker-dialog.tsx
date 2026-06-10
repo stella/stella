@@ -36,8 +36,10 @@ import {
 } from "@stll/ui/components/dialog";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";
+import { ViewLayoutPreview } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview";
 import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
 import { useDeleteViewTemplate } from "@/routes/_protected.workspaces/$workspaceId/-mutations/view-templates";
 import { useCreateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
@@ -74,6 +76,9 @@ export const TemplatePickerDialog = ({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
   const canDeleteTemplate = usePermissions({ view: ["delete"] });
+  const [previewLayout, setPreviewLayout] = useState<ViewLayoutType | null>(
+    null,
+  );
   const { data: templates, isPending } = useQuery({
     ...viewTemplatesOptions({
       key: { organizationId },
@@ -84,6 +89,7 @@ export const TemplatePickerDialog = ({
   const visibleTemplates = templates?.filter(
     (template) => !disallowedLayoutTypes.has(template.layoutType),
   );
+  const hasTemplates = (visibleTemplates?.length ?? 0) > 0;
 
   const createView = useCreateView(workspaceId);
   const deleteTemplate = useDeleteViewTemplate();
@@ -140,8 +146,18 @@ export const TemplatePickerDialog = ({
   };
 
   return (
-    <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogPopup className="sm:max-w-md">
+    <Dialog
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) {
+          setPreviewLayout(null);
+        }
+        onOpenChange(nextOpen);
+      }}
+      open={open}
+    >
+      <DialogPopup
+        className={cn("sm:max-w-md", hasTemplates && "sm:max-w-2xl")}
+      >
         <DialogHeader>
           <DialogTitle>{t("workspaces.views.templates.title")}</DialogTitle>
           <DialogDescription>
@@ -149,14 +165,27 @@ export const TemplatePickerDialog = ({
           </DialogDescription>
         </DialogHeader>
         <DialogPanel>
-          <TemplateList
-            canDeleteTemplate={canDeleteTemplate}
-            isMutating={createView.isPending || deleteTemplate.isPending}
-            isPending={isPending}
-            onDelete={handleDelete}
-            onUse={handleUse}
-            templates={visibleTemplates}
-          />
+          <div className="flex items-stretch">
+            <div className="min-w-0 flex-1">
+              <TemplateList
+                canDeleteTemplate={canDeleteTemplate}
+                isMutating={createView.isPending || deleteTemplate.isPending}
+                isPending={isPending}
+                onDelete={handleDelete}
+                onPreview={setPreviewLayout}
+                onUse={handleUse}
+                templates={visibleTemplates}
+              />
+            </div>
+            {hasTemplates && (
+              <div className="ms-3 hidden border-s ps-1 sm:block">
+                <ViewLayoutPreview
+                  kind={previewLayout}
+                  workspaceId={workspaceId}
+                />
+              </div>
+            )}
+          </div>
         </DialogPanel>
         <DialogFooter>
           <Button onClick={() => onOpenChange(false)} variant="ghost">
@@ -175,6 +204,7 @@ type TemplateListProps = {
   canDeleteTemplate: boolean;
   onUse: (template: WorkspaceViewTemplate) => void;
   onDelete: (templateId: string) => void;
+  onPreview: (layoutType: ViewLayoutType) => void;
 };
 
 const TemplateList = ({
@@ -184,6 +214,7 @@ const TemplateList = ({
   canDeleteTemplate,
   onUse,
   onDelete,
+  onPreview,
 }: TemplateListProps) => {
   const t = useTranslations();
 
@@ -212,6 +243,7 @@ const TemplateList = ({
             isPending={isMutating}
             key={template.id}
             onDelete={() => onDelete(template.id)}
+            onPreview={() => onPreview(template.layoutType)}
             onUse={() => onUse(template)}
             template={template}
           />
@@ -227,6 +259,7 @@ type TemplateRowProps = {
   isPending: boolean;
   onUse: () => void;
   onDelete: () => void;
+  onPreview: () => void;
 };
 
 const TemplateRow = ({
@@ -235,12 +268,17 @@ const TemplateRow = ({
   isPending,
   onUse,
   onDelete,
+  onPreview,
 }: TemplateRowProps) => {
   const t = useTranslations();
   const Icon = layoutIcons[template.layoutType];
 
   return (
-    <li className="hover:bg-muted/50 flex items-center gap-2 rounded p-2">
+    <li
+      className="hover:bg-muted/50 flex items-center gap-2 rounded p-2"
+      onFocus={onPreview}
+      onMouseEnter={onPreview}
+    >
       <Icon className="text-muted-foreground size-4 shrink-0" />
       <button
         className="min-w-0 flex-1 truncate text-start text-sm"

@@ -1,0 +1,80 @@
+/*
+ * Kanban layout preview: one card is "picked up" from the In-progress
+ * column (lift, tilt, shadow), carried over, and dropped at the top of
+ * the Done column while crossfading between its in-progress and done
+ * renderings. Runs once per mount; with reduced motion the preview
+ * stays in the initial static state.
+ */
+
+.view-layout-preview-fade-in {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .view-layout-preview-move {
+    animation: view-layout-preview-move 2.6s ease-in-out forwards;
+  }
+
+  .view-layout-preview-fade-out {
+    animation: view-layout-preview-fade-out 2.6s linear forwards;
+  }
+
+  .view-layout-preview-fade-in {
+    animation: view-layout-preview-fade-in 2.6s linear forwards;
+  }
+}
+
+/*
+ * Horizontal target: 100% = card width, 1.25rem = column gap plus both
+ * columns' inner padding. Vertical target: -4.5rem lifts the card from
+ * the second slot of the source column to the first slot of the Done
+ * column (height of the card above it plus the column's item gap).
+ */
+@keyframes view-layout-preview-move {
+  0%,
+  28% {
+    transform: none;
+    filter: none;
+  }
+
+  38% {
+    transform: translate(0.25rem, -4.875rem) rotate(2.5deg) scale(1.05);
+    filter: drop-shadow(0 8px 10px rgb(0 0 0 / 0.28));
+  }
+
+  64% {
+    transform: translate(calc(100% + 1.25rem), -4.875rem) rotate(2.5deg)
+      scale(1.05);
+    filter: drop-shadow(0 8px 10px rgb(0 0 0 / 0.28));
+  }
+
+  74%,
+  100% {
+    transform: translate(calc(100% + 1.25rem), -4.5rem) rotate(0deg) scale(1);
+    filter: none;
+  }
+}
+
+@keyframes view-layout-preview-fade-out {
+  0%,
+  64% {
+    opacity: 1;
+  }
+
+  72%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes view-layout-preview-fade-in {
+  0%,
+  64% {
+    opacity: 0;
+  }
+
+  72%,
+  100% {
+    opacity: 1;
+  }
+}
