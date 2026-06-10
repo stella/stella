@@ -665,17 +665,29 @@ export const mergeManifestWithDiscovery = (
   // Start with discovered fields, enriching with manifest
   const resolved: ResolvedField[] = [];
   const seen = new Set<string>();
+  const arrayRoots = new Set<string>();
 
   for (const df of discovered.fields) {
     seen.add(df.path);
+    if (df.kind === "array") {
+      arrayRoots.add(df.path);
+    }
     const meta = metaByPath.get(df.path);
-    resolved.push(mergeField(df, meta));
+    resolved.push(mergeField(df, meta, metaByPath));
   }
 
   // Add manifest-only fields (not discovered)
   if (manifest) {
     for (const f of manifest.fields) {
       if (seen.has(f.path)) {
+        continue;
+      }
+      // Loop-item metadata (e.g. "lawyers.name" under a discovered
+      // {{#each lawyers}}) merges into the array's itemFields above; adding
+      // it as a flat field would shadow the array root in the prefix filter
+      // below and break the array rendering.
+      const root = f.path.split(".").at(0);
+      if (root !== undefined && root !== f.path && arrayRoots.has(root)) {
         continue;
       }
       resolved.push({
@@ -714,6 +726,7 @@ export const mergeManifestWithDiscovery = (
 const mergeField = (
   discovered: DiscoveredField,
   meta?: FieldMeta,
+  metaByPath?: ReadonlyMap<string, FieldMeta>,
 ): ResolvedField => {
   const resolved: ResolvedField = {
     path: discovered.path,
@@ -770,8 +783,12 @@ const mergeField = (
   }
 
   if (discovered.itemFields) {
-    // Item-level metadata not yet supported
-    resolved.itemFields = discovered.itemFields.map((item) => mergeField(item));
+    // Item paths are relative to the array root; their manifest entries are
+    // stored dotted ("lawyers.name"), so resolve item metadata through the
+    // full path.
+    resolved.itemFields = discovered.itemFields.map((item) =>
+      mergeField(item, metaByPath?.get(`${discovered.path}.${item.path}`)),
+    );
   }
 
   return resolved;
