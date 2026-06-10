@@ -49,6 +49,12 @@ import {
   buildAutofillUpdates,
   groupSupportsRegistryAutofill,
 } from "./registry-autofill";
+import {
+  firstOfNextMonthIso,
+  formatDateValue,
+  inDaysIso,
+  todayIso,
+} from "./template-date-format";
 import { TemplatePrefillPanel } from "./template-prefill-panel";
 import type { PrefillSuggestionDto } from "./template-prefill-panel";
 
@@ -486,6 +492,69 @@ const AiAdaptHint = ({ show }: { show: boolean }) => {
   );
 };
 
+/** Quick picks under a date input: common contract dates entered as one
+ *  click (today, the first of next month, 30 days out). */
+const DateQuickChips = ({ onPick }: { onPick: (iso: string) => void }) => {
+  const t = useTranslations();
+  const chips = [
+    { key: "today", label: t("common.today"), iso: todayIso },
+    {
+      key: "firstOfNextMonth",
+      label: t("templates.dateChipFirstOfNextMonth"),
+      iso: firstOfNextMonthIso,
+    },
+    {
+      key: "plus30",
+      label: t("templates.dateChipPlus30Days"),
+      iso: () => inDaysIso(30),
+    },
+  ];
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {chips.map((chip) => (
+        <button
+          className="bg-accent text-accent-foreground hover:bg-accent/80 cursor-pointer rounded-md px-1.5 py-0.5 text-xs font-medium"
+          key={chip.key}
+          onClick={() => onPick(chip.iso())}
+          type="button"
+        >
+          {chip.label}
+        </button>
+      ))}
+    </div>
+  );
+};
+
+/** How the entered date will render in the generated document, per the
+ *  field's manifest dateFormat. Hidden while empty/invalid, and for the
+ *  pass-through "iso" style (the input already shows that value). */
+const DateRenderPreview = ({
+  dateFormat,
+  value,
+}: {
+  dateFormat: ResolvedField["dateFormat"];
+  value: unknown;
+}) => {
+  const t = useTranslations();
+  if (
+    dateFormat === undefined ||
+    dateFormat.style === "iso" ||
+    typeof value !== "string" ||
+    value === ""
+  ) {
+    return null;
+  }
+  const formatted = formatDateValue(value, dateFormat);
+  if (formatted === null) {
+    return null;
+  }
+  return (
+    <p className="text-muted-foreground text-xs">
+      {t("templates.dateRenderPreview", { value: formatted })}
+    </p>
+  );
+};
+
 /** Shown under registry-lookup fields: the entered number (e.g. KRS) is
  *  resolved against the register at fill time and replaced with the company
  *  details; the wand marks an AI format instruction shaping that text. */
@@ -689,7 +758,7 @@ const FieldRenderer = ({
           value={value === "" || typeof value !== "string" ? undefined : value}
         >
           <SelectTrigger>
-            <SelectValue placeholder={label} />
+            <SelectValue placeholder={field.hint ?? label} />
           </SelectTrigger>
           <SelectPopup>
             {selectOptions.map((option: string) => (
@@ -718,6 +787,7 @@ const FieldRenderer = ({
               name={field.path}
               onBlur={handleBlur}
               onChange={(e) => onChange(field.path, e.target.value)}
+              placeholder={field.hint}
               value={typeof value === "string" ? value : ""}
             />
           }
@@ -742,6 +812,7 @@ const FieldRenderer = ({
               name={field.path}
               onBlur={handleBlur}
               onChange={(e) => onChange(field.path, e.target.value)}
+              placeholder={field.hint}
               type="number"
               value={typeof value === "string" ? value : ""}
             />
@@ -765,6 +836,13 @@ const FieldRenderer = ({
           onChange={(v) => onChange(field.path, v ?? "")}
           value={typeof value === "string" ? value : ""}
         />
+        <DateQuickChips
+          onPick={(iso) => {
+            onChange(field.path, iso);
+            onBlur?.(field.path);
+          }}
+        />
+        <DateRenderPreview dateFormat={field.dateFormat} value={value} />
         <FieldError message={error} />
       </Field>
     );
@@ -783,6 +861,7 @@ const FieldRenderer = ({
             name={field.path}
             onBlur={handleBlur}
             onChange={(e) => onChange(field.path, e.target.value)}
+            placeholder={field.hint}
             type="text"
             value={typeof value === "string" ? value : ""}
           />
