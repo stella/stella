@@ -2139,6 +2139,7 @@ type Messages = {
       "expressionPlaceholder": "expression";
       "fieldHelp": "When someone fills this template, they'll be asked for this value. You decide here how that question looks.";
       "fillFormPreview": "How it appears in the fill form";
+      "fillStale": "Unsaved changes — save to fill with the latest fields.";
       "filledByPerson": "Person";
       "formula": "Formula";
       "insert": "Insert";

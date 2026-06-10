@@ -1850,6 +1850,8 @@ const TemplateFillFacet = ({ templateId }: { templateId: string }) => {
   });
   const detailOptions = templateDetailOptions(activeOrganizationId, templateId);
   const { data: detailData } = useQuery(detailOptions);
+  const fillIsDirty = useTemplateStudioStore((s) => s.isDirty);
+  const fillActions = useTemplateStudioStore((s) => s.actions);
   const detail =
     detailData && !(detailData instanceof Response) && "manifest" in detailData
       ? detailData
@@ -1908,16 +1910,32 @@ const TemplateFillFacet = ({ templateId }: { templateId: string }) => {
   }
 
   return (
-    <TemplateForm
-      conditions={discovered.conditions}
-      fields={discovered.fields}
-      fileName={detail.fileName}
-      onBack={() => undefined}
-      onDone={() => undefined}
-      onValuesChange={pushFillPreview}
-      structureErrors={discovered.structureErrors}
-      templateId={templateId}
-    />
+    <>
+      {fillIsDirty ? (
+        <div className="border-warning/30 bg-warning/10 mx-4 mt-3 flex items-center justify-between gap-2 rounded-lg border p-2.5">
+          <p className="text-warning-foreground text-xs">
+            {t("templates.studio.fillStale")}
+          </p>
+          <Button
+            onClick={() => fillActions?.save()}
+            size="sm"
+            variant="outline"
+          >
+            {t("common.save")}
+          </Button>
+        </div>
+      ) : null}
+      <TemplateForm
+        conditions={discovered.conditions}
+        fields={discovered.fields}
+        fileName={detail.fileName}
+        onBack={() => undefined}
+        onDone={() => undefined}
+        onValuesChange={pushFillPreview}
+        structureErrors={discovered.structureErrors}
+        templateId={templateId}
+      />
+    </>
   );
 };
 

@@ -2136,6 +2136,7 @@
       "expressionPlaceholder": "expresión",
       "fieldHelp": "Cuando alguien rellene esta plantilla, se le pedirá este valor. Aquí decides cómo se verá esa pregunta.",
       "fillFormPreview": "Así aparece en el formulario",
+      "fillStale": "Cambios sin guardar: guarda para rellenar con los campos actuales.",
       "filledByPerson": "Persona",
       "formula": "Fórmula",
       "insert": "Insertar",

@@ -2136,6 +2136,7 @@
       "expressionPlaceholder": "avaldis",
       "fieldHelp": "Kui keegi seda malli täidab, küsitakse temalt seda väärtust. Siin otsustate, kuidas see küsimus välja näeb.",
       "fillFormPreview": "Nii kuvatakse see vormis",
+      "fillStale": "Salvestamata muudatused — salvestage, et täita uusimate väljadega.",
       "filledByPerson": "Isik",
       "formula": "Valem",
       "insert": "Sisesta",

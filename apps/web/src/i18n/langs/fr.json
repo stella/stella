@@ -2136,6 +2136,7 @@
       "expressionPlaceholder": "expression",
       "fieldHelp": "Quand quelqu'un remplit ce modèle, cette valeur lui est demandée. Vous décidez ici de l'apparence de cette question.",
       "fillFormPreview": "Aperçu dans le formulaire",
+      "fillStale": "Modifications non enregistrées — enregistrez pour remplir avec les derniers champs.",
       "filledByPerson": "Personne",
       "formula": "Formule",
       "insert": "Insérer",

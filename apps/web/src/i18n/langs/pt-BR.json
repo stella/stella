@@ -2136,6 +2136,7 @@
       "expressionPlaceholder": "expressão",
       "fieldHelp": "Quando alguém preencher este modelo, este valor será solicitado. Aqui você decide como essa pergunta vai aparecer.",
       "fillFormPreview": "Como aparece no formulário",
+      "fillStale": "Alterações não salvas — salve para preencher com os campos mais recentes.",
       "filledByPerson": "Pessoa",
       "formula": "Fórmula",
       "insert": "Inserir",

@@ -2136,6 +2136,7 @@
       "expressionPlaceholder": "wyrażenie",
       "fieldHelp": "Gdy ktoś będzie wypełniać ten szablon, zostanie poproszony o tę wartość. Tutaj decydujesz, jak to pytanie będzie wyglądać.",
       "fillFormPreview": "Tak pojawi się w formularzu",
+      "fillStale": "Niezapisane zmiany — zapisz, aby wypełniać najnowsze pola.",
       "filledByPerson": "Osoba",
       "formula": "Formuła",
       "insert": "Wstaw",

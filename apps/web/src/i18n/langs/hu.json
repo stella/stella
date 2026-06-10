@@ -2136,6 +2136,7 @@
       "expressionPlaceholder": "kifejezés",
       "fieldHelp": "Amikor valaki kitölti ezt a sablont, ezt az értéket fogja megadni. Itt döntheti el, hogyan nézzen ki ez a kérdés.",
       "fillFormPreview": "Így jelenik meg az űrlapon",
+      "fillStale": "Mentetlen módosítások — mentsen, hogy a legfrissebb mezőkkel töltse ki.",
       "filledByPerson": "Személy",
       "formula": "Képlet",
       "insert": "Beszúrás",

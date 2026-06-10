@@ -2136,6 +2136,7 @@
       "expressionPlaceholder": "výraz",
       "fieldHelp": "Keď niekto šablónu vypĺňa, bude požiadaný o túto hodnotu. Tu určíte, ako bude otázka vyzerať.",
       "fillFormPreview": "Ako sa zobrazí vo formulári",
+      "fillStale": "Neuložené zmeny — uložte, aby sa vypĺňali aktuálne polia.",
       "filledByPerson": "Osoba",
       "formula": "Vzorec",
       "insert": "Vložiť",

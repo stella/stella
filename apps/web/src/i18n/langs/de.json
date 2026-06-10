@@ -2136,6 +2136,7 @@
       "expressionPlaceholder": "Ausdruck",
       "fieldHelp": "Wer diese Vorlage ausfüllt, wird nach diesem Wert gefragt. Hier legen Sie fest, wie diese Frage aussieht.",
       "fillFormPreview": "So erscheint es im Formular",
+      "fillStale": "Ungespeicherte Änderungen — speichern Sie, um mit den aktuellen Feldern auszufüllen.",
       "filledByPerson": "Person",
       "formula": "Formel",
       "insert": "Einfügen",
