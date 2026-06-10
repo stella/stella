@@ -5,7 +5,6 @@ import * as v from "valibot";
 import type { ScopedDb } from "@/api/db";
 import {
   buildAiFieldGenerator,
-  buildAiLookupFormatter,
   buildAiOccurrenceAdapter,
 } from "@/api/handlers/docx/ai-field-generator";
 import { suggestTemplateFields } from "@/api/handlers/templates/suggest-template-fields";
@@ -55,12 +54,6 @@ export const createTemplateTools = ({
   // Per-occurrence adapter for aiAdapt fields (stub rewritten to fit each
   // marker's surrounding text); same fallback semantics as generateAiValue.
   const adaptAiValue = buildAiOccurrenceAdapter({
-    orgAIConfig: orgAIConfig ?? null,
-    organizationId,
-  });
-  // AI formatter for lookup fields (FieldMeta.lookup.aiFormat); falls back to
-  // the deterministic rendering when the model is unavailable.
-  const formatLookupValue = buildAiLookupFormatter({
     orgAIConfig: orgAIConfig ?? null,
     organizationId,
   });
@@ -143,7 +136,6 @@ export const createTemplateTools = ({
           organizationId,
           generateAiValue,
           adaptAiValue,
-          formatLookupValue,
         }),
     }),
 

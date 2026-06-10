@@ -13,7 +13,6 @@ import { generateText, Output, streamText } from "ai";
 import * as v from "valibot";
 
 import type { AiOccurrenceAdapter } from "@/api/handlers/docx/adapt-ai-fields";
-import type { AiLookupFormatter } from "@/api/handlers/docx/lookup-fields";
 import type { AiFieldGenerator } from "@/api/handlers/docx/resolve-ai-fields";
 import { getModelForRole } from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
@@ -52,76 +51,6 @@ ${JSON.stringify(values)}
 Reply with only the text for this field — no preamble, no quotes, no markdown.`,
       });
       const trimmed = text.trim();
-      return trimmed.length > 0 ? trimmed : undefined;
-    } catch {
-      return undefined;
-    }
-  };
-};
-
-const AI_LOOKUP_FORMAT_TIMEOUT_MS = 20_000;
-const AI_LOOKUP_FORMAT_MAX_TOKENS = 600;
-
-// strictObject + nullable-required member: OpenAI strict structured output
-// rejects plain objects and optional properties (see strictOutputSchema).
-const lookupFormattingSchema = v.strictObject({
-  // null when the instruction cannot be satisfied from the registry data;
-  // callers then fall back to the deterministic rendering.
-  formatted: v.nullable(v.string()),
-});
-
-const LOOKUP_FORMAT_SYSTEM_PROMPT =
-  "You format official company-register data into one text fragment for a " +
-  "legal document, following the given instruction (e.g. bracketed slots " +
-  "for the company name, seat, and registration number). Use only the " +
-  "facts in the provided registry data; never invent or guess values. " +
-  "Match the instruction's language. Return null when the instruction " +
-  "cannot be satisfied from the data.";
-
-/**
- * Model-backed formatter for registry-lookup fields (FieldMeta.lookup with
- * an aiFormat instruction). Returns `undefined` when the org has no usable
- * AI config or the model fails, so the fill falls back to the deterministic
- * "name, seat" rendering.
- */
-export const buildAiLookupFormatter = ({
-  orgAIConfig,
-  organizationId,
-}: {
-  orgAIConfig: OrgAIConfig | null;
-  organizationId: SafeId<"organization">;
-}): AiLookupFormatter | undefined => {
-  if (!orgAIConfig) {
-    return undefined;
-  }
-  return async ({ instruction, fieldPath, hit }) => {
-    try {
-      const result = streamText({
-        abortSignal: AbortSignal.timeout(AI_LOOKUP_FORMAT_TIMEOUT_MS),
-        maxOutputTokens: AI_LOOKUP_FORMAT_MAX_TOKENS,
-        model: getModelForRole("fast", orgAIConfig, {
-          promptCachingEnabled: false,
-          scopeKey: organizationId,
-          organizationId,
-          serviceTier: "standard",
-        }),
-        output: Output.object({
-          schema: strictOutputSchema(lookupFormattingSchema),
-        }),
-        prompt: `Field: ${fieldPath}
-Formatting instruction: ${instruction}
-
-Registry data (JSON):
-${JSON.stringify(hit)}
-
-Return the formatted text only — no preamble, no quotes, no markdown.`,
-        system: LOOKUP_FORMAT_SYSTEM_PROMPT,
-      });
-      const { formatted } = await result.output;
-      if (formatted === null) {
-        return undefined;
-      }
-      const trimmed = formatted.trim();
       return trimmed.length > 0 ? trimmed : undefined;
     } catch {
       return undefined;

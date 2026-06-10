@@ -176,41 +176,10 @@ describe("resolveLookupFields", () => {
     }
   });
 
-  test("uses the AI formatter when aiFormat is set", async () => {
-    const calls: { instruction: string; fieldPath: string }[] = [];
-    const result = await resolveLookupFields({
-      values: { buyer_krs: "0000592109" },
-      fields: [
-        {
-          path: "buyer_krs",
-          aiAdapt: true,
-          lookup: {
-            registry: "krs",
-            aiFormat: "[name], with its seat in [seat], KRS [number]",
-          },
-        },
-      ],
-      resolve: hitResolver(KRS_HIT),
-      formatWithAi: async ({ instruction, fieldPath }) => {
-        calls.push({ instruction, fieldPath });
-        return "Żabka Polska sp. z o.o., with its seat in Poznań, KRS 0000592109";
-      },
-    });
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.values["buyer_krs"]).toBe(
-        "Żabka Polska sp. z o.o., with its seat in Poznań, KRS 0000592109",
-      );
-    }
-    expect(calls).toEqual([
-      {
-        instruction: "[name], with its seat in [seat], KRS [number]",
-        fieldPath: "buyer_krs",
-      },
-    ]);
-  });
-
-  test("falls back to the deterministic rendering when AI declines", async () => {
+  test("renders the template deterministically even when the field is Person + AI", async () => {
+    // aiAdapt (Person + AI) changes nothing at lookup time: the author's
+    // [token] template is substituted from the hit, no formatter involved.
+    // Grammar adjustments happen downstream in the per-occurrence aiAdapt pass.
     const result = await resolveLookupFields({
       values: { buyer_krs: "0000592109" },
       fields: [
@@ -224,29 +193,13 @@ describe("resolveLookupFields", () => {
         },
       ],
       resolve: hitResolver(KRS_HIT),
-      formatWithAi: async () => undefined,
     });
     expect(result.ok).toBe(true);
     if (result.ok) {
-      // AI declined: the template still renders deterministically.
       expect(result.values["buyer_krs"]).toBe(
         "Żabka Polska sp. z o.o., seat: Poznań",
       );
     }
-  });
-
-  test("does not call the AI formatter without an aiFormat instruction", async () => {
-    let called = false;
-    await resolveLookupFields({
-      values: { buyer_krs: "0000592109" },
-      fields: [krsField],
-      resolve: hitResolver(KRS_HIT),
-      formatWithAi: async () => {
-        called = true;
-        return "never";
-      },
-    });
-    expect(called).toBe(false);
   });
 });
 

@@ -6,7 +6,6 @@ import { templateFills } from "@/api/db/schema";
 import { adaptAiFields } from "@/api/handlers/docx/adapt-ai-fields";
 import {
   buildAiFieldGenerator,
-  buildAiLookupFormatter,
   buildAiOccurrenceAdapter,
 } from "@/api/handlers/docx/ai-field-generator";
 import { createDispatchLookupResolver } from "@/api/handlers/docx/lookup-fields";
@@ -123,14 +122,11 @@ export const fillHandler = async ({
   let adaptedPaths: readonly string[] = [];
   const manifest = await readManifest(buffer);
 
-  const hasLookupAiFormat = manifest?.fields.some(
-    (field) => field.lookup?.aiFormat,
-  );
   const hasAiDraftFields = manifest?.fields.some((field) => field.aiPrompt);
   const hasAiAdaptFields = manifest?.fields.some((field) => field.aiAdapt);
-  // Loaded once for lookup formatting and the AI draft/adapt steps below.
+  // Loaded once for the AI draft/adapt steps below.
   const orgAIConfig =
-    manifest && (hasAiDraftFields || hasAiAdaptFields || hasLookupAiFormat)
+    manifest && (hasAiDraftFields || hasAiAdaptFields)
       ? await loadOrgAIConfig(organizationId)
       : null;
 
@@ -143,7 +139,6 @@ export const fillHandler = async ({
     values: fillData,
     manifest,
     resolveLookup: createDispatchLookupResolver(),
-    formatLookupWithAi: buildAiLookupFormatter({ orgAIConfig, organizationId }),
   });
   if (stepError !== null) {
     return new Response(JSON.stringify({ error: stepError }), {

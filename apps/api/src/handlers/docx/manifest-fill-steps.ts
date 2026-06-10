@@ -18,29 +18,20 @@ import { applyCompositeFields } from "./composite-fields";
 import { applyDateFields } from "./date-fields";
 import { checkDependentFields } from "./dependent-fields";
 import { applyFormulaFields } from "./formula-fields";
-import {
-  type AiLookupFormatter,
-  applyLookupFields,
-  type LookupResolver,
-} from "./lookup-fields";
+import { applyLookupFields, type LookupResolver } from "./lookup-fields";
 import type { FieldMeta } from "./types";
 
 export const applyManifestFillSteps = async ({
   values,
   manifest,
   resolveLookup,
-  formatLookupWithAi,
 }: {
   values: Record<string, unknown>;
   manifest: { fields: FieldMeta[] } | null;
   resolveLookup: LookupResolver;
-  /** Optional model-backed formatter for lookup fields with an aiFormat
-   *  instruction; without it the deterministic rendering is used. */
-  formatLookupWithAi?: AiLookupFormatter | undefined;
 }): Promise<string | null> => {
   const lookupError = await applyLookupFields(values, manifest, {
     resolve: resolveLookup,
-    formatWithAi: formatLookupWithAi,
   });
   if (lookupError !== null) {
     return lookupError;
