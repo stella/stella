@@ -2196,6 +2196,85 @@ const buildOutline = (directives: readonly DirectiveRange[]): OutlineNode[] => {
   return root;
 };
 
+/** The rule-builder's param-less operator word keys; narrowed from the broad
+ *  `TranslationKey` union so the row can call `t(key)` with a single argument
+ *  (interpolating keys need a values object). */
+type OperatorWordKey =
+  | "templates.conditionOpAtLeast"
+  | "templates.conditionOpAtMost"
+  | "templates.conditionOpIsNot"
+  | "templates.conditionOpIs"
+  | "templates.conditionOpGreaterThan"
+  | "templates.conditionOpLessThan"
+  | "templates.conditionOpContains";
+
+/** Canonical comparison operators (as `serializeCondition` emits them) mapped
+ *  to the rule-builder's word keys, longest first so `>=`/`<=`/`!=` win over
+ *  their single-character prefixes when scanning an expression. */
+const CONDITION_OPERATOR_WORDS: readonly {
+  operator: string;
+  labelKey: OperatorWordKey;
+}[] = [
+  { operator: ">=", labelKey: "templates.conditionOpAtLeast" },
+  { operator: "<=", labelKey: "templates.conditionOpAtMost" },
+  { operator: "!=", labelKey: "templates.conditionOpIsNot" },
+  { operator: "==", labelKey: "templates.conditionOpIs" },
+  { operator: ">", labelKey: "templates.conditionOpGreaterThan" },
+  { operator: "<", labelKey: "templates.conditionOpLessThan" },
+  { operator: "contains", labelKey: "templates.conditionOpContains" },
+];
+
+/** Strip matching surrounding quotes from a comparison's right-hand side so
+ *  `state == "draft"` reads as `is draft`, not `is "draft"`. */
+const unquote = (value: string): string => {
+  const trimmed = value.trim();
+  const first = trimmed.at(0);
+  if (
+    trimmed.length >= 2 &&
+    (first === '"' || first === "'") &&
+    trimmed.at(-1) === first
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+};
+
+/** Friendly reading of a condition/loop opener for the outline row. Bare
+ *  boolean field paths read as the field's label; binary comparisons read as
+ *  `label operator-word value`; anything we can't prettify falls back to the
+ *  raw expression. The raw expression stays available as the row's `title`. */
+const humanizeConditionExpr = (
+  expr: string,
+  fields: readonly StudioField[],
+  operatorWord: (key: OperatorWordKey) => string,
+): string => {
+  const trimmed = expr.trim();
+  if (trimmed === "") {
+    return expr;
+  }
+  const labelFor = (path: string): string => {
+    const field = fields.find((f) => f.path === path);
+    return field !== undefined && field.label !== "" ? field.label : path;
+  };
+  // A bare field path with no operator is a yes/no question gating the block.
+  if (isFieldPath(trimmed)) {
+    return labelFor(trimmed);
+  }
+  for (const { operator, labelKey } of CONDITION_OPERATOR_WORDS) {
+    const index = trimmed.indexOf(operator);
+    if (index <= 0) {
+      continue;
+    }
+    const lhs = trimmed.slice(0, index).trim();
+    const rhs = trimmed.slice(index + operator.length).trim();
+    if (lhs === "" || rhs === "" || !isFieldPath(lhs)) {
+      continue;
+    }
+    return `${labelFor(lhs)} ${operatorWord(labelKey)} ${unquote(rhs)}`;
+  }
+  return trimmed;
+};
+
 const outlineFieldPaths = (nodes: OutlineNode[]): Set<string> => {
   const paths = new Set<string>();
   const walk = (list: OutlineNode[]) => {
@@ -3898,7 +3977,6 @@ const OutlineRow = ({
 }) => {
   const t = useTranslations();
   const actions = useTemplateStudioStore((s) => s.actions);
-  const [open, setOpen] = useState(true);
 
   const jump = () => {
     if (node.from >= 0) {
@@ -4017,40 +4095,74 @@ const OutlineRow = ({
     }
   }
 
+  return <OutlineGroupRow fields={fields} jump={jump} node={node} />;
+};
+
+/** A condition / loop block in the outline, rendered as a peer of field rows:
+ *  a boxed icon slot (Split for if/elseif/else, Repeat for each) and a human
+ *  reading of the opener as the label, with the raw expression kept in the
+ *  row's title. Collapsible when it owns children. */
+const OutlineGroupRow = ({
+  node,
+  fields,
+  jump,
+}: {
+  node: OutlineGroup;
+  fields: StudioField[];
+  jump: () => void;
+}) => {
+  const t = useTranslations();
+  const [open, setOpen] = useState(true);
   const GroupIcon = node.kind === "each" ? RepeatIcon : SplitIcon;
   const groupTitle =
     node.kind === "each"
       ? t("templates.studio.loop")
       : t("templates.studio.scopeCondition");
+  const friendly = humanizeConditionExpr(node.expr, fields, (key) => t(key));
+  let groupLabel: string;
+  if (node.kind === "each") {
+    groupLabel = t("templates.studio.repeats", { item: friendly });
+  } else if (node.kind === "else") {
+    groupLabel = t("templates.studio.otherwise");
+  } else if (node.kind === "elseif") {
+    groupLabel = t("templates.studio.otherwiseIf", { condition: friendly });
+  } else {
+    groupLabel = friendly;
+  }
+  const hasChildren = node.children.length > 0;
   return (
-    <li>
-      <div className="flex items-center">
+    <li className="group/row relative">
+      <div className="flex items-center gap-1">
+        {hasChildren ? (
+          <button
+            aria-expanded={open}
+            aria-label={groupTitle}
+            className="hover:bg-muted text-muted-foreground shrink-0 rounded p-0.5"
+            onClick={() => setOpen((v) => !v)}
+            type="button"
+          >
+            {open ? (
+              <ChevronDownIcon className="size-3.5" />
+            ) : (
+              <ChevronRightIcon className="size-3.5" />
+            )}
+          </button>
+        ) : (
+          <span aria-hidden="true" className="size-3.5 shrink-0 p-0.5" />
+        )}
         <button
-          aria-expanded={open}
-          aria-label={groupTitle}
-          className="hover:bg-muted text-muted-foreground rounded p-0.5"
-          onClick={() => setOpen((v) => !v)}
-          type="button"
-        >
-          {open ? (
-            <ChevronDownIcon className="size-3.5" />
-          ) : (
-            <ChevronRightIcon className="size-3.5" />
-          )}
-        </button>
-        <button
-          className="hover:bg-muted flex min-w-0 flex-1 items-center gap-2 rounded px-1.5 py-1 text-start text-xs"
+          className="hover:bg-muted group flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 py-2 text-start text-sm"
           onClick={jump}
-          title={groupTitle}
+          title={node.expr === "" ? groupTitle : node.expr}
           type="button"
         >
-          <GroupIcon className="text-muted-foreground size-3.5 shrink-0" />
-          <code className="truncate">
-            {node.expr === "" ? node.kind : node.expr}
-          </code>
+          <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
+            <GroupIcon className="size-4" />
+          </span>
+          <span className="truncate">{groupLabel}</span>
         </button>
       </div>
-      {open && node.children.length > 0 ? (
+      {hasChildren && open ? (
         <ul className="border-border ms-2 flex flex-col border-s ps-2">
           {node.children.map((child, index) => (
             <OutlineRow fields={fields} key={index} node={child} />
