@@ -60,6 +60,11 @@ const RESOURCE_PATH_PATTERN =
   /^[a-z0-9][a-z0-9._-]*(\/[a-z0-9][a-z0-9._-]*)*$/u;
 const FILENAME_PATTERN = /^[a-z0-9][a-z0-9._-]*$/u;
 
+// Default name for a freshly created (still empty) folder. A path segment,
+// not user-facing copy: resource paths only allow lowercase ASCII, so a
+// translated default would fail validation.
+const NEW_FOLDER_BASE = "new-folder";
+
 // A skill is invoked in chat via /its-command; suggest the skill's name as that
 // command by default (lowercase, hyphenated) so the field reads as /skill-name.
 // Diacritics are decomposed and stripped first so a name like "Česká dovednost"
@@ -135,6 +140,13 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     null,
   );
   const [renameValue, setRenameValue] = useState("");
+  // A skill folder is just a path prefix of its resource rows, so an empty
+  // folder has nothing to persist. "New folder" creates one here immediately
+  // (Files-view parity); it materializes server-side with its first file.
+  const [pendingFolders, setPendingFolders] = useState<string[]>([]);
+  const [renamingFolderPath, setRenamingFolderPath] = useState<string | null>(
+    null,
+  );
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(
     () => new Set(),
   );
@@ -172,6 +184,74 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     () => new Set(resources.map((entry) => entry.path)),
     [resources],
   );
+
+  // A pending folder that gained its first resource is real now; render it
+  // from the resource paths instead so it cannot show up twice.
+  const emptyPendingFolders = useMemo(
+    () =>
+      pendingFolders.filter(
+        (folder) =>
+          !resources.some((entry) => entry.path.startsWith(`${folder}/`)),
+      ),
+    [pendingFolders, resources],
+  );
+
+  // Every folder path visible in the tree (resource prefixes + pending),
+  // for deduplicating new-folder names and validating folder renames.
+  const folderPrefixes = useMemo(() => {
+    const out = new Set<string>(emptyPendingFolders);
+    for (const entry of resources) {
+      const segments = entry.path.split("/");
+      for (let i = 1; i < segments.length; i += 1) {
+        out.add(segments.slice(0, i).join("/"));
+      }
+    }
+    return out;
+  }, [resources, emptyPendingFolders]);
+
+  const createPendingFolder = (parentPath: string | null) => {
+    const prefix = parentPath ? `${parentPath}/` : "";
+    let path = `${prefix}${NEW_FOLDER_BASE}`;
+    let suffix = 1;
+    while (folderPrefixes.has(path)) {
+      suffix += 1;
+      path = `${prefix}${NEW_FOLDER_BASE}-${suffix}`;
+    }
+    setPendingFolders((current) => [...current, path]);
+    // Open the name for typing right away, mirroring the Files tree.
+    setRenamingResourceId(null);
+    setRenamingFolderPath(path);
+    setRenameValue(path.split("/").at(-1) ?? path);
+  };
+
+  const onCancelFolderRename = () => {
+    setRenamingFolderPath(null);
+    setRenameValue("");
+  };
+
+  const onConfirmFolderRename = (folderPath: string, nextName: string) => {
+    const trimmed = nextName.trim();
+    const parent = folderPath.split("/").slice(0, -1).join("/");
+    const nextPath = parent ? `${parent}/${trimmed}` : trimmed;
+    if (nextPath === folderPath || trimmed.length === 0) {
+      onCancelFolderRename();
+      return;
+    }
+    if (!FILENAME_PATTERN.test(trimmed) || folderPrefixes.has(nextPath)) {
+      stellaToast.add({ title: tSkills("invalidPath"), type: "error" });
+      return;
+    }
+    setPendingFolders((current) =>
+      current.map((folder) => (folder === folderPath ? nextPath : folder)),
+    );
+    onCancelFolderRename();
+  };
+
+  const onRemovePendingFolder = (folderPath: string) => {
+    setPendingFolders((current) =>
+      current.filter((folder) => folder !== folderPath),
+    );
+  };
 
   const safeSkillId = toSafeId<"agentSkill">(skillId);
   const skillName = detail.data?.name ?? "";
@@ -333,7 +413,11 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       if (response.error) {
         throw toAPIError(response.error);
       }
-      return { ...response.data, resourceId: payload.resourceId };
+      return {
+        ...response.data,
+        resourceId: payload.resourceId,
+        path: payload.path,
+      };
     },
     onSuccess: (result) => {
       // If the deleted file was selected, jump back to SKILL.md.
@@ -342,6 +426,16 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         selected.resourceId === result.resourceId
       ) {
         setSelected({ type: "body" });
+      }
+      // Close the deleted file's inspector tab; left open, it would keep
+      // saving to the now-missing path.
+      const tabId = buildSkillResourceTabId({
+        skillName,
+        resourcePath: result.path,
+      });
+      const { tabs, closeTab } = useInspectorStore.getState();
+      if (tabs.some((tab) => tab.id === tabId)) {
+        closeTab(tabId);
       }
       onChanged();
       void detail.refetch();
@@ -389,7 +483,10 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     onError: (error) => toastError(error, t("common.unexpectedError")),
   });
 
-  const fileNodes = useMemo(() => buildSkillNodes(resources), [resources]);
+  const fileNodes = useMemo(
+    () => buildSkillNodes(resources, emptyPendingFolders),
+    [resources, emptyPendingFolders],
+  );
   const allFolderIds = useMemo(() => {
     const ids = new Set<string>();
     const walk = (siblings: FileTreeNode[]) => {
@@ -674,26 +771,38 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
               createPending={createResource.isPending}
               deletePending={deleteResource.isPending}
               nodes={fileNodes}
+              onCancelFolderRename={onCancelFolderRename}
               onCancelRename={() => {
                 setRenamingResourceId(null);
                 setRenameValue("");
               }}
               onCreateFile={onCreateFile}
+              onCreateFolder={createPendingFolder}
               onDeleteFile={(entry) =>
                 deleteResource.mutate({
                   path: entry.path,
                   resourceId: entry.id,
                 })
               }
+              onRemovePendingFolder={onRemovePendingFolder}
               onSelect={selectFile}
+              onStartFolderRename={(path) => {
+                setRenamingResourceId(null);
+                setRenamingFolderPath(path);
+                setRenameValue(path.split("/").at(-1) ?? path);
+              }}
               onStartRename={(entry) => {
+                setRenamingFolderPath(null);
                 setRenamingResourceId(entry.id);
                 setRenameValue(entry.path);
               }}
+              onSubmitFolderRename={onConfirmFolderRename}
               onSubmitRename={onConfirmRename}
               onToggleCollapsed={toggleCollapsed}
+              pendingFolders={emptyPendingFolders}
               renamePending={renameResource.isPending}
               renameValue={renameValue}
+              renamingFolderPath={renamingFolderPath}
               renamingResourceId={renamingResourceId}
               resources={resources}
               selected={selected}
@@ -706,6 +815,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
             <RootAddMenu
               createPending={createResource.isPending}
               onCreateFile={onCreateFile}
+              onCreateFolder={() => createPendingFolder(null)}
               onUploadFiles={(files) => {
                 for (const file of files) {
                   void handleUpload(file);
@@ -724,15 +834,22 @@ type SkillFileTreeProps = {
   createPending: boolean;
   deletePending: boolean;
   nodes: FileTreeNode[];
+  onCancelFolderRename: () => void;
   onCancelRename: () => void;
   onCreateFile: (path: string, content: string) => boolean;
+  onCreateFolder: (parentPath: string | null) => void;
   onDeleteFile: (entry: TreeEntry) => void;
+  onRemovePendingFolder: (folderPath: string) => void;
   onSelect: (next: SelectedFile) => void;
+  onStartFolderRename: (folderPath: string) => void;
   onStartRename: (entry: TreeEntry) => void;
+  onSubmitFolderRename: (folderPath: string, nextName: string) => void;
   onSubmitRename: (oldPath: string, newPath: string) => void;
   onToggleCollapsed: (path: string) => void;
+  pendingFolders: string[];
   renamePending: boolean;
   renameValue: string;
+  renamingFolderPath: string | null;
   renamingResourceId: string | null;
   resources: SkillResource[];
   selected: SelectedFile;
@@ -748,15 +865,22 @@ function SkillFileTree({
   createPending,
   deletePending,
   nodes,
+  onCancelFolderRename,
   onCancelRename,
   onCreateFile,
+  onCreateFolder,
   onDeleteFile,
+  onRemovePendingFolder,
   onSelect,
+  onStartFolderRename,
   onStartRename,
+  onSubmitFolderRename,
   onSubmitRename,
   onToggleCollapsed,
+  pendingFolders,
   renamePending,
   renameValue,
+  renamingFolderPath,
   renamingResourceId,
   resources,
   selected,
@@ -808,12 +932,23 @@ function SkillFileTree({
       onToggle={onToggleCollapsed}
       renderActions={(node) => {
         if (node.kind === "folder") {
+          const isPending = pendingFolders.includes(node.id);
           return (
-            <FolderCreateActions
-              createPending={createPending}
-              folderPath={node.id}
-              onCreateFile={onCreateFile}
-            />
+            <>
+              <FolderCreateActions
+                createPending={createPending}
+                folderPath={node.id}
+                onCreateFile={onCreateFile}
+                onCreateFolder={onCreateFolder}
+              />
+              {isPending && (
+                <PendingFolderActions
+                  folderPath={node.id}
+                  onRemove={onRemovePendingFolder}
+                  onStartRename={onStartFolderRename}
+                />
+              )}
+            </>
           );
         }
         if (node.id === BODY_NODE_ID) {
@@ -848,6 +983,28 @@ function SkillFileTree({
         return undefined;
       }}
       renderName={(node) => {
+        if (node.kind === "folder" && renamingFolderPath === node.id) {
+          return (
+            <Input
+              autoFocus
+              className="h-7 flex-1 text-sm"
+              onBlur={onCancelFolderRename}
+              onChange={(event) => setRenameValue(event.target.value)}
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => {
+                event.stopPropagation();
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  onSubmitFolderRename(node.id, renameValue);
+                }
+                if (event.key === "Escape") {
+                  onCancelFolderRename();
+                }
+              }}
+              value={renameValue}
+            />
+          );
+        }
         const resource = resourceById.get(node.id);
         if (
           node.kind === "file" &&
@@ -898,7 +1055,44 @@ type FolderCreateActionsProps = {
   createPending: boolean;
   folderPath: string;
   onCreateFile: (path: string, content: string) => boolean;
+  onCreateFolder: (parentPath: string) => void;
 };
+
+type PendingFolderActionsProps = {
+  folderPath: string;
+  onRemove: (folderPath: string) => void;
+  onStartRename: (folderPath: string) => void;
+};
+
+// Rename + remove affordances for a not-yet-persisted folder. Removal needs
+// no confirmation: the folder is empty by definition.
+function PendingFolderActions({
+  folderPath,
+  onRemove,
+  onStartRename,
+}: PendingFolderActionsProps) {
+  const tSkills = useTranslations("knowledge.agentSkills");
+  return (
+    <>
+      <Button
+        aria-label={tSkills("renameFile")}
+        onClick={() => onStartRename(folderPath)}
+        size="icon-sm"
+        variant="ghost"
+      >
+        <PencilIcon className="size-3.5" />
+      </Button>
+      <Button
+        aria-label={tSkills("deleteFile")}
+        onClick={() => onRemove(folderPath)}
+        size="icon-sm"
+        variant="ghost"
+      >
+        <Trash2Icon className="size-3.5" />
+      </Button>
+    </>
+  );
+}
 
 // The "+ file" / "+ folder" affordances for a folder row, surfaced as the
 // FileTree's hover actions.
@@ -906,13 +1100,11 @@ function FolderCreateActions({
   createPending,
   folderPath,
   onCreateFile,
+  onCreateFolder,
 }: FolderCreateActionsProps) {
   const tSkills = useTranslations("knowledge.agentSkills");
   const [newFileOpen, setNewFileOpen] = useState(false);
   const [filename, setFilename] = useState("");
-  const [newFolderOpen, setNewFolderOpen] = useState(false);
-  const [subfolder, setSubfolder] = useState("");
-  const [subfolderFilename, setSubfolderFilename] = useState("");
 
   const submitNewFile = () => {
     const trimmed = filename.trim();
@@ -926,71 +1118,16 @@ function FolderCreateActions({
     }
   };
 
-  const submitNewFolder = () => {
-    const folder = subfolder.trim();
-    // Lowercase default: resource paths only allow lowercase segments, so an
-    // uppercase README.md would fail validation.
-    const file = subfolderFilename.trim() || "readme.md";
-    if (!folder) {
-      return;
-    }
-    const normalizedFile = file.endsWith(".md") ? file : `${file}.md`;
-    if (onCreateFile(`${folderPath}/${folder}/${normalizedFile}`, "")) {
-      setSubfolder("");
-      setSubfolderFilename("");
-      setNewFolderOpen(false);
-    }
-  };
-
   return (
     <>
-      <Popover onOpenChange={setNewFolderOpen} open={newFolderOpen}>
-        <PopoverTrigger
-          render={
-            <Button
-              aria-label={tSkills("newFolder")}
-              size="icon-sm"
-              variant="ghost"
-            >
-              <FolderPlusIcon className="size-3.5" />
-            </Button>
-          }
-        />
-        <PopoverContent className="flex w-72 flex-col gap-2 p-2">
-          <Input
-            autoFocus
-            onChange={(event) => setSubfolder(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Escape") {
-                setNewFolderOpen(false);
-              }
-            }}
-            placeholder={tSkills("newFolderNamePlaceholder")}
-            value={subfolder}
-          />
-          <Input
-            onChange={(event) => setSubfolderFilename(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                submitNewFolder();
-              }
-              if (event.key === "Escape") {
-                setNewFolderOpen(false);
-              }
-            }}
-            placeholder={tSkills("newFolderFilenamePlaceholder")}
-            value={subfolderFilename}
-          />
-          <Button
-            disabled={createPending || subfolder.trim().length === 0}
-            onClick={submitNewFolder}
-            size="sm"
-          >
-            {tSkills("newFolder")}
-          </Button>
-        </PopoverContent>
-      </Popover>
+      <Button
+        aria-label={tSkills("newFolder")}
+        onClick={() => onCreateFolder(folderPath)}
+        size="icon-sm"
+        variant="ghost"
+      >
+        <FolderPlusIcon className="size-3.5" />
+      </Button>
       <Popover onOpenChange={setNewFileOpen} open={newFileOpen}>
         <PopoverTrigger
           render={
@@ -1108,31 +1245,28 @@ function FileRowActions({
 type RootAddMenuProps = {
   createPending: boolean;
   onCreateFile: (path: string, content: string) => boolean;
+  onCreateFolder: () => void;
   onUploadFiles: (files: File[]) => void;
 };
 
 // Root-level "Add" affordance, mirroring the matters Files view: a menu with
-// upload, new file, and new folder. A skill folder is just a path prefix, so
-// creating one asks for its first file as well.
+// upload, new file, and new folder (created immediately, named inline).
 function RootAddMenu({
   createPending,
   onCreateFile,
+  onCreateFolder,
   onUploadFiles,
 }: RootAddMenuProps) {
   const t = useTranslations();
   const tSkills = useTranslations("knowledge.agentSkills");
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [mode, setMode] = useState<"file" | "folder" | null>(null);
+  const [newFileOpen, setNewFileOpen] = useState(false);
   const [path, setPath] = useState("");
-  const [folder, setFolder] = useState("");
-  const [folderFilename, setFolderFilename] = useState("");
 
   const closePopover = () => {
-    setMode(null);
+    setNewFileOpen(false);
     setPath("");
-    setFolder("");
-    setFolderFilename("");
   };
 
   const submitNewFile = () => {
@@ -1141,18 +1275,6 @@ function RootAddMenu({
       return;
     }
     if (onCreateFile(trimmed, "")) {
-      closePopover();
-    }
-  };
-
-  const submitNewFolder = () => {
-    const folderName = folder.trim();
-    const file = folderFilename.trim() || "readme.md";
-    if (!folderName) {
-      return;
-    }
-    const normalizedFile = file.endsWith(".md") ? file : `${file}.md`;
-    if (onCreateFile(`${folderName}/${normalizedFile}`, "")) {
       closePopover();
     }
   };
@@ -1175,11 +1297,11 @@ function RootAddMenu({
             {t("common.uploadFiles")}
           </MenuItem>
           <MenuSeparator />
-          <MenuItem onClick={() => setMode("file")}>
+          <MenuItem onClick={() => setNewFileOpen(true)}>
             <FilePlusIcon />
             {tSkills("newFile")}
           </MenuItem>
-          <MenuItem onClick={() => setMode("folder")}>
+          <MenuItem onClick={onCreateFolder}>
             <FolderPlusIcon />
             {tSkills("newFolder")}
           </MenuItem>
@@ -1204,70 +1326,33 @@ function RootAddMenu({
             closePopover();
           }
         }}
-        open={mode !== null}
+        open={newFileOpen}
       >
         <PopoverContent anchor={triggerRef} className="w-72">
-          {mode === "folder" ? (
-            <div className="flex flex-col gap-2">
-              <Input
-                autoFocus
-                onChange={(event) => setFolder(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Escape") {
-                    closePopover();
-                  }
-                }}
-                placeholder={tSkills("newFolderNamePlaceholder")}
-                value={folder}
-              />
-              <Input
-                onChange={(event) => setFolderFilename(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    submitNewFolder();
-                  }
-                  if (event.key === "Escape") {
-                    closePopover();
-                  }
-                }}
-                placeholder={tSkills("newFolderFilenamePlaceholder")}
-                value={folderFilename}
-              />
-              <Button
-                disabled={createPending || folder.trim().length === 0}
-                onClick={submitNewFolder}
-                size="sm"
-              >
-                {tSkills("newFolder")}
-              </Button>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              <Input
-                autoFocus
-                onChange={(event) => setPath(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    submitNewFile();
-                  }
-                  if (event.key === "Escape") {
-                    closePopover();
-                  }
-                }}
-                placeholder={tSkills("newFilePathPlaceholder")}
-                value={path}
-              />
-              <Button
-                disabled={createPending || path.trim().length === 0}
-                onClick={submitNewFile}
-                size="sm"
-              >
-                {tSkills("newFile")}
-              </Button>
-            </div>
-          )}
+          <div className="flex flex-col gap-2">
+            <Input
+              autoFocus
+              onChange={(event) => setPath(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  submitNewFile();
+                }
+                if (event.key === "Escape") {
+                  closePopover();
+                }
+              }}
+              placeholder={tSkills("newFilePathPlaceholder")}
+              value={path}
+            />
+            <Button
+              disabled={createPending || path.trim().length === 0}
+              onClick={submitNewFile}
+              size="sm"
+            >
+              {tSkills("newFile")}
+            </Button>
+          </div>
         </PopoverContent>
       </Popover>
     </>
@@ -1307,8 +1392,12 @@ const fileIcon = (fileName: string) => {
 };
 
 // SKILL.md is pinned first; resources become a nested folder/file tree keyed by
-// path (folder node id = its path, file node id = the resource id).
-const buildSkillNodes = (resources: SkillResource[]): FileTreeNode[] => {
+// path (folder node id = its path, file node id = the resource id). Pending
+// folders render as empty folder nodes until their first file persists them.
+const buildSkillNodes = (
+  resources: SkillResource[],
+  pendingFolders: string[],
+): FileTreeNode[] => {
   const root: FileTreeNode[] = [];
   const folderByPath = new Map<string, FileTreeNode[]>();
   const ensureFolder = (folderPath: string): FileTreeNode[] => {
@@ -1344,6 +1433,9 @@ const buildSkillNodes = (resources: SkillResource[]): FileTreeNode[] => {
       name: fileName,
       kind: "file",
     });
+  }
+  for (const folder of pendingFolders) {
+    ensureFolder(folder);
   }
   const sortNodes = (siblings: FileTreeNode[]) => {
     siblings.sort((a, b) => {

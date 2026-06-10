@@ -1369,8 +1369,6 @@
       "newFileFilenamePlaceholder": "notes.md",
       "newFilePathPlaceholder": "folder/notes.md",
       "newFolder": "Nová složka",
-      "newFolderFilenamePlaceholder": "readme.md",
-      "newFolderNamePlaceholder": "podsložka",
       "pdfPreviewSoon": "Náhled PDF bude k dispozici, jakmile budou podporovány binární zdroje dovedností.",
       "privateSection": "Vaše dovednosti",
       "regenerate": "Vygenerovat znovu",

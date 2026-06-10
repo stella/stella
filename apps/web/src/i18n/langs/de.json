@@ -1369,8 +1369,6 @@
       "newFileFilenamePlaceholder": "notes.md",
       "newFilePathPlaceholder": "ordner/notizen.md",
       "newFolder": "Neuer Ordner",
-      "newFolderFilenamePlaceholder": "readme.md",
-      "newFolderNamePlaceholder": "unterordner",
       "pdfPreviewSoon": "Die PDF-Vorschau wird verfügbar sein, sobald binäre Skill-Ressourcen unterstützt werden.",
       "privateSection": "Deine Skills",
       "regenerate": "Neu generieren",

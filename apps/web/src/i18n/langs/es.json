@@ -1369,8 +1369,6 @@
       "newFileFilenamePlaceholder": "notas.md",
       "newFilePathPlaceholder": "carpeta/notas.md",
       "newFolder": "Nueva carpeta",
-      "newFolderFilenamePlaceholder": "readme.md",
-      "newFolderNamePlaceholder": "subcarpeta",
       "pdfPreviewSoon": "La vista previa de PDF estará disponible cuando se admitan recursos binarios en las habilidades.",
       "privateSection": "Tus habilidades",
       "regenerate": "Regenerar",

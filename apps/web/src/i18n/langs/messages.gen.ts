@@ -1372,8 +1372,6 @@ type Messages = {
       "newFileFilenamePlaceholder": "notes.md";
       "newFilePathPlaceholder": "folder/notes.md";
       "newFolder": "New folder";
-      "newFolderFilenamePlaceholder": "readme.md";
-      "newFolderNamePlaceholder": "subfolder";
       "pdfPreviewSoon": "PDF preview will be available once binary skill resources are supported.";
       "privateSection": "Your skills";
       "regenerate": "Regenerate";
