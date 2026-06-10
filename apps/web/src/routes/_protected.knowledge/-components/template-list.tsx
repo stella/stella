@@ -49,7 +49,7 @@ import { ContextMenu } from "@/components/context-menu";
 import type { ContextMenuAction } from "@/components/context-menu";
 import { UserAvatar } from "@/components/user-avatar";
 import { usePermissions } from "@/hooks/use-permissions";
-import { useI18nStore } from "@/i18n/i18n-store";
+import { supportedLanguages, useI18nStore } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
 import { userErrorMessage } from "@/lib/errors";
@@ -80,6 +80,8 @@ type TemplateItem = {
   lastUsedAt: Date | null;
   useCount: number;
   tags: string[] | null;
+  /** Ordered BCP-47 tags of the document text, primary language first. */
+  languages: string[];
   whenToUse: string | null;
   whenNotToUse: string | null;
   authorName: string | null;
@@ -529,6 +531,11 @@ const TemplateRow = ({
 
 // ── Row metadata (muted, small) ──────────────────────
 
+/** Localized via Intl so language names need no translation entries.
+ *  Stored tags are server-validated, so `of()` cannot throw here. */
+const languageDisplayName = (tag: string, uiLang: string): string =>
+  new Intl.DisplayNames([uiLang], { type: "language" }).of(tag) ?? tag;
+
 type RowMetaProps = {
   template: TemplateItem;
   lang: string;
@@ -560,6 +567,19 @@ const RowMeta = ({ template, lang, canUpdate, onDescribe }: RowMetaProps) => {
 
   return (
     <span className="text-muted-foreground hidden items-center gap-1 text-xs sm:flex">
+      {template.languages.length > 0 && (
+        <span className="flex items-center gap-1">
+          {template.languages.map((tag) => (
+            <span
+              className="bg-muted rounded px-1.5 py-0.5 text-[10px] font-medium uppercase"
+              key={tag}
+              title={languageDisplayName(tag, lang)}
+            >
+              {tag}
+            </span>
+          ))}
+        </span>
+      )}
       <span className="whitespace-nowrap">{segments.join(" · ")}</span>
       {showNudge && (
         <>
@@ -756,6 +776,8 @@ const TemplateGuidanceDialog = ({
   </Dialog>
 );
 
+const MAX_TEMPLATE_LANGUAGES = 4;
+
 const TemplateGuidanceDialogBody = ({
   onOpenChange,
   template,
@@ -764,6 +786,7 @@ const TemplateGuidanceDialogBody = ({
   const invalidateTemplates = useInvalidateTemplates();
   const [whenToUse, setWhenToUse] = useState(template.whenToUse ?? "");
   const [whenNotToUse, setWhenNotToUse] = useState(template.whenNotToUse ?? "");
+  const [languages, setLanguages] = useState<string[]>(template.languages);
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -771,6 +794,7 @@ const TemplateGuidanceDialogBody = ({
     const response = await api.templates({ templateId: template.id }).post({
       whenToUse: whenToUse.trim() || null,
       whenNotToUse: whenNotToUse.trim() || null,
+      languages,
     });
     setSaving(false);
 
@@ -825,6 +849,7 @@ const TemplateGuidanceDialogBody = ({
             value={whenNotToUse}
           />
         </div>
+        <TemplateLanguagesField languages={languages} onChange={setLanguages} />
       </DialogPanel>
       <DialogFooter>
         <DialogClose render={<Button variant="ghost" />}>
@@ -840,6 +865,103 @@ const TemplateGuidanceDialogBody = ({
         </Button>
       </DialogFooter>
     </DialogPopup>
+  );
+};
+
+// ── Languages field (multi-select + free BCP-47 entry) ─
+
+type TemplateLanguagesFieldProps = {
+  languages: string[];
+  onChange: (languages: string[]) => void;
+};
+
+const TemplateLanguagesField = ({
+  languages,
+  onChange,
+}: TemplateLanguagesFieldProps) => {
+  const t = useTranslations();
+  const lang = useI18nStore((s) => s.lang);
+  const [input, setInput] = useState("");
+
+  const addLanguage = (value: string) => {
+    const tag = value.trim();
+    setInput("");
+    if (!tag || languages.length >= MAX_TEMPLATE_LANGUAGES) {
+      return;
+    }
+    const exists = languages.some(
+      (existing) => existing.toLowerCase() === tag.toLowerCase(),
+    );
+    if (exists) {
+      return;
+    }
+    onChange([...languages, tag]);
+  };
+
+  const quickPicks = supportedLanguages.filter(
+    (tag) =>
+      !languages.some(
+        (existing) => existing.toLowerCase() === tag.toLowerCase(),
+      ),
+  );
+
+  return (
+    <div className="grid gap-1.5">
+      <label className="text-sm font-medium" htmlFor="template-languages">
+        {t("templates.languages")}
+      </label>
+
+      {languages.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {languages.map((tag) => (
+            <span
+              className="bg-muted text-foreground flex items-center gap-1 rounded-full py-0.5 ps-2 pe-1 text-xs font-medium"
+              key={tag}
+            >
+              {languageDisplayName(tag, lang)}
+              <span className="text-muted-foreground uppercase">{tag}</span>
+              <button
+                aria-label={t("common.remove")}
+                className="text-muted-foreground hover:text-foreground rounded-full p-0.5"
+                onClick={() => onChange(languages.filter((x) => x !== tag))}
+                type="button"
+              >
+                <XIcon className="size-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      <Input
+        disabled={languages.length >= MAX_TEMPLATE_LANGUAGES}
+        id="template-languages"
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            addLanguage(input);
+          }
+        }}
+        placeholder={t("templates.languagesPlaceholder")}
+        value={input}
+      />
+
+      {languages.length < MAX_TEMPLATE_LANGUAGES && (
+        <div className="flex flex-wrap gap-1">
+          {quickPicks.map((tag) => (
+            <button
+              className="bg-muted text-muted-foreground hover:text-foreground rounded-full px-2 py-0.5 text-xs font-medium transition-colors"
+              key={tag}
+              onClick={() => addLanguage(tag)}
+              type="button"
+            >
+              {languageDisplayName(tag, lang)}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 };
 

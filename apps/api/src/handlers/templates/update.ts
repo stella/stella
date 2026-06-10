@@ -8,6 +8,10 @@ import { templates, templateVersions } from "@/api/db/schema";
 import { writeManifest } from "@/api/handlers/docx/template-manifest";
 import type { TemplateManifest } from "@/api/handlers/docx/types";
 import { isTemplateManifest } from "@/api/handlers/docx/types";
+import {
+  MAX_TEMPLATE_LANGUAGES,
+  normalizeTemplateLanguages,
+} from "@/api/handlers/templates/template-languages";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -37,6 +41,12 @@ const updateTemplateBodySchema = t.Object({
   ),
   whenToUse: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
   whenNotToUse: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
+  // BCP-47 tags cap at 35 characters (RFC 5646 recommended buffer).
+  languages: t.Optional(
+    t.Array(t.String({ maxLength: 35 }), {
+      maxItems: MAX_TEMPLATE_LANGUAGES,
+    }),
+  ),
 });
 
 const updateTemplateParamsSchema = t.Object({
@@ -125,6 +135,7 @@ const updateTemplateHandler = async function* ({
     tags: string[];
     whenToUse: string | null;
     whenNotToUse: string | null;
+    languages: string[];
     updatedAt: Date;
   }> = {
     ...pickDefined(body, ["name", "categoryId"]),
@@ -141,6 +152,15 @@ const updateTemplateHandler = async function* ({
   }
   if (body.whenNotToUse !== undefined) {
     updates.whenNotToUse = body.whenNotToUse?.trim() || null;
+  }
+  if (body.languages !== undefined) {
+    const normalized = normalizeTemplateLanguages(body.languages);
+    if (!normalized.ok) {
+      return Result.err(
+        new HandlerError({ status: 400, message: normalized.message }),
+      );
+    }
+    updates.languages = normalized.languages;
   }
 
   if (body.manifest !== undefined) {
