@@ -1112,7 +1112,7 @@ const RegistryAutofillControl = ({
 };
 
 export const TemplateForm = ({
-  fields,
+  fields: allFields,
   conditions,
   structureErrors,
   file,
@@ -1123,6 +1123,9 @@ export const TemplateForm = ({
   onValuesChange,
 }: TemplateFormProps) => {
   const t = useTranslations();
+  // Formula fields are derived server-side at fill time, never user-entered:
+  // the form renders no input for them and submits no value.
+  const fields = allFields.filter((f) => f.formula === undefined);
   const [values, setValues] = useState<FormValues>(() =>
     buildInitialValues(fields),
   );
