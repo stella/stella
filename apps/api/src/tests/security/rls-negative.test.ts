@@ -29,6 +29,7 @@ import {
   rateEntries,
   rateTables,
   templateCategories,
+  templateChatThreads,
   templateClauses,
   templateFills,
   templates,
@@ -201,6 +202,20 @@ describe("chat SELECT — wrong user or workspace", () => {
         tx.$count(
           fileChatThreads,
           eq(fileChatThreads.id, ids.fileChatThreadA1),
+        ),
+      ids.userA2,
+    );
+    expect(c).toBe(0);
+  });
+
+  test("different user in the same org cannot read template chat mappings", async () => {
+    const c = await scopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      (tx) =>
+        tx.$count(
+          templateChatThreads,
+          eq(templateChatThreads.id, ids.templateChatThreadA1),
         ),
       ids.userA2,
     );

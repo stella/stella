@@ -27,6 +27,7 @@ import {
   orgPolicies,
   promptShortcutPolicies,
   stella,
+  templateChatThreadPolicies,
   userPolicies,
   workspaceIdCheck,
   workspaceViewTemplatePolicies,
@@ -3126,6 +3127,51 @@ export const fileChatThreads = p.pgTable(
   ],
 );
 
+/**
+ * Per-user mapping of an org-scoped template to its latest chat
+ * thread, so reopening a template in the Template Studio resumes
+ * the conversation. "New chat" repoints `chatThreadId` at a fresh
+ * thread; older threads stay reachable from the chat history list.
+ */
+export const templateChatThreads = p.pgTable(
+  "template_chat_threads",
+  {
+    id: pUuid<"templateChatThread">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    templateId: safeUuid<"template">("template_id").notNull(),
+    chatThreadId: safeUuid<"chatThread">("chat_thread_id")
+      .notNull()
+      .references(() => chatThreads.id, { onDelete: "cascade" }),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    updatedAt: p
+      .timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    p
+      .uniqueIndex("template_chat_threads_scope_uidx")
+      .on(table.organizationId, table.userId, table.templateId),
+    p
+      .uniqueIndex("template_chat_threads_chat_thread_id_uidx")
+      .on(table.chatThreadId),
+    p
+      .foreignKey({
+        columns: [table.templateId, table.organizationId],
+        foreignColumns: [templates.id, templates.organizationId],
+      })
+      .onDelete("cascade"),
+    ...templateChatThreadPolicies(),
+  ],
+);
+
 // -- MCP Connectors --
 
 export const MCP_CONNECTOR_AUTH_TYPES = ["none", "bearer", "oauth2"] as const;
@@ -4033,6 +4079,7 @@ export const relations = defineRelations(
     chatThreadCompactions,
     chatThreadSearchDocuments,
     fileChatThreads,
+    templateChatThreads,
     mcpConnectors,
     mcpOAuthClients,
     mcpUserConnections,
@@ -4780,6 +4827,16 @@ export const relations = defineRelations(
       field: r.one.fields({
         from: r.fileChatThreads.fieldId,
         to: r.fields.id,
+      }),
+    },
+    templateChatThreads: {
+      thread: r.one.chatThreads({
+        from: r.templateChatThreads.chatThreadId,
+        to: r.chatThreads.id,
+      }),
+      template: r.one.templates({
+        from: r.templateChatThreads.templateId,
+        to: r.templates.id,
       }),
     },
     mcpConnectors: {

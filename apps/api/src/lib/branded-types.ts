@@ -19,6 +19,7 @@ export type SafeIdType =
   | "chatThreadCompaction"
   | "chatThread"
   | "fileChatThread"
+  | "templateChatThread"
   | "clause"
   | "clauseCategory"
   | "clauseVariant"

@@ -103,6 +103,13 @@ const fileChatThreadScopeCheck = sql`(
   ${workspaceCheck}
 )`;
 
+// Per-user mapping of an org-scoped template to its latest chat
+// thread. Templates have no workspace, so the scope is user + org.
+const templateChatThreadScopeCheck = sql`(
+  ${userCheck} AND
+  ${organizationCheck}
+)`;
+
 // Derived chat tables store only `thread_id` and derive all tenancy
 // from their owning thread, so RLS joins `chat_threads` and applies
 // the same scope the thread enforces. This is defence in depth:
@@ -654,5 +661,28 @@ export const fileChatThreadPolicies = () => [
     for: "delete",
     to: stella,
     using: fileChatThreadScopeCheck,
+  }),
+];
+
+export const templateChatThreadPolicies = () => [
+  p.pgPolicy("template_chat_thread_select", {
+    for: "select",
+    to: stella,
+    using: templateChatThreadScopeCheck,
+  }),
+  p.pgPolicy("template_chat_thread_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: templateChatThreadScopeCheck,
+  }),
+  p.pgPolicy("template_chat_thread_update", {
+    for: "update",
+    to: stella,
+    using: templateChatThreadScopeCheck,
+  }),
+  p.pgPolicy("template_chat_thread_delete", {
+    for: "delete",
+    to: stella,
+    using: templateChatThreadScopeCheck,
   }),
 ];

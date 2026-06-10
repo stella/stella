@@ -5,6 +5,8 @@ import getMessages from "@/api/handlers/chat/get-messages";
 import getThreadRecap from "@/api/handlers/chat/get-thread-recap";
 import getThreads from "@/api/handlers/chat/get-threads";
 import resolveFileThread from "@/api/handlers/chat/resolve-file-thread";
+import resolveTemplateThread from "@/api/handlers/chat/resolve-template-thread";
+import rotateTemplateThread from "@/api/handlers/chat/rotate-template-thread";
 import sendMessage from "@/api/handlers/chat/send-message";
 import updateThread from "@/api/handlers/chat/update-thread";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
@@ -21,6 +23,14 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
     body: resolveFileThread.config.body,
     permissions: resolveFileThread.config.permissions,
     validateWorkspaceAccess: true,
+  })
+  .post("/template-thread", resolveTemplateThread.handler, {
+    body: resolveTemplateThread.config.body,
+    permissions: resolveTemplateThread.config.permissions,
+  })
+  .post("/template-thread/rotate", rotateTemplateThread.handler, {
+    body: rotateTemplateThread.config.body,
+    permissions: rotateTemplateThread.config.permissions,
   })
   .get("/threads", getThreads.handler, {
     permissions: getThreads.config.permissions,
