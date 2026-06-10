@@ -882,12 +882,12 @@ export const TemplateStudioPage = ({
       }
     } else if (kind === "clause") {
       withEditorView((view) => {
-        const name = slugify(
+        const slotName = slugify(
           view.state.doc.textBetween(range.from, range.to, " "),
         );
         view.dispatch(
           view.state.tr
-            .insertText(`{{@clause:${name}}}`, range.from, range.to)
+            .insertText(`{{@clause:${slotName}}}`, range.from, range.to)
             .scrollIntoView(),
         );
         view.focus();
