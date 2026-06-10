@@ -2076,6 +2076,7 @@
     "fillForm": "Sablon kitöltése",
     "generate": "Dokumentum generálása",
     "generating": "Generálás...",
+    "goBackToEditing": "Vissza a szerkesztéshez",
     "inputTypes": {
       "boolean": "Igen / Nem",
       "company": "Cégazonosító",
@@ -2118,6 +2119,7 @@
     "registryLookup": "Keresés",
     "registryNotFound": "Nem található cég ehhez az azonosítóhoz",
     "renameFailed": "A sablon átnevezése nem sikerült",
+    "saveAndLeave": "Mentés és kilépés",
     "saveFailed": "Nem sikerült menteni a sablont",
     "searchTemplates": "Sablonok keresése…",
     "structureWarnings": "{count, plural, one {# struktúra figyelmeztetés} other {# struktúra figyelmeztetés}}",

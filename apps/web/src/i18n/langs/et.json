@@ -2076,6 +2076,7 @@
     "fillForm": "Täida mall",
     "generate": "Loo dokument",
     "generating": "Loomine...",
+    "goBackToEditing": "Tagasi muutma",
     "inputTypes": {
       "boolean": "Jah / Ei",
       "company": "Ettevõtte ID",
@@ -2118,6 +2119,7 @@
     "registryLookup": "Otsi",
     "registryNotFound": "Selle ID-ga ettevõtet ei leitud",
     "renameFailed": "Malli ümbernimetamine ebaõnnestus",
+    "saveAndLeave": "Salvesta ja lahku",
     "saveFailed": "Malli salvestamine ebaõnnestus",
     "searchTemplates": "Otsi malle…",
     "structureWarnings": "{count, plural, one {# struktuurihoiatus} other {# struktuurihoiatust}}",

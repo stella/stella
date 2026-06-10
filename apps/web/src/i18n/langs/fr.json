@@ -2076,6 +2076,7 @@
     "fillForm": "Remplir le modèle",
     "generate": "Générer le document",
     "generating": "Génération...",
+    "goBackToEditing": "Revenir à l'édition",
     "inputTypes": {
       "boolean": "Oui / Non",
       "company": "ID de l'entreprise",
@@ -2118,6 +2119,7 @@
     "registryLookup": "Rechercher",
     "registryNotFound": "Aucune entreprise trouvée pour cet ID",
     "renameFailed": "Impossible de renommer le modèle",
+    "saveAndLeave": "Enregistrer et quitter",
     "saveFailed": "Impossible d'enregistrer le modèle",
     "searchTemplates": "Rechercher des modèles…",
     "structureWarnings": "{count, plural, one {# avertissement de structure} many {# avertissements de structure} other {# avertissements de structure}}",

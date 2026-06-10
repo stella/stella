@@ -2076,6 +2076,7 @@
     "fillForm": "Wypełnij szablon",
     "generate": "Generuj dokument",
     "generating": "Generowanie...",
+    "goBackToEditing": "Wróć do edycji",
     "inputTypes": {
       "boolean": "Tak / Nie",
       "company": "ID firmy",
@@ -2118,6 +2119,7 @@
     "registryLookup": "Wyszukaj",
     "registryNotFound": "Nie znaleziono firmy o tym ID",
     "renameFailed": "Nie udało się zmienić nazwy szablonu",
+    "saveAndLeave": "Zapisz i wyjdź",
     "saveFailed": "Nie udało się zapisać szablonu",
     "searchTemplates": "Szukaj szablonów…",
     "structureWarnings": "{count, plural, one {# ostrzeżenie struktury} few {# ostrzeżenia struktury} many {# ostrzeżeń struktury} other {# ostrzeżeń struktury}}",

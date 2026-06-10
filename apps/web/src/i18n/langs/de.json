@@ -2076,6 +2076,7 @@
     "fillForm": "Vorlage ausfüllen",
     "generate": "Dokument generieren",
     "generating": "Generierung...",
+    "goBackToEditing": "Zurück zur Bearbeitung",
     "inputTypes": {
       "boolean": "Ja / Nein",
       "company": "Firmen-ID",
@@ -2118,6 +2119,7 @@
     "registryLookup": "Nachschlagen",
     "registryNotFound": "Kein Unternehmen für diese ID gefunden",
     "renameFailed": "Vorlage konnte nicht umbenannt werden",
+    "saveAndLeave": "Speichern und verlassen",
     "saveFailed": "Vorlage konnte nicht gespeichert werden",
     "searchTemplates": "Vorlagen durchsuchen…",
     "structureWarnings": "{count, plural, one {# Strukturwarnung} other {# Strukturwarnungen}}",

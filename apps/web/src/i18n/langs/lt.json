@@ -2076,6 +2076,7 @@
     "fillForm": "Užpildyti šabloną",
     "generate": "Generuoti dokumentą",
     "generating": "Generuojama...",
+    "goBackToEditing": "Grįžti į redagavimą",
     "inputTypes": {
       "boolean": "Taip / Ne",
       "company": "Įmonės ID",
@@ -2118,6 +2119,7 @@
     "registryLookup": "Ieškoti",
     "registryNotFound": "Pagal šį ID įmonių nerasta",
     "renameFailed": "Nepavyko pervadinti šablono",
+    "saveAndLeave": "Išsaugoti ir išeiti",
     "saveFailed": "Nepavyko išsaugoti šablono",
     "searchTemplates": "Ieškoti šablonų…",
     "structureWarnings": "{count, plural, one {# struktūros įspėjimas} few {# struktūros įspėjimai} many {# struktūros įspėjimo} other {# struktūros įspėjimų}}",

@@ -2076,6 +2076,7 @@
     "fillForm": "Aizpildīt veidni",
     "generate": "Ģenerēt dokumentu",
     "generating": "Ģenerē...",
+    "goBackToEditing": "Atpakaļ pie rediģēšanas",
     "inputTypes": {
       "boolean": "Jā / Nē",
       "company": "Uzņēmuma ID",
@@ -2118,6 +2119,7 @@
     "registryLookup": "Meklēt",
     "registryNotFound": "Šim ID nav atrasts neviens uzņēmums",
     "renameFailed": "Neizdevās pārsaukt veidni",
+    "saveAndLeave": "Saglabāt un iziet",
     "saveFailed": "Neizdevās saglabāt veidni",
     "searchTemplates": "Meklēt veidnes…",
     "structureWarnings": "{count, plural, zero {# struktūras brīdinājumu} one {# struktūras brīdinājums} other {# struktūras brīdinājumi}}",

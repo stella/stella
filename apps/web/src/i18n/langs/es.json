@@ -2076,6 +2076,7 @@
     "fillForm": "Rellenar plantilla",
     "generate": "Generar documento",
     "generating": "Generando...",
+    "goBackToEditing": "Volver a editar",
     "inputTypes": {
       "boolean": "Sí / No",
       "company": "ID de empresa",
@@ -2118,6 +2119,7 @@
     "registryLookup": "Buscar",
     "registryNotFound": "No se encontró ninguna empresa con ese ID",
     "renameFailed": "Error al renombrar la plantilla",
+    "saveAndLeave": "Guardar y salir",
     "saveFailed": "No se pudo guardar la plantilla",
     "searchTemplates": "Buscar plantillas…",
     "structureWarnings": "{count, plural, one {# advertencia de estructura} other {# advertencias de estructura}}",

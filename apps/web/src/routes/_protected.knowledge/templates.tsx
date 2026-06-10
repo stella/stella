@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
+import { ArrowLeftIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
 import {
@@ -170,16 +171,28 @@ function RouteComponent() {
                 {t("templates.unsavedLeaveConfirm")}
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <AlertDialogFooter>
+            <AlertDialogFooter className="justify-between sm:justify-between">
               <AlertDialogClose render={<Button variant="ghost" />}>
-                {t("common.cancel")}
+                <ArrowLeftIcon />
+                {t("templates.goBackToEditing")}
               </AlertDialogClose>
-              <AlertDialogClose
-                onClick={exitDetail}
-                render={<Button variant="destructive" />}
-              >
-                {t("folio.discardChanges")}
-              </AlertDialogClose>
+              <div className="flex items-center gap-2">
+                <AlertDialogClose
+                  onClick={exitDetail}
+                  render={<Button variant="destructive" />}
+                >
+                  {t("folio.discardChanges")}
+                </AlertDialogClose>
+                <AlertDialogClose
+                  onClick={() => {
+                    useTemplateStudioStore.getState().actions?.save();
+                    exitDetail();
+                  }}
+                  render={<Button />}
+                >
+                  {t("templates.saveAndLeave")}
+                </AlertDialogClose>
+              </div>
             </AlertDialogFooter>
           </AlertDialogPopup>
         </AlertDialog>

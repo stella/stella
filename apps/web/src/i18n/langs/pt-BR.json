@@ -2076,6 +2076,7 @@
     "fillForm": "Preencher modelo",
     "generate": "Gerar documento",
     "generating": "Gerando...",
+    "goBackToEditing": "Voltar a editar",
     "inputTypes": {
       "boolean": "Sim / Não",
       "company": "ID da empresa",
@@ -2118,6 +2119,7 @@
     "registryLookup": "Pesquisar",
     "registryNotFound": "Nenhuma empresa encontrada para esse ID",
     "renameFailed": "Falha ao renomear modelo",
+    "saveAndLeave": "Salvar e sair",
     "saveFailed": "Falha ao salvar o modelo",
     "searchTemplates": "Pesquisar modelos…",
     "structureWarnings": "{count, plural, one {# aviso de estrutura} many {# avisos de estrutura} other {# avisos de estrutura}}",

@@ -2076,6 +2076,7 @@
     "fillForm": "Vyplnit šablonu",
     "generate": "Vygenerovat dokument",
     "generating": "Generování...",
+    "goBackToEditing": "Zpět k úpravám",
     "inputTypes": {
       "boolean": "Ano / Ne",
       "company": "ID společnosti",
@@ -2118,6 +2119,7 @@
     "registryLookup": "Vyhledat",
     "registryNotFound": "Pro toto ID nebyla nalezena žádná společnost",
     "renameFailed": "Přejmenování šablony se nezdařilo",
+    "saveAndLeave": "Uložit a odejít",
     "saveFailed": "Nepodařilo se uložit šablonu",
     "searchTemplates": "Hledat šablony…",
     "structureWarnings": "{count, plural, one {# varování struktury} few {# varování struktury} other {# varování struktury}}",
