@@ -2,16 +2,20 @@
  * Shared pre-fill value pipeline for every fill boundary (web fill,
  * fill-by-id, fill-preview, and the stored-template fill service): resolve
  * registry lookups, assemble composite (multipart) values, evaluate formula
- * (derived) fields, and check dependent (optionsFrom) selects — in that
- * order, before any AI step or substitution sees the values. Formulas run
- * after lookup and composite so they can reference those results, and before
- * the dependent check so it sees the final values. Mutates `values` in place
- * and returns the first failing step's combined validation message (the
+ * (derived) fields, check dependent (optionsFrom) selects, and format date
+ * fields — in that order, before any AI step or substitution sees the
+ * values. Formulas run after lookup and composite so they can reference
+ * those results, and before the dependent check so it sees the final
+ * values. Date formatting runs last so the AI-adaptation step (which every
+ * boundary applies after this pipeline) receives the locale-rendered date
+ * as the stub it inflects per occurrence. Mutates `values` in place and
+ * returns the first failing step's combined validation message (the
  * boundary rejects with it, naming the field), or null when everything
  * passed.
  */
 
 import { applyCompositeFields } from "./composite-fields";
+import { applyDateFields } from "./date-fields";
 import { checkDependentFields } from "./dependent-fields";
 import { applyFormulaFields } from "./formula-fields";
 import {
@@ -49,5 +53,10 @@ export const applyManifestFillSteps = async ({
 
   applyFormulaFields(values, manifest);
 
-  return checkDependentFields(values, manifest);
+  const dependentError = checkDependentFields(values, manifest);
+  if (dependentError !== null) {
+    return dependentError;
+  }
+
+  return applyDateFields(values, manifest);
 };
