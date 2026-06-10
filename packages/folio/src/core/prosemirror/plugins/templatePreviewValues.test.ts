@@ -59,10 +59,7 @@ describe("templatePreviewValues: entry tracking", () => {
     const entries = getEntries(state);
     expect(
       entries.map((e) => `${e.expr}=${templatePreviewValueText(e.value)}`),
-    ).toEqual([
-      "tenant.name=Pavel Novák",
-      "signing_date=2026-06-10",
-    ]);
+    ).toEqual(["tenant.name=Pavel Novák", "signing_date=2026-06-10"]);
     for (const entry of entries) {
       expect(sliceFromTo(state.doc, entry.from, entry.to)).toBe(
         `{{${entry.expr}}}`,
