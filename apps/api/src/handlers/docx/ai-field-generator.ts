@@ -9,10 +9,15 @@
  * so callers leave AI fields unfilled rather than erroring.
  */
 
-import { generateText, Output, streamText } from "ai";
+import { generateText, Output, stepCountIs, streamText } from "ai";
 import * as v from "valibot";
 
 import type { AiOccurrenceAdapter } from "@/api/handlers/docx/adapt-ai-fields";
+import {
+  maybeSkillTools,
+  SKILL_REF_GENERATOR_GUIDANCE,
+  type SkillToolsContext,
+} from "@/api/handlers/docx/ai-skill-tools";
 import type { AiFieldGenerator } from "@/api/handlers/docx/resolve-ai-fields";
 import { getModelForRole } from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
@@ -21,19 +26,26 @@ import type { SafeId } from "@/api/lib/branded-types";
 
 const AI_FIELD_TIMEOUT_MS = 20_000;
 const AI_FIELD_MAX_TOKENS = 800;
+// One step to (optionally) call load-skill, one to draft the value. Bounded so
+// a skill-referencing prompt cannot loop the model indefinitely.
+const SKILL_TOOL_MAX_STEPS = 4;
 
 export const buildAiFieldGenerator = ({
   orgAIConfig,
   organizationId,
+  skillContext,
 }: {
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
+  /** When present, prompts that reference a skill get load-skill tools. */
+  skillContext?: SkillToolsContext | undefined;
 }): AiFieldGenerator | undefined => {
   if (!orgAIConfig) {
     return undefined;
   }
   return async ({ prompt, values }) => {
     try {
+      const skillTools = maybeSkillTools(prompt, skillContext);
       const { text } = await generateText({
         abortSignal: AbortSignal.timeout(AI_FIELD_TIMEOUT_MS),
         maxOutputTokens: AI_FIELD_MAX_TOKENS,
@@ -43,6 +55,13 @@ export const buildAiFieldGenerator = ({
           organizationId,
           serviceTier: "standard",
         }),
+        ...(skillTools
+          ? {
+              tools: skillTools,
+              stopWhen: stepCountIs(SKILL_TOOL_MAX_STEPS),
+              system: SKILL_REF_GENERATOR_GUIDANCE,
+            }
+          : {}),
         prompt: `You are drafting a single field of a legal document. Instruction: ${prompt}
 
 Known details (JSON):
@@ -113,6 +132,7 @@ export const buildAiOccurrenceAdapter = ({
   orgAIConfig,
   organizationId,
   documentLanguages = [],
+  skillContext,
 }: {
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
@@ -120,12 +140,15 @@ export const buildAiOccurrenceAdapter = ({
    *  is told which languages the document uses, which improves
    *  inflection in bilingual templates. */
   documentLanguages?: readonly string[];
+  /** When present, instructions that reference a skill get load-skill tools. */
+  skillContext?: SkillToolsContext | undefined;
 }): AiOccurrenceAdapter | undefined => {
   if (!orgAIConfig) {
     return undefined;
   }
   return async (input) => {
     try {
+      const skillTools = maybeSkillTools(input.prompt ?? "", skillContext);
       const result = streamText({
         abortSignal: AbortSignal.timeout(AI_ADAPT_TIMEOUT_MS),
         maxOutputTokens: AI_ADAPT_MAX_TOKENS,
@@ -135,11 +158,16 @@ export const buildAiOccurrenceAdapter = ({
           organizationId,
           serviceTier: "standard",
         }),
+        ...(skillTools
+          ? { tools: skillTools, stopWhen: stepCountIs(SKILL_TOOL_MAX_STEPS) }
+          : {}),
         output: Output.object({
           schema: strictOutputSchema(occurrenceRenderingsSchema),
         }),
         prompt: buildAdaptPrompt(input, documentLanguages),
-        system: ADAPT_SYSTEM_PROMPT,
+        system: skillTools
+          ? `${ADAPT_SYSTEM_PROMPT} ${SKILL_REF_GENERATOR_GUIDANCE}`
+          : ADAPT_SYSTEM_PROMPT,
       });
       const { renderings } = await result.output;
       if (renderings.length !== input.occurrences.length) {
