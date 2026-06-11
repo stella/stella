@@ -3,7 +3,9 @@ import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import {
+  CheckIcon,
   DownloadIcon,
+  FolderIcon,
   LayoutTemplateIcon,
   MoreHorizontalIcon,
   PencilLineIcon,
@@ -39,6 +41,9 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@stll/ui/components/menu";
 import { Textarea } from "@stll/ui/components/textarea";
@@ -57,6 +62,7 @@ import { formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import { TemplateCategorySidebar } from "@/routes/_protected.knowledge/-components/template-category-sidebar";
 import type { TemplateCategoryItem } from "@/routes/_protected.knowledge/-components/template-category-sidebar";
+import { TEMPLATE_DRAG_MIME } from "@/routes/_protected.knowledge/-components/template-drag";
 import { TemplateUpload } from "@/routes/_protected.knowledge/-components/template-upload";
 import { UseTemplateDialog } from "@/routes/_protected.knowledge/-components/use-template-dialog";
 import { knowledgeKeys } from "@/routes/_protected.knowledge/-queries";
@@ -113,6 +119,7 @@ export const TemplateList = ({
 }: TemplateListProps) => {
   const t = useTranslations();
   const canCreateTemplate = usePermissions({ template: ["create"] });
+  const assignCategory = useAssignTemplateCategory();
   const inputRef = useRef<HTMLInputElement>(null);
   const [discovering, setDiscovering] = useState(false);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
@@ -230,6 +237,7 @@ export const TemplateList = ({
 
       <TemplateCategorySidebar
         categories={categories}
+        onAssignCategory={assignCategory}
         onCategoriesChanged={onCategoriesChanged}
         onSelect={onCategorySelect}
         onSelectTag={setTagFilter}
@@ -294,7 +302,9 @@ export const TemplateList = ({
             {visibleTemplates.map((template) => (
               <TemplateRow
                 allTags={allTags}
+                categories={categories}
                 key={template.id}
+                onAssignCategory={assignCategory}
                 onDeleted={onDeleted}
                 onSelect={() => onSelect(template)}
                 template={template}
@@ -324,9 +334,62 @@ const downloadTemplateSource = async (
   window.open(response.data.presignedUrl, "_blank");
 };
 
+/** Builds a category submenu entry, marking the current one with a check and
+ *  disabling it so re-assigning to the same category is a no-op. */
+const categoryAction = (
+  label: string,
+  current: boolean,
+  onClick: () => void,
+): ContextMenuAction => {
+  if (current) {
+    return { label, icon: <CheckIcon />, disabled: true, onClick };
+  }
+  return { label, onClick };
+};
+
+/** Renders a single `ContextMenuAction` inside the ⋯ dropdown, mirroring the
+ *  right-click `ContextMenu` so both surfaces stay driven by one array. */
+const DropdownActionItem = ({ action }: { action: ContextMenuAction }) => {
+  if (action.submenu) {
+    return (
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger>
+          {action.icon}
+          {action.label}
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent>
+          {action.submenu.map((sub) => (
+            <DropdownActionItem action={sub} key={sub.label} />
+          ))}
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+    );
+  }
+
+  return (
+    <DropdownMenuItem
+      className={
+        action.variant === "destructive"
+          ? "text-destructive-foreground"
+          : undefined
+      }
+      disabled={action.disabled === true}
+      onClick={action.onClick}
+    >
+      {action.icon}
+      {action.label}
+    </DropdownMenuItem>
+  );
+};
+
 type TemplateRowProps = {
   template: TemplateItem;
   allTags: string[];
+  categories: TemplateCategoryItem[];
+  onAssignCategory: (
+    templateId: string,
+    categoryId: string | null,
+  ) => Promise<void>;
   onSelect: () => void;
   onDeleted: () => void;
 };
@@ -334,6 +397,8 @@ type TemplateRowProps = {
 const TemplateRow = ({
   template,
   allTags,
+  categories,
+  onAssignCategory,
   onSelect,
   onDeleted,
 }: TemplateRowProps) => {
@@ -377,15 +442,37 @@ const TemplateRow = ({
     onDeleted();
   };
 
-  const contextActions: ContextMenuAction[] = [
+  const rowActions: ContextMenuAction[] = [
     {
       label: t("templates.useTemplate"),
       icon: <WandSparklesIcon />,
       onClick: () => setUseOpen(true),
     },
+    {
+      label: t("common.download"),
+      icon: <DownloadIcon />,
+      onClick: () =>
+        void downloadTemplateSource(template.id, t("common.unexpectedError")),
+    },
   ];
   if (canUpdateTemplate) {
-    contextActions.push(
+    const categorySubmenu: ContextMenuAction[] = [
+      categoryAction(
+        t("common.uncategorized"),
+        template.categoryId === null,
+        () => void onAssignCategory(template.id, null),
+      ),
+    ];
+    for (const category of categories) {
+      categorySubmenu.push(
+        categoryAction(
+          category.name,
+          template.categoryId === category.id,
+          () => void onAssignCategory(template.id, category.id),
+        ),
+      );
+    }
+    rowActions.push(
       {
         label: t("templates.addTag"),
         icon: <TagIcon />,
@@ -396,10 +483,15 @@ const TemplateRow = ({
         icon: <PencilLineIcon />,
         onClick: () => setGuidanceOpen(true),
       },
+      {
+        label: t("templates.moveToCategory"),
+        icon: <FolderIcon />,
+        submenu: categorySubmenu,
+      },
     );
   }
   if (canDeleteTemplate) {
-    contextActions.push({
+    rowActions.push({
       label: t("common.delete"),
       icon: <Trash2Icon />,
       onClick: () => setDeleteOpen(true),
@@ -407,10 +499,19 @@ const TemplateRow = ({
     });
   }
 
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData(TEMPLATE_DRAG_MIME, template.id);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
   return (
     <li className="group">
-      <ContextMenu actions={contextActions}>
-        <div className="flex items-center gap-4 px-4 py-3">
+      <ContextMenu actions={rowActions}>
+        <div
+          className="flex items-center gap-4 px-4 py-3"
+          draggable
+          onDragStart={handleDragStart}
+        >
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <button
               className="flex min-w-0 items-center gap-3 text-start hover:opacity-80"
@@ -452,49 +553,18 @@ const TemplateRow = ({
               />
             </Tooltip>
 
-            {(canUpdateTemplate || canDeleteTemplate) && (
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={<Button size="icon-xs" variant="ghost" />}
-                >
-                  <MoreHorizontalIcon />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  <DropdownMenuItem
-                    onClick={() =>
-                      void downloadTemplateSource(
-                        template.id,
-                        t("common.unexpectedError"),
-                      )
-                    }
-                  >
-                    <DownloadIcon />
-                    {t("common.download")}
-                  </DropdownMenuItem>
-                  {canUpdateTemplate && (
-                    <>
-                      <DropdownMenuItem onClick={() => setTagsOpen(true)}>
-                        <TagIcon />
-                        {t("templates.addTag")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setGuidanceOpen(true)}>
-                        <PencilLineIcon />
-                        {t("templates.usageGuidance")}
-                      </DropdownMenuItem>
-                    </>
-                  )}
-                  {canDeleteTemplate && (
-                    <DropdownMenuItem
-                      className="text-destructive-foreground"
-                      onClick={() => setDeleteOpen(true)}
-                    >
-                      <Trash2Icon />
-                      {t("common.delete")}
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={<Button size="icon-xs" variant="ghost" />}
+              >
+                <MoreHorizontalIcon />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                {rowActions.map((action) => (
+                  <DropdownActionItem action={action} key={action.label} />
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </ContextMenu>
@@ -979,6 +1049,36 @@ const TemplateLanguagesField = ({
       )}
     </div>
   );
+};
+
+// ── Shared category assignment ───────────────────────
+
+/** Assigns (or clears, when `categoryId` is null) a template's category.
+ *  Mirrors the tag/guidance saves: same POST endpoint, single-field body. */
+const useAssignTemplateCategory = () => {
+  const t = useTranslations();
+  const invalidateTemplates = useInvalidateTemplates();
+
+  return async (templateId: string, categoryId: string | null) => {
+    const response = await api.templates({ templateId }).post({
+      categoryId:
+        categoryId === null ? null : toSafeId<"templateCategory">(categoryId),
+    });
+
+    if (response.error) {
+      stellaToast.add({
+        type: "error",
+        title: t("templates.saveFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+
+    invalidateTemplates();
+  };
 };
 
 // ── Shared invalidation ──────────────────────────────
