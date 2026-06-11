@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { status } from "elysia";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -179,6 +179,45 @@ export const readDecisionHandler = async (
     languageGroupKey: decision.languageGroupKey,
   });
 
+  // Citations may point at decisions from non-redistributable sources;
+  // drop those so the response cannot leak restricted decisions' ids.
+  // Unresolved citations (null citedDecisionId) carry only text and stay.
+  const relatedIdCandidates = decision.citationsFrom
+    .map((citation) => citation.citedDecisionId)
+    .concat(decision.citationsTo.map((citation) => citation.citingDecisionId));
+  const relatedDecisionIds = [
+    ...new Set(relatedIdCandidates.filter((value) => value !== null)),
+  ];
+  const redistributableRelatedIds = new Set(
+    relatedDecisionIds.length === 0
+      ? []
+      : (
+          await caseLawDb((tx) =>
+            tx
+              .select({ id: caseLawDecisions.id })
+              .from(caseLawDecisions)
+              .innerJoin(
+                caseLawSources,
+                eq(caseLawSources.id, caseLawDecisions.sourceId),
+              )
+              .where(
+                and(
+                  inArray(caseLawDecisions.id, relatedDecisionIds),
+                  redistributableCaseLawSource,
+                ),
+              ),
+          )
+        ).map((row) => row.id),
+  );
+  const citationsFrom = decision.citationsFrom.filter(
+    (citation) =>
+      citation.citedDecisionId === null ||
+      redistributableRelatedIds.has(citation.citedDecisionId),
+  );
+  const citationsTo = decision.citationsTo.filter((citation) =>
+    redistributableRelatedIds.has(citation.citingDecisionId),
+  );
+
   // Prefer canonical AST from object storage when corpus storage is
   // enabled; fall back to the Postgres column so a read is never harder
   // than today.
@@ -222,8 +261,8 @@ export const readDecisionHandler = async (
       name: source.name,
       adapterKey: source.adapterKey,
     },
-    citationsFrom: decision.citationsFrom,
-    citationsTo: decision.citationsTo,
+    citationsFrom,
+    citationsTo,
     languageAlternates,
     fulltext,
   };

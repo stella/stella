@@ -44,6 +44,7 @@ type IndexableRow = {
   astS3Key: string | null;
   fulltext: string | null;
   contentHash: string | null;
+  indexedHash: string | null;
   indexedGeneration: string | null;
 };
 
@@ -63,6 +64,7 @@ const SELECT_COLUMNS = {
   astS3Key: caseLawDecisions.astS3Key,
   fulltext: caseLawDecisions.fulltext,
   contentHash: caseLawDecisions.contentHash,
+  indexedHash: caseLawDecisions.indexedHash,
   indexedGeneration: caseLawDecisions.indexedGeneration,
 };
 
@@ -308,6 +310,10 @@ export const backfillCorpusIndex = async (
     await scopedDb(async (tx) => {
       // audit: skip — search index maintenance; rebuilds derived state
       for (const { row } of group) {
+        // Compare-and-set on the selected indexedHash: a concurrent
+        // re-ingest clears it (possibly with the same contentHash), and
+        // an unconditional write would mask that refresh so the stale
+        // index document would never be retried.
         await tx
           .update(caseLawDecisions)
           .set({
@@ -315,7 +321,12 @@ export const backfillCorpusIndex = async (
             indexedGeneration: indexId,
             indexedAt: now,
           })
-          .where(eq(caseLawDecisions.id, row.id));
+          .where(
+            and(
+              eq(caseLawDecisions.id, row.id),
+              sql`${caseLawDecisions.indexedHash} IS NOT DISTINCT FROM ${row.indexedHash}`,
+            ),
+          );
       }
       await tx.insert(caseLawIndexJobs).values(
         group.map(({ row }) => ({
