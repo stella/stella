@@ -18,6 +18,7 @@ import type {
   ParagraphFormatting,
   TextFormatting,
 } from "../../types/document";
+import { mergeParagraphFormatting } from "../../utils/paragraphFormattingMerge";
 import { mergeTextFormatting } from "../../utils/textFormattingMerge";
 
 /**
@@ -306,7 +307,7 @@ export class StyleResolver {
     style: Style,
   ): void {
     if (style.pPr) {
-      const merged = this.mergeParagraphFormatting(
+      const merged = mergeParagraphFormatting(
         result.paragraphFormatting,
         style.pPr,
       );
@@ -320,52 +321,6 @@ export class StyleResolver {
         result.runFormatting = merged;
       }
     }
-  }
-
-  /**
-   * Merge paragraph formatting (source overrides target)
-   */
-  private mergeParagraphFormatting(
-    target: ParagraphFormatting | undefined,
-    source: ParagraphFormatting | undefined,
-  ): ParagraphFormatting | undefined {
-    if (!source) {
-      return target;
-    }
-    if (!target) {
-      return { ...source };
-    }
-
-    const result = { ...target };
-
-    for (const key of Object.keys(source) as (keyof ParagraphFormatting)[]) {
-      const value = source[key];
-      if (value !== undefined) {
-        if (key === "runProperties") {
-          const mergedRPr = mergeTextFormatting(
-            result.runProperties,
-            source.runProperties,
-          );
-          if (mergedRPr !== undefined) {
-            result.runProperties = mergedRPr;
-          }
-        } else if (key === "borders" || key === "numPr" || key === "frame") {
-          const baseValue = result[key] as Record<string, unknown> | undefined;
-          const sourceValue = value as Record<string, unknown> | undefined;
-          (result as Record<string, unknown>)[key] = {
-            ...baseValue,
-            ...sourceValue,
-          };
-        } else if (key === "tabs" && Array.isArray(value)) {
-          // Tabs from higher priority source replace lower priority
-          result.tabs = [...value];
-        } else {
-          (result as Record<string, unknown>)[key] = value;
-        }
-      }
-    }
-
-    return result;
   }
 }
 
