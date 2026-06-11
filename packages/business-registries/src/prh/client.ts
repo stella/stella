@@ -20,6 +20,43 @@ const MAX_SEARCH_LIMIT = 100;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const isOptionalRecord = (value: unknown): boolean =>
+  value === undefined || isRecord(value);
+
+const isOptionalRecordArray = (value: unknown): boolean =>
+  value === undefined || (Array.isArray(value) && value.every(isRecord));
+
+const isPrhSourcedValue = (value: unknown): boolean =>
+  isRecord(value) && typeof value["value"] === "string";
+
+const isPrhRawName = (value: unknown): boolean =>
+  isRecord(value) &&
+  typeof value["name"] === "string" &&
+  typeof value["type"] === "string";
+
+const isPrhAddress = (value: unknown): boolean =>
+  isRecord(value) && typeof value["type"] === "number";
+
+const isPrhRawCompany = (value: unknown): boolean =>
+  isRecord(value) &&
+  isPrhSourcedValue(value["businessId"]) &&
+  (value["names"] === undefined ||
+    (Array.isArray(value["names"]) && value["names"].every(isPrhRawName))) &&
+  isOptionalRecord(value["mainBusinessLine"]) &&
+  isOptionalRecordArray(value["companyForms"]) &&
+  isOptionalRecordArray(value["companySituations"]) &&
+  (value["addresses"] === undefined ||
+    (Array.isArray(value["addresses"]) &&
+      value["addresses"].every(isPrhAddress)));
+
+const isPrhCompaniesResponse = (
+  value: unknown,
+): value is PrhCompaniesResponse =>
+  isRecord(value) &&
+  typeof value["totalResults"] === "number" &&
+  Array.isArray(value["companies"]) &&
+  value["companies"].every(isPrhRawCompany);
+
 const parseErrorBody = (value: unknown): PrhErrorResponse => {
   if (!isRecord(value)) {
     return {};
@@ -37,7 +74,7 @@ const parseErrorBody = (value: unknown): PrhErrorResponse => {
   return result;
 };
 
-const prhGet = async <T>(url: string): Promise<T> => {
+const prhGet = async (url: string): Promise<PrhCompaniesResponse> => {
   let response: Response;
   try {
     response = await fetch(url, {
@@ -72,11 +109,14 @@ const prhGet = async <T>(url: string): Promise<T> => {
     });
   }
 
-  // SAFETY: PRH AvoinData v3 is a stable, documented public API and
-  // the shape is captured by `PrhCompaniesResponse`. Runtime
-  // validation adds little for well-typed JSON responses.
-  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
-  return body as T;
+  if (!isPrhCompaniesResponse(body)) {
+    throw new PrhAPIError({
+      message: "PRH returned an unexpected response shape",
+      httpStatus: response.status,
+    });
+  }
+
+  return body;
 };
 
 /**
@@ -99,9 +139,7 @@ export const lookupByBusinessId = async (
     throw new PrhValidationError(`Invalid Y-tunnus: ${businessId}`);
   }
   const params = new URLSearchParams({ businessId: normalized });
-  const data = await prhGet<PrhCompaniesResponse>(
-    `${COMPANIES_URL}?${params.toString()}`,
-  );
+  const data = await prhGet(`${COMPANIES_URL}?${params.toString()}`);
   const hit = data.companies.at(0);
   return hit ? parseCompany(hit) : null;
 };
@@ -135,9 +173,7 @@ export const searchByName = async (
     name: trimmed,
     maxResults: limit.toString(),
   });
-  const data = await prhGet<PrhCompaniesResponse>(
-    `${COMPANIES_URL}?${params.toString()}`,
-  );
+  const data = await prhGet(`${COMPANIES_URL}?${params.toString()}`);
   // Slice defensively in case PRH returns more than the requested
   // maxResults; callers should still get exactly the clamped limit.
   return data.companies.slice(0, limit).map(parseSearchEntry);
