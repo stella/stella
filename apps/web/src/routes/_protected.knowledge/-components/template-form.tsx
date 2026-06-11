@@ -46,6 +46,8 @@ import { userErrorMessage } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
+import type { ClauseBody } from "./clause-editor-types";
+import { FillClausesSection } from "./fill-clauses-section";
 import {
   buildAutofillUpdates,
   groupSupportsRegistryAutofill,
@@ -1441,6 +1443,11 @@ export const TemplateForm = ({
   const [values, setValues] = useState<FormValues>(() =>
     buildInitialValues(fields),
   );
+  // Per-fill clause edits (AI tweaks made in the fill form), keyed by slot
+  // patch key; sent as `clauseOverrides` and applied only to this fill.
+  const [clauseOverrides, setClauseOverrides] = useState<
+    Record<string, ClauseBody>
+  >({});
   useEffect(() => {
     onValuesChange?.(values);
   }, [values, onValuesChange]);
@@ -1850,7 +1857,10 @@ export const TemplateForm = ({
         if (templateId) {
           return await api
             .templates({ templateId })
-            .fill.post({ values: valuesJson }, { query: { format } });
+            .fill.post(
+              { values: valuesJson, clauseOverrides },
+              { query: { format } },
+            );
         }
         if (!file) {
           panic(
@@ -1912,6 +1922,7 @@ export const TemplateForm = ({
     },
     [
       values,
+      clauseOverrides,
       fields,
       conditions,
       file,
@@ -2103,6 +2114,14 @@ export const TemplateForm = ({
               <TemplatePrefillPanel
                 matterWorkspaceId={prefill.workspaceId}
                 onApply={applyPrefill}
+                templateId={templateId}
+              />
+            )}
+
+            {templateId !== undefined && (
+              <FillClausesSection
+                onChange={setClauseOverrides}
+                overrides={clauseOverrides}
                 templateId={templateId}
               />
             )}

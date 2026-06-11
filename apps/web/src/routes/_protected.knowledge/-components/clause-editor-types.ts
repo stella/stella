@@ -19,3 +19,5 @@ export type ClauseParagraph = {
   /** 0-based nesting depth of the list item (0 = top level). */
   listLevel?: number;
 };
+
+export type ClauseBody = ClauseParagraph[];

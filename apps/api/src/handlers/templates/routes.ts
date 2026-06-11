@@ -5,6 +5,7 @@ import deleteTemplateCategory from "@/api/handlers/templates/categories-delete";
 import listTemplateCategories from "@/api/handlers/templates/categories-list";
 import updateTemplateCategory from "@/api/handlers/templates/categories-update";
 import checkTemplate from "@/api/handlers/templates/check";
+import getTemplateClauseSlots from "@/api/handlers/templates/clause-slots";
 import linkTemplateClause from "@/api/handlers/templates/clauses-link";
 import listTemplateClauses from "@/api/handlers/templates/clauses-list";
 import syncTemplateClause from "@/api/handlers/templates/clauses-sync";
@@ -114,6 +115,10 @@ export const templatesRoute = new Elysia({
   .get("/:templateId", getTemplate.handler, {
     params: getTemplate.config.params,
     permissions: getTemplate.config.permissions,
+  })
+  .get("/:templateId/clause-slots", getTemplateClauseSlots.handler, {
+    params: getTemplateClauseSlots.config.params,
+    permissions: getTemplateClauseSlots.config.permissions,
   })
   .post("/:templateId", updateTemplate.handler, {
     body: updateTemplate.config.body,

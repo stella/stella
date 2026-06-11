@@ -61,6 +61,34 @@ export const resolveClauseSlots = async (
 };
 
 /**
+ * Like {@link resolveClauseSlots}, but returns each slot's raw `ClauseBody`
+ * (keyed by patch key) instead of the converted rich patch. Lets the fill UI
+ * show the clause and offer a per-fill AI adjustment before it is inserted.
+ */
+export const resolveClauseSlotBodies = async (
+  templateId: SafeId<"template">,
+  slots: ClauseSlot[],
+  scopedDb: ScopedDb,
+  organizationId: SafeId<"organization">,
+): Promise<Record<string, ClauseBody>> => {
+  const bodies: Record<string, ClauseBody> = {};
+
+  for (const slot of slots) {
+    const body = await resolveSlotBody(
+      templateId,
+      slot,
+      scopedDb,
+      organizationId,
+    );
+    if (body) {
+      bodies[slot.patchKey] = body;
+    }
+  }
+
+  return bodies;
+};
+
+/**
  * Resolve each clause slot to its linked clause's PLAIN TEXT, keyed by
  * slot NAME (not the patch key) so the live fill preview can match the
  * folio clause-slot directive (`scanDirectives` exposes the slot name as
