@@ -53,6 +53,8 @@ export type ProcessLegislationResult = {
   id: SafeId<"legislationDocument">;
   inserted: boolean;
   skipped: boolean;
+  /** Object-storage write failed; the row keeps its previous sourceHash so a re-ingest retries. */
+  corpusWriteFailed: boolean;
 };
 
 /**
@@ -187,7 +189,12 @@ export const processLegislationDocument = async (
   );
 
   if (existing && existing.sourceHash === sourceHash) {
-    return { id: existing.id, inserted: false, skipped: true };
+    return {
+      id: existing.id,
+      inserted: false,
+      skipped: true,
+      corpusWriteFailed: false,
+    };
   }
 
   const values = {
@@ -232,6 +239,7 @@ export const processLegislationDocument = async (
     return row.id;
   });
 
+  let corpusWriteFailed = false;
   if (envBase.CORPUS_STORAGE_ENABLED) {
     try {
       const written = await writeCorpusDocument({
@@ -255,6 +263,7 @@ export const processLegislationDocument = async (
           .where(eq(legislationDocuments.id, id));
       });
     } catch (error) {
+      corpusWriteFailed = true;
       captureError(error, {
         documentId: id,
         step: "processLegislationDocument.corpusWrite",
@@ -267,7 +276,7 @@ export const processLegislationDocument = async (
     }
   }
 
-  return { id, inserted: !existing, skipped: false };
+  return { id, inserted: !existing, skipped: false, corpusWriteFailed };
 };
 
 /**
@@ -300,6 +309,7 @@ export const runLegislationIngestion = async ({
       break;
     }
     const { documents, nextCursor } = await adapter.fetchPage(cursor, signal);
+    let corpusWriteFailures = 0;
     for (const doc of documents) {
       const result = await processLegislationDocument(doc, scopedDb);
       if (result.skipped) {
@@ -307,6 +317,16 @@ export const runLegislationIngestion = async ({
       } else {
         inserted += 1;
       }
+      if (result.corpusWriteFailed) {
+        corpusWriteFailures += 1;
+      }
+    }
+    if (corpusWriteFailures > 0) {
+      // Hold the cursor on a page with failed corpus writes: cursor
+      // sources do not re-emit consumed pages, so advancing would leave
+      // the preserved source-hash retry unreachable until the source
+      // changes again.
+      break;
     }
     cursor = nextCursor;
     if (nextCursor === null || documents.length === 0) {

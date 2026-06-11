@@ -620,6 +620,7 @@ export const runIngestionPipeline = async ({
     const pageT0 = performance.now();
     const insertedBefore = inserted;
     const skippedBefore = skipped;
+    const s3FailuresBefore = s3UploadFailures;
     try {
       for (const result of page.decisions) {
         try {
@@ -690,6 +691,14 @@ export const runIngestionPipeline = async ({
 
       const pageInserted = inserted - insertedBefore;
       const pageSkipped = skipped - skippedBefore;
+      const pageS3Failures = s3UploadFailures - s3FailuresBefore;
+      if (pageS3Failures > 0 && haltReason === null) {
+        // Hold the cursor on a page with failed corpus writes: cursor
+        // sources do not re-emit consumed pages, so advancing would leave
+        // the preserved source-hash retry unreachable until the source
+        // changes again.
+        haltReason = `${pageS3Failures} corpus write failure(s); cursor held for retry`;
+      }
       logger.info("case_law.ingestion.pipeline_page_done", {
         adapterKey: adapter.key,
         cursor: cursor ?? "",
