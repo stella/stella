@@ -33,7 +33,7 @@
     "@hocuspocus/provider": "^4.1.0",
     "@libpdf/core": "catalog:",
     "@posthog/react": "^1.10.0",
-    "@pydantic/genai-prices": "^0.0.62",
+    "@pydantic/genai-prices": "^0.0.64",
     "@stll/ai-catalog": "workspace:*",
     "@stll/anonymize-chat": "workspace:*",
     "@stll/anonymize-data": "catalog:",

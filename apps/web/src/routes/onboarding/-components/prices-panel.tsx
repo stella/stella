@@ -1,12 +1,7 @@
 import { useMemo } from "react";
 
 import { calcPrice } from "@pydantic/genai-prices";
-import type {
-  ModelPrice,
-  Provider,
-  TieredPrices,
-  Usage,
-} from "@pydantic/genai-prices";
+import type { ModelPrice, TieredPrices } from "@pydantic/genai-prices";
 import { useTranslations } from "use-intl";
 
 import {
@@ -33,32 +28,6 @@ const TYPICAL_OUTPUT_TOKENS = 2000;
 // entry in genai-prices for most models, so we look up the bare
 // model id (`provider/model` → `model`) and apply this multiplier.
 const OPENROUTER_MARKUP = 1.055;
-
-// Prices already merged into @pydantic/genai-prices upstream but not in
-// a published release yet. Each entry mirrors the upstream definition
-// verbatim, so the figure stays stable once the bundled catalog ships
-// it. Consulted only as a fallback by `priceFor`, so each model turns
-// into harmless dead weight — and can be deleted — once a genai-prices
-// release covers it.
-// SOURCE: github.com/pydantic/genai-prices PR #379 (merged 2026-05-19)
-const PENDING_MODEL_PRICES: Provider = {
-  id: "stella-pending-prices",
-  name: PROVIDER_LABELS.google,
-  api_pattern: ".*",
-  models: [
-    {
-      id: "gemini-3.5-flash",
-      match: { starts_with: "gemini-3.5-flash" },
-      prices: { input_mtok: 1.5, cache_read_mtok: 0.15, output_mtok: 9 },
-    },
-  ],
-};
-
-// Bundled catalog first; fall back to PENDING_MODEL_PRICES for models
-// genai-prices does not price yet.
-const priceFor = (usage: Usage, modelId: string) =>
-  calcPrice(usage, modelId) ??
-  calcPrice(usage, modelId, { provider: PENDING_MODEL_PRICES });
 
 const formatPerMTok = (
   raw: number | TieredPrices | undefined,
@@ -108,7 +77,7 @@ const lookupPrice = (modelId: string): LookupResult | null => {
     input_tokens: TYPICAL_INPUT_TOKENS,
     output_tokens: TYPICAL_OUTPUT_TOKENS,
   };
-  const direct = priceFor(usage, modelId);
+  const direct = calcPrice(usage, modelId);
   if (direct) {
     return { calc: direct, markup: 1 };
   }
@@ -118,7 +87,7 @@ const lookupPrice = (modelId: string): LookupResult | null => {
   // BYOK markup so the user sees an accurate effective price.
   const slashIndex = modelId.indexOf("/");
   if (slashIndex !== -1) {
-    const fallback = priceFor(usage, modelId.slice(slashIndex + 1));
+    const fallback = calcPrice(usage, modelId.slice(slashIndex + 1));
     if (fallback) {
       return { calc: fallback, markup: OPENROUTER_MARKUP };
     }
