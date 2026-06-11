@@ -46,6 +46,7 @@ export const redactCaseLawDecision = async ({
         textS3Key: true,
         normalizedS3Key: true,
         astS3Key: true,
+        indexedGeneration: true,
       },
     }),
   );
@@ -98,7 +99,10 @@ export const redactCaseLawDecision = async ({
       : {}),
     contentHash: null,
     indexedHash: null,
-    indexedGeneration: null,
+    // indexedGeneration is intentionally NOT scrubbed here: it records
+    // which corpus index holds the indexed copy, and is only cleared
+    // below once the index delete-task succeeds, so a failed delete
+    // keeps the retry target.
     indexedAt: null,
   };
 
@@ -111,18 +115,37 @@ export const redactCaseLawDecision = async ({
       .where(eq(caseLawDecisions.id, decisionId));
   });
 
-  // 4. corpus index (delete-task + audit row) in this jurisdiction's index.
-  // Skipped when corpus index isn't configured. This intentionally happens
-  // after local authoritative stores are scrubbed, so a transient index
-  // failure cannot leave the DB/S3 payloads unerased.
+  // 4. corpus index (delete-task + audit row). Skipped when corpus index
+  // isn't configured. This intentionally happens after local authoritative
+  // stores are scrubbed, so a transient index failure cannot leave the
+  // DB/S3 payloads unerased. The copy is deleted from the row's recorded
+  // index (a corrected country can leave it under a different jurisdiction
+  // index) and from the current-country index in case a move was
+  // mid-flight; the recorded pointer is only cleared once both succeed.
   let auditedViaCorpusIndex = false;
   if (envBase.CORPUS_INDEX_ENDPOINT !== undefined) {
-    await removeDecisionFromCorpusIndex(
-      decisionId,
-      scopedDb,
+    const targets = new Set([
+      ...(decision.indexedGeneration === null
+        ? []
+        : [decision.indexedGeneration]),
       corpusIndexId(generation, decision.country),
-      "redact",
-    );
+    ]);
+    for (const indexId of targets) {
+      await removeDecisionFromCorpusIndex(
+        decisionId,
+        scopedDb,
+        indexId,
+        "redact",
+      );
+    }
+    // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+    await scopedDb((tx) => {
+      // audit: skip — GDPR redaction bookkeeping; recorded in case_law_index_jobs above
+      return tx
+        .update(caseLawDecisions)
+        .set({ indexedGeneration: null })
+        .where(eq(caseLawDecisions.id, decisionId));
+    });
     auditedViaCorpusIndex = true;
   }
 
