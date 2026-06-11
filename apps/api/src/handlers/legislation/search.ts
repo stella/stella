@@ -1,10 +1,11 @@
-import { inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
-import { legislationDocuments } from "@/api/db/schema";
+import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
+import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
 // eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
 import { isUuid, tSafeId } from "@/api/lib/custom-schema";
@@ -128,6 +129,9 @@ const pgSearch = async (
       ${scoreExpr} AS score
     FROM legislation_search_documents sd
     JOIN legislation_documents d ON d.id = sd.document_id
+    JOIN legislation_sources
+      ON legislation_sources.id = d.source_id
+     AND ${redistributableLegislationSource}
     WHERE sd.tsv @@ ${tsQuery}
       ${filters}
       ${cursorFilter}
@@ -244,7 +248,16 @@ const corpusIndexSearch = async (
                   citationAuthority: legislationDocuments.citationAuthority,
                 })
                 .from(legislationDocuments)
-                .where(inArray(legislationDocuments.id, ids)),
+                .innerJoin(
+                  legislationSources,
+                  eq(legislationSources.id, legislationDocuments.sourceId),
+                )
+                .where(
+                  and(
+                    inArray(legislationDocuments.id, ids),
+                    redistributableLegislationSource,
+                  ),
+                ),
             );
 
       const byId = new Map(rows.map((row) => [String(row.id), row]));
