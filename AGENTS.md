@@ -347,6 +347,12 @@ shared packages in `packages/`. Use Glob/Grep to explore.
 `build` | `lint` | `format` | `typecheck` | `test` |
 `db:push`
 
+`bun run verify` runs the same checks as the required CI job
+(`ci-checks` in `.github/workflows/ci.yml`); use it to self-verify a
+branch instead of hand-picking individual checks. Green here means
+green on the `ci-result` status. `--all` checks every package instead
+of only those affected vs `origin/main`.
+
 ## Documentation Access
 
 The `stella-docs` MCP server provides on-demand access to library documentation via

@@ -8,6 +8,7 @@
   "exports": {
     "./base.json": "./base.json",
     "./library.json": "./library.json",
+    "./published.json": "./published.json",
     "./node.json": "./node.json",
     "./bun.json": "./bun.json",
     "./react-library.json": "./react-library.json"

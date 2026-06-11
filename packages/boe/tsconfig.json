@@ -1,5 +1,5 @@
 {
-  "extends": "@stll/typescript-config/base.json",
+  "extends": "@stll/typescript-config/published.json",
   "compilerOptions": {
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "module": "ESNext",

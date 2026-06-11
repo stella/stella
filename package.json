@@ -31,6 +31,7 @@
     "i18n:sync": "turbo run i18n:sync --",
     "check:model-catalog": "bun packages/scripts/src/model-catalog-upstream.ts",
     "test": "turbo run test",
+    "verify": "bash scripts/verify.sh",
     "db:push": "bun --filter @stll/api db:push",
     "clean": "turbo run clean && git clean -xdf node_modules",
     "sync:well-known": "cp -r .well-known apps/web/public/",
