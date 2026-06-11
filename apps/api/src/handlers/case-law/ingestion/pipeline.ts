@@ -54,8 +54,10 @@ type PipelineInput = {
   signal?: AbortSignal;
   /**
    * Hard caps for bounded sample runs (staging smoke): stop after this
-   * many pages / processed decisions without advancing the cursor past
-   * unprocessed work. Defaults to the adapter's own cycle limits.
+   * many pages / newly stored decisions without advancing the cursor
+   * past unprocessed work. Dedup-skipped and failed decisions do not
+   * count toward the cap, so a re-run with the same cap continues past
+   * already-ingested work. Defaults to the adapter's own cycle limits.
    */
   maxPages?: number;
   maxDecisions?: number;
@@ -656,7 +658,7 @@ export const runIngestionPipeline = async ({
     const s3FailuresBefore = s3UploadFailures;
     try {
       for (const result of page.decisions) {
-        if (maxDecisions !== undefined && inserted + skipped >= maxDecisions) {
+        if (maxDecisions !== undefined && inserted >= maxDecisions) {
           // Halting (instead of breaking quietly) keeps the cursor at
           // this page so the unprocessed remainder is not skipped.
           haltReason = `Decision cap (${maxDecisions}) reached`;
