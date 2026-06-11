@@ -27,15 +27,15 @@ const ROMAN = [
   "x",
 ] as const;
 
+const ASCII_LOWER = "abcdefghijklmnopqrstuvwxyz";
+
 const orderedLabel = (level: number, ordinal: number): string => {
   // 1-based ordinal; cycle marker style by depth: 1. → a. → i. → 1. …
   const style = level % 3;
   if (style === 1) {
-    // charCodeAt(0) is a plain number (codePointAt is number | undefined);
-    // a–z lives in the BMP so charCode is exact here.
-    const letter = String.fromCodePoint(
-      "a".codePointAt(0) + ((ordinal - 1) % 26),
-    );
+    // charAt always returns a string — no number | undefined to guard (unlike
+    // codePointAt, or indexed access under noUncheckedIndexedAccess).
+    const letter = ASCII_LOWER.charAt((ordinal - 1) % 26);
     return `${letter}.`;
   }
   if (style === 2) {
