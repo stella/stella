@@ -391,6 +391,10 @@ export const processDecision = async (
           // next ingestion cycle sees a hash mismatch and retries
           // the upload instead of permanently skipping the decision.
           sourceHash: s3UploadFailed ? existing.sourceHash : result.rawHash,
+          // Clear indexedHash so the corpus indexer re-picks this row even
+          // when only metadata changed (its staleness check compares
+          // indexedHash to contentHash, which only tracks the payload).
+          indexedHash: null,
           updatedAt: new Date(),
         })
         .where(eq(caseLawDecisions.id, existing.id));
