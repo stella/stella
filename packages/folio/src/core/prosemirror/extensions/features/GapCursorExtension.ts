@@ -15,11 +15,11 @@
 import { gapCursor } from "prosemirror-gapcursor";
 
 import { createExtension } from "../create";
-import type { ExtensionRuntime } from "../types";
+import type { ExtensionContext, ExtensionRuntime } from "../types";
 
 export const GapCursorExtension = createExtension({
   name: "gapCursor",
-  onSchemaReady(_ctx): ExtensionRuntime {
+  onSchemaReady(_ctx: ExtensionContext): ExtensionRuntime {
     return {
       plugins: [gapCursor()],
     };

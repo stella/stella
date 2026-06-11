@@ -11,11 +11,11 @@
 
 import { createContentControlWidgetsPlugin } from "../../plugins/contentControlWidgets";
 import { createExtension } from "../create";
-import type { ExtensionRuntime } from "../types";
+import type { ExtensionContext, ExtensionRuntime } from "../types";
 
 export const ContentControlWidgetsExtension = createExtension({
   name: "contentControlWidgets",
-  onSchemaReady(_ctx): ExtensionRuntime {
+  onSchemaReady(_ctx: ExtensionContext): ExtensionRuntime {
     return {
       plugins: [createContentControlWidgetsPlugin()],
     };

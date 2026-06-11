@@ -11,13 +11,13 @@
 import { Plugin, PluginKey, NodeSelection } from "prosemirror-state";
 
 import { createExtension } from "../create";
-import type { ExtensionRuntime } from "../types";
+import type { ExtensionContext, ExtensionRuntime } from "../types";
 
 const imageDragKey = new PluginKey("imageDrag");
 
 export const ImageDragExtension = createExtension({
   name: "imageDrag",
-  onSchemaReady(_ctx): ExtensionRuntime {
+  onSchemaReady(_ctx: ExtensionContext): ExtensionRuntime {
     const plugin = new Plugin({
       key: imageDragKey,
       props: {
