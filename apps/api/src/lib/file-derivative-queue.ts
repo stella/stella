@@ -4,6 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
+import { allocateFileObject } from "@/api/handlers/files/file-object-ids";
 import {
   convertToPdf,
   shouldGeneratePdfDerivative,
@@ -319,7 +320,7 @@ const processPdfDerivativeJob = async ({
     throw conversionResult.error;
   }
 
-  const pdfFileId = Bun.randomUUIDv7();
+  const pdfFileId = allocateFileObject();
   const sourceFileId = content.id;
   const pdfKey = createFileKey({
     organizationId: branded.organizationId,
@@ -503,7 +504,7 @@ const processImageThumbnailJob = async ({
     throw thumbnailResult.error;
   }
 
-  const thumbnailFileId = Bun.randomUUIDv7();
+  const thumbnailFileId = allocateFileObject();
   const sourceFileId = content.id;
   const thumbnailKey = createFileKey({
     organizationId: branded.organizationId,

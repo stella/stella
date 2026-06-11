@@ -19,6 +19,14 @@ void mock.module("@/api/lib/search/process-extraction", () => ({
   processExtraction: processExtractionMock,
 }));
 
+const fileMock = mock(() => ({}));
+const writeMock = mock(async () => undefined);
+const s3DeleteMock = mock(async () => undefined);
+
+void mock.module("@/api/lib/s3", () => ({
+  getS3: () => ({ delete: s3DeleteMock, file: fileMock, write: writeMock }),
+}));
+
 const { default: duplicateEntity } = await import("./duplicate");
 
 const workspaceId = toSafeId<"workspace">("workspace_1");
@@ -50,6 +58,10 @@ type InsertedEntity = {
   docSequence?: number | null;
 };
 
+type InsertedField = {
+  content: FieldContent;
+};
+
 const isInsertedEntity = (value: unknown): value is InsertedEntity =>
   typeof value === "object" &&
   value !== null &&
@@ -57,6 +69,9 @@ const isInsertedEntity = (value: unknown): value is InsertedEntity =>
   "kind" in value &&
   "name" in value &&
   "parentId" in value;
+
+const isInsertedField = (value: unknown): value is InsertedField =>
+  typeof value === "object" && value !== null && "content" in value;
 
 const isArrayWithLength = (
   value: unknown,
@@ -190,6 +205,22 @@ describe("duplicate entity", () => {
     expect(insertedAuditLogs).toHaveLength(1);
     const auditBatch = insertedAuditLogs.at(0);
     expect(isArrayWithLength(auditBatch, 3)).toBe(true);
+    const fieldBatch = insertedFields.at(0);
+    expect(isArrayWithLength(fieldBatch, 1)).toBe(true);
+    if (!isArrayWithLength(fieldBatch, 1)) {
+      throw new Error("Expected duplicated file field batch");
+    }
+
+    const duplicatedFileField = fieldBatch.at(0);
+    expect(isInsertedField(duplicatedFileField)).toBe(true);
+    if (!isInsertedField(duplicatedFileField)) {
+      throw new Error("Expected duplicated file field");
+    }
+    expect(duplicatedFileField.content.type).toBe("file");
+    if (duplicatedFileField.content.type === "file") {
+      expect(duplicatedFileField.content.id).not.toBe(fileContent.id);
+    }
+    expect(writeMock).toHaveBeenCalledTimes(1);
 
     const rootDuplicate = insertedEntities.at(0);
     const documentDuplicate = insertedEntities.at(1);

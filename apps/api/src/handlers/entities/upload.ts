@@ -6,6 +6,10 @@ import type { Static } from "elysia";
 import type { SafeDb, Transaction } from "@/api/db";
 import { jsonField } from "@/api/db/json-utils";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
+import {
+  allocateFileObject,
+  fileContentWithMintedObject,
+} from "@/api/handlers/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/handlers/files/image-derivative";
 import { isEncryptedPdf } from "@/api/handlers/files/pdf-utils";
@@ -193,7 +197,7 @@ const uploadEntityHandler = async function* ({
     encrypted = result.value;
   }
 
-  const fileId = Bun.randomUUIDv7();
+  const fileId = allocateFileObject();
   const sourceKey = createFileKey({
     organizationId,
     workspaceId,
@@ -243,7 +247,7 @@ const uploadEntityHandler = async function* ({
           workspaceId,
           propertyId: property.id,
           entityVersionId,
-          content: {
+          content: fileContentWithMintedObject({
             type: "file",
             version: 1,
             id: fileId,
@@ -263,7 +267,7 @@ const uploadEntityHandler = async function* ({
               mimeType: file.type,
             }),
             ...(scanWarnings !== undefined && { scanWarnings }),
-          },
+          }),
         });
 
         await tx

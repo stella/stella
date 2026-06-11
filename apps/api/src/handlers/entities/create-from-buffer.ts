@@ -3,6 +3,10 @@ import { eq } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
+import {
+  allocateFileObject,
+  fileContentWithMintedObject,
+} from "@/api/handlers/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/handlers/files/image-derivative";
 import { createFileKey } from "@/api/handlers/files/utils";
@@ -94,7 +98,7 @@ export const createEntityFromBuffer = async ({
   scanWarnings,
 }: CreateEntityFromBufferInput): Promise<CreateEntityFromBufferResult> => {
   const fileName = sanitizeFilenamePreservingExtension(rawFileName);
-  const fileId = Bun.randomUUIDv7();
+  const fileId = allocateFileObject();
   const s3Key = createFileKey({
     organizationId,
     workspaceId,
@@ -175,7 +179,7 @@ export const createEntityFromBuffer = async ({
         workspaceId,
         propertyId: fileProperty.id,
         entityVersionId,
-        content: {
+        content: fileContentWithMintedObject({
           type: "file",
           version: 1,
           id: fileId,
@@ -195,7 +199,7 @@ export const createEntityFromBuffer = async ({
             mimeType,
           }),
           ...(scanWarnings !== undefined && { scanWarnings }),
-        },
+        }),
       });
 
       await tx

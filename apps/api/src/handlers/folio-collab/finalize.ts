@@ -16,6 +16,10 @@ import {
   buildVersionStamp,
   cloneFieldsForRevision,
 } from "@/api/handlers/entities/version-utils";
+import {
+  allocateFileObject,
+  fileContentWithMintedObject,
+} from "@/api/handlers/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
@@ -281,7 +285,7 @@ const finalizeFolioCollabSession = createSafeTokenHandler<
     const storedBytes = new Uint8Array(checkpointBuffer);
     const nextVersionNumber = baseVersion.versionNumber + 1;
     const nextVersionId = createSafeId<"entityVersion">();
-    const sourceFileId = Bun.randomUUIDv7();
+    const sourceFileId = allocateFileObject();
     const sourceKey = createFileKey({
       fileId: sourceFileId,
       mimeType: DOCX_MIME_TYPE,
@@ -421,7 +425,7 @@ const finalizeFolioCollabSession = createSafeTokenHandler<
           currentFields: baseVersion.fields,
           entityVersionId: nextVersionId,
           propertyId: sessionPreview.propertyId,
-          replacementContent: {
+          replacementContent: fileContentWithMintedObject({
             encrypted: false,
             fileName: sessionPreview.fileName,
             id: sourceFileId,
@@ -438,7 +442,7 @@ const finalizeFolioCollabSession = createSafeTokenHandler<
             ...(sessionPreview.docxCheckpointScanWarnings !== null && {
               scanWarnings: sessionPreview.docxCheckpointScanWarnings,
             }),
-          },
+          }),
           workspaceId,
         });
 
