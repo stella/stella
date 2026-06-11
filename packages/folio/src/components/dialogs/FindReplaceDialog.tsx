@@ -217,32 +217,6 @@ export function FindReplaceDialog({
     setResult(null);
   }, []);
 
-  const handleSearchKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        const action = getFindEnterAction({
-          searchText,
-          result,
-          shiftKey: e.shiftKey,
-        });
-        if (action === "search") {
-          performSearch();
-          return;
-        }
-        if (action === "previous") {
-          handleFindPrevious();
-          return;
-        }
-        handleFindNext();
-      } else if (e.key === "Escape") {
-        onClose();
-      }
-    },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
-    [searchText, result, performSearch, onClose],
-  );
-
   const handleFindNext = useCallback(() => {
     if (!searchText.trim()) {
       performSearch();
@@ -287,6 +261,38 @@ export function FindReplaceDialog({
       });
     }
   }, [searchText, result, performSearch, onFindPrevious]);
+
+  const handleSearchKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const action = getFindEnterAction({
+          searchText,
+          result,
+          shiftKey: e.shiftKey,
+        });
+        if (action === "search") {
+          performSearch();
+          return;
+        }
+        if (action === "previous") {
+          handleFindPrevious();
+          return;
+        }
+        handleFindNext();
+      } else if (e.key === "Escape") {
+        onClose();
+      }
+    },
+    [
+      searchText,
+      result,
+      performSearch,
+      handleFindPrevious,
+      handleFindNext,
+      onClose,
+    ],
+  );
 
   const handleOverlayClick = useCallback((e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
