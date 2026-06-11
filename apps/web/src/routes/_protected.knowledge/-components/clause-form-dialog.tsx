@@ -298,6 +298,8 @@ const ClauseFormDialogBody = ({
                 bodyParagraphs: paragraphs,
               }))
             }
+            title={form.title}
+            usageNotes={form.usageNotes}
           />
         </div>
 
