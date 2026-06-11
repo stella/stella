@@ -23,6 +23,7 @@ import { marked, type Token, type Tokens } from "marked";
 import type {
   BlockContent,
   Document,
+  ParagraphContent,
   ListRendering,
   Paragraph,
   Run,
@@ -31,6 +32,7 @@ import type {
   TableRow,
 } from "../types/document";
 import { createEmptyDocument } from "../utils/createDocument";
+import { sanitizeExternalUrl } from "../utils/urlSecurity";
 
 // Whitelisted by toMarkdown's monospace inference, so a codespan survives the
 // round-trip. Folio renders Courier New through its bundled Cousine face.
@@ -96,15 +98,42 @@ const textRun = (text: string, fmt: RunFormat = {}): Run => {
   return { type: "run", formatting, content };
 };
 
+const sanitizeMarkdownHref = (rawHref: string): string | undefined => {
+  const trimmed = rawHref.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  if (trimmed.startsWith("#")) {
+    const anchor = trimmed.slice(1);
+    if (!anchor || hasUnsafeAnchorCharacter(anchor)) {
+      return undefined;
+    }
+    return `#${anchor}`;
+  }
+
+  return sanitizeExternalUrl(trimmed);
+};
+
+const hasUnsafeAnchorCharacter = (anchor: string): boolean => {
+  for (const char of anchor) {
+    const codePoint = char.codePointAt(0) ?? 0;
+    if (codePoint <= 0x20 || codePoint === 0x7f || char.trim() === "") {
+      return true;
+    }
+  }
+  return false;
+};
+
 const inlineToRuns = (
   tokens: Token[] | undefined,
   fallback: string,
   base: RunFormat,
-): Run[] => {
+): ParagraphContent[] => {
   if (!tokens || tokens.length === 0) {
     return [textRun(fallback, base)];
   }
-  const runs: Run[] = [];
+  const runs: ParagraphContent[] = [];
   for (const token of tokens) {
     if (isTokenType(token, "strong")) {
       runs.push(
@@ -121,9 +150,32 @@ const inlineToRuns = (
     } else if (isTokenType(token, "codespan")) {
       runs.push(textRun(token.text, { ...base, mono: true }));
     } else if (isTokenType(token, "link")) {
+      const children = inlineToRuns(token.tokens, token.text, base).filter(
+        (child): child is Run => child.type === "run",
+      );
+      const href = sanitizeMarkdownHref(token.href);
+      const linkChildren =
+        children.length > 0 ? children : [textRun(token.text, base)];
+      if (!href) {
+        runs.push(...linkChildren);
+        continue;
+      }
+
+      const anchor = href.startsWith("#") ? href.slice(1) : undefined;
+      runs.push({
+        type: "hyperlink",
+        href,
+        ...(anchor ? { anchor } : {}),
+        children: linkChildren,
+      });
+    } else if (isTokenType(token, "paragraph")) {
       runs.push(...inlineToRuns(token.tokens, token.text, base));
     } else if (token.type === "br") {
       runs.push({ type: "run", content: [{ type: "break" }] });
+    } else if (token.type === "space") {
+      if (runs.length > 0 && token.raw.includes("\n")) {
+        runs.push(textRun("\n", base));
+      }
     } else if (isTokenType(token, "text")) {
       const nested = token.tokens;
       if (nested && nested.length > 0) {
@@ -138,13 +190,16 @@ const inlineToRuns = (
   return runs.length > 0 ? runs : [textRun(fallback, base)];
 };
 
-const para = (runs: Run[], styleId?: string): Paragraph => ({
+const para = (runs: ParagraphContent[], styleId?: string): Paragraph => ({
   type: "paragraph",
   formatting: styleId ? { styleId } : {},
   content: runs.length > 0 ? runs : [textRun("")],
 });
 
-const listPara = (runs: Run[], rendering: ListRendering): Paragraph => ({
+const listPara = (
+  runs: ParagraphContent[],
+  rendering: ListRendering,
+): Paragraph => ({
   type: "paragraph",
   // Real numbering properties, not just display metadata: the editor's list
   // commands (Enter continues the list, Tab indents, toggle) and the live
