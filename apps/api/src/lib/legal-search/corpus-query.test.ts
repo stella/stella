@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
 
-import { corpusFreeTextClause } from "@/api/lib/legal-search/corpus-query";
+import {
+  corpusFreeTextClause,
+  quoteCorpusValue,
+} from "@/api/lib/legal-search/corpus-query";
 
 test("free text cannot escape into the query DSL", () => {
   expect(corpusFreeTextClause('smlouva) OR (court:"X" AND text:*')).toBe(
@@ -16,4 +19,9 @@ test("unicode terms survive intact", () => {
 
 test("input without searchable terms yields no clause", () => {
   expect(corpusFreeTextClause("?!()*:\\")).toBeNull();
+});
+
+test("filter values escape backslashes before quotes", () => {
+  expect(quoteCorpusValue("foo\\")).toBe('"foo\\\\"');
+  expect(quoteCorpusValue('a"b')).toBe('"a\\"b"');
 });

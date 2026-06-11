@@ -22,7 +22,10 @@ import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { isUuid } from "@/api/lib/custom-schema";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
-import { corpusFreeTextClause } from "@/api/lib/legal-search/corpus-query";
+import {
+  corpusFreeTextClause,
+  quoteCorpusValue,
+} from "@/api/lib/legal-search/corpus-query";
 import {
   corpusIndexId,
   corpusIndexPattern,
@@ -402,9 +405,6 @@ const searchPostgresDecisions = async (
   };
 };
 
-const quoteCorpusIndexValue = (value: string): string =>
-  `"${value.replaceAll('"', '\\"')}"`;
-
 const buildCorpusIndexQuery = (body: SearchDecisionsBody): string | null => {
   const freeText = corpusFreeTextClause(body.query);
   if (freeText === null) {
@@ -412,16 +412,16 @@ const buildCorpusIndexQuery = (body: SearchDecisionsBody): string | null => {
   }
   const clauses: string[] = [freeText];
   if (body.decisionType) {
-    clauses.push(`document_type:${quoteCorpusIndexValue(body.decisionType)}`);
+    clauses.push(`document_type:${quoteCorpusValue(body.decisionType)}`);
   }
   if (body.sourceId) {
-    clauses.push(`source:${quoteCorpusIndexValue(body.sourceId)}`);
+    clauses.push(`source:${quoteCorpusValue(body.sourceId)}`);
   }
   if (body.language) {
-    clauses.push(`language:${quoteCorpusIndexValue(body.language)}`);
+    clauses.push(`language:${quoteCorpusValue(body.language)}`);
   }
   if (body.court) {
-    clauses.push(`court:${quoteCorpusIndexValue(body.court)}`);
+    clauses.push(`court:${quoteCorpusValue(body.court)}`);
   }
   if (body.dateFrom || body.dateTo) {
     clauses.push(

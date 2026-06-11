@@ -12,7 +12,10 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { isUuid, tSafeId } from "@/api/lib/custom-schema";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
-import { corpusFreeTextClause } from "@/api/lib/legal-search/corpus-query";
+import {
+  corpusFreeTextClause,
+  quoteCorpusValue,
+} from "@/api/lib/legal-search/corpus-query";
 import {
   corpusIndexId,
   corpusIndexPattern,
@@ -176,23 +179,22 @@ const mapRowHit = (row: RawRow): LegislationHit => ({
 });
 
 const buildCorpusIndexQuery = (body: SearchLegislationBody): string | null => {
-  const q = (v: string) => `"${v.replaceAll('"', '\\"')}"`;
   const freeText = corpusFreeTextClause(body.query);
   if (freeText === null) {
     return null;
   }
   const clauses = [freeText];
   if (body.documentType) {
-    clauses.push(`document_type:${q(body.documentType)}`);
+    clauses.push(`document_type:${quoteCorpusValue(body.documentType)}`);
   }
   if (body.status) {
-    clauses.push(`status:${q(body.status)}`);
+    clauses.push(`status:${quoteCorpusValue(body.status)}`);
   }
   if (body.source) {
-    clauses.push(`source:${q(body.source)}`);
+    clauses.push(`source:${quoteCorpusValue(body.source)}`);
   }
   if (body.language) {
-    clauses.push(`language:${q(body.language)}`);
+    clauses.push(`language:${quoteCorpusValue(body.language)}`);
   }
   if (body.dateFrom || body.dateTo) {
     clauses.push(
