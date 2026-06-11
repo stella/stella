@@ -753,7 +753,7 @@ const VariantFormDialogBody = ({
     const payload = { label: label.trim(), body };
 
     const response =
-      isEdit && variant
+      variant !== undefined
         ? await api
             .clauses({ clauseId })
             .variants({ variantId: variant.id })
