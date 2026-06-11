@@ -49,6 +49,7 @@ import {
 import { toProseDoc, createEmptyDoc } from "../core/prosemirror/conversion";
 import { fromProseDoc } from "../core/prosemirror/conversion/fromProseDoc";
 import type { ExtensionManager } from "../core/prosemirror/extensions/ExtensionManager";
+import { ensureParaIdsInState } from "../core/prosemirror/extensions/features/ParaIdAllocatorExtension";
 import { createDocumentStylesPlugin } from "../core/prosemirror/plugins/documentStyles";
 import { schema } from "../core/prosemirror/schema";
 import type { Document, Theme, StyleDefinitions } from "../core/types/document";
@@ -397,6 +398,11 @@ export function createHiddenEditorState(
   const styleResolverPlugin = createDocumentStylesPlugin(
     styles ?? document?.package.styles,
   );
+  const plugins: Plugin[] = [
+    ...externalPlugins,
+    ...(manager?.getPlugins() ?? []),
+    styleResolverPlugin,
+  ];
 
   if (collaboration) {
     if (!collaborationModules) {
@@ -406,28 +412,51 @@ export function createHiddenEditorState(
     }
 
     if (collaboration.shouldSeed && collaboration.yXmlFragment.length === 0) {
+      const seedState = ensureParaIdsInState(
+        EditorState.create({
+          doc: localDoc,
+          schema: activeSchema,
+          plugins,
+        }),
+      );
       collaborationModules.yProseMirror.prosemirrorToYXmlFragment(
-        localDoc,
+        seedState.doc,
         collaboration.yXmlFragment,
       );
       collaboration.onSeeded?.();
     }
 
-    const { doc } = collaborationModules.yProseMirror.initProseMirrorDoc(
+    let { doc } = collaborationModules.yProseMirror.initProseMirrorDoc(
       collaboration.yXmlFragment,
       activeSchema,
     );
 
+    const initializedState = ensureParaIdsInState(
+      EditorState.create({
+        doc,
+        schema: activeSchema,
+        plugins,
+      }),
+    );
+    if (!initializedState.doc.eq(doc)) {
+      collaborationModules.yProseMirror.prosemirrorToYXmlFragment(
+        initializedState.doc,
+        collaboration.yXmlFragment,
+      );
+      ({ doc } = collaborationModules.yProseMirror.initProseMirrorDoc(
+        collaboration.yXmlFragment,
+        activeSchema,
+      ));
+    }
+
     const startedAt = performance.now();
-    const state = EditorState.create({
-      doc,
-      schema: activeSchema,
-      plugins: [
-        ...externalPlugins,
-        ...(manager?.getPlugins() ?? []),
-        styleResolverPlugin,
-      ],
-    });
+    const state = ensureParaIdsInState(
+      EditorState.create({
+        doc,
+        schema: activeSchema,
+        plugins,
+      }),
+    );
     recordHiddenEditorPhase(
       reason,
       "editor-state",
@@ -436,20 +465,14 @@ export function createHiddenEditorState(
     return state;
   }
 
-  // External plugins go first so they can intercept before extension keymaps
-  // (e.g. suggestion mode must handle Backspace/Delete before deleteSelection)
-  const plugins: Plugin[] = [
-    ...externalPlugins,
-    ...(manager?.getPlugins() ?? []),
-    styleResolverPlugin,
-  ];
-
   const startedAt = performance.now();
-  const state = EditorState.create({
-    doc: localDoc,
-    schema: activeSchema,
-    plugins,
-  });
+  const state = ensureParaIdsInState(
+    EditorState.create({
+      doc: localDoc,
+      schema: activeSchema,
+      plugins,
+    }),
+  );
   recordHiddenEditorPhase(
     reason,
     "editor-state",

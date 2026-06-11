@@ -16,6 +16,7 @@ import {
   hasStructuralChanges,
   hasUntrackedChanges,
   clearTrackedChanges,
+  ignoreTrackedChanges,
   ParagraphChangeTrackerExtension,
 } from "./ParagraphChangeTrackerExtension";
 
@@ -290,6 +291,52 @@ describe("ParagraphChangeTrackerExtension", () => {
       const changed = getChangedParagraphIds(state);
       expect(changed.has("P1")).toBe(false);
       expect(changed.has("P2")).toBe(true);
+    });
+  });
+
+  describe("ignored generated transactions", () => {
+    test("does not record ignored doc-changing transactions", () => {
+      let state = createState([{ text: "Hello", paraId: "P1" }]);
+
+      const tr = state.tr.setNodeMarkup(0, undefined, {
+        ...state.doc.child(0).attrs,
+        paraId: "P2",
+      });
+      state = state.apply(ignoreTrackedChanges(tr));
+
+      expect(getChangedParagraphIds(state).size).toBe(0);
+      expect(hasStructuralChanges(state)).toBe(false);
+      expect(hasUntrackedChanges(state)).toBe(false);
+    });
+
+    test("preserves existing tracked edits while ignoring generated changes", () => {
+      let state = createState([
+        { text: "Hello", paraId: "P1" },
+        { text: "World", paraId: "P2" },
+      ]);
+
+      state = typeText(state, "X", 1);
+      expect(getChangedParagraphIds(state).has("P1")).toBe(true);
+
+      let secondParagraphPos = 0;
+      state.doc.descendants((node, pos) => {
+        if (node.type.name === "paragraph" && node.attrs.paraId === "P2") {
+          secondParagraphPos = pos;
+          return false;
+        }
+        return true;
+      });
+
+      const tr = state.tr.setNodeMarkup(secondParagraphPos, undefined, {
+        ...state.doc.child(1).attrs,
+        paraId: "P3",
+      });
+      state = state.apply(ignoreTrackedChanges(tr));
+
+      const changed = getChangedParagraphIds(state);
+      expect(changed.has("P1")).toBe(true);
+      expect(changed.has("P2")).toBe(false);
+      expect(changed.has("P3")).toBe(false);
     });
   });
 

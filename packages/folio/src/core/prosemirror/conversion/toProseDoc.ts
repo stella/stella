@@ -2157,14 +2157,14 @@ function convertImage(image: Image, rawXml?: string): PMNode {
   }
 
   // Convert wrap distances from EMU to pixels for margins
-  const distTop = image.wrap.distT ? emuToPixels(image.wrap.distT) : undefined;
-  const distBottom = image.wrap.distB
-    ? emuToPixels(image.wrap.distB)
-    : undefined;
-  const distLeft = image.wrap.distL ? emuToPixels(image.wrap.distL) : undefined;
-  const distRight = image.wrap.distR
-    ? emuToPixels(image.wrap.distR)
-    : undefined;
+  const distTop =
+    image.wrap.distT != null ? emuToPixels(image.wrap.distT) : undefined;
+  const distBottom =
+    image.wrap.distB != null ? emuToPixels(image.wrap.distB) : undefined;
+  const distLeft =
+    image.wrap.distL != null ? emuToPixels(image.wrap.distL) : undefined;
+  const distRight =
+    image.wrap.distR != null ? emuToPixels(image.wrap.distR) : undefined;
 
   // Build position data for floating images
   let position:
