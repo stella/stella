@@ -1,5 +1,5 @@
 import { Result, panic } from "better-result";
-import { eq, like } from "drizzle-orm";
+import { and, eq, like, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db";
 import {
@@ -235,12 +235,15 @@ const uploadSourceRaw = async (
 type PreserveCorpusWriteRetryInput = {
   decisionId: SafeId<"caseLawDecision">;
   previousSourceHash: string | null;
+  /** The sourceHash this run persisted; the reset only applies while the row still carries it. */
+  expectedSourceHash: string | null;
   scopedDb: ScopedDb;
 };
 
 const preserveCorpusWriteRetry = async ({
   decisionId,
   previousSourceHash,
+  expectedSourceHash,
   scopedDb,
 }: PreserveCorpusWriteRetryInput): Promise<void> => {
   // If the corpus write fails after the DB text update, do not leave the
@@ -251,19 +254,28 @@ const preserveCorpusWriteRetry = async ({
   // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
   await scopedDb((tx) => {
     // audit: skip — background corpus storage retry bookkeeping; derived state
-    return tx
-      .update(caseLawDecisions)
-      .set({
-        sourceHash: previousSourceHash,
-        textS3Key: null,
-        normalizedS3Key: null,
-        astS3Key: null,
-        contentHash: null,
-        indexedHash: null,
-        indexedGeneration: null,
-        indexedAt: null,
-      })
-      .where(eq(caseLawDecisions.id, decisionId));
+    return (
+      tx
+        .update(caseLawDecisions)
+        .set({
+          sourceHash: previousSourceHash,
+          textS3Key: null,
+          normalizedS3Key: null,
+          astS3Key: null,
+          contentHash: null,
+          indexedHash: null,
+          indexedGeneration: null,
+          indexedAt: null,
+        })
+        // Only undo this run's own write: a concurrent newer refresh owns
+        // the row once it has advanced sourceHash.
+        .where(
+          and(
+            eq(caseLawDecisions.id, decisionId),
+            sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${expectedSourceHash}`,
+          ),
+        )
+    );
   });
 };
 
@@ -481,6 +493,12 @@ export const processDecision = async (
   // from its Postgres columns and preserves the source-hash mismatch so normal
   // ingestion can retry the corpus write.
   if (envBase.CORPUS_STORAGE_ENABLED) {
+    // The sourceHash this call just persisted: corpus-key and retry
+    // updates below only apply while the row still carries it, so a
+    // slower run cannot overwrite a concurrent newer refresh.
+    const persistedSourceHash = s3UploadFailed
+      ? (existing?.sourceHash ?? null)
+      : result.rawHash;
     try {
       const written = await writeCorpusDocument({
         documentId: decisionId,
@@ -500,7 +518,12 @@ export const processDecision = async (
             astS3Key: written.astKey,
             contentHash: written.contentHash,
           })
-          .where(eq(caseLawDecisions.id, decisionId));
+          .where(
+            and(
+              eq(caseLawDecisions.id, decisionId),
+              sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${persistedSourceHash}`,
+            ),
+          );
       });
     } catch (error) {
       s3UploadFailed = true;
@@ -508,6 +531,7 @@ export const processDecision = async (
       await preserveCorpusWriteRetry({
         decisionId,
         previousSourceHash: existing?.sourceHash ?? null,
+        expectedSourceHash: persistedSourceHash,
         scopedDb,
       });
     }

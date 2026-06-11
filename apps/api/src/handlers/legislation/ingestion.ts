@@ -89,12 +89,15 @@ const sanitizeInput = (
 type PreserveLegislationCorpusWriteRetryInput = {
   documentId: SafeId<"legislationDocument">;
   previousSourceHash: string | null;
+  /** The sourceHash this run persisted; the reset only applies while the row still carries it. */
+  expectedSourceHash: string | null;
   scopedDb: ScopedDb;
 };
 
 const preserveLegislationCorpusWriteRetry = async ({
   documentId,
   previousSourceHash,
+  expectedSourceHash,
   scopedDb,
 }: PreserveLegislationCorpusWriteRetryInput): Promise<void> => {
   // Keep the next ingestion pass from treating this document as unchanged
@@ -103,19 +106,28 @@ const preserveLegislationCorpusWriteRetry = async ({
   // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
   await scopedDb((tx) => {
     // audit: skip — background corpus storage retry bookkeeping; derived state
-    return tx
-      .update(legislationDocuments)
-      .set({
-        sourceHash: previousSourceHash,
-        textS3Key: null,
-        normalizedS3Key: null,
-        astS3Key: null,
-        contentHash: null,
-        indexedHash: null,
-        indexedGeneration: null,
-        indexedAt: null,
-      })
-      .where(eq(legislationDocuments.id, documentId));
+    return (
+      tx
+        .update(legislationDocuments)
+        .set({
+          sourceHash: previousSourceHash,
+          textS3Key: null,
+          normalizedS3Key: null,
+          astS3Key: null,
+          contentHash: null,
+          indexedHash: null,
+          indexedGeneration: null,
+          indexedAt: null,
+        })
+        // Only undo this run's own write: a concurrent newer refresh owns
+        // the row once it has advanced sourceHash.
+        .where(
+          and(
+            eq(legislationDocuments.id, documentId),
+            sql`${legislationDocuments.sourceHash} IS NOT DISTINCT FROM ${expectedSourceHash}`,
+          ),
+        )
+    );
   });
 };
 
@@ -252,15 +264,24 @@ export const processLegislationDocument = async (
       // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
       await scopedDb((tx) => {
         // audit: skip — background corpus storage; derived state
-        return tx
-          .update(legislationDocuments)
-          .set({
-            textS3Key: written.textKey,
-            normalizedS3Key: written.sectionsKey,
-            astS3Key: written.astKey,
-            contentHash: written.contentHash,
-          })
-          .where(eq(legislationDocuments.id, id));
+        return (
+          tx
+            .update(legislationDocuments)
+            .set({
+              textS3Key: written.textKey,
+              normalizedS3Key: written.sectionsKey,
+              astS3Key: written.astKey,
+              contentHash: written.contentHash,
+            })
+            // Only while the row still carries this run's sourceHash: a
+            // slower run must not overwrite a concurrent newer refresh.
+            .where(
+              and(
+                eq(legislationDocuments.id, id),
+                sql`${legislationDocuments.sourceHash} IS NOT DISTINCT FROM ${sourceHash}`,
+              ),
+            )
+        );
       });
     } catch (error) {
       corpusWriteFailed = true;
@@ -271,6 +292,7 @@ export const processLegislationDocument = async (
       await preserveLegislationCorpusWriteRetry({
         documentId: id,
         previousSourceHash: existing?.sourceHash ?? null,
+        expectedSourceHash: sourceHash,
         scopedDb,
       });
     }
