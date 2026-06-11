@@ -1,7 +1,5 @@
 import type { ComponentProps } from "react";
 
-import type { AnyFieldApi } from "@tanstack/react-form";
-
 import { Field, FieldError } from "@stll/ui/components/field";
 import { cn } from "@stll/ui/lib/utils";
 
@@ -16,9 +14,15 @@ export const PropertyFormField = ({
     {children}
   </Field>
 );
-// TODO: FIXME — replace AnyFieldApi with a properly typed FieldApi
+type TextFieldHandle = {
+  name: string;
+  state: { value: string };
+  handleChange: (value: string) => void;
+  handleBlur: () => void;
+};
+
 type PropertyTextInputProps = {
-  field: AnyFieldApi;
+  field: TextFieldHandle;
   placeholder: string;
 };
 
@@ -26,7 +30,6 @@ export const PropertyTextInput = ({
   field,
   placeholder,
 }: PropertyTextInputProps) => (
-  // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
   <PropertyFormField name={field.name}>
     <input
       autoComplete="off"
@@ -36,7 +39,6 @@ export const PropertyTextInput = ({
       onChange={(e) => field.handleChange(e.target.value)}
       placeholder={placeholder}
       type="text"
-      // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
       value={field.state.value}
     />
     <FieldError />

@@ -124,9 +124,10 @@ export const KanbanCard = ({
             if (!inner) {
               return;
             }
-            // SAFETY: cloneNode of HTMLElement returns HTMLElement
-            // eslint-disable-next-line typescript/no-unsafe-type-assertion
-            const clone = inner.cloneNode(true) as HTMLElement;
+            const clone = inner.cloneNode(true);
+            if (!(clone instanceof HTMLElement)) {
+              return;
+            }
             const rect = inner.getBoundingClientRect();
             clone.style.width = `${rect.width}px`;
             container.append(clone);

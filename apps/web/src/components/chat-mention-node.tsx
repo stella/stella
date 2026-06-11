@@ -10,11 +10,60 @@ import {
 import { cn } from "@stll/ui/lib/utils";
 
 import type { ChatReferenceCategory } from "@/components/chat-mention-extension";
+import { isMentionCategory } from "@/components/chat/chat-mention-href";
 import { getMatterColor } from "@/lib/matter-colors";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 
 const cls = "size-3 shrink-0";
 const CHAT_MENTION_LABEL_MAX_WIDTH_CLASS = "max-w-48";
+
+type ChatMentionAttrs = {
+  id: string;
+  label: string;
+  category: ChatReferenceCategory;
+  kind: string;
+  mimeType: string | null;
+  sourceWorkspaceId: string | null;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const isChatReferenceCategory = (
+  value: unknown,
+): value is ChatReferenceCategory =>
+  typeof value === "string" &&
+  (value === "decision" || isMentionCategory(value));
+
+const readChatMentionAttrs = (value: unknown): ChatMentionAttrs => {
+  if (!isRecord(value)) {
+    return {
+      id: "",
+      label: "",
+      category: "entity",
+      kind: "document",
+      mimeType: null,
+      sourceWorkspaceId: null,
+    };
+  }
+
+  const id = value["id"];
+  const label = value["label"];
+  const category = value["category"];
+  const kind = value["kind"];
+  const mimeType = value["mimeType"];
+  const sourceWorkspaceId = value["sourceWorkspaceId"];
+
+  return {
+    id: typeof id === "string" ? id : "",
+    label: typeof label === "string" ? label : "",
+    category: isChatReferenceCategory(category) ? category : "entity",
+    kind: typeof kind === "string" ? kind : "document",
+    mimeType: typeof mimeType === "string" ? mimeType : null,
+    sourceWorkspaceId:
+      typeof sourceWorkspaceId === "string" ? sourceWorkspaceId : null,
+  };
+};
 
 const CategoryIcon = ({
   category,
@@ -50,16 +99,7 @@ const CategoryIcon = ({
 };
 
 export const ChatMentionNode = (props: NodeViewProps) => {
-  // SAFETY: attrs from our own mention extension schema
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
-  const attrs = props.node.attrs as {
-    id: string;
-    label: string;
-    category: ChatReferenceCategory;
-    kind: string;
-    mimeType: string | null;
-    sourceWorkspaceId: string | null;
-  };
+  const attrs = readChatMentionAttrs(props.node.attrs);
   const sourceWorkspaceId = attrs.sourceWorkspaceId;
   const sourceWorkspaceColor = sourceWorkspaceId
     ? getMatterColor(sourceWorkspaceId)

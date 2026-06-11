@@ -41,13 +41,18 @@ export function broadcastMcpOAuthOutcome(outcome: McpOAuthOutcome): void {
     return;
   }
 
-  // SAFETY: lib.dom types `window.opener` as `any` because the
-  // opener may be a Window from any origin. We post to our own
-  // origin only, so narrowing to the postMessage surface is safe.
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-  const opener = window.opener as Pick<Window, "postMessage"> | null;
-  if (opener !== null) {
-    opener.postMessage(message, window.location.origin);
+  const opener: unknown = window.opener;
+  if (
+    typeof opener !== "object" ||
+    opener === null ||
+    !("postMessage" in opener)
+  ) {
+    return;
+  }
+
+  const postMessage = opener.postMessage;
+  if (typeof postMessage === "function") {
+    postMessage.call(opener, message, window.location.origin);
   }
 }
 

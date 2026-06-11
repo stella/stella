@@ -1,7 +1,6 @@
 import { useState } from "react";
 
 import { revalidateLogic, useForm } from "@tanstack/react-form";
-import type { AnyFieldApi } from "@tanstack/react-form";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -194,8 +193,7 @@ export const EditFieldDialog = ({
               errors={errors}
               onSubmit={(e) => {
                 e.preventDefault();
-                // eslint-disable-next-line typescript/no-floating-promises
-                form.handleSubmit();
+                void form.handleSubmit();
               }}
             >
               <DialogHeader>
@@ -349,23 +347,27 @@ export const EditFieldDialog = ({
   );
 };
 
-// TODO: FIXME — replace AnyFieldApi with a properly typed FieldApi
+type TextFieldHandle = {
+  name: string;
+  state: { value: string };
+  handleChange: (value: string) => void;
+  handleBlur: () => void;
+};
+
 type TextFormFieldProps = {
-  field: AnyFieldApi;
+  field: TextFieldHandle;
 };
 
 const TextFormField = ({ field }: TextFormFieldProps) => {
   const t = useTranslations();
 
   return (
-    // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
     <Field name={field.name}>
       <FieldLabel>{t("workspaces.fields.fieldValueLabel")}</FieldLabel>
       <Input
         onBlur={field.handleBlur}
         onChange={(e) => field.handleChange(e.target.value)}
         placeholder={t("workspaces.fields.fieldValuePlaceholder")}
-        // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
         value={field.state.value}
       />
       <FieldError />

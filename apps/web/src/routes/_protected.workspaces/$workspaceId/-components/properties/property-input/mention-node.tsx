@@ -10,14 +10,34 @@ type MentionNodeProps = NodeViewProps & {
   workspaceId: string;
 };
 
-export const MentionNode = ({ workspaceId, ...props }: MentionNodeProps) => {
-  // SAFETY: attrs from our mention extension schema
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
-  const attributes = props.node.attrs as {
-    id: string;
-    label: string;
-    mentionSuggestionChar: string;
+type MentionAttrs = {
+  id: string;
+  label: string;
+  mentionSuggestionChar: string;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const readMentionAttrs = (value: unknown): MentionAttrs => {
+  if (!isRecord(value)) {
+    return { id: "", label: "", mentionSuggestionChar: "@" };
+  }
+
+  const id = value["id"];
+  const label = value["label"];
+  const mentionSuggestionChar = value["mentionSuggestionChar"];
+
+  return {
+    id: typeof id === "string" ? id : "",
+    label: typeof label === "string" ? label : "",
+    mentionSuggestionChar:
+      typeof mentionSuggestionChar === "string" ? mentionSuggestionChar : "@",
   };
+};
+
+export const MentionNode = ({ workspaceId, ...props }: MentionNodeProps) => {
+  const attributes = readMentionAttrs(props.node.attrs);
   const { data: propertyName } = useSuspenseQuery({
     ...propertiesOptions(workspaceId),
     select: (data) => data.find((item) => item.id === attributes.id)?.name,
