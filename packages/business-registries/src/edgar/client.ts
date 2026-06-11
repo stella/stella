@@ -40,10 +40,32 @@ const assertUserAgent = (userAgent: string): void => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const edgarGet = async <T>(
+const isOptionalStringArray = (value: unknown): boolean =>
+  value === undefined ||
+  (Array.isArray(value) && value.every((item) => typeof item === "string"));
+
+const isOptionalRecord = (value: unknown): boolean =>
+  value === undefined || isRecord(value);
+
+const isEdgarFormerName = (value: unknown): boolean =>
+  isRecord(value) && typeof value["name"] === "string";
+
+const isEdgarRawSubmission = (value: unknown): value is EdgarRawSubmission =>
+  isRecord(value) &&
+  typeof value["cik"] === "string" &&
+  typeof value["name"] === "string" &&
+  isOptionalStringArray(value["tickers"]) &&
+  isOptionalStringArray(value["exchanges"]) &&
+  isOptionalRecord(value["addresses"]) &&
+  (value["formerNames"] === undefined ||
+    (Array.isArray(value["formerNames"]) &&
+      value["formerNames"].every(isEdgarFormerName))) &&
+  isOptionalRecord(value["filings"]);
+
+const edgarGet = async (
   url: string,
   userAgent: string,
-): Promise<T | null> => {
+): Promise<EdgarRawSubmission | null> => {
   let response: Response;
   try {
     response = await fetch(url, {
@@ -99,18 +121,13 @@ const edgarGet = async <T>(
       cause: error,
     });
   }
-  if (!isRecord(json)) {
+  if (!isEdgarRawSubmission(json)) {
     throw new EdgarAPIError({
       message: "EDGAR returned an unexpected response shape",
       httpStatus: response.status,
     });
   }
-  // SAFETY: EDGAR's `submissions/CIK*.json` is a documented, stable
-  // public endpoint. The parser tolerates absent fields, so we narrow
-  // structurally at the top (`isRecord`) and let the parser handle
-  // the rest.
-  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
-  return json as T;
+  return json;
 };
 
 // ---------------------------------------------------------------------------
@@ -140,7 +157,7 @@ export const lookupByCik = async (
 
   const padded = padCik(cik);
   const url = `${SUBMISSIONS_BASE}/CIK${padded}.json`;
-  const raw = await edgarGet<EdgarRawSubmission>(url, config.userAgent);
+  const raw = await edgarGet(url, config.userAgent);
   if (!raw) {
     return null;
   }
