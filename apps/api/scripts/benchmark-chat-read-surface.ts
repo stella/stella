@@ -545,7 +545,6 @@ const buildOldTools = (trace: BenchTrace) => ({
         name: v.optional(v.string()),
       }),
     ),
-    // eslint-disable-next-line require-await
     execute: async ({ name }) => {
       const input = { name };
       addTrace({
@@ -555,16 +554,16 @@ const buildOldTools = (trace: BenchTrace) => ({
       });
 
       if (name) {
-        return {
+        return await Promise.resolve({
           function: `${name} returns { items } or { items, hasMore, nextOffset }.`,
-        };
+        });
       }
 
-      return {
+      return await Promise.resolve({
         functions: readCatalog.map((entry) =>
           entry.replace("read.", "stella."),
         ),
-      };
+      });
     },
   }),
   "execute-typescript": tool({
@@ -575,7 +574,6 @@ const buildOldTools = (trace: BenchTrace) => ({
         code: v.string(),
       }),
     ),
-    // eslint-disable-next-line require-await
     execute: async ({ code }) => {
       const output = simulateSandbox({
         code,
@@ -589,7 +587,7 @@ const buildOldTools = (trace: BenchTrace) => ({
         name: "execute-typescript",
         trace,
       });
-      return output;
+      return await Promise.resolve(output);
     },
   }),
   "read-contact": tool({
@@ -599,7 +597,6 @@ const buildOldTools = (trace: BenchTrace) => ({
         contactRef: v.string(),
       }),
     ),
-    // eslint-disable-next-line require-await
     execute: async ({ contactRef }) => {
       const input = { contactRef };
       const contact = contactItems.find(
@@ -612,7 +609,7 @@ const buildOldTools = (trace: BenchTrace) => ({
         name: "read-contact",
         trace,
       });
-      return contact ?? { error };
+      return await Promise.resolve(contact ?? { error });
     },
   }),
   "read-content-across-matters": tool({
@@ -623,7 +620,6 @@ const buildOldTools = (trace: BenchTrace) => ({
         entityRefs: v.array(v.string()),
       }),
     ),
-    // eslint-disable-next-line require-await
     execute: async ({ entityRefs }) => {
       const input = { entityRefs };
       const contents = contentItems.filter((item) =>
@@ -634,9 +630,9 @@ const buildOldTools = (trace: BenchTrace) => ({
         name: "read-content-across-matters",
         trace,
       });
-      return {
+      return await Promise.resolve({
         contents,
-      };
+      });
     },
   }),
   "search-across-matters": tool({
@@ -647,7 +643,6 @@ const buildOldTools = (trace: BenchTrace) => ({
         query: v.string(),
       }),
     ),
-    // eslint-disable-next-line require-await
     execute: async ({ query }) => {
       const input = { query };
       const normalizedQuery = query.toLowerCase();
@@ -659,9 +654,9 @@ const buildOldTools = (trace: BenchTrace) => ({
         name: "search-across-matters",
         trace,
       });
-      return {
+      return await Promise.resolve({
         hits,
-      };
+      });
     },
   }),
 });
@@ -682,7 +677,6 @@ const buildNewTools = ({
           code: v.string(),
         }),
       ),
-      // eslint-disable-next-line require-await
       execute: async ({ code }) => {
         const output = simulateSandbox({
           code,
@@ -696,7 +690,7 @@ const buildNewTools = ({
           name: "run-stella-query",
           trace,
         });
-        return output;
+        return await Promise.resolve(output);
       },
     }),
   };
@@ -714,7 +708,6 @@ const buildNewTools = ({
           name: v.optional(v.string()),
         }),
       ),
-      // eslint-disable-next-line require-await
       execute: async ({ name }) => {
         const input = { name };
         addTrace({
@@ -724,16 +717,16 @@ const buildNewTools = ({
         });
 
         if (name) {
-          return {
+          return await Promise.resolve({
             function: readCatalog.find((entry) =>
               entry.startsWith(`read.${name}`),
             ),
-          };
+          });
         }
 
-        return {
+        return await Promise.resolve({
           functions: readCatalog,
-        };
+        });
       },
     }),
     ...runner,

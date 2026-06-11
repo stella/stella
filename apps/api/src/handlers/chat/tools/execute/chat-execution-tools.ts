@@ -122,19 +122,18 @@ export const createChatExecutionTools = ({
           ),
         }),
       ),
-      // eslint-disable-next-line require-await
       execute: async ({ name }) => {
         if (name === undefined) {
           const manifest = buildReadonlyFunctionManifest(
             readonlyFunctionContracts,
           ).unwrap();
-          return {
+          return await Promise.resolve({
             functions: manifest.map((entry) => ({
               name: entry.name,
               summary: entry.summary,
               outputShape: entry.outputShape,
             })),
-          };
+          });
         }
 
         const manifestEntry = findReadonlyFunctionManifestEntry({
@@ -148,9 +147,9 @@ export const createChatExecutionTools = ({
           });
         }
 
-        return {
+        return await Promise.resolve({
           function: manifestEntry,
-        };
+        });
       },
     }),
 

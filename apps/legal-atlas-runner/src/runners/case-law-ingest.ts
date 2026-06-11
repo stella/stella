@@ -134,16 +134,16 @@ const MAX_CONCURRENT_DB_WRITES = Math.max(
 let activeDbSlots = 0;
 const dbSlotQueue: (() => void)[] = [];
 
-// eslint-disable-next-line require-await -- returns Promise on queued path
 const acquireDbSlot = async (signal?: AbortSignal): Promise<void> => {
   if (signal?.aborted) {
     throw new DOMException("DB slot acquisition aborted", "AbortError");
   }
   if (activeDbSlots < MAX_CONCURRENT_DB_WRITES) {
     activeDbSlots++;
+    await Promise.resolve();
     return;
   }
-  return new Promise<void>((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     const entry = () => {
       signal?.removeEventListener("abort", onAbort);
       activeDbSlots++;
