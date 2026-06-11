@@ -20,7 +20,8 @@
       "cta": "Atidaryti AI nustatymus",
       "description": "Pridėkite teikėjo prisijungimo duomenis, kad galėtumėte naudoti AI funkcijas.",
       "title": "Prijungti AI teikėją"
-    }
+    },
+    "refinePlaceholder": "Kaip DI turėtų pakoreguoti formuluotę?"
   },
   "anonymize": {
     "addEntity": "Pridėti subjektą",
@@ -707,7 +708,9 @@
     "closeAll": "Uždaryti viską",
     "closeOthers": "Uždaryti kitus",
     "columns": "Stulpeliai",
+    "comfortable": "Patogus",
     "comingSoon": "Netrukus",
+    "compact": "Kompaktiškas",
     "confirm": "Patvirtinti",
     "confirmAction": "Ar tikrai?",
     "connectionLost": "Ryšys nutrūko",
