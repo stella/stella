@@ -1,4 +1,5 @@
-import type { PDF, PdfDict, PdfRef, PdfStream } from "@libpdf/core";
+import { PdfStream } from "@libpdf/core";
+import type { PDF, PdfDict, PdfRef } from "@libpdf/core";
 
 /**
  * A redaction region on a specific page for content stream
@@ -85,7 +86,7 @@ const getContentStreams = (
     return getContentStreams(resolved, ctx);
   }
 
-  if (contents.type === "stream") {
+  if (contents instanceof PdfStream) {
     return [contents];
   }
 
@@ -96,7 +97,7 @@ const getContentStreams = (
       const item = arr.at(i);
       if (item) {
         const resolved = item.type === "ref" ? ctx.resolve(item) : item;
-        if (resolved?.type === "stream") {
+        if (resolved instanceof PdfStream) {
           streams.push(resolved);
         }
       }

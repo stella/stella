@@ -111,20 +111,20 @@ const toSingleSelectValue = (value: unknown): string | null => {
   return null;
 };
 
+const toTextValue = (value: unknown): string => {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  return "";
+};
+
 const toMultiSelectValue = (value: unknown): string[] => {
   if (Array.isArray(value) && value.every((item) => typeof item === "string")) {
     return value;
   }
 
   return [];
-};
-
-const toDateValue = (value: unknown): string => {
-  if (typeof value === "string") {
-    return value;
-  }
-
-  return "";
 };
 
 const toIntValue = (value: unknown): number => {
@@ -275,7 +275,7 @@ export const EditFieldDialog = ({
                         <FieldLabel>{t("common.date")}</FieldLabel>
                         <DatePickerPopover
                           onChange={(val) => field.handleChange(val)}
-                          value={toDateValue(field.state.value)}
+                          value={toTextValue(field.state.value)}
                         />
                         <FieldError />
                       </Field>
@@ -362,7 +362,7 @@ export const EditFieldDialog = ({
 
 type TextFieldHandle = {
   name: string;
-  state: { value: string };
+  state: { value: unknown };
   handleChange: (value: string) => void;
   handleBlur: () => void;
 };
@@ -381,7 +381,7 @@ const TextFormField = ({ field }: TextFormFieldProps) => {
         onBlur={field.handleBlur}
         onChange={(e) => field.handleChange(e.target.value)}
         placeholder={t("workspaces.fields.fieldValuePlaceholder")}
-        value={field.state.value}
+        value={toTextValue(field.state.value)}
       />
       <FieldError />
     </Field>
