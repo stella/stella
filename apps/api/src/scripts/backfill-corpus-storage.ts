@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, isNull } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 /**
@@ -31,6 +31,7 @@ type BackfillRow = {
   fulltext: string | null;
   sections: DecisionSection[] | null;
   documentAst: DocumentAst | EmptyAst | null;
+  updatedAt: Date;
 };
 
 const ingestionDb = createIngestionDb(rlsDb);
@@ -62,7 +63,17 @@ const backfillRow = async (row: BackfillRow): Promise<void> => {
           astS3Key: result.astKey,
           contentHash: result.contentHash,
         })
-        .where(eq(caseLawDecisions.id, row.id)),
+        // Compare-and-set on the selected row state: a concurrent
+        // ingestion refresh may have written newer keys, and an
+        // unconditional update would point the row back at the stale
+        // backfill payload.
+        .where(
+          and(
+            eq(caseLawDecisions.id, row.id),
+            isNull(caseLawDecisions.textS3Key),
+            sql`${caseLawDecisions.updatedAt} IS NOT DISTINCT FROM ${row.updatedAt}`,
+          ),
+        ),
     );
     written += 1;
   } catch (error) {
@@ -88,6 +99,7 @@ while (true) {
         fulltext: caseLawDecisions.fulltext,
         sections: caseLawDecisions.sections,
         documentAst: caseLawDecisions.documentAst,
+        updatedAt: caseLawDecisions.updatedAt,
       })
       .from(caseLawDecisions)
       .where(where)
