@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { type CSSProperties, useRef, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
@@ -6,7 +6,6 @@ import {
   CheckIcon,
   DownloadIcon,
   FolderIcon,
-  LayoutTemplateIcon,
   MoreHorizontalIcon,
   PencilLineIcon,
   PlusIcon,
@@ -173,8 +172,13 @@ export const TemplateList = ({
     e.target.value = "";
   };
 
+  // Only the .docx file-drop affordance — NOT the internal template-row drag
+  // (which carries TEMPLATE_DRAG_MIME, not files) — should light up the list.
+  const isFileDrag = (e: React.DragEvent) =>
+    e.dataTransfer.types.includes("Files");
+
   const handleDragOver = (e: React.DragEvent) => {
-    if (!canCreateTemplate) {
+    if (!canCreateTemplate || !isFileDrag(e)) {
       return;
     }
     e.preventDefault();
@@ -187,6 +191,9 @@ export const TemplateList = ({
   };
 
   const handleDrop = (e: React.DragEvent) => {
+    if (!isFileDrag(e)) {
+      return;
+    }
     e.preventDefault();
     setIsDragOver(false);
     if (!canCreateTemplate) {
@@ -394,6 +401,49 @@ type TemplateRowProps = {
   onDeleted: () => void;
 };
 
+/** Stable hue (0–359) from a category id, so each category gets a consistent
+ *  low-chroma tint and otherwise-identical rows become scannable. */
+const categoryHue = (categoryId: string): number => {
+  let hue = 0;
+  for (const char of categoryId) {
+    hue = (hue * 31 + (char.codePointAt(0) ?? 0)) % 360;
+  }
+  return hue;
+};
+
+/** The template's initial in a rounded square, tinted by its category (the one
+ *  accent per row). The hue rides in a CSS variable so the oklch classes can
+ *  pick theme-appropriate lightness; uncategorized templates stay neutral. */
+const TemplateMonogram = ({
+  name,
+  categoryId,
+}: {
+  name: string;
+  categoryId: string | null;
+}) => {
+  const initial = (name.trim().at(0) ?? "?").toUpperCase();
+  if (categoryId === null) {
+    return (
+      <div className="bg-muted text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold">
+        {initial}
+      </div>
+    );
+  }
+  // CSSProperties has no index signature for CSS custom properties, so widen
+  // the binding rather than cast; --cat-hue feeds the oklch() classes.
+  const style: CSSProperties & { "--cat-hue": string } = {
+    "--cat-hue": String(categoryHue(categoryId)),
+  };
+  return (
+    <div
+      className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[oklch(0.94_0.045_var(--cat-hue))] text-sm font-semibold text-[oklch(0.45_0.13_var(--cat-hue))] dark:bg-[oklch(0.32_0.05_var(--cat-hue))] dark:text-[oklch(0.85_0.11_var(--cat-hue))]"
+      style={style}
+    >
+      {initial}
+    </div>
+  );
+};
+
 const TemplateRow = ({
   template,
   allTags,
@@ -402,6 +452,9 @@ const TemplateRow = ({
   onSelect,
   onDeleted,
 }: TemplateRowProps) => {
+  const categoryName =
+    categories.find((category) => category.id === template.categoryId)?.name ??
+    null;
   const t = useTranslations();
   const lang = useI18nStore((s) => s.lang);
   const canUpdateTemplate = usePermissions({ template: ["update"] });
@@ -518,11 +571,19 @@ const TemplateRow = ({
               onClick={onSelect}
               type="button"
             >
-              <div className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
-                <LayoutTemplateIcon className="text-muted-foreground size-4" />
-              </div>
-              <span className="truncate text-sm font-medium">
-                {template.name}
+              <TemplateMonogram
+                categoryId={template.categoryId}
+                name={template.name}
+              />
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate text-sm font-medium">
+                  {template.name}
+                </span>
+                {categoryName !== null && (
+                  <span className="text-muted-foreground truncate text-xs">
+                    {categoryName}
+                  </span>
+                )}
               </span>
             </button>
           </div>
@@ -632,17 +693,15 @@ type RowMetaProps = {
 const RowMeta = ({ template, lang, canUpdate, onDescribe }: RowMetaProps) => {
   const t = useTranslations();
 
-  const segments: string[] = [
+  // Field/usage counts are secondary — kept out of the way until row hover.
+  const detailSegments: string[] = [
     t("templates.fieldCount", { count: template.fieldCount }),
-    t("templates.updatedAgo", {
-      time: formatRelativeTime(template.updatedAt, lang),
-    }),
   ];
   if (template.useCount > 0) {
-    segments.push(t("templates.usedTimes", { count: template.useCount }));
+    detailSegments.push(t("templates.usedTimes", { count: template.useCount }));
   }
   if (template.lastUsedAt) {
-    segments.push(
+    detailSegments.push(
       t("templates.lastUsedAgo", {
         time: formatRelativeTime(template.lastUsedAt, lang),
       }),
@@ -652,7 +711,7 @@ const RowMeta = ({ template, lang, canUpdate, onDescribe }: RowMetaProps) => {
   const showNudge = canUpdate && !template.whenToUse;
 
   return (
-    <span className="text-muted-foreground hidden items-center gap-1 text-xs sm:flex">
+    <span className="text-muted-foreground hidden items-center gap-1 text-xs tabular-nums sm:flex">
       {template.languages.length > 0 && (
         <span className="flex items-center gap-1">
           {template.languages.map((tag) => (
@@ -666,19 +725,28 @@ const RowMeta = ({ template, lang, canUpdate, onDescribe }: RowMetaProps) => {
           ))}
         </span>
       )}
-      <span className="whitespace-nowrap">{segments.join(" · ")}</span>
-      {showNudge && (
-        <>
-          <span>{"·"}</span>
-          <button
-            className="hover:text-foreground whitespace-nowrap underline-offset-2 hover:underline"
-            onClick={onDescribe}
-            type="button"
-          >
-            {t("templates.describeWhenToUse")}
-          </button>
-        </>
-      )}
+      <span className="whitespace-nowrap">
+        {t("templates.updatedAgo", {
+          time: formatRelativeTime(template.updatedAt, lang),
+        })}
+      </span>
+      {/* Reserves space (opacity, not display) so the row never shifts on hover. */}
+      <span className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <span aria-hidden>{"·"}</span>
+        <span className="whitespace-nowrap">{detailSegments.join(" · ")}</span>
+        {showNudge && (
+          <>
+            <span aria-hidden>{"·"}</span>
+            <button
+              className="hover:text-foreground whitespace-nowrap underline-offset-2 hover:underline"
+              onClick={onDescribe}
+              type="button"
+            >
+              {t("templates.describeWhenToUse")}
+            </button>
+          </>
+        )}
+      </span>
     </span>
   );
 };
