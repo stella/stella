@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status } from "elysia";
 import type { Static } from "elysia";
@@ -469,7 +469,14 @@ const searchCorpusIndexDecisions = async (
       // Reapply the request filters against the current rows: a stale
       // corpus hit (metadata changed, async re-index/delete pending) must
       // not satisfy filters it no longer matches.
-      const rehydrationFilters: SQL[] = [redistributableCaseLawSource];
+      const rehydrationFilters: SQL[] = [
+        redistributableCaseLawSource,
+        // Reject hits whose corpus state was scrubbed (redaction) or
+        // cleared for retry (failed corpus write): the index copy can
+        // outlive the row's corpus state transiently and must not serve
+        // stale snippets for content that no longer exists.
+        isNotNull(caseLawDecisions.contentHash),
+      ];
       if (body.court) {
         rehydrationFilters.push(eq(caseLawDecisions.court, body.court));
       }
