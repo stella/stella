@@ -3,6 +3,9 @@ import { t } from "elysia";
 
 import type { SafeDb, ScopedDb } from "@/api/db";
 import { templateFills } from "@/api/db/schema";
+import { clauseBodyToRichPatch } from "@/api/handlers/clauses/clause-to-patch";
+import { clauseBodySchema } from "@/api/handlers/clauses/shared-schemas";
+import type { ClauseBody } from "@/api/handlers/clauses/types";
 import { adaptAiFields } from "@/api/handlers/docx/adapt-ai-fields";
 import {
   buildAiConditionDecider,
@@ -18,6 +21,7 @@ import { resolveAiFields } from "@/api/handlers/docx/resolve-ai-fields";
 import { resolveClauseSlots } from "@/api/handlers/docx/resolve-clause-slots";
 import { readManifest } from "@/api/handlers/docx/template-manifest";
 import { isTemplateData } from "@/api/handlers/docx/types";
+import type { RichPatchValue } from "@/api/handlers/docx/types";
 import { convertToPdf } from "@/api/handlers/files/gotenberg";
 import { recordTemplateUse } from "@/api/handlers/templates/record-use";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
@@ -38,6 +42,10 @@ import { containsNull } from "./fill";
 
 const fillByIdBodySchema = t.Object({
   values: t.String(),
+  // Per-fill clause edits (e.g. an AI tweak made in the fill form), keyed by
+  // the slot patch key (`@clause:Name`). When present, the override body is
+  // inserted for that slot instead of the linked clause's resolved body.
+  clauseOverrides: t.Optional(t.Record(t.String(), clauseBodySchema)),
 });
 
 const fillByIdQuerySchema = t.Object({
@@ -54,9 +62,47 @@ type FillByIdProps = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   templateId: SafeId<"template">;
-  body: { values: string };
+  body: { values: string; clauseOverrides?: Record<string, ClauseBody> };
   query: { format?: "docx" | "pdf" };
   recordAuditEvent: AuditRecorder;
+};
+
+type ResolveClausePatchesArgs = {
+  buffer: Buffer;
+  templateId: SafeId<"template">;
+  clauseOverrides: Record<string, ClauseBody> | undefined;
+  scopedDb: ScopedDb;
+  organizationId: SafeId<"organization">;
+};
+
+/** Resolve the template's clause slots to rich patches, with any per-fill
+ *  override taking precedence over the linked clause body. */
+const resolveClausePatches = async ({
+  buffer,
+  templateId,
+  clauseOverrides,
+  scopedDb,
+  organizationId,
+}: ResolveClausePatchesArgs): Promise<Record<string, RichPatchValue>> => {
+  const slots = await discoverClauseSlots(buffer);
+  if (slots.length === 0) {
+    return {};
+  }
+  const patches = await resolveClauseSlots(
+    templateId,
+    slots,
+    scopedDb,
+    organizationId,
+  );
+  if (clauseOverrides) {
+    const slotKeys = new Set(slots.map((slot) => slot.patchKey));
+    for (const [key, overrideBody] of Object.entries(clauseOverrides)) {
+      if (slotKeys.has(key)) {
+        patches[key] = clauseBodyToRichPatch(overrideBody);
+      }
+    }
+  }
+  return patches;
 };
 
 const fillByIdHandler = async function* ({
@@ -65,7 +111,7 @@ const fillByIdHandler = async function* ({
   organizationId,
   userId,
   templateId,
-  body: { values: valuesJson },
+  body: { values: valuesJson, clauseOverrides },
   query: { format = "docx" },
   recordAuditEvent,
 }: FillByIdProps) {
@@ -124,18 +170,16 @@ const fillByIdHandler = async function* ({
   const arrayBuf = await s3File.arrayBuffer();
   const buffer = Buffer.from(arrayBuf);
 
-  // Discover and resolve clause slots ({{@clause:...}})
-  const slots = await discoverClauseSlots(buffer);
-  if (slots.length > 0) {
-    const clausePatches = await resolveClauseSlots(
-      templateId,
-      slots,
-      scopedDb,
-      organizationId,
-    );
-    for (const [key, value] of Object.entries(clausePatches)) {
-      parsed[key] = value;
-    }
+  // Discover/resolve clause slots ({{@clause:...}}) and apply per-fill overrides.
+  const clausePatches = await resolveClausePatches({
+    buffer,
+    templateId,
+    clauseOverrides,
+    scopedDb,
+    organizationId,
+  });
+  for (const [key, value] of Object.entries(clausePatches)) {
+    parsed[key] = value;
   }
 
   // Draft AI-fillable fields so the downloaded document matches the preview
