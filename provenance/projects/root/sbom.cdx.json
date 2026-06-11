@@ -627,6 +627,12 @@
             "location": "apps/web/src/components/chat/use-request-chat-about.ts#1"
           },
           {
+            "location": "apps/web/src/components/docx-preview-zoom.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx-preview-zoom.ts#2"
+          },
+          {
             "location": "apps/web/src/components/inspector/use-docx-tab-edit-session.ts#1"
           },
           {
@@ -649,6 +655,9 @@
           },
           {
             "location": "apps/web/src/hooks/use-client-auth-status.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-external-file-drop.ts#1"
           },
           {
             "location": "apps/web/src/hooks/use-inline-rename.ts#1"
@@ -726,12 +735,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/matter-name-map.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-preview-zoom.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-preview-zoom.ts#2"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-docx-block-scroll.ts#1"
           },
           {
@@ -751,9 +754,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-external-file-drop.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash.ts#1"
@@ -1041,6 +1041,15 @@
             "location": "apps/web/src/components/empty-screen.tsx#2"
           },
           {
+            "location": "apps/web/src/components/file-drop-zone.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/file-tree/file-tree.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/file-tree/folder-expand-toggle.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inline-pill.tsx#6"
           },
           {
@@ -1114,6 +1123,15 @@
           },
           {
             "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/markdown/markdown-folio-editor.impl.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/markdown/markdown-folio-editor.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/markdown-icon.tsx#1"
           },
           {
             "location": "apps/web/src/components/markdown-preview.tsx#1"
@@ -1284,6 +1302,9 @@
             "location": "apps/web/src/routes/_protected.dev_.autocomplete.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/add-mcp-server-sheet.tsx#1"
           },
           {
@@ -1294,9 +1315,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/install-pack-button.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/tool-detail-view.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-detail.tsx#1"
@@ -1314,13 +1332,10 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/create-skill-sheet.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/edit-skill-sheet.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-category-sidebar.tsx#1"
@@ -1933,6 +1948,9 @@
           },
           {
             "location": "packages/ui/src/components/preview-card.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/preview-pane.tsx#1"
           },
           {
             "location": "packages/ui/src/components/scroll-to-top.tsx#9"
@@ -2307,6 +2325,12 @@
             "location": "apps/web/src/components/chat/use-request-chat-about.ts#1"
           },
           {
+            "location": "apps/web/src/components/docx-preview-zoom.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx-preview-zoom.ts#2"
+          },
+          {
             "location": "apps/web/src/components/inspector/use-docx-tab-edit-session.ts#1"
           },
           {
@@ -2329,6 +2353,9 @@
           },
           {
             "location": "apps/web/src/hooks/use-client-auth-status.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-external-file-drop.ts#1"
           },
           {
             "location": "apps/web/src/hooks/use-inline-rename.ts#1"
@@ -2406,12 +2433,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/matter-name-map.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-preview-zoom.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-preview-zoom.ts#2"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-docx-block-scroll.ts#1"
           },
           {
@@ -2431,9 +2452,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-external-file-drop.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash.ts#1"
@@ -2721,6 +2739,15 @@
             "location": "apps/web/src/components/empty-screen.tsx#2"
           },
           {
+            "location": "apps/web/src/components/file-drop-zone.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/file-tree/file-tree.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/file-tree/folder-expand-toggle.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inline-pill.tsx#6"
           },
           {
@@ -2794,6 +2821,15 @@
           },
           {
             "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/markdown/markdown-folio-editor.impl.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/markdown/markdown-folio-editor.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/markdown-icon.tsx#1"
           },
           {
             "location": "apps/web/src/components/markdown-preview.tsx#1"
@@ -2964,6 +3000,9 @@
             "location": "apps/web/src/routes/_protected.dev_.autocomplete.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/add-mcp-server-sheet.tsx#1"
           },
           {
@@ -2974,9 +3013,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/install-pack-button.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/tool-detail-view.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-detail.tsx#1"
@@ -2994,13 +3030,10 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/create-skill-sheet.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/edit-skill-sheet.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-category-sidebar.tsx#1"
@@ -3613,6 +3646,9 @@
           },
           {
             "location": "packages/ui/src/components/preview-card.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/preview-pane.tsx#1"
           },
           {
             "location": "packages/ui/src/components/scroll-to-top.tsx#9"
@@ -4241,7 +4277,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-external-file-drop.ts#3"
+            "location": "apps/web/src/hooks/use-external-file-drop.ts#3"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#11"
@@ -4284,7 +4320,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-external-file-drop.ts#4"
+            "location": "apps/web/src/hooks/use-external-file-drop.ts#4"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#15"
@@ -4333,13 +4369,13 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-external-file-drop.ts#3"
+            "location": "apps/web/src/hooks/use-external-file-drop.ts#3"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#11"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-external-file-drop.ts#4"
+            "location": "apps/web/src/hooks/use-external-file-drop.ts#4"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#15"
@@ -4482,13 +4518,13 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-external-file-drop.ts#3"
+            "location": "apps/web/src/hooks/use-external-file-drop.ts#3"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#11"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-external-file-drop.ts#4"
+            "location": "apps/web/src/hooks/use-external-file-drop.ts#4"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#15"
@@ -4894,6 +4930,12 @@
             "location": "apps/web/src/components/chat/use-request-chat-about.ts#1"
           },
           {
+            "location": "apps/web/src/components/docx-preview-zoom.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx-preview-zoom.ts#2"
+          },
+          {
             "location": "apps/web/src/components/inspector/use-docx-tab-edit-session.ts#1"
           },
           {
@@ -4916,6 +4958,9 @@
           },
           {
             "location": "apps/web/src/hooks/use-client-auth-status.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-external-file-drop.ts#1"
           },
           {
             "location": "apps/web/src/hooks/use-inline-rename.ts#1"
@@ -4993,12 +5038,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/matter-name-map.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-preview-zoom.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-preview-zoom.ts#2"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-docx-block-scroll.ts#1"
           },
           {
@@ -5018,9 +5057,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-external-file-drop.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash.ts#1"
@@ -5308,6 +5344,15 @@
             "location": "apps/web/src/components/empty-screen.tsx#2"
           },
           {
+            "location": "apps/web/src/components/file-drop-zone.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/file-tree/file-tree.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/file-tree/folder-expand-toggle.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inline-pill.tsx#6"
           },
           {
@@ -5381,6 +5426,15 @@
           },
           {
             "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/markdown/markdown-folio-editor.impl.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/markdown/markdown-folio-editor.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/markdown-icon.tsx#1"
           },
           {
             "location": "apps/web/src/components/markdown-preview.tsx#1"
@@ -5551,6 +5605,9 @@
             "location": "apps/web/src/routes/_protected.dev_.autocomplete.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/add-mcp-server-sheet.tsx#1"
           },
           {
@@ -5561,9 +5618,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/install-pack-button.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/tool-detail-view.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-detail.tsx#1"
@@ -5581,13 +5635,10 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/create-skill-sheet.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/edit-skill-sheet.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-category-sidebar.tsx#1"
@@ -6200,6 +6251,9 @@
           },
           {
             "location": "packages/ui/src/components/preview-card.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/preview-pane.tsx#1"
           },
           {
             "location": "packages/ui/src/components/scroll-to-top.tsx#9"
@@ -7109,6 +7163,12 @@
             "location": "apps/web/src/components/chat/use-request-chat-about.ts#1"
           },
           {
+            "location": "apps/web/src/components/docx-preview-zoom.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx-preview-zoom.ts#2"
+          },
+          {
             "location": "apps/web/src/components/inspector/use-docx-tab-edit-session.ts#1"
           },
           {
@@ -7131,6 +7191,9 @@
           },
           {
             "location": "apps/web/src/hooks/use-client-auth-status.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-external-file-drop.ts#1"
           },
           {
             "location": "apps/web/src/hooks/use-inline-rename.ts#1"
@@ -7208,12 +7271,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/matter-name-map.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-preview-zoom.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-preview-zoom.ts#2"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-docx-block-scroll.ts#1"
           },
           {
@@ -7233,9 +7290,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-external-file-drop.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash.ts#1"
@@ -7523,6 +7577,15 @@
             "location": "apps/web/src/components/empty-screen.tsx#2"
           },
           {
+            "location": "apps/web/src/components/file-drop-zone.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/file-tree/file-tree.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/file-tree/folder-expand-toggle.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inline-pill.tsx#6"
           },
           {
@@ -7596,6 +7659,15 @@
           },
           {
             "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/markdown/markdown-folio-editor.impl.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/markdown/markdown-folio-editor.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/markdown-icon.tsx#1"
           },
           {
             "location": "apps/web/src/components/markdown-preview.tsx#1"
@@ -7766,6 +7838,9 @@
             "location": "apps/web/src/routes/_protected.dev_.autocomplete.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/add-mcp-server-sheet.tsx#1"
           },
           {
@@ -7776,9 +7851,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/install-pack-button.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/tool-detail-view.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-detail.tsx#1"
@@ -7796,13 +7868,10 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/create-skill-sheet.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/edit-skill-sheet.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-category-sidebar.tsx#1"
@@ -8415,6 +8484,9 @@
           },
           {
             "location": "packages/ui/src/components/preview-card.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/preview-pane.tsx#1"
           },
           {
             "location": "packages/ui/src/components/scroll-to-top.tsx#9"
@@ -9647,6 +9719,9 @@
             "location": "apps/web/src/components/breadcrumbs/pdf-breadcrumb.tsx#1"
           },
           {
+            "location": "apps/web/src/components/breadcrumbs/skill-breadcrumb.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/breadcrumbs/workspace-breadcrumb.tsx#3"
           },
           {
@@ -9779,13 +9854,16 @@
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#4"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#3"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/add-mcp-server-sheet.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/catalogue-browser.tsx#7"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/tool-detail-view.tsx#3"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/tool-detail-view.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-detail.tsx#3"
@@ -9794,13 +9872,10 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/create-skill-sheet.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/edit-skill-sheet.tsx#3"
-          },
-          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-clauses-tab.tsx#3"
@@ -10304,6 +10379,9 @@
             "location": "apps/web/src/components/breadcrumbs/shared.tsx#3"
           },
           {
+            "location": "apps/web/src/components/breadcrumbs/skill-breadcrumb.tsx#2"
+          },
+          {
             "location": "apps/web/src/components/breadcrumbs/workspace-breadcrumb.tsx#4"
           },
           {
@@ -10409,10 +10487,16 @@
             "location": "apps/web/src/routes/_protected.dev_.autocomplete.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/edit-skill-sheet.tsx#4"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/catalogue-browser.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/tool-detail-view.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-clauses-tab.tsx#4"
@@ -10446,6 +10530,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/tools.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/tools_.$skillId.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#4"
@@ -10715,7 +10802,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/routeTree.gen.ts#1493"
+            "location": "apps/web/src/routeTree.gen.ts#1515"
           },
           {
             "location": "apps/web/src/server.ts#1"
@@ -11971,6 +12058,12 @@
             "location": "apps/web/src/components/chat/use-request-chat-about.ts#1"
           },
           {
+            "location": "apps/web/src/components/docx-preview-zoom.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx-preview-zoom.ts#2"
+          },
+          {
             "location": "apps/web/src/components/inspector/use-docx-tab-edit-session.ts#1"
           },
           {
@@ -11993,6 +12086,9 @@
           },
           {
             "location": "apps/web/src/hooks/use-client-auth-status.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-external-file-drop.ts#1"
           },
           {
             "location": "apps/web/src/hooks/use-inline-rename.ts#1"
@@ -12070,12 +12166,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/matter-name-map.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-preview-zoom.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-preview-zoom.ts#2"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-docx-block-scroll.ts#1"
           },
           {
@@ -12095,9 +12185,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-external-file-drop.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash.ts#1"
@@ -12385,6 +12472,15 @@
             "location": "apps/web/src/components/empty-screen.tsx#2"
           },
           {
+            "location": "apps/web/src/components/file-drop-zone.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/file-tree/file-tree.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/file-tree/folder-expand-toggle.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inline-pill.tsx#6"
           },
           {
@@ -12458,6 +12554,15 @@
           },
           {
             "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/markdown/markdown-folio-editor.impl.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/markdown/markdown-folio-editor.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/markdown-icon.tsx#1"
           },
           {
             "location": "apps/web/src/components/markdown-preview.tsx#1"
@@ -12628,6 +12733,9 @@
             "location": "apps/web/src/routes/_protected.dev_.autocomplete.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/add-mcp-server-sheet.tsx#1"
           },
           {
@@ -12638,9 +12746,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/install-pack-button.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/tool-detail-view.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-detail.tsx#1"
@@ -12658,13 +12763,10 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/create-skill-sheet.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/edit-skill-sheet.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-category-sidebar.tsx#1"
@@ -13277,6 +13379,9 @@
           },
           {
             "location": "packages/ui/src/components/preview-card.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/preview-pane.tsx#1"
           },
           {
             "location": "packages/ui/src/components/scroll-to-top.tsx#9"
@@ -14581,6 +14686,9 @@
             "location": "apps/api/src/handlers/skills/delete.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/skills/from-blueprint.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/skills/generate-draft.ts#2"
           },
           {
@@ -15260,6 +15368,9 @@
           },
           {
             "location": "packages/scripts/src/dev-runner.ts#2"
+          },
+          {
+            "location": "packages/skills/scripts/generate-blueprints-manifest.ts#1"
           },
           {
             "location": "packages/skills/scripts/generate-manifest.ts#1"
@@ -17756,6 +17867,9 @@
             "location": "apps/api/src/handlers/mcp-connectors/oauth-callback.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/mcp-connectors/oauth-client-metadata-route.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/mcp-connectors/probe-connector.ts#2"
           },
           {
@@ -17865,6 +17979,9 @@
           },
           {
             "location": "apps/api/src/handlers/skills/delete.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/from-blueprint.ts#2"
           },
           {
             "location": "apps/api/src/handlers/skills/generate-draft.ts#3"
@@ -18892,6 +19009,15 @@
             "location": "apps/web/src/components/feedback-dialog.tsx#1"
           },
           {
+            "location": "apps/web/src/components/file-drop-zone.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/file-tree/file-tree.tsx#8"
+          },
+          {
+            "location": "apps/web/src/components/file-tree/folder-expand-toggle.tsx#3"
+          },
+          {
             "location": "apps/web/src/components/inspector/anonymization-facet.tsx#27"
           },
           {
@@ -18913,13 +19039,13 @@
             "location": "apps/web/src/components/inspector/external-reference-panel.tsx#19"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#14"
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#13"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-pdf-error-fallback.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/inspector-rail.tsx#12"
+            "location": "apps/web/src/components/inspector/inspector-rail.tsx#11"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-tab-header.tsx#3"
@@ -18941,6 +19067,9 @@
           },
           {
             "location": "apps/web/src/components/language-picker.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/markdown/markdown-folio-editor.impl.tsx#3"
           },
           {
             "location": "apps/web/src/components/matter-number-hint.tsx#3"
@@ -19006,10 +19135,13 @@
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#18"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#9"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/add-mcp-server-sheet.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/catalogue-browser.tsx#17"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/catalogue-browser.tsx#18"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/catalogue-detail-panel.tsx#16"
@@ -19021,7 +19153,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/install-pack-button.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/tool-detail-view.tsx#4"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/tool-detail-view.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-detail.tsx#10"
@@ -19036,10 +19168,10 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx#13"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/edit-skill-sheet.tsx#20"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#5"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-category-sidebar.tsx#8"
@@ -19186,7 +19318,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#18"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#29"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#28"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx#6"
@@ -19303,6 +19435,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog.tsx#13"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview.tsx#8"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#23"
           },
           {
@@ -19315,10 +19450,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-sorts.tsx#6"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#19"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workspace-drop-zone.tsx#5"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#17"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/expenses.tsx#4"
@@ -19505,6 +19637,186 @@
       ],
       "type": "library",
       "version": "1.17.0"
+    },
+    {
+      "authors": [
+        {
+          "name": "Christopher Jeffrey"
+        }
+      ],
+      "bom-ref": "pkg:npm/marked@15.0.12",
+      "description": "A markdown parser built for speed",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/marked/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/marked/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "packages/folio/src/core/markdown/fromMarkdown.ts#21"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://marked.js.org"
+        },
+        {
+          "type": "vcs",
+          "url": "git://github.com/markedjs/marked.git"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "marked",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/marked/package.json"
+        }
+      ],
+      "purl": "pkg:npm/marked@15.0.12",
+      "scope": "required",
+      "type": "library",
+      "version": "15.0.12"
+    },
+    {
+      "authors": [
+        {
+          "name": "Christopher Jeffrey"
+        }
+      ],
+      "bom-ref": "pkg:npm/marked@16.4.2",
+      "description": "A markdown parser built for speed",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/mermaid/node_modules/marked/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/mermaid/node_modules/marked/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "packages/folio/src/core/markdown/fromMarkdown.ts#21"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://marked.js.org"
+        },
+        {
+          "type": "vcs",
+          "url": "git://github.com/markedjs/marked.git"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "marked",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/mermaid/node_modules/marked/package.json"
+        }
+      ],
+      "purl": "pkg:npm/marked@16.4.2",
+      "scope": "required",
+      "type": "library",
+      "version": "16.4.2"
+    },
+    {
+      "authors": [
+        {
+          "name": "Christopher Jeffrey"
+        }
+      ],
+      "bom-ref": "pkg:npm/marked@17.0.5",
+      "description": "A markdown parser built for speed",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/streamdown/node_modules/marked/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/streamdown/node_modules/marked/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "packages/folio/src/core/markdown/fromMarkdown.ts#21"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://marked.js.org"
+        },
+        {
+          "type": "vcs",
+          "url": "git://github.com/markedjs/marked.git"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "marked",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/streamdown/node_modules/marked/package.json"
+        }
+      ],
+      "purl": "pkg:npm/marked@17.0.5",
+      "scope": "required",
+      "type": "library",
+      "version": "17.0.5"
     },
     {
       "authors": [
@@ -21013,6 +21325,12 @@
             "location": "apps/web/src/components/chat/use-request-chat-about.ts#1"
           },
           {
+            "location": "apps/web/src/components/docx-preview-zoom.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx-preview-zoom.ts#2"
+          },
+          {
             "location": "apps/web/src/components/inspector/use-docx-tab-edit-session.ts#1"
           },
           {
@@ -21035,6 +21353,9 @@
           },
           {
             "location": "apps/web/src/hooks/use-client-auth-status.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-external-file-drop.ts#1"
           },
           {
             "location": "apps/web/src/hooks/use-inline-rename.ts#1"
@@ -21112,12 +21433,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/matter-name-map.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-preview-zoom.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-preview-zoom.ts#2"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-docx-block-scroll.ts#1"
           },
           {
@@ -21137,9 +21452,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-external-file-drop.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash.ts#1"
@@ -21427,6 +21739,15 @@
             "location": "apps/web/src/components/empty-screen.tsx#2"
           },
           {
+            "location": "apps/web/src/components/file-drop-zone.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/file-tree/file-tree.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/file-tree/folder-expand-toggle.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inline-pill.tsx#6"
           },
           {
@@ -21500,6 +21821,15 @@
           },
           {
             "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/markdown/markdown-folio-editor.impl.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/markdown/markdown-folio-editor.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/markdown-icon.tsx#1"
           },
           {
             "location": "apps/web/src/components/markdown-preview.tsx#1"
@@ -21670,6 +22000,9 @@
             "location": "apps/web/src/routes/_protected.dev_.autocomplete.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/add-mcp-server-sheet.tsx#1"
           },
           {
@@ -21680,9 +22013,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/install-pack-button.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/tool-detail-view.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-detail.tsx#1"
@@ -21700,13 +22030,10 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/create-skill-sheet.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/edit-skill-sheet.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-category-sidebar.tsx#1"
@@ -22321,6 +22648,9 @@
             "location": "packages/ui/src/components/preview-card.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/preview-pane.tsx#1"
+          },
+          {
             "location": "packages/ui/src/components/scroll-to-top.tsx#9"
           },
           {
@@ -22769,6 +23099,9 @@
             "location": "apps/web/src/components/contact-picker.tsx#6"
           },
           {
+            "location": "apps/web/src/components/markdown/markdown-folio-editor.impl.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/search-dialog.tsx#21"
           },
           {
@@ -22793,7 +23126,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#16"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#30"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#29"
           }
         ]
       },
@@ -22859,6 +23192,9 @@
             "location": "apps/web/src/components/inspector/use-file-tab-rename.ts#3"
           },
           {
+            "location": "apps/web/src/hooks/use-external-file-drop.ts#5"
+          },
+          {
             "location": "apps/web/src/hooks/use-sign-out.ts#3"
           },
           {
@@ -22875,9 +23211,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities.ts#9"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-external-file-drop.ts#5"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-retry-cell.ts#2"
@@ -22997,6 +23330,9 @@
             "location": "apps/web/src/components/feedback-dialog.tsx#2"
           },
           {
+            "location": "apps/web/src/components/file-tree/folder-expand-toggle.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/inspector/anonymization-context-menu.tsx#16"
           },
           {
@@ -23024,7 +23360,7 @@
             "location": "apps/web/src/components/inspector/file-facets.tsx#4"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#15"
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#14"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-panel.tsx#12"
@@ -23033,10 +23369,7 @@
             "location": "apps/web/src/components/inspector/inspector-pdf-error-fallback.tsx#2"
           },
           {
-            "location": "apps/web/src/components/inspector/inspector-rail.tsx#13"
-          },
-          {
-            "location": "apps/web/src/components/inspector/markdown-file-viewer.tsx#1"
+            "location": "apps/web/src/components/inspector/inspector-rail.tsx#12"
           },
           {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#4"
@@ -23049,6 +23382,9 @@
           },
           {
             "location": "apps/web/src/components/jurisdiction-picker.tsx#4"
+          },
+          {
+            "location": "apps/web/src/components/markdown/markdown-folio-editor.impl.tsx#5"
           },
           {
             "location": "apps/web/src/components/matter-number-hint.tsx#4"
@@ -23141,13 +23477,16 @@
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#20"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#10"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/add-mcp-server-sheet.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/catalogue-badges.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/catalogue-browser.tsx#18"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/catalogue-browser.tsx#19"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/catalogue-detail-panel.tsx#17"
@@ -23156,7 +23495,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/install-pack-button.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/tool-detail-view.tsx#5"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/tool-detail-view.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-detail.tsx#11"
@@ -23171,16 +23510,13 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx#15"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/create-skill-sheet.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/edit-skill-sheet.tsx#21"
-          },
-          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#6"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/paragraph-rendering.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx#17"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-category-sidebar.tsx#9"
@@ -23285,6 +23621,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx#10"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/ai-cell-source-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/batch-action-bar.tsx#8"
           },
           {
@@ -23381,7 +23720,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/field-value-select.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#31"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#30"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inline-edit.tsx#1"
@@ -23495,13 +23834,16 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog.tsx#14"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview.tsx#9"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#24"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters.tsx#13"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#20"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#18"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-service-tier-prompt.tsx#11"
@@ -23510,7 +23852,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt.tsx#11"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workspace-drop-zone.tsx#6"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workspace-drop-zone.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/expenses.tsx#5"
