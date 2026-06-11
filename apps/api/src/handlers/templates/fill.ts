@@ -127,10 +127,7 @@ export const fillHandler = async ({
       structureErrors:
         result.structureErrors.length > 0 ? result.structureErrors : null,
     });
-  })
-    // TODO: fix this
-    // oxlint-disable-next-line no-empty-function
-    .catch(() => {});
+  }).catch(() => undefined);
 
   // PDF conversion via Gotenberg
   if (format === "pdf") {

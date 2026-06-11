@@ -909,9 +909,7 @@ export const TemplateForm = ({
     (e: React.SubmitEvent<HTMLFormElement>) => {
       e.preventDefault();
       // Errors are surfaced as toasts inside handleDownload
-      // TODO: fix this
-      // oxlint-disable-next-line no-empty-function
-      handleDownload("docx").catch(() => {});
+      handleDownload("docx").catch(() => undefined);
     },
     [handleDownload],
   );

@@ -1,9 +1,7 @@
 import type { Analytics } from "@/api/lib/analytics/types";
 
-// eslint-disable-next-line no-empty-function
-const noop = () => {};
-// eslint-disable-next-line no-empty-function
-const asyncNoop = async () => {};
+const noop = () => undefined;
+const asyncNoop = async () => await Promise.resolve();
 
 export const noopAnalytics: Analytics = {
   capture: noop,
