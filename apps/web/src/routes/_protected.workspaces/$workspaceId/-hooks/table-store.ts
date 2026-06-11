@@ -16,6 +16,24 @@ const TABLE_CONTENT_MODES = ["tight", "fit-content"] as const;
 
 export type TableContentMode = (typeof TABLE_CONTENT_MODES)[number];
 
+const selectedEntitiesEqual = (
+  prev: readonly WorkspaceEntity[] | undefined,
+  next: readonly WorkspaceEntity[],
+): boolean => {
+  if (!prev) {
+    return next.length === 0;
+  }
+
+  if (prev.length !== next.length) {
+    return false;
+  }
+
+  return prev.every((entity, index) => {
+    const nextEntity = next[index];
+    return entity === nextEntity && entity.entityId === nextEntity.entityId;
+  });
+};
+
 const replacer = (_key: string, value: unknown): unknown => {
   if (value instanceof Map) {
     return { [MAP_TAG]: [...value.entries()] };
@@ -145,7 +163,7 @@ export const useTableStore = create<TableStore>()(
       setSelectedEntities: (viewId, entities) => {
         set((state) => {
           const prev = state.selectedEntities[viewId];
-          if (entities.length === 0 && (!prev || prev.length === 0)) {
+          if (selectedEntitiesEqual(prev, entities)) {
             return;
           }
           state.selectedEntities[viewId] = entities;

@@ -153,7 +153,11 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
   useEffect(() => {
     const selected = rowSelection ?? {};
     const result: TableTreeNode[] = [];
-    const visit = (nodes: TableTreeNode[]) => {
+    const visit = (nodes: TableTreeNode[] | undefined) => {
+      if (!nodes) {
+        return;
+      }
+
       for (const node of nodes) {
         if (selected[node.entityId]) {
           result.push(node);

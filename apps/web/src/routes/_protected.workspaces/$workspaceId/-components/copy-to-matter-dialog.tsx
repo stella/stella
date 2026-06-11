@@ -24,6 +24,10 @@ import { cn } from "@stll/ui/lib/utils";
 import { api } from "@/lib/api";
 import { toSafeId } from "@/lib/safe-id";
 import {
+  getCopyToMatterRootEntities,
+  type CopyToMatterEntity,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.logic";
+import {
   entitiesKeys,
   workspaceFoldersOptions,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
@@ -31,11 +35,6 @@ import type { WorkspaceFolder } from "@/routes/_protected.workspaces/$workspaceI
 import { workspacesOptions } from "@/routes/_protected.workspaces/-queries";
 
 const routeApi = getRouteApi("/_protected");
-
-type CopyToMatterEntity = {
-  entityId: string;
-  entityName: string;
-};
 
 type CopyToMatterDialogProps = {
   open: boolean;
@@ -69,7 +68,9 @@ export const CopyToMatterDialog = ({
   // Exclude current workspace from target options
   const targetWorkspaces =
     data?.workspaces.filter((w) => w.id !== sourceWorkspaceId) ?? [];
-  const singleEntity = entities.length === 1 ? entities.at(0) : undefined;
+  const transferEntities = getCopyToMatterRootEntities(entities);
+  const singleEntity =
+    transferEntities.length === 1 ? transferEntities.at(0) : undefined;
 
   const handleSubmit = async () => {
     if (!targetWorkspaceId) {
@@ -80,7 +81,7 @@ export const CopyToMatterDialog = ({
 
     let failedCount = 0;
     let firstErrorMessage: string | null = null;
-    for (const { entityId } of entities) {
+    for (const { entityId } of transferEntities) {
       const result = await Result.tryPromise(
         async () =>
           await api
@@ -115,16 +116,18 @@ export const CopyToMatterDialog = ({
 
     // Invalidate both workspaces even on partial failure; some
     // entities may have transferred before the failing one.
-    await queryClient.invalidateQueries({
-      queryKey: entitiesKeys.all(sourceWorkspaceId),
-    });
-    await queryClient.invalidateQueries({
-      queryKey: entitiesKeys.all(targetWorkspaceId),
-    });
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: entitiesKeys.all(sourceWorkspaceId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: entitiesKeys.all(targetWorkspaceId),
+      }),
+    ]);
 
     setIsSubmitting(false);
 
-    if (failedCount === entities.length) {
+    if (failedCount === transferEntities.length) {
       stellaToast.add({
         title: t("errors.actionFailed"),
         description: firstErrorMessage ?? undefined,
@@ -168,7 +171,7 @@ export const CopyToMatterDialog = ({
                   name: singleEntity.entityName,
                 })
               : t("workspaces.copyToMatter.descriptionCount", {
-                  count: entities.length,
+                  count: transferEntities.length,
                 })}
           </DialogDescription>
         </DialogHeader>

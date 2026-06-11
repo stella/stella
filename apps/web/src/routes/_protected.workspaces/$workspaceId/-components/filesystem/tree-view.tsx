@@ -387,6 +387,18 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     }
     return map;
   }, [data]);
+  const tree = useMemo(() => buildTree(data), [data]);
+  const treeNodeMap = useMemo(() => {
+    const map = new Map<string, TableTreeNode>();
+    const visit = (nodes: readonly TableTreeNode[]) => {
+      for (const node of nodes) {
+        map.set(node.entityId, node);
+        visit(node.children);
+      }
+    };
+    visit(tree);
+    return map;
+  }, [tree]);
 
   const getSelectedDragItems = useCallback(
     (entityIds: Set<string>): DragPreviewData[] => {
@@ -411,17 +423,16 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     (ids: Set<string>): WorkspaceEntity[] => {
       const entities: WorkspaceEntity[] = [];
       for (const id of ids) {
-        const entity = entityMap.get(id);
+        const entity = treeNodeMap.get(id);
         if (entity) {
           entities.push(entity);
         }
       }
       return entities;
     },
-    [entityMap],
+    [treeNodeMap],
   );
 
-  const tree = useMemo(() => buildTree(data), [data]);
   // Drill-down navigation (persisted in URL search params)
   const currentFolderId = useSearch({
     from: "/_protected/workspaces/$workspaceId/$viewId",
