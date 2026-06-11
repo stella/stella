@@ -25,16 +25,14 @@ const searchGlobalMock = mock();
 
 // The fire-and-forget chat reindex hook touches rootDb; stub it so the
 // summary-chat tests do not need a live database for the side effect.
-// eslint-disable-next-line typescript-eslint/no-floating-promises -- Bun mock.module is sync for registration
-mock.module("@/api/lib/search/index-chat", () => ({
+void mock.module("@/api/lib/search/index-chat", () => ({
   upsertChatThreadSearchDocument: mock(async () => undefined),
   backfillChatThreadSearchIndex: mock(async () => 0),
 }));
 
 // Mock index-global directly to prevent transitive db/root imports that
 // require a live database connection and cause flaky failures in CI.
-// eslint-disable-next-line typescript-eslint/no-floating-promises -- Bun mock.module is sync for registration
-mock.module("@/api/lib/search/index-global", () => ({
+void mock.module("@/api/lib/search/index-global", () => ({
   rebuildSupplementalSearchIndex: mock(async () => undefined),
   reindexWorkspacesForContact: mock(async () => undefined),
   searchGlobal: searchGlobalMock,
