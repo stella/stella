@@ -8,6 +8,7 @@ import { deleteCorpusDocument } from "@/api/handlers/case-law/corpus-storage";
 import { removeDecisionFromIndex } from "@/api/handlers/case-law/search-index";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 
 /**
@@ -130,13 +131,24 @@ export const redactCaseLawDecision = async ({
         : [decision.indexedGeneration]),
       corpusIndexId(generation, decision.country),
     ]);
+    // Attempt every target: one failing index (already dropped, or a
+    // transient error) must not leave copies in the others undeleted.
+    let firstError: CorpusIndexError | null = null;
     for (const indexId of targets) {
-      await removeDecisionFromCorpusIndex(
+      const removed = await removeDecisionFromCorpusIndex(
         decisionId,
         scopedDb,
         indexId,
         "redact",
       );
+      if (removed.isErr()) {
+        firstError ??= removed.error;
+      }
+    }
+    if (firstError) {
+      // Keep indexedGeneration so the retry still knows every target.
+      // eslint-disable-next-line no-throw-literal -- CorpusIndexError (TaggedError); rethrow so the caller retries the redaction
+      throw firstError;
     }
     // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
     await scopedDb((tx) => {

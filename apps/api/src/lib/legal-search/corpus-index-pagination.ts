@@ -165,8 +165,12 @@ export const readCorpusIndexSearchPage = async <TContext>({
 
   const hasMoreInWindow = windowed.length > limit;
   const pageRanked = hasMoreInWindow ? windowed.slice(0, limit) : windowed;
-  const hitScanLimit = startOffset < totalHits;
-  const hasMore = hasMoreInWindow || (hitScanLimit && pageRanked.length > 0);
+  // A follow-up request rescans from offset 0 and can only reach deeper
+  // candidates while the scan cap is not exhausted; past the cap a
+  // cursor could never be satisfied and must not be advertised.
+  const scanCanContinue =
+    startOffset < totalHits && startOffset < LIMITS.corpusIndexSearchScanLimit;
+  const hasMore = hasMoreInWindow || (scanCanContinue && pageRanked.length > 0);
 
   return {
     pageRanked,

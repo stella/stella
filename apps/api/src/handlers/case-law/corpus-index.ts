@@ -396,7 +396,7 @@ export const removeDecisionFromCorpusIndex = async (
   scopedDb: ScopedDb,
   indexId: string,
   operation: "delete" | "redact" = "delete",
-): Promise<void> => {
+): Promise<Result<void, CorpusIndexError>> => {
   const result = await getCorpusIndexClient().deleteByQuery(
     indexId,
     `document_id:"${decisionId}"`,
@@ -416,7 +416,5 @@ export const removeDecisionFromCorpusIndex = async (
     ],
     indexId,
   );
-  if (result.isErr()) {
-    throw result.error;
-  }
+  return result;
 };
