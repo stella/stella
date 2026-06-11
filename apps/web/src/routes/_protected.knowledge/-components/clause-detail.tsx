@@ -3,9 +3,14 @@ import { useCallback, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeftIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
   Loader2Icon,
   MoreHorizontalIcon,
+  PencilIcon,
   PlusIcon,
+  RotateCcwIcon,
+  StarIcon,
   Trash2Icon,
 } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
@@ -367,6 +372,7 @@ const DetailContent = ({
           <HistoryTab
             clauseId={clauseId}
             currentBody={detail.body}
+            onRefresh={onRefresh}
             versions={detail.versions}
           />
         </TabsPanel>
@@ -409,12 +415,14 @@ const VariantsTab = ({
 
       {variants.length > 0 && (
         <ul className="divide-y rounded-lg border">
-          {variants.map((variant) => (
+          {variants.map((variant, index) => (
             <VariantRow
               clauseId={clauseId}
+              index={index}
               key={variant.id}
               onChanged={onRefresh}
               variant={variant}
+              variants={variants}
             />
           ))}
         </ul>
@@ -430,18 +438,33 @@ const VariantsTab = ({
   );
 };
 
+/** Reverse of the create form's split: join paragraph text back into
+ *  the plain-text textarea representation. */
+const variantBodyToText = (body: unknown): string => {
+  const paragraphs = isClauseParagraphs(body) ? body : [];
+  return paragraphs.map((p) => p.text).join("\n");
+};
+
 const VariantRow = ({
   variant,
+  variants,
+  index,
   clauseId,
   onChanged,
 }: {
   variant: VariantItem;
+  variants: VariantItem[];
+  index: number;
   clauseId: string;
   onChanged: () => void;
 }) => {
   const t = useTranslations();
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [promoteOpen, setPromoteOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [promoting, setPromoting] = useState(false);
+  const [reordering, setReordering] = useState(false);
 
   const handleDelete = useCallback(async () => {
     setDeleting(true);
@@ -472,13 +495,110 @@ const VariantRow = ({
     onChanged();
   }, [clauseId, variant.id, t, onChanged]);
 
+  const handlePromote = useCallback(async () => {
+    const body = isClauseParagraphs(variant.body) ? variant.body : [];
+    if (body.length === 0) {
+      return;
+    }
+
+    setPromoting(true);
+    // Reuse the clause update endpoint: a body change bumps
+    // currentVersion and writes a clauseVersions snapshot, so the
+    // promotion stays auditable and revertable from history.
+    const response = await api.clauses({ clauseId }).post({ body });
+
+    setPromoting(false);
+
+    if (response.error) {
+      stellaToast.add({
+        type: "error",
+        title: t("clauses.saveFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+
+    stellaToast.add({
+      type: "success",
+      title: t("clauses.variantPromoted"),
+    });
+    setPromoteOpen(false);
+    onChanged();
+  }, [clauseId, variant.body, t, onChanged]);
+
+  const handleReorder = useCallback(
+    async (direction: "up" | "down") => {
+      const neighborIndex = direction === "up" ? index - 1 : index + 1;
+      const neighbor = variants.at(neighborIndex);
+      if (!neighbor) {
+        return;
+      }
+
+      setReordering(true);
+      // Swap sortOrder with the neighbor; the list query orders by
+      // sortOrder asc so the rows visually exchange places.
+      const [first, second] = await Promise.all([
+        api
+          .clauses({ clauseId })
+          .variants({ variantId: variant.id })
+          .post({ sortOrder: neighbor.sortOrder }),
+        api
+          .clauses({ clauseId })
+          .variants({ variantId: neighbor.id })
+          .post({ sortOrder: variant.sortOrder }),
+      ]);
+
+      setReordering(false);
+
+      const failure = first.error ?? second.error;
+      if (failure) {
+        stellaToast.add({
+          type: "error",
+          title: t("clauses.saveFailed"),
+          description: userErrorMessage(failure, t("common.unexpectedError")),
+        });
+        return;
+      }
+
+      onChanged();
+    },
+    [clauseId, index, variant.id, variant.sortOrder, variants, t, onChanged],
+  );
+
   const body = isClauseParagraphs(variant.body) ? variant.body : [];
+  const canMoveUp = index > 0;
+  const canMoveDown = index < variants.length - 1;
 
   return (
     <li className="px-4 py-3">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-medium">{variant.label}</span>
-        <AlertDialog onOpenChange={setDeleteOpen} open={deleteOpen}>
+        <div className="flex items-center gap-1">
+          <Button
+            aria-label={t("common.moveUp")}
+            disabled={!canMoveUp || reordering}
+            onClick={() => {
+              void handleReorder("up");
+            }}
+            size="icon-xs"
+            variant="ghost"
+          >
+            <ChevronUpIcon />
+          </Button>
+          <Button
+            aria-label={t("common.moveDown")}
+            disabled={!canMoveDown || reordering}
+            onClick={() => {
+              void handleReorder("down");
+            }}
+            size="icon-xs"
+            variant="ghost"
+          >
+            <ChevronDownIcon />
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger
               render={<Button size="icon-xs" variant="ghost" />}
@@ -486,6 +606,14 @@ const VariantRow = ({
               <MoreHorizontalIcon />
             </DropdownMenuTrigger>
             <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => setEditOpen(true)}>
+                <PencilIcon />
+                {t("common.edit")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setPromoteOpen(true)}>
+                <StarIcon />
+                {t("clauses.useAsMainBody")}
+              </DropdownMenuItem>
               <DropdownMenuItem
                 className="text-destructive-foreground"
                 onClick={() => setDeleteOpen(true)}
@@ -495,37 +623,72 @@ const VariantRow = ({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <AlertDialogPopup>
-            <AlertDialogHeader>
-              <AlertDialogTitle>{t("common.delete")}</AlertDialogTitle>
-              <AlertDialogDescription>
-                {t("common.deleteConfirmDescription", {
-                  name: variant.label,
-                })}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogClose render={<Button variant="ghost" />}>
-                {t("common.cancel")}
-              </AlertDialogClose>
-              <Button
-                disabled={deleting}
-                onClick={() => {
-                  void handleDelete();
-                }}
-                variant="destructive"
-              >
-                {t("common.delete")}
-              </Button>
-            </AlertDialogFooter>
-          </AlertDialogPopup>
-        </AlertDialog>
+        </div>
       </div>
       {body.length > 0 && (
         <div className="bg-muted/30 mt-2 rounded border p-3">
           <ClauseBody paragraphs={body} />
         </div>
       )}
+
+      <AlertDialog onOpenChange={setDeleteOpen} open={deleteOpen}>
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("common.delete")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("common.deleteConfirmDescription", {
+                name: variant.label,
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="ghost" />}>
+              {t("common.cancel")}
+            </AlertDialogClose>
+            <Button
+              disabled={deleting}
+              onClick={() => {
+                void handleDelete();
+              }}
+              variant="destructive"
+            >
+              {t("common.delete")}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
+
+      <AlertDialog onOpenChange={setPromoteOpen} open={promoteOpen}>
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("clauses.useAsMainBody")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("clauses.confirmUseAsMainBody")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="ghost" />}>
+              {t("common.cancel")}
+            </AlertDialogClose>
+            <Button
+              disabled={promoting}
+              onClick={() => {
+                void handlePromote();
+              }}
+            >
+              {t("clauses.useAsMainBody")}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
+
+      <VariantFormDialog
+        clauseId={clauseId}
+        onOpenChange={setEditOpen}
+        onSaved={onChanged}
+        open={editOpen}
+        variant={variant}
+      />
     </li>
   );
 };
@@ -537,15 +700,46 @@ const VariantFormDialog = ({
   open,
   onOpenChange,
   onSaved,
+  variant,
 }: {
   clauseId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
+  variant?: VariantItem;
+}) => (
+  <Dialog onOpenChange={onOpenChange} open={open}>
+    {/* Mount only while open so each open re-seeds from `variant`
+        (edit) or resets to blank (create) without an effect, matching
+        ClauseFormDialog. */}
+    {open ? (
+      <VariantFormDialogBody
+        clauseId={clauseId}
+        onOpenChange={onOpenChange}
+        onSaved={onSaved}
+        variant={variant}
+      />
+    ) : null}
+  </Dialog>
+);
+
+const VariantFormDialogBody = ({
+  clauseId,
+  onOpenChange,
+  onSaved,
+  variant,
+}: {
+  clauseId: string;
+  onOpenChange: (open: boolean) => void;
+  onSaved: () => void;
+  variant: VariantItem | undefined;
 }) => {
   const t = useTranslations();
-  const [label, setLabel] = useState("");
-  const [bodyText, setBodyText] = useState("");
+  const isEdit = !!variant;
+  const [label, setLabel] = useState(() => variant?.label ?? "");
+  const [bodyText, setBodyText] = useState(() =>
+    variant ? variantBodyToText(variant.body) : "",
+  );
   const [saving, setSaving] = useState(false);
 
   const handleSave = useCallback(async () => {
@@ -556,10 +750,15 @@ const VariantFormDialog = ({
     setSaving(true);
 
     const body = bodyText.split("\n").map((line) => ({ text: line }));
+    const payload = { label: label.trim(), body };
 
-    const response = await api
-      .clauses({ clauseId })
-      .variants.put({ label: label.trim(), body });
+    const response =
+      isEdit && variant
+        ? await api
+            .clauses({ clauseId })
+            .variants({ variantId: variant.id })
+            .post(payload)
+        : await api.clauses({ clauseId }).variants.put(payload);
 
     setSaving(false);
 
@@ -577,60 +776,58 @@ const VariantFormDialog = ({
 
     stellaToast.add({
       type: "success",
-      title: t("clauses.variantCreated"),
+      title: isEdit ? t("clauses.variantUpdated") : t("clauses.variantCreated"),
     });
 
-    setLabel("");
-    setBodyText("");
     onOpenChange(false);
     onSaved();
-  }, [clauseId, label, bodyText, t, onOpenChange, onSaved]);
+  }, [clauseId, isEdit, variant, label, bodyText, t, onOpenChange, onSaved]);
 
   return (
-    <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogPopup className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{t("clauses.addVariant")}</DialogTitle>
-        </DialogHeader>
-        <DialogPanel className="grid gap-4">
-          <div className="grid gap-1.5">
-            <label className="text-sm font-medium" htmlFor="variant-label">
-              {t("clauses.variantLabel")}
-            </label>
-            <Input
-              id="variant-label"
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder={t("clauses.variantLabelPlaceholder")}
-              value={label}
-            />
-          </div>
-          <div className="grid gap-1.5">
-            <label className="text-sm font-medium" htmlFor="variant-body">
-              {t("clauses.body")}
-            </label>
-            <Textarea
-              className="min-h-[100px]"
-              id="variant-body"
-              onChange={(e) => setBodyText(e.target.value)}
-              value={bodyText}
-            />
-          </div>
-        </DialogPanel>
-        <DialogFooter>
-          <DialogClose render={<Button variant="ghost" />}>
-            {t("common.cancel")}
-          </DialogClose>
-          <Button
-            disabled={saving || !label.trim()}
-            onClick={() => {
-              void handleSave();
-            }}
-          >
-            {t("common.save")}
-          </Button>
-        </DialogFooter>
-      </DialogPopup>
-    </Dialog>
+    <DialogPopup className="sm:max-w-md">
+      <DialogHeader>
+        <DialogTitle>
+          {isEdit ? t("clauses.editVariant") : t("clauses.addVariant")}
+        </DialogTitle>
+      </DialogHeader>
+      <DialogPanel className="grid gap-4">
+        <div className="grid gap-1.5">
+          <label className="text-sm font-medium" htmlFor="variant-label">
+            {t("clauses.variantLabel")}
+          </label>
+          <Input
+            id="variant-label"
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder={t("clauses.variantLabelPlaceholder")}
+            value={label}
+          />
+        </div>
+        <div className="grid gap-1.5">
+          <label className="text-sm font-medium" htmlFor="variant-body">
+            {t("clauses.body")}
+          </label>
+          <Textarea
+            className="min-h-[100px]"
+            id="variant-body"
+            onChange={(e) => setBodyText(e.target.value)}
+            value={bodyText}
+          />
+        </div>
+      </DialogPanel>
+      <DialogFooter>
+        <DialogClose render={<Button variant="ghost" />}>
+          {t("common.cancel")}
+        </DialogClose>
+        <Button
+          disabled={saving || !label.trim()}
+          onClick={() => {
+            void handleSave();
+          }}
+        >
+          {t("common.save")}
+        </Button>
+      </DialogFooter>
+    </DialogPopup>
   );
 };
 
@@ -640,13 +837,14 @@ const HistoryTab = ({
   clauseId,
   currentBody,
   versions,
+  onRefresh,
 }: {
   clauseId: string;
   currentBody: ClauseParagraph[];
   versions: VersionItem[];
+  onRefresh: () => void;
 }) => {
   const t = useTranslations();
-  const format = useFormatter();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [diffResult, setDiffResult] = useState<ParagraphDiff[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -712,32 +910,16 @@ const HistoryTab = ({
       <div className="rounded-lg border">
         <ul className="divide-y">
           {versions.map((ver) => (
-            <li key={ver.id}>
-              <button
-                className={cn(
-                  "flex w-full items-center justify-between",
-                  "px-4 py-3 text-sm transition-colors",
-                  "hover:bg-muted/50",
-                  selectedId === ver.id && "bg-muted",
-                )}
-                onClick={() => {
-                  void handleVersionClick(ver.id);
-                }}
-                type="button"
-              >
-                <span className="font-medium">
-                  {t("clauses.version", {
-                    version: String(ver.version),
-                  })}
-                </span>
-                <span className="text-muted-foreground">
-                  {format.dateTime(new Date(ver.createdAt), {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  })}
-                </span>
-              </button>
-            </li>
+            <VersionRow
+              clauseId={clauseId}
+              isSelected={selectedId === ver.id}
+              key={ver.id}
+              onRestored={onRefresh}
+              onToggleDiff={() => {
+                void handleVersionClick(ver.id);
+              }}
+              version={ver}
+            />
           ))}
         </ul>
       </div>
@@ -763,5 +945,111 @@ const HistoryTab = ({
         </div>
       )}
     </div>
+  );
+};
+
+const VersionRow = ({
+  version,
+  clauseId,
+  isSelected,
+  onToggleDiff,
+  onRestored,
+}: {
+  version: VersionItem;
+  clauseId: string;
+  isSelected: boolean;
+  onToggleDiff: () => void;
+  onRestored: () => void;
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+
+  const handleRestore = useCallback(async () => {
+    setRestoring(true);
+    const response = await api
+      .clauses({ clauseId })
+      .versions({ versionId: version.id })
+      .restore.post();
+
+    setRestoring(false);
+
+    if (response.error) {
+      stellaToast.add({
+        type: "error",
+        title: t("clauses.saveFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+
+    stellaToast.add({
+      type: "success",
+      title: t("clauses.versionRestored"),
+    });
+    setRestoreOpen(false);
+    onRestored();
+  }, [clauseId, version.id, t, onRestored]);
+
+  return (
+    <li className="flex items-center gap-2 px-2">
+      <button
+        className={cn(
+          "flex flex-1 items-center justify-between",
+          "px-2 py-3 text-sm transition-colors",
+          "hover:bg-muted/50 rounded",
+          isSelected && "bg-muted",
+        )}
+        onClick={onToggleDiff}
+        type="button"
+      >
+        <span className="font-medium">
+          {t("clauses.version", {
+            version: String(version.version),
+          })}
+        </span>
+        <span className="text-muted-foreground">
+          {format.dateTime(new Date(version.createdAt), {
+            dateStyle: "medium",
+            timeStyle: "short",
+          })}
+        </span>
+      </button>
+      <AlertDialog onOpenChange={setRestoreOpen} open={restoreOpen}>
+        <Button
+          aria-label={t("clauses.restoreVersion")}
+          onClick={() => setRestoreOpen(true)}
+          size="icon-xs"
+          variant="ghost"
+        >
+          <RotateCcwIcon />
+        </Button>
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("clauses.restoreVersion")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("clauses.confirmRestoreVersion")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="ghost" />}>
+              {t("common.cancel")}
+            </AlertDialogClose>
+            <Button
+              disabled={restoring}
+              onClick={() => {
+                void handleRestore();
+              }}
+            >
+              {t("clauses.restoreVersion")}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
+    </li>
   );
 };

@@ -594,6 +594,8 @@ type Messages = {
     "clauseUpdated": "Clause updated";
     "compareWithCurrent": "Compared with current version";
     "confirmDeleteClause": "This will permanently delete the clause and all its variants.";
+    "confirmRestoreVersion": "This will set the clause body to this version, creating a new version. History is preserved.";
+    "confirmUseAsMainBody": "This will replace the clause body with this variant, creating a new version. The variant stays.";
     "createCategory": "New category";
     "createClause": "New clause";
     "createFailed": "Failed to create clause";
@@ -604,6 +606,7 @@ type Messages = {
     "descriptionPlaceholder": "Brief description of the clause";
     "editCategory": "Edit category";
     "editClause": "Edit clause";
+    "editVariant": "Edit variant";
     "export": "Export";
     "exportFailed": "Failed to export clauses";
     "import": "Import";
@@ -626,6 +629,7 @@ type Messages = {
     "noVariants": "No variants";
     "noVersions": "No version history";
     "outdatedVersion": "Update available";
+    "restoreVersion": "Restore this version";
     "saveFailed": "Failed to save";
     "searchClauses": "Search clauses...";
     "searchPlaceholder": "Search clauses...";
@@ -652,6 +656,7 @@ type Messages = {
     "updateFailed": "Failed to update clause";
     "usageNotes": "Usage notes";
     "usageNotesPlaceholder": "When should this clause be used? (for AI assembly)";
+    "useAsMainBody": "Use as main body";
     "variant": "Variant";
     "variantCreated": "Variant created";
     "variantDefault": "Standard (no variant)";
@@ -660,9 +665,12 @@ type Messages = {
     "variantDeletedWithLabel": "Variant “{label}” was deleted";
     "variantLabel": "Variant label";
     "variantLabelPlaceholder": "e.g. Standard";
+    "variantPromoted": "Variant set as main body";
+    "variantUpdated": "Variant updated";
     "variants": "Variants";
     "version": "Version {version}";
     "versionCount": "{count, plural, one {# version} other {# versions}}";
+    "versionRestored": "Version restored";
   };
   "common": {
     "accept": "Accept";
@@ -789,6 +797,8 @@ type Messages = {
     "matter": "Matter";
     "matters": "Matters";
     "metadata": "Metadata";
+    "moveDown": "Move down";
+    "moveUp": "Move up";
     "name": "Name";
     "newRow": "New row";
     "next": "Next";
