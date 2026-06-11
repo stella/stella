@@ -14,7 +14,12 @@ import { backfillLegislationCorpusIndex } from "@/api/handlers/legislation/corpu
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
-import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
+import {
+  isCorpusS3Stale,
+  isS3Stale,
+  refreshCorpusS3,
+  refreshS3,
+} from "@/api/lib/s3";
 
 const BATCH_SIZE = 50;
 const CONCURRENCY = 4;
@@ -197,6 +202,17 @@ const nextBatchSize = (limit: number | null, attempted: number): number => {
   return Math.min(BATCH_SIZE, Math.max(0, limit - attempted));
 };
 
+// Long backfills outlive temporary AWS credentials; refresh the shared
+// clients between batches once they approach the STS expiry window.
+const refreshStaleS3 = async (): Promise<void> => {
+  if (isS3Stale()) {
+    await refreshS3();
+  }
+  if (isCorpusS3Stale()) {
+    await refreshCorpusS3();
+  }
+};
+
 const backfillCaseLaw = async (
   limit: number | null,
 ): Promise<BackfillResult> => {
@@ -209,6 +225,7 @@ const backfillCaseLaw = async (
     if (batchSize === 0) {
       break;
     }
+    await refreshStaleS3();
 
     const idFilter: SQL | undefined =
       lastId === null ? undefined : gt(caseLawDecisions.id, lastId);
@@ -267,6 +284,7 @@ const backfillLegislation = async (
     if (batchSize === 0) {
       break;
     }
+    await refreshStaleS3();
 
     const idFilter: SQL | undefined =
       lastId === null ? undefined : gt(legislationDocuments.id, lastId);
@@ -328,6 +346,7 @@ const backfillCaseLawIndex = async (
     if (batchSize === 0) {
       break;
     }
+    await refreshStaleS3();
 
     const count = await backfillCorpusIndex(ingestionDb, batchSize, generation);
     if (count === 0) {
@@ -352,6 +371,7 @@ const backfillLegislationIndex = async (
     if (batchSize === 0) {
       break;
     }
+    await refreshStaleS3();
 
     const count = await backfillLegislationCorpusIndex(
       ingestionDb,

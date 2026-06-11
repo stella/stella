@@ -12,7 +12,10 @@ import {
   bodyPreviewJoin,
   redistributableSourceJoin,
 } from "@/api/handlers/case-law/decisions/search-sql";
-import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
+import {
+  redistributableCaseLawSource,
+  redistributableCaseLawSourceSqlFor,
+} from "@/api/handlers/case-law/redistribution";
 // eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -145,6 +148,9 @@ const searchPostgresDecisions = async (
       FROM case_law_citations c
       JOIN case_law_decisions citing_d
         ON citing_d.id = c.citing_decision_id
+      JOIN case_law_sources citing_src
+        ON citing_src.id = citing_d.source_id
+       AND ${redistributableCaseLawSourceSqlFor("citing_src")}
       WHERE c.cited_decision_id = d.id
     ) cb
   `);

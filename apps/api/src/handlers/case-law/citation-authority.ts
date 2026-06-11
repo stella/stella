@@ -2,6 +2,7 @@ import type { SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
 import { courtWeightSql } from "@/api/handlers/case-law/citation-score";
+import { redistributableCaseLawSourceSqlFor } from "@/api/handlers/case-law/redistribution";
 
 /**
  * Materialize the citation-authority ranking signal onto
@@ -85,6 +86,9 @@ export const recomputeCitationAuthorityForAll = async (
         case_law_citations c
         JOIN case_law_decisions citing_d
           ON citing_d.id = c.citing_decision_id
+        JOIN case_law_sources citing_src
+          ON citing_src.id = citing_d.source_id
+         AND ${sql.raw(redistributableCaseLawSourceSqlFor("citing_src"))}
       ) ON c.cited_decision_id = d2.id
       GROUP BY d2.id
     ) agg
