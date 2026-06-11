@@ -1,4 +1,5 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
@@ -230,6 +231,41 @@ const corpusIndexSearch = async (
       const ids = candidates.map((candidate) =>
         toSafeId<"legislationDocument">(candidate.id),
       );
+      // Reapply the request filters against the current rows: a stale
+      // corpus hit (metadata changed, async re-index/delete pending) must
+      // not satisfy filters it no longer matches.
+      const rehydrationFilters: SQL[] = [redistributableLegislationSource];
+      if (body.jurisdiction) {
+        rehydrationFilters.push(
+          eq(legislationDocuments.country, body.jurisdiction),
+        );
+      }
+      if (body.documentType) {
+        rehydrationFilters.push(
+          eq(legislationDocuments.documentType, body.documentType),
+        );
+      }
+      if (body.status) {
+        rehydrationFilters.push(eq(legislationDocuments.status, body.status));
+      }
+      if (body.source) {
+        rehydrationFilters.push(eq(legislationDocuments.sourceId, body.source));
+      }
+      if (body.language) {
+        rehydrationFilters.push(
+          eq(legislationDocuments.language, body.language),
+        );
+      }
+      if (body.dateFrom) {
+        rehydrationFilters.push(
+          sql`${legislationDocuments.effectiveDate} >= ${body.dateFrom}`,
+        );
+      }
+      if (body.dateTo) {
+        rehydrationFilters.push(
+          sql`${legislationDocuments.effectiveDate} <= ${body.dateTo}`,
+        );
+      }
       const rows =
         ids.length === 0
           ? []
@@ -255,7 +291,7 @@ const corpusIndexSearch = async (
                 .where(
                   and(
                     inArray(legislationDocuments.id, ids),
-                    redistributableLegislationSource,
+                    ...rehydrationFilters,
                   ),
                 ),
             );

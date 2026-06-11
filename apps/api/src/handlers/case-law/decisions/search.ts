@@ -1,4 +1,5 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { status } from "elysia";
 import type { Static } from "elysia";
 
@@ -458,6 +459,37 @@ const searchCorpusIndexDecisions = async (
       const ids = candidates.map((candidate) =>
         toSafeId<"caseLawDecision">(candidate.id),
       );
+      // Reapply the request filters against the current rows: a stale
+      // corpus hit (metadata changed, async re-index/delete pending) must
+      // not satisfy filters it no longer matches.
+      const rehydrationFilters: SQL[] = [redistributableCaseLawSource];
+      if (body.court) {
+        rehydrationFilters.push(eq(caseLawDecisions.court, body.court));
+      }
+      if (body.country) {
+        rehydrationFilters.push(eq(caseLawDecisions.country, body.country));
+      }
+      if (body.dateFrom) {
+        rehydrationFilters.push(
+          sql`${caseLawDecisions.decisionDate} >= ${body.dateFrom}`,
+        );
+      }
+      if (body.dateTo) {
+        rehydrationFilters.push(
+          sql`${caseLawDecisions.decisionDate} <= ${body.dateTo}`,
+        );
+      }
+      if (body.decisionType) {
+        rehydrationFilters.push(
+          eq(caseLawDecisions.decisionType, body.decisionType),
+        );
+      }
+      if (body.sourceId) {
+        rehydrationFilters.push(eq(caseLawDecisions.sourceId, body.sourceId));
+      }
+      if (body.language) {
+        rehydrationFilters.push(eq(caseLawDecisions.language, body.language));
+      }
       const rows =
         ids.length === 0
           ? []
@@ -485,10 +517,7 @@ const searchCorpusIndexDecisions = async (
                   eq(caseLawSources.id, caseLawDecisions.sourceId),
                 )
                 .where(
-                  and(
-                    inArray(caseLawDecisions.id, ids),
-                    redistributableCaseLawSource,
-                  ),
+                  and(inArray(caseLawDecisions.id, ids), ...rehydrationFilters),
                 ),
             );
 
