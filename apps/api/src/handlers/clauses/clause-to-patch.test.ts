@@ -50,6 +50,73 @@ describe("clauseBodyToRichPatch", () => {
       paragraphs: [{ runs: [{ text: "" }] }],
     });
   });
+
+  test("prefixes bullet items with a bullet marker", () => {
+    const body: ClauseBody = [
+      { text: "First", listKind: "bullet", listLevel: 0 },
+      { text: "Second", listKind: "bullet", listLevel: 0 },
+    ];
+
+    expect(clauseBodyToRichPatch(body)).toEqual({
+      paragraphs: [
+        { runs: [{ text: "• First" }] },
+        { runs: [{ text: "• Second" }] },
+      ],
+    });
+  });
+
+  test("numbers ordered items sequentially, preserving run formatting", () => {
+    const body: ClauseBody = [
+      {
+        text: "First",
+        runs: [{ text: "First", bold: true }],
+        listKind: "ordered",
+        listLevel: 0,
+      },
+      { text: "Second", listKind: "ordered", listLevel: 0 },
+    ];
+
+    expect(clauseBodyToRichPatch(body)).toEqual({
+      paragraphs: [
+        { runs: [{ text: "1. First", bold: true }] },
+        { runs: [{ text: "2. Second" }] },
+      ],
+    });
+  });
+
+  test("nested ordered items indent and switch marker style by depth", () => {
+    const body: ClauseBody = [
+      { text: "Top", listKind: "ordered", listLevel: 0 },
+      { text: "Sub", listKind: "ordered", listLevel: 1 },
+      { text: "SubSub", listKind: "ordered", listLevel: 2 },
+      { text: "Top2", listKind: "ordered", listLevel: 0 },
+    ];
+
+    expect(clauseBodyToRichPatch(body)).toEqual({
+      paragraphs: [
+        { runs: [{ text: "1. Top" }] },
+        { runs: [{ text: "    a. Sub" }] },
+        { runs: [{ text: "        i. SubSub" }] },
+        { runs: [{ text: "2. Top2" }] },
+      ],
+    });
+  });
+
+  test("ordered numbering restarts after a non-list paragraph breaks the run", () => {
+    const body: ClauseBody = [
+      { text: "One", listKind: "ordered", listLevel: 0 },
+      { text: "Break" },
+      { text: "Fresh one", listKind: "ordered", listLevel: 0 },
+    ];
+
+    expect(clauseBodyToRichPatch(body)).toEqual({
+      paragraphs: [
+        { runs: [{ text: "1. One" }] },
+        { runs: [{ text: "Break" }] },
+        { runs: [{ text: "1. Fresh one" }] },
+      ],
+    });
+  });
 });
 
 describe("clauseBodyToPlainText", () => {
