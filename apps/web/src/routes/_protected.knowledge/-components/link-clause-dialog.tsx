@@ -1,3 +1,4 @@
+import type { ComponentProps } from "react";
 import { useEffect, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
@@ -17,6 +18,10 @@ import {
 } from "@stll/ui/components/dialog";
 import { Input } from "@stll/ui/components/input";
 import {
+  MenuPreviewLayout,
+  PreviewPane,
+} from "@stll/ui/components/preview-pane";
+import {
   Select,
   SelectItem,
   SelectPopup,
@@ -29,6 +34,7 @@ import { api } from "@/lib/api";
 import { toAPIError, userErrorMessage } from "@/lib/errors";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
+import { ClauseBody } from "@/routes/_protected.knowledge/-components/clause-body";
 import {
   clauseCategoriesOptions,
   clausesOptions,
@@ -75,6 +81,9 @@ export const LinkClauseDialog = ({
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(
     null,
   );
+  // Variant whose body the preview pane shows while its option is highlighted;
+  // null renders the pane empty (and is the "Standard (no variant)" row).
+  const [previewVariantId, setPreviewVariantId] = useState<string | null>(null);
   // null = not yet initialized; the effect below preselects the first
   // unfilled discovered slot once the template preview loads.
   const [slotValue, setSlotValue] = useState<string | null>(null);
@@ -325,26 +334,56 @@ export const LinkClauseDialog = ({
           </div>
 
           {selectedClauseId && variants.length > 0 && (
-            <div>
-              <label
-                className="mb-1 block text-sm font-medium"
-                htmlFor="variant-select"
-              >
+            <div className="grid gap-1">
+              <span className="text-sm font-medium">
                 {t("clauses.variant")}
-              </label>
-              <select
-                className="flex h-9 w-full rounded-md border bg-transparent px-3 py-1 text-sm"
-                id="variant-select"
-                onChange={(e) => setSelectedVariantId(e.target.value || null)}
+              </span>
+              <Select
+                onValueChange={(value: string | null) =>
+                  setSelectedVariantId(
+                    value === null || value === "" ? null : value,
+                  )
+                }
                 value={selectedVariantId ?? ""}
               >
-                <option value="">{t("clauses.variantDefault")}</option>
-                {variants.map((variant) => (
-                  <option key={variant.id} value={variant.id}>
-                    {variant.label}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder={t("clauses.variantDefault")} />
+                </SelectTrigger>
+                <SelectPopup>
+                  <MenuPreviewLayout
+                    preview={
+                      <PreviewPane>
+                        {previewVariantId !== null && (
+                          <VariantBodyPreview
+                            body={
+                              variants.find((v) => v.id === previewVariantId)
+                                ?.body ?? []
+                            }
+                          />
+                        )}
+                      </PreviewPane>
+                    }
+                  >
+                    <SelectItem
+                      onFocus={() => setPreviewVariantId(null)}
+                      onMouseEnter={() => setPreviewVariantId(null)}
+                      value=""
+                    >
+                      {t("clauses.variantDefault")}
+                    </SelectItem>
+                    {variants.map((variant) => (
+                      <SelectItem
+                        key={variant.id}
+                        onFocus={() => setPreviewVariantId(variant.id)}
+                        onMouseEnter={() => setPreviewVariantId(variant.id)}
+                        value={variant.id}
+                      >
+                        {variant.label}
+                      </SelectItem>
+                    ))}
+                  </MenuPreviewLayout>
+                </SelectPopup>
+              </Select>
             </div>
           )}
 
@@ -405,5 +444,23 @@ export const LinkClauseDialog = ({
         </DialogFooter>
       </DialogPopup>
     </Dialog>
+  );
+};
+
+// ── Variant preview ──────────────────────────────────
+
+type ClauseBodyParagraphs = ComponentProps<typeof ClauseBody>["paragraphs"];
+
+/** The highlighted variant's actual body text, scaled down to fit the pane;
+ *  the same ClauseBody renderer the clause detail uses, so what the author
+ *  previews is exactly what links. */
+const VariantBodyPreview = ({ body }: { body: ClauseBodyParagraphs }) => {
+  if (body.length === 0) {
+    return null;
+  }
+  return (
+    <div className="h-[133%] w-[133%] origin-top-left scale-75 text-xs [&_p]:text-xs">
+      <ClauseBody paragraphs={body} />
+    </div>
   );
 };

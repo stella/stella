@@ -89,6 +89,10 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from "@stll/ui/components/menu";
+import {
+  MenuPreviewLayout,
+  PreviewPane,
+} from "@stll/ui/components/preview-pane";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { Separator } from "@stll/ui/components/separator";
 import { Textarea } from "@stll/ui/components/textarea";
@@ -2011,10 +2015,11 @@ const SelectionGesturePopover = ({
 }) => {
   const t = useTranslations();
   const fields = useTemplateStudioStore((s) => s.fields);
+  const [preview, setPreview] = useState<GestureInsertKind | null>(null);
   return (
     <div
       aria-label={t("templates.studio.insert")}
-      className="bg-popover text-popover-foreground absolute z-30 flex w-56 flex-col rounded-lg border p-1 shadow-lg/5 transition-opacity duration-100 starting:opacity-0"
+      className="bg-popover text-popover-foreground absolute z-30 flex flex-col rounded-lg border p-1 shadow-lg/5 transition-opacity duration-100 starting:opacity-0"
       role="group"
       style={{
         left: gesture.left,
@@ -2025,63 +2030,144 @@ const SelectionGesturePopover = ({
             : `translate(-50%, ${GESTURE_POPOVER_OFFSET_PX}px)`,
       }}
     >
-      <GestureSplitRow
-        existing={fields.map((field) => ({
-          key: field.path,
-          icon: VALUE_TYPE_META[inputTypeValueKind(field.inputType)].icon,
-          label: field.label === "" ? field.path : field.label,
-          sublabel: field.label === "" ? undefined : field.path,
-          onSelect: () => onInsertExisting(field.path),
-        }))}
-        icon={BracesIcon}
-        label={t("templates.studio.makeField")}
-        onDefault={onMakeField}
-        reuseLabel={t("templates.studio.existingField")}
-      />
-      <GestureSplitRow
-        existing={reusableConditions(fields, (key) => t(key)).map(
-          (condition) => ({
-            key: condition.ref,
-            icon: SplitIcon,
-            label: condition.label,
-            onSelect: () => onWrapIfExisting(condition.ref),
-          }),
+      <MenuPreviewLayout
+        preview={
+          <PreviewPane>
+            {preview && <GestureInsertPreview kind={preview} />}
+          </PreviewPane>
+        }
+      >
+        <GestureSplitRow
+          existing={fields.map((field) => ({
+            key: field.path,
+            icon: VALUE_TYPE_META[inputTypeValueKind(field.inputType)].icon,
+            label: field.label === "" ? field.path : field.label,
+            sublabel: field.label === "" ? undefined : field.path,
+            onSelect: () => onInsertExisting(field.path),
+          }))}
+          icon={BracesIcon}
+          label={t("templates.studio.makeField")}
+          onDefault={onMakeField}
+          onHighlight={() => setPreview("field")}
+          reuseLabel={t("templates.studio.existingField")}
+        />
+        <GestureSplitRow
+          existing={reusableConditions(fields, (key) => t(key)).map(
+            (condition) => ({
+              key: condition.ref,
+              icon: SplitIcon,
+              label: condition.label,
+              onSelect: () => onWrapIfExisting(condition.ref),
+            }),
+          )}
+          icon={SplitIcon}
+          label={t("templates.studio.showOnlyIf")}
+          onDefault={onWrapIf}
+          onHighlight={() => setPreview("if")}
+          reuseLabel={t("templates.studio.existingCondition")}
+        />
+        <Button
+          className="justify-start gap-2 font-normal"
+          onClick={onWrapEach}
+          onFocus={() => setPreview("each")}
+          onMouseDown={keepEditorFocus}
+          onMouseEnter={() => setPreview("each")}
+          size="sm"
+          variant="ghost"
+        >
+          <RepeatIcon className="text-muted-foreground size-3.5 shrink-0" />
+          {t("templates.studio.repeatForEach")}
+        </Button>
+        <Button
+          className="justify-start gap-2 font-normal"
+          onClick={onMakeClause}
+          onFocus={() => setPreview("clause")}
+          onMouseDown={keepEditorFocus}
+          onMouseEnter={() => setPreview("clause")}
+          size="sm"
+          variant="ghost"
+        >
+          <TextQuoteIcon className="text-muted-foreground size-3.5 shrink-0" />
+          {t("templates.studio.scopeClause")}
+        </Button>
+        {enrichment.status !== "idle" && (
+          <>
+            <Separator className="my-1" />
+            <GestureAiRow
+              enrichment={enrichment}
+              fields={fields}
+              onAcceptAi={onAcceptAi}
+            />
+          </>
         )}
-        icon={SplitIcon}
-        label={t("templates.studio.showOnlyIf")}
-        onDefault={onWrapIf}
-        reuseLabel={t("templates.studio.existingCondition")}
-      />
-      <Button
-        className="justify-start gap-2 font-normal"
-        onClick={onWrapEach}
-        onMouseDown={keepEditorFocus}
-        size="sm"
-        variant="ghost"
-      >
-        <RepeatIcon className="text-muted-foreground size-3.5 shrink-0" />
-        {t("templates.studio.repeatForEach")}
-      </Button>
-      <Button
-        className="justify-start gap-2 font-normal"
-        onClick={onMakeClause}
-        onMouseDown={keepEditorFocus}
-        size="sm"
-        variant="ghost"
-      >
+      </MenuPreviewLayout>
+    </div>
+  );
+};
+
+/** What each gesture-menu insert produces, shown in the preview pane while a
+ *  row is highlighted. Mock depictions of inserted document content, not
+ *  interface text; deliberately untranslated to keep them free of per-language
+ *  i18n debt. */
+type GestureInsertKind = "field" | "if" | "each" | "clause";
+
+// Mock document content, not interface text; deliberately untranslated (see
+// the preview-pane pattern) so the previews carry no per-language i18n debt.
+const GESTURE_PREVIEW_SAMPLE = {
+  fieldBefore: "Payment is due within ",
+  fieldAfter: " days.",
+  fieldMarker: "{{due_days}}",
+  ifMarker: "{{#if has_guarantor}}",
+  ifBody: "The Guarantor shall be jointly liable.",
+  eachMarker: "{{#each parties}}",
+  eachItem: "– {{name}}, {{role}}",
+  clauseMarker: "{{@clause:liability}}",
+} as const;
+
+const GestureInsertPreview = ({ kind }: { kind: GestureInsertKind }) => {
+  if (kind === "field") {
+    return (
+      <div className="flex h-full flex-col justify-center gap-1.5 text-sm leading-relaxed">
+        <span>
+          {GESTURE_PREVIEW_SAMPLE.fieldBefore}
+          <code className="bg-primary/10 text-primary rounded px-1 py-0.5 text-xs">
+            {GESTURE_PREVIEW_SAMPLE.fieldMarker}
+          </code>
+          {GESTURE_PREVIEW_SAMPLE.fieldAfter}
+        </span>
+      </div>
+    );
+  }
+  if (kind === "if") {
+    return (
+      <div className="border-foreground-disabled bg-accent/50 flex h-full flex-col justify-center rounded-sm border-s-[3px] py-1.5 ps-3 pe-2 text-sm leading-relaxed">
+        <code className="text-muted-foreground text-xs">
+          {GESTURE_PREVIEW_SAMPLE.ifMarker}
+        </code>
+        <span className="mt-1">{GESTURE_PREVIEW_SAMPLE.ifBody}</span>
+      </div>
+    );
+  }
+  if (kind === "each") {
+    return (
+      <div className="border-success/40 bg-success/10 flex h-full flex-col justify-center gap-1 rounded-sm border-s-[3px] py-1.5 ps-3 pe-2 text-sm leading-relaxed">
+        <code className="text-muted-foreground text-xs">
+          {GESTURE_PREVIEW_SAMPLE.eachMarker}
+        </code>
+        <span>{GESTURE_PREVIEW_SAMPLE.eachItem}</span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex h-full flex-col justify-center gap-1.5">
+      <div className="bg-card flex items-center gap-1.5 rounded-sm border border-dashed p-2">
         <TextQuoteIcon className="text-muted-foreground size-3.5 shrink-0" />
-        {t("templates.studio.scopeClause")}
-      </Button>
-      {enrichment.status !== "idle" && (
-        <>
-          <Separator className="my-1" />
-          <GestureAiRow
-            enrichment={enrichment}
-            fields={fields}
-            onAcceptAi={onAcceptAi}
-          />
-        </>
-      )}
+        <code className="text-muted-foreground text-xs">
+          {GESTURE_PREVIEW_SAMPLE.clauseMarker}
+        </code>
+      </div>
+      <div className="bg-muted h-1.5 w-3/4 rounded-full" />
+      <div className="bg-muted h-1.5 w-1/2 rounded-full" />
     </div>
   );
 };
@@ -2106,12 +2192,16 @@ const GestureSplitRow = ({
   label,
   reuseLabel,
   onDefault,
+  onHighlight,
   existing,
 }: {
   icon: LucideIcon;
   label: string;
   reuseLabel: string;
   onDefault: () => void;
+  /** Drive the preview pane while the default (create-new) button is hovered
+   *  or focused. */
+  onHighlight: () => void;
   existing: GestureExistingOption[];
 }) => {
   const [open, setOpen] = useState(false);
@@ -2121,7 +2211,9 @@ const GestureSplitRow = ({
         <Button
           className="flex-1 justify-start gap-2 font-normal"
           onClick={onDefault}
+          onFocus={onHighlight}
           onMouseDown={keepEditorFocus}
+          onMouseEnter={onHighlight}
           size="sm"
           variant="ghost"
         >
@@ -5165,6 +5257,9 @@ const FieldFace = ({
   );
   const [recipeDialogOpen, setRecipeDialogOpen] = useState(false);
   const [previewValue, setPreviewValue] = useState("");
+  const [whoFillsPreview, setWhoFillsPreview] = useState<ValueSource | null>(
+    null,
+  );
 
   const pushPreview = (value: string) => {
     setPreviewValue(value);
@@ -5199,7 +5294,7 @@ const FieldFace = ({
 
   // The four value sources are mutually exclusive (the manifest validator
   // rejects combinations), so each picker button clears the other three.
-  let valueSource: "person" | "textAi" | "ai" | "formula" = "person";
+  let valueSource: ValueSource = "person";
   if (field.formula !== undefined) {
     valueSource = "formula";
   } else if (field.aiAdapt) {
@@ -5317,69 +5412,87 @@ const FieldFace = ({
         ) : null}
         <div className="flex flex-col gap-2 border-t px-4 py-4">
           <Label className="text-sm">{t("templates.studio.whoFills")}</Label>
-          <div className="flex items-center gap-1">
-            <Button
-              className="flex-1"
-              onClick={() =>
-                onUpdate({
-                  aiPrompt: undefined,
-                  aiAdapt: false,
-                  formula: undefined,
-                })
-              }
-              size="sm"
-              variant={valueSource === "person" ? "secondary" : "ghost"}
-            >
-              <UserIcon className="size-3.5" />
-              {t("templates.studio.filledByPerson")}
-            </Button>
-            <Button
-              className="flex-1"
-              onClick={() =>
-                onUpdate({
-                  aiAdapt: true,
-                  formula: undefined,
-                })
-              }
-              size="sm"
-              variant={valueSource === "textAi" ? "secondary" : "ghost"}
-            >
-              <UserIcon className="size-3.5" />
-              <WandSparklesIcon className="size-3.5" />
-              {t("templates.studio.textPlusAi")}
-            </Button>
-            <Button
-              className="flex-1"
-              onClick={() =>
-                onUpdate({
-                  aiPrompt: field.aiPrompt ?? "",
-                  aiAdapt: false,
-                  formula: undefined,
-                })
-              }
-              size="sm"
-              variant={valueSource === "ai" ? "secondary" : "ghost"}
-            >
-              <WandSparklesIcon className="size-3.5" />
-              {t("templates.studio.draftedByAi")}
-            </Button>
-            <Button
-              className="flex-1"
-              onClick={() =>
-                onUpdate({
-                  formula: field.formula ?? "",
-                  aiPrompt: undefined,
-                  aiAdapt: false,
-                  lookup: undefined,
-                })
-              }
-              size="sm"
-              variant={valueSource === "formula" ? "secondary" : "ghost"}
-            >
-              <SigmaIcon className="size-3.5" />
-              {t("templates.studio.formula")}
-            </Button>
-          </div>
+          <MenuPreviewLayout
+            preview={
+              <PreviewPane className="w-40">
+                {whoFillsPreview && (
+                  <WhoFillsPreview source={whoFillsPreview} />
+                )}
+              </PreviewPane>
+            }
+          >
+            <div className="flex items-center gap-1">
+              <Button
+                className="flex-1"
+                onClick={() =>
+                  onUpdate({
+                    aiPrompt: undefined,
+                    aiAdapt: false,
+                    formula: undefined,
+                  })
+                }
+                onFocus={() => setWhoFillsPreview("person")}
+                onMouseEnter={() => setWhoFillsPreview("person")}
+                size="sm"
+                variant={valueSource === "person" ? "secondary" : "ghost"}
+              >
+                <UserIcon className="size-3.5" />
+                {t("templates.studio.filledByPerson")}
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={() =>
+                  onUpdate({
+                    aiAdapt: true,
+                    formula: undefined,
+                  })
+                }
+                onFocus={() => setWhoFillsPreview("textAi")}
+                onMouseEnter={() => setWhoFillsPreview("textAi")}
+                size="sm"
+                variant={valueSource === "textAi" ? "secondary" : "ghost"}
+              >
+                <UserIcon className="size-3.5" />
+                <WandSparklesIcon className="size-3.5" />
+                {t("templates.studio.textPlusAi")}
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={() =>
+                  onUpdate({
+                    aiPrompt: field.aiPrompt ?? "",
+                    aiAdapt: false,
+                    formula: undefined,
+                  })
+                }
+                onFocus={() => setWhoFillsPreview("ai")}
+                onMouseEnter={() => setWhoFillsPreview("ai")}
+                size="sm"
+                variant={valueSource === "ai" ? "secondary" : "ghost"}
+              >
+                <WandSparklesIcon className="size-3.5" />
+                {t("templates.studio.draftedByAi")}
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={() =>
+                  onUpdate({
+                    formula: field.formula ?? "",
+                    aiPrompt: undefined,
+                    aiAdapt: false,
+                    lookup: undefined,
+                  })
+                }
+                onFocus={() => setWhoFillsPreview("formula")}
+                onMouseEnter={() => setWhoFillsPreview("formula")}
+                size="sm"
+                variant={valueSource === "formula" ? "secondary" : "ghost"}
+              >
+                <SigmaIcon className="size-3.5" />
+                {t("templates.studio.formula")}
+              </Button>
+            </div>
+          </MenuPreviewLayout>
           {valueSource === "textAi" ? (
             <>
               <p className="text-muted-foreground text-xs leading-relaxed">
@@ -5466,6 +5579,71 @@ const FieldFace = ({
         onOpenChange={setRecipeDialogOpen}
         open={recipeDialogOpen}
       />
+    </div>
+  );
+};
+
+/** The four mutually exclusive ways a field's value is produced at fill time. */
+type ValueSource = "person" | "textAi" | "ai" | "formula";
+
+// Mock fill content, not interface text; deliberately untranslated (see the
+// preview-pane pattern) so the previews carry no per-language i18n debt.
+const WHO_FILLS_SAMPLE = {
+  personName: "Jane Doe",
+  typedRaw: "jane doe",
+  aiDrafted: "Drafted by AI",
+  formulaExpression: "net + net * vat",
+  formulaResult: "1 210,00",
+} as const;
+
+/** A miniature of each value source's fill experience, shown in the preview
+ *  pane while a "Who fills" button is highlighted. Mock depictions, not
+ *  interface text; deliberately untranslated to avoid per-language i18n debt. */
+const WhoFillsPreview = ({ source }: { source: ValueSource }) => {
+  if (source === "person") {
+    return (
+      <div className="flex h-full flex-col justify-center gap-1.5">
+        <div className="bg-muted h-1.5 w-16 rounded-full" />
+        <div className="bg-card flex items-center rounded-md border px-2 py-1.5 text-xs">
+          {WHO_FILLS_SAMPLE.personName}
+        </div>
+      </div>
+    );
+  }
+  if (source === "textAi") {
+    return (
+      <div className="flex h-full flex-col justify-center gap-1.5">
+        <div className="bg-card flex items-center rounded-md border px-2 py-1.5 text-xs">
+          {WHO_FILLS_SAMPLE.typedRaw}
+        </div>
+        <span className="text-primary flex items-center gap-1 text-xs">
+          <WandSparklesIcon className="size-3 shrink-0" />
+          {WHO_FILLS_SAMPLE.personName}
+        </span>
+      </div>
+    );
+  }
+  if (source === "ai") {
+    return (
+      <div className="flex h-full flex-col justify-center gap-1.5">
+        <span className="bg-primary/10 text-primary inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-xs">
+          <WandSparklesIcon className="size-3 shrink-0" />
+          {WHO_FILLS_SAMPLE.aiDrafted}
+        </span>
+        <div className="bg-muted h-1.5 w-full rounded-full" />
+        <div className="bg-muted h-1.5 w-3/4 rounded-full" />
+      </div>
+    );
+  }
+  return (
+    <div className="flex h-full flex-col justify-center gap-1.5">
+      <code className="text-muted-foreground text-xs">
+        {WHO_FILLS_SAMPLE.formulaExpression}
+      </code>
+      <span className="flex items-center gap-1 text-sm">
+        <SigmaIcon className="text-muted-foreground size-3.5 shrink-0" />
+        {WHO_FILLS_SAMPLE.formulaResult}
+      </span>
     </div>
   );
 };
