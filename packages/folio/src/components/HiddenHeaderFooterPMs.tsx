@@ -38,6 +38,7 @@ import { EditorView } from "prosemirror-view";
 
 import { headerFooterToProseDoc } from "../core/prosemirror/conversion/toProseDoc";
 import { ExtensionManager } from "../core/prosemirror/extensions/ExtensionManager";
+import { ensureParaIdsInState } from "../core/prosemirror/extensions/features/ParaIdAllocatorExtension";
 import { createStarterKit } from "../core/prosemirror/extensions/StarterKit";
 import { createDocumentStylesPlugin } from "../core/prosemirror/plugins/documentStyles";
 import { schema } from "../core/prosemirror/schema";
@@ -148,11 +149,13 @@ function buildInitialState(
   // Header/footer paragraphs share the document's style table, so they get
   // the same style-aware behavior (e.g. Enter after a heading → body text).
   const styleResolverPlugin = createDocumentStylesPlugin(styles);
-  return EditorState.create({
-    doc: pmDoc,
-    schema,
-    plugins: [...mgr.getPlugins(), styleResolverPlugin],
-  });
+  return ensureParaIdsInState(
+    EditorState.create({
+      doc: pmDoc,
+      schema,
+      plugins: [...mgr.getPlugins(), styleResolverPlugin],
+    }),
+  );
 }
 
 export function enumerateHfSlots(doc: Document | null): HfPartKey[] {

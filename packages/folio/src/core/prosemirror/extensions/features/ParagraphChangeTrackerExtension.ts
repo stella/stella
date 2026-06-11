@@ -22,6 +22,9 @@ import type { ExtensionRuntime } from "../types";
 export const paragraphChangeTrackerKey =
   new PluginKey<ParagraphChangeTrackerState>("paragraphChangeTracker");
 
+const CLEAR_META = "clear";
+const IGNORE_META = "ignore";
+
 export type ParagraphChangeTrackerState = {
   /** Set of paraIds that were modified since last clear */
   changedParaIds: Set<string>;
@@ -130,13 +133,23 @@ function createParagraphChangeTrackerPlugin(): Plugin<ParagraphChangeTrackerStat
         tr: Transaction,
         prevState: ParagraphChangeTrackerState,
       ): ParagraphChangeTrackerState {
+        const meta = tr.getMeta(paragraphChangeTrackerKey);
         // Check for explicit clear meta
-        if (tr.getMeta(paragraphChangeTrackerKey) === "clear") {
+        if (meta === CLEAR_META) {
           return {
             changedParaIds: new Set(),
             structuralChange: false,
             hasUntrackedChanges: false,
             paragraphCount: prevState.paragraphCount,
+          };
+        }
+
+        if (meta === IGNORE_META) {
+          return {
+            ...prevState,
+            paragraphCount: tr.docChanged
+              ? countParagraphs(tr.doc)
+              : prevState.paragraphCount,
           };
         }
 
@@ -274,7 +287,11 @@ export function hasUntrackedChanges(state: EditorState): boolean {
  * Create a transaction that clears the change tracker
  */
 export function clearTrackedChanges(state: EditorState): Transaction {
-  return state.tr.setMeta(paragraphChangeTrackerKey, "clear");
+  return state.tr.setMeta(paragraphChangeTrackerKey, CLEAR_META);
+}
+
+export function ignoreTrackedChanges(tr: Transaction): Transaction {
+  return tr.setMeta(paragraphChangeTrackerKey, IGNORE_META);
 }
 
 export const ParagraphChangeTrackerExtension = createExtension({

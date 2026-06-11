@@ -12,7 +12,14 @@ import { describe, test, expect } from "bun:test";
 import { Schema, Slice, Fragment } from "prosemirror-model";
 import { EditorState } from "prosemirror-state";
 
-import { ParaIdAllocatorExtension } from "./ParaIdAllocatorExtension";
+import {
+  getChangedParagraphIds,
+  ParagraphChangeTrackerExtension,
+} from "./ParagraphChangeTrackerExtension";
+import {
+  ensureParaIdsInState,
+  ParaIdAllocatorExtension,
+} from "./ParaIdAllocatorExtension";
 
 const schema = new Schema({
   nodes: {
@@ -36,6 +43,13 @@ const plugin = runtime.plugins?.[0];
 if (!plugin) {
   throw new Error("Expected plugin from ParaIdAllocatorExtension");
 }
+const changeTrackerRuntime = ParagraphChangeTrackerExtension().onSchemaReady({
+  schema,
+});
+const changeTrackerPlugin = changeTrackerRuntime.plugins?.[0];
+if (!changeTrackerPlugin) {
+  throw new Error("Expected plugin from ParagraphChangeTrackerExtension");
+}
 
 const para = (text: string, paraId: string | null = null) =>
   schema.node(
@@ -48,6 +62,12 @@ const createState = (...paras: ReturnType<typeof para>[]) =>
   EditorState.create({
     doc: schema.node("doc", null, paras),
     plugins: [plugin],
+  });
+
+const createTrackedState = (...paras: ReturnType<typeof para>[]) =>
+  EditorState.create({
+    doc: schema.node("doc", null, paras),
+    plugins: [plugin, changeTrackerPlugin],
   });
 
 const collectParaIds = (state: EditorState): (string | null)[] => {
@@ -64,6 +84,37 @@ const collectParaIds = (state: EditorState): (string | null)[] => {
 };
 
 describe("ParaIdAllocatorExtension", () => {
+  test("allocates missing paraIds on the initial state before the first edit", () => {
+    const initial = createState(para("Needs an id"), para("Also needs one"));
+    expect(collectParaIds(initial)).toEqual([null, null]);
+
+    const next = ensureParaIdsInState(initial);
+    const ids = collectParaIds(next);
+
+    expect(ids).toHaveLength(2);
+    expect(ids[0]).toMatch(/^[0-9A-F]{8}$/u);
+    expect(ids[1]).toMatch(/^[0-9A-F]{8}$/u);
+    expect(ids[0]).not.toBe(ids[1]);
+  });
+
+  test("initial allocation does not seed paragraph change tracking", () => {
+    const initial = createTrackedState(para("Needs an id"));
+
+    const next = ensureParaIdsInState(initial);
+
+    expect(collectParaIds(next)[0]).toMatch(/^[0-9A-F]{8}$/u);
+    expect(getChangedParagraphIds(next).size).toBe(0);
+  });
+
+  test("initial allocation is idempotent when all paraIds are unique", () => {
+    const initial = createState(
+      para("First", "11111111"),
+      para("Second", "22222222"),
+    );
+
+    expect(ensureParaIdsInState(initial)).toBe(initial);
+  });
+
   test("does not allocate on a selection-only transaction", () => {
     const initial = createState(para("Already has one", "ABCDEFGH"));
     const tr = initial.tr.setMeta("anything", true); // no doc change

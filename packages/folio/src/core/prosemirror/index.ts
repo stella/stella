@@ -52,6 +52,7 @@ export type { SelectionState } from "./selectionState";
 
 // Re-export TextSelection for restoring selections after toolbar interactions
 export { TextSelection } from "prosemirror-state";
+export { ensureParaIdsInState } from "./extensions/features/ParaIdAllocatorExtension";
 
 // Plugins (selection tracker only — keymaps are now in extension system)
 export {

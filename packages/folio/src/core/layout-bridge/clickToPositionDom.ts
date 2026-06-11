@@ -606,7 +606,7 @@ export function getCaretPositionFromDom(
       return {
         x: rangeRect.left - overlayRect.left,
         y: rangeRect.top - overlayRect.top,
-        height: lineHeight,
+        height: rangeRect.height || lineHeight,
         pageIndex,
       };
     }

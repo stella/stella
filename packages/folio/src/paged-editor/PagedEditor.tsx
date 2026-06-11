@@ -201,6 +201,12 @@ import {
   prefersReducedMotionBehavior,
 } from "./scrollNavigation";
 import { computePerBlockMeasureInputs } from "./sectionBlockWidths";
+import {
+  DEFAULT_PAGE_HEIGHT_PX,
+  getMargins,
+  getPageSize,
+  twipsToPixels,
+} from "./sectionGeometry";
 import { SelectionOverlay } from "./SelectionOverlay";
 import { getTransactionDirtyRange } from "./transactionDirtyRange";
 import { useDragAutoScroll } from "./useDragAutoScroll";
@@ -413,18 +419,6 @@ type TextInputDispatchTarget<TView> = {
 // =============================================================================
 // CONSTANTS
 // =============================================================================
-
-// Default page size (US Letter at 96 DPI)
-const DEFAULT_PAGE_WIDTH = 816;
-const DEFAULT_PAGE_HEIGHT = 1056;
-
-// Default margins (1 inch at 96 DPI)
-const DEFAULT_MARGINS: PageMargins = {
-  top: 96,
-  right: 96,
-  bottom: 96,
-  left: 96,
-};
 
 export const DEFAULT_PAGE_GAP = 24;
 const COMMENTS_SIDEBAR_SCROLL_GUTTER = 304;
@@ -1632,63 +1626,6 @@ function getTableRowOffset(
     offsetY += (tMeasure as TableMeasure).rows[ri]?.height ?? 0;
   }
   return offsetY;
-}
-
-/**
- * Convert twips to pixels (1 twip = 1/20 point, 96 pixels per inch).
- */
-function twipsToPixels(twips: number): number {
-  return Math.round((twips / 1440) * 96);
-}
-
-/**
- * Extract page size from section properties or use defaults.
- */
-function getPageSize(sectionProps: SectionProperties | null | undefined): {
-  w: number;
-  h: number;
-} {
-  return {
-    w: sectionProps?.pageWidth
-      ? twipsToPixels(sectionProps.pageWidth)
-      : DEFAULT_PAGE_WIDTH,
-    h: sectionProps?.pageHeight
-      ? twipsToPixels(sectionProps.pageHeight)
-      : DEFAULT_PAGE_HEIGHT,
-  };
-}
-
-/**
- * Extract margins from section properties or use defaults.
- */
-function getMargins(
-  sectionProps: SectionProperties | null | undefined,
-): PageMargins {
-  const top = sectionProps?.marginTop
-    ? twipsToPixels(sectionProps.marginTop)
-    : DEFAULT_MARGINS.top;
-  const bottom = sectionProps?.marginBottom
-    ? twipsToPixels(sectionProps.marginBottom)
-    : DEFAULT_MARGINS.bottom;
-
-  return {
-    top,
-    right: sectionProps?.marginRight
-      ? twipsToPixels(sectionProps.marginRight)
-      : DEFAULT_MARGINS.right,
-    bottom,
-    left: sectionProps?.marginLeft
-      ? twipsToPixels(sectionProps.marginLeft)
-      : DEFAULT_MARGINS.left,
-    // Header/footer distances - where the header/footer content starts
-    // Default to 0.5 inch (48px at 96 DPI) if not specified
-    header: sectionProps?.headerDistance
-      ? twipsToPixels(sectionProps.headerDistance)
-      : 48,
-    footer: sectionProps?.footerDistance
-      ? twipsToPixels(sectionProps.footerDistance)
-      : 48,
-  };
 }
 
 function pageMarginsEqual(left: PageMargins, right: PageMargins): boolean {
@@ -6761,7 +6698,7 @@ export function PagedEditor(
   // Calculate total height for scroll
   const totalHeight = useMemo(() => {
     if (!layout) {
-      return DEFAULT_PAGE_HEIGHT + 48;
+      return DEFAULT_PAGE_HEIGHT_PX + 48;
     }
     const numPages = layout.pages.length;
     return numPages * pageSize.h + (numPages - 1) * pageGap + 48;
