@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useRef } from "react";
 
-import { createFileRoute, Navigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 
 import { DefaultPendingComponent } from "@/components/route-components";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
@@ -24,11 +24,21 @@ export const Route = createFileRoute("/_protected/chat_/new")({
 // (ssr: false, null pendingComponent) shows nothing, leaving cold
 // direct loads of /chat/new on a blank page.
 function NewChatRedirect() {
-  const [threadId] = useState(() => createChatThreadId());
-  return (
-    <>
-      <Navigate params={{ threadId }} replace to="/chat/$threadId" />
-      <DefaultPendingComponent />
-    </>
-  );
+  const navigate = useNavigate();
+  const didRedirectRef = useRef(false);
+
+  useEffect(() => {
+    if (didRedirectRef.current) {
+      return;
+    }
+
+    didRedirectRef.current = true;
+    void navigate({
+      params: { threadId: createChatThreadId() },
+      replace: true,
+      to: "/chat/$threadId",
+    });
+  }, [navigate]);
+
+  return <DefaultPendingComponent />;
 }
