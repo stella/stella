@@ -2124,6 +2124,7 @@
     "lastUsedAgo": "Naposledy použité {time}",
     "loadFailed": "Nepodarilo sa načítať šablóny",
     "lookupFieldHint": "Zadajte číslo KRS; údaje o spoločnosti sa doplnia z registra.",
+    "moveToCategory": "Presunúť do kategórie",
     "moveToMatter": "Presunúť do spisu",
     "moveToMatterAnyway": "Aj tak presunúť",
     "newFromTemplate": "Nový dokument zo šablóny",

@@ -35,10 +35,12 @@ import {
   DropdownMenuTrigger,
 } from "@stll/ui/components/menu";
 import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
+import { TEMPLATE_DRAG_MIME } from "@/routes/_protected.knowledge/-components/template-drag";
 
 // ── Types ────────────────────────────────────────────
 
@@ -54,6 +56,10 @@ type TemplateCategorySidebarProps = {
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   onCategoriesChanged: () => void;
+  onAssignCategory: (
+    templateId: string,
+    categoryId: string | null,
+  ) => Promise<void>;
   tags: string[];
   selectedTag: string | null;
   onSelectTag: (tag: string | null) => void;
@@ -66,6 +72,7 @@ export const TemplateCategorySidebar = ({
   selectedId,
   onSelect,
   onCategoriesChanged,
+  onAssignCategory,
   tags,
   selectedTag,
   onSelectTag,
@@ -77,26 +84,18 @@ export const TemplateCategorySidebar = ({
   return (
     <div className="flex w-48 shrink-0 flex-col overflow-y-auto">
       <nav className="flex-1 p-2">
-        <button
-          className={`w-full rounded-md px-3 py-1.5 text-start text-sm ${
-            selectedId === null ? "bg-muted font-medium" : "hover:bg-muted/50"
-          }`}
-          onClick={() => onSelect(null)}
-          type="button"
-        >
-          {t("templates.allTemplates")}
-        </button>
-        <button
-          className={`w-full rounded-md px-3 py-1.5 text-start text-sm ${
-            selectedId === "uncategorized"
-              ? "bg-muted font-medium"
-              : "hover:bg-muted/50"
-          }`}
-          onClick={() => onSelect("uncategorized")}
-          type="button"
-        >
-          {t("common.uncategorized")}
-        </button>
+        <CategoryNavButton
+          isSelected={selectedId === null}
+          label={t("templates.allTemplates")}
+          onAssign={(templateId) => void onAssignCategory(templateId, null)}
+          onSelect={() => onSelect(null)}
+        />
+        <CategoryNavButton
+          isSelected={selectedId === "uncategorized"}
+          label={t("common.uncategorized")}
+          onAssign={(templateId) => void onAssignCategory(templateId, null)}
+          onSelect={() => onSelect("uncategorized")}
+        />
 
         {categories.length > 0 && <div className="my-1 border-t" />}
 
@@ -105,6 +104,7 @@ export const TemplateCategorySidebar = ({
             category={cat}
             isSelected={selectedId === cat.id}
             key={cat.id}
+            onAssign={(templateId) => void onAssignCategory(templateId, cat.id)}
             onCategoriesChanged={onCategoriesChanged}
             onSelect={() => onSelect(cat.id)}
           />
@@ -156,6 +156,82 @@ export const TemplateCategorySidebar = ({
   );
 };
 
+// ── Drop target ─────────────────────────────────────
+
+type DropTarget = {
+  isDragOver: boolean;
+  onDragOver: (e: React.DragEvent) => void;
+  onDragLeave: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent) => void;
+};
+
+/** Wires the dragged-template drop affordance for a category target.
+ *  `onAssign` receives the dragged template id; the caller binds the
+ *  destination category id (or null for All templates / Uncategorized). */
+const useCategoryDropTarget = (
+  onAssign: (templateId: string) => void,
+): DropTarget => {
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const onDragOver = (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes(TEMPLATE_DRAG_MIME)) {
+      return;
+    }
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setIsDragOver(true);
+  };
+
+  const onDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const templateId = e.dataTransfer.getData(TEMPLATE_DRAG_MIME);
+    if (templateId) {
+      onAssign(templateId);
+    }
+  };
+
+  return { isDragOver, onDragOver, onDragLeave, onDrop };
+};
+
+// ── Nav button (All templates / Uncategorized) ──────
+
+const CategoryNavButton = ({
+  label,
+  isSelected,
+  onSelect,
+  onAssign,
+}: {
+  label: string;
+  isSelected: boolean;
+  onSelect: () => void;
+  onAssign: (templateId: string) => void;
+}) => {
+  const drop = useCategoryDropTarget(onAssign);
+
+  return (
+    <button
+      className={cn(
+        "w-full rounded-md px-3 py-1.5 text-start text-sm transition-colors",
+        isSelected ? "bg-muted font-medium" : "hover:bg-muted/50",
+        drop.isDragOver && "ring-primary bg-muted ring-2 ring-inset",
+      )}
+      onClick={onSelect}
+      onDragLeave={drop.onDragLeave}
+      onDragOver={drop.onDragOver}
+      onDrop={drop.onDrop}
+      type="button"
+    >
+      {label}
+    </button>
+  );
+};
+
 // ── Category Row ────────────────────────────────────
 
 const CategoryRow = ({
@@ -163,13 +239,16 @@ const CategoryRow = ({
   isSelected,
   onSelect,
   onCategoriesChanged,
+  onAssign,
 }: {
   category: TemplateCategoryItem;
   isSelected: boolean;
   onSelect: () => void;
   onCategoriesChanged: () => void;
+  onAssign: (templateId: string) => void;
 }) => {
   const t = useTranslations();
+  const drop = useCategoryDropTarget(onAssign);
   const canUpdateTemplate = usePermissions({ template: ["update"] });
   const canDeleteTemplate = usePermissions({ template: ["delete"] });
   const [editOpen, setEditOpen] = useState(false);
@@ -201,11 +280,20 @@ const CategoryRow = ({
   }, [category.id, t, onCategoriesChanged]);
 
   return (
-    <div className="group flex items-center">
+    <div
+      className={cn(
+        "group flex items-center rounded-md transition-colors",
+        drop.isDragOver && "ring-primary bg-muted ring-2 ring-inset",
+      )}
+      onDragLeave={drop.onDragLeave}
+      onDragOver={drop.onDragOver}
+      onDrop={drop.onDrop}
+    >
       <button
-        className={`min-w-0 flex-1 truncate rounded-md px-3 py-1.5 text-start text-sm ${
-          isSelected ? "bg-muted font-medium" : "hover:bg-muted/50"
-        }`}
+        className={cn(
+          "min-w-0 flex-1 truncate rounded-md px-3 py-1.5 text-start text-sm",
+          isSelected ? "bg-muted font-medium" : "hover:bg-muted/50",
+        )}
         onClick={onSelect}
         type="button"
       >

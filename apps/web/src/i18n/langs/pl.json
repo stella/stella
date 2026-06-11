@@ -2124,6 +2124,7 @@
     "lastUsedAgo": "Ostatnio użyto {time}",
     "loadFailed": "Nie udało się załadować szablonów",
     "lookupFieldHint": "Wpisz numer KRS; dane spółki zostaną uzupełnione z rejestru.",
+    "moveToCategory": "Przenieś do kategorii",
     "moveToMatter": "Przenieś do sprawy",
     "moveToMatterAnyway": "Przenieś mimo to",
     "newFromTemplate": "Nowy dokument z szablonu",

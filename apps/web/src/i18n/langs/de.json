@@ -2124,6 +2124,7 @@
     "lastUsedAgo": "Zuletzt verwendet {time}",
     "loadFailed": "Vorlagen konnten nicht geladen werden",
     "lookupFieldHint": "KRS-Nummer eingeben; die Unternehmensdaten werden aus dem Register übernommen.",
+    "moveToCategory": "In Kategorie verschieben",
     "moveToMatter": "In Akte verschieben",
     "moveToMatterAnyway": "Trotzdem verschieben",
     "newFromTemplate": "Neues Dokument aus Vorlage",

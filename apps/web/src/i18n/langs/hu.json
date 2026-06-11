@@ -2124,6 +2124,7 @@
     "lastUsedAgo": "Utoljára használva {time}",
     "loadFailed": "Nem sikerült betölteni a sablonokat",
     "lookupFieldHint": "Adja meg a KRS-számot; a cég adatai a nyilvántartásból kerülnek kitöltésre.",
+    "moveToCategory": "Áthelyezés kategóriába",
     "moveToMatter": "Áthelyezés ügyiratba",
     "moveToMatterAnyway": "Áthelyezés így is",
     "newFromTemplate": "Új dokumentum sablonból",

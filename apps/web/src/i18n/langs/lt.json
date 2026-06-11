@@ -2124,6 +2124,7 @@
     "lastUsedAgo": "Paskutinį kartą naudota {time}",
     "loadFailed": "Nepavyko įkelti šablonų",
     "lookupFieldHint": "Įveskite KRS numerį; įmonės duomenys užpildomi iš registro.",
+    "moveToCategory": "Perkelti į kategoriją",
     "moveToMatter": "Perkelti į bylą",
     "moveToMatterAnyway": "Vis tiek perkelti",
     "newFromTemplate": "Naujas dokumentas iš šablono",

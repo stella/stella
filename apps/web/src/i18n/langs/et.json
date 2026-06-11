@@ -2124,6 +2124,7 @@
     "lastUsedAgo": "Viimati kasutatud {time}",
     "loadFailed": "Mallide laadimine ebaõnnestus",
     "lookupFieldHint": "Sisestage KRS-number; ettevõtte andmed täidetakse registrist.",
+    "moveToCategory": "Teisalda kategooriasse",
     "moveToMatter": "Teisalda toimikusse",
     "moveToMatterAnyway": "Teisalda ikkagi",
     "newFromTemplate": "Uus dokument mallist",

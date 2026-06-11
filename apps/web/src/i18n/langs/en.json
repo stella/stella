@@ -2124,6 +2124,7 @@
     "lastUsedAgo": "Last used {time}",
     "loadFailed": "Failed to load templates",
     "lookupFieldHint": "Enter a KRS number; the company details are filled from the register.",
+    "moveToCategory": "Move to category",
     "moveToMatter": "Move to matter",
     "moveToMatterAnyway": "Move anyway",
     "newFromTemplate": "New document from template",

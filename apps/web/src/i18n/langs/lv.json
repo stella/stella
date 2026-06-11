@@ -2124,6 +2124,7 @@
     "lastUsedAgo": "Pēdējoreiz izmantots {time}",
     "loadFailed": "Neizdevās ielādēt veidnes",
     "lookupFieldHint": "Ievadiet KRS numuru; uzņēmuma dati tiek aizpildīti no reģistra.",
+    "moveToCategory": "Pārvietot uz kategoriju",
     "moveToMatter": "Pārvietot uz lietu",
     "moveToMatterAnyway": "Tomēr pārvietot",
     "newFromTemplate": "Jauns dokuments no veidnes",

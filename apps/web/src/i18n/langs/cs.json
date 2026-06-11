@@ -2124,6 +2124,7 @@
     "lastUsedAgo": "Naposledy použito {time}",
     "loadFailed": "Nepodařilo se načíst šablony",
     "lookupFieldHint": "Zadejte číslo KRS; údaje o společnosti se doplní z rejstříku.",
+    "moveToCategory": "Přesunout do kategorie",
     "moveToMatter": "Přesunout do spisu",
     "moveToMatterAnyway": "Přesto přesunout",
     "newFromTemplate": "Nový dokument ze šablony",

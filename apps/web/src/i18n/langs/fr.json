@@ -2124,6 +2124,7 @@
     "lastUsedAgo": "Dernière utilisation {time}",
     "loadFailed": "Impossible de charger les modèles",
     "lookupFieldHint": "Saisissez un numéro KRS ; les données de la société sont remplies depuis le registre.",
+    "moveToCategory": "Déplacer vers une catégorie",
     "moveToMatter": "Déplacer vers un dossier",
     "moveToMatterAnyway": "Déplacer quand même",
     "newFromTemplate": "Nouveau document à partir d'un modèle",

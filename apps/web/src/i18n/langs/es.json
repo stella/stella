@@ -2124,6 +2124,7 @@
     "lastUsedAgo": "Último uso {time}",
     "loadFailed": "No se pudieron cargar las plantillas",
     "lookupFieldHint": "Introduzca un número KRS; los datos de la empresa se rellenan desde el registro.",
+    "moveToCategory": "Mover a categoría",
     "moveToMatter": "Mover a asunto",
     "moveToMatterAnyway": "Mover de todos modos",
     "newFromTemplate": "Nuevo documento desde plantilla",
