@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
@@ -236,10 +236,12 @@ const corpusIndexSearch = async (
       // not satisfy filters it no longer matches.
       const rehydrationFilters: SQL[] = [
         redistributableLegislationSource,
-        // Reject hits whose corpus state was cleared for retry (failed
-        // corpus write): the index copy can outlive the row's corpus
-        // state transiently and must not serve stale snippets.
-        isNotNull(legislationDocuments.contentHash),
+        // Accept only hits whose index state is current. The equality
+        // fails for rows cleared for a write retry (null contentHash)
+        // and for rows whose payload changed but are not re-indexed yet
+        // (indexedHash cleared by ingestion), so stale index copies
+        // cannot serve outdated snippets.
+        eq(legislationDocuments.indexedHash, legislationDocuments.contentHash),
       ];
       if (body.jurisdiction) {
         rehydrationFilters.push(
