@@ -3,8 +3,9 @@ import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
-import { caseLawDecisions } from "@/api/db/schema";
+import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { validCaseLawLanguageAlternateCountSql } from "@/api/handlers/case-law/decisions/language";
+import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { isUuid, tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
@@ -34,7 +35,7 @@ export const listDecisionsHandler = async (
   caseLawDb: CaseLawPublicReadDb,
 ) => {
   const limit = query.limit ?? LIMITS.caseLawSearchPageSizeDefault;
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [redistributableCaseLawSource];
 
   if (query.cursor) {
     const separatorIdx = query.cursor.indexOf("_");
@@ -102,7 +103,11 @@ export const listDecisionsHandler = async (
         createdAt: caseLawDecisions.createdAt,
       })
       .from(caseLawDecisions)
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .innerJoin(
+        caseLawSources,
+        eq(caseLawSources.id, caseLawDecisions.sourceId),
+      )
+      .where(and(...conditions))
       .orderBy(desc(caseLawDecisions.createdAt), desc(caseLawDecisions.id))
       .limit(limit + 1),
   );
@@ -123,8 +128,15 @@ export const listDecisionsHandler = async (
               count: validCaseLawLanguageAlternateCountSql,
             })
             .from(caseLawDecisions)
+            .innerJoin(
+              caseLawSources,
+              eq(caseLawSources.id, caseLawDecisions.sourceId),
+            )
             .where(
-              inArray(caseLawDecisions.languageGroupKey, languageGroupKeys),
+              and(
+                inArray(caseLawDecisions.languageGroupKey, languageGroupKeys),
+                redistributableCaseLawSource,
+              ),
             )
             .groupBy(caseLawDecisions.languageGroupKey),
         )

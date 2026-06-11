@@ -1,13 +1,17 @@
-import { inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { status } from "elysia";
 import type { Static } from "elysia";
 
-import { caseLawDecisions } from "@/api/db/schema";
+import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import { courtWeightSql } from "@/api/handlers/case-law/citation-score";
 import { validCaseLawLanguageAlternateCountSql } from "@/api/handlers/case-law/decisions/language";
 import type { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
-import { bodyPreviewJoin } from "@/api/handlers/case-law/decisions/search-sql";
+import {
+  bodyPreviewJoin,
+  redistributableSourceJoin,
+} from "@/api/handlers/case-law/decisions/search-sql";
+import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
 // eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -171,6 +175,7 @@ const searchPostgresDecisions = async (
     FROM case_law_search_documents sd
     JOIN case_law_decisions d
       ON d.id = sd.decision_id
+    ${redistributableSourceJoin}
     ${bodyPreviewJoin}
     LEFT JOIN ${citationBoost} ON true
     WHERE sd.tsv @@ ${tsQuery}
@@ -185,6 +190,7 @@ const searchPostgresDecisions = async (
     FROM case_law_search_documents sd
     JOIN case_law_decisions d
       ON d.id = sd.decision_id
+    ${redistributableSourceJoin}
     WHERE sd.tsv @@ ${tsQuery}
       ${allFilters}
   `;
@@ -195,6 +201,7 @@ const searchPostgresDecisions = async (
     FROM case_law_search_documents sd
     JOIN case_law_decisions d
       ON d.id = sd.decision_id
+    ${redistributableSourceJoin}
     WHERE sd.tsv @@ ${tsQuery}
       ${countryFilter}
       ${dateFromFilter}
@@ -213,6 +220,7 @@ const searchPostgresDecisions = async (
     FROM case_law_search_documents sd
     JOIN case_law_decisions d
       ON d.id = sd.decision_id
+    ${redistributableSourceJoin}
     WHERE sd.tsv @@ ${tsQuery}
       ${courtFilter}
       ${dateFromFilter}
@@ -231,6 +239,7 @@ const searchPostgresDecisions = async (
     FROM case_law_search_documents sd
     JOIN case_law_decisions d
       ON d.id = sd.decision_id
+    ${redistributableSourceJoin}
     WHERE sd.tsv @@ ${tsQuery}
       ${courtFilter}
       ${countryFilter}
@@ -471,7 +480,16 @@ const searchCorpusIndexDecisions = async (
                   createdAt: caseLawDecisions.createdAt,
                 })
                 .from(caseLawDecisions)
-                .where(inArray(caseLawDecisions.id, ids)),
+                .innerJoin(
+                  caseLawSources,
+                  eq(caseLawSources.id, caseLawDecisions.sourceId),
+                )
+                .where(
+                  and(
+                    inArray(caseLawDecisions.id, ids),
+                    redistributableCaseLawSource,
+                  ),
+                ),
             );
 
       const byId = new Map(rows.map((row) => [String(row.id), row]));

@@ -8,6 +8,7 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { readCorpusText } from "@/api/handlers/case-law/corpus-storage";
+import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   getCorpusIndexClient,
@@ -62,13 +63,6 @@ const SELECT_COLUMNS = {
   fulltext: caseLawDecisions.fulltext,
   contentHash: caseLawDecisions.contentHash,
 };
-
-// Index only redistributable sources (license gate). null descriptor =
-// legacy public-record source, treated as redistributable.
-const redistributable = sql`(
-  ${caseLawSources.descriptor} IS NULL
-  OR (${caseLawSources.descriptor} ->> 'allowsRedistribution') = 'true'
-)`;
 
 // A row is indexable once its canonical payload is in object storage.
 const hasContent = sql`${caseLawDecisions.contentHash} IS NOT NULL`;
@@ -167,7 +161,7 @@ export const backfillCorpusIndex = async (
       .where(
         and(
           hasContent,
-          redistributable,
+          redistributableCaseLawSource,
           or(
             isNull(caseLawDecisions.indexedGeneration),
             sql`${caseLawDecisions.indexedGeneration} <> (${generation} || '_' || lower(${caseLawDecisions.country}))`,
@@ -193,7 +187,7 @@ export const backfillCorpusIndex = async (
             .where(
               and(
                 hasContent,
-                redistributable,
+                redistributableCaseLawSource,
                 sql`${caseLawDecisions.indexedGeneration} = (${generation} || '_' || lower(${caseLawDecisions.country}))`,
                 sql`${caseLawDecisions.indexedHash} IS DISTINCT FROM ${caseLawDecisions.contentHash}`,
               ),

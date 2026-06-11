@@ -3,7 +3,8 @@ import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
-import { caseLawDecisions } from "@/api/db/schema";
+import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -147,6 +148,11 @@ export const listSitemapShardsHandler = async (
         lastmod: sql<Date | null>`max(${caseLawDecisions.updatedAt})`,
       })
       .from(caseLawDecisions)
+      .innerJoin(
+        caseLawSources,
+        eq(caseLawSources.id, caseLawDecisions.sourceId),
+      )
+      .where(redistributableCaseLawSource)
       .groupBy(caseLawDecisions.country, decisionYearSql, decisionMonthSql)
       .orderBy(
         asc(caseLawDecisions.country),
@@ -167,6 +173,11 @@ export const listSitemapShardsHandler = async (
             lastmod: sql<Date | null>`max(${caseLawDecisions.updatedAt})`,
           })
           .from(caseLawDecisions)
+          .innerJoin(
+            caseLawSources,
+            eq(caseLawSources.id, caseLawDecisions.sourceId),
+          )
+          .where(redistributableCaseLawSource)
           .groupBy(
             caseLawDecisions.country,
             decisionYearSql,
@@ -273,7 +284,11 @@ export const listSitemapShardDecisionsHandler = async (
         updatedAt: caseLawDecisions.updatedAt,
       })
       .from(caseLawDecisions)
-      .where(and(...conditions))
+      .innerJoin(
+        caseLawSources,
+        eq(caseLawSources.id, caseLawDecisions.sourceId),
+      )
+      .where(and(redistributableCaseLawSource, ...conditions))
       .orderBy(desc(caseLawDecisions.updatedAt), desc(caseLawDecisions.id))
       .limit(LIMITS.caseLawSitemapShardUrlLimit + 1);
 
@@ -306,7 +321,16 @@ export const listSitemapShardDecisionsHandler = async (
           updatedAt: caseLawDecisions.updatedAt,
         })
         .from(caseLawDecisions)
-        .where(inArray(caseLawDecisions.languageGroupKey, groupKeyBatch))
+        .innerJoin(
+          caseLawSources,
+          eq(caseLawSources.id, caseLawDecisions.sourceId),
+        )
+        .where(
+          and(
+            inArray(caseLawDecisions.languageGroupKey, groupKeyBatch),
+            redistributableCaseLawSource,
+          ),
+        )
         .orderBy(asc(caseLawDecisions.language), asc(caseLawDecisions.id));
       alternateRows.push(...batchRows);
     }

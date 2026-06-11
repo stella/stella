@@ -1,16 +1,19 @@
+import { panic } from "better-result";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { status } from "elysia";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import { caseLawDecisions } from "@/api/db/schema";
+import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
+import { isRedistributable } from "@/api/handlers/case-law/corpus-source";
 import {
   readCorpusAst,
   readCorpusText,
 } from "@/api/handlers/case-law/corpus-storage";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
+import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -84,7 +87,16 @@ const listPublicDecisionLanguageAlternates = async ({
         updatedAt: caseLawDecisions.updatedAt,
       })
       .from(caseLawDecisions)
-      .where(eq(caseLawDecisions.languageGroupKey, languageGroupKey))
+      .innerJoin(
+        caseLawSources,
+        eq(caseLawSources.id, caseLawDecisions.sourceId),
+      )
+      .where(
+        and(
+          eq(caseLawDecisions.languageGroupKey, languageGroupKey),
+          redistributableCaseLawSource,
+        ),
+      )
       .orderBy(asc(caseLawDecisions.language), asc(caseLawDecisions.id)),
   );
   const dedupedAlternates = dedupeAlternatesByLanguage(alternates);
@@ -128,7 +140,9 @@ export const readDecisionHandler = async (
       },
       with: {
         source: {
-          columns: { id: true, name: true, adapterKey: true },
+          // descriptor: only for the redistribution gate below,
+          // never returned to the client.
+          columns: { id: true, name: true, adapterKey: true, descriptor: true },
         },
         citationsFrom: {
           columns: {
@@ -151,6 +165,12 @@ export const readDecisionHandler = async (
   );
 
   if (!decision) {
+    return status(404, { message: "Decision not found" });
+  }
+
+  const source =
+    decision.source ?? panic("Case-law decision has no source relation");
+  if (!isRedistributable(source.descriptor)) {
     return status(404, { message: "Decision not found" });
   }
 
@@ -197,7 +217,11 @@ export const readDecisionHandler = async (
     metadata: decision.metadata,
     createdAt: decision.createdAt,
     updatedAt: decision.updatedAt,
-    source: decision.source,
+    source: {
+      id: source.id,
+      name: source.name,
+      adapterKey: source.adapterKey,
+    },
     citationsFrom: decision.citationsFrom,
     citationsTo: decision.citationsTo,
     languageAlternates,
