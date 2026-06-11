@@ -63,6 +63,65 @@ const buildAuthHeader = (apiKey: string): string => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const isOptionalRecord = (value: unknown): boolean =>
+  value === undefined || isRecord(value);
+
+const isOptionalStringArray = (value: unknown): boolean =>
+  value === undefined ||
+  (Array.isArray(value) && value.every((item) => typeof item === "string"));
+
+const isCompaniesHousePreviousName = (value: unknown): boolean =>
+  isRecord(value) && typeof value["name"] === "string";
+
+const isCompaniesHouseRawCompanyProfile = (
+  value: unknown,
+): value is CompaniesHouseRawCompanyProfile =>
+  isRecord(value) &&
+  typeof value["company_name"] === "string" &&
+  typeof value["company_number"] === "string" &&
+  isOptionalRecord(value["registered_office_address"]) &&
+  isOptionalRecord(value["service_address"]) &&
+  isOptionalStringArray(value["sic_codes"]) &&
+  isOptionalRecord(value["accounts"]) &&
+  isOptionalRecord(value["confirmation_statement"]) &&
+  (value["previous_company_names"] === undefined ||
+    (Array.isArray(value["previous_company_names"]) &&
+      value["previous_company_names"].every(isCompaniesHousePreviousName)));
+
+const isCompaniesHouseSearchItem = (value: unknown): boolean =>
+  isRecord(value) &&
+  typeof value["company_number"] === "string" &&
+  typeof value["title"] === "string" &&
+  isOptionalRecord(value["address"]) &&
+  isOptionalStringArray(value["description_identifier"]);
+
+const isCompaniesHouseRawSearchResponse = (
+  value: unknown,
+): value is CompaniesHouseRawSearchResponse =>
+  isRecord(value) &&
+  (value["items"] === undefined ||
+    (Array.isArray(value["items"]) &&
+      value["items"].every(isCompaniesHouseSearchItem)));
+
+const isCompaniesHouseOfficer = (value: unknown): boolean =>
+  isRecord(value) &&
+  typeof value["name"] === "string" &&
+  typeof value["officer_role"] === "string" &&
+  isOptionalRecord(value["date_of_birth"]) &&
+  isOptionalRecord(value["address"]) &&
+  isOptionalRecord(value["principal_office_address"]) &&
+  isOptionalRecord(value["identification"]);
+
+const isCompaniesHouseRawOfficersResponse = (
+  value: unknown,
+): value is CompaniesHouseRawOfficersResponse =>
+  isRecord(value) &&
+  (value["items"] === undefined ||
+    (Array.isArray(value["items"]) &&
+      value["items"].every(isCompaniesHouseOfficer))) &&
+  (value["total_results"] === undefined ||
+    typeof value["total_results"] === "number");
+
 const readUpstreamMessage = async (
   response: Response,
 ): Promise<string | null> => {
@@ -104,6 +163,7 @@ const readUpstreamMessage = async (
 const companiesHouseGet = async <T>(
   url: string,
   apiKey: string,
+  isExpectedShape: (value: unknown) => value is T,
 ): Promise<T | null> => {
   let response: Response;
   try {
@@ -154,18 +214,13 @@ const companiesHouseGet = async <T>(
       cause: error,
     });
   }
-  if (!isRecord(json)) {
+  if (!isExpectedShape(json)) {
     throw new CompaniesHouseAPIError({
       message: "Companies House returned an unexpected response shape",
       httpStatus: response.status,
     });
   }
-  // SAFETY: Companies House publishes a stable, documented JSON shape
-  // for every endpoint we call. The parser tolerates absent optional
-  // fields, so we narrow structurally at the top (`isRecord`) and let
-  // the parser handle the rest.
-  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
-  return json as T;
+  return json;
 };
 
 // ---------------------------------------------------------------------------
@@ -199,6 +254,7 @@ export const lookupByCompanyNumber = async (
   const raw = await companiesHouseGet<CompaniesHouseRawCompanyProfile>(
     url,
     config.apiKey,
+    isCompaniesHouseRawCompanyProfile,
   );
   if (!raw) {
     return null;
@@ -252,6 +308,7 @@ export const searchByName = async (
   const raw = await companiesHouseGet<CompaniesHouseRawSearchResponse>(
     url,
     config.apiKey,
+    isCompaniesHouseRawSearchResponse,
   );
   if (!raw) {
     return [];
@@ -320,6 +377,7 @@ export const lookupOfficersByCompanyNumber = async (
     const raw = await companiesHouseGet<CompaniesHouseRawOfficersResponse>(
       url,
       config.apiKey,
+      isCompaniesHouseRawOfficersResponse,
     );
     if (!raw) {
       return collected;
