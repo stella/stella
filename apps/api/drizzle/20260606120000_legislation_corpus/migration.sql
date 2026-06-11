@@ -3,6 +3,12 @@
 -- family. Additive. RLS: stella reads, stella_ingestion writes (same
 -- global-corpus model as case_law_*; policy names are reused).
 
+-- Bound lock waits and runtime for the whole wrapping transaction.
+set lock_timeout = '10s';
+--> statement-breakpoint
+set statement_timeout = '10min';
+--> statement-breakpoint
+
 CREATE TABLE "legislation_sources" (
   "id" uuid PRIMARY KEY NOT NULL,
   "adapter_key" varchar(64) NOT NULL,
@@ -81,7 +87,7 @@ ALTER TABLE "legislation_documents"
   FOREIGN KEY ("source_id") REFERENCES "legislation_sources"("id") ON DELETE CASCADE;
 --> statement-breakpoint
 ALTER TABLE "legislation_search_documents"
-  ADD CONSTRAINT "legislation_search_documents_document_id_legislation_documents_id_fk"
+  ADD CONSTRAINT "legislation_search_documents_document_id_fk"
   FOREIGN KEY ("document_id") REFERENCES "legislation_documents"("id") ON DELETE CASCADE;
 --> statement-breakpoint
 ALTER TABLE "legislation_index_jobs"

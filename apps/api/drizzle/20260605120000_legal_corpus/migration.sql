@@ -6,6 +6,12 @@
 -- until the corpus index cutover is proven. Those columns/tables are dropped
 -- only in a later, separately-acknowledged release.
 
+-- Bound lock waits and runtime for the whole wrapping transaction.
+set lock_timeout = '10s';
+--> statement-breakpoint
+set statement_timeout = '10min';
+--> statement-breakpoint
+
 -- 1. Per-source license / redistribution descriptor (see corpus-source.ts).
 ALTER TABLE "case_law_sources"
   ADD COLUMN "descriptor" jsonb;
@@ -42,9 +48,15 @@ ALTER TABLE "case_law_decisions"
 ALTER TABLE "case_law_decisions"
   ADD COLUMN "indexed_at" timestamp;
 --> statement-breakpoint
+-- The only writer to case_law_decisions is the background ingestion
+-- daemon; blocking its writes for the index build is acceptable and
+-- reads stay available, so CONCURRENTLY (which would require splitting
+-- the wrapping transaction) is not needed.
+-- squawk-ignore require-concurrent-index-creation
 CREATE INDEX "case_law_decisions_citation_authority_idx"
   ON "case_law_decisions" ("citation_authority");
 --> statement-breakpoint
+-- squawk-ignore require-concurrent-index-creation
 CREATE INDEX "case_law_decisions_indexed_idx"
   ON "case_law_decisions" ("indexed_hash", "content_hash");
 --> statement-breakpoint
