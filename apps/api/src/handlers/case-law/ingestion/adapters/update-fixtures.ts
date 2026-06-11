@@ -1,4 +1,3 @@
-/* eslint-disable no-console -- CLI script */
 /**
  * Update adapter test fixtures from live APIs.
  *
@@ -19,6 +18,14 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
+
+const writeStdoutLine = (message = ""): void => {
+  process.stdout.write(`${message}\n`);
+};
+
+const writeStderrLine = (message = ""): void => {
+  process.stderr.write(`${message}\n`);
+};
 
 type FixtureRecord = {
   /** Adapter key. */
@@ -89,8 +96,8 @@ if (import.meta.main) {
   const allKeys = listAdapterKeys();
 
   if (adapterFlag !== -1 && !rawTarget) {
-    console.error("--adapter requires a value");
-    console.error("Available:", allKeys.join(", "));
+    writeStderrLine("--adapter requires a value");
+    writeStderrLine(`Available: ${allKeys.join(", ")}`);
     process.exit(1);
   }
 
@@ -100,16 +107,17 @@ if (import.meta.main) {
     : allKeys;
 
   if (keysToUpdate.length === 0) {
-    console.error(
+    writeStderrLine(
       targetAdapter
         ? `Unknown adapter: ${targetAdapter}`
         : "No adapters registered",
     );
-    console.error("Available:", allKeys.join(", "));
+    writeStderrLine(`Available: ${allKeys.join(", ")}`);
     process.exit(1);
   }
 
-  console.log(`Updating fixtures for ${keysToUpdate.length} adapter(s)...\n`);
+  writeStdoutLine(`Updating fixtures for ${keysToUpdate.length} adapter(s)...`);
+  writeStdoutLine();
 
   let failures = 0;
   for (const [i, key] of keysToUpdate.entries()) {
@@ -117,10 +125,10 @@ if (import.meta.main) {
     const result = await updateAdapter(key);
 
     if ("error" in result) {
-      console.log(`FAILED: ${result.error}`);
+      writeStdoutLine(`FAILED: ${result.error}`);
       failures++;
     } else {
-      console.log(`OK (${result.count} decisions → ${result.filename})`);
+      writeStdoutLine(`OK (${result.count} decisions → ${result.filename})`);
     }
 
     // Rate limit between adapters
@@ -129,7 +137,7 @@ if (import.meta.main) {
     }
   }
 
-  console.log(
+  writeStdoutLine(
     `\n${keysToUpdate.length - failures}/${keysToUpdate.length} updated`,
   );
   if (failures > 0) {

@@ -1,4 +1,3 @@
-/* eslint-disable no-console -- CLI script */
 /**
  * Adapter health checks.
  *
@@ -22,6 +21,10 @@ import {
   ADAPTER_MODULES,
   loadAdapterByKey,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
+
+const writeStdoutLine = (message = ""): void => {
+  process.stdout.write(`${message}\n`);
+};
 
 type LoadResult =
   | { adapter: SourceAdapter; key: string }
@@ -273,9 +276,10 @@ export const formatHealthReport = (
 
 // Run as standalone script
 if (import.meta.main) {
-  console.log("Running adapter health checks...\n");
+  writeStdoutLine("Running adapter health checks...");
+  writeStdoutLine();
   const results = await checkAllAdapters();
-  console.log(formatHealthReport(results));
+  writeStdoutLine(formatHealthReport(results));
   const failed = results.filter(
     (r) => r.status === "down" || r.status === "degraded",
   );
