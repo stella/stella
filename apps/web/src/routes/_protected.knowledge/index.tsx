@@ -39,6 +39,12 @@ type KnowledgeSection = {
 
 export const knowledgeSections: readonly KnowledgeSection[] = [
   {
+    key: "tools",
+    icon: PackageIcon,
+    to: "/knowledge/tools",
+    titleKey: "knowledge.sections.tools.title",
+  },
+  {
     key: "templates",
     icon: LayoutTemplateIcon,
     to: "/knowledge/templates",
@@ -49,12 +55,6 @@ export const knowledgeSections: readonly KnowledgeSection[] = [
     icon: TextQuoteIcon,
     to: "/knowledge/clauses",
     titleKey: "common.clauses",
-  },
-  {
-    key: "tools",
-    icon: PackageIcon,
-    to: "/knowledge/tools",
-    titleKey: "knowledge.sections.tools.title",
   },
   { key: "agents", icon: BotIcon, titleKey: "knowledge.sections.agents.title" },
 ];

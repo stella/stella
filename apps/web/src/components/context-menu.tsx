@@ -5,6 +5,7 @@ import { ContextMenu as ContextMenuPrimitive } from "@base-ui/react/context-menu
 import {
   MenuItem,
   MenuPopup,
+  MenuSeparator,
   MenuSub,
   MenuSubPopup,
   MenuSubTrigger,
@@ -18,6 +19,9 @@ export type ContextMenuAction = {
   disabled?: boolean;
   checked?: boolean;
   submenu?: readonly ContextMenuAction[];
+  /** Draw a divider above this item — e.g. to set a trailing "New …" action
+   *  apart from the list of existing choices above it. */
+  separatorBefore?: boolean;
 };
 
 type ContextMenuProps = {
@@ -56,32 +60,40 @@ export const ContextMenu = ({ actions, children }: ContextMenuProps) => {
 };
 
 const ContextMenuActionItem = ({ action }: { action: ContextMenuAction }) => {
+  const separator = action.separatorBefore ? <MenuSeparator /> : null;
+
   if (action.submenu) {
     return (
-      <MenuSub>
-        <MenuSubTrigger>
-          {action.icon}
-          {action.label}
-        </MenuSubTrigger>
-        <MenuSubPopup>
-          {action.submenu.map((sub) => (
-            <ContextMenuActionItem action={sub} key={sub.label} />
-          ))}
-        </MenuSubPopup>
-      </MenuSub>
+      <>
+        {separator}
+        <MenuSub>
+          <MenuSubTrigger>
+            {action.icon}
+            {action.label}
+          </MenuSubTrigger>
+          <MenuSubPopup>
+            {action.submenu.map((sub) => (
+              <ContextMenuActionItem action={sub} key={sub.label} />
+            ))}
+          </MenuSubPopup>
+        </MenuSub>
+      </>
     );
   }
 
   return (
-    <MenuItem
-      className={
-        action.variant === "destructive" ? "text-destructive" : undefined
-      }
-      disabled={action.disabled === true}
-      onClick={action.onClick}
-    >
-      {action.icon}
-      {action.label}
-    </MenuItem>
+    <>
+      {separator}
+      <MenuItem
+        className={
+          action.variant === "destructive" ? "text-destructive" : undefined
+        }
+        disabled={action.disabled === true}
+        onClick={action.onClick}
+      >
+        {action.icon}
+        {action.label}
+      </MenuItem>
+    </>
   );
 };

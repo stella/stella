@@ -9,6 +9,9 @@ import {
   MoreHorizontalIcon,
   PencilLineIcon,
   PlusIcon,
+  Rows2Icon,
+  Rows3Icon,
+  SquarePenIcon,
   TagIcon,
   Trash2Icon,
   WandSparklesIcon,
@@ -40,11 +43,13 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@stll/ui/components/menu";
+import { SegmentedIconToggle } from "@stll/ui/components/segmented-icon-toggle";
 import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 
@@ -59,7 +64,10 @@ import { DOCX_MIME } from "@/lib/consts";
 import { userErrorMessage } from "@/lib/errors";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
-import { TemplateCategorySidebar } from "@/routes/_protected.knowledge/-components/template-category-sidebar";
+import {
+  CategoryFormDialog,
+  TemplateCategorySidebar,
+} from "@/routes/_protected.knowledge/-components/template-category-sidebar";
 import type { TemplateCategoryItem } from "@/routes/_protected.knowledge/-components/template-category-sidebar";
 import { TEMPLATE_DRAG_MIME } from "@/routes/_protected.knowledge/-components/template-drag";
 import { TemplateUpload } from "@/routes/_protected.knowledge/-components/template-upload";
@@ -123,6 +131,12 @@ export const TemplateList = ({
   const [discovering, setDiscovering] = useState(false);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [density, setDensity] = useState<TemplateDensity>(readTemplateDensity);
+
+  const changeDensity = (next: TemplateDensity) => {
+    setDensity(next);
+    writeTemplateDensity(next);
+  };
 
   const discover = async (file: File) => {
     if (file.type !== DOCX_MIME) {
@@ -276,27 +290,30 @@ export const TemplateList = ({
               </span>
             )}
           </div>
-          {canCreateTemplate && (
-            <>
-              <Button
-                disabled={discovering}
-                onClick={() => inputRef.current?.click()}
-                size="sm"
-              >
-                <PlusIcon />
-                {discovering
-                  ? t("templates.discovering")
-                  : t("templates.newTemplate")}
-              </Button>
-              <input
-                accept=".docx"
-                className="hidden"
-                onChange={handleFileChange}
-                ref={inputRef}
-                type="file"
-              />
-            </>
-          )}
+          <div className="flex shrink-0 items-center gap-2">
+            <DensityToggle density={density} onChange={changeDensity} />
+            {canCreateTemplate && (
+              <>
+                <Button
+                  disabled={discovering}
+                  onClick={() => inputRef.current?.click()}
+                  size="sm"
+                >
+                  <PlusIcon />
+                  {discovering
+                    ? t("templates.discovering")
+                    : t("templates.newTemplate")}
+                </Button>
+                <input
+                  accept=".docx"
+                  className="hidden"
+                  onChange={handleFileChange}
+                  ref={inputRef}
+                  type="file"
+                />
+              </>
+            )}
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -313,8 +330,10 @@ export const TemplateList = ({
               <TemplateRow
                 allTags={allTags}
                 categories={categories}
+                density={density}
                 key={template.id}
                 onAssignCategory={assignCategory}
+                onCategoriesChanged={onCategoriesChanged}
                 onDeleted={onDeleted}
                 onSelect={() => onSelect(template)}
                 template={template}
@@ -324,6 +343,30 @@ export const TemplateList = ({
         </div>
       </div>
     </div>
+  );
+};
+
+type DensityToggleProps = {
+  density: TemplateDensity;
+  onChange: (density: TemplateDensity) => void;
+};
+
+const DensityToggle = ({ density, onChange }: DensityToggleProps) => {
+  const t = useTranslations();
+
+  return (
+    <SegmentedIconToggle
+      onChange={onChange}
+      options={[
+        { value: "compact", icon: Rows3Icon, label: t("common.compact") },
+        {
+          value: "comfortable",
+          icon: Rows2Icon,
+          label: t("common.comfortable"),
+        },
+      ]}
+      value={density}
+    />
   );
 };
 
@@ -360,46 +403,70 @@ const categoryAction = (
 /** Renders a single `ContextMenuAction` inside the ⋯ dropdown, mirroring the
  *  right-click `ContextMenu` so both surfaces stay driven by one array. */
 const DropdownActionItem = ({ action }: { action: ContextMenuAction }) => {
+  const separator = action.separatorBefore ? <DropdownMenuSeparator /> : null;
+
   if (action.submenu) {
     return (
-      <DropdownMenuSub>
-        <DropdownMenuSubTrigger>
-          {action.icon}
-          {action.label}
-        </DropdownMenuSubTrigger>
-        <DropdownMenuSubContent>
-          {action.submenu.map((sub) => (
-            <DropdownActionItem action={sub} key={sub.label} />
-          ))}
-        </DropdownMenuSubContent>
-      </DropdownMenuSub>
+      <>
+        {separator}
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            {action.icon}
+            {action.label}
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            {action.submenu.map((sub) => (
+              <DropdownActionItem action={sub} key={sub.label} />
+            ))}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+      </>
     );
   }
 
   return (
-    <DropdownMenuItem
-      className={
-        action.variant === "destructive"
-          ? "text-destructive-foreground"
-          : undefined
-      }
-      disabled={action.disabled === true}
-      onClick={action.onClick}
-    >
-      {action.icon}
-      {action.label}
-    </DropdownMenuItem>
+    <>
+      {separator}
+      <DropdownMenuItem
+        className={
+          action.variant === "destructive"
+            ? "text-destructive-foreground"
+            : undefined
+        }
+        disabled={action.disabled === true}
+        onClick={action.onClick}
+      >
+        {action.icon}
+        {action.label}
+      </DropdownMenuItem>
+    </>
   );
+};
+
+type TemplateDensity = "compact" | "comfortable";
+
+const DENSITY_STORAGE_KEY = "stella.templates.density";
+
+/** Persisted list density; defaults to compact for fast scanning. */
+const readTemplateDensity = (): TemplateDensity =>
+  localStorage.getItem(DENSITY_STORAGE_KEY) === "comfortable"
+    ? "comfortable"
+    : "compact";
+
+const writeTemplateDensity = (density: TemplateDensity): void => {
+  localStorage.setItem(DENSITY_STORAGE_KEY, density);
 };
 
 type TemplateRowProps = {
   template: TemplateItem;
   allTags: string[];
   categories: TemplateCategoryItem[];
+  density: TemplateDensity;
   onAssignCategory: (
     templateId: string,
     categoryId: string | null,
   ) => Promise<void>;
+  onCategoriesChanged: () => void;
   onSelect: () => void;
   onDeleted: () => void;
 };
@@ -451,7 +518,9 @@ const TemplateRow = ({
   template,
   allTags,
   categories,
+  density,
   onAssignCategory,
+  onCategoriesChanged,
   onSelect,
   onDeleted,
 }: TemplateRowProps) => {
@@ -467,6 +536,7 @@ const TemplateRow = ({
   const [tagsOpen, setTagsOpen] = useState(false);
   const [guidanceOpen, setGuidanceOpen] = useState(false);
   const [useOpen, setUseOpen] = useState(false);
+  const [createCategoryOpen, setCreateCategoryOpen] = useState(false);
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -500,6 +570,13 @@ const TemplateRow = ({
 
   const rowActions: ContextMenuAction[] = [
     {
+      // Redundant with the whole-row click, but makes "you can edit this"
+      // explicit in both the right-click and ⋯ menus.
+      label: t("common.edit"),
+      icon: <SquarePenIcon />,
+      onClick: onSelect,
+    },
+    {
       label: t("templates.useTemplate"),
       icon: <WandSparklesIcon />,
       onClick: () => setUseOpen(true),
@@ -528,6 +605,12 @@ const TemplateRow = ({
         ),
       );
     }
+    categorySubmenu.push({
+      label: t("templates.createCategory"),
+      icon: <PlusIcon />,
+      separatorBefore: true,
+      onClick: () => setCreateCategoryOpen(true),
+    });
     rowActions.push(
       {
         label: t("templates.addTag"),
@@ -560,76 +643,96 @@ const TemplateRow = ({
     e.dataTransfer.effectAllowed = "move";
   };
 
+  // Trailing cluster — fixed width so it lines up across rows. `relative z-10`
+  // keeps Use / ⋯ clickable above the row-wide open affordance (the name
+  // button's stretched ::after). Opening the template is the whole-row click,
+  // mirroring the clause list; Use (fill) stays an explicit CTA.
+  const actions = (
+    <div className="relative z-10 flex shrink-0 items-center gap-2">
+      <Button onClick={() => setUseOpen(true)} size="xs" variant="outline">
+        {t("templates.useTemplate")}
+      </Button>
+      <Tooltip
+        content={template.authorName}
+        render={<span className="inline-flex" />}
+      >
+        <UserAvatar
+          className="size-6 shrink-0 text-[0.5625rem]"
+          image={template.authorImage}
+          name={template.authorName}
+        />
+      </Tooltip>
+      <DropdownMenu>
+        <DropdownMenuTrigger render={<Button size="icon-xs" variant="ghost" />}>
+          <MoreHorizontalIcon />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent>
+          {rowActions.map((action) => (
+            <DropdownActionItem action={action} key={action.label} />
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+
   return (
     <li className="group">
       <ContextMenu actions={rowActions}>
         <div
-          className="flex items-center gap-4 px-4 py-3"
+          className={
+            density === "compact"
+              ? "hover:bg-muted/50 relative flex cursor-pointer items-center gap-3 px-4 py-2 transition-colors"
+              : "hover:bg-muted/50 relative flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors"
+          }
           draggable
           onDragStart={handleDragStart}
         >
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <button
-              className="flex min-w-0 items-center gap-3 text-start hover:opacity-80"
-              onClick={onSelect}
-              type="button"
-            >
-              <TemplateMonogram
-                categoryId={template.categoryId}
-                name={template.name}
-              />
-              <span className="flex min-w-0 flex-col">
+          <TemplateMonogram
+            categoryId={template.categoryId}
+            name={template.name}
+          />
+
+          {density === "compact" ? (
+            <>
+              <button
+                className="flex min-w-0 flex-1 items-baseline gap-2 text-start after:absolute after:inset-0"
+                onClick={onSelect}
+                type="button"
+              >
                 <span className="truncate text-sm font-medium">
                   {template.name}
                 </span>
                 {categoryName !== null && (
-                  <span className="text-muted-foreground truncate text-xs">
+                  <span className="text-muted-foreground shrink-0 truncate text-xs">
                     {categoryName}
                   </span>
                 )}
-              </span>
-            </button>
-          </div>
-
-          <div className="flex shrink-0 items-center gap-3">
-            <Button
-              onClick={() => setUseOpen(true)}
-              size="xs"
-              variant="outline"
-            >
-              {t("templates.useTemplate")}
-            </Button>
-            <RowMeta
-              canUpdate={canUpdateTemplate}
-              lang={lang}
-              onDescribe={() => setGuidanceOpen(true)}
-              template={template}
-            />
-
-            <Tooltip
-              content={template.authorName}
-              render={<span className="inline-flex" />}
-            >
-              <UserAvatar
-                className="size-6 shrink-0 text-[0.5625rem]"
-                image={template.authorImage}
-                name={template.authorName}
+              </button>
+              {actions}
+            </>
+          ) : (
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <button
+                  className="flex min-w-0 flex-1 text-start after:absolute after:inset-0"
+                  onClick={onSelect}
+                  type="button"
+                >
+                  <span className="truncate text-sm font-medium">
+                    {template.name}
+                  </span>
+                </button>
+                {actions}
+              </div>
+              <RowDescription
+                canUpdate={canUpdateTemplate}
+                categoryName={categoryName}
+                onDescribe={() => setGuidanceOpen(true)}
+                template={template}
               />
-            </Tooltip>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={<Button size="icon-xs" variant="ghost" />}
-              >
-                <MoreHorizontalIcon />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                {rowActions.map((action) => (
-                  <DropdownActionItem action={action} key={action.label} />
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+              <RowStats lang={lang} template={template} />
+            </div>
+          )}
         </div>
       </ContextMenu>
 
@@ -675,6 +778,14 @@ const TemplateRow = ({
         templateId={template.id}
         templateName={template.name}
       />
+      <CategoryFormDialog
+        onCreated={(category) =>
+          void onAssignCategory(template.id, category.id)
+        }
+        onOpenChange={setCreateCategoryOpen}
+        onSaved={onCategoriesChanged}
+        open={createCategoryOpen}
+      />
     </li>
   );
 };
@@ -686,35 +797,37 @@ const TemplateRow = ({
 const languageDisplayName = (tag: string, uiLang: string): string =>
   new Intl.DisplayNames([uiLang], { type: "language" }).of(tag) ?? tag;
 
-type RowMetaProps = {
+type RowStatsProps = {
   template: TemplateItem;
   lang: string;
-  canUpdate: boolean;
-  onDescribe: () => void;
 };
 
-const RowMeta = ({ template, lang, canUpdate, onDescribe }: RowMetaProps) => {
+// Always-visible secondary stats (comfortable density only): language chips
+// plus field/usage counts and the last-updated time.
+const RowStats = ({ template, lang }: RowStatsProps) => {
   const t = useTranslations();
 
-  // Field/usage counts are secondary — kept out of the way until row hover.
-  const detailSegments: string[] = [
+  const segments: string[] = [
     t("templates.fieldCount", { count: template.fieldCount }),
   ];
   if (template.useCount > 0) {
-    detailSegments.push(t("templates.usedTimes", { count: template.useCount }));
+    segments.push(t("templates.usedTimes", { count: template.useCount }));
   }
   if (template.lastUsedAt) {
-    detailSegments.push(
+    segments.push(
       t("templates.lastUsedAgo", {
         time: formatRelativeTime(template.lastUsedAt, lang),
       }),
     );
   }
-
-  const showNudge = canUpdate && !template.whenToUse;
+  segments.push(
+    t("templates.updatedAgo", {
+      time: formatRelativeTime(template.updatedAt, lang),
+    }),
+  );
 
   return (
-    <span className="text-muted-foreground hidden items-center gap-1 text-xs tabular-nums sm:flex">
+    <span className="text-muted-foreground flex items-center gap-2 text-xs tabular-nums">
       {template.languages.length > 0 && (
         <span className="flex items-center gap-1">
           {template.languages.map((tag) => (
@@ -728,28 +841,68 @@ const RowMeta = ({ template, lang, canUpdate, onDescribe }: RowMetaProps) => {
           ))}
         </span>
       )}
-      <span className="whitespace-nowrap">
-        {t("templates.updatedAgo", {
-          time: formatRelativeTime(template.updatedAt, lang),
-        })}
-      </span>
-      {/* Reserves space (opacity, not display) so the row never shifts on hover. */}
-      <span className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-        <span aria-hidden>{"·"}</span>
-        <span className="whitespace-nowrap">{detailSegments.join(" · ")}</span>
-        {showNudge && (
-          <>
-            <span aria-hidden>{"·"}</span>
-            <button
-              className="hover:text-foreground whitespace-nowrap underline-offset-2 hover:underline"
-              onClick={onDescribe}
-              type="button"
-            >
-              {t("templates.describeWhenToUse")}
-            </button>
-          </>
-        )}
-      </span>
+      <span className="truncate">{segments.join(" · ")}</span>
+    </span>
+  );
+};
+
+type RowDescriptionProps = {
+  template: TemplateItem;
+  categoryName: string | null;
+  canUpdate: boolean;
+  onDescribe: () => void;
+};
+
+// Category + "when to use" guidance (comfortable density only). Falls back to
+// a quiet nudge to add guidance when none is set and the user can edit.
+const RowDescription = ({
+  template,
+  categoryName,
+  canUpdate,
+  onDescribe,
+}: RowDescriptionProps) => {
+  const t = useTranslations();
+
+  const guidance = template.whenToUse?.trim() ?? "";
+
+  // Editable "when to use": a pencil-led button that opens the guidance dialog.
+  // `relative z-10` keeps it clickable above the row-wide open affordance, so
+  // editing guidance is distinct from opening the template. When the user can't
+  // edit, show plain text (or nothing if there is no guidance).
+  const detail = (() => {
+    if (canUpdate) {
+      return (
+        <button
+          className="hover:text-foreground relative z-10 inline-flex min-w-0 items-center gap-1 underline-offset-2 hover:underline"
+          onClick={onDescribe}
+          type="button"
+        >
+          <PencilLineIcon className="size-3 shrink-0" />
+          <span className="truncate">
+            {guidance === "" ? t("templates.describeWhenToUse") : guidance}
+          </span>
+        </button>
+      );
+    }
+    if (guidance !== "") {
+      return <span className="truncate">{guidance}</span>;
+    }
+    return null;
+  })();
+
+  if (categoryName === null && detail === null) {
+    return null;
+  }
+
+  return (
+    <span className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs">
+      {categoryName !== null && (
+        <span className="text-foreground shrink-0 font-medium">
+          {categoryName}
+        </span>
+      )}
+      {categoryName !== null && detail !== null && <span aria-hidden>·</span>}
+      {detail}
     </span>
   );
 };
