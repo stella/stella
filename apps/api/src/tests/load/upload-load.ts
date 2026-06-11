@@ -205,8 +205,7 @@ const runPool = async <T>(
 
   const workers = Array.from(
     { length: Math.min(concurrency, tasks.length) },
-    // eslint-disable-next-line require-await
-    async () => worker(),
+    async () => await worker(),
   );
   await Promise.all(workers);
   return results;
@@ -318,10 +317,15 @@ const main = async () => {
 
   // Build task list
   const tasks = files.map(
-    (file, i) =>
-      // eslint-disable-next-line require-await
-      async () =>
-        uploadFile(file, i, args.baseUrl, args.workspaceId, propertyId, cookie),
+    (file, i) => async () =>
+      await uploadFile(
+        file,
+        i,
+        args.baseUrl,
+        args.workspaceId,
+        propertyId,
+        cookie,
+      ),
   );
 
   // Run
