@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, isNull } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -30,6 +30,7 @@ type BackfillRow = {
   fulltext: string | null;
   sections: DecisionSection[] | null;
   documentAst: DocumentAst | EmptyAst | null;
+  updatedAt: Date;
 };
 
 type LegislationBackfillRow = {
@@ -38,6 +39,7 @@ type LegislationBackfillRow = {
   fulltext: string | null;
   sections: DecisionSection[] | null;
   documentAst: DocumentAst | EmptyAst | null;
+  updatedAt: Date;
 };
 
 type BackfillOptions = {
@@ -143,7 +145,17 @@ const backfillRow = async (row: BackfillRow): Promise<boolean> => {
           astS3Key: result.astKey,
           contentHash: result.contentHash,
         })
-        .where(eq(caseLawDecisions.id, row.id)),
+        // Compare-and-set on the selected row state: a concurrent
+        // ingestion refresh may have written newer keys, and an
+        // unconditional update would point the row back at the stale
+        // backfill payload.
+        .where(
+          and(
+            eq(caseLawDecisions.id, row.id),
+            isNull(caseLawDecisions.textS3Key),
+            sql`${caseLawDecisions.updatedAt} IS NOT DISTINCT FROM ${row.updatedAt}`,
+          ),
+        ),
     );
 
     return true;
@@ -177,7 +189,17 @@ const backfillLegislationRow = async (
           astS3Key: result.astKey,
           contentHash: result.contentHash,
         })
-        .where(eq(legislationDocuments.id, row.id)),
+        // Compare-and-set on the selected row state: a concurrent
+        // ingestion refresh may have written newer keys, and an
+        // unconditional update would point the row back at the stale
+        // backfill payload.
+        .where(
+          and(
+            eq(legislationDocuments.id, row.id),
+            isNull(legislationDocuments.textS3Key),
+            sql`${legislationDocuments.updatedAt} IS NOT DISTINCT FROM ${row.updatedAt}`,
+          ),
+        ),
     );
 
     return true;
@@ -241,6 +263,7 @@ const backfillCaseLaw = async (
           fulltext: caseLawDecisions.fulltext,
           sections: caseLawDecisions.sections,
           documentAst: caseLawDecisions.documentAst,
+          updatedAt: caseLawDecisions.updatedAt,
         })
         .from(caseLawDecisions)
         .where(where)
@@ -300,6 +323,7 @@ const backfillLegislation = async (
           fulltext: legislationDocuments.fulltext,
           sections: legislationDocuments.sections,
           documentAst: legislationDocuments.documentAst,
+          updatedAt: legislationDocuments.updatedAt,
         })
         .from(legislationDocuments)
         .where(where)
