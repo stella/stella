@@ -44,6 +44,7 @@ type IndexableRow = {
   astS3Key: string | null;
   fulltext: string | null;
   contentHash: string | null;
+  indexedGeneration: string | null;
 };
 
 const SELECT_COLUMNS = {
@@ -62,6 +63,7 @@ const SELECT_COLUMNS = {
   astS3Key: caseLawDecisions.astS3Key,
   fulltext: caseLawDecisions.fulltext,
   contentHash: caseLawDecisions.contentHash,
+  indexedGeneration: caseLawDecisions.indexedGeneration,
 };
 
 // A row is indexable once its canonical payload is in object storage.
@@ -234,6 +236,51 @@ export const backfillCorpusIndex = async (
   let firstError: CorpusIndexError | null = null;
 
   for (const [indexId, group] of groups) {
+    // A decision whose country was corrected moves to another
+    // per-jurisdiction index: delete the stale copy from the old index
+    // (same generation only; generation rebuilds replace whole indexes)
+    // before ingesting and advancing the generation pointer, so it
+    // cannot keep matching searches scoped to its old jurisdiction.
+    const moved = group.flatMap(({ row }) =>
+      row.indexedGeneration !== null &&
+      row.indexedGeneration !== indexId &&
+      row.indexedGeneration.startsWith(`${generation}_`)
+        ? [{ id: row.id, oldIndexId: row.indexedGeneration }]
+        : [],
+    );
+    let staleError: CorpusIndexError | null = null;
+    for (const entry of moved) {
+      const removed = await getCorpusIndexClient().deleteByQuery(
+        entry.oldIndexId,
+        `document_id:"${entry.id}"`,
+      );
+      await recordJobs(
+        scopedDb,
+        [
+          {
+            decisionId: entry.id,
+            contentHash: null,
+            operation: "delete" as const,
+            status: removed.isErr()
+              ? ("failed" as const)
+              : ("succeeded" as const),
+            ...(removed.isErr()
+              ? { errorMessage: removed.error.message.slice(0, 2048) }
+              : {}),
+          },
+        ],
+        entry.oldIndexId,
+      );
+      if (removed.isErr()) {
+        staleError = removed.error;
+        break;
+      }
+    }
+    if (staleError) {
+      firstError ??= staleError;
+      continue;
+    }
+
     const ensured = await ensureIndex(indexId);
     const ingest = ensured.isErr()
       ? ensured
