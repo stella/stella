@@ -45,6 +45,7 @@ type IndexableRow = {
   contentHash: string | null;
   indexedHash: string | null;
   indexedGeneration: string | null;
+  updatedAt: Date;
 };
 
 const SELECT_COLUMNS = {
@@ -66,6 +67,7 @@ const SELECT_COLUMNS = {
   contentHash: legislationDocuments.contentHash,
   indexedHash: legislationDocuments.indexedHash,
   indexedGeneration: legislationDocuments.indexedGeneration,
+  updatedAt: legislationDocuments.updatedAt,
 };
 
 const hasContent = sql`${legislationDocuments.contentHash} IS NOT NULL`;
@@ -297,10 +299,11 @@ export const backfillLegislationCorpusIndex = async (
     await scopedDb(async (tx) => {
       // audit: skip — search index maintenance; rebuilds derived state
       for (const { row } of group) {
-        // Compare-and-set on the selected indexedHash: a concurrent
-        // re-ingest clears it (possibly with the same contentHash), and
-        // an unconditional write would mask that refresh so the stale
-        // index document would never be retried.
+        // Compare-and-set on the selected row state: a concurrent
+        // re-ingest clears indexedHash (possibly leaving it null-to-null
+        // when the row was already pending) and bumps updatedAt, and an
+        // unconditional write would mask that refresh so the stale index
+        // document would never be retried.
         await tx
           .update(legislationDocuments)
           .set({
@@ -312,6 +315,7 @@ export const backfillLegislationCorpusIndex = async (
             and(
               eq(legislationDocuments.id, row.id),
               sql`${legislationDocuments.indexedHash} IS NOT DISTINCT FROM ${row.indexedHash}`,
+              sql`${legislationDocuments.updatedAt} IS NOT DISTINCT FROM ${row.updatedAt}`,
             ),
           );
       }

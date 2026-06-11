@@ -46,6 +46,7 @@ type IndexableRow = {
   contentHash: string | null;
   indexedHash: string | null;
   indexedGeneration: string | null;
+  updatedAt: Date;
 };
 
 const SELECT_COLUMNS = {
@@ -66,6 +67,7 @@ const SELECT_COLUMNS = {
   contentHash: caseLawDecisions.contentHash,
   indexedHash: caseLawDecisions.indexedHash,
   indexedGeneration: caseLawDecisions.indexedGeneration,
+  updatedAt: caseLawDecisions.updatedAt,
 };
 
 // A row is indexable once its canonical payload is in object storage.
@@ -310,10 +312,11 @@ export const backfillCorpusIndex = async (
     await scopedDb(async (tx) => {
       // audit: skip — search index maintenance; rebuilds derived state
       for (const { row } of group) {
-        // Compare-and-set on the selected indexedHash: a concurrent
-        // re-ingest clears it (possibly with the same contentHash), and
-        // an unconditional write would mask that refresh so the stale
-        // index document would never be retried.
+        // Compare-and-set on the selected row state: a concurrent
+        // re-ingest clears indexedHash (possibly leaving it null-to-null
+        // when the row was already pending) and bumps updatedAt, and an
+        // unconditional write would mask that refresh so the stale index
+        // document would never be retried.
         await tx
           .update(caseLawDecisions)
           .set({
@@ -325,6 +328,7 @@ export const backfillCorpusIndex = async (
             and(
               eq(caseLawDecisions.id, row.id),
               sql`${caseLawDecisions.indexedHash} IS NOT DISTINCT FROM ${row.indexedHash}`,
+              sql`${caseLawDecisions.updatedAt} IS NOT DISTINCT FROM ${row.updatedAt}`,
             ),
           );
       }
