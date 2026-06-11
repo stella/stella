@@ -11,6 +11,7 @@ on:
       - "apps/api/drizzle.config.ts"
       - "scripts/check-migration-safety.ts"
       - "scripts/check-migrations.sh"
+      - ".squawk.toml"
       - ".github/workflows/db-migrations.yml"
   workflow_dispatch:
 

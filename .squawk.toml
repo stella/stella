@@ -1,0 +1,33 @@
+# Squawk lints migration SQL for lock-safety in CI (scripts/check-migrations.sh).
+# Only migration files changed in the PR are linted.
+
+# Keep in sync with the Postgres major version used in production and in
+# .github/workflows/db-migrations.yml.
+pg_version = "18.0"
+
+# `drizzle-kit migrate` wraps every migration in a transaction.
+assume_in_transaction = true
+
+# Keep lock-safety rules active. Migrations that need concurrent indexes can
+# split Drizzle's wrapping transaction and locally ignore the transaction-control
+# warnings on the COMMIT/BEGIN lines.
+excluded_rules = [
+  # Destructive changes are owned by scripts/check-migration-safety.ts, which
+  # requires a reviewed-acknowledgement comment. Excluded here so each rule
+  # class has exactly one suppression mechanism.
+  "ban-drop-column",
+  "ban-drop-table",
+  "ban-drop-database",
+  "renaming-column",
+  "renaming-table",
+  "ban-truncate-cascade",
+  "changing-column-type",
+
+  # Schema house style: drizzle-generated DDL uses varchar, timestamp without
+  # time zone, and int keys throughout. Changing that is a schema-wide
+  # decision, not a per-migration lint.
+  "prefer-text-field",
+  "prefer-timestamp-tz",
+  "prefer-bigint-over-int",
+  "prefer-bigint-over-smallint",
+]

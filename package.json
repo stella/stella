@@ -62,6 +62,7 @@
     "oxlint-tsgolint": "^0.23.0",
     "react": "catalog:react19",
     "sherif": "catalog:",
+    "squawk-cli": "2.56.0",
     "turbo": "^2.9.16",
     "typescript": "catalog:",
     "ultracite": "catalog:",

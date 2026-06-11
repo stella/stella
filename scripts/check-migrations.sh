@@ -173,6 +173,15 @@ fi
 if [[ -d apps/api/drizzle ]]; then
   if [[ "${#MIGRATION_SQL_FILES[@]}" -gt 0 ]]; then
     bun scripts/check-migration-safety.ts "${MIGRATION_SQL_FILES[@]}"
+
+    # Lock-safety linting (rule set configured in .squawk.toml). Destructive
+    # changes are covered separately by check-migration-safety.ts above.
+    bun squawk "${MIGRATION_SQL_FILES[@]}" || {
+      echo "ERROR: squawk found DDL in the changed migrations that is unsafe to apply under load." >&2
+      echo "Rewrite the statement (rule docs: https://squawkhq.com/docs/rules), or suppress a" >&2
+      echo "reviewed finding with '-- squawk-ignore <rule-name>' on the line above the statement." >&2
+      exit 1
+    }
   fi
 
   (cd apps/api && bun --bun drizzle-kit check)

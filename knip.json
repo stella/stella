@@ -13,6 +13,7 @@
         "ultracite",
         "i18n-unused",
         "oxlint",
+        "squawk-cli",
         "vite"
       ],
       "ignoreBinaries": ["scripts/dev.sh"]
