@@ -314,9 +314,8 @@ export const czUsAdapter: SourceAdapter = {
   // return search results. A GET to the search page returns
   // the form but no count. Implement POST-based total count
   // when we add full ÚS historical ingestion.
-  // eslint-disable-next-line require-await -- interface requires Promise
   async getTotalCount(_signal) {
-    return null;
+    return await Promise.resolve(null);
   },
 
   async fetchPage(cursor, _config, signal) {

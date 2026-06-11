@@ -236,11 +236,11 @@ export const OnboardingWizard = () => {
       setStep("creating");
       const startTime = Date.now();
 
-      // eslint-disable-next-line require-await
-      const delay = async (ms: number) =>
-        new Promise<void>((resolve) => {
+      const delay = async (ms: number) => {
+        await new Promise<void>((resolve) => {
           setTimeout(resolve, ms);
         });
+      };
 
       // Phase 1: Create organization
       setCreatingPhase("org");

@@ -20,27 +20,28 @@ const YARA_SEVERITY_MAP: Record<string, Match["severity"]> = {
 };
 
 export const yaraScanner: Scanner = {
-  // eslint-disable-next-line require-await -- Scanner interface requires Promise
   async scan(bytes) {
     const matches = compiled.scan(Buffer.from(bytes));
 
-    return matches.map((m: RuleMatch): Match => {
-      const { meta } = m;
-      const verdict =
-        "verdict" in meta && typeof meta.verdict === "string"
-          ? meta.verdict
-          : undefined;
+    return await Promise.resolve(
+      matches.map((m: RuleMatch): Match => {
+        const { meta } = m;
+        const verdict =
+          "verdict" in meta && typeof meta.verdict === "string"
+            ? meta.verdict
+            : undefined;
 
-      const severity =
-        (verdict ? YARA_SEVERITY_MAP[verdict] : undefined) ?? "suspicious";
-      const match: Match = {
-        rule: m.ruleIdentifier,
-        severity,
-      };
-      if (isRecord(meta)) {
-        match.meta = meta;
-      }
-      return match;
-    });
+        const severity =
+          (verdict ? YARA_SEVERITY_MAP[verdict] : undefined) ?? "suspicious";
+        const match: Match = {
+          rule: m.ruleIdentifier,
+          severity,
+        };
+        if (isRecord(meta)) {
+          match.meta = meta;
+        }
+        return match;
+      }),
+    );
   },
 };
