@@ -736,6 +736,7 @@
     "duplicate": "Dupliquer",
     "duplicated": "Dupliqué",
     "edit": "Modifier",
+    "edited": "Modifié",
     "email": "E-mail",
     "empty": "Vide",
     "emptyScreen": {
@@ -820,6 +821,7 @@
     "remove": "Supprimer",
     "rename": "Renommer",
     "required": "Obligatoire",
+    "reset": "Réinitialiser",
     "retry": "Réessayer",
     "role": "Rôle",
     "run": "Exécuter",

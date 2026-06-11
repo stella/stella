@@ -739,6 +739,7 @@ type Messages = {
     "duplicate": "Duplicate";
     "duplicated": "Duplicated";
     "edit": "Edit";
+    "edited": "Edited";
     "email": "Email";
     "empty": "Empty";
     "emptyScreen": {
@@ -823,6 +824,7 @@ type Messages = {
     "remove": "Remove";
     "rename": "Rename";
     "required": "Required";
+    "reset": "Reset";
     "retry": "Retry";
     "role": "Role";
     "run": "Run";
