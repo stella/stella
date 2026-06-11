@@ -20,7 +20,8 @@
       "cta": "AI-Einstellungen öffnen",
       "description": "Füge Provider-Zugangsdaten hinzu, um AI-Funktionen zu nutzen.",
       "title": "AI-Provider verbinden"
-    }
+    },
+    "refinePlaceholder": "Wie soll die KI den Wortlaut anpassen?"
   },
   "anonymize": {
     "addEntity": "Entität hinzufügen",
@@ -707,7 +708,9 @@
     "closeAll": "Alle schließen",
     "closeOthers": "Andere schließen",
     "columns": "Spalten",
+    "comfortable": "Komfortabel",
     "comingSoon": "Demnächst verfügbar",
+    "compact": "Kompakt",
     "confirm": "Bestätigen",
     "confirmAction": "Sind Sie sicher?",
     "connectionLost": "Verbindung verloren",

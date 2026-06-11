@@ -20,7 +20,8 @@
       "cta": "Ava AI seaded",
       "description": "Lisa teenusepakkuja pääsuandmed, et hakata AI-funktsioone kasutama.",
       "title": "Ühenda AI teenusepakkuja"
-    }
+    },
+    "refinePlaceholder": "Kuidas peaks AI sõnastust kohandama?"
   },
   "anonymize": {
     "addEntity": "Lisa olem",
@@ -707,7 +708,9 @@
     "closeAll": "Sulge kõik",
     "closeOthers": "Sulge teised",
     "columns": "Veerud",
+    "comfortable": "Avar",
     "comingSoon": "Tulemas peagi",
+    "compact": "Kompaktne",
     "confirm": "Kinnita",
     "confirmAction": "Olete kindel?",
     "connectionLost": "Ühendus katkes",

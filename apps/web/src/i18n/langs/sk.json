@@ -20,7 +20,8 @@
       "cta": "Otvoriť nastavenia AI",
       "description": "Pridajte prihlasovacie údaje poskytovateľa a začnite používať funkcie AI.",
       "title": "Pripojiť poskytovateľa AI"
-    }
+    },
+    "refinePlaceholder": "Ako má AI upraviť znenie?"
   },
   "anonymize": {
     "addEntity": "Pridať entitu",
@@ -707,7 +708,9 @@
     "closeAll": "Zavrieť všetko",
     "closeOthers": "Zavrieť ostatné",
     "columns": "Stĺpce",
+    "comfortable": "Pohodlné",
     "comingSoon": "Čoskoro",
+    "compact": "Kompaktné",
     "confirm": "Potvrdiť",
     "confirmAction": "Naozaj?",
     "connectionLost": "Spojenie stratené",

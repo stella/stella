@@ -20,7 +20,8 @@
       "cta": "Ouvrir les paramètres IA",
       "description": "Ajoutez les identifiants d’un fournisseur pour commencer à utiliser les fonctions IA.",
       "title": "Connecter un fournisseur IA"
-    }
+    },
+    "refinePlaceholder": "Comment l’IA doit-elle ajuster la formulation ?"
   },
   "anonymize": {
     "addEntity": "Ajouter une entité",
@@ -707,7 +708,9 @@
     "closeAll": "Tout fermer",
     "closeOthers": "Fermer les autres",
     "columns": "Colonnes",
+    "comfortable": "Confortable",
     "comingSoon": "Bientôt disponible",
+    "compact": "Condensé",
     "confirm": "Confirmer",
     "confirmAction": "Êtes-vous sûr(e) ?",
     "connectionLost": "Connexion perdue",

@@ -20,7 +20,8 @@
       "cta": "Atvērt AI iestatījumus",
       "description": "Pievienojiet pakalpojumu sniedzēja piekļuves datus, lai sāktu izmantot AI funkcijas.",
       "title": "Pievienot AI pakalpojumu sniedzēju"
-    }
+    },
+    "refinePlaceholder": "Kā AI jāpielāgo formulējums?"
   },
   "anonymize": {
     "addEntity": "Pievienot entītiju",
@@ -707,7 +708,9 @@
     "closeAll": "Aizvērt visu",
     "closeOthers": "Aizvērt citus",
     "columns": "Kolonnas",
+    "comfortable": "Ērts",
     "comingSoon": "Drīzumā",
+    "compact": "Kompakts",
     "confirm": "Apstiprināt",
     "confirmAction": "Vai esat pārliecināts?",
     "connectionLost": "Savienojums zaudēts",
