@@ -1,8 +1,23 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { panic } from "better-result";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { status } from "elysia";
 
-import { caseLawDecisions } from "@/api/db/schema";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+
+import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
+import {
+  allowsDerivedAi,
+  isRedistributable,
+} from "@/api/handlers/case-law/corpus-source";
+import {
+  readCorpusAst,
+  readCorpusText,
+} from "@/api/handlers/case-law/corpus-storage";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
+import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
+import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
+import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 
@@ -75,13 +90,24 @@ const listPublicDecisionLanguageAlternates = async ({
         updatedAt: caseLawDecisions.updatedAt,
       })
       .from(caseLawDecisions)
-      .where(eq(caseLawDecisions.languageGroupKey, languageGroupKey))
+      .innerJoin(
+        caseLawSources,
+        eq(caseLawSources.id, caseLawDecisions.sourceId),
+      )
+      .where(
+        and(
+          eq(caseLawDecisions.languageGroupKey, languageGroupKey),
+          redistributableCaseLawSource,
+        ),
+      )
       .orderBy(asc(caseLawDecisions.language), asc(caseLawDecisions.id)),
   );
   const dedupedAlternates = dedupeAlternatesByLanguage(alternates);
 
   return dedupedAlternates.length > 1 ? dedupedAlternates : [];
 };
+
+const corpusReadEnabled = (): boolean => envBase.CORPUS_STORAGE_ENABLED;
 
 export const readDecisionHandler = async (
   decisionId: SafeId<"caseLawDecision">,
@@ -107,12 +133,19 @@ export const readDecisionHandler = async (
         metadata: true,
         createdAt: true,
         updatedAt: true,
+        // Object-storage keys: never returned to the client, only used
+        // to fetch canonical payloads when corpus storage is enabled.
+        astS3Key: true,
+        textS3Key: true,
+        contentHash: true,
         // fulltext: only as fallback when no AST
         // sections: frontend doesn't use these
       },
       with: {
         source: {
-          columns: { id: true, name: true, adapterKey: true },
+          // descriptor: only for the redistribution gate below,
+          // never returned to the client.
+          columns: { id: true, name: true, adapterKey: true, descriptor: true },
         },
         citationsFrom: {
           columns: {
@@ -138,23 +171,75 @@ export const readDecisionHandler = async (
     return status(404, { message: "Decision not found" });
   }
 
+  const source =
+    decision.source ?? panic("Case-law decision has no source relation");
+  if (!isRedistributable(source.descriptor)) {
+    return status(404, { message: "Decision not found" });
+  }
+
   const languageAlternates = await listPublicDecisionLanguageAlternates({
     caseLawDb,
     languageGroupKey: decision.languageGroupKey,
   });
 
+  // Citations may point at decisions from non-redistributable sources;
+  // drop those so the response cannot leak restricted decisions' ids.
+  // Unresolved citations (null citedDecisionId) carry only text and stay.
+  const relatedIdCandidates = decision.citationsFrom
+    .map((citation) => citation.citedDecisionId)
+    .concat(decision.citationsTo.map((citation) => citation.citingDecisionId));
+  const relatedDecisionIds = [
+    ...new Set(relatedIdCandidates.filter((value) => value !== null)),
+  ];
+  const redistributableRelatedIds = new Set(
+    relatedDecisionIds.length === 0
+      ? []
+      : (
+          await caseLawDb((tx) =>
+            tx
+              .select({ id: caseLawDecisions.id })
+              .from(caseLawDecisions)
+              .innerJoin(
+                caseLawSources,
+                eq(caseLawSources.id, caseLawDecisions.sourceId),
+              )
+              .where(
+                and(
+                  inArray(caseLawDecisions.id, relatedDecisionIds),
+                  redistributableCaseLawSource,
+                ),
+              ),
+          )
+        ).map((row) => row.id),
+  );
+  const citationsFrom = decision.citationsFrom.filter(
+    (citation) =>
+      citation.citedDecisionId === null ||
+      redistributableRelatedIds.has(citation.citedDecisionId),
+  );
+  const citationsTo = decision.citationsTo.filter((citation) =>
+    redistributableRelatedIds.has(citation.citingDecisionId),
+  );
+
+  // Prefer canonical AST from object storage when corpus storage is
+  // enabled; fall back to the Postgres column so a read is never harder
+  // than today.
+  const documentAst = await resolveAst({
+    astS3Key: decision.astS3Key,
+    contentHash: decision.contentHash,
+    pgAst: decision.documentAst,
+    decisionId,
+  });
+
   // Only fetch fulltext if no usable documentAst (fallback).
-  // Empty `{}` is stored by adapters without AST parsers;
-  // treat it the same as null.
   let fulltext: string | null = null;
-  if (!hasUsableAst(decision.documentAst)) {
-    const fallback = await caseLawDb((tx) =>
-      tx.query.caseLawDecisions.findFirst({
-        where: { id: { eq: decisionId } },
-        columns: { fulltext: true },
-      }),
-    );
-    fulltext = fallback?.fulltext ?? null;
+  if (!hasUsableAst(documentAst)) {
+    fulltext = await resolveFulltext({
+      textS3Key: decision.textS3Key,
+      contentHash: decision.contentHash,
+      decisionId,
+      caseLawDb,
+    });
   }
 
   return {
@@ -168,15 +253,22 @@ export const readDecisionHandler = async (
     languageGroupKey: decision.languageGroupKey,
     decisionDate: decision.decisionDate,
     decisionType: decision.decisionType,
-    documentAst: decision.documentAst,
+    documentAst,
     sourceUrl: decision.sourceUrl,
     documentUrl: decision.documentUrl,
     metadata: decision.metadata,
     createdAt: decision.createdAt,
     updatedAt: decision.updatedAt,
-    source: decision.source,
-    citationsFrom: decision.citationsFrom,
-    citationsTo: decision.citationsTo,
+    source: {
+      id: source.id,
+      name: source.name,
+      adapterKey: source.adapterKey,
+      // Derived licence bit (never the raw descriptor): AI consumers
+      // must not feed the full text to a model when this is false.
+      allowsDerivedAi: allowsDerivedAi(source.descriptor),
+    },
+    citationsFrom,
+    citationsTo,
     languageAlternates,
     fulltext,
   };
@@ -213,4 +305,57 @@ export const readDecisionBySlugHandler = async (
   }
 
   return await readDecisionHandler(firstDecision.id, caseLawDb);
+};
+
+type ResolveAstInput = {
+  astS3Key: string | null;
+  contentHash: string | null;
+  pgAst: DocumentAst | EmptyAst | null;
+  decisionId: SafeId<"caseLawDecision">;
+};
+
+const resolveAst = async ({
+  astS3Key,
+  contentHash,
+  pgAst,
+  decisionId,
+}: ResolveAstInput): Promise<DocumentAst | EmptyAst | null> => {
+  if (!corpusReadEnabled() || astS3Key === null || contentHash === null) {
+    return pgAst;
+  }
+  try {
+    return await readCorpusAst(astS3Key);
+  } catch (error) {
+    captureError(error, { decisionId, step: "readDecision.corpusAst" });
+    return pgAst;
+  }
+};
+
+type ResolveFulltextInput = {
+  textS3Key: string | null;
+  contentHash: string | null;
+  decisionId: SafeId<"caseLawDecision">;
+  caseLawDb: CaseLawPublicReadDb;
+};
+
+const resolveFulltext = async ({
+  textS3Key,
+  contentHash,
+  decisionId,
+  caseLawDb,
+}: ResolveFulltextInput): Promise<string | null> => {
+  if (corpusReadEnabled() && textS3Key !== null && contentHash !== null) {
+    try {
+      return await readCorpusText(textS3Key);
+    } catch (error) {
+      captureError(error, { decisionId, step: "readDecision.corpusText" });
+    }
+  }
+  const fallback = await caseLawDb((tx) =>
+    tx.query.caseLawDecisions.findFirst({
+      where: { id: { eq: decisionId } },
+      columns: { fulltext: true },
+    }),
+  );
+  return fallback?.fulltext ?? null;
 };

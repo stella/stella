@@ -1,0 +1,369 @@
+import { panic } from "better-result";
+import { and, eq, sql } from "drizzle-orm";
+
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+
+import type { ScopedDb } from "@/api/db";
+import { legislationDocuments, legislationSources } from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
+import { writeCorpusDocument } from "@/api/handlers/case-law/corpus-storage";
+import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  sanitizeMetadata,
+  stripDangerousChars,
+} from "@/api/handlers/case-law/ingestion/sanitize";
+import type { DecisionSection } from "@/api/handlers/case-law/types";
+import { captureError } from "@/api/lib/analytics";
+import type { SafeId } from "@/api/lib/branded-types";
+
+/**
+ * Legislation ingestion. The canonical, source-agnostic entry is
+ * `processLegislationDocument` (store + upsert), which any source feeds —
+ * a structured import today, or a `LegislationAdapter` (Slov-Lex /
+ * eSbírka / Polish Sejm) once its source-specific fetch+parse is built.
+ * The substrate (object storage, corpus index index, pg-fts projection,
+ * search, erasure) is shared with case law via the `legislation` family.
+ */
+
+export type LegislationStatus = "current" | "historical" | "repealed" | "draft";
+
+/** Normalized legislation document — what every source produces. */
+export type LegislationDocumentInput = {
+  sourceId: SafeId<"legislationSource">;
+  /** Work identifier (ELI / national statute id), shared across versions. */
+  eli: string;
+  title: string;
+  country: string;
+  language: string;
+  documentType?: string | null;
+  status?: LegislationStatus;
+  effectiveDate?: string | null;
+  /** Point-in-time consolidation window; null versionValidTo = current. */
+  versionValidFrom?: string | null;
+  versionValidTo?: string | null;
+  fulltext?: string | null;
+  sections?: DecisionSection[] | null;
+  ast?: DocumentAst | EmptyAst | null;
+  sourceUrl?: string | null;
+  documentUrl?: string | null;
+  metadata?: Record<string, unknown>;
+};
+
+export type ProcessLegislationResult = {
+  id: SafeId<"legislationDocument">;
+  inserted: boolean;
+  skipped: boolean;
+  /** Object-storage write failed; the row keeps its previous sourceHash so a re-ingest retries. */
+  corpusWriteFailed: boolean;
+};
+
+/**
+ * A legislation source. Implement one per provider (Slov-Lex, eSbírka,
+ * Polish Sejm ELI API). `fetchPage` returns normalized documents + the
+ * next cursor; the runner persists them via processLegislationDocument.
+ */
+export type LegislationAdapter = {
+  adapterKey: string;
+  fetchPage: (
+    cursor: string | null,
+    signal: AbortSignal,
+  ) => Promise<{
+    documents: LegislationDocumentInput[];
+    nextCursor: string | null;
+  }>;
+};
+
+const sanitizeInput = (
+  input: LegislationDocumentInput,
+): LegislationDocumentInput => ({
+  ...input,
+  eli: stripDangerousChars(input.eli),
+  title: stripDangerousChars(input.title),
+  fulltext:
+    input.fulltext === null || input.fulltext === undefined
+      ? null
+      : stripDangerousChars(input.fulltext),
+  metadata: sanitizeMetadata(input.metadata ?? {}),
+});
+
+type PreserveLegislationCorpusWriteRetryInput = {
+  documentId: SafeId<"legislationDocument">;
+  previousSourceHash: string | null;
+  /** The sourceHash this run persisted; the reset only applies while the row still carries it. */
+  expectedSourceHash: string | null;
+  scopedDb: ScopedDb;
+};
+
+const preserveLegislationCorpusWriteRetry = async ({
+  documentId,
+  previousSourceHash,
+  expectedSourceHash,
+  scopedDb,
+}: PreserveLegislationCorpusWriteRetryInput): Promise<void> => {
+  // Keep the next ingestion pass from treating this document as unchanged
+  // after a failed object-storage write. Clear corpus-derived pointers so
+  // reads use the fresh Postgres columns until S3 succeeds.
+  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+  await scopedDb((tx) => {
+    // audit: skip — background corpus storage retry bookkeeping; derived state
+    return (
+      tx
+        .update(legislationDocuments)
+        .set({
+          sourceHash: previousSourceHash,
+          textS3Key: null,
+          normalizedS3Key: null,
+          astS3Key: null,
+          contentHash: null,
+          indexedHash: null,
+          indexedGeneration: null,
+          indexedAt: null,
+        })
+        // Only undo this run's own write: a concurrent newer refresh owns
+        // the row once it has advanced sourceHash.
+        .where(
+          and(
+            eq(legislationDocuments.id, documentId),
+            sql`${legislationDocuments.sourceHash} IS NOT DISTINCT FROM ${expectedSourceHash}`,
+          ),
+        )
+    );
+  });
+};
+
+/**
+ * Hash over every persisted, search-visible field — not just the corpus
+ * payload — so a source re-emitting identical text with changed metadata
+ * (title, status, dates, URLs) still updates the row instead of hitting
+ * the dedup skip.
+ */
+const legislationSourceHash = (input: LegislationDocumentInput): string => {
+  const hasher = new Bun.CryptoHasher("sha256");
+  hasher.update(
+    JSON.stringify([
+      input.eli,
+      input.title,
+      input.country,
+      input.language,
+      input.documentType ?? null,
+      input.status ?? "current",
+      input.effectiveDate ?? null,
+      input.versionValidFrom ?? null,
+      input.versionValidTo ?? null,
+      input.fulltext ?? null,
+      input.sections ?? null,
+      input.ast ?? null,
+      input.sourceUrl ?? null,
+      input.documentUrl ?? null,
+      input.metadata ?? {},
+    ]),
+  );
+  return hasher.digest("hex");
+};
+
+/**
+ * Store + upsert one legislation document. Deduplicates by a source hash
+ * over the corpus payload plus all persisted metadata: an unchanged
+ * re-ingest is skipped. When CORPUS_STORAGE_ENABLED, the canonical
+ * payload is written to object storage (outside the tx) and the row's
+ * S3 keys + content hash are recorded so the indexers pick it up. The
+ * pg-fts and corpus index projections are maintained by the backfill
+ * loops (not inline), matching the case-law pipeline.
+ */
+export const processLegislationDocument = async (
+  raw: LegislationDocumentInput,
+  scopedDb: ScopedDb,
+): Promise<ProcessLegislationResult> => {
+  const input = sanitizeInput(raw);
+  const text = input.fulltext ?? null;
+  const sections = input.sections ?? null;
+  const ast = input.ast ?? null;
+  const sourceHash = legislationSourceHash(input);
+
+  const versionMatch = sql`${legislationDocuments.versionValidFrom} IS NOT DISTINCT FROM ${input.versionValidFrom ?? null}`;
+
+  const [existing] = await scopedDb((tx) =>
+    tx
+      .select({
+        id: legislationDocuments.id,
+        sourceHash: legislationDocuments.sourceHash,
+      })
+      .from(legislationDocuments)
+      .where(
+        and(
+          eq(legislationDocuments.sourceId, input.sourceId),
+          eq(legislationDocuments.eli, input.eli),
+          eq(legislationDocuments.language, input.language),
+          versionMatch,
+        ),
+      )
+      .limit(1),
+  );
+
+  if (existing && existing.sourceHash === sourceHash) {
+    return {
+      id: existing.id,
+      inserted: false,
+      skipped: true,
+      corpusWriteFailed: false,
+    };
+  }
+
+  const values = {
+    sourceId: input.sourceId,
+    eli: input.eli,
+    title: input.title,
+    country: input.country,
+    language: input.language,
+    documentType: input.documentType ?? null,
+    status: input.status ?? "current",
+    effectiveDate: input.effectiveDate ?? null,
+    versionValidFrom: input.versionValidFrom ?? null,
+    versionValidTo: input.versionValidTo ?? null,
+    fulltext: text,
+    sections,
+    documentAst: ast,
+    sourceUrl: input.sourceUrl ?? null,
+    documentUrl: input.documentUrl ?? null,
+    metadata: input.metadata ?? {},
+    sourceHash,
+  };
+
+  const id = await scopedDb(async (tx) => {
+    // audit: skip — background legislation ingestion; public data, not user actions
+    if (existing) {
+      // Clear indexedHash so the corpus indexer re-picks this row even
+      // when only metadata changed (its staleness check compares
+      // indexedHash to contentHash, which only tracks the payload).
+      await tx
+        .update(legislationDocuments)
+        .set({ ...values, indexedHash: null, updatedAt: new Date() })
+        .where(eq(legislationDocuments.id, existing.id));
+      return existing.id;
+    }
+    const [row] = await tx
+      .insert(legislationDocuments)
+      .values(values)
+      .returning({ id: legislationDocuments.id });
+    if (!row) {
+      panic("Failed to insert legislation document");
+    }
+    return row.id;
+  });
+
+  let corpusWriteFailed = false;
+  if (envBase.CORPUS_STORAGE_ENABLED) {
+    try {
+      const written = await writeCorpusDocument({
+        documentId: id,
+        jurisdiction: input.country,
+        text,
+        sections,
+        ast,
+      });
+      // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+      await scopedDb((tx) => {
+        // audit: skip — background corpus storage; derived state
+        return (
+          tx
+            .update(legislationDocuments)
+            .set({
+              textS3Key: written.textKey,
+              normalizedS3Key: written.sectionsKey,
+              astS3Key: written.astKey,
+              contentHash: written.contentHash,
+            })
+            // Only while the row still carries this run's sourceHash: a
+            // slower run must not overwrite a concurrent newer refresh.
+            .where(
+              and(
+                eq(legislationDocuments.id, id),
+                sql`${legislationDocuments.sourceHash} IS NOT DISTINCT FROM ${sourceHash}`,
+              ),
+            )
+        );
+      });
+    } catch (error) {
+      corpusWriteFailed = true;
+      captureError(error, {
+        documentId: id,
+        step: "processLegislationDocument.corpusWrite",
+      });
+      await preserveLegislationCorpusWriteRetry({
+        documentId: id,
+        previousSourceHash: existing?.sourceHash ?? null,
+        expectedSourceHash: sourceHash,
+        scopedDb,
+      });
+    }
+  }
+
+  return { id, inserted: !existing, skipped: false, corpusWriteFailed };
+};
+
+/**
+ * Drive a legislation adapter: fetch pages, persist each document, and
+ * advance the source cursor. Bounded by maxPages per cycle.
+ */
+export const runLegislationIngestion = async ({
+  adapter,
+  source,
+  scopedDb,
+  signal,
+  maxPages,
+}: {
+  adapter: LegislationAdapter;
+  source: { id: SafeId<"legislationSource">; syncCursor: string | null };
+  scopedDb: ScopedDb;
+  signal: AbortSignal;
+  maxPages: number;
+}): Promise<{
+  inserted: number;
+  skipped: number;
+  nextCursor: string | null;
+}> => {
+  let cursor = source.syncCursor;
+  let inserted = 0;
+  let skipped = 0;
+
+  for (let page = 0; page < maxPages; page += 1) {
+    if (signal.aborted) {
+      break;
+    }
+    const { documents, nextCursor } = await adapter.fetchPage(cursor, signal);
+    let corpusWriteFailures = 0;
+    for (const doc of documents) {
+      const result = await processLegislationDocument(doc, scopedDb);
+      if (result.skipped) {
+        skipped += 1;
+      } else {
+        inserted += 1;
+      }
+      if (result.corpusWriteFailed) {
+        corpusWriteFailures += 1;
+      }
+    }
+    if (corpusWriteFailures > 0) {
+      // Hold the cursor on a page with failed corpus writes: cursor
+      // sources do not re-emit consumed pages, so advancing would leave
+      // the preserved source-hash retry unreachable until the source
+      // changes again.
+      break;
+    }
+    cursor = nextCursor;
+    if (nextCursor === null || documents.length === 0) {
+      break;
+    }
+  }
+
+  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+  await scopedDb((tx) => {
+    // audit: skip — background legislation ingestion; sync-cursor advance
+    return tx
+      .update(legislationSources)
+      .set({ syncCursor: cursor, lastSyncAt: new Date() })
+      .where(eq(legislationSources.id, source.id));
+  });
+
+  return { inserted, skipped, nextCursor: cursor };
+};

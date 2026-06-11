@@ -245,4 +245,20 @@ describe("public case-law route boundary", () => {
     expect(source).toContain('const SITEMAP_COUNTRY_PATTERN = "^[a-z]{2,3}$"');
     expect(source).toContain("country.toUpperCase()");
   });
+
+  test("every public decision surface enforces the redistribution gate", async () => {
+    const listSource = await readListSource();
+    const decisionSource = await readDecisionSource();
+    const facetsSource = await readFacetsSource();
+    const searchSource = await readSearchSource();
+    const sitemapSource = await readSitemapSource();
+
+    expect(listSource).toContain("redistributableCaseLawSource");
+    expect(decisionSource).toContain("redistributableCaseLawSource");
+    expect(decisionSource).toContain("isRedistributable");
+    expect(facetsSource).toContain("redistributableCaseLawSource");
+    expect(searchSource).toContain("redistributableSourceJoin");
+    expect(searchSource).toContain("redistributableCaseLawSource");
+    expect(sitemapSource).toContain("redistributableCaseLawSource");
+  });
 });

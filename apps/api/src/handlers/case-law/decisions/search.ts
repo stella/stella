@@ -1,14 +1,40 @@
-import { inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { status } from "elysia";
 import type { Static } from "elysia";
 
-import { caseLawDecisions } from "@/api/db/schema";
+import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
 import { courtWeightSql } from "@/api/handlers/case-law/citation-score";
 import { validCaseLawLanguageAlternateCountSql } from "@/api/handlers/case-law/decisions/language";
 import type { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
-import { bodyPreviewJoin } from "@/api/handlers/case-law/decisions/search-sql";
+import {
+  bodyPreviewJoin,
+  redistributableSourceJoin,
+} from "@/api/handlers/case-law/decisions/search-sql";
+import {
+  redistributableCaseLawSource,
+  redistributableCaseLawSourceSqlFor,
+} from "@/api/handlers/case-law/redistribution";
+// eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
+import { toSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { isUuid } from "@/api/lib/custom-schema";
+import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
+import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
+import {
+  corpusFreeTextClause,
+  quoteCorpusValue,
+} from "@/api/lib/legal-search/corpus-query";
+import {
+  corpusIndexId,
+  corpusIndexPattern,
+  isCorpusIndexJurisdiction,
+} from "@/api/lib/legal-search/index-naming";
+import {
+  blendStableCitationAuthority,
+  stableBlendUpperBound,
+} from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 import {
@@ -43,6 +69,17 @@ const headlineRegconfig = sql`
 type SearchDecisionsBody = Static<typeof searchDecisionsBodySchema>;
 
 export const searchDecisionsHandler = async (
+  body: SearchDecisionsBody,
+  caseLawDb: CaseLawPublicReadDb,
+) => {
+  if (envBase.LEGAL_SEARCH_PROVIDER === "corpus-index") {
+    return await searchCorpusIndexDecisions(body, caseLawDb);
+  }
+
+  return await searchPostgresDecisions(body, caseLawDb);
+};
+
+const searchPostgresDecisions = async (
   body: SearchDecisionsBody,
   caseLawDb: CaseLawPublicReadDb,
 ) => {
@@ -118,6 +155,9 @@ export const searchDecisionsHandler = async (
       FROM case_law_citations c
       JOIN case_law_decisions citing_d
         ON citing_d.id = c.citing_decision_id
+      JOIN case_law_sources citing_src
+        ON citing_src.id = citing_d.source_id
+       AND ${redistributableCaseLawSourceSqlFor("citing_src")}
       WHERE c.cited_decision_id = d.id
     ) cb
   `);
@@ -149,6 +189,7 @@ export const searchDecisionsHandler = async (
     FROM case_law_search_documents sd
     JOIN case_law_decisions d
       ON d.id = sd.decision_id
+    ${redistributableSourceJoin}
     ${bodyPreviewJoin}
     LEFT JOIN ${citationBoost} ON true
     WHERE sd.tsv @@ ${tsQuery}
@@ -163,6 +204,7 @@ export const searchDecisionsHandler = async (
     FROM case_law_search_documents sd
     JOIN case_law_decisions d
       ON d.id = sd.decision_id
+    ${redistributableSourceJoin}
     WHERE sd.tsv @@ ${tsQuery}
       ${allFilters}
   `;
@@ -173,6 +215,7 @@ export const searchDecisionsHandler = async (
     FROM case_law_search_documents sd
     JOIN case_law_decisions d
       ON d.id = sd.decision_id
+    ${redistributableSourceJoin}
     WHERE sd.tsv @@ ${tsQuery}
       ${countryFilter}
       ${dateFromFilter}
@@ -191,6 +234,7 @@ export const searchDecisionsHandler = async (
     FROM case_law_search_documents sd
     JOIN case_law_decisions d
       ON d.id = sd.decision_id
+    ${redistributableSourceJoin}
     WHERE sd.tsv @@ ${tsQuery}
       ${courtFilter}
       ${dateFromFilter}
@@ -209,6 +253,7 @@ export const searchDecisionsHandler = async (
     FROM case_law_search_documents sd
     JOIN case_law_decisions d
       ON d.id = sd.decision_id
+    ${redistributableSourceJoin}
     WHERE sd.tsv @@ ${tsQuery}
       ${courtFilter}
       ${countryFilter}
@@ -268,8 +313,15 @@ export const searchDecisionsHandler = async (
               count: validCaseLawLanguageAlternateCountSql,
             })
             .from(caseLawDecisions)
+            .innerJoin(
+              caseLawSources,
+              eq(caseLawSources.id, caseLawDecisions.sourceId),
+            )
             .where(
-              inArray(caseLawDecisions.languageGroupKey, languageGroupKeys),
+              and(
+                inArray(caseLawDecisions.languageGroupKey, languageGroupKeys),
+                redistributableCaseLawSource,
+              ),
             )
             .groupBy(caseLawDecisions.languageGroupKey),
         )
@@ -349,6 +401,274 @@ export const searchDecisionsHandler = async (
     hits,
     facets,
     totalCount,
+    nextCursor,
+  };
+};
+
+const buildCorpusIndexQuery = (body: SearchDecisionsBody): string | null => {
+  const freeText = corpusFreeTextClause(body.query);
+  if (freeText === null) {
+    return null;
+  }
+  const clauses: string[] = [freeText];
+  if (body.decisionType) {
+    clauses.push(`document_type:${quoteCorpusValue(body.decisionType)}`);
+  }
+  if (body.sourceId) {
+    clauses.push(`source:${quoteCorpusValue(body.sourceId)}`);
+  }
+  if (body.language) {
+    clauses.push(`language:${quoteCorpusValue(body.language)}`);
+  }
+  if (body.court) {
+    clauses.push(`court:${quoteCorpusValue(body.court)}`);
+  }
+  if (body.dateFrom || body.dateTo) {
+    clauses.push(
+      `decision_date:[${body.dateFrom ?? "*"} TO ${body.dateTo ?? "*"}]`,
+    );
+  }
+  return clauses.join(" AND ");
+};
+
+const extractCorpusSnippet = (
+  snippet: Record<string, unknown> | undefined,
+): string | null => {
+  const text = snippet?.["text"];
+  const raw = Array.isArray(text) ? text.join(" … ") : text;
+  if (typeof raw !== "string" || raw.length === 0) {
+    return null;
+  }
+  return raw.replaceAll("<b>", "<mark>").replaceAll("</b>", "</mark>");
+};
+
+const searchCorpusIndexDecisions = async (
+  body: SearchDecisionsBody,
+  caseLawDb: CaseLawPublicReadDb,
+) => {
+  const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
+
+  let parsedCursor: { score: number; id: string } | null = null;
+  if (body.cursor) {
+    parsedCursor = decodeCursor(body.cursor);
+    if (!parsedCursor || !isUuid(parsedCursor.id)) {
+      return status(400, { message: "Invalid cursor" });
+    }
+  }
+
+  if (body.country !== undefined && !isCorpusIndexJurisdiction(body.country)) {
+    return status(400, { message: "Invalid country" });
+  }
+
+  const generation = corpusGeneration("case_law");
+  const indexId = body.country
+    ? corpusIndexId(generation, body.country)
+    : corpusIndexPattern(generation);
+
+  const query = buildCorpusIndexQuery(body);
+  if (query === null) {
+    return { hits: [], facets: null, totalCount: null, nextCursor: null };
+  }
+
+  // Upper bound for the pagination early-stop: scanning may end only
+  // once no unseen candidate could out-blend the page cursor.
+  const [authorityBound] = await caseLawDb((tx) =>
+    tx
+      .select({
+        max: sql<number>`coalesce(max(${caseLawDecisions.citationAuthority}), 0)`,
+      })
+      .from(caseLawDecisions),
+  );
+  const maxAuthority = authorityBound?.max ?? 0;
+
+  const searchPage = await readCorpusIndexSearchPage({
+    indexId,
+    query,
+    limit,
+    parsedCursor,
+    snippetFields: ["text"],
+    extractId: (hit) => {
+      const id = hit["document_id"];
+      return typeof id === "string" && isUuid(id) ? id : null;
+    },
+    extractSnippet: extractCorpusSnippet,
+    unseenScoreUpperBound: (nextLexicalScore) =>
+      stableBlendUpperBound(nextLexicalScore, maxAuthority),
+    rankCandidates: async (candidates) => {
+      const ids = candidates.map((candidate) =>
+        toSafeId<"caseLawDecision">(candidate.id),
+      );
+      // Reapply the request filters against the current rows: a stale
+      // corpus hit (metadata changed, async re-index/delete pending) must
+      // not satisfy filters it no longer matches.
+      const rehydrationFilters: SQL[] = [
+        redistributableCaseLawSource,
+        // Accept only hits whose index state is current. The equality
+        // fails for scrubbed rows (contentHash nulled by redaction or a
+        // write retry) and for rows whose payload changed but are not
+        // re-indexed yet (indexedHash cleared by ingestion), so stale
+        // index copies cannot serve outdated or erased snippets.
+        eq(caseLawDecisions.indexedHash, caseLawDecisions.contentHash),
+      ];
+      if (body.court) {
+        rehydrationFilters.push(eq(caseLawDecisions.court, body.court));
+      }
+      if (body.country) {
+        rehydrationFilters.push(eq(caseLawDecisions.country, body.country));
+      }
+      if (body.dateFrom) {
+        rehydrationFilters.push(
+          sql`${caseLawDecisions.decisionDate} >= ${body.dateFrom}`,
+        );
+      }
+      if (body.dateTo) {
+        rehydrationFilters.push(
+          sql`${caseLawDecisions.decisionDate} <= ${body.dateTo}`,
+        );
+      }
+      if (body.decisionType) {
+        rehydrationFilters.push(
+          eq(caseLawDecisions.decisionType, body.decisionType),
+        );
+      }
+      if (body.sourceId) {
+        rehydrationFilters.push(eq(caseLawDecisions.sourceId, body.sourceId));
+      }
+      if (body.language) {
+        rehydrationFilters.push(eq(caseLawDecisions.language, body.language));
+      }
+      const rows =
+        ids.length === 0
+          ? []
+          : await caseLawDb((tx) =>
+              tx
+                .select({
+                  id: caseLawDecisions.id,
+                  caseNumber: caseLawDecisions.caseNumber,
+                  slug: caseLawDecisions.slug,
+                  ecli: caseLawDecisions.ecli,
+                  court: caseLawDecisions.court,
+                  country: caseLawDecisions.country,
+                  language: caseLawDecisions.language,
+                  languageGroupKey: caseLawDecisions.languageGroupKey,
+                  decisionDate: caseLawDecisions.decisionDate,
+                  decisionType: caseLawDecisions.decisionType,
+                  sourceUrl: caseLawDecisions.sourceUrl,
+                  citationCount: caseLawDecisions.citationCount,
+                  citationAuthority: caseLawDecisions.citationAuthority,
+                  createdAt: caseLawDecisions.createdAt,
+                })
+                .from(caseLawDecisions)
+                .innerJoin(
+                  caseLawSources,
+                  eq(caseLawSources.id, caseLawDecisions.sourceId),
+                )
+                .where(
+                  and(inArray(caseLawDecisions.id, ids), ...rehydrationFilters),
+                ),
+            );
+
+      const byId = new Map(rows.map((row) => [String(row.id), row]));
+      const authorityById = new Map(
+        rows.map((row) => [String(row.id), row.citationAuthority]),
+      );
+
+      return {
+        context: { byId },
+        ranked: blendStableCitationAuthority({
+          candidates: candidates.filter((candidate) => byId.has(candidate.id)),
+          authorityById,
+        }),
+      };
+    },
+  });
+
+  const {
+    context: { byId },
+    hasMore,
+    pageRanked,
+    snippetById,
+  } = searchPage;
+
+  const languageGroupKeys = [
+    ...new Set(
+      pageRanked
+        .map((hit) => byId.get(hit.id)?.languageGroupKey ?? null)
+        .filter((value): value is string => value !== null),
+    ),
+  ];
+  const languageAlternateCounts =
+    languageGroupKeys.length > 0
+      ? await caseLawDb((tx) =>
+          tx
+            .select({
+              languageGroupKey: caseLawDecisions.languageGroupKey,
+              count: validCaseLawLanguageAlternateCountSql,
+            })
+            .from(caseLawDecisions)
+            .innerJoin(
+              caseLawSources,
+              eq(caseLawSources.id, caseLawDecisions.sourceId),
+            )
+            .where(
+              and(
+                inArray(caseLawDecisions.languageGroupKey, languageGroupKeys),
+                redistributableCaseLawSource,
+              ),
+            )
+            .groupBy(caseLawDecisions.languageGroupKey),
+        )
+      : [];
+  const languageAlternateCountByGroupKey = new Map(
+    languageAlternateCounts
+      .filter(
+        (
+          row,
+        ): row is {
+          count: number;
+          languageGroupKey: string;
+        } => row.languageGroupKey !== null,
+      )
+      .map((row) => [row.languageGroupKey, row.count]),
+  );
+
+  const last = pageRanked.at(-1);
+  const nextCursor = hasMore && last ? encodeCursor(last.score, last.id) : null;
+
+  const hits = pageRanked.flatMap((hit) => {
+    const row = byId.get(hit.id);
+    if (!row) {
+      return [];
+    }
+
+    return [
+      {
+        decisionId: row.id,
+        caseNumber: row.caseNumber,
+        slug: row.slug,
+        ecli: row.ecli,
+        court: row.court,
+        country: row.country,
+        language: row.language,
+        languageAlternateCount:
+          row.languageGroupKey === null
+            ? 0
+            : (languageAlternateCountByGroupKey.get(row.languageGroupKey) ?? 1),
+        languageGroupKey: row.languageGroupKey,
+        decisionDate: row.decisionDate,
+        decisionType: row.decisionType,
+        sourceUrl: row.sourceUrl,
+        headline: snippetById.get(hit.id) ?? null,
+        citationCount: row.citationCount,
+        createdAt: row.createdAt.toISOString(),
+      },
+    ];
+  });
+
+  return {
+    hits,
+    facets: null,
+    totalCount: null,
     nextCursor,
   };
 };

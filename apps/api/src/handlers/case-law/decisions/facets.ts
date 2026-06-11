@@ -1,6 +1,7 @@
-import { desc, isNotNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
 
-import { caseLawDecisions } from "@/api/db/schema";
+import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -25,6 +26,11 @@ export const listDecisionFacetsHandler = async (
         count: sql<number>`count(*)::int`,
       })
       .from(caseLawDecisions)
+      .innerJoin(
+        caseLawSources,
+        eq(caseLawSources.id, caseLawDecisions.sourceId),
+      )
+      .where(redistributableCaseLawSource)
       .groupBy(caseLawDecisions.country)
       .orderBy(desc(sql`count(*)`), desc(caseLawDecisions.country))
       .limit(LIMITS.caseLawFacetLimit);
@@ -34,6 +40,11 @@ export const listDecisionFacetsHandler = async (
         count: sql<number>`count(*)::int`,
       })
       .from(caseLawDecisions)
+      .innerJoin(
+        caseLawSources,
+        eq(caseLawSources.id, caseLawDecisions.sourceId),
+      )
+      .where(redistributableCaseLawSource)
       .groupBy(caseLawDecisions.court)
       .orderBy(desc(sql`count(*)`), desc(caseLawDecisions.court))
       .limit(LIMITS.caseLawFacetLimit);
@@ -43,7 +54,16 @@ export const listDecisionFacetsHandler = async (
         count: sql<number>`count(*)::int`,
       })
       .from(caseLawDecisions)
-      .where(isNotNull(caseLawDecisions.decisionDate))
+      .innerJoin(
+        caseLawSources,
+        eq(caseLawSources.id, caseLawDecisions.sourceId),
+      )
+      .where(
+        and(
+          isNotNull(caseLawDecisions.decisionDate),
+          redistributableCaseLawSource,
+        ),
+      )
       .groupBy(sql`to_char(${caseLawDecisions.decisionDate}, 'YYYY')`)
       .orderBy(desc(sql`to_char(${caseLawDecisions.decisionDate}, 'YYYY')`))
       .limit(LIMITS.caseLawFacetLimit);

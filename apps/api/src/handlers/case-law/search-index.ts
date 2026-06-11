@@ -1,8 +1,13 @@
-import { asc, eq, gt, notExists, sql } from "drizzle-orm";
+import { and, asc, eq, gt, notExists, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db";
-import { caseLawDecisions, caseLawSearchDocuments } from "@/api/db/schema";
+import {
+  caseLawDecisions,
+  caseLawSearchDocuments,
+  caseLawSources,
+} from "@/api/db/schema";
 import { resolveFtsConfig } from "@/api/handlers/case-law/fts-config";
+import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import { logger } from "@/api/lib/observability/logger";
@@ -28,22 +33,31 @@ export const indexDecision = async (
   decisionId: SafeId<"caseLawDecision">,
   scopedDb: ScopedDb,
 ): Promise<void> => {
-  const decision = await scopedDb((tx) =>
-    tx.query.caseLawDecisions.findFirst({
-      where: { id: { eq: decisionId } },
-      columns: {
-        id: true,
-        caseNumber: true,
-        ecli: true,
-        court: true,
-        language: true,
-        fulltext: true,
-        sections: true,
-      },
-    }),
+  const [decision] = await scopedDb((tx) =>
+    tx
+      .select({
+        id: caseLawDecisions.id,
+        caseNumber: caseLawDecisions.caseNumber,
+        ecli: caseLawDecisions.ecli,
+        court: caseLawDecisions.court,
+        language: caseLawDecisions.language,
+        fulltext: caseLawDecisions.fulltext,
+        sections: caseLawDecisions.sections,
+      })
+      .from(caseLawDecisions)
+      .innerJoin(
+        caseLawSources,
+        eq(caseLawSources.id, caseLawDecisions.sourceId),
+      )
+      .where(
+        and(eq(caseLawDecisions.id, decisionId), redistributableCaseLawSource),
+      )
+      .limit(1),
   );
 
   if (!decision) {
+    // Deleted or gated by source policy: drop any stale projection row.
+    await removeDecisionFromIndex(decisionId, scopedDb);
     return;
   }
 
@@ -70,7 +84,7 @@ export const indexDecision = async (
     ? sql`unaccent(coalesce(${title}, '') || ' ' || coalesce(${searchableText}, ''))`
     : sql`coalesce(${title}, '') || ' ' || coalesce(${searchableText}, '')`;
 
-  const tsvExpr = sql`to_tsvector('simple', ${textExpr})`;
+  const tsvExpr = sql`to_tsvector(${fts.regconfig}, ${textExpr})`;
 
   await scopedDb(async (tx) => {
     // Raise statement timeout for the tsvector upsert.
@@ -87,7 +101,7 @@ export const indexDecision = async (
       ${title},
       ${searchableText},
       ${decision.language},
-      ${"simple"},
+      ${fts.regconfig},
       now(),
       ${tsvExpr}
     )
@@ -139,12 +153,21 @@ export const backfillSearchIndex = async (
     tx
       .select({ id: caseLawDecisions.id })
       .from(caseLawDecisions)
+      .innerJoin(
+        caseLawSources,
+        eq(caseLawSources.id, caseLawDecisions.sourceId),
+      )
       .where(
-        notExists(
-          tx
-            .select({ one: sql`1` })
-            .from(caseLawSearchDocuments)
-            .where(eq(caseLawSearchDocuments.decisionId, caseLawDecisions.id)),
+        and(
+          redistributableCaseLawSource,
+          notExists(
+            tx
+              .select({ one: sql`1` })
+              .from(caseLawSearchDocuments)
+              .where(
+                eq(caseLawSearchDocuments.decisionId, caseLawDecisions.id),
+              ),
+          ),
         ),
       )
       .orderBy(asc(caseLawDecisions.createdAt))
@@ -160,7 +183,16 @@ export const backfillSearchIndex = async (
         caseLawSearchDocuments,
         eq(caseLawSearchDocuments.decisionId, caseLawDecisions.id),
       )
-      .where(gt(caseLawDecisions.updatedAt, caseLawSearchDocuments.updatedAt))
+      .innerJoin(
+        caseLawSources,
+        eq(caseLawSources.id, caseLawDecisions.sourceId),
+      )
+      .where(
+        and(
+          redistributableCaseLawSource,
+          gt(caseLawDecisions.updatedAt, caseLawSearchDocuments.updatedAt),
+        ),
+      )
       .orderBy(asc(caseLawDecisions.createdAt))
       .limit(staleLimit),
   );

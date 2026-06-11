@@ -30,6 +30,7 @@ import { folioCollabRoute } from "@/api/handlers/folio-collab/routes";
 import { healthRoute } from "@/api/handlers/health/routes";
 import { hostedUsageWebhookRoute } from "@/api/handlers/hosted-usage-webhook/routes";
 import { invoicesRoute } from "@/api/handlers/invoices/routes";
+import { legislationCorpusRoute } from "@/api/handlers/legislation/corpus-routes";
 import { legislationRoute } from "@/api/handlers/legislation/routes";
 import { mcpConnectorsRoute } from "@/api/handlers/mcp-connectors/routes";
 import { mcpRoute } from "@/api/handlers/mcp/routes";
@@ -72,7 +73,12 @@ import {
   InMemoryRateLimitContext,
   scopedGenerator,
 } from "@/api/lib/rate-limit";
-import { isS3Stale, refreshS3 } from "@/api/lib/s3";
+import {
+  isCorpusS3Stale,
+  isS3Stale,
+  refreshCorpusS3,
+  refreshS3,
+} from "@/api/lib/s3";
 import { setSecurityHeaders } from "@/api/lib/security-headers";
 import { initWorkflowWorker } from "@/api/lib/workflow-queue";
 
@@ -365,6 +371,7 @@ const api = new Elysia()
       .use(clausesRoute)
       .use(contactsRoute)
       .use(legislationRoute)
+      .use(legislationCorpusRoute)
       .use(searchRoute)
       .use(auditLogsRoute)
       .use(caseLawRoute)
@@ -385,15 +392,21 @@ export default api;
 
 const startS3RefreshLoop = () => {
   const timer = setInterval(() => {
-    if (!isS3Stale()) {
-      return;
+    if (isS3Stale()) {
+      refreshS3().catch((error: unknown) => {
+        logger.error("s3.refresh_failed", {
+          "error.type": errorTag(error),
+        });
+      });
     }
 
-    refreshS3().catch((error: unknown) => {
-      logger.error("s3.refresh_failed", {
-        "error.type": errorTag(error),
+    if (isCorpusS3Stale()) {
+      refreshCorpusS3().catch((error: unknown) => {
+        logger.error("s3.corpus_refresh_failed", {
+          "error.type": errorTag(error),
+        });
       });
-    });
+    }
   }, S3_REFRESH_CHECK_INTERVAL_MS);
 
   timer.unref();
@@ -405,6 +418,7 @@ const startS3RefreshLoop = () => {
 await assertMigrationsApplied();
 
 await refreshS3();
+await refreshCorpusS3();
 startS3RefreshLoop();
 
 // BullMQ worker for asynchronous file derivatives.

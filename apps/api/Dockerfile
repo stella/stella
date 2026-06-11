@@ -8,7 +8,7 @@ FROM base AS pruner
 # major lets a new turbo release change `turbo prune` lockfile output mid-flight.
 RUN bun install -g turbo@2.9.16
 COPY . .
-RUN turbo prune @stll/api --docker
+RUN turbo prune @stll/api @stll/legal-atlas-runner --docker
 
 # Install dependencies using only package manifests (cached layer)
 FROM base AS deps
@@ -41,6 +41,7 @@ RUN mkdir -p /app/runtime-workers && \
       --target bun \
       --outfile /app/runtime-workers/extraction-worker.js \
       apps/api/src/lib/search/extraction-worker.ts
+RUN bun --filter @stll/legal-atlas-runner build
 
 # Run the compiled API as non-root.
 FROM deps AS runner
@@ -55,6 +56,7 @@ ENV STELLA_WORKER_DIR=/\$bunfs/root/workers
 RUN groupadd --system --gid 1001 stella && \
     useradd --system --uid 1001 --gid stella --no-create-home stella
 COPY --chown=stella:stella --from=builder /app/server /app/server
+COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/index.js /app/legal-atlas.js
 COPY --chown=stella:stella --from=builder /app/apps/api/drizzle.config.ts /app/apps/api/drizzle.config.ts
 COPY --chown=stella:stella --from=builder /app/apps/api/src/db-url.ts /app/apps/api/src/db-url.ts
 COPY --chown=stella:stella --from=builder /app/apps/api/drizzle /app/apps/api/drizzle
