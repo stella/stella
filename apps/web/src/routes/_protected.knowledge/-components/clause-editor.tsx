@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import Bold from "@tiptap/extension-bold";
 import Document from "@tiptap/extension-document";
@@ -24,10 +24,21 @@ import {
   ItalicIcon,
   ListIcon,
   ListOrderedIcon,
+  WandSparklesIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import {
+  Popover,
+  PopoverPopup,
+  PopoverTrigger,
+} from "@stll/ui/components/popover";
+import { Textarea } from "@stll/ui/components/textarea";
+import { stellaToast } from "@stll/ui/components/toast";
+
+import { api } from "@/lib/api";
+import { userErrorMessage } from "@/lib/errors";
 
 import {
   CLAUSE_DIRECTIVE_NODE,
@@ -320,14 +331,51 @@ type ClauseEditorProps = {
   content: ClauseParagraph[];
   onChange: (body: ClauseParagraph[]) => void;
   placeholder?: string;
+  /** Context passed to the AI refine assist (current, possibly unsaved values). */
+  usageNotes?: string;
+  title?: string;
 };
 
 export const ClauseEditor = ({
   content,
   onChange,
   placeholder,
+  usageNotes,
+  title,
 }: ClauseEditorProps) => {
   const t = useTranslations();
+  const [refineOpen, setRefineOpen] = useState(false);
+  const [instruction, setInstruction] = useState("");
+  const [refining, setRefining] = useState(false);
+
+  const handleRefine = async () => {
+    const trimmed = instruction.trim();
+    if (trimmed === "") {
+      return;
+    }
+    setRefining(true);
+    const response = await api.clauses["ai-rewrite"].post({
+      body: content,
+      instruction: trimmed,
+      usageNotes: usageNotes ?? null,
+      title: title ?? null,
+    });
+    setRefining(false);
+    if (response.error) {
+      stellaToast.add({
+        type: "error",
+        title: t("ai.editWithAI"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+    onChange(response.data.body);
+    setRefineOpen(false);
+    setInstruction("");
+  };
   // Last body the editor itself emitted, so the reset effect can tell an
   // external content change (dialog reset, clause switch) from the round-trip
   // of the user's own keystroke and avoid clobbering the cursor.
@@ -532,6 +580,53 @@ export const ClauseEditor = ({
         >
           <ListOrderedIcon className="size-3.5" />
         </Button>
+
+        <Popover onOpenChange={setRefineOpen} open={refineOpen}>
+          <PopoverTrigger
+            render={
+              <Button
+                aria-label={t("ai.editWithAI")}
+                className="ms-auto"
+                disabled={!editorReady || refining}
+                size="icon-xs"
+                type="button"
+                variant="ghost"
+              />
+            }
+          >
+            <WandSparklesIcon className="size-3.5" />
+          </PopoverTrigger>
+          <PopoverPopup align="end" className="w-80" side="bottom">
+            <div className="flex flex-col gap-2 p-1">
+              <Textarea
+                autoFocus
+                className="min-h-16 text-sm"
+                onChange={(e) => setInstruction(e.target.value)}
+                placeholder={t("ai.refinePlaceholder")}
+                value={instruction}
+              />
+              <div className="flex justify-end gap-2">
+                <Button
+                  onClick={() => setRefineOpen(false)}
+                  size="sm"
+                  type="button"
+                  variant="ghost"
+                >
+                  {t("common.cancel")}
+                </Button>
+                <Button
+                  disabled={refining || instruction.trim() === ""}
+                  onClick={() => void handleRefine()}
+                  size="sm"
+                  type="button"
+                >
+                  <WandSparklesIcon className="size-3.5" />
+                  {t("ai.editWithAI")}
+                </Button>
+              </div>
+            </div>
+          </PopoverPopup>
+        </Popover>
       </div>
 
       {/* Editor area */}
