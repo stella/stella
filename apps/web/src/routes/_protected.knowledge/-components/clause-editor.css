@@ -34,6 +34,24 @@
   font-size: 1rem;
 }
 
+.clause-editor .tiptap ul,
+.clause-editor .tiptap ol {
+  margin: 0.25rem 0;
+  padding-inline-start: 1.5rem;
+}
+
+.clause-editor .tiptap ul {
+  list-style: disc;
+}
+
+.clause-editor .tiptap ol {
+  list-style: decimal;
+}
+
+.clause-editor .tiptap li > p {
+  margin: 0;
+}
+
 .clause-editor .tiptap p.is-editor-empty:first-child::before {
   color: color-mix(in srgb, var(--color-muted-foreground) 64%, transparent);
   content: attr(data-placeholder);

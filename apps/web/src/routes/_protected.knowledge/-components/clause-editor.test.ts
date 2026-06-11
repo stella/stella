@@ -56,6 +56,91 @@ describe("clause body ⇄ TipTap round-trip", () => {
     expect(tipTapToClauseBody(clauseBodyToTipTap(body))).toEqual(body);
   });
 
+  test("a flat bullet list round-trips as bulletList > listItem > paragraph", () => {
+    const body: ClauseParagraph[] = [
+      { text: "First", listKind: "bullet", listLevel: 0 },
+      { text: "Second", listKind: "bullet", listLevel: 0 },
+    ];
+
+    const doc = clauseBodyToTipTap(body);
+    expect(doc.content?.at(0)).toEqual({
+      type: "bulletList",
+      content: [
+        {
+          type: "listItem",
+          content: [
+            { type: "paragraph", content: [{ type: "text", text: "First" }] },
+          ],
+        },
+        {
+          type: "listItem",
+          content: [
+            { type: "paragraph", content: [{ type: "text", text: "Second" }] },
+          ],
+        },
+      ],
+    });
+    expect(tipTapToClauseBody(doc)).toEqual(body);
+  });
+
+  test("an ordered list round-trips and keeps its kind", () => {
+    const body: ClauseParagraph[] = [
+      { text: "One", listKind: "ordered", listLevel: 0 },
+      { text: "Two", listKind: "ordered", listLevel: 0 },
+    ];
+
+    const doc = clauseBodyToTipTap(body);
+    expect(doc.content?.at(0)?.type).toBe("orderedList");
+    expect(tipTapToClauseBody(doc)).toEqual(body);
+  });
+
+  test("nested list levels round-trip losslessly", () => {
+    const body: ClauseParagraph[] = [
+      { text: "Top", listKind: "bullet", listLevel: 0 },
+      { text: "Child", listKind: "bullet", listLevel: 1 },
+      { text: "Grandchild", listKind: "bullet", listLevel: 2 },
+      { text: "Back to top", listKind: "bullet", listLevel: 0 },
+    ];
+
+    expect(tipTapToClauseBody(clauseBodyToTipTap(body))).toEqual(body);
+  });
+
+  test("a nested ordered list inside a bullet list round-trips", () => {
+    const body: ClauseParagraph[] = [
+      { text: "Bullet", listKind: "bullet", listLevel: 0 },
+      { text: "Numbered child", listKind: "ordered", listLevel: 1 },
+      { text: "Another bullet", listKind: "bullet", listLevel: 0 },
+    ];
+
+    expect(tipTapToClauseBody(clauseBodyToTipTap(body))).toEqual(body);
+  });
+
+  test("list items keep run formatting", () => {
+    const body: ClauseParagraph[] = [
+      {
+        text: "bold item",
+        runs: [{ text: "bold", bold: true }, { text: " item" }],
+        listKind: "bullet",
+        listLevel: 0,
+      },
+    ];
+
+    expect(tipTapToClauseBody(clauseBodyToTipTap(body))).toEqual(body);
+  });
+
+  test("lists interleave with paragraphs and directives", () => {
+    const body: ClauseParagraph[] = [
+      { text: "Intro" },
+      directive("if", "x"),
+      { text: "Item A", listKind: "bullet", listLevel: 0 },
+      { text: "Item B", listKind: "bullet", listLevel: 0 },
+      directive("endif", ""),
+      { text: "Outro" },
+    ];
+
+    expect(tipTapToClauseBody(clauseBodyToTipTap(body))).toEqual(body);
+  });
+
   test("reordering reflects the editor's order — no stale-index resurrection", () => {
     // What the editor doc looks like after the author drags the directive
     // block below the paragraph: the converter must honor that order, not
