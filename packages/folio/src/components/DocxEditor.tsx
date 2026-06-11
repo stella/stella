@@ -616,16 +616,20 @@ export function DocxEditor({
     return mgr;
   }, []);
 
-  const initialSuggestionModeRef = useRef({
+  const [initialSuggestionMode] = useState(() => ({
     active: editingMode === "suggesting",
     author,
-  });
+  }));
 
   // Suggestion mode plugin
-  const suggestionPlugin = useMemo(() => {
-    const initial = initialSuggestionModeRef.current;
-    return createSuggestionModePlugin(initial.active, initial.author);
-  }, []);
+  const suggestionPlugin = useMemo(
+    () =>
+      createSuggestionModePlugin(
+        initialSuggestionMode.active,
+        initialSuggestionMode.author,
+      ),
+    [initialSuggestionMode],
+  );
   // AI suggestion decorations — non-mutating overlay for the review
   // queue. Always present; the plugin renders nothing until
   // suggestions are pushed in.

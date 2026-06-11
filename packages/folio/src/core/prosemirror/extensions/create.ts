@@ -17,13 +17,9 @@ import type {
   ExtensionRuntime,
 } from "./types";
 
-const copyOptions = (options: object): Record<string, unknown> => {
-  const result: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(options)) {
-    result[key] = value;
-  }
-  return result;
-};
+const copyOptions = (options: object): Record<string, unknown> => ({
+  ...options,
+});
 
 const mergeDefaultOptions = <TOptions extends Record<string, unknown>>(
   defaultOptions: TOptions,

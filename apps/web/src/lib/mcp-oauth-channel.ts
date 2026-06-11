@@ -3,6 +3,10 @@ import * as v from "valibot";
 const CHANNEL_NAME = "mcp-oauth";
 const MESSAGE_KIND = "stll.mcp-oauth";
 
+type PostMessageOpener = {
+  postMessage: (message: unknown, targetOrigin: string) => void;
+};
+
 // Wire schema carries a `kind` discriminator so the global
 // `window.message` listener on the opener page can't pick up
 // unrelated messages that happen to share `status`. Callers only
@@ -23,6 +27,15 @@ export type McpOAuthOutcome =
   | { status: "connected" }
   | { status: "error"; reason: string };
 
+const hasPostMessage = (value: object): value is PostMessageOpener => {
+  if (!("postMessage" in value)) {
+    return false;
+  }
+
+  const postMessage: unknown = value.postMessage;
+  return typeof postMessage === "function";
+};
+
 export function broadcastMcpOAuthOutcome(outcome: McpOAuthOutcome): void {
   const message = { kind: MESSAGE_KIND, ...outcome };
 
@@ -42,17 +55,16 @@ export function broadcastMcpOAuthOutcome(outcome: McpOAuthOutcome): void {
   }
 
   const opener: unknown = window.opener;
-  if (
-    typeof opener !== "object" ||
-    opener === null ||
-    !("postMessage" in opener)
-  ) {
+  if (typeof opener !== "object" || opener === null) {
     return;
   }
 
-  const postMessage = opener.postMessage;
-  if (typeof postMessage === "function") {
-    postMessage.call(opener, message, window.location.origin);
+  try {
+    if (hasPostMessage(opener)) {
+      opener.postMessage(message, window.location.origin);
+    }
+  } catch {
+    // Cross-origin opener property access can throw SecurityError.
   }
 }
 
