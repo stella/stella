@@ -129,8 +129,20 @@ describe("markdown bridge — round-trip", () => {
         "- **bold** item\n\n  continuation with [link](https://example.com)",
       ),
     ).toContain(
-      "**bold** item  \ncontinuation with [link](https://example.com)",
+      "**bold** item  \ncontinuation with [link](https://example.com/)",
     );
+  });
+
+  test("markdown links reject executable hrefs", () => {
+    expect(
+      normalize("[bad](javascript:alert(1)) and [data](data:text/html,evil)"),
+    ).toBe("bad and data");
+  });
+
+  test("markdown links keep safe external and internal hrefs", () => {
+    expect(
+      normalize("[site](https://example.com/a) and [section](#intro)"),
+    ).toBe("[site](https://example.com/a) and [section](#intro)");
   });
 
   test("loose list items are idempotent after markdown bridge normalization", () => {

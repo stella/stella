@@ -32,6 +32,7 @@ import type {
   TableRow,
 } from "../types/document";
 import { createEmptyDocument } from "../utils/createDocument";
+import { sanitizeExternalUrl } from "../utils/urlSecurity";
 
 // Whitelisted by toMarkdown's monospace inference, so a codespan survives the
 // round-trip. Folio renders Courier New through its bundled Cousine face.
@@ -97,6 +98,33 @@ const textRun = (text: string, fmt: RunFormat = {}): Run => {
   return { type: "run", formatting, content };
 };
 
+const sanitizeMarkdownHref = (rawHref: string): string | undefined => {
+  const trimmed = rawHref.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  if (trimmed.startsWith("#")) {
+    const anchor = trimmed.slice(1);
+    if (!anchor || hasUnsafeAnchorCharacter(anchor)) {
+      return undefined;
+    }
+    return `#${anchor}`;
+  }
+
+  return sanitizeExternalUrl(trimmed);
+};
+
+const hasUnsafeAnchorCharacter = (anchor: string): boolean => {
+  for (const char of anchor) {
+    const codePoint = char.codePointAt(0) ?? 0;
+    if (codePoint <= 0x20 || codePoint === 0x7f || char.trim() === "") {
+      return true;
+    }
+  }
+  return false;
+};
+
 const inlineToRuns = (
   tokens: Token[] | undefined,
   fallback: string,
@@ -125,10 +153,20 @@ const inlineToRuns = (
       const children = inlineToRuns(token.tokens, token.text, base).filter(
         (child): child is Run => child.type === "run",
       );
+      const href = sanitizeMarkdownHref(token.href);
+      const linkChildren =
+        children.length > 0 ? children : [textRun(token.text, base)];
+      if (!href) {
+        runs.push(...linkChildren);
+        continue;
+      }
+
+      const anchor = href.startsWith("#") ? href.slice(1) : undefined;
       runs.push({
         type: "hyperlink",
-        href: token.href,
-        children: children.length > 0 ? children : [textRun(token.text, base)],
+        href,
+        ...(anchor ? { anchor } : {}),
+        children: linkChildren,
       });
     } else if (isTokenType(token, "paragraph")) {
       runs.push(...inlineToRuns(token.tokens, token.text, base));
