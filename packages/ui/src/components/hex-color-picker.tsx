@@ -235,11 +235,11 @@ const useColorManipulation = (
 
 const isTouch = (e: MouseEvent | TouchEvent): e is TouchEvent => "touches" in e;
 
-const isMoveEvent = (
-  event: Event,
-  win: Window,
-): event is MouseEvent | TouchEvent =>
-  event instanceof win.MouseEvent || "touches" in event;
+const isMouseMoveEvent = (event: Event): event is MouseEvent =>
+  "buttons" in event && "pageX" in event && "pageY" in event;
+
+const isMoveEvent = (event: Event): event is MouseEvent | TouchEvent =>
+  isMouseMoveEvent(event) || "touches" in event;
 
 const getTouchPoint = (touches: TouchList, id: number | null): Touch | null => {
   const found = Array.from(touches).find((t) => t.identifier === id);
@@ -311,7 +311,7 @@ const InteractiveArea = ({
     const endType = touch ? "touchend" : "mouseup";
 
     const handleMove: EventListener = (event) => {
-      if (!isMoveEvent(event, win)) {
+      if (!isMoveEvent(event)) {
         detachListeners();
         return;
       }
