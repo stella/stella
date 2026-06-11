@@ -4,6 +4,21 @@ import { expect, test } from "@playwright/test";
 // no usage entitlement row, no AI provider config. Regressions that
 // only appear in that state must fail here, not in front of a user.
 
+// Surface browser-side failures in the test output: a client render
+// crash otherwise shows up only as an opaque locator timeout, hiding
+// the actual exception behind a blank page.
+test.beforeEach(({ page }) => {
+  page.on("pageerror", (error) => {
+    console.log(`[pageerror] ${error.stack ?? String(error)}`);
+  });
+  page.on("requestfailed", (request) => {
+    const failure = request.failure()?.errorText ?? "unknown failure";
+    console.log(
+      `[requestfailed] ${request.method()} ${request.url()}: ${failure}`,
+    );
+  });
+});
+
 test("deployed app serves the authenticated shell", async ({ page }) => {
   await page.goto("/");
   await expect(page).not.toHaveURL(/\/auth(\/|$)/u);

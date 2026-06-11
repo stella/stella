@@ -43,7 +43,7 @@ import { Route as ProtectedKnowledgeMcpRouteImport } from './routes/_protected.k
 import { Route as ProtectedKnowledgeClausesRouteImport } from './routes/_protected.knowledge/clauses'
 import { Route as ProtectedDevAutocompleteRouteImport } from './routes/_protected.dev_.autocomplete'
 import { Route as ProtectedContactsContactIdRouteImport } from './routes/_protected.contacts/$contactId'
-import { Route as ProtectedChatNewRouteImport } from './routes/_protected.chat/new'
+import { Route as ProtectedChatNewRouteImport } from './routes/_protected.chat_.new'
 import { Route as ProtectedChatThreadIdRouteImport } from './routes/_protected.chat/$threadId'
 import { Route as ProtectedWorkspacesWorkspaceIdRouteRouteImport } from './routes/_protected.workspaces/$workspaceId/route'
 import { Route as ProtectedSettingsOrganizationRouteRouteImport } from './routes/_protected.settings/organization.route'
@@ -251,9 +251,9 @@ const ProtectedContactsContactIdRoute =
     getParentRoute: () => ProtectedRoute,
   } as any)
 const ProtectedChatNewRoute = ProtectedChatNewRouteImport.update({
-  id: '/new',
-  path: '/new',
-  getParentRoute: () => ProtectedChatRouteRoute,
+  id: '/chat_/new',
+  path: '/chat/new',
+  getParentRoute: () => ProtectedRoute,
 } as any)
 const ProtectedChatThreadIdRoute = ProtectedChatThreadIdRouteImport.update({
   id: '/$threadId',
@@ -566,7 +566,7 @@ export interface FileRoutesById {
   '/_protected/settings/organization': typeof ProtectedSettingsOrganizationRouteRouteWithChildren
   '/_protected/workspaces/$workspaceId': typeof ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren
   '/_protected/chat/$threadId': typeof ProtectedChatThreadIdRoute
-  '/_protected/chat/new': typeof ProtectedChatNewRoute
+  '/_protected/chat_/new': typeof ProtectedChatNewRoute
   '/_protected/contacts/$contactId': typeof ProtectedContactsContactIdRoute
   '/_protected/dev_/autocomplete': typeof ProtectedDevAutocompleteRoute
   '/_protected/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
@@ -753,7 +753,7 @@ export interface FileRouteTypes {
     | '/_protected/settings/organization'
     | '/_protected/workspaces/$workspaceId'
     | '/_protected/chat/$threadId'
-    | '/_protected/chat/new'
+    | '/_protected/chat_/new'
     | '/_protected/contacts/$contactId'
     | '/_protected/dev_/autocomplete'
     | '/_protected/knowledge/clauses'
@@ -1053,12 +1053,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedContactsContactIdRouteImport
       parentRoute: typeof ProtectedRoute
     }
-    '/_protected/chat/new': {
-      id: '/_protected/chat/new'
-      path: '/new'
+    '/_protected/chat_/new': {
+      id: '/_protected/chat_/new'
+      path: '/chat/new'
       fullPath: '/chat/new'
       preLoaderRoute: typeof ProtectedChatNewRouteImport
-      parentRoute: typeof ProtectedChatRouteRoute
+      parentRoute: typeof ProtectedRoute
     }
     '/_protected/chat/$threadId': {
       id: '/_protected/chat/$threadId'
@@ -1298,7 +1298,6 @@ const LawRouteRouteWithChildren = LawRouteRoute._addFileChildren(
 
 interface ProtectedChatRouteRouteChildren {
   ProtectedChatThreadIdRoute: typeof ProtectedChatThreadIdRoute
-  ProtectedChatNewRoute: typeof ProtectedChatNewRoute
   ProtectedChatIndexRoute: typeof ProtectedChatIndexRoute
   ProtectedChatWorkspacesWorkspaceIdThreadIdRoute: typeof ProtectedChatWorkspacesWorkspaceIdThreadIdRoute
   ProtectedChatWorkspacesWorkspaceIdNewRoute: typeof ProtectedChatWorkspacesWorkspaceIdNewRoute
@@ -1306,7 +1305,6 @@ interface ProtectedChatRouteRouteChildren {
 
 const ProtectedChatRouteRouteChildren: ProtectedChatRouteRouteChildren = {
   ProtectedChatThreadIdRoute: ProtectedChatThreadIdRoute,
-  ProtectedChatNewRoute: ProtectedChatNewRoute,
   ProtectedChatIndexRoute: ProtectedChatIndexRoute,
   ProtectedChatWorkspacesWorkspaceIdThreadIdRoute:
     ProtectedChatWorkspacesWorkspaceIdThreadIdRoute,
@@ -1466,6 +1464,7 @@ interface ProtectedRouteChildren {
   ProtectedKnowledgeRouteRoute: typeof ProtectedKnowledgeRouteRouteWithChildren
   ProtectedSettingsRouteRoute: typeof ProtectedSettingsRouteRouteWithChildren
   ProtectedWorkspacesWorkspaceIdRouteRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren
+  ProtectedChatNewRoute: typeof ProtectedChatNewRoute
   ProtectedContactsContactIdRoute: typeof ProtectedContactsContactIdRoute
   ProtectedDevAutocompleteRoute: typeof ProtectedDevAutocompleteRoute
   ProtectedContactsIndexRoute: typeof ProtectedContactsIndexRoute
@@ -1479,6 +1478,7 @@ const ProtectedRouteChildren: ProtectedRouteChildren = {
   ProtectedSettingsRouteRoute: ProtectedSettingsRouteRouteWithChildren,
   ProtectedWorkspacesWorkspaceIdRouteRoute:
     ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren,
+  ProtectedChatNewRoute: ProtectedChatNewRoute,
   ProtectedContactsContactIdRoute: ProtectedContactsContactIdRoute,
   ProtectedDevAutocompleteRoute: ProtectedDevAutocompleteRoute,
   ProtectedContactsIndexRoute: ProtectedContactsIndexRoute,
