@@ -22,6 +22,9 @@ const REGISTER_PROBE_ORDER: readonly KrsRegisterCode[] = ["RejP", "RejS"];
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const isKrsLookupResponse = (value: unknown): value is KrsLookupResponse =>
+  isRecord(value) && (value["odpis"] === undefined || isRecord(value["odpis"]));
+
 const parseErrorBody = (value: unknown): KrsErrorResponse => {
   if (!isRecord(value)) {
     return {};
@@ -90,13 +93,13 @@ const krsGet = async (
       cause: error,
     });
   }
-  // SAFETY: the KRS API is a stable, documented public surface and
-  // the shape is captured by `KrsLookupResponse`. The parser
-  // tolerates absent optional fields via defensive `?.` chains, so a
-  // runtime schema mismatch surfaces as `null` properties on the
-  // domain output rather than a 500.
-  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
-  return { status: response.status, body: body as KrsLookupResponse };
+  if (!isKrsLookupResponse(body)) {
+    throw new KrsAPIError({
+      message: `KRS ${response.status}: unexpected JSON payload shape`,
+      httpStatus: response.status,
+    });
+  }
+  return { status: response.status, body };
 };
 
 const buildLookupUrl = (
