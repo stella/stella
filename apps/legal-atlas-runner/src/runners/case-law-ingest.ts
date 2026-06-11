@@ -297,9 +297,15 @@ type CycleResult = {
  * "timeout" means the cycle hit MAX_CYCLE_MS but progress
  * was made (cursor advanced) — not a true failure.
  */
+type CycleBounds = {
+  maxPages?: number | undefined;
+  maxDecisions?: number | undefined;
+};
+
 const runOneCycle = async (
   adapterKey: string,
   name: string,
+  bounds: CycleBounds = {},
 ): Promise<CycleResult> => {
   const initialCursor =
     adapterKey === ADAPTER_KEYS.CZ_REGIONAL ? daysAgoCursor(7) : null;
@@ -325,8 +331,15 @@ const runOneCycle = async (
       scopedDb: ingestionDb,
       dbSlot: { acquire: acquireDbSlot, release: releaseDbSlot },
       signal: AbortSignal.timeout(cycleMs),
+      ...(bounds.maxPages !== undefined && { maxPages: bounds.maxPages }),
+      ...(bounds.maxDecisions !== undefined && {
+        maxDecisions: bounds.maxDecisions,
+      }),
     });
-    if (result.haltReason) {
+    if (result.haltReason?.startsWith("Decision cap")) {
+      // A requested sample bound is a successful outcome, not a failure.
+      logInfo(`[${adapterKey}] ${result.haltReason}`);
+    } else if (result.haltReason) {
       outcome =
         result.haltReason === "Cycle timeout exceeded" ? "timeout" : "failed";
       errorMessage = result.haltReason.slice(0, 2048);
@@ -462,12 +475,62 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
   }
 };
 
+type IngestCliArgs = {
+  filterKey: string | undefined;
+  maxPages: number | undefined;
+  maxDecisions: number | undefined;
+};
+
+const parseIngestArgs = (argv: readonly string[]): IngestCliArgs | null => {
+  const args: IngestCliArgs = {
+    filterKey: undefined,
+    maxPages: undefined,
+    maxDecisions: undefined,
+  };
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === "--max-pages" || arg === "--max-decisions") {
+      const parsed = Number(argv[i + 1]);
+      if (!Number.isInteger(parsed) || parsed < 1) {
+        logError(`${arg} requires a positive integer`);
+        return null;
+      }
+      if (arg === "--max-pages") {
+        args.maxPages = parsed;
+      } else {
+        args.maxDecisions = parsed;
+      }
+      i += 1;
+      continue;
+    }
+    if (arg !== undefined && !arg.startsWith("--") && !args.filterKey) {
+      args.filterKey = arg;
+      continue;
+    }
+    logError(`Unknown option: ${arg ?? "(missing)"}`);
+    return null;
+  }
+  return args;
+};
+
 export const runCaseLawIngest = async (
   argv: readonly string[],
 ): Promise<number> => {
-  const filterKey = argv.at(0);
+  const parsed = parseIngestArgs(argv);
+  if (parsed === null) {
+    return 64;
+  }
+  const { filterKey, maxPages, maxDecisions } = parsed;
 
-  // Single adapter: run once and exit (useful for debugging).
+  if ((maxPages !== undefined || maxDecisions !== undefined) && !filterKey) {
+    logError(
+      "--max-pages/--max-decisions require an adapter key (bounded sample runs are single-adapter)",
+    );
+    return 64;
+  }
+
+  // Single adapter: run once and exit (useful for debugging and for
+  // bounded staging sample runs).
   if (filterKey) {
     const match = SOURCES.find((s) => s.adapterKey === filterKey);
     if (!match) {
@@ -479,7 +542,10 @@ export const runCaseLawIngest = async (
     }
     await refreshS3();
     await refreshCorpusS3();
-    const { outcome } = await runOneCycle(match.adapterKey, match.name);
+    const { outcome } = await runOneCycle(match.adapterKey, match.name, {
+      maxPages,
+      maxDecisions,
+    });
     return outcome === "completed" ? 0 : 1;
   }
 
