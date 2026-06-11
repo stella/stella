@@ -25,6 +25,39 @@ const MAX_SEARCH_LIMIT = 25;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const isRechercheEstablishment = (value: unknown): boolean =>
+  isRecord(value) && typeof value["siret"] === "string";
+
+const isRechercheDirector = (value: unknown): boolean =>
+  isRecord(value) &&
+  (value["type_dirigeant"] === "personne physique" ||
+    value["type_dirigeant"] === "personne morale");
+
+const isRechercheCompany = (value: unknown): boolean =>
+  isRecord(value) &&
+  typeof value["siren"] === "string" &&
+  typeof value["nom_complet"] === "string" &&
+  (value["siege"] === undefined ||
+    value["siege"] === null ||
+    isRechercheEstablishment(value["siege"])) &&
+  (value["matching_etablissements"] === undefined ||
+    (Array.isArray(value["matching_etablissements"]) &&
+      value["matching_etablissements"].every(isRechercheEstablishment))) &&
+  (value["dirigeants"] === undefined ||
+    (Array.isArray(value["dirigeants"]) &&
+      value["dirigeants"].every(isRechercheDirector)));
+
+const isRechercheSearchResponse = (
+  value: unknown,
+): value is RechercheEntreprisesSearchResponse =>
+  isRecord(value) &&
+  Array.isArray(value["results"]) &&
+  value["results"].every(isRechercheCompany) &&
+  typeof value["total_results"] === "number" &&
+  typeof value["page"] === "number" &&
+  typeof value["per_page"] === "number" &&
+  typeof value["total_pages"] === "number";
+
 const parseErrorBody = (value: unknown): RechercheEntreprisesErrorResponse => {
   if (!isRecord(value)) {
     return {};
@@ -39,7 +72,9 @@ const parseErrorBody = (value: unknown): RechercheEntreprisesErrorResponse => {
   return result;
 };
 
-const rechercheEntreprisesGet = async <T>(url: string): Promise<T> => {
+const rechercheEntreprisesGet = async (
+  url: string,
+): Promise<RechercheEntreprisesSearchResponse> => {
   let response: Response;
   try {
     response = await fetch(url, {
@@ -69,9 +104,6 @@ const rechercheEntreprisesGet = async <T>(url: string): Promise<T> => {
     });
   }
 
-  // SAFETY: recherche-entreprises is a stable, documented public API
-  // and the shape is captured by `RechercheEntreprisesSearchResponse`.
-  // Runtime validation adds little for well-typed JSON responses.
   let payload: unknown;
   try {
     payload = await response.json();
@@ -89,8 +121,14 @@ const rechercheEntreprisesGet = async <T>(url: string): Promise<T> => {
       cause: error,
     });
   }
-  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
-  return payload as T;
+  if (!isRechercheSearchResponse(payload)) {
+    throw new RechercheEntreprisesAPIError({
+      message: `recherche-entreprises returned an unexpected JSON body shape (HTTP ${response.status})`,
+      httpStatus: response.status,
+      upstreamMessage: null,
+    });
+  }
+  return payload;
 };
 
 /**
@@ -114,10 +152,9 @@ export const lookupBySiren = async (
     throw new RechercheEntreprisesValidationError(`Invalid SIREN: ${siren}`);
   }
   const params = new URLSearchParams({ q: normalized });
-  const data =
-    await rechercheEntreprisesGet<RechercheEntreprisesSearchResponse>(
-      `${SEARCH_URL}?${params.toString()}`,
-    );
+  const data = await rechercheEntreprisesGet(
+    `${SEARCH_URL}?${params.toString()}`,
+  );
   const hit = data.results.at(0);
   // Belt-and-braces: the search endpoint matches `q` against any
   // text field, so an unrelated entity could in principle slip in.
@@ -153,10 +190,9 @@ export const lookupBySiret = async (
     throw new RechercheEntreprisesValidationError(`Invalid SIRET: ${siret}`);
   }
   const params = new URLSearchParams({ q: normalized });
-  const data =
-    await rechercheEntreprisesGet<RechercheEntreprisesSearchResponse>(
-      `${SEARCH_URL}?${params.toString()}`,
-    );
+  const data = await rechercheEntreprisesGet(
+    `${SEARCH_URL}?${params.toString()}`,
+  );
   // SIRET = SIREN (first 9) + NIC (last 5). Require BOTH the unité
   // légale's SIREN to match the SIRET prefix AND the establishment
   // itself to appear in `matching_etablissements`. Without the second
@@ -210,9 +246,8 @@ export const searchByName = async (
     q: trimmed,
     per_page: String(perPage),
   });
-  const data =
-    await rechercheEntreprisesGet<RechercheEntreprisesSearchResponse>(
-      `${SEARCH_URL}?${params.toString()}`,
-    );
+  const data = await rechercheEntreprisesGet(
+    `${SEARCH_URL}?${params.toString()}`,
+  );
   return data.results.slice(0, perPage).map(parseSearchEntry);
 };
