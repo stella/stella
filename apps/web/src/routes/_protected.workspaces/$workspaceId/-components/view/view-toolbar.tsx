@@ -27,6 +27,7 @@ import {
   MenuSeparator,
   MenuTrigger,
 } from "@stll/ui/components/menu";
+import { SegmentedIconToggle } from "@stll/ui/components/segmented-icon-toggle";
 import {
   Select,
   SelectItem,
@@ -35,10 +36,8 @@ import {
   SelectValue,
 } from "@stll/ui/components/select";
 import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
 
 import { FolderExpandToggle } from "@/components/file-tree/folder-expand-toggle";
-import Tooltip from "@/components/tooltip";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { apiUrl } from "@/lib/api-url";
@@ -290,35 +289,15 @@ const TableContentModeControl = ({ viewId }: TableContentModeControlProps) => {
   const setMode = useTableStore((s) => s.setContentMode);
 
   return (
-    <div className="border-border/70 bg-muted/30 inline-flex h-7 shrink-0 items-center overflow-hidden rounded-md border p-0.5">
-      {TABLE_CONTENT_MODE_OPTIONS.map((option) => {
-        const Icon = option.icon;
-        const isActive = mode === option.mode;
-        return (
-          <Tooltip
-            content={t(option.labelKey)}
-            key={option.mode}
-            render={
-              <Button
-                aria-label={t(option.labelKey)}
-                aria-pressed={isActive}
-                className={cn(
-                  "text-muted-foreground h-6 min-h-0 w-7 rounded-[4px] p-0",
-                  isActive &&
-                    "bg-muted text-foreground ring-border/80 hover:bg-muted hover:text-foreground shadow-xs ring-1",
-                )}
-                onClick={() => setMode(viewId, option.mode)}
-                size="icon-xs"
-                type="button"
-                variant="ghost"
-              />
-            }
-          >
-            <Icon className="size-3.5" />
-          </Tooltip>
-        );
-      })}
-    </div>
+    <SegmentedIconToggle
+      onChange={(next) => setMode(viewId, next)}
+      options={TABLE_CONTENT_MODE_OPTIONS.map((option) => ({
+        value: option.mode,
+        icon: option.icon,
+        label: t(option.labelKey),
+      }))}
+      value={mode}
+    />
   );
 };
 

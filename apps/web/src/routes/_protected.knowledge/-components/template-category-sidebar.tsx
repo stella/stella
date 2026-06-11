@@ -375,13 +375,17 @@ type CategoryFormDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
+  /** Fires after a successful create (not edit) with the new category, so
+   *  callers can act on it — e.g. assign the row that triggered the create. */
+  onCreated?: (category: { id: string; name: string }) => void;
   initial?: { id: string; name: string };
 };
 
-const CategoryFormDialog = ({
+export const CategoryFormDialog = ({
   open,
   onOpenChange,
   onSaved,
+  onCreated,
   initial,
 }: CategoryFormDialogProps) => (
   <Dialog onOpenChange={onOpenChange} open={open}>
@@ -393,6 +397,7 @@ const CategoryFormDialog = ({
     {open ? (
       <CategoryFormDialogBody
         initial={initial}
+        onCreated={onCreated}
         onOpenChange={onOpenChange}
         onSaved={onSaved}
       />
@@ -403,12 +408,14 @@ const CategoryFormDialog = ({
 type CategoryFormDialogBodyProps = {
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
+  onCreated?: (category: { id: string; name: string }) => void;
   initial: { id: string; name: string } | undefined;
 };
 
 const CategoryFormDialogBody = ({
   onOpenChange,
   onSaved,
+  onCreated,
   initial,
 }: CategoryFormDialogBodyProps) => {
   const t = useTranslations();
@@ -459,11 +466,13 @@ const CategoryFormDialogBody = ({
         });
         return;
       }
+
+      onCreated?.({ id: response.data.id, name: response.data.name });
     }
 
     onOpenChange(false);
     onSaved();
-  }, [name, isEdit, initial, t, onOpenChange, onSaved]);
+  }, [name, isEdit, initial, t, onOpenChange, onSaved, onCreated]);
 
   return (
     <DialogPopup className="sm:max-w-sm">
