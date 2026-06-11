@@ -255,25 +255,9 @@ export const backfillCorpusIndex = async (
     );
     let staleError: CorpusIndexError | null = null;
     for (const entry of moved) {
-      const removed = await getCorpusIndexClient().deleteByQuery(
-        entry.oldIndexId,
-        `document_id:"${entry.id}"`,
-      );
-      await recordJobs(
+      const removed = await removeDecisionFromCorpusIndex(
+        entry.id,
         scopedDb,
-        [
-          {
-            decisionId: entry.id,
-            contentHash: null,
-            operation: "delete" as const,
-            status: removed.isErr()
-              ? ("failed" as const)
-              : ("succeeded" as const),
-            ...(removed.isErr()
-              ? { errorMessage: removed.error.message.slice(0, 2048) }
-              : {}),
-          },
-        ],
         entry.oldIndexId,
       );
       if (removed.isErr()) {
@@ -310,6 +294,7 @@ export const backfillCorpusIndex = async (
       continue;
     }
 
+    const casMissed: SafeId<"caseLawDecision">[] = [];
     await scopedDb(async (tx) => {
       // audit: skip — search index maintenance; rebuilds derived state
       for (const { row } of group) {
@@ -318,7 +303,7 @@ export const backfillCorpusIndex = async (
         // when the row was already pending) and bumps updatedAt, and an
         // unconditional write would mask that refresh so the stale index
         // document would never be retried.
-        await tx
+        const marked = await tx
           .update(caseLawDecisions)
           .set({
             indexedHash: row.contentHash,
@@ -331,19 +316,40 @@ export const backfillCorpusIndex = async (
               sql`${caseLawDecisions.indexedHash} IS NOT DISTINCT FROM ${row.indexedHash}`,
               sql`${caseLawDecisions.updatedAt} IS NOT DISTINCT FROM ${row.updatedAt}`,
             ),
-          );
+          )
+          .returning({ id: caseLawDecisions.id });
+        if (marked.length === 0) {
+          casMissed.push(row.id);
+        }
       }
-      await tx.insert(caseLawIndexJobs).values(
-        group.map(({ row }) => ({
-          decisionId: row.id,
-          generation: indexId,
-          operation: "index" as const,
-          status: "succeeded" as const,
-          contentHash: row.contentHash,
-        })),
-      );
+      const markedRows = group.filter(({ row }) => !casMissed.includes(row.id));
+      if (markedRows.length > 0) {
+        await tx.insert(caseLawIndexJobs).values(
+          markedRows.map(({ row }) => ({
+            decisionId: row.id,
+            generation: indexId,
+            operation: "index" as const,
+            status: "succeeded" as const,
+            contentHash: row.contentHash,
+          })),
+        );
+      }
     });
-    indexed += group.length;
+    // A missed CAS means a refresh outpaced this batch after the ingest
+    // appended its document: the row carries no generation pointer to it,
+    // so delete the unrecorded copy now; the refreshed row is re-indexed
+    // by a later cycle.
+    for (const missedId of casMissed) {
+      const removed = await removeDecisionFromCorpusIndex(
+        missedId,
+        scopedDb,
+        indexId,
+      );
+      if (removed.isErr()) {
+        firstError ??= removed.error;
+      }
+    }
+    indexed += group.length - casMissed.length;
   }
 
   // Surface a failure so the daemon retries the un-indexed groups.

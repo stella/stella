@@ -242,25 +242,9 @@ export const backfillLegislationCorpusIndex = async (
     );
     let staleError: CorpusIndexError | null = null;
     for (const entry of moved) {
-      const removed = await getCorpusIndexClient().deleteByQuery(
-        entry.oldIndexId,
-        `document_id:"${entry.id}"`,
-      );
-      await recordJobs(
+      const removed = await removeLegislationFromCorpusIndex(
+        entry.id,
         scopedDb,
-        [
-          {
-            documentId: entry.id,
-            contentHash: null,
-            operation: "delete" as const,
-            status: removed.isErr()
-              ? ("failed" as const)
-              : ("succeeded" as const),
-            ...(removed.isErr()
-              ? { errorMessage: removed.error.message.slice(0, 2048) }
-              : {}),
-          },
-        ],
         entry.oldIndexId,
       );
       if (removed.isErr()) {
@@ -297,6 +281,7 @@ export const backfillLegislationCorpusIndex = async (
       continue;
     }
 
+    const casMissed: SafeId<"legislationDocument">[] = [];
     await scopedDb(async (tx) => {
       // audit: skip — search index maintenance; rebuilds derived state
       for (const { row } of group) {
@@ -305,7 +290,7 @@ export const backfillLegislationCorpusIndex = async (
         // when the row was already pending) and bumps updatedAt, and an
         // unconditional write would mask that refresh so the stale index
         // document would never be retried.
-        await tx
+        const marked = await tx
           .update(legislationDocuments)
           .set({
             indexedHash: row.contentHash,
@@ -318,19 +303,40 @@ export const backfillLegislationCorpusIndex = async (
               sql`${legislationDocuments.indexedHash} IS NOT DISTINCT FROM ${row.indexedHash}`,
               sql`${legislationDocuments.updatedAt} IS NOT DISTINCT FROM ${row.updatedAt}`,
             ),
-          );
+          )
+          .returning({ id: legislationDocuments.id });
+        if (marked.length === 0) {
+          casMissed.push(row.id);
+        }
       }
-      await tx.insert(legislationIndexJobs).values(
-        group.map(({ row }) => ({
-          documentId: row.id,
-          generation: indexId,
-          operation: "index" as const,
-          status: "succeeded" as const,
-          contentHash: row.contentHash,
-        })),
-      );
+      const markedRows = group.filter(({ row }) => !casMissed.includes(row.id));
+      if (markedRows.length > 0) {
+        await tx.insert(legislationIndexJobs).values(
+          markedRows.map(({ row }) => ({
+            documentId: row.id,
+            generation: indexId,
+            operation: "index" as const,
+            status: "succeeded" as const,
+            contentHash: row.contentHash,
+          })),
+        );
+      }
     });
-    indexed += group.length;
+    // A missed CAS means a refresh outpaced this batch after the ingest
+    // appended its document: the row carries no generation pointer to it,
+    // so delete the unrecorded copy now; the refreshed row is re-indexed
+    // by a later cycle.
+    for (const missedId of casMissed) {
+      const removed = await removeLegislationFromCorpusIndex(
+        missedId,
+        scopedDb,
+        indexId,
+      );
+      if (removed.isErr()) {
+        firstError ??= removed.error;
+      }
+    }
+    indexed += group.length - casMissed.length;
   }
 
   if (firstError) {
@@ -378,7 +384,7 @@ export const removeLegislationFromCorpusIndex = async (
   scopedDb: ScopedDb,
   indexId: string,
   operation: "delete" | "redact" = "delete",
-): Promise<void> => {
+): Promise<Result<void, CorpusIndexError>> => {
   const result = await getCorpusIndexClient().deleteByQuery(
     indexId,
     `document_id:"${documentId}"`,
@@ -398,7 +404,5 @@ export const removeLegislationFromCorpusIndex = async (
     ],
     indexId,
   );
-  if (result.isErr()) {
-    throw result.error;
-  }
+  return result;
 };
