@@ -12,6 +12,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { isUuid, tSafeId } from "@/api/lib/custom-schema";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
+import { corpusFreeTextClause } from "@/api/lib/legal-search/corpus-query";
 import {
   corpusIndexId,
   corpusIndexPattern,
@@ -171,9 +172,13 @@ const mapRowHit = (row: RawRow): LegislationHit => ({
   score: Number(row["score"]) || 0,
 });
 
-const buildCorpusIndexQuery = (body: SearchLegislationBody): string => {
+const buildCorpusIndexQuery = (body: SearchLegislationBody): string | null => {
   const q = (v: string) => `"${v.replaceAll('"', '\\"')}"`;
-  const clauses = [`(${body.query})`];
+  const freeText = corpusFreeTextClause(body.query);
+  if (freeText === null) {
+    return null;
+  }
+  const clauses = [freeText];
   if (body.documentType) {
     clauses.push(`document_type:${q(body.documentType)}`);
   }
@@ -216,9 +221,14 @@ const corpusIndexSearch = async (
     ? corpusIndexId(generation, body.jurisdiction)
     : corpusIndexPattern(generation);
 
+  const query = buildCorpusIndexQuery(body);
+  if (query === null) {
+    return { hits: [], nextCursor: null };
+  }
+
   const searchPage = await readCorpusIndexSearchPage({
     indexId,
-    query: buildCorpusIndexQuery(body),
+    query,
     limit,
     parsedCursor,
     snippetFields: ["text"],

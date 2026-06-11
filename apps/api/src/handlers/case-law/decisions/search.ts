@@ -22,6 +22,7 @@ import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { isUuid } from "@/api/lib/custom-schema";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
+import { corpusFreeTextClause } from "@/api/lib/legal-search/corpus-query";
 import {
   corpusIndexId,
   corpusIndexPattern,
@@ -401,8 +402,12 @@ const searchPostgresDecisions = async (
 const quoteCorpusIndexValue = (value: string): string =>
   `"${value.replaceAll('"', '\\"')}"`;
 
-const buildCorpusIndexQuery = (body: SearchDecisionsBody): string => {
-  const clauses: string[] = [`(${body.query})`];
+const buildCorpusIndexQuery = (body: SearchDecisionsBody): string | null => {
+  const freeText = corpusFreeTextClause(body.query);
+  if (freeText === null) {
+    return null;
+  }
+  const clauses: string[] = [freeText];
   if (body.decisionType) {
     clauses.push(`document_type:${quoteCorpusIndexValue(body.decisionType)}`);
   }
@@ -457,9 +462,14 @@ const searchCorpusIndexDecisions = async (
     ? corpusIndexId(generation, body.country)
     : corpusIndexPattern(generation);
 
+  const query = buildCorpusIndexQuery(body);
+  if (query === null) {
+    return { hits: [], facets: null, totalCount: null, nextCursor: null };
+  }
+
   const searchPage = await readCorpusIndexSearchPage({
     indexId,
-    query: buildCorpusIndexQuery(body),
+    query,
     limit,
     parsedCursor,
     snippetFields: ["text"],
