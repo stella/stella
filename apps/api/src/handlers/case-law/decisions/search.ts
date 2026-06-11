@@ -300,8 +300,15 @@ const searchPostgresDecisions = async (
               count: validCaseLawLanguageAlternateCountSql,
             })
             .from(caseLawDecisions)
+            .innerJoin(
+              caseLawSources,
+              eq(caseLawSources.id, caseLawDecisions.sourceId),
+            )
             .where(
-              inArray(caseLawDecisions.languageGroupKey, languageGroupKeys),
+              and(
+                inArray(caseLawDecisions.languageGroupKey, languageGroupKeys),
+                redistributableCaseLawSource,
+              ),
             )
             .groupBy(caseLawDecisions.languageGroupKey),
         )
@@ -559,8 +566,15 @@ const searchCorpusIndexDecisions = async (
               count: validCaseLawLanguageAlternateCountSql,
             })
             .from(caseLawDecisions)
+            .innerJoin(
+              caseLawSources,
+              eq(caseLawSources.id, caseLawDecisions.sourceId),
+            )
             .where(
-              inArray(caseLawDecisions.languageGroupKey, languageGroupKeys),
+              and(
+                inArray(caseLawDecisions.languageGroupKey, languageGroupKeys),
+                redistributableCaseLawSource,
+              ),
             )
             .groupBy(caseLawDecisions.languageGroupKey),
         )
