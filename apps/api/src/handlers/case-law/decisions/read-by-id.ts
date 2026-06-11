@@ -6,7 +6,10 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
-import { isRedistributable } from "@/api/handlers/case-law/corpus-source";
+import {
+  allowsDerivedAi,
+  isRedistributable,
+} from "@/api/handlers/case-law/corpus-source";
 import {
   readCorpusAst,
   readCorpusText,
@@ -260,6 +263,9 @@ export const readDecisionHandler = async (
       id: source.id,
       name: source.name,
       adapterKey: source.adapterKey,
+      // Derived licence bit (never the raw descriptor): AI consumers
+      // must not feed the full text to a model when this is false.
+      allowsDerivedAi: allowsDerivedAi(source.descriptor),
     },
     citationsFrom,
     citationsTo,

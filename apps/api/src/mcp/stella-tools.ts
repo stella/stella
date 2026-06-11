@@ -793,6 +793,11 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
     return errorResult("Decision not found");
   }
 
+  // allowsRedistribution gates whether the decision is publicly
+  // readable; allowsDerivedAi additionally gates feeding full text to a
+  // model, which is exactly this tool's context.
+  const aiTextAllowed = result.source.allowsDerivedAi;
+
   return textResult({
     decision: {
       appUrl: buildCaseLawDecisionAppUrl({
@@ -820,10 +825,18 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
       metadata: result.metadata,
       source: result.source,
       sourceUrl: result.sourceUrl,
-      text: toPlainDecisionText({
-        documentAst: result.documentAst,
-        fulltext: result.fulltext,
-      }),
+      text: aiTextAllowed
+        ? toPlainDecisionText({
+            documentAst: result.documentAst,
+            fulltext: result.fulltext,
+          })
+        : null,
+      ...(aiTextAllowed
+        ? {}
+        : {
+            textWithheldReason:
+              "The source licence does not permit AI use of the full text.",
+          }),
     },
   });
 };

@@ -260,6 +260,7 @@ const createReadDecisionResult = () => ({
   slug: "stable-official-slug",
   source: {
     adapterKey: "cz-ns",
+    allowsDerivedAi: true,
     id: "src_1",
     name: "Nejvyšší soud",
   },
@@ -915,11 +916,34 @@ describe("OpenAI-compatible MCP tools", () => {
         metadata: { panel: "29 Cdo" },
         source: {
           adapterKey: "cz-ns",
+          allowsDerivedAi: true,
           id: "src_1",
           name: "Nejvyšší soud",
         },
         sourceUrl: "https://example.test/decision",
         text: "29 Cdo 123/2024\n\nThe court dismissed the appeal.",
+      },
+    });
+  });
+
+  test("read_case_law_decision withholds text when the source bars AI use", async () => {
+    const base = createReadDecisionResult();
+    readDecisionHandlerMock.mockResolvedValue({
+      ...base,
+      source: { ...base.source, allowsDerivedAi: false },
+    });
+
+    const result = await handleMcpToolCall({
+      args: { decision_id: "dec_123" },
+      context: createContext(),
+      toolName: "read_case_law_decision",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      decision: {
+        text: null,
+        textWithheldReason:
+          "The source licence does not permit AI use of the full text.",
       },
     });
   });
@@ -953,6 +977,7 @@ describe("OpenAI-compatible MCP tools", () => {
         metadata: { panel: "29 Cdo" },
         source: {
           adapterKey: "cz-ns",
+          allowsDerivedAi: true,
           id: "src_1",
           name: "Nejvyšší soud",
         },
