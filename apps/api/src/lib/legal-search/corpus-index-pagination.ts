@@ -96,11 +96,15 @@ export const readCorpusIndexSearchPage = async <TContext>({
       break;
     }
 
+    // Sort by BM25 explicitly: without it the engine returns hits in
+    // document-id order and the rank-based lexical score below would be
+    // meaningless.
     const result = await getCorpusIndexClient().search({
       indexId,
       query,
       maxHits,
       startOffset,
+      sortBy: "_score",
       snippetFields,
     });
     if (result.isErr()) {

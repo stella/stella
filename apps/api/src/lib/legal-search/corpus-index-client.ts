@@ -26,7 +26,11 @@ export type CorpusIndexSearchInput = {
   query: string;
   maxHits: number;
   startOffset?: number | undefined;
-  sortByField?: string | undefined;
+  /**
+   * `sort_by` value, e.g. `_score` for BM25 (descending). Without it the
+   * engine returns hits in document-id order, not relevance order.
+   */
+  sortBy?: string | undefined;
   snippetFields?: string[] | undefined;
 };
 
@@ -154,7 +158,14 @@ const buildClient = (): CorpusIndexClient => ({
   ingestBatch: async (indexId, ndjson) =>
     await Result.tryPromise({
       try: async () => {
-        await requestJson<unknown>(
+        const sentDocs = ndjson
+          .split("\n")
+          .filter((line) => line.trim().length > 0).length;
+        const response = await requestJson<{
+          num_docs_for_processing?: number;
+          num_rejected_docs?: number;
+          parse_failures?: unknown[];
+        }>(
           `/api/v1/${indexId}/ingest?commit=auto`,
           {
             method: "POST",
@@ -163,6 +174,25 @@ const buildClient = (): CorpusIndexClient => ({
           },
           INGEST_TIMEOUT_MS,
         );
+        // The engine can accept the HTTP request while dropping documents.
+        // v0.8 only reports num_docs_for_processing (per-document parse
+        // failures surface in server logs, not the response); newer engines
+        // report rejections explicitly. Fail the batch on any signal that
+        // not every document was accepted so the backfill retries instead
+        // of committing indexedHash for documents that never landed.
+        const rejected =
+          response.num_rejected_docs ?? response.parse_failures?.length ?? 0;
+        if (rejected > 0) {
+          throw new CorpusIndexError({
+            message: `corpus index ingest rejected ${rejected} of ${sentDocs} documents`,
+          });
+        }
+        const accepted = response.num_docs_for_processing;
+        if (accepted !== undefined && accepted < sentDocs) {
+          throw new CorpusIndexError({
+            message: `corpus index ingest accepted ${accepted} of ${sentDocs} documents`,
+          });
+        }
       },
       catch: toCorpusIndexError,
     }),
@@ -172,7 +202,7 @@ const buildClient = (): CorpusIndexClient => ({
     query,
     maxHits,
     startOffset,
-    sortByField,
+    sortBy,
     snippetFields,
   }) =>
     await Result.tryPromise({
@@ -184,8 +214,8 @@ const buildClient = (): CorpusIndexClient => ({
         if (startOffset !== undefined) {
           body["start_offset"] = startOffset;
         }
-        if (sortByField !== undefined) {
-          body["sort_by_field"] = sortByField;
+        if (sortBy !== undefined) {
+          body["sort_by"] = sortBy;
         }
         if (snippetFields !== undefined && snippetFields.length > 0) {
           body["snippet_fields"] = snippetFields.join(",");
