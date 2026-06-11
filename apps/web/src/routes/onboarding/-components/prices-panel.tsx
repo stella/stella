@@ -27,6 +27,14 @@ const TYPICAL_OUTPUT_TOKENS = 2000;
 // model id (`provider/model` → `model`) and apply this multiplier.
 const OPENROUTER_MARKUP = 1.055;
 
+const modelOptionsForProvider = (
+  provider: ProviderValue,
+): readonly string[] => {
+  const optionsByProvider: Partial<Record<ProviderValue, readonly string[]>> =
+    MODEL_OPTIONS_BY_PROVIDER;
+  return optionsByProvider[provider] ?? [];
+};
+
 const formatPerMTok = (
   raw: number | TieredPrices | undefined,
   markup: number,
@@ -126,9 +134,7 @@ export const PricesPanel = ({ providers, roleModels }: PricesPanelProps) => {
 
   const groups = providers.map((provider) => ({
     provider,
-    rows: MODEL_OPTIONS_BY_PROVIDER[provider].map((modelId) =>
-      buildRow(modelId),
-    ),
+    rows: modelOptionsForProvider(provider).map((modelId) => buildRow(modelId)),
   }));
 
   const selectedKeys = new Set<string>();

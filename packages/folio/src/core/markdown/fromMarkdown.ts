@@ -23,6 +23,7 @@ import { marked, type Token, type Tokens } from "marked";
 import type {
   BlockContent,
   Document,
+  ParagraphContent,
   ListRendering,
   Paragraph,
   Run,
@@ -100,11 +101,11 @@ const inlineToRuns = (
   tokens: Token[] | undefined,
   fallback: string,
   base: RunFormat,
-): Run[] => {
+): ParagraphContent[] => {
   if (!tokens || tokens.length === 0) {
     return [textRun(fallback, base)];
   }
-  const runs: Run[] = [];
+  const runs: ParagraphContent[] = [];
   for (const token of tokens) {
     if (isTokenType(token, "strong")) {
       runs.push(
@@ -121,9 +122,22 @@ const inlineToRuns = (
     } else if (isTokenType(token, "codespan")) {
       runs.push(textRun(token.text, { ...base, mono: true }));
     } else if (isTokenType(token, "link")) {
+      const children = inlineToRuns(token.tokens, token.text, base).filter(
+        (child): child is Run => child.type === "run",
+      );
+      runs.push({
+        type: "hyperlink",
+        href: token.href,
+        children: children.length > 0 ? children : [textRun(token.text, base)],
+      });
+    } else if (isTokenType(token, "paragraph")) {
       runs.push(...inlineToRuns(token.tokens, token.text, base));
     } else if (token.type === "br") {
       runs.push({ type: "run", content: [{ type: "break" }] });
+    } else if (token.type === "space") {
+      if (runs.length > 0 && token.raw.includes("\n")) {
+        runs.push(textRun("\n", base));
+      }
     } else if (isTokenType(token, "text")) {
       const nested = token.tokens;
       if (nested && nested.length > 0) {
@@ -138,13 +152,16 @@ const inlineToRuns = (
   return runs.length > 0 ? runs : [textRun(fallback, base)];
 };
 
-const para = (runs: Run[], styleId?: string): Paragraph => ({
+const para = (runs: ParagraphContent[], styleId?: string): Paragraph => ({
   type: "paragraph",
   formatting: styleId ? { styleId } : {},
   content: runs.length > 0 ? runs : [textRun("")],
 });
 
-const listPara = (runs: Run[], rendering: ListRendering): Paragraph => ({
+const listPara = (
+  runs: ParagraphContent[],
+  rendering: ListRendering,
+): Paragraph => ({
   type: "paragraph",
   // Real numbering properties, not just display metadata: the editor's list
   // commands (Enter continues the list, Tab indents, toggle) and the live

@@ -10,6 +10,7 @@
 //    emits (headings, prose, marks, lists, tables, inline code, blockquotes).
 
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
 import { fromMarkdown } from "./fromMarkdown";
 import { toMarkdown } from "./index";
@@ -122,6 +123,26 @@ describe("markdown bridge — round-trip", () => {
     );
   });
 
+  test("loose list paragraph tokens keep nested marks and links", () => {
+    expect(
+      normalize(
+        "- **bold** item\n\n  continuation with [link](https://example.com)",
+      ),
+    ).toContain(
+      "**bold** item  \ncontinuation with [link](https://example.com)",
+    );
+  });
+
+  test("loose list items are idempotent after markdown bridge normalization", () => {
+    fc.assert(
+      fc.property(
+        looseListItemMarkdown(),
+        (source) => normalize(normalize(source)) === normalize(source),
+      ),
+      { numRuns: 100 },
+    );
+  });
+
   test("a soft line break becomes a break node, not a raw newline in a run", () => {
     // A Word run can't carry "\n"; the layout engine renders such lines on top
     // of each other. A two-line blockquote must produce an explicit break.
@@ -150,3 +171,63 @@ describe("markdown bridge — round-trip", () => {
     expect(breakNodes).toBeGreaterThan(0);
   });
 });
+
+const LOWERCASE_WORD_CHARS = [
+  "a",
+  "b",
+  "c",
+  "d",
+  "e",
+  "f",
+  "g",
+  "h",
+  "i",
+  "j",
+  "k",
+  "l",
+  "m",
+  "n",
+  "o",
+  "p",
+  "q",
+  "r",
+  "s",
+  "t",
+  "u",
+  "v",
+  "w",
+  "x",
+  "y",
+  "z",
+] as const;
+
+const inlineText = fc
+  .array(
+    fc.array(fc.constantFrom(...LOWERCASE_WORD_CHARS), {
+      minLength: 1,
+      maxLength: 8,
+    }),
+    { minLength: 1, maxLength: 3 },
+  )
+  .map((words) => words.map((chars) => chars.join("")).join(" "));
+
+const inlineMarkdown = fc.oneof(
+  inlineText,
+  inlineText.map((value) => `**${value}**`),
+  inlineText.map((value) => `*${value}*`),
+  inlineText.map((value) => `\`${value.replaceAll("`", "")}\``),
+  inlineText.map(
+    (value) => `[${value}](https://example.com/${encodeURIComponent(value)})`,
+  ),
+);
+
+const looseListItemMarkdown = () =>
+  fc
+    .tuple(
+      fc.array(inlineMarkdown, { minLength: 1, maxLength: 3 }),
+      fc.array(inlineMarkdown, { minLength: 1, maxLength: 3 }),
+    )
+    .map(
+      ([firstParagraph, secondParagraph]) =>
+        `- ${firstParagraph.join(" ")}\n\n  ${secondParagraph.join(" ")}`,
+    );
