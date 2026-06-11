@@ -19,7 +19,8 @@
       "cta": "Abrir configurações de IA",
       "description": "Adicione credenciais de provedor para começar a usar recursos de IA.",
       "title": "Conectar provedor de IA"
-    }
+    },
+    "refinePlaceholder": "Como a IA deve ajustar a redação?"
   },
   "app": {
     "versionMismatch": {
@@ -678,7 +679,9 @@
     "closeAll": "Fechar tudo",
     "closeOthers": "Fechar outros",
     "columns": "Colunas",
+    "comfortable": "Confortável",
     "comingSoon": "Em breve",
+    "compact": "Compacto",
     "confirm": "Confirmar",
     "confirmAction": "Você tem certeza?",
     "connectionLost": "Conexão perdida",

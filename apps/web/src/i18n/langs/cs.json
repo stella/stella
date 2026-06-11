@@ -19,7 +19,8 @@
       "cta": "Otevřít nastavení AI",
       "description": "Přidejte přihlašovací údaje poskytovatele a začněte používat funkce AI.",
       "title": "Připojit poskytovatele AI"
-    }
+    },
+    "refinePlaceholder": "Jak má AI upravit znění?"
   },
   "app": {
     "versionMismatch": {
@@ -683,7 +684,9 @@
     "closeAll": "Zavřít vše",
     "closeOthers": "Zavřít ostatní",
     "columns": "Sloupce",
+    "comfortable": "Pohodlné",
     "comingSoon": "Již brzy",
+    "compact": "Kompaktní",
     "confirm": "Potvrdit",
     "confirmAction": "Opravdu?",
     "connectionLost": "Spojení ztraceno",
