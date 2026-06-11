@@ -5,6 +5,12 @@ import Document from "@tiptap/extension-document";
 import Heading from "@tiptap/extension-heading";
 import History from "@tiptap/extension-history";
 import Italic from "@tiptap/extension-italic";
+import {
+  BulletList,
+  ListItem,
+  ListKeymap,
+  OrderedList,
+} from "@tiptap/extension-list";
 import Paragraph from "@tiptap/extension-paragraph";
 import Placeholder from "@tiptap/extension-placeholder";
 import Text from "@tiptap/extension-text";
@@ -16,7 +22,10 @@ import {
   Heading2Icon,
   Heading3Icon,
   ItalicIcon,
+  ListIcon,
+  ListOrderedIcon,
 } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 
@@ -28,7 +37,24 @@ import {
   isBlockDirectiveKind,
 } from "./clause-directive-node";
 import "./clause-editor.css";
-import type { ClauseParagraph, ClauseRun } from "./clause-editor-types";
+import type {
+  ClauseListKind,
+  ClauseParagraph,
+  ClauseRun,
+} from "./clause-editor-types";
+
+const listNodeType = (kind: ClauseListKind): "bulletList" | "orderedList" =>
+  kind === "bullet" ? "bulletList" : "orderedList";
+
+const listKindOfNode = (type: string | undefined): ClauseListKind | null => {
+  if (type === "bulletList") {
+    return "bullet";
+  }
+  if (type === "orderedList") {
+    return "ordered";
+  }
+  return null;
+};
 
 const isUsableEditor = (editor: Editor | null | undefined): editor is Editor =>
   editor !== null && editor !== undefined && !editor.isDestroyed;
@@ -44,51 +70,131 @@ const directiveToNode = (p: ClauseParagraph): JSONContent => ({
   },
 });
 
+const runsToInline = (runs: readonly ClauseRun[]): JSONContent[] =>
+  runs.map((run): JSONContent => {
+    const marks: { type: string }[] = [];
+    if (run.bold) {
+      marks.push({ type: "bold" });
+    }
+    if (run.italic) {
+      marks.push({ type: "italic" });
+    }
+    const node: JSONContent = {
+      type: "text",
+      text: run.text || " ",
+    };
+    if (marks.length > 0) {
+      node.marks = marks;
+    }
+    return node;
+  });
+
+const paragraphToNode = (p: ClauseParagraph): JSONContent => {
+  const isHeading = p.style === "heading" && p.level !== undefined;
+  const content = runsToInline(p.runs ?? [{ text: p.text }]);
+
+  if (isHeading) {
+    return {
+      type: "heading",
+      attrs: { level: Math.min(p.level ?? 1, 3) },
+      content,
+    };
+  }
+  return { type: "paragraph", content };
+};
+
+const listLevelOf = (p: ClauseParagraph): number =>
+  p.listKind ? Math.max(0, p.listLevel ?? 0) : 0;
+
+/**
+ * Build the TipTap list node(s) for one run of consecutive list paragraphs
+ * (all sharing `start.listKind` at the current level), nesting deeper levels as
+ * child lists inside the preceding `listItem`. Returns the list node plus the
+ * number of paragraphs it consumed, so the caller can resume after the run.
+ */
+const buildList = (
+  body: readonly ClauseParagraph[],
+  start: number,
+  level: number,
+  kind: ClauseListKind,
+): { node: JSONContent; consumed: number } => {
+  const items: JSONContent[] = [];
+  let i = start;
+
+  while (i < body.length) {
+    const p = body[i];
+    if (!p || p.isDirective || !p.listKind) {
+      break;
+    }
+    const pLevel = listLevelOf(p);
+    if (pLevel < level || (pLevel === level && p.listKind !== kind)) {
+      break;
+    }
+    if (pLevel > level) {
+      // A deeper item with no own-level parent: nest it under the last item,
+      // or open a fresh item so the structure stays well-formed.
+      const child = buildList(body, i, pLevel, p.listKind);
+      const lastItem = items.at(-1);
+      if (lastItem?.content) {
+        lastItem.content.push(child.node);
+      } else {
+        items.push({ type: "listItem", content: [child.node] });
+      }
+      i += child.consumed;
+      continue;
+    }
+
+    // paragraphToNode ignores list props, so the item's inner paragraph is
+    // just the paragraph itself; buildList owns the list/nesting structure.
+    const itemContent: JSONContent[] = [paragraphToNode(p)];
+    i += 1;
+    // Pull any immediately-following deeper items into this item as a sub-list.
+    const next = body[i];
+    if (next?.listKind && listLevelOf(next) > level) {
+      const child = buildList(body, i, listLevelOf(next), next.listKind);
+      itemContent.push(child.node);
+      i += child.consumed;
+    }
+    items.push({ type: "listItem", content: itemContent });
+  }
+
+  return {
+    node: { type: listNodeType(kind), content: items },
+    consumed: i - start,
+  };
+};
+
 export const clauseBodyToTipTap = (
   body: readonly ClauseParagraph[],
-): JSONContent => ({
-  type: "doc",
-  content: body.map((p): JSONContent => {
+): JSONContent => {
+  const content: JSONContent[] = [];
+  let i = 0;
+
+  while (i < body.length) {
+    const p = body[i];
+    if (!p) {
+      i += 1;
+      continue;
+    }
     // Directives ride in the document as atomic nodes, so their position is
     // the editor's truth rather than something reconstructed on save.
     if (p.isDirective) {
-      return directiveToNode(p);
+      content.push(directiveToNode(p));
+      i += 1;
+      continue;
     }
-
-    const isHeading = p.style === "heading" && p.level !== undefined;
-    const runs = p.runs ?? [{ text: p.text }];
-
-    const content: JSONContent[] = runs.map((run): JSONContent => {
-      const marks: { type: string }[] = [];
-      if (run.bold) {
-        marks.push({ type: "bold" });
-      }
-      if (run.italic) {
-        marks.push({ type: "italic" });
-      }
-      const node: JSONContent = {
-        type: "text",
-        text: run.text || " ",
-      };
-      if (marks.length > 0) {
-        node.marks = marks;
-      }
-      return node;
-    });
-
-    if (isHeading) {
-      return {
-        type: "heading",
-        attrs: {
-          level: Math.min(p.level ?? 1, 3),
-        },
-        content,
-      };
+    if (p.listKind) {
+      const built = buildList(body, i, listLevelOf(p), p.listKind);
+      content.push(built.node);
+      i += built.consumed;
+      continue;
     }
+    content.push(paragraphToNode(p));
+    i += 1;
+  }
 
-    return { type: "paragraph", content };
-  }),
-});
+  return { type: "doc", content };
+};
 
 // ── Conversion: TipTap JSON → ClauseBody ────────────
 
@@ -104,50 +210,95 @@ const nodeToDirective = (node: JSONContent): ClauseParagraph => {
   };
 };
 
-export const tipTapToClauseBody = (json: JSONContent): ClauseParagraph[] => {
-  const content = json.content ?? [];
+/** Extract a single paragraph/heading node (its inline runs + heading style). */
+const nodeToParagraph = (node: JSONContent): ClauseParagraph => {
+  const isHeading = node.type === "heading";
+  const runs: ClauseRun[] = [];
+  let plainText = "";
 
-  return content.map((node): ClauseParagraph => {
-    if (node.type === CLAUSE_DIRECTIVE_NODE) {
-      return nodeToDirective(node);
+  for (const child of node.content ?? []) {
+    if (child.type === "text" && child.text) {
+      const bold = child.marks?.some((m) => m.type === "bold");
+      const italic = child.marks?.some((m) => m.type === "italic");
+
+      const run: ClauseRun = { text: child.text };
+      if (bold) {
+        run.bold = true;
+      }
+      if (italic) {
+        run.italic = true;
+      }
+      runs.push(run);
+
+      plainText += child.text;
     }
+  }
 
-    const isHeading = node.type === "heading";
-    const runs: ClauseRun[] = [];
-    let plainText = "";
+  // If all runs are unstyled, omit the runs array
+  const hasFormatting = runs.some((r) => r.bold || r.italic);
 
-    for (const child of node.content ?? []) {
-      if (child.type === "text" && child.text) {
-        const bold = child.marks?.some((m) => m.type === "bold");
-        const italic = child.marks?.some((m) => m.type === "italic");
+  const paragraph: ClauseParagraph = { text: plainText };
+  if (hasFormatting) {
+    paragraph.runs = runs;
+  }
+  if (isHeading) {
+    paragraph.style = "heading";
+    paragraph.level =
+      typeof node.attrs?.["level"] === "number" ? node.attrs["level"] : 1;
+  }
+  return paragraph;
+};
 
-        const run: ClauseRun = { text: child.text };
-        if (bold) {
-          run.bold = true;
-        }
-        if (italic) {
-          run.italic = true;
-        }
-        runs.push(run);
+/**
+ * Flatten a `bulletList`/`orderedList` node to list-item paragraphs at `level`.
+ * Each `listItem` contributes one paragraph (its leading block) tagged with the
+ * list kind + level; any nested list inside the item recurses one level deeper.
+ */
+const flattenList = (
+  listNode: JSONContent,
+  kind: ClauseListKind,
+  level: number,
+  out: ClauseParagraph[],
+): void => {
+  for (const item of listNode.content ?? []) {
+    if (item.type !== "listItem") {
+      continue;
+    }
+    const blocks = item.content ?? [];
+    // The item's own text comes first; a list item must carry at least one
+    // marker line even if it holds nothing but a nested list.
+    const leadBlock = blocks.find((b) => listKindOfNode(b.type) === null);
+    const lead = leadBlock ? nodeToParagraph(leadBlock) : { text: "" };
+    lead.listKind = kind;
+    lead.listLevel = level;
+    out.push(lead);
 
-        plainText += child.text;
+    for (const block of blocks) {
+      const childKind = listKindOfNode(block.type);
+      if (childKind) {
+        flattenList(block, childKind, level + 1, out);
       }
     }
+  }
+};
 
-    // If all runs are unstyled, omit the runs array
-    const hasFormatting = runs.some((r) => r.bold || r.italic);
+export const tipTapToClauseBody = (json: JSONContent): ClauseParagraph[] => {
+  const body: ClauseParagraph[] = [];
 
-    const paragraph: ClauseParagraph = { text: plainText };
-    if (hasFormatting) {
-      paragraph.runs = runs;
+  for (const node of json.content ?? []) {
+    if (node.type === CLAUSE_DIRECTIVE_NODE) {
+      body.push(nodeToDirective(node));
+      continue;
     }
-    if (isHeading) {
-      paragraph.style = "heading";
-      paragraph.level =
-        typeof node.attrs?.["level"] === "number" ? node.attrs["level"] : 1;
+    const kind = listKindOfNode(node.type);
+    if (kind) {
+      flattenList(node, kind, 0, body);
+      continue;
     }
-    return paragraph;
-  });
+    body.push(nodeToParagraph(node));
+  }
+
+  return body;
 };
 
 /** Stable identity of a body for detecting external resets vs. the editor's
@@ -157,7 +308,9 @@ const bodyKey = (body: readonly ClauseParagraph[]): string =>
     .map((p) =>
       p.isDirective
         ? `D:${p.directiveKind ?? ""}:${p.directiveExpression ?? ""}`
-        : `P:${p.style ?? ""}:${p.level ?? ""}:${(p.runs ?? [{ text: p.text }])
+        : `P:${p.style ?? ""}:${p.level ?? ""}:${p.listKind ?? ""}:${p.listLevel ?? ""}:${(
+            p.runs ?? [{ text: p.text }]
+          )
             .map((r) => `${r.bold ? "b" : ""}${r.italic ? "i" : ""}|${r.text}`)
             .join("\u0001")}`,
     )
@@ -176,6 +329,7 @@ export const ClauseEditor = ({
   onChange,
   placeholder,
 }: ClauseEditorProps) => {
+  const t = useTranslations();
   // Last body the editor itself emitted, so the reset effect can tell an
   // external content change (dialog reset, clause switch) from the round-trip
   // of the user's own keystroke and avoid clobbering the cursor.
@@ -189,6 +343,11 @@ export const ClauseEditor = ({
       Bold,
       Italic,
       Heading.configure({ levels: [1, 2, 3] }),
+      BulletList,
+      OrderedList,
+      ListItem,
+      // Tab / Shift-Tab nesting plus smart Backspace/Delete at list edges.
+      ListKeymap,
       ClauseDirectiveNode,
       History,
       Placeholder.configure({
@@ -243,6 +402,22 @@ export const ClauseEditor = ({
 
     editor.chain().focus().toggleHeading({ level }).run();
   };
+
+  const toggleBulletList = useCallback(() => {
+    if (!isUsableEditor(editor)) {
+      return;
+    }
+
+    editor.chain().focus().toggleBulletList().run();
+  }, [editor]);
+
+  const toggleOrderedList = useCallback(() => {
+    if (!isUsableEditor(editor)) {
+      return;
+    }
+
+    editor.chain().focus().toggleOrderedList().run();
+  }, [editor]);
 
   return (
     // Stop modifier key combos from propagating to global
@@ -324,6 +499,37 @@ export const ClauseEditor = ({
           variant="ghost"
         >
           <Heading3Icon className="size-3.5" />
+        </Button>
+        <div className="bg-border mx-1 h-4 w-px" />
+        <Button
+          aria-label={t("folio.bulletList")}
+          className={
+            editorReady && editor.isActive("bulletList")
+              ? "bg-muted"
+              : undefined
+          }
+          disabled={!editorReady}
+          onClick={toggleBulletList}
+          size="icon-xs"
+          type="button"
+          variant="ghost"
+        >
+          <ListIcon className="size-3.5" />
+        </Button>
+        <Button
+          aria-label={t("folio.numberedList")}
+          className={
+            editorReady && editor.isActive("orderedList")
+              ? "bg-muted"
+              : undefined
+          }
+          disabled={!editorReady}
+          onClick={toggleOrderedList}
+          size="icon-xs"
+          type="button"
+          variant="ghost"
+        >
+          <ListOrderedIcon className="size-3.5" />
         </Button>
       </div>
 
