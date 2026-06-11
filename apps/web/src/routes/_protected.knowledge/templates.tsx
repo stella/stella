@@ -548,8 +548,7 @@ const TemplateDetail = ({
     (e: React.KeyboardEvent) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        // eslint-disable-next-line @typescript-eslint/no-floating-promises
-        saveRename();
+        void saveRename();
         return;
       }
       if (e.key === "Escape") {

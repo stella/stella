@@ -528,6 +528,9 @@ const coerceValue = (field: ResolvedField, value: unknown): unknown => {
   return value;
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
 const setNestedValue = (
   obj: Record<string, unknown>,
   path: string,
@@ -542,11 +545,8 @@ const setNestedValue = (
 
   for (const part of parts.slice(0, -1)) {
     const next = current[part];
-    if (typeof next === "object" && next !== null && !Array.isArray(next)) {
-      // SAFETY: a plain object value is structurally compatible with
-      // Record<string, unknown>; we guarded against arrays/null above.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
-      current = next as Record<string, unknown>;
+    if (isRecord(next)) {
+      current = next;
       continue;
     }
     const child: Record<string, unknown> = {};
@@ -909,9 +909,7 @@ export const TemplateForm = ({
     (e: React.SubmitEvent<HTMLFormElement>) => {
       e.preventDefault();
       // Errors are surfaced as toasts inside handleDownload
-      // TODO: fix this
-      // oxlint-disable-next-line no-empty-function
-      handleDownload("docx").catch(() => {});
+      handleDownload("docx").catch(() => undefined);
     },
     [handleDownload],
   );

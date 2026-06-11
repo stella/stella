@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from "@stll/ui/components/select";
 
+import type { TranslationKey } from "@/i18n/types";
 import type { ViewFilterCondition, WorkspaceProperty } from "@/lib/types";
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
 
@@ -281,6 +282,34 @@ const STATUS_VALUES = [
 
 const PRIORITY_VALUES = ["none", "urgent", "high", "medium", "low"] as const;
 
+type StatusValue = (typeof STATUS_VALUES)[number];
+type PriorityValue = (typeof PRIORITY_VALUES)[number];
+
+const STATUS_VALUE_LABEL_KEYS = {
+  open: "tasks.statusValues.open",
+  in_progress: "tasks.statusValues.in_progress",
+  in_review: "tasks.statusValues.in_review",
+  done: "tasks.statusValues.done",
+  cancelled: "tasks.statusValues.cancelled",
+} satisfies Record<StatusValue, TranslationKey>;
+
+const PRIORITY_VALUE_LABEL_KEYS = {
+  none: "tasks.priorityValues.none",
+  urgent: "tasks.priorityValues.urgent",
+  high: "tasks.priorityValues.high",
+  medium: "tasks.priorityValues.medium",
+  low: "tasks.priorityValues.low",
+} satisfies Record<PriorityValue, TranslationKey>;
+
+const STATUS_VALUE_SET: ReadonlySet<string> = new Set(STATUS_VALUES);
+const PRIORITY_VALUE_SET: ReadonlySet<string> = new Set(PRIORITY_VALUES);
+
+const isStatusValue = (value: string): value is StatusValue =>
+  STATUS_VALUE_SET.has(value);
+
+const isPriorityValue = (value: string): value is PriorityValue =>
+  PRIORITY_VALUE_SET.has(value);
+
 type BuiltinFilterChipProps = {
   filter: Extract<ViewFilterCondition, { field: "builtin" }>;
   onChange: (filter: ViewFilterCondition) => void;
@@ -297,12 +326,13 @@ const BuiltinFilterChip = ({
   const label = isStatus ? t("common.status") : t("tasks.priority");
   const values = isStatus ? STATUS_VALUES : PRIORITY_VALUES;
 
-  const resolveLabel = (val: string) =>
-    isStatus
-      ? // eslint-disable-next-line typescript/no-unsafe-type-assertion
-        t(`tasks.statusValues.${val}` as "tasks.statusValues.open")
-      : // eslint-disable-next-line typescript/no-unsafe-type-assertion
-        t(`tasks.priorityValues.${val}` as "tasks.priorityValues.none");
+  const resolveLabel = (value: string) => {
+    if (isStatus) {
+      return isStatusValue(value) ? t(STATUS_VALUE_LABEL_KEYS[value]) : value;
+    }
+
+    return isPriorityValue(value) ? t(PRIORITY_VALUE_LABEL_KEYS[value]) : value;
+  };
 
   const opOptions = [
     { value: "eq", label: t("filters.eq") },

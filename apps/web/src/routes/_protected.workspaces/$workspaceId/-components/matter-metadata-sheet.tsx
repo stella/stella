@@ -158,8 +158,7 @@ export const MatterMetadataPanel = ({
       {
         onSuccess: () => {
           setReferenceDirty(false);
-          // eslint-disable-next-line typescript/no-floating-promises
-          queryClient.invalidateQueries({
+          void queryClient.invalidateQueries({
             queryKey: workspacesKeys.byId(workspaceId),
           });
         },

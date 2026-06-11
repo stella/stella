@@ -115,8 +115,7 @@ export const EntityLink = ({
       })();
       return;
     }
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    navigate({
+    void navigate({
       to: "/workspaces/$workspaceId",
       params: { workspaceId: id },
     });

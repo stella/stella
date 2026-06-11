@@ -251,8 +251,7 @@ const ContactRow = ({ contact }: { contact: ContactItem }) => {
     contact.phones?.find((p) => p.isPrimary) ?? contact.phones?.at(0);
 
   const openContact = () => {
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    navigate({
+    void navigate({
       to: "/contacts/$contactId",
       params: { contactId: contact.id },
     });
@@ -263,8 +262,7 @@ const ContactRow = ({ contact }: { contact: ContactItem }) => {
       { contactId: contact.id },
       {
         onSuccess: () => {
-          // eslint-disable-next-line typescript/no-floating-promises
-          queryClient.invalidateQueries({
+          void queryClient.invalidateQueries({
             queryKey: contactsKeys.all,
           });
           stellaToast.add({
@@ -619,8 +617,7 @@ const CreateContactDialog = ({
           errors={formErrors}
           onSubmit={(e) => {
             e.preventDefault();
-            // eslint-disable-next-line typescript/no-floating-promises
-            form.handleSubmit();
+            void form.handleSubmit();
           }}
         >
           <DialogHeader>

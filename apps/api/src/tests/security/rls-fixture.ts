@@ -41,13 +41,12 @@ const initFixture = async (): Promise<RlsFixture> => {
  * created on first call; subsequent calls await the same
  * promise.
  */
-// eslint-disable-next-line require-await
 export const getRlsFixture = async (): Promise<RlsFixture> => {
   refCount++;
 
   fixturePromise ??= initFixture();
 
-  return fixturePromise;
+  return await fixturePromise;
 };
 
 /**

@@ -91,27 +91,87 @@ export type AnyExtension = Extension | NodeExtension | MarkExtension;
 // DEFINITION TYPES (used by factory functions)
 // ============================================================================
 
-export type ExtensionDefinition<TOptions = Record<string, unknown>> = {
+type ExtensionOptions = Record<string, unknown>;
+
+type ExtensionDefinitionWithDefaults<TOptions extends ExtensionOptions> = {
   name: string;
   priority?: ExtensionPriority;
-  defaultOptions?: TOptions;
+  defaultOptions: TOptions;
   onSchemaReady(ctx: ExtensionContext, options: TOptions): ExtensionRuntime;
 };
 
-export type NodeExtensionDefinition<TOptions = Record<string, unknown>> = {
+type ExtensionDefinitionWithoutDefaults<
+  TOptions extends ExtensionOptions = ExtensionOptions,
+> = {
   name: string;
   priority?: ExtensionPriority;
-  defaultOptions?: TOptions;
+  defaultOptions?: undefined;
+  onSchemaReady(
+    ctx: ExtensionContext,
+    options: Partial<TOptions>,
+  ): ExtensionRuntime;
+};
+
+export type ExtensionDefinition<
+  TOptions extends ExtensionOptions = ExtensionOptions,
+> =
+  | ExtensionDefinitionWithDefaults<TOptions>
+  | ExtensionDefinitionWithoutDefaults<TOptions>;
+
+type NodeExtensionDefinitionWithDefaults<TOptions extends ExtensionOptions> = {
+  name: string;
+  priority?: ExtensionPriority;
+  defaultOptions: TOptions;
   schemaNodeName: string;
   nodeSpec: NodeSpec | ((options: TOptions) => NodeSpec);
   onSchemaReady?(ctx: ExtensionContext, options: TOptions): ExtensionRuntime;
 };
 
-export type MarkExtensionDefinition<TOptions = Record<string, unknown>> = {
+type NodeExtensionDefinitionWithoutDefaults<
+  TOptions extends ExtensionOptions = ExtensionOptions,
+> = {
   name: string;
   priority?: ExtensionPriority;
-  defaultOptions?: TOptions;
+  defaultOptions?: undefined;
+  schemaNodeName: string;
+  nodeSpec: NodeSpec | ((options: Partial<TOptions>) => NodeSpec);
+  onSchemaReady?(
+    ctx: ExtensionContext,
+    options: Partial<TOptions>,
+  ): ExtensionRuntime;
+};
+
+export type NodeExtensionDefinition<
+  TOptions extends ExtensionOptions = ExtensionOptions,
+> =
+  | NodeExtensionDefinitionWithDefaults<TOptions>
+  | NodeExtensionDefinitionWithoutDefaults<TOptions>;
+
+type MarkExtensionDefinitionWithDefaults<TOptions extends ExtensionOptions> = {
+  name: string;
+  priority?: ExtensionPriority;
+  defaultOptions: TOptions;
   schemaMarkName: string;
   markSpec: MarkSpec | ((options: TOptions) => MarkSpec);
   onSchemaReady?(ctx: ExtensionContext, options: TOptions): ExtensionRuntime;
 };
+
+type MarkExtensionDefinitionWithoutDefaults<
+  TOptions extends ExtensionOptions = ExtensionOptions,
+> = {
+  name: string;
+  priority?: ExtensionPriority;
+  defaultOptions?: undefined;
+  schemaMarkName: string;
+  markSpec: MarkSpec | ((options: Partial<TOptions>) => MarkSpec);
+  onSchemaReady?(
+    ctx: ExtensionContext,
+    options: Partial<TOptions>,
+  ): ExtensionRuntime;
+};
+
+export type MarkExtensionDefinition<
+  TOptions extends ExtensionOptions = ExtensionOptions,
+> =
+  | MarkExtensionDefinitionWithDefaults<TOptions>
+  | MarkExtensionDefinitionWithoutDefaults<TOptions>;

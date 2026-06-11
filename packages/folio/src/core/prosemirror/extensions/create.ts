@@ -17,6 +17,43 @@ import type {
   ExtensionRuntime,
 } from "./types";
 
+const copyOptions = (options: object): Record<string, unknown> => ({
+  ...options,
+});
+
+const mergeDefaultOptions = <TOptions extends Record<string, unknown>>(
+  defaultOptions: TOptions,
+  options: Partial<TOptions> | undefined,
+): TOptions => ({
+  ...defaultOptions,
+  ...options,
+});
+
+const extensionHasDefaultOptions = <TOptions extends Record<string, unknown>>(
+  def: ExtensionDefinition<TOptions>,
+): def is Extract<
+  ExtensionDefinition<TOptions>,
+  { defaultOptions: TOptions }
+> => def.defaultOptions !== undefined;
+
+const nodeExtensionHasDefaultOptions = <
+  TOptions extends Record<string, unknown>,
+>(
+  def: NodeExtensionDefinition<TOptions>,
+): def is Extract<
+  NodeExtensionDefinition<TOptions>,
+  { defaultOptions: TOptions }
+> => def.defaultOptions !== undefined;
+
+const markExtensionHasDefaultOptions = <
+  TOptions extends Record<string, unknown>,
+>(
+  def: MarkExtensionDefinition<TOptions>,
+): def is Extract<
+  MarkExtensionDefinition<TOptions>,
+  { defaultOptions: TOptions }
+> => def.defaultOptions !== undefined;
+
 /**
  * Create a generic extension (plugins, commands, keymaps — no schema contribution)
  */
@@ -26,19 +63,29 @@ export function createExtension<
   def: ExtensionDefinition<TOptions>,
 ): (options?: Partial<TOptions>) => Extension {
   return (options?: Partial<TOptions>): Extension => {
-    // SAFETY: spread of optional Partial<TOptions> + Partial<TOptions>
-    // cannot be inferred as TOptions, but the merge is sound: when
-    // a caller passes a definition with TOptions = Record<string, unknown>
-    // (the default), the result already satisfies TOptions.
-    // oxlint-disable-next-line no-dangerous-type-assertions/no-dangerous-type-assertions
-    const mergedOptions = { ...def.defaultOptions, ...options } as TOptions;
+    if (extensionHasDefaultOptions(def)) {
+      const mergedOptions = mergeDefaultOptions(def.defaultOptions, options);
 
+      return {
+        type: "extension",
+        config: {
+          name: def.name,
+          priority: def.priority ?? Priority.Default,
+          options: copyOptions(mergedOptions),
+        },
+        onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
+          return def.onSchemaReady(ctx, mergedOptions);
+        },
+      };
+    }
+
+    const mergedOptions = options ?? {};
     return {
       type: "extension",
       config: {
         name: def.name,
         priority: def.priority ?? Priority.Default,
-        options: mergedOptions as Record<string, unknown>,
+        options: copyOptions(mergedOptions),
       },
       onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
         return def.onSchemaReady(ctx, mergedOptions);
@@ -56,12 +103,29 @@ export function createNodeExtension<
   def: NodeExtensionDefinition<TOptions>,
 ): (options?: Partial<TOptions>) => NodeExtension {
   return (options?: Partial<TOptions>): NodeExtension => {
-    // SAFETY: spread of optional Partial<TOptions> + Partial<TOptions>
-    // cannot be inferred as TOptions, but the merge is sound: when
-    // a caller passes a definition with TOptions = Record<string, unknown>
-    // (the default), the result already satisfies TOptions.
-    // oxlint-disable-next-line no-dangerous-type-assertions/no-dangerous-type-assertions
-    const mergedOptions = { ...def.defaultOptions, ...options } as TOptions;
+    if (nodeExtensionHasDefaultOptions(def)) {
+      const mergedOptions = mergeDefaultOptions(def.defaultOptions, options);
+      const nodeSpec =
+        typeof def.nodeSpec === "function"
+          ? def.nodeSpec(mergedOptions)
+          : def.nodeSpec;
+
+      return {
+        type: "node",
+        config: {
+          name: def.name,
+          priority: def.priority ?? Priority.Default,
+          options: copyOptions(mergedOptions),
+          schemaNodeName: def.schemaNodeName,
+          nodeSpec,
+        },
+        onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
+          return def.onSchemaReady?.(ctx, mergedOptions) ?? {};
+        },
+      };
+    }
+
+    const mergedOptions = options ?? {};
     const nodeSpec =
       typeof def.nodeSpec === "function"
         ? def.nodeSpec(mergedOptions)
@@ -72,7 +136,7 @@ export function createNodeExtension<
       config: {
         name: def.name,
         priority: def.priority ?? Priority.Default,
-        options: mergedOptions as Record<string, unknown>,
+        options: copyOptions(mergedOptions),
         schemaNodeName: def.schemaNodeName,
         nodeSpec,
       },
@@ -92,12 +156,29 @@ export function createMarkExtension<
   def: MarkExtensionDefinition<TOptions>,
 ): (options?: Partial<TOptions>) => MarkExtension {
   return (options?: Partial<TOptions>): MarkExtension => {
-    // SAFETY: spread of optional Partial<TOptions> + Partial<TOptions>
-    // cannot be inferred as TOptions, but the merge is sound: when
-    // a caller passes a definition with TOptions = Record<string, unknown>
-    // (the default), the result already satisfies TOptions.
-    // oxlint-disable-next-line no-dangerous-type-assertions/no-dangerous-type-assertions
-    const mergedOptions = { ...def.defaultOptions, ...options } as TOptions;
+    if (markExtensionHasDefaultOptions(def)) {
+      const mergedOptions = mergeDefaultOptions(def.defaultOptions, options);
+      const markSpec =
+        typeof def.markSpec === "function"
+          ? def.markSpec(mergedOptions)
+          : def.markSpec;
+
+      return {
+        type: "mark",
+        config: {
+          name: def.name,
+          priority: def.priority ?? Priority.Default,
+          options: copyOptions(mergedOptions),
+          schemaMarkName: def.schemaMarkName,
+          markSpec,
+        },
+        onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
+          return def.onSchemaReady?.(ctx, mergedOptions) ?? {};
+        },
+      };
+    }
+
+    const mergedOptions = options ?? {};
     const markSpec =
       typeof def.markSpec === "function"
         ? def.markSpec(mergedOptions)
@@ -108,7 +189,7 @@ export function createMarkExtension<
       config: {
         name: def.name,
         priority: def.priority ?? Priority.Default,
-        options: mergedOptions as Record<string, unknown>,
+        options: copyOptions(mergedOptions),
         schemaMarkName: def.schemaMarkName,
         markSpec,
       },

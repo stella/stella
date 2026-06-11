@@ -279,8 +279,7 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
         hasNextPage={hasNextPage}
         isFetchingNextPage={isFetchingNextPage}
         onLoadMore={() => {
-          // eslint-disable-next-line typescript/no-floating-promises
-          fetchNextPage();
+          void fetchNextPage();
         }}
         table={table}
         contentMode={tableState.contentMode}

@@ -228,13 +228,12 @@ let dbRefCount = 0;
  * is created on first call; subsequent calls await the
  * same promise.
  */
-// eslint-disable-next-line require-await
 export const getTestDb = async (): Promise<TestDatabase> => {
   dbRefCount++;
 
   dbPromise ??= createTestDb();
 
-  return dbPromise;
+  return await dbPromise;
 };
 
 /**

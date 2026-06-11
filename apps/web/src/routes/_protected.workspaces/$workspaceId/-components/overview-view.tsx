@@ -165,8 +165,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
       title: t("success.taskCreated"),
       type: "success",
     });
-    // eslint-disable-next-line typescript/no-floating-promises
-    queryClient.invalidateQueries({
+    void queryClient.invalidateQueries({
       queryKey: workspacesKeys.overview(workspaceId),
     });
     useInspectorStore
@@ -398,8 +397,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           onClick={() => {
             const view = findViewByType("filesystem");
             if (view) {
-              // eslint-disable-next-line typescript/no-floating-promises
-              navigate({
+              void navigate({
                 to: "/workspaces/$workspaceId/$viewId",
                 params: { workspaceId, viewId: view.id },
               });
@@ -413,8 +411,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           onClick={() => {
             const view = findViewByType("kanban");
             if (view) {
-              // eslint-disable-next-line typescript/no-floating-promises
-              navigate({
+              void navigate({
                 to: "/workspaces/$workspaceId/$viewId",
                 params: { workspaceId, viewId: view.id },
               });
@@ -451,8 +448,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           icon={<ClockIcon className="size-4" />}
           label={t("workspaces.overview.timeThisWeek")}
           onClick={() => {
-            // eslint-disable-next-line typescript/no-floating-promises
-            navigate({
+            void navigate({
               to: "/workspaces/$workspaceId/timesheets",
               params: { workspaceId },
             });

@@ -84,8 +84,9 @@ export const useWorkspaceSSE = (
           parsed.type === INVALIDATE_QUERY_EVENT_TYPE &&
           Array.isArray(parsed.data)
         ) {
-          // eslint-disable-next-line typescript/no-floating-promises
-          queryClientRef.current.invalidateQueries({ queryKey: parsed.data });
+          void queryClientRef.current.invalidateQueries({
+            queryKey: parsed.data,
+          });
         }
       } catch {
         // Malformed SSE data; ignore.

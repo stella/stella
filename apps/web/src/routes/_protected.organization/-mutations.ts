@@ -30,13 +30,12 @@ export const useRemoveMember = () => {
 
       return result.data;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       stellaToast.add({
         title: t("success.memberRemoved"),
         type: "success",
       });
-      // eslint-disable-next-line typescript/no-floating-promises
-      queryClient.invalidateQueries({ queryKey: organizationKeys.all });
+      await queryClient.invalidateQueries({ queryKey: organizationKeys.all });
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -68,9 +67,8 @@ export const useInviteMember = () => {
 
       return result.data;
     },
-    onSuccess: () => {
-      // eslint-disable-next-line typescript/no-floating-promises
-      queryClient.invalidateQueries({ queryKey: organizationKeys.all });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: organizationKeys.all });
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -99,9 +97,8 @@ export const useCancelInvitation = () => {
 
       return result.data;
     },
-    onSuccess: () => {
-      // eslint-disable-next-line typescript/no-floating-promises
-      queryClient.invalidateQueries({ queryKey: organizationKeys.all });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: organizationKeys.all });
       stellaToast.add({
         title: t("success.invitationCanceled"),
         type: "success",

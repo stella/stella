@@ -24,6 +24,10 @@ import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import { Input } from "@stll/ui/components/input";
 
+import {
+  getFindDialogOpenBehavior,
+  shouldRefreshFindDialogSearch,
+} from "./findReplaceDialogBehavior";
 import { getFindReplaceOverlayStyle } from "./findReplaceDialogLayout";
 import { getFindEnterAction } from "./findReplaceInteraction";
 import type { FindOptions, FindResult, FindMatch } from "./findReplaceUtils";
@@ -129,6 +133,22 @@ export function FindReplaceDialog({
 
   // Refs
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const latestFindCallbacksRef = useRef({
+    onFind,
+    onHighlightMatches,
+    onClearHighlights,
+  });
+  latestFindCallbacksRef.current = {
+    onFind,
+    onHighlightMatches,
+    onClearHighlights,
+  };
+
+  const latestFindOptionsRef = useRef({ matchCase, matchWholeWord });
+  latestFindOptionsRef.current = { matchCase, matchWholeWord };
+
+  const latestSearchStateRef = useRef({ isOpen, searchText });
+  latestSearchStateRef.current = { isOpen, searchText };
 
   // Sync with external result if provided
   useEffect(() => {
@@ -139,29 +159,33 @@ export function FindReplaceDialog({
 
   // Initialize when dialog opens
   useEffect(() => {
-    if (isOpen) {
-      setSearchText(initialSearchText);
-      setResult(null);
+    const behavior = getFindDialogOpenBehavior({ isOpen, initialSearchText });
 
-      setTimeout(() => {
-        searchInputRef.current?.focus();
-        searchInputRef.current?.select();
-      }, 100);
-
-      if (initialSearchText) {
-        const searchResult = onFind(initialSearchText, {
-          matchCase,
-          matchWholeWord,
-        });
-        setResult(searchResult);
-        if (searchResult?.matches && onHighlightMatches) {
-          onHighlightMatches(searchResult.matches);
-        }
-      }
-    } else if (onClearHighlights) {
-      onClearHighlights();
+    if (behavior.type === "closed") {
+      latestFindCallbacksRef.current.onClearHighlights?.();
+      return;
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
+
+    setSearchText(behavior.searchText);
+    setResult(null);
+
+    setTimeout(() => {
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    }, 100);
+
+    if (behavior.shouldFindInitialText) {
+      const callbacks = latestFindCallbacksRef.current;
+      const options = latestFindOptionsRef.current;
+      const searchResult = callbacks.onFind(behavior.searchText, {
+        matchCase: options.matchCase,
+        matchWholeWord: options.matchWholeWord,
+      });
+      setResult(searchResult);
+      if (searchResult?.matches && callbacks.onHighlightMatches) {
+        callbacks.onHighlightMatches(searchResult.matches);
+      }
+    }
   }, [isOpen, initialSearchText]);
 
   const performSearch = useCallback(() => {
@@ -190,11 +214,13 @@ export function FindReplaceDialog({
     onClearHighlights,
   ]);
 
+  const performSearchRef = useRef(performSearch);
+  performSearchRef.current = performSearch;
+
   useEffect(() => {
-    if (isOpen && searchText.trim()) {
-      performSearch();
+    if (shouldRefreshFindDialogSearch(latestSearchStateRef.current)) {
+      performSearchRef.current();
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [matchCase, matchWholeWord]);
 
   useEffect(() => {
@@ -216,32 +242,6 @@ export function FindReplaceDialog({
     setSearchText(e.target.value);
     setResult(null);
   }, []);
-
-  const handleSearchKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        const action = getFindEnterAction({
-          searchText,
-          result,
-          shiftKey: e.shiftKey,
-        });
-        if (action === "search") {
-          performSearch();
-          return;
-        }
-        if (action === "previous") {
-          handleFindPrevious();
-          return;
-        }
-        handleFindNext();
-      } else if (e.key === "Escape") {
-        onClose();
-      }
-    },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
-    [searchText, result, performSearch, onClose],
-  );
 
   const handleFindNext = useCallback(() => {
     if (!searchText.trim()) {
@@ -287,6 +287,38 @@ export function FindReplaceDialog({
       });
     }
   }, [searchText, result, performSearch, onFindPrevious]);
+
+  const handleSearchKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const action = getFindEnterAction({
+          searchText,
+          result,
+          shiftKey: e.shiftKey,
+        });
+        if (action === "search") {
+          performSearch();
+          return;
+        }
+        if (action === "previous") {
+          handleFindPrevious();
+          return;
+        }
+        handleFindNext();
+      } else if (e.key === "Escape") {
+        onClose();
+      }
+    },
+    [
+      searchText,
+      result,
+      performSearch,
+      handleFindPrevious,
+      handleFindNext,
+      onClose,
+    ],
+  );
 
   const handleOverlayClick = useCallback((e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {

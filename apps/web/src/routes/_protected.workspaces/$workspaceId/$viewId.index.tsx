@@ -1,13 +1,35 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
-import type { WorkspaceView } from "@/lib/types";
+import type { ViewLayout, WorkspaceView } from "@/lib/types";
 import { CalendarView } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view";
 import { FilesystemView } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view";
 import { KanbanView } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view";
 import { OverviewView } from "@/routes/_protected.workspaces/$workspaceId/-components/overview-view";
 import { TableLayout } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-layout";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
+
+type TableWorkspaceView = WorkspaceView & {
+  layout: Extract<ViewLayout, { type: "table" }>;
+};
+
+type FilesystemWorkspaceView = WorkspaceView & {
+  layout: Extract<ViewLayout, { type: "filesystem" }>;
+};
+
+type CalendarWorkspaceView = WorkspaceView & {
+  layout: Extract<ViewLayout, { type: "calendar" }>;
+};
+
+const isTableView = (view: WorkspaceView): view is TableWorkspaceView =>
+  view.layout.type === "table";
+
+const isFilesystemView = (
+  view: WorkspaceView,
+): view is FilesystemWorkspaceView => view.layout.type === "filesystem";
+
+const isCalendarView = (view: WorkspaceView): view is CalendarWorkspaceView =>
+  view.layout.type === "calendar";
 
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/$viewId/",
@@ -30,39 +52,24 @@ function RouteComponent() {
 
   switch (activeView.layout.type) {
     case "table":
-      return (
-        <TableLayout
-          // SAFETY: switch narrows activeView.layout.type to "table";
-          // TS cannot propagate the narrowing onto the parent because
-          // `WorkspaceView<T>` uses T only inside an `Extract`, so the
-          // generic is treated as invariant.
-          // eslint-disable-next-line typescript/no-unsafe-type-assertion
-          view={activeView as WorkspaceView<"table">}
-          workspaceId={workspaceId}
-        />
-      );
+      if (!isTableView(activeView)) {
+        return null;
+      }
+      return <TableLayout view={activeView} workspaceId={workspaceId} />;
     case "overview":
       return <OverviewView workspaceId={workspaceId} />;
     case "filesystem":
-      return (
-        <FilesystemView
-          // SAFETY: same invariance limitation as the "table" branch above.
-          // eslint-disable-next-line typescript/no-unsafe-type-assertion
-          view={activeView as WorkspaceView<"filesystem">}
-          workspaceId={workspaceId}
-        />
-      );
+      if (!isFilesystemView(activeView)) {
+        return null;
+      }
+      return <FilesystemView view={activeView} workspaceId={workspaceId} />;
     case "kanban":
       return <KanbanView view={activeView} workspaceId={workspaceId} />;
     case "calendar":
-      return (
-        <CalendarView
-          // SAFETY: same invariance limitation as the "table" branch above.
-          // eslint-disable-next-line typescript/no-unsafe-type-assertion
-          view={activeView as WorkspaceView<"calendar">}
-          workspaceId={workspaceId}
-        />
-      );
+      if (!isCalendarView(activeView)) {
+        return null;
+      }
+      return <CalendarView view={activeView} workspaceId={workspaceId} />;
     case "timeline":
       return null;
     default: {

@@ -35,6 +35,7 @@ import type {
   TableLook,
   TableMeasurement,
 } from "../types/document";
+import { mergeParagraphFormatting } from "../utils/paragraphFormattingMerge";
 import { mergeTextFormatting } from "../utils/textFormattingMerge";
 import {
   BorderStyleSchema,
@@ -1563,62 +1564,6 @@ function parseDocDefaults(
   }
 
   return result.rPr || result.pPr ? result : undefined;
-}
-
-/**
- * Deep merge paragraph formatting (source overrides target)
- */
-function mergeParagraphFormatting(
-  target: ParagraphFormatting | undefined,
-  source: ParagraphFormatting | undefined,
-): ParagraphFormatting | undefined {
-  if (!source) {
-    return target;
-  }
-  if (!target) {
-    return { ...source };
-  }
-
-  const result: ParagraphFormatting = { ...target };
-
-  // SAFETY: Object.keys returns string[]; widening to ParagraphFormatting's
-  // keys is sound here because source is typed as ParagraphFormatting and
-  // own-enumerable string keys of a typed object are a subset of its keys.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  const sourceKeys = Object.keys(source) as (keyof ParagraphFormatting)[];
-
-  for (const key of sourceKeys) {
-    const value = source[key];
-    if (value === undefined) {
-      continue;
-    }
-    if (key === "runProperties") {
-      const mergedRunProps = mergeTextFormatting(
-        result.runProperties,
-        source.runProperties,
-      );
-      if (mergedRunProps) {
-        result.runProperties = mergedRunProps;
-      }
-    } else if (key === "borders" || key === "numPr" || key === "frame") {
-      // SAFETY: deep-merge known nested-object keys; both sides have the
-      // same shape per the union narrowing on `key`.
-      const baseValue = result[key] as Record<string, unknown> | undefined;
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      const sourceValue = value as Record<string, unknown> | undefined;
-      (result as Record<string, unknown>)[key] = {
-        ...baseValue,
-        ...sourceValue,
-      };
-    } else if (key === "tabs" && Array.isArray(value)) {
-      result.tabs = [...value];
-    } else {
-      // SAFETY: dynamic property copy across matching ParagraphFormatting keys
-      (result as Record<string, unknown>)[key] = value;
-    }
-  }
-
-  return result;
 }
 
 /**

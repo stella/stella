@@ -1,7 +1,6 @@
 import { useState } from "react";
 
 import { revalidateLogic, useForm } from "@tanstack/react-form";
-import type { AnyFieldApi } from "@tanstack/react-form";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -66,11 +65,6 @@ const fieldFormSchema = v.variant("type", [
 
 type FieldFormSchema = v.InferInput<typeof fieldFormSchema>;
 
-type FieldFormValue<T extends FieldFormSchema["type"]> = Extract<
-  FieldFormSchema,
-  { type: T }
->["value"];
-
 const getDefaultValues = (
   fieldContent: EditableFieldContent,
 ): FieldFormSchema => {
@@ -107,6 +101,38 @@ const getDefaultValues = (
     value: fieldContent.value,
     currency: fieldContent.currency,
   };
+};
+
+const toSingleSelectValue = (value: unknown): string | null => {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  return null;
+};
+
+const toTextValue = (value: unknown): string => {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  return "";
+};
+
+const toMultiSelectValue = (value: unknown): string[] => {
+  if (Array.isArray(value) && value.every((item) => typeof item === "string")) {
+    return value;
+  }
+
+  return [];
+};
+
+const toIntValue = (value: unknown): number => {
+  if (typeof value === "number") {
+    return value;
+  }
+
+  return 0;
 };
 
 type EditFieldDialogProps = {
@@ -194,8 +220,7 @@ export const EditFieldDialog = ({
               errors={errors}
               onSubmit={(e) => {
                 e.preventDefault();
-                // eslint-disable-next-line typescript/no-floating-promises
-                form.handleSubmit();
+                void form.handleSubmit();
               }}
             >
               <DialogHeader>
@@ -218,11 +243,7 @@ export const EditFieldDialog = ({
                           onChange={(value) => field.handleChange(value)}
                           options={options}
                           type="single-select"
-                          value={
-                            // SAFETY: guarded by fieldContent.type check
-                            // eslint-disable-next-line typescript/no-unsafe-type-assertion
-                            field.state.value as FieldFormValue<"single-select">
-                          }
+                          value={toSingleSelectValue(field.state.value)}
                         />
                         <FieldError />
                       </Field>
@@ -238,11 +259,7 @@ export const EditFieldDialog = ({
                           onChange={field.handleChange}
                           options={options}
                           type="multi-select"
-                          value={
-                            // SAFETY: guarded by fieldContent.type check
-                            // eslint-disable-next-line typescript/no-unsafe-type-assertion
-                            field.state.value as FieldFormValue<"multi-select">
-                          }
+                          value={toMultiSelectValue(field.state.value)}
                         />
                         <FieldError />
                       </Field>
@@ -258,11 +275,7 @@ export const EditFieldDialog = ({
                         <FieldLabel>{t("common.date")}</FieldLabel>
                         <DatePickerPopover
                           onChange={(val) => field.handleChange(val)}
-                          value={
-                            // SAFETY: guarded by fieldContent.type check
-                            // eslint-disable-next-line typescript/no-unsafe-type-assertion
-                            (field.state.value as FieldFormValue<"date">) ?? ""
-                          }
+                          value={toTextValue(field.state.value)}
                         />
                         <FieldError />
                       </Field>
@@ -291,9 +304,7 @@ export const EditFieldDialog = ({
                               "workspaces.fields.numberPlaceholder",
                             )}
                             type="number"
-                            // SAFETY: guarded by fieldContent.type check
-                            // eslint-disable-next-line typescript/no-unsafe-type-assertion
-                            value={field.state.value as FieldFormValue<"int">}
+                            value={toIntValue(field.state.value)}
                           />
                           <FieldError />
                         </Field>
@@ -349,24 +360,28 @@ export const EditFieldDialog = ({
   );
 };
 
-// TODO: FIXME — replace AnyFieldApi with a properly typed FieldApi
+type TextFieldHandle = {
+  name: string;
+  state: { value: unknown };
+  handleChange: (value: string) => void;
+  handleBlur: () => void;
+};
+
 type TextFormFieldProps = {
-  field: AnyFieldApi;
+  field: TextFieldHandle;
 };
 
 const TextFormField = ({ field }: TextFormFieldProps) => {
   const t = useTranslations();
 
   return (
-    // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
     <Field name={field.name}>
       <FieldLabel>{t("workspaces.fields.fieldValueLabel")}</FieldLabel>
       <Input
         onBlur={field.handleBlur}
         onChange={(e) => field.handleChange(e.target.value)}
         placeholder={t("workspaces.fields.fieldValuePlaceholder")}
-        // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
-        value={field.state.value}
+        value={toTextValue(field.state.value)}
       />
       <FieldError />
     </Field>

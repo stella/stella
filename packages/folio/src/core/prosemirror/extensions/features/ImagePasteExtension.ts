@@ -11,7 +11,7 @@ import type { EditorView } from "prosemirror-view";
 import { getClipboardImageFiles } from "../../../utils/clipboard";
 import { isSafeImageFile } from "../../../utils/imageValidation";
 import { createExtension } from "../create";
-import type { ExtensionRuntime } from "../types";
+import type { ExtensionContext, ExtensionRuntime } from "../types";
 
 const MAX_INLINE_IMAGE_WIDTH = 612; // ~6.375 inches at 96 DPI
 
@@ -108,7 +108,7 @@ async function insertImageFiles(
 
 export const ImagePasteExtension = createExtension({
   name: "imagePaste",
-  onSchemaReady(_ctx): ExtensionRuntime {
+  onSchemaReady(_ctx: ExtensionContext): ExtensionRuntime {
     const plugin = new Plugin({
       props: {
         handleDOMEvents: {

@@ -158,18 +158,19 @@ function buildInitialState(
   );
 }
 
-export function enumerateHfSlots(doc: Document | null): HfPartKey[] {
-  if (!doc?.package) {
-    return [];
-  }
+export function enumerateHfSlotsFromParts({
+  headers,
+  footers,
+}: {
+  headers: Map<string, HeaderFooter> | undefined;
+  footers: Map<string, HeaderFooter> | undefined;
+}): HfPartKey[] {
   const out: HfPartKey[] = [];
-  const headers = doc.package.headers;
   if (headers) {
     for (const rId of headers.keys()) {
       out.push({ rId, kind: "header" });
     }
   }
-  const footers = doc.package.footers;
   if (footers) {
     // A document SHOULD NOT register the same rId under both headers and
     // footers — the OOXML schema keeps them disjoint per
@@ -181,6 +182,16 @@ export function enumerateHfSlots(doc: Document | null): HfPartKey[] {
     }
   }
   return out;
+}
+
+export function enumerateHfSlots(doc: Document | null): HfPartKey[] {
+  if (!doc?.package) {
+    return [];
+  }
+  return enumerateHfSlotsFromParts({
+    headers: doc.package.headers,
+    footers: doc.package.footers,
+  });
 }
 
 // =============================================================================
@@ -228,13 +239,15 @@ export const HiddenHeaderFooterPMs = memo(
         [],
       );
 
+      const headers = document?.package.headers;
+      const footers = document?.package.footers;
+
       const slots = useMemo<HfPartKey[]>(
-        () => enumerateHfSlots(document),
+        () => enumerateHfSlotsFromParts({ headers, footers }),
         // Re-enumerate when the Maps themselves are swapped. Mutations to the
         // existing Map (e.g. external save) intentionally do NOT trigger
         // this — the persistent PM is the source of truth while loaded.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        [document?.package.headers, document?.package.footers],
+        [headers, footers],
       );
 
       useEffect(() => {

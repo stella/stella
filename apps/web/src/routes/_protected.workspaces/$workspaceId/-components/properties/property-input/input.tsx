@@ -17,6 +17,7 @@ import { useEditor } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 import { Loader2Icon, WandSparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
+import * as v from "valibot";
 
 import { Button } from "@stll/ui/components/button";
 import { FieldError } from "@stll/ui/components/field";
@@ -49,14 +50,19 @@ import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-
 
 const protectedRouteApi = getRouteApi("/_protected");
 
+const mentionAttrsSchema = v.object({
+  id: v.string(),
+});
+
 const getMentions = (editor: Editor): string[] => {
   const mentions = new Set<string>();
 
   editor.state.doc.descendants((node) => {
     if (node.type.name === "mention") {
-      // TODO: FIXME — ProseMirror node.attrs is Record<string, any>
-      // oxlint-disable-next-line typescript-eslint/no-unsafe-argument
-      mentions.add(node.attrs["id"]);
+      const result = v.safeParse(mentionAttrsSchema, node.attrs);
+      if (result.success) {
+        mentions.add(result.output.id);
+      }
     }
   });
 

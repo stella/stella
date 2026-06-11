@@ -22,8 +22,7 @@ import "@stll/ui/globals.css";
 
 const isDev = import.meta.env.DEV;
 const DevRoot = isDev
-  ? // eslint-disable-next-line require-await -- lazy() requires async import
-    lazy(async () => import("@/components/dev-root"))
+  ? lazy(async () => await import("@/components/dev-root"))
   : null;
 
 export const Route = createRootRouteWithContext<{

@@ -70,12 +70,11 @@ export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
 
       return response.data;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       // Reflect the actor's own write immediately instead of waiting on
       // the server-pushed SSE invalidation round-trip; SSE remains the
       // path that propagates the change to other users' tabs.
-      // eslint-disable-next-line typescript/no-floating-promises
-      queryClient.invalidateQueries({
+      await queryClient.invalidateQueries({
         queryKey: propertiesKeys.all(workspaceId),
       });
     },
@@ -137,9 +136,8 @@ export const useCreatePropertiesBatch = ({
 
       return response.data;
     },
-    onSuccess: () => {
-      // eslint-disable-next-line typescript/no-floating-promises
-      queryClient.invalidateQueries({
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
         queryKey: propertiesKeys.all(workspaceId),
       });
     },
@@ -194,9 +192,8 @@ export const useUpdateProperty = () => {
         throw toAPIError(response.error);
       }
     },
-    onSuccess: (_data, { workspaceId }) => {
-      // eslint-disable-next-line typescript/no-floating-promises
-      queryClient.invalidateQueries({
+    onSuccess: async (_data, { workspaceId }) => {
+      await queryClient.invalidateQueries({
         queryKey: propertiesKeys.all(workspaceId),
       });
     },
@@ -323,9 +320,8 @@ export const useDeleteProperty = () => {
         throw toAPIError(response.error);
       }
     },
-    onSuccess: (_data, { workspaceId }) => {
-      // eslint-disable-next-line typescript/no-floating-promises
-      queryClient.invalidateQueries({
+    onSuccess: async (_data, { workspaceId }) => {
+      await queryClient.invalidateQueries({
         queryKey: propertiesKeys.all(workspaceId),
       });
     },

@@ -334,8 +334,7 @@ const CreateRateTableForm = ({
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        // eslint-disable-next-line typescript/no-floating-promises
-        form.handleSubmit();
+        void form.handleSubmit();
       }}
     >
       <div className="flex gap-3">
@@ -678,8 +677,7 @@ const CreateRateEntryForm = ({
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        // eslint-disable-next-line typescript/no-floating-promises
-        form.handleSubmit();
+        void form.handleSubmit();
       }}
     >
       <div className="flex flex-col gap-1.5">

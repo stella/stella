@@ -36,13 +36,11 @@ type CliFlags = {
 };
 
 const printStdout = (value: string): void => {
-  // eslint-disable-next-line no-console -- CLI output
-  console.log(value);
+  process.stdout.write(`${value}\n`);
 };
 
 const printStderr = (value: string): void => {
-  // eslint-disable-next-line no-console -- CLI error output
-  console.error(value);
+  process.stderr.write(`${value}\n`);
 };
 
 const parseArgs = (args: readonly string[]): CliFlags => {

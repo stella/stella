@@ -443,9 +443,8 @@ export const skUsAdapter: SourceAdapter = {
   pageTimeoutMs: 120_000,
   maxSyncPages: 10,
 
-  // eslint-disable-next-line require-await -- no async work needed
   async getTotalCount(_signal) {
-    return null;
+    return await Promise.resolve(null);
   },
 
   async fetchPage(cursor, _config, signal) {

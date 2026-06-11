@@ -86,8 +86,7 @@ const MatterNumberingCardBody = ({
   }, 300);
 
   useEffect(() => {
-    // eslint-disable-next-line typescript/no-floating-promises
-    fetchPreview(pattern, padding);
+    void fetchPreview(pattern, padding);
   }, [pattern, padding, fetchPreview]);
 
   const updateMutation = useMutation({

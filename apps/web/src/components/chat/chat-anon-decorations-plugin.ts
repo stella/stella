@@ -35,13 +35,16 @@ export const CHAT_ANON_DECORATIONS_PLUGIN_KEY_PREFIX = `${CHAT_ANON_DECORATIONS_
 // change touching this file. The key has no behaviour, only
 // identity, so caching it indefinitely is safe.
 type AnonGlobals = {
-  __stllAnonPluginKey?: PluginKey<PluginState>;
-  __stllAnonPlugin?: Plugin<PluginState>;
+  __stllAnonPluginKey?: PluginKey<PluginState> | undefined;
+  __stllAnonPlugin?: Plugin<PluginState> | undefined;
 };
-// SAFETY: cross-HMR persistence stash on the global object; keys
-// are intentionally underscored to avoid collisions.
-// oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
-const anonGlobals = globalThis as unknown as AnonGlobals;
+
+declare global {
+  var __stllAnonPluginKey: PluginKey<PluginState> | undefined;
+  var __stllAnonPlugin: Plugin<PluginState> | undefined;
+}
+
+const anonGlobals: AnonGlobals = globalThis;
 
 export const chatAnonDecorationsPluginKey: PluginKey<PluginState> =
   (anonGlobals.__stllAnonPluginKey ??= new PluginKey<PluginState>(

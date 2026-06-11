@@ -36,8 +36,7 @@ export const OrganizationListToolbar = () => {
   // the value being re-set.
   const [lastSeenUrlQuery, setLastSeenUrlQuery] = useState(q);
   const updateSearch = useDebouncedCallback((value: string) => {
-    // eslint-disable-next-line typescript/no-floating-promises
-    navigate({
+    void navigate({
       to: "/settings/organization/members",
       search: (prev) => ({ ...prev, q: value || undefined }),
     });

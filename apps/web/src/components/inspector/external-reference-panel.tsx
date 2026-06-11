@@ -416,20 +416,23 @@ const useExternalPdfBuffer = ({
   const query = useQuery({
     queryKey: ["external-pdf", url],
     queryFn: async ({ signal }): Promise<ExternalPdfPayload> => {
-      // SAFETY: `enabled` below guarantees `url` is defined when the
-      // queryFn runs.
-      // eslint-disable-next-line typescript/no-non-null-assertion
-      const response = await fetch(url!, {
+      if (url === undefined) {
+        throw new FetchBoundaryError({
+          url: "",
+          status: 0,
+          statusText: "Missing URL",
+          message: "External PDF URL missing",
+        });
+      }
+
+      const response = await fetch(url, {
         credentials: "include",
         signal,
       });
 
       if (!response.ok) {
         throw new FetchBoundaryError({
-          // SAFETY: `enabled` below guarantees `url` is defined when the
-          // queryFn runs.
-          // eslint-disable-next-line typescript/no-non-null-assertion
-          url: url!,
+          url,
           status: response.status,
           statusText: response.statusText,
           message: `External PDF fetch failed: ${String(response.status)}`,

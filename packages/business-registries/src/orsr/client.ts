@@ -29,6 +29,23 @@ const MAX_SEARCH_LIMIT = 100;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const isOrsrSearchHit = (value: unknown): value is OrsrRawSearchHit =>
+  isRecord(value) && typeof value["id"] === "number";
+
+const isOrsrSearchResponse = (value: unknown): value is OrsrRawSearchResponse =>
+  isRecord(value) &&
+  (value["filteredCount"] === undefined ||
+    typeof value["filteredCount"] === "number") &&
+  (value["data"] === undefined ||
+    (Array.isArray(value["data"]) && value["data"].every(isOrsrSearchHit)));
+
+const isOrsrExtractResponse = (
+  value: unknown,
+): value is OrsrRawExtractResponse =>
+  isRecord(value) &&
+  (value["fileReference"] === undefined || isRecord(value["fileReference"])) &&
+  (value["legalPerson"] === undefined || isRecord(value["legalPerson"]));
+
 const parseErrorBody = (value: unknown): OrsrRawErrorResponse => {
   if (!isRecord(value)) {
     return {};
@@ -43,7 +60,10 @@ const parseErrorBody = (value: unknown): OrsrRawErrorResponse => {
   return result;
 };
 
-const orsrGet = async <T>(url: string): Promise<T> => {
+const orsrGet = async <T>(
+  url: string,
+  isExpectedShape: (value: unknown) => value is T,
+): Promise<T> => {
   let response: Response;
   try {
     response = await fetch(url, {
@@ -68,13 +88,9 @@ const orsrGet = async <T>(url: string): Promise<T> => {
     });
   }
 
+  let body: unknown;
   try {
-    // SAFETY: `sluzby.orsr.sk` is a stable, documented Ministry of
-    // Justice surface backed by a published XSD. Runtime validation
-    // adds little for well-typed JSON; the parser tolerates absent
-    // fields so upstream drift surfaces as `null` rather than a throw.
-    // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
-    return (await response.json()) as T;
+    body = await response.json();
   } catch (error) {
     throw new OrsrAPIError({
       message: `ORSR ${response.status}: invalid JSON payload`,
@@ -83,6 +99,16 @@ const orsrGet = async <T>(url: string): Promise<T> => {
       cause: error,
     });
   }
+
+  if (!isExpectedShape(body)) {
+    throw new OrsrAPIError({
+      message: `ORSR ${response.status}: unexpected JSON payload shape`,
+      httpStatus: response.status,
+      upstreamMessage: null,
+    });
+  }
+
+  return body;
 };
 
 const buildSearchUrl = (filterValue: string, take?: number): string => {
@@ -168,8 +194,9 @@ export const lookupByIco = async (ico: string): Promise<OrsrCompany | null> => {
     throw new OrsrValidationError(`Invalid Slovak IČO: ${ico}`);
   }
 
-  const searchData = await orsrGet<OrsrRawSearchResponse>(
+  const searchData = await orsrGet(
     buildSearchUrl(normalized),
+    isOrsrSearchResponse,
   );
   const hit = pickLatestHit(searchData.data);
   if (!hit) {
@@ -190,8 +217,9 @@ export const lookupByIco = async (ico: string): Promise<OrsrCompany | null> => {
     vlozka: String(fileRef.insertNumber),
     sud: fileRef.court,
   });
-  const extract = await orsrGet<OrsrRawExtractResponse>(
+  const extract = await orsrGet(
     `${EXTRACT_URL}?${extractParams.toString()}`,
+    isOrsrExtractResponse,
   );
   return parseExtract(extract);
 };
@@ -225,8 +253,9 @@ export const searchByName = async (
     Math.max(take, DEFAULT_SEARCH_LIMIT),
     MAX_SEARCH_LIMIT,
   );
-  const data = await orsrGet<OrsrRawSearchResponse>(
+  const data = await orsrGet(
     buildSearchUrl(trimmed, searchTake),
+    isOrsrSearchResponse,
   );
   return dedupeLatestHitsByIco(data.data).slice(0, take).map(parseSearchHit);
 };

@@ -123,12 +123,10 @@ const InvoiceDetail = ({
   );
 
   const invalidateAll = () => {
-    // eslint-disable-next-line typescript/no-floating-promises
-    queryClient.invalidateQueries({
+    void queryClient.invalidateQueries({
       queryKey: invoicesKeys.all(workspaceId),
     });
-    // eslint-disable-next-line typescript/no-floating-promises
-    queryClient.invalidateQueries({
+    void queryClient.invalidateQueries({
       queryKey: timeEntriesKeys.all(workspaceId),
     });
   };
@@ -705,8 +703,7 @@ const EditInvoiceForm = ({
         showErrorToast(t("billing.failedToSave"));
         return;
       }
-      // eslint-disable-next-line typescript/no-floating-promises
-      queryClient.invalidateQueries({
+      void queryClient.invalidateQueries({
         queryKey: invoicesKeys.all(workspaceId),
       });
       onClose();
@@ -721,8 +718,7 @@ const EditInvoiceForm = ({
       errors={formErrors}
       onSubmit={(e) => {
         e.preventDefault();
-        // eslint-disable-next-line typescript/no-floating-promises
-        form.handleSubmit();
+        void form.handleSubmit();
       }}
     >
       <h2 className="text-sm font-semibold">

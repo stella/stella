@@ -616,10 +616,19 @@ export function DocxEditor({
     return mgr;
   }, []);
 
+  const [initialSuggestionMode] = useState(() => ({
+    active: editingMode === "suggesting",
+    author,
+  }));
+
   // Suggestion mode plugin
   const suggestionPlugin = useMemo(
-    () => createSuggestionModePlugin(editingMode === "suggesting", author),
-    [], // eslint-disable-line react-hooks/exhaustive-deps
+    () =>
+      createSuggestionModePlugin(
+        initialSuggestionMode.active,
+        initialSuggestionMode.author,
+      ),
+    [initialSuggestionMode],
   );
   // AI suggestion decorations — non-mutating overlay for the review
   // queue. Always present; the plugin renders nothing until

@@ -109,24 +109,23 @@ export type OpenDocxResponse = {
   sessionId: string;
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === "string");
+
 export const isAppSnapshot = (value: unknown): value is AppSnapshot => {
-  if (typeof value !== "object" || value === null) {
+  if (!isRecord(value)) {
     return false;
   }
-
-  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
-  const record = value as Record<string, unknown>;
-
   return (
-    typeof record["bridgePort"] === "number" &&
-    typeof record["bridgeVersion"] === "number" &&
-    Array.isArray(record["capabilities"]) &&
-    (record["capabilities"] as unknown[]).every((c) => typeof c === "string") &&
-    typeof record["runningSince"] === "string" &&
-    Array.isArray(record["sessions"]) &&
-    typeof record["notificationPreferences"] === "object" &&
-    record["notificationPreferences"] !== null &&
-    typeof record["update"] === "object" &&
-    record["update"] !== null
+    typeof value["bridgePort"] === "number" &&
+    typeof value["bridgeVersion"] === "number" &&
+    isStringArray(value["capabilities"]) &&
+    typeof value["runningSince"] === "string" &&
+    Array.isArray(value["sessions"]) &&
+    isRecord(value["notificationPreferences"]) &&
+    isRecord(value["update"])
   );
 };

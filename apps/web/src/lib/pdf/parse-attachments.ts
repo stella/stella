@@ -5,6 +5,9 @@ export type PDFAttachment = {
   filename: string;
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
 const pdfAttachmentSchema = v.strictObject({
   content: v.instance(Uint8Array),
   filename: v.pipe(
@@ -22,11 +25,13 @@ const parsePdfAttachment = v.safeParser(pdfAttachmentSchema);
  * pdfjs-dist v5.5+ returns `null` when there are no attachments;
  * older versions returned `undefined`. This function handles both.
  */
-export const parseAttachments = (
-  attachments?: Record<string, unknown> | null,
-): PDFAttachment[] => {
+export const parseAttachments = (attachments?: unknown): PDFAttachment[] => {
   // eslint-disable-next-line no-eq-null, eqeqeq -- getAttachments() returns null (v5.5) or undefined (older)
   if (attachments == null) {
+    return [];
+  }
+
+  if (!isRecord(attachments)) {
     return [];
   }
 

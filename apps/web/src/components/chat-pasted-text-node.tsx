@@ -18,7 +18,10 @@ import {
 } from "@stll/ui/components/popover";
 import { cn } from "@stll/ui/lib/utils";
 
-import type { PastedTextSource } from "@/components/chat-pasted-text-extension";
+import type {
+  PastedTextAttrs,
+  PastedTextSource,
+} from "@/components/chat-pasted-text-extension";
 
 const CHIP_MAX_LABEL_WIDTH_CLASS = "max-w-48";
 
@@ -32,15 +35,37 @@ const pickChipIcon = (source: PastedTextSource) => {
   return ClipboardPasteIcon;
 };
 
+const PASTED_TEXT_SOURCE_VALUES: ReadonlySet<string> = new Set([
+  "paste",
+  "prompt",
+  "skill",
+]);
+
+const isPastedTextSource = (value: unknown): value is PastedTextSource =>
+  typeof value === "string" && PASTED_TEXT_SOURCE_VALUES.has(value);
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const readPastedTextAttrs = (value: unknown): PastedTextAttrs => {
+  if (!isRecord(value)) {
+    return { text: "", label: "", source: "paste" };
+  }
+
+  const text = value["text"];
+  const label = value["label"];
+  const source = value["source"];
+
+  return {
+    text: typeof text === "string" ? text : "",
+    label: typeof label === "string" ? label : "",
+    source: isPastedTextSource(source) ? source : "paste",
+  };
+};
+
 export const ChatPastedTextNode = (props: NodeViewProps) => {
   const t = useTranslations();
-  // SAFETY: attrs from our own pastedText node schema
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
-  const attrs = props.node.attrs as {
-    text: string;
-    label: string;
-    source: PastedTextSource;
-  };
+  const attrs = readPastedTextAttrs(props.node.attrs);
 
   // Local-state-only edits keep the textarea responsive on large
   // pastes; we commit back to the node attrs on blur (which fires

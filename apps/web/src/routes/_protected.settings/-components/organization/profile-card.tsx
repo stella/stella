@@ -86,8 +86,7 @@ export const OrganizationProfileCard = () => {
             errors={formErrors}
             onSubmit={(e) => {
               e.preventDefault();
-              // eslint-disable-next-line typescript/no-floating-promises
-              form.handleSubmit();
+              void form.handleSubmit();
             }}
           >
             <form.Field name="name">

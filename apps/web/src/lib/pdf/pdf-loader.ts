@@ -171,11 +171,8 @@ export const loadPDF = async ({
 
   return Result.tryPromise({
     try: async () => {
-      // oxlint-disable-next-line typescript/no-unsafe-assignment -- pdfjs-dist types getAttachments() as Promise<any>
-      const attachments = await document.getAttachments();
-      const pdfAttachments =
-        // oxlint-disable-next-line typescript/no-unsafe-argument -- attachments is typed as any by pdfjs-dist
-        parseAttachments(attachments);
+      const attachments: unknown = await document.getAttachments();
+      const pdfAttachments = parseAttachments(attachments);
 
       const isPortfolio = pdfAttachments.length > 0 && document.numPages <= 1;
 

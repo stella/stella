@@ -230,6 +230,51 @@ export const parseRolesResponse = (
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const isRawRoleType = (value: unknown): value is BrregRawRoleType =>
+  isRecord(value) && typeof value["kode"] === "string";
+
+const isRawRolePerson = (value: unknown): value is BrregRawRolePerson =>
+  isRecord(value) &&
+  (value["navn"] === undefined || isRecord(value["navn"])) &&
+  (value["erDoed"] === undefined || typeof value["erDoed"] === "boolean");
+
+const isRawRoleEntity = (value: unknown): value is BrregRawRoleEntity =>
+  isRecord(value) &&
+  typeof value["organisasjonsnummer"] === "string" &&
+  (value["navn"] === undefined ||
+    (Array.isArray(value["navn"]) &&
+      value["navn"].every((item) => typeof item === "string"))) &&
+  (value["organisasjonsform"] === undefined ||
+    isRawRoleType(value["organisasjonsform"]));
+
+const isRawRoleTrustee = (value: unknown): value is BrregRawRoleTrustee =>
+  isRecord(value) &&
+  typeof value["navn"] === "string" &&
+  (value["postadresse"] === undefined || isRecord(value["postadresse"]));
+
+const isRawRole = (value: unknown): value is BrregRawRole =>
+  isRecord(value) &&
+  isRawRoleType(value["type"]) &&
+  (value["person"] === undefined || isRawRolePerson(value["person"])) &&
+  (value["enhet"] === undefined || isRawRoleEntity(value["enhet"])) &&
+  (value["bostyrer"] === undefined || isRawRoleTrustee(value["bostyrer"])) &&
+  (value["fratraadt"] === undefined ||
+    typeof value["fratraadt"] === "boolean") &&
+  (value["avregistrert"] === undefined ||
+    typeof value["avregistrert"] === "boolean");
+
+const isRawRoleGroup = (value: unknown): value is BrregRawRoleGroup =>
+  isRecord(value) &&
+  isRawRoleType(value["type"]) &&
+  (value["roller"] === undefined ||
+    (Array.isArray(value["roller"]) && value["roller"].every(isRawRole)));
+
+const isRawRolesResponse = (value: unknown): value is BrregRawRolesResponse =>
+  isRecord(value) &&
+  (value["rollegrupper"] === undefined ||
+    (Array.isArray(value["rollegrupper"]) &&
+      value["rollegrupper"].every(isRawRoleGroup)));
+
 const parseUpstreamMessage = (value: unknown): string | null => {
   if (!isRecord(value)) {
     return null;
@@ -281,11 +326,19 @@ const brregGetRoles = async (
   }
 
   try {
-    // SAFETY: Brreg is a stable, documented public API. Runtime validation
-    // adds little for well-typed JSON responses.
-    // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
-    return (await response.json()) as BrregRawRolesResponse;
+    const body: unknown = await response.json();
+    if (!isRawRolesResponse(body)) {
+      throw new BrregAPIError({
+        message: `Brreg ${response.status}: unexpected roles payload shape`,
+        httpStatus: response.status,
+        upstreamMessage: null,
+      });
+    }
+    return body;
   } catch (error) {
+    if (error instanceof BrregAPIError) {
+      throw error;
+    }
     throw new BrregAPIError({
       message: `Brreg ${response.status}: invalid JSON payload`,
       httpStatus: response.status,

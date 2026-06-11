@@ -235,11 +235,15 @@ const useColorManipulation = (
 
 const isTouch = (e: MouseEvent | TouchEvent): e is TouchEvent => "touches" in e;
 
-const getTouchPoint = (touches: TouchList, id: number | null): Touch => {
+const isMouseMoveEvent = (event: Event): event is MouseEvent =>
+  "buttons" in event && "pageX" in event && "pageY" in event;
+
+const isMoveEvent = (event: Event): event is MouseEvent | TouchEvent =>
+  isMouseMoveEvent(event) || "touches" in event;
+
+const getTouchPoint = (touches: TouchList, id: number | null): Touch | null => {
   const found = Array.from(touches).find((t) => t.identifier === id);
-  // SAFETY: callers only invoke this when touches.length > 0
-  // eslint-disable-next-line typescript/no-non-null-assertion
-  return found ?? touches.item(0)!;
+  return found ?? touches.item(0);
 };
 
 const getParentWindow = (node?: HTMLDivElement | null): Window =>
@@ -249,11 +253,15 @@ const getRelativePosition = (
   node: HTMLDivElement,
   event: MouseEvent | TouchEvent,
   touchId: number | null,
-): Interaction => {
+): Interaction | null => {
   const rect = node.getBoundingClientRect();
   const pointer = isTouch(event)
     ? getTouchPoint(event.touches, touchId)
     : event;
+  if (!pointer) {
+    return null;
+  }
+
   const win = getParentWindow(node);
   return {
     left: clamp((pointer.pageX - (rect.left + win.pageXOffset)) / rect.width),
@@ -303,14 +311,26 @@ const InteractiveArea = ({
     const endType = touch ? "touchend" : "mouseup";
 
     const handleMove: EventListener = (event) => {
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- EventListener receives Event; we only attach to mouse/touch events
-      const e = event as MouseEvent | TouchEvent;
-      if (!isTouch(e)) {
-        e.preventDefault();
+      if (!isMoveEvent(event)) {
+        detachListeners();
+        return;
       }
-      const isDown = isTouch(e) ? e.touches.length > 0 : e.buttons > 0;
+
+      if (!isTouch(event)) {
+        event.preventDefault();
+      }
+      const isDown = isTouch(event)
+        ? event.touches.length > 0
+        : event.buttons > 0;
       if (isDown && container.current) {
-        onMoveRef(getRelativePosition(container.current, e, touchId.current));
+        const position = getRelativePosition(
+          container.current,
+          event,
+          touchId.current,
+        );
+        if (position) {
+          onMoveRef(position);
+        }
       } else {
         detachListeners();
       }
@@ -349,7 +369,10 @@ const InteractiveArea = ({
     }
 
     el.focus();
-    onMoveRef(getRelativePosition(el, native, touchId.current));
+    const position = getRelativePosition(el, native, touchId.current);
+    if (position) {
+      onMoveRef(position);
+    }
     attachListeners();
   };
 

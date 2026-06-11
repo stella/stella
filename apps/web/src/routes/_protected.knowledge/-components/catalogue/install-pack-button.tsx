@@ -75,8 +75,7 @@ export const InstallPackButton = ({
     <Button
       disabled={busy}
       onClick={() => {
-        // eslint-disable-next-line typescript/no-floating-promises
-        onClick();
+        void onClick();
       }}
       size="xs"
       variant="outline"

@@ -26,6 +26,56 @@ const BRREG_RESULT_CAP = 10_000;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const isOptionalRecord = (value: unknown): boolean =>
+  value === undefined || isRecord(value);
+
+const isOptionalNumber = (value: unknown): boolean =>
+  value === undefined || typeof value === "number";
+
+const isBrregRawEnhet = (value: unknown): value is BrregRawEnhet =>
+  isRecord(value) &&
+  typeof value["organisasjonsnummer"] === "string" &&
+  typeof value["navn"] === "string" &&
+  isOptionalRecord(value["organisasjonsform"]) &&
+  isOptionalRecord(value["postadresse"]) &&
+  isOptionalRecord(value["forretningsadresse"]) &&
+  isOptionalRecord(value["beliggenhetsadresse"]) &&
+  isOptionalRecord(value["naeringskode1"]) &&
+  isOptionalRecord(value["naeringskode2"]) &&
+  isOptionalRecord(value["naeringskode3"]) &&
+  isOptionalNumber(value["antallAnsatte"]);
+
+const isBrregSearchResponse = (
+  value: unknown,
+): value is BrregSearchResponse => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  const embedded = value["_embedded"];
+  if (embedded !== undefined) {
+    if (!isRecord(embedded)) {
+      return false;
+    }
+    const enheter = embedded["enheter"];
+    if (!Array.isArray(enheter) || !enheter.every(isBrregRawEnhet)) {
+      return false;
+    }
+  }
+
+  const page = value["page"];
+  if (page === undefined) {
+    return true;
+  }
+  return (
+    isRecord(page) &&
+    typeof page["size"] === "number" &&
+    typeof page["totalElements"] === "number" &&
+    typeof page["totalPages"] === "number" &&
+    typeof page["number"] === "number"
+  );
+};
+
 const parseErrorBody = (value: unknown): BrregErrorResponse => {
   if (!isRecord(value)) {
     return {};
@@ -43,7 +93,35 @@ const parseErrorBody = (value: unknown): BrregErrorResponse => {
   return result;
 };
 
-const brregGet = async <T>(url: string): Promise<T | null> => {
+const readBrregJson = async <T>(
+  response: Response,
+  isExpectedShape: (value: unknown) => value is T,
+): Promise<T> => {
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch (error) {
+    throw new BrregAPIError({
+      message: "Brreg returned a non-JSON response",
+      httpStatus: response.status,
+      cause: error,
+    });
+  }
+
+  if (!isExpectedShape(body)) {
+    throw new BrregAPIError({
+      message: "Brreg returned an unexpected response shape",
+      httpStatus: response.status,
+    });
+  }
+
+  return body;
+};
+
+const brregGet = async <T>(
+  url: string,
+  isExpectedShape: (value: unknown) => value is T,
+): Promise<T | null> => {
   let response: Response;
   try {
     response = await fetch(url, {
@@ -85,10 +163,7 @@ const brregGet = async <T>(url: string): Promise<T | null> => {
     });
   }
 
-  // SAFETY: Brreg is a stable, documented public API. Runtime validation
-  // adds little for well-typed JSON responses.
-  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
-  return response.json() as Promise<T>;
+  return readBrregJson(response, isExpectedShape);
 };
 
 // ---------------------------------------------------------------------------
@@ -126,14 +201,15 @@ export const lookupByOrgnr = async (
     throw new BrregValidationError(`Invalid orgnr: ${orgnr}`);
   }
 
-  const enhet = await brregGet<BrregRawEnhet>(`${ENHETER_URL}/${normalized}`);
+  const enhet = await brregGet(`${ENHETER_URL}/${normalized}`, isBrregRawEnhet);
   if (enhet) {
     return parseEnhet(enhet, "enhet");
   }
 
   if (options?.includeSubEntities ?? true) {
-    const sub = await brregGet<BrregRawEnhet>(
+    const sub = await brregGet(
       `${UNDERENHETER_URL}/${normalized}`,
+      isBrregRawEnhet,
     );
     if (sub) {
       return parseEnhet(sub, "underenhet");
@@ -181,7 +257,7 @@ export const searchByName = async (
 
   let data: BrregSearchResponse | null;
   try {
-    data = await brregGet<BrregSearchResponse>(url);
+    data = await brregGet(url, isBrregSearchResponse);
   } catch (error) {
     // Brreg short-circuits queries that would exceed its 10k result
     // cap with HTTP 400 — there is no page envelope to inspect — so

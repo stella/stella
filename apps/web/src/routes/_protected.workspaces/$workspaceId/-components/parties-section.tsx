@@ -83,8 +83,7 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
       { id, type, displayName: name },
       {
         onSuccess: () => {
-          // eslint-disable-next-line typescript/no-floating-promises
-          queryClient.invalidateQueries({
+          void queryClient.invalidateQueries({
             queryKey: contactsKeys.all,
           });
           handleSetClient({ id, displayName: name });
@@ -108,8 +107,7 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
             title: t("success.clientUpdated"),
             type: "success",
           });
-          // eslint-disable-next-line typescript/no-floating-promises
-          queryClient.invalidateQueries({
+          void queryClient.invalidateQueries({
             queryKey: workspacesKeys.byId(workspaceId),
           });
         },
@@ -302,8 +300,7 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
       { id, type, displayName: name },
       {
         onSuccess: () => {
-          // eslint-disable-next-line typescript/no-floating-promises
-          queryClient.invalidateQueries({
+          void queryClient.invalidateQueries({
             queryKey: contactsKeys.all,
           });
           setSelectedContact({ id, displayName: name });
@@ -334,12 +331,10 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
             title: t("workspaces.parties.promotedSuccess"),
             type: "success",
           });
-          // eslint-disable-next-line typescript/no-floating-promises
-          queryClient.invalidateQueries({
+          void queryClient.invalidateQueries({
             queryKey: workspacesKeys.byId(workspaceId),
           });
-          // eslint-disable-next-line typescript/no-floating-promises
-          queryClient.invalidateQueries({
+          void queryClient.invalidateQueries({
             queryKey: workspacesKeys.all,
           });
           handleClose();
@@ -483,8 +478,7 @@ const PartyRow = ({ party, workspaceId }: PartyRowProps) => {
             title: t("success.partyRemoved"),
             type: "success",
           });
-          // eslint-disable-next-line typescript/no-floating-promises
-          queryClient.invalidateQueries({
+          void queryClient.invalidateQueries({
             queryKey: workspaceContactsOptions(workspaceId).queryKey,
           });
         },
@@ -608,8 +602,7 @@ const AddPartyDialog = ({
             title: t("success.partyAdded"),
             type: "success",
           });
-          // eslint-disable-next-line typescript/no-floating-promises
-          queryClient.invalidateQueries({
+          void queryClient.invalidateQueries({
             queryKey: workspaceContactsOptions(workspaceId).queryKey,
           });
           setIsOpen(false);

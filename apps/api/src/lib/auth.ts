@@ -241,7 +241,6 @@ const createAuth = () => {
     databaseHooks: {
       user: {
         create: {
-          // eslint-disable-next-line require-await -- async required by better-auth hook type
           before: async (user) => {
             validateTimezoneId(user["timezoneId"]);
             // Email-OTP and some social providers leave `name` blank.
@@ -251,15 +250,14 @@ const createAuth = () => {
             // Then trim `preferredName` / `wordEditShortcut` (Word author /
             // initials prefs) before persisting.
             const data = normalizeUserPreferences(ensureDisplayName(user));
-            return { data };
+            return await Promise.resolve({ data });
           },
         },
         update: {
-          // eslint-disable-next-line require-await -- async required by better-auth hook type
           before: async (user) => {
             validateTimezoneId(user["timezoneId"]);
             const data = normalizeUserPreferences(ensureDisplayName(user));
-            return { data };
+            return await Promise.resolve({ data });
           },
         },
       },
