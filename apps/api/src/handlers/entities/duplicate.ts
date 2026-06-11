@@ -3,10 +3,12 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db";
-import type { EntitySnapshot } from "@/api/handlers/entities/copy-utils";
 import {
-  collectFileMappings,
+  collectFileCopySources,
   copyEntities,
+  copyFileObjects,
+  type EntitySnapshot,
+  type FileMapping,
   getFolderSubtree,
   remapFileIds,
   rollbackS3Copies,
@@ -23,7 +25,6 @@ import {
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
 import { LIMITS } from "@/api/lib/limits";
-import { getS3 } from "@/api/lib/s3";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 
 const duplicateEntityBodySchema = t.Object({
@@ -120,26 +121,22 @@ const duplicateEntityHandler = async function* ({
     sourceEntities = subtree;
   }
 
-  // Copies must not share storage objects with their source: deleting
-  // an entity deletes its objects, so a shared reference would let
-  // deleting the duplicate destroy the original's file. Mint new file
-  // IDs and copy the objects before the DB transaction.
-  const fileMappings = collectFileMappings({
+  const fileCopySources = collectFileCopySources({
     sourceEntities,
     organizationId,
     sourceWorkspaceId: workspaceId,
-    targetWorkspaceId: workspaceId,
   });
 
-  const s3 = getS3();
   const copiedS3Keys: string[] = [];
+  let fileMappings: FileMapping[];
 
   try {
-    for (const { sourceKey, targetKey, mimeType } of fileMappings) {
-      // Stream directly from source to target without buffering in memory
-      await s3.write(targetKey, s3.file(sourceKey), { type: mimeType });
-      copiedS3Keys.push(targetKey);
-    }
+    fileMappings = await copyFileObjects({
+      sources: fileCopySources,
+      organizationId,
+      targetWorkspaceId: workspaceId,
+      copiedS3Keys,
+    });
   } catch (error) {
     await rollbackS3Copies(copiedS3Keys);
     captureError(error, { workspaceId, sourceEntityId });
@@ -150,20 +147,25 @@ const duplicateEntityHandler = async function* ({
 
   const remappedEntities = remapFileIds(sourceEntities, fileMappings);
 
-  const txResult = yield* Result.await(
-    safeDb(
-      async (tx) =>
-        await copyEntities({
-          tx,
-          targetWorkspaceId: workspaceId,
-          targetParentId: source.parentId,
-          userId,
-          recordAuditEvent,
-          sourceEntityId,
-          sourceEntities: remappedEntities,
-        }),
-    ),
+  const txResultResult = await safeDb(
+    async (tx) =>
+      await copyEntities({
+        tx,
+        targetWorkspaceId: workspaceId,
+        targetParentId: source.parentId,
+        userId,
+        recordAuditEvent,
+        sourceEntityId,
+        sourceEntities: remappedEntities,
+      }),
   );
+
+  if (Result.isError(txResultResult)) {
+    await rollbackS3Copies(copiedS3Keys);
+    return Result.err(txResultResult.error);
+  }
+
+  const txResult = txResultResult.value;
 
   if (!txResult.ok) {
     await rollbackS3Copies(copiedS3Keys);

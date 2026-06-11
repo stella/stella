@@ -35,6 +35,10 @@ import {
   properties,
   workspaces,
 } from "@/api/db/schema";
+import {
+  allocateFileObject,
+  fileContentWithMintedObject,
+} from "@/api/handlers/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/handlers/files/image-derivative";
 import { isEncryptedPdf } from "@/api/handlers/files/pdf-utils";
@@ -555,7 +559,7 @@ export const finalizeEntityCreate = async function* ({
     encrypted = encryptedResult.value;
   }
 
-  const fileId = Bun.randomUUIDv7();
+  const fileId = allocateFileObject();
   const entityId = createSafeId<"entity">();
   const entityVersionId = createSafeId<"entityVersion">();
   const fieldId = createSafeId<"field">();
@@ -650,7 +654,7 @@ export const finalizeEntityCreate = async function* ({
       workspaceId,
       propertyId: targetResult.value.propertyId,
       entityVersionId,
-      content: {
+      content: fileContentWithMintedObject({
         type: "file",
         version: 1,
         id: fileId,
@@ -670,7 +674,7 @@ export const finalizeEntityCreate = async function* ({
           mimeType: declaredMime,
         }),
         ...(scanWarnings !== undefined && { scanWarnings }),
-      },
+      }),
     });
     await tx
       .update(workspaces)

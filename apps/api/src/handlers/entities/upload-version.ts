@@ -14,6 +14,10 @@ import {
   buildVersionStamp,
   cloneFieldsForRevision,
 } from "@/api/handlers/entities/version-utils";
+import {
+  allocateFileObject,
+  fileContentWithMintedObject,
+} from "@/api/handlers/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/handlers/files/image-derivative";
 import { createFileKey } from "@/api/handlers/files/utils";
@@ -160,7 +164,7 @@ export default createSafeHandler(
 
     // Upload the source file first; PDF derivatives are generated
     // asynchronously by the file-derivative queue.
-    const fileId = Bun.randomUUIDv7();
+    const fileId = allocateFileObject();
     const sha256Hex = new Bun.CryptoHasher("sha256")
       .update(new Uint8Array(fileBuffer))
       .digest("hex");
@@ -256,7 +260,7 @@ export default createSafeHandler(
             entityVersionId: nextVersionId,
             propertyId: freshFileField.propertyId,
             replacementFieldId: fileFieldId,
-            replacementContent: {
+            replacementContent: fileContentWithMintedObject({
               encrypted: false,
               fileName: sanitizedName,
               id: fileId,
@@ -276,7 +280,7 @@ export default createSafeHandler(
                 mimeType: file.type,
               }),
               ...(scanWarnings !== undefined && { scanWarnings }),
-            },
+            }),
             workspaceId,
           }),
         );

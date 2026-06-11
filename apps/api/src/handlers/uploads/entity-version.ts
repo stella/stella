@@ -30,6 +30,10 @@ import {
   buildVersionStamp,
   cloneFieldsForRevision,
 } from "@/api/handlers/entities/version-utils";
+import {
+  allocateFileObject,
+  fileContentWithMintedObject,
+} from "@/api/handlers/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/handlers/files/image-derivative";
 import { createFileKey } from "@/api/handlers/files/utils";
@@ -147,7 +151,7 @@ export const finalizeEntityVersion = async function* ({
   const sanitizedName = sanitizeFilename(declaredName);
   const { entityId } = purposeData;
 
-  const fileId = Bun.randomUUIDv7();
+  const fileId = allocateFileObject();
   const nextVersionId = createSafeId<"entityVersion">();
   const fileFieldId = createSafeId<"field">();
   const finalKey = createFileKey({
@@ -262,7 +266,7 @@ export const finalizeEntityVersion = async function* ({
         entityVersionId: nextVersionId,
         propertyId: freshFileField.propertyId,
         replacementFieldId: fileFieldId,
-        replacementContent: {
+        replacementContent: fileContentWithMintedObject({
           encrypted: false,
           fileName: sanitizedName,
           id: fileId,
@@ -282,7 +286,7 @@ export const finalizeEntityVersion = async function* ({
             mimeType: declaredMime,
           }),
           ...(scanWarnings !== undefined && { scanWarnings }),
-        },
+        }),
         workspaceId,
       }),
     );

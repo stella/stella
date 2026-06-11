@@ -2,8 +2,10 @@ import { Result } from "better-result";
 import { and, desc, eq, ne } from "drizzle-orm";
 
 import { entities, entityVersions } from "@/api/db/schema";
-import type { FieldContent } from "@/api/db/schema-validators";
-import { THUMBNAIL_MIME_TYPE } from "@/api/handlers/files/image-derivative";
+import {
+  extractFieldFileRefs,
+  filterUnreferencedFieldFileRefs,
+} from "@/api/handlers/files/field-file-refs";
 import { deleteS3Objects } from "@/api/handlers/files/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -12,7 +14,6 @@ import type { AuditEvent } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcast } from "@/api/lib/sse";
-import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const paramsSchema = workspaceParams({
   entityId: tSafeId("entity"),
@@ -23,25 +24,6 @@ const config = {
   permissions: { entity: ["update"] },
   params: paramsSchema,
 } satisfies HandlerConfig;
-
-type FileRef = { fileId: string; mimeType: string };
-
-const extractFileRefs = (content: FieldContent): FileRef[] => {
-  if (content.type !== "file") {
-    return [];
-  }
-  const refs: FileRef[] = [{ fileId: content.id, mimeType: content.mimeType }];
-  if (content.pdfFileId) {
-    refs.push({ fileId: content.pdfFileId, mimeType: PDF_MIME_TYPE });
-  }
-  if (content.thumbnailFileId) {
-    refs.push({
-      fileId: content.thumbnailFileId,
-      mimeType: THUMBNAIL_MIME_TYPE,
-    });
-  }
-  return refs;
-};
 
 export default createSafeHandler(
   config,
@@ -127,14 +109,25 @@ export default createSafeHandler(
     );
 
     const fileRefs = versionFields.flatMap((row) =>
-      extractFileRefs(row.content),
+      extractFieldFileRefs(row.content),
+    );
+    const unreferencedFileRefs = yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await filterUnreferencedFieldFileRefs({
+            tx,
+            workspaceId,
+            fileRows: fileRefs,
+            excludedEntityVersionIds: [params.versionId],
+          }),
+      ),
     );
 
     // Delete S3 objects first (idempotent on retry)
-    if (fileRefs.length > 0) {
+    if (unreferencedFileRefs.length > 0) {
       Result.unwrap(
         await deleteS3Objects({
-          fileRows: fileRefs,
+          fileRows: unreferencedFileRefs,
           organizationId,
           workspaceId,
         }),

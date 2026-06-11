@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
+import {
+  allocateFileObject,
+  fileContentWithMintedObject,
+} from "@/api/handlers/files/file-object-ids";
 import { toSafeId } from "@/api/lib/branded-types";
 
 import { buildVersionStamp, cloneFieldsForRevision } from "./version-utils";
@@ -49,10 +53,10 @@ describe("cloneFieldsForRevision", () => {
     const filePropertyId = toSafeId<"property">("prop_file");
     const textPropertyId = toSafeId<"property">("prop_text");
     const nextVersionId = toSafeId<"entityVersion">("version_next");
-    const replacementFile = {
+    const replacementFile = fileContentWithMintedObject({
       encrypted: false,
       fileName: "agreement.docx",
-      id: Bun.randomUUIDv7(),
+      id: allocateFileObject(),
       mimeType:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       pdfFileId: null,
@@ -60,7 +64,7 @@ describe("cloneFieldsForRevision", () => {
       sizeBytes: 128,
       type: "file",
       version: 1,
-    } as const;
+    });
 
     const cloned = cloneFieldsForRevision({
       currentFields: [
@@ -120,10 +124,10 @@ describe("cloneFieldsForRevision", () => {
     const textPropertyId = toSafeId<"property">("prop_text");
     const nextVersionId = toSafeId<"entityVersion">("version_next");
     const replacementFieldId = toSafeId<"field">("field_replacement");
-    const replacementFile = {
+    const replacementFile = fileContentWithMintedObject({
       encrypted: false,
       fileName: "agreement.docx",
-      id: Bun.randomUUIDv7(),
+      id: allocateFileObject(),
       mimeType:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       pdfFileId: null,
@@ -131,7 +135,7 @@ describe("cloneFieldsForRevision", () => {
       sizeBytes: 128,
       type: "file",
       version: 1,
-    } as const;
+    });
 
     const cloned = cloneFieldsForRevision({
       currentFields: [

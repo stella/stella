@@ -5,14 +5,22 @@ import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db";
 import { entities, workspaces } from "@/api/db/schema";
-import type { EntitySnapshot } from "@/api/handlers/entities/copy-utils";
 import {
-  collectFileMappings,
+  collectFileCopySources,
   copyEntities,
+  copyFileObjects,
+  type EntitySnapshot,
+  type FileMapping,
   getFolderSubtree,
   remapFileIds,
   rollbackS3Copies,
 } from "@/api/handlers/entities/copy-utils";
+import {
+  extractFieldFileRefs,
+  filterUnreferencedFieldFileRefs,
+  type FieldFileRef,
+} from "@/api/handlers/files/field-file-refs";
+import { deleteS3Objects } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -27,7 +35,6 @@ import {
 } from "@/api/lib/file-derivative-queue";
 import { broadcastQueryInvalidationToTargetWorkspace } from "@/api/lib/invalidate-query-macro";
 import { LIMITS } from "@/api/lib/limits";
-import { getS3 } from "@/api/lib/s3";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 
@@ -105,6 +112,58 @@ const remapPropertyIds = (
       },
     };
   });
+
+type CleanupMovedSourceFilesOptions = {
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  sourceWorkspaceId: SafeId<"workspace">;
+  sourceEntityId: SafeId<"entity">;
+  sourceFileRefs: FieldFileRef[];
+};
+
+const cleanupMovedSourceFiles = async ({
+  safeDb,
+  organizationId,
+  sourceWorkspaceId,
+  sourceEntityId,
+  sourceFileRefs,
+}: CleanupMovedSourceFilesOptions): Promise<void> => {
+  if (sourceFileRefs.length === 0) {
+    return;
+  }
+
+  const unreferencedSourceFileRefsResult = await safeDb(
+    async (tx) =>
+      await filterUnreferencedFieldFileRefs({
+        tx,
+        workspaceId: sourceWorkspaceId,
+        fileRows: sourceFileRefs,
+      }),
+  );
+
+  if (Result.isError(unreferencedSourceFileRefsResult)) {
+    captureError(unreferencedSourceFileRefsResult.error, {
+      operation: "move-cleanup",
+      sourceWorkspaceId,
+      sourceEntityId,
+    });
+    return;
+  }
+
+  const deleteResult = await deleteS3Objects({
+    fileRows: unreferencedSourceFileRefsResult.value,
+    organizationId,
+    workspaceId: sourceWorkspaceId,
+  });
+
+  if (Result.isError(deleteResult)) {
+    captureError(deleteResult.error, {
+      operation: "move-cleanup",
+      sourceWorkspaceId,
+      sourceEntityId,
+    });
+  }
+};
 
 const copyToWorkspaceHandler = async function* ({
   safeDb,
@@ -264,26 +323,32 @@ const copyToWorkspaceHandler = async function* ({
     sourceEntities,
     propertyIdMap,
   );
+  const sourceFileRefs = sourceEntities.flatMap(
+    (entity) =>
+      entity.currentVersion?.fields.flatMap((field) =>
+        extractFieldFileRefs(field.content),
+      ) ?? [],
+  );
 
-  // Collect file mappings for S3 copy after property remapping, so
+  // Collect file objects for S3 copy after property remapping, so
   // files from dropped fields do not leave orphaned target objects.
-  const fileMappings = collectFileMappings({
+  const fileCopySources = collectFileCopySources({
     sourceEntities: propertyRemappedEntities,
     organizationId,
     sourceWorkspaceId,
-    targetWorkspaceId,
   });
 
   // S3 copy phase: copy all files before DB transaction
-  const s3 = getS3();
   const copiedS3Keys: string[] = [];
+  let fileMappings: FileMapping[];
 
   try {
-    for (const { sourceKey, targetKey, mimeType } of fileMappings) {
-      // Stream directly from source to target without buffering in memory
-      await s3.write(targetKey, s3.file(sourceKey), { type: mimeType });
-      copiedS3Keys.push(targetKey);
-    }
+    fileMappings = await copyFileObjects({
+      sources: fileCopySources,
+      organizationId,
+      targetWorkspaceId,
+      copiedS3Keys,
+    });
   } catch (error) {
     await rollbackS3Copies(copiedS3Keys);
     captureError(error, {
@@ -302,55 +367,60 @@ const copyToWorkspaceHandler = async function* ({
   // DB transaction phase: copy (and delete for moves) in a single transaction
   // to ensure atomicity — either both succeed or neither does.
   const sourceEntityIds = sourceEntities.map((e) => e.id);
-  const txResult = yield* Result.await(
-    safeDb(async (tx) => {
-      const copyResult = await copyEntities({
-        tx,
-        targetWorkspaceId,
-        targetParentId,
-        userId,
-        recordAuditEvent: recordTargetAuditEvent,
-        sourceEntityId,
-        sourceEntities: remappedEntities,
-        sourceWorkspaceId,
-      });
+  const txResultResult = await safeDb(async (tx) => {
+    const copyResult = await copyEntities({
+      tx,
+      targetWorkspaceId,
+      targetParentId,
+      userId,
+      recordAuditEvent: recordTargetAuditEvent,
+      sourceEntityId,
+      sourceEntities: remappedEntities,
+      sourceWorkspaceId,
+    });
 
-      if (!copyResult.ok) {
-        return copyResult;
-      }
-
-      // For move operations, delete source entities in the same transaction
-      if (deleteSource) {
-        // Delete in reverse order (children first) to respect FK constraints.
-        // The cascade will handle versions and fields.
-        for (const id of sourceEntityIds.toReversed()) {
-          await tx.delete(entities).where(eq(entities.id, id));
-        }
-
-        await tx
-          .update(workspaces)
-          .set({ lastActivityAt: new Date() })
-          .where(eq(workspaces.id, sourceWorkspaceId));
-
-        await recordSourceAuditEvent(
-          tx,
-          copyResult.copiedEntities.map((entity) => ({
-            action: AUDIT_ACTION.DELETE,
-            resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-            resourceId: entity.sourceId,
-            changes: {
-              deleted: {
-                old: { kind: entity.kind, name: entity.name },
-                new: { movedToWorkspaceId: targetWorkspaceId },
-              },
-            },
-          })),
-        );
-      }
-
+    if (!copyResult.ok) {
       return copyResult;
-    }),
-  );
+    }
+
+    // For move operations, delete source entities in the same transaction
+    if (deleteSource) {
+      // Delete in reverse order (children first) to respect FK constraints.
+      // The cascade will handle versions and fields.
+      for (const id of sourceEntityIds.toReversed()) {
+        await tx.delete(entities).where(eq(entities.id, id));
+      }
+
+      await tx
+        .update(workspaces)
+        .set({ lastActivityAt: new Date() })
+        .where(eq(workspaces.id, sourceWorkspaceId));
+
+      await recordSourceAuditEvent(
+        tx,
+        copyResult.copiedEntities.map((entity) => ({
+          action: AUDIT_ACTION.DELETE,
+          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+          resourceId: entity.sourceId,
+          changes: {
+            deleted: {
+              old: { kind: entity.kind, name: entity.name },
+              new: { movedToWorkspaceId: targetWorkspaceId },
+            },
+          },
+        })),
+      );
+    }
+
+    return copyResult;
+  });
+
+  if (Result.isError(txResultResult)) {
+    await rollbackS3Copies(copiedS3Keys);
+    return Result.err(txResultResult.error);
+  }
+
+  const txResult = txResultResult.value;
 
   if (!txResult.ok) {
     await rollbackS3Copies(copiedS3Keys);
@@ -359,17 +429,14 @@ const copyToWorkspaceHandler = async function* ({
     );
   }
 
-  // Delete source S3 objects after DB transaction succeeds (for moves)
   if (deleteSource) {
-    const sourceKeys = fileMappings.map((m) => m.sourceKey);
-    await Promise.all(
-      sourceKeys.map(
-        async (key) =>
-          await s3.delete(key).catch((error: unknown) => {
-            captureError(error, { key, operation: "move-cleanup" });
-          }),
-      ),
-    );
+    await cleanupMovedSourceFiles({
+      safeDb,
+      organizationId,
+      sourceWorkspaceId,
+      sourceEntityId,
+      sourceFileRefs,
+    });
   }
 
   // Process search extraction for new entities

@@ -1,4 +1,8 @@
 import type { FieldContent } from "@/api/db/schema-validators";
+import {
+  reuseFileObjectWithinEntity,
+  type WritableFileFieldContent,
+} from "@/api/handlers/files/file-object-ids";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   generateVerificationCode,
@@ -10,14 +14,12 @@ type RevisionField = {
   propertyId: SafeId<"property">;
 };
 
-type RevisionFileContent = Extract<FieldContent, { type: "file" }>;
-
 type CloneRevisionFieldsInput = {
   currentFields: RevisionField[];
   entityVersionId: SafeId<"entityVersion">;
   replacementFieldId?: SafeId<"field">;
   propertyId: SafeId<"property">;
-  replacementContent: RevisionFileContent;
+  replacementContent: WritableFileFieldContent;
   workspaceId: SafeId<"workspace">;
 };
 
@@ -57,11 +59,34 @@ export const cloneFieldsForRevision = ({
     ...(replacementFieldId &&
       field.propertyId === propertyId &&
       field.content.type === "file" && { id: replacementFieldId }),
-    content:
-      field.propertyId === propertyId && field.content.type === "file"
-        ? replacementContent
-        : field.content,
+    content: contentForRevisionField({
+      field,
+      propertyId,
+      replacementContent,
+    }),
     entityVersionId,
     propertyId: field.propertyId,
     workspaceId,
   }));
+
+type ContentForRevisionFieldOptions = {
+  field: RevisionField;
+  propertyId: SafeId<"property">;
+  replacementContent: WritableFileFieldContent;
+};
+
+const contentForRevisionField = ({
+  field,
+  propertyId,
+  replacementContent,
+}: ContentForRevisionFieldOptions): FieldContent => {
+  if (field.propertyId === propertyId && field.content.type === "file") {
+    return replacementContent;
+  }
+
+  if (field.content.type === "file") {
+    return reuseFileObjectWithinEntity(field.content);
+  }
+
+  return field.content;
+};

@@ -29,6 +29,14 @@ void mock.module("@/api/lib/search/process-extraction", () => ({
   processExtraction: processExtractionMock,
 }));
 
+const captureErrorMock = mock(() => undefined);
+void mock.module("@/api/lib/analytics", () => ({
+  captureError: captureErrorMock,
+  captureRequestError: captureErrorMock,
+  getAnalytics: () => ({ capture: mock(() => undefined) }),
+  isLocalPostHogDebugEnabled: () => false,
+}));
+
 const broadcastQueryInvalidationToTargetWorkspaceMock = mock(() => undefined);
 void mock.module("@/api/lib/invalidate-query-macro", () => ({
   broadcastQueryInvalidationToOrganization: mock(() => undefined),
@@ -141,6 +149,7 @@ beforeEach(() => {
   fileMock.mockClear();
   writeMock.mockClear();
   s3DeleteMock.mockClear();
+  captureErrorMock.mockClear();
   processExtractionMock.mockClear();
   syncWorkspaceSearchActivityMock.mockClear();
   broadcastQueryInvalidationToTargetWorkspaceMock.mockClear();
@@ -447,6 +456,122 @@ describe("copy-to-workspace", () => {
     expect(insertedFields).toHaveLength(0);
     expect(fileMock).not.toHaveBeenCalled();
     expect(writeMock).not.toHaveBeenCalled();
+  });
+
+  test("keeps move success when source file cleanup lookup fails", async () => {
+    let nextDocumentSequence = 0;
+    let selectCallCount = 0;
+    let deletedEntityCount = 0;
+
+    const sourceEntity = {
+      id: documentId,
+      kind: "document" as const,
+      name: "Move.pdf",
+      parentId: null,
+      readOnly: false,
+      currentVersion: {
+        id: toSafeId<"entityVersion">("version_1"),
+        fields: [{ propertyId: sourceFilePropertyId, content: fileContent }],
+      },
+    };
+
+    const tx = {
+      query: {
+        entities: {
+          findFirst: async () => sourceEntity,
+          findMany: async () => [sourceEntity],
+        },
+        properties: {
+          findMany: async (opts: {
+            where: { workspaceId: { eq: string } };
+          }) => {
+            if (opts.where.workspaceId.eq === sourceWorkspaceId) {
+              return [
+                {
+                  id: sourceFilePropertyId,
+                  name: "Source File",
+                  content: filePropertyContent,
+                },
+              ];
+            }
+            return [
+              {
+                id: targetFilePropertyId,
+                name: "Source File",
+                content: filePropertyContent,
+              },
+            ];
+          },
+        },
+        workspaces: {
+          findFirst: async () => ({ reference: null }),
+        },
+      },
+      $count: async () => 0,
+      select: () => {
+        selectCallCount += 1;
+
+        return {
+          from: () => ({
+            innerJoin: () => ({
+              where: async () => {
+                throw new Error("cleanup lookup failed");
+              },
+            }),
+            where: async () => {
+              if (selectCallCount === 1) {
+                return [];
+              }
+              throw new Error("unexpected lookup");
+            },
+          }),
+        };
+      },
+      insert: (table: unknown) => ({
+        values: () => {
+          if (table === documentCounters) {
+            return {
+              onConflictDoUpdate: () => ({
+                returning: async () => {
+                  nextDocumentSequence += 1;
+                  return [{ lastValue: nextDocumentSequence }];
+                },
+              }),
+            };
+          }
+
+          return undefined;
+        },
+      }),
+      update: () => ({
+        set: () => ({
+          where: async () => {},
+        }),
+      }),
+      delete: () => ({
+        where: async () => {
+          deletedEntityCount += 1;
+        },
+      }),
+    };
+
+    const { safeDb } = createScopedDbMock(tx);
+    const result = await copyToWorkspace.handler(
+      createContext({
+        safeDb,
+        entityId: documentId,
+        deleteSource: true,
+      }),
+    );
+
+    expect(result).toEqual({
+      entityId: expect.any(String),
+      entityIds: expect.any(Array),
+    });
+    expect(deletedEntityCount).toBe(1);
+    expect(writeMock).toHaveBeenCalledTimes(1);
+    expect(s3DeleteMock).not.toHaveBeenCalled();
+    expect(captureErrorMock).toHaveBeenCalledTimes(1);
   });
 
   test("copies folder tree with children", async () => {

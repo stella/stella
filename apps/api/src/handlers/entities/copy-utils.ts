@@ -1,8 +1,15 @@
+import { panic, TaggedError } from "better-result";
 import { and, eq, isNull, like } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
+import {
+  allocateFileObject,
+  fileContentWithMintedObject,
+  type MintedFileId,
+  type WritableFieldContent,
+} from "@/api/handlers/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/handlers/files/image-derivative";
 import { createFileKey } from "@/api/handlers/files/utils";
@@ -31,6 +38,17 @@ export type EntitySnapshot = {
   } | null;
 };
 
+type WritableEntityFieldSnapshot = {
+  propertyId: SafeId<"property">;
+  content: WritableFieldContent;
+};
+
+export type WritableEntitySnapshot = Omit<EntitySnapshot, "currentVersion"> & {
+  currentVersion: {
+    fields: WritableEntityFieldSnapshot[];
+  } | null;
+};
+
 export type CopiedEntity = {
   sourceId: SafeId<"entity">;
   entityId: SafeId<"entity">;
@@ -50,32 +68,46 @@ export type CopiedFileField = {
 export type FileMapping = {
   sourceKey: string;
   targetKey: string;
-  newFileId: string;
+  newFileId: MintedFileId;
+  sourceEntityId: SafeId<"entity">;
   sourceFileId: string;
+  sourcePropertyId: SafeId<"property">;
   mimeType: string;
 };
 
-type CollectFileMappingsOptions = {
+export type FileCopySource = {
+  sourceEntityId: SafeId<"entity">;
+  sourceKey: string;
+  sourceFileId: string;
+  sourcePropertyId: SafeId<"property">;
+  mimeType: string;
+};
+
+type FileMappingKeyInput = {
+  sourceEntityId: SafeId<"entity">;
+  sourcePropertyId: SafeId<"property">;
+};
+
+const fileMappingKey = ({
+  sourceEntityId,
+  sourcePropertyId,
+}: FileMappingKeyInput) => `${sourceEntityId}:${sourcePropertyId}`;
+
+type CollectFileCopySourcesOptions = {
   sourceEntities: EntitySnapshot[];
   organizationId: SafeId<"organization">;
   sourceWorkspaceId: SafeId<"workspace">;
-  targetWorkspaceId: SafeId<"workspace">;
 };
 
 /**
- * Collect all file mappings from entities for S3 copy.
- * Creates new file IDs for the copies. Copies must never share
- * storage objects with their source: S3 keys are derived from the
- * file ID, and entity deletion deletes the underlying objects, so a
- * shared ID would let deleting the copy destroy the original's file.
+ * Collect all source file objects needed for S3 copy.
  */
-export const collectFileMappings = ({
+export const collectFileCopySources = ({
   sourceEntities,
   organizationId,
   sourceWorkspaceId,
-  targetWorkspaceId,
-}: CollectFileMappingsOptions): FileMapping[] => {
-  const mappings: FileMapping[] = [];
+}: CollectFileCopySourcesOptions): FileCopySource[] => {
+  const sources: FileCopySource[] = [];
 
   for (const entity of sourceEntities) {
     if (!entity.currentVersion) {
@@ -83,11 +115,11 @@ export const collectFileMappings = ({
     }
     for (const field of entity.currentVersion.fields) {
       if (field.content.type === "file" && field.content.id) {
-        const newFileId = Bun.randomUUIDv7();
         const { mimeType } = field.content;
-        mappings.push({
+        sources.push({
+          sourceEntityId: entity.id,
           sourceFileId: field.content.id,
-          newFileId,
+          sourcePropertyId: field.propertyId,
           mimeType,
           sourceKey: createFileKey({
             organizationId,
@@ -95,15 +127,110 @@ export const collectFileMappings = ({
             fileId: field.content.id,
             mimeType,
           }),
-          targetKey: createFileKey({
-            organizationId,
-            workspaceId: targetWorkspaceId,
-            fileId: newFileId,
-            mimeType,
-          }),
         });
       }
     }
+  }
+
+  return sources;
+};
+
+type CopyFileObjectOptions = FileCopySource & {
+  organizationId: SafeId<"organization">;
+  targetWorkspaceId: SafeId<"workspace">;
+  copiedS3Keys: string[];
+};
+
+/**
+ * Copy one field-backed file object and return the minted target ID.
+ * Copies must never share storage objects with their source: S3 keys
+ * are derived from the file ID, and entity deletion deletes the
+ * underlying objects.
+ */
+export const copyFileObject = async ({
+  sourceEntityId,
+  sourceFileId,
+  sourcePropertyId,
+  sourceKey,
+  mimeType,
+  organizationId,
+  targetWorkspaceId,
+  copiedS3Keys,
+}: CopyFileObjectOptions): Promise<FileMapping> => {
+  const newFileId = allocateFileObject();
+  const targetKey = createFileKey({
+    organizationId,
+    workspaceId: targetWorkspaceId,
+    fileId: newFileId,
+    mimeType,
+  });
+  const s3 = getS3();
+
+  await s3.write(targetKey, s3.file(sourceKey), { type: mimeType });
+  copiedS3Keys.push(targetKey);
+
+  return {
+    sourceEntityId,
+    sourceFileId,
+    sourcePropertyId,
+    sourceKey,
+    targetKey,
+    newFileId,
+    mimeType,
+  };
+};
+
+type CopyFileObjectsOptions = {
+  sources: FileCopySource[];
+  organizationId: SafeId<"organization">;
+  targetWorkspaceId: SafeId<"workspace">;
+  copiedS3Keys: string[];
+};
+
+class FileObjectCopyError extends TaggedError("FileObjectCopyError")<{
+  message: string;
+  cause?: unknown;
+}>() {}
+
+export const copyFileObjects = async ({
+  sources,
+  organizationId,
+  targetWorkspaceId,
+  copiedS3Keys,
+}: CopyFileObjectsOptions): Promise<FileMapping[]> => {
+  const results = await Promise.allSettled(
+    sources.map(
+      async (source) =>
+        await copyFileObject({
+          ...source,
+          organizationId,
+          targetWorkspaceId,
+          copiedS3Keys,
+        }),
+    ),
+  );
+
+  const mappings: FileMapping[] = [];
+  let firstError: unknown;
+  let hasError = false;
+
+  for (const result of results) {
+    if (result.status === "fulfilled") {
+      mappings.push(result.value);
+      continue;
+    }
+
+    if (!hasError) {
+      firstError = result.reason;
+      hasError = true;
+    }
+  }
+
+  if (hasError) {
+    throw new FileObjectCopyError({
+      message: "Failed to copy file object",
+      cause: firstError,
+    });
   }
 
   return mappings;
@@ -117,49 +244,60 @@ export const collectFileMappings = ({
 export const remapFileIds = (
   sourceEntities: EntitySnapshot[],
   fileMappings: FileMapping[],
-): EntitySnapshot[] => {
-  const idMap = new Map(fileMappings.map((m) => [m.sourceFileId, m.newFileId]));
+): WritableEntitySnapshot[] => {
+  const idMap = new Map(
+    fileMappings.map((m) => [fileMappingKey(m), m.newFileId]),
+  );
 
   return sourceEntities.map((entity) => {
     if (!entity.currentVersion) {
-      return entity;
+      return { ...entity, currentVersion: null };
     }
 
-    const remappedFields = entity.currentVersion.fields.map((field) => {
-      if (field.content.type !== "file" || !field.content.id) {
-        return field;
-      }
+    const remappedFields: WritableEntityFieldSnapshot[] =
+      entity.currentVersion.fields.map((field) => {
+        if (field.content.type !== "file") {
+          return {
+            content: field.content,
+            propertyId: field.propertyId,
+          };
+        }
 
-      const newFileId = idMap.get(field.content.id);
-      if (!newFileId) {
-        return field;
-      }
-
-      const {
-        pdfDerivative: _pdfDerivative,
-        placeholder: _placeholder,
-        thumbnailDerivative: _thumbnailDerivative,
-        ...restContent
-      } = field.content;
-
-      return {
-        ...field,
-        content: {
-          ...restContent,
-          id: newFileId,
-          pdfFileId: null,
-          pdfDerivative: pdfDerivativeStateForFile({
-            encrypted: field.content.encrypted,
-            mimeType: field.content.mimeType,
+        const newFileId = idMap.get(
+          fileMappingKey({
+            sourceEntityId: entity.id,
+            sourcePropertyId: field.propertyId,
           }),
-          thumbnailFileId: null,
-          thumbnailDerivative: thumbnailDerivativeStateForFile({
-            encrypted: field.content.encrypted,
-            mimeType: field.content.mimeType,
+        );
+        if (!newFileId) {
+          panic("Missing file mapping for copied file field");
+        }
+
+        const {
+          pdfDerivative: _pdfDerivative,
+          placeholder: _placeholder,
+          thumbnailDerivative: _thumbnailDerivative,
+          ...restContent
+        } = field.content;
+
+        return {
+          ...field,
+          content: fileContentWithMintedObject({
+            ...restContent,
+            id: newFileId,
+            pdfFileId: null,
+            pdfDerivative: pdfDerivativeStateForFile({
+              encrypted: field.content.encrypted,
+              mimeType: field.content.mimeType,
+            }),
+            thumbnailFileId: null,
+            thumbnailDerivative: thumbnailDerivativeStateForFile({
+              encrypted: field.content.encrypted,
+              mimeType: field.content.mimeType,
+            }),
           }),
-        },
-      };
-    });
+        };
+      });
 
     return {
       ...entity,
@@ -338,7 +476,7 @@ type CopyEntitiesProps = {
    */
   recordAuditEvent: AuditRecorder;
   sourceEntityId: SafeId<"entity">;
-  sourceEntities: EntitySnapshot[];
+  sourceEntities: WritableEntitySnapshot[];
   /** Source workspace ID for audit log (cross-workspace only). */
   sourceWorkspaceId?: SafeId<"workspace">;
 };

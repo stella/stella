@@ -18,6 +18,10 @@ import {
   buildVersionStamp,
   cloneFieldsForRevision,
 } from "@/api/handlers/entities/version-utils";
+import {
+  allocateFileObject,
+  fileContentWithMintedObject,
+} from "@/api/handlers/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
@@ -392,7 +396,7 @@ export const finalizeDesktopEditSessionHandler = async ({
 
       const storedBytes = new Uint8Array(checkpointBuffer);
       const nextVersionId = createSafeId<"entityVersion">();
-      const sourceFileId = Bun.randomUUIDv7();
+      const sourceFileId = allocateFileObject();
       const sourceKey = createFileKey({
         fileId: sourceFileId,
         mimeType: DOCX_MIME_TYPE,
@@ -417,7 +421,7 @@ export const finalizeDesktopEditSessionHandler = async ({
         currentFields: baseVersion.fields,
         entityVersionId: nextVersionId,
         propertyId: editSession.propertyId,
-        replacementContent: {
+        replacementContent: fileContentWithMintedObject({
           encrypted: false,
           fileName: editSession.fileName,
           id: sourceFileId,
@@ -434,7 +438,7 @@ export const finalizeDesktopEditSessionHandler = async ({
           ...(editSession.checkpointScanWarnings !== null && {
             scanWarnings: editSession.checkpointScanWarnings,
           }),
-        },
+        }),
         workspaceId: authorizedSession.value.workspaceId,
       });
 
