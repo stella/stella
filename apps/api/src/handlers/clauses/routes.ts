@@ -11,6 +11,7 @@ import importClauses from "@/api/handlers/clauses/import";
 import getClause from "@/api/handlers/clauses/read-by-id";
 import listClauses from "@/api/handlers/clauses/read-list";
 import getClauseVersion from "@/api/handlers/clauses/read-version";
+import rewriteClause from "@/api/handlers/clauses/rewrite";
 import getTemplateClausePreview from "@/api/handlers/clauses/template-slot-preview";
 import updateClause from "@/api/handlers/clauses/update";
 import createVariant from "@/api/handlers/clauses/variants-create";
@@ -70,6 +71,12 @@ export const clausesRoute = new Elysia({
   .put("/import", importClauses.handler, {
     body: importClauses.config.body,
     permissions: importClauses.config.permissions,
+  })
+  // AI assist: revise a clause body's prose in place (stateless; static path
+  // registered before /:clauseId so it isn't captured as an id).
+  .post("/ai-rewrite", rewriteClause.handler, {
+    body: rewriteClause.config.body,
+    permissions: rewriteClause.config.permissions,
   })
   // Live fill preview: resolve a template's linked clause slots to plain text.
   .get("/template-slot-preview/:templateId", getTemplateClausePreview.handler, {
