@@ -707,6 +707,7 @@
     "duplicate": "Duplikovať",
     "duplicated": "Duplikované",
     "edit": "Upraviť",
+    "edited": "Upravené",
     "email": "E-mail",
     "empty": "Prázdne",
     "emptyScreen": {
@@ -793,6 +794,7 @@
     "remove": "Odstrániť",
     "rename": "Premenovať",
     "required": "Povinné",
+    "reset": "Obnoviť",
     "retry": "Skúsiť znova",
     "role": "Rola",
     "run": "Spustiť",

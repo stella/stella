@@ -707,6 +707,7 @@
     "duplicate": "Dublēt",
     "duplicated": "Dublēts",
     "edit": "Rediģēt",
+    "edited": "Rediģēts",
     "email": "E-pasts",
     "empty": "Tukšs",
     "emptyScreen": {
@@ -793,6 +794,7 @@
     "remove": "Noņemt",
     "rename": "Pārdēvēt",
     "required": "Obligāts",
+    "reset": "Atiestatīt",
     "retry": "Mēģināt vēlreiz",
     "role": "Loma",
     "run": "Palaist",

@@ -707,6 +707,7 @@
     "duplicate": "Duplikuj",
     "duplicated": "Zduplikowano",
     "edit": "Edytuj",
+    "edited": "Edytowano",
     "email": "E-mail",
     "empty": "Puste",
     "emptyScreen": {
@@ -793,6 +794,7 @@
     "remove": "Usuń",
     "rename": "Zmień nazwę",
     "required": "Wymagane",
+    "reset": "Resetuj",
     "retry": "Spróbuj ponownie",
     "role": "Rola",
     "run": "Uruchom",

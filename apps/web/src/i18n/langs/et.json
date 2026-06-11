@@ -707,6 +707,7 @@
     "duplicate": "Dubleeri",
     "duplicated": "Dubleeritud",
     "edit": "Muuda",
+    "edited": "Muudetud",
     "email": "E-post",
     "empty": "Tühi",
     "emptyScreen": {
@@ -793,6 +794,7 @@
     "remove": "Eemalda",
     "rename": "Nimeta ümber",
     "required": "Kohustuslik",
+    "reset": "Lähtesta",
     "retry": "Proovi uuesti",
     "role": "Roll",
     "run": "Käivita",

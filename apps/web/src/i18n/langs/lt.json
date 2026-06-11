@@ -707,6 +707,7 @@
     "duplicate": "Dubliuoti",
     "duplicated": "Dublikuota",
     "edit": "Redaguoti",
+    "edited": "Redaguota",
     "email": "El. paštas",
     "empty": "Tuščia",
     "emptyScreen": {
@@ -793,6 +794,7 @@
     "remove": "Pašalinti",
     "rename": "Pervadinti",
     "required": "Privalomas",
+    "reset": "Atstatyti",
     "retry": "Bandyti dar kartą",
     "role": "Rolė",
     "run": "Paleisti",

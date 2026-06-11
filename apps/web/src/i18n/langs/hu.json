@@ -707,6 +707,7 @@
     "duplicate": "Másolás",
     "duplicated": "Duplikálva",
     "edit": "Szerkesztés",
+    "edited": "Szerkesztve",
     "email": "E-mail",
     "empty": "Üres",
     "emptyScreen": {
@@ -793,6 +794,7 @@
     "remove": "Eltávolítás",
     "rename": "Átnevezés",
     "required": "Kötelező",
+    "reset": "Visszaállítás",
     "retry": "Újrapróbál",
     "role": "Szerepkör",
     "run": "Futtatás",
