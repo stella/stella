@@ -256,8 +256,11 @@ export const TemplateList = ({
       <div className="flex min-h-0 flex-1 flex-col border-s">
         <div className="flex items-center justify-between gap-3 border-b px-4 py-2">
           <div className="flex min-w-0 items-center gap-2">
-            <span className="text-muted-foreground text-sm">
-              {String(visibleTemplates.length)}
+            <h2 className="text-foreground text-sm font-semibold">
+              {t("knowledge.sections.templates.title")}
+            </h2>
+            <span className="text-muted-foreground text-sm tabular-nums">
+              {visibleTemplates.length}
             </span>
             {tagFilter && (
               <span className="bg-muted text-foreground flex items-center gap-1 rounded-full py-0.5 ps-2 pe-1 text-xs font-medium">
