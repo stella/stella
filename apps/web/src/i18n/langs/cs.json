@@ -736,6 +736,7 @@
     "duplicate": "Duplikovat",
     "duplicated": "Duplikováno",
     "edit": "Upravit",
+    "edited": "Upraveno",
     "email": "E-mail",
     "empty": "Prázdné",
     "emptyScreen": {
@@ -820,6 +821,7 @@
     "remove": "Odebrat",
     "rename": "Přejmenovat",
     "required": "Povinné",
+    "reset": "Resetovat",
     "retry": "Spustit znovu",
     "role": "Role",
     "run": "Spustit",
