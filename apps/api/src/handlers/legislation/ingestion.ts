@@ -6,10 +6,7 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { ScopedDb } from "@/api/db";
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
-import {
-  corpusContentHash,
-  writeCorpusDocument,
-} from "@/api/handlers/case-law/corpus-storage";
+import { writeCorpusDocument } from "@/api/handlers/case-law/corpus-storage";
 import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   sanitizeMetadata,
@@ -121,11 +118,42 @@ const preserveLegislationCorpusWriteRetry = async ({
 };
 
 /**
- * Store + upsert one legislation document. Deduplicates by content hash:
- * an unchanged re-ingest is skipped. When CORPUS_STORAGE_ENABLED, the
- * canonical payload is written to object storage (outside the tx) and
- * the row's S3 keys + content hash are recorded so the indexers pick it
- * up. The pg-fts and corpus index projections are maintained by the backfill
+ * Hash over every persisted, search-visible field — not just the corpus
+ * payload — so a source re-emitting identical text with changed metadata
+ * (title, status, dates, URLs) still updates the row instead of hitting
+ * the dedup skip.
+ */
+const legislationSourceHash = (input: LegislationDocumentInput): string => {
+  const hasher = new Bun.CryptoHasher("sha256");
+  hasher.update(
+    JSON.stringify([
+      input.eli,
+      input.title,
+      input.country,
+      input.language,
+      input.documentType ?? null,
+      input.status ?? "current",
+      input.effectiveDate ?? null,
+      input.versionValidFrom ?? null,
+      input.versionValidTo ?? null,
+      input.fulltext ?? null,
+      input.sections ?? null,
+      input.ast ?? null,
+      input.sourceUrl ?? null,
+      input.documentUrl ?? null,
+      input.metadata ?? {},
+    ]),
+  );
+  return hasher.digest("hex");
+};
+
+/**
+ * Store + upsert one legislation document. Deduplicates by a source hash
+ * over the corpus payload plus all persisted metadata: an unchanged
+ * re-ingest is skipped. When CORPUS_STORAGE_ENABLED, the canonical
+ * payload is written to object storage (outside the tx) and the row's
+ * S3 keys + content hash are recorded so the indexers pick it up. The
+ * pg-fts and corpus index projections are maintained by the backfill
  * loops (not inline), matching the case-law pipeline.
  */
 export const processLegislationDocument = async (
@@ -136,7 +164,7 @@ export const processLegislationDocument = async (
   const text = input.fulltext ?? null;
   const sections = input.sections ?? null;
   const ast = input.ast ?? null;
-  const sourceHash = corpusContentHash({ text, sections, ast });
+  const sourceHash = legislationSourceHash(input);
 
   const versionMatch = sql`${legislationDocuments.versionValidFrom} IS NOT DISTINCT FROM ${input.versionValidFrom ?? null}`;
 
@@ -185,9 +213,12 @@ export const processLegislationDocument = async (
   const id = await scopedDb(async (tx) => {
     // audit: skip — background legislation ingestion; public data, not user actions
     if (existing) {
+      // Clear indexedHash so the corpus indexer re-picks this row even
+      // when only metadata changed (its staleness check compares
+      // indexedHash to contentHash, which only tracks the payload).
       await tx
         .update(legislationDocuments)
-        .set({ ...values, updatedAt: new Date() })
+        .set({ ...values, indexedHash: null, updatedAt: new Date() })
         .where(eq(legislationDocuments.id, existing.id));
       return existing.id;
     }

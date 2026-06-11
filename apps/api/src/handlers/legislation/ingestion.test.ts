@@ -12,7 +12,7 @@ import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { processLegislationDocument } from "@/api/handlers/legislation/ingestion";
 import { createSafeId } from "@/api/lib/branded-types";
 
-// Validates the legislation ingestion entry: store + upsert + content-hash
+// Validates the legislation ingestion entry: store + upsert + source-hash
 // dedup. CORPUS_STORAGE_ENABLED is off in tests, so no S3 is touched.
 
 const allSchema = { ...schema, ...authSchema, ...rlsExports };
@@ -83,7 +83,7 @@ test("ingesting a legislation document inserts a row with its fields", async () 
   expect(row?.sourceHash).toBeTruthy();
 });
 
-test("re-ingesting identical content is skipped (content-hash dedup)", async () => {
+test("re-ingesting identical content is skipped (source-hash dedup)", async () => {
   const first = await processLegislationDocument(
     docInput("a stable consolidated text"),
     scopedDb,
@@ -109,4 +109,34 @@ test("changed content updates the same row (new consolidation text)", async () =
   expect(updated.id).toBe(first.id);
   expect(updated.skipped).toBe(false);
   expect(updated.inserted).toBe(false);
+});
+
+test("metadata-only change updates the row (same text, new status)", async () => {
+  const first = await processLegislationDocument(
+    docInput("text that does not change"),
+    scopedDb,
+  );
+  const updated = await processLegislationDocument(
+    {
+      ...docInput("text that does not change"),
+      status: "repealed",
+      versionValidTo: "2026-01-01",
+    },
+    scopedDb,
+  );
+  expect(updated.id).toBe(first.id);
+  expect(updated.skipped).toBe(false);
+  expect(updated.inserted).toBe(false);
+
+  const [row] = await db
+    .select({
+      status: legislationDocuments.status,
+      versionValidTo: legislationDocuments.versionValidTo,
+      indexedHash: legislationDocuments.indexedHash,
+    })
+    .from(legislationDocuments)
+    .where(eq(legislationDocuments.id, first.id));
+  expect(row?.status).toBe("repealed");
+  expect(row?.versionValidTo).toBe("2026-01-01");
+  expect(row?.indexedHash).toBeNull();
 });
