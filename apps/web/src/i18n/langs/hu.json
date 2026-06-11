@@ -20,7 +20,8 @@
       "cta": "AI-beállítások megnyitása",
       "description": "Adj hozzá szolgáltatói hitelesítési adatokat az AI-funkciók használatához.",
       "title": "AI-szolgáltató csatlakoztatása"
-    }
+    },
+    "refinePlaceholder": "Hogyan igazítsa az AI a megfogalmazást?"
   },
   "anonymize": {
     "addEntity": "Entitás hozzáadása",
@@ -707,7 +708,9 @@
     "closeAll": "Összes bezárása",
     "closeOthers": "Többi bezárása",
     "columns": "Oszlopok",
+    "comfortable": "Kényelmes",
     "comingSoon": "Hamarosan",
+    "compact": "Kompakt",
     "confirm": "Megerősítés",
     "confirmAction": "Biztosan folytatja?",
     "connectionLost": "Kapcsolat megszakadt",

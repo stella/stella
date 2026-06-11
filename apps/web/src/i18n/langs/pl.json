@@ -20,7 +20,8 @@
       "cta": "Otwórz ustawienia AI",
       "description": "Dodaj dane dostępu dostawcy, aby zacząć używać funkcji AI.",
       "title": "Połącz dostawcę AI"
-    }
+    },
+    "refinePlaceholder": "Jak AI ma dostosować sformułowanie?"
   },
   "anonymize": {
     "addEntity": "Dodaj podmiot",
@@ -707,7 +708,9 @@
     "closeAll": "Zamknij wszystko",
     "closeOthers": "Zamknij pozostałe",
     "columns": "Kolumny",
+    "comfortable": "Komfortowy",
     "comingSoon": "Wkrótce",
+    "compact": "Kompaktowy",
     "confirm": "Potwierdź",
     "confirmAction": "Czy na pewno?",
     "connectionLost": "Utracono połączenie",

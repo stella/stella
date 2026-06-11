@@ -24,6 +24,7 @@ type Messages = {
       "description": "Add provider credentials to start using AI features.";
       "title": "Connect AI provider";
     };
+    "refinePlaceholder": "How should the AI adjust the wording?";
   };
   "anonymize": {
     "addEntity": "Add entity";
@@ -710,7 +711,9 @@ type Messages = {
     "closeAll": "Close all";
     "closeOthers": "Close others";
     "columns": "Columns";
+    "comfortable": "Comfortable";
     "comingSoon": "Coming soon";
+    "compact": "Compact";
     "confirm": "Confirm";
     "confirmAction": "Are you sure?";
     "connectionLost": "Connection lost";

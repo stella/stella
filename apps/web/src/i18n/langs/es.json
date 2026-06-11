@@ -20,7 +20,8 @@
       "cta": "Abrir ajustes de IA",
       "description": "Añade credenciales de proveedor para empezar a usar funciones de IA.",
       "title": "Conectar proveedor de IA"
-    }
+    },
+    "refinePlaceholder": "¿Cómo debe la IA ajustar la redacción?"
   },
   "anonymize": {
     "addEntity": "Añadir entidad",
@@ -707,7 +708,9 @@
     "closeAll": "Cerrar todo",
     "closeOthers": "Cerrar otros",
     "columns": "Columnas",
+    "comfortable": "Cómodo",
     "comingSoon": "Próximamente",
+    "compact": "Compacto",
     "confirm": "Confirmar",
     "confirmAction": "¿Está seguro?",
     "connectionLost": "Conexión perdida",
