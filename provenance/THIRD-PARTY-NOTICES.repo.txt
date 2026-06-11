@@ -110,6 +110,9 @@ Project: root
 - jose 6.2.3 — MIT
 - jszip 3.10.1 — (MIT OR GPL-3.0-or-later)
 - lucide-react 1.17.0 — ISC
+- marked 15.0.12 — MIT
+- marked 16.4.2 — MIT
+- marked 17.0.5 — MIT
 - nodemailer 8.0.10 — MIT-0
 - pdfjs-dist 6.0.227 — Apache-2.0
 - postal-mime 2.7.4 — MIT-0
