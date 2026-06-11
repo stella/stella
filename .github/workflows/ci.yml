@@ -130,7 +130,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.changed-files.outputs.package_checks_required == 'true'
-        run: bun ci --ignore-scripts
+        run: bash scripts/bun-ci-retry.sh --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -254,6 +254,9 @@ jobs:
       - name: Test release-channel script
         run: bash scripts/release-channel.test.sh
 
+      - name: Test bun ci retry script
+        run: bash scripts/bun-ci-retry.test.sh
+
       # Fail PRs that change the desktop bridge surface without
       # bumping BRIDGE_VERSION in apps/desktop/src-tauri/src/types.rs.
       # See scripts/check-bridge-version.sh for rationale.
@@ -318,7 +321,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.changed.outputs.run == 'true'
-        run: bun ci --ignore-scripts
+        run: bash scripts/bun-ci-retry.sh --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the secret to install-time lifecycle scripts. The token is
@@ -429,7 +432,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.changed.outputs.run == 'true'
-        run: bun ci --ignore-scripts
+        run: bash scripts/bun-ci-retry.sh --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -496,7 +499,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.changed.outputs.run == 'true'
-        run: bun ci --ignore-scripts
+        run: bash scripts/bun-ci-retry.sh --ignore-scripts
         env:
           NPM_TOKEN: ""
 
