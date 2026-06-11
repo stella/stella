@@ -121,4 +121,6 @@ while (true) {
 
 console.log(`Done. Wrote ${written} decisions, ${failed} failed.`);
 
-process.exit(0);
+// Non-zero on partial failure: the cutover checklist treats this run as
+// green only when every decision has its corpus objects.
+process.exit(failed === 0 ? 0 : 1);
