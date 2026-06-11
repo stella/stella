@@ -47,6 +47,7 @@ import {
   runWebhookTransaction,
   updateWebhookEventResultInTx,
 } from "@/api/lib/hosted-usage-provider/webhook-store";
+import { isRecord } from "@/api/lib/type-guards";
 
 export const HOSTED_USAGE_WEBHOOK_HEADERS = {
   id: "webhook-id",
@@ -118,12 +119,10 @@ export const receiveHostedUsageWebhook = async (
     return respond(400, "Missing webhook-id");
   }
 
-  // SAFETY: envelope validation above accepted parsedJson, which
-  // requires `type: string` — that only matches a plain JSON
-  // object, not an array or primitive. The cast is sound after
-  // validation.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
-  const payload = parsedJson as Record<string, unknown>;
+  if (!isRecord(parsedJson)) {
+    return respond(400, "Malformed payload");
+  }
+  const payload = parsedJson;
 
   // Validate the strict schema for the events we actually handle
   // BEFORE opening a transaction. Unknown event types are recorded
