@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-
 import { calcPrice } from "@pydantic/genai-prices";
 import type { ModelPrice, TieredPrices } from "@pydantic/genai-prices";
 import { useTranslations } from "use-intl";
@@ -126,44 +124,33 @@ export const PricesPanel = ({ providers, roleModels }: PricesPanelProps) => {
   const tOrganization = useTranslations("organization");
   const t = useTranslations();
 
-  const groups = useMemo(
-    () =>
-      providers.map((provider) => ({
-        provider,
-        rows: MODEL_OPTIONS_BY_PROVIDER[provider].map((modelId) =>
-          buildRow(modelId),
-        ),
-      })),
-    [providers],
-  );
+  const groups = providers.map((provider) => ({
+    provider,
+    rows: MODEL_OPTIONS_BY_PROVIDER[provider].map((modelId) =>
+      buildRow(modelId),
+    ),
+  }));
 
-  const selectedKeys = useMemo(() => {
-    const keys = new Set<string>();
-    for (const selection of Object.values(roleModels)) {
-      if (selection) {
-        keys.add(encodeModelSelection(selection));
-      }
+  const selectedKeys = new Set<string>();
+  for (const selection of Object.values(roleModels)) {
+    if (selection) {
+      selectedKeys.add(encodeModelSelection(selection));
     }
-    return keys;
-  }, [roleModels]);
+  }
 
-  const selectedRows = useMemo(
-    () =>
-      ROLE_KEYS.flatMap((role: RoleValue) => {
-        const selection = roleModels[role];
-        if (!selection) {
-          return [];
-        }
-        return [
-          {
-            role,
-            provider: selection.provider,
-            ...buildRow(selection.modelId),
-          },
-        ];
-      }),
-    [roleModels],
-  );
+  const selectedRows = ROLE_KEYS.flatMap((role: RoleValue) => {
+    const selection = roleModels[role];
+    if (!selection) {
+      return [];
+    }
+    return [
+      {
+        role,
+        provider: selection.provider,
+        ...buildRow(selection.modelId),
+      },
+    ];
+  });
 
   if (providers.length === 0) {
     return (
