@@ -2098,6 +2098,7 @@
       "copied": "Nukopijuota į bylą",
       "copyOption": "Kopijuoti (palikti originalą)",
       "description": "Kopijuoti arba perkelti \"{name}\" į kitą bylą",
+      "descriptionCount": "Kopijuoti arba perkelti {count, plural, one {# elementą} few {# elementus} other {# elementų}} į kitą bylą",
       "menuItem": "Kopijuoti/Perkelti į bylą",
       "moveButton": "Perkelti",
       "moveOption": "Perkelti (ištrinti originalą)",

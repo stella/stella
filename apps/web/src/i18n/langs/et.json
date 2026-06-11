@@ -2098,6 +2098,7 @@
       "copied": "Kopeeritud toimikusse",
       "copyOption": "Kopeeri (säilita originaal)",
       "description": "Kopeeri või teisalda \"{name}\" teise toimikusse",
+      "descriptionCount": "Kopeeri või teisalda {count, plural, one {# üksus} other {# üksust}} teise toimikusse",
       "menuItem": "Kopeeri/Teisalda toimikusse",
       "moveButton": "Teisalda",
       "moveOption": "Teisalda (kustuta originaal)",

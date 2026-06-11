@@ -64,9 +64,11 @@ import {
   CellMetadataMenuSection,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags";
 import { CopyToMatterDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog";
+import type { CopyToMatterEntity } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.logic";
 import { getExtension } from "@/routes/_protected.workspaces/$workspaceId/-components/file-extension";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { getPdfDownloadFileName } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
+import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { useEntitiesCountLimit } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-limits";
 import { useRetryCell } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-retry-cell";
@@ -130,6 +132,9 @@ export const RowActions = ({
   const requestChatAbout = useRequestChatAbout(workspaceId);
   const retryCell = useRetryCell(workspaceId);
   const [copyToMatterOpen, setCopyToMatterOpen] = useState(false);
+  const [copyToMatterEntities, setCopyToMatterEntities] = useState<
+    CopyToMatterEntity[]
+  >([]);
   const [isRetrying, setIsRetrying] = useState(false);
   const { data: properties } = useQuery(propertiesOptions(workspaceId));
   const uploadVersionInputRef = useRef<HTMLInputElement>(null);
@@ -137,6 +142,7 @@ export const RowActions = ({
   const name = getEntityName(entity);
   const isFolder = entity.kind === "folder";
   const isBulk = selectedEntities !== undefined && selectedEntities.length > 1;
+  const bulkTargets = isBulk ? selectedEntities : [entity];
   const isCellContext =
     !isBulk && cellMetadataTarget !== null && cellMetadataTarget !== undefined;
   const isDocx = !isBulk && file?.mimeType === DOCX_MIME;
@@ -146,6 +152,16 @@ export const RowActions = ({
     isDocx && entity.activeEditBy !== null && !entity.activeEditBy.isMe;
   // Show "Edit in Desktop" when: DOCX + (not locked OR locked by me)
   const canOpenInDesktop = isDocx && !isLockedByOther;
+  const openCopyToMatterDialog = () => {
+    setCopyToMatterEntities(toCopyToMatterEntities(bulkTargets));
+    setCopyToMatterOpen(true);
+  };
+  const handleCopyToMatterOpenChange = (nextOpen: boolean) => {
+    setCopyToMatterOpen(nextOpen);
+    if (!nextOpen) {
+      setCopyToMatterEntities([]);
+    }
+  };
 
   const openVersionHistory = file
     ? () => {
@@ -393,8 +409,7 @@ export const RowActions = ({
   };
 
   const handleChatAbout = () => {
-    const targets = isBulk ? selectedEntities : [entity];
-    const mentions = targets.map((e) => {
+    const mentions = bulkTargets.map((e) => {
       const f = getFirstFile(e);
       return {
         id: e.entityId,
@@ -408,11 +423,10 @@ export const RowActions = ({
   };
 
   const handleDuplicate = async () => {
-    const allTargets = isBulk ? selectedEntities : [entity];
     // Folders cannot be duplicated server-side; silently skip them so a
     // mixed selection (folders + files) does not surface as a generic
     // failure to the user.
-    const targets = allTargets.filter((e) => e.kind !== "folder");
+    const targets = bulkTargets.filter((e) => e.kind !== "folder");
 
     if (targets.length === 0) {
       stellaToast.add({
@@ -699,16 +713,14 @@ export const RowActions = ({
               <CopyIcon />
               {t("common.duplicate")}
             </MenuItem>
-            {!isBulk && (
-              <MenuItem
-                onClick={() => {
-                  setCopyToMatterOpen(true);
-                }}
-              >
-                <FolderSyncIcon />
-                {t("workspaces.copyToMatter.menuItem")}
-              </MenuItem>
-            )}
+            <MenuItem
+              onClick={() => {
+                openCopyToMatterDialog();
+              }}
+            >
+              <FolderSyncIcon />
+              {t("workspaces.copyToMatter.menuItem")}
+            </MenuItem>
 
             <MenuSeparator />
 
@@ -756,15 +768,12 @@ export const RowActions = ({
           </>
         )}
       </MenuPopup>
-      {!isBulk && (
-        <CopyToMatterDialog
-          entityId={entity.entityId}
-          entityName={name}
-          onOpenChange={setCopyToMatterOpen}
-          open={copyToMatterOpen}
-          sourceWorkspaceId={workspaceId}
-        />
-      )}
+      <CopyToMatterDialog
+        entities={copyToMatterEntities}
+        onOpenChange={handleCopyToMatterOpenChange}
+        open={copyToMatterOpen}
+        sourceWorkspaceId={workspaceId}
+      />
       {/* Hidden file input for upload new version */}
       {canUploadVersion && (
         <input
@@ -838,6 +847,21 @@ const CreateSubfolderMenuItem = ({
 };
 
 // -- Helpers (avoid duplicating logic between single/bulk) --
+
+const toCopyToMatterEntities = (
+  targets: readonly (WorkspaceEntity | TableTreeNode)[],
+): CopyToMatterEntity[] => targets.map(toCopyToMatterEntity);
+
+const toCopyToMatterEntity = (
+  entity: WorkspaceEntity | TableTreeNode,
+): CopyToMatterEntity => ({
+  children:
+    "children" in entity ? entity.children.map(toCopyToMatterEntity) : [],
+  entityId: entity.entityId,
+  entityName: getEntityName(entity),
+  kind: entity.kind,
+  parentId: entity.parentId,
+});
 
 type FileRef = { fieldId: string; fileName: string; mimeType: string | null };
 type Msg = { downloading: string; failed: string };
