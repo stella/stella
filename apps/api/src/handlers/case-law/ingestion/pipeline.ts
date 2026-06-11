@@ -53,6 +53,13 @@ type PipelineInput = {
   /** Per-cycle abort signal. Fires when the adapter's time budget is exhausted. */
   signal?: AbortSignal;
   /**
+   * Hard caps for bounded sample runs (staging smoke): stop after this
+   * many pages / processed decisions without advancing the cursor past
+   * unprocessed work. Defaults to the adapter's own cycle limits.
+   */
+  maxPages?: number;
+  maxDecisions?: number;
+  /**
    * Optional concurrency limiter for DB-heavy operations.
    * When provided, the pipeline acquires a slot before
    * processing decisions (insert, index, citations) and
@@ -556,6 +563,8 @@ export const runIngestionPipeline = async ({
   source,
   scopedDb,
   signal,
+  maxPages: maxPagesOverride,
+  maxDecisions,
   dbSlot,
 }: PipelineInput): Promise<PipelineResult> => {
   const adapter = getAdapter(source.adapterKey);
@@ -581,7 +590,7 @@ export const runIngestionPipeline = async ({
   const MAX_CONSECUTIVE_FAILURES = 10;
   let haltReason: string | null = null;
 
-  const maxPages = adapter.maxSyncPages ?? MAX_SYNC_PAGES;
+  const maxPages = maxPagesOverride ?? adapter.maxSyncPages ?? MAX_SYNC_PAGES;
 
   while (pagesProcessed < maxPages) {
     if (signal?.aborted) {
@@ -647,6 +656,12 @@ export const runIngestionPipeline = async ({
     const s3FailuresBefore = s3UploadFailures;
     try {
       for (const result of page.decisions) {
+        if (maxDecisions !== undefined && inserted + skipped >= maxDecisions) {
+          // Halting (instead of breaking quietly) keeps the cursor at
+          // this page so the unprocessed remainder is not skipped.
+          haltReason = `Decision cap (${maxDecisions}) reached`;
+          break;
+        }
         try {
           const outcome = await processDecision(result, source.id, scopedDb);
 
