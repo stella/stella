@@ -130,7 +130,9 @@ jobs:
 
       - name: Install dependencies
         if: steps.changed-files.outputs.package_checks_required == 'true'
-        run: bun ci --ignore-scripts
+        # Transient registry/tarball errors fail the whole run from its
+        # first step; retry once before treating the install as broken.
+        run: bun ci --ignore-scripts || (sleep 10 && bun ci --ignore-scripts)
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -318,7 +320,9 @@ jobs:
 
       - name: Install dependencies
         if: steps.changed.outputs.run == 'true'
-        run: bun ci --ignore-scripts
+        # Transient registry/tarball errors fail the whole run from its
+        # first step; retry once before treating the install as broken.
+        run: bun ci --ignore-scripts || (sleep 10 && bun ci --ignore-scripts)
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the secret to install-time lifecycle scripts. The token is
@@ -429,7 +433,9 @@ jobs:
 
       - name: Install dependencies
         if: steps.changed.outputs.run == 'true'
-        run: bun ci --ignore-scripts
+        # Transient registry/tarball errors fail the whole run from its
+        # first step; retry once before treating the install as broken.
+        run: bun ci --ignore-scripts || (sleep 10 && bun ci --ignore-scripts)
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -496,7 +502,9 @@ jobs:
 
       - name: Install dependencies
         if: steps.changed.outputs.run == 'true'
-        run: bun ci --ignore-scripts
+        # Transient registry/tarball errors fail the whole run from its
+        # first step; retry once before treating the install as broken.
+        run: bun ci --ignore-scripts || (sleep 10 && bun ci --ignore-scripts)
         env:
           NPM_TOKEN: ""
 
