@@ -70,8 +70,7 @@ export const useCreateBBoxes = ({
       return response.data;
     },
     onSuccess: () => {
-      // eslint-disable-next-line typescript/no-floating-promises
-      queryClient.invalidateQueries({
+      void queryClient.invalidateQueries({
         queryKey: workspaceKeys.justifications(workspaceId),
       });
     },

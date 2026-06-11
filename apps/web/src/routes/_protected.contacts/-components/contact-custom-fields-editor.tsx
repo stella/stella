@@ -220,8 +220,7 @@ const CustomFieldRow = ({
         disabled={disabled}
         maxLength={128}
         onBlur={() => {
-          // eslint-disable-next-line typescript/no-floating-promises
-          save();
+          void save();
         }}
         onChange={(event) => setLabel(event.currentTarget.value)}
         value={label}
@@ -231,8 +230,7 @@ const CustomFieldRow = ({
         disabled={disabled}
         maxLength={2000}
         onBlur={() => {
-          // eslint-disable-next-line typescript/no-floating-promises
-          save();
+          void save();
         }}
         onChange={(event) => setValue(event.currentTarget.value)}
         value={value}

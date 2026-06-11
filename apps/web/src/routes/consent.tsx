@@ -248,8 +248,7 @@ function ConsentPage() {
               disabled={isPending}
               loading={isPending}
               onClick={() => {
-                // eslint-disable-next-line typescript/no-floating-promises
-                handleConsent(true);
+                void handleConsent(true);
               }}
               type="button"
             >
@@ -259,8 +258,7 @@ function ConsentPage() {
               className="w-full"
               disabled={isPending}
               onClick={() => {
-                // eslint-disable-next-line typescript/no-floating-promises
-                handleConsent(false);
+                void handleConsent(false);
               }}
               type="button"
               variant="outline"

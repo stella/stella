@@ -75,8 +75,7 @@ function Organization() {
 
   useEffect(() => {
     if (!isPending && !hasOrganizations && !isOauthPostLogin) {
-      // eslint-disable-next-line typescript/no-floating-promises
-      navigate({ to: "/onboarding", replace: true });
+      void navigate({ to: "/onboarding", replace: true });
     }
   }, [hasOrganizations, isOauthPostLogin, isPending, navigate]);
 
@@ -350,8 +349,7 @@ const CreateOrganizationForm = ({
           errors={formErrors}
           onSubmit={(event) => {
             event.preventDefault();
-            // eslint-disable-next-line typescript/no-floating-promises
-            form.handleSubmit();
+            void form.handleSubmit();
           }}
         >
           <form.Field name="name">

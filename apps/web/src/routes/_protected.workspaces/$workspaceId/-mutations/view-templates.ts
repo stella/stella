@@ -33,8 +33,7 @@ export const useCreateViewTemplate = () => {
       return { data: response.data, workspaceId };
     },
     onSuccess: () => {
-      // eslint-disable-next-line typescript/no-floating-promises
-      queryClient.invalidateQueries({
+      void queryClient.invalidateQueries({
         queryKey: viewTemplateKeys.all({ organizationId }),
       });
     },
@@ -70,8 +69,7 @@ export const useDeleteViewTemplate = () => {
       return { data: response.data, workspaceId };
     },
     onSuccess: () => {
-      // eslint-disable-next-line typescript/no-floating-promises
-      queryClient.invalidateQueries({
+      void queryClient.invalidateQueries({
         queryKey: viewTemplateKeys.all({ organizationId }),
       });
     },

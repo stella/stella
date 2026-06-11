@@ -259,8 +259,7 @@ export const useMatterActions = (
             title: t("success.workspaceDeletedSuccessfully"),
             type: "success",
           });
-          // eslint-disable-next-line typescript/no-floating-promises
-          queryClient.invalidateQueries({ queryKey: workspacesKeys.all });
+          void queryClient.invalidateQueries({ queryKey: workspacesKeys.all });
           onDeleted?.();
         },
         onError: () => {
@@ -525,12 +524,10 @@ export const AddMemberDialog = ({
             title: t("success.memberAdded"),
             type: "success",
           });
-          // eslint-disable-next-line typescript/no-floating-promises
-          queryClient.invalidateQueries({
+          void queryClient.invalidateQueries({
             queryKey: workspaceMembersKeys.all(workspaceId),
           });
-          // eslint-disable-next-line typescript/no-floating-promises
-          queryClient.invalidateQueries({ queryKey: workspacesKeys.all });
+          void queryClient.invalidateQueries({ queryKey: workspacesKeys.all });
           onOpenChange(false);
           setSelectedUserId(null);
         },

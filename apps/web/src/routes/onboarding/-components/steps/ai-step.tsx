@@ -320,8 +320,7 @@ export const AIStep = ({
             compact
             onProvidersChange={updateProviders}
             onSaveRow={(index) => {
-              // eslint-disable-next-line typescript/no-floating-promises
-              saveRow(index);
+              void saveRow(index);
             }}
             providers={providers}
             rowStatuses={rowStatusList}

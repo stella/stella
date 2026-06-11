@@ -57,8 +57,7 @@ const FullscreenPdfViewer = () => {
 
   const handlePageChanged = useCallback(
     (page: number) => {
-      // eslint-disable-next-line typescript/no-floating-promises
-      navigate({
+      void navigate({
         replace: true,
         search: (prev) =>
           produce(prev, (s) => {

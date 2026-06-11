@@ -50,9 +50,8 @@ export const useCreateWorkspace = () => {
 
       return { id: toSafeId<"workspace">(id) };
     },
-    onSuccess: () => {
-      // eslint-disable-next-line typescript/no-floating-promises
-      queryClient.invalidateQueries({
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
         queryKey: workspacesKeys.all,
       });
     },
@@ -166,9 +165,8 @@ export const useUnarchiveWorkspace = () => {
         throw toAPIError(response.error);
       }
     },
-    onSuccess: () => {
-      // eslint-disable-next-line typescript/no-floating-promises
-      queryClient.invalidateQueries({
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
         queryKey: workspacesKeys.all,
       });
     },

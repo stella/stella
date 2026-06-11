@@ -749,12 +749,10 @@ export const OnboardingWizard = () => {
       >
         <DownloadStep
           onNext={() => {
-            // eslint-disable-next-line typescript/no-floating-promises
-            executeSetup(data);
+            void executeSetup(data);
           }}
           onSkip={() => {
-            // eslint-disable-next-line typescript/no-floating-promises
-            executeSetup(data);
+            void executeSetup(data);
           }}
         />
       </OnboardingLayout>
