@@ -1,0 +1,75 @@
+# Migrations exempt from squawk lock-safety linting (scripts/check-migrations.sh).
+#
+# These migrations are already applied to live databases. Drizzle tracks
+# applied migrations by content hash, so they are immutable — editing them
+# to satisfy new lint rules would change the hash and break the migrator.
+# They are grandfathered here; EVERY new migration (not in this list) is
+# fully linted. Do not add new migrations here — make them comply instead.
+#
+# One migration.sql path per line.
+apps/api/drizzle/20260429152450_entity-version-ai-summaries/migration.sql
+apps/api/drizzle/20260429205610_global-search-indexes/migration.sql
+apps/api/drizzle/20260429220500_global-search-unaccent/migration.sql
+apps/api/drizzle/20260430131000_agenda_scheduler_infosoud/migration.sql
+apps/api/drizzle/20260430211000_type-jsonb-metadata/migration.sql
+apps/api/drizzle/20260501090000_entity-name-not-null/migration.sql
+apps/api/drizzle/20260501115500_jsonb-driver-casts/migration.sql
+apps/api/drizzle/20260501130000_chat-threads-context-matter-ids/migration.sql
+apps/api/drizzle/20260501131500_case-law-offset-cursors/migration.sql
+apps/api/drizzle/20260502093000_user-word-edit-preferences/migration.sql
+apps/api/drizzle/20260502100000_property-status-cleanup/migration.sql
+apps/api/drizzle/20260503100000_chat-threads-data-workspace-ids/migration.sql
+apps/api/drizzle/20260503120000_anonymization_blacklist_entries/migration.sql
+apps/api/drizzle/20260503150000_personal-matters/migration.sql
+apps/api/drizzle/20260503184500_docx-folio-justifications-types/migration.sql
+apps/api/drizzle/20260504000000_prompt-shortcuts/migration.sql
+apps/api/drizzle/20260504100000_chat-threads-organization-scope/migration.sql
+apps/api/drizzle/20260506100000_cell-metadata/migration.sql
+apps/api/drizzle/20260507110000_practice-jurisdictions/migration.sql
+apps/api/drizzle/20260507130000_mcp_connectors/migration.sql
+apps/api/drizzle/20260507140000_mcp_connection_enabled/migration.sql
+apps/api/drizzle/20260508152000_mcp_connection_resource_url/migration.sql
+apps/api/drizzle/20260508161000_mcp_connection_authorization_server_url/migration.sql
+apps/api/drizzle/20260509220000_disabled-native-tools/migration.sql
+apps/api/drizzle/20260510000000_native-tool-overrides/migration.sql
+apps/api/drizzle/20260510120000_folio-collab-sessions/migration.sql
+apps/api/drizzle/20260510140000_document_rls_role_bootstrap/migration.sql
+apps/api/drizzle/20260512090000_user-managed-skills/migration.sql
+apps/api/drizzle/20260512182300_anonymization-blacklist-workspace-scope/migration.sql
+apps/api/drizzle/20260513120000_desktop-edit-handoffs/migration.sql
+apps/api/drizzle/20260514000000_anonymization_allowlist_entries/migration.sql
+apps/api/drizzle/20260515100000_workspace-view-templates/migration.sql
+apps/api/drizzle/20260515103000_workspace-view-template-properties/migration.sql
+apps/api/drizzle/20260516000000_case_law_ingestion_role/migration.sql
+apps/api/drizzle/20260516120000_chat-thread-list-pagination/migration.sql
+apps/api/drizzle/20260516130000_file-chat-threads/migration.sql
+apps/api/drizzle/20260521103000_auth_user_stella_select_columns/migration.sql
+apps/api/drizzle/20260522100000_entity_hot_path_indexes/migration.sql
+apps/api/drizzle/20260522120000_audit_logs_deny_mutations/migration.sql
+apps/api/drizzle/20260523144218_chat-threads-title-source/migration.sql
+apps/api/drizzle/20260524070000_chat_thread_web_search_enabled/migration.sql
+apps/api/drizzle/20260525153000_folio_collab_stella_grants/migration.sql
+apps/api/drizzle/20260528120000_org_deepl_api_key/migration.sql
+apps/api/drizzle/20260529120000_org_settings_prompt_caching/migration.sql
+apps/api/drizzle/20260529160000_presigned_upload_staging/migration.sql
+apps/api/drizzle/20260529214500_pending_upload_purposes/migration.sql
+apps/api/drizzle/20260530035340_catalogue_bundled_skill_origin/migration.sql
+apps/api/drizzle/20260530190000_country_code_type_narrowing/migration.sql
+apps/api/drizzle/20260602120000_agent_skills_command_autoinvoke/migration.sql
+apps/api/drizzle/20260603104021_usage_entitlements/migration.sql
+apps/api/drizzle/20260603120000_case_law_public_slugs/migration.sql
+apps/api/drizzle/20260603120000_mcp_gateway_cached_tools/migration.sql
+apps/api/drizzle/20260603130000_workspaces_lead_user_id/migration.sql
+apps/api/drizzle/20260604120000_chat_threads_recap/migration.sql
+apps/api/drizzle/20260605090000_desktop_edit_sessions_expiry_index/migration.sql
+apps/api/drizzle/20260605133000_desktop_edit_expiry_notifications/migration.sql
+apps/api/drizzle/20260605143000_workflow_pending_fields_index/migration.sql
+apps/api/drizzle/20260605150000_mcp_connector_server_metadata/migration.sql
+apps/api/drizzle/20260606120000_chat-thread-search-documents/migration.sql
+apps/api/drizzle/20260606130000_user_files_image_thumbnail/migration.sql
+apps/api/drizzle/20260607120000_chat-context-compaction/migration.sql
+apps/api/drizzle/20260610090000_templates_usage_metadata/migration.sql
+apps/api/drizzle/20260610120000_template_chat_threads/migration.sql
+apps/api/drizzle/20260610130000_template_recipes/migration.sql
+apps/api/drizzle/20260610150000_template_clauses_variant_label/migration.sql
+apps/api/drizzle/20260610160000_templates_languages/migration.sql
