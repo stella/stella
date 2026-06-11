@@ -1,7 +1,8 @@
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
-import { caseLawDecisions } from "@/api/db/schema";
+import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
 // eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
 import { isUuid } from "@/api/lib/custom-schema";
@@ -12,7 +13,10 @@ import {
   corpusIndexId,
   corpusIndexPattern,
 } from "@/api/lib/legal-search/index-naming";
-import { blendStableCitationAuthority } from "@/api/lib/legal-search/rerank";
+import {
+  blendStableCitationAuthority,
+  stableBlendUpperBound,
+} from "@/api/lib/legal-search/rerank";
 import type {
   LegalSearchHit,
   LegalSearchProvider,
@@ -83,6 +87,16 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
     : corpusIndexPattern(generation);
 
   const parsedCursor = query.cursor ? decodeCursor(query.cursor) : null;
+
+  // Upper bound for the pagination early-stop: scanning may end only
+  // once no unseen candidate could out-blend the page cursor.
+  const [authorityBound] = await rootDb
+    .select({
+      max: sql<number>`coalesce(max(${caseLawDecisions.citationAuthority}), 0)`,
+    })
+    .from(caseLawDecisions);
+  const maxAuthority = authorityBound?.max ?? 0;
+
   const searchPage = await readCorpusIndexSearchPage({
     indexId,
     query: buildQuery(query),
@@ -94,6 +108,8 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
       return typeof id === "string" && isUuid(id) ? id : null;
     },
     extractSnippet,
+    unseenScoreUpperBound: (nextLexicalScore) =>
+      stableBlendUpperBound(nextLexicalScore, maxAuthority),
     rankCandidates: async (candidates) => {
       const ids = candidates.map((candidate) =>
         toSafeId<"caseLawDecision">(candidate.id),
@@ -117,7 +133,22 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
                 createdAt: caseLawDecisions.createdAt,
               })
               .from(caseLawDecisions)
-              .where(inArray(caseLawDecisions.id, ids));
+              .innerJoin(
+                caseLawSources,
+                eq(caseLawSources.id, caseLawDecisions.sourceId),
+              )
+              // Same gates as the public search rehydration: source
+              // policy, and only rows whose index state is current.
+              .where(
+                and(
+                  inArray(caseLawDecisions.id, ids),
+                  redistributableCaseLawSource,
+                  eq(
+                    caseLawDecisions.indexedHash,
+                    caseLawDecisions.contentHash,
+                  ),
+                ),
+              );
 
       // Keyed by plain string id (candidate ids from corpus index are strings).
       const displayById = new Map(rows.map((row) => [String(row.id), row]));

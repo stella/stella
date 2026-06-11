@@ -28,7 +28,10 @@ import {
   corpusIndexPattern,
   isCorpusIndexJurisdiction,
 } from "@/api/lib/legal-search/index-naming";
-import { blendStableCitationAuthority } from "@/api/lib/legal-search/rerank";
+import {
+  blendStableCitationAuthority,
+  stableBlendUpperBound,
+} from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 import {
@@ -467,6 +470,17 @@ const searchCorpusIndexDecisions = async (
     return { hits: [], facets: null, totalCount: null, nextCursor: null };
   }
 
+  // Upper bound for the pagination early-stop: scanning may end only
+  // once no unseen candidate could out-blend the page cursor.
+  const [authorityBound] = await caseLawDb((tx) =>
+    tx
+      .select({
+        max: sql<number>`coalesce(max(${caseLawDecisions.citationAuthority}), 0)`,
+      })
+      .from(caseLawDecisions),
+  );
+  const maxAuthority = authorityBound?.max ?? 0;
+
   const searchPage = await readCorpusIndexSearchPage({
     indexId,
     query,
@@ -478,6 +492,8 @@ const searchCorpusIndexDecisions = async (
       return typeof id === "string" && isUuid(id) ? id : null;
     },
     extractSnippet: extractCorpusSnippet,
+    unseenScoreUpperBound: (nextLexicalScore) =>
+      stableBlendUpperBound(nextLexicalScore, maxAuthority),
     rankCandidates: async (candidates) => {
       const ids = candidates.map((candidate) =>
         toSafeId<"caseLawDecision">(candidate.id),

@@ -115,6 +115,19 @@ export const blendCitationAuthority = ({
 };
 
 /**
+ * Highest blended score any not-yet-scanned candidate could reach under
+ * blendStableCitationAuthority, given the next rank's lexical score and
+ * an upper bound on citation authority. Pagination scans until this
+ * drops below the page cursor so reranking cannot promote an unseen
+ * candidate past an already-emitted page.
+ */
+export const stableBlendUpperBound = (
+  nextLexicalScore: number,
+  maxAuthority: number,
+  weight: number = DEFAULT_AUTHORITY_WEIGHT,
+): number => nextLexicalScore + weight * Math.max(0, maxAuthority);
+
+/**
  * Stable cursor score for corpus-index pagination. Callers provide a lexical
  * score already normalized against the index-wide hit count, so adding later
  * candidate windows does not change scores for earlier hits.

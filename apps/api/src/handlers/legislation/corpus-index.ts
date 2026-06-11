@@ -227,14 +227,15 @@ export const backfillLegislationCorpusIndex = async (
   let firstError: CorpusIndexError | null = null;
 
   for (const [indexId, group] of groups) {
-    // A document whose country was corrected moves to another
-    // per-jurisdiction index: delete the stale copy from the old index
-    // (same generation only; generation rebuilds replace whole indexes)
-    // before ingesting and advancing the generation pointer, so it
-    // cannot keep matching searches scoped to its old jurisdiction.
+    // Ingest appends; it never replaces. Before re-ingesting, delete the
+    // previously indexed copy from wherever it lives (the same index for
+    // a content refresh, another jurisdiction index for a corrected
+    // country), or stale copies keep matching old text. Same generation
+    // only: generation rebuilds replace whole indexes. Engine delete
+    // tasks only affect splits that already exist, so the copy ingested
+    // below is not at risk.
     const moved = group.flatMap(({ row }) =>
       row.indexedGeneration !== null &&
-      row.indexedGeneration !== indexId &&
       row.indexedGeneration.startsWith(`${generation}_`)
         ? [{ id: row.id, oldIndexId: row.indexedGeneration }]
         : [],

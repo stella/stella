@@ -23,6 +23,13 @@ type CorpusIndexSearchPageInput<TContext> = {
   extractSnippet: (
     snippet: Record<string, unknown> | undefined,
   ) => string | null;
+  /**
+   * Highest blended score any unseen candidate could still reach, given
+   * the next rank's lexical score. The scan continues past a full page
+   * until this drops below the would-be cursor, so reranking cannot
+   * promote an unseen candidate past an emitted page.
+   */
+  unseenScoreUpperBound: (nextLexicalScore: number) => number;
   rankCandidates: (
     candidates: readonly ScoredCandidate[],
   ) => Promise<CorpusIndexRanking<TContext>>;
@@ -73,6 +80,7 @@ export const readCorpusIndexSearchPage = async <TContext>({
   extractId,
   extractSnippet,
   rankCandidates,
+  unseenScoreUpperBound,
 }: CorpusIndexSearchPageInput<TContext>): Promise<
   CorpusIndexSearchPageResult<TContext>
 > => {
@@ -140,7 +148,13 @@ export const readCorpusIndexSearchPage = async <TContext>({
     ranking = await rankCandidates(candidates);
     windowed = windowAfterCursor(ranking.ranked, parsedCursor);
     if (windowed.length > limit) {
-      break;
+      const cursorScore = windowed.at(limit - 1)?.score ?? 0;
+      const nextUnseen = unseenScoreUpperBound(
+        corpusIndexLexicalScore(totalHits, startOffset),
+      );
+      if (nextUnseen < cursorScore) {
+        break;
+      }
     }
   }
 

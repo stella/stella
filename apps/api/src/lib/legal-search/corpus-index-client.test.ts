@@ -83,6 +83,7 @@ test("search pagination always requests BM25 relevance order", async () => {
     extractId: (hit) =>
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
     extractSnippet: () => null,
+    unseenScoreUpperBound: () => 0,
     rankCandidates: async (candidates) => ({
       context: null,
       ranked: candidates.map((candidate) => ({
