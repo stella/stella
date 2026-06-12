@@ -331,6 +331,8 @@ type ClauseEditorProps = {
   content: ClauseParagraph[];
   onChange: (body: ClauseParagraph[]) => void;
   placeholder?: string;
+  /** Fired when the editor loses focus, carrying the current body. */
+  onBlur?: (body: ClauseParagraph[]) => void;
   /** Context passed to the AI refine assist (current, possibly unsaved values). */
   usageNotes?: string;
   title?: string;
@@ -340,6 +342,7 @@ export const ClauseEditor = ({
   content,
   onChange,
   placeholder,
+  onBlur,
   usageNotes,
   title,
 }: ClauseEditorProps) => {
@@ -405,6 +408,9 @@ export const ClauseEditor = ({
       const body = tipTapToClauseBody(e.getJSON());
       lastEmittedKeyRef.current = bodyKey(body);
       onChange(body);
+    },
+    onBlur: ({ editor: e }) => {
+      onBlur?.(tipTapToClauseBody(e.getJSON()));
     },
   });
 

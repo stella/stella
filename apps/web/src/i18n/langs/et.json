@@ -154,7 +154,6 @@
     "invoiceNarrativePlaceholder": "Kliendile nähtav kirjeldus (vabatahtlik)",
     "invoices": {
       "addEntries": "Lisa kirjed",
-      "back": "Tagasi",
       "confirmDelete": "See kustutab selle arvemustandiga jäädavalt ja tühistab kõigi kirjete sidumise. Toimingut ei saa tagasi võtta.",
       "confirmVoid": "Arve tühistamine eemaldab kõik seotud ajakirjed ja kulud ning taastab nende eelmise oleku.",
       "createInvoice": "Loo arve",
@@ -697,6 +696,7 @@
       "socialSecurityNumber": "Sotsiaalkindlustuse number",
       "taxIdentificationNumber": "Maksukohustuslase number"
     },
+    "back": "Tagasi",
     "cancel": "Tühista",
     "captions": "Subtiitrid",
     "caseLaw": "Kohtupraktika",

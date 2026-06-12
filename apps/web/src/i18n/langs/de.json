@@ -154,7 +154,6 @@
     "invoiceNarrativePlaceholder": "Beschreibung für den Mandanten (optional)",
     "invoices": {
       "addEntries": "Einträge hinzufügen",
-      "back": "Zurück",
       "confirmDelete": "Dieser Rechnungsentwurf wird endgültig gelöscht und alle verknüpften Einträge werden getrennt. Diese Aktion kann nicht rückgängig gemacht werden.",
       "confirmVoid": "Das Stornieren dieser Rechnung trennt alle Zeiteinträge und Ausgaben und setzt sie auf ihren vorherigen Status zurück.",
       "createInvoice": "Rechnung erstellen",
@@ -697,6 +696,7 @@
       "socialSecurityNumber": "Sozialversicherungsnummer",
       "taxIdentificationNumber": "Steuer-Identifikationsnummer"
     },
+    "back": "Zurück",
     "cancel": "Abbrechen",
     "captions": "Untertitel",
     "caseLaw": "Rechtsprechung",

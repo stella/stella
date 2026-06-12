@@ -157,7 +157,6 @@ type Messages = {
     "invoiceNarrativePlaceholder": "Client-facing description (optional)";
     "invoices": {
       "addEntries": "Add entries";
-      "back": "Back";
       "confirmDelete": "This will permanently delete this draft invoice and unlink all entries. This action cannot be undone.";
       "confirmVoid": "Voiding this invoice will unlink all time entries and expenses, reverting them to their previous status.";
       "createInvoice": "Create invoice";
@@ -700,6 +699,7 @@ type Messages = {
       "socialSecurityNumber": "Social security number";
       "taxIdentificationNumber": "Tax identification number";
     };
+    "back": "Back";
     "cancel": "Cancel";
     "captions": "Captions";
     "caseLaw": "Case Law";

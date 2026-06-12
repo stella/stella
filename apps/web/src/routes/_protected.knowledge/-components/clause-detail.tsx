@@ -13,6 +13,7 @@ import {
   StarIcon,
   Trash2Icon,
 } from "lucide-react";
+import { useDebouncedCallback } from "use-debounce";
 import { useFormatter, useTranslations } from "use-intl";
 
 import {
@@ -41,6 +42,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@stll/ui/components/menu";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/components/select";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/components/tabs";
 import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
@@ -53,34 +61,20 @@ import {
   userErrorFromThrown,
   userErrorMessage,
 } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import { ClauseBody } from "@/routes/_protected.knowledge/-components/clause-body";
 import { diffClauseBodies } from "@/routes/_protected.knowledge/-components/clause-diff";
 import type { ParagraphDiff } from "@/routes/_protected.knowledge/-components/clause-diff";
 import { ClauseDiffView } from "@/routes/_protected.knowledge/-components/clause-diff-view";
-import { ClauseFormDialog } from "@/routes/_protected.knowledge/-components/clause-form-dialog";
-import type { BlockDirectiveKind } from "@/routes/_protected.knowledge/-components/paragraph-rendering";
+import { ClauseEditor } from "@/routes/_protected.knowledge/-components/clause-editor";
+import type { ClauseParagraph } from "@/routes/_protected.knowledge/-components/clause-editor-types";
 import {
   clauseDetailOptions,
   knowledgeKeys,
 } from "@/routes/_protected.knowledge/-queries";
+import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 
 // ── Types ────────────────────────────────────────────
-
-type ClauseRun = {
-  text: string;
-  bold?: boolean;
-  italic?: boolean;
-};
-
-type ClauseParagraph = {
-  text: string;
-  style?: string;
-  level?: number;
-  runs?: ClauseRun[];
-  isDirective?: boolean;
-  directiveKind?: BlockDirectiveKind;
-  directiveExpression?: string;
-};
 
 /** Narrows JSONB `unknown` to ClauseParagraph[].
  *  Validates the first element only (sample check);
@@ -157,8 +151,6 @@ export const ClauseDetailView = ({
   const canEditClause = usePermissions({ clause: ["update"] });
   const canDeleteClause = usePermissions({ clause: ["delete"] });
   const detailQuery = useQuery(clauseDetailOptions(organizationId, clauseId));
-  const [editOpen, setEditOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
 
   // SAFETY: The API returns body as ClauseParagraph[]
   // but Eden types it as unknown due to JSONB.
@@ -170,6 +162,227 @@ export const ClauseDetailView = ({
       queryKey: knowledgeKeys.clauses.detail(organizationId, clauseId),
     });
   }, [clauseId, organizationId, queryClient]);
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      {detailQuery.isPending && (
+        <div className="flex flex-1 items-center justify-center p-8">
+          <p className="text-muted-foreground text-sm">
+            {t("clauses.loading")}
+          </p>
+        </div>
+      )}
+
+      {detailQuery.isError && (
+        <div className="flex flex-1 items-center justify-center p-8">
+          <p className="text-muted-foreground text-sm">
+            {t("clauses.loadFailed")}
+          </p>
+        </div>
+      )}
+
+      {detail && (
+        <DetailContent
+          canDelete={canDeleteClause}
+          canEdit={canEditClause}
+          categories={categories}
+          clauseId={clauseId}
+          detail={detail}
+          onBack={onBack}
+          onDeleted={onDeleted}
+          onRefresh={refreshDetail}
+        />
+      )}
+    </div>
+  );
+};
+
+// ── Detail Content ───────────────────────────────────
+
+const DetailContent = ({
+  detail,
+  clauseId,
+  categories,
+  canEdit,
+  canDelete,
+  onBack,
+  onDeleted,
+  onRefresh,
+}: {
+  detail: ClauseDetail;
+  clauseId: string;
+  categories: CategoryOption[];
+  canEdit: boolean;
+  canDelete: boolean;
+  onBack: () => void;
+  onDeleted: () => void;
+  onRefresh: () => void;
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+
+  return (
+    <div className="mx-auto w-full max-w-2xl overflow-y-auto p-6">
+      <ClauseHeader
+        canDelete={canDelete}
+        canEdit={canEdit}
+        categories={categories}
+        clauseId={clauseId}
+        detail={detail}
+        onBack={onBack}
+        onDeleted={onDeleted}
+        onRefresh={onRefresh}
+      />
+
+      <p className="text-muted-foreground mt-2 text-sm">
+        {t("clauses.version", {
+          version: String(detail.currentVersion),
+        })}
+        {" \u00b7 "}
+        {format.dateTime(new Date(detail.createdAt), {
+          dateStyle: "medium",
+        })}
+      </p>
+
+      <div className="mt-3 grid gap-3">
+        <ClauseInlineTextField
+          canEdit={canEdit}
+          clauseId={clauseId}
+          field="description"
+          label={t("common.description")}
+          placeholder={t("clauses.descriptionPlaceholder")}
+          onRefresh={onRefresh}
+          value={detail.description}
+        />
+        <ClauseInlineTextField
+          canEdit={canEdit}
+          clauseId={clauseId}
+          field="language"
+          inputProps={{ maxLength: 10, className: "w-40" }}
+          label={t("common.language")}
+          placeholder={t("clauses.languagePlaceholder")}
+          onRefresh={onRefresh}
+          value={detail.language}
+        />
+      </div>
+
+      <Tabs className="mt-6" defaultValue="body">
+        <TabsList variant="underline">
+          <TabsTab value="body">{t("clauses.body")}</TabsTab>
+          <TabsTab value="variants">{t("clauses.variants")}</TabsTab>
+          <TabsTab value="history">{t("common.history")}</TabsTab>
+        </TabsList>
+
+        <TabsPanel value="body">
+          <ClauseBodyEditor
+            canEdit={canEdit}
+            clauseId={clauseId}
+            detail={detail}
+            onRefresh={onRefresh}
+          />
+          <ClauseUsageNotesField
+            canEdit={canEdit}
+            clauseId={clauseId}
+            onRefresh={onRefresh}
+            value={detail.usageNotes}
+          />
+        </TabsPanel>
+
+        <TabsPanel value="variants">
+          <VariantsTab
+            clauseId={clauseId}
+            onRefresh={onRefresh}
+            variants={detail.variants}
+          />
+        </TabsPanel>
+
+        <TabsPanel value="history">
+          <HistoryTab
+            clauseId={clauseId}
+            currentBody={detail.body}
+            onRefresh={onRefresh}
+            versions={detail.versions}
+          />
+        </TabsPanel>
+      </Tabs>
+    </div>
+  );
+};
+
+// \u2500\u2500 Header (back, inline title, category, delete) \u2500\u2500\u2500\u2500
+
+const ClauseHeader = ({
+  detail,
+  clauseId,
+  categories,
+  canEdit,
+  canDelete,
+  onBack,
+  onDeleted,
+  onRefresh,
+}: {
+  detail: ClauseDetail;
+  clauseId: string;
+  categories: CategoryOption[];
+  canEdit: boolean;
+  canDelete: boolean;
+  onBack: () => void;
+  onDeleted: () => void;
+  onRefresh: () => void;
+}) => {
+  const t = useTranslations();
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(detail.title);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  const saveTitle = useCallback(async () => {
+    const trimmed = titleDraft.trim();
+    setEditingTitle(false);
+    if (trimmed === "" || trimmed === detail.title) {
+      setTitleDraft(detail.title);
+      return;
+    }
+
+    const response = await api.clauses({ clauseId }).post({ title: trimmed });
+
+    if (response.error) {
+      setTitleDraft(detail.title);
+      stellaToast.add({
+        type: "error",
+        title: t("clauses.saveFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+
+    onRefresh();
+  }, [clauseId, detail.title, titleDraft, t, onRefresh]);
+
+  const saveCategory = useCallback(
+    async (value: string) => {
+      const response = await api.clauses({ clauseId }).post({
+        categoryId: value === "" ? null : toSafeId<"clauseCategory">(value),
+      });
+
+      if (response.error) {
+        stellaToast.add({
+          type: "error",
+          title: t("clauses.saveFailed"),
+          description: userErrorMessage(
+            response.error,
+            t("common.unexpectedError"),
+          ),
+        });
+        return;
+      }
+
+      onRefresh();
+    },
+    [clauseId, t, onRefresh],
+  );
 
   const deleteClause = useMutation({
     mutationFn: async () => {
@@ -197,186 +410,334 @@ export const ClauseDetailView = ({
   });
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-between border-b px-4 py-2">
-        <Button onClick={onBack} size="sm" variant="ghost">
-          <ArrowLeftIcon />
-          {t("clauses.backToList")}
-        </Button>
+    <div className="flex items-center gap-2">
+      <Button
+        aria-label={t("common.back")}
+        onClick={onBack}
+        size="icon-sm"
+        variant="ghost"
+      >
+        <ArrowLeftIcon />
+      </Button>
 
-        {detail && (
-          <div className="flex gap-1">
-            {canEditClause && (
-              <Button
-                onClick={() => setEditOpen(true)}
-                size="sm"
-                variant="outline"
-              >
-                {t("common.edit")}
-              </Button>
-            )}
-            {canDeleteClause && (
-              <AlertDialog onOpenChange={setDeleteOpen} open={deleteOpen}>
-                <Button
-                  onClick={() => setDeleteOpen(true)}
-                  size="sm"
-                  variant="ghost"
-                >
-                  <Trash2Icon className="size-4" />
-                </Button>
-                <AlertDialogPopup>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>
-                      {t("clauses.deleteClause")}
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                      {t("clauses.confirmDeleteClause")}
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogClose render={<Button variant="ghost" />}>
-                      {t("common.cancel")}
-                    </AlertDialogClose>
-                    <Button
-                      disabled={deleteClause.isPending}
-                      onClick={() => {
-                        deleteClause.mutate();
-                      }}
-                      variant="destructive"
-                    >
-                      {t("common.delete")}
-                    </Button>
-                  </AlertDialogFooter>
-                </AlertDialogPopup>
-              </AlertDialog>
-            )}
-          </div>
-        )}
-      </div>
-
-      {detailQuery.isPending && (
-        <div className="flex flex-1 items-center justify-center p-8">
-          <p className="text-muted-foreground text-sm">
-            {t("clauses.loading")}
-          </p>
-        </div>
-      )}
-
-      {detailQuery.isError && (
-        <div className="flex flex-1 items-center justify-center p-8">
-          <p className="text-muted-foreground text-sm">
-            {t("clauses.loadFailed")}
-          </p>
-        </div>
-      )}
-
-      {detail && (
-        <DetailContent
-          categories={categories}
-          clauseId={clauseId}
-          detail={detail}
-          onRefresh={refreshDetail}
-        />
-      )}
-
-      {detail && (
-        <ClauseFormDialog
-          categories={categories}
-          initial={{
-            ...detail,
-            bodyParagraphs: detail.body,
+      {editingTitle && canEdit ? (
+        <InlineEdit
+          className="flex-1"
+          inputClassName="flex-1 text-base"
+          onCancel={() => {
+            setTitleDraft(detail.title);
+            setEditingTitle(false);
           }}
-          onOpenChange={setEditOpen}
-          onSaved={refreshDetail}
-          open={editOpen}
+          onChange={setTitleDraft}
+          onCommit={() => {
+            void saveTitle();
+          }}
+          value={titleDraft}
         />
+      ) : (
+        <button
+          className="flex-1 truncate text-start text-lg font-semibold disabled:cursor-default"
+          disabled={!canEdit}
+          onClick={() => {
+            setTitleDraft(detail.title);
+            setEditingTitle(true);
+          }}
+          type="button"
+        >
+          {detail.title}
+        </button>
+      )}
+
+      {canEdit && (
+        <Select
+          disabled={!canEdit}
+          onValueChange={(val) => {
+            void saveCategory(val ?? "");
+          }}
+          value={detail.categoryId ?? ""}
+        >
+          <SelectTrigger className="h-8 w-40 text-sm">
+            <SelectValue placeholder={t("common.uncategorized")} />
+          </SelectTrigger>
+          <SelectPopup>
+            <SelectItem value="">{t("common.uncategorized")}</SelectItem>
+            {categories.map((cat) => (
+              <SelectItem key={cat.id} value={cat.id}>
+                {cat.name}
+              </SelectItem>
+            ))}
+          </SelectPopup>
+        </Select>
+      )}
+
+      {canDelete && (
+        <AlertDialog onOpenChange={setDeleteOpen} open={deleteOpen}>
+          <Button
+            aria-label={t("clauses.deleteClause")}
+            onClick={() => setDeleteOpen(true)}
+            size="icon-sm"
+            variant="ghost"
+          >
+            <Trash2Icon className="size-4" />
+          </Button>
+          <AlertDialogPopup>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t("clauses.deleteClause")}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {t("clauses.confirmDeleteClause")}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogClose render={<Button variant="ghost" />}>
+                {t("common.cancel")}
+              </AlertDialogClose>
+              <Button
+                disabled={deleteClause.isPending}
+                onClick={() => {
+                  deleteClause.mutate();
+                }}
+                variant="destructive"
+              >
+                {t("common.delete")}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogPopup>
+        </AlertDialog>
       )}
     </div>
   );
 };
 
-// ── Detail Content ───────────────────────────────────
+// \u2500\u2500 Inline editable body (WYSIWYG, autosave) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
-const DetailContent = ({
+const ClauseBodyEditor = ({
   detail,
   clauseId,
-  categories,
+  canEdit,
   onRefresh,
 }: {
   detail: ClauseDetail;
   clauseId: string;
-  categories: CategoryOption[];
+  canEdit: boolean;
   onRefresh: () => void;
 }) => {
   const t = useTranslations();
-  const format = useFormatter();
 
-  const categoryName = detail.categoryId
-    ? categories.find((c) => c.id === detail.categoryId)?.name
-    : null;
+  const saveBody = useCallback(
+    async (body: ClauseParagraph[]) => {
+      const response = await api.clauses({ clauseId }).post({ body });
+
+      if (response.error) {
+        stellaToast.add({
+          type: "error",
+          title: t("clauses.saveFailed"),
+          description: userErrorMessage(
+            response.error,
+            t("common.unexpectedError"),
+          ),
+        });
+        return;
+      }
+
+      onRefresh();
+    },
+    [clauseId, t, onRefresh],
+  );
+
+  const debouncedSave = useDebouncedCallback((body: ClauseParagraph[]) => {
+    void saveBody(body);
+  }, 1200);
+
+  if (!canEdit) {
+    return (
+      <div className="mt-4 rounded-lg border p-4">
+        <ClauseBody paragraphs={detail.body} />
+      </div>
+    );
+  }
 
   return (
-    <div className="mx-auto w-full max-w-2xl overflow-y-auto p-6">
-      <div className="mb-6">
-        <h2 className="text-lg font-semibold">{detail.title}</h2>
-        <p className="text-muted-foreground mt-1 text-sm">
-          {categoryName ?? t("common.uncategorized")}
-          {" \u00b7 "}
-          {t("clauses.version", {
-            version: String(detail.currentVersion),
-          })}
-          {" \u00b7 "}
-          {format.dateTime(new Date(detail.createdAt), {
-            dateStyle: "medium",
-          })}
-        </p>
-        {detail.description && (
-          <p className="text-muted-foreground mt-2 text-sm">
-            {detail.description}
-          </p>
-        )}
+    <div className="mt-4">
+      <ClauseEditor
+        content={detail.body}
+        onBlur={(body) => {
+          debouncedSave.cancel();
+          void saveBody(body);
+        }}
+        onChange={debouncedSave}
+        title={detail.title}
+        usageNotes={detail.usageNotes ?? undefined}
+      />
+    </div>
+  );
+};
+
+// ── Inline metadata fields (autosave) ────────────────
+
+/** Short single-line metadata field (description, language).
+ *  Commits the trimmed value on blur, sending `null` when empty,
+ *  mirroring the modal's `field.trim() || null` shape. */
+const ClauseInlineTextField = ({
+  field,
+  value,
+  label,
+  placeholder,
+  clauseId,
+  canEdit,
+  onRefresh,
+  inputProps,
+}: {
+  field: "description" | "language";
+  value: string | null;
+  label: string;
+  placeholder: string;
+  clauseId: string;
+  canEdit: boolean;
+  onRefresh: () => void;
+  inputProps?: { maxLength?: number; className?: string };
+}) => {
+  const t = useTranslations();
+  const [draft, setDraft] = useState(value ?? "");
+
+  const commit = useCallback(async () => {
+    const next = draft.trim() || null;
+    if (next === (value ?? null)) {
+      return;
+    }
+
+    const response = await api.clauses({ clauseId }).post({ [field]: next });
+
+    if (response.error) {
+      setDraft(value ?? "");
+      stellaToast.add({
+        type: "error",
+        title: t("clauses.saveFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+
+    onRefresh();
+  }, [clauseId, draft, field, value, t, onRefresh]);
+
+  if (!canEdit) {
+    if (!value) {
+      return null;
+    }
+    return (
+      <div className="grid gap-1">
+        <span className="text-muted-foreground text-xs font-medium">
+          {label}
+        </span>
+        <p className="text-muted-foreground text-sm">{value}</p>
       </div>
+    );
+  }
 
-      <Tabs defaultValue="body">
-        <TabsList variant="underline">
-          <TabsTab value="body">{t("clauses.body")}</TabsTab>
-          <TabsTab value="variants">{t("clauses.variants")}</TabsTab>
-          <TabsTab value="history">{t("common.history")}</TabsTab>
-        </TabsList>
+  return (
+    <div className="grid gap-1.5">
+      <label className="text-sm font-medium" htmlFor={`clause-${field}`}>
+        {label}
+      </label>
+      <Input
+        className={inputProps?.className}
+        id={`clause-${field}`}
+        maxLength={inputProps?.maxLength}
+        onBlur={() => {
+          void commit();
+        }}
+        onChange={(e) => setDraft(e.target.value)}
+        placeholder={placeholder}
+        value={draft}
+      />
+    </div>
+  );
+};
 
-        <TabsPanel value="body">
-          <div className="mt-4 rounded-lg border p-4">
-            <ClauseBody paragraphs={detail.body} />
-          </div>
-          {detail.usageNotes && (
-            <div className="mt-3">
-              <p className="text-muted-foreground text-xs font-medium">
-                {t("clauses.usageNotes")}
-              </p>
-              <p className="text-muted-foreground mt-1 text-sm">
-                {detail.usageNotes}
-              </p>
-            </div>
-          )}
-        </TabsPanel>
+/** Multi-line usage notes field. Autosaves on a debounce while
+ *  typing and flushes on blur, matching the body editor's pattern. */
+const ClauseUsageNotesField = ({
+  value,
+  clauseId,
+  canEdit,
+  onRefresh,
+}: {
+  value: string | null;
+  clauseId: string;
+  canEdit: boolean;
+  onRefresh: () => void;
+}) => {
+  const t = useTranslations();
+  const [draft, setDraft] = useState(value ?? "");
 
-        <TabsPanel value="variants">
-          <VariantsTab
-            clauseId={clauseId}
-            onRefresh={onRefresh}
-            variants={detail.variants}
-          />
-        </TabsPanel>
+  const save = useCallback(
+    async (text: string) => {
+      const next = text.trim() || null;
+      if (next === (value ?? null)) {
+        return;
+      }
 
-        <TabsPanel value="history">
-          <HistoryTab
-            clauseId={clauseId}
-            currentBody={detail.body}
-            onRefresh={onRefresh}
-            versions={detail.versions}
-          />
-        </TabsPanel>
-      </Tabs>
+      const response = await api
+        .clauses({ clauseId })
+        .post({ usageNotes: next });
+
+      if (response.error) {
+        stellaToast.add({
+          type: "error",
+          title: t("clauses.saveFailed"),
+          description: userErrorMessage(
+            response.error,
+            t("common.unexpectedError"),
+          ),
+        });
+        return;
+      }
+
+      onRefresh();
+    },
+    [clauseId, value, t, onRefresh],
+  );
+
+  const debouncedSave = useDebouncedCallback((text: string) => {
+    void save(text);
+  }, 1200);
+
+  if (!canEdit) {
+    if (!value) {
+      return null;
+    }
+    return (
+      <div className="mt-3">
+        <p className="text-muted-foreground text-xs font-medium">
+          {t("clauses.usageNotes")}
+        </p>
+        <p className="text-muted-foreground mt-1 text-sm">{value}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 grid gap-1.5">
+      <label className="text-sm font-medium" htmlFor="clause-usage-notes">
+        {t("clauses.usageNotes")}
+      </label>
+      <Textarea
+        className="min-h-[60px]"
+        id="clause-usage-notes"
+        onBlur={() => {
+          debouncedSave.cancel();
+          void save(draft);
+        }}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          debouncedSave(e.target.value);
+        }}
+        placeholder={t("clauses.usageNotesPlaceholder")}
+        value={draft}
+      />
     </div>
   );
 };

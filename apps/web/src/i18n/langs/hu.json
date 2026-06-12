@@ -154,7 +154,6 @@
     "invoiceNarrativePlaceholder": "Ügyféllel közölt leírás (nem kötelező)",
     "invoices": {
       "addEntries": "Tételek hozzáadása",
-      "back": "Vissza",
       "confirmDelete": "Ezzel véglegesen törlődik ez a számlatervezet, és az összes tétel kapcsolata megszűnik. Ez a művelet nem vonható vissza.",
       "confirmVoid": "A számla érvénytelenítésével az összes időbejegyzés és kiadás leválik, és visszakerül az előző státuszba.",
       "createInvoice": "Számla létrehozása",
@@ -697,6 +696,7 @@
       "socialSecurityNumber": "Társadalombiztosítási szám",
       "taxIdentificationNumber": "Adóazonosító"
     },
+    "back": "Vissza",
     "cancel": "Mégse",
     "captions": "Feliratok",
     "caseLaw": "Joggyakorlat",

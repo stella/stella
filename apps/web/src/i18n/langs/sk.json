@@ -154,7 +154,6 @@
     "invoiceNarrativePlaceholder": "Popis pre klienta (nepovinné)",
     "invoices": {
       "addEntries": "Pridať záznamy",
-      "back": "Späť",
       "confirmDelete": "Týmto natrvalo odstránite tento koncept faktúry a odpojíte všetky záznamy. Túto akciu nie je možné vrátiť späť.",
       "confirmVoid": "Zrušením tejto faktúry sa odpoja všetky časové záznamy a výdavky a vrátia sa do predchádzajúceho stavu.",
       "createInvoice": "Vytvoriť faktúru",
@@ -697,6 +696,7 @@
       "socialSecurityNumber": "Číslo sociálneho poistenia",
       "taxIdentificationNumber": "DIČ"
     },
+    "back": "Späť",
     "cancel": "Zrušiť",
     "captions": "Titulky",
     "caseLaw": "Judikatúra",

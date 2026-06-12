@@ -154,7 +154,6 @@
     "invoiceNarrativePlaceholder": "Descrição voltada para o cliente (opcional)",
     "invoices": {
       "addEntries": "Adicionar entradas",
-      "back": "Voltar",
       "confirmDelete": "Esta ação excluirá permanentemente este rascunho de fatura e desvinculará todas as entradas. Esta ação não pode ser desfeita.",
       "confirmVoid": "A anulação desta fatura desvinculará todos os lançamentos de tempo e despesas, revertendo-os ao status anterior.",
       "createInvoice": "Criar fatura",
@@ -697,6 +696,7 @@
       "socialSecurityNumber": "Número de seguro social",
       "taxIdentificationNumber": "CPF / CNPJ"
     },
+    "back": "Voltar",
     "cancel": "Cancelar",
     "captions": "Legendas",
     "caseLaw": "Jurisprudência",

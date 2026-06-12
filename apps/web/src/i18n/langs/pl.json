@@ -154,7 +154,6 @@
     "invoiceNarrativePlaceholder": "Opis widoczny dla klienta (opcjonalnie)",
     "invoices": {
       "addEntries": "Dodaj wpisy",
-      "back": "Wstecz",
       "confirmDelete": "Spowoduje to trwałe usunięcie wersji roboczej faktury i odłączenie wszystkich wpisów. Tej operacji nie można cofnąć.",
       "confirmVoid": "Unieważnienie faktury spowoduje odłączenie wszystkich wpisów czasu i wydatków oraz przywrócenie ich do poprzedniego statusu.",
       "createInvoice": "Utwórz fakturę",
@@ -697,6 +696,7 @@
       "socialSecurityNumber": "Numer ubezpieczenia społecznego",
       "taxIdentificationNumber": "NIP"
     },
+    "back": "Wstecz",
     "cancel": "Anuluj",
     "captions": "Napisy",
     "caseLaw": "Orzecznictwo",
