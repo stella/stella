@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { displayLanguageName, LANGUAGES, toLanguageCode } from "@stll/locales";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -29,6 +30,14 @@ import {
   AlertDialogTitle,
 } from "@stll/ui/components/alert-dialog";
 import { Button } from "@stll/ui/components/button";
+import {
+  Combobox,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxPopup,
+} from "@stll/ui/components/combobox";
 import {
   Dialog,
   DialogClose,
@@ -59,7 +68,7 @@ import type { ContextMenuAction } from "@/components/context-menu";
 import Tooltip from "@/components/tooltip";
 import { UserAvatar } from "@/components/user-avatar";
 import { usePermissions } from "@/hooks/use-permissions";
-import { supportedLanguages, useI18nStore } from "@/i18n/i18n-store";
+import { useI18nStore } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { DOCX_MIME, TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
 import { userErrorMessage } from "@/lib/errors";
@@ -798,10 +807,10 @@ const TemplateRow = ({
 
 // ── Row metadata (muted, small) ──────────────────────
 
-/** Localized via Intl so language names need no translation entries.
- *  Stored tags are server-validated, so `of()` cannot throw here. */
+/** Endonym from the shared language list, with an Intl fallback localized to
+ *  the UI language for tags outside the canonical list. */
 const languageDisplayName = (tag: string, uiLang: string): string =>
-  new Intl.DisplayNames([uiLang], { type: "language" }).of(tag) ?? tag;
+  displayLanguageName(tag, { displayLocale: uiLang });
 
 type RowStatsProps = {
   template: TemplateItem;
@@ -1184,11 +1193,16 @@ const TemplateGuidanceDialogBody = ({
   );
 };
 
-// ── Languages field (multi-select + free BCP-47 entry) ─
+// ── Languages field (searchable multi-select over ISO 639-1) ─
 
 type TemplateLanguagesFieldProps = {
   languages: string[];
   onChange: (languages: string[]) => void;
+};
+
+type LanguagePick = {
+  code: string;
+  label: string;
 };
 
 const TemplateLanguagesField = ({
@@ -1197,29 +1211,31 @@ const TemplateLanguagesField = ({
 }: TemplateLanguagesFieldProps) => {
   const t = useTranslations();
   const lang = useI18nStore((s) => s.lang);
-  const [input, setInput] = useState("");
 
-  const addLanguage = (value: string) => {
-    const tag = value.trim();
-    setInput("");
-    if (!tag || languages.length >= MAX_TEMPLATE_LANGUAGES) {
+  const selectedCodes = new Set(languages);
+  // Offer the full ISO 639-1 living-language list, minus already-picked codes,
+  // sorted by the localized label so search and scanning are predictable.
+  const options: LanguagePick[] = LANGUAGES.filter(
+    (language) => !selectedCodes.has(language.code),
+  )
+    .map((language) => ({
+      code: language.code,
+      label: languageDisplayName(language.code, lang),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label, lang));
+
+  const atLimit = languages.length >= MAX_TEMPLATE_LANGUAGES;
+
+  const addLanguage = (pick: LanguagePick | null) => {
+    if (!pick || atLimit) {
       return;
     }
-    const exists = languages.some(
-      (existing) => existing.toLowerCase() === tag.toLowerCase(),
-    );
-    if (exists) {
+    const code = toLanguageCode(pick.code);
+    if (!code || selectedCodes.has(code)) {
       return;
     }
-    onChange([...languages, tag]);
+    onChange([...languages, code]);
   };
-
-  const quickPicks = supportedLanguages.filter(
-    (tag) =>
-      !languages.some(
-        (existing) => existing.toLowerCase() === tag.toLowerCase(),
-      ),
-  );
 
   return (
     <div className="grid gap-1.5">
@@ -1249,33 +1265,35 @@ const TemplateLanguagesField = ({
         </div>
       )}
 
-      <Input
-        disabled={languages.length >= MAX_TEMPLATE_LANGUAGES}
-        id="template-languages"
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            addLanguage(input);
-          }
-        }}
-        placeholder={t("templates.languagesPlaceholder")}
-        value={input}
-      />
-
-      {languages.length < MAX_TEMPLATE_LANGUAGES && (
-        <div className="flex flex-wrap gap-1">
-          {quickPicks.map((tag) => (
-            <button
-              className="bg-muted text-muted-foreground hover:text-foreground rounded-full px-2 py-0.5 text-xs font-medium transition-colors"
-              key={tag}
-              onClick={() => addLanguage(tag)}
-              type="button"
-            >
-              {languageDisplayName(tag, lang)}
-            </button>
-          ))}
-        </div>
+      {!atLimit && (
+        <Combobox<LanguagePick>
+          autoHighlight
+          isItemEqualToValue={(a, b) => a.code === b.code}
+          items={options}
+          itemToStringLabel={(item) => item.label}
+          onValueChange={addLanguage}
+          value={null}
+        >
+          <ComboboxInput
+            id="template-languages"
+            placeholder={t("templates.languagesPlaceholder")}
+          />
+          <ComboboxPopup>
+            <ComboboxList>
+              {(item: LanguagePick) => (
+                <ComboboxItem key={item.code} value={item}>
+                  {item.label}
+                  <span className="text-muted-foreground ms-2 uppercase">
+                    {item.code}
+                  </span>
+                </ComboboxItem>
+              )}
+            </ComboboxList>
+            <ComboboxEmpty>
+              {t("translate.dialog.noLanguagesFound")}
+            </ComboboxEmpty>
+          </ComboboxPopup>
+        </Combobox>
       )}
     </div>
   );

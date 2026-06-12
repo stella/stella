@@ -41,7 +41,8 @@ const updateTemplateBodySchema = t.Object({
   ),
   whenToUse: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
   whenNotToUse: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
-  // BCP-47 tags cap at 35 characters (RFC 5646 recommended buffer).
+  // Accepts language tags (canonicalized to ISO 639-1 base codes server-side
+  // by `normalizeTemplateLanguages`). Tags cap at 35 chars (RFC 5646 buffer).
   languages: t.Optional(
     t.Array(t.String({ maxLength: 35 }), {
       maxItems: MAX_TEMPLATE_LANGUAGES,

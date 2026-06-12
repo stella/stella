@@ -2,6 +2,9 @@ import { createTranslator } from "use-intl/core";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+import { isUiLocale, resolveUiLocale } from "@stll/locales";
+import type { UiLocale } from "@stll/locales";
+
 import { getStorageKey } from "@/consts";
 import en from "@/i18n/langs/en.json";
 import type Messages from "@/i18n/langs/messages.gen";
@@ -10,6 +13,9 @@ type LocalizedMessages<T> = {
   [K in keyof T]: T[K] extends string ? string : LocalizedMessages<T[K]>;
 };
 
+// UI presentation order for language pickers. The membership is enforced
+// against the shared `UiLocale` set (a stale entry fails typecheck); only the
+// ordering is local. Message lookup itself is keyed, so order is cosmetic.
 export const supportedLanguages = [
   "en",
   "cs",
@@ -23,13 +29,11 @@ export const supportedLanguages = [
   "pl",
   "pt-BR",
   "sk",
-] as const;
+] as const satisfies readonly UiLocale[];
 
-export type SupportedLanguage = (typeof supportedLanguages)[number];
+export type SupportedLanguage = UiLocale;
 export type LocaleMessages = LocalizedMessages<Messages>;
 type MessageLoader = () => LocaleMessages | Promise<LocaleMessages>;
-
-const supportedLanguageSet: ReadonlySet<string> = new Set(supportedLanguages);
 
 const messageLoaders = {
   en: () => en,
@@ -61,35 +65,9 @@ export const LANG_ENDONYMS = {
   sk: "Slovenčina",
 } as const satisfies Record<SupportedLanguage, string>;
 
-export const isSupportedLanguage = (
-  value: string,
-): value is SupportedLanguage => supportedLanguageSet.has(value);
+export const isSupportedLanguage = isUiLocale;
 
-const normalizeLocale = (value: string): string => value.replace("_", "-");
-
-export const resolveSupportedLanguage = (
-  value: string,
-): SupportedLanguage | null => {
-  const normalized = normalizeLocale(value);
-  if (isSupportedLanguage(normalized)) {
-    return normalized;
-  }
-
-  const prefix = normalized.split("-").at(0);
-  if (!prefix) {
-    return null;
-  }
-
-  if (isSupportedLanguage(prefix)) {
-    return prefix;
-  }
-
-  if (prefix === "pt") {
-    return "pt-BR";
-  }
-
-  return null;
-};
+export const resolveSupportedLanguage = resolveUiLocale;
 
 const detectLang = (): SupportedLanguage => {
   const languages =

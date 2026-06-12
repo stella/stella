@@ -79,6 +79,7 @@
         "@stll/folio": "workspace:*",
         "@stll/infosoud": "workspace:*",
         "@stll/legal-ast": "workspace:*",
+        "@stll/locales": "workspace:*",
         "@stll/money": "workspace:*",
         "@stll/permissions": "workspace:*",
         "@stll/skills": "workspace:*",
@@ -241,6 +242,7 @@
         "@stll/errors": "workspace:*",
         "@stll/folio": "workspace:*",
         "@stll/legal-ast": "workspace:*",
+        "@stll/locales": "workspace:*",
         "@stll/money": "workspace:*",
         "@stll/permissions": "workspace:*",
         "@stll/template-conditions": "workspace:*",
@@ -521,6 +523,15 @@
         "typescript": "catalog:",
       },
     },
+    "packages/locales": {
+      "name": "@stll/locales",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "@types/bun": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/money": {
       "name": "@stll/money",
       "version": "0.0.0",
@@ -589,6 +600,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@react-email/components": "^1.0.12",
+        "@stll/locales": "workspace:*",
         "react": "catalog:react19",
         "use-intl": "catalog:",
       },
@@ -1663,6 +1675,8 @@
     "@stll/legal-atlas": ["@stll/legal-atlas@workspace:packages/legal-atlas"],
 
     "@stll/legal-atlas-runner": ["@stll/legal-atlas-runner@workspace:apps/legal-atlas-runner"],
+
+    "@stll/locales": ["@stll/locales@workspace:packages/locales"],
 
     "@stll/money": ["@stll/money@workspace:packages/money"],
 

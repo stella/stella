@@ -1,5 +1,7 @@
 import { createTranslator } from "use-intl/core";
 
+import type { UiLocale } from "@stll/locales";
+
 import cs from "./langs/cs.json";
 import de from "./langs/de.json";
 import en from "./langs/en.json";
@@ -26,9 +28,9 @@ const langMessages = {
   pl,
   "pt-BR": ptBr,
   sk,
-} as const;
+} as const satisfies Record<UiLocale, unknown>;
 
-export type SupportedLang = keyof typeof langMessages;
+export type SupportedLang = UiLocale;
 
 export const getTranslator = (lang: SupportedLang) =>
   createTranslator({
