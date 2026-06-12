@@ -1,9 +1,10 @@
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import type { PropsWithChildren } from "react";
 
 import { HotkeysProvider } from "@tanstack/react-hotkeys";
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
+import { useRouter } from "@tanstack/react-router";
 import { IntlProvider } from "use-intl";
 
 import { ToastProvider } from "@stll/ui/components/toast";
@@ -54,6 +55,21 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
   // on the client the gate only matters for the initial document load.
   const onPublicSsrPath =
     typeof window !== "undefined" && isPublicSsrPath(window.location.pathname);
+
+  // Head content (the document title) renders outside this provider and
+  // only re-evaluates on router invalidation; refresh it when a new
+  // locale finishes loading post-hydration so the title localizes
+  // without a navigation. Ref-guarded to locale CHANGES so the initial
+  // mount does not re-run route loaders.
+  const router = useRouter();
+  const previousLocaleRef = useRef(locale);
+  useEffect(() => {
+    if (!onPublicSsrPath || previousLocaleRef.current === locale) {
+      return;
+    }
+    previousLocaleRef.current = locale;
+    void router.invalidate();
+  }, [router, locale, onPublicSsrPath]);
 
   // Gate the boot spinner on the first load, not on isLoaded: a language
   // switch flips isLoaded false while the new locale streams in, and gating
