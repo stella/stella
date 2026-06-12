@@ -5,14 +5,22 @@ import { SidebarMenuButton, SidebarMenuItem } from "@/components/sidebar";
 import { env } from "@/env";
 
 type Props = {
-  userEmail: string;
+  userEmail?: string | undefined;
 };
 
-const buildMailto = (recipient: string, userEmail: string, route: string) => {
+const buildMailto = (
+  recipient: string,
+  userEmail: string | undefined,
+  route: string,
+) => {
   const subject = `Feedback (${route})`;
-  const body = ["", "", "---", `From: ${userEmail}`, `Route: ${route}`].join(
-    "\n",
-  );
+  const body = [
+    "",
+    "",
+    "---",
+    ...(userEmail ? [`From: ${userEmail}`] : []),
+    `Route: ${route}`,
+  ].join("\n");
   return `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 };
 

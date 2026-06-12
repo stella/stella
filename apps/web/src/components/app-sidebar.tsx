@@ -14,51 +14,31 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link, useMatch } from "@tanstack/react-router";
 import {
-  ChevronsUpDownIcon,
   EllipsisVerticalIcon,
-  GlobeIcon,
   LayersIcon,
-  LogOutIcon,
-  MonitorIcon,
-  MoonIcon,
   PanelLeftIcon,
   PinIcon,
   PinOffIcon,
   PlusIcon,
   SearchIcon,
-  Settings2Icon,
-  SunIcon,
   UsersIcon,
 } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@stll/ui/components/avatar";
 import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
 import {
   Menu,
-  MenuGroup,
-  MenuGroupLabel,
   MenuItem,
   MenuPopup,
-  MenuRadioGroup,
-  MenuRadioItem,
   MenuSeparator,
-  MenuSub,
-  MenuSubPopup,
-  MenuSubTrigger,
   MenuTrigger,
 } from "@stll/ui/components/menu";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
-import { DevSidebarGroup } from "@/components/dev-sidebar-group";
 import { FeedbackDialog } from "@/components/feedback-dialog";
 import { SearchDialog } from "@/components/search-dialog";
 import {
@@ -77,8 +57,8 @@ import {
   SidebarSeparator,
   useSidebar,
 } from "@/components/sidebar";
+import { SidebarUserMenu } from "@/components/sidebar-user-menu";
 import { StellaWordmark } from "@/components/stella-wordmark";
-import { PALETTES, THEMES, useTheme } from "@/components/theme-provider";
 import Tooltip from "@/components/tooltip";
 import {
   getWorkspacePrimaryNavItems,
@@ -87,20 +67,13 @@ import {
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { usePermissions } from "@/hooks/use-permissions";
 import { usePublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
-import { useSignOut } from "@/hooks/use-sign-out";
-import {
-  LANG_ENDONYMS,
-  supportedLanguages,
-  useI18nStore,
-} from "@/i18n/i18n-store";
+import { useI18nStore } from "@/i18n/i18n-store";
 import { SIDE_RAIL_ICON_BUTTON_SIZE } from "@/lib/consts";
-import { getInitials } from "@/lib/get-initials";
 import { HOTKEYS, NAV_KEY } from "@/lib/hotkeys";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { knowledgeSections } from "@/routes/_protected.knowledge/index";
-import { organizationOptions } from "@/routes/_protected.organization/-queries";
 import {
   MatterMenuHeader,
   MatterMenuItems,
@@ -110,10 +83,8 @@ import { useUpdateWorkspace } from "@/routes/_protected.workspaces/-mutations";
 import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
 import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
 
-const isDev = import.meta.env.DEV;
 const RECENTS_LIMIT = 5;
 const HOLD_DELAY_MS = 500;
-const CHANGELOG_URL = "https://stll.app/changelog";
 // TODO: Persist pinned workspaces on the backend (user
 // preference or a `pinned` flag on the workspace member).
 
@@ -554,7 +525,6 @@ const SidebarContextArea = ({
 const routeApi = getRouteApi("/_protected");
 
 export function AppSidebar(props: AppSidebarProps) {
-  const signOut = useSignOut();
   const t = useTranslations();
   const navigate = routeApi.useNavigate();
   const canCreateMatter = usePermissions({ workspace: ["create"] });
@@ -565,9 +535,6 @@ export function AppSidebar(props: AppSidebarProps) {
   const primaryNavItems = getWorkspacePrimaryNavItems({
     includePublicLaw: publicLawPreviewEnabled,
   });
-  const { theme, setTheme, palette, setPalette } = useTheme();
-  const lang = useI18nStore((s) => s.lang);
-  const setLang = useI18nStore((s) => s.setLang);
   const user = routeApi.useRouteContext({
     select: (ctx) => ctx.user,
   });
@@ -585,10 +552,6 @@ export function AppSidebar(props: AppSidebarProps) {
     workspacesNavigationOptions(user.activeOrganizationId),
   );
   const workspaces = workspacesData?.workspaces;
-  const { data: organization } = useQuery(organizationOptions);
-
-  const displayName = user.name ?? user.email;
-  const orgName = organization?.name;
 
   const workspaceMatch = useMatch({
     from: "/_protected/workspaces/$workspaceId",
@@ -998,165 +961,7 @@ export function AppSidebar(props: AppSidebarProps) {
       <SidebarFooter>
         <SidebarMenu>
           <FeedbackDialog userEmail={user.email} />
-          <SidebarMenuItem>
-            <Menu>
-              <Tooltip
-                content={isCollapsed ? displayName : null}
-                render={
-                  <MenuTrigger
-                    className={cn(
-                      "hover:bg-sidebar-accent data-popup-open:bg-sidebar-accent flex w-full items-center overflow-hidden rounded-md p-2 text-start text-sm outline-hidden",
-                      isCollapsed ? "justify-center" : "gap-2",
-                    )}
-                  />
-                }
-                side="right"
-              >
-                <Avatar className="size-7 rounded-full">
-                  {user.image && <AvatarImage src={user.image} />}
-                  <AvatarFallback className="text-[0.625rem]">
-                    {getInitials(displayName)}
-                  </AvatarFallback>
-                </Avatar>
-                {!isCollapsed && (
-                  <>
-                    <div className="flex min-w-0 flex-col justify-center">
-                      {user.name ? (
-                        <>
-                          <span className="truncate text-sm font-medium">
-                            {user.name}
-                          </span>
-                          {user.email && (
-                            <span className="text-muted-foreground truncate text-xs">
-                              {user.email}
-                            </span>
-                          )}
-                        </>
-                      ) : (
-                        <span className="truncate text-sm font-medium">
-                          {user.email || t("common.user")}
-                        </span>
-                      )}
-                    </div>
-                    <ChevronsUpDownIcon className="ms-auto size-4 opacity-50" />
-                  </>
-                )}
-              </Tooltip>
-              <MenuPopup align="end" className="w-56" side="top" sideOffset={8}>
-                {orgName && (
-                  <>
-                    <MenuGroup>
-                      <MenuGroupLabel className="text-sm">
-                        {orgName}
-                      </MenuGroupLabel>
-                    </MenuGroup>
-                    <MenuSeparator />
-                  </>
-                )}
-                <MenuItem
-                  onClick={() => {
-                    void navigate({
-                      to: "/settings",
-                    });
-                  }}
-                >
-                  <Settings2Icon />
-                  {t("common.settings")}
-                </MenuItem>
-                <MenuSeparator />
-                <MenuSub>
-                  <MenuSubTrigger>
-                    <SunIcon />
-                    {t("appearance.title")}
-                  </MenuSubTrigger>
-                  <MenuSubPopup>
-                    <MenuGroup>
-                      <MenuGroupLabel>{t("appearance.theme")}</MenuGroupLabel>
-                      <MenuRadioGroup value={theme}>
-                        {THEMES.map((themeOption) => (
-                          <MenuRadioItem
-                            key={themeOption}
-                            onClick={() => setTheme(themeOption)}
-                            value={themeOption}
-                          >
-                            <div className="flex items-center gap-1.5">
-                              {
-                                {
-                                  light: <SunIcon />,
-                                  dark: <MoonIcon />,
-                                  system: <MonitorIcon />,
-                                }[themeOption]
-                              }
-                              {t(`appearance.${themeOption}`)}
-                            </div>
-                          </MenuRadioItem>
-                        ))}
-                      </MenuRadioGroup>
-                    </MenuGroup>
-                    <MenuSeparator />
-                    <MenuGroup>
-                      <MenuGroupLabel>{t("appearance.palette")}</MenuGroupLabel>
-                      <MenuRadioGroup value={palette}>
-                        {PALETTES.map((p) => (
-                          <MenuRadioItem
-                            key={p}
-                            onClick={() => setPalette(p)}
-                            value={p}
-                          >
-                            {t(`appearance.${p}`)}
-                          </MenuRadioItem>
-                        ))}
-                      </MenuRadioGroup>
-                    </MenuGroup>
-                  </MenuSubPopup>
-                </MenuSub>
-                <MenuSub>
-                  <MenuSubTrigger>
-                    <GlobeIcon />
-                    {t("common.language")}
-                  </MenuSubTrigger>
-                  <MenuSubPopup>
-                    <MenuRadioGroup value={lang}>
-                      {supportedLanguages.map((langCode) => (
-                        <MenuRadioItem
-                          key={langCode}
-                          onClick={() => void setLang(langCode)}
-                          value={langCode}
-                        >
-                          {LANG_ENDONYMS[langCode]}
-                        </MenuRadioItem>
-                      ))}
-                    </MenuRadioGroup>
-                  </MenuSubPopup>
-                </MenuSub>
-                {isDev && <DevSidebarGroup />}
-                <MenuSeparator />
-                <MenuItem
-                  disabled={signOut.isPending}
-                  onClick={() => signOut.mutate()}
-                >
-                  <LogOutIcon />
-                  {t("common.signOut")}
-                </MenuItem>
-                <MenuItem
-                  aria-label={t("selfhost.viewReleaseNotes")}
-                  className="text-foreground-ghost data-highlighted:text-foreground min-h-0 px-2 pt-1.5 pb-1 text-[0.6875rem] tabular-nums"
-                  label={t("selfhost.viewReleaseNotes")}
-                  nativeButton={false}
-                  render={
-                    <a
-                      aria-label={t("selfhost.viewReleaseNotes")}
-                      href={CHANGELOG_URL}
-                      rel="noopener"
-                      target="_blank"
-                    />
-                  }
-                >
-                  v{__APP_VERSION__} · {__APP_COMMIT_SHA__.slice(0, 12)}
-                </MenuItem>
-              </MenuPopup>
-            </Menu>
-          </SidebarMenuItem>
+          <SidebarUserMenu user={user} />
         </SidebarMenu>
       </SidebarFooter>
 
