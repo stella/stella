@@ -1813,6 +1813,9 @@
   },
   "settings": {
     "account": {
+      "beta": "Beta-Funktionen",
+      "betaCaseLawDescription": "Öffentliche Rechtsprechungssuche und -ansicht in der Seitenleiste anzeigen",
+      "betaDescription": "Funktionen ausprobieren, die sich noch in der Entwicklung befinden",
       "desktop": "Desktop",
       "desktopAppDescription": "Öffnen Sie Dokumente und Dateien direkt in stella von Ihrem Computer aus.",
       "desktopDescription": "Installieren Sie stella auf Ihrem Computer",

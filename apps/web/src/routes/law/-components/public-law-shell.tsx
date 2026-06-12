@@ -29,9 +29,9 @@ import {
 import { StellaWordmark } from "@/components/stella-wordmark";
 import { getWorkspacePrimaryNavItems } from "@/components/workspace-primary-nav";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
-import { usePublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import { HOTKEYS } from "@/lib/hotkeys";
+import { isPublicLawRouteEnabled } from "@/lib/public-law-launch";
 
 const SignInDialog = lazy(async () => {
   const module = await import("@/components/auth/sign-in-dialog");
@@ -98,9 +98,11 @@ function PublicLawSidebar({
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
   const [searchOpen, setSearchOpen] = useState(false);
-  const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
+  // This shell is server-rendered; the localStorage-backed preview
+  // toggle is browser-only and would mismatch hydration. The host/env
+  // gate is isomorphic, and anyone rendering this shell passed it.
   const primaryNavItems = getWorkspacePrimaryNavItems({
-    includePublicLaw: publicLawPreviewEnabled,
+    includePublicLaw: isPublicLawRouteEnabled(),
   });
 
   const requestPrivateFeature = (redirectTo: string) => {

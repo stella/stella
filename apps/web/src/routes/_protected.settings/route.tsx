@@ -1,6 +1,7 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 import {
+  FlaskConicalIcon,
   GaugeIcon,
   HashIcon,
   MonitorIcon,
@@ -15,6 +16,7 @@ import { useTranslations } from "use-intl";
 import { cn } from "@stll/ui/lib/utils";
 
 import type { TranslationKey } from "@/i18n/types";
+import { betaFeaturesAvailable } from "@/lib/beta-features";
 import { pageTitle } from "@/lib/page-title";
 import { roleOptions } from "@/routes/-queries";
 import { managementRoles } from "@/routes/_protected.organization/-consts";
@@ -29,6 +31,7 @@ export const Route = createFileRoute("/_protected/settings")({
 type NavTo =
   | "/settings/account/profile"
   | "/settings/account/desktop"
+  | "/settings/account/beta"
   | "/settings/organization/members"
   | "/settings/organization/matter-numbering"
   | "/settings/organization/ai"
@@ -47,6 +50,12 @@ type Section = {
   readonly items: readonly NavItem[];
 };
 
+const BETA_NAV_ITEM = {
+  to: "/settings/account/beta",
+  labelKey: "settings.account.beta",
+  icon: FlaskConicalIcon,
+} as const satisfies NavItem;
+
 const ACCOUNT_SECTION = {
   id: "account",
   labelKey: "settings.account.title",
@@ -61,6 +70,8 @@ const ACCOUNT_SECTION = {
       labelKey: "settings.account.desktop",
       icon: MonitorIcon,
     },
+    // Beta features: only on hosts where users may flip them (dev,
+    // staging); appended conditionally in SettingsLayout.
   ],
 } as const satisfies Section;
 
@@ -101,9 +112,18 @@ function SettingsLayout() {
   const { data: role } = useSuspenseQuery(roleOptions);
   const showOrganization = managementRoles.includes(role);
 
+  // No `Section` annotation: it would widen labelKey to the full
+  // TranslationKey union, whose ICU-variable members make t() demand a
+  // values argument. The literal key types stay narrow this way.
+  const accountSection = betaFeaturesAvailable()
+    ? ({
+        ...ACCOUNT_SECTION,
+        items: [...ACCOUNT_SECTION.items, BETA_NAV_ITEM],
+      } as const)
+    : ACCOUNT_SECTION;
   const sections = showOrganization
-    ? [ACCOUNT_SECTION, ORGANIZATION_SECTION]
-    : [ACCOUNT_SECTION];
+    ? [accountSection, ORGANIZATION_SECTION]
+    : [accountSection];
 
   return (
     <div className="flex min-h-0 flex-1 overflow-hidden border-t">

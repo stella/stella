@@ -1813,6 +1813,9 @@
   },
   "settings": {
     "account": {
+      "beta": "Béta funkciók",
+      "betaCaseLawDescription": "Nyilvános joggyakorlat-keresés és -olvasó megjelenítése az oldalsávban",
+      "betaDescription": "Próbálja ki a még fejlesztés alatt álló funkciókat",
       "desktop": "Asztali alkalmazás",
       "desktopAppDescription": "Nyisson meg dokumentumokat és fájlokat közvetlenül a stella-ban a számítógépéről.",
       "desktopDescription": "Telepítse a Stellát a számítógépére",

@@ -1813,6 +1813,9 @@
   },
   "settings": {
     "account": {
+      "beta": "Beta funkcijas",
+      "betaCaseLawDescription": "Rādīt publisko tiesu prakses meklēšanu un lasītāju sānjoslā",
+      "betaDescription": "Izmēģiniet funkcijas, kas vēl tiek izstrādātas",
       "desktop": "Datorlietotne",
       "desktopAppDescription": "Atveriet dokumentus un failus tieši stella no sava datora.",
       "desktopDescription": "Instalējiet stella savā datorā",
