@@ -38,8 +38,8 @@ import {
   useChatAnonymized,
   useSetChatAnonymized,
 } from "@/lib/chat-anonymized-store";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { useDevStore } from "@/lib/dev-store";
 import { toAPIError } from "@/lib/errors";
@@ -273,13 +273,13 @@ export const ChatThreadPage = ({
     data.webSearchAvailable,
     data.webSearchEnabled,
     enabledPreference,
-seedWebSearch,
-   ]);
-   const controller = useChatEditor({
-     sentMessageHistoryHtml,
-     suggestedFollowupPrompt,
-     threadRef,
-   });
+    seedWebSearch,
+  ]);
+  const controller = useChatEditor({
+    sentMessageHistoryHtml,
+    suggestedFollowupPrompt,
+    threadRef,
+  });
 
   const openInspectorChat = useInspectorStore((s) => s.openChat);
   const navigate = useNavigate();
@@ -435,7 +435,7 @@ seedWebSearch,
             workspaceId={workspaceId ?? threadRef.threadId}
           />
           <div className="mx-auto w-full max-w-5xl px-4 pb-4">
-<SuggestedFollowupChips
+            <SuggestedFollowupChips
               isGenerating={isGenerating}
               isEmpty={controller.isEmpty}
               lastMessageId={messages.at(-1)?.id ?? null}
@@ -444,12 +444,12 @@ seedWebSearch,
               prompts={suggestedFollowupPrompts}
               onSelect={(prompt) => {
                 controller.setContent(prompt);
-              }}
-              onSend={async (prompt) => {
-                if (!(await ensureAIAvailable())) {
-                  return;
-                }
-                await sendMessage({ text: prompt });
+                void controller.submit(async (draft) => {
+                  if (!(await ensureAIAvailable())) {
+                    return;
+                  }
+                  await sendMessage(await buildChatRequestMessage(draft));
+                });
               }}
             />
             <ChatInputSurface

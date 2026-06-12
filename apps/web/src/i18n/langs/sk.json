@@ -473,7 +473,6 @@
     "sources": "Zdroje:",
     "stopResponse": "Zastaviť",
     "stopped": "Zastavené",
-    "tabToAsk": "Tabulátor pre otázku: \"{prompt}\"",
     "suggestionSeverity": {
       "style": "Štýl",
       "substantive": "Vecné",
@@ -485,6 +484,7 @@
       "stale": "Zastarané"
     },
     "suggestionStep": "{current} z {total}",
+    "tabToAsk": "→ pre otázku: \"{prompt}\"",
     "thinking": "Pracujem s kontextom",
     "tool": {
       "apply-active-docx-edits": "Pripravujem úpravy dokumentu",

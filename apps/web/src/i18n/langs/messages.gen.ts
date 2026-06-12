@@ -476,7 +476,6 @@ type Messages = {
     "sources": "Sources:";
     "stopResponse": "Stop";
     "stopped": "Stopped";
-    "tabToAsk": "Tab to ask: \"{prompt}\"";
     "suggestionSeverity": {
       "style": "Style";
       "substantive": "Substantive";
@@ -488,6 +487,7 @@ type Messages = {
       "stale": "Stale";
     };
     "suggestionStep": "{current} of {total}";
+    "tabToAsk": "→ to ask: \"{prompt}\"";
     "thinking": "Working with context";
     "tool": {
       "apply-active-docx-edits": "Preparing document edits";

@@ -24,10 +24,7 @@ import {
 } from "react";
 import type { RefObject } from "react";
 
-import {
-  useQuery,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { LoaderCircleIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -60,8 +57,10 @@ import type { ApprovalToolName } from "@/components/chat/chat-ui-tools";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
+import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useDevStore } from "@/lib/dev-store";
+import { SuggestedFollowupChips } from "@/routes/_protected.chat/-components/suggested-followup-chips";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 import type {
@@ -74,8 +73,6 @@ import {
   fileChatThreadOptions,
 } from "@/routes/_protected.chat/-queries";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
-import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
-import { SuggestedFollowupChips } from "@/routes/_protected.chat/-components/suggested-followup-chips";
 
 type ActiveFile = {
   docxEditSnapshot?:
@@ -1017,29 +1014,32 @@ const FileChatOverlayInner = ({
     );
   }
 
-// Check eligibility for suggested prompts using draft state (avoids
-   // unnecessary API calls when user is typing).
-   const lastMessageId = messages.at(-1)?.id ?? null;
-   const lastMessageRole = messages.at(-1)?.role ?? null;
-   const editorIsInitiallyEmpty = useIsChatDraftEmpty(threadRef);
-   const eligibleForSuggestions =
-     editorIsInitiallyEmpty && !isGenerating && lastMessageId !== null && lastMessageRole === "assistant";
-   const { data: suggestedPromptsData } = useQuery(
-     chatThreadSuggestedPromptsOptions({
-       activeOrganizationId,
-       enabled: eligibleForSuggestions,
-       lastMessageId: lastMessageId ?? "",
-       threadRef,
-     }),
-   );
-   const suggestedPrompts = suggestedPromptsData?.prompts ?? [];
-   const suggestedFollowupPrompt = suggestedPrompts.at(0) ?? undefined;
+  // Check eligibility for suggested prompts using draft state (avoids
+  // unnecessary API calls when user is typing).
+  const lastMessageId = messages.at(-1)?.id ?? null;
+  const lastMessageRole = messages.at(-1)?.role ?? null;
+  const editorIsInitiallyEmpty = useIsChatDraftEmpty(threadRef);
+  const eligibleForSuggestions =
+    editorIsInitiallyEmpty &&
+    !isGenerating &&
+    lastMessageId !== null &&
+    lastMessageRole === "assistant";
+  const { data: suggestedPromptsData } = useQuery(
+    chatThreadSuggestedPromptsOptions({
+      activeOrganizationId,
+      enabled: eligibleForSuggestions,
+      lastMessageId: lastMessageId ?? "",
+      threadRef,
+    }),
+  );
+  const suggestedPrompts = suggestedPromptsData?.prompts ?? [];
+  const suggestedFollowupPrompt = suggestedPrompts.at(0) ?? undefined;
 
-   const editorController = useChatEditor({
-     placeholder: filePlaceholder,
-     suggestedFollowupPrompt,
-     threadRef,
-   });
+  const editorController = useChatEditor({
+    placeholder: filePlaceholder,
+    suggestedFollowupPrompt,
+    threadRef,
+  });
   // Focus the composer when the user explicitly starts a new thread,
   // so they can type the first message without an extra click. The
   // initial mount is skipped (entering the document should not steal
@@ -1237,12 +1237,12 @@ const FileChatOverlayInner = ({
           prompts={suggestedPrompts}
           onSelect={(prompt) => {
             editorController.setContent(prompt);
-          }}
-          onSend={async (prompt) => {
-            if (!(await ensureAIAvailable())) {
-              return;
-            }
-            await sendMessage({ text: prompt });
+            void editorController.submit(async (draft) => {
+              if (!(await ensureAIAvailable())) {
+                return;
+              }
+              await sendMessage({ text: draft.html });
+            });
           }}
         />
         <PromptBar

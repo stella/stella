@@ -128,10 +128,18 @@ export const useChatDraftStore = create<ChatDraftStore>((set, get) => ({
 export const getChatDraft = (threadRef: ChatThreadRef): ChatDraftState | null =>
   useChatDraftStore.getState().getDraft(getChatThreadKey(threadRef));
 
-const isEmptyDoc = (draft: ChatDraftState): boolean =>
-  draft.doc.type === "doc" &&
-  (draft.doc.content?.length ?? 0) === 1 &&
-  draft.doc.content?.[0]?.type === "paragraph";
+const isEmptyDoc = (draft: ChatDraftState): boolean => {
+  if (draft.doc.type !== "doc") {
+    return false;
+  }
+  const nodes = draft.doc.content;
+  if (!nodes || nodes.length !== 1) {
+    return false;
+  }
+  const [only] = nodes;
+  // A paragraph with children (text, mentions, pasted-text chips) is not empty.
+  return only?.type === "paragraph" && (only.content?.length ?? 0) === 0;
+};
 
 const isDraftEmpty = (draft: ChatDraftState | null): boolean => {
   if (!draft) {

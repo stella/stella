@@ -473,7 +473,6 @@
     "sources": "Fontes:",
     "stopResponse": "Parar",
     "stopped": "Interrompido",
-    "tabToAsk": "Tab para perguntar: \"{prompt}\"",
     "suggestionSeverity": {
       "style": "Estilo",
       "substantive": "Substancial",
@@ -485,6 +484,7 @@
       "stale": "Desatualizado"
     },
     "suggestionStep": "{current} de {total}",
+    "tabToAsk": "→ para perguntar: \"{prompt}\"",
     "thinking": "Trabalhando com contexto",
     "tool": {
       "apply-active-docx-edits": "Preparando edições no documento",

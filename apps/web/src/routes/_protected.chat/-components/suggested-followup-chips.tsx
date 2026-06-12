@@ -10,8 +10,12 @@ type SuggestedFollowupChipsProps = {
   lastMessageRole: "user" | "assistant" | "system" | "tool" | null;
   messageCount: number;
   prompts: string[];
+  /**
+   * Called when a chip is clicked. The caller is responsible for setting the
+   * editor content and submitting via `controller.submit` so the normal
+   * `clearDraft` / `clearContent` path runs.
+   */
   onSelect: (prompt: string) => void;
-  onSend: (prompt: string) => void;
 };
 
 /**
@@ -19,10 +23,6 @@ type SuggestedFollowupChipsProps = {
  * chat composer when the composer is empty, the AI has just responded,
  * and no generation is in progress. Chips disappear once the user
  * starts typing or submits a message.
- *
- * For smaller chats (inspector tab, file overlay), the parent component
- * handles fetching prompts via `chatThreadSuggestedPromptsOptions`. For
- * the full chat page, prompts are passed directly to enable Tab-to-ask.
  */
 export const SuggestedFollowupChips = ({
   isGenerating,
@@ -32,7 +32,6 @@ export const SuggestedFollowupChips = ({
   messageCount,
   prompts,
   onSelect,
-  onSend,
 }: SuggestedFollowupChipsProps) => {
   const eligible =
     isEmpty &&
@@ -46,7 +45,10 @@ export const SuggestedFollowupChips = ({
   }
 
   return (
-    <div aria-label="Suggested follow-up prompts" className="flex flex-wrap gap-2 pb-2">
+    <div
+      aria-label="Suggested follow-up prompts"
+      className="flex flex-wrap gap-2 pb-2"
+    >
       {prompts.map((prompt, index) => (
         // eslint-disable-next-line react/no-array-index-key
         <Button
@@ -54,7 +56,6 @@ export const SuggestedFollowupChips = ({
           key={index}
           onClick={() => {
             onSelect(prompt);
-            onSend(prompt);
           }}
           variant="outline"
         >

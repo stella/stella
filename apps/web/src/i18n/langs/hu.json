@@ -473,7 +473,6 @@
     "sources": "Források:",
     "stopResponse": "Leállítás",
     "stopped": "Leállítva",
-    "tabToAsk": "Tab a kérdezéshez: „{prompt}”",
     "suggestionSeverity": {
       "style": "Stílus",
       "substantive": "Érdemi",
@@ -485,6 +484,7 @@
       "stale": "Elavult"
     },
     "suggestionStep": "{current} / {total}",
+    "tabToAsk": "→ a kérdezéshez: „{prompt}“",
     "thinking": "Kontextussal dolgozom",
     "tool": {
       "apply-active-docx-edits": "Dokumentummódosítások előkészítése",

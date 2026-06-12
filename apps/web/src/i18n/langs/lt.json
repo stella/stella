@@ -473,7 +473,6 @@
     "sources": "Šaltiniai:",
     "stopResponse": "Stabdyti",
     "stopped": "Sustabdyta",
-    "tabToAsk": "Tab, kad paklaustumėte: „{prompt}“",
     "suggestionSeverity": {
       "style": "Stilius",
       "substantive": "Esminis",
@@ -485,6 +484,7 @@
       "stale": "Pasenusi"
     },
     "suggestionStep": "{current} iš {total}",
+    "tabToAsk": "→, kad paklaustumėte: „{prompt}“",
     "thinking": "Dirbama su kontekstu",
     "tool": {
       "apply-active-docx-edits": "Ruošiami dokumento pakeitimai",

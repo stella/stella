@@ -29,7 +29,6 @@ import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
 import { CHAT_SEND_MODE, getPreferredChatSendMode } from "@stll/anonymize-chat";
-import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { Button } from "@stll/ui/components/button";
 
@@ -60,17 +59,21 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useDevStore } from "@/lib/dev-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
 import { toSafeId } from "@/lib/safe-id";
 import { ChatAnonymizedToggle } from "@/routes/_protected.chat/-components/chat-anonymized-toggle";
-import { SuggestedFollowupChips } from "@/routes/_protected.chat/-components/suggested-followup-chips";
 import { ChatWebSearchToggle } from "@/routes/_protected.chat/-components/chat-web-search-toggle";
+import { SuggestedFollowupChips } from "@/routes/_protected.chat/-components/suggested-followup-chips";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
-import { chatThreadOptions, chatThreadSuggestedPromptsOptions } from "@/routes/_protected.chat/-queries";
+import {
+  chatThreadOptions,
+  chatThreadSuggestedPromptsOptions,
+} from "@/routes/_protected.chat/-queries";
 import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
 
 type ChatTabPanelProps = {
@@ -237,7 +240,9 @@ export const ChatTabPanel = ({
   // assistant, and no generation is in progress. Using draft state
   // avoids triggering the query when user is actively typing.
   const eligibleForSuggestions =
-    editorIsInitiallyEmpty && lastMessageId !== null && lastMessageRole === "assistant";
+    editorIsInitiallyEmpty &&
+    lastMessageId !== null &&
+    lastMessageRole === "assistant";
   const { data: suggestedPromptsData } = useQuery(
     chatThreadSuggestedPromptsOptions({
       activeOrganizationId,
@@ -402,12 +407,12 @@ export const ChatTabPanel = ({
             prompts={suggestedPrompts}
             onSelect={(prompt) => {
               editorController.setContent(prompt);
-            }}
-            onSend={async (prompt) => {
-              if (!(await ensureAIAvailable())) {
-                return;
-              }
-              await sendMessage({ text: prompt });
+              void editorController.submit(async (draft) => {
+                if (!(await ensureAIAvailable())) {
+                  return;
+                }
+                await sendMessage({ text: draft.html });
+              });
             }}
           />
           <PromptBar

@@ -473,7 +473,6 @@
     "sources": "Allikad:",
     "stopResponse": "Peata",
     "stopped": "Peatatud",
-    "tabToAsk": "Tabeldusklahv küsimiseks: \"{prompt}\"",
     "suggestionSeverity": {
       "style": "Stiil",
       "substantive": "Sisuline",
@@ -485,6 +484,7 @@
       "stale": "Aegunud"
     },
     "suggestionStep": "{current} / {total}",
+    "tabToAsk": "→ küsimiseks: \"{prompt}\"",
     "thinking": "Töötan kontekstiga",
     "tool": {
       "apply-active-docx-edits": "Dokumendi muudatuste ettevalmistamine",

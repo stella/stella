@@ -473,7 +473,6 @@
     "sources": "Avoti:",
     "stopResponse": "Apturēt",
     "stopped": "Apturēts",
-    "tabToAsk": "Tab, lai jautātu: “{prompt}”",
     "suggestionSeverity": {
       "style": "Stils",
       "substantive": "Pēc būtības",
@@ -485,6 +484,7 @@
       "stale": "Novecojis"
     },
     "suggestionStep": "{current} no {total}",
+    "tabToAsk": "→, lai jautātu: “{prompt}”",
     "thinking": "Strādāju ar kontekstu",
     "tool": {
       "apply-active-docx-edits": "Dokumenta izmaiņu sagatavošana",
