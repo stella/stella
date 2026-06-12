@@ -4451,8 +4451,18 @@ export async function seed(organizationId?: string, userId?: string) {
   // 14. Templates & clauses (knowledge base)
   await seedTemplates(ORG_ID, seedUserIds);
 
-  // 15. Global case-law corpus for search and references
-  await seedCaseLaw();
+  // 15. Global case-law corpus for search and references. This pulls real prod
+  // fixtures and is the most schema-coupled step; a local schema drift here
+  // (e.g. a worktree whose migrations lag the shared dev DB) must not abort the
+  // whole seed or dump a giant error toast — warn and continue.
+  try {
+    await seedCaseLaw();
+  } catch (error) {
+    console.warn(
+      "  Case-law seed skipped (non-fatal — likely local schema drift):",
+      error instanceof Error ? error.message : error,
+    );
+  }
 
   console.log("\nDone. Dev data seeded successfully.");
 }
