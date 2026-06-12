@@ -154,7 +154,6 @@
     "invoiceNarrativePlaceholder": "Klientui skirtas aprašymas (neprivaloma)",
     "invoices": {
       "addEntries": "Pridėti įrašus",
-      "back": "Atgal",
       "confirmDelete": "Tai visam laikui ištrins šią sąskaitos juodraštį ir atsies visus įrašus. Šio veiksmo negalima atšaukti.",
       "confirmVoid": "Panaikinus šią sąskaitą, bus atsieti visi laiko įrašai ir išlaidos, grąžinant juos į ankstesnę būseną.",
       "createInvoice": "Sukurti sąskaitą",
@@ -697,6 +696,7 @@
       "socialSecurityNumber": "Socialinio draudimo numeris",
       "taxIdentificationNumber": "Mokesčių mokėtojo kodas"
     },
+    "back": "Atgal",
     "cancel": "Atšaukti",
     "captions": "Subtitrai",
     "caseLaw": "Teismų praktika",

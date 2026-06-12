@@ -154,7 +154,6 @@
     "invoiceNarrativePlaceholder": "Descripción para el cliente (opcional)",
     "invoices": {
       "addEntries": "Añadir registros",
-      "back": "Volver",
       "confirmDelete": "Esta acción eliminará definitivamente este borrador de factura y desvinculará todos los registros. No se puede deshacer.",
       "confirmVoid": "Anular esta factura desvinculará todos los registros de tiempo y gastos, devolviendo a su estado anterior.",
       "createInvoice": "Crear factura",
@@ -697,6 +696,7 @@
       "socialSecurityNumber": "Número de la seguridad social",
       "taxIdentificationNumber": "NIF / CIF"
     },
+    "back": "Volver",
     "cancel": "Cancelar",
     "captions": "Subtítulos",
     "caseLaw": "Jurisprudencia",
