@@ -2,23 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
-import { ArrowLeftIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
-import {
-  AlertDialog,
-  AlertDialogClose,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogPopup,
-  AlertDialogTitle,
-} from "@stll/ui/components/alert-dialog";
-import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
+import { LeaveConfirmDialog } from "@/routes/_protected.knowledge/-components/leave-confirm-dialog";
 import { TemplateList } from "@/routes/_protected.knowledge/-components/template-list";
 import { useTemplateNavStore } from "@/routes/_protected.knowledge/-components/template-nav-store";
 import { TemplateStudioPage } from "@/routes/_protected.knowledge/-components/template-studio";
@@ -163,39 +153,24 @@ function RouteComponent() {
           }}
           template={view.template}
         />
-        <AlertDialog onOpenChange={setConfirmLeave} open={confirmLeave}>
-          <AlertDialogPopup>
-            <AlertDialogHeader>
-              <AlertDialogTitle>{t("common.confirmAction")}</AlertDialogTitle>
-              <AlertDialogDescription>
-                {t("templates.unsavedLeaveConfirm")}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter className="justify-between sm:justify-between">
-              <AlertDialogClose render={<Button variant="ghost" />}>
-                <ArrowLeftIcon />
-                {t("templates.goBackToEditing")}
-              </AlertDialogClose>
-              <div className="flex items-center gap-2">
-                <AlertDialogClose
-                  onClick={exitDetail}
-                  render={<Button variant="destructive" />}
-                >
-                  {t("folio.discardChanges")}
-                </AlertDialogClose>
-                <AlertDialogClose
-                  onClick={() => {
-                    useTemplateStudioStore.getState().actions?.save();
-                    exitDetail();
-                  }}
-                  render={<Button />}
-                >
-                  {t("templates.saveAndLeave")}
-                </AlertDialogClose>
-              </div>
-            </AlertDialogFooter>
-          </AlertDialogPopup>
-        </AlertDialog>
+        <LeaveConfirmDialog
+          cancelLabel={t("templates.goBackToEditing")}
+          description={t("templates.unsavedLeaveConfirm")}
+          onOpenChange={setConfirmLeave}
+          open={confirmLeave}
+          primary={{
+            label: t("templates.saveAndLeave"),
+            onClick: () => {
+              useTemplateStudioStore.getState().actions?.save();
+              exitDetail();
+            },
+          }}
+          secondary={{
+            label: t("folio.discardChanges"),
+            variant: "destructive",
+            onClick: exitDetail,
+          }}
+        />
       </>
     );
   }

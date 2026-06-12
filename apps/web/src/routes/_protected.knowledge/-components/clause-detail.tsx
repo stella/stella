@@ -78,6 +78,7 @@ import type { ParagraphDiff } from "@/routes/_protected.knowledge/-components/cl
 import { ClauseDiffView } from "@/routes/_protected.knowledge/-components/clause-diff-view";
 import { ClauseEditor } from "@/routes/_protected.knowledge/-components/clause-editor";
 import type { ClauseParagraph } from "@/routes/_protected.knowledge/-components/clause-editor-types";
+import { LeaveConfirmDialog } from "@/routes/_protected.knowledge/-components/leave-confirm-dialog";
 import {
   clauseDetailOptions,
   knowledgeKeys,
@@ -230,6 +231,11 @@ const DetailContent = ({
 }) => {
   const t = useTranslations();
   const format = useFormatter();
+  // Autosave persists the head working copy on every edit; a version snapshot
+  // is created only on explicit "Save as new version" / leave-with-changes.
+  // This tracks whether the head has un-versioned edits. A freshly loaded
+  // clause is clean.
+  const [dirtySinceVersion, setDirtySinceVersion] = useState(false);
 
   return (
     <div className="mx-auto w-full max-w-2xl overflow-y-auto p-6">
@@ -239,9 +245,11 @@ const DetailContent = ({
         categories={categories}
         clauseId={clauseId}
         detail={detail}
+        dirtySinceVersion={dirtySinceVersion}
         onBack={onBack}
         onDeleted={onDeleted}
         onRefresh={onRefresh}
+        onVersionSaved={() => setDirtySinceVersion(false)}
       />
 
       <p className="text-muted-foreground mt-2 text-sm">
@@ -284,6 +292,7 @@ const DetailContent = ({
             canEdit={canEdit}
             clauseId={clauseId}
             detail={detail}
+            onBodyDirty={() => setDirtySinceVersion(true)}
             onRefresh={onRefresh}
           />
           <ClauseUsageNotesField
@@ -323,23 +332,72 @@ const ClauseHeader = ({
   categories,
   canEdit,
   canDelete,
+  dirtySinceVersion,
   onBack,
   onDeleted,
   onRefresh,
+  onVersionSaved,
 }: {
   detail: ClauseDetail;
   clauseId: string;
   categories: CategoryOption[];
   canEdit: boolean;
   canDelete: boolean;
+  dirtySinceVersion: boolean;
   onBack: () => void;
   onDeleted: () => void;
   onRefresh: () => void;
+  onVersionSaved: () => void;
 }) => {
   const t = useTranslations();
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(detail.title);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const [savingVersion, setSavingVersion] = useState(false);
+
+  // Snapshot the current head body as a new version. The head is already
+  // autosaved, so this only appends to history (no data is at risk).
+  const saveVersion = useCallback(async () => {
+    setSavingVersion(true);
+    const response = await api
+      .clauses({ clauseId })
+      .post({ body: detail.body, snapshotVersion: true });
+    setSavingVersion(false);
+
+    if (response.error) {
+      stellaToast.add({
+        type: "error",
+        title: t("clauses.saveFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return false;
+    }
+
+    onVersionSaved();
+    onRefresh();
+    return true;
+  }, [clauseId, detail.body, t, onVersionSaved, onRefresh]);
+
+  const saveVersionAndLeave = useCallback(async () => {
+    const ok = await saveVersion();
+    if (ok) {
+      onBack();
+    }
+  }, [saveVersion, onBack]);
+
+  // Un-versioned head edits don't block leaving (they're already saved); we
+  // just offer to capture them as a version first.
+  const handleBack = useCallback(() => {
+    if (dirtySinceVersion) {
+      setConfirmLeave(true);
+      return;
+    }
+    onBack();
+  }, [dirtySinceVersion, onBack]);
 
   const saveTitle = useCallback(async () => {
     const trimmed = titleDraft.trim();
@@ -419,7 +477,7 @@ const ClauseHeader = ({
     <div className="flex items-center gap-2">
       <Button
         aria-label={t("common.back")}
-        onClick={onBack}
+        onClick={handleBack}
         size="icon-sm"
         variant="ghost"
       >
@@ -476,6 +534,19 @@ const ClauseHeader = ({
         </Select>
       )}
 
+      {canEdit && (
+        <Button
+          disabled={!dirtySinceVersion || savingVersion}
+          onClick={() => {
+            void saveVersion();
+          }}
+          size="sm"
+          variant="outline"
+        >
+          {t("clauses.saveAsVersion")}
+        </Button>
+      )}
+
       {canDelete && (
         <AlertDialog onOpenChange={setDeleteOpen} open={deleteOpen}>
           <Button
@@ -510,6 +581,24 @@ const ClauseHeader = ({
           </AlertDialogPopup>
         </AlertDialog>
       )}
+
+      <LeaveConfirmDialog
+        cancelLabel={t("templates.goBackToEditing")}
+        description={t("clauses.unsavedVersionLeaveConfirm")}
+        onOpenChange={setConfirmLeave}
+        open={confirmLeave}
+        primary={{
+          label: t("clauses.saveVersionAndLeave"),
+          onClick: () => {
+            void saveVersionAndLeave();
+          },
+        }}
+        secondary={{
+          label: t("clauses.leaveWithoutVersion"),
+          variant: "ghost",
+          onClick: onBack,
+        }}
+      />
     </div>
   );
 };
@@ -521,16 +610,20 @@ const ClauseBodyEditor = ({
   clauseId,
   canEdit,
   onRefresh,
+  onBodyDirty,
 }: {
   detail: ClauseDetail;
   clauseId: string;
   canEdit: boolean;
   onRefresh: () => void;
+  onBodyDirty: () => void;
 }) => {
   const t = useTranslations();
 
   const saveBody = useCallback(
     async (body: ClauseParagraph[]) => {
+      // Head-only autosave: persists the working copy without snapshotting a
+      // version. The version snapshot happens on explicit save / leave.
       const response = await api.clauses({ clauseId }).post({ body });
 
       if (response.error) {
@@ -570,7 +663,13 @@ const ClauseBodyEditor = ({
           debouncedSave.cancel();
           void saveBody(body);
         }}
-        onChange={debouncedSave}
+        onChange={(body) => {
+          // Mark un-versioned the instant the body is edited (not when the
+          // debounced autosave resolves), so leaving right after a change still
+          // triggers the "save a version?" prompt.
+          onBodyDirty();
+          debouncedSave(body);
+        }}
         title={detail.title}
         usageNotes={detail.usageNotes ?? undefined}
       />
@@ -988,10 +1087,12 @@ const VariantRow = ({
     }
 
     setPromoting(true);
-    // Reuse the clause update endpoint: a body change bumps
-    // currentVersion and writes a clauseVersions snapshot, so the
-    // promotion stays auditable and revertable from history.
-    const response = await api.clauses({ clauseId }).post({ body });
+    // Reuse the clause update endpoint with an explicit version snapshot:
+    // bumps currentVersion and writes a clauseVersions row, so the promotion
+    // stays auditable and revertable from history.
+    const response = await api
+      .clauses({ clauseId })
+      .post({ body, snapshotVersion: true });
 
     setPromoting(false);
 

@@ -44,8 +44,20 @@
   list-style: disc;
 }
 
+/* Compound legal numbering for ordered lists: 1, 1.1, 1.1.1, … Each ol opens a
+   `clause-ol` counter; each li increments it and the marker renders the whole
+   counter chain joined by ".". Bullet lists are untouched (rule above). */
 .clause-editor .tiptap ol {
-  list-style: decimal;
+  counter-reset: clause-ol;
+  list-style: none;
+}
+
+.clause-editor .tiptap ol > li {
+  counter-increment: clause-ol;
+}
+
+.clause-editor .tiptap ol > li::marker {
+  content: counters(clause-ol, ".") ". ";
 }
 
 .clause-editor .tiptap li > p {

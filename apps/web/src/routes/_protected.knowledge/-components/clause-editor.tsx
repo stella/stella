@@ -24,6 +24,8 @@ import {
   ItalicIcon,
   ListIcon,
   ListOrderedIcon,
+  Redo2Icon,
+  Undo2Icon,
   WandSparklesIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -385,6 +387,11 @@ export const ClauseEditor = ({
   const lastEmittedKeyRef = useRef(bodyKey(content));
 
   const editor = useEditor({
+    // Inline on an SSR'd page (unlike the old modal, which only mounted
+    // client-side): defer editor creation to the client so the server and
+    // client DOM agree. Without this, the hydration mismatch corrupts
+    // ProseMirror's DOM<->position mapping and text selection stops working.
+    immediatelyRender: false,
     extensions: [
       Document,
       Paragraph,
@@ -474,6 +481,25 @@ export const ClauseEditor = ({
     editor.chain().focus().toggleOrderedList().run();
   }, [editor]);
 
+  const undo = useCallback(() => {
+    if (!isUsableEditor(editor)) {
+      return;
+    }
+
+    editor.chain().focus().undo().run();
+  }, [editor]);
+
+  const redo = useCallback(() => {
+    if (!isUsableEditor(editor)) {
+      return;
+    }
+
+    editor.chain().focus().redo().run();
+  }, [editor]);
+
+  const canUndo = editorReady && editor.can().undo();
+  const canRedo = editorReady && editor.can().redo();
+
   return (
     // Stop modifier key combos from propagating to global
     // hotkeys (e.g., Cmd+B toggles sidebar otherwise).
@@ -488,6 +514,29 @@ export const ClauseEditor = ({
     >
       {/* Toolbar */}
       <div className="flex items-center gap-0.5 border-b px-1 py-0.5">
+        <Button
+          aria-label={t("folio.undo")}
+          disabled={!canUndo}
+          onClick={undo}
+          size="icon-xs"
+          title={t("folio.undo")}
+          type="button"
+          variant="ghost"
+        >
+          <Undo2Icon className="size-3.5" />
+        </Button>
+        <Button
+          aria-label={t("folio.redo")}
+          disabled={!canRedo}
+          onClick={redo}
+          size="icon-xs"
+          title={t("folio.redo")}
+          type="button"
+          variant="ghost"
+        >
+          <Redo2Icon className="size-3.5" />
+        </Button>
+        <div className="bg-border mx-1 h-4 w-px" />
         <Button
           className={
             editorReady && editor.isActive("bold") ? "bg-muted" : undefined
@@ -637,6 +686,10 @@ export const ClauseEditor = ({
 
       {/* Editor area */}
       <EditorContent editor={editor} />
+
+      <p className="text-muted-foreground border-t px-2 py-1 text-xs">
+        {t("clauses.formattingPreviewHint")}
+      </p>
     </div>
   );
 };
