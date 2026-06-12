@@ -16,6 +16,7 @@ import {
 import { useDebouncedCallback } from "use-debounce";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { displayLanguageName, LANGUAGES, toLanguageCode } from "@stll/locales";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -26,6 +27,14 @@ import {
   AlertDialogTitle,
 } from "@stll/ui/components/alert-dialog";
 import { Button } from "@stll/ui/components/button";
+import {
+  Combobox,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxPopup,
+} from "@stll/ui/components/combobox";
 import {
   Dialog,
   DialogClose,
@@ -55,6 +64,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";
+import { useI18nStore } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import {
   toAPIError,
@@ -254,13 +264,9 @@ const DetailContent = ({
           onRefresh={onRefresh}
           value={detail.description}
         />
-        <ClauseInlineTextField
+        <ClauseLanguageField
           canEdit={canEdit}
           clauseId={clauseId}
-          field="language"
-          inputProps={{ maxLength: 10, className: "w-40" }}
-          label={t("common.language")}
-          placeholder={t("clauses.languagePlaceholder")}
           onRefresh={onRefresh}
           value={detail.language}
         />
@@ -574,7 +580,7 @@ const ClauseBodyEditor = ({
 
 // ── Inline metadata fields (autosave) ────────────────
 
-/** Short single-line metadata field (description, language).
+/** Short single-line metadata field (description).
  *  Commits the trimmed value on blur, sending `null` when empty,
  *  mirroring the modal's `field.trim() || null` shape. */
 const ClauseInlineTextField = ({
@@ -585,16 +591,14 @@ const ClauseInlineTextField = ({
   clauseId,
   canEdit,
   onRefresh,
-  inputProps,
 }: {
-  field: "description" | "language";
+  field: "description";
   value: string | null;
   label: string;
   placeholder: string;
   clauseId: string;
   canEdit: boolean;
   onRefresh: () => void;
-  inputProps?: { maxLength?: number; className?: string };
 }) => {
   const t = useTranslations();
   const [draft, setDraft] = useState(value ?? "");
@@ -643,9 +647,7 @@ const ClauseInlineTextField = ({
         {label}
       </label>
       <Input
-        className={inputProps?.className}
         id={`clause-${field}`}
-        maxLength={inputProps?.maxLength}
         onBlur={() => {
           void commit();
         }}
@@ -653,6 +655,129 @@ const ClauseInlineTextField = ({
         placeholder={placeholder}
         value={draft}
       />
+    </div>
+  );
+};
+
+// ── Language field (searchable single-select over ISO 639-1) ─
+
+type LanguagePick = {
+  code: string;
+  label: string;
+};
+
+/** Single nullable clause language, picked from the canonical
+ *  {@link LANGUAGES} list via a searchable combobox and autosaved as the
+ *  base ISO 639-1 code (region tags canonicalized through `toLanguageCode`).
+ *  Clearing the selection saves `null`. Legacy free-text values outside the
+ *  enum still render (via `displayLanguageName`) and stay selected until the
+ *  user re-picks. */
+const ClauseLanguageField = ({
+  value,
+  clauseId,
+  canEdit,
+  onRefresh,
+}: {
+  value: string | null;
+  clauseId: string;
+  canEdit: boolean;
+  onRefresh: () => void;
+}) => {
+  const t = useTranslations();
+  const lang = useI18nStore((s) => s.lang);
+
+  const options: LanguagePick[] = LANGUAGES.map((language) => ({
+    code: language.code,
+    label: displayLanguageName(language.code, { displayLocale: lang }),
+  })).sort((a, b) => a.label.localeCompare(b.label, lang));
+
+  // Keep a legacy/out-of-enum stored value selectable rather than dropping it.
+  const selected: LanguagePick | null =
+    value === null
+      ? null
+      : (options.find((option) => option.code === toLanguageCode(value)) ?? {
+          code: value,
+          label: displayLanguageName(value, { displayLocale: lang }),
+        });
+
+  const save = useCallback(
+    async (next: string | null) => {
+      const response = await api.clauses({ clauseId }).post({ language: next });
+
+      if (response.error) {
+        stellaToast.add({
+          type: "error",
+          title: t("clauses.saveFailed"),
+          description: userErrorMessage(
+            response.error,
+            t("common.unexpectedError"),
+          ),
+        });
+        return;
+      }
+
+      onRefresh();
+    },
+    [clauseId, t, onRefresh],
+  );
+
+  const handleChange = (pick: LanguagePick | null) => {
+    const next = pick === null ? null : (toLanguageCode(pick.code) ?? null);
+    if (next === value) {
+      return;
+    }
+    void save(next);
+  };
+
+  if (!canEdit) {
+    if (selected === null) {
+      return null;
+    }
+    return (
+      <div className="grid gap-1">
+        <span className="text-muted-foreground text-xs font-medium">
+          {t("common.language")}
+        </span>
+        <p className="text-muted-foreground text-sm">{selected.label}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-1.5">
+      <label className="text-sm font-medium" htmlFor="clause-language">
+        {t("common.language")}
+      </label>
+      <Combobox<LanguagePick>
+        autoHighlight
+        isItemEqualToValue={(a, b) => a.code === b.code}
+        items={options}
+        itemToStringLabel={(item) => item.label}
+        onValueChange={handleChange}
+        value={selected}
+      >
+        <ComboboxInput
+          className="w-60"
+          id="clause-language"
+          placeholder={t("clauses.languagePlaceholder")}
+          showClear
+        />
+        <ComboboxPopup>
+          <ComboboxList>
+            {(item: LanguagePick) => (
+              <ComboboxItem key={item.code} value={item}>
+                {item.label}
+                <span className="text-muted-foreground ms-2 uppercase">
+                  {item.code}
+                </span>
+              </ComboboxItem>
+            )}
+          </ComboboxList>
+          <ComboboxEmpty>
+            {t("translate.dialog.noLanguagesFound")}
+          </ComboboxEmpty>
+        </ComboboxPopup>
+      </Combobox>
     </div>
   );
 };
