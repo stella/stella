@@ -71,7 +71,11 @@ function RootComponent() {
 
 function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en">
+    // dark-mode-init.js mutates the html element's class before React
+    // hydrates the document, so the attribute set never matches the
+    // server markup; suppress the per-element warning rather than
+    // letting every SSR page log a recovered hydration error.
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
         <script src="/dark-mode-init.js" />
