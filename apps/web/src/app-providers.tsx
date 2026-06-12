@@ -4,6 +4,7 @@ import type { PropsWithChildren } from "react";
 import { HotkeysProvider } from "@tanstack/react-hotkeys";
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
+import { useRouterState } from "@tanstack/react-router";
 import { IntlProvider } from "use-intl";
 
 import { ToastProvider } from "@stll/ui/components/toast";
@@ -16,6 +17,7 @@ import { useI18nStore } from "@/i18n/i18n-store";
 import type Messages from "@/i18n/langs/messages.gen";
 import { AnalyticsProvider, useAnalytics } from "@/lib/analytics/provider";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
+import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 
 const SERVER_I18N_TIME_ZONE = "UTC";
 
@@ -32,12 +34,26 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
   const messages = useI18nStore((s) => s.messages);
   const hasLoadedOnce = useI18nStore((s) => s.hasLoadedOnce);
 
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
+
   // Gate the boot spinner on the first load, not on isLoaded: a language
   // switch flips isLoaded false while the new locale streams in, and gating
   // the whole subtree on it would unmount the app (losing in-progress state
   // like onboarding) on every switch. loadedLang/messages are always a
   // consistent already-loaded pair, so the locale swaps in place instead.
-  if (!hasLoadedOnce && typeof window !== "undefined") {
+  //
+  // Server-rendered public paths must skip the spinner entirely: the
+  // server renders full content, so the client's first render has to
+  // produce identical markup or hydration fails. Both sides render the
+  // statically bundled English there, and the persisted locale swaps in
+  // place after mount.
+  if (
+    !hasLoadedOnce &&
+    typeof window !== "undefined" &&
+    !isPublicSsrPath(pathname)
+  ) {
     return <DefaultPendingComponent />;
   }
 

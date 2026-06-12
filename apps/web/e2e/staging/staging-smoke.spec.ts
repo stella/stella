@@ -46,3 +46,31 @@ test("chat thread page renders for an entitlement-less owner", async ({
     .first();
   await expect(composer.or(aiKeyGate)).toBeVisible();
 });
+
+test("server-rendered public law pages hydrate cleanly", async ({ page }) => {
+  // Hydration mismatches surface as pageerrors (React #418 + a router
+  // invariant) and end in the error boundary; collect them explicitly
+  // so the failure names the real exception instead of a timeout.
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => {
+    pageErrors.push(error.message);
+  });
+
+  await page.goto("/law/cases");
+  const firstDecision = page
+    .locator('a[href*="/law/"][href*="/cases/"]')
+    .first();
+
+  await expect(firstDecision).toBeVisible();
+  await firstDecision.click();
+  await expect(page).toHaveURL(/\/law\/[a-z]{2,3}\/cases\//u);
+
+  // Force a full server-rendered load of the decision page: client-side
+  // navigation alone would never exercise the hydration path that broke.
+  await page.reload();
+
+  // Case numbers look like "6 Tdo 647/2017"; anchoring on the slash-year
+  // tail keeps the regex linear.
+  await expect(page.getByRole("heading", { name: /\/\d{4}/u })).toBeVisible();
+  expect(pageErrors).toEqual([]);
+});
