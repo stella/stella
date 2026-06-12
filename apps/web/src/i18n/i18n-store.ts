@@ -5,6 +5,7 @@ import { persist } from "zustand/middleware";
 import { getStorageKey } from "@/consts";
 import en from "@/i18n/langs/en.json";
 import type Messages from "@/i18n/langs/messages.gen";
+import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 
 type LocalizedMessages<T> = {
   [K in keyof T]: T[K] extends string ? string : LocalizedMessages<T[K]>;
@@ -109,6 +110,13 @@ const detectLang = (): SupportedLanguage => {
 
 const defaultLanguage = detectLang();
 const defaultMessages = en;
+
+/**
+ * The statically bundled English messages. Server-rendered public pages
+ * render with these until hydration completes, so client markup can
+ * match the server's regardless of the persisted locale.
+ */
+export const bundledEnglishMessages = en;
 
 export const loadLocaleMessages = async (
   lang: SupportedLanguage,
@@ -223,9 +231,19 @@ export const useI18nStore = create<State & Actions>()(
       version: 0,
       partialize: (state) => ({ lang: state.lang }),
       onRehydrateStorage: () => (state) => {
-        if (state) {
-          void state.loadMessages(state.lang);
+        if (!state) {
+          return;
         }
+        // Public SSR paths hydrate against server-rendered English; the
+        // client entrypoint loads the persisted locale after first paint
+        // instead of this eager rehydration hook.
+        if (
+          typeof window !== "undefined" &&
+          isPublicSsrPath(window.location.pathname)
+        ) {
+          return;
+        }
+        void state.loadMessages(state.lang);
       },
     },
   ),

@@ -598,13 +598,22 @@ describe("public law sitemap", () => {
     expect(searchSource).toContain("usePublicLawPreviewEnabled");
   });
 
-  test("start client initializes i18n before hydrating", async () => {
+  test("start client orders i18n around hydration per path kind", async () => {
     const source = await readSource("apps/web/src/client.tsx");
-    const initializeIndex = source.indexOf("initializeI18n().finally");
-    const hydrateIndex = source.indexOf("hydrateRoot(");
 
-    expect(initializeIndex).toBeGreaterThan(-1);
-    expect(hydrateIndex).toBeGreaterThan(initializeIndex);
+    // Public SSR paths hydrate first (against the server's English) and
+    // load the persisted locale after first paint; app paths keep the
+    // resolve-locale-then-hydrate boot model.
+    expect(source).toContain("isPublicSsrPath(window.location.pathname)");
+    expect(source).toContain("void initializeI18n().finally(hydrate);");
+    const ssrBranchIndex = source.indexOf(
+      "isPublicSsrPath(window.location.pathname)",
+    );
+    const appBranchIndex = source.indexOf(
+      "void initializeI18n().finally(hydrate);",
+    );
+    expect(ssrBranchIndex).toBeGreaterThan(-1);
+    expect(appBranchIndex).toBeGreaterThan(ssrBranchIndex);
   });
 
   test("app provider preserves browser time zones for app timestamps", async () => {
