@@ -71,4 +71,41 @@ describe("resolveAiFields", () => {
     });
     expect("scope" in result).toBe(false);
   });
+
+  test("injects the document text only for fields that opted in", async () => {
+    const seenByPath = new Map<string, string | undefined>();
+    const capturingGenerator: AiFieldGenerator = async ({
+      fieldPath,
+      documentText,
+    }) => {
+      seenByPath.set(fieldPath, documentText);
+      return `DRAFT[${fieldPath}]`;
+    };
+    await resolveAiFields({
+      values: {},
+      fields: [
+        { path: "reads", aiPrompt: "Draft", aiSeesDocument: true },
+        { path: "blind", aiPrompt: "Draft", aiSeesDocument: false },
+        { path: "absent", aiPrompt: "Draft" },
+      ],
+      generate: capturingGenerator,
+      documentText: "THE CONTRACT BODY",
+    });
+    expect(seenByPath.get("reads")).toBe("THE CONTRACT BODY");
+    expect(seenByPath.get("blind")).toBeUndefined();
+    expect(seenByPath.get("absent")).toBeUndefined();
+  });
+
+  test("an opted-in field gets no document text when none is supplied", async () => {
+    let seen: string | undefined = "sentinel";
+    await resolveAiFields({
+      values: {},
+      fields: [{ path: "reads", aiPrompt: "Draft", aiSeesDocument: true }],
+      generate: async ({ documentText }) => {
+        seen = documentText;
+        return "DRAFT";
+      },
+    });
+    expect(seen).toBeUndefined();
+  });
 });

@@ -44,9 +44,15 @@ export const buildAiFieldGenerator = ({
   if (!orgAIConfig) {
     return undefined;
   }
-  return async ({ prompt, values }) => {
+  return async ({ prompt, values, documentText }) => {
     try {
       const skillTools = maybeSkillTools(prompt, skillContext);
+      // Injected only for fields that opted in via aiSeesDocument; omitted
+      // entirely otherwise so non-opted fields cost the same tokens as before.
+      const documentSection =
+        documentText !== undefined && documentText.trim() !== ""
+          ? `\nDocument:\n${documentText}\n`
+          : "";
       const { text } = await generateText({
         abortSignal: AbortSignal.timeout(AI_FIELD_TIMEOUT_MS),
         maxOutputTokens: AI_FIELD_MAX_TOKENS,
@@ -64,7 +70,7 @@ export const buildAiFieldGenerator = ({
             }
           : {}),
         prompt: `You are drafting a single field of a legal document. Instruction: ${prompt}
-
+${documentSection}
 Known details (JSON):
 ${JSON.stringify(values)}
 

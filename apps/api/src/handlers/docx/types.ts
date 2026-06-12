@@ -376,6 +376,13 @@ export type FieldMeta = {
    */
   aiAdapt?: boolean | undefined;
   /**
+   * Per-field opt-in for AI-drafted fields ({@link aiPrompt}): when true, the
+   * rendered document text is injected into the generator prompt so the draft
+   * can reference the surrounding contract. Default falsy keeps the token cost
+   * bounded — only opted-in fields pay for the document context.
+   */
+  aiSeesDocument?: boolean | undefined;
+  /**
    * Composite field: the value is entered as several parts (e.g. a select for
    * a professional title plus a free-text name) that are validated and joined
    * by {@link format} into the single string the document's one {{marker}} is
@@ -559,6 +566,8 @@ export const isFieldMeta = (value: unknown): value is FieldMeta => {
     (value["aiPrompt"] === undefined ||
       typeof value["aiPrompt"] === "string") &&
     (value["aiAdapt"] === undefined || typeof value["aiAdapt"] === "boolean") &&
+    (value["aiSeesDocument"] === undefined ||
+      typeof value["aiSeesDocument"] === "boolean") &&
     (value["parts"] === undefined ||
       (Array.isArray(value["parts"]) &&
         value["parts"].length > 0 &&
@@ -656,6 +665,9 @@ export type ResolvedField = {
   /** Mirrors {@link FieldMeta.aiPrompt}: AI-drafted fields render no
    *  fill-form input (the model writes them at fill time). */
   aiPrompt?: string | undefined;
+  /** Mirrors {@link FieldMeta.aiSeesDocument}: opts an AI-drafted field into
+   *  receiving the document text in its generator prompt. */
+  aiSeesDocument?: boolean | undefined;
   /** Mirrors {@link FieldMeta.parts}: the fill form renders one input per part. */
   parts?: FieldPart[] | undefined;
   /** Mirrors {@link FieldMeta.format}. */

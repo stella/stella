@@ -13,7 +13,10 @@ import {
 } from "@/api/handlers/docx/adapt-ai-fields";
 import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
-import { extractText } from "@/api/handlers/docx/extract-text";
+import {
+  documentTextForAiFields,
+  extractText,
+} from "@/api/handlers/docx/extract-text";
 import { createDispatchLookupResolver } from "@/api/handlers/docx/lookup-fields";
 import { manifestNamedConditions } from "@/api/handlers/docx/manifest-conditions";
 import { applyManifestFillSteps } from "@/api/handlers/docx/manifest-fill-steps";
@@ -265,9 +268,14 @@ export const fillStoredTemplateDocx = async ({
       return { error: stepError };
     }
 
+    const documentText = await documentTextForAiFields(
+      new Uint8Array(loaded.buffer),
+      manifest.fields,
+    );
     record = await resolveAiFields({
       values: record,
       fields: manifest.fields,
+      documentText,
       generate: generateAiValue,
     });
     // Decide AI-decided boolean conditions (a boolean field with an aiPrompt)
