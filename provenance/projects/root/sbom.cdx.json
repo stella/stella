@@ -59,7 +59,7 @@
       "version": "3.0.81"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/azure@3.0.69",
+      "bom-ref": "pkg:npm/@ai-sdk/azure@3.0.70",
       "evidence": {
         "identity": [
           {
@@ -107,13 +107,13 @@
           "value": "node_modules/@ai-sdk/azure/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/azure@3.0.69",
+      "purl": "pkg:npm/%40ai-sdk/azure@3.0.70",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.0.69"
+      "version": "3.0.70"
     },
     {
       "bom-ref": "pkg:npm/@ai-sdk/devtools@0.0.18",
@@ -413,7 +413,7 @@
       "version": "3.0.37"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/openai@3.0.67",
+      "bom-ref": "pkg:npm/@ai-sdk/openai@3.0.68",
       "evidence": {
         "identity": [
           {
@@ -464,14 +464,14 @@
           "value": "node_modules/@ai-sdk/openai/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/openai@3.0.67",
+      "purl": "pkg:npm/%40ai-sdk/openai@3.0.68",
       "scope": "required",
       "tags": [
         "framework",
         "ml"
       ],
       "type": "framework",
-      "version": "3.0.67"
+      "version": "3.0.68"
     },
     {
       "bom-ref": "pkg:npm/@ai-sdk/provider-utils@4.0.27",
@@ -1281,6 +1281,9 @@
             "location": "apps/web/src/routes/_protected.chat/index.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.chat_.new.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.contacts/$contactId.tsx#1"
           },
           {
@@ -1746,9 +1749,6 @@
             "location": "apps/web/src/routes/onboarding/-components/onboarding-wizard.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/onboarding/-components/prices-panel.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/onboarding/-components/sidebar-preview.tsx#1"
           },
           {
@@ -2031,7 +2031,7 @@
             "location": "apps/api/scripts/seed-usage-policies.ts#9"
           },
           {
-            "location": "apps/api/src/env-base.ts#11"
+            "location": "apps/api/src/env-base.ts#12"
           },
           {
             "location": "apps/api/src/env.ts#3"
@@ -2220,7 +2220,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#6"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input.tsx#20"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx#21"
@@ -2979,6 +2982,9 @@
             "location": "apps/web/src/routes/_protected.chat/index.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.chat_.new.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.contacts/$contactId.tsx#1"
           },
           {
@@ -3442,9 +3448,6 @@
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/onboarding-wizard.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/onboarding/-components/prices-panel.tsx#1"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/sidebar-preview.tsx#1"
@@ -4645,10 +4648,10 @@
     {
       "authors": [
         {
-          "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/javascript/)"
+          "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1061.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1063.0",
       "description": "AWS SDK for JavaScript S3 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -4697,21 +4700,21 @@
           "value": "node_modules/@aws-sdk/client-s3/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1061.0",
+      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1063.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1061.0"
+      "version": "3.1063.0"
     },
     {
       "authors": [
         {
-          "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/javascript/)"
+          "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1061.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1063.0",
       "description": "AWS SDK for JavaScript Sesv2 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -4760,21 +4763,21 @@
           "value": "node_modules/@aws-sdk/client-sesv2/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1061.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1063.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1061.0"
+      "version": "3.1063.0"
     },
     {
       "authors": [
         {
-          "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/javascript/)"
+          "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1061.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1063.0",
       "description": "AWS SDK for JavaScript Sts Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -4823,21 +4826,21 @@
           "value": "node_modules/@aws-sdk/client-sts/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1061.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1063.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1061.0"
+      "version": "3.1063.0"
     },
     {
       "authors": [
         {
-          "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/javascript/)"
+          "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1061.0",
+      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1063.0",
       "evidence": {
         "identity": [
           {
@@ -4885,13 +4888,13 @@
           "value": "node_modules/@aws-sdk/s3-request-presigner/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1061.0",
+      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1063.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1061.0"
+      "version": "3.1063.0"
     },
     {
       "authors": [
@@ -5584,6 +5587,9 @@
             "location": "apps/web/src/routes/_protected.chat/index.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.chat_.new.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.contacts/$contactId.tsx#1"
           },
           {
@@ -6047,9 +6053,6 @@
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/onboarding-wizard.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/onboarding/-components/prices-panel.tsx#1"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/sidebar-preview.tsx#1"
@@ -6758,6 +6761,9 @@
           },
           {
             "location": "apps/web/src/lib/anonymize/pdf-content-stream.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/anonymize/pdf-content-stream.ts#2"
           },
           {
             "location": "apps/web/src/lib/anonymize/pdf-coords.ts#1"
@@ -7817,6 +7823,9 @@
             "location": "apps/web/src/routes/_protected.chat/index.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.chat_.new.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.contacts/$contactId.tsx#1"
           },
           {
@@ -8282,9 +8291,6 @@
             "location": "apps/web/src/routes/onboarding/-components/onboarding-wizard.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/onboarding/-components/prices-panel.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/onboarding/-components/sidebar-preview.tsx#1"
           },
           {
@@ -8542,7 +8548,7 @@
           "name": "Pydantic Team"
         }
       ],
-      "bom-ref": "pkg:npm/@pydantic/genai-prices@0.0.62",
+      "bom-ref": "pkg:npm/@pydantic/genai-prices@0.0.64",
       "description": "Calculate prices for calling LLM inference APIs",
       "evidence": {
         "identity": [
@@ -8561,10 +8567,10 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/routes/onboarding/-components/prices-panel.tsx#3"
+            "location": "apps/web/src/routes/onboarding/-components/prices-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/onboarding/-components/prices-panel.tsx#9"
+            "location": "apps/web/src/routes/onboarding/-components/prices-panel.tsx#2"
           }
         ]
       },
@@ -8594,10 +8600,10 @@
           "value": "node_modules/@pydantic/genai-prices/package.json"
         }
       ],
-      "purl": "pkg:npm/%40pydantic/genai-prices@0.0.62",
+      "purl": "pkg:npm/%40pydantic/genai-prices@0.0.64",
       "scope": "required",
       "type": "library",
-      "version": "0.0.62"
+      "version": "0.0.64"
     },
     {
       "bom-ref": "pkg:npm/@react-email/components@1.0.12",
@@ -9228,12 +9234,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/form.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx#3"
@@ -10276,7 +10276,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.11",
+      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.15",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -10362,9 +10362,6 @@
           },
           {
             "location": "apps/web/src/components/breadcrumbs/app-breadcrumbs.tsx#3"
-          },
-          {
-            "location": "apps/web/src/components/breadcrumbs/app-breadcrumbs.tsx#4"
           },
           {
             "location": "apps/web/src/components/breadcrumbs/contact-breadcrumb.tsx#2"
@@ -10457,9 +10454,6 @@
             "location": "apps/web/src/routes/_protected.chat/index.tsx#15"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/new.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/_protected.chat/route.tsx#1"
           },
           {
@@ -10467,6 +10461,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.chat/workspaces/$workspaceId/new.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.chat_.new.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/$contactId.tsx#8"
@@ -10772,10 +10769,10 @@
           "value": "node_modules/@tanstack/react-router/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-router@1.170.11",
+      "purl": "pkg:npm/%40tanstack/react-router@1.170.15",
       "scope": "required",
       "type": "library",
-      "version": "1.170.11"
+      "version": "1.170.15"
     },
     {
       "authors": [
@@ -10783,7 +10780,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-start@1.168.19",
+      "bom-ref": "pkg:npm/@tanstack/react-start@1.168.24",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -10838,10 +10835,10 @@
           "value": "node_modules/@tanstack/react-start/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-start@1.168.19",
+      "purl": "pkg:npm/%40tanstack/react-start@1.168.24",
       "scope": "required",
       "type": "library",
-      "version": "1.168.19"
+      "version": "1.168.24"
     },
     {
       "authors": [
@@ -11298,7 +11295,7 @@
       "version": "2.11.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/core@3.24.0",
+      "bom-ref": "pkg:npm/@tiptap/core@3.26.0",
       "description": "headless rich text editor",
       "evidence": {
         "identity": [
@@ -11356,13 +11353,13 @@
           "value": "node_modules/@tiptap/core/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/core@3.24.0",
+      "purl": "pkg:npm/%40tiptap/core@3.26.0",
       "scope": "required",
       "type": "library",
-      "version": "3.24.0"
+      "version": "3.26.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-bold@3.24.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-bold@3.26.0",
       "description": "bold extension for tiptap",
       "evidence": {
         "identity": [
@@ -11411,13 +11408,13 @@
           "value": "node_modules/@tiptap/extension-bold/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-bold@3.24.0",
+      "purl": "pkg:npm/%40tiptap/extension-bold@3.26.0",
       "scope": "required",
       "type": "library",
-      "version": "3.24.0"
+      "version": "3.26.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-document@3.24.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-document@3.26.0",
       "description": "document extension for tiptap",
       "evidence": {
         "identity": [
@@ -11469,13 +11466,13 @@
           "value": "node_modules/@tiptap/extension-document/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-document@3.24.0",
+      "purl": "pkg:npm/%40tiptap/extension-document@3.26.0",
       "scope": "required",
       "type": "library",
-      "version": "3.24.0"
+      "version": "3.26.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-hard-break@3.24.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-hard-break@3.26.0",
       "description": "hard break extension for tiptap",
       "evidence": {
         "identity": [
@@ -11524,13 +11521,13 @@
           "value": "node_modules/@tiptap/extension-hard-break/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-hard-break@3.24.0",
+      "purl": "pkg:npm/%40tiptap/extension-hard-break@3.26.0",
       "scope": "required",
       "type": "library",
-      "version": "3.24.0"
+      "version": "3.26.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-heading@3.24.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-heading@3.26.0",
       "description": "heading extension for tiptap",
       "evidence": {
         "identity": [
@@ -11579,13 +11576,13 @@
           "value": "node_modules/@tiptap/extension-heading/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-heading@3.24.0",
+      "purl": "pkg:npm/%40tiptap/extension-heading@3.26.0",
       "scope": "required",
       "type": "library",
-      "version": "3.24.0"
+      "version": "3.26.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-history@3.24.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-history@3.26.0",
       "description": "history extension for tiptap",
       "evidence": {
         "identity": [
@@ -11640,13 +11637,13 @@
           "value": "node_modules/@tiptap/extension-history/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-history@3.24.0",
+      "purl": "pkg:npm/%40tiptap/extension-history@3.26.0",
       "scope": "required",
       "type": "library",
-      "version": "3.24.0"
+      "version": "3.26.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-italic@3.24.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-italic@3.26.0",
       "description": "italic extension for tiptap",
       "evidence": {
         "identity": [
@@ -11695,13 +11692,13 @@
           "value": "node_modules/@tiptap/extension-italic/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-italic@3.24.0",
+      "purl": "pkg:npm/%40tiptap/extension-italic@3.26.0",
       "scope": "required",
       "type": "library",
-      "version": "3.24.0"
+      "version": "3.26.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-mention@3.24.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-mention@3.26.0",
       "description": "mention extension for tiptap",
       "evidence": {
         "identity": [
@@ -11759,13 +11756,13 @@
           "value": "node_modules/@tiptap/extension-mention/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-mention@3.24.0",
+      "purl": "pkg:npm/%40tiptap/extension-mention@3.26.0",
       "scope": "required",
       "type": "library",
-      "version": "3.24.0"
+      "version": "3.26.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-paragraph@3.24.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-paragraph@3.26.0",
       "description": "paragraph extension for tiptap",
       "evidence": {
         "identity": [
@@ -11820,13 +11817,13 @@
           "value": "node_modules/@tiptap/extension-paragraph/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-paragraph@3.24.0",
+      "purl": "pkg:npm/%40tiptap/extension-paragraph@3.26.0",
       "scope": "required",
       "type": "library",
-      "version": "3.24.0"
+      "version": "3.26.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-placeholder@3.24.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-placeholder@3.26.0",
       "description": "placeholder extension for tiptap",
       "evidence": {
         "identity": [
@@ -11881,13 +11878,13 @@
           "value": "node_modules/@tiptap/extension-placeholder/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-placeholder@3.24.0",
+      "purl": "pkg:npm/%40tiptap/extension-placeholder@3.26.0",
       "scope": "required",
       "type": "library",
-      "version": "3.24.0"
+      "version": "3.26.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-text@3.24.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-text@3.26.0",
       "description": "text extension for tiptap",
       "evidence": {
         "identity": [
@@ -11942,13 +11939,13 @@
           "value": "node_modules/@tiptap/extension-text/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-text@3.24.0",
+      "purl": "pkg:npm/%40tiptap/extension-text@3.26.0",
       "scope": "required",
       "type": "library",
-      "version": "3.24.0"
+      "version": "3.26.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/pm@3.24.0",
+      "bom-ref": "pkg:npm/@tiptap/pm@3.26.0",
       "description": "prosemirror wrapper package for tiptap",
       "evidence": {
         "identity": [
@@ -12021,13 +12018,13 @@
           "value": "node_modules/@tiptap/pm/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/pm@3.24.0",
+      "purl": "pkg:npm/%40tiptap/pm@3.26.0",
       "scope": "required",
       "type": "library",
-      "version": "3.24.0"
+      "version": "3.26.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/react@3.24.0",
+      "bom-ref": "pkg:npm/@tiptap/react@3.26.0",
       "description": "React components for tiptap",
       "evidence": {
         "identity": [
@@ -12712,6 +12709,9 @@
             "location": "apps/web/src/routes/_protected.chat/index.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.chat_.new.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.contacts/$contactId.tsx#1"
           },
           {
@@ -13177,9 +13177,6 @@
             "location": "apps/web/src/routes/onboarding/-components/onboarding-wizard.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/onboarding/-components/prices-panel.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/onboarding/-components/sidebar-preview.tsx#1"
           },
           {
@@ -13426,13 +13423,13 @@
           "value": "node_modules/@tiptap/react/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/react@3.24.0",
+      "purl": "pkg:npm/%40tiptap/react@3.26.0",
       "scope": "required",
       "type": "library",
-      "version": "3.24.0"
+      "version": "3.26.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/suggestion@3.24.0",
+      "bom-ref": "pkg:npm/@tiptap/suggestion@3.26.0",
       "description": "suggestion plugin for tiptap",
       "evidence": {
         "identity": [
@@ -13499,10 +13496,10 @@
           "value": "node_modules/@tiptap/suggestion/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/suggestion@3.24.0",
+      "purl": "pkg:npm/%40tiptap/suggestion@3.26.0",
       "scope": "required",
       "type": "library",
-      "version": "3.24.0"
+      "version": "3.26.0"
     },
     {
       "authors": [
@@ -13578,6 +13575,259 @@
     },
     {
       "bom-ref": "pkg:npm/ai@6.0.196",
+      "description": "AI SDK by Vercel - build apps like ChatGPT, Claude, Gemini, and more with a single interface for any model using the Vercel AI Gateway or go direct to OpenAI, Anthropic, Google, or any other model provider.",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@ai-sdk/react/node_modules/ai/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@ai-sdk/react/node_modules/ai/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/scripts/benchmark-chat-read-surface.ts#13"
+          },
+          {
+            "location": "apps/api/scripts/benchmark-chat-read-surface.ts#14"
+          },
+          {
+            "location": "apps/api/src/dev/register-mock-ai.ts#2"
+          },
+          {
+            "location": "apps/api/src/dev/register-mock-ai.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/ai-autocomplete/stream.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/analysis/generate.ts#9"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#10"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/attachment-validation.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/attachment-validation.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/chat-schema.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/chat-schema.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/compaction.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/compaction.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/generate-thread-title.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/loop-detector.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/persistent-compaction.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/stream-chat.ts#8"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/stream-chat.ts#14"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/third-party-boundary.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/third-party-boundary.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/thread-recap.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/active-docx-edit-tool.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/boe-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/business-registry-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/chat-tools.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/create-document-tool.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/execute/chat-execution-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/external-mcp-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/infosoud-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/org-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/tool-policy.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/web-search-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/types.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/upload-files.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/upload-files.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/properties/suggest-prompt.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/search/ai.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/generate-draft.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/resources/rewrite.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/ai-caching.ts#16"
+          },
+          {
+            "location": "apps/api/src/lib/ai-error.ts#9"
+          },
+          {
+            "location": "apps/api/src/lib/ai-models.ts#43"
+          },
+          {
+            "location": "apps/api/src/lib/ai-models.ts#44"
+          },
+          {
+            "location": "apps/api/src/lib/ai-output-schema.ts#27"
+          },
+          {
+            "location": "apps/api/src/lib/ai-output-schema.ts#28"
+          },
+          {
+            "location": "apps/api/src/lib/analytics/ai.ts#6"
+          },
+          {
+            "location": "apps/api/src/lib/bbox/ai-generate-b-boxes.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/workflow/ai-generate-batch.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/workflow/ai-generate-batch.ts#2"
+          },
+          {
+            "location": "apps/api/src/mcp/tool-utils.ts#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#14"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.chat/-lib/build-chat-request-message.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.chat/-queries.ts#8"
+          },
+          {
+            "location": "apps/web/src/components/ai-elements/message.tsx#6"
+          },
+          {
+            "location": "apps/web/src/components/chat/ask-user-card.tsx#4"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#4"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#5"
+          },
+          {
+            "location": "apps/web/src/components/chat/needs-matter-card.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/chat/source-chips.tsx#5"
+          },
+          {
+            "location": "apps/web/src/components/chat/source-chips.tsx#6"
+          },
+          {
+            "location": "apps/web/src/components/chat/tool-call-card.tsx#4"
+          },
+          {
+            "location": "apps/api/src/dev/register-mock-ai.ts#3"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://ai-sdk.dev/docs"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/vercel/ai"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
+          }
+        }
+      ],
+      "name": "ai",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@ai-sdk/react/node_modules/ai/package.json"
+        }
+      ],
+      "purl": "pkg:npm/ai@6.0.196",
+      "scope": "required",
+      "tags": [
+        "ai"
+      ],
+      "type": "library",
+      "version": "6.0.196"
+    },
+    {
+      "bom-ref": "pkg:npm/ai@6.0.197",
       "description": "AI SDK by Vercel - build apps like ChatGPT, Claude, Gemini, and more with a single interface for any model using the Vercel AI Gateway or go direct to OpenAI, Anthropic, Google, or any other model provider.",
       "evidence": {
         "identity": [
@@ -13821,13 +14071,13 @@
           "value": "node_modules/ai/package.json"
         }
       ],
-      "purl": "pkg:npm/ai@6.0.196",
+      "purl": "pkg:npm/ai@6.0.197",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "6.0.196"
+      "version": "6.0.197"
     },
     {
       "authors": [
@@ -14059,6 +14309,9 @@
             "location": "apps/api/src/db-url.ts#1"
           },
           {
+            "location": "apps/api/src/env-base.ts#11"
+          },
+          {
             "location": "apps/api/src/env.ts#2"
           },
           {
@@ -14084,6 +14337,12 @@
           },
           {
             "location": "apps/api/src/handlers/billing-codes/update.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/corpus-index.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/decisions/read-by-id.ts#1"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/slug.ts#1"
@@ -14317,6 +14576,9 @@
             "location": "apps/api/src/handlers/entities/copy-to-workspace.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/entities/copy-utils.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/entities/create-from-buffer.ts#1"
           },
           {
@@ -14537,6 +14799,15 @@
           },
           {
             "location": "apps/api/src/handlers/legislation/borme-summary.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/legislation/corpus-index.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/legislation/corpus-routes.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/legislation/ingestion.ts#1"
           },
           {
             "location": "apps/api/src/handlers/mcp-connectors/connect.ts#1"
@@ -15094,6 +15365,12 @@
             "location": "apps/api/src/lib/huggingface.ts#1"
           },
           {
+            "location": "apps/api/src/lib/legal-search/corpus-index-client.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/index-naming.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/matter-reference.ts#1"
           },
           {
@@ -15431,6 +15708,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-result.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#5"
@@ -16418,6 +16698,15 @@
             "location": "apps/api/src/handlers/case-law/analysis/generate.ts#10"
           },
           {
+            "location": "apps/api/src/handlers/case-law/citation-authority.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/citation-authority.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/corpus-index.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/decisions/facets.ts#1"
           },
           {
@@ -16430,7 +16719,7 @@
             "location": "apps/api/src/handlers/case-law/decisions/list.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/case-law/decisions/read-by-id.ts#1"
+            "location": "apps/api/src/handlers/case-law/decisions/read-by-id.ts#2"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/search-sql.ts#1"
@@ -16439,10 +16728,16 @@
             "location": "apps/api/src/handlers/case-law/decisions/search.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/case-law/decisions/search.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/decisions/sitemap.ts#1"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/sitemap.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/erasure.ts#1"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/pipeline.ts#2"
@@ -16461,6 +16756,9 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/polarity/rule-engine.ts#13"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/redistribution.ts#1"
           },
           {
             "location": "apps/api/src/handlers/case-law/search-index.ts#1"
@@ -16589,7 +16887,7 @@
             "location": "apps/api/src/handlers/entities/copy-to-workspace.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/entities/copy-utils.ts#1"
+            "location": "apps/api/src/handlers/entities/copy-utils.ts#2"
           },
           {
             "location": "apps/api/src/handlers/entities/create-from-buffer.ts#2"
@@ -16715,6 +17013,9 @@
             "location": "apps/api/src/handlers/fields/upsert-by-id.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/files/field-file-refs.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/files/read-by-id.ts#2"
           },
           {
@@ -16749,6 +17050,27 @@
           },
           {
             "location": "apps/api/src/handlers/invoices/update.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/legislation/corpus-index.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/legislation/ingestion.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/legislation/read-by-id.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/legislation/redistribution.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/legislation/search-index.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/legislation/search.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/legislation/search.ts#2"
           },
           {
             "location": "apps/api/src/handlers/mcp-connectors/connect.ts#2"
@@ -17126,6 +17448,12 @@
             "location": "apps/api/src/lib/infosoud/agenda-import.ts#1"
           },
           {
+            "location": "apps/api/src/lib/legal-search/corpus-index-provider.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/pg-fts-legal-provider.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/mcp-upstream/connections.ts#9"
           },
           {
@@ -17201,6 +17529,12 @@
             "location": "apps/api/src/scripts/adapter-health.ts#17"
           },
           {
+            "location": "apps/api/src/scripts/backfill-corpus-storage.ts#1"
+          },
+          {
+            "location": "apps/api/src/scripts/backfill-corpus-storage.ts#2"
+          },
+          {
             "location": "apps/api/src/scripts/backfill-fulltext.ts#12"
           },
           {
@@ -17208,6 +17542,12 @@
           },
           {
             "location": "apps/api/src/scripts/resolve-citations.ts#18"
+          },
+          {
+            "location": "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts#1"
+          },
+          {
+            "location": "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts#2"
           },
           {
             "location": "apps/api/src/db/auth-schema.ts#10"
@@ -17423,16 +17763,16 @@
             "location": "apps/api/src/handlers/case-law/decisions/list.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/case-law/decisions/read-by-id.ts#2"
+            "location": "apps/api/src/handlers/case-law/decisions/read-by-id.ts#3"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/search-schema.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/case-law/decisions/search.ts#2"
+            "location": "apps/api/src/handlers/case-law/decisions/search.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/case-law/decisions/search.ts#3"
+            "location": "apps/api/src/handlers/case-law/decisions/search.ts#4"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/sitemap.ts#3"
@@ -17843,7 +18183,19 @@
             "location": "apps/api/src/handlers/legislation/borme-summary.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/legislation/corpus-routes.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/legislation/read-by-id.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/legislation/routes.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/legislation/search.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/legislation/search.ts#4"
           },
           {
             "location": "apps/api/src/handlers/mcp/routes-core.ts#1"
@@ -19294,7 +19646,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-result.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.tsx#5"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.tsx#6"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#5"
@@ -19649,14 +20001,14 @@
       "evidence": {
         "identity": [
           {
-            "concludedValue": "node_modules/marked/package.json",
+            "concludedValue": "node_modules/@react-email/markdown/node_modules/marked/package.json",
             "confidence": 0.7,
             "field": "purl",
             "methods": [
               {
                 "confidence": 0.7,
                 "technique": "manifest-analysis",
-                "value": "node_modules/marked/package.json"
+                "value": "node_modules/@react-email/markdown/node_modules/marked/package.json"
               }
             ]
           }
@@ -19690,7 +20042,11 @@
       "properties": [
         {
           "name": "SrcFile",
-          "value": "node_modules/marked/package.json"
+          "value": "node_modules/react-email/node_modules/marked/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@react-email/markdown/node_modules/marked/package.json"
         }
       ],
       "purl": "pkg:npm/marked@15.0.12",
@@ -19817,6 +20173,66 @@
       "scope": "required",
       "type": "library",
       "version": "17.0.5"
+    },
+    {
+      "authors": [
+        {
+          "name": "Christopher Jeffrey"
+        }
+      ],
+      "bom-ref": "pkg:npm/marked@18.0.5",
+      "description": "A markdown parser built for speed",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/marked/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/marked/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "packages/folio/src/core/markdown/fromMarkdown.ts#21"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://marked.js.org"
+        },
+        {
+          "type": "vcs",
+          "url": "git://github.com/markedjs/marked.git"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "marked",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/marked/package.json"
+        }
+      ],
+      "purl": "pkg:npm/marked@18.0.5",
+      "scope": "required",
+      "type": "library",
+      "version": "18.0.5"
     },
     {
       "authors": [
@@ -20015,7 +20431,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-js@1.379.2",
+      "bom-ref": "pkg:npm/posthog-js@1.381.0",
       "description": "Posthog-js allows you to automatically capture usage and send events to PostHog.",
       "evidence": {
         "identity": [
@@ -20064,10 +20480,10 @@
           "value": "node_modules/posthog-js/lib/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-js@1.379.2",
+      "purl": "pkg:npm/posthog-js@1.381.0",
       "scope": "required",
       "type": "library",
-      "version": "1.379.2"
+      "version": "1.381.0"
     },
     {
       "authors": [
@@ -20075,7 +20491,7 @@
           "name": "PostHog <engineering@posthog.com> (https://posthog.com)"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-node@5.35.14",
+      "bom-ref": "pkg:npm/posthog-node@5.36.3",
       "description": "PostHog Node.js integration",
       "evidence": {
         "identity": [
@@ -20120,10 +20536,10 @@
           "value": "node_modules/posthog-node/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-node@5.35.14",
+      "purl": "pkg:npm/posthog-node@5.36.3",
       "scope": "required",
       "type": "library",
-      "version": "5.35.14"
+      "version": "5.36.3"
     },
     {
       "bom-ref": "pkg:npm/prosemirror-commands@1.7.1",
@@ -20505,6 +20921,9 @@
             "location": "packages/folio/src/core/prosemirror/extensions/features/EmptyParagraphFormatExtension.ts#22"
           },
           {
+            "location": "packages/folio/src/core/prosemirror/extensions/features/ParaIdAllocatorExtension.ts#16"
+          },
+          {
             "location": "packages/folio/src/core/prosemirror/extensions/marks/RunFormattingOverrideExtension.ts#9"
           },
           {
@@ -20670,7 +21089,10 @@
             "location": "packages/folio/src/core/prosemirror/extensions/features/ListExtension.ts#8"
           },
           {
-            "location": "packages/folio/src/core/prosemirror/extensions/features/ParaIdAllocatorExtension.ts#16"
+            "location": "packages/folio/src/core/prosemirror/extensions/features/ParaIdAllocatorExtension.ts#17"
+          },
+          {
+            "location": "packages/folio/src/core/prosemirror/extensions/features/ParaIdAllocatorExtension.ts#18"
           },
           {
             "location": "packages/folio/src/core/prosemirror/extensions/features/ParagraphChangeTrackerExtension.ts#9"
@@ -21010,7 +21432,7 @@
             "location": "packages/folio/src/components/HiddenHeaderFooterPMs.tsx#37"
           },
           {
-            "location": "packages/folio/src/components/HiddenHeaderFooterPMs.tsx#52"
+            "location": "packages/folio/src/components/HiddenHeaderFooterPMs.tsx#53"
           },
           {
             "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#32"
@@ -21025,19 +21447,19 @@
             "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#39"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#58"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#59"
           },
           {
             "location": "packages/folio/src/paged-editor/PagedEditor.tsx#32"
           },
           {
-            "location": "packages/folio/src/components/HiddenHeaderFooterPMs.tsx#52"
+            "location": "packages/folio/src/components/HiddenHeaderFooterPMs.tsx#53"
           },
           {
             "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#35"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#58"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#59"
           }
         ]
       },
@@ -21979,6 +22401,9 @@
             "location": "apps/web/src/routes/_protected.chat/index.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.chat_.new.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.contacts/$contactId.tsx#1"
           },
           {
@@ -22442,9 +22867,6 @@
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/onboarding-wizard.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/onboarding/-components/prices-panel.tsx#1"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/sidebar-preview.tsx#1"
@@ -23267,7 +23689,7 @@
             "location": "apps/web/src/components/auth/sign-in-panel.tsx#8"
           },
           {
-            "location": "apps/web/src/components/breadcrumbs/app-breadcrumbs.tsx#5"
+            "location": "apps/web/src/components/breadcrumbs/app-breadcrumbs.tsx#4"
           },
           {
             "location": "apps/web/src/components/breadcrumbs/workspace-breadcrumb.tsx#7"
@@ -23696,7 +24118,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-result.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.tsx#6"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.tsx#7"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#6"
@@ -23705,7 +24127,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#26"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#5"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/editable-field.tsx#16"
@@ -23945,7 +24367,7 @@
             "location": "apps/web/src/routes/onboarding/-components/onboarding-wizard.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/onboarding/-components/prices-panel.tsx#10"
+            "location": "apps/web/src/routes/onboarding/-components/prices-panel.tsx#3"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/sidebar-preview.tsx#12"
@@ -24191,7 +24613,7 @@
             "location": "apps/api/scripts/seed-usage-policies.ts#9"
           },
           {
-            "location": "apps/api/src/env-base.ts#11"
+            "location": "apps/api/src/env-base.ts#12"
           },
           {
             "location": "apps/api/src/env.ts#3"
@@ -24380,7 +24802,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#6"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input.tsx#20"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx#21"
