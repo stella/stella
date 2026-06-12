@@ -16,6 +16,9 @@ export type StudioField = EditableField & {
   aiPrompt: string | undefined;
   /** Person fills a stub; AI rewords it per occurrence to fit the context. */
   aiAdapt: boolean;
+  /** AI-only field opt-in: inject the document text into the generator
+   *  prompt so the draft can reference the surrounding contract. */
+  aiSeesDocument: boolean;
 };
 export const defaultStudioField = (path: string): StudioField => ({
   path,
@@ -26,6 +29,7 @@ export const defaultStudioField = (path: string): StudioField => ({
   options: [],
   aiPrompt: undefined,
   aiAdapt: false,
+  aiSeesDocument: false,
 });
 
 type TemplateStudioSession = {
