@@ -134,6 +134,14 @@ export default defineConfig(({ mode }) => {
       // deps here makes the optimizer finish them up front. Dev-only:
       // production uses Rollup and ignores optimizeDeps.
       include: [
+        // 3. @tanstack/react-start's isomorphic-fn/server entrypoints
+        //    (lib/beta-features.ts) reach these only at runtime.
+        "@tanstack/history",
+        "@tanstack/router-core",
+        "@tanstack/router-core/ssr/client",
+        "@tanstack/router-core/ssr/server",
+        "h3-v2",
+        "seroval",
         "@better-auth/core/env",
         "@better-auth/core/error",
         "@better-auth/core/utils/error-codes",
