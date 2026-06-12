@@ -47,7 +47,6 @@ import {
 import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
-import { useDevStore } from "@/lib/dev-store";
 import { toAPIError } from "@/lib/errors";
 import { useModelSelectorStore } from "@/lib/model-selector-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
@@ -87,7 +86,6 @@ export const ChatThreadPage = ({
   const { ensureAIAvailable } = useAIKeyGate();
   const userContext = useChatUserContext();
   const getUserContext = useEffectEvent(() => userContext);
-  const showToolCallDetails = useDevStore((state) => state.showToolCallDetails);
   const prompts = useSavedPrompts();
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
@@ -139,10 +137,13 @@ export const ChatThreadPage = ({
     }),
   );
   const { chat } = data;
-  if (seededForThreadId !== threadRef.threadId) {
+  useEffect(() => {
+    if (seededForThreadId === threadRef.threadId) {
+      return;
+    }
     setSeededForThreadId(threadRef.threadId);
     setContextMatterIds(data.contextMatterIds);
-  }
+  }, [data.contextMatterIds, seededForThreadId, threadRef.threadId]);
 
   const {
     error,
@@ -462,7 +463,6 @@ export const ChatThreadPage = ({
                     onSendWithoutAnonymization={sendWithoutAnonymization}
                     queuedMessages={queuedMessages}
                     showThinkingIndicator
-                    showToolCallDetails={showToolCallDetails}
                     streamdownComponents={streamdownComponents}
                     workspaceId={workspaceId}
                   />
@@ -529,7 +529,7 @@ export const ChatThreadPage = ({
               controller={controller}
               isGenerating={isGenerating}
               onStop={() => {
-                void stop();
+                stop();
               }}
               onSubmit={async (draft) => {
                 const reservedCommand = matchReservedChatCommand(draft.html);

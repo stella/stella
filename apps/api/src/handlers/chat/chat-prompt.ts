@@ -455,7 +455,7 @@ const buildContextMatterScopeSection = ({
 
 export const extractTitle = (parts: ChatMessage["parts"]) => {
   const raw = parts
-    .map((part) => (part.type === "text" ? part.text : ""))
+    .map((part) => (part.type === "text" ? part.content : ""))
     .join("");
   const plainText = cheerio
     .load(raw, undefined, false)

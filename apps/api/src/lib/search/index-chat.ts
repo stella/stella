@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
+import { normalizePersistedChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
 import type {
   ChatMessageRole,
   PersistedChatMessageContent,
@@ -17,49 +18,37 @@ const extractMessageSearchText = (
   content: PersistedChatMessageContent,
 ): string => {
   const parts: string[] = [];
-  const messageParts: readonly unknown[] = content.data;
-  for (const part of messageParts) {
-    if (!isRecord(part) || typeof part["type"] !== "string") {
-      continue;
-    }
-
-    if (part["type"] === "text" && typeof part["text"] === "string") {
-      const trimmed = part["text"].trim();
+  const message = normalizePersistedChatMessageContent(content);
+  for (const part of message.parts) {
+    if (part.type === "text") {
+      const trimmed = part.content.trim();
       if (trimmed) {
         parts.push(trimmed);
       }
-      continue;
     }
+  }
 
-    const sourceDocumentData = part["data"];
-    if (
-      part["type"] === "data-stella-source-document" &&
-      isRecord(sourceDocumentData)
-    ) {
-      for (const value of [
-        sourceDocumentData["title"],
-        sourceDocumentData["mention"],
-        sourceDocumentData["entityRef"],
-        sourceDocumentData["matterRef"],
-        sourceDocumentData["kind"],
-      ]) {
-        if (typeof value !== "string") {
-          continue;
-        }
+  for (const sourceDocumentData of message.metadata.sourceDocuments ?? []) {
+    for (const value of [
+      sourceDocumentData.title,
+      sourceDocumentData.mention,
+      sourceDocumentData.entityRef,
+      sourceDocumentData.matterRef,
+      sourceDocumentData.kind,
+    ]) {
+      if (typeof value !== "string") {
+        continue;
+      }
 
-        const trimmed = value.trim();
-        if (trimmed) {
-          parts.push(trimmed);
-        }
+      const trimmed = value.trim();
+      if (trimmed) {
+        parts.push(trimmed);
       }
     }
   }
 
   return parts.join(" ").slice(0, LIMITS.chatMessageSearchTextMaxLength);
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
 
 type ChatSearchMessageRow = {
   content: PersistedChatMessageContent;

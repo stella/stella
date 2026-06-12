@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { env } from "@/api/env";
-import type { OrgAIConfig } from "@/api/lib/ai-models";
+import type { OrgAIConfig } from "@/api/lib/ai-config";
 import {
   createSafeRootHandler,
   resolveMeteringContext,

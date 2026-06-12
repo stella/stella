@@ -57,12 +57,12 @@ import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import { type ChatThreadRef, createChatThreadId } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
-import { useDevStore } from "@/lib/dev-store";
 import { useModelSelectorStore } from "@/lib/model-selector-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
@@ -73,6 +73,7 @@ import { ChatWebSearchToggle } from "@/routes/_protected.chat/-components/chat-w
 import { SuggestedFollowupChips } from "@/routes/_protected.chat/-components/suggested-followup-chips";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
+import { buildChatRequestMessage } from "@/routes/_protected.chat/-lib/build-chat-request-message";
 import {
   chatThreadOptions,
   chatThreadSuggestedPromptsOptions,
@@ -89,6 +90,10 @@ type ChatTabPanelProps = {
    * picks up the same breadcrumb tint as the rest of the matter.
    */
   matterColor?: string | null | undefined;
+};
+
+const capturePromptSubmitError = (error: unknown): void => {
+  getAnalytics().captureError(error);
 };
 
 export const ChatTabPanel = ({
@@ -141,7 +146,6 @@ export const ChatTabPanel = ({
     setSendMode(getPreferredChatSendMode(enabled));
   };
   const getSendMode = useEffectEvent(() => sendMode);
-  const showToolCallDetails = useDevStore((s) => s.showToolCallDetails);
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const chatContextLabel = useChatContextLabel(tab, activeOrganizationId);
 
@@ -232,6 +236,21 @@ export const ChatTabPanel = ({
     initialOlderCursor: data.olderCursor,
     threadRef,
     workspaceId: tabWorkspaceId,
+  });
+  const handlePromptSubmit = useEffectEvent(async (prompt: string) => {
+    try {
+      if (!(await ensureAIAvailable())) {
+        return;
+      }
+
+      // PromptBar emits the raw editor HTML; the backend parses
+      // `<entity-mention>` tags out of TanStack text content.
+      await sendMessage(
+        await buildChatRequestMessage({ files: [], html: prompt }),
+      );
+    } catch (submitError) {
+      capturePromptSubmitError(submitError);
+    }
   });
 
   // TipTap composer for this thread — `@`-mention chips, drafts,
@@ -390,7 +409,6 @@ export const ChatTabPanel = ({
                   onSendWithoutAnonymization={sendWithoutAnonymization}
                   queuedMessages={queuedMessages}
                   showThinkingIndicator
-                  showToolCallDetails={showToolCallDetails}
                   streamdownComponents={streamdownComponents}
                   workspaceId={tabWorkspaceId}
                 />
@@ -420,7 +438,7 @@ export const ChatTabPanel = ({
                 if (!(await ensureAIAvailable())) {
                   return;
                 }
-                await sendMessage({ text: draft.html });
+                await sendMessage(await buildChatRequestMessage(draft));
               });
             }}
           />
@@ -433,7 +451,7 @@ export const ChatTabPanel = ({
             }
             layout="standalone"
             onStop={() => {
-              void stop();
+              stop();
             }}
             onSubmit={({ prompt }) => {
               const reservedCommand = matchReservedChatCommand(prompt);
@@ -452,16 +470,7 @@ export const ChatTabPanel = ({
                 return;
               }
 
-              void ensureAIAvailable().then((available) => {
-                if (!available) {
-                  return;
-                }
-                // PromptBar emits the raw editor HTML; the legacy
-                // backend already parses `<entity-mention>` tags out
-                // of the `text` field, so we forward unchanged.
-                void sendMessage({ text: prompt });
-                return;
-              });
+              void handlePromptSubmit(prompt);
             }}
             onTogglePanel={() => {
               // Standalone has no thread toggle; never called.

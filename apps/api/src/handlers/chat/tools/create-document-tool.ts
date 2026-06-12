@@ -1,6 +1,7 @@
-import { valibotSchema } from "@ai-sdk/valibot";
-import { tool } from "ai";
+import { toolDefinition } from "@tanstack/ai";
 import * as v from "valibot";
+
+import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 
 export const CREATE_DOCUMENT_TOOL_NAME = "create-document";
 
@@ -9,7 +10,7 @@ export const CREATE_DOCUMENT_TOOL_NAME = "create-document";
 // thread's active matter or by prompting the user with the
 // matter-pick card), calls `POST /chat/tools/create-document`
 // to do the actual compile + persist, and posts the result
-// back via the AI SDK's `addToolOutput`. Mirrors the pattern
+// back via TanStack ChatClient.addToolResult. Mirrors the pattern
 // used by `apply-active-docx-edits`.
 //
 // `workspaceId` is intentionally NOT in the input schema —
@@ -57,7 +58,8 @@ export type CreateDocumentToolOutput = v.InferOutput<
 >;
 
 export const createCreateDocumentTool = () =>
-  tool({
+  toolDefinition({
+    name: CREATE_DOCUMENT_TOOL_NAME,
     description:
       "Create a brand-new DOCX. The compiler numbers and paginates " +
       "deterministically — do not write manual clause numbers. This " +
@@ -81,6 +83,6 @@ export const createCreateDocumentTool = () =>
       "  @pagebreak — force a page break.\n\n" +
       "PLACEHOLDERS: wrap unknown values in `[[ ]]` — the compiler highlights them in yellow so the user can spot and fill them. Example: `Buyer shall pay [[purchase price]] on or before [[closing date]].` Briefly tell the user in your reply which placeholders you left.\n\n" +
       "@signatures: one block at the end, key:value lines per party. Keys: `party` (legal name), `by` (signing person, alias `name`), `title` (role). Use the document-language alias for the keys — e.g. `party / strana / partei / partie / parte / fél`. Each `party:` line opens a new party block; omit `by` and `title` to leave a blank line for hand-fill. The compiler renders one column per party (party name bolded, signing space, rule, then your `by:` / `title:` values raw) — no compiler-added captions. If you want labels like 'Datum:' or 'Podpis', write them inline in the source above the @signatures block (with @paragraph), in the document's language.",
-    inputSchema: valibotSchema(createDocumentToolInputSchema),
-    outputSchema: valibotSchema(createDocumentToolOutputSchema),
+    inputSchema: toTanStackToolSchema(createDocumentToolInputSchema),
+    outputSchema: toTanStackToolSchema(createDocumentToolOutputSchema),
   });

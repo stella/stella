@@ -5,13 +5,11 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import type { ComponentProps } from "react";
 
-import { useChat } from "@ai-sdk/react";
-import type { Chat } from "@ai-sdk/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { isToolUIPart } from "ai";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import { v7 as uuidv7 } from "uuid";
@@ -23,6 +21,7 @@ import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import type {
   ApprovalToolName,
   AskUserOutput,
+  ChatPart,
   ChatUITools,
   PersistedChatMessage,
   ToolApprovalGrant,
@@ -31,22 +30,28 @@ import {
   getExternalMcpConnectorApprovalGrant,
   getExternalMcpConnectorSlugFromToolName,
   getToolApprovalGrant,
+  hasRunningToolCallInLatestAssistantMessage,
   isApprovalToolName,
-  isChatTurnInFlight,
   isExternalMcpToolName,
   isToolApprovalGrant,
 } from "@/components/chat/chat-ui-tools";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import type { NeedsMatterMatter } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
-import { fetchOlderMessages } from "@/routes/_protected.chat/-queries";
+import {
+  fetchOlderMessages,
+  isChatMessageStartError,
+  sendThreadChatMessage,
+  type ChatRuntime,
+  type ChatSendMessageOptions,
+  type ChatUserMessageInput,
+} from "@/routes/_protected.chat/-queries";
 import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
 import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
@@ -58,7 +63,7 @@ type CreateDocumentOutput = ChatUITools["create-document"]["output"];
 type CreateDocumentSuccess = Extract<CreateDocumentOutput, { success: true }>;
 
 type UseChatSessionOptions = {
-  chat: Chat<PersistedChatMessage>;
+  chat: ChatRuntime;
   conversationId: string;
   getSendMode?: (() => ChatSendMode) | undefined;
   /** Cursor for the first older page, seeded from the thread fetch. */
@@ -81,19 +86,6 @@ const EMPTY_MCP_CONNECTOR_IDENTITIES: readonly McpConnectorApprovalIdentity[] =
   [];
 
 /**
- * Payload shape accepted by the AI SDK's `sendMessage`. Surfaces
- * only ever pass `{ text }`, `{ files }`, or `{ text, files }`, but
- * the queue keeps the SDK's full union so it can hold whatever a
- * caller hands `sendMessage`.
- */
-type ChatSendMessageInput = NonNullable<
-  Parameters<Chat<PersistedChatMessage>["sendMessage"]>[0]
->;
-type ChatSendMessageOptions = Parameters<
-  Chat<PersistedChatMessage>["sendMessage"]
->[1];
-
-/**
  * A user message composed while a response was still streaming.
  * `useChatSession` holds these in a queue and dispatches them —
  * oldest first — once the turn finishes. `text` is the raw editor
@@ -108,22 +100,47 @@ export type QueuedChatMessage = {
 };
 
 type QueuedChatEntry = QueuedChatMessage & {
-  /** Fully-built payload handed to the AI SDK on dispatch. */
-  message: ChatSendMessageInput;
-  options: ChatSendMessageOptions;
+  /** Fully-built payload handed to TanStack ChatClient on dispatch. */
+  message: ChatUserMessageInput;
+  options?: ChatSendMessageOptions;
 };
 
 /**
  * Pull a display preview out of an outgoing chat payload. The SDK
- * union has no discriminator, so the `text`/`files` shapes our
- * surfaces send are told apart structurally with `in`.
+ * accepts either raw text or multimodal content; queued bubbles only
+ * need a text preview and attachment count.
  */
 const describeQueuedMessage = (
-  message: ChatSendMessageInput,
-): Pick<QueuedChatMessage, "fileCount" | "text"> => ({
-  text: "text" in message ? message.text : "",
-  fileCount: "files" in message ? message.files.length : 0,
-});
+  message: ChatUserMessageInput,
+): Pick<QueuedChatMessage, "fileCount" | "text"> => {
+  if (typeof message.content === "string") {
+    return { text: message.content, fileCount: 0 };
+  }
+
+  return {
+    text: message.content
+      .filter((part) => part.type === "text")
+      .map((part) => part.content)
+      .join("\n\n"),
+    fileCount: message.content.filter((part) => part.type !== "text").length,
+  };
+};
+
+type AskUserToolCallPart = Extract<
+  ChatPart,
+  { name: "ask-user"; type: "tool-call" }
+>;
+
+const resetAskUserToolCall = (
+  part: AskUserToolCallPart,
+): AskUserToolCallPart => {
+  const { output: _discardedOutput, ...partWithoutOutput } = part;
+  return { ...partWithoutOutput, state: "input-complete" };
+};
+
+const ignoreQueuedDispatchError = (error: unknown): void => {
+  void error;
+};
 
 export const useChatSession = ({
   chat,
@@ -133,8 +150,8 @@ export const useChatSession = ({
   threadRef,
   workspaceId,
 }: UseChatSessionOptions) => {
-  const organizationId = useAuthenticatedUser().activeOrganizationId;
   const t = useTranslations();
+  const organizationId = useAuthenticatedUser().activeOrganizationId;
   const { data: mcpCatalog } = useQuery(mcpConnectorsOptions(organizationId));
   const mcpConnectorIdentities =
     mcpCatalog?.connectors ?? EMPTY_MCP_CONNECTOR_IDENTITIES;
@@ -145,22 +162,27 @@ export const useChatSession = ({
     readAlwaysApprovedTools({ organizationId, mcpConnectorIdentities: [] }),
   );
 
-  const {
-    error,
-    messages,
-    regenerate,
-    sendMessage: sendChatMessage,
-    setMessages,
-    stop,
-    status,
-    addToolApprovalResponse,
-    addToolOutput,
-  } = useChat({ chat });
+  const snapshot = useSyncExternalStore(
+    chat.subscribe,
+    chat.getSnapshot,
+    chat.getSnapshot,
+  );
+  const { error, messages, sessionGenerating, status } = snapshot;
+  const sendChatMessage = useCallback(
+    async (message: ChatUserMessageInput, options?: ChatSendMessageOptions) => {
+      await sendThreadChatMessage(chat, message, options);
+    },
+    [chat],
+  );
+  const setMessages = chat.setMessages;
+  const stop = chat.stop;
+  const addToolApprovalResponse = chat.addToolApprovalResponse;
+  const addToolResult = chat.addToolResult;
 
   // Load-older paging. `olderCursor` seeds from the thread fetch and advances
-  // with each older page. Re-seed whenever a fresh `Chat` is hydrated — both
+  // with each older page. Re-seed whenever a fresh runtime is hydrated — both
   // on thread switch and on a same-thread refetch (sending a message
-  // invalidates the thread query, which rebuilds the Chat from the newest
+  // invalidates the thread query, which rebuilds the runtime from the newest
   // page plus a new initial cursor). Keying on conversationId alone would
   // leave the cursor stale after such a refetch, hiding "load earlier" or
   // paging from a stale boundary. `isLoadingOlder` gates the
@@ -174,12 +196,12 @@ export const useChatSession = ({
   const [seededChat, setSeededChat] = useState(chat);
   const isLoadingOlderRef = useRef(false);
   const olderCursorRef = useRef(olderCursor);
-  // Render-current Chat identity for the stale-response guard below. A fresh
-  // Chat means the thread was rehydrated — a thread switch OR a same-thread
-  // refetch (sending a message rebuilds the Chat from a newer first page) — so
-  // an in-flight older request must be discarded. A thread-id guard would miss
-  // the same-thread case. Written during render (not a passive effect) so a
-  // response resolving in the commit→effect window is still caught.
+  // Render-current runtime identity for the stale-response guard below. A fresh
+  // runtime means the thread was rehydrated — a thread switch OR a same-thread
+  // refetch (sending a message rebuilds the runtime from a newer first page) —
+  // so an in-flight older request must be discarded. A thread-id guard would
+  // miss the same-thread case. Written during render (not a passive effect) so
+  // a response resolving in the commit→effect window is still caught.
   const seededChatRef = useRef(chat);
   if (seededChat !== chat) {
     setSeededChat(chat);
@@ -205,10 +227,10 @@ export const useChatSession = ({
       async () => await fetchOlderMessages({ key: threadRef, before }),
     );
 
-    // Discard a response that resolved after the Chat was rehydrated (thread
-    // switch OR same-thread refetch): the re-seed already reset paging for the
-    // new page, so applying this would corrupt its cursor and prepend a stale
-    // page (skipping the boundary message).
+    // Discard a response that resolved after the runtime was rehydrated
+    // (thread switch OR same-thread refetch): the re-seed already reset paging
+    // for the new page, so applying this would corrupt its cursor and prepend
+    // a stale page (skipping the boundary message).
     if (seededChatRef.current !== requestedChat) {
       return;
     }
@@ -231,19 +253,17 @@ export const useChatSession = ({
     }
 
     const older = result.value;
-    setMessages((current) => {
-      const existingIds = new Set(current.map((message) => message.id));
-      const prepend = older.messages.filter(
-        (message) => !existingIds.has(message.id),
-      );
-      if (prepend.length === 0) {
-        return current;
-      }
-      return [...prepend, ...current];
-    });
+    const current = chat.getSnapshot().messages;
+    const existingIds = new Set(current.map((message) => message.id));
+    const prepend = older.messages.filter(
+      (message) => !existingIds.has(message.id),
+    );
+    if (prepend.length > 0) {
+      setMessages([...prepend, ...current]);
+    }
     olderCursorRef.current = older.olderCursor;
     setOlderCursor(older.olderCursor);
-  }, [setMessages, t, threadRef]);
+  }, [chat, setMessages, t, threadRef]);
 
   // Mirror `isGenerating` (computed below) and the live queue into
   // refs so the stable `sendMessage` callback can branch on the
@@ -255,13 +275,6 @@ export const useChatSession = ({
   const wasGeneratingRef = useRef(false);
   const conversationIdRef = useRef(conversationId);
   const [queuedMessages, setQueuedMessages] = useState<QueuedChatEntry[]>([]);
-  /**
-   * Set when the user stops a turn whose request the SDK can no
-   * longer abort (the stream already died, leaving a tool part stuck
-   * in a running state). Suppresses the running-tool-call signal in
-   * `isGenerating`; lifted as soon as a new request starts.
-   */
-  const [turnAbandoned, setTurnAbandoned] = useState(false);
 
   const replaceQueuedMessages = useCallback((next: QueuedChatEntry[]) => {
     queueRef.current = next;
@@ -269,7 +282,7 @@ export const useChatSession = ({
   }, []);
 
   const withSendModeSnapshot = useCallback(
-    (options: ChatSendMessageOptions): ChatSendMessageOptions => {
+    (options?: ChatSendMessageOptions): ChatSendMessageOptions | undefined => {
       const sendMode = getSendMode?.();
       if (sendMode === undefined) {
         return options;
@@ -286,11 +299,14 @@ export const useChatSession = ({
   );
 
   const enqueueMessage = useCallback(
-    (message: ChatSendMessageInput, options: ChatSendMessageOptions) => {
-      replaceQueuedMessages([
-        ...queueRef.current,
-        { id: uuidv7(), message, options, ...describeQueuedMessage(message) },
-      ]);
+    (message: ChatUserMessageInput, options?: ChatSendMessageOptions) => {
+      const queuedMessage = {
+        id: uuidv7(),
+        message,
+        ...describeQueuedMessage(message),
+        ...(options === undefined ? {} : { options }),
+      };
+      replaceQueuedMessages([...queueRef.current, queuedMessage]);
     },
     [replaceQueuedMessages],
   );
@@ -304,8 +320,24 @@ export const useChatSession = ({
     return next;
   }, [replaceQueuedMessages]);
 
+  const dispatchQueuedMessage = useCallback(
+    async (entry: QueuedChatEntry) => {
+      isGeneratingRef.current = true;
+      try {
+        await sendChatMessage(entry.message, entry.options);
+      } catch (sendError) {
+        isGeneratingRef.current = false;
+        if (isChatMessageStartError(sendError)) {
+          replaceQueuedMessages([entry, ...queueRef.current]);
+        }
+        throw sendError;
+      }
+    },
+    [replaceQueuedMessages, sendChatMessage],
+  );
+
   const sendMessage = useCallback(
-    async (message: ChatSendMessageInput, options?: ChatSendMessageOptions) => {
+    async (message: ChatUserMessageInput, options?: ChatSendMessageOptions) => {
       if (conversationIdRef.current !== conversationId) {
         conversationIdRef.current = conversationId;
         isGeneratingRef.current = false;
@@ -326,8 +358,7 @@ export const useChatSession = ({
         enqueueMessage(message, requestOptions);
         const next = takeOldestQueuedMessage();
         if (next) {
-          isGeneratingRef.current = true;
-          await sendChatMessage(next.message, next.options);
+          await dispatchQueuedMessage(next);
         }
         return;
       }
@@ -336,6 +367,7 @@ export const useChatSession = ({
     },
     [
       conversationId,
+      dispatchQueuedMessage,
       enqueueMessage,
       replaceQueuedMessages,
       sendChatMessage,
@@ -355,35 +387,32 @@ export const useChatSession = ({
 
   const resendLatestMessage = useCallback(
     async ({ messageId, sendMode }: ResendLatestMessageOptions = {}) => {
-      await regenerate({
-        ...(messageId === undefined ? {} : { messageId }),
-        ...(sendMode === undefined ? {} : { body: { sendMode } }),
-      });
+      const latestAssistant = messages.findLast(
+        (message) => message.role === "assistant",
+      );
+      if (
+        messageId !== undefined &&
+        latestAssistant !== undefined &&
+        latestAssistant.id !== messageId
+      ) {
+        return;
+      }
+
+      await chat.reload(
+        sendMode === undefined ? undefined : { body: { sendMode } },
+      );
     },
-    [regenerate],
+    [chat, messages],
   );
 
-  /**
-   * Stop the current turn. The SDK's `stop()` only aborts a live
-   * request (`submitted`/`streaming`); for a turn whose stream is
-   * already dead it resolves without changing anything, so the
-   * abandoned mark is what guarantees the session returns to idle.
-   * Marked before awaiting so the UI resets even if the abort
-   * settles late.
-   */
-  const stopGenerating = useCallback(async () => {
-    setTurnAbandoned(true);
-    await stop();
-  }, [stop]);
-
   const handleApprove = useCallback(
-    (id: string, _toolName?: ApprovalToolName) => {
-      addToolApprovalResponse({ id, approved: true });
+    async (id: string, _toolName?: ApprovalToolName) => {
+      await addToolApprovalResponse({ id, approved: true });
     },
     [addToolApprovalResponse],
   );
   const handleAllowInConversation = useCallback(
-    (id: string, toolName: ApprovalToolName) => {
+    async (id: string, toolName: ApprovalToolName) => {
       const next = new Set(conversationApprovedTools).add(
         getToolApprovalGrant(toolName),
       );
@@ -397,19 +426,19 @@ export const useChatSession = ({
         conversationId,
         scope: "session",
       });
-      addToolApprovalResponse({ id, approved: true });
+      await addToolApprovalResponse({ id, approved: true });
     },
     [addToolApprovalResponse, conversationApprovedTools, conversationId],
   );
   const handleAlwaysAllow = useCallback(
-    (id: string, toolName: ApprovalToolName) => {
+    async (id: string, toolName: ApprovalToolName) => {
       const approvalKey = getAlwaysApprovalKey({
         mcpConnectorIdentities,
         organizationId,
         toolName,
       });
       if (approvalKey === null) {
-        addToolApprovalResponse({ id, approved: true });
+        await addToolApprovalResponse({ id, approved: true });
         return;
       }
 
@@ -424,7 +453,7 @@ export const useChatSession = ({
         nextStored,
       );
       dispatchApprovedToolsChanged({ scope: "local" });
-      addToolApprovalResponse({ id, approved: true });
+      await addToolApprovalResponse({ id, approved: true });
     },
     [
       addToolApprovalResponse,
@@ -434,32 +463,34 @@ export const useChatSession = ({
     ],
   );
   const handleDeny = useCallback(
-    (id: string) => addToolApprovalResponse({ id, approved: false }),
+    async (id: string) => {
+      await addToolApprovalResponse({ id, approved: false });
+    },
     [addToolApprovalResponse],
   );
   const handleAskUserSubmit = useCallback(
-    (toolCallId: string, output: AskUserOutput) =>
-      addToolOutput({
+    async (toolCallId: string, output: AskUserOutput) => {
+      await addToolResult({
         tool: "ask-user",
         toolCallId,
         output,
-      }),
-    [addToolOutput],
+      });
+    },
+    [addToolResult],
   );
 
   /**
    * Edit an already-answered ask-user card and replay the model
-   * from that point. We don't have a "rewind to message" primitive
-   * in the AI SDK, so this is a truncate-and-replay:
+   * from that point. TanStack ChatClient does not expose a
+   * rewind-to-tool-call primitive, so this is a truncate-and-replay:
    *
    *   1. Find the assistant message that owns the ask-user part.
    *   2. Drop every message after it locally; the backend receives
    *      the same truncation target for persisted history.
-   *   3. Reset the ask-user part itself to `input-available` so
-   *      `addToolOutput` writes a fresh output and the
-   *      `sendAutomaticallyWhen` predicate (which fires when the
-   *      latest assistant message has a complete tool call) drives
-   *      the next turn.
+   *   3. Reset the ask-user `tool-call` to `input-complete` and
+   *      remove its paired `tool-result` so `addToolResult` writes
+   *      a fresh output and TanStack's continuation logic drives the
+   *      next turn.
    *
    * The replay request also carries `truncateAfterMessageId`, so the
    * backend drops persisted downstream turns before preparing the next
@@ -475,7 +506,9 @@ export const useChatSession = ({
         }
         const hasPart = candidate.parts.some(
           (part) =>
-            part.type === "tool-ask-user" && part.toolCallId === toolCallId,
+            part.type === "tool-call" &&
+            part.name === "ask-user" &&
+            part.id === toolCallId,
         );
         if (hasPart) {
           targetIndex = i;
@@ -502,41 +535,44 @@ export const useChatSession = ({
           if (message.role !== "assistant") {
             return message;
           }
-          // Reset the matching ask-user part so `addToolOutput` can
-          // overwrite its output without the SDK no-op'ing because
-          // the state is already `output-available`. Using the
-          // `input-available` shape keeps the input visible so the
-          // card body stays consistent during the brief frame
-          // between truncation and the next `addToolOutput` call.
-          const nextParts = message.parts.map((part) => {
-            if (
-              part.type === "tool-ask-user" &&
-              part.toolCallId === toolCallId &&
-              part.state === "output-available"
-            ) {
-              return {
-                type: "tool-ask-user" as const,
-                toolCallId: part.toolCallId,
-                state: "input-available" as const,
-                input: part.input,
-              };
+          // Reset the matching ask-user part so `addToolResult` can
+          // overwrite its output. Keeping `input` on the tool-call
+          // keeps the card body stable during the brief frame between
+          // truncation and the next tool-result write.
+          const nextParts: ChatPart[] = [];
+          for (const part of message.parts) {
+            if (part.type === "tool-result" && part.toolCallId === toolCallId) {
+              continue;
             }
-            return part;
-          });
+            if (
+              part.type === "tool-call" &&
+              part.name === "ask-user" &&
+              part.id === toolCallId &&
+              part.state === "complete"
+            ) {
+              nextParts.push(resetAskUserToolCall(part));
+              continue;
+            }
+            nextParts.push(part);
+          }
           return { ...message, parts: nextParts };
         });
       setMessages(truncated);
       const replayOptions = withSendModeSnapshot({
-        body: { truncateAfterMessageId: targetMessage.id },
+        body: {
+          truncateAfterMessageId: toSafeId<"chatMessage">(targetMessage.id),
+        },
       });
-      await addToolOutput({
-        tool: "ask-user",
-        toolCallId,
-        output,
-        ...(replayOptions === undefined ? {} : { options: replayOptions }),
-      });
+      await addToolResult(
+        {
+          tool: "ask-user",
+          toolCallId,
+          output,
+        },
+        replayOptions,
+      );
     },
-    [addToolOutput, messages, setMessages, withSendModeSnapshot],
+    [addToolResult, messages, setMessages, withSendModeSnapshot],
   );
 
   const { data: workspacesNavigation, isPending: isLoadingMatters } = useQuery(
@@ -576,7 +612,7 @@ export const useChatSession = ({
           success: false,
           message: apiError.message,
         };
-        await addToolOutput({
+        await addToolResult({
           tool: "create-document",
           toolCallId,
           output: failure,
@@ -600,13 +636,13 @@ export const useChatSession = ({
         );
       }
 
-      await addToolOutput({
+      await addToolResult({
         tool: "create-document",
         toolCallId,
         output: response.data,
       });
     },
-    [addToolOutput, queryClient],
+    [addToolResult, queryClient],
   );
 
   const handleOpenCreatedDocument = useCallback(
@@ -667,40 +703,27 @@ export const useChatSession = ({
     [messages],
   );
 
-  const isGenerating = isChatTurnInFlight({ status, messages, turnAbandoned });
-  // These refs are also written optimistically in `sendMessage`/the drain
-  // effect; mirroring the committed value must run post-commit (see the refs'
-  // doc comment above) so a bailed-out render can't strand the ref ahead of
-  // committed state. A render-time assignment would defeat that guarantee.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reconcile mutable ref to committed isGenerating post-commit; render-time assign could strand it ahead of a bailed render
+  const hasRunningToolCall = useMemo(
+    () => hasRunningToolCallInLatestAssistantMessage({ messages }),
+    [messages],
+  );
+  const isGenerating =
+    status === "submitted" ||
+    status === "streaming" ||
+    sessionGenerating ||
+    hasRunningToolCall;
   useEffect(() => {
     isGeneratingRef.current = isGenerating;
   }, [isGenerating]);
-  // A fresh request (manual send, regenerate, or the SDK's automatic
-  // continuation) starts a new turn; lift the abandoned mark so its
-  // tool calls count as in-flight again.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reconcile derived turnAbandoned flag to committed status post-commit; render-time assign could strand it ahead of a bailed render
-  useEffect(() => {
-    if (status === "submitted" || status === "streaming") {
-      setTurnAbandoned(false);
-    }
-  }, [status]);
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reconcile mutable ref to committed queue post-commit; render-time assign could strand it ahead of a bailed render
   useEffect(() => {
     queueRef.current = queuedMessages;
   }, [queuedMessages]);
 
-  // This is a hook, so there is no element to attach a `key` to: the reset of
-  // these refs + the queue (which fires setState via replaceQueuedMessages) must
-  // happen here. Lifting to a key would require every consumer to remount, which
-  // is out of scope and unverifiable from here.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id inside a hook (no element to key); resets several committed-state refs and the queue
   useEffect(() => {
     conversationIdRef.current = conversationId;
     isGeneratingRef.current = false;
     replaceQueuedMessages([]);
     wasGeneratingRef.current = false;
-    setTurnAbandoned(false);
   }, [conversationId, replaceQueuedMessages]);
 
   // Drain the queue one message per turn. When the response
@@ -712,11 +735,6 @@ export const useChatSession = ({
   // into a failing provider just burns quota and spams the user
   // with repeats of the same error. The next manual send (or a
   // successful `regenerate`) lifts the gate.
-  // The "turn finished" trigger is `isGenerating` falling to false, observed
-  // post-commit — the turn ends inside the AI SDK's status machine, not in any
-  // handler we own, so there is no event site to relay this into. It must read
-  // the committed status/queue after the stream settles.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- drains the queue on the post-commit isGenerating-falls-to-false transition; no owned event/handler to relocate into
   useEffect(() => {
     const finishedTurn = wasGeneratingRef.current && !isGenerating;
     wasGeneratingRef.current = isGenerating;
@@ -735,27 +753,22 @@ export const useChatSession = ({
     // already passes them; the automatic drain must too, otherwise
     // toggling the mode between queueing and draining sends the
     // queued turn with the wrong mode.
-    void sendChatMessage(next.message, next.options);
+    void dispatchQueuedMessage(next).catch(ignoreQueuedDispatchError);
   }, [
+    dispatchQueuedMessage,
     isGenerating,
     queuedMessages,
     replaceQueuedMessages,
-    sendChatMessage,
     status,
   ]);
 
-  // Re-reads the approved-tool sets from storage when the conversation/org/
-  // connectors change. Both setters are also driven by user approvals and the
-  // cross-tab storage listener below, so the value is genuine local state, not
-  // pure derived state: a render-time compute would discard those mutations.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- re-sync storage-backed approved-tool state on id/org/connector change; setters shared with handlers + storage listener, so not derivable in render
   useEffect(() => {
     setConversationApprovedTools(readConversationApprovedTools(conversationId));
     setAlwaysApprovedTools(
       readAlwaysApprovedTools({ organizationId, mcpConnectorIdentities }),
     );
   }, [conversationId, mcpConnectorIdentities, organizationId]);
-  useExternalSyncEffect(() => {
+  useEffect(() => {
     const handleApprovedToolsChanged = (event: Event) => {
       const detail = getApprovedToolsChangedDetail(event);
       if (!detail) {
@@ -813,7 +826,7 @@ export const useChatSession = ({
     sendMessage,
     queuedMessages,
     removeQueuedMessage,
-    stop: stopGenerating,
+    stop,
     isGenerating,
     alwaysApprovedTools,
     conversationApprovedTools,
@@ -827,7 +840,7 @@ export const useChatSession = ({
     handleOpenCreatedDocument,
     createDocumentMatters,
     isLoadingCreateDocumentMatters: isLoadingMatters,
-    addToolOutput,
+    addToolResult,
     streamdownComponents,
     approvalPendingMessageId,
   };
@@ -1098,7 +1111,7 @@ const getCurrentApprovalPendingMessageId = (
     }
 
     for (const part of msg.parts) {
-      if (isToolUIPart(part) && part.state === "approval-requested") {
+      if (part.type === "tool-call" && part.state === "approval-requested") {
         return msg.id;
       }
     }

@@ -80,7 +80,9 @@ export const getEntityName = (entity: WorkspaceEntity): string => {
     return entity.name;
   }
 
-  const fields = Object.values(entity.fields);
+  const fields = Object.values(entity.fields).filter(
+    (field): field is WorkspaceField => field !== undefined,
+  );
   const fileField = fields.find((f) => f.content.type === "file");
 
   if (fileField?.content.type === "file" && fileField.content.fileName) {
@@ -105,11 +107,15 @@ export const getEntityName = (entity: WorkspaceEntity): string => {
 };
 
 export const getFirstFile = (entity: WorkspaceEntity) => {
-  for (const [propertyId, field] of Object.entries(entity.fields)) {
+  for (const field of Object.values(entity.fields)) {
+    if (!field) {
+      continue;
+    }
+
     if (field.content.type === "file") {
       return {
         fieldId: field.id,
-        propertyId,
+        propertyId: field.propertyId,
         entityId: field.entityId,
         fileName: field.content.fileName,
         mimeType: field.content.mimeType,

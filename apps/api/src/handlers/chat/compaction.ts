@@ -1,7 +1,14 @@
-import { generateText, isFileUIPart, isTextUIPart, isToolUIPart } from "ai";
-import type { LanguageModel, ModelMessage } from "ai";
+import type { ModelMessage } from "@tanstack/ai";
 import { Result } from "better-result";
 
+import type { ModelRole } from "@stll/ai-catalog";
+
+import {
+  getChatAttachmentFilename,
+  getChatAttachmentMimeType,
+  isChatAttachmentPart,
+  isChatTextPart,
+} from "@/api/handlers/chat/chat-message-parts";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import {
   isProviderInvisiblePart,
@@ -11,8 +18,11 @@ import type {
   ChatCompactionSummary,
   ChatMessage,
 } from "@/api/handlers/chat/types";
-import type { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
+import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
 const ESTIMATED_CHARS_PER_TOKEN = 4;
 const MESSAGE_OVERHEAD_TOKENS = 12;
@@ -33,9 +43,9 @@ const COMPACTION_SYSTEM_PROMPT = [
   "Do not invent facts. Keep placeholder tokens, IDs, citations, and quoted legal terms exactly as provided.",
 ].join("\n");
 
-type CompactionAIAnalytics = Pick<
-  ReturnType<typeof createAIAnalyticsCallbacks>,
-  "captureError" | "stepCallbacks"
+type TanStackCompactionAIAnalytics = Pick<
+  TanStackAIAnalyticsCallbacks,
+  "captureError" | "middleware"
 >;
 
 const CHAT_COMPACTION_FORMAT_PROMPT = [
@@ -366,19 +376,25 @@ export const compactModelMessages = async ({
 
 type CompactChatMessagesForModelOptions = PlanChatCompactionOptions & {
   abortSignal: AbortSignal;
-  aiAnalytics?: CompactionAIAnalytics | undefined;
+  aiAnalytics?: TanStackCompactionAIAnalytics | undefined;
   boundary: ChatThirdPartyBoundary;
-  model: LanguageModel;
+  modelId?: string | undefined;
   onSummaryError?: ((error: HandlerError<500>) => void) | undefined;
+  organizationId: SafeId<"organization">;
+  orgAIConfig: OrgAIConfig | null;
 };
 
 type CompactModelMessagesForModelOptions = {
   abortSignal: AbortSignal;
-  aiAnalytics?: CompactionAIAnalytics | undefined;
+  aiAnalytics?: TanStackCompactionAIAnalytics | undefined;
+  modelId?: string | undefined;
   messages: ModelMessage[];
-  model: LanguageModel;
   onSummaryError?: ((error: HandlerError<500>) => void) | undefined;
+  organizationId: SafeId<"organization">;
+  orgAIConfig: OrgAIConfig | null;
   preserveTokens?: number | undefined;
+  role: ModelRole;
+  summarizeWithModel?: ((transcript: string) => Promise<string>) | undefined;
   triggerTokens?: number | undefined;
 };
 
@@ -387,8 +403,10 @@ export const compactChatMessagesForModel = async ({
   aiAnalytics,
   boundary,
   messages,
-  model,
+  modelId,
   onSummaryError,
+  organizationId,
+  orgAIConfig,
   preserveTokens,
   triggerTokens,
 }: CompactChatMessagesForModelOptions): Promise<
@@ -404,19 +422,27 @@ export const compactChatMessagesForModel = async ({
     summarizeTranscript: async (transcript) => {
       const result = await Result.tryPromise({
         try: async () =>
-          await generateText({
+          await generateTanStackTextForRole({
             abortSignal,
+            analytics: aiAnalytics,
+            caching: resolveCaching({
+              promptCachingEnabled: false,
+              role: "chat",
+              scopeKey: null,
+            }),
             maxOutputTokens: MAX_SUMMARY_OUTPUT_TOKENS,
-            model,
+            modelId,
+            organizationId,
+            orgAIConfig,
             prompt: [
               "Compact the earlier conversation transcript below.",
               "Return only the checkpoint summary.",
               "",
               transcript,
             ].join("\n"),
+            role: "chat",
             system: CHAT_COMPACTION_SYSTEM_PROMPT,
             temperature: 0,
-            ...aiAnalytics?.stepCallbacks,
           }),
         catch: (error) => {
           aiAnalytics?.captureError(error);
@@ -427,7 +453,7 @@ export const compactChatMessagesForModel = async ({
         throw result.error;
       }
 
-      return result.value.text;
+      return result.value;
     },
   });
 
@@ -436,8 +462,10 @@ export const summarizeChatCompactionForModel = async ({
   aiAnalytics,
   boundary,
   messages,
-  model,
+  modelId,
   onSummaryError,
+  organizationId,
+  orgAIConfig,
   preserveTokens,
   triggerTokens,
 }: CompactChatMessagesForModelOptions): Promise<
@@ -453,19 +481,27 @@ export const summarizeChatCompactionForModel = async ({
     summarizeTranscript: async (transcript) => {
       const result = await Result.tryPromise({
         try: async () =>
-          await generateText({
+          await generateTanStackTextForRole({
             abortSignal,
+            analytics: aiAnalytics,
+            caching: resolveCaching({
+              promptCachingEnabled: false,
+              role: "chat",
+              scopeKey: null,
+            }),
             maxOutputTokens: MAX_SUMMARY_OUTPUT_TOKENS,
-            model,
+            modelId,
+            organizationId,
+            orgAIConfig,
             prompt: [
               "Compact the earlier conversation transcript below.",
               "Return only the checkpoint summary.",
               "",
               transcript,
             ].join("\n"),
+            role: "chat",
             system: CHAT_COMPACTION_SYSTEM_PROMPT,
             temperature: 0,
-            ...aiAnalytics?.stepCallbacks,
           }),
         catch: (error) => {
           aiAnalytics?.captureError(error);
@@ -476,17 +512,21 @@ export const summarizeChatCompactionForModel = async ({
         throw result.error;
       }
 
-      return result.value.text;
+      return result.value;
     },
   });
 
 export const compactModelMessagesForModel = async ({
   abortSignal,
   aiAnalytics,
+  modelId,
   messages,
-  model,
   onSummaryError,
+  organizationId,
+  orgAIConfig,
   preserveTokens,
+  role,
+  summarizeWithModel,
   triggerTokens,
 }: CompactModelMessagesForModelOptions): Promise<
   Result<ModelMessage[], HandlerError<500>>
@@ -496,12 +536,24 @@ export const compactModelMessagesForModel = async ({
     onSummaryError,
     preserveTokens,
     summarizeTranscript: async (transcript) => {
+      if (summarizeWithModel) {
+        return await summarizeWithModel(transcript);
+      }
+
       const result = await Result.tryPromise({
         try: async () =>
-          await generateText({
+          await generateTanStackTextForRole({
             abortSignal,
+            analytics: aiAnalytics,
+            caching: resolveCaching({
+              promptCachingEnabled: false,
+              role,
+              scopeKey: null,
+            }),
             maxOutputTokens: MAX_SUMMARY_OUTPUT_TOKENS,
-            model,
+            modelId,
+            organizationId,
+            orgAIConfig,
             prompt: [
               "Compact the earlier model-step transcript below.",
               "Return only the checkpoint summary.",
@@ -509,8 +561,8 @@ export const compactModelMessagesForModel = async ({
               transcript,
             ].join("\n"),
             system: COMPACTION_SYSTEM_PROMPT,
+            role,
             temperature: 0,
-            ...aiAnalytics?.stepCallbacks,
           }),
         catch: (error) => {
           aiAnalytics?.captureError(error);
@@ -521,7 +573,7 @@ export const compactModelMessagesForModel = async ({
         throw result.error;
       }
 
-      return result.value.text;
+      return result.value;
     },
     triggerTokens,
   });
@@ -580,7 +632,7 @@ export const createCompactionSummaryMessage = ({
   parts: [
     {
       type: "text",
-      text: [
+      content: [
         `Earlier conversation compacted from ${summarizedMessageCount} message(s).`,
         summary,
       ].join("\n\n"),
@@ -750,11 +802,11 @@ const getProviderVisibleMessages = (
 };
 
 const estimatePartTokens = (part: ChatMessage["parts"][number]): number => {
-  if (isTextUIPart(part)) {
-    return estimateTextTokens(part.text);
+  if (isChatTextPart(part)) {
+    return estimateTextTokens(part.content);
   }
 
-  if (isFileUIPart(part)) {
+  if (isChatAttachmentPart(part)) {
     return FILE_PART_ESTIMATED_TOKENS;
   }
 
@@ -782,25 +834,25 @@ const estimateModelMessageTokens = (message: ModelMessage): number =>
 const renderPartForCompaction = (
   part: ChatMessage["parts"][number],
 ): string => {
-  if (isTextUIPart(part)) {
+  if (isChatTextPart(part)) {
     return renderTaggedValue(
       "text",
-      truncateForCompaction(part.text, MAX_TEXT_PART_CHARS),
+      truncateForCompaction(part.content, MAX_TEXT_PART_CHARS),
     );
   }
 
-  if (isFileUIPart(part)) {
+  if (isChatAttachmentPart(part)) {
     return renderTaggedValue(
       "file",
       [
-        `name: ${part.filename ?? "unnamed"}`,
-        `mediaType: ${part.mediaType}`,
-        "content: omitted; old file attachments are not rehydrated during compaction",
+        `name: ${getChatAttachmentFilename(part) ?? "unnamed"}`,
+        `mediaType: ${getChatAttachmentMimeType(part)}`,
+        "content: omitted; attachments are not inlined during compaction",
       ].join("\n"),
     );
   }
 
-  if (isToolUIPart(part)) {
+  if (isChatToolPart(part)) {
     return renderTaggedValue(
       "tool",
       truncateForCompaction(safeStringify(part), MAX_STRUCTURED_PART_CHARS),
@@ -818,8 +870,18 @@ const renderModelMessageContent = (message: ModelMessage): string => {
     return message.content;
   }
 
+  if (message.toolCalls && message.toolCalls.length > 0) {
+    return safeStringify({
+      content: message.content,
+      toolCalls: message.toolCalls,
+    });
+  }
+
   return safeStringify(message.content);
 };
+
+const isChatToolPart = (part: ChatMessage["parts"][number]): boolean =>
+  part.type === "tool-call" || part.type === "tool-result";
 
 const renderTaggedValue = (tag: string, value: string): string =>
   `<${tag}>\n${value}\n</${tag}>`;

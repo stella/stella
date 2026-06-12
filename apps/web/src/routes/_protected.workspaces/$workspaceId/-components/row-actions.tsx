@@ -57,7 +57,11 @@ import { DOCX_MIME } from "@/lib/consts";
 import { openDocxInDesktop } from "@/lib/desktop-bridge";
 import { ClientOperationError, isUnauthorizedError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
-import type { WorkspaceCellMetadata, WorkspaceEntity } from "@/lib/types";
+import type {
+  PropertyId,
+  WorkspaceCellMetadata,
+  WorkspaceEntity,
+} from "@/lib/types";
 import { isFileDisplayable } from "@/lib/types";
 import {
   CellLockMenuItem,
@@ -114,7 +118,7 @@ type RowActionsProps = {
    *  move dedupe stays correct across hidden intermediate folders. */
   getAncestorIds?: ((entityId: string) => string[]) | undefined;
   cellMetadataTarget?:
-    | { propertyId: string; metadata: WorkspaceCellMetadata | undefined }
+    | { propertyId: PropertyId; metadata: WorkspaceCellMetadata | undefined }
     | null
     | undefined;
 };
@@ -139,7 +143,7 @@ export const RowActions = ({
   const deleteEntities = useDeleteEntities();
   const uploadVersion = useUploadVersion();
   const requestChatAbout = useRequestChatAbout(workspaceId);
-  const retryCell = useRetryCell(workspaceId);
+  const retryCell = useRetryCell(toSafeId<"workspace">(workspaceId));
   const [copyToMatterOpen, setCopyToMatterOpen] = useState(false);
   const [copyToMatterEntities, setCopyToMatterEntities] = useState<
     CopyToMatterEntity[]

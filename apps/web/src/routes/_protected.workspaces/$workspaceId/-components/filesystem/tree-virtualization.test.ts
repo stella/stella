@@ -1,16 +1,20 @@
 import { describe, expect, test } from "bun:test";
 
+import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceEntity } from "@/lib/types";
 import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 
 import { flattenFilesystemRows } from "./tree-virtualization";
+
+const safeEntityId = (value: string) => toSafeId<"entity">(value);
+const entityIds = (...values: string[]) => values.map(safeEntityId);
 
 const entity = (
   entityId: string,
   kind: WorkspaceEntity["kind"],
   children: TableTreeNode[] = [],
 ): TableTreeNode => ({
-  entityId,
+  entityId: toSafeId<"entity">(entityId),
   kind,
   name: entityId,
   parentId: null,
@@ -63,13 +67,9 @@ describe("filesystem row virtualization", () => {
       new Set(["folder-a", "folder-b"]),
     );
 
-    expect(rows.map((row) => row.node.entityId)).toEqual([
-      "folder-a",
-      "doc-a-1",
-      "folder-b",
-      "doc-b-1",
-      "doc-root",
-    ]);
+    expect(rows.map((row) => row.node.entityId)).toEqual(
+      entityIds("folder-a", "doc-a-1", "folder-b", "doc-b-1", "doc-root"),
+    );
     expect(rows.map((row) => row.depth)).toEqual([0, 1, 1, 2, 0]);
     const nestedDoc = rows.at(3);
     expect(nestedDoc).toBeDefined();
@@ -91,12 +91,9 @@ describe("filesystem row virtualization", () => {
       new Set(["folder-a"]),
     );
 
-    expect(rows.map((row) => row.node.entityId)).toEqual([
-      "folder-a",
-      "doc-a-1",
-      "folder-b",
-      "doc-root",
-    ]);
+    expect(rows.map((row) => row.node.entityId)).toEqual(
+      entityIds("folder-a", "doc-a-1", "folder-b", "doc-root"),
+    );
     const nestedFolder = rows.at(2);
     expect(nestedFolder).toBeDefined();
     if (!nestedFolder) {

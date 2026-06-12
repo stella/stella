@@ -1,5 +1,3 @@
-import type { FileUIPart } from "ai";
-import { isFileUIPart } from "ai";
 import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
@@ -17,6 +15,13 @@ import {
   TEXT_MARKDOWN_MIME_TYPE,
   TEXT_PLAIN_MIME_TYPE,
 } from "@/api/handlers/chat/attachment-validation";
+import {
+  createChatAttachmentPart,
+  getChatAttachmentFilename,
+  getChatAttachmentMimeType,
+  getChatAttachmentUrl,
+  isChatAttachmentPart,
+} from "@/api/handlers/chat/chat-message-parts";
 import { ChatError } from "@/api/handlers/chat/errors";
 import {
   generateImageThumbnail,
@@ -43,7 +48,11 @@ import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 import { extractText } from "../docx/extract-text";
-import type { ChatMessage } from "./types";
+import type {
+  ChatAttachmentPart,
+  ChatMessage,
+  PersistableChatMessage,
+} from "./types";
 
 export type UserFileThreadAccess = {
   threadId: SafeId<"chatThread">;
@@ -51,7 +60,7 @@ export type UserFileThreadAccess = {
 };
 
 type UploadMessageFilesProps = {
-  message: ChatMessage;
+  message: PersistableChatMessage;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
@@ -71,7 +80,7 @@ export type UploadedChatFile = {
 };
 
 type UploadedChatMessage = {
-  message: ChatMessage;
+  message: PersistableChatMessage;
   uploadedFiles: UploadedChatFile[];
 };
 
@@ -114,7 +123,10 @@ export const uploadMessageFiles = async ({
   };
 
   for (const part of message.parts) {
-    if (!isFileUIPart(part) || isUserFileUrl(part.url)) {
+    if (
+      !isChatAttachmentPart(part) ||
+      isUserFileUrl(getChatAttachmentUrl(part))
+    ) {
       parts.push(part);
       continue;
     }
@@ -145,10 +157,11 @@ export const uploadMessageFiles = async ({
       thumbnailS3Key: uploadedFile.value.thumbnailS3Key,
     });
     parts.push({
-      ...part,
-      filename: uploadedFile.value.fileName,
-      mediaType: uploadedFile.value.mimeType,
-      url: toUserFileUrl(uploadedFile.value.id),
+      ...createChatAttachmentPart({
+        filename: uploadedFile.value.fileName,
+        mimeType: uploadedFile.value.mimeType,
+        url: toUserFileUrl(uploadedFile.value.id),
+      }),
     });
   }
 
@@ -231,7 +244,7 @@ type HydrateFilePartProps = {
 
 export type HydratedFilePart =
   | {
-      part: FileUIPart;
+      part: ChatAttachmentPart;
       type: "anonymizable";
     }
   | {
@@ -239,7 +252,7 @@ export type HydratedFilePart =
       type: "blocked";
     }
   | {
-      part: FileUIPart;
+      part: ChatAttachmentPart;
       type: "rawOverride";
     };
 
@@ -271,12 +284,12 @@ export const createRawChatFilePart = ({
   bytes: Uint8Array;
   fileName: string;
   mimeType: string;
-}): FileUIPart => ({
-  type: "file",
-  filename: fileName,
-  mediaType: mimeType,
-  url: toDataUrl(bytes, mimeType),
-});
+}): ChatAttachmentPart =>
+  createChatAttachmentPart({
+    filename: fileName,
+    mimeType,
+    url: toDataUrl(bytes, mimeType),
+  });
 
 export const hydrateFilePart = async ({
   fileName,
@@ -311,12 +324,11 @@ export const hydrateFilePart = async ({
 
     if (DIRECT_TEXT_MIME_TYPES.has(mimeType)) {
       return Result.ok<HydratedFilePart>({
-        part: {
-          type: "file",
+        part: createChatAttachmentPart({
           filename: fileName,
-          mediaType: TEXT_PLAIN_MIME_TYPE,
+          mimeType: TEXT_PLAIN_MIME_TYPE,
           url: toDataUrl(bytes, TEXT_PLAIN_MIME_TYPE),
-        },
+        }),
         type: "anonymizable",
       });
     }
@@ -359,12 +371,11 @@ export const hydrateFilePart = async ({
     }
 
     return Result.ok<HydratedFilePart>({
-      part: {
-        type: "file",
+      part: createChatAttachmentPart({
         filename: toDocxTextFilename({ filename: fileName }),
-        mediaType: TEXT_PLAIN_MIME_TYPE,
+        mimeType: TEXT_PLAIN_MIME_TYPE,
         url: toDataUrl(Buffer.from(text, "utf-8"), TEXT_PLAIN_MIME_TYPE),
-      },
+      }),
       type: "anonymizable",
     });
   });
@@ -546,30 +557,32 @@ type NormalizeUserFilePartProps = {
   fileId: SafeId<"userFile">;
   fileName: string;
   mimeType: string;
-  part: FileUIPart;
+  part: ChatAttachmentPart;
 };
 
 export const normalizeUserFilePart = ({
   fileId,
   fileName,
   mimeType,
-  part,
+  part: _part,
 }: NormalizeUserFilePartProps) => ({
-  ...part,
-  filename: fileName,
-  mediaType: mimeType,
-  url: toUserFileUrl(fileId),
+  ...createChatAttachmentPart({
+    filename: fileName,
+    mimeType,
+    url: toUserFileUrl(fileId),
+  }),
 });
 
 type ParseMessageFileDataUrlProps = {
-  part: FileUIPart;
+  part: ChatAttachmentPart;
 };
 
 const parseMessageFileDataUrl = ({ part }: ParseMessageFileDataUrlProps) => {
+  const mimeType = getChatAttachmentMimeType(part);
   const parseResult = parseDataUrl({
-    expectedMimeType: part.mediaType,
+    expectedMimeType: mimeType,
     maxBytes: CHAT_MAX_FILE_BYTES,
-    url: part.url,
+    url: getChatAttachmentUrl(part),
   });
 
   if (Result.isError(parseResult)) {
@@ -594,7 +607,7 @@ const parseMessageFileDataUrl = ({ part }: ParseMessageFileDataUrlProps) => {
 
   return Result.ok({
     bytes: parseResult.value.bytes,
-    fileName: sanitizeFilename(part.filename ?? "attachment"),
+    fileName: sanitizeFilename(getChatAttachmentFilename(part) ?? "attachment"),
     mimeType: parseResult.value.mimeType,
   });
 };

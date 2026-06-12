@@ -54,6 +54,7 @@ import type { DragPreviewData } from "@/components/drag-preview";
 import { FileTreeNameCell } from "@/components/file-tree/file-tree";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { HOTKEYS } from "@/lib/hotkeys";
+import { toSafeId } from "@/lib/safe-id";
 import { isFileDisplayable } from "@/lib/types";
 import type {
   ViewLayout,
@@ -491,7 +492,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     }
     const trail: { id: string; name: string }[] = [];
     const nodeMap = new Map(data.map((e) => [e.entityId, e]));
-    let current = nodeMap.get(currentFolderId);
+    let current = nodeMap.get(toSafeId<"entity">(currentFolderId));
     while (current) {
       trail.unshift({
         id: current.entityId,
@@ -1720,7 +1721,7 @@ const ExtraColumnCell = ({ column, entity }: ExtraColumnCellProps) => {
   }
 
   // Regular property
-  const field = entity.fields[column.id];
+  const field = entity.fields[toSafeId<"property">(column.id)];
 
   // Date fields need explicit formatting; raw Date objects
   // crash React ("Objects are not valid as a React child").

@@ -425,6 +425,7 @@ type UseChatComposerWiringOptions = {
   controller: ChatEditorController;
   inputDisabled: boolean;
   onSubmit: (draft: ChatInputDraft) => Promise<void> | void;
+  onSubmitError?: ((error: unknown) => void) | undefined;
   /**
    * Pre-submit gate. Return `false` to abort the submit (e.g. when a
    * file-aware caller wants to block until a DOCX snapshot is ready).
@@ -448,6 +449,7 @@ export const useChatComposerWiring = ({
   controller,
   inputDisabled,
   onSubmit,
+  onSubmitError,
   onSubmitGuard,
   submitDisabled,
 }: UseChatComposerWiringOptions) => {
@@ -460,10 +462,14 @@ export const useChatComposerWiring = ({
     if (onSubmitGuard && onSubmitGuard() === false) {
       return;
     }
-    await submit(async (draft) => {
-      await onSubmit(draft);
-    });
-  }, [onSubmit, onSubmitGuard, submit, submitDisabled]);
+    try {
+      await submit(async (draft) => {
+        await onSubmit(draft);
+      });
+    } catch (error) {
+      onSubmitError?.(error);
+    }
+  }, [onSubmit, onSubmitError, onSubmitGuard, submit, submitDisabled]);
 
   useExternalSyncEffect(() => {
     setSubmitHandler(submitDraft);

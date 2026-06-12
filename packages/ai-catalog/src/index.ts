@@ -2,7 +2,8 @@
  * Canonical AI provider and model catalog.
  *
  * Single source of truth for every provider/model identifier stella
- * offers. Imported by the API runtime (`apps/api/src/lib/ai-models.ts`)
+ * offers. Imported by the API runtime
+ * (`apps/api/src/lib/tanstack-ai-models.ts`)
  * and the BYOK settings UI (`apps/web`), so the picker can never offer
  * a model the backend rejects, and vice versa.
  *
@@ -43,6 +44,15 @@ export const AI_PROVIDERS = [
 
 export type AIProvider = (typeof AI_PROVIDERS)[number];
 
+export const TANSTACK_AI_PROVIDERS = [
+  "google",
+  "openrouter",
+  "openai",
+  "anthropic",
+] as const satisfies readonly AIProvider[];
+
+export type TanStackAIProvider = (typeof TANSTACK_AI_PROVIDERS)[number];
+
 /**
  * Per-role default model IDs for the BYOK-capable cloud providers.
  * Shared between the instance default table (`DEFAULT_MODELS`) and the
@@ -73,13 +83,7 @@ export const BYOK_DEFAULT_MODELS = {
     reasoning: "claude-sonnet-4-6",
     pdf: "claude-sonnet-4-6",
   },
-  mistral: {
-    fast: "mistral-small-latest",
-    chat: "mistral-large-latest",
-    reasoning: "magistral-medium-latest",
-    pdf: "mistral-large-latest",
-  },
-} as const satisfies Partial<Record<AIProvider, Record<ModelRole, string>>>;
+} as const satisfies Record<TanStackAIProvider, Record<ModelRole, string>>;
 
 /**
  * Instance-level default model IDs per provider. Extends the BYOK
@@ -88,6 +92,12 @@ export const BYOK_DEFAULT_MODELS = {
  */
 export const DEFAULT_MODELS = {
   ...BYOK_DEFAULT_MODELS,
+  mistral: {
+    fast: "mistral-small-latest",
+    chat: "mistral-large-latest",
+    reasoning: "magistral-medium-latest",
+    pdf: "mistral-large-latest",
+  },
   azure_foundry: {
     fast: "gpt-5.4-nano",
     chat: "gpt-5.4-mini",
@@ -114,9 +124,9 @@ export const DEFAULT_MODELS = {
  * The frontend list is not a security boundary; this is what the API
  * accepts.
  *
- * Limited to providers BYOK supports (no openai_compatible).
- * `azure_foundry` and `huggingface` take custom deployment IDs, so they
- * carry no curated list.
+ * Limited to providers the TanStack AI integration supports for BYOK.
+ * Providers without a first-class TanStack adapter path are intentionally
+ * not accepted at this boundary.
  */
 export const BYOK_MODEL_OPTIONS = {
   google: [
@@ -132,15 +142,7 @@ export const BYOK_MODEL_OPTIONS = {
     "claude-opus-4-6",
     "claude-haiku-4-5-20251001",
   ],
-  mistral: [
-    "mistral-medium-3-5",
-    "mistral-large-latest",
-    "mistral-small-latest",
-    "magistral-medium-latest",
-  ],
   openai: ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5.2"],
-  azure_foundry: [],
-  huggingface: [],
   openrouter: [
     "google/gemini-3.1-pro-preview",
     "google/gemini-3.5-flash",
@@ -150,10 +152,7 @@ export const BYOK_MODEL_OPTIONS = {
     "openai/gpt-5.5",
     "openai/gpt-5.4-mini",
   ],
-} as const satisfies Record<
-  Exclude<AIProvider, "openai_compatible">,
-  readonly string[]
->;
+} as const satisfies Record<TanStackAIProvider, readonly string[]>;
 
 export type BYOKProvider = keyof typeof BYOK_MODEL_OPTIONS;
 
@@ -174,10 +173,9 @@ export const ANTHROPIC_ADAPTIVE_THINKING_MODELS = [
 /**
  * Anthropic models that reject sampling overrides (`temperature`,
  * `topP`, `topK`) with a 400 on every request shape; they always run
- * with provider-side defaults. Enforced by a strip middleware in the
- * model wrapper (`withInstrumentation` in
- * `apps/api/src/lib/ai-models.ts`) so neither role defaults nor
- * call-site overrides can reach the provider.
+ * with provider-side defaults. Enforced by TanStack model-option
+ * construction in `apps/api/src/lib/tanstack-ai-models.ts` so neither
+ * role defaults nor call-site overrides can reach the provider.
  */
 export const ANTHROPIC_FIXED_SAMPLING_MODELS = [
   "claude-opus-4-7",
@@ -188,7 +186,7 @@ export const ANTHROPIC_FIXED_SAMPLING_MODELS = [
 /**
  * Per-model ledger rates, normalized micro-units per 1M tokens.
  *
- * Keys are the canonical model IDs stella passes to the AI SDK.
+ * Keys are the canonical model IDs stella passes to provider adapters.
  * Consumers (`apps/api/src/lib/usage/unit-model.ts`) fall back to a
  * defensive default for unknown IDs. The nightly
  * `model-catalog-upstream` check validates that every offered
@@ -213,10 +211,10 @@ export type ModelRate = {
  * Providers whose catalog entries are first-party API model IDs and so
  * must carry an explicit rate. Mirrors `MODELS_DEV_PROVIDER` in the
  * nightly check; `openrouter` (provider-prefixed slugs) and the
- * custom-deployment providers are metered by their underlying model
- * IDs or the fallback rate.
+ * legacy/custom-deployment providers are metered by their underlying
+ * model IDs or the fallback rate.
  */
-type FirstPartyProvider = "google" | "openai" | "anthropic" | "mistral";
+type FirstPartyProvider = "google" | "openai" | "anthropic";
 
 type OfferedFirstPartyModelId =
   (typeof BYOK_MODEL_OPTIONS)[FirstPartyProvider][number];

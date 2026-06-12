@@ -222,6 +222,7 @@ export default defineConfig(({ mode }) => {
       dedupe: [
         "react",
         "react-dom",
+        "solid-js",
         "lucide-react",
         "zustand",
         "@tanstack/react-query",
@@ -229,8 +230,8 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [
       logCapPlugin(),
-      versionManifestPlugin(),
       devtools({ consolePiping: { enabled: false } }),
+      versionManifestPlugin(),
       tailwindcss(),
       tanstackStart({
         router: {

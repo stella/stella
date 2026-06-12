@@ -9,7 +9,7 @@ stella is built for firms that need control. Matters, documents, and search are 
 - Apache-2.0 for open-source use; commercial licensing arrangements (support, indemnity, custom terms) are available alongside.
 - AI outputs are grounded by citations and traceable to source material.
 - Sensitive text can be anonymized before AI workflows.
-- The AI layer uses the AI SDK and remains provider-agnostic.
+- The AI layer uses TanStack AI and remains provider-agnostic across supported providers.
 - No lock-in: standard files, full export, and no per-seat pricing on the core workspace.
 
 ## Start here

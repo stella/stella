@@ -1,10 +1,10 @@
-import { generateText, Output } from "ai";
+import type { DocumentPart } from "@tanstack/ai";
+import type { AnthropicDocumentMetadata } from "@tanstack/ai-anthropic";
 import { panic, Result } from "better-result";
+import * as v from "valibot";
 
-import { getModelForRole } from "@/api/lib/ai-models";
-import type { OrgAIConfig } from "@/api/lib/ai-models";
-import { strictOutputSchema } from "@/api/lib/ai-output-schema";
-import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   BBOX_ARRAY_DESCRIPTION,
   BBOX_SYSTEM_PROMPT,
@@ -13,6 +13,16 @@ import {
 } from "@/api/lib/bbox/ai-prompts";
 import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
+import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+
+const bboxOutputSchema = v.strictObject({
+  boxes: v.pipe(
+    v.array(bboxItemSchema),
+    v.minLength(1),
+    v.description(BBOX_ARRAY_DESCRIPTION),
+  ),
+});
 
 // `bboxItemSchema` already validated `v.length(4)`; this only narrows
 // the static type from `number[]` to the 4-tuple without a cast.
@@ -58,7 +68,12 @@ export const generateBBoxData = async ({
 }: GenerateBBoxDataProps): Promise<
   Result<[number, number, number, number][], WorkflowIntegrationError>
 > => {
-  const aiAnalytics = createAIAnalyticsCallbacks({
+  const caching = resolveCaching({
+    promptCachingEnabled,
+    role: "pdf",
+    scopeKey: justificationId,
+  });
+  const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     feature: "bbox.generate",
     modelRole: "pdf",
     orgAIConfig: orgAIConfig ?? null,
@@ -74,26 +89,30 @@ export const generateBBoxData = async ({
 
   const generated = await Result.tryPromise({
     try: async () => {
-      const result = await generateText({
-        model: getModelForRole("pdf", orgAIConfig, {
-          promptCachingEnabled,
-          scopeKey: justificationId,
-          organizationId,
-          serviceTier: "standard",
-        }),
+      const pdfPart: DocumentPart<AnthropicDocumentMetadata> = {
+        type: "document",
+        source: {
+          type: "data",
+          value: Buffer.from(pdfData).toString("base64"),
+          mimeType: "application/pdf",
+        },
+        metadata: { mediaType: "application/pdf" },
+      };
+      const result = await generateTanStackObjectForRole({
+        role: "pdf",
+        orgAIConfig,
+        organizationId,
+        analytics: aiAnalytics,
+        caching,
         system: BBOX_SYSTEM_PROMPT,
         messages: [
           {
             role: "user",
             content: [
-              {
-                type: "file",
-                data: pdfData,
-                mediaType: "application/pdf",
-              },
+              markTanStackCacheBreakpoint(pdfPart, { decision: caching }),
               {
                 type: "text",
-                text: buildBBoxUserMessage({
+                content: buildBBoxUserMessage({
                   prompt,
                   fieldContent,
                   justificationText,
@@ -102,15 +121,11 @@ export const generateBBoxData = async ({
             ],
           },
         ],
-        output: Output.array({
-          element: strictOutputSchema(bboxItemSchema),
-          description: BBOX_ARRAY_DESCRIPTION,
-        }),
+        outputSchema: bboxOutputSchema,
         abortSignal,
-        ...aiAnalytics.stepCallbacks,
       });
 
-      return result.output;
+      return result.boxes;
     },
     catch: (error) => {
       aiAnalytics.captureError(error);
@@ -125,9 +140,6 @@ export const generateBBoxData = async ({
   if (Result.isError(generated)) {
     return Result.err(generated.error);
   }
-  // Previously enforced by `v.nonEmpty()` on the array schema;
-  // `Output.array` validates per element, so the emptiness invariant
-  // moves here.
   if (generated.value.length === 0) {
     const error = new WorkflowIntegrationError({
       message: "BBox AI generation returned no bounding boxes",

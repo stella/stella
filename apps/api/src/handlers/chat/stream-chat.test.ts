@@ -1,4 +1,5 @@
-import type { InferUIMessageChunk } from "ai";
+import { EventType, StreamProcessor } from "@tanstack/ai";
+import type { StreamChunk } from "@tanstack/ai";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
@@ -6,46 +7,378 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { createPipelineContext } from "@stll/anonymize-wasm";
 
 import type { ScopedDb } from "@/api/db";
+import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
-import type { ChatMessage } from "@/api/handlers/chat/types";
+import type {
+  ChatAnonRestoration,
+  ChatMessage,
+} from "@/api/handlers/chat/types";
 import { toUserFileUrl } from "@/api/handlers/user-files/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import {
+  chatMessageUsageFromTokenUsage,
   collectInitialRestorationPlaceholders,
-  deanonymizeOutgoingStream,
+  createChatMessageIdMapper,
+  ensureAssistantMessageStart,
   hydrateMessages,
-  resolveRefsInTextStream,
+  normalizeFinalAssistantMessageId,
+  processServerChatStream,
+  remapOutgoingMessageIds,
+  transformOutgoingStream,
 } from "./stream-chat";
 
-type ChatChunk = InferUIMessageChunk<ChatMessage>;
-
 const collectChunks = async (
-  stream: ReadableStream<ChatChunk>,
-): Promise<ChatChunk[]> => {
-  const chunks: ChatChunk[] = [];
+  stream: AsyncIterable<StreamChunk>,
+): Promise<StreamChunk[]> => {
+  const chunks: StreamChunk[] = [];
   for await (const chunk of stream) {
     chunks.push(chunk);
   }
   return chunks;
 };
 
-const collectText = (chunks: readonly ChatChunk[]) => {
+const collectText = (chunks: readonly StreamChunk[]) => {
   let text = "";
   for (const chunk of chunks) {
-    if (chunk.type === "text-delta") {
+    if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {
       text += chunk.delta;
     }
   }
   return text;
 };
 
+const collectReasoning = (chunks: readonly StreamChunk[]) => {
+  let text = "";
+  for (const chunk of chunks) {
+    if (chunk.type === EventType.REASONING_MESSAGE_CONTENT) {
+      text += chunk.delta;
+    }
+  }
+  return text;
+};
+
+const stripTimestamps = (chunks: readonly StreamChunk[]) =>
+  chunks.map((chunk) => {
+    const { timestamp, ...rest } = chunk;
+    void timestamp;
+    return rest;
+  });
+
 const scopedDb: ScopedDb = async () => {
   throw new Error("Expected stream deanonymization test not to access DB");
 };
+
+describe("outgoing chat stream message ids", () => {
+  test("normalizes provider assistant message ids to one stable stella UUID", async () => {
+    const firstId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    const ids = [firstId];
+    let index = 0;
+    const mapMessageId = createChatMessageIdMapper(() => {
+      const nextId = ids.at(index);
+      if (nextId === undefined) {
+        throw new Error("Unexpected message id request");
+      }
+      index += 1;
+      return nextId;
+    });
+
+    expect(
+      await collectChunks(
+        remapOutgoingMessageIds({
+          mapMessageId,
+          source: streamChunks([
+            {
+              type: EventType.TEXT_MESSAGE_START,
+              messageId: "openrouter-responses-a",
+              role: "assistant",
+            },
+            {
+              type: EventType.TEXT_MESSAGE_CONTENT,
+              delta: "Ahoj",
+              messageId: "openrouter-responses-a",
+            },
+            {
+              type: EventType.CUSTOM,
+              name: "structured-output.start",
+              value: { messageId: "openrouter-responses-a" },
+            },
+            {
+              type: EventType.TOOL_CALL_START,
+              parentMessageId: "openrouter-responses-b",
+              toolCallId: "tool-1",
+              toolCallName: "ask-user",
+              toolName: "ask-user",
+            },
+            {
+              type: EventType.TOOL_CALL_RESULT,
+              content: "{}",
+              messageId: "openrouter-responses-b",
+              toolCallId: "tool-1",
+            },
+            {
+              type: EventType.TEXT_MESSAGE_END,
+              messageId: "openrouter-responses-a",
+            },
+          ]),
+        }),
+      ),
+    ).toEqual([
+      {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId: firstId,
+        role: "assistant",
+      },
+      {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        delta: "Ahoj",
+        messageId: firstId,
+      },
+      {
+        type: EventType.CUSTOM,
+        name: "structured-output.start",
+        value: { messageId: firstId },
+      },
+      {
+        type: EventType.TOOL_CALL_START,
+        parentMessageId: firstId,
+        toolCallId: "tool-1",
+        toolCallName: "ask-user",
+        toolName: "ask-user",
+      },
+      {
+        type: EventType.TOOL_CALL_RESULT,
+        content: "{}",
+        messageId: firstId,
+        toolCallId: "tool-1",
+      },
+      {
+        type: EventType.TEXT_MESSAGE_END,
+        messageId: firstId,
+      },
+    ]);
+    expect(index).toBe(1);
+  });
+
+  test("normalizes tanstack generated final assistant ids before persistence", () => {
+    const messageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    const mapMessageId = createChatMessageIdMapper(() => messageId);
+
+    expect(mapMessageId("provider-stream-message")).toBe(messageId);
+    expect(
+      normalizeFinalAssistantMessageId({
+        mapMessageId,
+        message: {
+          id: "msg-1781251066139-vhjhi8",
+          role: "assistant",
+          parts: [
+            {
+              content: "Checking source law.",
+              type: "thinking",
+            },
+            {
+              arguments: "{}",
+              id: "tool-1",
+              name: "ask-user",
+              state: "input-complete",
+              type: "tool-call",
+            },
+          ],
+        },
+      }),
+    ).toEqual({
+      id: messageId,
+      role: "assistant",
+      parts: [
+        {
+          content: "Checking source law.",
+          type: "thinking",
+        },
+        {
+          arguments: "{}",
+          id: "tool-1",
+          name: "ask-user",
+          state: "input-complete",
+          type: "tool-call",
+        },
+      ],
+    });
+  });
+
+  test("seeds tanstack message state before reasoning-only chunks", async () => {
+    const messageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    const threadId = "thread-1";
+    const mapMessageId = createChatMessageIdMapper(() => messageId);
+    const responseMessageIds: string[] = [];
+    const processor = new StreamProcessor({
+      events: {
+        onStreamEnd: (message) => {
+          responseMessageIds.push(message.id);
+        },
+      },
+    });
+    const chunks = ensureAssistantMessageStart({
+      getOrCreateMessageId: () => mapMessageId("assistant-response"),
+      source: remapOutgoingMessageIds({
+        mapMessageId,
+        source: streamChunks([
+          { type: EventType.RUN_STARTED, runId: "run-1", threadId },
+          {
+            type: EventType.REASONING_MESSAGE_CONTENT,
+            delta: "Checking source law.",
+            messageId: "openrouter-reasoning-message",
+          },
+          {
+            type: EventType.REASONING_MESSAGE_END,
+            messageId: "openrouter-reasoning-message",
+          },
+          {
+            type: EventType.RUN_FINISHED,
+            finishReason: "stop",
+            runId: "run-1",
+            threadId,
+          },
+        ]),
+      }),
+    });
+
+    const emitted = await collectChunks(chunks);
+    for (const chunk of emitted) {
+      processor.processChunk(chunk);
+    }
+
+    expect(stripTimestamps(emitted)).toEqual([
+      { type: EventType.RUN_STARTED, runId: "run-1", threadId },
+      {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId,
+        role: "assistant",
+      },
+      {
+        type: EventType.REASONING_MESSAGE_CONTENT,
+        delta: "Checking source law.",
+        messageId,
+      },
+      {
+        type: EventType.REASONING_MESSAGE_END,
+        messageId,
+      },
+      {
+        type: EventType.RUN_FINISHED,
+        finishReason: "stop",
+        runId: "run-1",
+        threadId,
+      },
+    ]);
+    expect(responseMessageIds).toEqual([messageId]);
+  });
+
+  test("defers run finished until assistant persistence has completed", async () => {
+    const events: string[] = [];
+    const messageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    let responseMessage: ChatMessage | null = null;
+    const processor = new StreamProcessor({
+      events: {
+        onStreamEnd: (message) => {
+          events.push("processor:onStreamEnd");
+          responseMessage = {
+            id: message.id,
+            parts: [{ content: "Ahoj", type: "text" }],
+            role: "assistant",
+          };
+        },
+      },
+    });
+    const stream = processServerChatStream({
+      abortSignal: new AbortController().signal,
+      getResponseMessage: () => responseMessage,
+      mapMessageId: createChatMessageIdMapper(() => messageId),
+      onFinish: () => {
+        events.push("server:onFinish");
+      },
+      processor,
+      source: streamChunks([
+        {
+          type: EventType.RUN_STARTED,
+          runId: "run-1",
+          threadId: "thread-1",
+        },
+        {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId: "provider-message",
+          role: "assistant",
+        },
+        {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          delta: "Ahoj",
+          messageId: "provider-message",
+        },
+        {
+          type: EventType.TEXT_MESSAGE_END,
+          messageId: "provider-message",
+        },
+        {
+          type: EventType.RUN_FINISHED,
+          finishReason: "stop",
+          runId: "run-1",
+          threadId: "thread-1",
+        },
+      ]),
+    });
+
+    const emittedTypes: string[] = [];
+    for await (const chunk of stream) {
+      emittedTypes.push(chunk.type);
+      events.push(`yield:${chunk.type}`);
+    }
+
+    expect(emittedTypes).toEqual([
+      EventType.RUN_STARTED,
+      EventType.TEXT_MESSAGE_START,
+      EventType.TEXT_MESSAGE_CONTENT,
+      EventType.TEXT_MESSAGE_END,
+      EventType.RUN_FINISHED,
+    ]);
+    expect(events).toEqual([
+      "yield:RUN_STARTED",
+      "yield:TEXT_MESSAGE_START",
+      "yield:TEXT_MESSAGE_CONTENT",
+      "yield:TEXT_MESSAGE_END",
+      "processor:onStreamEnd",
+      "server:onFinish",
+      "yield:RUN_FINISHED",
+    ]);
+  });
+});
+
+describe("chat message usage metadata", () => {
+  test("preserves provider-reported reasoning tokens", () => {
+    expect(
+      chatMessageUsageFromTokenUsage({
+        completionTokens: 22,
+        completionTokensDetails: { reasoningTokens: 12 },
+        promptTokens: 10,
+        totalTokens: 32,
+      }),
+    ).toEqual({
+      completionTokens: 22,
+      completionTokensDetails: { reasoningTokens: 12 },
+      promptTokens: 10,
+      totalTokens: 32,
+    });
+  });
+});
 
 const createBoundary = (
   pairs: readonly (readonly [string, string])[],
@@ -60,51 +393,88 @@ const createBoundary = (
   type: "anonymized",
 });
 
-const streamChunks = (
-  chunks: readonly ChatChunk[],
-): ReadableStream<ChatChunk> =>
-  new ReadableStream<ChatChunk>({
-    start(controller) {
-      for (const chunk of chunks) {
-        controller.enqueue(chunk);
-      }
-      controller.close();
-    },
-  });
+const streamChunks = async function* (
+  chunks: readonly StreamChunk[],
+): AsyncIterable<StreamChunk> {
+  yield* chunks;
+};
 
 describe("chat stream refs", () => {
   test("resolves assistant text refs across streamed chunk boundaries", async () => {
-    const chunks: ChatChunk[] = [
-      { id: "text_1", type: "text-start" },
+    const chunks: StreamChunk[] = [
       {
+        type: EventType.TEXT_MESSAGE_CONTENT,
         delta: "Open [Document](",
-        id: "text_1",
-        type: "text-delta",
+        messageId: "text_1",
       },
       {
+        type: EventType.TEXT_MESSAGE_CONTENT,
         delta: "#stella-entity-ref=",
-        id: "text_1",
-        type: "text-delta",
+        messageId: "text_1",
       },
       {
+        type: EventType.TEXT_MESSAGE_CONTENT,
         delta: "ent_1) now.",
-        id: "text_1",
-        type: "text-delta",
+        messageId: "text_1",
       },
-      { id: "text_1", type: "text-end" },
+      { type: EventType.TEXT_MESSAGE_END, messageId: "text_1" },
     ];
 
     const resolvedChunks = await collectChunks(
-      resolveRefsInTextStream(streamChunks(chunks), (text) =>
-        text.replace(
-          "#stella-entity-ref=ent_1",
-          "#stella-entity=workspace_1:entity_1",
-        ),
-      ),
+      transformOutgoingStream({
+        boundary: { type: "raw" },
+        initialRestorationPlaceholders: new Set(),
+        restorationPairs: [],
+        source: streamChunks(chunks),
+        resolveAssistantTextRefs: (text) =>
+          text.replace(
+            "#stella-entity-ref=ent_1",
+            "#stella-entity=workspace_1:entity_1",
+          ),
+      }),
     );
 
     expect(collectText(resolvedChunks)).toBe(
       "Open [Document](#stella-entity=workspace_1:entity_1) now.",
+    );
+  });
+
+  test("resolves assistant reasoning refs across streamed chunk boundaries", async () => {
+    const chunks: StreamChunk[] = [
+      {
+        type: EventType.REASONING_MESSAGE_CONTENT,
+        delta: "Check [Document](",
+        messageId: "reasoning_1",
+      },
+      {
+        type: EventType.REASONING_MESSAGE_CONTENT,
+        delta: "#stella-entity-ref=",
+        messageId: "reasoning_1",
+      },
+      {
+        type: EventType.REASONING_MESSAGE_CONTENT,
+        delta: "ent_1) first.",
+        messageId: "reasoning_1",
+      },
+      { type: EventType.REASONING_MESSAGE_END, messageId: "reasoning_1" },
+    ];
+
+    const resolvedChunks = await collectChunks(
+      transformOutgoingStream({
+        boundary: { type: "raw" },
+        initialRestorationPlaceholders: new Set(),
+        restorationPairs: [],
+        source: streamChunks(chunks),
+        resolveAssistantTextRefs: (text) =>
+          text.replace(
+            "#stella-entity-ref=ent_1",
+            "#stella-entity=workspace_1:entity_1",
+          ),
+      }),
+    );
+
+    expect(collectReasoning(resolvedChunks)).toBe(
+      "Check [Document](#stella-entity=workspace_1:entity_1) first.",
     );
   });
 
@@ -120,22 +490,24 @@ describe("chat stream refs", () => {
       workspaceId,
     });
 
-    const chunks: ChatChunk[] = [
-      { id: "text_1", type: "text-start" },
+    const chunks: StreamChunk[] = [
       {
+        type: EventType.TEXT_MESSAGE_CONTENT,
         delta: `Utworzyłem nowy dokument ${mention}.`,
-        id: "text_1",
-        type: "text-delta",
+        messageId: "text_1",
       },
-      { id: "text_1", type: "text-end" },
+      { type: EventType.TEXT_MESSAGE_END, messageId: "text_1" },
     ];
 
     const resolvedChunks = await collectChunks(
-      resolveRefsInTextStream(
-        streamChunks(chunks),
-        registry.resolveAssistantTextRefs,
-        registry.resolveAssistantValueRefs,
-      ),
+      transformOutgoingStream({
+        boundary: { type: "raw" },
+        initialRestorationPlaceholders: new Set(),
+        restorationPairs: [],
+        source: streamChunks(chunks),
+        resolveAssistantTextRefs: registry.resolveAssistantTextRefs,
+        resolveAssistantValueRefs: registry.resolveAssistantValueRefs,
+      }),
     );
 
     expect(collectText(resolvedChunks)).toBe(
@@ -156,37 +528,42 @@ describe("chat stream refs", () => {
       workspaceId,
     });
 
-    const chunks: ChatChunk[] = [
+    const chunks: StreamChunk[] = [
       {
-        type: "tool-output-available",
+        type: EventType.TOOL_CALL_RESULT,
+        messageId: "message_1",
         toolCallId: "tool_1",
-        output: {
+        content: JSON.stringify({
           fileName: "Mzuri_Umowa_Strona_1.docx",
           href: "#stella-entity-ref=ent_1",
           mention,
           success: true,
-        },
+        }),
       },
     ];
 
     const [resolvedChunk] = await collectChunks(
-      resolveRefsInTextStream(
-        streamChunks(chunks),
-        registry.resolveAssistantTextRefs,
-        registry.resolveAssistantValueRefs,
-      ),
+      transformOutgoingStream({
+        boundary: { type: "raw" },
+        initialRestorationPlaceholders: new Set(),
+        restorationPairs: [],
+        source: streamChunks(chunks),
+        resolveAssistantTextRefs: registry.resolveAssistantTextRefs,
+        resolveAssistantValueRefs: registry.resolveAssistantValueRefs,
+      }),
     );
 
     expect(resolvedChunk).toEqual({
-      type: "tool-output-available",
+      type: EventType.TOOL_CALL_RESULT,
+      messageId: "message_1",
       toolCallId: "tool_1",
-      output: {
+      content: JSON.stringify({
         fileName: "Mzuri_Umowa_Strona_1.docx",
         href: "#stella-entity=0dc54d0c-10d7-501d-897e-e801dbd0998c:c09ec856-d945-5ecc-82e3-bb5382165f34",
         mention:
           "[Mzuri_Umowa_Strona_1.docx](#stella-entity=0dc54d0c-10d7-501d-897e-e801dbd0998c:c09ec856-d945-5ecc-82e3-bb5382165f34)",
         success: true,
-      },
+      }),
     });
   });
 });
@@ -223,12 +600,11 @@ describe("chat message hydration", () => {
           id: "msg_1",
           role: "user",
           parts: [
-            {
-              type: "file",
+            createChatAttachmentPart({
               filename: "draft.pdf",
-              mediaType: PDF_MIME_TYPE,
+              mimeType: PDF_MIME_TYPE,
               url: toUserFileUrl(userFileId),
-            },
+            }),
           ],
         },
       ],
@@ -258,7 +634,7 @@ describe("anonymized outgoing chat stream", () => {
         {
           id: "previous",
           role: "assistant",
-          parts: [{ type: "text", text: "Earlier [PERSON_3]" }],
+          parts: [{ type: "text", content: "Earlier [PERSON_3]" }],
         },
         {
           id: "current",
@@ -266,7 +642,7 @@ describe("anonymized outgoing chat stream", () => {
           parts: [
             {
               type: "text",
-              text: "Does [PERSON_1] involve [PERSON_2]?",
+              content: "Does [PERSON_1] involve [PERSON_2]?",
             },
           ],
         },
@@ -286,76 +662,140 @@ describe("anonymized outgoing chat stream", () => {
       ["[PERSON_1]", "System Only"],
       ["[PERSON_2]", "Jan Novak"],
     ]);
-    const stream = deanonymizeOutgoingStream(
-      streamChunks([
-        { type: "text-delta", id: "text-1", delta: "Hello" },
-        { type: "text-end", id: "text-1" },
-      ]),
+    const restorationPairs: ChatAnonRestoration[] = [];
+    const stream = transformOutgoingStream({
       boundary,
-      {
-        initialRestorationPlaceholders: new Set(["[PERSON_2]"]),
-      },
-    );
+      initialRestorationPlaceholders: new Set(["[PERSON_2]"]),
+      restorationPairs,
+      source: streamChunks([
+        {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: "text-1",
+          delta: "Hello",
+        },
+        { type: EventType.TEXT_MESSAGE_END, messageId: "text-1" },
+      ]),
+    });
 
-    expect(await collectChunks(stream)).toEqual([
+    expect(stripTimestamps(await collectChunks(stream))).toEqual([
       {
-        type: "data-stella-anon-restorations",
-        data: { pairs: [{ placeholder: "[PERSON_2]", original: "Jan Novak" }] },
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: "text-1",
+        delta: "Hello",
       },
-      { type: "text-delta", id: "text-1", delta: "Hello" },
-      { type: "text-end", id: "text-1" },
+      { type: EventType.TEXT_MESSAGE_END, messageId: "text-1" },
+    ]);
+    expect(restorationPairs).toEqual([
+      { placeholder: "[PERSON_2]", original: "Jan Novak" },
     ]);
   });
 
   test("emits a restoration pair when assistant text uses a placeholder", async () => {
     const boundary = createBoundary([["[PERSON_1]", "Jan Novak"]]);
-    const stream = deanonymizeOutgoingStream(
-      streamChunks([
-        { type: "text-delta", id: "text-1", delta: "[PERSON_1]" },
-        { type: "text-end", id: "text-1" },
-      ]),
+    const stream = transformOutgoingStream({
       boundary,
-    );
+      initialRestorationPlaceholders: new Set(),
+      restorationPairs: [],
+      source: streamChunks([
+        {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: "text-1",
+          delta: "[PERSON_1]",
+        },
+        { type: EventType.TEXT_MESSAGE_END, messageId: "text-1" },
+      ]),
+    });
 
-    expect(await collectChunks(stream)).toEqual([
+    expect(stripTimestamps(await collectChunks(stream))).toEqual([
       {
-        type: "data-stella-anon-restorations",
-        data: { pairs: [{ placeholder: "[PERSON_1]", original: "Jan Novak" }] },
+        type: EventType.CUSTOM,
+        name: "stella.anon-restorations",
+        value: {
+          pairs: [{ placeholder: "[PERSON_1]", original: "Jan Novak" }],
+        },
       },
-      { type: "text-delta", id: "text-1", delta: "Jan Novak" },
-      { type: "text-end", id: "text-1" },
+      {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: "text-1",
+        delta: "Jan Novak",
+      },
+      { type: EventType.TEXT_MESSAGE_END, messageId: "text-1" },
+    ]);
+  });
+
+  test("emits a restoration pair when assistant reasoning uses a placeholder", async () => {
+    const boundary = createBoundary([["[PERSON_1]", "Jan Novak"]]);
+    const stream = transformOutgoingStream({
+      boundary,
+      initialRestorationPlaceholders: new Set(),
+      restorationPairs: [],
+      source: streamChunks([
+        {
+          type: EventType.REASONING_MESSAGE_CONTENT,
+          messageId: "reasoning-1",
+          delta: "[PERSON_1]",
+        },
+        { type: EventType.REASONING_MESSAGE_END, messageId: "reasoning-1" },
+      ]),
+    });
+
+    expect(stripTimestamps(await collectChunks(stream))).toEqual([
+      {
+        type: EventType.CUSTOM,
+        name: "stella.anon-restorations",
+        value: {
+          pairs: [{ placeholder: "[PERSON_1]", original: "Jan Novak" }],
+        },
+      },
+      {
+        type: EventType.REASONING_MESSAGE_CONTENT,
+        messageId: "reasoning-1",
+        delta: "Jan Novak",
+      },
+      { type: EventType.REASONING_MESSAGE_END, messageId: "reasoning-1" },
     ]);
   });
 
   test("restores bracketless placeholders in user-visible tool input", async () => {
     const boundary = createBoundary([["[PERSON_1]", "Jan Novak"]]);
-    const stream = deanonymizeOutgoingStream(
-      streamChunks([
+    const stream = transformOutgoingStream({
+      boundary,
+      initialRestorationPlaceholders: new Set(),
+      restorationPairs: [],
+      source: streamChunks([
         {
-          type: "tool-input-available",
-          toolCallId: "tool_1",
-          toolName: "ask-user",
-          input: {
-            options: ["Call PERSON_1", "Email [PERSON_1]"],
-            question: "How should PERSON_1 be contacted?",
+          type: EventType.CUSTOM,
+          name: "tool-input-available",
+          value: {
+            toolCallId: "tool_1",
+            toolName: "ask-user",
+            input: {
+              options: ["Call PERSON_1", "Email [PERSON_1]"],
+              question: "How should PERSON_1 be contacted?",
+            },
           },
         },
       ]),
-      boundary,
-    );
+    });
 
-    expect(await collectChunks(stream)).toEqual([
+    expect(stripTimestamps(await collectChunks(stream))).toEqual([
       {
-        type: "data-stella-anon-restorations",
-        data: { pairs: [{ placeholder: "[PERSON_1]", original: "Jan Novak" }] },
+        type: EventType.CUSTOM,
+        name: "stella.anon-restorations",
+        value: {
+          pairs: [{ placeholder: "[PERSON_1]", original: "Jan Novak" }],
+        },
       },
       {
-        type: "tool-input-available",
-        toolCallId: "tool_1",
-        toolName: "ask-user",
-        input: {
-          options: ["Call Jan Novak", "Email Jan Novak"],
-          question: "How should Jan Novak be contacted?",
+        type: EventType.CUSTOM,
+        name: "tool-input-available",
+        value: {
+          toolCallId: "tool_1",
+          toolName: "ask-user",
+          input: {
+            options: ["Call Jan Novak", "Email Jan Novak"],
+            question: "How should Jan Novak be contacted?",
+          },
         },
       },
     ]);

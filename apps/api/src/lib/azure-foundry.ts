@@ -10,9 +10,8 @@ export type AzureFoundryBaseURLResult =
 
 /**
  * Normalize an Azure AI Foundry / Azure OpenAI endpoint into the
- * baseURL shape expected by @ai-sdk/azure. The provider appends
- * `/v1{path}` itself, so user-pasted `/openai/v1` endpoints are
- * stored without the trailing `/v1`.
+ * provider base URL shape used by saved legacy configs. User-pasted
+ * `/openai/v1` endpoints are stored without the trailing `/v1`.
  */
 export const normalizeAzureFoundryBaseURL = (
   rawEndpoint: string,

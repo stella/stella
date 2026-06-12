@@ -20,6 +20,8 @@ import { cn } from "@stll/ui/lib/utils";
 import { renderDragPreview } from "@/components/drag-preview";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { toSafeId } from "@/lib/safe-id";
+import type { PropertyId } from "@/lib/types";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
@@ -73,16 +75,15 @@ const shouldIgnoreRowExpansionClick = (target: EventTarget) => {
   );
 };
 
-const getContextPropertyId = (target: EventTarget) => {
+const getContextPropertyId = (target: EventTarget): PropertyId | null => {
   if (!(target instanceof HTMLElement)) {
     return null;
   }
 
-  return (
-    target.closest<HTMLElement>("[data-table-property-id]")?.dataset[
-      "tablePropertyId"
-    ] ?? null
-  );
+  const propertyId = target.closest<HTMLElement>("[data-table-property-id]")
+    ?.dataset["tablePropertyId"];
+
+  return propertyId ? toSafeId<"property">(propertyId) : null;
 };
 
 type ActiveCellFlashInput = {
@@ -218,7 +219,7 @@ export const DraggableRow = ({
   const [contextAnchor, setContextAnchor] = useState<VirtualAnchor | null>(
     null,
   );
-  const [contextPropertyId, setContextPropertyId] = useState<string | null>(
+  const [contextPropertyId, setContextPropertyId] = useState<PropertyId | null>(
     null,
   );
   const entity = row.original;
@@ -629,7 +630,12 @@ const DataRowCells = ({
     const canExpandCell = !isSelectCell && !isAddPropertyCell;
     const canFlagCell = canExpandCell && !cell.column.id.startsWith("_");
     const isExpandedCell = expandedCellId === cell.column.id;
-    const fieldContent = cell.row.original.fields[cell.column.id]?.content;
+    const propertyId = canFlagCell
+      ? toSafeId<"property">(cell.column.id)
+      : null;
+    const fieldContent = propertyId
+      ? cell.row.original.fields[propertyId]?.content
+      : undefined;
     const isExpandedTextCell = isExpandedCell && fieldContent?.type === "text";
 
     return (

@@ -8,9 +8,8 @@ import {
   DEFAULT_MODELS,
   MODEL_RATES,
   MODEL_ROLES,
+  TANSTACK_AI_PROVIDERS,
 } from "./index";
-
-const CUSTOM_PROVIDERS = new Set(["azure_foundry", "huggingface"]);
 
 describe("DEFAULT_MODELS", () => {
   test("covers every provider and role", () => {
@@ -24,28 +23,23 @@ describe("DEFAULT_MODELS", () => {
   });
 
   test("shares the BYOK defaults verbatim", () => {
-    const byokProviders = [
-      "google",
-      "openrouter",
-      "openai",
-      "anthropic",
-      "mistral",
-    ] as const;
-    for (const provider of byokProviders) {
+    for (const provider of TANSTACK_AI_PROVIDERS) {
       expect(DEFAULT_MODELS[provider]).toEqual(BYOK_DEFAULT_MODELS[provider]);
     }
   });
 });
 
 describe("BYOK_MODEL_OPTIONS", () => {
-  test("excludes openai_compatible and lists curated models for cloud providers", () => {
+  test("only lists TanStack-supported BYOK providers", () => {
+    expect(Object.keys(BYOK_MODEL_OPTIONS).sort()).toEqual(
+      [...TANSTACK_AI_PROVIDERS].sort(),
+    );
     expect("openai_compatible" in BYOK_MODEL_OPTIONS).toBe(false);
-    for (const [provider, models] of Object.entries(BYOK_MODEL_OPTIONS)) {
-      if (CUSTOM_PROVIDERS.has(provider)) {
-        expect(models).toHaveLength(0);
-      } else {
-        expect(models.length).toBeGreaterThan(0);
-      }
+    expect("azure_foundry" in BYOK_MODEL_OPTIONS).toBe(false);
+    expect("huggingface" in BYOK_MODEL_OPTIONS).toBe(false);
+    expect("mistral" in BYOK_MODEL_OPTIONS).toBe(false);
+    for (const models of Object.values(BYOK_MODEL_OPTIONS)) {
+      expect(models.length).toBeGreaterThan(0);
     }
   });
 });

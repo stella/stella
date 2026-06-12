@@ -9,11 +9,18 @@
  *   bun apps/api/scripts/benchmark-chat-read-surface.ts --json
  */
 
-import { valibotSchema } from "@ai-sdk/valibot";
-import { generateText, stepCountIs, tool } from "ai";
-import type { LanguageModel, LanguageModelUsage } from "ai";
+import { EventType, chat, maxIterations, toolDefinition } from "@tanstack/ai";
+import type { TokenUsage, Tool } from "@tanstack/ai";
 import { panic } from "better-result";
 import * as v from "valibot";
+
+import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
+import { resolveCaching } from "@/api/lib/ai-config";
+import {
+  mergeGenerationOptions,
+  systemPromptsPatch,
+} from "@/api/lib/tanstack-ai-generate";
+import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 
 const surfaces = ["old-mixed", "new-describe", "new-inline"] as const;
 
@@ -72,7 +79,7 @@ type BenchRun = {
   surface: Surface;
   taskId: string;
   tools: ToolTrace[];
-  usage: LanguageModelUsage | null;
+  usage: TokenUsage | null;
 };
 
 const tasks = [
@@ -277,46 +284,48 @@ const parseArgs = (): Args => {
 };
 
 type BenchModel = {
+  model: ResolvedTanStackTextModel;
   id: string;
-  model: LanguageModel;
   provider: string;
 };
 
 const getBenchModel = async (): Promise<BenchModel | null> => {
   const {
-    getModelById,
-    getModelForRole,
-    getModelInfoForRole,
-    hasInstanceProvider,
-  } = await import("@/api/lib/ai-models");
+    getTanStackTextModelById,
+    getTanStackTextModelForRole,
+    getTanStackTextModelInfoForRole,
+    hasTanStackInstanceProvider,
+  } = await import("@/api/lib/tanstack-ai-models");
 
-  if (!hasInstanceProvider()) {
+  if (!hasTanStackInstanceProvider()) {
     return null;
   }
 
   const overrideModel = process.env.AI_BENCH_MODEL;
   if (overrideModel) {
-    const info = getModelInfoForRole("fast", null);
+    const info = getTanStackTextModelInfoForRole("fast", null, {
+      organizationId: null,
+    });
+    const model = getTanStackTextModelById(overrideModel, null, {
+      role: "fast",
+      organizationId: null,
+    });
     return {
       id: overrideModel,
-      model: getModelById(overrideModel, null, {
-        promptCachingEnabled: true,
-        scopeKey: null,
-        role: "fast",
-        organizationId: null,
-      }),
+      model,
       provider: info.provider,
     };
   }
 
-  const info = getModelInfoForRole("fast", null);
+  const info = getTanStackTextModelInfoForRole("fast", null, {
+    organizationId: null,
+  });
+  const model = getTanStackTextModelForRole("fast", null, {
+    organizationId: null,
+  });
   return {
     id: info.modelId,
-    model: getModelForRole("fast", null, {
-      promptCachingEnabled: true,
-      scopeKey: null,
-      organizationId: null,
-    }),
+    model,
     provider: info.provider,
   };
 };
@@ -537,127 +546,125 @@ const simulateSandbox = ({
 };
 
 const buildOldTools = (trace: BenchTrace) => ({
-  "describe-stella-function": tool({
+  "describe-stella-function": toolDefinition({
+    name: "describe-stella-function",
     description:
       "Describe available stella sandbox read functions. Omit name to list them.",
-    inputSchema: valibotSchema(
+    inputSchema: toTanStackToolSchema(
       v.strictObject({
         name: v.optional(v.string()),
       }),
     ),
-    execute: async ({ name }) => {
-      const input = { name };
-      addTrace({
-        input,
-        name: "describe-stella-function",
-        trace,
-      });
+  }).server(({ name }) => {
+    const input = { name };
+    addTrace({
+      input,
+      name: "describe-stella-function",
+      trace,
+    });
 
-      if (name) {
-        return await Promise.resolve({
-          function: `${name} returns { items } or { items, hasMore, nextOffset }.`,
-        });
-      }
+    if (name) {
+      return {
+        function: `${name} returns { items } or { items, hasMore, nextOffset }.`,
+      };
+    }
 
-      return await Promise.resolve({
-        functions: readCatalog.map((entry) =>
-          entry.replace("read.", "stella."),
-        ),
-      });
-    },
+    return {
+      functions: readCatalog.map((entry) => entry.replace("read.", "stella.")),
+    };
   }),
-  "execute-typescript": tool({
+  "execute-typescript": toolDefinition({
+    name: "execute-typescript",
     description:
       "Run TypeScript against stella sandbox reads through stella.*.",
-    inputSchema: valibotSchema(
+    inputSchema: toTanStackToolSchema(
       v.strictObject({
         code: v.string(),
       }),
     ),
-    execute: async ({ code }) => {
-      const output = simulateSandbox({
-        code,
-        expectedNamespace: "stella",
-      });
-      const error = "error" in output.value ? output.value.error : undefined;
-      addTrace({
-        code,
-        error,
-        input: { code },
-        name: "execute-typescript",
-        trace,
-      });
-      return await Promise.resolve(output);
-    },
+  }).server(({ code }) => {
+    const output = simulateSandbox({
+      code,
+      expectedNamespace: "stella",
+    });
+    const error = "error" in output.value ? output.value.error : undefined;
+    addTrace({
+      code,
+      error,
+      input: { code },
+      name: "execute-typescript",
+      trace,
+    });
+    return output;
   }),
-  "read-contact": tool({
+  "read-contact": toolDefinition({
+    name: "read-contact",
     description: "Read one contact by exact contactRef.",
-    inputSchema: valibotSchema(
+    inputSchema: toTanStackToolSchema(
       v.strictObject({
         contactRef: v.string(),
       }),
     ),
-    execute: async ({ contactRef }) => {
-      const input = { contactRef };
-      const contact = contactItems.find(
-        (candidate) => candidate.contactRef === contactRef,
-      );
-      const error = contact ? undefined : "Contact not found";
-      addTrace({
-        error,
-        input,
-        name: "read-contact",
-        trace,
-      });
-      return await Promise.resolve(contact ?? { error });
-    },
+  }).server(({ contactRef }) => {
+    const input = { contactRef };
+    const contact = contactItems.find(
+      (candidate) => candidate.contactRef === contactRef,
+    );
+    const error = contact ? undefined : "Contact not found";
+    addTrace({
+      error,
+      input,
+      name: "read-contact",
+      trace,
+    });
+    return contact ?? { error };
   }),
-  "read-content-across-matters": tool({
+  "read-content-across-matters": toolDefinition({
+    name: "read-content-across-matters",
     description:
       "Read document contents by entityRefs across accessible matters.",
-    inputSchema: valibotSchema(
+    inputSchema: toTanStackToolSchema(
       v.strictObject({
         entityRefs: v.array(v.string()),
       }),
     ),
-    execute: async ({ entityRefs }) => {
-      const input = { entityRefs };
-      const contents = contentItems.filter((item) =>
-        entityRefs.includes(item.entityRef),
-      );
-      addTrace({
-        input,
-        name: "read-content-across-matters",
-        trace,
-      });
-      return await Promise.resolve({
-        contents,
-      });
-    },
+  }).server(({ entityRefs }) => {
+    const input = { entityRefs };
+    const contents = contentItems.filter((item) =>
+      entityRefs.includes(item.entityRef),
+    );
+    addTrace({
+      input,
+      name: "read-content-across-matters",
+      trace,
+    });
+    return {
+      contents,
+    };
   }),
-  "search-across-matters": tool({
+  "search-across-matters": toolDefinition({
+    name: "search-across-matters",
     description:
       "Search documents across accessible matters. Returns { hits }.",
-    inputSchema: valibotSchema(
+    inputSchema: toTanStackToolSchema(
       v.strictObject({
         query: v.string(),
       }),
     ),
-    execute: async ({ query }) => {
-      const input = { query };
-      const normalizedQuery = query.toLowerCase();
-      const hits = normalizedQuery.includes("termination")
-        ? [documentItems[1]]
-        : documentItems;
-      addTrace({
-        input,
-        name: "search-across-matters",
-        trace,
-      });
-      return await Promise.resolve({
-        hits,
-      });
-    },
+  }).server(({ query }) => {
+    const input = { query };
+    const normalizedQuery = query.toLowerCase();
+    const hits = normalizedQuery.includes("termination")
+      ? [documentItems[1]]
+      : documentItems;
+    addTrace({
+      input,
+      name: "search-across-matters",
+      trace,
+    });
+    return {
+      hits,
+    };
   }),
 });
 
@@ -669,29 +676,29 @@ const buildNewTools = ({
   trace: BenchTrace;
 }) => {
   const runner = {
-    "run-stella-query": tool({
+    "run-stella-query": toolDefinition({
+      name: "run-stella-query",
       description:
         "Run TypeScript against stella readonly reads through read.*.",
-      inputSchema: valibotSchema(
+      inputSchema: toTanStackToolSchema(
         v.strictObject({
           code: v.string(),
         }),
       ),
-      execute: async ({ code }) => {
-        const output = simulateSandbox({
-          code,
-          expectedNamespace: "read",
-        });
-        const error = "error" in output.value ? output.value.error : undefined;
-        addTrace({
-          code,
-          error,
-          input: { code },
-          name: "run-stella-query",
-          trace,
-        });
-        return await Promise.resolve(output);
-      },
+    }).server(({ code }) => {
+      const output = simulateSandbox({
+        code,
+        expectedNamespace: "read",
+      });
+      const error = "error" in output.value ? output.value.error : undefined;
+      addTrace({
+        code,
+        error,
+        input: { code },
+        name: "run-stella-query",
+        trace,
+      });
+      return output;
     }),
   };
 
@@ -700,34 +707,34 @@ const buildNewTools = ({
   }
 
   return {
-    "describe-stella-api": tool({
+    "describe-stella-api": toolDefinition({
+      name: "describe-stella-api",
       description:
         "Describe available stella readonly read functions. Omit name to list them.",
-      inputSchema: valibotSchema(
+      inputSchema: toTanStackToolSchema(
         v.strictObject({
           name: v.optional(v.string()),
         }),
       ),
-      execute: async ({ name }) => {
-        const input = { name };
-        addTrace({
-          input,
-          name: "describe-stella-api",
-          trace,
-        });
+    }).server(({ name }) => {
+      const input = { name };
+      addTrace({
+        input,
+        name: "describe-stella-api",
+        trace,
+      });
 
-        if (name) {
-          return await Promise.resolve({
-            function: readCatalog.find((entry) =>
-              entry.startsWith(`read.${name}`),
-            ),
-          });
-        }
+      if (name) {
+        return {
+          function: readCatalog.find((entry) =>
+            entry.startsWith(`read.${name}`),
+          ),
+        };
+      }
 
-        return await Promise.resolve({
-          functions: readCatalog,
-        });
-      },
+      return {
+        functions: readCatalog,
+      };
     }),
     ...runner,
   };
@@ -751,15 +758,17 @@ const getSurfaceTools = ({
 }: {
   surface: Surface;
   trace: BenchTrace;
-}) => {
+}): Tool[] => {
   if (surface === "old-mixed") {
-    return buildOldTools(trace);
+    return Object.values(buildOldTools(trace));
   }
 
-  return buildNewTools({
-    includeDescribe: surface === "new-describe",
-    trace,
-  });
+  return Object.values(
+    buildNewTools({
+      includeDescribe: surface === "new-describe",
+      trace,
+    }),
+  );
 };
 
 const includesAllExpected = ({
@@ -847,7 +856,7 @@ const runBenchTask = async ({
   surface,
   task,
 }: {
-  model: LanguageModel;
+  model: ResolvedTanStackTextModel;
   repeat: number;
   surface: Surface;
   task: BenchTask;
@@ -856,39 +865,66 @@ const runBenchTask = async ({
     tools: [],
   };
   const start = performance.now();
-  const result = await generateText({
-    maxOutputTokens: 500,
+  const caching = resolveCaching({
+    promptCachingEnabled: true,
+    role: "fast",
+    scopeKey: null,
+  });
+  const stream = chat({
+    adapter: model.adapter,
     messages: [
       {
         content: task.prompt,
         role: "user",
       },
     ],
-    model,
-    stopWhen: stepCountIs(5),
-    system: getSurfaceSystem(surface),
-    temperature: 0,
+    agentLoopStrategy: maxIterations(5),
+    ...systemPromptsPatch({
+      caching,
+      model,
+      system: getSurfaceSystem(surface),
+    }),
+    modelOptions: mergeGenerationOptions({
+      caching,
+      model,
+      maxOutputTokens: 500,
+      serviceTier: "standard",
+      temperature: 0,
+    }),
     tools: getSurfaceTools({
       surface,
       trace,
     }),
   });
+
+  let finalText = "";
+  let usage: TokenUsage | null = null;
+  for await (const chunk of stream) {
+    if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {
+      finalText += chunk.delta;
+      continue;
+    }
+    if (chunk.type === EventType.RUN_FINISHED) {
+      usage = chunk.usage ?? null;
+    }
+  }
+
   const latencyMs = Math.round(performance.now() - start);
 
   return {
-    finalText: result.text,
+    finalText,
     repeat,
     score: scoreRun({
       latencyMs,
       surface,
       task,
-      text: result.text,
+      text: finalText,
       trace,
     }),
     surface,
     taskId: task.id,
     tools: trace.tools,
-    usage: result.totalUsage,
+    usage,
   };
 };
 

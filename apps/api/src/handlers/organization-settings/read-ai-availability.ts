@@ -1,11 +1,11 @@
 import { Result } from "better-result";
 
-import {
-  hasInstanceProvider,
-  isDeferredServiceTierAvailableForRole,
-} from "@/api/lib/ai-models";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import {
+  hasTanStackInstanceProvider,
+  isDeferredServiceTierAvailableForRole,
+} from "@/api/lib/tanstack-ai-models";
 
 const config = {
   // Any org member needs to know whether AI is usable; the answer
@@ -17,7 +17,7 @@ const readAIAvailability = createSafeRootHandler(
   config,
   // eslint-disable-next-line require-yield -- pure read with no Result.await calls
   async function* ({ orgAIConfig }) {
-    const instanceProvisioned = hasInstanceProvider();
+    const instanceProvisioned = hasTanStackInstanceProvider();
     const orgConfigured = orgAIConfig !== null;
     return Result.ok({
       instanceProvisioned,

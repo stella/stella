@@ -1,8 +1,8 @@
 /**
  * Shared base for all language-specific analysis prompts.
  *
- * The output JSON schema is enforced by ai-sdk's Output.object
- * with a Valibot schema; no textual schema description needed.
+ * The output JSON schema is enforced by TanStack AI structured
+ * output with a Valibot schema; no textual schema description needed.
  */
 
 /**

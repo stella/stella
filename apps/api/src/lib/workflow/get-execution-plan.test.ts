@@ -47,6 +47,34 @@ const createProperty = (
 });
 
 const propertyId = (value: string) => toSafeId<"property">(value);
+type TestPropertyId = ReturnType<typeof propertyId>;
+
+const propertyIds = (...values: string[]): TestPropertyId[] =>
+  values.map(propertyId);
+
+const propertySet = (...values: string[]): Set<TestPropertyId> =>
+  new Set(propertyIds(...values));
+
+const propertyMap = <Value>(
+  entries: [string, Value][],
+): Map<TestPropertyId, Value> =>
+  new Map(entries.map(([id, value]) => [propertyId(id), value]));
+
+const propertyDependency = (
+  property: string,
+  dependsOn: string,
+): PropertyDependency => ({
+  propertyId: propertyId(property),
+  dependsOnPropertyId: propertyId(dependsOn),
+  condition: null,
+});
+
+const batchPropertyDependency = (
+  dependsOn: string,
+): BatchPropertyDependency => ({
+  dependsOnPropertyId: propertyId(dependsOn),
+  condition: null,
+});
 
 describe("buildDependencyGraph", () => {
   test("builds graph with no edges", () => {
@@ -58,9 +86,9 @@ describe("buildDependencyGraph", () => {
 
     const graph = buildDependencyGraph({ properties, dependencies: edges });
 
-    expect(graph.propertyIds).toEqual(new Set(["p1", "p2"]));
-    expect(graph.inDegree.get("p1")).toBe(0);
-    expect(graph.inDegree.get("p2")).toBe(0);
+    expect(graph.propertyIds).toEqual(propertySet("p1", "p2"));
+    expect(graph.inDegree.get(propertyId("p1"))).toBe(0);
+    expect(graph.inDegree.get(propertyId("p2"))).toBe(0);
   });
 
   test("builds graph with diamond dependency structure", () => {
@@ -72,38 +100,35 @@ describe("buildDependencyGraph", () => {
       createProperty("D"),
     ];
     const edges: PropertyDependency[] = [
-      { propertyId: "B", dependsOnPropertyId: "A", condition: null },
-      { propertyId: "C", dependsOnPropertyId: "A", condition: null },
-      { propertyId: "D", dependsOnPropertyId: "B", condition: null },
-      { propertyId: "D", dependsOnPropertyId: "C", condition: null },
+      propertyDependency("B", "A"),
+      propertyDependency("C", "A"),
+      propertyDependency("D", "B"),
+      propertyDependency("D", "C"),
     ];
 
     const graph = buildDependencyGraph({ properties, dependencies: edges });
 
-    expect(graph.inDegree.get("A")).toBe(0);
-    expect(graph.inDegree.get("B")).toBe(1);
-    expect(graph.inDegree.get("C")).toBe(1);
-    expect(graph.inDegree.get("D")).toBe(2);
+    expect(graph.inDegree.get(propertyId("A"))).toBe(0);
+    expect(graph.inDegree.get(propertyId("B"))).toBe(1);
+    expect(graph.inDegree.get(propertyId("C"))).toBe(1);
+    expect(graph.inDegree.get(propertyId("D"))).toBe(2);
 
-    expect([...(graph.dependents.get("A") ?? [])].toSorted()).toEqual([
-      "B",
-      "C",
-    ]);
-    expect(graph.dependents.get("B")).toEqual(["D"]);
-    expect(graph.dependents.get("C")).toEqual(["D"]);
+    expect(
+      [...(graph.dependents.get(propertyId("A")) ?? [])].toSorted(),
+    ).toEqual(propertyIds("B", "C"));
+    expect(graph.dependents.get(propertyId("B"))).toEqual(propertyIds("D"));
+    expect(graph.dependents.get(propertyId("C"))).toEqual(propertyIds("D"));
   });
 
   test("builds graph with self-dependency A -> A", () => {
     const properties: ExecutionPlanProperty[] = [createProperty("A")];
-    const edges: PropertyDependency[] = [
-      { propertyId: "A", dependsOnPropertyId: "A", condition: null },
-    ];
+    const edges: PropertyDependency[] = [propertyDependency("A", "A")];
 
     const graph = buildDependencyGraph({ properties, dependencies: edges });
 
-    expect(graph.inDegree.get("A")).toBe(1);
-    expect(graph.dependents.get("A")).toEqual(["A"]);
-    expect(graph.dependsOn.get("A")).toEqual(new Set(["A"]));
+    expect(graph.inDegree.get(propertyId("A"))).toBe(1);
+    expect(graph.dependents.get(propertyId("A"))).toEqual(propertyIds("A"));
+    expect(graph.dependsOn.get(propertyId("A"))).toEqual(propertySet("A"));
   });
 
   test("builds graph with duplicate edges (B depends on A twice)", () => {
@@ -112,15 +137,17 @@ describe("buildDependencyGraph", () => {
       createProperty("B"),
     ];
     const edges: PropertyDependency[] = [
-      { propertyId: "B", dependsOnPropertyId: "A", condition: null },
-      { propertyId: "B", dependsOnPropertyId: "A", condition: null },
+      propertyDependency("B", "A"),
+      propertyDependency("B", "A"),
     ];
 
     const graph = buildDependencyGraph({ properties, dependencies: edges });
 
-    expect(graph.inDegree.get("A")).toBe(0);
-    expect(graph.inDegree.get("B")).toBe(2);
-    expect(graph.dependents.get("A")).toEqual(["B", "B"]);
+    expect(graph.inDegree.get(propertyId("A"))).toBe(0);
+    expect(graph.inDegree.get(propertyId("B"))).toBe(2);
+    expect(graph.dependents.get(propertyId("A"))).toEqual(
+      propertyIds("B", "B"),
+    );
   });
 
   test("builds graph with dangling edge (dependency references property not in properties)", () => {
@@ -129,15 +156,15 @@ describe("buildDependencyGraph", () => {
       createProperty("B"),
     ];
     const edges: PropertyDependency[] = [
-      { propertyId: "B", dependsOnPropertyId: "A", condition: null },
-      { propertyId: "C", dependsOnPropertyId: "B", condition: null },
+      propertyDependency("B", "A"),
+      propertyDependency("C", "B"),
     ];
 
     const graph = buildDependencyGraph({ properties, dependencies: edges });
 
-    expect(graph.propertyIds).toEqual(new Set(["A", "B"]));
-    expect(graph.inDegree.get("C")).toBe(1);
-    expect(graph.dependents.get("B")).toEqual(["C"]);
+    expect(graph.propertyIds).toEqual(propertySet("A", "B"));
+    expect(graph.inDegree.get(propertyId("C"))).toBe(1);
+    expect(graph.dependents.get(propertyId("B"))).toEqual(propertyIds("C"));
   });
 });
 
@@ -148,35 +175,39 @@ describe("buildLevelBatches", () => {
     const pC = createProperty("C");
 
     const propertyDependenciesMap = new Map<
-      string,
+      TestPropertyId,
       BatchPropertyDependency[]
     >();
-    propertyDependenciesMap.set("B", [
-      { dependsOnPropertyId: "A", condition: null },
+    propertyDependenciesMap.set(propertyId("B"), [
+      batchPropertyDependency("A"),
     ]);
-    propertyDependenciesMap.set("C", [
-      { dependsOnPropertyId: "A", condition: null },
+    propertyDependenciesMap.set(propertyId("C"), [
+      batchPropertyDependency("A"),
     ]);
 
-    const dependsOn = new Map<string, Set<string>>();
-    dependsOn.set("B", new Set(["A"]));
-    dependsOn.set("C", new Set(["A"]));
+    const dependsOn = new Map<TestPropertyId, Set<TestPropertyId>>();
+    dependsOn.set(propertyId("B"), propertySet("A"));
+    dependsOn.set(propertyId("C"), propertySet("A"));
 
     const graph = {
       propertyDependenciesMap,
       dependsOn,
       inDegree: new Map(),
       dependents: new Map(),
-      propertyIds: new Set(["A", "B", "C"]),
+      propertyIds: propertySet("A", "B", "C"),
     };
 
-    const propertiesById = new Map([
+    const propertiesById = propertyMap([
       ["A", pA],
       ["B", pB],
       ["C", pC],
     ]);
 
-    const batches = buildLevelBatches(["B", "C"], propertiesById, graph);
+    const batches = buildLevelBatches(
+      propertyIds("B", "C"),
+      propertiesById,
+      graph,
+    );
 
     expect(batches.length).toBe(1);
     expect(batches[0]?.inputs).toEqual([propertyId("A")]);
@@ -188,48 +219,54 @@ describe("buildLevelBatches", () => {
 
   test("excludes file-type properties from batches", () => {
     const pFile = createProperty("p1", { content: fileContent });
-    const propertiesById = new Map([["p1", pFile]]);
+    const propertiesById = propertyMap([["p1", pFile]]);
     const graph = {
       propertyDependenciesMap: new Map(),
-      dependsOn: new Map<string, Set<string>>([["p1", new Set<string>()]]),
+      dependsOn: new Map<TestPropertyId, Set<TestPropertyId>>([
+        [propertyId("p1"), propertySet()],
+      ]),
       inDegree: new Map(),
       dependents: new Map(),
-      propertyIds: new Set(["p1"]),
+      propertyIds: propertySet("p1"),
     };
 
-    const batches = buildLevelBatches(["p1"], propertiesById, graph);
+    const batches = buildLevelBatches(propertyIds("p1"), propertiesById, graph);
 
     expect(batches.length).toBe(0);
   });
 
   test("excludes manual-input tool properties from batches", () => {
     const pManual = createProperty("p1", { tool: manualInputTool });
-    const propertiesById = new Map([["p1", pManual]]);
+    const propertiesById = propertyMap([["p1", pManual]]);
     const graph = {
       propertyDependenciesMap: new Map(),
-      dependsOn: new Map<string, Set<string>>([["p1", new Set<string>()]]),
+      dependsOn: new Map<TestPropertyId, Set<TestPropertyId>>([
+        [propertyId("p1"), propertySet()],
+      ]),
       inDegree: new Map(),
       dependents: new Map(),
-      propertyIds: new Set(["p1"]),
+      propertyIds: propertySet("p1"),
     };
 
-    const batches = buildLevelBatches(["p1"], propertiesById, graph);
+    const batches = buildLevelBatches(propertyIds("p1"), propertiesById, graph);
 
     expect(batches.length).toBe(0);
   });
 
   test("excludes fresh properties from batches", () => {
     const pFresh = createProperty("p1", { status: "fresh" });
-    const propertiesById = new Map([["p1", pFresh]]);
+    const propertiesById = propertyMap([["p1", pFresh]]);
     const graph = {
       propertyDependenciesMap: new Map(),
-      dependsOn: new Map<string, Set<string>>([["p1", new Set<string>()]]),
+      dependsOn: new Map<TestPropertyId, Set<TestPropertyId>>([
+        [propertyId("p1"), propertySet()],
+      ]),
       inDegree: new Map(),
       dependents: new Map(),
-      propertyIds: new Set(["p1"]),
+      propertyIds: propertySet("p1"),
     };
 
-    const batches = buildLevelBatches(["p1"], propertiesById, graph);
+    const batches = buildLevelBatches(propertyIds("p1"), propertiesById, graph);
 
     expect(batches.length).toBe(0);
   });
@@ -239,34 +276,38 @@ describe("buildLevelBatches", () => {
     const pB = createProperty("B", { status: "stale" });
 
     const propertyDependenciesMap = new Map<
-      string,
+      TestPropertyId,
       BatchPropertyDependency[]
     >();
-    propertyDependenciesMap.set("A", [
-      { dependsOnPropertyId: "X", condition: null },
+    propertyDependenciesMap.set(propertyId("A"), [
+      batchPropertyDependency("X"),
     ]);
-    propertyDependenciesMap.set("B", [
-      { dependsOnPropertyId: "X", condition: null },
+    propertyDependenciesMap.set(propertyId("B"), [
+      batchPropertyDependency("X"),
     ]);
 
-    const dependsOn = new Map<string, Set<string>>();
-    dependsOn.set("A", new Set(["X"]));
-    dependsOn.set("B", new Set(["X"]));
+    const dependsOn = new Map<TestPropertyId, Set<TestPropertyId>>();
+    dependsOn.set(propertyId("A"), propertySet("X"));
+    dependsOn.set(propertyId("B"), propertySet("X"));
 
     const graph = {
       propertyDependenciesMap,
       dependsOn,
       inDegree: new Map(),
       dependents: new Map(),
-      propertyIds: new Set(["A", "B"]),
+      propertyIds: propertySet("A", "B"),
     };
 
-    const propertiesById = new Map([
+    const propertiesById = propertyMap([
       ["A", pA],
       ["B", pB],
     ]);
 
-    const batches = buildLevelBatches(["A", "B"], propertiesById, graph);
+    const batches = buildLevelBatches(
+      propertyIds("A", "B"),
+      propertiesById,
+      graph,
+    );
 
     expect(batches.length).toBe(1);
     expect(batches[0]?.properties.map((p) => p.id)).toEqual([propertyId("B")]);
@@ -278,33 +319,37 @@ describe("buildLevelBatches", () => {
     const pC = createProperty("C");
 
     const propertyDependenciesMap = new Map<
-      string,
+      TestPropertyId,
       BatchPropertyDependency[]
     >();
-    propertyDependenciesMap.set("B", [
-      { dependsOnPropertyId: "A", condition: null },
+    propertyDependenciesMap.set(propertyId("B"), [
+      batchPropertyDependency("A"),
     ]);
-    propertyDependenciesMap.set("C", []);
+    propertyDependenciesMap.set(propertyId("C"), []);
 
-    const dependsOn = new Map<string, Set<string>>();
-    dependsOn.set("B", new Set(["A"]));
-    dependsOn.set("C", new Set<string>());
+    const dependsOn = new Map<TestPropertyId, Set<TestPropertyId>>();
+    dependsOn.set(propertyId("B"), propertySet("A"));
+    dependsOn.set(propertyId("C"), propertySet());
 
     const graph = {
       propertyDependenciesMap,
       dependsOn,
       inDegree: new Map(),
       dependents: new Map(),
-      propertyIds: new Set(["A", "B", "C"]),
+      propertyIds: propertySet("A", "B", "C"),
     };
 
-    const propertiesById = new Map([
+    const propertiesById = propertyMap([
       ["A", pA],
       ["B", pB],
       ["C", pC],
     ]);
 
-    const batches = buildLevelBatches(["B", "C"], propertiesById, graph);
+    const batches = buildLevelBatches(
+      propertyIds("B", "C"),
+      propertiesById,
+      graph,
+    );
 
     expect(batches.length).toBe(2);
     const inputsList = batches.map((b) => b.inputs.join(",")).toSorted();
@@ -343,8 +388,8 @@ describe("getPropertyExecutionPlan", () => {
       createProperty("C"),
     ];
     const dependencies: PropertyDependency[] = [
-      { propertyId: "B", dependsOnPropertyId: "A", condition: null },
-      { propertyId: "C", dependsOnPropertyId: "A", condition: null },
+      propertyDependency("B", "A"),
+      propertyDependency("C", "A"),
     ];
 
     const plan = getPropertyExecutionPlan({ properties, dependencies });
@@ -360,9 +405,7 @@ describe("getPropertyExecutionPlan", () => {
       createProperty("A"),
       createProperty("B"),
     ];
-    const dependencies: PropertyDependency[] = [
-      { propertyId: "B", dependsOnPropertyId: "A", condition: null },
-    ];
+    const dependencies: PropertyDependency[] = [propertyDependency("B", "A")];
 
     const plan = getPropertyExecutionPlan({ properties, dependencies });
 
@@ -381,8 +424,8 @@ describe("getPropertyExecutionPlan", () => {
       createProperty("C"),
     ];
     const dependencies: PropertyDependency[] = [
-      { propertyId: "B", dependsOnPropertyId: "A", condition: null },
-      { propertyId: "C", dependsOnPropertyId: "B", condition: null },
+      propertyDependency("B", "A"),
+      propertyDependency("C", "B"),
     ];
 
     const plan = getPropertyExecutionPlan({ properties, dependencies });
@@ -407,10 +450,10 @@ describe("getPropertyExecutionPlan", () => {
       createProperty("D"),
     ];
     const dependencies: PropertyDependency[] = [
-      { propertyId: "B", dependsOnPropertyId: "A", condition: null },
-      { propertyId: "C", dependsOnPropertyId: "A", condition: null },
-      { propertyId: "D", dependsOnPropertyId: "B", condition: null },
-      { propertyId: "D", dependsOnPropertyId: "C", condition: null },
+      propertyDependency("B", "A"),
+      propertyDependency("C", "A"),
+      propertyDependency("D", "B"),
+      propertyDependency("D", "C"),
     ];
 
     const plan = getPropertyExecutionPlan({ properties, dependencies });
@@ -436,16 +479,14 @@ describe("getPropertyExecutionPlan", () => {
     const cyclePlan = getPropertyExecutionPlan({
       properties: [createProperty("A"), createProperty("B")],
       dependencies: [
-        { propertyId: "B", dependsOnPropertyId: "A", condition: null },
-        { propertyId: "A", dependsOnPropertyId: "B", condition: null },
+        propertyDependency("B", "A"),
+        propertyDependency("A", "B"),
       ],
     });
 
     const selfDepPlan = getPropertyExecutionPlan({
       properties: [createProperty("A")],
-      dependencies: [
-        { propertyId: "A", dependsOnPropertyId: "A", condition: null },
-      ],
+      dependencies: [propertyDependency("A", "A")],
     });
 
     expect(cyclePlan).toEqual([]);
@@ -461,8 +502,8 @@ describe("getPropertyExecutionPlan", () => {
       createProperty("C", { status: "fresh" }),
     ];
     const dependencies: PropertyDependency[] = [
-      { propertyId: "B", dependsOnPropertyId: "A", condition: null },
-      { propertyId: "C", dependsOnPropertyId: "A", condition: null },
+      propertyDependency("B", "A"),
+      propertyDependency("C", "A"),
     ];
 
     const plan = getPropertyExecutionPlan({ properties, dependencies });
@@ -481,8 +522,8 @@ describe("getPropertyExecutionPlan", () => {
       createProperty("C", { status: "fresh" }),
     ];
     const dependencies: PropertyDependency[] = [
-      { propertyId: "B", dependsOnPropertyId: "A", condition: null },
-      { propertyId: "C", dependsOnPropertyId: "B", condition: null },
+      propertyDependency("B", "A"),
+      propertyDependency("C", "B"),
     ];
 
     const plan = getPropertyExecutionPlan({ properties, dependencies });
@@ -499,8 +540,8 @@ describe("getPropertyExecutionPlan", () => {
       createProperty("B"),
     ];
     const dependencies: PropertyDependency[] = [
-      { propertyId: "B", dependsOnPropertyId: "A", condition: null },
-      { propertyId: "C", dependsOnPropertyId: "B", condition: null },
+      propertyDependency("B", "A"),
+      propertyDependency("C", "B"),
     ];
 
     expect(() =>

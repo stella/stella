@@ -1,7 +1,16 @@
-import type { MCPClient } from "@ai-sdk/mcp";
-import type { ToolSet } from "ai";
+import type { MCPToolSource, ServerTool } from "@tanstack/ai";
+import type { MCPClient } from "@tanstack/ai-mcp";
 
 import type { SafeDb } from "@/api/db";
+import type {
+  ChatTool,
+  ChatToolMap,
+} from "@/api/handlers/chat/tools/chat-tool-types";
+import {
+  getExternalMcpToolDefinitionsForConnector,
+  selectAllowedExternalMcpToolDefinitions,
+} from "@/api/handlers/chat/tools/external-mcp-tool-definitions";
+import { normalizeExternalMcpToolsForChat } from "@/api/handlers/chat/tools/external-mcp-tools-normalization";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -9,13 +18,15 @@ import {
   loadActiveMcpConnectionsForUser,
 } from "@/api/lib/mcp-upstream/connections";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
-import { namespaceMcpToolName } from "@/api/lib/mcp-upstream/namespace";
 
 export type LoadedExternalMcpTools = {
   close: () => Promise<void> | void;
   connectors: LoadedExternalMcpConnector[];
-  tools: ToolSet;
+  source: StellaMcpToolSource;
+  tools: ChatToolMap;
 };
+
+export type StellaMcpToolSource = MCPToolSource;
 
 export type LoadedExternalMcpConnector = {
   description: string;
@@ -35,7 +46,8 @@ export const loadExternalMcpToolsForUser = async ({
 }): Promise<LoadedExternalMcpTools> => {
   const clients: MCPClient[] = [];
   const connectors: LoadedExternalMcpConnector[] = [];
-  const loadedTools: ToolSet = {};
+  const sourceTools: Record<string, ServerTool | undefined> = {};
+  const loadedTools: ChatToolMap = {};
 
   const rows = await loadActiveMcpConnectionsForUser({
     organizationId,
@@ -52,22 +64,66 @@ export const loadExternalMcpToolsForUser = async ({
       organizationId,
       row,
       safeDb,
+      sourceTools,
       userId,
     });
   }
 
-  return {
-    close: async () => {
-      const closeTasks: Promise<void>[] = [];
-      for (const client of clients) {
-        closeTasks.push(client.close());
-      }
-      await Promise.allSettled(closeTasks);
-    },
-    connectors,
-    tools: loadedTools,
+  const closeClients = async (): Promise<void> => {
+    const closeTasks: Promise<void>[] = [];
+    for (const client of clients) {
+      closeTasks.push(client.close());
+    }
+    await Promise.allSettled(closeTasks);
   };
+
+  const source = createStellaMcpToolSource({ closeClients, sourceTools });
+
+  return { close: closeClients, connectors, source, tools: loadedTools };
 };
+
+export const createStellaMcpToolSource = ({
+  closeClients,
+  sourceTools,
+}: {
+  closeClients: () => Promise<void>;
+  sourceTools: Readonly<Record<string, ServerTool | undefined>>;
+}): StellaMcpToolSource => ({
+  close: closeClients,
+  tools: async ({ lazy = true }: { lazy?: boolean } = {}) => {
+    const discoveredTools = Object.values(sourceTools).filter(
+      (tool): tool is ServerTool => tool !== undefined,
+    );
+    if (lazy) {
+      return await Promise.resolve(discoveredTools);
+    }
+
+    return await Promise.resolve(discoveredTools.map(stripLazyToolFlag));
+  },
+});
+
+const stripLazyToolFlag = (tool: ServerTool): ServerTool => {
+  const eagerTool = { ...tool };
+  delete eagerTool.lazy;
+  return eagerTool;
+};
+
+const copyServerTools = ({
+  sourceTools,
+  tools,
+}: {
+  sourceTools: Record<string, ServerTool | undefined>;
+  tools: ChatToolMap;
+}): void => {
+  for (const [name, tool] of Object.entries(tools)) {
+    if (isServerTool(tool)) {
+      sourceTools[name] = tool;
+    }
+  }
+};
+
+const isServerTool = (tool: ChatTool | undefined): tool is ServerTool =>
+  tool !== undefined && "__toolSide" in tool && tool.__toolSide === "server";
 
 const loadConnectorTools = async ({
   clients,
@@ -76,14 +132,16 @@ const loadConnectorTools = async ({
   organizationId,
   row,
   safeDb,
+  sourceTools,
   userId,
 }: {
   clients: MCPClient[];
   connectors: LoadedExternalMcpConnector[];
-  loadedTools: ToolSet;
+  loadedTools: ChatToolMap;
   organizationId: SafeId<"organization">;
   row: LoadedMcpConnection;
   safeDb: SafeDb;
+  sourceTools: Record<string, ServerTool | undefined>;
   userId: SafeId<"user">;
 }) => {
   try {
@@ -98,29 +156,20 @@ const loadConnectorTools = async ({
     }
     clients.push(client);
 
-    const tools = await client.tools();
-    const allowedTools = row.allowedTools ? new Set(row.allowedTools) : null;
-    const toolNames: string[] = [];
-
-    for (const [toolName, toolDefinition] of Object.entries(tools)) {
-      if (allowedTools && !allowedTools.has(toolName)) {
-        continue;
-      }
-
-      toolNames.push(toolName);
-      loadedTools[
-        namespaceMcpToolName({
-          connectorSlug: row.slug,
-          toolName,
-        })
-      ] = toolDefinition;
-    }
+    const tools = await loadMcpConnectorTools({ client, row });
+    const normalized = normalizeExternalMcpToolsForChat({
+      allowedTools: row.allowedTools,
+      connectorSlug: row.slug,
+      tools,
+    });
+    Object.assign(loadedTools, normalized.tools);
+    copyServerTools({ sourceTools, tools: normalized.tools });
 
     connectors.push({
       description: row.description,
       displayName: row.displayName,
       slug: row.slug,
-      toolNames,
+      toolNames: normalized.toolNames,
     });
   } catch (error) {
     captureError(error, {
@@ -128,6 +177,29 @@ const loadConnectorTools = async ({
       connectorSlug: row.slug,
     });
   }
+};
+
+export const loadMcpConnectorTools = async ({
+  client,
+  row,
+}: {
+  client: MCPClient;
+  row: LoadedMcpConnection;
+}): Promise<ServerTool[]> => {
+  const definitions = getExternalMcpToolDefinitionsForConnector(row);
+  if (definitions === null) {
+    return await client.tools();
+  }
+
+  const allowedDefinitions = selectAllowedExternalMcpToolDefinitions({
+    allowedTools: row.allowedTools,
+    definitions,
+  });
+  if (allowedDefinitions.length === 0) {
+    return [];
+  }
+
+  return await client.tools(allowedDefinitions);
 };
 
 export const buildExternalMcpSystemHint = (

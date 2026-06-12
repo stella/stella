@@ -7,14 +7,13 @@
  * for potential rule generation.
  */
 
-import { generateText, Output } from "ai";
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import { getModelForRole } from "@/api/lib/ai-models";
-import { strictOutputSchema } from "@/api/lib/ai-output-schema";
-import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import { resolveCaching } from "@/api/lib/ai-config";
+import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
 import type { Polarity } from "./consts";
 
@@ -72,7 +71,7 @@ export const classifyWithLLM = async ({
 }: ClassifyWithLLMOptions): Promise<
   Result<ClassificationResult, WorkflowIntegrationError>
 > => {
-  const aiAnalytics = createAIAnalyticsCallbacks({
+  const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     feature: "case-law.polarity",
     modelRole: "fast",
     properties: {
@@ -83,14 +82,15 @@ export const classifyWithLLM = async ({
 
   return await Result.tryPromise({
     try: async () => {
-      const result = await generateText({
-        // System-level pipeline call (no per-org context) — keep caching
-        // on so identical citation/language combinations hit the cache.
-        model: getModelForRole("fast", null, {
-          promptCachingEnabled: true,
-          scopeKey: `polarity:${language}`,
-          organizationId: null,
-          serviceTier: "flex",
+      const output = await generateTanStackObjectForRole({
+        role: "fast",
+        orgAIConfig: null,
+        organizationId: null,
+        analytics: aiAnalytics,
+        caching: resolveCaching({
+          promptCachingEnabled: false,
+          role: "fast",
+          scopeKey: null,
         }),
         system: SYSTEM_PROMPT,
         messages: [
@@ -102,22 +102,19 @@ Surrounding text:
 ${context}`,
           },
         ],
-        output: Output.object({
-          schema: strictOutputSchema(classificationSchema),
-        }),
+        outputSchema: classificationSchema,
         abortSignal: abortSignal
           ? AbortSignal.any([abortSignal, AbortSignal.timeout(15_000)])
           : AbortSignal.timeout(15_000),
-        ...aiAnalytics.stepCallbacks,
       });
 
       return {
         // SAFETY: Valibot picklist at line 45 restricts to
         // valid Polarity subset ("positive" | "neutral" | "negative").
         // The picklist subset is assignable to Polarity without cast
-        polarity: result.output.polarity,
-        keyPhrase: result.output.keyPhrase,
-        confidence: result.output.confidence,
+        polarity: output.polarity,
+        keyPhrase: output.keyPhrase,
+        confidence: output.confidence,
       };
     },
     catch: (error) => {

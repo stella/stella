@@ -13,6 +13,7 @@ import { PreviewPane } from "@stll/ui/components/preview-pane";
 
 import type { TranslationKey } from "@/i18n/types";
 import { DOCX_MIME } from "@/lib/consts";
+import { toSafeId } from "@/lib/safe-id";
 import type { ViewLayoutType, WorkspaceEntity } from "@/lib/types";
 import {
   CalendarEntityChip,
@@ -342,7 +343,7 @@ const mockTask = ({
   status,
   priority,
 }: MockTaskOptions): WorkspaceEntity => ({
-  entityId,
+  entityId: toSafeId<"entity">(entityId),
   kind: "task",
   name,
   parentId: null,

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceProperty } from "@/lib/types";
 
 import { entitiesKeys, visibleEntityFieldIds } from "./entities.logic";
@@ -8,10 +9,10 @@ const property = (
   id: string,
   type: WorkspaceProperty["content"]["type"],
 ): WorkspaceProperty => ({
-  id,
+  id: toSafeId<"property">(id),
   name: id,
   createdAt: new Date("2025-01-01T00:00:00.000Z"),
-  workspaceId: "workspace-1",
+  workspaceId: toSafeId<"workspace">("workspace-1"),
   status: "fresh",
   content:
     type === "single-select" || type === "multi-select"

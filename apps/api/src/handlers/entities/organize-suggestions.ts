@@ -1,4 +1,3 @@
-import { generateText, Output } from "ai";
 import { Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
@@ -11,21 +10,21 @@ import {
   entityVersionAiSummaries,
   searchDocuments,
 } from "@/api/db/schema";
+import { resolveCaching } from "@/api/lib/ai-config";
+import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { aiHandlerError } from "@/api/lib/ai-error";
-import {
-  getModelForRole,
-  getModelInfoForRole,
-  requireAIAvailable,
-} from "@/api/lib/ai-models";
-import type { OrgAIConfig } from "@/api/lib/ai-models";
-import { strictOutputSchema } from "@/api/lib/ai-output-schema";
 import { captureError } from "@/api/lib/analytics";
-import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import {
+  getTanStackTextModelInfoForRole,
+  requireTanStackAIAvailableForRole,
+} from "@/api/lib/tanstack-ai-models";
 
 const MAX_ORGANIZE_FILES = 100;
 const MAX_EXISTING_FOLDERS = 500;
@@ -166,7 +165,10 @@ const organizeSuggestionsHandler = async function* ({
   body,
   userId,
 }: OrganizeSuggestionsHandlerProps) {
-  yield* requireAIAvailable(orgAIConfig);
+  yield* requireTanStackAIAvailableForRole({
+    orgConfig: orgAIConfig,
+    role: "fast",
+  });
 
   const contexts = yield* Result.await(
     loadSummaryContexts({ safeDb, workspaceId, organizationId, body }),
@@ -232,7 +234,7 @@ const organizeSuggestionsHandler = async function* ({
     );
   }
 
-  const aiAnalytics = createAIAnalyticsCallbacks({
+  const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     usageMetering: {
       actionType: "chat",
       organizationId,
@@ -257,12 +259,15 @@ const organizeSuggestionsHandler = async function* ({
 
   const result = await Result.tryPromise({
     try: async () =>
-      await generateText({
-        model: getModelForRole("fast", orgAIConfig, {
+      await generateTanStackObjectForRole({
+        role: "fast",
+        orgAIConfig,
+        organizationId,
+        analytics: aiAnalytics,
+        caching: resolveCaching({
           promptCachingEnabled,
+          role: "fast",
           scopeKey: `${organizationId}:${workspaceId}:organize`,
-          organizationId,
-          serviceTier: "flex",
         }),
         system: ORGANIZE_SYSTEM_PROMPT,
         prompt: JSON.stringify({
@@ -281,15 +286,12 @@ const organizeSuggestionsHandler = async function* ({
             summary: context.summary,
           })),
         }),
-        output: Output.object({
-          schema: strictOutputSchema(suggestionsAIOutputSchema),
-        }),
+        outputSchema: suggestionsAIOutputSchema,
         // 200 base + 200 per file (≈30-40 tokens per JSON suggestion plus
         // wrapping). Capped at 24 000 so a 100-file batch (~20 200) has
         // headroom for the model's slightly variable output sizes.
         maxOutputTokens: Math.min(24_000, 200 + body.files.length * 200),
         abortSignal: AbortSignal.timeout(60_000),
-        ...aiAnalytics.stepCallbacks,
       }),
     catch: (error: unknown) => error,
   });
@@ -310,7 +312,7 @@ const organizeSuggestionsHandler = async function* ({
   }
 
   const suggestionsByEntityId = normalizeSuggestions({
-    suggestions: result.value.output.suggestions,
+    suggestions: result.value.suggestions,
     contexts,
   });
 
@@ -325,7 +327,7 @@ const organizeSuggestionsHandler = async function* ({
   });
 
   const deleteFolders = normalizeFolderDeletions({
-    deleteFolders: result.value.output.deleteFolders,
+    deleteFolders: result.value.deleteFolders,
     emptyFolders,
     suggestedFolders: [...flattenedByEntityId.values()].map(
       (suggestion) => suggestion.folderPath,
@@ -696,7 +698,7 @@ const generateMissingSummaries = async ({
 }: GenerateMissingSummariesOptions): Promise<
   Result<GeneratedSummary[], HandlerError>
 > => {
-  const aiAnalytics = createAIAnalyticsCallbacks({
+  const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     usageMetering: {
       actionType: "chat",
       organizationId,
@@ -718,12 +720,15 @@ const generateMissingSummaries = async ({
 
   const result = await Result.tryPromise({
     try: async () =>
-      await generateText({
-        model: getModelForRole("fast", orgAIConfig, {
+      await generateTanStackObjectForRole({
+        role: "fast",
+        orgAIConfig,
+        organizationId,
+        analytics: aiAnalytics,
+        caching: resolveCaching({
           promptCachingEnabled,
+          role: "fast",
           scopeKey: `${organizationId}:${workspaceId}:summaries`,
-          organizationId,
-          serviceTier: "flex",
         }),
         system: SUMMARY_SYSTEM_PROMPT,
         prompt: JSON.stringify({
@@ -734,15 +739,12 @@ const generateMissingSummaries = async ({
             textExcerpt: context.textExcerpt,
           })),
         }),
-        output: Output.object({
-          schema: strictOutputSchema(generatedSummariesAISchema),
-        }),
+        outputSchema: generatedSummariesAISchema,
         // Summaries can run longer than the suggestion JSON; allow a
         // bigger budget here. ~120 tokens per summary at 100 files puts
         // us around 12 200 tokens.
         maxOutputTokens: Math.min(24_000, 200 + contexts.length * 300),
         abortSignal: AbortSignal.timeout(60_000),
-        ...aiAnalytics.stepCallbacks,
       }),
     catch: (error: unknown) => error,
   });
@@ -763,7 +765,7 @@ const generateMissingSummaries = async ({
   }
 
   const summariesByEntityId = normalizeSummaries({
-    summaries: result.value.output.summaries,
+    summaries: result.value.summaries,
     contexts,
   });
 
@@ -959,7 +961,9 @@ const persistGeneratedSummaries = async ({
   orgAIConfig,
   contexts,
 }: PersistGeneratedSummariesOptions) => {
-  const modelInfo = getModelInfoForRole("fast", orgAIConfig);
+  const modelInfo = getTanStackTextModelInfoForRole("fast", orgAIConfig, {
+    organizationId,
+  });
   const values = contexts.flatMap((context) => {
     if (context.summary === null) {
       return [];

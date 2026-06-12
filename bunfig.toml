@@ -16,6 +16,23 @@ minimumReleaseAgeExcludes = [
   "@stll/regex-set-wasm",
   "@stll/stdnum",
   "@stll/text-search-wasm",
+  # Transitive exact pin from @tanstack/ai-openrouter 0.15.6; fresh
+  # inside quarantine as part of the TanStack AI 0.39 provider batch.
+  "@openrouter/sdk",
+  # TanStack AI beta: opted in ahead of stable for the AI SDK migration.
+  "@tanstack/ai",
+  "@tanstack/ai-anthropic",
+  "@tanstack/ai-bedrock",
+  "@tanstack/ai-client",
+  "@tanstack/ai-event-client",
+  "@tanstack/ai-gemini",
+  "@tanstack/ai-mcp",
+  "@tanstack/ai-mistral",
+  "@tanstack/ai-openai",
+  "@tanstack/ai-openrouter",
+  "@tanstack/ai-react",
+  "@tanstack/ai-utils",
+  "@tanstack/react-ai-devtools",
   # TanStack Table v9 beta: opted in ahead of stable to adopt the
   # tree-shakable feature/plugin model, granular re-render control,
   # and table devtools. Remove once v9 ships stable and clears the
@@ -24,6 +41,7 @@ minimumReleaseAgeExcludes = [
   "@tanstack/table-core",
   "@tanstack/react-table-devtools",
   "@tanstack/table-devtools",
+  "@tanstack/openai-base",
   "@typescript/native-preview",
   "@typescript/native-preview-darwin-arm64",
   "@typescript/native-preview-darwin-x64",

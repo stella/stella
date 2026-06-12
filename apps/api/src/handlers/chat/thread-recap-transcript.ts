@@ -22,8 +22,8 @@ const collapseWhitespace = (value: string): string => {
 const messageText = (message: RecapMessage): string => {
   const segments: string[] = [];
   for (const part of message.parts) {
-    if (part.type === "text" && part.text.trim()) {
-      segments.push(part.text);
+    if (part.type === "text" && part.content.trim()) {
+      segments.push(part.content);
     }
   }
   return collapseWhitespace(segments.join("\n"));

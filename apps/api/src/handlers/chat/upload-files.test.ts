@@ -9,7 +9,11 @@ import {
   TEXT_MARKDOWN_MIME_TYPE,
   TEXT_PLAIN_MIME_TYPE,
 } from "@/api/handlers/chat/attachment-validation";
-import type { ChatMessage } from "@/api/handlers/chat/types";
+import {
+  createChatAttachmentPart,
+  getChatAttachmentUrl,
+} from "@/api/handlers/chat/chat-message-parts";
+import type { PersistableChatMessage } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { parseDataUrl, toDataUrl } from "@/api/lib/data-url";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
@@ -66,9 +70,9 @@ describe("chat attachment hydration", () => {
     expect(result.value).toMatchObject({
       type: "anonymizable",
       part: {
-        filename: "contacts.csv",
-        mediaType: TEXT_PLAIN_MIME_TYPE,
-        type: "file",
+        metadata: { filename: "contacts.csv" },
+        source: { mimeType: TEXT_PLAIN_MIME_TYPE },
+        type: "document",
       },
     });
     if (result.value.type !== "anonymizable") {
@@ -77,7 +81,7 @@ describe("chat attachment hydration", () => {
     const parsed = parseDataUrl({
       expectedMimeType: TEXT_PLAIN_MIME_TYPE,
       maxBytes: 1024,
-      url: result.value.part.url,
+      url: getChatAttachmentUrl(result.value.part),
     });
 
     expect(Result.isOk(parsed)).toBe(true);
@@ -118,9 +122,9 @@ describe("chat attachment hydration", () => {
     expect(result.value).toMatchObject({
       type: "rawOverride",
       part: {
-        filename: "scan.pdf",
-        mediaType: PDF_MIME_TYPE,
-        type: "file",
+        metadata: { filename: "scan.pdf" },
+        source: { mimeType: PDF_MIME_TYPE },
+        type: "document",
       },
     });
   });
@@ -140,9 +144,9 @@ describe("chat attachment hydration", () => {
     expect(result.value).toMatchObject({
       type: "rawOverride",
       part: {
-        filename: "draft.docx",
-        mediaType: DOCX_MIME_TYPE,
-        type: "file",
+        metadata: { filename: "draft.docx" },
+        source: { mimeType: DOCX_MIME_TYPE },
+        type: "document",
       },
     });
   });
@@ -162,25 +166,23 @@ describe("chat attachment hydration", () => {
     const safeDb: SafeDb = async (callback) =>
       // oxlint-disable-next-line node/callback-return -- arrow body already returns the callback result
       await Result.tryPromise(async () => await callback(testTx));
-    const message: ChatMessage = {
-      id: "msg_1",
+    const message: PersistableChatMessage = {
+      id: toSafeId<"chatMessage">("11111111-1111-4111-8111-111111111111"),
       role: "user",
       parts: [
-        {
-          type: "file",
+        createChatAttachmentPart({
           filename: "first.txt",
-          mediaType: TEXT_PLAIN_MIME_TYPE,
+          mimeType: TEXT_PLAIN_MIME_TYPE,
           url: toDataUrl(
             new TextEncoder().encode("first"),
             TEXT_PLAIN_MIME_TYPE,
           ),
-        },
-        {
-          type: "file",
+        }),
+        createChatAttachmentPart({
           filename: "broken.txt",
-          mediaType: TEXT_PLAIN_MIME_TYPE,
+          mimeType: TEXT_PLAIN_MIME_TYPE,
           url: "not-a-data-url",
-        },
+        }),
       ],
     };
 

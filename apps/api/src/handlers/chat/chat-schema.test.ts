@@ -1,8 +1,13 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { SafeDb } from "@/api/db";
+import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
+import { validateMessage } from "@/api/handlers/chat/chat-schema";
+import type { ChatToolMap } from "@/api/handlers/chat/tools/chat-tool-types";
 import { toUserFileUrl } from "@/api/handlers/user-files/types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 import type { StoredChatFile, StoredFileRef } from "./attachment-validation";
@@ -16,6 +21,12 @@ type ChatParts = ChatMessage["parts"];
 
 const userFileId = (id: string) => toSafeId<"userFile">(id);
 const chatThreadId = (id: string) => toSafeId<"chatThread">(id);
+const userId = (id: string) => toSafeId<"user">(id);
+const chatMessageId = (id: string) => toSafeId<"chatMessage">(id);
+const noDbReads: SafeDb = async () => {
+  throw new Error("This validation path should not read the database");
+};
+const noTools = {} satisfies ChatToolMap;
 
 const createUserFilePart = ({
   fileId,
@@ -25,24 +36,23 @@ const createUserFilePart = ({
   mediaType: string;
 }) =>
   [
-    {
-      type: "file",
+    createChatAttachmentPart({
       filename: "attachment",
-      mediaType,
+      mimeType: mediaType,
       url: toUserFileUrl(userFileId(fileId)),
-    },
+    }),
   ] satisfies ChatParts;
 
 describe("validateChatFileParts", () => {
   test("rejects too many attachments in one message", () => {
     const parts = Array.from(
       { length: LIMITS.chatContextFilesPerMessage + 1 },
-      (_, index) => ({
-        type: "file" as const,
-        filename: `attachment-${index}.txt`,
-        mediaType: "text/plain",
-        url: toUserFileUrl(userFileId(`file_${index}`)),
-      }),
+      (_, index) =>
+        createChatAttachmentPart({
+          filename: `attachment-${index}.txt`,
+          mimeType: "text/plain",
+          url: toUserFileUrl(userFileId(`file_${index}`)),
+        }),
     ) satisfies ChatParts;
 
     const result = validateChatFileParts({ parts });
@@ -61,12 +71,11 @@ describe("validateChatFileParts", () => {
   test("returns a safe error for invalid data URLs", () => {
     const result = validateChatFileParts({
       parts: [
-        {
-          type: "file",
+        createChatAttachmentPart({
           filename: "attachment.txt",
-          mediaType: "text/plain",
+          mimeType: "text/plain",
           url: "data:text/plain",
-        },
+        }),
       ] satisfies ChatParts,
     });
 
@@ -99,12 +108,11 @@ describe("validateChatFileParts", () => {
 
   test("rejects unsupported attachment sources", () => {
     const parts = [
-      {
-        type: "file",
+      createChatAttachmentPart({
         filename: "attachment.txt",
-        mediaType: "text/plain",
+        mimeType: "text/plain",
         url: "https://example.com/attachment.txt",
-      },
+      }),
     ] satisfies ChatParts;
 
     const result = validateChatFileParts({ parts });
@@ -118,6 +126,58 @@ describe("validateChatFileParts", () => {
     expect(result.error.message).toBe(
       "Chat attachments must use base64 data URLs or stella user-file URLs",
     );
+  });
+});
+
+describe("validateMessage", () => {
+  test("accepts TanStack text parts at the live boundary", async () => {
+    const result = await validateMessage({
+      message: {
+        id: chatMessageId("msg_tanstack_text"),
+        role: "user",
+        parts: [{ type: "text", content: "Ahoj" }],
+      },
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_tanstack_text"),
+      tools: noTools,
+      userId: userId("user_tanstack_text"),
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) {
+      return;
+    }
+
+    expect(result.value.message.parts).toEqual([
+      { type: "text", content: "Ahoj" },
+    ]);
+  });
+
+  test("rejects old text parts at the live boundary", async () => {
+    const result = await validateMessage({
+      message: {
+        id: chatMessageId("msg_legacy_text"),
+        role: "user",
+        parts: [{ type: "text", text: "Ahoj" }],
+      },
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_legacy_text"),
+      tools: noTools,
+      userId: userId("user_legacy_text"),
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isOk(result)) {
+      return;
+    }
+
+    expect(result.error).toBeInstanceOf(HandlerError);
+    if (!(result.error instanceof HandlerError)) {
+      return;
+    }
+
+    expect(result.error.status).toBe(400);
+    expect(result.error.message).toBe("Invalid chat message part");
   });
 });
 

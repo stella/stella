@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { normalizeAzureFoundryBaseURL } from "@/api/lib/azure-foundry";
 
 describe("Azure Foundry endpoint normalization", () => {
-  test("normalizes Azure OpenAI resource endpoints for the AI SDK Azure provider", () => {
+  test("normalizes Azure OpenAI resource endpoints for saved provider config", () => {
     expect(
       normalizeAzureFoundryBaseURL(
         "https://example.openai.azure.com/openai/v1/",

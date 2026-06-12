@@ -1,16 +1,17 @@
-import { normalizeLegacyToolInputs } from "@/api/handlers/chat/legacy-tool-compat";
+import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import type {
-  ChatMessage,
-  ChatMessageContent,
   ChatMessageRole,
+  PersistableChatMessage,
+  PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
+import type { SafeId } from "@/api/lib/branded-types";
 
 type PlanMessagePersistenceProps = {
-  message: ChatMessage;
+  message: PersistableChatMessage;
   storedMessages: {
-    id: string;
+    id: SafeId<"chatMessage">;
     role: ChatMessageRole;
-    content: ChatMessageContent;
+    content: PersistedChatMessageContent;
   }[];
   /**
    * The incoming message already exists for this thread per a targeted DB
@@ -23,17 +24,21 @@ type PlanMessagePersistenceProps = {
 
 export type MessagePersistencePlan =
   | { type: "none" }
-  | { type: "insert"; message: ChatMessage }
-  | { message: ChatMessage; messageId: string; type: "update" }
+  | { type: "insert"; message: PersistableChatMessage }
   | {
-      deleteMessageId: string;
-      insertMessage: ChatMessage;
+      message: PersistableChatMessage;
+      messageId: SafeId<"chatMessage">;
+      type: "update";
+    }
+  | {
+      deleteMessageId: SafeId<"chatMessage">;
+      insertMessage: PersistableChatMessage;
       type: "replace-last-assistant";
     };
 
 type PlanMessagePersistenceResult = {
-  existingIds: Set<string>;
-  messages: ChatMessage[];
+  existingIds: Set<SafeId<"chatMessage">>;
+  messages: PersistableChatMessage[];
   persistencePlan: MessagePersistencePlan;
 };
 
@@ -43,11 +48,7 @@ export const planMessagePersistence = ({
   incomingMessageExists = false,
 }: PlanMessagePersistenceProps): PlanMessagePersistenceResult => {
   const existingIds = new Set(storedMessages.map((m) => m.id));
-  const messages = storedMessages.map((m) => ({
-    id: m.id,
-    role: m.role,
-    parts: normalizeLegacyToolInputs(m.content.data),
-  }));
+  const messages = storedMessages.map(chatMessageFromPersisted);
 
   // The id exists in this thread but falls outside the (possibly windowed)
   // `storedMessages`. The window cannot reconcile such a message in-memory, so
@@ -134,9 +135,9 @@ export const planMessagePersistence = ({
 };
 
 type PlanAssistantFinishPersistenceProps = {
-  existingIds: Set<string>;
+  existingIds: Set<SafeId<"chatMessage">>;
   isAborted: boolean;
-  message: ChatMessage;
+  message: PersistableChatMessage;
 };
 
 export const planAssistantFinishPersistence = ({

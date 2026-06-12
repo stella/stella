@@ -1,10 +1,9 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import {
-  PROVIDER_PROBE_VALUES,
-  probeProvider,
-} from "@/api/lib/ai-provider-probe";
+import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
+
+import { probeProvider } from "@/api/lib/ai-provider-probe";
 import { createSafeSessionHandler } from "@/api/lib/api-handlers";
 import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -13,13 +12,9 @@ import { logger } from "@/api/lib/observability/logger";
 const MAX_PROBE_ERROR_DETAIL_LEN = 200;
 
 export const validateProviderBody = t.Object({
-  provider: t.UnionEnum(PROVIDER_PROBE_VALUES),
+  provider: t.UnionEnum(TANSTACK_AI_PROVIDERS),
   apiKey: t.String({ minLength: 1, maxLength: 512 }),
-  endpoint: t.Optional(t.String({ minLength: 1, maxLength: 2048 })),
-  apiVersion: t.Optional(t.String({ minLength: 1, maxLength: 64 })),
-  region: t.Optional(
-    t.Union([t.Literal("eu"), t.Literal("global"), t.Literal("ch")]),
-  ),
+  region: t.Optional(t.Literal("global")),
 });
 
 const config = {
@@ -46,12 +41,7 @@ const validateProvider = createSafeSessionHandler(
     const result = yield* Result.await(
       Result.tryPromise({
         try: async () =>
-          await probeProvider(
-            body.provider,
-            body.apiKey,
-            body.endpoint,
-            body.apiVersion,
-          ),
+          await probeProvider(body.provider, body.apiKey, undefined, undefined),
         catch: (error: unknown) => {
           const raw = error instanceof Error ? error.message : "Unknown error";
           logger.warn("ai_config.provider_validation_unreachable", {

@@ -1,4 +1,10 @@
+import {
+  convertSchemaToJsonSchema,
+  parseWithStandardSchema,
+  toolDefinition,
+} from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import type { SafeDb, ScopedDb } from "@/api/db";
 import {
@@ -18,6 +24,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 
 import { createOrgTools } from "./org-tools";
 import { createSkillTools } from "./skill-tools";
+import { toTanStackToolSchema } from "./tanstack-tool-schema";
 import {
   buildCreatedDocumentToolOutput,
   createWorkspaceTools,
@@ -66,6 +73,54 @@ describe("chat tool schemas", () => {
         scopedDb: unusedScopedDb,
       }),
     ).not.toThrow();
+  });
+
+  test("wraps Valibot schemas as TanStack Standard JSON Schema", async () => {
+    const tools = createOrgTools({
+      accessibleWorkspaceIds: [workspaceId],
+      organizationId,
+      scopedDb: unusedScopedDb,
+    });
+    const askUser = tools["ask-user"];
+
+    const jsonSchema = convertSchemaToJsonSchema(askUser.inputSchema);
+    expect(jsonSchema?.type).toBe("object");
+    expect(jsonSchema?.properties).toHaveProperty("questions");
+
+    const value = parseWithStandardSchema(askUser.inputSchema, {
+      analysis: "Need scope.",
+      questions: [{ question: "Which law?", reason: "Jurisdiction matters." }],
+    });
+    expect(value).toEqual({
+      analysis: "Need scope.",
+      questions: [{ question: "Which law?", reason: "Jurisdiction matters." }],
+    });
+  });
+
+  test("preserves TanStack custom tool events in tool context", async () => {
+    const events: { name: string; value: Record<string, unknown> }[] = [];
+    const tool = toolDefinition({
+      name: "emit-progress",
+      description: "Emit progress.",
+      inputSchema: toTanStackToolSchema(v.strictObject({})),
+    }).server((_input, context) => {
+      if (!context) {
+        throw new Error("Expected TanStack tool execution context");
+      }
+      context.emitCustomEvent("progress", { current: 1 });
+      return { ok: true };
+    });
+
+    await tool.execute?.(
+      {},
+      {
+        emitCustomEvent: (name, value) => {
+          events.push({ name, value });
+        },
+      },
+    );
+
+    expect(events).toEqual([{ name: "progress", value: { current: 1 } }]);
   });
 
   test("construct workspace tools as JSON-schema-compatible AI tools", () => {

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
 import { getInternalPropertyId } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
@@ -12,7 +13,7 @@ const entity = (
   entityId: string,
   kind: WorkspaceEntity["kind"],
 ): WorkspaceEntity => ({
-  entityId,
+  entityId: toSafeId<"entity">(entityId),
   kind,
   name: entityId,
   parentId: null,
@@ -52,10 +53,10 @@ const entity = (
 });
 
 const singleSelectProperty = (id: string): WorkspaceProperty => ({
-  id,
+  id: toSafeId<"property">(id),
   name: id,
   createdAt: new Date("2026-01-01T00:00:00.000Z"),
-  workspaceId: "workspace-1",
+  workspaceId: toSafeId<"workspace">("workspace-1"),
   status: "fresh",
   content: {
     version: 1,

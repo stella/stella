@@ -6,8 +6,6 @@
  * Renaming a kind is a wire-format change — update both sides
  * (and `chat-thread-messages.tsx`) together.
  */
-import { APICallError, RetryError } from "ai";
-
 import {
   ChatLoopDetectedError,
   HandlerError,
@@ -25,43 +23,62 @@ export const AI_ERROR_KINDS = [
 
 export type AIErrorKind = (typeof AI_ERROR_KINDS)[number];
 
-// The AI SDK throws `NoSuchModelError` (name "AI_NoSuchModelError")
-// when a provider rejects an unknown model id without an HTTP call;
-// matched structurally so we don't depend on the symbol being exported.
-const isNoSuchModelError = (error: unknown): boolean =>
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object";
+
+const providerStatusCode = (error: unknown): number | null => {
+  if (!isRecord(error)) {
+    return null;
+  }
+
+  const statusCode = error["statusCode"];
+  if (typeof statusCode === "number" && Number.isInteger(statusCode)) {
+    return statusCode;
+  }
+
+  const status = error["status"];
+  if (typeof status === "number" && Number.isInteger(status)) {
+    return status;
+  }
+
+  return null;
+};
+
+const isApiCallError = (error: unknown): boolean =>
   error !== null &&
   typeof error === "object" &&
-  "name" in error &&
-  error.name === "AI_NoSuchModelError";
+  providerStatusCode(error) !== null;
+
+const errorCause = (error: unknown): unknown => {
+  if (!isRecord(error)) {
+    return undefined;
+  }
+  return error["cause"];
+};
 
 export const classifyAIError = (error: unknown): AIErrorKind => {
-  if (RetryError.isInstance(error)) {
-    return classifyAIError(error.lastError);
-  }
   if (ChatLoopDetectedError.is(error)) {
     return "loop_detected";
   }
-  if (isNoSuchModelError(error)) {
-    return "model_unavailable";
-  }
-  if (APICallError.isInstance(error)) {
-    if (error.statusCode === 429) {
+  if (isApiCallError(error)) {
+    const statusCode = providerStatusCode(error);
+    if (statusCode === 429) {
       return "quota_exhausted";
     }
     // A provider 402 is the upstream account's billing/credit problem,
     // distinct from Stella's own usage preflight, which returns a
     // structured 402 before the model call and never reaches this
     // classifier.
-    if (error.statusCode === 402) {
+    if (statusCode === 402) {
       return "provider_billing";
     }
     // A 404 on a generate/stream call means the provider no longer
     // serves the configured model (retired or renamed upstream) — a
     // config problem, not a transient outage, so retrying won't help.
-    if (error.statusCode === 404) {
+    if (statusCode === 404) {
       return "model_unavailable";
     }
-    if (error.statusCode !== undefined && error.statusCode >= 500) {
+    if (statusCode !== null && statusCode >= 500) {
       return "provider_unavailable";
     }
   }
@@ -70,13 +87,9 @@ export const classifyAIError = (error: unknown): AIErrorKind => {
   // `Error.cause` from a higher-level rethrow). Without this, callers
   // that pass a wrapped error get classified as `unknown` and miss the
   // mapped HTTP status / UX copy.
-  if (
-    error !== null &&
-    typeof error === "object" &&
-    "cause" in error &&
-    error.cause !== undefined
-  ) {
-    return classifyAIError(error.cause);
+  const cause = errorCause(error);
+  if (cause !== undefined) {
+    return classifyAIError(cause);
   }
   return "unknown";
 };

@@ -3,24 +3,18 @@ import { BYOK_DEFAULT_MODELS, BYOK_MODEL_OPTIONS } from "@stll/ai-catalog";
 export const PROVIDER_KEYS = [
   "google",
   "anthropic",
-  "mistral",
   "openai",
-  "azure_foundry",
   "openrouter",
-  "huggingface",
 ] as const;
 
 export const PROVIDER_LABELS = {
   google: "Google",
   anthropic: "Anthropic",
-  mistral: "Mistral",
   openai: "OpenAI",
-  azure_foundry: "Azure Foundry",
   openrouter: "OpenRouter",
-  huggingface: "Hugging Face",
 } as const satisfies Record<(typeof PROVIDER_KEYS)[number], string>;
 
-export const REGION_KEYS = ["global", "eu", "ch"] as const;
+export const REGION_KEYS = ["global"] as const;
 
 export const ROLE_KEYS = ["chat", "fast", "reasoning", "pdf"] as const;
 
@@ -84,25 +78,15 @@ export type SerializedProviderConfig = {
 };
 
 const PROVIDER_VALUES = new Set<string>(PROVIDER_KEYS);
-const REGION_VALUES = new Set<string>(REGION_KEYS);
 const ROLE_VALUES = new Set<string>(ROLE_KEYS);
-
-export const REGIONAL_PROVIDERS = new Set<ProviderValue>(["google"]);
-export const CUSTOM_MODEL_ID_PROVIDERS = new Set<ProviderValue>([
-  "azure_foundry",
-  "huggingface",
-]);
-export const ENDPOINT_REQUIRED_PROVIDERS = new Set<ProviderValue>([
-  "azure_foundry",
-  "huggingface",
-]);
 
 // Catalog data is the single source of truth in @stll/ai-catalog,
 // shared with the API runtime. The `satisfies` guards also cross-check
 // that the package's provider/role sets still match the UI's
 // ProviderValue/RoleValue — a divergence fails typecheck here.
-export const DEFAULT_MODELS_BY_PROVIDER = BYOK_DEFAULT_MODELS satisfies Partial<
-  Record<ProviderValue, Record<RoleValue, string>>
+export const DEFAULT_MODELS_BY_PROVIDER = BYOK_DEFAULT_MODELS satisfies Record<
+  ProviderValue,
+  Record<RoleValue, string>
 >;
 
 export const MODEL_OPTIONS_BY_PROVIDER = BYOK_MODEL_OPTIONS satisfies Record<
@@ -112,9 +96,6 @@ export const MODEL_OPTIONS_BY_PROVIDER = BYOK_MODEL_OPTIONS satisfies Record<
 
 export const isProviderValue = (value: string | null): value is ProviderValue =>
   value !== null && PROVIDER_VALUES.has(value);
-
-export const isRegionValue = (value: string | null): value is RegionValue =>
-  value !== null && REGION_VALUES.has(value);
 
 export const isRoleValue = (value: string): value is RoleValue =>
   ROLE_VALUES.has(value);
@@ -144,15 +125,6 @@ export const providerDraftsFromStoredProviders = (
     }
 
     const provider = providerConfig.provider;
-    const storedRegion = providerConfig.region;
-    let region: RegionValue = "global";
-    if (
-      storedRegion &&
-      isRegionValue(storedRegion) &&
-      REGIONAL_PROVIDERS.has(provider)
-    ) {
-      region = storedRegion;
-    }
 
     drafts.push({
       provider,
@@ -160,7 +132,7 @@ export const providerDraftsFromStoredProviders = (
       apiKeyMasked: providerConfig.apiKeyMasked,
       endpoint: providerConfig.endpoint ?? "",
       apiVersion: providerConfig.apiVersion,
-      region,
+      region: "global",
       replacingKey: false,
     });
   }
@@ -298,9 +270,6 @@ export const isKnownModelSelection = (
   }
   const knownModels: readonly string[] =
     MODEL_OPTIONS_BY_PROVIDER[selection.provider];
-  if (CUSTOM_MODEL_ID_PROVIDERS.has(selection.provider)) {
-    return selection.modelId.trim().length > 0;
-  }
   return knownModels.includes(selection.modelId);
 };
 
@@ -374,12 +343,6 @@ export const serializeProviderDrafts = (
     serializedProviders.push({
       provider: providerDraft.provider,
       ...(apiKey ? { apiKey } : {}),
-      ...(ENDPOINT_REQUIRED_PROVIDERS.has(providerDraft.provider)
-        ? { endpoint: providerDraft.endpoint.trim() }
-        : {}),
-      ...(providerDraft.provider === "azure_foundry" && providerDraft.apiVersion
-        ? { apiVersion: providerDraft.apiVersion }
-        : {}),
       region: providerDraft.region,
     });
   }
@@ -416,12 +379,6 @@ export const hasUsableProviderDrafts = (
     ) {
       return false;
     }
-    if (
-      ENDPOINT_REQUIRED_PROVIDERS.has(providerDraft.provider) &&
-      !providerDraft.endpoint.trim()
-    ) {
-      return false;
-    }
   }
 
   return true;
@@ -432,9 +389,6 @@ export const getDefaultModelSelection = (
   role: RoleValue,
 ): ModelSelection | null => {
   if (!provider) {
-    return null;
-  }
-  if (provider === "azure_foundry" || provider === "huggingface") {
     return null;
   }
   const defaults = DEFAULT_MODELS_BY_PROVIDER[provider];
@@ -449,5 +403,5 @@ const normalizeModelSelection = ({
   modelId,
 }: ModelSelection): ModelSelection => ({
   provider,
-  modelId: CUSTOM_MODEL_ID_PROVIDERS.has(provider) ? modelId.trim() : modelId,
+  modelId,
 });

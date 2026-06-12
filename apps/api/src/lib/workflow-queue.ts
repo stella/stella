@@ -14,11 +14,11 @@ import {
   properties,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
+import type { AIRequestServiceTier } from "@/api/lib/ai-config";
 import {
   loadOrgAIConfig,
   loadPromptCachingPreference,
 } from "@/api/lib/ai-config-loader";
-import type { AIRequestServiceTier } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -1031,8 +1031,8 @@ export const initWorkflowWorker = () => {
       // job "active" indefinitely and block follow-up workflow runs.
       //
       // We pipe an AbortSignal through `processEntityJob` so the
-      // timeout actually CANCELS the in-flight work (the AI SDK call
-      // honours the signal). Without that, a `Promise.race`-style
+      // timeout actually CANCELS the in-flight work (the TanStack AI
+      // request honours the signal). Without that, a `Promise.race`-style
       // wrapper would only reject the wrapper while the original
       // attempt kept running — racing the BullMQ retry and double-
       // incrementing the workflow completion counter.
@@ -1565,7 +1565,7 @@ const processOneBatch = async ({
       };
       // generateBatch returns a Result<T, E> directly. The combined
       // signal aborts when EITHER the per-batch AI timeout fires OR the
-      // worker-level per-job timeout does, so the AI SDK actually cancels
+      // worker-level per-job timeout does, so TanStack AI actually cancels
       // the in-flight request.
       const batchResult = await runWorkflowBatchGenerationWithRetry({
         generate: async () =>

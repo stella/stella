@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
+import type { WorkspaceJustification } from "@/lib/types";
 import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
 type JustificationsKey = {
@@ -60,6 +61,26 @@ export const workflowOptions = ({ key }: { key: WorkflowKey }) =>
       return response.data;
     },
   });
+
+type RawWorkspaceJustification = Omit<
+  WorkspaceJustification,
+  "id" | "fieldId" | "fileFieldIds"
+> & {
+  id: string;
+  fieldId: string;
+  fileFieldIds: string[];
+};
+
+const toWorkspaceJustification = (
+  justification: RawWorkspaceJustification,
+): WorkspaceJustification => ({
+  ...justification,
+  id: toSafeId<"justification">(justification.id),
+  fieldId: toSafeId<"field">(justification.fieldId),
+  fileFieldIds: justification.fileFieldIds.map((fieldId) =>
+    toSafeId<"field">(fieldId),
+  ),
+});
 
 export const workflowTargetCountOptions = ({
   entityIds,
@@ -126,6 +147,6 @@ export const justificationsOptions = ({
         throw toAPIError(response.error);
       }
 
-      return response.data;
+      return response.data.map(toWorkspaceJustification);
     },
   });

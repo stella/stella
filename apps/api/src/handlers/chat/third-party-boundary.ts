@@ -1,5 +1,3 @@
-import type { FileUIPart, ToolSet } from "ai";
-import { isFileUIPart, isToolUIPart } from "ai";
 import { Result } from "better-result";
 
 import {
@@ -16,10 +14,21 @@ import {
   TEXT_PLAIN_MIME_TYPE,
 } from "@/api/handlers/chat/attachment-validation";
 import {
+  createChatAttachmentPart,
+  getChatAttachmentFilename,
+  getChatAttachmentMimeType,
+  getChatAttachmentUrl,
+  isChatAttachmentPart,
+} from "@/api/handlers/chat/chat-message-parts";
+import type { ChatToolMap } from "@/api/handlers/chat/tools/chat-tool-types";
+import {
   CHAT_TOOL_POLICY_KIND,
   getChatToolPolicy,
 } from "@/api/handlers/chat/tools/tool-policy";
-import type { ChatMessage } from "@/api/handlers/chat/types";
+import type {
+  ChatAttachmentPart,
+  ChatMessage,
+} from "@/api/handlers/chat/types";
 import { loadAnonymizationAllowlistCanonicals } from "@/api/lib/anonymization-allowlist";
 import { loadAnonymizationGazetteerEntries } from "@/api/lib/anonymization-blacklist";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -387,10 +396,10 @@ const anonymizePlainTextFile = ({
   part,
   replacements,
 }: {
-  part: FileUIPart;
+  part: ChatAttachmentPart;
   replacements: TextReplacement[];
-}): Result<FileUIPart, BoundaryRefusal> => {
-  if (part.mediaType !== TEXT_PLAIN_MIME_TYPE) {
+}): Result<ChatMessage["parts"][number], BoundaryRefusal> => {
+  if (getChatAttachmentMimeType(part) !== TEXT_PLAIN_MIME_TYPE) {
     return Result.err(
       new HandlerError({
         code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
@@ -404,7 +413,7 @@ const anonymizePlainTextFile = ({
   const parsed = parseDataUrl({
     expectedMimeType: TEXT_PLAIN_MIME_TYPE,
     maxBytes: CHAT_MAX_FILE_BYTES,
-    url: part.url,
+    url: getChatAttachmentUrl(part),
   });
 
   if (Result.isError(parsed)) {
@@ -421,27 +430,29 @@ const anonymizePlainTextFile = ({
 
   const text = Buffer.from(parsed.value.bytes).toString("utf-8");
   let anonymizedText = text;
-  let filename = part.filename;
+  let filename = getChatAttachmentFilename(part);
 
-  const prepared: FileUIPart = {
-    ...part,
-    ...(filename ? { filename } : {}),
-    mediaType: TEXT_PLAIN_MIME_TYPE,
+  const prepared = createChatAttachmentPart({
+    filename,
+    mimeType: TEXT_PLAIN_MIME_TYPE,
     url: toDataUrl(Buffer.from(anonymizedText, "utf-8"), TEXT_PLAIN_MIME_TYPE),
-  };
+  });
 
   queueTextReplacement(replacements, text, (value) => {
     anonymizedText = value;
-    prepared.url = toDataUrl(
-      Buffer.from(anonymizedText, "utf-8"),
-      TEXT_PLAIN_MIME_TYPE,
-    );
+    prepared.source = {
+      ...prepared.source,
+      value: toDataUrl(
+        Buffer.from(anonymizedText, "utf-8"),
+        TEXT_PLAIN_MIME_TYPE,
+      ),
+    };
   });
 
   if (filename) {
     queueTextReplacement(replacements, filename, (value) => {
       filename = value;
-      prepared.filename = filename;
+      prepared.metadata = { ...prepared.metadata, filename };
     });
   }
 
@@ -461,69 +472,38 @@ const preparePartForThirdParty = ({
     return Result.ok(part);
   }
 
-  if (part.type === "text" || part.type === "reasoning") {
+  if (part.type === "text" || part.type === "thinking") {
     const prepared = { ...part };
-    queueTextReplacement(replacements, part.text, (value) => {
-      prepared.text = value;
+    queueTextReplacement(replacements, part.content, (value) => {
+      prepared.content = value;
     });
     return Result.ok(prepared);
   }
 
-  if (isFileUIPart(part)) {
+  if (isChatAttachmentPart(part)) {
     return anonymizePlainTextFile({ part, replacements });
   }
 
-  if (isToolUIPart(part)) {
+  if (part.type === "tool-call") {
     return anonymizeToolPart({ part, replacements });
   }
 
-  if (part.type === "source-document") {
-    const prepared = { ...part };
-    queueTextReplacement(replacements, part.title, (value) => {
-      prepared.title = value;
-    });
-    if (part.filename) {
-      queueTextReplacement(replacements, part.filename, (value) => {
-        prepared.filename = value;
-      });
-    }
-    return Result.ok(prepared);
-  }
-
-  if (part.type === "source-url" && part.title) {
-    const prepared = { ...part };
-    queueTextReplacement(replacements, part.title, (value) => {
-      prepared.title = value;
-    });
-    return Result.ok(prepared);
-  }
-
-  if ("data" in part) {
-    const preparedPart: Omit<typeof part, "data"> & { data: unknown } = {
-      ...part,
-      data: part.data,
-    };
-    const data = anonymizeUnknownStrings({
-      apply: (value) => {
-        preparedPart.data = value;
-      },
-      replacements,
-      value: part.data,
-    });
-
-    if (Result.isError(data)) {
-      return Result.err(data.error);
-    }
-
-    preparedPart.data = data.value;
-
-    // SAFETY: data part discriminators are preserved. Nested provider-visible
-    // text values are written back after the request-level batch anonymization.
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    return Result.ok(preparedPart as ChatMessage["parts"][number]);
-  }
-
   return Result.ok(part);
+};
+
+const toProviderVisibleMessage = (
+  message: ChatMessage,
+  parts: ChatMessage["parts"] = message.parts,
+): ChatMessage => {
+  const visible: ChatMessage = {
+    id: message.id,
+    role: message.role,
+    parts,
+    ...(message.createdAt === undefined
+      ? {}
+      : { createdAt: message.createdAt }),
+  };
+  return visible;
 };
 
 const removeProviderInvisibleParts = (
@@ -540,9 +520,7 @@ const removeProviderInvisibleParts = (
       continue;
     }
 
-    visibleMessages.push(
-      parts.length === message.parts.length ? message : { ...message, parts },
-    );
+    visibleMessages.push(toProviderVisibleMessage(message, parts));
   }
 
   return visibleMessages;
@@ -704,6 +682,7 @@ const anonymizeUnknownStrings = ({
 type ToolLikePart = Extract<ChatMessage["parts"][number], { state: string }>;
 type MutableToolLikePart = ToolLikePart & {
   approval?: unknown;
+  arguments?: string | undefined;
   errorText?: string | undefined;
   input?: unknown;
   output?: unknown;
@@ -719,6 +698,18 @@ const anonymizeToolPart = ({
 }): Result<ToolLikePart, BoundaryRefusal> =>
   Result.gen(function* () {
     const prepared: MutableToolLikePart = { ...part };
+
+    if (part.type === "tool-call") {
+      const parsedArguments = safeParseToolArguments(part.arguments);
+      const argumentsResult = yield* anonymizeUnknownStrings({
+        apply: (value) => {
+          prepared.arguments = safeStringifyToolArguments(value);
+        },
+        replacements,
+        value: parsedArguments,
+      });
+      prepared.arguments = safeStringifyToolArguments(argumentsResult);
+    }
 
     if ("input" in part) {
       const input = yield* anonymizeUnknownStrings({
@@ -742,15 +733,15 @@ const anonymizeToolPart = ({
       prepared.output = output;
     }
 
-    const errorText = "errorText" in part ? part.errorText : undefined;
-    if (errorText) {
+    const errorText: unknown = Reflect.get(part, "errorText");
+    if (typeof errorText === "string" && errorText.length > 0) {
       queueTextReplacement(replacements, errorText, (value) => {
         prepared.errorText = value;
       });
     }
 
-    const title = "title" in part ? part.title : undefined;
-    if (title) {
+    const title: unknown = Reflect.get(part, "title");
+    if (typeof title === "string" && title.length > 0) {
       queueTextReplacement(replacements, title, (value) => {
         prepared.title = value;
       });
@@ -776,25 +767,51 @@ const anonymizeToolPart = ({
     return Result.ok(prepared as ToolLikePart);
   });
 
-export const prepareToolsForThirdParty = <TTools extends ToolSet>({
+const safeParseToolArguments = (argumentsJson: string): unknown => {
+  try {
+    const parsed: unknown = JSON.parse(argumentsJson);
+    return parsed;
+  } catch {
+    return argumentsJson;
+  }
+};
+
+const safeStringifyToolArguments = (value: unknown): string => {
+  if (typeof value === "string") {
+    return value;
+  }
+  try {
+    const serialized: unknown = JSON.stringify(value);
+    return typeof serialized === "string" ? serialized : "{}";
+  } catch {
+    return "{}";
+  }
+};
+
+export const prepareToolsForThirdParty = ({
   boundary,
   tools,
 }: {
   boundary: ChatThirdPartyBoundary;
-  tools: TTools;
-}): TTools => {
+  tools: ChatToolMap;
+}): ChatToolMap => {
   const hasExternalTool = Object.values(tools).some(
-    (toolDefinition) => getChatToolPolicy(toolDefinition).requiresAnonymization,
+    (toolDefinition) =>
+      toolDefinition !== undefined &&
+      getChatToolPolicy(toolDefinition).requiresAnonymization,
   );
   if (boundary.type === "raw" && !hasExternalTool) {
     return tools;
   }
 
-  const wrapped: Partial<TTools> = {};
+  const wrapped: ChatToolMap = {};
 
-  for (const key of Object.keys(tools) as (keyof TTools & string)[]) {
-    const current = tools[key];
-    if (!current?.execute) {
+  for (const [key, current] of Object.entries(tools)) {
+    if (!current) {
+      continue;
+    }
+
+    if (!current.execute) {
       wrapped[key] = current;
       continue;
     }
@@ -812,7 +829,7 @@ export const prepareToolsForThirdParty = <TTools extends ToolSet>({
       policy.kind === CHAT_TOOL_POLICY_KIND.mutation;
     wrapped[key] = {
       ...current,
-      execute: async (...args: Parameters<typeof execute>) => {
+      execute: async (input, context) => {
         if (policy.requiresAnonymization && boundary.type === "raw") {
           throw new HandlerError({
             status: 422,
@@ -822,24 +839,21 @@ export const prepareToolsForThirdParty = <TTools extends ToolSet>({
         }
 
         if (boundary.type === "raw") {
-          const rawOutput: unknown = await execute(...args);
-          return rawOutput;
+          const outputValue: unknown = await execute(input, context);
+          return outputValue;
         }
 
+        let toolInput: unknown = input;
         if (deanonymizeInputBeforeExecute) {
-          // SAFETY: the AI SDK types tool execute's input arg as `any`
-          // because each tool defines its own input schema. We
-          // recursively walk strings only and preserve every other
-          // value identity, so the shape match is safe.
-          // Lenient match: the LLM regularly strips the `[ ]` from
-          // a placeholder when embedding it in a JSON argument, so
-          // bare `PERSON_1` must also resolve here.
-          (args as [unknown, ...unknown[]])[0] =
-            deanonymizeUnknownStringsFromBoundary(boundary, args[0], "lenient");
+          toolInput = deanonymizeUnknownStringsFromBoundary(
+            boundary,
+            input,
+            "lenient",
+          );
         }
 
         const replacements: TextReplacement[] = [];
-        let outputValue: unknown = await execute(...args);
+        let outputValue: unknown = await execute(toolInput, context);
         const anonymizedOutput = anonymizeUnknownStrings({
           apply: (value) => {
             outputValue = value;
@@ -866,8 +880,5 @@ export const prepareToolsForThirdParty = <TTools extends ToolSet>({
     };
   }
 
-  // SAFETY: each tool is copied unchanged except for execute(), whose output
-  // is recursively string-anonymized while preserving the original shape.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  return wrapped as TTools;
+  return wrapped;
 };

@@ -1,24 +1,48 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
+import { toSafeId, type SafeId } from "@/lib/safe-id";
 import {
   __resetChatRequestStateForTests,
   buildSendRequestBody,
   chatKeys,
-  createSendAutomaticallyPredicate,
+  chatThreadOptions,
+  createChatRuntime,
   matchesChatThreadAcrossScopes,
   mergeGroupedChatThreadPages,
+  sendThreadChatMessage,
 } from "@/routes/_protected.chat/-queries";
 
 const createMessage = (id = "message-A"): PersistedChatMessage => ({
   id,
   role: "user",
-  parts: [{ type: "text", text: "Hello" }],
+  parts: [{ type: "text", content: "Hello" }],
 });
 const date = (value: string): Date => new Date(value);
+const assistantMessageId = "11111111-1111-4111-8111-111111111111";
+const createOutgoingMessage = (
+  id: string,
+  content = "ahoj",
+): { content: string; id: SafeId<"chatMessage"> } => ({
+  id: toSafeId<"chatMessage">(id),
+  content,
+});
+
+const createSseResponse = (chunks: readonly Record<string, unknown>[]) =>
+  new Response(
+    chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join(""),
+    { headers: { "Content-Type": "text/event-stream" } },
+  );
+
+const parseJsonRequestBody = (init: RequestInit | undefined): unknown => {
+  if (typeof init?.body !== "string") {
+    throw new TypeError("Expected chat fetch body to be a JSON string");
+  }
+  return JSON.parse(init.body);
+};
 
 describe("chatKeys", () => {
   test("separates plain chat transports from active DOCX edit transports", () => {
@@ -38,6 +62,47 @@ describe("chatKeys", () => {
     ).not.toEqual(
       chatKeys.thread("org_test", { ...base, contextKind: "active-docx-edit" }),
     );
+  });
+
+  test("shares the draft chat runtime key with the routed thread page", () => {
+    const threadId = toChatThreadId("thread-A");
+    const threadRef = { scope: "global", threadId } as const;
+    const activeOrganizationId = "org_test";
+
+    const draftOptions = chatThreadOptions({
+      activeOrganizationId,
+      key: threadRef,
+      context: {
+        allowMissingThread: true,
+        getContextMatterIds: () => ["matter-A"],
+        getSendMode: () => CHAT_SEND_MODE.anonymized,
+        getUserContext: () => ({
+          locale: "cs",
+          timezone: "Europe/Prague",
+          userName: "Test User",
+          wordEditAuthorName: "Test User",
+          wordEditShortcut: "TU",
+        }),
+      },
+    });
+    const routedOptions = chatThreadOptions({
+      activeOrganizationId,
+      key: threadRef,
+      context: {
+        allowMissingThread: true,
+        getContextMatterIds: () => [],
+        getSendMode: () => CHAT_SEND_MODE.rawOverride,
+        getUserContext: () => ({
+          locale: "en",
+          timezone: "UTC",
+          userName: "Route User",
+          wordEditAuthorName: "Route User",
+          wordEditShortcut: "RU",
+        }),
+      },
+    });
+
+    expect(draftOptions.queryKey).toEqual(routedOptions.queryKey);
   });
 });
 
@@ -244,12 +309,13 @@ describe("buildSendRequestBody", () => {
             role: "assistant",
             parts: [
               {
-                input: { query: "Acme" },
+                arguments: JSON.stringify({ code: "return entities;" }),
+                id: "tool-call-A",
+                input: { code: "return entities;" },
                 output: { content: [] },
-                state: "output-available",
-                toolCallId: "tool-call-A",
-                toolName: "run-stella-query",
-                type: "dynamic-tool",
+                state: "complete",
+                name: "run-stella-query",
+                type: "tool-call",
               },
             ],
           },
@@ -258,6 +324,29 @@ describe("buildSendRequestBody", () => {
     ).toMatchObject({
       sendMode: CHAT_SEND_MODE.rawOverride,
       threadId: "thread-A",
+    });
+  });
+
+  test("forwards the replay truncation target for tool-result continuations", () => {
+    const threadId = toChatThreadId("thread-A");
+    const truncateAfterMessageId = toSafeId<"chatMessage">(
+      "22222222-2222-4222-8222-222222222222",
+    );
+
+    expect(
+      buildSendRequestBody({
+        context: { getSendMode: () => CHAT_SEND_MODE.anonymized },
+        key: { scope: "global", threadId },
+        messages: [createMessage()],
+        requestBody: {
+          sendMode: CHAT_SEND_MODE.rawOverride,
+          truncateAfterMessageId,
+        },
+      }),
+    ).toMatchObject({
+      sendMode: CHAT_SEND_MODE.rawOverride,
+      threadId: "thread-A",
+      truncateAfterMessageId,
     });
   });
 
@@ -285,88 +374,358 @@ describe("buildSendRequestBody", () => {
   });
 });
 
-describe("createSendAutomaticallyPredicate", () => {
+describe("chat runtime", () => {
+  const previousFetch = globalThis.fetch;
+  type FetchHandler = (
+    ...args: Parameters<typeof fetch>
+  ) => ReturnType<typeof fetch>;
+  const createFetchMock = (handler: FetchHandler): typeof fetch =>
+    Object.assign(handler, { preconnect: previousFetch.preconnect });
+
   beforeEach(() => {
     __resetChatRequestStateForTests();
+    globalThis.fetch = previousFetch;
+  });
+  afterEach(() => {
+    globalThis.fetch = previousFetch;
   });
 
-  test("allows sequential auto sends inside the same assistant message", () => {
-    const shouldSendAutomatically =
-      createSendAutomaticallyPredicate("thread-A");
-    const baseMessage = {
-      id: "message-A",
-      role: "assistant",
-    } satisfies Pick<PersistedChatMessage, "id" | "role">;
-    const firstToolResult = {
-      ...baseMessage,
-      parts: [
-        { type: "step-start" },
-        {
-          input: {},
-          output: { content: [] },
-          state: "output-available",
-          toolCallId: "tool-call-1",
-          toolName: "mcp__legaldatahunter-com__discover_countries",
-          type: "dynamic-tool",
-        },
-      ],
-    } satisfies PersistedChatMessage;
-    const secondApprovalResponse = {
-      ...baseMessage,
-      parts: [
-        ...firstToolResult.parts,
-        { type: "step-start" },
-        {
-          approval: { approved: true, id: "approval-1" },
-          input: { query: "derecho al olvido" },
-          state: "approval-responded",
-          toolCallId: "tool-call-2",
-          toolName: "mcp__legaldatahunter-com__search",
-          type: "dynamic-tool",
-        },
-      ],
-    } satisfies PersistedChatMessage;
+  test("streams reasoning and final text through tanstack ChatClient", async () => {
+    const threadId = toChatThreadId("thread-A");
+    const requests: unknown[] = [];
+    let finishCount = 0;
 
-    expect(shouldSendAutomatically({ messages: [firstToolResult] })).toBeTrue();
-    expect(
-      shouldSendAutomatically({ messages: [firstToolResult] }),
-    ).toBeFalse();
-    expect(
-      shouldSendAutomatically({ messages: [secondApprovalResponse] }),
-    ).toBeTrue();
+    globalThis.fetch = createFetchMock(async (_input, init) => {
+      requests.push(parseJsonRequestBody(init));
+      return createSseResponse([
+        { type: "RUN_STARTED", threadId, runId: "run-A" },
+        {
+          type: "TEXT_MESSAGE_START",
+          messageId: assistantMessageId,
+          role: "assistant",
+        },
+        {
+          type: "REASONING_MESSAGE_CONTENT",
+          messageId: assistantMessageId,
+          delta: "Reading the prompt.",
+        },
+        {
+          type: "TEXT_MESSAGE_CONTENT",
+          messageId: assistantMessageId,
+          delta: "Ahoj!",
+        },
+        { type: "TEXT_MESSAGE_END", messageId: assistantMessageId },
+        {
+          type: "RUN_FINISHED",
+          threadId,
+          runId: "run-A",
+          finishReason: "stop",
+        },
+      ]);
+    });
+
+    const runtime = createChatRuntime({
+      context: { getSendMode: () => CHAT_SEND_MODE.anonymized },
+      initialMessages: [],
+      key: { scope: "global", threadId },
+      onError: (error) => {
+        throw error;
+      },
+      onFinish: () => {
+        finishCount += 1;
+      },
+    });
+
+    await sendThreadChatMessage(
+      runtime,
+      createOutgoingMessage("22222222-2222-4222-8222-222222222201"),
+      {
+        body: { sendMode: CHAT_SEND_MODE.rawOverride },
+      },
+    );
+
+    expect(requests).toHaveLength(1);
+    expect(requests.at(0)).toMatchObject({
+      message: {
+        parts: [{ type: "text", content: "ahoj" }],
+        role: "user",
+      },
+      sendMode: CHAT_SEND_MODE.rawOverride,
+      threadId,
+    });
+    expect(finishCount).toBe(1);
+    expect(runtime.getSnapshot()).toMatchObject({
+      status: "ready",
+      messages: [
+        {
+          role: "user",
+          parts: [{ type: "text", content: "ahoj" }],
+        },
+        {
+          id: assistantMessageId,
+          role: "assistant",
+          parts: [
+            { type: "thinking", content: "Reading the prompt." },
+            { type: "text", content: "Ahoj!" },
+          ],
+        },
+      ],
+    });
   });
 
-  test("keeps the one-fire budget when older history is prepended", () => {
-    const shouldSendAutomatically =
-      createSendAutomaticallyPredicate("thread-A");
-    const assistantTail = {
-      id: "assistant-1",
-      role: "assistant",
-      parts: [
-        { type: "step-start" },
+  test("streams reasoning-first chunks through tanstack ChatClient", async () => {
+    const threadId = toChatThreadId("thread-A");
+    let finishCount = 0;
+
+    globalThis.fetch = createFetchMock(async () =>
+      createSseResponse([
+        { type: "RUN_STARTED", threadId, runId: "run-A" },
         {
-          input: {},
-          output: { content: [] },
-          state: "output-available",
-          toolCallId: "tool-call-1",
-          toolName: "mcp__legaldatahunter-com__discover_countries",
-          type: "dynamic-tool",
+          type: "TEXT_MESSAGE_START",
+          messageId: assistantMessageId,
+          role: "assistant",
         },
-      ],
-    } satisfies PersistedChatMessage;
+        {
+          type: "REASONING_MESSAGE_CONTENT",
+          messageId: assistantMessageId,
+          delta: "Thinking before answer.",
+        },
+        {
+          type: "RUN_FINISHED",
+          threadId,
+          runId: "run-A",
+          finishReason: "stop",
+        },
+      ]),
+    );
 
-    // The tail fires once, then its one-fire budget is spent.
-    expect(shouldSendAutomatically({ messages: [assistantTail] })).toBeTrue();
-    expect(shouldSendAutomatically({ messages: [assistantTail] })).toBeFalse();
+    const runtime = createChatRuntime({
+      context: undefined,
+      initialMessages: [],
+      key: { scope: "global", threadId },
+      onError: (error) => {
+        throw error;
+      },
+      onFinish: () => {
+        finishCount += 1;
+      },
+    });
 
-    // Loading older history prepends messages (messages[0] changes) while the
-    // thread and assistant tail stay the same. Budgeting on messages[0] would
-    // hand the same tail a fresh budget and re-fire the turn; keying on the
-    // thread id keeps it spent.
-    expect(
-      shouldSendAutomatically({
-        messages: [createMessage("older-1"), assistantTail],
-      }),
-    ).toBeFalse();
+    await sendThreadChatMessage(
+      runtime,
+      createOutgoingMessage("22222222-2222-4222-8222-222222222202"),
+    );
+
+    expect(finishCount).toBe(1);
+    expect(runtime.getSnapshot().messages.at(-1)).toMatchObject({
+      id: assistantMessageId,
+      role: "assistant",
+      parts: [{ type: "thinking", content: "Thinking before answer." }],
+    });
+  });
+
+  test("notifies subscribers when tanstack ChatClient sendMessage streams", async () => {
+    const threadId = toChatThreadId("thread-A");
+    const snapshots: PersistedChatMessage[][] = [];
+
+    globalThis.fetch = createFetchMock(async () =>
+      createSseResponse([
+        { type: "RUN_STARTED", threadId, runId: "run-A" },
+        {
+          type: "TEXT_MESSAGE_START",
+          messageId: assistantMessageId,
+          role: "assistant",
+        },
+        {
+          type: "REASONING_MESSAGE_CONTENT",
+          messageId: assistantMessageId,
+          delta: "Checking context.",
+        },
+        {
+          type: "TEXT_MESSAGE_CONTENT",
+          messageId: assistantMessageId,
+          delta: "Ahoj!",
+        },
+        { type: "TEXT_MESSAGE_END", messageId: assistantMessageId },
+        {
+          type: "RUN_FINISHED",
+          threadId,
+          runId: "run-A",
+          finishReason: "stop",
+        },
+      ]),
+    );
+
+    const runtime = createChatRuntime({
+      context: undefined,
+      initialMessages: [],
+      key: { scope: "global", threadId },
+      onError: (error) => {
+        throw error;
+      },
+      onFinish: () => {},
+    });
+    const unsubscribe = runtime.subscribe(() => {
+      snapshots.push(runtime.getSnapshot().messages);
+    });
+
+    await sendThreadChatMessage(
+      runtime,
+      createOutgoingMessage("22222222-2222-4222-8222-222222222203"),
+    );
+    unsubscribe();
+
+    expect(snapshots.some((messages) => messages.length > 0)).toBe(true);
+    expect(snapshots.at(-1)).toMatchObject([
+      {
+        role: "user",
+        parts: [{ type: "text", content: "ahoj" }],
+      },
+      {
+        role: "assistant",
+        parts: [
+          { type: "thinking", content: "Checking context." },
+          { type: "text", content: "Ahoj!" },
+        ],
+      },
+    ]);
+  });
+
+  test("exposes mounted-thread messages immediately before the response resolves", async () => {
+    const threadId = toChatThreadId("thread-A");
+    let markResponseRequested: () => void = () => {
+      throw new Error("Chat response was not requested");
+    };
+    const responseRequested = new Promise<void>((resolve) => {
+      markResponseRequested = resolve;
+    });
+    let releaseResponse: () => void = () => {
+      throw new Error("Chat response was not requested");
+    };
+
+    globalThis.fetch = createFetchMock(async () => {
+      await new Promise<void>((resolve) => {
+        releaseResponse = resolve;
+        markResponseRequested();
+      });
+      return createSseResponse([
+        { type: "RUN_STARTED", threadId, runId: "run-A" },
+        {
+          type: "TEXT_MESSAGE_START",
+          messageId: assistantMessageId,
+          role: "assistant",
+        },
+        {
+          type: "TEXT_MESSAGE_CONTENT",
+          messageId: assistantMessageId,
+          delta: "Ahoj!",
+        },
+        { type: "TEXT_MESSAGE_END", messageId: assistantMessageId },
+        {
+          type: "RUN_FINISHED",
+          threadId,
+          runId: "run-A",
+          finishReason: "stop",
+        },
+      ]);
+    });
+
+    const runtime = createChatRuntime({
+      context: undefined,
+      initialMessages: [],
+      key: { scope: "global", threadId },
+      onError: (error) => {
+        throw error;
+      },
+      onFinish: () => {},
+    });
+    const message = createOutgoingMessage(
+      "22222222-2222-4222-8222-222222222204",
+    );
+
+    const sent = sendThreadChatMessage(runtime, message);
+
+    expect(runtime.getSnapshot().messages).toMatchObject([
+      {
+        id: message.id,
+        role: "user",
+        parts: [{ type: "text", content: "ahoj" }],
+      },
+    ]);
+
+    await responseRequested;
+    releaseResponse();
+    await sent;
+  });
+
+  test("exposes the first draft message immediately for the route handoff", async () => {
+    const threadId = toChatThreadId("thread-A");
+    let markResponseRequested: () => void = () => {
+      throw new Error("Chat response was not requested");
+    };
+    const responseRequested = new Promise<void>((resolve) => {
+      markResponseRequested = resolve;
+    });
+    let releaseResponse: () => void = () => {
+      throw new Error("Chat response was not requested");
+    };
+
+    globalThis.fetch = createFetchMock(async () => {
+      await new Promise<void>((resolve) => {
+        releaseResponse = resolve;
+        markResponseRequested();
+      });
+      return createSseResponse([
+        { type: "RUN_STARTED", threadId, runId: "run-A" },
+        {
+          type: "TEXT_MESSAGE_START",
+          messageId: assistantMessageId,
+          role: "assistant",
+        },
+        {
+          type: "TEXT_MESSAGE_CONTENT",
+          messageId: assistantMessageId,
+          delta: "Ahoj!",
+        },
+        { type: "TEXT_MESSAGE_END", messageId: assistantMessageId },
+        {
+          type: "RUN_FINISHED",
+          threadId,
+          runId: "run-A",
+          finishReason: "stop",
+        },
+      ]);
+    });
+
+    const runtime = createChatRuntime({
+      context: undefined,
+      initialMessages: [],
+      key: { scope: "global", threadId },
+      onError: (error) => {
+        throw error;
+      },
+      onFinish: () => {},
+    });
+
+    const messageId = toSafeId<"chatMessage">(
+      "22222222-2222-4222-8222-222222222222",
+    );
+    const started = runtime.startRouteHandoffMessage({
+      id: messageId,
+      content: "ahoj",
+    });
+
+    expect(started.messageId).toBe(messageId);
+    expect(runtime.getSnapshot().messages).toMatchObject([
+      {
+        id: messageId,
+        role: "user",
+        parts: [{ type: "text", content: "ahoj" }],
+      },
+    ]);
+
+    await responseRequested;
+    releaseResponse();
+    await started.stream;
   });
 });

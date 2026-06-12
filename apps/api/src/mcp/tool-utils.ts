@@ -1,5 +1,4 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import type { ToolExecutionOptions } from "ai";
 import { TaggedError } from "better-result";
 
 import { env } from "@/api/env";
@@ -19,7 +18,12 @@ export const MAX_SEARCH_LIMIT = LIMITS.mcpSearchPageSizeMax;
 export const DEFAULT_COMPAT_SEARCH_LIMIT =
   LIMITS.mcpCompatSearchPageSizeDefault;
 
-export const MCP_TOOL_EXECUTION_OPTIONS: ToolExecutionOptions = {
+type LocalToolExecutionOptions = {
+  messages: [];
+  toolCallId: string;
+};
+
+export const MCP_TOOL_EXECUTION_OPTIONS: LocalToolExecutionOptions = {
   messages: [],
   toolCallId: "mcp",
 };
@@ -443,7 +447,7 @@ export const invokeAiTool = async <TArgs extends Record<string, unknown>>({
 }: {
   args: TArgs;
   tool: {
-    execute?: (args: TArgs, options: ToolExecutionOptions) => unknown;
+    execute?: (args: TArgs, options: LocalToolExecutionOptions) => unknown;
   };
 }): Promise<CallToolResult> => {
   if (!tool.execute) {

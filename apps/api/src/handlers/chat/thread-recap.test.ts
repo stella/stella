@@ -15,7 +15,7 @@ const textMessage = ({
   text: string;
 }): RecapMessage => ({
   role,
-  parts: [{ type: "text", text }],
+  parts: [{ type: "text", content: text }],
 });
 
 describe("chat thread recap transcript", () => {

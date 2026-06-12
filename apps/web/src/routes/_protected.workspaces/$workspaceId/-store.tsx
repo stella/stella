@@ -3,7 +3,7 @@ import { immer } from "zustand/middleware/immer";
 
 import type { BoundingBox } from "@stll/api/types";
 
-import type { WorkspaceJustification } from "@/lib/types";
+import type { JustificationId, WorkspaceJustification } from "@/lib/types";
 
 type ActiveJustification = {
   id: string;
@@ -38,7 +38,9 @@ type State = {
 type Actions = {
   syncJustifications: (justifications: WorkspaceJustification[]) => void;
   clearJustifications: () => void;
-  getJustifications: (justificationIds: string[]) => WorkspaceJustification[];
+  getJustifications: (
+    justificationIds: JustificationId[],
+  ) => WorkspaceJustification[];
   getExtractionPreview: (entityId: string, propertyId: string) => string | null;
   setExtractionPreview: (preview: {
     entityId: string;

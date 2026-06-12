@@ -449,6 +449,8 @@
     },
     "queuedAttachmentCount": "{count, plural, zero {# pielikumu} one {# pielikums} other {# pielikumi}}",
     "queuedNotice": "Rindā — tiks nosūtīts, kad pabeigsies pašreizējā atbilde",
+    "reasoning": "Argumentācija",
+    "reasoningTokens": "{count, plural, zero {# argumentācijas tokenu} one {# argumentācijas tokens} other {# argumentācijas tokeni}}",
     "recapLoading": "Sarunas apkopošana…",
     "removeSuggestion": "(noņemt)",
     "resend": "Nosūtīt vēlreiz",

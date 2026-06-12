@@ -8,16 +8,14 @@ import type {
 } from "elysia";
 import { status } from "elysia";
 
-import type { PermissionInput, roles } from "@stll/permissions";
+import type { ModelRole } from "@stll/ai-catalog";
+import type { PermissionInput } from "@stll/permissions";
+import { roles } from "@stll/permissions";
 
 import type { SafeDb, ScopedDb } from "@/api/db";
 import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
 import { env } from "@/api/env";
-import {
-  getModelInfoForRole,
-  resolveEffectiveServiceTierForProvider,
-} from "@/api/lib/ai-models";
-import type { ModelRole, OrgAIConfig } from "@/api/lib/ai-models";
+import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureRequestError } from "@/api/lib/analytics";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
@@ -40,6 +38,10 @@ import {
 import { logger } from "@/api/lib/observability/logger";
 import { getRequestContext } from "@/api/lib/observability/request-context";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
+import {
+  getTanStackTextModelInfoForRole,
+  resolveEffectiveServiceTierForProvider,
+} from "@/api/lib/tanstack-ai-models";
 import { assertUsageAvailable } from "@/api/lib/usage";
 import { computeUsageUnitCost } from "@/api/lib/usage/action-weights";
 
@@ -50,7 +52,7 @@ import { computeUsageUnitCost } from "@/api/lib/usage/action-weights";
  *    otherwise the check is a no-op so observation-mode runs
  *    always pass through).
  *
- * Post-flight ledger writes happen from AI SDK step callbacks,
+ * Post-flight ledger writes happen from model step callbacks,
  * where the actual model usage is available. Keeping writes out
  * of the generic handler layer prevents fixed-estimate rows and
  * usage-based rows from double-counting the same action.
@@ -65,7 +67,7 @@ export type UsageMeteringConfig = {
   /**
    * Logical model role recorded on the consumption ledger row.
    * Defaults to `"chat"`. Set to the role the handler will pass
-   * to `getModelForRole(...)` so cross-cutting analytics match
+   * to the model resolver so cross-cutting analytics match
    * the actual model.
    */
   modelRole?: ModelRole;
@@ -116,8 +118,8 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
     orgAIConfig: OrgAIConfig | null;
     /**
      * Whether stella may annotate AI requests for this org with
-     * prompt-cache markers. Threaded through to `getModelForRole`
-     * and `getModelById`; the SDK middleware strips any markers when
+     * prompt-cache markers. Threaded through to the model resolver;
+     * provider adapters strip any markers when
      * `false` regardless of what call sites set.
      */
     promptCachingEnabled: boolean;
@@ -398,7 +400,9 @@ export const resolveMeteringContext = ({
   userId: SafeId<"user">;
 }): ResolvedMeteringContext => {
   const modelRole = metering.modelRole ?? "chat";
-  const modelInfo = getModelInfoForRole(modelRole, orgAIConfig);
+  const modelInfo = getTanStackTextModelInfoForRole(modelRole, orgAIConfig, {
+    organizationId,
+  });
   const isByok = modelInfo.keySource === "byok";
   const serviceTier = resolveEffectiveServiceTierForProvider({
     provider: modelInfo.provider,
@@ -695,9 +699,8 @@ const logAndCaptureSafeError = ({
     if (errorStatusCode !== undefined) {
       attributes["error.status_code"] = errorStatusCode;
     }
-    // Walk up to three levels of `.cause` so nested wrappers
-    // (generator-result re-throws, AI SDK over fetch errors,
-    // etc.) don't hide the underlying failure type.
+    // Walk up to three levels of `.cause` so nested wrappers do not
+    // hide the underlying failure type.
     const seen = new WeakSet<object>([error]);
     let cause = safeErrorCause(error);
     let depth = 1;

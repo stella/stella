@@ -1,18 +1,18 @@
-import { generateText } from "ai";
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { resolveCaching } from "@/api/lib/ai-config";
 import {
   loadOrgAIConfig,
   loadPromptCachingPreference,
 } from "@/api/lib/ai-config-loader";
 import { aiHandlerError } from "@/api/lib/ai-error";
-import { getModelForRole } from "@/api/lib/ai-models";
-import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
 const suggestableContentType = t.Union([
   t.Literal("text"),
@@ -131,7 +131,7 @@ const suggestPrompt = createSafeHandler(
       loadPromptCachingPreference(session.activeOrganizationId),
     ]);
 
-    const aiAnalytics = createAIAnalyticsCallbacks({
+    const aiAnalytics = createTanStackAIAnalyticsCallbacks({
       usageMetering: {
         actionType: "chat",
         organizationId: session.activeOrganizationId,
@@ -159,12 +159,15 @@ const suggestPrompt = createSafeHandler(
 
     const generateResult = await Result.tryPromise({
       try: async () => {
-        const result = await generateText({
-          model: getModelForRole("fast", orgAIConfig, {
+        const result = await generateTanStackTextForRole({
+          role: "fast",
+          orgAIConfig,
+          organizationId: session.activeOrganizationId,
+          analytics: aiAnalytics,
+          caching: resolveCaching({
             promptCachingEnabled,
+            role: "fast",
             scopeKey: null,
-            organizationId: session.activeOrganizationId,
-            serviceTier: "standard",
           }),
           system: SYSTEM_PROMPT,
           messages: [{ role: "user", content: userMessage }],
@@ -172,9 +175,8 @@ const suggestPrompt = createSafeHandler(
             request.signal,
             AbortSignal.timeout(SUGGEST_TIMEOUT_MS),
           ]),
-          ...aiAnalytics.stepCallbacks,
         });
-        return result.text;
+        return result;
       },
       catch: (error) => {
         aiAnalytics.captureError(error);

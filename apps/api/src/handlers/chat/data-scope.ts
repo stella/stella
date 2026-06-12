@@ -50,7 +50,14 @@ export const extractIncomingMessageWorkspaceIds = ({
 
 export const extractMessageWorkspaceIds = (
   message: ChatMessage,
-): SafeId<"workspace">[] => collectPartsWorkspaceIds(message.parts);
+): SafeId<"workspace">[] => {
+  const ids = new Set<SafeId<"workspace">>();
+  for (const id of collectPartsWorkspaceIds(message.parts)) {
+    ids.add(id);
+  }
+  collectStructuralWorkspaceIds(message.metadata?.sourceDocuments, ids);
+  return Array.from(ids);
+};
 
 export const extractThreadDataWorkspaceIds = (
   messages: readonly ChatMessage[],
@@ -69,11 +76,10 @@ export const extractThreadDataWorkspaceIds = (
 //
 //   1. **Structural fields** — any property at any depth named
 //      `workspaceId` or `matterRef` whose value is a UUID string.
-//      Covers `data-stella-source-document` parts
-//      (`data.workspaceId`), tool output parts that include
-//      `matterRef` / `workspaceId` (search hits, file lookups,
-//      property/entity records), and any future part shape that
-//      reuses these conventional field names.
+//      Covers tool output parts that include `matterRef` /
+//      `workspaceId` (search hits, file lookups, property/entity
+//      records), persisted source-document metadata, and any future
+//      part shape that reuses these conventional field names.
 //   2. **Resolved text refs** — `#stella-workspace=<uuid>` and
 //      `#stella-entity=<workspace>:<entity>` produced by
 //      `resolveAssistantTextRefs` after the stream finishes.
@@ -149,10 +155,10 @@ const collectTextRefWorkspaceIds = (
   if (!("type" in part) || part.type !== "text") {
     return;
   }
-  if (!("text" in part) || typeof part.text !== "string") {
+  if (!("content" in part) || typeof part.content !== "string") {
     return;
   }
-  for (const match of part.text.matchAll(STELLA_TEXT_REF_WORKSPACE_REGEX)) {
+  for (const match of part.content.matchAll(STELLA_TEXT_REF_WORKSPACE_REGEX)) {
     const captured = match.groups?.["workspaceId"];
     if (captured) {
       ids.add(brandPersistedWorkspaceId(captured));

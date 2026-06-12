@@ -1,5 +1,4 @@
-import { valibotSchema } from "@ai-sdk/valibot";
-import { tool } from "ai";
+import { toolDefinition } from "@tanstack/ai";
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
@@ -16,6 +15,7 @@ import {
   loadAvailableChatSkill,
   readAvailableChatSkillResource,
 } from "@/api/handlers/chat/skills";
+import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import {
   RESOURCE_PATH_PATTERN,
   inferResourceKind,
@@ -58,13 +58,14 @@ export const createSkillTools = ({
       : {};
 
   return {
-    "load-skill": tool({
+    "load-skill": toolDefinition({
+      name: "load-skill",
       description:
         "Load the full instructions for one stella skill. The system " +
         "prompt lists skill names and descriptions only; use this when " +
         "a skill is relevant to the user's task and you need its full " +
         "methodology or resource list.",
-      inputSchema: valibotSchema(
+      inputSchema: toTanStackToolSchema(
         v.strictObject({
           skillName: v.pipe(
             v.string(),
@@ -74,43 +75,43 @@ export const createSkillTools = ({
           ),
         }),
       ),
-      execute: async ({ skillName }) => {
-        assertAvailableSkill({
-          availableSkillIds,
-          skillName,
-        });
+    }).server(async ({ skillName }) => {
+      assertAvailableSkill({
+        availableSkillIds,
+        skillName,
+      });
 
-        const skillResult = await loadAvailableChatSkill({
-          organizationId,
-          activeSkillId,
-          safeDb,
-          skillName,
-          userId,
+      const skillResult = await loadAvailableChatSkill({
+        activeSkillId,
+        organizationId,
+        safeDb,
+        skillName,
+        userId,
+      });
+      if (Result.isError(skillResult)) {
+        throw new ChatToolError({
+          message: "Skill could not be loaded.",
+          cause: skillResult.error,
         });
-        if (Result.isError(skillResult)) {
-          throw new ChatToolError({
-            message: "Skill could not be loaded.",
-            cause: skillResult.error,
-          });
-        }
-        const skill = skillResult.value;
-        return {
-          name: skill.name,
-          version: skill.version,
-          description: skill.description,
-          instructions: skill.body,
-          resources: skill.resources,
-        };
-      },
+      }
+      const skill = skillResult.value;
+      return {
+        name: skill.name,
+        version: skill.version,
+        description: skill.description,
+        instructions: skill.body,
+        resources: skill.resources,
+      };
     }),
 
-    "read-skill-resource": tool({
+    "read-skill-resource": toolDefinition({
+      name: "read-skill-resource",
       description:
         "Read one resource from a loaded stella skill. Use only paths " +
         "returned by load-skill. Resources are read-only methodology, " +
         "knowledge, or prompt templates; they do not grant access to " +
         "matter data.",
-      inputSchema: valibotSchema(
+      inputSchema: toTanStackToolSchema(
         v.strictObject({
           skillName: v.pipe(
             v.string(),
@@ -126,50 +127,49 @@ export const createSkillTools = ({
           ),
         }),
       ),
-      execute: async ({ path, skillName }) => {
-        assertAvailableSkill({
-          availableSkillIds,
-          skillName,
-        });
+    }).server(async ({ path, skillName }) => {
+      assertAvailableSkill({
+        availableSkillIds,
+        skillName,
+      });
 
-        const resourcesResult = await listAvailableChatSkillResources({
-          organizationId,
-          activeSkillId,
-          safeDb,
-          skillName,
-          userId,
+      const resourcesResult = await listAvailableChatSkillResources({
+        activeSkillId,
+        organizationId,
+        safeDb,
+        skillName,
+        userId,
+      });
+      if (Result.isError(resourcesResult)) {
+        throw new ChatToolError({
+          message: "Skill resources could not be listed.",
+          cause: resourcesResult.error,
         });
-        if (Result.isError(resourcesResult)) {
-          throw new ChatToolError({
-            message: "Skill resources could not be listed.",
-            cause: resourcesResult.error,
-          });
-        }
+      }
 
-        const resources = resourcesResult.value;
-        if (!resources.some((resource) => resource.path === path)) {
-          throw new ChatToolError({
-            message: "Unknown or unavailable skill resource path.",
-          });
-        }
-
-        const read = await readSkillResourceContent({
-          organizationId,
-          activeSkillId,
-          path,
-          safeDb,
-          skillName,
-          userId,
+      const resources = resourcesResult.value;
+      if (!resources.some((resource) => resource.path === path)) {
+        throw new ChatToolError({
+          message: "Unknown or unavailable skill resource path.",
         });
-        return {
-          skillName,
-          path,
-          mimeType: inferSkillResourceMimeType(path),
-          content: read.content,
-          skillId: read.skillId,
-          origin: read.origin,
-        };
-      },
+      }
+
+      const read = await readSkillResourceContent({
+        activeSkillId,
+        organizationId,
+        path,
+        safeDb,
+        skillName,
+        userId,
+      });
+      return {
+        skillName,
+        path,
+        mimeType: inferSkillResourceMimeType(path),
+        content: read.content,
+        skillId: read.skillId,
+        origin: read.origin,
+      };
     }),
 
     ...currentSkillEditTools,
@@ -249,12 +249,13 @@ const createCurrentSkillEditTools = ({
 }: CurrentSkillEditToolsContext) => {
   const bodyReplacementTools = canReplaceCurrentSkillBody(activeSkillContext)
     ? {
-        "update-current-skill-body": tool({
+        "update-current-skill-body": toolDefinition({
+          name: "update-current-skill-body",
           description:
             "Replace the current active skill's SKILL.md body. This tool is " +
             "only available in a chat opened from an editable skill. Use it " +
             "only when the user asks to edit the current skill instructions.",
-          inputSchema: valibotSchema(
+          inputSchema: toTanStackToolSchema(
             v.strictObject({
               content: v.pipe(
                 v.string(),
@@ -264,26 +265,28 @@ const createCurrentSkillEditTools = ({
               ),
             }),
           ),
-          execute: async ({ content }) =>
+        }).server(
+          async ({ content }) =>
             await updateCurrentSkillBody({
               activeSkillContext,
               content,
               recordAuditEvent,
               safeDb,
             }),
-        }),
+        ),
       }
     : {};
 
   return {
     ...bodyReplacementTools,
 
-    "update-current-skill-resource": tool({
+    "update-current-skill-resource": toolDefinition({
+      name: "update-current-skill-resource",
       description:
         "Replace one existing file in the current active skill. This tool " +
         "is only available in a chat opened from an editable skill. Use " +
         "paths from the active skill file list or read-skill-resource.",
-      inputSchema: valibotSchema(
+      inputSchema: toTanStackToolSchema(
         v.strictObject({
           path: v.pipe(
             v.string(),
@@ -298,7 +301,8 @@ const createCurrentSkillEditTools = ({
           ),
         }),
       ),
-      execute: async ({ content, path }) =>
+    }).server(
+      async ({ content, path }) =>
         await updateCurrentSkillResource({
           activeSkillContext,
           content,
@@ -306,13 +310,14 @@ const createCurrentSkillEditTools = ({
           recordAuditEvent,
           safeDb,
         }),
-    }),
+    ),
 
-    "create-current-skill-resource": tool({
+    "create-current-skill-resource": toolDefinition({
+      name: "create-current-skill-resource",
       description:
         "Create a new text/markdown file in the current active skill. " +
         "This tool is only available in a chat opened from an editable skill.",
-      inputSchema: valibotSchema(
+      inputSchema: toTanStackToolSchema(
         v.strictObject({
           path: v.pipe(
             v.string(),
@@ -329,7 +334,8 @@ const createCurrentSkillEditTools = ({
           ),
         }),
       ),
-      execute: async ({ content, path }) =>
+    }).server(
+      async ({ content, path }) =>
         await createCurrentSkillResource({
           activeSkillContext,
           content,
@@ -338,7 +344,7 @@ const createCurrentSkillEditTools = ({
           recordAuditEvent,
           safeDb,
         }),
-    }),
+    ),
   };
 };
 

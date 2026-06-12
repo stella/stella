@@ -76,9 +76,8 @@ describe("extractFromError", () => {
     expect(extractFromError(error)).toBeNull();
   });
 
-  test("recognises AI SDK errors via numeric statusCode === 402", () => {
-    const sdkError = {
-      name: "AI_APICallError",
+  test("recognises transport errors via numeric statusCode === 402", () => {
+    const transportError = {
       statusCode: 402,
       message: "Usage limit exceeded: need 30, have 5",
       responseBody: JSON.stringify({
@@ -87,7 +86,7 @@ describe("extractFromError", () => {
         available: 5,
       }),
     };
-    const out = extractFromError(sdkError);
+    const out = extractFromError(transportError);
     expect(out?.details).toEqual({
       reason: "usage_limit_exceeded",
       required: 30,
@@ -95,31 +94,31 @@ describe("extractFromError", () => {
     });
   });
 
-  test("AI SDK error with object responseBody (not stringified)", () => {
-    const sdkError = {
+  test("transport error with object responseBody (not stringified)", () => {
+    const transportError = {
       statusCode: 402,
       message: "no entitlement",
       responseBody: { reason: "no_entitlement", required: 1, available: 0 },
     };
-    expect(extractFromError(sdkError)?.details).toEqual({
+    expect(extractFromError(transportError)?.details).toEqual({
       reason: "no_entitlement",
       required: 1,
       available: 0,
     });
   });
 
-  test("AI SDK error with non-JSON responseBody is rejected (no marker)", () => {
+  test("transport error with non-JSON responseBody is rejected (no marker)", () => {
     // Without our `reason` marker we cannot prove this 402 came
     // from our usage-limit gate vs. an upstream provider — decline.
-    const sdkError = {
+    const transportError = {
       statusCode: 402,
       message: "usage limit",
       responseBody: "this is not json at all",
     };
-    expect(extractFromError(sdkError)).toBeNull();
+    expect(extractFromError(transportError)).toBeNull();
   });
 
-  test("returns null for AI SDK error with non-402 statusCode", () => {
+  test("returns null for transport error with non-402 statusCode", () => {
     expect(extractFromError({ statusCode: 500, message: "boom" })).toBeNull();
   });
 
@@ -130,17 +129,17 @@ describe("extractFromError", () => {
     expect(extractFromError(42)).toBeNull();
   });
 
-  test("AI SDK 402 without our reason marker is declined", () => {
-    // An upstream provider's 402 surfaced through the AI SDK
+  test("transport 402 without our reason marker is declined", () => {
+    // An upstream provider's 402 surfaced through transport
     // (OpenAI/Anthropic quota etc.) must NOT pop the modal —
     // the message would mislead the user into thinking it's a
     // Stella usage-limit gate when it isn't.
-    const sdkError = {
+    const transportError = {
       statusCode: 402,
       message: "Quota exceeded",
       responseBody: JSON.stringify({ error: "upstream provider quota" }),
     };
-    expect(extractFromError(sdkError)).toBeNull();
+    expect(extractFromError(transportError)).toBeNull();
   });
 
   test("array-shaped responseBody is rejected as not-a-plain-object", () => {

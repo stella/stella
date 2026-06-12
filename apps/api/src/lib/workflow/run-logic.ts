@@ -1,6 +1,6 @@
 import { matchError, Result } from "better-result";
 
-import type { AIRequestServiceTier } from "@/api/lib/ai-models";
+import type { AIRequestServiceTier } from "@/api/lib/ai-config";
 import type {
   WorkflowIntegrationError,
   WorkflowValidationError,

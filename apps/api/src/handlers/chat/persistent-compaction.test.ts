@@ -12,7 +12,7 @@ import {
 const message = (id: string, text: string): ChatMessage => ({
   id,
   role: "user",
-  parts: [{ type: "text", text }],
+  parts: [{ type: "text", content: text }],
 });
 
 describe("persistent chat compaction", () => {

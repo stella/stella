@@ -219,7 +219,9 @@ export const visibleEntityFieldIds = ({
     }
   }
 
-  const allowedRequiredIds = new Set(properties.map((property) => property.id));
+  const allowedRequiredIds = new Set<string>(
+    properties.map((property) => property.id),
+  );
   for (const propertyId of requiredPropertyIds) {
     if (allowedRequiredIds.has(propertyId)) {
       propertyIds.add(propertyId);

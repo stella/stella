@@ -14,15 +14,11 @@ import {
 
 import {
   createProviderCredentialDraft,
-  ENDPOINT_REQUIRED_PROVIDERS,
   getAvailableProviderKeys,
   getNextAvailableProvider,
   isProviderValue,
-  isRegionValue,
   PROVIDER_KEYS,
   PROVIDER_LABELS,
-  REGION_KEYS,
-  REGIONAL_PROVIDERS,
 } from "@/components/ai-config-role-models.logic";
 import type {
   ProviderCredentialDraft,
@@ -32,24 +28,9 @@ import type {
 const API_KEY_PLACEHOLDER = {
   google: "AIza...",
   anthropic: "sk-ant-...",
-  mistral: "...",
   openai: "sk-proj-...",
-  azure_foundry: "0123456789abcdef...",
   openrouter: "sk-or-v1-...",
-  huggingface: "hf_...",
 } as const satisfies Record<ProviderValue, string>;
-
-const ENDPOINT_PLACEHOLDER = {
-  azure_foundry: "https://<resource>.openai.azure.com/openai/v1",
-  huggingface: "https://<id>.endpoints.huggingface.cloud/v1",
-} as const;
-
-const getEndpointPlaceholder = (provider: ProviderValue): string => {
-  if (provider === "azure_foundry" || provider === "huggingface") {
-    return ENDPOINT_PLACEHOLDER[provider];
-  }
-  return "";
-};
 
 export type ProviderRowStatus =
   | "idle"
@@ -133,12 +114,6 @@ export const AIConfigProvidersEditor = ({
 
       <div className="w-full overflow-hidden rounded-md border">
         {providers.map((providerDraft, index) => {
-          const supportsRegionalRouting = REGIONAL_PROVIDERS.has(
-            providerDraft.provider,
-          );
-          const needsEndpoint = ENDPOINT_REQUIRED_PROVIDERS.has(
-            providerDraft.provider,
-          );
           const providerOptions = getAvailableProviderKeys({
             currentProvider: providerDraft.provider,
             providers,
@@ -150,9 +125,8 @@ export const AIConfigProvidersEditor = ({
           if (compact) {
             const rowStatus: ProviderRowStatus = rowStatuses?.[index] ?? "idle";
             const hasUsableKey =
-              (providerDraft.apiKey.trim().length > 0 ||
-                (hasSavedKey && !providerDraft.replacingKey)) &&
-              (!needsEndpoint || providerDraft.endpoint.trim().length > 0);
+              providerDraft.apiKey.trim().length > 0 ||
+              (hasSavedKey && !providerDraft.replacingKey);
             const showSaveButton =
               onSaveRow !== undefined &&
               hasUsableKey &&
@@ -160,7 +134,7 @@ export const AIConfigProvidersEditor = ({
               rowStatus !== "valid";
             return (
               <div
-                className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-1 border-t p-2 first:border-t-0 sm:grid-cols-[minmax(5rem,0.7fr)_minmax(0,1fr)_minmax(5rem,0.7fr)_auto] sm:items-center"
+                className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-1 border-t p-2 first:border-t-0 sm:grid-cols-[minmax(5rem,0.7fr)_minmax(0,1fr)_auto] sm:items-center"
                 key={`${providerDraft.provider}-${index}`}
               >
                 <Select
@@ -415,32 +389,6 @@ export const AIConfigProvidersEditor = ({
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                {needsEndpoint && (
-                  <Field>
-                    <FieldLabel>{t("aiConfig.endpoint")}</FieldLabel>
-                    <Input
-                      autoComplete="off"
-                      disabled={disabled}
-                      onChange={(event) =>
-                        updateProvider(index, {
-                          ...providerDraft,
-                          endpoint: event.target.value,
-                        })
-                      }
-                      placeholder={getEndpointPlaceholder(
-                        providerDraft.provider,
-                      )}
-                      type="url"
-                      value={providerDraft.endpoint}
-                    />
-                    {
-                      <p className="text-muted-foreground text-xs">
-                        {t("aiConfig.endpointDescription")}
-                      </p>
-                    }
-                  </Field>
-                )}
-
                 {showKeyInput && (
                   <Field>
                     <FieldLabel>
@@ -467,40 +415,6 @@ export const AIConfigProvidersEditor = ({
                         {t("aiConfig.newApiKeyDescription")}
                       </p>
                     )}
-                  </Field>
-                )}
-
-                {supportsRegionalRouting && (
-                  <Field>
-                    <FieldLabel>{t("aiConfig.dataRegion")}</FieldLabel>
-                    <Select
-                      disabled={disabled}
-                      onValueChange={(value) => {
-                        if (isRegionValue(value)) {
-                          updateProvider(index, {
-                            ...providerDraft,
-                            region: value,
-                          });
-                        }
-                      }}
-                      value={providerDraft.region}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectPopup alignItemWithTrigger={false}>
-                        {REGION_KEYS.map((region) => (
-                          <SelectItem key={region} value={region}>
-                            {t(`aiConfig.regions.${region}`)}
-                          </SelectItem>
-                        ))}
-                      </SelectPopup>
-                    </Select>
-                    {
-                      <p className="text-muted-foreground text-xs">
-                        {t("aiConfig.dataRegionDescription")}
-                      </p>
-                    }
                   </Field>
                 )}
               </div>

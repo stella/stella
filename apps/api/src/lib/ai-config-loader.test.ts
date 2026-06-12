@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import type { OrgAIConfig } from "@/api/lib/ai-config";
 import {
   decryptOrgAIConfigRow,
   resolvePromptCachingPreference,
 } from "@/api/lib/ai-config-loader-core";
-import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { toSafeId } from "@/api/lib/branded-types";
 
 const decryptedAIConfig: OrgAIConfig = {

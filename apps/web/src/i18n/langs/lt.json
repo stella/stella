@@ -449,6 +449,8 @@
     },
     "queuedAttachmentCount": "{count, plural, one {# priedas} few {# priedai} many {# priedo} other {# priedų}}",
     "queuedNotice": "Eilėje — bus išsiųsta, kai baigsis dabartinis atsakymas",
+    "reasoning": "Mąstymas",
+    "reasoningTokens": "{count, plural, one {# mąstymo tokenas} few {# mąstymo tokenai} many {# mąstymo tokeno} other {# mąstymo tokenų}}",
     "recapLoading": "Apibendrinamas pokalbis…",
     "removeSuggestion": "(pašalinti)",
     "resend": "Siųsti dar kartą",

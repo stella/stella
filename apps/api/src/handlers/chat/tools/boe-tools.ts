@@ -1,5 +1,4 @@
-import { valibotSchema } from "@ai-sdk/valibot";
-import { tool } from "ai";
+import { toolDefinition } from "@tanstack/ai";
 import * as v from "valibot";
 
 import {
@@ -11,6 +10,8 @@ import {
   RELATION_TYPES,
   searchConsolidatedLegislation,
 } from "@stll/boe";
+
+import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 
 // @valibot/to-json-schema rejects regex flags, so v.regex literals
 // in this file deliberately omit the `u` flag.
@@ -33,10 +34,11 @@ const dateSchema = v.pipe(
 );
 
 export const createBoeTools = () => ({
-  boe_search_legislation: tool({
+  boe_search_legislation: toolDefinition({
+    name: "boe_search_legislation",
     description:
       "Search Spain's consolidated legislation (~50,000 norms) by free text, title, department, legal range (Ley, Real Decreto, etc.), subject matter, or publication date. Use this to discover laws by topic before fetching their full text. Returns titles + BOE identifiers (e.g. BOE-A-1889-4763) you can pass to boe_get_law.",
-    inputSchema: valibotSchema(
+    inputSchema: toTanStackToolSchema(
       v.strictObject({
         text: v.optional(
           v.pipe(
@@ -108,14 +110,16 @@ export const createBoeTools = () => ({
         ),
       }),
     ),
-    execute: async ({ limit, offset, ...query }) =>
+  }).server(
+    async ({ limit, offset, ...query }) =>
       await searchConsolidatedLegislation({ ...query, limit, offset }),
-  }),
+  ),
 
-  boe_get_law: tool({
+  boe_get_law: toolDefinition({
+    name: "boe_get_law",
     description:
       "Fetch a Spanish consolidated law by its BOE identifier. Returns metadata (date, department, status), legal analysis (relationships to other norms), and optionally the full text. Use after boe_search_legislation to obtain the actual content of a norm.",
-    inputSchema: valibotSchema(
+    inputSchema: toTanStackToolSchema(
       v.strictObject({
         lawId: lawIdSchema,
         metadata: v.optional(
@@ -148,24 +152,25 @@ export const createBoeTools = () => ({
         ),
       }),
     ),
-    execute: async ({ lawId, ...sections }) =>
-      await getConsolidatedLaw(lawId, sections),
-  }),
+  }).server(
+    async ({ lawId, ...sections }) => await getConsolidatedLaw(lawId, sections),
+  ),
 
-  boe_get_law_structure: tool({
+  boe_get_law_structure: toolDefinition({
+    name: "boe_get_law_structure",
     description:
       "Fetch the table of contents (articles, dispositions, annexes) of a Spanish consolidated law. Use this to discover block IDs that boe_get_law_block can fetch individually.",
-    inputSchema: valibotSchema(v.strictObject({ lawId: lawIdSchema })),
-    execute: async ({ lawId }) => ({
-      lawId,
-      structure: await getLawStructure(lawId),
-    }),
-  }),
+    inputSchema: toTanStackToolSchema(v.strictObject({ lawId: lawIdSchema })),
+  }).server(async ({ lawId }) => ({
+    lawId,
+    structure: await getLawStructure(lawId),
+  })),
 
-  boe_get_law_block: tool({
+  boe_get_law_block: toolDefinition({
+    name: "boe_get_law_block",
     description:
       "Fetch a single article or disposition (block) of a Spanish consolidated law by its block ID. Cheaper and more focused than fetching the full text. Get block IDs from boe_get_law_structure.",
-    inputSchema: valibotSchema(
+    inputSchema: toTanStackToolSchema(
       v.strictObject({
         lawId: lawIdSchema,
         blockId: v.pipe(
@@ -176,17 +181,17 @@ export const createBoeTools = () => ({
         ),
       }),
     ),
-    execute: async ({ blockId, lawId }) => ({
-      lawId,
-      blockId,
-      block: await getLawTextBlock(lawId, blockId),
-    }),
-  }),
+  }).server(async ({ blockId, lawId }) => ({
+    lawId,
+    blockId,
+    block: await getLawTextBlock(lawId, blockId),
+  })),
 
-  boe_find_related_laws: tool({
+  boe_find_related_laws: toolDefinition({
+    name: "boe_find_related_laws",
     description:
       "Find Spanish norms that modify, derogate, or are modified/derogated by a given law. Returns the raw analysis section so the model can pick the relations it needs.",
-    inputSchema: valibotSchema(
+    inputSchema: toTanStackToolSchema(
       v.strictObject({
         lawId: lawIdSchema,
         relationType: v.optional(
@@ -203,17 +208,18 @@ export const createBoeTools = () => ({
         ),
       }),
     ),
-    execute: async ({ lawId, relationType }) =>
+  }).server(
+    async ({ lawId, relationType }) =>
       await findRelatedLaws(lawId, relationType ?? RELATION_TYPES.all),
-  }),
+  ),
 
-  borme_get_summary: tool({
+  borme_get_summary: toolDefinition({
+    name: "borme_get_summary",
     description:
       "Fetch the daily BORME (Boletín Oficial del Registro Mercantil) — Spain's commercial registry gazette. Use this for due diligence: company formations, director changes, capital increases, dissolutions published on a given day. The Spanish business registry has no real-time API, so this is the canonical source for recent corporate events.",
-    inputSchema: valibotSchema(v.strictObject({ date: dateSchema })),
-    execute: async ({ date }) => ({
-      date,
-      summary: await getBormeSummary(date),
-    }),
-  }),
+    inputSchema: toTanStackToolSchema(v.strictObject({ date: dateSchema })),
+  }).server(async ({ date }) => ({
+    date,
+    summary: await getBormeSummary(date),
+  })),
 });

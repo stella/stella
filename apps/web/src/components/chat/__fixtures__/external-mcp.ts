@@ -99,33 +99,23 @@ export const externalMcpCitedAssistantMessageFixture = {
   role: "assistant",
   parts: [
     {
-      type: "step-start",
-    },
-    {
-      type: "dynamic-tool",
-      toolName: "mcp__externallegal__get_document",
-      toolCallId: "tool_mock_external_mcp_get_document_105_2022",
-      state: "output-available",
+      type: "tool-call",
+      id: "tool_mock_external_mcp_get_document_105_2022",
+      name: "mcp__externallegal__get_document",
+      arguments: JSON.stringify({
+        source: "ES/ConstitutionalCourt",
+        source_id: "ECLI:ES:TC:2022:105",
+      }),
+      state: "complete",
       input: {
         source: "ES/ConstitutionalCourt",
         source_id: "ECLI:ES:TC:2022:105",
       },
       output: externalMcpGetDocumentResponseFixture,
-      callProviderMetadata: {
-        mcp: {
-          name: "ai-sdk-mcp-client",
-        },
-      },
-      resultProviderMetadata: {
-        mcp: {
-          name: "ai-sdk-mcp-client",
-        },
-      },
     },
     {
       type: "text",
-      state: "done",
-      text: [
+      content: [
         "The Tribunal Constitucional decision recognizes the case as a recurso de amparo decided by the Pleno, with a full document record available from the external MCP server.",
         "",
         "The relevant citation is [SENTENCIA 105/2022, de 13 de septiembre](https://hj.tribunalconstitucional.es/HJ/es/Resolucion/Show/29068).",

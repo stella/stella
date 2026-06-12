@@ -13,9 +13,11 @@ import { cn } from "@stll/ui/lib/utils";
 import { UserAvatar } from "@/components/user-avatar";
 import { formatRelativeTime } from "@/lib/relative-time";
 import type {
+  FieldId,
   JustificationContent,
   WorkspaceCellMetadata,
   WorkspaceEntity,
+  WorkspaceField,
   WorkspaceJustification,
 } from "@/lib/types";
 import {
@@ -342,7 +344,7 @@ const flattenStatements = (content: JustificationContent): CardStatement[] => {
 };
 
 type SourceFile = {
-  fieldId: string;
+  fieldId: FieldId;
   fileName: string;
   mimeType: string;
 };
@@ -354,7 +356,7 @@ const resolveSourceFiles = (
   const files: SourceFile[] = [];
   for (const fileFieldId of justification.fileFieldIds) {
     const field = Object.values(entity.fields).find(
-      (f) => f.id === fileFieldId,
+      (f): f is WorkspaceField => f !== undefined && f.id === fileFieldId,
     );
     if (field?.content.type === "file") {
       files.push({

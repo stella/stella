@@ -1,6 +1,7 @@
-import { valibotSchema } from "@ai-sdk/valibot";
-import { tool } from "ai";
+import { toolDefinition } from "@tanstack/ai";
 import * as v from "valibot";
+
+import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 
 export const APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME = "apply-active-docx-edits";
 
@@ -248,7 +249,8 @@ const outputSchema = v.strictObject({
 });
 
 export const createActiveDocxEditTool = () =>
-  tool({
+  toolDefinition({
+    name: APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME,
     description:
       "Propose edits for the DOCX currently open in the document " +
       "editor. Use this whenever the user asks to change, edit, " +
@@ -262,7 +264,7 @@ export const createActiveDocxEditTool = () =>
       "replacements are not re-formatted. See each schema field for its " +
       "semantics.",
     needsApproval: true,
-    inputSchema: valibotSchema(
+    inputSchema: toTanStackToolSchema(
       v.strictObject({
         operations: v.pipe(
           v.array(operationSchema),
@@ -279,5 +281,5 @@ export const createActiveDocxEditTool = () =>
         ),
       }),
     ),
-    outputSchema: valibotSchema(outputSchema),
+    outputSchema: toTanStackToolSchema(outputSchema),
   });

@@ -1,7 +1,7 @@
-import { valibotSchema } from "@ai-sdk/valibot";
-import { tool } from "ai";
+import { toolDefinition } from "@tanstack/ai";
 import * as v from "valibot";
 
+import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import {
   executeRegistryLookup,
   getRegistryHandlerDefinitionByCountry,
@@ -110,34 +110,34 @@ export const createBusinessRegistryTools = ({
   });
 
   return {
-    [BUSINESS_REGISTRY_LOOKUP_TOOL_NAME]: tool({
+    [BUSINESS_REGISTRY_LOOKUP_TOOL_NAME]: toolDefinition({
+      name: BUSINESS_REGISTRY_LOOKUP_TOOL_NAME,
       description: TOOL_DESCRIPTION_BASE + canonicalOnlySuffix,
-      inputSchema: valibotSchema(inputSchema),
-      execute: async ({ jurisdiction, limit, query }) => {
-        const handler = getRegistryHandlerByCountry(jurisdiction);
-        if (!handler) {
-          // `enabledJurisdictions` should always be a subset of the
-          // countries we ship adapters for, but defend against
-          // configuration drift rather than crash mid-tool-call.
-          return {
-            error: `No business registry adapter is shipped for jurisdiction ${jurisdiction}`,
-          };
-        }
-        const result = await executeRegistryLookup({
-          handler,
-          query,
-          ...(limit === undefined ? {} : { limit }),
-        });
-        // executeRegistryLookup returns a HandlerError instance for
-        // validation / upstream failures; surface those to the model
-        // as structured strings rather than throwing — the model can
-        // explain the failure to the user instead of the call
-        // crashing the chat turn.
-        if (result instanceof Error) {
-          return { error: result.message };
-        }
-        return result;
-      },
+      inputSchema: toTanStackToolSchema(inputSchema),
+    }).server(async ({ jurisdiction, limit, query }) => {
+      const handler = getRegistryHandlerByCountry(jurisdiction);
+      if (!handler) {
+        // `enabledJurisdictions` should always be a subset of the
+        // countries we ship adapters for, but defend against
+        // configuration drift rather than crash mid-tool-call.
+        return {
+          error: `No business registry adapter is shipped for jurisdiction ${jurisdiction}`,
+        };
+      }
+      const result = await executeRegistryLookup({
+        handler,
+        query,
+        ...(limit === undefined ? {} : { limit }),
+      });
+      // executeRegistryLookup returns a HandlerError instance for
+      // validation / upstream failures; surface those to the model
+      // as structured strings rather than throwing — the model can
+      // explain the failure to the user instead of the call
+      // crashing the chat turn.
+      if (result instanceof Error) {
+        return { error: result.message };
+      }
+      return result;
     }),
   };
 };

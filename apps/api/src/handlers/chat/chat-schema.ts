@@ -1,6 +1,4 @@
-import { isTextUIPart, safeValidateUIMessages } from "ai";
-import type { ToolSet } from "ai";
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import type { Static } from "elysia";
 import { t } from "elysia";
 
@@ -12,9 +10,18 @@ import {
   validateChatFileParts,
   validateStoredFileRefs,
 } from "@/api/handlers/chat/attachment-validation";
-import { normalizeLegacyRawToolInputs } from "@/api/handlers/chat/legacy-tool-compat";
+import {
+  isChatPart,
+  isChatTextPart,
+} from "@/api/handlers/chat/chat-message-parts";
 import { CHAT_TOOL_SCOPE } from "@/api/handlers/chat/tools/tool-scope";
-import type { ChatMention, ChatMessage } from "@/api/handlers/chat/types";
+import type { ChatToolMap } from "@/api/handlers/chat/tools/chat-tool-types";
+import type {
+  ChatMention,
+  ChatMessage,
+  ChatPart,
+  PersistableChatMessage,
+} from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -150,13 +157,13 @@ type ValidateMessageInput = {
   message: RawIncomingMessage;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
-  tools: ToolSet;
+  tools: ChatToolMap;
   userId: SafeId<"user">;
 };
 
 type ValidateMessageResult = Result<
   {
-    message: ChatMessage;
+    message: PersistableChatMessage;
     storedFileRefs: StoredFileRef[];
   },
   HandlerError<400 | 403 | 404> | SafeDbError
@@ -170,29 +177,29 @@ export const validateMessage = async ({
   userId,
 }: ValidateMessageInput): Promise<ValidateMessageResult> =>
   await Result.gen(async function* () {
-    const normalizedMessage = {
-      ...message,
-      parts: normalizeLegacyRawToolInputs(message.parts),
+    const partsResult = validateIncomingChatParts(message.parts);
+    if (Result.isError(partsResult)) {
+      return Result.err(partsResult.error);
+    }
+
+    const validatedMessage: PersistableChatMessage = {
+      id: message.id,
+      role: message.role,
+      parts: partsResult.value,
     };
-    const validationResult = await safeValidateUIMessages<ChatMessage>({
-      messages: [normalizedMessage],
+    const toolValidationResult = validateToolCallParts({
+      message: validatedMessage,
       tools,
     });
 
-    if (!validationResult.success) {
+    if (Result.isError(toolValidationResult)) {
       return Result.err(
         new HandlerError({
           status: 400,
           message: "Invalid chat message",
-          cause: validationResult.error,
+          cause: toolValidationResult.error,
         }),
       );
-    }
-
-    const validatedMessage = validationResult.data.at(0);
-
-    if (!validatedMessage) {
-      panic("Validated incoming chat messages unexpectedly empty");
     }
 
     const storedFileRefsResult = validateChatFileParts({
@@ -246,14 +253,56 @@ export const validateMessage = async ({
     });
   });
 
+const validateIncomingChatParts = (
+  parts: readonly unknown[],
+): Result<ChatPart[], HandlerError<400>> => {
+  const validatedParts: ChatPart[] = [];
+  for (const part of parts) {
+    if (!isChatPart(part)) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Invalid chat message part",
+        }),
+      );
+    }
+    validatedParts.push(part);
+  }
+  return Result.ok(validatedParts);
+};
+
+const validateToolCallParts = ({
+  message,
+  tools,
+}: {
+  message: ChatMessage;
+  tools: ChatToolMap;
+}): Result<void, HandlerError<400>> => {
+  const toolNames = new Set(Object.keys(tools));
+  for (const part of message.parts) {
+    if (part.type !== "tool-call") {
+      continue;
+    }
+    if (!toolNames.has(part.name)) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: `Unknown chat tool: ${part.name}`,
+        }),
+      );
+    }
+  }
+  return Result.ok();
+};
+
 type ParseMessageProps = {
   accessibleWorkspaceIds: SafeId<"workspace">[];
-  message: ChatMessage;
+  message: PersistableChatMessage;
 };
 
 type ParseMessageResult = {
   mentions: ChatMention[];
-  message: ChatMessage;
+  message: PersistableChatMessage;
 };
 
 export const parseMessage = ({
@@ -271,16 +320,16 @@ export const parseMessage = ({
   const mentions: ChatMention[] = [];
 
   for (const part of message.parts) {
-    if (isTextUIPart(part)) {
+    if (isChatTextPart(part)) {
       const normalizedText = normalizeChatMessageHtml(
-        part.text,
+        part.content,
         accessibleWorkspaceIds,
       );
 
       mentions.push(...normalizedText.mentions);
       normalizedParts.push({
         ...part,
-        text: normalizedText.text,
+        content: normalizedText.text,
       });
       continue;
     }

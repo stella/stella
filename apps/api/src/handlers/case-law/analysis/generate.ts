@@ -6,12 +6,11 @@
  * until the analysis is ready.
  */
 
-import { Output, streamText } from "ai";
 import { and, eq, isNull } from "drizzle-orm";
+import * as v from "valibot";
 
 import type {
   AnalysisHeading,
-  AnalysisInProgress,
   DecisionAnalysis,
   PersistedDecisionAnalysis,
 } from "@stll/legal-ast/analysis";
@@ -32,12 +31,12 @@ import type { ScopedDb } from "@/api/db";
 // eslint-disable-next-line no-restricted-imports -- background task outlives the request scope; no ctx.scopedDb available
 import { rootDb } from "@/api/db/root";
 import { caseLawDecisions } from "@/api/db/schema";
-import { getModelForRole, getModelInfoForRole } from "@/api/lib/ai-models";
-import type { OrgAIConfig } from "@/api/lib/ai-models";
-import { strictOutputSchema } from "@/api/lib/ai-output-schema";
+import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics";
-import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { getTanStackTextModelForRole } from "@/api/lib/tanstack-ai-models";
 
 import { normalizeAnalysisHeadingLabels } from "./category-catalog";
 import { formatDecisionForPrompt } from "./prompts/base";
@@ -46,6 +45,10 @@ import { getSystemPrompt } from "./prompts/index";
 const SENTINEL_STALE_MS = 5 * 60 * 1000;
 
 type StreamedAnalysisHeading = Omit<AnalysisHeading, "children">;
+
+const analysisOutputSchema = v.strictObject({
+  headings: v.array(analysisHeadingSchema),
+});
 
 const createAnalysisHeading = ({
   heading,
@@ -106,14 +109,7 @@ Type: ${decision.decisionType ?? "unknown"}
 
 ${decisionText}`;
 
-  const model = getModelForRole("fast", orgAIConfig, {
-    promptCachingEnabled,
-    scopeKey: decisionId,
-    organizationId,
-    serviceTier: "flex",
-  });
-  const { modelId } = getModelInfoForRole("fast", orgAIConfig);
-  const aiAnalytics = createAIAnalyticsCallbacks({
+  const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     feature: "case-law.analysis",
     modelRole: "fast",
     orgAIConfig,
@@ -125,47 +121,32 @@ ${decisionText}`;
   });
 
   try {
-    const result = streamText({
-      model,
-      output: Output.array({
-        element: strictOutputSchema(analysisHeadingSchema),
+    const { modelId } = getTanStackTextModelForRole("fast", orgAIConfig, {
+      organizationId,
+    });
+    const result = await generateTanStackObjectForRole({
+      role: "fast",
+      orgAIConfig,
+      organizationId,
+      analytics: aiAnalytics,
+      caching: resolveCaching({
+        promptCachingEnabled,
+        role: "fast",
+        scopeKey: decisionId,
       }),
       system: systemPrompt,
-      messages: [{ role: "user", content: userMessage }],
+      prompt: userMessage,
+      outputSchema: analysisOutputSchema,
       abortSignal: AbortSignal.timeout(120_000),
-      ...aiAnalytics.stepCallbacks,
-      ...(aiAnalytics.onStreamError
-        ? { onError: aiAnalytics.onStreamError }
-        : {}),
     });
 
     // Assign stable IDs at push time so they don't change across persists
-    const headings: AnalysisHeading[] = [];
-
-    const persistPartial = async () => {
-      // audit: skip — background AI analysis output
-      const partial: AnalysisInProgress = {
-        version: 1,
-        generatedAt: new Date().toISOString(),
-        model: modelId,
-        tree: headings,
-        status: "generating",
-      };
-
-      await rootDb
-        .update(caseLawDecisions)
-        .set({ analysis: partial })
-        .where(eq(caseLawDecisions.id, decisionId));
-    };
-
-    for await (const raw of result.elementStream) {
-      const heading = createAnalysisHeading({
-        heading: raw,
+    const headings = result.headings.map((heading) =>
+      createAnalysisHeading({
+        heading,
         language: decision.language,
-      });
-      headings.push(heading);
-      await persistPartial();
-    }
+      }),
+    );
 
     // Final persist without status marker
     const finalTree = headings;

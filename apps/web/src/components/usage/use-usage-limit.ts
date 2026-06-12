@@ -82,22 +82,19 @@ const extractStructured = (
 };
 
 /**
- * Recognise an HTTP-402 error across the two error shapes we
+ * Recognise an HTTP-402 error across the error shapes we
  * receive on the frontend:
  *
  *  - `APIError` from Eden treaty mutations (toAPIError converts
  *    a 4xx response into one of these).
- *  - The AI SDK's `AI_APICallError` from `useChat({ chat })` —
- *    streaming chat path; the SDK rejects the stream with an
- *    error whose `statusCode === 402`. Detected here by reading
- *    a numeric `statusCode` on any thrown object. Trying to
- *    import the SDK's error class would couple this hook to the
- *    chat surface; the structural check is enough.
+ *  - Streaming/provider transport errors whose `statusCode === 402`.
+ *    Detected here by reading a numeric `statusCode` on any thrown
+ *    object so this hook stays decoupled from the chat runtime.
  *
  * For both shapes we additionally require that the parsed
  * response body carries one of OUR `UsageLimitExceededReason`
  * markers — an upstream provider (OpenAI, Anthropic, etc.) that
- * surfaces a generic 402 through the AI SDK would otherwise pop
+ * surfaces a generic 402 through the transport layer would otherwise pop
  * the usage-limit modal misleadingly, and a backend route can
  * also map provider failures into a 402 without usage details.
  *
@@ -133,7 +130,7 @@ export const extractFromError = (
     if (!details || !isReason(details["reason"])) {
       // 402 without our reason marker = not from our usage-limit
       // gate; could be an upstream provider's 402 leaking
-      // through the AI SDK error envelope. Decline the modal so
+      // through the transport error envelope. Decline the modal so
       // the user sees a generic toast instead of a misleading
       // usage-limit CTA for an error we did not raise.
       return null;

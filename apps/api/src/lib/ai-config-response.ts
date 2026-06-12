@@ -1,4 +1,4 @@
-import type { DataRegion, OrgAIProviderConfig } from "@/api/lib/ai-models";
+import type { DataRegion, OrgAIProviderConfig } from "@/api/lib/ai-config";
 
 export type ProviderResponseExtras = {
   endpoint?: string;

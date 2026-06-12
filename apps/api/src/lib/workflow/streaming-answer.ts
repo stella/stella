@@ -1,3 +1,7 @@
+import { parsePartialJSON } from "@tanstack/ai/client";
+
+import type { SafeId } from "@/api/lib/branded-types";
+
 const MAX_STREAMED_ANSWER_CHARS = 500;
 
 const truncateStreamedAnswer = (value: string): string => {
@@ -56,13 +60,19 @@ export const formatPartialAnswer = (answer: unknown): string | null => {
 };
 
 export type PartialAnswerUpdate = {
-  propertyId: string;
+  propertyId: SafeId<"property">;
   answer: string;
 };
 
 type ConsumePartialAnswersArgs = {
   partialOutputs: AsyncIterable<unknown> | Iterable<unknown>;
-  propertyIds: readonly string[];
+  propertyIds: readonly SafeId<"property">[];
+  onPartialAnswer: (update: PartialAnswerUpdate) => Promise<void> | void;
+};
+
+type ConsumeTanStackPartialAnswerArgs = {
+  rawJson: string;
+  propertyIds: readonly SafeId<"property">[];
   onPartialAnswer: (update: PartialAnswerUpdate) => Promise<void> | void;
 };
 
@@ -91,4 +101,21 @@ export const consumePartialAnswers = async ({
       await onPartialAnswer({ propertyId, answer });
     }
   }
+};
+
+export const consumeTanStackPartialAnswer = async ({
+  rawJson,
+  propertyIds,
+  onPartialAnswer,
+}: ConsumeTanStackPartialAnswerArgs): Promise<void> => {
+  const partialOutput: unknown = parsePartialJSON(rawJson);
+  if (partialOutput === undefined) {
+    return;
+  }
+
+  await consumePartialAnswers({
+    partialOutputs: [partialOutput],
+    propertyIds,
+    onPartialAnswer,
+  });
 };

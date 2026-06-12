@@ -1,15 +1,15 @@
-import { generateText, Output } from "ai";
 import { Result } from "better-result";
 import { t } from "elysia";
 import * as v from "valibot";
 
-import { getModelForRole, requireAIAvailable } from "@/api/lib/ai-models";
-import { strictOutputSchema } from "@/api/lib/ai-output-schema";
-import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import { resolveCaching } from "@/api/lib/ai-config";
+import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
 
 import { isAiResourcePath } from "./ai-resource-path";
 
@@ -92,9 +92,12 @@ const generateSkillDraft = createSafeRootHandler(
     session,
     user,
   }) {
-    yield* requireAIAvailable(orgAIConfig);
+    yield* requireTanStackAIAvailableForRole({
+      orgConfig: orgAIConfig,
+      role: "fast",
+    });
 
-    const aiAnalytics = createAIAnalyticsCallbacks({
+    const aiAnalytics = createTanStackAIAnalyticsCallbacks({
       usageMetering: {
         actionType: "chat",
         organizationId: session.activeOrganizationId,
@@ -113,20 +116,20 @@ const generateSkillDraft = createSafeRootHandler(
     const prompt = buildPrompt(body);
     const generation = await Result.tryPromise({
       try: async () =>
-        await generateText({
+        await generateTanStackObjectForRole({
           abortSignal: AbortSignal.timeout(GENERATION_TIMEOUT_MS),
           maxOutputTokens: GENERATION_MAX_OUTPUT_TOKENS,
-          model: getModelForRole("fast", orgAIConfig, {
+          role: "fast",
+          orgAIConfig,
+          organizationId: session.activeOrganizationId,
+          analytics: aiAnalytics,
+          caching: resolveCaching({
             promptCachingEnabled,
-            scopeKey: null,
-            organizationId: session.activeOrganizationId,
-            serviceTier: "flex",
+            role: "fast",
+            scopeKey: `${session.activeOrganizationId}:skills:draft`,
           }),
-          output: Output.object({
-            schema: strictOutputSchema(aiGenerationSchema),
-          }),
+          outputSchema: aiGenerationSchema,
           prompt,
-          ...aiAnalytics.stepCallbacks,
         }),
       catch: (cause) => {
         aiAnalytics.captureError(cause);
@@ -141,7 +144,7 @@ const generateSkillDraft = createSafeRootHandler(
       return Result.err(generation.error);
     }
 
-    const markdown = stripFences(generation.value.output.markdown).trim();
+    const markdown = stripFences(generation.value.markdown).trim();
     if (!markdown) {
       return Result.err(
         new HandlerError({
@@ -151,7 +154,7 @@ const generateSkillDraft = createSafeRootHandler(
       );
     }
 
-    const resources = sanitizeResources(generation.value.output.resources);
+    const resources = sanitizeResources(generation.value.resources);
 
     return Result.ok({ markdown, resources });
   },
