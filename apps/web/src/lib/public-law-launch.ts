@@ -1,11 +1,13 @@
 import { env } from "@/env";
-import { isPublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
+import { betaFeaturesAvailable } from "@/lib/beta-features";
 
-// Includes the beta-features preview state so hosts where users can
-// flip the toggle (dev, staging) also serve the /law routes; without
-// it the sidebar entry would lead to a 404.
+// Beta hosts always serve the /law routes; the Settings toggle only
+// governs discoverability (sidebar entry, search kinds). The gate must
+// not depend on the localStorage-backed toggle because /law paths are
+// server-rendered and the server cannot see it — host and env flag
+// resolve identically on both sides.
 export const isPublicLawRouteEnabled = (): boolean =>
-  import.meta.env.DEV || isPublicLawPreviewEnabled();
+  import.meta.env.DEV || env.VITE_PUBLIC_LAW_ENABLED || betaFeaturesAvailable();
 
 export const isPublicLawIndexingEnabled = (): boolean =>
   env.VITE_PUBLIC_LAW_ENABLED && env.VITE_PUBLIC_LAW_INDEXING_ENABLED;
