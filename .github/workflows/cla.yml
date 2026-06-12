@@ -15,7 +15,7 @@ on:
   issue_comment:
     types: [created]
   pull_request_target: # zizmor: ignore[dangerous-triggers] pinned reusable CLA workflow does not check out or execute PR code
-    types: [opened, closed]
+    types: [opened, synchronize, reopened, closed]
 
 permissions:
   actions: write
