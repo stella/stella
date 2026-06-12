@@ -33,6 +33,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/components/menu";
 import { Separator } from "@stll/ui/components/separator";
+import { Skeleton } from "@stll/ui/components/skeleton";
 import { TOAST_RIGHT_OFFSET_VAR } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
@@ -163,10 +164,82 @@ export const Route = createFileRoute("/_protected")({
   },
   component: ProtectedComponent,
   // This subtree is private and client-only. Rendering a loading
-  // shell in SSR gives no SEO value and currently trips React's
-  // streamed Suspense boundary path under Bun in CI.
-  pendingComponent: () => null,
+  // shell in SSR gives no SEO value and previously tripped React's
+  // streamed Suspense boundary path under Bun in CI, so the fallback
+  // must stay PURE STATIC: plain layout divs + Skeleton blocks, no
+  // hooks, context, data, lazy(), or Suspense. It renders identically
+  // on server and client to shape the shell during hydration instead
+  // of flashing a blank white screen.
+  pendingComponent: ProtectedPendingSkeleton,
 });
+
+// Static, SSR-safe placeholder for the client-only `_protected`
+// subtree. Mirrors the real shell's shape (left side-rail → sidebar
+// column → main content with a header bar) using the same layout
+// constants so the skeleton lines up with the chrome that replaces
+// it. Intentionally free of hooks, context, data, and Suspense.
+function ProtectedPendingSkeleton() {
+  return (
+    <div aria-hidden="true" className="bg-background flex h-full min-h-dvh">
+      {/* Sidebar column — matches AppSidebar's 16rem width with a
+          header row, a few stacked nav rows, and a footer row. */}
+      <div className="bg-sidebar hidden w-64 shrink-0 flex-col gap-2 border-e p-2 md:flex">
+        <div
+          className={`flex shrink-0 items-center gap-2 ${TOOLBAR_ROW_HEIGHT}`}
+        >
+          <Skeleton className="size-6 rounded-md" />
+          <Skeleton className="h-4 w-28" />
+        </div>
+        <div className="mt-2 flex flex-col gap-2">
+          {Array.from({ length: 6 }, (_, index) => (
+            <Skeleton className="h-8 w-full rounded-md" key={index} />
+          ))}
+        </div>
+        <div className="flex-1" />
+        <Skeleton className="h-8 w-full shrink-0 rounded-md" />
+      </div>
+
+      {/* Main content column — header-height bar + a handful of
+          content blocks. */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div
+          className={`flex shrink-0 items-center gap-3 border-b px-4 ${TOOLBAR_ROW_HEIGHT}`}
+        >
+          <Skeleton className="h-4 w-40" />
+          <div className="ms-auto flex items-center gap-2">
+            <Skeleton className={SIDE_RAIL_ICON_BUTTON_SIZE} />
+            <Skeleton className={SIDE_RAIL_ICON_BUTTON_SIZE} />
+          </div>
+        </div>
+        <div className="flex flex-1 flex-col gap-4 p-6">
+          <Skeleton className="h-8 w-1/3" />
+          <Skeleton className="h-4 w-2/3" />
+          <Skeleton className="h-40 w-full rounded-md" />
+          <Skeleton className="h-4 w-1/2" />
+          <Skeleton className="h-24 w-full rounded-md" />
+        </div>
+      </div>
+
+      {/* Right side-rail — same width as the real rail with muted
+          icon-sized blocks top and bottom. */}
+      <div
+        className={`bg-muted/50 hidden shrink-0 flex-col border-s md:flex ${SIDE_RAIL_WIDTH}`}
+      >
+        <div
+          className={`flex w-full shrink-0 items-center justify-center border-b ${TOOLBAR_ROW_HEIGHT}`}
+        >
+          <Skeleton className={SIDE_RAIL_ICON_BUTTON_SIZE} />
+        </div>
+        <div className="flex-1" />
+        <div
+          className={`flex w-full shrink-0 items-center justify-center border-t ${TOOLBAR_ROW_HEIGHT}`}
+        >
+          <Skeleton className={SIDE_RAIL_ICON_BUTTON_SIZE} />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function ProtectedComponent() {
   const analyticsUser = Route.useRouteContext({ select: (ctx) => ctx.user });
