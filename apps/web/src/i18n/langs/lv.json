@@ -154,7 +154,6 @@
     "invoiceNarrativePlaceholder": "Klientam paredzēts apraksts (neobligāti)",
     "invoices": {
       "addEntries": "Pievienot ierakstus",
-      "back": "Atpakaļ",
       "confirmDelete": "Tas neatgriezeniski dzēsīs šo rēķina melnrakstu un atsaistīs visus ierakstus. Šo darbību nevar atcelt.",
       "confirmVoid": "Anulējot šo rēķinu, tiks atsaistīti visi laika ieraksti un izdevumi, atgriežot tos iepriekšējā statusā.",
       "createInvoice": "Izveidot rēķinu",
@@ -697,6 +696,7 @@
       "socialSecurityNumber": "Sociālās apdrošināšanas numurs",
       "taxIdentificationNumber": "Nodokļu maksātāja numurs"
     },
+    "back": "Atpakaļ",
     "cancel": "Atcelt",
     "captions": "Subtitri",
     "caseLaw": "Tiesu prakse",

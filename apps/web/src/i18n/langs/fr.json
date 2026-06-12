@@ -154,7 +154,6 @@
     "invoiceNarrativePlaceholder": "Description destinée au client (facultatif)",
     "invoices": {
       "addEntries": "Ajouter des entrées",
-      "back": "Retour",
       "confirmDelete": "Cette action supprimera définitivement ce brouillon de facture et dissociera toutes les entrées. Elle est irréversible.",
       "confirmVoid": "L'annulation de cette facture dissociera toutes les entrées de temps et dépenses, qui retrouveront leur statut antérieur.",
       "createInvoice": "Créer une facture",
@@ -697,6 +696,7 @@
       "socialSecurityNumber": "Numéro de sécurité sociale",
       "taxIdentificationNumber": "Numéro fiscal"
     },
+    "back": "Retour",
     "cancel": "Annuler",
     "captions": "Légendes",
     "caseLaw": "Jurisprudence",
