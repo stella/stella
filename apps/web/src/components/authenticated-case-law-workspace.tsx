@@ -37,11 +37,13 @@ export function AuthenticatedCaseLawWorkspace({
       <ChatMentionProviders>
         <AIAvailabilityProvider>
           <ChatEditorProvider>
-            <AuthenticatedDecisionWorkspace
-              decision={decision}
-              decisionId={decisionId}
-              initialSearchQuery={initialSearchQuery}
-            />
+            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+              <AuthenticatedDecisionWorkspace
+                decision={decision}
+                decisionId={decisionId}
+                initialSearchQuery={initialSearchQuery}
+              />
+            </div>
             <CaseLawInspector decisionId={decisionId} />
           </ChatEditorProvider>
         </AIAvailabilityProvider>

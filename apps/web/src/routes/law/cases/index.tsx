@@ -10,6 +10,7 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { Button } from "@stll/ui/components/button";
+import { stellaToast } from "@stll/ui/components/toast";
 
 import { DecisionFilters } from "@/features/case-law/components/decision-filters";
 import { DecisionTable } from "@/features/case-law/components/decision-table";
@@ -48,6 +49,7 @@ const optionalBrowseStringSchema = (maxLength: number) =>
 const searchSchema = v.object({
   country: optionalBrowseStringSchema(3),
   court: optionalBrowseStringSchema(512),
+  notFound: v.optional(v.boolean()),
   year: optionalBrowseStringSchema(4),
 });
 
@@ -170,6 +172,22 @@ function PublicCaseLawIndex() {
     select: ({ country, court, year }) => ({ country, court, year }),
   });
   const { country, court, year } = search;
+  const notFound = Route.useSearch({ select: (s) => s.notFound });
+  const navigate = Route.useNavigate();
+
+  useEffect(() => {
+    if (!notFound) {
+      return;
+    }
+    stellaToast.add({
+      title: t("caseLaw.decisionNotFound"),
+      type: "error",
+    });
+    void navigate({
+      replace: true,
+      search: (prev) => ({ ...prev, notFound: undefined }),
+    });
+  }, [notFound, navigate, t]);
   const routeFilters = createDecisionFiltersFromSearch(search);
   const [filters, setFilters] = useState<DecisionListFilters>(routeFilters);
   const { data: browseFacets } = useSuspenseQuery(decisionFacetsOptions());
