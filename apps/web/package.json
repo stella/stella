@@ -44,6 +44,7 @@
     "@stll/errors": "workspace:*",
     "@stll/folio": "workspace:*",
     "@stll/legal-ast": "workspace:*",
+    "@stll/locales": "workspace:*",
     "@stll/money": "workspace:*",
     "@stll/permissions": "workspace:*",
     "@stll/template-conditions": "workspace:*",

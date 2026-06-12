@@ -2,45 +2,44 @@
  * Template-level language metadata helpers.
  *
  * Templates are often bilingual legal documents (e.g. a Polish|English
- * two-column contract), so `templates.languages` stores ordered BCP-47
- * tags: primary language first. Validation accepts any structurally
- * well-formed tag (via `Intl`), not only the app locales, because legal
- * documents legitimately use languages the UI is not translated into.
+ * two-column contract), so `templates.languages` stores ordered language
+ * codes: primary language first. Codes are constrained to the canonical
+ * ISO 639-1 living-language list (`@stll/locales`), not arbitrary BCP-47,
+ * so display and equality checks have a single source of truth. Regional
+ * input tags (`pt-BR`, `EN-gb`) canonicalize to their base code (`pt`, `en`).
  */
 
 import { Result } from "better-result";
 
+import { toLanguageCode } from "@stll/locales";
+import type { LanguageCode } from "@stll/locales";
+
 import { extractText } from "@/api/handlers/docx/extract-text";
-import { isPlausibleLocale } from "@/api/handlers/docx/types";
 
 export const MAX_TEMPLATE_LANGUAGES = 4;
 
 type NormalizeTemplateLanguagesResult =
-  | { ok: true; languages: string[] }
+  | { ok: true; languages: LanguageCode[] }
   | { ok: false; message: string };
 
 /**
- * Trims, validates, canonicalizes ("EN-gb" -> "en-GB"), and dedupes a
- * client-supplied list of language tags, preserving order. Returns a
- * failure message suitable for a 400 response on the first invalid tag.
+ * Trims, canonicalizes (`"EN-gb"` -> `"en"`, `"pt-BR"` -> `"pt"`), filters to
+ * known ISO 639-1 living languages, and dedupes a client-supplied list,
+ * preserving order. Unknown or malformed tags are dropped rather than
+ * rejected, so stored data with stray tags never blocks a save; only the
+ * count cap returns a 400.
  */
 export const normalizeTemplateLanguages = (
   input: readonly string[],
 ): NormalizeTemplateLanguagesResult => {
-  const languages: string[] = [];
+  const languages: LanguageCode[] = [];
   for (const raw of input) {
-    const trimmed = raw.trim();
-    if (!trimmed) {
+    const code = toLanguageCode(raw);
+    if (code === null) {
       continue;
     }
-    if (!isPlausibleLocale(trimmed)) {
-      return { ok: false, message: `Invalid language tag: ${trimmed}` };
-    }
-    // Cannot throw here: isPlausibleLocale already proved the tag is
-    // structurally well-formed for Intl.
-    const canonical = Intl.getCanonicalLocales(trimmed).at(0) ?? trimmed;
-    if (!languages.includes(canonical)) {
-      languages.push(canonical);
+    if (!languages.includes(code)) {
+      languages.push(code);
     }
   }
   if (languages.length > MAX_TEMPLATE_LANGUAGES) {

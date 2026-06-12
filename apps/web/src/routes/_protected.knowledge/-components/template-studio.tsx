@@ -61,6 +61,7 @@ import type {
   TemplatePreviewSpan,
   TemplatePreviewValue,
 } from "@stll/folio";
+import { displayLanguageName } from "@stll/locales";
 import {
   isFieldPath,
   renderDeterministicFieldValue,
@@ -3808,13 +3809,10 @@ const GuidanceNote = ({
   );
 };
 
-/** Localized language-chip text via Intl (no translation entries needed,
- *  same as the template list); tags Intl cannot name fall back to the
- *  uppercase tag. Stored tags are server-validated, so `of()` cannot
- *  throw here. */
+/** Language-chip text from the shared language list (endonym), with an
+ *  Intl fallback localized to the UI language for tags outside the list. */
 const languageChipLabel = (tag: string, uiLang: string): string =>
-  new Intl.DisplayNames([uiLang], { type: "language" }).of(tag) ??
-  tag.toUpperCase();
+  displayLanguageName(tag, { displayLocale: uiLang });
 
 /** A condition string that is exactly one field's bare name (the "is filled"
  *  / yes-no truthy check) maps back to that field, so the question input can

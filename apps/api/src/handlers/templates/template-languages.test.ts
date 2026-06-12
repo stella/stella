@@ -11,9 +11,17 @@ import {
 // ── normalizeTemplateLanguages ───────────────────────────
 
 describe("normalizeTemplateLanguages", () => {
-  test("trims, canonicalizes casing, dedupes, preserves order", () => {
+  test("trims, canonicalizes to base ISO 639-1, dedupes, preserves order", () => {
     const result = normalizeTemplateLanguages([" PL ", "en-gb", "pl", "EN-GB"]);
-    expect(result).toEqual({ ok: true, languages: ["pl", "en-GB"] });
+    expect(result).toEqual({ ok: true, languages: ["pl", "en"] });
+  });
+
+  test("canonicalizes regional UI tags onto their base code", () => {
+    // The UI ships pt-BR, but template storage keys on the base code pt.
+    expect(normalizeTemplateLanguages(["pt-BR", "en_US"])).toEqual({
+      ok: true,
+      languages: ["pt", "en"],
+    });
   });
 
   test("skips empty entries", () => {
@@ -28,11 +36,17 @@ describe("normalizeTemplateLanguages", () => {
     });
   });
 
-  test("rejects structurally malformed tags", () => {
-    for (const bad of ["en_US", "not a tag", "-pl", "a"]) {
-      const result = normalizeTemplateLanguages([bad]);
-      expect(result.ok).toBe(false);
-    }
+  test("drops unknown or malformed tags rather than rejecting", () => {
+    // Lenient on input: stray/unknown tags never block a save, they are
+    // silently dropped; only known codes survive.
+    const result = normalizeTemplateLanguages([
+      "not a tag",
+      "-pl",
+      "a",
+      "zz",
+      "cs",
+    ]);
+    expect(result).toEqual({ ok: true, languages: ["cs"] });
   });
 
   test("rejects more than the maximum number of languages", () => {

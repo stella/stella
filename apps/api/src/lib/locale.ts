@@ -8,22 +8,10 @@
  * weights (e.g. "cs,en-US;q=0.9,en;q=0.8").
  */
 
-const SUPPORTED_LANGS = [
-  "en",
-  "cs",
-  "de",
-  "es",
-  "et",
-  "fr",
-  "hu",
-  "lt",
-  "lv",
-  "pl",
-  "pt-BR",
-  "sk",
-] as const;
+import { resolveUiLocale } from "@stll/locales";
+import type { UiLocale } from "@stll/locales";
 
-export type SupportedLang = (typeof SUPPORTED_LANGS)[number];
+export type SupportedLang = UiLocale;
 
 export const extractLangFromRequest = (
   request: Request | undefined,
@@ -35,25 +23,14 @@ export const extractLangFromRequest = (
   }
 
   for (const part of header.split(",")) {
-    const lang = part.split(";")[0]?.trim().replace("_", "-");
+    const lang = part.split(";")[0]?.trim();
     if (!lang) {
       continue;
     }
 
-    const exactMatch = SUPPORTED_LANGS.find((l) => l === lang);
-    if (exactMatch) {
-      return exactMatch;
-    }
-
-    const prefix = lang.split("-").at(0);
-    const match = SUPPORTED_LANGS.find((l) => l === prefix);
-
-    if (match) {
-      return match;
-    }
-
-    if (prefix === "pt") {
-      return "pt-BR";
+    const resolved = resolveUiLocale(lang);
+    if (resolved) {
+      return resolved;
     }
   }
 
