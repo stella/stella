@@ -339,7 +339,7 @@ function PublicInspectorRail({
     select: (state) => state.location.href,
   });
 
-  const railButton = (icon: ReactNode, edgeClass: string) => (
+  const railButton = (icon: ReactNode, label: string, edgeClass: string) => (
     <div
       className={cn(
         "flex w-full shrink-0 items-center justify-center",
@@ -348,10 +348,10 @@ function PublicInspectorRail({
       )}
     >
       <Tooltip
-        content={t("inspector.openChat")}
+        content={label}
         render={
           <button
-            aria-label={t("inspector.openChat")}
+            aria-label={label}
             className={cn(
               "text-muted-foreground hover:bg-accent hover:text-foreground flex items-center justify-center rounded-md transition-colors",
               SIDE_RAIL_ICON_BUTTON_SIZE,
@@ -382,10 +382,15 @@ function PublicInspectorRail({
         <div className="bg-sidebar flex h-full w-full flex-col">
           <div className="bg-background flex h-full border-s shadow-lg">
             <div className={SIDE_RAIL_CONTAINER_CLASS}>
-              {railButton(<PanelRightIcon className="size-4" />, "border-b")}
+              {railButton(
+                <PanelRightIcon className="size-4" />,
+                t("inspector.showPane"),
+                "border-b",
+              )}
               <div className="flex-1" />
               {railButton(
                 <MessageSquarePlusIcon className="size-4" />,
+                t("inspector.openChat"),
                 "border-t",
               )}
             </div>
