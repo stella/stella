@@ -172,7 +172,6 @@ export const buildDocumentUrl = ({
 const slugifyCaseNumber = (caseNumber: string) =>
   slugifyCaseLawPathSegment(caseNumber);
 
-const UNKNOWN_DATE_SEGMENT = "unknown-date";
 const UNKNOWN_COURT_SEGMENT = "unknown-court";
 const LANGUAGE_SEGMENT_REGEX = /^(?=.{2,8}$)[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/u;
 
@@ -223,28 +222,6 @@ const normalizeCaseLawLanguageSegment = (
   return normalized;
 };
 
-const formatDecisionDateSegment = (value: Date | string | null): string => {
-  if (value === null) {
-    return UNKNOWN_DATE_SEGMENT;
-  }
-
-  if (value instanceof Date) {
-    return Number.isNaN(value.getTime())
-      ? UNKNOWN_DATE_SEGMENT
-      : value.toISOString().slice(0, 10);
-  }
-
-  const rawDate = value.trim();
-  if (/^\d{4}-\d{2}-\d{2}$/u.test(rawDate)) {
-    return rawDate;
-  }
-
-  const date = new Date(rawDate);
-  return Number.isNaN(date.getTime())
-    ? UNKNOWN_DATE_SEGMENT
-    : date.toISOString().slice(0, 10);
-};
-
 const isCaseLawLanguageAlternate = (
   alternate: unknown,
 ): alternate is { language: string } =>
@@ -287,7 +264,6 @@ type CaseLawDecisionUrlInput = {
   caseNumber: string;
   country: string;
   court: string;
-  decisionDate: Date | string | null;
   language?: string | null | undefined;
   languageAlternateCount?: number | null | undefined;
   languageAlternates?: readonly unknown[] | null | undefined;
@@ -306,7 +282,6 @@ const buildCaseLawDecisionUrl = ({
   caseNumber,
   country,
   court,
-  decisionDate,
   language,
   languageAlternateCount,
   languageAlternates,
@@ -317,7 +292,7 @@ const buildCaseLawDecisionUrl = ({
     court.trim().length > 0
       ? slugifyCaseLawPathSegment(court)
       : UNKNOWN_COURT_SEGMENT;
-  const basePath = `${getAppBaseUrl()}/law/${country.toLowerCase()}/cases/${courtSegment}/${formatDecisionDateSegment(decisionDate)}`;
+  const basePath = `${getAppBaseUrl()}/law/${country.toLowerCase()}/cases/${courtSegment}`;
   const decisionSlug =
     normalizeCaseLawStoredSlug(slug) ?? slugifyCaseNumber(caseNumber);
 

@@ -700,7 +700,7 @@ describe("OpenAI-compatible MCP tools", () => {
       nextCursor: "cursor_2",
       results: [
         {
-          appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/2024-02-01/cs/stable-official-slug`,
+          appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/stable-official-slug`,
           caseNumber: "29 Cdo 123/2024",
           citationCount: 7,
           country: "CZE",
@@ -757,7 +757,7 @@ describe("OpenAI-compatible MCP tools", () => {
       nextCursor: null,
       results: [
         {
-          appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/2024-02-01/stable-official-slug`,
+          appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
           caseNumber: "29 Cdo 123/2024",
           citationCount: 7,
           country: "CZE",
@@ -899,7 +899,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(parseToolPayload(result)).toEqual({
       decision: {
-        appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/2024-02-01/stable-official-slug`,
+        appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
         caseNumber: "29 Cdo 123/2024",
         citationsFrom: [{ citationText: "29 Odo 1/2001", id: "c_1" }],
         citationsFromTotal: 1,
@@ -960,7 +960,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(parseToolPayload(result)).toEqual({
       decision: {
-        appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/2024-02-01/stable-official-slug`,
+        appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
         caseNumber: "29 Cdo 123/2024",
         citationsFrom: [{ citationText: "29 Odo 1/2001", id: "c_1" }],
         citationsFromTotal: 1,

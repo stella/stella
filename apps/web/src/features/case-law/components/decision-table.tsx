@@ -47,22 +47,12 @@ type DecisionCellContext<TValue> = CellContext<
 const columnHelper = createColumnHelper<DecisionFeatures, Decision>();
 
 const renderCaseNumberCell = (info: DecisionCellContext<string>) => {
-  const {
-    country,
-    court,
-    decisionDate,
-    headline,
-    id,
-    language,
-    languageAlternateCount,
-    slug,
-  } = info.row.original;
+  const { country, court, headline, language, languageAlternateCount, slug } =
+    info.row.original;
   const routeParams = createCaseLawDecisionRouteParams({
     caseNumber: info.getValue(),
     country,
     court,
-    decisionDate,
-    decisionId: id,
     language,
     languageAlternateCount,
     slug,
@@ -76,11 +66,10 @@ const renderCaseNumberCell = (info: DecisionCellContext<string>) => {
           params={{
             country: routeParams.country,
             court: routeParams.court,
-            date: routeParams.date,
             language: routeParams.language,
             slug: routeParams.slug,
           }}
-          to="/law/$country/cases/$court/$date/$language/$slug"
+          to="/law/$country/cases/$court/$language/$slug"
         >
           {info.getValue()}
         </Link>
@@ -90,10 +79,9 @@ const renderCaseNumberCell = (info: DecisionCellContext<string>) => {
           params={{
             country: routeParams.country,
             court: routeParams.court,
-            date: routeParams.date,
             slug: routeParams.slug,
           }}
-          to="/law/$country/cases/$court/$date/$slug"
+          to="/law/$country/cases/$court/$slug"
         >
           {info.getValue()}
         </Link>

@@ -8,7 +8,7 @@ import {
 } from "@/routes/law/-case-detail";
 
 export const Route = createFileRoute(
-  "/law/$country/cases/$court/$date/$language/$slug",
+  "/law/$country/cases/$court/$language/$slug",
 )({
   validateSearch: publicDecisionSearchSchema,
   loaderDeps: ({ search }) => search,
@@ -33,10 +33,9 @@ export const Route = createFileRoute(
 
 function PublicDecisionRoute() {
   const params = Route.useParams({
-    select: ({ country, court, date, language, slug }) => ({
+    select: ({ country, court, language, slug }) => ({
       country,
       court,
-      date,
       language,
       slug,
     }),

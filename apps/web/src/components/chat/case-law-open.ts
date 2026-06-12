@@ -17,10 +17,9 @@ type NavigateToCaseLawDecision = (options: {
   params: {
     country: string;
     court: string;
-    date: string;
     slug: string;
   };
-  to: "/law/$country/cases/$court/$date/$slug";
+  to: "/law/$country/cases/$court/$slug";
 }) => Promise<void> | void;
 
 const CASE_LAW_LINK_SEARCH_LIMIT = 5;
@@ -52,8 +51,6 @@ const resolveCaseLawDecisionRouteParams = async (
       caseNumber: data.caseNumber,
       country: data.country,
       court: data.court,
-      decisionDate: data.decisionDate,
-      decisionId: data.id,
       slug: data.slug,
     });
   }
@@ -78,8 +75,6 @@ const resolveCaseLawDecisionRouteParams = async (
     caseNumber: hit.caseNumber,
     country: hit.country,
     court: hit.court,
-    decisionDate: hit.decisionDate,
-    decisionId: hit.decisionId,
     slug: hit.slug,
   };
 
@@ -111,7 +106,7 @@ export const openCaseLawDecision = async (
     }
 
     await navigate({
-      to: "/law/$country/cases/$court/$date/$slug",
+      to: "/law/$country/cases/$court/$slug",
       params,
     });
   } catch (error) {

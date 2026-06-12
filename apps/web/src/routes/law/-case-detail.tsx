@@ -137,11 +137,10 @@ const redirectToCanonicalDecisionPath = ({
 
   if (canonicalParams.language) {
     throw redirect({
-      to: "/law/$country/cases/$court/$date/$language/$slug",
+      to: "/law/$country/cases/$court/$language/$slug",
       params: {
         country: canonicalParams.country,
         court: canonicalParams.court,
-        date: canonicalParams.date,
         language: canonicalParams.language,
         slug: canonicalParams.slug,
       },
@@ -151,11 +150,10 @@ const redirectToCanonicalDecisionPath = ({
   }
 
   throw redirect({
-    to: "/law/$country/cases/$court/$date/$slug",
+    to: "/law/$country/cases/$court/$slug",
     params: {
       country: canonicalParams.country,
       court: canonicalParams.court,
-      date: canonicalParams.date,
       slug: canonicalParams.slug,
     },
     replace: true,
@@ -173,8 +171,6 @@ const createDecisionAlternateLinks = (
         caseNumber: alternate.caseNumber,
         country: alternate.country,
         court: alternate.court,
-        decisionDate: alternate.decisionDate,
-        decisionId: alternate.id,
         language: alternate.language,
         languageAlternates: decision.languageAlternates,
         slug: alternate.slug,
@@ -201,8 +197,6 @@ export const loadPublicCaseLawDecisionRoute = async ({
       caseNumber: decision.caseNumber,
       country: decision.country,
       court: decision.court,
-      decisionDate: decision.decisionDate,
-      decisionId: decision.id,
       language: decision.language,
       languageAlternates: decision.languageAlternates,
       slug: decision.slug,
@@ -235,8 +229,6 @@ export const loadPublicCaseLawDecisionRoute = async ({
     caseNumber: decision.caseNumber,
     country: decision.country,
     court: decision.court,
-    decisionDate: decision.decisionDate,
-    decisionId: decision.id,
     language: decision.language,
     languageAlternates: decision.languageAlternates,
     slug: decision.slug,

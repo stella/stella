@@ -55,7 +55,6 @@ describe("public law sitemap", () => {
             slug: "stable-official-slug",
             country: "CZE",
             court: "Nejvyssi soud",
-            decisionDate: "2017-09-20",
             language: "cs",
             languageAlternates: [],
             updatedAt: "2026-01-01T00:00:00.000Z",
@@ -204,7 +203,6 @@ describe("public law sitemap", () => {
         slug: "stable-official-slug",
         country: "CZE",
         court: "Nejvyssi soud",
-        decisionDate: "2017-09-20",
         language: "cs",
         languageAlternates: [],
         updatedAt: "2026-01-01T00:00:00.000Z",
@@ -213,7 +211,7 @@ describe("public law sitemap", () => {
 
     expect(xml).not.toContain("http://localhost:3000/law/cases</loc>");
     expect(xml).toContain(
-      "http://localhost:3000/law/cze/cases/nejvyssi-soud/2017-09-20/stable-official-slug",
+      "http://localhost:3000/law/cze/cases/nejvyssi-soud/stable-official-slug",
     );
     expect(xml).not.toContain("xmlns:xhtml");
     expect(xml).not.toContain("hreflang");
@@ -227,7 +225,6 @@ describe("public law sitemap", () => {
         slug: "c-123-22",
         country: "EU",
         court: "Court of Justice",
-        decisionDate: "2024-03-07",
         language: "en",
         languageAlternates: [
           {
@@ -236,7 +233,6 @@ describe("public law sitemap", () => {
             slug: "c-123-22",
             country: "EU",
             court: "Court of Justice",
-            decisionDate: "2024-03-07",
             language: "en",
             updatedAt: "2026-01-01T00:00:00.000Z",
           },
@@ -246,7 +242,6 @@ describe("public law sitemap", () => {
             slug: "c-123-22-cs",
             country: "EU",
             court: "Court of Justice",
-            decisionDate: "2024-03-07",
             language: "cs",
             updatedAt: "2026-01-01T00:00:00.000Z",
           },
@@ -257,10 +252,10 @@ describe("public law sitemap", () => {
 
     expect(xml).toContain('xmlns:xhtml="http://www.w3.org/1999/xhtml"');
     expect(xml).toContain(
-      "http://localhost:3000/law/eu/cases/court-of-justice/2024-03-07/en/c-123-22",
+      "http://localhost:3000/law/eu/cases/court-of-justice/en/c-123-22",
     );
     expect(xml).toContain(
-      'hreflang="cs" href="http://localhost:3000/law/eu/cases/court-of-justice/2024-03-07/cs/c-123-22-cs"',
+      'hreflang="cs" href="http://localhost:3000/law/eu/cases/court-of-justice/cs/c-123-22-cs"',
     );
     expect(xml).toContain('hreflang="x-default"');
   });
@@ -273,7 +268,6 @@ describe("public law sitemap", () => {
         slug: "c-123-22",
         country: "EU",
         court: "Court of Justice",
-        decisionDate: "2024-03-07",
         language: "en",
         languageAlternates: [
           {
@@ -282,7 +276,6 @@ describe("public law sitemap", () => {
             slug: "c-123-22",
             country: "EU",
             court: "Court of Justice",
-            decisionDate: "2024-03-07",
             language: "EN",
             updatedAt: "2026-01-01T00:00:00.000Z",
           },
@@ -292,7 +285,6 @@ describe("public law sitemap", () => {
             slug: "c-123-22-duplicate",
             country: "EU",
             court: "Court of Justice",
-            decisionDate: "2024-03-07",
             language: "en",
             updatedAt: "2026-01-01T00:00:00.000Z",
           },
@@ -302,7 +294,6 @@ describe("public law sitemap", () => {
             slug: "c-123-22-cs",
             country: "EU",
             court: "Court of Justice",
-            decisionDate: "2024-03-07",
             language: "cs",
             updatedAt: "2026-01-01T00:00:00.000Z",
           },
@@ -323,7 +314,6 @@ describe("public law sitemap", () => {
         slug: "c-123-22",
         country: "EU",
         court: "Court of Justice",
-        decisionDate: "2024-03-07",
         language: "en",
         languageAlternates: [
           {
@@ -332,7 +322,6 @@ describe("public law sitemap", () => {
             slug: "c-123-22",
             country: "EU",
             court: "Court of Justice",
-            decisionDate: "2024-03-07",
             language: "not a language",
             updatedAt: "2026-01-01T00:00:00.000Z",
           },
@@ -342,7 +331,6 @@ describe("public law sitemap", () => {
             slug: "c-123-22-cs",
             country: "EU",
             court: "Court of Justice",
-            decisionDate: "2024-03-07",
             language: "",
             updatedAt: "2026-01-01T00:00:00.000Z",
           },
@@ -401,7 +389,6 @@ describe("public law sitemap", () => {
         slug: null,
         country: "CZE",
         court: "Nejvyssi soud",
-        decisionDate: "2017-09-20",
         language: "cs",
         languageAlternates: [],
         updatedAt: "2026-01-01T00:00:00.000Z",
@@ -410,7 +397,7 @@ describe("public law sitemap", () => {
 
     expect(xml).toContain("<lastmod>2026-01-01</lastmod>");
     expect(xml).toContain(
-      "http://localhost:3000/law/cze/cases/nejvyssi-soud/2017-09-20/20-cdo-470-2017",
+      "http://localhost:3000/law/cze/cases/nejvyssi-soud/20-cdo-470-2017",
     );
     expect(xml).toContain("<lastmod>2026-01-01</lastmod>");
     expect(xml).not.toContain("analysis");

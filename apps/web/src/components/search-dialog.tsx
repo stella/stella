@@ -696,13 +696,11 @@ export const SearchDialog = ({
       const slug =
         "slug" in hit && typeof hit.slug === "string" ? hit.slug : null;
       await navigate({
-        to: "/law/$country/cases/$court/$date/$slug",
+        to: "/law/$country/cases/$court/$slug",
         params: createCaseLawDecisionRouteParams({
           caseNumber: hit.caseNumber,
           country: hit.country,
           court: hit.court,
-          decisionDate: hit.decisionDate,
-          decisionId: hit.decisionId,
           slug,
         }),
         search: {
