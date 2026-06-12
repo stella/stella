@@ -71,6 +71,7 @@ import type {
   DeterministicFieldConfig,
 } from "@stll/template-conditions";
 import { Button } from "@stll/ui/components/button";
+import { Checkbox } from "@stll/ui/components/checkbox";
 import {
   Dialog,
   DialogClose,
@@ -5484,6 +5485,7 @@ const FieldFace = ({
                 onUpdate({
                   aiPrompt: undefined,
                   aiAdapt: false,
+                  aiSeesDocument: false,
                   formula: undefined,
                 })
               }
@@ -5498,6 +5500,7 @@ const FieldFace = ({
               onClick={() =>
                 onUpdate({
                   aiAdapt: true,
+                  aiSeesDocument: false,
                   formula: undefined,
                 })
               }
@@ -5529,6 +5532,7 @@ const FieldFace = ({
                   formula: field.formula ?? "",
                   aiPrompt: undefined,
                   aiAdapt: false,
+                  aiSeesDocument: false,
                   lookup: undefined,
                 })
               }
@@ -5558,15 +5562,29 @@ const FieldFace = ({
             </>
           ) : null}
           {valueSource === "ai" ? (
-            <AIPromptInput
-              className="bg-muted/40 focus-within:ring-ring/40 rounded-md border px-2.5 py-2 focus-within:ring-1"
-              mentionExtension={fieldMention}
-              onChange={(value) => onUpdate({ aiPrompt: value })}
-              placeholder={t("templates.studio.aiPromptPlaceholder")}
-              value={field.aiPrompt ?? ""}
-              valueFormat="text"
-              variant="minimal"
-            />
+            <>
+              <AIPromptInput
+                className="bg-muted/40 focus-within:ring-ring/40 rounded-md border px-2.5 py-2 focus-within:ring-1"
+                mentionExtension={fieldMention}
+                onChange={(value) => onUpdate({ aiPrompt: value })}
+                placeholder={t("templates.studio.aiPromptPlaceholder")}
+                value={field.aiPrompt ?? ""}
+                valueFormat="text"
+                variant="minimal"
+              />
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                {t("templates.studio.aiPromptContextHint")}
+              </p>
+              <label className="text-muted-foreground flex w-fit cursor-pointer items-center gap-1.5 text-xs">
+                <Checkbox
+                  checked={field.aiSeesDocument}
+                  onCheckedChange={(checked) =>
+                    onUpdate({ aiSeesDocument: checked })
+                  }
+                />
+                {t("templates.studio.aiSeesDocument")}
+              </label>
+            </>
           ) : null}
           {valueSource === "formula" ? (
             <>
@@ -5581,13 +5599,25 @@ const FieldFace = ({
               </p>
             </>
           ) : null}
+          {valueSource === "person" || valueSource === "textAi" ? (
+            <label className="text-muted-foreground flex w-fit cursor-pointer items-center gap-1.5 text-xs">
+              <Checkbox
+                checked={field.required}
+                onCheckedChange={(checked) => onUpdate({ required: checked })}
+              />
+              {t("common.required")}
+              <span aria-hidden className="text-destructive">
+                *
+              </span>
+            </label>
+          ) : null}
         </div>
         <FieldConfigEditor
           embedded
           field={field}
           hideFormulaControl
           hideHint={valueSource === "ai"}
-          hideRequired={valueSource === "ai"}
+          hideRequired
           onUpdate={onUpdate}
         />
         {field.lookup !== undefined && field.lookup.formats.length > 0 ? (
@@ -5992,6 +6022,7 @@ const parseFields = (manifest: unknown): StudioField[] => {
         aiPrompt:
           typeof raw["aiPrompt"] === "string" ? raw["aiPrompt"] : undefined,
         aiAdapt: raw["aiAdapt"] === true,
+        aiSeesDocument: raw["aiSeesDocument"] === true,
       };
       if (typeof raw["optionsFrom"] === "string") {
         field.optionsFrom = raw["optionsFrom"];
@@ -6089,6 +6120,7 @@ type ManifestField = {
   options?: string[];
   aiPrompt?: string;
   aiAdapt?: boolean;
+  aiSeesDocument?: boolean;
   parts?: EditablePart[];
   format?: string;
   optionsFrom?: string;
@@ -6147,6 +6179,11 @@ const studioFieldToManifestField = (f: StudioField): ManifestField => {
   }
   if (f.aiAdapt) {
     field.aiAdapt = true;
+  }
+  // Only an AI-drafted field (aiPrompt) reads the document; the flag is
+  // meaningless without one, so do not persist a stale opt-in.
+  if (f.aiSeesDocument && f.aiPrompt) {
+    field.aiSeesDocument = true;
   }
   if (f.optionsFrom !== undefined && f.inputType === "select") {
     field.optionsFrom = f.optionsFrom;
@@ -6334,6 +6371,7 @@ const recipeFieldToStudioPatch = (field: RecipeField): Partial<StudioField> => {
     options: field.options ?? [],
     aiPrompt: field.aiPrompt,
     aiAdapt: field.aiAdapt === true,
+    aiSeesDocument: field.aiSeesDocument === true,
   };
   if (field.optionsFrom !== undefined) {
     patch.optionsFrom = field.optionsFrom;
