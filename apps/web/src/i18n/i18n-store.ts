@@ -110,6 +110,13 @@ const detectLang = (): SupportedLanguage => {
 const defaultLanguage = detectLang();
 const defaultMessages = en;
 
+/**
+ * The statically bundled English messages. Server-rendered public pages
+ * render with these until hydration completes, so client markup can
+ * match the server's regardless of the persisted locale.
+ */
+export const bundledEnglishMessages = en;
+
 export const loadLocaleMessages = async (
   lang: SupportedLanguage,
 ): Promise<LocaleMessages> => await messageLoaders[lang]();

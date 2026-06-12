@@ -48,6 +48,19 @@ test("chat thread page renders for an entitlement-less owner", async ({
 });
 
 test("server-rendered public law pages hydrate cleanly", async ({ page }) => {
+  // A persisted non-English locale is the harder hydration case: the
+  // client holds translated messages before hydrating against the
+  // server's English markup. The bug class this guards against only
+  // reproduced with a non-default locale.
+  // String form: the e2e tsconfig has no DOM lib, so a function body
+  // referencing browser globals would not typecheck in this context.
+  await page.addInitScript({
+    content: `window.localStorage.setItem(
+      "stella-i18n",
+      JSON.stringify({ state: { lang: "cs" }, version: 0 }),
+    );`,
+  });
+
   // Hydration mismatches surface as pageerrors (React #418 + a router
   // invariant) and end in the error boundary; collect them explicitly
   // so the failure names the real exception instead of a timeout.
