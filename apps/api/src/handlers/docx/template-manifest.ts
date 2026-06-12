@@ -155,6 +155,9 @@ const buildFieldXml = (field: FieldMeta): string => {
   if (field.aiAdapt !== undefined) {
     attrs.push(`aiAdapt="${field.aiAdapt}"`);
   }
+  if (field.aiSeesDocument !== undefined) {
+    attrs.push(`aiSeesDocument="${field.aiSeesDocument}"`);
+  }
   if (field.format !== undefined) {
     attrs.push(`format="${escapeXml(field.format)}"`);
   }
@@ -347,6 +350,10 @@ const parseFieldMeta = (el: slimdom.Element): FieldMeta => {
   const aiAdapt = el.getAttribute("aiAdapt");
   if (aiAdapt !== null) {
     field.aiAdapt = aiAdapt === "true";
+  }
+  const aiSeesDocument = el.getAttribute("aiSeesDocument");
+  if (aiSeesDocument !== null) {
+    field.aiSeesDocument = aiSeesDocument === "true";
   }
   // A hand-edited value outside the field-path grammar is dropped so the
   // isFieldMeta invariant holds downstream.
@@ -747,6 +754,7 @@ export const mergeManifestWithDiscovery = (
         required: f.required,
         aiAdapt: f.aiAdapt,
         aiPrompt: f.aiPrompt,
+        aiSeesDocument: f.aiSeesDocument,
         parts: f.parts,
         format: f.format,
         optionsFrom: f.optionsFrom,
@@ -815,6 +823,9 @@ const mergeField = (
     }
     if (meta.aiPrompt !== undefined) {
       resolved.aiPrompt = meta.aiPrompt;
+    }
+    if (meta.aiSeesDocument !== undefined) {
+      resolved.aiSeesDocument = meta.aiSeesDocument;
     }
     if (meta.parts !== undefined && meta.format !== undefined) {
       resolved.parts = meta.parts;

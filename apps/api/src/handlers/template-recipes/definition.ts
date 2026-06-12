@@ -71,6 +71,7 @@ const recipeFieldSchema = v.pipe(
     required: v.optional(v.boolean()),
     aiPrompt: v.optional(v.pipe(v.string(), v.maxLength(4000))),
     aiAdapt: v.optional(v.boolean()),
+    aiSeesDocument: v.optional(v.boolean()),
     parts: v.optional(
       v.pipe(
         v.array(recipeFieldPartSchema),
