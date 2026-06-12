@@ -53,12 +53,11 @@ export const anonymizeTextFields = async (input: AnonymizeTextFieldsInput) => {
     });
   }
 
-  return await runWithPipelineContext(async () => {
-    pipelineContext.corefSourceMap.clear();
-    return await anonymizeTextFieldsWithDependencies({
+  return await runWithPipelineContext(async () => 
+    await anonymizeTextFieldsWithDependencies({
       ...input,
       context: pipelineContext,
       dependencies: anonymizeTextFieldsDependencies,
-    });
-  });
+    })
+  );
 };

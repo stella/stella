@@ -62,7 +62,6 @@ const handle = async (request: AnonRequest): Promise<AnonResponse> => {
   try {
     const result = await runWithPipelineContext(async () => {
       const dictionaries = await getDictionaries();
-      pipelineContext.corefSourceMap.clear();
       const runtime = {
         createPipelineContext: anonymizeRuntime.createPipelineContext,
         defaultOperatorConfig: anonymizeRuntime.DEFAULT_OPERATOR_CONFIG,

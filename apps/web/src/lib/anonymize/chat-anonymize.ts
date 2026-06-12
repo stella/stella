@@ -61,7 +61,6 @@ export const anonymizeChatText = async ({
     getPipelineContext(),
   ]);
   return await runWithPipelineContext(async () => {
-    context.corefSourceMap.clear();
     const runtime = {
       createPipelineContext: wasm.createPipelineContext,
       defaultOperatorConfig: wasm.DEFAULT_OPERATOR_CONFIG,

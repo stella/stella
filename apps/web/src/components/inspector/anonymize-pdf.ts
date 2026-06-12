@@ -125,7 +125,6 @@ const runPipelineAndCommit = async ({
   const dictionaries = await dictionariesPromise;
   const entities = await runWithPipelineContext(async () => {
     pipelineContext ??= wasm.createPipelineContext();
-    pipelineContext.corefSourceMap.clear();
     const config = {
       ...buildPipelineConfig(workspaceId, DEFAULT_ENTITY_LABELS),
       dictionaries,

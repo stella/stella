@@ -632,7 +632,7 @@
     "@better-auth/oauth-provider": "1.6.12",
     "@libpdf/core": "0.3.6",
     "@stll/anonymize-data": "0.0.6",
-    "@stll/anonymize-wasm": "1.4.8",
+    "@stll/anonymize-wasm": "1.4.11",
     "@t3-oss/env-core": "0.13.11",
     "@tailwindcss/postcss": "4.3.0",
     "@tailwindcss/vite": "4.3.0",
@@ -1611,7 +1611,7 @@
 
     "@stll/anonymize-data": ["@stll/anonymize-data@0.0.6", "", {}, "sha512-lyhYWgwDTeofwrvHSVfvqhJny/8Goss3IiA49+8+RyJmry4s9PnexkPDuLIrtOuJiUZhhxZW+HzL6wrcPRUE8Q=="],
 
-    "@stll/anonymize-wasm": ["@stll/anonymize-wasm@1.4.8", "", { "dependencies": { "@huggingface/tokenizers": "^0.1.3", "@stll/stdnum": "^2.0.1", "@stll/text-search-wasm": "^1.0.5" }, "peerDependencies": { "@stll/anonymize-data": "^0.0.6", "vite": ">=5 <10" }, "optionalPeers": ["@stll/anonymize-data", "vite"] }, "sha512-20OatbOLmPm248WMdhVSj/yO5xjV9Wp4jda1ycRtbzZ4DBhMUemR1DwHImiip6swxPI5Nj1W7ydGmuK9ewu+aA=="],
+    "@stll/anonymize-wasm": ["@stll/anonymize-wasm@1.4.11", "", { "dependencies": { "@huggingface/tokenizers": "^0.1.3", "@stll/stdnum": "^2.0.1", "@stll/text-search-wasm": "^1.0.5" }, "peerDependencies": { "@stll/anonymize-data": "^0.0.6", "vite": ">=5 <10" }, "optionalPeers": ["@stll/anonymize-data", "vite"] }, "sha512-iKhCfo7t/2pZCP/839z542lTdG3aQ1bkLpJ5m+7+oLSWaLSfQ0JteGH19eHMfugfUiIFx5y6YPnfDAH3esF0qQ=="],
 
     "@stll/api": ["@stll/api@workspace:apps/api"],
 
@@ -1661,7 +1661,7 @@
 
     "@stll/skills": ["@stll/skills@workspace:packages/skills"],
 
-    "@stll/stdnum": ["@stll/stdnum@2.0.1", "", {}, "sha512-NqE/jVGT4Ve9r4/tvTDrCIkWynw4PYzlINbM65wKSymgfyRnHsYpsZaAZY5TKPs0qCzM7O3BY2Pmj7mT8uoxEw=="],
+    "@stll/stdnum": ["@stll/stdnum@2.1.0", "", {}, "sha512-8IdWPXIgqZqvL05qaAQQPPsgS7gzjbXMDHvXFFjv3xepPyIUuxJPkZLHmnmjoExsBJGaz0sbr1gyUYr+A2pVng=="],
 
     "@stll/template-conditions": ["@stll/template-conditions@workspace:packages/template-conditions"],
 
