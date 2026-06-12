@@ -2,7 +2,7 @@ import { useMemo } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 
-import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { skillCommandsOptions } from "@/routes/_protected.knowledge/-queries";
 
 import type { ChatPrompt } from "./types";
@@ -19,10 +19,15 @@ const MAX_SUGGESTIONS = 4;
  */
 export const useSavedPrompts = (): ChatPrompt[] => {
   // Sourced from the auth context, not the /_protected route context:
-  // this hook also renders inside the public law workspace's
-  // authenticated branch, where no /_protected match exists.
-  const { activeOrganizationId } = useAuthenticatedUser();
-  const { data = [] } = useQuery(skillCommandsOptions(activeOrganizationId));
+  // this hook also renders inside the public law workspace, where no
+  // /_protected match exists. Anonymous visitors (pre-signup AI
+  // surfaces) simply have no saved prompts.
+  const activeOrganizationId =
+    useMaybeAuthenticatedUser()?.activeOrganizationId;
+  const { data = [] } = useQuery({
+    ...skillCommandsOptions(activeOrganizationId ?? ""),
+    enabled: activeOrganizationId !== undefined,
+  });
 
   return useMemo(
     () =>

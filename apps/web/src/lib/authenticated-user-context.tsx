@@ -34,3 +34,12 @@ export const useAuthenticatedUser = (): AuthenticatedUser => {
   }
   return user;
 };
+
+/**
+ * Like useAuthenticatedUser, but returns null outside the provider.
+ * For account-bound garnish on surfaces that anonymous visitors can
+ * reach (public law pages, pre-signup AI features): render without the
+ * account data instead of requiring the provider.
+ */
+export const useMaybeAuthenticatedUser = (): AuthenticatedUser | null =>
+  use(AuthenticatedUserContext);
