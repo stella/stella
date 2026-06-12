@@ -112,8 +112,14 @@ function SettingsLayout() {
   const { data: role } = useSuspenseQuery(roleOptions);
   const showOrganization = managementRoles.includes(role);
 
-  const accountSection: Section = betaFeaturesAvailable()
-    ? { ...ACCOUNT_SECTION, items: [...ACCOUNT_SECTION.items, BETA_NAV_ITEM] }
+  // No `Section` annotation: it would widen labelKey to the full
+  // TranslationKey union, whose ICU-variable members make t() demand a
+  // values argument. The literal key types stay narrow this way.
+  const accountSection = betaFeaturesAvailable()
+    ? ({
+        ...ACCOUNT_SECTION,
+        items: [...ACCOUNT_SECTION.items, BETA_NAV_ITEM],
+      } as const)
     : ACCOUNT_SECTION;
   const sections = showOrganization
     ? [accountSection, ORGANIZATION_SECTION]
