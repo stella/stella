@@ -56,10 +56,13 @@ const updateAdapter = async (
     if (!adapter) {
       return { error: `Unknown adapter: ${adapterKey}` };
     }
+    // Generous budget: adapters that rate-limit per-decision detail
+    // fetches (cz-us) need several minutes for a full first page, and a
+    // truncated capture weakens the fixture-based parser coverage.
     const result = await adapter.fetchPage(
       null,
       {},
-      AbortSignal.timeout(120_000),
+      AbortSignal.timeout(600_000),
     );
 
     if (result.isErr()) {
