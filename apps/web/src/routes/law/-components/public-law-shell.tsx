@@ -286,7 +286,6 @@ function PublicLawTopBar() {
     select: (state) => {
       const loaderData = state.matches.at(-1)?.loaderData;
       if (
-        loaderData !== null &&
         typeof loaderData === "object" &&
         "caseNumber" in loaderData &&
         typeof loaderData.caseNumber === "string"
