@@ -10,6 +10,7 @@ import type {
   BlockDirectiveKind,
   ExtractedDocument,
   ExtractedParagraph,
+  FieldMeta,
   ParagraphSource,
 } from "./types";
 
@@ -315,6 +316,29 @@ export const extractText = async (
   const charCount = headers.chars + bodyResult.chars + footers.chars;
 
   return { paragraphs, charCount, view: "accepted" };
+};
+
+/**
+ * Rendered document body for AI-draft fields that opted into seeing it
+ * ({@link FieldMeta.aiSeesDocument}). Returns `undefined` — and skips the
+ * extraction entirely — when no AI-draft field opted in, so the generator
+ * prompt and token cost stay unchanged for non-opted templates.
+ */
+export const documentTextForAiFields = async (
+  docxBytes: Uint8Array,
+  fields: readonly FieldMeta[],
+): Promise<string | undefined> => {
+  const wantsDocumentText = fields.some(
+    (field) =>
+      field.aiPrompt !== undefined &&
+      field.aiPrompt !== "" &&
+      field.aiSeesDocument === true,
+  );
+  if (!wantsDocumentText) {
+    return undefined;
+  }
+  const { paragraphs } = await extractText(docxBytes);
+  return paragraphs.map((paragraph) => paragraph.text).join("\n");
 };
 
 // ── Markdown extraction ─────────────────────────────────

@@ -13,6 +13,7 @@ import {
   buildAiOccurrenceAdapter,
 } from "@/api/handlers/docx/ai-field-generator";
 import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
+import { documentTextForAiFields } from "@/api/handlers/docx/extract-text";
 import { createDispatchLookupResolver } from "@/api/handlers/docx/lookup-fields";
 import { applyManifestFillSteps } from "@/api/handlers/docx/manifest-fill-steps";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
@@ -212,9 +213,14 @@ const fillByIdHandler = async function* ({
 
   if (manifest && (hasAiDraftFields || hasAiAdaptFields)) {
     if (hasAiDraftFields) {
+      const documentText = await documentTextForAiFields(
+        new Uint8Array(buffer),
+        manifest.fields,
+      );
       const aiResolved = await resolveAiFields({
         values: parsed,
         fields: manifest.fields,
+        documentText,
         generate: buildAiFieldGenerator({
           orgAIConfig,
           organizationId,

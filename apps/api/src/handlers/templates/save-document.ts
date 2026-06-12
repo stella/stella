@@ -135,6 +135,7 @@ const saveTemplateDocument = createSafeRootHandler(
       required: f.required,
       aiPrompt: sourceFieldByPath.get(f.path)?.aiPrompt,
       aiAdapt: sourceFieldByPath.get(f.path)?.aiAdapt,
+      aiSeesDocument: sourceFieldByPath.get(f.path)?.aiSeesDocument,
       parts: sourceFieldByPath.get(f.path)?.parts,
       format: sourceFieldByPath.get(f.path)?.format,
       optionsFrom: sourceFieldByPath.get(f.path)?.optionsFrom,

@@ -20,16 +20,23 @@ export type AiFieldGenerator = (input: {
   fieldPath: string;
   /** Already-entered + previously-resolved values, for grounding the draft. */
   values: Record<string, unknown>;
+  /** Rendered document text, supplied only for fields that opted in via
+   *  {@link FieldMeta.aiSeesDocument}; undefined keeps the prompt unchanged. */
+  documentText?: string | undefined;
 }) => Promise<string | undefined>;
 
 export const resolveAiFields = async ({
   values,
   fields,
   generate,
+  documentText,
 }: {
   values: Record<string, unknown>;
   fields: readonly FieldMeta[];
   generate: AiFieldGenerator | undefined;
+  /** Rendered document body, injected into the generator prompt only for
+   *  fields with {@link FieldMeta.aiSeesDocument} set. */
+  documentText?: string | undefined;
 }): Promise<Record<string, unknown>> => {
   // A boolean field with an aiPrompt is a yes/no decision, not a string draft;
   // it is resolved to a real boolean by resolveAiConditions instead, so it is
@@ -61,6 +68,9 @@ export const resolveAiFields = async ({
       prompt,
       fieldPath: field.path,
       values: resolved,
+      // Only opted-in fields pay the token cost of the document context; the
+      // generator omits the section entirely when this is undefined.
+      documentText: field.aiSeesDocument === true ? documentText : undefined,
     });
     if (value !== undefined) {
       resolved[field.path] = value;

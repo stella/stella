@@ -7,18 +7,20 @@ import { toSafeId } from "@/api/lib/branded-types";
 
 // Capture the args each generate/stream call receives so we can assert whether
 // the skill tools were wired. The model itself is irrelevant here (mocked).
-const generateTextMock = mock(async (args: { tools?: ToolSet }) => {
-  generateTextArgs.push(args);
-  return { text: "drafted value" };
-});
+const generateTextMock = mock(
+  async (args: { tools?: ToolSet; prompt?: string }) => {
+    generateTextArgs.push(args);
+    return { text: "drafted value" };
+  },
+);
 
-const streamTextMock = mock((args: { tools?: ToolSet }) => {
+const streamTextMock = mock((args: { tools?: ToolSet; prompt?: string }) => {
   streamTextArgs.push(args);
   return { output: Promise.resolve({ renderings: ["adapted"] }) };
 });
 
-const generateTextArgs: { tools?: ToolSet }[] = [];
-const streamTextArgs: { tools?: ToolSet }[] = [];
+const generateTextArgs: { tools?: ToolSet; prompt?: string }[] = [];
+const streamTextArgs: { tools?: ToolSet; prompt?: string }[] = [];
 
 void mock.module("ai", () => ({
   generateText: generateTextMock,
@@ -99,6 +101,40 @@ describe("buildAiFieldGenerator skill-tool wiring", () => {
     });
 
     expect(lastGenerate()?.tools).toBeUndefined();
+  });
+});
+
+describe("buildAiFieldGenerator document-text injection", () => {
+  test("injects a Document section when documentText is supplied", async () => {
+    const generate = buildAiFieldGenerator({ orgAIConfig, organizationId });
+    await generate?.({
+      prompt: PLAIN_PROMPT,
+      fieldPath: "scope",
+      values: {},
+      documentText: "THE FULL CONTRACT BODY",
+    });
+
+    const prompt = lastGenerate()?.prompt ?? "";
+    expect(prompt).toContain("Document:\nTHE FULL CONTRACT BODY");
+  });
+
+  test("omits the Document section when no documentText is supplied", async () => {
+    const generate = buildAiFieldGenerator({ orgAIConfig, organizationId });
+    await generate?.({ prompt: PLAIN_PROMPT, fieldPath: "scope", values: {} });
+
+    expect(lastGenerate()?.prompt ?? "").not.toContain("Document:");
+  });
+
+  test("omits the Document section for blank documentText", async () => {
+    const generate = buildAiFieldGenerator({ orgAIConfig, organizationId });
+    await generate?.({
+      prompt: PLAIN_PROMPT,
+      fieldPath: "scope",
+      values: {},
+      documentText: "   ",
+    });
+
+    expect(lastGenerate()?.prompt ?? "").not.toContain("Document:");
   });
 });
 

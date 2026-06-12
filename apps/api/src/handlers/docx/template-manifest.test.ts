@@ -942,6 +942,27 @@ describe("round-trip", () => {
     ]);
   });
 
+  test("aiSeesDocument round-trips on an AI-drafted field", async () => {
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        { path: "scope", aiPrompt: "Draft the scope", aiSeesDocument: true },
+        { path: "title", aiPrompt: "Draft the title", aiSeesDocument: false },
+      ],
+    };
+
+    const docx = await createMinimalDocx();
+    const withManifest = await writeManifest(docx, manifest);
+    const readBack = await readManifest(withManifest);
+
+    expect(
+      readBack?.fields.find((f) => f.path === "scope")?.aiSeesDocument,
+    ).toBe(true);
+    expect(
+      readBack?.fields.find((f) => f.path === "title")?.aiSeesDocument,
+    ).toBe(false);
+  });
+
   test("optionsFrom round-trips; an invalid value is dropped on read", async () => {
     const manifest: TemplateManifest = {
       version: 1,
