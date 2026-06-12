@@ -25,6 +25,8 @@ export const DIRECTIVE_KINDS = [
   "clause",
   "num",
   "ref",
+  "index",
+  "count",
   "if",
   "elseif",
   "else",
@@ -59,6 +61,8 @@ export type MarkerMeta =
   | { kind: "clause"; name: string; version: string | undefined }
   | { kind: "num"; key: string }
   | { kind: "ref"; key: string }
+  | { kind: "index" }
+  | { kind: "count" }
   | { kind: "if"; expr: string }
   | { kind: "elseif"; expr: string }
   | { kind: "else" }
@@ -92,6 +96,12 @@ export const numPattern = (): RegExp =>
 export const refPattern = (): RegExp =>
   /\{\{\s*@ref:([\p{L}\p{N}_.-]+)\s*\}\}/gu;
 
+/** `{{@index}}` — the 1-based position within the innermost enclosing loop. */
+export const indexPattern = (): RegExp => /\{\{\s*@index\s*\}\}/gu;
+
+/** `{{@count}}` — the item count of the innermost enclosing loop. */
+export const countPattern = (): RegExp => /\{\{\s*@count\s*\}\}/gu;
+
 /** Cheap presence test for any numbering marker (no capture). */
 export const hasNumberingPattern = (): RegExp => /\{\{\s*@(?:num|ref):/u;
 
@@ -115,6 +125,8 @@ export const isFieldPath = (value: string): boolean =>
 const CLAUSE_INNER_RE = /^@clause:([^:}\s]+)(?::([^}\s]+))?$/u;
 const NUM_INNER_RE = /^@num:([\p{L}\p{N}_.-]+)$/u;
 const REF_INNER_RE = /^@ref:([\p{L}\p{N}_.-]+)$/u;
+const INDEX_INNER_RE = /^@index$/u;
+const COUNT_INNER_RE = /^@count$/u;
 // `\b(.*)` rather than `\b\s*(.*)`: the overlapping `\s*`/`.*` quantifiers are
 // polynomial; group 2 is trimmed at the use site below, so drop the `\s*`.
 const BLOCK_INNER_RE = /^(#if|#elseif|#else|#each|\/if|\/each)\b(.*)$/u;
@@ -163,6 +175,14 @@ export const classifyMarker = (innerRaw: string): MarkerMeta | null => {
   const ref = REF_INNER_RE.exec(inner);
   if (ref) {
     return { kind: "ref", key: ref[1] ?? "" };
+  }
+
+  if (INDEX_INNER_RE.test(inner)) {
+    return { kind: "index" };
+  }
+
+  if (COUNT_INNER_RE.test(inner)) {
+    return { kind: "count" };
   }
 
   if (FIELD_PATH_RE.test(inner)) {

@@ -175,6 +175,45 @@ describe("fillTemplate — @num/@ref through {{#each}} expansion", () => {
   });
 });
 
+describe("fillTemplate — {{@index}}/{{@count}} through {{#each}} expansion", () => {
+  test("block loop resolves index/count and composes with item fields", async () => {
+    const docx = await buildDocxBuffer([
+      "{{#each parties}}",
+      "{{@index}}/{{@count}}: {{parties.name}}.",
+      "{{/each}}",
+    ]);
+    const { buffer } = await fillTemplate(docx, {
+      parties: [{ name: "Alpha" }, { name: "Beta" }, { name: "Gamma" }],
+    });
+    const text = await docTextOf(buffer);
+
+    expect(text).toContain("1/3: Alpha.");
+    expect(text).toContain("2/3: Beta.");
+    expect(text).toContain("3/3: Gamma.");
+  });
+
+  test("nested loops bind @index/@count to the innermost loop", async () => {
+    const docx = await buildDocxBuffer([
+      "{{#each groups}}",
+      "G{{@index}}/{{@count}}.",
+      "{{#each groups.items}}",
+      "I{{@index}}/{{@count}}.",
+      "{{/each}}",
+      "{{/each}}",
+    ]);
+    const { buffer } = await fillTemplate(docx, {
+      groups: [{ items: ["a", "b"] }, { items: ["c"] }],
+    });
+    const text = await docTextOf(buffer);
+
+    expect(text).toContain("G1/2.");
+    expect(text).toContain("G2/2.");
+    // First group: two inner items numbered 1/2, 2/2; second group: 1/1.
+    expect(text).toContain("I1/2.I2/2.");
+    expect(text).toContain("I1/1.");
+  });
+});
+
 // numId 1 resolves (num → abstractNum); numId 2 dangles on a missing abstractNum.
 const NUMBERING_XML =
   `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +

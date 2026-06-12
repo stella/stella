@@ -62,6 +62,8 @@ const directiveExpr = (meta: MarkerMeta): string => {
     case "elseif":
     case "each":
       return meta.expr;
+    case "index":
+    case "count":
     case "else":
     case "endif":
     case "endeach":
