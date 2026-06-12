@@ -609,12 +609,14 @@ type Messages = {
     "editVariant": "Edit variant";
     "export": "Export";
     "exportFailed": "Failed to export clauses";
+    "formattingPreviewHint": "Numbering and styling here is a preview. The generated document applies its own list formatting, so don't type numbers by hand.";
     "import": "Import";
     "importFailed": "Failed to import clauses";
     "importResult": "{created, plural, one {# created} other {# created}}, {skipped, plural, one {# skipped} other {# skipped}}";
     "importSuccess": "{count, plural, one {# clause imported} other {# clauses imported}}";
     "importing": "Importing…";
     "languagePlaceholder": "e.g. en";
+    "leaveWithoutVersion": "Leave without a version";
     "limitReached": "Clause limit reached";
     "linkClause": "Link clause";
     "linkFailed": "Failed to link clause";
@@ -630,7 +632,9 @@ type Messages = {
     "noVersions": "No version history";
     "outdatedVersion": "Update available";
     "restoreVersion": "Restore this version";
+    "saveAsVersion": "Save as new version";
     "saveFailed": "Failed to save";
+    "saveVersionAndLeave": "Save version & leave";
     "searchClauses": "Search clauses...";
     "searchPlaceholder": "Search clauses...";
     "selectFile": "Select JSON file";
@@ -653,6 +657,7 @@ type Messages = {
     "unlinkFailed": "Failed to unlink clause";
     "unlinked": "Clause unlinked";
     "unmappedSlot": "Not linked";
+    "unsavedVersionLeaveConfirm": "Save your changes as a version before leaving?";
     "updateFailed": "Failed to update clause";
     "usageNotes": "Usage notes";
     "usageNotesPlaceholder": "When should this clause be used? (for AI assembly)";
