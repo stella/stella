@@ -1,0 +1,26 @@
+[
+  {
+    "CLEE": "09015721110000111001000000U1",
+    "Id": "6281106",
+    "Nombre": "HOTEL MARRIOTT REFORMA",
+    "Razon_social": "HOTELERA REFORMA SA DE CV",
+    "Clase_actividad": "Hoteles con otros servicios integrados",
+    "Estrato": "251 y mas personas",
+    "Tipo_vialidad": "AVENIDA",
+    "Calle": "PASEO DE LA REFORMA",
+    "Num_Exterior": "276",
+    "Num_Interior": "",
+    "Colonia": "JUAREZ",
+    "CP": "06600",
+    "Ubicacion": "CUAUHTEMOC, CUAUHTEMOC, CIUDAD DE MEXICO",
+    "Telefono": "5550000000",
+    "Correo_e": "",
+    "Sitio_internet": "www.marriott.com",
+    "Tipo": "Fijo",
+    "Longitud": "-99.162222",
+    "Latitud": "19.428611",
+    "CentroComercial": "",
+    "TipoCentroComercial": "",
+    "NumLocal": ""
+  }
+]

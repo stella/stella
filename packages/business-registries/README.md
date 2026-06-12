@@ -28,10 +28,11 @@ await ares.lookupByIco("27082440");
 
 ## Supported registries
 
-| Subpath  | Jurisdiction   | Registry                                                                                              |
-| -------- | -------------- | ----------------------------------------------------------------------------------------------------- |
-| `/ares`  | Czech Republic | [ARES](https://ares.gov.cz) — public open API                                                         |
-| `/brreg` | Norway         | [Brønnøysundregistrene](https://data.brreg.no/enhetsregisteret/api/docs/index.html) — public open API |
+| Subpath  | Jurisdiction   | Registry                                                                                                                      |
+| -------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `/ares`  | Czech Republic | [ARES](https://ares.gov.cz) — public open API                                                                                 |
+| `/brreg` | Norway         | [Brønnøysundregistrene](https://data.brreg.no/enhetsregisteret/api/docs/index.html) — public open API                         |
+| `/denue` | Mexico         | [INEGI DENUE](https://www.inegi.org.mx/servicios/api_denue.html) — official establishment / economic-unit API; token required |
 
 More jurisdictions land per-PR; see the package README on the main branch for
 the current list.
