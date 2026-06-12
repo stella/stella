@@ -1813,6 +1813,9 @@
   },
   "settings": {
     "account": {
+      "beta": "Beta funkce",
+      "betaCaseLawDescription": "Zobrazit veřejné vyhledávání a čtečku judikatury v postranním panelu",
+      "betaDescription": "Vyzkoušejte funkce, které jsou stále ve vývoji",
       "desktop": "Aplikace pro počítač",
       "desktopAppDescription": "Otevírejte dokumenty a soubory přímo ve stella z vašeho počítače.",
       "desktopDescription": "Nainstalujte si stella na svůj počítač",

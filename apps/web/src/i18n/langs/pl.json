@@ -1813,6 +1813,9 @@
   },
   "settings": {
     "account": {
+      "beta": "Funkcje beta",
+      "betaCaseLawDescription": "Pokaż publiczne wyszukiwanie i czytnik orzecznictwa w pasku bocznym",
+      "betaDescription": "Wypróbuj funkcje, które są wciąż w fazie rozwoju",
       "desktop": "Aplikacja na komputer",
       "desktopAppDescription": "Otwieraj dokumenty i pliki bezpośrednio w stella ze swojego komputera.",
       "desktopDescription": "Zainstaluj stella na swoim komputerze",

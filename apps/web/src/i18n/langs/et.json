@@ -1813,6 +1813,9 @@
   },
   "settings": {
     "account": {
+      "beta": "Beetafunktsioonid",
+      "betaCaseLawDescription": "Kuva avalik kohtupraktika otsing ja lugeja külgribal",
+      "betaDescription": "Proovige funktsioone, mis on alles arendamisel",
       "desktop": "Töölaud",
       "desktopAppDescription": "Avage dokumendid ja failid otse stella-s oma arvutist.",
       "desktopDescription": "Installige stella oma arvutisse",

@@ -1816,6 +1816,9 @@ type Messages = {
   };
   "settings": {
     "account": {
+      "beta": "Beta Features";
+      "betaCaseLawDescription": "Show the public case law search and reader in the sidebar";
+      "betaDescription": "Try features that are still in development";
       "desktop": "Desktop";
       "desktopAppDescription": "Open documents and files directly in stella from your computer.";
       "desktopDescription": "Install stella on your computer";

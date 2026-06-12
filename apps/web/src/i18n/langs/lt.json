@@ -1813,6 +1813,9 @@
   },
   "settings": {
     "account": {
+      "beta": "Beta funkcijos",
+      "betaCaseLawDescription": "Rodyti viešą teismų praktikos paiešką ir skaityklę šoninėje juostoje",
+      "betaDescription": "Išbandykite funkcijas, kurios dar kuriamos",
       "desktop": "Darbalaukis",
       "desktopAppDescription": "Atidarykite dokumentus ir failus tiesiai „stella“ iš savo kompiuterio.",
       "desktopDescription": "Įdiekite „stella“ į savo kompiuterį",

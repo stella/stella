@@ -60,6 +60,7 @@ import { Route as ProtectedSettingsOrganizationAnonymizationRouteImport } from '
 import { Route as ProtectedSettingsOrganizationAiRouteImport } from './routes/_protected.settings/organization.ai'
 import { Route as ProtectedSettingsAccountProfileRouteImport } from './routes/_protected.settings/account.profile'
 import { Route as ProtectedSettingsAccountDesktopRouteImport } from './routes/_protected.settings/account.desktop'
+import { Route as ProtectedSettingsAccountBetaRouteImport } from './routes/_protected.settings/account.beta'
 import { Route as ProtectedKnowledgeToolsSkillIdRouteImport } from './routes/_protected.knowledge/tools_.$skillId'
 import { Route as ProtectedWorkspacesWorkspaceIdViewIdRouteRouteImport } from './routes/_protected.workspaces/$workspaceId/$viewId.route'
 import { Route as ProtectedWorkspacesWorkspaceIdViewIdIndexRouteImport } from './routes/_protected.workspaces/$workspaceId/$viewId.index'
@@ -350,6 +351,12 @@ const ProtectedSettingsAccountDesktopRoute =
     path: '/account/desktop',
     getParentRoute: () => ProtectedSettingsRouteRoute,
   } as any)
+const ProtectedSettingsAccountBetaRoute =
+  ProtectedSettingsAccountBetaRouteImport.update({
+    id: '/account/beta',
+    path: '/account/beta',
+    getParentRoute: () => ProtectedSettingsRouteRoute,
+  } as any)
 const ProtectedKnowledgeToolsSkillIdRoute =
   ProtectedKnowledgeToolsSkillIdRouteImport.update({
     id: '/tools_/$skillId',
@@ -463,6 +470,7 @@ export interface FileRoutesByFullPath {
   '/law/cases/': typeof LawCasesIndexRoute
   '/workspaces/$workspaceId/$viewId': typeof ProtectedWorkspacesWorkspaceIdViewIdRouteRouteWithChildren
   '/knowledge/tools/$skillId': typeof ProtectedKnowledgeToolsSkillIdRoute
+  '/settings/account/beta': typeof ProtectedSettingsAccountBetaRoute
   '/settings/account/desktop': typeof ProtectedSettingsAccountDesktopRoute
   '/settings/account/profile': typeof ProtectedSettingsAccountProfileRoute
   '/settings/organization/ai': typeof ProtectedSettingsOrganizationAiRoute
@@ -519,6 +527,7 @@ export interface FileRoutesByTo {
   '/workspaces': typeof ProtectedWorkspacesIndexRoute
   '/law/cases': typeof LawCasesIndexRoute
   '/knowledge/tools/$skillId': typeof ProtectedKnowledgeToolsSkillIdRoute
+  '/settings/account/beta': typeof ProtectedSettingsAccountBetaRoute
   '/settings/account/desktop': typeof ProtectedSettingsAccountDesktopRoute
   '/settings/account/profile': typeof ProtectedSettingsAccountProfileRoute
   '/settings/organization/ai': typeof ProtectedSettingsOrganizationAiRoute
@@ -585,6 +594,7 @@ export interface FileRoutesById {
   '/law/cases/': typeof LawCasesIndexRoute
   '/_protected/workspaces/$workspaceId/$viewId': typeof ProtectedWorkspacesWorkspaceIdViewIdRouteRouteWithChildren
   '/_protected/knowledge/tools_/$skillId': typeof ProtectedKnowledgeToolsSkillIdRoute
+  '/_protected/settings/account/beta': typeof ProtectedSettingsAccountBetaRoute
   '/_protected/settings/account/desktop': typeof ProtectedSettingsAccountDesktopRoute
   '/_protected/settings/account/profile': typeof ProtectedSettingsAccountProfileRoute
   '/_protected/settings/organization/ai': typeof ProtectedSettingsOrganizationAiRoute
@@ -651,6 +661,7 @@ export interface FileRouteTypes {
     | '/law/cases/'
     | '/workspaces/$workspaceId/$viewId'
     | '/knowledge/tools/$skillId'
+    | '/settings/account/beta'
     | '/settings/account/desktop'
     | '/settings/account/profile'
     | '/settings/organization/ai'
@@ -707,6 +718,7 @@ export interface FileRouteTypes {
     | '/workspaces'
     | '/law/cases'
     | '/knowledge/tools/$skillId'
+    | '/settings/account/beta'
     | '/settings/account/desktop'
     | '/settings/account/profile'
     | '/settings/organization/ai'
@@ -772,6 +784,7 @@ export interface FileRouteTypes {
     | '/law/cases/'
     | '/_protected/workspaces/$workspaceId/$viewId'
     | '/_protected/knowledge/tools_/$skillId'
+    | '/_protected/settings/account/beta'
     | '/_protected/settings/account/desktop'
     | '/_protected/settings/account/profile'
     | '/_protected/settings/organization/ai'
@@ -1172,6 +1185,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedSettingsAccountDesktopRouteImport
       parentRoute: typeof ProtectedSettingsRouteRoute
     }
+    '/_protected/settings/account/beta': {
+      id: '/_protected/settings/account/beta'
+      path: '/account/beta'
+      fullPath: '/settings/account/beta'
+      preLoaderRoute: typeof ProtectedSettingsAccountBetaRouteImport
+      parentRoute: typeof ProtectedSettingsRouteRoute
+    }
     '/_protected/knowledge/tools_/$skillId': {
       id: '/_protected/knowledge/tools_/$skillId'
       path: '/tools/$skillId'
@@ -1378,6 +1398,7 @@ const ProtectedSettingsOrganizationRouteRouteWithChildren =
 interface ProtectedSettingsRouteRouteChildren {
   ProtectedSettingsOrganizationRouteRoute: typeof ProtectedSettingsOrganizationRouteRouteWithChildren
   ProtectedSettingsIndexRoute: typeof ProtectedSettingsIndexRoute
+  ProtectedSettingsAccountBetaRoute: typeof ProtectedSettingsAccountBetaRoute
   ProtectedSettingsAccountDesktopRoute: typeof ProtectedSettingsAccountDesktopRoute
   ProtectedSettingsAccountProfileRoute: typeof ProtectedSettingsAccountProfileRoute
 }
@@ -1387,6 +1408,7 @@ const ProtectedSettingsRouteRouteChildren: ProtectedSettingsRouteRouteChildren =
     ProtectedSettingsOrganizationRouteRoute:
       ProtectedSettingsOrganizationRouteRouteWithChildren,
     ProtectedSettingsIndexRoute: ProtectedSettingsIndexRoute,
+    ProtectedSettingsAccountBetaRoute: ProtectedSettingsAccountBetaRoute,
     ProtectedSettingsAccountDesktopRoute: ProtectedSettingsAccountDesktopRoute,
     ProtectedSettingsAccountProfileRoute: ProtectedSettingsAccountProfileRoute,
   }

@@ -1813,6 +1813,9 @@
   },
   "settings": {
     "account": {
+      "beta": "Funciones beta",
+      "betaCaseLawDescription": "Mostrar la búsqueda y el lector de jurisprudencia pública en la barra lateral",
+      "betaDescription": "Prueba funciones que aún están en desarrollo",
       "desktop": "Escritorio",
       "desktopAppDescription": "Abre documentos y archivos directamente en stella desde tu ordenador.",
       "desktopDescription": "Instala stella en tu ordenador",
