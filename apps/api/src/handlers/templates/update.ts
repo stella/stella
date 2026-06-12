@@ -39,8 +39,8 @@ const updateTemplateBodySchema = t.Object({
       maxItems: 32,
     }),
   ),
-  whenToUse: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
-  whenNotToUse: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
+  whenToUse: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
+  whenNotToUse: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
   // BCP-47 tags cap at 35 characters (RFC 5646 recommended buffer).
   languages: t.Optional(
     t.Array(t.String({ maxLength: 35 }), {
