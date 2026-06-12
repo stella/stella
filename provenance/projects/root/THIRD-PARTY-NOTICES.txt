@@ -8,13 +8,13 @@ Some licenses may require additional attribution text or redistribution steps.
 
 Project: root
 - @ai-sdk/anthropic 3.0.81 — Apache-2.0
-- @ai-sdk/azure 3.0.69 — Apache-2.0
+- @ai-sdk/azure 3.0.70 — Apache-2.0
 - @ai-sdk/devtools 0.0.18 — Apache-2.0
 - @ai-sdk/google 3.0.80 — Apache-2.0
 - @ai-sdk/google-vertex 4.0.142 — Apache-2.0
 - @ai-sdk/mcp 1.0.46 — Apache-2.0
 - @ai-sdk/mistral 3.0.37 — Apache-2.0
-- @ai-sdk/openai 3.0.67 — Apache-2.0
+- @ai-sdk/openai 3.0.68 — Apache-2.0
 - @ai-sdk/provider 3.0.10 — Apache-2.0
 - @ai-sdk/provider-utils 4.0.27 — Apache-2.0
 - @ai-sdk/react 3.0.198 — Apache-2.0
@@ -25,10 +25,10 @@ Project: root
 - @atlaskit/pragmatic-drag-and-drop 1.8.1 — Apache-2.0
 - @atlaskit/pragmatic-drag-and-drop-auto-scroll 2.1.5 — Apache-2.0
 - @atlaskit/pragmatic-drag-and-drop-hitbox 1.2.0 — Apache-2.0
-- @aws-sdk/client-s3 3.1061.0 — Apache-2.0
-- @aws-sdk/client-sesv2 3.1061.0 — Apache-2.0
-- @aws-sdk/client-sts 3.1061.0 — Apache-2.0
-- @aws-sdk/s3-request-presigner 3.1061.0 — Apache-2.0
+- @aws-sdk/client-s3 3.1063.0 — Apache-2.0
+- @aws-sdk/client-sesv2 3.1063.0 — Apache-2.0
+- @aws-sdk/client-sts 3.1063.0 — Apache-2.0
+- @aws-sdk/s3-request-presigner 3.1063.0 — Apache-2.0
 - @base-ui/react 1.5.0 — MIT
 - @better-auth/oauth-provider 1.6.12 — MIT
 - @elysiajs/cors 1.4.2 — MIT
@@ -43,7 +43,7 @@ Project: root
 - @opentelemetry/api-logs 0.218.0 — Apache-2.0
 - @playwright/test 1.60.0 — Apache-2.0
 - @posthog/react 1.10.0 — MIT
-- @pydantic/genai-prices 0.0.62 — MIT
+- @pydantic/genai-prices 0.0.64 — MIT
 - @react-email/components 1.0.12 — MIT
 - @react-email/render 2.0.6 — MIT
 - @react-email/render 2.0.8 — MIT
@@ -58,32 +58,33 @@ Project: root
 - @tanstack/react-hotkeys 0.10.0 — MIT
 - @tanstack/react-query 5.101.0 — MIT
 - @tanstack/react-query-devtools 5.101.0 — MIT
-- @tanstack/react-router 1.170.11 — MIT
+- @tanstack/react-router 1.170.15 — MIT
 - @tanstack/react-router-devtools 1.167.0 — MIT
 - @tanstack/react-router-ssr-query 1.167.1 — MIT
-- @tanstack/react-start 1.168.19 — MIT
+- @tanstack/react-start 1.168.24 — MIT
 - @tanstack/react-store 0.11.0 — MIT
 - @tanstack/react-store 0.9.3 — MIT
 - @tanstack/react-table 9.0.0-beta.3 — MIT
 - @tanstack/react-table-devtools 9.0.0-beta.3 — MIT
 - @tanstack/react-virtual 3.14.2 — MIT
 - @tauri-apps/api 2.11.0 — Apache-2.0 OR MIT
-- @tiptap/core 3.24.0 — MIT
-- @tiptap/extension-bold 3.24.0 — MIT
-- @tiptap/extension-document 3.24.0 — MIT
-- @tiptap/extension-hard-break 3.24.0 — MIT
-- @tiptap/extension-heading 3.24.0 — MIT
-- @tiptap/extension-history 3.24.0 — MIT
-- @tiptap/extension-italic 3.24.0 — MIT
-- @tiptap/extension-mention 3.24.0 — MIT
-- @tiptap/extension-paragraph 3.24.0 — MIT
-- @tiptap/extension-placeholder 3.24.0 — MIT
-- @tiptap/extension-text 3.24.0 — MIT
-- @tiptap/pm 3.24.0 — MIT
-- @tiptap/react 3.24.0 — MIT
-- @tiptap/suggestion 3.24.0 — MIT
+- @tiptap/core 3.26.0 — MIT
+- @tiptap/extension-bold 3.26.0 — MIT
+- @tiptap/extension-document 3.26.0 — MIT
+- @tiptap/extension-hard-break 3.26.0 — MIT
+- @tiptap/extension-heading 3.26.0 — MIT
+- @tiptap/extension-history 3.26.0 — MIT
+- @tiptap/extension-italic 3.26.0 — MIT
+- @tiptap/extension-mention 3.26.0 — MIT
+- @tiptap/extension-paragraph 3.26.0 — MIT
+- @tiptap/extension-placeholder 3.26.0 — MIT
+- @tiptap/extension-text 3.26.0 — MIT
+- @tiptap/pm 3.26.0 — MIT
+- @tiptap/react 3.26.0 — MIT
+- @tiptap/suggestion 3.26.0 — MIT
 - @valibot/to-json-schema 1.7.0 — MIT
 - ai 6.0.196 — Apache-2.0
+- ai 6.0.197 — Apache-2.0
 - astro 6.4.4 — MIT
 - better-auth 1.6.12 — MIT
 - better-result 2.9.2 — MIT
@@ -114,11 +115,12 @@ Project: root
 - marked 15.0.12 — MIT
 - marked 16.4.2 — MIT
 - marked 17.0.5 — MIT
+- marked 18.0.5 — MIT
 - nodemailer 8.0.10 — MIT-0
 - pdfjs-dist 6.0.227 — Apache-2.0
 - postal-mime 2.7.4 — MIT-0
-- posthog-js 1.379.2 — SEE LICENSE IN LICENSE
-- posthog-node 5.35.14 — MIT
+- posthog-js 1.381.0 — SEE LICENSE IN LICENSE
+- posthog-node 5.36.3 — MIT
 - prosemirror-commands 1.7.1 — MIT
 - prosemirror-dropcursor 1.8.2 — MIT
 - prosemirror-gapcursor 1.4.1 — MIT
