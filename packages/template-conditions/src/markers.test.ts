@@ -25,6 +25,8 @@ describe("classifyMarker", () => {
     });
     expect(classifyMarker("@num:scope")).toEqual({ kind: "num", key: "scope" });
     expect(classifyMarker("@ref:scope")).toEqual({ kind: "ref", key: "scope" });
+    expect(classifyMarker("@index")).toEqual({ kind: "index" });
+    expect(classifyMarker(" @count ")).toEqual({ kind: "count" });
     expect(classifyMarker("#if individual")).toEqual({
       kind: "if",
       expr: "individual",
@@ -46,6 +48,9 @@ describe("classifyMarker", () => {
     expect(classifyMarker("")).toBeNull();
     expect(classifyMarker("@unknown:x")).toBeNull();
     expect(classifyMarker("has spaces")).toBeNull();
+    // Iteration tokens take no argument: `@index:x` / `@count:x` are not them.
+    expect(classifyMarker("@index:x")).toBeNull();
+    expect(classifyMarker("@count:1")).toBeNull();
   });
 
   test("every kind classifyMarker emits is in DIRECTIVE_KINDS", () => {
@@ -55,6 +60,8 @@ describe("classifyMarker", () => {
       "@clause:A",
       "@num:a",
       "@ref:a",
+      "@index",
+      "@count",
       "#if a",
       "#elseif a",
       "#else",
@@ -109,5 +116,7 @@ describe("isBlockDirectiveKind", () => {
     expect(isBlockDirectiveKind("placeholder")).toBe(false);
     expect(isBlockDirectiveKind("clause")).toBe(false);
     expect(isBlockDirectiveKind("num")).toBe(false);
+    expect(isBlockDirectiveKind("index")).toBe(false);
+    expect(isBlockDirectiveKind("count")).toBe(false);
   });
 });

@@ -25,8 +25,10 @@ import * as slimdom from "slimdom";
 
 import {
   blockDirectiveLinePattern,
+  countPattern,
   evaluateCondition,
   hasBlockDirectivePattern,
+  indexPattern,
   numPattern,
   refPattern,
   resolvePath,
@@ -579,17 +581,26 @@ export const processBlockDirectives = (
     const expansionId = eachExpansionCount;
     eachExpansionCount += 1;
 
+    // `{{@index}}`/`{{@count}}` bind to the innermost loop, so resolve them
+    // only on paragraphs that belong directly to this loop's body — not those
+    // inside a nested `{{#each}}`, which will resolve when that loop expands.
+    const directlyInLoop = directEachBodyMask(contentParagraphs);
+
     // Create expanded paragraphs for each item
     const expandedGroups: slimdom.Element[][] = [];
     for (let itemIdx = 0; itemIdx < items.length; itemIdx++) {
       const item = items[itemIdx];
       const group: slimdom.Element[] = [];
 
-      for (const contentP of contentParagraphs) {
+      for (const [pIdx, contentP] of contentParagraphs.entries()) {
         const cloned = cloneParagraph(contentP, doc);
 
         // Rewrite {{arrayPath.field}} → {{__each_arrayPath_N_field}}
         rewriteEachPlaceholders(cloned, block.arrayPath, itemIdx);
+
+        if (directlyInLoop[pIdx]) {
+          rewriteIterationTokens(cloned, itemIdx, items.length);
+        }
 
         if (localNumKeys.size > 0) {
           scopeNumberingMarkers(cloned, {
@@ -704,15 +715,18 @@ export const processBlockDirectives = (
 // ── Each-expansion helpers ───────────────────────────────
 
 /** Generate the synthetic patch key for an each-expanded field. */
-const eachKey = (arrayPath: string, index: number, field: string): string =>
-  `__each_${arrayPath}_${index}_${field}`;
+export const eachKey = (
+  arrayPath: string,
+  index: number,
+  field: string,
+): string => `__each_${arrayPath}_${index}_${field}`;
 
 /**
  * Recursively register patch values for an array item,
  * flattening nested objects into dot-joined keys so that
  * deep paths like `{{sellers.address.city}}` resolve.
  */
-const registerItemPatchValues = (
+export const registerItemPatchValues = (
   patchValues: Record<string, RichPatchValue>,
   item: Record<string, unknown>,
   arrayPath: string,
@@ -770,6 +784,26 @@ const rewriteTextNodes = (
 
 /**
  * Rewrite `{{arrayPath.field}}` → `{{__each_arrayPath_N_field}}`
+ * in a plain text string. Shared with the inline-each expander so
+ * both passes rewrite item field references identically.
+ */
+export const rewriteEachPlaceholdersInText = (
+  text: string,
+  arrayPath: string,
+  index: number,
+): string => {
+  const re = new RegExp(
+    `\\{\\{${escapeRegExp(arrayPath)}\\.([.\\p{L}\\p{N}_]+)\\}\\}`,
+    "gu",
+  );
+  return text.replace(
+    re,
+    (_match, field: string) => `{{${eachKey(arrayPath, index, field)}}}`,
+  );
+};
+
+/**
+ * Rewrite `{{arrayPath.field}}` → `{{__each_arrayPath_N_field}}`
  * in all `w:t` nodes of a paragraph.
  */
 const rewriteEachPlaceholders = (
@@ -777,19 +811,88 @@ const rewriteEachPlaceholders = (
   arrayPath: string,
   index: number,
 ): void => {
-  const re = new RegExp(
-    `\\{\\{${escapeRegExp(arrayPath)}\\.([.\\p{L}\\p{N}_]+)\\}\\}`,
-    "gu",
-  );
   rewriteTextNodes(paragraph, (text) =>
-    text.replace(
-      re,
-      (_match, field: string) => `{{${eachKey(arrayPath, index, field)}}}`,
-    ),
+    rewriteEachPlaceholdersInText(text, arrayPath, index),
   );
 };
 
+/**
+ * Resolve `{{@index}}`/`{{@count}}` in all `w:t` nodes of a paragraph for the
+ * iteration at `index` of a loop with `count` items.
+ */
+const rewriteIterationTokens = (
+  paragraph: slimdom.Element,
+  index: number,
+  count: number,
+): void => {
+  rewriteTextNodes(paragraph, (text) =>
+    rewriteIterationTokensInText(text, index, count),
+  );
+};
+
+/**
+ * For each content paragraph of a loop, whether it belongs *directly* to that
+ * loop's body (each-nesting depth 0) rather than to a nested `{{#each}}`. A
+ * nested `{{#each}}` opener line and its inner paragraphs are depth > 0; the
+ * matching `{{/each}}` line closes back to the enclosing depth. Drives which
+ * paragraphs get their `{{@index}}`/`{{@count}}` tokens resolved by this loop.
+ */
+const directEachBodyMask = (
+  paragraphs: readonly slimdom.Element[],
+): boolean[] => {
+  const mask: boolean[] = [];
+  let depth = 0;
+  for (const p of paragraphs) {
+    const match = DIRECTIVE_RE.exec(paragraphText(p));
+    const tag = match?.[1];
+    if (tag === "/each") {
+      depth -= 1;
+    }
+    mask.push(depth === 0);
+    if (tag === "#each") {
+      depth += 1;
+    }
+  }
+  return mask;
+};
+
+/**
+ * Resolve the per-iteration tokens `{{@index}}` and `{{@count}}` in a plain
+ * text string: `{{@index}}` → the 1-based position (`index + 1`), `{{@count}}`
+ * → the loop's item count. Shared by the block and inline each expanders so
+ * both resolve iteration tokens identically.
+ *
+ * Composition: the caller applies this only to text that belongs to the
+ * *innermost* enclosing loop (the block expander skips paragraphs nested in an
+ * inner `{{#each}}`, the inline expander has no nested loops by grammar). An
+ * outer loop therefore leaves a nested loop's tokens untouched, and they are
+ * resolved when that inner loop expands — so `{{@index}}`/`{{@count}}` always
+ * bind to the closest loop. It also composes with field substitution: tokens
+ * and `{{path.field}}` placeholders are disjoint, so the order of the two
+ * rewrites does not matter.
+ */
+export const rewriteIterationTokensInText = (
+  text: string,
+  index: number,
+  count: number,
+): string =>
+  text
+    .replace(indexPattern(), String(index + 1))
+    .replace(countPattern(), String(count));
+
 // ── Loop-scoped clause numbering ─────────────────────────
+
+/** Collect `{{@num:Key}}` keys appearing in a plain text string. */
+export const collectNumKeysInText = (text: string): Set<string> => {
+  const keys = new Set<string>();
+  for (const match of text.matchAll(numPattern())) {
+    const key = match[1];
+    if (key !== undefined) {
+      keys.add(key);
+    }
+  }
+  return keys;
+};
 
 /** Collect `{{@num:Key}}` keys appearing in the given paragraphs. */
 const collectNumKeys = (
@@ -797,52 +900,75 @@ const collectNumKeys = (
 ): Set<string> => {
   const keys = new Set<string>();
   for (const p of paragraphs) {
-    for (const match of paragraphText(p).matchAll(numPattern())) {
-      const key = match[1];
-      if (key !== undefined) {
-        keys.add(key);
-      }
+    for (const key of collectNumKeysInText(paragraphText(p))) {
+      keys.add(key);
     }
   }
   return keys;
 };
 
+/**
+ * Namespace for the synthetic per-iteration numbering key. Block and inline
+ * loops expand independently but share the document's numbering key space (the
+ * raw-XML `applyNumbering` pass runs once over both), so a distinct infix keeps
+ * an identical base `@num` key used in both a block and an inline loop from
+ * colliding on the same number.
+ */
+type NumberingScope = "each" | "ieach";
+
 /** Synthetic per-iteration key for a loop-local `@num`/`@ref`. */
 const iterationNumKey = (
   key: string,
+  scope: NumberingScope,
   expansionId: number,
   index: number,
-): string => `${key}__each${expansionId}_${index}`;
+): string => `${key}__${scope}${expansionId}_${index}`;
 
 type ScopeNumberingOptions = {
   localKeys: ReadonlySet<string>;
   expansionId: number;
   index: number;
+  /** Defaults to the block-loop namespace. */
+  scope?: NumberingScope;
 };
 
 /**
- * Rewrite loop-local `{{@num:Key}}` / `{{@ref:Key}}` markers to
- * per-iteration keys so numbering.ts assigns each expanded copy
- * its own number and intra-iteration refs follow it. Nested
- * loops compose: each enclosing expansion appends its own
- * suffix, so every (outer, inner) iteration pair stays unique.
- * Operates per `w:t` node; markers split across runs are out of
- * grammar, matching the raw-XML numbering pass.
+ * Rewrite loop-local `{{@num:Key}}` / `{{@ref:Key}}` markers in a plain text
+ * string to per-iteration keys so numbering.ts assigns each expanded copy its
+ * own number and intra-iteration refs follow it. Only keys present in
+ * `localKeys` (those *defined* by a `{{@num:Key}}` in the loop body) are
+ * scoped, so a `@ref` to a shared clause outside the loop still resolves.
+ * Shared by the block expander (per `w:t` node) and the inline expander (per
+ * rendered span).
+ */
+export const scopeIterationNumberingInText = (
+  text: string,
+  { localKeys, expansionId, index, scope = "each" }: ScopeNumberingOptions,
+): string => {
+  const rewriteSigil = (input: string, sigil: "num" | "ref", re: RegExp) =>
+    input.replace(re, (match, key: string) =>
+      localKeys.has(key)
+        ? `{{@${sigil}:${iterationNumKey(key, scope, expansionId, index)}}}`
+        : match,
+    );
+  return rewriteSigil(
+    rewriteSigil(text, "num", numPattern()),
+    "ref",
+    refPattern(),
+  );
+};
+
+/**
+ * DOM wrapper over {@link scopeIterationNumberingInText}: rewrite loop-local
+ * numbering markers in every `w:t` node of a paragraph. Markers split across
+ * runs are out of grammar, matching the raw-XML numbering pass.
  */
 const scopeNumberingMarkers = (
   paragraph: slimdom.Element,
-  { localKeys, expansionId, index }: ScopeNumberingOptions,
+  options: ScopeNumberingOptions,
 ): void => {
-  const numRe = numPattern();
-  const refRe = refPattern();
-  const rewriteSigil = (text: string, sigil: "num" | "ref", re: RegExp) =>
-    text.replace(re, (match, key: string) =>
-      localKeys.has(key)
-        ? `{{@${sigil}:${iterationNumKey(key, expansionId, index)}}}`
-        : match,
-    );
   rewriteTextNodes(paragraph, (text) =>
-    rewriteSigil(rewriteSigil(text, "num", numRe), "ref", refRe),
+    scopeIterationNumberingInText(text, options),
   );
 };
 

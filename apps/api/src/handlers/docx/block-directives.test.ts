@@ -1175,3 +1175,64 @@ describe("pruneDanglingNumPr", () => {
     expect(numPrCounts(body)).toEqual([1, 0, 0, 1, 1]);
   });
 });
+
+// ── Iteration tokens: {{@index}} / {{@count}} ────────────
+
+describe("processBlockDirectives — iteration tokens", () => {
+  test("resolves {{@index}} (1-based) and {{@count}} per item", () => {
+    const xml = WRAP(
+      [P("{{#each rows}}"), P("{{@index}} of {{@count}}"), P("{{/each}}")].join(
+        "",
+      ),
+    );
+    const body = parseBody(xml);
+    processBlockDirectives(body, { rows: [{}, {}, {}] });
+    expect(bodyTexts(body)).toEqual(["1 of 3", "2 of 3", "3 of 3"]);
+  });
+
+  test("empty array removes the block (no tokens emitted)", () => {
+    const xml = WRAP(
+      [P("{{#each rows}}"), P("Item {{@index}}"), P("{{/each}}")].join(""),
+    );
+    const body = parseBody(xml);
+    processBlockDirectives(body, { rows: [] });
+    expect(bodyTexts(body)).toEqual([]);
+  });
+
+  test("{{@index}} composes with an item field placeholder", () => {
+    const xml = WRAP(
+      [P("{{#each p}}"), P("{{@index}}. {{p.name}}"), P("{{/each}}")].join(""),
+    );
+    const body = parseBody(xml);
+    const { patchValues } = processBlockDirectives(body, {
+      p: [{ name: "Alice" }, { name: "Bob" }],
+    });
+    // The token resolves immediately; the field becomes a synthetic each-key
+    // that value substitution fills later (see patch-template).
+    expect(bodyTexts(body)).toEqual([
+      "1. {{__each_p_0_name}}",
+      "2. {{__each_p_1_name}}",
+    ]);
+    expect(patchValues["__each_p_0_name"]).toBe("Alice");
+    expect(patchValues["__each_p_1_name"]).toBe("Bob");
+  });
+
+  test("nested loops: {{@index}}/{{@count}} bind to the innermost loop", () => {
+    const xml = WRAP(
+      [
+        P("{{#each groups}}"),
+        P("G{{@index}}/{{@count}}"),
+        P("{{#each groups.items}}"),
+        P("I{{@index}}/{{@count}}"),
+        P("{{/each}}"),
+        P("{{/each}}"),
+      ].join(""),
+    );
+    const body = parseBody(xml);
+    processBlockDirectives(body, {
+      groups: [{ items: [{}, {}] }, { items: [{}] }],
+    });
+    // Outer tokens count groups (2); inner tokens count each group's items.
+    expect(bodyTexts(body)).toEqual(["G1/2", "I1/2", "I2/2", "G2/2", "I1/1"]);
+  });
+});

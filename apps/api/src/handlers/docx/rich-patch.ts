@@ -518,6 +518,111 @@ export const replaceParagraphTextRanges = (
 };
 
 /**
+ * Deep-clone the run sequence covering `[contentStart, contentEnd)` of a
+ * paragraph's span text, trimming the boundary runs to the in-span slice while
+ * keeping every run's `rPr`. Returns the cloned `w:r` elements in document
+ * order; runs lying entirely inside the span are cloned whole, the first/last
+ * run is cloned with its text sliced to the part that falls inside the span.
+ * An empty span (no text spans intersect it) yields an empty array.
+ *
+ * The clones are detached (no parent); the caller owns insertion. Boundary
+ * `w:t` nodes keep `xml:space="preserve"` so leading/trailing whitespace inside
+ * the body (author separators) survives.
+ */
+const cloneRunSequence = (
+  spans: readonly TextSpan[],
+  contentStart: number,
+  contentEnd: number,
+): slimdom.Element[] => {
+  const clones: slimdom.Element[] = [];
+  for (const span of spans) {
+    const from = Math.max(span.start, contentStart);
+    const to = Math.min(span.end, contentEnd);
+    if (from >= to) {
+      continue;
+    }
+    const runClone = span.run.cloneNode(true);
+    if (!isElement(runClone)) {
+      continue;
+    }
+    const slice = span.text.slice(from - span.start, to - span.start);
+    // A run can hold several `w:t` (one span each). Index the span's `w:t`
+    // within its run, then rewrite the same position in the clone and clear the
+    // other `w:t`s so this clone carries exactly this span's in-span slice.
+    const tIndex = span.run
+      .getElementsByTagNameNS(W_NS, "t")
+      .indexOf(span.node);
+    const clonedTs = runClone.getElementsByTagNameNS(W_NS, "t");
+    for (const [i, t] of clonedTs.entries()) {
+      setText(t, i === tIndex ? slice : "");
+    }
+    clones.push(runClone);
+  }
+  return clones;
+};
+
+/**
+ * Render an inline `{{#each}}` span at the run level, preserving run formatting
+ * authored inside the body. For each item, the body run sequence
+ * (`[contentStart, contentEnd)` of the paragraph span text) is deep-cloned and
+ * each cloned run's text is rewritten by `rewriteItem(text, itemIndex)`; the
+ * concatenated per-item clones replace the whole marker span (`[start, end)`),
+ * so the opener/closer marker runs are removed. `itemCount === 0` removes the
+ * span entirely. Offsets index {@link paragraphSpanText}; this must run before
+ * the paragraph is otherwise mutated for the same span.
+ */
+export const expandInlineEachRuns = (
+  paragraph: slimdom.Element,
+  range: {
+    start: number;
+    end: number;
+    contentStart: number;
+    contentEnd: number;
+  },
+  itemCount: number,
+  rewriteItem: (text: string, itemIndex: number) => string,
+): void => {
+  const spans = collectTextSpans(paragraph);
+
+  const replacementRuns: slimdom.Element[] = [];
+  for (let itemIdx = 0; itemIdx < itemCount; itemIdx++) {
+    for (const runClone of cloneRunSequence(
+      spans,
+      range.contentStart,
+      range.contentEnd,
+    )) {
+      for (const t of runClone.getElementsByTagNameNS(W_NS, "t")) {
+        const text = t.textContent ?? "";
+        const rewritten = rewriteItem(text, itemIdx);
+        if (rewritten !== text) {
+          setText(t, rewritten);
+        }
+      }
+      replacementRuns.push(runClone);
+    }
+  }
+
+  // Cut the whole marker span (markers + body) out of the original runs, then
+  // splice the expanded copies in at the cut point. Reuse applyInlineMatch with
+  // an empty value: it preserves surrounding run formatting and leaves an
+  // anchor (the start span's run) we insert the clones after.
+  const anchor = spanForOffset(spans, range.start);
+  applyInlineMatch(paragraph, collectTextSpans(paragraph), {
+    start: range.start,
+    end: range.end,
+    value: "",
+  });
+  if (!anchor) {
+    return;
+  }
+  const parent = anchor.run.parentNode;
+  if (!parent) {
+    return;
+  }
+  insertAfter(parent, anchor.run, replacementRuns);
+};
+
+/**
  * Inline injection of a multi-paragraph value (e.g. a multi-paragraph library
  * clause filling a mid-paragraph `{{@clause:Name}}` slot). The host paragraph
  * is split: text before the first multi-paragraph marker stays in a leading
