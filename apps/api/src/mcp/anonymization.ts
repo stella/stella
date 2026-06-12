@@ -53,11 +53,12 @@ export const anonymizeTextFields = async (input: AnonymizeTextFieldsInput) => {
     });
   }
 
-  return await runWithPipelineContext(async () => 
-    await anonymizeTextFieldsWithDependencies({
-      ...input,
-      context: pipelineContext,
-      dependencies: anonymizeTextFieldsDependencies,
-    })
+  return await runWithPipelineContext(
+    async () =>
+      await anonymizeTextFieldsWithDependencies({
+        ...input,
+        context: pipelineContext,
+        dependencies: anonymizeTextFieldsDependencies,
+      }),
   );
 };
