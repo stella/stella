@@ -2181,6 +2181,10 @@ type Messages = {
       "aiScopeSelectionPrompt": "Only suggest fields within this selected part of the document:";
       "aiSuggest": "Suggest fields";
       "clauseSlotHelp": "A clause from the library is inserted here at fill time. Manage linked clauses in the Clauses tab.";
+      "conceptClause": "Inserts a reusable clause from your library.";
+      "conceptCondition": "Shows this text only when a condition holds.";
+      "conceptField": "A value you fill in at use time.";
+      "conceptLoop": "Repeats this text for each item in a list.";
       "conditionAdvanced": "Advanced";
       "conditionAiPlaceholder": "Describe when this is true, e.g. the contract is governed by Czech law";
       "conditionAskQuestion": "Ask a yes/no question";
@@ -2198,7 +2202,7 @@ type Messages = {
       "conditionSourceAsked": "Asked";
       "conditionSourceRule": "Rule";
       "conditionsSectionHelp": "Select text in the document → right-click → Show only if…";
-      "draftedByAi": "AI";
+      "draftedByAi": "AI only";
       "emptyClauseSlot": "Empty clause slot";
       "existingCondition": "Existing condition…";
       "existingField": "Existing field…";
@@ -2211,6 +2215,8 @@ type Messages = {
       "insert": "Insert";
       "insertAtCaret": "Insert at cursor";
       "insertFormatDefault": "Default";
+      "insertItemNumber": "Item number";
+      "insertItemTotal": "Total items";
       "insertOutput": "Insert in document";
       "invalidExpression": "That expression is invalid";
       "loop": "Loop";
@@ -2227,6 +2233,7 @@ type Messages = {
       "otherwise": "Otherwise";
       "otherwiseIf": "Otherwise if {condition}";
       "prepareWithAi": "Prepare with AI";
+      "previewHint": "Hover an option to preview.";
       "questions": "Questions";
       "recipeSaveFailed": "Failed to save recipe";
       "recipeSaved": "Recipe saved";
@@ -2237,6 +2244,7 @@ type Messages = {
       "renameFieldInvalid": "That name is invalid or already taken";
       "repeatForEach": "Repeat for each…";
       "repeatable": "Repeatable";
+      "repeatableHelp": "Let the filler add this field more than once — for example, a list of parties or items.";
       "repeatableLoopHasOtherContent": "The repeating block around this field contains other content; remove it in the document.";
       "repeatableNested": "This field already sits inside a repeating block.";
       "repeats": "Repeats: {item}";

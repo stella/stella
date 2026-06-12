@@ -15,10 +15,6 @@ import { Checkbox } from "@stll/ui/components/checkbox";
 import { Field, FieldControl, FieldLabel } from "@stll/ui/components/field";
 import { Input } from "@stll/ui/components/input";
 import {
-  MenuPreviewLayout,
-  PreviewPane,
-} from "@stll/ui/components/preview-pane";
-import {
   Select,
   SelectItem,
   SelectPopup,
@@ -37,7 +33,6 @@ import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 
 import {
   DATE_FORMAT_STYLES,
-  type DateFormatStyle,
   formatDateExample,
   type TemplateDateFormat,
 } from "./template-date-format";
@@ -1303,9 +1298,6 @@ const DateFormatConfigControl = ({
   const t = useTranslations();
   const locale = field.dateFormat?.locale ?? defaultLocale;
   const style = field.dateFormat?.style ?? "iso";
-  const [previewStyle, setPreviewStyle] = useState<DateFormatStyle | null>(
-    null,
-  );
 
   // The supported UI languages, plus the stored locale when it is not one of
   // them (a template's document language is not limited to UI languages).
@@ -1358,30 +1350,11 @@ const DateFormatConfigControl = ({
             <SelectValue />
           </SelectTrigger>
           <SelectPopup>
-            <MenuPreviewLayout
-              preview={
-                <PreviewPane className="w-44">
-                  {previewStyle && (
-                    <div className="flex h-full flex-col justify-center gap-1 text-center">
-                      <span className="text-base font-medium">
-                        {formatDateExample({ locale, style: previewStyle })}
-                      </span>
-                    </div>
-                  )}
-                </PreviewPane>
-              }
-            >
-              {DATE_FORMAT_STYLES.map((styleChoice) => (
-                <SelectItem
-                  key={styleChoice}
-                  onFocus={() => setPreviewStyle(styleChoice)}
-                  onMouseEnter={() => setPreviewStyle(styleChoice)}
-                  value={styleChoice}
-                >
-                  {formatDateExample({ locale, style: styleChoice })}
-                </SelectItem>
-              ))}
-            </MenuPreviewLayout>
+            {DATE_FORMAT_STYLES.map((styleChoice) => (
+              <SelectItem key={styleChoice} value={styleChoice}>
+                {formatDateExample({ locale, style: styleChoice })}
+              </SelectItem>
+            ))}
           </SelectPopup>
         </Select>
       </Field>
@@ -1452,6 +1425,7 @@ export const FieldConfigEditor = ({
   onUpdate,
   embedded = false,
   hideHint = false,
+  hideRequired = false,
   siblingPaths,
   hideFormulaControl = false,
   defaultDateLocale,
@@ -1463,6 +1437,9 @@ export const FieldConfigEditor = ({
   embedded?: boolean;
   /** Hide the fill-form hint input (AI-drafted fields have no question). */
   hideHint?: boolean;
+  /** Hide the "required" toggle — no person fills an AI-drafted field, so
+   *  requiredness is meaningless there (formula fields drop it too). */
+  hideRequired?: boolean;
   /** Paths of the template's other fields, offered as sources for a
    *  dependent select's options; a typed path input is shown when absent. */
   siblingPaths?: readonly string[] | undefined;
@@ -1495,7 +1472,7 @@ export const FieldConfigEditor = ({
       <Field>
         <div className="flex items-center justify-between gap-2">
           <FieldLabel>{t("templates.fieldLabel")}</FieldLabel>
-          {isFormula ? null : (
+          {isFormula || hideRequired ? null : (
             <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs">
               <Checkbox
                 checked={field.required}

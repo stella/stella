@@ -6,6 +6,7 @@ import { panic } from "better-result";
 import {
   AlertTriangleIcon,
   LandmarkIcon,
+  PencilIcon,
   PlusIcon,
   TrashIcon,
   WandSparklesIcon,
@@ -267,6 +268,10 @@ type SaveTarget =
 type TemplateFormProps = (TransientFillProps | ServerFillProps) & {
   /** Live values tap for hosts that preview the fill elsewhere. */
   onValuesChange?: (values: Record<string, unknown>) => void;
+  /** Opt-in edit affordance: when set, each top-level field row shows a
+   *  pencil that jumps to that field's configuration. Absent in the real
+   *  fill flow so its layout stays unchanged. */
+  onEditField?: (path: string) => void;
   /** Persist the filled DOCX as a matter document (server-side fill only). */
   saveTarget?: SaveTarget | undefined;
   /** Show the AI "prefill from documents" panel (server-side fill only);
@@ -504,6 +509,51 @@ const PrefillBadge = ({ snippet }: { snippet?: string | null | undefined }) => {
   );
 };
 
+/** Opt-in pencil that jumps to a field's configuration. Rendered once per
+ *  top-level field, aligned to the trailing edge of the label line. */
+const EditFieldButton = ({ onEdit }: { onEdit: () => void }) => {
+  const t = useTranslations();
+  return (
+    <Button
+      aria-label={t("common.edit")}
+      className="text-muted-foreground"
+      onClick={(event) => {
+        event.stopPropagation();
+        onEdit();
+      }}
+      size="icon-sm"
+      title={t("common.edit")}
+      type="button"
+      variant="ghost"
+    >
+      <PencilIcon className="size-3.5" />
+    </Button>
+  );
+};
+
+/** Standard field label line: label text, required marker, prefill badge, and
+ *  (when an edit handler is present) a trailing pencil. */
+const FieldLabelRow = ({
+  label,
+  required,
+  prefillSnippet,
+  onEdit,
+}: {
+  label: string;
+  required: boolean;
+  prefillSnippet?: string | null | undefined;
+  onEdit?: (() => void) | undefined;
+}) => (
+  <FieldLabel className="flex items-center justify-between gap-2">
+    <span className="inline-flex items-center">
+      {label}
+      {required && <RequiredIndicator />}
+      <PrefillBadge snippet={prefillSnippet} />
+    </span>
+    {onEdit && <EditFieldButton onEdit={onEdit} />}
+  </FieldLabel>
+);
+
 const FieldError = ({ message }: { message?: string | undefined }) => {
   if (!message) {
     return null;
@@ -618,6 +668,7 @@ const CompositeFieldRow = ({
   onBlur,
   error,
   prefillSnippet,
+  onEdit,
 }: {
   field: ResolvedField;
   parts: CompositePart[];
@@ -628,6 +679,7 @@ const CompositeFieldRow = ({
   onBlur?: ((path: string) => void) | undefined;
   error?: string | undefined;
   prefillSnippet?: string | null | undefined;
+  onEdit?: (() => void) | undefined;
 }) => {
   const partValues = readPartValues(value);
   const setPart = (key: string, partValue: string) =>
@@ -635,11 +687,12 @@ const CompositeFieldRow = ({
 
   return (
     <Field>
-      <FieldLabel>
-        {label}
-        {required && <RequiredIndicator />}
-        <PrefillBadge snippet={prefillSnippet} />
-      </FieldLabel>
+      <FieldLabelRow
+        label={label}
+        onEdit={onEdit}
+        prefillSnippet={prefillSnippet}
+        required={required}
+      />
       <div className="flex flex-wrap items-start gap-2">
         {parts.map((part) => {
           const partLabel = part.label ?? part.key;
@@ -703,6 +756,7 @@ const FieldRenderer = ({
   error,
   derivedOptions,
   prefillSnippet,
+  onEditField,
 }: {
   field: ResolvedField;
   value: unknown;
@@ -715,6 +769,9 @@ const FieldRenderer = ({
   /** Set when the value was AI-prefilled: the supporting source snippet
    *  (null when the model gave none). Undefined hides the badge. */
   prefillSnippet?: string | null | undefined;
+  /** Opt-in: jump to this field's configuration. Only passed for top-level
+   *  fields, never for array sub-item rows. */
+  onEditField?: ((path: string) => void) | undefined;
 }) => {
   const locale = useLocale();
   const inputType =
@@ -722,6 +779,7 @@ const FieldRenderer = ({
   const label = field.label ?? field.path;
   const required = field.required ?? field.validation?.required ?? false;
   const handleBlur = () => onBlur?.(field.path);
+  const onEdit = onEditField ? () => onEditField(field.path) : undefined;
 
   // A composite field renders one input per part on a single row; its form
   // value is the object of part values, assembled by the server at fill time.
@@ -734,6 +792,7 @@ const FieldRenderer = ({
         label={label}
         onBlur={onBlur}
         onChange={onChange}
+        onEdit={onEdit}
         parts={parts}
         prefillSnippet={prefillSnippet}
         required={required}
@@ -745,19 +804,22 @@ const FieldRenderer = ({
   if (inputType === "boolean" || field.kind === "boolean") {
     return (
       <Field>
-        <div className="flex items-center gap-2">
-          <Checkbox
-            checked={value === true}
-            onCheckedChange={(checked) => {
-              onChange(field.path, checked);
-              onBlur?.(field.path);
-            }}
-          />
-          <FieldLabel>
-            {label}
-            {required && <RequiredIndicator />}
-            <PrefillBadge snippet={prefillSnippet} />
-          </FieldLabel>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Checkbox
+              checked={value === true}
+              onCheckedChange={(checked) => {
+                onChange(field.path, checked);
+                onBlur?.(field.path);
+              }}
+            />
+            <FieldLabel>
+              {label}
+              {required && <RequiredIndicator />}
+              <PrefillBadge snippet={prefillSnippet} />
+            </FieldLabel>
+          </div>
+          {onEdit && <EditFieldButton onEdit={onEdit} />}
         </div>
         <FieldError message={error} />
       </Field>
@@ -774,11 +836,12 @@ const FieldRenderer = ({
   ) {
     return (
       <Field>
-        <FieldLabel>
-          {label}
-          {required && <RequiredIndicator />}
-          <PrefillBadge snippet={prefillSnippet} />
-        </FieldLabel>
+        <FieldLabelRow
+          label={label}
+          onEdit={onEdit}
+          prefillSnippet={prefillSnippet}
+          required={required}
+        />
         <Select
           disabled={selectOptions.length === 0}
           name={field.path}
@@ -807,11 +870,12 @@ const FieldRenderer = ({
   if (inputType === "textarea") {
     return (
       <Field>
-        <FieldLabel>
-          {label}
-          {required && <RequiredIndicator />}
-          <PrefillBadge snippet={prefillSnippet} />
-        </FieldLabel>
+        <FieldLabelRow
+          label={label}
+          onEdit={onEdit}
+          prefillSnippet={prefillSnippet}
+          required={required}
+        />
         <FieldControl
           render={
             <Textarea
@@ -832,11 +896,12 @@ const FieldRenderer = ({
   if (inputType === "number") {
     return (
       <Field>
-        <FieldLabel>
-          {label}
-          {required && <RequiredIndicator />}
-          <PrefillBadge snippet={prefillSnippet} />
-        </FieldLabel>
+        <FieldLabelRow
+          label={label}
+          onEdit={onEdit}
+          prefillSnippet={prefillSnippet}
+          required={required}
+        />
         <FieldControl
           render={
             <Input
@@ -857,11 +922,12 @@ const FieldRenderer = ({
   if (inputType === "date") {
     return (
       <Field>
-        <FieldLabel>
-          {label}
-          {required && <RequiredIndicator />}
-          <PrefillBadge snippet={prefillSnippet} />
-        </FieldLabel>
+        <FieldLabelRow
+          label={label}
+          onEdit={onEdit}
+          prefillSnippet={prefillSnippet}
+          required={required}
+        />
         <DatePickerPopover
           locale={locale}
           onChange={(v) => onChange(field.path, v ?? "")}
@@ -881,11 +947,12 @@ const FieldRenderer = ({
 
   return (
     <Field>
-      <FieldLabel>
-        {label}
-        {required && <RequiredIndicator />}
-        <PrefillBadge snippet={prefillSnippet} />
-      </FieldLabel>
+      <FieldLabelRow
+        label={label}
+        onEdit={onEdit}
+        prefillSnippet={prefillSnippet}
+        required={required}
+      />
       <FieldControl
         render={
           <Input
@@ -913,6 +980,7 @@ const ArrayFieldRenderer = ({
   onClearPaths,
   errors,
   touched,
+  onEditField,
 }: {
   field: ResolvedField;
   values: FormValues;
@@ -921,6 +989,9 @@ const ArrayFieldRenderer = ({
   onClearPaths: (paths: string[]) => void;
   errors: FieldErrors;
   touched: TouchedFields;
+  /** Opt-in: jump to this array field's configuration (one pencil for the
+   *  whole field, never per item). */
+  onEditField?: ((path: string) => void) | undefined;
 }) => {
   const t = useTranslations();
   const itemFields: ResolvedField[] = field.itemFields ?? [];
@@ -985,7 +1056,12 @@ const ArrayFieldRenderer = ({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">{label}</span>
+        <span className="inline-flex items-center text-sm font-medium">
+          {label}
+          {onEditField && (
+            <EditFieldButton onEdit={() => onEditField(field.path)} />
+          )}
+        </span>
         <div className="flex items-center gap-2">
           {maxItems !== undefined && (
             <span className="text-muted-foreground text-xs">
@@ -1401,6 +1477,7 @@ export const TemplateForm = ({
   onBack,
   onDone,
   onValuesChange,
+  onEditField,
   saveTarget,
   prefill,
 }: TemplateFormProps) => {
@@ -2156,6 +2233,7 @@ export const TemplateForm = ({
                     key={field.path}
                     onBlur={handleBlur}
                     onChange={handleChangeWithValidation}
+                    onEditField={onEditField}
                     prefillSnippet={prefillSnippets[field.path]}
                     value={values[field.path]}
                   />
@@ -2171,6 +2249,7 @@ export const TemplateForm = ({
                 onBlur={handleBlur}
                 onChange={handleChangeWithValidation}
                 onClearPaths={handleClearPaths}
+                onEditField={onEditField}
                 touched={touched}
                 values={values}
               />

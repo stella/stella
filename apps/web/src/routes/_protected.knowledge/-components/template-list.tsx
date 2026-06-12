@@ -52,6 +52,7 @@ import {
 import { SegmentedIconToggle } from "@stll/ui/components/segmented-icon-toggle";
 import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import { ContextMenu } from "@/components/context-menu";
 import type { ContextMenuAction } from "@/components/context-menu";
@@ -60,7 +61,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { usePermissions } from "@/hooks/use-permissions";
 import { supportedLanguages, useI18nStore } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
-import { DOCX_MIME } from "@/lib/consts";
+import { DOCX_MIME, TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
 import { userErrorMessage } from "@/lib/errors";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
@@ -268,7 +269,12 @@ export const TemplateList = ({
       />
 
       <div className="flex min-h-0 flex-1 flex-col border-s">
-        <div className="flex items-center justify-between gap-3 border-b px-4 py-2">
+        <div
+          className={cn(
+            "flex items-center justify-between gap-3 border-b px-4",
+            TOOLBAR_ROW_MIN_HEIGHT,
+          )}
+        >
           <div className="flex min-w-0 items-center gap-2">
             <h2 className="text-foreground text-sm font-semibold">
               {t("knowledge.sections.templates.title")}
@@ -1137,7 +1143,7 @@ const TemplateGuidanceDialogBody = ({
           <Textarea
             className="min-h-[60px]"
             id="template-when-to-use"
-            maxLength={2000}
+            maxLength={10_000}
             onChange={(e) => setWhenToUse(e.target.value)}
             placeholder={t("templates.whenToUsePlaceholder")}
             value={whenToUse}
@@ -1153,7 +1159,7 @@ const TemplateGuidanceDialogBody = ({
           <Textarea
             className="min-h-[60px]"
             id="template-when-not-to-use"
-            maxLength={2000}
+            maxLength={10_000}
             onChange={(e) => setWhenNotToUse(e.target.value)}
             placeholder={t("templates.whenNotToUsePlaceholder")}
             value={whenNotToUse}

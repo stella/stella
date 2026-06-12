@@ -42,6 +42,11 @@ export type StudioActions = {
   insertClause: () => void;
   /** Insert a `{{@clause:Name}}` slot bound to a linked clause's slot name. */
   insertClauseSlot: (slotName: string) => void;
+  /** Insert a raw marker (e.g. `{{@index}}`) inline at the caret. */
+  insertText: (text: string) => void;
+  /** True when the document caret sits inside a `{{#each}}…{{/each}}` body,
+   *  so loop-only tokens (`{{@index}}`, `{{@count}}`) are meaningful there. */
+  isCaretInLoop: () => boolean;
   makeField: () => void;
   save: () => void;
   /** Rewrite {{oldPath}} markers in the document and rename the field.
