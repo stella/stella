@@ -31,7 +31,6 @@ const sitemapDecisionSchema = v.strictObject({
   slug: v.nullable(v.string()),
   country: v.string(),
   court: v.string(),
-  decisionDate: v.nullable(v.string()),
   language: v.string(),
   languageAlternates: v.array(
     v.strictObject({
@@ -40,7 +39,6 @@ const sitemapDecisionSchema = v.strictObject({
       slug: v.nullable(v.string()),
       country: v.string(),
       court: v.string(),
-      decisionDate: v.nullable(v.string()),
       language: v.string(),
       updatedAt: v.string(),
     }),
@@ -136,8 +134,6 @@ const createCaseLawDecisionSitemapUrl = (
     caseNumber: decision.caseNumber,
     country: decision.country,
     court: decision.court,
-    decisionDate: decision.decisionDate,
-    decisionId: decision.id,
     language: decision.language,
     languageAlternates: decision.languageAlternates,
     slug: decision.slug,

@@ -83,14 +83,11 @@ describe("case-law decision routes", () => {
         caseNumber: "20 Cdo 470/2017",
         country: "CZE",
         court: "Nejvyšší soud",
-        decisionDate: "2017-09-20",
-        decisionId: DECISION_ID,
         slug: "ecli-cz-ns-2017-20-cdo",
       }),
     ).toEqual({
       country: "cze",
       court: "nejvyssi-soud",
-      date: "2017-09-20",
       slug: "ecli-cz-ns-2017-20-cdo",
     });
   });
@@ -100,8 +97,6 @@ describe("case-law decision routes", () => {
       caseNumber: "20 Cdo 470/2017",
       country: "CZE",
       court: "Nejvyšší soud",
-      decisionDate: "2017-09-20",
-      decisionId: DECISION_ID,
       language: "cs",
       languageAlternates: [],
       slug: "ecli-cz-ns-2017-20-cdo",
@@ -110,11 +105,10 @@ describe("case-law decision routes", () => {
     expect(params).toEqual({
       country: "cze",
       court: "nejvyssi-soud",
-      date: "2017-09-20",
       slug: "ecli-cz-ns-2017-20-cdo",
     });
     expect(createCaseLawDecisionPath(params)).toBe(
-      "/law/cze/cases/nejvyssi-soud/2017-09-20/ecli-cz-ns-2017-20-cdo",
+      "/law/cze/cases/nejvyssi-soud/ecli-cz-ns-2017-20-cdo",
     );
   });
 
@@ -123,8 +117,6 @@ describe("case-law decision routes", () => {
       caseNumber: "C-123/22",
       country: "EUR",
       court: "Court of Justice",
-      decisionDate: "2024-03-07",
-      decisionId: DECISION_ID,
       language: "EN",
       languageAlternates: [{ language: "en" }, { language: "cs" }],
       slug: "c-123-22",
@@ -133,12 +125,11 @@ describe("case-law decision routes", () => {
     expect(params).toEqual({
       country: "eur",
       court: "court-of-justice",
-      date: "2024-03-07",
       language: "en",
       slug: "c-123-22",
     });
     expect(createCaseLawDecisionPath(params)).toBe(
-      "/law/eur/cases/court-of-justice/2024-03-07/en/c-123-22",
+      "/law/eur/cases/court-of-justice/en/c-123-22",
     );
   });
 
@@ -178,8 +169,6 @@ describe("case-law decision routes", () => {
         caseNumber: "C-123/22",
         country: "EUR",
         court: "Court of Justice",
-        decisionDate: "2024-03-07",
-        decisionId: DECISION_ID,
         language: "FR",
         languageAlternates: [
           { language: "not a language" },
@@ -191,7 +180,6 @@ describe("case-law decision routes", () => {
     ).toEqual({
       country: "eur",
       court: "court-of-justice",
-      date: "2024-03-07",
       slug: "c-123-22",
     });
   });
@@ -202,8 +190,6 @@ describe("case-law decision routes", () => {
         caseNumber: "C-123/22",
         country: "EUR",
         court: "Court of Justice",
-        decisionDate: "2024-03-07",
-        decisionId: DECISION_ID,
         language: "EN",
         languageAlternateCount: 2,
         slug: "c-123-22",
@@ -211,7 +197,6 @@ describe("case-law decision routes", () => {
     ).toEqual({
       country: "eur",
       court: "court-of-justice",
-      date: "2024-03-07",
       language: "en",
       slug: "c-123-22",
     });
@@ -223,13 +208,10 @@ describe("case-law decision routes", () => {
         caseNumber: "20 Cdo 470/2017",
         country: "SVK",
         court: "",
-        decisionDate: null,
-        decisionId: DECISION_ID,
       }),
     ).toMatchObject({
       country: "svk",
       court: "unknown-court",
-      date: "unknown-date",
     });
   });
 

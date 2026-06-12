@@ -7,7 +7,7 @@ import {
   publicDecisionSearchSchema,
 } from "@/routes/law/-case-detail";
 
-export const Route = createFileRoute("/law/$country/cases/$court/$date/$slug")({
+export const Route = createFileRoute("/law/$country/cases/$court/$slug")({
   validateSearch: publicDecisionSearchSchema,
   loaderDeps: ({ search }) => search,
   loader: async ({ context: { queryClient }, deps, params }) =>
@@ -31,10 +31,9 @@ export const Route = createFileRoute("/law/$country/cases/$court/$date/$slug")({
 
 function PublicDecisionRoute() {
   const params = Route.useParams({
-    select: ({ country, court, date, slug }) => ({
+    select: ({ country, court, slug }) => ({
       country,
       court,
-      date,
       slug,
     }),
   });

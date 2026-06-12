@@ -20,7 +20,6 @@ export type CaseLawDecisionSearchHit = {
 export type CaseLawDecisionRouteParams = {
   country: string;
   court: string;
-  date: string;
   language?: string;
   slug: string;
 };
@@ -204,37 +203,13 @@ export const extractLegacyCaseLawDecisionIdFromRouteParam = (
   return isCaseLawDecisionId(decoded) ? decoded : null;
 };
 
-const UNKNOWN_DATE_SEGMENT = "unknown-date";
 const UNKNOWN_COURT_SEGMENT = "unknown-court";
 const LANGUAGE_SEGMENT_REGEX = /^(?=.{2,8}$)[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/u;
-
-const formatDecisionDateSegment = (value: Date | string | null): string => {
-  if (value === null) {
-    return UNKNOWN_DATE_SEGMENT;
-  }
-
-  if (value instanceof Date) {
-    return Number.isNaN(value.getTime())
-      ? UNKNOWN_DATE_SEGMENT
-      : value.toISOString().slice(0, 10);
-  }
-
-  const rawDate = value.trim();
-  if (/^\d{4}-\d{2}-\d{2}$/u.test(rawDate)) {
-    return rawDate;
-  }
-
-  const date = new Date(rawDate);
-  return Number.isNaN(date.getTime())
-    ? UNKNOWN_DATE_SEGMENT
-    : date.toISOString().slice(0, 10);
-};
 
 export const createCaseLawDecisionRouteParams = ({
   caseNumber,
   country,
   court,
-  decisionDate,
   language,
   languageAlternateCount,
   languageAlternates,
@@ -243,8 +218,6 @@ export const createCaseLawDecisionRouteParams = ({
   caseNumber: string;
   country: string;
   court: string;
-  decisionDate: Date | string | null;
-  decisionId: string;
   language?: string | null | undefined;
   languageAlternateCount?: number | null | undefined;
   languageAlternates?: readonly unknown[] | null | undefined;
@@ -257,7 +230,6 @@ export const createCaseLawDecisionRouteParams = ({
       court.trim().length > 0
         ? slugifyCaseLawPathSegment(court)
         : UNKNOWN_COURT_SEGMENT,
-    date: formatDecisionDateSegment(decisionDate),
     slug: createCaseLawDecisionRouteParam({ caseNumber, slug }),
   };
 
@@ -348,15 +320,14 @@ const isCaseLawLanguageAlternate = (
 export const createCaseLawDecisionPath = ({
   country,
   court,
-  date,
   language,
   slug,
-}: CaseLawDecisionRouteParams): `/law/${string}/cases/${string}/${string}/${string}` => {
+}: CaseLawDecisionRouteParams): `/law/${string}/cases/${string}/${string}` => {
   if (language) {
-    return `/law/${country}/cases/${court}/${date}/${language}/${slug}`;
+    return `/law/${country}/cases/${court}/${language}/${slug}`;
   }
 
-  return `/law/${country}/cases/${court}/${date}/${slug}`;
+  return `/law/${country}/cases/${court}/${slug}`;
 };
 
 export const decodeCaseLawDecisionRef = (value: string): string => {

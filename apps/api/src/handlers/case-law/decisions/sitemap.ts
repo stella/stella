@@ -47,7 +47,6 @@ type SitemapDecisionAlternate = {
   caseNumber: string;
   country: string;
   court: string;
-  decisionDate: string | null;
   id: string;
   language: string;
   slug: string | null;
@@ -278,7 +277,6 @@ export const listSitemapShardDecisionsHandler = async (
         slug: caseLawDecisions.slug,
         country: caseLawDecisions.country,
         court: caseLawDecisions.court,
-        decisionDate: caseLawDecisions.decisionDate,
         language: caseLawDecisions.language,
         languageGroupKey: caseLawDecisions.languageGroupKey,
         updatedAt: caseLawDecisions.updatedAt,
@@ -315,7 +313,6 @@ export const listSitemapShardDecisionsHandler = async (
           slug: caseLawDecisions.slug,
           country: caseLawDecisions.country,
           court: caseLawDecisions.court,
-          decisionDate: caseLawDecisions.decisionDate,
           language: caseLawDecisions.language,
           languageGroupKey: caseLawDecisions.languageGroupKey,
           updatedAt: caseLawDecisions.updatedAt,
@@ -374,7 +371,6 @@ export const listSitemapShardDecisionsHandler = async (
       slug: alternate.slug,
       country: alternate.country,
       court: alternate.court,
-      decisionDate: alternate.decisionDate,
       language: alternate.language,
       updatedAt: alternate.updatedAt,
     });
@@ -394,7 +390,6 @@ export const listSitemapShardDecisionsHandler = async (
         slug: row.slug,
         country: row.country,
         court: row.court,
-        decisionDate: row.decisionDate,
         language: row.language,
         languageAlternates: alternates.length > 1 ? alternates : [],
         updatedAt: row.updatedAt,
