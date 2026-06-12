@@ -31,6 +31,25 @@ const parseBody = (xml: string): slimdom.Element => {
 const bodyTexts = (body: slimdom.Element): string[] =>
   [...body.getElementsByTagNameNS(W_NS, "p")].map((p) => paragraphText(p));
 
+/** Text of every run carrying a `<w:b/>` (bold) property, in document order. */
+const boldRunTexts = (body: slimdom.Element): string[] => {
+  const texts: string[] = [];
+  for (const run of body.getElementsByTagNameNS(W_NS, "r")) {
+    const rPr = run.getElementsByTagNameNS(W_NS, "rPr").at(0);
+    if (!rPr || rPr.getElementsByTagNameNS(W_NS, "b").length === 0) {
+      continue;
+    }
+    const text = run
+      .getElementsByTagNameNS(W_NS, "t")
+      .map((t) => t.textContent ?? "")
+      .join("");
+    if (text.length > 0) {
+      texts.push(text);
+    }
+  }
+  return texts;
+};
+
 const makeDocx = async (documentXml: string): Promise<Buffer> => {
   const zip = new JSZip();
   zip.file("word/document.xml", documentXml);
@@ -54,6 +73,12 @@ const documentText = async (buffer: Buffer): Promise<string> => {
     texts.push(match[1] ?? "");
   }
   return texts.join("");
+};
+
+const documentBody = async (buffer: Buffer): Promise<slimdom.Element> => {
+  const zip = await JSZip.loadAsync(buffer);
+  const xml = (await zip.file("word/document.xml")?.async("string")) ?? "";
+  return parseBody(xml);
 };
 
 // ── parseInlineConditions ────────────────────────────────
@@ -87,13 +112,50 @@ describe("parseInlineConditions", () => {
     }
   });
 
-  test("rejects inline each", () => {
+  test("parses an inline each with content-span offsets covering the body", () => {
+    const text = "Parties: {{#each parties}}{{parties.name}}, {{/each}}end";
+    const parsed = parseInlineConditions(text);
+    if (!parsed.ok) {
+      throw new Error(parsed.message);
+    }
+    expect(parsed.groups).toHaveLength(1);
+    const group = parsed.groups[0];
+    if (group?.kind !== "each") {
+      throw new Error("expected an each group");
+    }
+    expect(group.arrayPath).toBe("parties");
+    expect(text.slice(group.start, group.end)).toBe(
+      "{{#each parties}}{{parties.name}}, {{/each}}",
+    );
+    expect(text.slice(group.contentStart, group.contentEnd)).toBe(
+      "{{parties.name}}, ",
+    );
+  });
+
+  test("rejects an inline each nested inside an inline if", () => {
     const parsed = parseInlineConditions(
-      "items: {{#each items}}x{{/each}} end",
+      "x {{#if a}}{{#each items}}y{{/each}}{{/if}}",
     );
     expect(parsed.ok).toBe(false);
     if (!parsed.ok) {
-      expect(parsed.message).toContain("Inline {{#each}} is not supported");
+      expect(parsed.message).toContain("Nested inline {{#each}}");
+    }
+  });
+
+  test("rejects an unclosed inline each, naming the paragraph", () => {
+    const parsed = parseInlineConditions("list: {{#each items}} never closed");
+    expect(parsed.ok).toBe(false);
+    if (!parsed.ok) {
+      expect(parsed.message).toContain("Unclosed inline {{#each}}");
+      expect(parsed.directive).toBe("{{#each items}}");
+    }
+  });
+
+  test("rejects an orphaned inline each closer", () => {
+    const parsed = parseInlineConditions("text {{/each}} more");
+    expect(parsed.ok).toBe(false);
+    if (!parsed.ok) {
+      expect(parsed.message).toContain("Orphaned inline {{/each}}");
     }
   });
 
@@ -228,16 +290,100 @@ describe("processInlineConditions", () => {
     expect(bodyTexts(body)).toEqual(["Intro.", original]);
   });
 
-  test("reports nested inline ifs and inline each as structure errors", () => {
+  test("reports nested inline ifs as structure errors", () => {
     const nested = "a {{#if x}}b {{#if y}}c{{/if}}{{/if}}";
-    const inlineEach = "list: {{#each items}}{{items.name}}{{/each}} end";
-    const body = parseBody(WRAP(P(nested) + P(inlineEach)));
-    const errors = processInlineConditions(body, { x: true, items: [] });
-    expect(errors.map((e) => e.paragraphIndex)).toEqual([0, 1]);
+    const body = parseBody(WRAP(P(nested)));
+    const errors = processInlineConditions(body, { x: true });
+    expect(errors.map((e) => e.paragraphIndex)).toEqual([0]);
     expect(errors[0]?.message).toContain("Nested inline {{#if}}");
-    expect(errors[1]?.message).toContain("Inline {{#each}} is not supported");
-    // Both paragraphs stay untouched.
-    expect(bodyTexts(body)).toEqual([nested, inlineEach]);
+    // The paragraph stays untouched.
+    expect(bodyTexts(body)).toEqual([nested]);
+  });
+
+  test("expands an inline each over a record array, repeating separators", () => {
+    const body = parseBody(
+      WRAP(P("Parties: {{#each parties}}{{parties.name}}, {{/each}}signed.")),
+    );
+    const errors = processInlineConditions(body, {
+      parties: [{ name: "Alice" }, { name: "Bob" }, { name: "Carol" }],
+    });
+    expect(errors).toEqual([]);
+    expect(bodyTexts(body)).toEqual(["Parties: Alice, Bob, Carol, signed."]);
+  });
+
+  test("resolves multiple item fields inside an inline each body", () => {
+    const body = parseBody(
+      WRAP(
+        P(
+          "Roster: {{#each people}}{{people.name}} ({{people.role}}); {{/each}}done.",
+        ),
+      ),
+    );
+    const errors = processInlineConditions(body, {
+      people: [
+        { name: "Alice", role: "Buyer" },
+        { name: "Bob", role: "Seller" },
+      ],
+    });
+    expect(errors).toEqual([]);
+    expect(bodyTexts(body)).toEqual([
+      "Roster: Alice (Buyer); Bob (Seller); done.",
+    ]);
+  });
+
+  test("renders an empty array as an empty span", () => {
+    const body = parseBody(
+      WRAP(P("Parties: {{#each parties}}{{parties.name}}, {{/each}}none.")),
+    );
+    const errors = processInlineConditions(body, { parties: [] });
+    expect(errors).toEqual([]);
+    expect(bodyTexts(body)).toEqual(["Parties: none."]);
+  });
+
+  test("expands an inline each over a primitive array via .value", () => {
+    const body = parseBody(
+      WRAP(P("Tags: {{#each tags}}{{tags.value}} {{/each}}end.")),
+    );
+    const errors = processInlineConditions(body, {
+      tags: ["alpha", "beta"],
+    });
+    expect(errors).toEqual([]);
+    expect(bodyTexts(body)).toEqual(["Tags: alpha beta end."]);
+  });
+
+  test("treats a non-array each path as an empty span", () => {
+    const body = parseBody(
+      WRAP(P("X: {{#each missing}}{{missing.name}}, {{/each}}Y.")),
+    );
+    const errors = processInlineConditions(body, {});
+    expect(errors).toEqual([]);
+    expect(bodyTexts(body)).toEqual(["X: Y."]);
+  });
+
+  test("resolves an inline each alongside an inline if in one paragraph", () => {
+    const body = parseBody(
+      WRAP(
+        P(
+          "Sellers: {{#each sellers}}{{sellers.name}}, {{/each}}{{#if notarised}}(notarised){{/if}}.",
+        ),
+      ),
+    );
+    const errors = processInlineConditions(body, {
+      sellers: [{ name: "Alice" }, { name: "Bob" }],
+      notarised: true,
+    });
+    expect(errors).toEqual([]);
+    expect(bodyTexts(body)).toEqual(["Sellers: Alice, Bob, (notarised)."]);
+  });
+
+  test("reports an unclosed inline each and leaves the paragraph untouched", () => {
+    const original = "list: {{#each items}}{{items.name}}, never closed.";
+    const body = parseBody(WRAP(P("Intro.") + P(original)));
+    const errors = processInlineConditions(body, { items: [{ name: "A" }] });
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.message).toContain("Unclosed inline {{#each}}");
+    expect(errors[0]?.paragraphIndex).toBe(1);
+    expect(bodyTexts(body)).toEqual(["Intro.", original]);
   });
 
   test("skips whole-paragraph directive lines (block engine territory)", () => {
@@ -246,6 +392,96 @@ describe("processInlineConditions", () => {
     const errors = processInlineConditions(body, {});
     expect(errors).toEqual([]);
     expect(bodyTexts(body)).toEqual(["{{/if}}", "Plain text."]);
+  });
+
+  test("resolves {{@index}} (1-based) and {{@count}} inside an inline each", () => {
+    const body = parseBody(
+      WRAP(P("Rows: {{#each rows}}{{@index}}/{{@count}} {{/each}}done.")),
+    );
+    const errors = processInlineConditions(body, { rows: [{}, {}, {}] });
+    expect(errors).toEqual([]);
+    expect(bodyTexts(body)).toEqual(["Rows: 1/3 2/3 3/3 done."]);
+  });
+
+  test("renders an empty array span with no iteration tokens", () => {
+    const body = parseBody(
+      WRAP(P("Rows: {{#each rows}}{{@index}} {{/each}}none.")),
+    );
+    const errors = processInlineConditions(body, { rows: [] });
+    expect(errors).toEqual([]);
+    expect(bodyTexts(body)).toEqual(["Rows: none."]);
+  });
+
+  test("preserves a bold run inside an inline each body for every item", () => {
+    // Body: bold "{{p.name}}" run + plain "; " run, repeated per item.
+    const xml = WRAP(
+      `<w:p>` +
+        `<w:r><w:t xml:space="preserve">Parties: {{#each p}}</w:t></w:r>` +
+        `<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">{{p.name}}</w:t></w:r>` +
+        `<w:r><w:t xml:space="preserve">; {{/each}}done.</w:t></w:r>` +
+        `</w:p>`,
+    );
+    const body = parseBody(xml);
+    const errors = processInlineConditions(body, {
+      p: [{ name: "Alice" }, { name: "Bob" }],
+    });
+    expect(errors).toEqual([]);
+    expect(bodyTexts(body)).toEqual(["Parties: Alice; Bob; done."]);
+
+    // Every item's name run carries <w:b/>; the separators stay plain.
+    const boldNames = boldRunTexts(body);
+    expect(boldNames).toEqual(["Alice", "Bob"]);
+  });
+
+  test("preserves mixed formatting across the each body per item", () => {
+    // Body: bold "{{p.name}}" + plain ", " — both repeat with formatting intact.
+    const xml = WRAP(
+      `<w:p>` +
+        `<w:r><w:t xml:space="preserve">{{#each p}}</w:t></w:r>` +
+        `<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">{{p.name}}</w:t></w:r>` +
+        `<w:r><w:t xml:space="preserve">, {{/each}}end.</w:t></w:r>` +
+        `</w:p>`,
+    );
+    const body = parseBody(xml);
+    const errors = processInlineConditions(body, {
+      p: [{ name: "Alice" }, { name: "Bob" }, { name: "Carol" }],
+    });
+    expect(errors).toEqual([]);
+    expect(bodyTexts(body)).toEqual(["Alice, Bob, Carol, end."]);
+    expect(boldRunTexts(body)).toEqual(["Alice", "Bob", "Carol"]);
+  });
+
+  test("preserves formatting alongside {{@index}} and an inline {{@num}}", async () => {
+    const docx = await makeDocx(
+      WRAP(
+        `<w:p>` +
+          `<w:r><w:t xml:space="preserve">List: {{#each p}}{{@index}}. {{@num:c}} </w:t></w:r>` +
+          `<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">{{p.name}}</w:t></w:r>` +
+          `<w:r><w:t xml:space="preserve">; {{/each}}end.</w:t></w:r>` +
+          `</w:p>`,
+      ),
+    );
+    const result = await fillTemplate(docx, {
+      p: [{ name: "Alice" }, { name: "Bob" }],
+    });
+    expect(result.structureErrors).toEqual([]);
+    expect(await documentText(result.buffer)).toBe(
+      "List: 1. 1 Alice; 2. 2 Bob; end.",
+    );
+    // The bold name run survives serialization for both expanded items.
+    const filledBody = await documentBody(result.buffer);
+    expect(boldRunTexts(filledBody)).toEqual(["Alice", "Bob"]);
+  });
+
+  test("{{@index}} composes with an item field in an inline each", () => {
+    const body = parseBody(
+      WRAP(P("List: {{#each p}}{{@index}}. {{p.name}}; {{/each}}end.")),
+    );
+    const errors = processInlineConditions(body, {
+      p: [{ name: "Alice" }, { name: "Bob" }],
+    });
+    expect(errors).toEqual([]);
+    expect(bodyTexts(body)).toEqual(["List: 1. Alice; 2. Bob; end."]);
   });
 });
 
@@ -283,6 +519,63 @@ describe("fillTemplate with inline conditions", () => {
     // reported as unmatched; its value surfaces as unused instead.
     expect(cut.unmatchedPlaceholders).toEqual([]);
     expect(cut.unusedValues).toContain("spouse_name");
+  });
+
+  test("inline each numbers loop-local {{@num}} sequentially per item", async () => {
+    const docx = await makeDocx(
+      WRAP(
+        P(
+          "Items: {{#each items}}Clause {{@num:item}} ({{items.name}}); {{/each}}end.",
+        ),
+      ),
+    );
+    const result = await fillTemplate(docx, {
+      items: [{ name: "A" }, { name: "B" }, { name: "C" }],
+    });
+    expect(result.structureErrors).toEqual([]);
+    expect(await documentText(result.buffer)).toBe(
+      "Items: Clause 1 (A); Clause 2 (B); Clause 3 (C); end.",
+    );
+  });
+
+  test("inline each resolves {{@index}}/{{@count}} through fillTemplate", async () => {
+    // Leading text keeps the paragraph off the block engine's
+    // whole-line-directive path, so the each stays inline.
+    const docx = await makeDocx(
+      WRAP(
+        P(
+          "List: {{#each items}}{{@index}}/{{@count}}: {{items.name}}. {{/each}}",
+        ),
+      ),
+    );
+    const result = await fillTemplate(docx, {
+      items: [{ name: "Alpha" }, { name: "Beta" }],
+    });
+    expect(result.structureErrors).toEqual([]);
+    expect(await documentText(result.buffer)).toBe(
+      "List: 1/2: Alpha. 2/2: Beta. ",
+    );
+  });
+
+  test("expands an inline each end-to-end through fillTemplate", async () => {
+    const docx = await makeDocx(
+      WRAP(
+        P(
+          "Signed by {{#each signers}}{{signers.name}} ({{signers.title}}), {{/each}}this day.",
+        ),
+      ),
+    );
+
+    const result = await fillTemplate(docx, {
+      signers: [
+        { name: "Jan Novák", title: "Director" },
+        { name: "Eva Malá", title: "Secretary" },
+      ],
+    });
+    expect(result.structureErrors).toEqual([]);
+    expect(await documentText(result.buffer)).toBe(
+      "Signed by Jan Novák (Director), Eva Malá (Secretary), this day.",
+    );
   });
 
   test("composes with block directives in the same document", async () => {
