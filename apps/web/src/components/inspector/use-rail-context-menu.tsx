@@ -4,6 +4,7 @@ import { useTranslations } from "use-intl";
 import { MenuItem } from "@stll/ui/components/menu";
 
 import { useInspectorStore } from "@/components/inspector/inspector-store";
+import type { ChatTab } from "@/components/inspector/inspector-store";
 import { useAnchoredMenu } from "@/components/inspector/use-anchored-menu";
 
 /**
@@ -13,8 +14,10 @@ import { useAnchoredMenu } from "@/components/inspector/use-anchored-menu";
  * (pane mounted on a global route), the menu opens a global chat.
  */
 export const useRailContextMenu = ({
+  activeSkill,
   workspaceId,
 }: {
+  activeSkill?: ChatTab["activeSkill"];
   workspaceId?: string | undefined;
 }) => {
   const t = useTranslations();
@@ -26,8 +29,12 @@ export const useRailContextMenu = ({
         onClick={() =>
           openChat(
             workspaceId === undefined
-              ? {}
-              : { workspaceId, contextMatterIds: [workspaceId] },
+              ? { ...(activeSkill ? { activeSkill } : {}) }
+              : {
+                  ...(activeSkill ? { activeSkill } : {}),
+                  workspaceId,
+                  contextMatterIds: [workspaceId],
+                },
           )
         }
       >

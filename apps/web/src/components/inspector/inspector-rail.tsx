@@ -19,11 +19,15 @@ import {
   ExternalSourceLogo,
   findMcpConnectorIconHref,
 } from "@/components/inspector/external-reference-panel";
+import { getActiveSkillChatContext } from "@/components/inspector/inspector-active-skill";
 import {
   isGenericInspectorTab,
   useInspectorStore,
 } from "@/components/inspector/inspector-store";
-import type { InspectorTab } from "@/components/inspector/inspector-store";
+import type {
+  ChatTab,
+  InspectorTab,
+} from "@/components/inspector/inspector-store";
 import { buildMaximizeTabAction } from "@/components/inspector/maximize-tab";
 import { useRailContextMenu } from "@/components/inspector/use-rail-context-menu";
 import { useTabContextMenu } from "@/components/inspector/use-tab-context-menu";
@@ -48,8 +52,10 @@ type InspectorRailProps = {
   onOpenChat: (
     args?: Parameters<
       (args?: {
+        label?: string;
         workspaceId?: string | undefined;
         contextMatterIds?: string[];
+        activeSkill?: ChatTab["activeSkill"];
       }) => void
     >[0],
   ) => void;
@@ -69,14 +75,26 @@ export const InspectorRail = ({
   workspaceId,
 }: InspectorRailProps) => {
   const t = useTranslations();
-  const railContextMenu = useRailContextMenu({ workspaceId });
+  const activeTab = tabs.find((tab) => tab.id === activeId);
+  const activeSkill = getActiveSkillChatContext(activeTab);
+  const railContextMenu = useRailContextMenu({ activeSkill, workspaceId });
 
   const openContextChat = () => {
-    onOpenChat(
-      workspaceId === undefined
+    const skillContext =
+      activeSkill === undefined
         ? {}
-        : { workspaceId, contextMatterIds: [workspaceId] },
-    );
+        : { activeSkill, label: activeSkill.skillName };
+
+    if (workspaceId === undefined) {
+      onOpenChat(skillContext);
+      return;
+    }
+
+    onOpenChat({
+      ...skillContext,
+      workspaceId,
+      contextMatterIds: [workspaceId],
+    });
   };
 
   return (

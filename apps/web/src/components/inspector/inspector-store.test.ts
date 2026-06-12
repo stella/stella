@@ -180,6 +180,32 @@ describe("openChat", () => {
     expect(tab.workspaceId).toBe("ws-1");
     expect(tab.contextMatterIds).toEqual(["ws-2"]);
   });
+
+  test("preserves active skill context on chat tabs", () => {
+    const threadId = toChatThreadId("thread-skill");
+    useInspectorStore.getState().openChat({
+      id: threadId,
+      activeSkill: { skillId: "skill-1", skillName: "Review Skill" },
+    });
+
+    useInspectorStore.getState().openChat({
+      id: threadId,
+      label: "Renamed skill chat",
+    });
+
+    const tab = useInspectorStore
+      .getState()
+      .tabs.find((t) => t.id === threadId);
+    if (tab?.type !== "chat") {
+      throw new Error("expected chat tab");
+    }
+
+    expect(tab.activeSkill).toEqual({
+      skillId: "skill-1",
+      skillName: "Review Skill",
+    });
+    expect(tab.label).toBe("Renamed skill chat");
+  });
 });
 
 describe("openExternal", () => {

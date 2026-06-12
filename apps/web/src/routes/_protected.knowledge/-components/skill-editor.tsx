@@ -8,6 +8,7 @@ import {
   FilePlusIcon,
   FileTextIcon,
   FolderPlusIcon,
+  MessageSquarePlusIcon,
   PencilIcon,
   PlusIcon,
   PowerIcon,
@@ -115,6 +116,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     select: (ctx) => ctx.user.activeOrganizationId,
   });
   const openSkillResourceTab = useInspectorStore((s) => s.openSkillResourceTab);
+  const openChat = useInspectorStore((s) => s.openChat);
 
   const detail = useQuery(skillDetailOptions(activeOrganizationId, skillId));
 
@@ -261,10 +263,14 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     path: string;
     content: string;
   }) => {
+    if (!detail.data) {
+      return;
+    }
+
     openSkillResourceTab({
       skillName,
       skillId,
-      origin: "upload",
+      origin: detail.data.origin,
       target: "resource",
       resourcePath: resource.path,
       label: resource.path.split("/").at(-1) ?? resource.path,
@@ -281,10 +287,14 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   const selectFile = (next: SelectedFile) => {
     setSelected(next);
     if (next.type === "body") {
+      if (!detail.data) {
+        return;
+      }
+
       openSkillResourceTab({
         skillName,
         skillId,
-        origin: "upload",
+        origin: detail.data.origin,
         target: "body",
         resourcePath: SKILL_BODY_FILE_NAME,
         label: SKILL_BODY_FILE_NAME,
@@ -313,7 +323,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     openSkillResourceTab({
       skillName: detail.data.name,
       skillId,
-      origin: "upload",
+      origin: detail.data.origin,
       target: "body",
       resourcePath: SKILL_BODY_FILE_NAME,
       label: SKILL_BODY_FILE_NAME,
@@ -662,6 +672,21 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
             />
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            {detail.data && (
+              <Button
+                aria-label={t("chat.newChat")}
+                onClick={() =>
+                  openChat({
+                    activeSkill: { skillId, skillName: detail.data.name },
+                    label: detail.data.name,
+                  })
+                }
+                size="icon-sm"
+                variant="ghost"
+              >
+                <MessageSquarePlusIcon className="size-4" />
+              </Button>
+            )}
             {detail.data && (
               <span className="text-muted-foreground rounded-md border px-1.5 py-0.5 text-xs">
                 {detail.data.scope === "team"

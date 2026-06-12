@@ -79,6 +79,11 @@ export const activeExternalSchema = t.Object({
   url: t.String(),
 });
 
+export const activeSkillSchema = t.Object({
+  skillId: t.Optional(tSafeId("agentSkill")),
+  skillName: t.String({ minLength: 1, maxLength: 64 }),
+});
+
 export const sendMessageBodySchema = t.Object({
   threadId: tSafeId("chatThread"),
   workspaceId: t.Optional(tSafeId("workspace")),
@@ -101,6 +106,7 @@ export const sendMessageBodySchema = t.Object({
   activeFile: t.Optional(activeFileSchema),
   activeDecision: t.Optional(activeDecisionSchema),
   activeExternal: t.Optional(activeExternalSchema),
+  activeSkill: t.Optional(activeSkillSchema),
   devModelId: t.Optional(
     t.String({
       minLength: 1,
@@ -115,6 +121,7 @@ export type IncomingUserContext = Static<typeof userContextSchema>;
 export type IncomingActiveFile = Static<typeof activeFileSchema>;
 export type IncomingActiveDecision = Static<typeof activeDecisionSchema>;
 export type IncomingActiveExternal = Static<typeof activeExternalSchema>;
+export type IncomingActiveSkill = Static<typeof activeSkillSchema>;
 
 type ValidateMessageInput = {
   message: RawIncomingMessage;

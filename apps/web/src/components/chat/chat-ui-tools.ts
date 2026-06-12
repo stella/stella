@@ -74,6 +74,7 @@ const CHAT_TOOL_TITLE_KEYS = {
   borme_get_summary: "chat.tool.borme_get_summary",
   business_registry_lookup: "chat.tool.business_registry_lookup",
   "create-document": "chat.tool.create-document",
+  "create-current-skill-resource": "common.edit",
   "describe-stella-api": "chat.tool.describe-stella-api",
   "expand-chat-history": "chat.tool.expand-chat-history",
   fetch_url: "chat.tool.fetch_url",
@@ -82,6 +83,8 @@ const CHAT_TOOL_TITLE_KEYS = {
   "load-skill": "chat.tool.load-skill",
   "read-skill-resource": "chat.tool.read-skill-resource",
   "search-chat-history": "chat.tool.search-chat-history",
+  "update-current-skill-body": "common.edit",
+  "update-current-skill-resource": "common.edit",
   "update-entity-fields": "chat.tool.update-entity-fields",
   web_search: "chat.tool.web_search",
 } as const satisfies Record<keyof ChatUITools, TranslationKey>;

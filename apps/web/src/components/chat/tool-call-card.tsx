@@ -39,6 +39,12 @@ const getToolInput = (part: ToolPart): unknown => {
 };
 
 const CODE_TOOL_NAMES = new Set(["execute-typescript", "run-stella-query"]);
+const SKILL_RESOURCE_OUTPUT_TOOL_NAMES = new Set([
+  "create-current-skill-resource",
+  "read-skill-resource",
+  "update-current-skill-body",
+  "update-current-skill-resource",
+]);
 
 const getCodeToolSource = (
   part: ToolPart,
@@ -81,7 +87,13 @@ const getStringInputValue = ({
   return typeof value === "string" ? value : undefined;
 };
 
-type SkillResourceOrigin = "built-in" | "upload" | "url";
+type SkillResourceOrigin =
+  | "authored"
+  | "built-in"
+  | "bundled"
+  | "upload"
+  | "url";
+type SkillResourceTarget = "body" | "resource";
 
 type SkillResourceOutput = {
   skillName: string;
@@ -90,6 +102,7 @@ type SkillResourceOutput = {
   mimeType: string;
   skillId: string | null;
   origin: SkillResourceOrigin;
+  target?: SkillResourceTarget | undefined;
 };
 
 const getStringProperty = (source: object, key: string): string | undefined => {
@@ -98,7 +111,14 @@ const getStringProperty = (source: object, key: string): string | undefined => {
 };
 
 const isSkillResourceOrigin = (value: unknown): value is SkillResourceOrigin =>
-  value === "built-in" || value === "upload" || value === "url";
+  value === "authored" ||
+  value === "built-in" ||
+  value === "bundled" ||
+  value === "upload" ||
+  value === "url";
+
+const isSkillResourceTarget = (value: unknown): value is SkillResourceTarget =>
+  value === "body" || value === "resource";
 
 const getNullableStringProperty = (
   source: object,
@@ -127,6 +147,7 @@ const getSkillResourceOutput = (
   const mimeType = getStringProperty(output, "mimeType");
   const skillId = getNullableStringProperty(output, "skillId");
   const originRaw: unknown = Reflect.get(output, "origin");
+  const targetRaw: unknown = Reflect.get(output, "target");
   if (
     skillName === undefined ||
     path === undefined ||
@@ -137,7 +158,15 @@ const getSkillResourceOutput = (
   ) {
     return undefined;
   }
-  return { skillName, path, content, mimeType, skillId, origin: originRaw };
+  return {
+    skillName,
+    path,
+    content,
+    mimeType,
+    skillId,
+    origin: originRaw,
+    ...(isSkillResourceTarget(targetRaw) ? { target: targetRaw } : {}),
+  };
 };
 
 const basenameOf = (path: string): string => {
@@ -163,15 +192,20 @@ const getToolSubtitle = ({
     }
     case "load-skill":
       return getStringInputValue({ key: "skillName", part }) ?? null;
+    case "create-current-skill-resource":
     case "read-skill-resource": {
       const skillName = getStringInputValue({ key: "skillName", part });
       const resourcePath = getStringInputValue({ key: "path", part });
       if (!skillName || !resourcePath) {
-        return null;
+        return resourcePath ?? null;
       }
 
       return `${skillName}: ${resourcePath}`;
     }
+    case "update-current-skill-body":
+      return "SKILL.md";
+    case "update-current-skill-resource":
+      return getStringInputValue({ key: "path", part }) ?? null;
     case "fetch_url": {
       const url = getStringInputValue({ key: "url", part });
       if (!url) {
@@ -231,6 +265,9 @@ const TOOL_ICONS: Record<string, typeof SearchIcon> = {
   "load-skill": LibraryIcon,
   "read-contact": UserIcon,
   "read-skill-resource": FileTextIcon,
+  "create-current-skill-resource": FileTextIcon,
+  "update-current-skill-body": FileTextIcon,
+  "update-current-skill-resource": FileTextIcon,
 };
 
 type CatalogEntry = {
@@ -317,7 +354,7 @@ export const ToolCallCard = ({
       showDetails &&
       (CODE_TOOL_NAMES.has(name) ||
         name === "load-skill" ||
-        name === "read-skill-resource"),
+        SKILL_RESOURCE_OUTPUT_TOOL_NAMES.has(name)),
     ),
   );
   const Icon = TOOL_ICONS[name] ?? SearchIcon;
@@ -341,7 +378,7 @@ export const ToolCallCard = ({
   const showCodeToolOutput = CODE_TOOL_NAMES.has(name) && hasOutput;
   const showMcpExactCall = mcpToolInfo !== null && toolInput !== undefined;
   const skillResourceOutput =
-    name === "read-skill-resource" && hasOutput
+    SKILL_RESOURCE_OUTPUT_TOOL_NAMES.has(name) && hasOutput
       ? getSkillResourceOutput(part)
       : undefined;
   const canExpand =
@@ -378,6 +415,9 @@ export const ToolCallCard = ({
                 mimeType: skillResourceOutput.mimeType,
                 content: skillResourceOutput.content,
                 label: basenameOf(skillResourceOutput.path),
+                ...(skillResourceOutput.target
+                  ? { target: skillResourceOutput.target }
+                  : {}),
               });
               return;
             }

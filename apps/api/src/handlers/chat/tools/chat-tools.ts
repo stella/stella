@@ -4,6 +4,7 @@ import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, ScopedDb } from "@/api/db";
 import { getChatSkillMetadata } from "@/api/handlers/chat/skills";
+import type { ActiveChatSkillContext } from "@/api/handlers/chat/skills";
 import {
   APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME,
   createActiveDocxEditTool,
@@ -38,6 +39,7 @@ import {
   WEB_SEARCH_TOOL_NAME,
 } from "@/api/handlers/chat/tools/web-search-tools";
 import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getDeployAvailableRegistryHandlers } from "@/api/lib/business-registries/dispatch";
 import { isWebSearchDeployAvailable } from "@/api/lib/web-search/select-provider";
@@ -63,10 +65,18 @@ type ActiveDocxEditTools = ReturnType<typeof createActiveDocxEditTools>;
 type CreateDocumentTools = ReturnType<typeof createCreateDocumentTools>;
 type WebSearchTools = ReturnType<typeof createWebSearchTools>;
 type ChatHistoryTools = ReturnType<typeof createChatHistoryTools>;
+type CurrentSkillEditToolName =
+  | "create-current-skill-resource"
+  | "update-current-skill-body"
+  | "update-current-skill-resource";
+type CurrentSkillEditTools = Partial<
+  Record<CurrentSkillEditToolName, NonNullable<ToolSet[string]>>
+>;
 
 type BuiltInChatTools = OrgTools &
   ChatExecutionTools &
   SkillTools &
+  CurrentSkillEditTools &
   BusinessRegistryTools &
   BoeTools &
   InfosoudTools &
@@ -77,6 +87,9 @@ type BuiltInChatTools = OrgTools &
   ChatHistoryTools;
 
 export type ChatTools = BuiltInChatTools;
+type BuiltInChatToolPolicyName =
+  | keyof BuiltInChatTools
+  | CurrentSkillEditToolName;
 
 type GetChatToolsProps = {
   safeDb: SafeDb;
@@ -116,6 +129,8 @@ type GetChatToolsProps = {
    */
   disabledNativeToolSlugs?: readonly string[] | undefined;
   skillMetadata?: readonly SkillMetadata[] | undefined;
+  activeSkillContext?: ActiveChatSkillContext | null | undefined;
+  recordAuditEvent?: AuditRecorder | undefined;
 };
 
 const createActiveDocxEditTools = () => ({
@@ -137,6 +152,7 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   borme_get_summary: CHAT_TOOL_POLICY_KIND.publicOfficial,
   [BUSINESS_REGISTRY_LOOKUP_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.publicOfficial,
   "create-document": CHAT_TOOL_POLICY_KIND.internal,
+  "create-current-skill-resource": CHAT_TOOL_POLICY_KIND.mutation,
   "describe-stella-api": CHAT_TOOL_POLICY_KIND.internal,
   [EXPAND_CHAT_HISTORY_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
   // Per-thread `webSearchEnabled` already gates the tools; an
@@ -150,10 +166,12 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   "read-skill-resource": CHAT_TOOL_POLICY_KIND.internal,
   "run-stella-query": CHAT_TOOL_POLICY_KIND.internal,
   [SEARCH_CHAT_HISTORY_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
+  "update-current-skill-body": CHAT_TOOL_POLICY_KIND.mutation,
+  "update-current-skill-resource": CHAT_TOOL_POLICY_KIND.mutation,
   "update-entity-fields": CHAT_TOOL_POLICY_KIND.mutation,
   [WEB_SEARCH_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.publicOfficial,
 } as const satisfies Record<
-  keyof BuiltInChatTools,
+  BuiltInChatToolPolicyName,
   (typeof CHAT_TOOL_POLICY_KIND)[keyof typeof CHAT_TOOL_POLICY_KIND]
 >;
 
@@ -171,6 +189,8 @@ export const getChatTools = ({
   externalTools = {},
   disabledNativeToolSlugs,
   skillMetadata,
+  activeSkillContext,
+  recordAuditEvent,
 }: GetChatToolsProps): ToolSet => {
   const orgTools = createOrgTools({
     accessibleWorkspaceIds: toolWorkspaceIds,
@@ -185,7 +205,9 @@ export const getChatTools = ({
     userId,
   });
   const skillTools = createSkillTools({
+    activeSkillContext,
     organizationId,
+    recordAuditEvent,
     safeDb,
     skills: skillMetadata ?? getChatSkillMetadata(),
     userId,
