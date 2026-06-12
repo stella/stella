@@ -70,8 +70,11 @@ test("server-rendered public law pages hydrate cleanly", async ({ page }) => {
   });
 
   await page.goto("/law/cases");
+  // Scoped to the decisions table: the shell sidebar also carries a
+  // /law/cases nav link that a page-wide href filter could match.
   const firstDecision = page
-    .locator('a[href*="/law/"][href*="/cases/"]')
+    .getByRole("table")
+    .locator('a[href*="/cases/"]')
     .first();
 
   await expect(firstDecision).toBeVisible();
