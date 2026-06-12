@@ -14,14 +14,17 @@ import { getRouteApi } from "@tanstack/react-router";
 import { panic } from "better-result";
 import {
   TextQuoteIcon,
+  ArrowLeftIcon,
   BookmarkIcon,
   BookmarkPlusIcon,
   BracesIcon,
+  CheckIcon,
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   CircleHelpIcon,
   CopyIcon,
+  HashIcon,
   LandmarkIcon,
   ListFilterIcon,
   Loader2Icon,
@@ -52,6 +55,7 @@ import {
   setTemplatePreviewValues,
 } from "@stll/folio";
 import type {
+  DirectiveKind,
   DirectiveRange,
   DocxEditorRef,
   TemplatePreviewSpan,
@@ -67,7 +71,6 @@ import type {
   DeterministicFieldConfig,
 } from "@stll/template-conditions";
 import { Button } from "@stll/ui/components/button";
-import { Checkbox } from "@stll/ui/components/checkbox";
 import {
   Dialog,
   DialogClose,
@@ -90,6 +93,11 @@ import {
   MenuTrigger,
 } from "@stll/ui/components/menu";
 import {
+  Popover,
+  PopoverPopup,
+  PopoverTrigger,
+} from "@stll/ui/components/popover";
+import {
   MenuPreviewLayout,
   PreviewPane,
 } from "@stll/ui/components/preview-pane";
@@ -109,7 +117,6 @@ import type {
   InspectorViewRenderProps,
 } from "@/components/inspector/view-registry";
 import { registerInspectorView } from "@/components/inspector/view-registry";
-import Tooltip from "@/components/tooltip";
 import { useI18nStore } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
@@ -181,6 +188,43 @@ const templateStudioTabId = (templateId: string) =>
 
 type TemplateStudioPayload = { templateId: string };
 
+/** Replay Folio's outline-jump flash (`folio-outline-flash`) on the directive
+ *  covering `pos`: scan the painted runs (`span[data-pm-start..data-pm-end]`)
+ *  for the one spanning the position and re-trigger the animation. Runs after a
+ *  scroll, so it retries across frames until the paged editor mounts the page. */
+const flashDirectiveAt = (view: EditorView, pos: number) => {
+  const container = view.dom.closest("[data-folio-scroll]");
+  if (!container) {
+    return;
+  }
+  let attempts = 0;
+  const run = () => {
+    const spans = container.querySelectorAll<HTMLElement>(
+      "span[data-pm-start][data-pm-end]",
+    );
+    for (const span of spans) {
+      const start = Number(span.dataset["pmStart"]);
+      const end = Number(span.dataset["pmEnd"]);
+      if (
+        Number.isFinite(start) &&
+        Number.isFinite(end) &&
+        start <= pos &&
+        pos < end
+      ) {
+        delete span.dataset["folioOutlineFlash"];
+        void span.offsetWidth;
+        span.dataset["folioOutlineFlash"] = "";
+        return;
+      }
+    }
+    attempts += 1;
+    if (attempts < 30) {
+      requestAnimationFrame(run);
+    }
+  };
+  requestAnimationFrame(run);
+};
+
 // ── Selection gesture popover ────────────────────────────
 
 /** Selecting prose settles for this long before the popover shows; drag and
@@ -190,11 +234,11 @@ const GESTURE_SHOW_DELAY_MS = 150;
  *  Make-field row. The instant buttons never wait for this. */
 const GESTURE_ENRICH_DELAY_MS = 500;
 const GESTURE_POPOVER_OFFSET_PX = 8;
-/** Half the popover's fixed width (w-56), for clamping inside the host. */
-const GESTURE_POPOVER_HALF_WIDTH_PX = 116;
-/** Rough rendered height of the five-row popover plus the AI slot, for the
- *  flip decision. */
-const GESTURE_POPOVER_EST_HEIGHT_PX = 210;
+/** Half the popover's widest layout (menu column + preview pane ≈ 440px), for
+ *  clamping its centered position inside the host so it never spills out. */
+const GESTURE_POPOVER_HALF_WIDTH_PX = 220;
+/** Rough rendered height of the menu + preview, for the above/below flip. */
+const GESTURE_POPOVER_EST_HEIGHT_PX = 280;
 /** At most this many existing field paths ride along in the enrichment
  *  instruction (the suggest endpoint bounds `instructions` at 2000 chars). */
 const GESTURE_ENRICH_MAX_PATHS = 30;
@@ -394,6 +438,8 @@ export const TemplateStudioPage = ({
       insertClause: () => actionsRef.current?.insertClause(),
       insertClauseSlot: (slotName) =>
         actionsRef.current?.insertClauseSlot(slotName),
+      insertText: (text) => actionsRef.current?.insertText(text),
+      isCaretInLoop: () => actionsRef.current?.isCaretInLoop() ?? false,
       makeField: () => actionsRef.current?.makeField(),
       save: () => actionsRef.current?.save(),
       renameFieldPath: (oldPath, newPath) =>
@@ -847,7 +893,7 @@ export const TemplateStudioPage = ({
   const insertCondition = (range?: { from: number; to: number }) =>
     insertOrWrapBlock("{{#if condition}}", "{{/if}}", "condition", range, true);
   const insertLoop = (range?: { from: number; to: number }) =>
-    insertOrWrapBlock("{{#each items}}", "{{/each}}", "items", range);
+    insertOrWrapBlock("{{#each items}}", "{{/each}}", "items", range, true);
   const insertClause = () => insertInline("{{@clause:Clause}}");
 
   /** Explicit-click block mirror: wrap the parallel cell's paragraphs in
@@ -871,7 +917,7 @@ export const TemplateStudioPage = ({
     if (kind === "if") {
       insertOrWrapBlock(`{{#if ${expr}}}`, "{{/if}}", expr, range, true);
     } else {
-      insertOrWrapBlock(`{{#each ${expr}}}`, "{{/each}}", expr, range);
+      insertOrWrapBlock(`{{#each ${expr}}}`, "{{/each}}", expr, range, true);
     }
   };
 
@@ -1366,24 +1412,26 @@ export const TemplateStudioPage = ({
     if (!paragraph || marker === undefined) {
       return false;
     }
-    const $from = state.doc.resolve(marker.from);
-    const $to = state.doc.resolve(marker.to);
-    if ($from.depth < 1 || $to.depth < 1) {
-      return false;
+    // Inline-or-block wrap, matching conditions: an inline marker becomes an
+    // inline {{#each}} (the fill engine resolves these), a whole-paragraph
+    // marker promotes to its own opener/closer paragraphs.
+    insertOrWrapBlock(
+      `{{#each ${path}}}`,
+      "{{/each}}",
+      path,
+      { from: marker.from, to: marker.to },
+      true,
+    );
+    // The wrap moves the caret into the new opener's placeholder name; park it
+    // back inside the item marker so the field face stays open, exactly like
+    // wrapFieldInCondition does.
+    const reopened = getTemplateDirectives(view.state)
+      .filter((d) => d.kind === "placeholder" && d.expr === itemPath)
+      .toSorted((a, b) => a.from - b.from)
+      .at(0);
+    if (reopened !== undefined) {
+      actionsRef.current.focusPosition(reopened.from);
     }
-    const start = $from.before(paragraphDepth($from, paragraph));
-    const end = $to.after(paragraphDepth($to, paragraph));
-    try {
-      view.dispatch(
-        state.tr
-          .insert(end, markerParagraph(state, paragraph, "{{/each}}"))
-          .insert(start, markerParagraph(state, paragraph, `{{#each ${path}}}`))
-          .scrollIntoView(),
-      );
-    } catch {
-      return false;
-    }
-    markDirty();
     return true;
   };
 
@@ -1395,85 +1443,20 @@ export const TemplateStudioPage = ({
     if (!view) {
       return false;
     }
-    const { state } = view;
-    const directives = getTemplateDirectives(state).toSorted(
-      (a, b) => a.from - b.from,
-    );
-    const marker = directives.find(
-      (d) => d.kind === "placeholder" && d.expr === path,
-    );
-    if (marker === undefined) {
+    // Read the loop name first and verify this field actually belongs to it;
+    // the shared remover otherwise mirrors unwrapFieldCondition's guard/delete.
+    const pair = enclosingDirectivePair(view.state, path, "each", "endeach");
+    if (pair === null) {
       return false;
     }
-    // The first closer whose popped opener encloses the marker is the
-    // innermost enclosing loop.
-    const stack: DirectiveRange[] = [];
-    let opener: DirectiveRange | undefined;
-    let closer: DirectiveRange | undefined;
-    for (const d of directives) {
-      if (d.kind === "each") {
-        stack.push(d);
-      } else if (d.kind === "endeach") {
-        const open = stack.pop();
-        if (
-          open !== undefined &&
-          open.to <= marker.from &&
-          d.from >= marker.to
-        ) {
-          opener = open;
-          closer = d;
-          break;
-        }
-      }
-    }
-    if (opener === undefined || closer === undefined) {
-      return false;
-    }
-    const loopPath = opener.expr.trim();
+    const loopPath = pair.opener.expr.trim();
     if (!path.startsWith(`${loopPath}.`)) {
       return false;
     }
-    // Re-verify the unwrap guard against the live document: any directive
-    // inside the pair other than this field's markers aborts.
-    const openerEnd = opener.to;
-    const closerStart = closer.from;
-    const bodyOnlyHasThisField = directives.every(
-      (d) =>
-        d.from < openerEnd ||
-        d.to > closerStart ||
-        (d.kind === "placeholder" && d.expr === path),
-    );
-    if (!bodyOnlyHasThisField) {
+    const result = removeEnclosingDirectiveParagraphs(path, "each", "endeach");
+    if (result === null) {
       return false;
     }
-    const paragraph = state.schema.nodes["paragraph"];
-    if (!paragraph) {
-      return false;
-    }
-    const paragraphBounds = (d: DirectiveRange) => {
-      const $pos = state.doc.resolve(d.from);
-      if ($pos.depth < 1) {
-        return null;
-      }
-      const depth = paragraphDepth($pos, paragraph);
-      return { from: $pos.before(depth), to: $pos.after(depth) };
-    };
-    const closerBounds = paragraphBounds(closer);
-    const openerBounds = paragraphBounds(opener);
-    if (closerBounds === null || openerBounds === null) {
-      return false;
-    }
-    try {
-      // Closer first so the opener's positions stay valid.
-      view.dispatch(
-        state.tr
-          .delete(closerBounds.from, closerBounds.to)
-          .delete(openerBounds.from, openerBounds.to),
-      );
-    } catch {
-      return false;
-    }
-    markDirty();
     const fields = useTemplateStudioStore.getState().fields;
     const flatPath = nextFreePath(loopPath, (candidate) =>
       fields.some((f) => f.path === candidate),
@@ -1512,12 +1495,37 @@ export const TemplateStudioPage = ({
     return true;
   };
 
-  // The innermost `{{#if}}` / `{{/if}}` pair that encloses this field's marker,
-  // paired by walking the sorted directives like buildOutline does. Returns
-  // null when the marker is not inside any `if` block.
-  const enclosingIfPair = (
+  // True when the caret sits inside an `{{#each}}…{{/each}}` body, paired by
+  // walking sorted directives with a stack. An `each` opener encloses the
+  // caret when `opener.to <= head` and its matching `endeach.from >= head`.
+  const caretInEachBlock = (state: EditorState): boolean => {
+    const head = state.selection.from;
+    const directives = getTemplateDirectives(state).toSorted(
+      (a, b) => a.from - b.from,
+    );
+    const stack: DirectiveRange[] = [];
+    for (const d of directives) {
+      if (d.kind === "each") {
+        stack.push(d);
+      } else if (d.kind === "endeach") {
+        const open = stack.pop();
+        if (open !== undefined && open.to <= head && d.from >= head) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  // The innermost opener/closer pair (e.g. `{{#if}}`/`{{/if}}` or
+  // `{{#each}}`/`{{/each}}`) that encloses this field's marker, paired by
+  // walking the sorted directives like buildOutline does. Returns null when the
+  // marker is not inside any matching block.
+  const enclosingDirectivePair = (
     state: EditorState,
     path: string,
+    openKind: DirectiveKind,
+    closeKind: DirectiveKind,
   ): { opener: DirectiveRange; closer: DirectiveRange } | null => {
     const directives = getTemplateDirectives(state).toSorted(
       (a, b) => a.from - b.from,
@@ -1530,9 +1538,9 @@ export const TemplateStudioPage = ({
     }
     const stack: DirectiveRange[] = [];
     for (const d of directives) {
-      if (d.kind === "if") {
+      if (d.kind === openKind) {
         stack.push(d);
-      } else if (d.kind === "endif") {
+      } else if (d.kind === closeKind) {
         const open = stack.pop();
         if (
           open !== undefined &&
@@ -1546,6 +1554,63 @@ export const TemplateStudioPage = ({
     return null;
   };
 
+  // Delete the innermost opener/closer paragraphs enclosing this field's marker,
+  // shared by condition-unwrap and loop-unmake. Guarded: the block body must
+  // hold nothing but this field's markers. An inline wrap deletes just the
+  // marker text; a block wrap (its own paragraph) deletes the whole paragraph.
+  // Delete the closer first so the opener's positions stay valid. Returns the
+  // pair on success, or null on guard fail / no pair / dispatch throw.
+  const removeEnclosingDirectiveParagraphs = (
+    path: string,
+    openKind: DirectiveKind,
+    closeKind: DirectiveKind,
+  ): { opener: DirectiveRange; closer: DirectiveRange } | null => {
+    const view = editorViewRef.current;
+    if (!view) {
+      return null;
+    }
+    const { state } = view;
+    const pair = enclosingDirectivePair(state, path, openKind, closeKind);
+    if (pair === null) {
+      return null;
+    }
+    const bodyOnlyHasThisField = getTemplateDirectives(state).every(
+      (d) =>
+        d.from < pair.opener.to ||
+        d.to > pair.closer.from ||
+        (d.kind === "placeholder" && d.expr === path),
+    );
+    if (!bodyOnlyHasThisField) {
+      return null;
+    }
+    const paragraph = state.schema.nodes["paragraph"];
+    const removalBounds = (d: DirectiveRange) => {
+      if (!d.block || !paragraph) {
+        return { from: d.from, to: d.to };
+      }
+      const $pos = state.doc.resolve(d.from);
+      if ($pos.depth < 1) {
+        return { from: d.from, to: d.to };
+      }
+      const depth = paragraphDepth($pos, paragraph);
+      return { from: $pos.before(depth), to: $pos.after(depth) };
+    };
+    const closerBounds = removalBounds(pair.closer);
+    const openerBounds = removalBounds(pair.opener);
+    try {
+      // Closer first so the opener's positions stay valid.
+      view.dispatch(
+        state.tr
+          .delete(closerBounds.from, closerBounds.to)
+          .delete(openerBounds.from, openerBounds.to),
+      );
+    } catch {
+      return null;
+    }
+    markDirty();
+    return pair;
+  };
+
   // Rewrite the `{{#if …}}` opener of the block that encloses this field's
   // marker (re-derived from the live document, so it works whether the block
   // was just created by wrapFieldInCondition or already existed).
@@ -1555,7 +1620,7 @@ export const TemplateStudioPage = ({
     if (!view || trimmed === "" || /[{}]/u.test(trimmed)) {
       return false;
     }
-    const pair = enclosingIfPair(view.state, path);
+    const pair = enclosingDirectivePair(view.state, path, "if", "endif");
     if (pair === null) {
       return false;
     }
@@ -1589,54 +1654,11 @@ export const TemplateStudioPage = ({
   // this field's marker (the face disables Remove otherwise). Delete the
   // closer first so the opener's positions stay valid.
   const unwrapFieldCondition = (path: string): boolean => {
-    const view = editorViewRef.current;
-    if (!view) {
-      return false;
+    const result = removeEnclosingDirectiveParagraphs(path, "if", "endif");
+    if (result !== null) {
+      actionsRef.current?.focusField(path);
     }
-    const { state } = view;
-    const pair = enclosingIfPair(state, path);
-    if (pair === null) {
-      return false;
-    }
-    const bodyOnlyHasThisField = getTemplateDirectives(state).every(
-      (d) =>
-        d.from < pair.opener.to ||
-        d.to > pair.closer.from ||
-        (d.kind === "placeholder" && d.expr === path),
-    );
-    if (!bodyOnlyHasThisField) {
-      return false;
-    }
-    const paragraph = state.schema.nodes["paragraph"];
-    // An inline wrap deletes just the marker text; a block wrap (the marker
-    // was the whole paragraph) deletes the opener/closer paragraphs, mirroring
-    // unmakeFieldRepeatable.
-    const removalBounds = (d: DirectiveRange) => {
-      if (!d.block || !paragraph) {
-        return { from: d.from, to: d.to };
-      }
-      const $pos = state.doc.resolve(d.from);
-      if ($pos.depth < 1) {
-        return { from: d.from, to: d.to };
-      }
-      const depth = paragraphDepth($pos, paragraph);
-      return { from: $pos.before(depth), to: $pos.after(depth) };
-    };
-    const closerBounds = removalBounds(pair.closer);
-    const openerBounds = removalBounds(pair.opener);
-    try {
-      // Closer first so the opener's positions stay valid.
-      view.dispatch(
-        state.tr
-          .delete(closerBounds.from, closerBounds.to)
-          .delete(openerBounds.from, openerBounds.to),
-      );
-    } catch {
-      return false;
-    }
-    markDirty();
-    actionsRef.current?.focusField(path);
-    return true;
+    return result !== null;
   };
 
   actionsRef.current = {
@@ -1691,6 +1713,11 @@ export const TemplateStudioPage = ({
     insertClause,
     insertRecipe,
     insertClauseSlot: (slotName) => insertInline(`{{@clause:${slotName}}}`),
+    insertText: (text) => insertInline(text),
+    isCaretInLoop: () => {
+      const view = editorViewRef.current;
+      return view !== null && caretInEachBlock(view.state);
+    },
     makeField: () => {
       makeField();
     },
@@ -1706,29 +1733,35 @@ export const TemplateStudioPage = ({
       if (placeholders.length === 0) {
         return;
       }
+      // Step field-by-field, not occurrence-by-occurrence: collapse to each
+      // distinct path's FIRST occurrence (placeholders are sorted, so the first
+      // seen per path wins) and cycle through those.
+      const firstByPath = new Map<string, DirectiveRange>();
+      for (const d of placeholders) {
+        if (!firstByPath.has(d.expr)) {
+          firstByPath.set(d.expr, d);
+        }
+      }
+      const distinct = [...firstByPath.values()];
       const head = view.state.selection.from;
-      const currentIndex = placeholders.findIndex(
+      const currentExpr = placeholders.find(
         (d) => head >= d.from && head <= d.to,
-      );
+      )?.expr;
+      const currentIndex =
+        currentExpr === undefined
+          ? -1
+          : distinct.findIndex((d) => d.expr === currentExpr);
       let nextIndex: number;
       if (currentIndex === -1) {
-        nextIndex = direction > 0 ? 0 : placeholders.length - 1;
+        nextIndex = direction > 0 ? 0 : distinct.length - 1;
       } else {
         nextIndex =
-          (currentIndex + direction + placeholders.length) %
-          placeholders.length;
+          (currentIndex + direction + distinct.length) % distinct.length;
       }
-      const target = placeholders.at(nextIndex);
-      if (!target) {
-        return;
+      const target = distinct.at(nextIndex);
+      if (target) {
+        actionsRef.current?.focusPosition(target.from);
       }
-      const $pos = view.state.doc.resolve(
-        Math.min(target.from + 2, view.state.doc.content.size),
-      );
-      view.dispatch(
-        view.state.tr.setSelection(TextSelection.near($pos)).scrollIntoView(),
-      );
-      view.focus();
     },
     focusField: (path) => {
       const view = editorViewRef.current;
@@ -1751,10 +1784,10 @@ export const TemplateStudioPage = ({
       const $pos = view.state.doc.resolve(
         Math.min(pos + 2, view.state.doc.content.size),
       );
-      view.dispatch(
-        view.state.tr.setSelection(TextSelection.near($pos)).scrollIntoView(),
-      );
+      view.dispatch(view.state.tr.setSelection(TextSelection.near($pos)));
       view.focus();
+      editorRef.current?.getEditorRef()?.scrollToPosition(pos);
+      flashDirectiveAt(view, pos);
     },
     renameFieldPath: (oldPath, newPath) => {
       const view = editorViewRef.current;
@@ -2019,7 +2052,7 @@ const SelectionGesturePopover = ({
   return (
     <div
       aria-label={t("templates.studio.insert")}
-      className="bg-popover text-popover-foreground absolute z-30 flex flex-col rounded-lg border p-1 shadow-lg/5 transition-opacity duration-100 starting:opacity-0"
+      className="bg-popover text-popover-foreground absolute z-50 flex max-h-[min(26rem,80vh)] max-w-[min(92vw,30rem)] flex-col overflow-y-auto rounded-lg border p-1 shadow-lg/5 transition-opacity duration-100 starting:opacity-0"
       role="group"
       style={{
         left: gesture.left,
@@ -2033,7 +2066,13 @@ const SelectionGesturePopover = ({
       <MenuPreviewLayout
         preview={
           <PreviewPane>
-            {preview && <GestureInsertPreview kind={preview} />}
+            {preview ? (
+              <GestureInsertPreview key={preview} kind={preview} />
+            ) : (
+              <div className="text-muted-foreground flex h-full items-center justify-center text-center text-xs text-balance">
+                {t("templates.studio.previewHint")}
+              </div>
+            )}
           </PreviewPane>
         }
       >
@@ -2113,61 +2152,174 @@ type GestureInsertKind = "field" | "if" | "each" | "clause";
 
 // Mock document content, not interface text; deliberately untranslated (see
 // the preview-pane pattern) so the previews carry no per-language i18n debt.
+// The concept caption below each IS translated (templates.studio.concept*).
 const GESTURE_PREVIEW_SAMPLE = {
-  fieldBefore: "Payment is due within ",
+  fieldBefore: "Due within ",
+  fieldMarker: "{{term}}",
+  fieldValue: "30",
   fieldAfter: " days.",
-  fieldMarker: "{{due_days}}",
   ifMarker: "{{#if has_guarantor}}",
   ifBody: "The Guarantor shall be jointly liable.",
   eachMarker: "{{#each parties}}",
   eachItem: "– {{name}}, {{role}}",
+  eachFilled: ["– Jane Roe, Buyer", "– John Doe, Seller"],
   clauseMarker: "{{@clause:liability}}",
+  clauseText: "Neither party is liable for indirect or consequential loss.",
 } as const;
 
+const CONCEPT_KEY: Record<GestureInsertKind, TranslationKey> = {
+  field: "templates.studio.conceptField",
+  if: "templates.studio.conceptCondition",
+  each: "templates.studio.conceptLoop",
+  clause: "templates.studio.conceptClause",
+};
+
+/** One-shot reveal: fills in after a short beat and stays (no loop). */
+const useFillReveal = (): boolean => {
+  const [filled, setFilled] = useState(false);
+  useEffect(() => {
+    const id = setTimeout(() => setFilled(true), 600);
+    return () => clearTimeout(id);
+  }, []);
+  return filled;
+};
+
+/** Cross-fades the whole template form into the whole filled result, stacked in
+ *  one grid cell sized to both — so the surrounding layout never reflows and a
+ *  shorter filled line just leaves harmless trailing space (no mid-text gap).
+ *  Opacity only (GPU-friendly); one-shot, settles on the filled layer. */
+const FillReveal = ({
+  on,
+  marker,
+  filled,
+  className,
+}: {
+  on: boolean;
+  marker: ReactNode;
+  filled: ReactNode;
+  className?: string;
+}) => (
+  <span className={cn("grid [&>*]:col-start-1 [&>*]:row-start-1", className)}>
+    <span
+      aria-hidden={on}
+      className="transition-opacity duration-500"
+      style={{ opacity: on ? 0 : 1 }}
+    >
+      {marker}
+    </span>
+    <span
+      aria-hidden={!on}
+      className="transition-opacity duration-500"
+      style={{ opacity: on ? 1 : 0 }}
+    >
+      {filled}
+    </span>
+  </span>
+);
+
 const GestureInsertPreview = ({ kind }: { kind: GestureInsertKind }) => {
-  if (kind === "field") {
-    return (
-      <div className="flex h-full flex-col justify-center gap-1.5 text-sm leading-relaxed">
-        <span>
-          {GESTURE_PREVIEW_SAMPLE.fieldBefore}
-          <code className="bg-primary/10 text-primary rounded px-1 py-0.5 text-xs">
-            {GESTURE_PREVIEW_SAMPLE.fieldMarker}
-          </code>
-          {GESTURE_PREVIEW_SAMPLE.fieldAfter}
-        </span>
-      </div>
-    );
-  }
-  if (kind === "if") {
-    return (
-      <div className="border-foreground-disabled bg-accent/50 flex h-full flex-col justify-center rounded-sm border-s-[3px] py-1.5 ps-3 pe-2 text-sm leading-relaxed">
-        <code className="text-muted-foreground text-xs">
-          {GESTURE_PREVIEW_SAMPLE.ifMarker}
-        </code>
-        <span className="mt-1">{GESTURE_PREVIEW_SAMPLE.ifBody}</span>
-      </div>
-    );
-  }
-  if (kind === "each") {
-    return (
-      <div className="border-success/40 bg-success/10 flex h-full flex-col justify-center gap-1 rounded-sm border-s-[3px] py-1.5 ps-3 pe-2 text-sm leading-relaxed">
-        <code className="text-muted-foreground text-xs">
-          {GESTURE_PREVIEW_SAMPLE.eachMarker}
-        </code>
-        <span>{GESTURE_PREVIEW_SAMPLE.eachItem}</span>
-      </div>
-    );
-  }
+  const t = useTranslations();
+  const filled = useFillReveal();
+
   return (
-    <div className="flex h-full flex-col justify-center gap-1.5">
-      <div className="bg-card flex items-center gap-1.5 rounded-sm border border-dashed p-2">
-        <TextQuoteIcon className="text-muted-foreground size-3.5 shrink-0" />
-        <code className="text-muted-foreground text-xs">
-          {GESTURE_PREVIEW_SAMPLE.clauseMarker}
-        </code>
+    <div className="flex h-full flex-col">
+      <div className="flex flex-1 flex-col justify-center overflow-hidden text-sm leading-relaxed">
+        {kind === "field" && (
+          <FillReveal
+            className="whitespace-nowrap"
+            filled={
+              <span>
+                {GESTURE_PREVIEW_SAMPLE.fieldBefore}
+                <span className="text-foreground font-semibold">
+                  {GESTURE_PREVIEW_SAMPLE.fieldValue}
+                </span>
+                {GESTURE_PREVIEW_SAMPLE.fieldAfter}
+              </span>
+            }
+            marker={
+              <span>
+                {GESTURE_PREVIEW_SAMPLE.fieldBefore}
+                <code className="bg-primary/10 text-primary rounded px-1 py-0.5 text-xs">
+                  {GESTURE_PREVIEW_SAMPLE.fieldMarker}
+                </code>
+                {GESTURE_PREVIEW_SAMPLE.fieldAfter}
+              </span>
+            }
+            on={filled}
+          />
+        )}
+
+        {kind === "if" && (
+          <div className="border-foreground-disabled bg-accent/50 rounded-sm border-s-[3px] py-1.5 ps-3 pe-2">
+            <FillReveal
+              className="block"
+              filled={
+                <span className="text-success inline-flex items-center gap-1 text-xs">
+                  <CheckIcon className="size-3" />
+                </span>
+              }
+              marker={
+                <code className="text-muted-foreground block text-xs">
+                  {GESTURE_PREVIEW_SAMPLE.ifMarker}
+                </code>
+              }
+              on={filled}
+            />
+            <span className="mt-1 block">{GESTURE_PREVIEW_SAMPLE.ifBody}</span>
+          </div>
+        )}
+
+        {kind === "each" && (
+          <div className="border-success/40 bg-success/10 rounded-sm border-s-[3px] py-1.5 ps-3 pe-2">
+            <FillReveal
+              className="block"
+              filled={
+                <span className="block">
+                  {GESTURE_PREVIEW_SAMPLE.eachFilled.map((row) => (
+                    <span className="block" key={row}>
+                      {row}
+                    </span>
+                  ))}
+                </span>
+              }
+              marker={
+                <span className="block">
+                  <code className="text-muted-foreground text-xs">
+                    {GESTURE_PREVIEW_SAMPLE.eachMarker}
+                  </code>
+                  <span className="mt-1 block">
+                    {GESTURE_PREVIEW_SAMPLE.eachItem}
+                  </span>
+                </span>
+              }
+              on={filled}
+            />
+          </div>
+        )}
+
+        {kind === "clause" && (
+          <FillReveal
+            className="block"
+            filled={
+              <span className="block leading-relaxed">
+                {GESTURE_PREVIEW_SAMPLE.clauseText}
+              </span>
+            }
+            marker={
+              <span className="bg-card flex items-center gap-1.5 rounded-sm border border-dashed p-2">
+                <TextQuoteIcon className="text-muted-foreground size-3.5 shrink-0" />
+                <code className="text-muted-foreground text-xs">
+                  {GESTURE_PREVIEW_SAMPLE.clauseMarker}
+                </code>
+              </span>
+            }
+            on={filled}
+          />
+        )}
       </div>
-      <div className="bg-muted h-1.5 w-3/4 rounded-full" />
-      <div className="bg-muted h-1.5 w-1/2 rounded-full" />
+      <p className="text-muted-foreground mt-1.5 shrink-0 text-[11px] leading-snug">
+        {t(CONCEPT_KEY[kind])}
+      </p>
     </div>
   );
 };
@@ -2417,6 +2569,31 @@ const siblingWrapRange = (
   return { from: sibling.from + 1, to: sibling.to - 1 };
 };
 
+type OutlineRowItem = { node: OutlineNode; count: number };
+
+/** Collapse sibling field nodes sharing a path into one row (keeping the first,
+ *  earliest occurrence) with an occurrence count; non-field nodes pass through
+ *  with count 1. Order is preserved (callers pass doc-sorted sibling lists). */
+const dedupeOutlineFields = (nodes: OutlineNode[]): OutlineRowItem[] => {
+  const result: OutlineRowItem[] = [];
+  const indexByPath = new Map<string, number>();
+  for (const node of nodes) {
+    if (node.type === "field") {
+      const existing = indexByPath.get(node.path);
+      if (existing !== undefined) {
+        const item = result[existing];
+        if (item) {
+          item.count += 1;
+        }
+        continue;
+      }
+      indexByPath.set(node.path, result.length);
+    }
+    result.push({ node, count: 1 });
+  }
+  return result;
+};
+
 /** Folds the flat directive scan into the document's nesting: if/each
  *  markers open groups that own everything up to their closer, so the
  *  panel mirrors which fields only appear under a condition or repeat. */
@@ -2558,30 +2735,11 @@ const outlineFieldPaths = (nodes: OutlineNode[]): Set<string> => {
   return paths;
 };
 
-/** First marker position per field path, for jump-to-marker rows rendered
- *  outside the outline (the Conditions disclosure's questions). */
-const outlineFieldFirstPositions = (
-  nodes: OutlineNode[],
-): Map<string, number> => {
-  const positions = new Map<string, number>();
-  const walk = (list: OutlineNode[]) => {
-    for (const node of list) {
-      if (node.type === "field" && !positions.has(node.path)) {
-        positions.set(node.path, node.from);
-      }
-      if (node.type === "group") {
-        walk(node.children);
-      }
-    }
-  };
-  walk(nodes);
-  return positions;
-};
-
-type StudioFacet = "fields" | "clauses" | "history" | "fill";
+type StudioFacet = "fields" | "guidance" | "clauses" | "history" | "fill";
 
 const STUDIO_FACETS: readonly StudioFacet[] = [
   "fields",
+  "guidance",
   "clauses",
   "history",
   "fill",
@@ -2594,6 +2752,9 @@ function TemplateStudioInspectorView({
   const t = useTranslations();
   const { templateId } = tab.payload;
   const [facet, setFacet] = useState<StudioFacet>("fields");
+  const [editReturnFacet, setEditReturnFacet] = useState<StudioFacet | null>(
+    null,
+  );
   const sessionTemplateId = useTemplateStudioStore((s) => s.templateId);
   const fields = useTemplateStudioStore((s) => s.fields);
   const outline = useTemplateStudioStore((s) => s.outline);
@@ -2604,6 +2765,18 @@ function TemplateStudioInspectorView({
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
+  const lang = useI18nStore((s) => s.lang);
+  // Languages sit in the tab header (next to the name) so the template's identity
+  // reads at a glance; useQuery (not suspense) keeps a cache miss from blocking
+  // the whole studio chrome.
+  const { data: detailData } = useQuery(
+    templateDetailOptions(activeOrganizationId, templateId),
+  );
+  const detail =
+    detailData && !(detailData instanceof Response) && "manifest" in detailData
+      ? detailData
+      : null;
+  const languages = detail?.languages ?? [];
   const openView = useInspectorStore((s) => s.openView);
   const setNavName = useTemplateNavStore((s) => s.setName);
   const [rename, setRename] = useState<{ active: boolean; value: string }>({
@@ -2641,9 +2814,21 @@ function TemplateStudioInspectorView({
 
   const facetLabels: Record<StudioFacet, string> = {
     fields: t("templates.fields"),
+    guidance: t("templates.whenToUse"),
     clauses: t("common.clauses"),
     history: t("common.history"),
     fill: t("templates.testFill"),
+  };
+
+  // Leaving the field-settings face returns to wherever the edit was launched
+  // from (the Fill-tab pencil records "fill"); otherwise it drops to the
+  // Fields overview.
+  const exitField = () => {
+    if (editReturnFacet !== null) {
+      setFacet(editReturnFacet);
+      setEditReturnFacet(null);
+    }
+    useTemplateStudioStore.getState().actions?.deselect();
   };
 
   // The page seeds the session on mount; until then (or after it unmounts and
@@ -2656,6 +2841,21 @@ function TemplateStudioInspectorView({
       <InspectorTabHeader
         actions={<StudioSaveAction />}
         label={tab.label}
+        matter={
+          languages.length > 0 ? (
+            <span className="flex shrink-0 items-center gap-1">
+              {languages.map((tag) => (
+                <span
+                  className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px] font-medium"
+                  key={tag}
+                  title={tag}
+                >
+                  {languageChipLabel(tag, lang)}
+                </span>
+              ))}
+            </span>
+          ) : undefined
+        }
         onClose={onClose}
         onStartRename={() => setRename({ active: true, value: tab.label })}
         rename={{
@@ -2675,6 +2875,7 @@ function TemplateStudioInspectorView({
           if (next === facet && next === "fields") {
             useTemplateStudioStore.getState().actions?.deselect();
           }
+          setEditReturnFacet(null);
           setFacet(next);
         }}
       />
@@ -2686,12 +2887,16 @@ function TemplateStudioInspectorView({
       {ready && facet === "fields" && (
         <Inspector
           fields={fields}
-          name={tab.label}
-          outline={outline}
+          onFieldBack={exitField}
           onFieldUpdate={upsertField}
+          outline={outline}
           selected={selected}
-          templateId={templateId}
         />
+      )}
+      {ready && facet === "guidance" && (
+        <div className="min-h-0 flex-1 overflow-auto">
+          <TemplateGuidanceFacet templateId={templateId} />
+        </div>
       )}
       {ready && facet === "clauses" && (
         <div className="min-h-0 flex-1 overflow-auto">
@@ -2704,7 +2909,17 @@ function TemplateStudioInspectorView({
         </div>
       )}
       {ready && facet === "fill" && (
-        <TemplateFillFacet templateId={templateId} />
+        <TemplateFillFacet
+          onEditField={(path) => {
+            setEditReturnFacet("fill");
+            setFacet("fields");
+            useTemplateStudioStore.getState().actions?.focusField(path);
+          }}
+          templateId={templateId}
+        />
+      )}
+      {ready && facet === "fields" && !selected && (
+        <StudioOverviewSummary fields={fields} templateId={templateId} />
       )}
       {ready && facet === "fields" && <StudioInsertRow />}
     </div>
@@ -2717,11 +2932,13 @@ const StudioSaveAction = () => {
   const actions = useTemplateStudioStore((s) => s.actions);
   const ui = useTemplateStudioStore((s) => s.ui);
   const isDirty = useTemplateStudioStore((s) => s.isDirty);
-  if (!actions) {
+  // Nothing to save → no button at all; a permanently greyed-out control just
+  // reads as broken. It reappears the moment an edit makes the tab dirty.
+  if (!actions || (!isDirty && !ui.isSaving)) {
     return null;
   }
   return (
-    <Button disabled={!isDirty || ui.isSaving} onClick={actions.save} size="xs">
+    <Button disabled={ui.isSaving} onClick={actions.save} size="xs">
       <SaveIcon className="size-3.5" />
       {t("common.save")}
     </Button>
@@ -2733,7 +2950,13 @@ const StudioSaveAction = () => {
 // field kind/itemFields, so re-discover the stored DOCX (the same merge the
 // fill endpoint uses) to get the real field shape — {{#each}} array fields
 // included — rather than reconstructing it from the flat manifest.
-const TemplateFillFacet = ({ templateId }: { templateId: string }) => {
+const TemplateFillFacet = ({
+  templateId,
+  onEditField,
+}: {
+  templateId: string;
+  onEditField: (path: string) => void;
+}) => {
   const fillSaveTarget = useFillToMatterSaveTarget();
   const facetOrgId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
@@ -2837,6 +3060,7 @@ const TemplateFillFacet = ({ templateId }: { templateId: string }) => {
         fileName={detail.fileName}
         onBack={() => undefined}
         onDone={() => undefined}
+        onEditField={onEditField}
         onValuesChange={(values) =>
           pushFillPreview(values, discovered.fields, clausePreview?.slotTexts)
         }
@@ -3110,27 +3334,6 @@ const queueLookupPreviews = (
   }, LOOKUP_PREVIEW_DEBOUNCE_MS);
 };
 
-/** Single-field variant for the field face: a lookup field's preview shows
- *  the looked-up rendering via the same debounce + cache as the fill facet. */
-const pushSingleFieldPreview = (field: StudioField, value: string) => {
-  cancelLookupPreviews();
-  const { actions } = useTemplateStudioStore.getState();
-  if (value === "") {
-    actions?.setFillPreview(null);
-    return;
-  }
-  const values: Record<string, unknown> = { [field.path]: value };
-  const rendered = renderPreviewFieldValue(field, value, values) ?? value;
-  const preview: Record<string, TemplatePreviewValue> = {
-    [field.path]: rendered,
-  };
-  const pending = applyCachedLookupRenderings(preview, [field]);
-  actions?.setFillPreview(preview);
-  if (pending.length > 0) {
-    queueLookupPreviews(pending, () => pushSingleFieldPreview(field, value));
-  }
-};
-
 /** One field entry in an "Existing field…" insert list. A lookup field with
  *  more than one output format expands into a submenu so the author picks WHICH
  *  rendering to insert: the first format as the default (`{{path}}`), each
@@ -3204,6 +3407,10 @@ const StudioInsertRow = () => {
   const { data: recipesData } = useQuery(
     templateRecipesOptions(activeOrganizationId),
   );
+  // The loop-token submenu (`{{@index}}`/`{{@count}}`) only makes sense inside
+  // an `{{#each}}` body. `isCaretInLoop` reads the live caret imperatively, so
+  // recompute it each time the menu opens rather than reactively.
+  const [caretInLoop, setCaretInLoop] = useState(false);
   const recipes =
     recipesData && "recipes" in recipesData ? recipesData.recipes : [];
   const linkedClauses =
@@ -3244,7 +3451,13 @@ const StudioInsertRow = () => {
         <PlusIcon />
         {t("templates.studio.newField")}
       </Button>
-      <Menu>
+      <Menu
+        onOpenChange={(open) => {
+          if (open) {
+            setCaretInLoop(actions.isCaretInLoop());
+          }
+        }}
+      >
         <MenuTrigger
           aria-label={t("templates.studio.insert")}
           render={<Button size="icon-sm" variant="ghost" />}
@@ -3277,6 +3490,24 @@ const StudioInsertRow = () => {
             <RepeatIcon />
             {t("templates.studio.loop")}
           </MenuItem>
+          {caretInLoop && (
+            <MenuSub>
+              <MenuSubTrigger>
+                <RepeatIcon />
+                {t("templates.studio.loop")}
+              </MenuSubTrigger>
+              <MenuSubPopup>
+                <MenuItem onClick={() => actions.insertText("{{@index}}")}>
+                  <HashIcon />
+                  {t("templates.studio.insertItemNumber")}
+                </MenuItem>
+                <MenuItem onClick={() => actions.insertText("{{@count}}")}>
+                  <SigmaIcon />
+                  {t("templates.studio.insertItemTotal")}
+                </MenuItem>
+              </MenuSubPopup>
+            </MenuSub>
+          )}
           {recipes.length > 0 && (
             <MenuSub>
               <MenuSubTrigger>
@@ -3339,23 +3570,19 @@ registerInspectorView<TemplateStudioPayload>({
 // ── Selection-scoped inspector ───────────────────────────
 
 type InspectorProps = {
-  templateId: string;
-  /** Template name, mirrored from the inspector tab label (rename updates
-   *  it immediately; the detail query may lag an invalidation behind). */
-  name: string;
   selected: DirectiveRange | null;
   fields: StudioField[];
   outline: OutlineNode[];
   onFieldUpdate: (path: string, patch: Partial<StudioField>) => void;
+  onFieldBack?: () => void;
 };
 
 const Inspector = ({
-  templateId,
-  name,
   selected,
   fields,
   outline,
   onFieldUpdate,
+  onFieldBack,
 }: InspectorProps) => {
   if (selected && selected.kind === "placeholder") {
     const field =
@@ -3365,6 +3592,7 @@ const Inspector = ({
       <FieldFace
         field={field}
         key={field.path}
+        onBack={onFieldBack}
         onUpdate={(patch) => onFieldUpdate(field.path, patch)}
       />
     );
@@ -3382,44 +3610,53 @@ const Inspector = ({
     return <LoopFace key={selected.expr} selected={selected} />;
   }
 
-  // Default: whole-template overview. The identity block leads (what this
-  // template IS), fields follow (they are what the template is made of);
-  // conditions fold into a disclosure of supporting logic. Conditions ARE
-  // boolean fields.
-  const booleanFields = fields.filter((f) => f.inputType === "boolean");
+  // Default: whole-template overview — the field/condition outline. Identity
+  // (language) now lives in the tab header, the when-to-use guidance in its own
+  // subtab, and the count summary in the footer above the insert row.
   return (
     <ScrollArea className="min-h-0 flex-1">
-      <TemplateIdentity
-        conditionCount={booleanFields.length}
-        fieldCount={fields.length}
-        name={name}
-        templateId={templateId}
-      />
-      <Separator />
       <FieldNavigator fields={fields} outline={outline} />
-      <Separator />
-      <ConditionsDisclosure fields={fields} outline={outline} />
     </ScrollArea>
   );
 };
 
-/** Identity block at the top of the template overview: name, language
- *  chips, a one-line content summary, and the when-to-use note (or a quiet
- *  nudge to write one — the editing itself lives in the template list).
- *  Display only. */
-const TemplateIdentity = ({
+/** Subtle count strip pinned above the insert row on the template overview:
+ *  fields · conditions · clauses. Conditions ARE the template's boolean
+ *  fields, so they are derived rather than fetched. */
+const StudioOverviewSummary = ({
+  fields,
   templateId,
-  name,
-  fieldCount,
-  conditionCount,
 }: {
+  fields: StudioField[];
   templateId: string;
-  name: string;
-  fieldCount: number;
-  conditionCount: number;
 }) => {
   const t = useTranslations();
-  const lang = useI18nStore((s) => s.lang);
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const { data: clausesData } = useQuery(
+    templateClausesOptions(activeOrganizationId, templateId),
+  );
+  const clauseCount =
+    clausesData && "links" in clausesData ? clausesData.links.length : 0;
+  const conditionCount = fields.filter((f) => f.inputType === "boolean").length;
+  const summary = [
+    t("templates.fieldCount", { count: fields.length }),
+    t("templates.conditionCount", { count: conditionCount }),
+    t("clauses.clauseCount", { count: clauseCount }),
+  ].join(" · ");
+  return (
+    <p className="text-muted-foreground shrink-0 px-4 py-2 text-xs tabular-nums">
+      {summary}
+    </p>
+  );
+};
+
+/** "When to use" subtab: free-text guidance that steers agents (and humans)
+ *  toward or away from this template. Its own tab because the guidance matters
+ *  to agents picking a template, not just to the author drafting one. */
+const TemplateGuidanceFacet = ({ templateId }: { templateId: string }) => {
+  const t = useTranslations();
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
@@ -3430,57 +3667,29 @@ const TemplateIdentity = ({
     detailData && !(detailData instanceof Response) && "manifest" in detailData
       ? detailData
       : null;
-  const { data: clausesData } = useQuery(
-    templateClausesOptions(activeOrganizationId, templateId),
-  );
-  const clauseCount =
-    clausesData && "links" in clausesData ? clausesData.links.length : 0;
-  const languages = detail?.languages ?? [];
-  const whenToUse = detail?.whenToUse ?? null;
-
-  const summary = [
-    t("templates.fieldCount", { count: fieldCount }),
-    t("templates.conditionCount", { count: conditionCount }),
-    t("clauses.clauseCount", { count: clauseCount }),
-  ].join(" · ");
-
-  return (
-    <div className="flex flex-col gap-1.5 px-4 py-3">
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="min-w-0 truncate text-sm font-medium">{name}</h3>
-        {languages.length > 0 && (
-          <span className="flex shrink-0 items-center gap-1">
-            {languages.map((tag) => (
-              <span
-                className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px] font-medium"
-                key={tag}
-                title={tag}
-              >
-                {languageChipLabel(tag, lang)}
-              </span>
-            ))}
-          </span>
-        )}
+  if (detail === null) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-8">
+        <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
       </div>
-      <p className="text-muted-foreground text-xs tabular-nums">{summary}</p>
-      {detail !== null && (
-        <WhenToUseEditor
-          languages={languages}
-          organizationId={activeOrganizationId}
-          templateId={templateId}
-          whenNotToUse={detail.whenNotToUse ?? null}
-          whenToUse={whenToUse}
-        />
-      )}
-    </div>
+    );
+  }
+  return (
+    <GuidanceFields
+      key={templateId}
+      languages={detail.languages}
+      organizationId={activeOrganizationId}
+      templateId={templateId}
+      whenNotToUse={detail.whenNotToUse ?? ""}
+      whenToUse={detail.whenToUse ?? ""}
+    />
   );
 };
 
-/** Click-to-edit `whenToUse` guidance in the overview identity block: shows
- *  the text (or a nudge when empty) until clicked, then a textarea that commits
- *  on blur or Enter and cancels on Escape, persisting via the template update
- *  endpoint (the same `whenToUse` field the list's guidance dialog writes). */
-const WhenToUseEditor = ({
+/** Both guidance notes, committed on blur via the template update endpoint
+ *  (the same fields the list's guidance dialog writes). Keyed on templateId so
+ *  switching templates resets the local drafts. */
+const GuidanceFields = ({
   organizationId,
   templateId,
   whenToUse,
@@ -3489,31 +3698,29 @@ const WhenToUseEditor = ({
 }: {
   organizationId: string;
   templateId: string;
-  whenToUse: string | null;
-  whenNotToUse: string | null;
+  whenToUse: string;
+  whenNotToUse: string;
   languages: string[];
 }) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(whenToUse ?? "");
-
-  const startEditing = () => {
-    setDraft(whenToUse ?? "");
-    setEditing(true);
-  };
+  const [useText, setUseText] = useState(whenToUse);
+  const [notText, setNotText] = useState(whenNotToUse);
 
   const commit = async () => {
-    setEditing(false);
-    const next = draft.trim() || null;
-    if (next === (whenToUse ?? null)) {
+    const nextUse = useText.trim() || null;
+    const nextNot = notText.trim() || null;
+    if (
+      nextUse === (whenToUse.trim() || null) &&
+      nextNot === (whenNotToUse.trim() || null)
+    ) {
       return;
     }
-    // Send every field explicitly: the update endpoint replaces guidance
-    // wholesale, so omitting siblings would clear them.
+    // The update endpoint replaces guidance wholesale, so send every field
+    // explicitly — omitting languages would clear them.
     const response = await api.templates({ templateId }).post({
-      whenToUse: next,
-      whenNotToUse,
+      whenToUse: nextUse,
+      whenNotToUse: nextNot,
       languages,
     });
     if (response.error) {
@@ -3532,51 +3739,71 @@ const WhenToUseEditor = ({
     });
   };
 
-  if (editing) {
-    return (
-      <Textarea
-        aria-label={t("templates.whenToUse")}
-        autoFocus
-        className="min-h-[60px] text-xs"
-        maxLength={2000}
-        onBlur={() => void commit()}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            e.currentTarget.blur();
-            return;
-          }
-          if (e.key === "Escape") {
-            setEditing(false);
-          }
-        }}
-        placeholder={t("templates.whenToUsePlaceholder")}
-        value={draft}
-      />
-    );
-  }
-
-  if (whenToUse !== null && whenToUse !== "") {
-    return (
-      <button
-        className="text-muted-foreground line-clamp-2 cursor-text text-start text-xs leading-relaxed"
-        onClick={startEditing}
-        title={whenToUse}
-        type="button"
-      >
-        {whenToUse}
-      </button>
-    );
-  }
   return (
-    <button
-      className="text-foreground-placeholder cursor-text text-start text-xs"
-      onClick={startEditing}
-      type="button"
-    >
-      {t("templates.describeWhenToUse")}
-    </button>
+    <div className="flex flex-col gap-4 p-4">
+      <GuidanceNote
+        label={t("templates.whenToUse")}
+        onBlur={() => void commit()}
+        onChange={setUseText}
+        placeholder={t("templates.whenToUsePlaceholder")}
+        value={useText}
+      />
+      <GuidanceNote
+        label={t("templates.whenNotToUse")}
+        onBlur={() => void commit()}
+        onChange={setNotText}
+        placeholder={t("templates.whenNotToUsePlaceholder")}
+        value={notText}
+      />
+    </div>
+  );
+};
+
+// The hard cap (matching templates/update.ts) is a generous safety net, not a
+// content limit; the soft recommended length is what actually nudges — past it
+// the live counter turns amber so notes stay concise for the agents reading
+// them.
+const GUIDANCE_MAX_LENGTH = 10_000;
+const GUIDANCE_RECOMMENDED_LENGTH = 500;
+
+/** One guidance note: label, a height-capped textarea that scrolls internally
+ *  once it fills, and a live character count that warns past the soft limit. */
+const GuidanceNote = ({
+  label,
+  value,
+  onChange,
+  onBlur,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (next: string) => void;
+  onBlur: () => void;
+  placeholder: string;
+}) => {
+  const overRecommended = value.length > GUIDANCE_RECOMMENDED_LENGTH;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label className="text-sm">{label}</Label>
+      <Textarea
+        aria-label={label}
+        className="text-sm"
+        maxLength={GUIDANCE_MAX_LENGTH}
+        onBlur={onBlur}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        style={{ maxHeight: "12rem" }}
+        value={value}
+      />
+      <span
+        className={cn(
+          "self-end text-[11px] tabular-nums",
+          overRecommended ? "text-warning" : "text-muted-foreground",
+        )}
+      >
+        {value.length}
+      </span>
+    </div>
   );
 };
 
@@ -3733,24 +3960,31 @@ const ConditionFace = ({
     <ScrollArea className="min-h-0 flex-1">
       <ScopeHeader
         action={
-          <Tooltip
-            content={t("templates.studio.conditionHelpTooltip")}
-            render={
-              <Button
-                aria-label={t("templates.studio.conditionHelpTooltip")}
-                size="icon-sm"
-                variant="ghost"
-              >
-                <CircleHelpIcon />
-              </Button>
-            }
-          />
+          <Popover>
+            <PopoverTrigger
+              render={
+                <Button
+                  aria-label={t("templates.studio.conditionHelpTooltip")}
+                  size="icon-sm"
+                  variant="ghost"
+                >
+                  <CircleHelpIcon />
+                </Button>
+              }
+            />
+            <PopoverPopup className="max-w-xs p-3">
+              <p className="text-xs">
+                {t("templates.studio.conditionHelpTooltip")}
+              </p>
+            </PopoverPopup>
+          </Popover>
         }
         onBack={() => actions?.deselect()}
         subtitle={
-          humanEcho === undefined || humanEcho === "" ? undefined : humanEcho
+          humanEcho !== undefined && humanEcho !== ""
+            ? humanEcho
+            : humanizeConditionExpr(selected.expr, fields, (key) => t(key))
         }
-        title={t("templates.studio.scopeCondition")}
       />
       <div className="flex flex-col gap-5 px-4 py-4">
         {conditionField === undefined ? (
@@ -4494,160 +4728,6 @@ const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
   );
 };
 
-/** First `{{#if}}` / `{{#elseif}}` opener position whose expression references
- *  a given condition by name/path (bare reference or inside a rule). Lets a
- *  condition-field — which has no `{{placeholder}}` marker — still jump to
- *  where it gates the document. */
-const outlineConditionFirstPositions = (
-  nodes: OutlineNode[],
-): Map<string, number> => {
-  const positions = new Map<string, number>();
-  const referencedPaths = (expr: string): string[] => {
-    const trimmed = expr.trim();
-    if (trimmed === "") {
-      return [];
-    }
-    if (isFieldPath(trimmed)) {
-      return [trimmed];
-    }
-    // A rule references its left-hand field paths; match whole-token paths so
-    // `client_type` does not match `client_type_2`.
-    return [...trimmed.matchAll(/[\p{L}_][\p{L}\p{N}_.]*/gu)].map((m) => m[0]);
-  };
-  const walk = (list: OutlineNode[]) => {
-    for (const node of list) {
-      if (
-        node.type === "group" &&
-        (node.kind === "if" || node.kind === "elseif")
-      ) {
-        for (const ref of referencedPaths(node.expr)) {
-          if (!positions.has(ref)) {
-            positions.set(ref, node.from);
-          }
-        }
-      }
-      if (node.type === "group") {
-        walk(node.children);
-      }
-    }
-  };
-  walk(nodes);
-  return positions;
-};
-
-/** Collapsed "Conditions · N" row on the template overview. Conditions ARE
- *  boolean fields: every boolean field is listed here (its source — asked /
- *  rule / AI — shown as an icon). New conditions are authored inline in the
- *  document or in a field's "Show only if…", never as standalone entries. */
-const ConditionsDisclosure = ({
-  outline,
-  fields,
-}: {
-  outline: OutlineNode[];
-  fields: StudioField[];
-}) => {
-  const t = useTranslations();
-  const [open, setOpen] = useState(false);
-  const booleanFields = fields.filter(isBooleanField);
-  const count = booleanFields.length;
-
-  return (
-    <div className="px-4 py-3">
-      <button
-        aria-expanded={open}
-        className="hover:bg-muted flex min-w-0 flex-1 items-center gap-1.5 rounded px-1.5 py-1 text-start text-xs"
-        onClick={() => setOpen((v) => !v)}
-        type="button"
-      >
-        {open ? (
-          <ChevronDownIcon className="text-muted-foreground size-3.5 shrink-0" />
-        ) : (
-          <ChevronRightIcon className="text-muted-foreground size-3.5 shrink-0" />
-        )}
-        <span className="text-muted-foreground font-medium">
-          {t("templates.conditionsTitle")} · {count}
-        </span>
-      </button>
-      {open && (
-        <div className="mt-1 flex flex-col gap-2">
-          {count === 0 ? (
-            <p className="text-muted-foreground px-1.5 text-xs leading-relaxed">
-              {t("templates.studio.conditionsSectionHelp")}
-            </p>
-          ) : (
-            <ul className="flex flex-col">
-              {booleanFields.map((field) => (
-                <ConditionRow
-                  field={field}
-                  fields={fields}
-                  key={field.path}
-                  outline={outline}
-                />
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
-
-/** Source-marking icon for a condition-field: a question mark when asked, a
- *  filter when ruled, a wand when AI decides. */
-const ConditionSourceIcon = ({ source }: { source: ConditionSource }) => {
-  if (source.kind === "rule") {
-    return (
-      <ListFilterIcon className="text-muted-foreground size-3.5 shrink-0" />
-    );
-  }
-  if (source.kind === "ai") {
-    return (
-      <WandSparklesIcon className="text-muted-foreground size-3.5 shrink-0" />
-    );
-  }
-  const ToggleIcon = VALUE_TYPE_META.boolean.icon;
-  return <ToggleIcon className="text-muted-foreground size-3.5 shrink-0" />;
-};
-
-/** A boolean field listed as a condition. Asked-source fields are also a
- *  question in the fill form; rule/AI fields are derived. Clicking jumps to
- *  where it gates the document (its placeholder if asked-and-placed, else its
- *  first `{{#if}}` reference). */
-const ConditionRow = ({
-  field,
-  fields,
-  outline,
-}: {
-  field: StudioField;
-  fields: StudioField[];
-  outline: OutlineNode[];
-}) => {
-  const t = useTranslations();
-  const actions = useTemplateStudioStore((s) => s.actions);
-  const source = conditionSourceOf(field);
-  const placed = outlineFieldFirstPositions(outline).get(field.path);
-  const gate = outlineConditionFirstPositions(outline).get(field.path);
-  const from = placed ?? gate ?? -1;
-  const label = conditionFieldLabel(field, fields, (key) => t(key));
-  return (
-    <li>
-      <button
-        className="hover:bg-muted group flex w-full items-center gap-2 rounded px-1.5 py-1 text-start text-xs"
-        onClick={() => {
-          if (from >= 0) {
-            actions?.focusPosition(from);
-          }
-        }}
-        title={field.path}
-        type="button"
-      >
-        <ConditionSourceIcon source={source} />
-        <FieldRowLabel label={label} path={field.path} />
-      </button>
-    </li>
-  );
-};
-
 /** Document outline: fields where they sit, condition/loop blocks as
  *  collapsible groups owning what's inside them, clause slots inline.
  *  Every row jumps the document caret to its marker. Yes/no fields are not
@@ -4677,8 +4757,13 @@ const FieldNavigator = ({
   return (
     <div className="px-4 py-3">
       <ul className="flex flex-col">
-        {outline.map((node, index) => (
-          <OutlineRow fields={fields} key={index} node={node} />
+        {dedupeOutlineFields(outline).map((item, index) => (
+          <OutlineRow
+            count={item.count}
+            fields={fields}
+            key={index}
+            node={item.node}
+          />
         ))}
       </ul>
       {unplaced.length > 0 && (
@@ -4783,9 +4868,11 @@ const InsertAtCaretButton = ({
 const OutlineRow = ({
   node,
   fields,
+  count = 1,
 }: {
   node: OutlineNode;
   fields: StudioField[];
+  count?: number;
 }) => {
   const t = useTranslations();
   const actions = useTemplateStudioStore((s) => s.actions);
@@ -4820,6 +4907,11 @@ const OutlineRow = ({
           <FieldRowLabel label={field?.label ?? ""} path={node.path} />
           {field === undefined ? null : (
             <span className="text-muted-foreground ms-auto flex shrink-0 items-center gap-1.5">
+              {count > 1 ? (
+                <span className="text-muted-foreground text-[10px] tabular-nums">
+                  {count}×
+                </span>
+              ) : null}
               <FieldCapabilityIcons field={field} />
               <ChevronRightIcon className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
             </span>
@@ -4942,26 +5034,18 @@ const OutlineGroupRow = ({
     groupLabel = friendly;
   }
   const hasChildren = node.children.length > 0;
+  // A condition that is a bare boolean field IS that field used as a gate, so
+  // it carries the same required/repeatable affordances a field row shows.
+  // Rule/AI conditions reference no single field, so they show no indicator.
+  const conditionField =
+    node.kind === "if" || node.kind === "elseif"
+      ? booleanFieldForExpr(node.expr, fields)
+      : undefined;
   return (
     <li className="group/row relative">
-      <div className="flex items-center gap-1">
-        {hasChildren ? (
-          <button
-            aria-expanded={open}
-            aria-label={groupTitle}
-            className="hover:bg-muted text-muted-foreground shrink-0 rounded p-0.5"
-            onClick={() => setOpen((v) => !v)}
-            type="button"
-          >
-            {open ? (
-              <ChevronDownIcon className="size-3.5" />
-            ) : (
-              <ChevronRightIcon className="size-3.5" />
-            )}
-          </button>
-        ) : (
-          <span aria-hidden="true" className="size-3.5 shrink-0 p-0.5" />
-        )}
+      {/* Expand control sits on the RIGHT so the leading icon lines up with
+          field rows (which have no leading chevron). */}
+      <div className="flex items-center">
         <button
           className="hover:bg-muted group flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 py-2 text-start text-sm"
           onClick={jump}
@@ -4972,12 +5056,40 @@ const OutlineGroupRow = ({
             <GroupIcon className="size-4" />
           </span>
           <span className="truncate">{groupLabel}</span>
+          {conditionField === undefined ? null : (
+            <span className="text-muted-foreground ms-auto flex shrink-0 items-center gap-1.5">
+              {fieldHasLoopBounds(conditionField) ? (
+                <RepeatIcon className="size-3.5" />
+              ) : null}
+              <FieldCapabilityIcons field={conditionField} />
+            </span>
+          )}
         </button>
+        {hasChildren ? (
+          <button
+            aria-expanded={open}
+            aria-label={groupTitle}
+            className="hover:bg-muted text-muted-foreground me-1 shrink-0 rounded p-0.5"
+            onClick={() => setOpen((v) => !v)}
+            type="button"
+          >
+            {open ? (
+              <ChevronDownIcon className="size-3.5" />
+            ) : (
+              <ChevronRightIcon className="size-3.5" />
+            )}
+          </button>
+        ) : null}
       </div>
       {hasChildren && open ? (
         <ul className="border-border ms-2 flex flex-col border-s ps-2">
-          {node.children.map((child, index) => (
-            <OutlineRow fields={fields} key={index} node={child} />
+          {dedupeOutlineFields(node.children).map((item, index) => (
+            <OutlineRow
+              count={item.count}
+              fields={fields}
+              key={index}
+              node={item.node}
+            />
           ))}
         </ul>
       ) : null}
@@ -5035,16 +5147,16 @@ const ScopeHeader = ({
   action,
   onBack,
 }: {
-  title: string;
+  title?: string;
   subtitle?: ReactNode;
   /** Right-aligned control (e.g. the field face's suggest wand). */
   action?: ReactNode;
-  /** Renders a leading chevron returning to the template overview. */
+  /** Renders a leading back arrow returning to the template overview. */
   onBack?: () => void;
 }) => {
   const t = useTranslations();
   return (
-    <div className="flex items-center justify-between gap-2 border-b px-4 py-3">
+    <div className="flex min-h-12 items-center justify-between gap-2 border-b px-3 py-2">
       {onBack === undefined ? null : (
         <Button
           aria-label={t("common.goBack")}
@@ -5053,13 +5165,15 @@ const ScopeHeader = ({
           size="icon-sm"
           variant="ghost"
         >
-          <ChevronLeftIcon />
+          <ArrowLeftIcon />
         </Button>
       )}
       <div className="min-w-0 flex-1">
-        <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
-          {title}
-        </p>
+        {title === undefined ? null : (
+          <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+            {title}
+          </p>
+        )}
         {subtitle === undefined ? null : (
           <div className="min-w-0 overflow-hidden text-sm">{subtitle}</div>
         )}
@@ -5162,11 +5276,7 @@ const FieldConditionSection = ({
 
   if (condition.kind === "none") {
     return (
-      <div className="flex flex-col gap-2 border-t px-4 py-4">
-        <Label className="text-sm">{t("templates.studio.showOnlyIf")}</Label>
-        <p className="text-muted-foreground text-xs leading-relaxed">
-          {t("templates.studio.showOnlyIfHelp")}
-        </p>
+      <div className="flex flex-col gap-1.5 border-t px-4 py-3">
         <Button
           className="self-start"
           onClick={() => {
@@ -5183,6 +5293,9 @@ const FieldConditionSection = ({
           <SplitIcon className="size-3.5" />
           {t("templates.studio.showOnlyIf")}
         </Button>
+        <p className="text-muted-foreground text-xs leading-relaxed">
+          {t("templates.studio.showOnlyIfHelp")}
+        </p>
       </div>
     );
   }
@@ -5233,9 +5346,11 @@ const FieldConditionSection = ({
 const FieldFace = ({
   field,
   onUpdate,
+  onBack,
 }: {
   field: StudioField;
   onUpdate: (patch: Partial<StudioField>) => void;
+  onBack?: () => void;
 }) => {
   const t = useTranslations();
   const actions = useTemplateStudioStore((s) => s.actions);
@@ -5256,15 +5371,6 @@ const FieldFace = ({
     [fields, field.path],
   );
   const [recipeDialogOpen, setRecipeDialogOpen] = useState(false);
-  const [previewValue, setPreviewValue] = useState("");
-  const [whoFillsPreview, setWhoFillsPreview] = useState<ValueSource | null>(
-    null,
-  );
-
-  const pushPreview = (value: string) => {
-    setPreviewValue(value);
-    pushSingleFieldPreview(field, value);
-  };
 
   // Clear the in-document preview when the face leaves or switches fields
   // (cancelling any pending lookup preview so it cannot re-set it).
@@ -5347,7 +5453,7 @@ const FieldFace = ({
               </Button>
             </div>
           }
-          onBack={() => actions?.deselect()}
+          onBack={onBack ?? (() => actions?.deselect())}
           subtitle={
             <FieldPathEditor
               key={field.path}
@@ -5368,13 +5474,120 @@ const FieldFace = ({
               path={field.path}
             />
           }
-          title={t("templates.studio.scopeField")}
         />
+        <div className="flex flex-col gap-2 border-t px-4 py-4">
+          <Label className="text-sm">{t("templates.studio.whoFills")}</Label>
+          <div className="grid grid-cols-2 gap-1.5">
+            <Button
+              className="justify-start"
+              onClick={() =>
+                onUpdate({
+                  aiPrompt: undefined,
+                  aiAdapt: false,
+                  formula: undefined,
+                })
+              }
+              size="sm"
+              variant={valueSource === "person" ? "default" : "outline"}
+            >
+              <UserIcon className="size-3.5" />
+              {t("templates.studio.filledByPerson")}
+            </Button>
+            <Button
+              className="justify-start"
+              onClick={() =>
+                onUpdate({
+                  aiAdapt: true,
+                  formula: undefined,
+                })
+              }
+              size="sm"
+              variant={valueSource === "textAi" ? "default" : "outline"}
+            >
+              <WandSparklesIcon className="size-3.5" />
+              {t("templates.studio.textPlusAi")}
+            </Button>
+            <Button
+              className="justify-start"
+              onClick={() =>
+                onUpdate({
+                  aiPrompt: field.aiPrompt ?? "",
+                  aiAdapt: false,
+                  formula: undefined,
+                })
+              }
+              size="sm"
+              variant={valueSource === "ai" ? "default" : "outline"}
+            >
+              <WandSparklesIcon className="size-3.5" />
+              {t("templates.studio.draftedByAi")}
+            </Button>
+            <Button
+              className="justify-start"
+              onClick={() =>
+                onUpdate({
+                  formula: field.formula ?? "",
+                  aiPrompt: undefined,
+                  aiAdapt: false,
+                  lookup: undefined,
+                })
+              }
+              size="sm"
+              variant={valueSource === "formula" ? "default" : "outline"}
+            >
+              <SigmaIcon className="size-3.5" />
+              {t("templates.studio.formula")}
+            </Button>
+          </div>
+          {valueSource === "textAi" ? (
+            <>
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                {t("templates.aiAdaptHint")}
+              </p>
+              <AIPromptInput
+                className="bg-muted/40 focus-within:ring-ring/40 rounded-md border px-2.5 py-2 focus-within:ring-1"
+                mentionExtension={fieldMention}
+                onChange={(value) => onUpdate({ aiPrompt: value || undefined })}
+                placeholder={t(
+                  "templates.studio.aiAdaptInstructionPlaceholder",
+                )}
+                value={field.aiPrompt ?? ""}
+                valueFormat="text"
+                variant="minimal"
+              />
+            </>
+          ) : null}
+          {valueSource === "ai" ? (
+            <AIPromptInput
+              className="bg-muted/40 focus-within:ring-ring/40 rounded-md border px-2.5 py-2 focus-within:ring-1"
+              mentionExtension={fieldMention}
+              onChange={(value) => onUpdate({ aiPrompt: value })}
+              placeholder={t("templates.studio.aiPromptPlaceholder")}
+              value={field.aiPrompt ?? ""}
+              valueFormat="text"
+              variant="minimal"
+            />
+          ) : null}
+          {valueSource === "formula" ? (
+            <>
+              <Input
+                className="h-8 font-mono text-xs"
+                onChange={(e) => onUpdate({ formula: e.target.value })}
+                placeholder={t("templates.fieldFormulaExpression")}
+                value={field.formula}
+              />
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                {t("templates.fieldFormulaExpressionHint")}
+              </p>
+            </>
+          ) : null}
+        </div>
         <FieldConfigEditor
           embedded
           field={field}
           hideFormulaControl
           hideHint={valueSource === "ai"}
+          hideRequired={valueSource === "ai"}
           onUpdate={onUpdate}
         />
         {field.lookup !== undefined && field.lookup.formats.length > 0 ? (
@@ -5410,155 +5623,30 @@ const FieldFace = ({
             ))}
           </div>
         ) : null}
-        <div className="flex flex-col gap-2 border-t px-4 py-4">
-          <Label className="text-sm">{t("templates.studio.whoFills")}</Label>
-          <MenuPreviewLayout
-            preview={
-              <PreviewPane className="w-40">
-                {whoFillsPreview && (
-                  <WhoFillsPreview source={whoFillsPreview} />
-                )}
-              </PreviewPane>
-            }
-          >
-            <div className="flex items-center gap-1">
-              <Button
-                className="flex-1"
-                onClick={() =>
-                  onUpdate({
-                    aiPrompt: undefined,
-                    aiAdapt: false,
-                    formula: undefined,
-                  })
-                }
-                onFocus={() => setWhoFillsPreview("person")}
-                onMouseEnter={() => setWhoFillsPreview("person")}
-                size="sm"
-                variant={valueSource === "person" ? "secondary" : "ghost"}
-              >
-                <UserIcon className="size-3.5" />
-                {t("templates.studio.filledByPerson")}
-              </Button>
-              <Button
-                className="flex-1"
-                onClick={() =>
-                  onUpdate({
-                    aiAdapt: true,
-                    formula: undefined,
-                  })
-                }
-                onFocus={() => setWhoFillsPreview("textAi")}
-                onMouseEnter={() => setWhoFillsPreview("textAi")}
-                size="sm"
-                variant={valueSource === "textAi" ? "secondary" : "ghost"}
-              >
-                <UserIcon className="size-3.5" />
-                <WandSparklesIcon className="size-3.5" />
-                {t("templates.studio.textPlusAi")}
-              </Button>
-              <Button
-                className="flex-1"
-                onClick={() =>
-                  onUpdate({
-                    aiPrompt: field.aiPrompt ?? "",
-                    aiAdapt: false,
-                    formula: undefined,
-                  })
-                }
-                onFocus={() => setWhoFillsPreview("ai")}
-                onMouseEnter={() => setWhoFillsPreview("ai")}
-                size="sm"
-                variant={valueSource === "ai" ? "secondary" : "ghost"}
-              >
-                <WandSparklesIcon className="size-3.5" />
-                {t("templates.studio.draftedByAi")}
-              </Button>
-              <Button
-                className="flex-1"
-                onClick={() =>
-                  onUpdate({
-                    formula: field.formula ?? "",
-                    aiPrompt: undefined,
-                    aiAdapt: false,
-                    lookup: undefined,
-                  })
-                }
-                onFocus={() => setWhoFillsPreview("formula")}
-                onMouseEnter={() => setWhoFillsPreview("formula")}
-                size="sm"
-                variant={valueSource === "formula" ? "secondary" : "ghost"}
-              >
-                <SigmaIcon className="size-3.5" />
-                {t("templates.studio.formula")}
-              </Button>
-            </div>
-          </MenuPreviewLayout>
-          {valueSource === "textAi" ? (
-            <>
-              <p className="text-muted-foreground text-xs leading-relaxed">
-                {t("templates.aiAdaptHint")}
-              </p>
-              <AIPromptInput
-                mentionExtension={fieldMention}
-                onChange={(value) => onUpdate({ aiPrompt: value || undefined })}
-                placeholder={t(
-                  "templates.studio.aiAdaptInstructionPlaceholder",
-                )}
-                value={field.aiPrompt ?? ""}
-                valueFormat="text"
-                variant="minimal"
-              />
-            </>
-          ) : null}
-          {valueSource === "ai" ? (
-            <AIPromptInput
-              mentionExtension={fieldMention}
-              onChange={(value) => onUpdate({ aiPrompt: value })}
-              placeholder={t("templates.studio.aiPromptPlaceholder")}
-              value={field.aiPrompt ?? ""}
-              valueFormat="text"
-              variant="minimal"
-            />
-          ) : null}
-          {valueSource === "formula" ? (
-            <>
-              <Input
-                className="h-8 font-mono text-xs"
-                onChange={(e) => onUpdate({ formula: e.target.value })}
-                placeholder={t("templates.fieldFormulaExpression")}
-                value={field.formula}
-              />
-              <p className="text-muted-foreground text-xs leading-relaxed">
-                {t("templates.fieldFormulaExpressionHint")}
-              </p>
-            </>
-          ) : null}
-          {repeat.kind !== "hidden" && (
-            <div
-              className="mt-1 flex items-center justify-between gap-2"
+        {repeat.kind === "hidden" || valueSource === "formula" ? null : (
+          <div className="flex flex-col gap-1.5 border-t px-4 py-3">
+            <Button
+              aria-pressed={repeat.kind === "on"}
+              className="self-start"
+              disabled={repeat.disabledKey !== null}
+              onClick={() => toggleRepeatable(repeat.kind !== "on")}
+              size="sm"
               title={
                 repeat.disabledKey === null ? undefined : t(repeat.disabledKey)
               }
+              variant={repeat.kind === "on" ? "secondary" : "ghost"}
             >
-              <Label
-                className="flex items-center gap-1.5 text-sm"
-                htmlFor="field-repeatable"
-              >
-                <RepeatIcon className="text-muted-foreground size-3.5" />
-                {t("templates.studio.repeatable")}
-              </Label>
-              <Checkbox
-                checked={repeat.kind === "on"}
-                disabled={repeat.disabledKey !== null}
-                id="field-repeatable"
-                onCheckedChange={(checked) => toggleRepeatable(checked)}
-              />
-            </div>
-          )}
-          {repeat.kind === "on" && loopContainerPath !== null && (
-            <LoopBoundsInputs containerPath={loopContainerPath} />
-          )}
-        </div>
+              <RepeatIcon className="size-3.5" />
+              {t("templates.studio.repeatable")}
+            </Button>
+            <p className="text-muted-foreground text-xs leading-relaxed">
+              {t("templates.studio.repeatableHelp")}
+            </p>
+            {repeat.kind === "on" && loopContainerPath !== null && (
+              <LoopBoundsInputs containerPath={loopContainerPath} />
+            )}
+          </div>
+        )}
         {fieldIsPlaced ? (
           <FieldConditionSection
             condition={condition}
@@ -5567,13 +5655,6 @@ const FieldFace = ({
           />
         ) : null}
       </ScrollArea>
-      {valueSource === "ai" ? null : (
-        <FieldPreview
-          field={field}
-          onValueChange={pushPreview}
-          value={previewValue}
-        />
-      )}
       <SaveRecipeDialog
         fieldPath={field.path}
         onOpenChange={setRecipeDialogOpen}
@@ -5585,68 +5666,6 @@ const FieldFace = ({
 
 /** The four mutually exclusive ways a field's value is produced at fill time. */
 type ValueSource = "person" | "textAi" | "ai" | "formula";
-
-// Mock fill content, not interface text; deliberately untranslated (see the
-// preview-pane pattern) so the previews carry no per-language i18n debt.
-const WHO_FILLS_SAMPLE = {
-  personName: "Jane Doe",
-  typedRaw: "jane doe",
-  aiDrafted: "Drafted by AI",
-  formulaExpression: "net + net * vat",
-  formulaResult: "1 210,00",
-} as const;
-
-/** A miniature of each value source's fill experience, shown in the preview
- *  pane while a "Who fills" button is highlighted. Mock depictions, not
- *  interface text; deliberately untranslated to avoid per-language i18n debt. */
-const WhoFillsPreview = ({ source }: { source: ValueSource }) => {
-  if (source === "person") {
-    return (
-      <div className="flex h-full flex-col justify-center gap-1.5">
-        <div className="bg-muted h-1.5 w-16 rounded-full" />
-        <div className="bg-card flex items-center rounded-md border px-2 py-1.5 text-xs">
-          {WHO_FILLS_SAMPLE.personName}
-        </div>
-      </div>
-    );
-  }
-  if (source === "textAi") {
-    return (
-      <div className="flex h-full flex-col justify-center gap-1.5">
-        <div className="bg-card flex items-center rounded-md border px-2 py-1.5 text-xs">
-          {WHO_FILLS_SAMPLE.typedRaw}
-        </div>
-        <span className="text-primary flex items-center gap-1 text-xs">
-          <WandSparklesIcon className="size-3 shrink-0" />
-          {WHO_FILLS_SAMPLE.personName}
-        </span>
-      </div>
-    );
-  }
-  if (source === "ai") {
-    return (
-      <div className="flex h-full flex-col justify-center gap-1.5">
-        <span className="bg-primary/10 text-primary inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-xs">
-          <WandSparklesIcon className="size-3 shrink-0" />
-          {WHO_FILLS_SAMPLE.aiDrafted}
-        </span>
-        <div className="bg-muted h-1.5 w-full rounded-full" />
-        <div className="bg-muted h-1.5 w-3/4 rounded-full" />
-      </div>
-    );
-  }
-  return (
-    <div className="flex h-full flex-col justify-center gap-1.5">
-      <code className="text-muted-foreground text-xs">
-        {WHO_FILLS_SAMPLE.formulaExpression}
-      </code>
-      <span className="flex items-center gap-1 text-sm">
-        <SigmaIcon className="text-muted-foreground size-3.5 shrink-0" />
-        {WHO_FILLS_SAMPLE.formulaResult}
-      </span>
-    </div>
-  );
-};
 
 /**
  * Save the field's configuration as an org-wide recipe, insertable into any
@@ -5787,22 +5806,22 @@ const FieldPathEditor = ({
   if (!editing) {
     return (
       <button
-        className="hover:bg-muted/60 group -ms-1 flex w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5"
+        className="hover:bg-muted/60 group text-muted-foreground -ms-1 flex w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5"
         onClick={() => setEditing(true)}
         title={t("templates.studio.renameField")}
         type="button"
       >
-        <code className="truncate text-sm" title={path}>
+        <code className="truncate text-xs" title={path}>
           {path}
         </code>
-        <PencilIcon className="text-muted-foreground size-3 opacity-0 transition-opacity group-hover:opacity-100" />
+        <PencilIcon className="size-3 opacity-0 transition-opacity group-hover:opacity-100" />
       </button>
     );
   }
   return (
     <Input
       autoFocus
-      className="h-7 font-mono text-sm"
+      className="h-7 font-mono text-xs"
       onBlur={commit}
       onChange={(e) => setValue(e.currentTarget.value)}
       onKeyDown={(e) => {
@@ -5820,113 +5839,6 @@ const FieldPathEditor = ({
 };
 
 /** Live preview of the control this field becomes in the fill form. */
-/** Pinned under the field config: type here and the value shows live in the
- *  document, replacing the {{marker}} (orange when the directive overlay is
- *  on, plain when it's off). */
-const FieldPreview = ({
-  field,
-  value,
-  onValueChange,
-}: {
-  field: StudioField;
-  value: string;
-  onValueChange: (value: string) => void;
-}) => {
-  const t = useTranslations();
-  const [open, setOpen] = useState(false);
-  const label = field.label || field.path;
-  return (
-    <div className="flex shrink-0 flex-col border-t">
-      <button
-        aria-expanded={open}
-        className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 px-4 py-3 text-[11px] font-medium tracking-wide uppercase transition-colors"
-        onClick={() => setOpen((prev) => !prev)}
-        type="button"
-      >
-        {open ? (
-          <ChevronDownIcon className="size-3.5 shrink-0" />
-        ) : (
-          <ChevronRightIcon className="size-3.5 shrink-0" />
-        )}
-        {t("templates.studio.fillFormPreview")}
-      </button>
-      {open ? (
-        <div className="px-4 pb-4">
-          <div className="bg-muted/30 flex flex-col gap-1.5 rounded-md border p-3">
-            <Label className="text-xs">
-              {label}
-              {field.required ? " *" : ""}
-            </Label>
-            <FieldPreviewControl
-              field={field}
-              onValueChange={onValueChange}
-              value={value}
-            />
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-};
-
-const FieldPreviewControl = ({
-  field,
-  value,
-  onValueChange,
-}: {
-  field: StudioField;
-  value: string;
-  onValueChange: (value: string) => void;
-}) => {
-  // A formula field is derived at fill time; the fill form shows no input.
-  if (field.formula !== undefined) {
-    return (
-      <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
-        <SigmaIcon className="size-3.5 shrink-0" />
-        <code className="min-w-0 truncate">{field.formula || "—"}</code>
-      </p>
-    );
-  }
-  if (field.inputType === "textarea") {
-    return (
-      <Textarea
-        onChange={(e) => onValueChange(e.target.value)}
-        placeholder={field.hint}
-        rows={3}
-        value={value}
-      />
-    );
-  }
-  if (field.inputType === "boolean") {
-    return <Checkbox checked={false} />;
-  }
-  if (field.inputType === "select") {
-    return (
-      <Input
-        onChange={(e) => onValueChange(e.target.value)}
-        placeholder={field.hint ?? (field.options.join(" / ") || undefined)}
-        value={value}
-      />
-    );
-  }
-  if (field.inputType === "date") {
-    return (
-      <Input
-        onChange={(e) => onValueChange(e.target.value)}
-        placeholder={field.hint ?? "2026-01-31"}
-        value={value}
-      />
-    );
-  }
-  return (
-    <Input
-      onChange={(e) => onValueChange(e.target.value)}
-      placeholder={field.hint}
-      value={value}
-    />
-  );
-};
-
 // ── Fit-to-width ─────────────────────────────────────────
 
 // Letter width at 96 DPI (816px); a touch wider than A4 so either page size
