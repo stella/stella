@@ -4,8 +4,8 @@
  * Renders a selection overlay with resize handles over a selected image
  * in the visible pages. Handles:
  * - Blue selection border
- * - 4 corner resize handles
- * - Drag-to-resize with aspect ratio lock
+ * - 4 corner handles (resize, keeping aspect ratio; Shift frees it)
+ * - 4 edge handles (stretch one dimension, breaking aspect ratio)
  * - Dimension tooltip during resize
  */
 
@@ -16,7 +16,13 @@ import type { CSSProperties } from "react";
 // TYPES
 // =============================================================================
 
-export type ResizeHandle = "nw" | "ne" | "se" | "sw";
+/**
+ * An image resize handle: the 4 corners ("nw"/"ne"/"se"/"sw") resize both axes
+ * and keep the aspect ratio (Shift frees it); the 4 edge midpoints
+ * ("n"/"s"/"e"/"w") resize a single axis so the user can deliberately stretch
+ * the image (break aspect).
+ */
+export type ResizeHandle = "nw" | "ne" | "se" | "sw" | "n" | "s" | "e" | "w";
 
 export type ImageSelectionInfo = {
   /** The DOM element of the selected image in the pages container */
@@ -79,12 +85,16 @@ const borderStyles: CSSProperties = {
   boxSizing: "border-box",
 };
 
+// White circular dots with a thin accent ring — matches the resize handles in
+// Word / PowerPoint. Fill uses the background token (white in light mode), the
+// ring uses the image-selection accent token.
 const handleBaseStyles: CSSProperties = {
   position: "absolute",
   width: `${HANDLE_SIZE}px`,
   height: `${HANDLE_SIZE}px`,
-  backgroundColor: IMAGE_SELECTION_COLOR,
-  border: "1px solid var(--doc-handle-border)",
+  backgroundColor: "var(--doc-handle-border)",
+  border: `1.5px solid ${IMAGE_SELECTION_COLOR}`,
+  borderRadius: "50%",
   boxShadow: "0 1px 3px var(--doc-shadow-md)",
   boxSizing: "border-box",
   pointerEvents: "auto",
@@ -110,13 +120,42 @@ const HANDLE_CURSORS = {
   ne: "ne-resize",
   se: "se-resize",
   sw: "sw-resize",
+  n: "ns-resize",
+  s: "ns-resize",
+  e: "ew-resize",
+  w: "ew-resize",
 } as const satisfies Record<ResizeHandle, string>;
+
+// Handle positions as fractions of the box: 0 = start edge, 0.5 = midpoint,
+// 1 = end edge. Corners drive both axes; edge midpoints drive one.
+const HANDLES = [
+  { pos: "nw", x: 0, y: 0 },
+  { pos: "ne", x: 1, y: 0 },
+  { pos: "se", x: 1, y: 1 },
+  { pos: "sw", x: 0, y: 1 },
+  { pos: "n", x: 0.5, y: 0 },
+  { pos: "s", x: 0.5, y: 1 },
+  { pos: "e", x: 1, y: 0.5 },
+  { pos: "w", x: 0, y: 0.5 },
+] as const satisfies readonly { pos: ResizeHandle; x: number; y: number }[];
 
 // =============================================================================
 // RESIZE CALCULATION
 // =============================================================================
 
-function calculateNewDimensions(
+const MIN_IMAGE_PX = 20;
+const MAX_IMAGE_PX = 2000;
+
+/**
+ * New image dimensions for a resize drag. Corner handles drive both axes; with
+ * `lockAspect` (the default; Shift frees it) the resize follows the dominant
+ * drag axis — the one whose scale moved furthest from 1 — so a corner drag that
+ * mostly shrinks one side actually shrinks the image instead of snapping back to
+ * the axis that barely moved. The scale is clamped as a whole so the aspect
+ * ratio survives the min/max pixel bounds. Edge handles drive a single axis and
+ * never lock; the non-driven axis passes through unchanged and unclamped.
+ */
+export function calculateNewDimensions(
   handle: ResizeHandle,
   deltaX: number,
   deltaY: number,
@@ -124,21 +163,44 @@ function calculateNewDimensions(
   startHeight: number,
   lockAspect: boolean,
 ): { width: number; height: number } {
+  const drivesWidth = handle.includes("w") || handle.includes("e");
+  const drivesHeight = handle.includes("n") || handle.includes("s");
+  const isCorner = drivesWidth && drivesHeight;
+
   const signX = handle.includes("w") ? -1 : 1;
   const signY = handle.includes("n") ? -1 : 1;
 
-  let newWidth = startWidth + deltaX * signX;
-  let newHeight = startHeight + deltaY * signY;
+  const clamp = (n: number) =>
+    Math.max(MIN_IMAGE_PX, Math.min(MAX_IMAGE_PX, n));
 
-  if (lockAspect) {
-    const scale = Math.max(newWidth / startWidth, newHeight / startHeight);
-    newWidth = startWidth * scale;
-    newHeight = startHeight * scale;
+  if (isCorner && lockAspect) {
+    const scaleX =
+      startWidth > 0 ? (startWidth + deltaX * signX) / startWidth : 1;
+    const scaleY =
+      startHeight > 0 ? (startHeight + deltaY * signY) / startHeight : 1;
+    let scale = Math.abs(scaleX - 1) > Math.abs(scaleY - 1) ? scaleX : scaleY;
+
+    // Clamp the scale itself (not each dimension) so neither side can drift off
+    // the aspect ratio when it hits MIN/MAX before the other. maxScale is
+    // applied last so an extreme aspect ratio whose min-size and max-size
+    // constraints cannot both hold (minScale > maxScale, e.g. a 700x1 rule)
+    // caps at MAX_IMAGE_PX instead of running away past it.
+    const minScale = Math.max(
+      startWidth > 0 ? MIN_IMAGE_PX / startWidth : 0,
+      startHeight > 0 ? MIN_IMAGE_PX / startHeight : 0,
+    );
+    const maxScale = Math.min(
+      startWidth > 0 ? MAX_IMAGE_PX / startWidth : Infinity,
+      startHeight > 0 ? MAX_IMAGE_PX / startHeight : Infinity,
+    );
+    scale = Math.min(maxScale, Math.max(minScale, scale));
+
+    return { width: startWidth * scale, height: startHeight * scale };
   }
 
   return {
-    width: Math.max(20, Math.min(2000, newWidth)),
-    height: Math.max(20, Math.min(2000, newHeight)),
+    width: drivesWidth ? clamp(startWidth + deltaX * signX) : startWidth,
+    height: drivesHeight ? clamp(startHeight + deltaY * signY) : startHeight,
   };
 }
 
@@ -492,30 +554,19 @@ export function ImageSelectionOverlay({
         onMouseDown={handleBodyMouseDown}
       />
 
-      {/* Corner resize handles */}
-      <Handle
-        handle="nw"
-        style={{ left: left - HANDLE_HALF, top: top - HANDLE_HALF }}
-        onMouseDown={handleResizeStart}
-      />
-      <Handle
-        handle="ne"
-        style={{ left: left + width - HANDLE_HALF, top: top - HANDLE_HALF }}
-        onMouseDown={handleResizeStart}
-      />
-      <Handle
-        handle="se"
-        style={{
-          left: left + width - HANDLE_HALF,
-          top: top + height - HANDLE_HALF,
-        }}
-        onMouseDown={handleResizeStart}
-      />
-      <Handle
-        handle="sw"
-        style={{ left: left - HANDLE_HALF, top: top + height - HANDLE_HALF }}
-        onMouseDown={handleResizeStart}
-      />
+      {/* 4 corner handles (keep aspect) + 4 edge handles (stretch one axis).
+          x/y are fractions of the box: 0 = start edge, 0.5 = midpoint, 1 = end. */}
+      {HANDLES.map(({ pos, x, y }) => (
+        <Handle
+          key={pos}
+          handle={pos}
+          style={{
+            left: left + width * x - HANDLE_HALF,
+            top: top + height * y - HANDLE_HALF,
+          }}
+          onMouseDown={handleResizeStart}
+        />
+      ))}
 
       {/* Dimension indicator during resize */}
       {isResizing && (
