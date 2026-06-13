@@ -10,10 +10,13 @@ import {
   parseBlockTree,
   processBlockDirectives,
   pruneDanglingNumPr,
+  readConditionRawValues,
   resolvePath,
   scanBlockDirectives,
 } from "./block-directives";
+import { applyManifestFillSteps } from "./manifest-fill-steps";
 import { paragraphText, W_NS } from "./ooxml";
+import type { FieldMeta, TemplateData } from "./types";
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -790,6 +793,92 @@ describe("processBlockDirectives — conditionals", () => {
 
     const texts = bodyTexts(body);
     expect(texts).toEqual(["Line 1", "Line 2", "Line 3"]);
+  });
+});
+
+// ── DOM integration: raw-value condition overlay ─────────
+
+// A date field rendered to localized display text (e.g. "13. června 2028")
+// must still be compared as its raw ISO value by an ordering condition: the
+// condition engine only orders ISO `YYYY-MM-DD` strings, so without the overlay
+// `{{#if signing_date > "..."}}` would compare the display string and silently
+// evaluate false. The overlay is keyed by field path; substitution still uses
+// the formatted value in `data`.
+describe("processBlockDirectives — raw condition values overlay", () => {
+  const DATE_IF = WRAP(
+    [
+      P('{{#if signing_date > "2028-01-01"}}'),
+      P("After cutoff"),
+      P("{{#else}}"),
+      P("Before cutoff"),
+      P("{{/if}}"),
+    ].join(""),
+  );
+
+  test("ordering compares the raw ISO date, not the localized display text", () => {
+    const body = parseBody(DATE_IF);
+    processBlockDirectives(
+      body,
+      { signing_date: "13. června 2028" },
+      undefined,
+      { signing_date: "2028-06-13" },
+    );
+
+    expect(bodyTexts(body)).toEqual(["After cutoff"]);
+  });
+
+  test("a raw ISO that fails the comparison takes the else branch", () => {
+    const body = parseBody(DATE_IF);
+    processBlockDirectives(
+      body,
+      { signing_date: "13. června 2020" },
+      undefined,
+      { signing_date: "2020-06-13" },
+    );
+
+    expect(bodyTexts(body)).toEqual(["Before cutoff"]);
+  });
+
+  test("without the overlay the localized string fails to order (regression guard)", () => {
+    // Documents the bug the overlay fixes: the display text is not an ISO date,
+    // so the ordering comparison is false and the true branch is dropped.
+    const body = parseBody(DATE_IF);
+    processBlockDirectives(body, { signing_date: "13. června 2028" });
+
+    expect(bodyTexts(body)).toEqual(["Before cutoff"]);
+  });
+
+  // End-to-end through the real fill pipeline: applyManifestFillSteps formats
+  // the date in place AND stashes its raw ISO under CONDITION_RAW_VALUES; the
+  // stash is then read back and drives condition evaluation while substitution
+  // sees the formatted value.
+  test("applyManifestFillSteps formats the value yet stashes the raw ISO for conditions", async () => {
+    const dateField: FieldMeta = {
+      path: "signing_date",
+      inputType: "date",
+      dateFormat: { locale: "cs", style: "long" },
+    };
+    const values: TemplateData = { signing_date: "2028-06-13" };
+
+    const error = await applyManifestFillSteps({
+      values,
+      manifest: { fields: [dateField] },
+      resolveLookup: () => {
+        throw new Error("no lookup field in this manifest");
+      },
+    });
+
+    expect(error).toBeNull();
+    // Substitution value is the localized display text…
+    expect(values["signing_date"]).toBe("13. června 2028");
+    // …while the raw ISO travels on the map for condition evaluation.
+    const overlay = readConditionRawValues(values);
+    expect(overlay).toEqual({ signing_date: "2028-06-13" });
+
+    // The same overlay drives condition evaluation against the formatted map.
+    const body = parseBody(DATE_IF);
+    processBlockDirectives(body, values, undefined, overlay);
+    expect(bodyTexts(body)).toEqual(["After cutoff"]);
   });
 });
 

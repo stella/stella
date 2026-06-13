@@ -20,6 +20,7 @@ import {
   HAS_BLOCK_DIRECTIVES_RE,
   processBlockDirectives,
   pruneDanglingNumPr,
+  readConditionRawValues,
 } from "./block-directives";
 import { discoverPlaceholders } from "./discover-placeholders";
 import { processInlineConditions } from "./inline-conditions";
@@ -88,6 +89,7 @@ const preProcessBlockDirectives = async (
   zip: JSZip,
   templateData: TemplateData,
   namedConditions?: NamedCondition[],
+  conditionValues?: Record<string, string>,
 ): Promise<{
   buffer: Buffer;
   expandedValues: Record<string, RichPatchValue>;
@@ -116,6 +118,7 @@ const preProcessBlockDirectives = async (
     body,
     templateData,
     namedConditions,
+    conditionValues,
   );
 
   // Inline conditional spans resolve after the block pass (whole-paragraph
@@ -129,9 +132,18 @@ const preProcessBlockDirectives = async (
   // context extraction and per-occurrence patching must see the same buffer
   // so occurrence indices stay aligned, and a rendering patched into a
   // branch that this pass later cuts is simply removed with the branch.
+  // Inline `{{#if}}` spans evaluate against the same raw-value overlay as the
+  // block pass (see CONDITION_RAW_VALUES). processInlineConditions uses `data`
+  // only for condition tests and inline-loop array resolution — never for
+  // scalar substitution — so overlaying the formatted date paths with their raw
+  // ISO values is safe and does not affect rendered text.
+  const inlineData =
+    conditionValues && Object.keys(conditionValues).length > 0
+      ? { ...templateData, ...conditionValues }
+      : templateData;
   const inlineErrors = processInlineConditions(
     body,
-    templateData,
+    inlineData,
     namedConditions,
   );
 
@@ -184,12 +196,19 @@ export const fillTemplate = async (
   if (isPatchValues(values)) {
     effectiveValues = values;
   } else if (isTemplateData(values)) {
+    // Raw (pre-format) values stashed by the fill pipeline so a date field that
+    // is both display-formatted and referenced by a `{{#if}}` compares against
+    // its ISO value, not the localized string (see CONDITION_RAW_VALUES). On a
+    // plain map (no overlay) this is undefined and evaluation uses `values` as
+    // before.
+    const conditionValues = readConditionRawValues(values);
     // Checks for block directives internally; returns null
     // when none are found
     const result = await preProcessBlockDirectives(
       zip,
       values,
       namedConditions,
+      conditionValues,
     );
 
     if (result) {
