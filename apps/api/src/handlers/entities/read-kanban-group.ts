@@ -54,7 +54,7 @@ const readKanbanGroupBodySchema = t.Object({
     }),
   ),
   cursor: t.Optional(t.String()),
-  fieldMode: t.Optional(t.UnionEnum(["full", "visible"])),
+  fieldMode: t.Optional(t.Union([t.Literal("full"), t.Literal("visible")])),
   fieldIds: t.Optional(
     t.Array(tSafeId("property"), {
       maxItems: LIMITS.propertiesCount,

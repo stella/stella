@@ -1,7 +1,12 @@
 import { PGlite } from "@electric-sql/pglite";
 import { describe, expect, test } from "bun:test";
 import { SQL, is, sql } from "drizzle-orm";
-import { PgDialect, integer, pgTable } from "drizzle-orm/pg-core";
+import {
+  PgDialect,
+  jsonb as stockJsonb,
+  integer,
+  pgTable,
+} from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { jsonb } from "@/api/db/columns";
@@ -87,5 +92,32 @@ describe("safe JSONB column", () => {
     } finally {
       await client.close();
     }
+  });
+});
+
+const stockTable = pgTable("jsonb_stock_canary", {
+  // eslint-disable-next-line require-custom-jsonb-column/require-custom-jsonb-column -- canary deliberately pins stock jsonb behaviour
+  value: stockJsonb("value"),
+});
+
+describe("stock pg-core JSONB canary", () => {
+  // Canary: stock pg-core jsonb still passes the raw value straight through
+  // mapToDriverValue (no `::text::jsonb` cast), so bun-sql then stores it as a
+  // JSON string primitive. Contrast the custom column above, whose encoder
+  // returns an SQL `$1::text::jsonb` expression. If these assertions ever
+  // fail, drizzle/bun-sql may have fixed it and apps/api/src/db/columns.ts
+  // jsonb may be removable.
+  test("does not cast objects through text JSONB", () => {
+    const encoded = stockTable.value.mapToDriverValue({ a: 1 });
+
+    expect(is(encoded, SQL)).toBe(false);
+    expect(encoded).toEqual({ a: 1 });
+  });
+
+  test("does not cast arrays through text JSONB", () => {
+    const encoded = stockTable.value.mapToDriverValue(["value"]);
+
+    expect(is(encoded, SQL)).toBe(false);
+    expect(encoded).toEqual(["value"]);
   });
 });

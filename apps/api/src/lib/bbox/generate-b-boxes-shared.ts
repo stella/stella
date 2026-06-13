@@ -172,6 +172,7 @@ const getFieldContentAsString = (content?: FieldContent) => {
 
 class JustificationDataError extends TaggedError("JustificationDataError")<{
   justificationId: SafeId<"justification">;
+  message: string;
 }>() {}
 
 export const prepareJustificationData = async (
@@ -212,6 +213,9 @@ export const prepareJustificationData = async (
       return Result.err(
         new JustificationDataError({
           justificationId,
+          message:
+            "Justification is missing field content, content, an " +
+            "ai-model tool, or its field",
         }),
       );
     }
@@ -227,6 +231,7 @@ export const prepareJustificationData = async (
       return Result.err(
         new JustificationDataError({
           justificationId,
+          message: "Entity version has no file field content",
         }),
       );
     }
@@ -240,6 +245,7 @@ export const prepareJustificationData = async (
       return Result.err(
         new JustificationDataError({
           justificationId,
+          message: "File is not a PDF and has no derived PDF",
         }),
       );
     }

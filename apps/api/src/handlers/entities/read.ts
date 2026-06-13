@@ -28,7 +28,7 @@ const readEntitiesBodySchema = t.Object({
       maximum: LIMITS.entitiesPageSizeMax,
     }),
   ),
-  fieldMode: t.Optional(t.UnionEnum(["full", "visible"])),
+  fieldMode: t.Optional(t.Union([t.Literal("full"), t.Literal("visible")])),
   fieldIds: t.Optional(
     t.Array(tSafeId("property"), {
       maxItems: LIMITS.propertiesCount,

@@ -50,19 +50,19 @@ const DEEPL_SUPPORTED_MIME_TYPES = new Set<string>([
   "application/xliff+xml",
 ]);
 
-const FORMALITY_VALUES = [
-  "default",
-  "more",
-  "less",
-  "prefer_more",
-  "prefer_less",
-] as const;
-
 const translateBody = t.Object({
   fieldId: tSafeId("field"),
   targetLang: t.String({ minLength: 2, maxLength: 16 }),
   sourceLang: t.Optional(t.String({ minLength: 2, maxLength: 16 })),
-  formality: t.Optional(t.UnionEnum(FORMALITY_VALUES)),
+  formality: t.Optional(
+    t.Union([
+      t.Literal("default"),
+      t.Literal("more"),
+      t.Literal("less"),
+      t.Literal("prefer_more"),
+      t.Literal("prefer_less"),
+    ]),
+  ),
 });
 
 const config = {
@@ -208,7 +208,7 @@ const translateEntity = createSafeHandler(
           mimeType: sourceContent.mimeType,
           targetLang: body.targetLang,
           sourceLang: body.sourceLang,
-          formality: body.formality,
+          formality: body.formality ?? "default",
         }),
       catch: (error: unknown) => error,
     });

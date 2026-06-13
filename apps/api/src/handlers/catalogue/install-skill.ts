@@ -3,7 +3,6 @@ import { t } from "elysia";
 
 import { findCatalogueSkillInstallPayload } from "@stll/catalogue/install-payloads";
 
-import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
 import { installSkill } from "@/api/handlers/skills/install";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -16,7 +15,7 @@ import {
 
 const installSkillBody = t.Object({
   slug: t.String({ minLength: 1, maxLength: 64 }),
-  scope: t.Optional(t.UnionEnum(AGENT_SKILL_SCOPES)),
+  scope: t.Optional(t.Union([t.Literal("team"), t.Literal("private")])),
 });
 
 const config = {

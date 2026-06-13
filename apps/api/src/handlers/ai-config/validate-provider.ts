@@ -17,7 +17,9 @@ export const validateProviderBody = t.Object({
   apiKey: t.String({ minLength: 1, maxLength: 512 }),
   endpoint: t.Optional(t.String({ minLength: 1, maxLength: 2048 })),
   apiVersion: t.Optional(t.String({ minLength: 1, maxLength: 64 })),
-  region: t.Optional(t.UnionEnum(["eu", "global", "ch"])),
+  region: t.Optional(
+    t.Union([t.Literal("eu"), t.Literal("global"), t.Literal("ch")]),
+  ),
 });
 
 const config = {
