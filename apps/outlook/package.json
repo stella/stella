@@ -36,6 +36,7 @@
     "@types/bun": "catalog:",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
+    "fast-xml-parser": "^5.8.0",
     "tailwindcss": "catalog:",
     "typescript": "catalog:"
   }

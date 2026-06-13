@@ -1,4 +1,5 @@
 import { panic } from "better-result";
+import { XMLParser } from "fast-xml-parser";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -67,6 +68,78 @@ const resolvePlaceholders = (env: ManifestEnv): ManifestPlaceholders => {
 
 const UNRESOLVED_PATTERN = /\{\{[A-Z_]+\}\}/u;
 
+// The mail (mailappversionoverrides) DesktopFormFactor accepts only these
+// child elements. GetStarted is a Taskpane-host element: Outlook rejects a
+// mail manifest that nests it ("invalid child element 'GetStarted'"), so every
+// render is validated structurally instead of trusting hand edits to the XML.
+const MAIL_DESKTOP_FORM_FACTOR_CHILDREN = new Set([
+  "FunctionFile",
+  "ExtensionPoint",
+]);
+
+type XmlNode = Record<string, unknown>;
+
+const isXmlNodeArray = (value: unknown): value is XmlNode[] =>
+  Array.isArray(value) &&
+  value.every(
+    (entry) =>
+      typeof entry === "object" && entry !== null && !Array.isArray(entry),
+  );
+
+const walkElements = function* (
+  nodes: XmlNode[],
+): Generator<{ children: XmlNode[]; tag: string }> {
+  for (const node of nodes) {
+    for (const [tag, value] of Object.entries(node)) {
+      if (tag === ":@" || tag === "#text" || !isXmlNodeArray(value)) {
+        continue;
+      }
+      yield { children: value, tag };
+      yield* walkElements(value);
+    }
+  }
+};
+
+const childElementTags = (children: XmlNode[]): string[] =>
+  children
+    .flatMap((child) => Object.keys(child))
+    .filter((tag) => tag !== ":@" && tag !== "#text");
+
+/**
+ * Reject manifests Outlook would refuse at sideload, guarding the one place
+ * hand edits go wrong: the children allowed under the mail DesktopFormFactor.
+ */
+export const assertValidMailManifest = (xml: string): void => {
+  const parsed: unknown = new XMLParser({
+    ignoreAttributes: false,
+    preserveOrder: true,
+  }).parse(xml);
+  if (!isXmlNodeArray(parsed)) {
+    panic("Manifest did not parse into an element tree");
+  }
+
+  let desktopFormFactorCount = 0;
+  for (const element of walkElements(parsed)) {
+    if (element.tag !== "DesktopFormFactor") {
+      continue;
+    }
+    desktopFormFactorCount += 1;
+    for (const childTag of childElementTags(element.children)) {
+      if (!MAIL_DESKTOP_FORM_FACTOR_CHILDREN.has(childTag)) {
+        panic(
+          `Invalid <${childTag}> under the mail DesktopFormFactor. Allowed: ${[
+            ...MAIL_DESKTOP_FORM_FACTOR_CHILDREN,
+          ].join(", ")}. GetStarted is Taskpane-only and Outlook rejects it.`,
+        );
+      }
+    }
+  }
+
+  if (desktopFormFactorCount === 0) {
+    panic("Manifest has no DesktopFormFactor; expected a Mailbox host.");
+  }
+};
+
 export const renderManifest = (env: ManifestEnv): string => {
   const template = readFileSync(TEMPLATE_PATH, "utf-8");
   const placeholders = resolvePlaceholders(env);
@@ -78,5 +151,6 @@ export const renderManifest = (env: ManifestEnv): string => {
   if (unresolved) {
     panic(`Unresolved manifest placeholder: ${unresolved[0]}`);
   }
+  assertValidMailManifest(output);
   return output;
 };
