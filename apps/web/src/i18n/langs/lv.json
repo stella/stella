@@ -20,7 +20,8 @@
       "description": "Pievienojiet pakalpojumu sniedzēja piekļuves datus, lai sāktu izmantot AI funkcijas.",
       "title": "Pievienot AI pakalpojumu sniedzēju"
     },
-    "refinePlaceholder": "Kā AI jāpielāgo formulējums?"
+    "refinePlaceholder": "Kā AI jāpielāgo formulējums?",
+    "regenerate": "Ģenerēt vēlreiz"
   },
   "app": {
     "versionMismatch": {

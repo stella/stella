@@ -25,6 +25,7 @@ type Messages = {
       "title": "Connect AI provider";
     };
     "refinePlaceholder": "How should the AI adjust the wording?";
+    "regenerate": "Regenerate";
   };
   "anonymize": {
     "addEntity": "Add entity";

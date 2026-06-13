@@ -20,7 +20,8 @@
       "description": "Füge Provider-Zugangsdaten hinzu, um AI-Funktionen zu nutzen.",
       "title": "AI-Provider verbinden"
     },
-    "refinePlaceholder": "Wie soll die KI den Wortlaut anpassen?"
+    "refinePlaceholder": "Wie soll die KI den Wortlaut anpassen?",
+    "regenerate": "Neu generieren"
   },
   "app": {
     "versionMismatch": {

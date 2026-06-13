@@ -20,7 +20,8 @@
       "description": "Pridajte prihlasovacie údaje poskytovateľa a začnite používať funkcie AI.",
       "title": "Pripojiť poskytovateľa AI"
     },
-    "refinePlaceholder": "Ako má AI upraviť znenie?"
+    "refinePlaceholder": "Ako má AI upraviť znenie?",
+    "regenerate": "Vygenerovať znova"
   },
   "app": {
     "versionMismatch": {

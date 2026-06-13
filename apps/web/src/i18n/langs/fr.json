@@ -20,7 +20,8 @@
       "description": "Ajoutez les identifiants d’un fournisseur pour commencer à utiliser les fonctions IA.",
       "title": "Connecter un fournisseur IA"
     },
-    "refinePlaceholder": "Comment l’IA doit-elle ajuster la formulation ?"
+    "refinePlaceholder": "Comment l’IA doit-elle ajuster la formulation ?",
+    "regenerate": "Régénérer"
   },
   "app": {
     "versionMismatch": {

@@ -20,7 +20,8 @@
       "description": "Pridėkite teikėjo prisijungimo duomenis, kad galėtumėte naudoti AI funkcijas.",
       "title": "Prijungti AI teikėją"
     },
-    "refinePlaceholder": "Kaip DI turėtų pakoreguoti formuluotę?"
+    "refinePlaceholder": "Kaip DI turėtų pakoreguoti formuluotę?",
+    "regenerate": "Generuoti iš naujo"
   },
   "app": {
     "versionMismatch": {

@@ -18,32 +18,34 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import type { Editor, JSONContent } from "@tiptap/react";
 import {
   BoldIcon,
+  CheckIcon,
   Heading1Icon,
   Heading2Icon,
   Heading3Icon,
   ItalicIcon,
   ListIcon,
   ListOrderedIcon,
+  Loader2Icon,
   Redo2Icon,
+  RotateCcwIcon,
   Undo2Icon,
   WandSparklesIcon,
+  XIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
-import {
-  Popover,
-  PopoverPopup,
-  PopoverTrigger,
-} from "@stll/ui/components/popover";
 import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 
+import { diffClauseBodies } from "./clause-diff";
+import { ClauseDiffView } from "./clause-diff-view";
 import {
   CLAUSE_DIRECTIVE_NODE,
   ClauseDirectiveNode,
@@ -51,6 +53,7 @@ import {
 } from "./clause-directive-node";
 import "./clause-editor.css";
 import type {
+  ClauseBody,
   ClauseListKind,
   ClauseParagraph,
   ClauseRun,
@@ -331,6 +334,17 @@ const bodyKey = (body: readonly ClauseParagraph[]): string =>
 
 // ── Editor Component ────────────────────────────────
 
+type AiEditState =
+  | { status: "idle" }
+  | { status: "prompting"; instruction: string }
+  | { status: "generating"; instruction: string; baseline: ClauseBody }
+  | {
+      status: "preview";
+      instruction: string;
+      baseline: ClauseBody;
+      revised: ClauseBody;
+    };
+
 type ClauseEditorProps = {
   content: ClauseParagraph[];
   onChange: (body: ClauseParagraph[]) => void;
@@ -351,23 +365,23 @@ export const ClauseEditor = ({
   title,
 }: ClauseEditorProps) => {
   const t = useTranslations();
-  const [refineOpen, setRefineOpen] = useState(false);
-  const [instruction, setInstruction] = useState("");
-  const [refining, setRefining] = useState(false);
+  // AI edit is a preview-then-apply flow: generate a rewrite, show it as a diff,
+  // and mutate the clause only when the user accepts. The prompt stays editable
+  // so the user can regenerate against the original body.
+  const [aiEdit, setAiEdit] = useState<AiEditState>({ status: "idle" });
 
-  const handleRefine = async () => {
+  const runRewrite = async (instruction: string, baseline: ClauseBody) => {
     const trimmed = instruction.trim();
     if (trimmed === "") {
       return;
     }
-    setRefining(true);
+    setAiEdit({ status: "generating", instruction: trimmed, baseline });
     const response = await api.clauses["ai-rewrite"].post({
-      body: content,
+      body: baseline,
       instruction: trimmed,
       usageNotes: usageNotes ?? null,
       title: title ?? null,
     });
-    setRefining(false);
     if (response.error) {
       stellaToast.add({
         type: "error",
@@ -377,11 +391,52 @@ export const ClauseEditor = ({
           t("common.unexpectedError"),
         ),
       });
+      // Keep the prompt open with its text so the user can adjust and retry.
+      setAiEdit({ status: "prompting", instruction: trimmed });
       return;
     }
-    onChange(response.data.body);
-    setRefineOpen(false);
-    setInstruction("");
+    setAiEdit({
+      status: "preview",
+      instruction: trimmed,
+      baseline,
+      revised: response.data.body,
+    });
+  };
+
+  const submitAiEdit = () => {
+    if (aiEdit.status === "idle") {
+      return;
+    }
+    const baseline = aiEdit.status === "prompting" ? content : aiEdit.baseline;
+    void runRewrite(aiEdit.instruction, baseline);
+  };
+
+  const acceptAiEdit = () => {
+    if (aiEdit.status !== "preview") {
+      return;
+    }
+    onChange(aiEdit.revised);
+    setAiEdit({ status: "idle" });
+  };
+
+  const updateInstruction = (value: string) => {
+    setAiEdit((prev) => {
+      if (prev.status === "prompting") {
+        return { status: "prompting", instruction: value };
+      }
+      if (prev.status === "preview") {
+        return { ...prev, instruction: value };
+      }
+      return prev;
+    });
+  };
+
+  const toggleAiEdit = () => {
+    setAiEdit((prev) =>
+      prev.status === "idle"
+        ? { status: "prompting", instruction: "" }
+        : { status: "idle" },
+    );
   };
   // Last body the editor itself emitted, so the reset effect can tell an
   // external content change (dialog reset, clause switch) from the round-trip
@@ -498,13 +553,15 @@ export const ClauseEditor = ({
 
   const canUndo = editorReady && editor.can().undo();
   const canRedo = editorReady && editor.can().redo();
+  const previewing = aiEdit.status === "preview";
+  const aiActive = aiEdit.status !== "idle";
 
   return (
     // Stop modifier key combos from propagating to global
     // hotkeys (e.g., Cmd+B toggles sidebar otherwise).
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- non-interactive editor wrapper; onKeyDown only stops modifier combos reaching global hotkeys, real input is the contenteditable inside
     <div
-      className="clause-editor rounded-md border"
+      className="clause-editor relative rounded-md border"
       onKeyDown={(e) => {
         if (e.metaKey || e.ctrlKey) {
           e.stopPropagation();
@@ -515,7 +572,7 @@ export const ClauseEditor = ({
       <div className="flex items-center gap-0.5 border-b px-1 py-0.5">
         <Button
           aria-label={t("folio.undo")}
-          disabled={!canUndo}
+          disabled={!canUndo || previewing}
           onClick={undo}
           size="icon-xs"
           title={t("folio.undo")}
@@ -526,7 +583,7 @@ export const ClauseEditor = ({
         </Button>
         <Button
           aria-label={t("folio.redo")}
-          disabled={!canRedo}
+          disabled={!canRedo || previewing}
           onClick={redo}
           size="icon-xs"
           title={t("folio.redo")}
@@ -540,7 +597,7 @@ export const ClauseEditor = ({
           className={
             editorReady && editor.isActive("bold") ? "bg-muted" : undefined
           }
-          disabled={!editorReady}
+          disabled={!editorReady || previewing}
           onClick={toggleBold}
           size="icon-xs"
           type="button"
@@ -552,7 +609,7 @@ export const ClauseEditor = ({
           className={
             editorReady && editor.isActive("italic") ? "bg-muted" : undefined
           }
-          disabled={!editorReady}
+          disabled={!editorReady || previewing}
           onClick={toggleItalic}
           size="icon-xs"
           type="button"
@@ -567,7 +624,7 @@ export const ClauseEditor = ({
               ? "bg-muted"
               : undefined
           }
-          disabled={!editorReady}
+          disabled={!editorReady || previewing}
           onClick={() => toggleHeading(1)}
           size="icon-xs"
           type="button"
@@ -581,7 +638,7 @@ export const ClauseEditor = ({
               ? "bg-muted"
               : undefined
           }
-          disabled={!editorReady}
+          disabled={!editorReady || previewing}
           onClick={() => toggleHeading(2)}
           size="icon-xs"
           type="button"
@@ -595,7 +652,7 @@ export const ClauseEditor = ({
               ? "bg-muted"
               : undefined
           }
-          disabled={!editorReady}
+          disabled={!editorReady || previewing}
           onClick={() => toggleHeading(3)}
           size="icon-xs"
           type="button"
@@ -611,7 +668,7 @@ export const ClauseEditor = ({
               ? "bg-muted"
               : undefined
           }
-          disabled={!editorReady}
+          disabled={!editorReady || previewing}
           onClick={toggleBulletList}
           size="icon-xs"
           type="button"
@@ -626,7 +683,7 @@ export const ClauseEditor = ({
               ? "bg-muted"
               : undefined
           }
-          disabled={!editorReady}
+          disabled={!editorReady || previewing}
           onClick={toggleOrderedList}
           size="icon-xs"
           type="button"
@@ -635,60 +692,136 @@ export const ClauseEditor = ({
           <ListOrderedIcon className="size-3.5" />
         </Button>
 
-        <Popover onOpenChange={setRefineOpen} open={refineOpen}>
-          <PopoverTrigger
-            render={
-              <Button
-                aria-label={t("ai.editWithAI")}
-                className="ms-auto"
-                disabled={!editorReady || refining}
-                size="icon-xs"
-                type="button"
-                variant="ghost"
-              />
-            }
-          >
-            <WandSparklesIcon className="size-3.5" />
-          </PopoverTrigger>
-          <PopoverPopup align="end" className="w-80" side="bottom">
-            <div className="flex flex-col gap-2 p-1">
-              <Textarea
-                autoFocus
-                className="min-h-16 text-sm"
-                onChange={(e) => setInstruction(e.target.value)}
-                placeholder={t("ai.refinePlaceholder")}
-                value={instruction}
-              />
-              <div className="flex justify-end gap-2">
-                <Button
-                  onClick={() => setRefineOpen(false)}
-                  size="sm"
-                  type="button"
-                  variant="ghost"
-                >
-                  {t("common.cancel")}
-                </Button>
-                <Button
-                  disabled={refining || instruction.trim() === ""}
-                  onClick={() => void handleRefine()}
-                  size="sm"
-                  type="button"
-                >
-                  <WandSparklesIcon className="size-3.5" />
-                  {t("ai.editWithAI")}
-                </Button>
-              </div>
-            </div>
-          </PopoverPopup>
-        </Popover>
+        <Button
+          aria-label={t("ai.editWithAI")}
+          className={cn("ms-auto", aiActive && "bg-muted")}
+          disabled={!editorReady || aiEdit.status === "generating"}
+          onClick={toggleAiEdit}
+          size="icon-xs"
+          title={t("ai.editWithAI")}
+          type="button"
+          variant="ghost"
+        >
+          <WandSparklesIcon className="size-3.5" />
+        </Button>
       </div>
 
-      {/* Editor area */}
-      <EditorContent editor={editor} />
+      {/* Editor area — hidden under an AI preview so the read-only diff can
+          take its place without tearing down the live editor instance. */}
+      <div className={cn(previewing && "hidden")}>
+        <EditorContent editor={editor} />
+      </div>
+      {aiEdit.status === "preview" ? (
+        <div className="px-3 py-2">
+          <ClauseDiffView
+            diffs={diffClauseBodies(aiEdit.baseline, aiEdit.revised)}
+          />
+        </div>
+      ) : null}
 
-      <p className="text-muted-foreground border-t px-2 py-1 text-xs">
+      <p
+        className={cn(
+          "text-muted-foreground border-t px-2 py-1 text-xs",
+          aiActive && "pb-16",
+        )}
+      >
         {t("clauses.formattingPreviewHint")}
       </p>
+
+      {aiEdit.status === "idle" ? null : (
+        <AiEditBar
+          instruction={aiEdit.instruction}
+          onAccept={acceptAiEdit}
+          onDiscard={() => setAiEdit({ status: "idle" })}
+          onInstructionChange={updateInstruction}
+          onSubmit={submitAiEdit}
+          status={aiEdit.status}
+        />
+      )}
     </div>
   );
+};
+
+// ── AI edit bar ─────────────────────────────────────
+
+type AiEditBarProps = {
+  status: "prompting" | "generating" | "preview";
+  instruction: string;
+  onInstructionChange: (value: string) => void;
+  onSubmit: () => void;
+  onAccept: () => void;
+  onDiscard: () => void;
+};
+
+const AiEditBar = ({
+  status,
+  instruction,
+  onInstructionChange,
+  onSubmit,
+  onAccept,
+  onDiscard,
+}: AiEditBarProps) => {
+  const t = useTranslations();
+  const generating = status === "generating";
+  const previewing = status === "preview";
+
+  return (
+    <div className="bg-popover absolute inset-x-0 bottom-2 z-10 mx-auto flex w-[min(92%,32rem)] flex-col gap-2 rounded-lg border p-2 shadow-lg">
+      <div className="flex items-start gap-2">
+        <WandSparklesIcon className="text-muted-foreground mt-2 size-3.5 shrink-0" />
+        <Textarea
+          autoFocus
+          className="min-h-9 flex-1 resize-none text-sm"
+          disabled={generating}
+          onChange={(e) => onInstructionChange(e.target.value)}
+          onKeyDown={(e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+              e.preventDefault();
+              onSubmit();
+            }
+          }}
+          placeholder={t("ai.refinePlaceholder")}
+          value={instruction}
+        />
+      </div>
+      <div className="flex items-center justify-end gap-2">
+        <Button onClick={onDiscard} size="sm" type="button" variant="ghost">
+          {previewing ? <XIcon className="size-3.5" /> : null}
+          {t("common.cancel")}
+        </Button>
+        <Button
+          disabled={generating || instruction.trim() === ""}
+          onClick={onSubmit}
+          size="sm"
+          type="button"
+          variant={previewing ? "ghost" : undefined}
+        >
+          <AiEditSubmitIcon generating={generating} previewing={previewing} />
+          {previewing ? t("ai.regenerate") : t("ai.editWithAI")}
+        </Button>
+        {previewing ? (
+          <Button onClick={onAccept} size="sm" type="button">
+            <CheckIcon className="size-3.5" />
+            {t("common.accept")}
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+};
+
+const AiEditSubmitIcon = ({
+  generating,
+  previewing,
+}: {
+  generating: boolean;
+  previewing: boolean;
+}) => {
+  if (generating) {
+    return <Loader2Icon className="size-3.5 animate-spin" />;
+  }
+  if (previewing) {
+    return <RotateCcwIcon className="size-3.5" />;
+  }
+  return <WandSparklesIcon className="size-3.5" />;
 };
