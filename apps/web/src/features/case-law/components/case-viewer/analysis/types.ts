@@ -45,8 +45,7 @@ const CORE_CATEGORY_VAR: Record<string, string> = {
 const hashString = (s: string): number => {
   let h = 0;
   for (let i = 0; i < s.length; i++) {
-    // djb2-style hash: bitwise ops are the correct tool here.
-    // eslint-disable-next-line no-bitwise, unicorn/prefer-math-trunc
+    // eslint-disable-next-line no-bitwise, unicorn/prefer-math-trunc -- djb2 hash needs shift and `| 0` int coercion
     h = ((h << 5) - h + (s.codePointAt(i) ?? 0)) | 0;
   }
   return Math.abs(h);

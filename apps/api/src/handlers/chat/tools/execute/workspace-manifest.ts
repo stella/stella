@@ -23,7 +23,7 @@ const entityKindSchema = v.picklist(ENTITY_KINDS);
 const propertyStatusSchema = v.picklist(PROPERTY_STATUSES);
 // @valibot/to-json-schema rejects regex flags, so v.regex literals
 // in this file deliberately omit the `u` flag.
-/* eslint-disable require-unicode-regexp */
+/* eslint-disable require-unicode-regexp -- @valibot/to-json-schema rejects regex flags */
 const matterRefSchema = v.pipe(
   v.string(),
   v.regex(/^mat_\d+$/),

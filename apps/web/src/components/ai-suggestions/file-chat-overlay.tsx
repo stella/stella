@@ -383,7 +383,7 @@ const prepareOperations = (
 // requiring `severity`/`area`, so old stored approvals can still
 // reach this code with the fields missing. Type narrowing says
 // they're always present; the runtime check is for legacy data.
-/* oxlint-disable typescript/no-unnecessary-condition */
+/* oxlint-disable typescript/no-unnecessary-condition -- legacy stored approvals predate the severity/area schema; runtime fallback for old data */
 const inputOperationSeverity = (
   operation: ToolInputOperation,
 ): FolioAIEditSeverity | "unspecified" => operation.severity ?? "unspecified";

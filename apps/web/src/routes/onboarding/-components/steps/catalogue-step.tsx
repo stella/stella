@@ -207,7 +207,7 @@ export const CatalogueStep = ({
         .sort((left, right) =>
           left.displayName.localeCompare(right.displayName),
         ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- matchesSearch is recreated each render; its only inputs (query, jurisdictionFilter) are listed, so memoizing on the closure itself would defeat the memo
     [recommendedEntries, otherEntries, query, jurisdictionFilter],
   );
 

@@ -347,6 +347,7 @@ const searchPostgresDecisions = async (
 
   const hits = resultRows.map((row) => {
     const languageGroupKey = toNullableString(row["language_group_key"]);
+    const headline = toNullableString(row["headline"]);
 
     return {
       decisionId: String(row["decision_id"]),
@@ -364,10 +365,7 @@ const searchPostgresDecisions = async (
       decisionDate: toNullableString(row["decision_date"]),
       decisionType: toNullableString(row["decision_type"]),
       sourceUrl: toNullableString(row["source_url"]),
-      // oxlint-disable-next-line typescript/strict-boolean-expressions -- row.headline from DB (any)
-      headline: row["headline"]
-        ? escapeAndHighlight(toNullableString(row["headline"]) ?? "")
-        : null,
+      headline: headline ? escapeAndHighlight(headline) : null,
       citationCount: Number(row["citation_count"]) || 0,
       createdAt:
         row["created_at"] instanceof Date

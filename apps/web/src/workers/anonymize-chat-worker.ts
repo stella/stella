@@ -92,14 +92,14 @@ const handle = async (request: AnonRequest): Promise<AnonResponse> => {
 
 // SAFETY: this module only runs inside a Web Worker — `self` is
 // the dedicated worker scope.
-// oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+// oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- worker `self` is the dedicated worker scope
 const scope = self as unknown as DedicatedWorkerGlobalScope;
 
 scope.addEventListener("message", (event: MessageEvent<AnonRequest>) => {
   void handle(event.data).then((response) => {
     // Worker postMessage doesn't take a targetOrigin (unlike
     // window.postMessage); the lint rule is window-specific.
-    // eslint-disable-next-line unicorn/require-post-message-target-origin
+    // eslint-disable-next-line unicorn/require-post-message-target-origin -- worker postMessage has no targetOrigin param, rule is window-specific
     scope.postMessage(response);
     return;
   });

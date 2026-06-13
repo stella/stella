@@ -1982,8 +1982,12 @@ export function DocxEditor({
 
       focusActiveEditor();
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
-    [tableSelection, getActiveEditorView, focusActiveEditor],
+    [
+      tableSelection,
+      getActiveEditorView,
+      focusActiveEditor,
+      getCachedStyleResolver,
+    ],
   );
 
   // Context menu handler
@@ -2144,7 +2148,8 @@ export function DocxEditor({
             break;
           case "applyStyle": {
             // Resolve style to get its formatting properties
-            // Use ref to avoid stale closure (handleFormat has [] deps)
+            // Use ref to avoid stale closure (handleFormat does not depend on
+            // the live document)
             const currentDoc = historyStateRef.current;
             const styleResolver = currentDoc?.package.styles
               ? getCachedStyleResolver(currentDoc.package.styles)
@@ -2173,8 +2178,7 @@ export function DocxEditor({
         }
       }
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
-    [getActiveEditorView],
+    [getActiveEditorView, getCachedStyleResolver],
   );
 
   const handleContextMenu = useCallback(
@@ -3296,7 +3300,7 @@ export function DocxEditor({
                   }}
                 >
                   {/* Editor content area */}
-                  {/* oxlint-disable-next-line jsx-a11y/no-static-element-interactions */}
+                  {/* oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- editor canvas; mouse handlers delegate focus to the child contenteditable, not an interactive control */}
                   <div
                     ref={editorContentRef}
                     style={{ position: "relative", flex: 1, minWidth: 0 }}

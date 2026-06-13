@@ -125,7 +125,7 @@ export const createMcpHttpRequestHandler = ({
 
     // The low-level Server API accepts JSON Schema directly, which keeps the
     // MCP surface independent from the AI SDK tool generics used elsewhere.
-    // eslint-disable-next-line typescript-eslint/no-deprecated
+    // eslint-disable-next-line typescript-eslint/no-deprecated -- low-level Server is the intended "advanced use case" API per the SDK; McpServer would couple us to AI SDK tool generics
     const server = new Server(
       { name: getMcpServerName(mode), version: MCP_SERVER_VERSION },
       { capabilities: { tools: {} } },

@@ -42,7 +42,7 @@ export const createPostHogAnalytics = (
           : {}),
       });
     },
-    // eslint-disable-next-line promise-function-async
+    // eslint-disable-next-line promise-function-async -- forwards client.flush()'s promise directly; async would add a redundant wrapper
     flush: () => client.flush(),
   };
 };

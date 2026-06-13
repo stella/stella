@@ -11,7 +11,7 @@ const FIXTURE_DIR = new URL("__fixtures__/", import.meta.url);
 // catch drift between an upstream payload and the committed JSON,
 // which is precisely what the assertions below check anyway.
 const readFixture = async <T>(name: string): Promise<T> =>
-  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- committed test fixture JSON; shape asserted by the tests below
   (await Bun.file(new URL(name, FIXTURE_DIR)).json()) as T;
 
 type FetchHandler = (input: URL | Request | string) => Promise<Response>;

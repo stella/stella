@@ -38,7 +38,7 @@ export class PDFErrorBoundary extends Component<
     this.props.onError?.(error);
   }
 
-  // oxlint-disable-next-line typescript-eslint/promise-function-async
+  // oxlint-disable-next-line typescript-eslint/promise-function-async -- React render() must stay sync; ReactNode children can be thenable
   override render() {
     if (this.state.hasError) {
       return this.props.fallback ?? null;

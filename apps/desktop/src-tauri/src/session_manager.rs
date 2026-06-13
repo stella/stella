@@ -979,9 +979,6 @@ impl SessionManager {
     let session_token = session.session_token.clone();
     let file_name = session.file_name.clone();
     let last_checkpoint_sha = session.last_checkpoint_sha.clone();
-    // Release the mutable borrow before calling other self methods
-    #[allow(dropping_references)]
-    drop(session);
 
     self.persist_sessions().await;
     self.emit_state_change();
@@ -1044,9 +1041,6 @@ impl SessionManager {
         } else {
           SessionStatus::Ready
         };
-
-        #[allow(dropping_references)]
-        drop(session);
 
         self.persist_sessions().await;
         self.emit_state_change();
@@ -1240,8 +1234,6 @@ impl SessionManager {
     let sid = session.id.clone();
     let session_token = session.session_token.clone();
     let pending_finalize = session.pending_finalize;
-    #[allow(dropping_references)]
-    drop(session);
 
     self.persist_sessions().await;
     self.emit_state_change();
@@ -1255,7 +1247,7 @@ impl SessionManager {
     session.finalize_in_flight = false;
 
     match result {
-      FinalizeResult::Finalized { version_number, .. } => {
+      FinalizeResult::Finalized { version_number } => {
         if session.changed_during_remote_save {
           session.changed_during_remote_save = false;
           session.last_error = Some(
@@ -1386,13 +1378,9 @@ impl SessionManager {
     }
 
     match response.json::<FinalizeResponse>().await {
-      Ok(FinalizeResponse::Finalized {
-        entity_id,
-        version_number,
-      }) => FinalizeResult::Finalized {
-        entity_id,
-        version_number,
-      },
+      Ok(FinalizeResponse::Finalized { version_number, .. }) => {
+        FinalizeResult::Finalized { version_number }
+      }
       Ok(FinalizeResponse::NoChanges) => FinalizeResult::NoChanges,
       Err(e) => FinalizeResult::Error(format!(
         "stella desktop received an invalid finalize response: {e}"
@@ -1836,12 +1824,8 @@ enum CheckpointResult {
   Error(String),
 }
 
-#[allow(dead_code)]
 enum FinalizeResult {
-  Finalized {
-    entity_id: String,
-    version_number: i64,
-  },
+  Finalized { version_number: i64 },
   NoChanges,
   TakenOver(String),
   SessionClosed(String),

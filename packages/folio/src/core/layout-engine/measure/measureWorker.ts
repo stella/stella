@@ -275,7 +275,7 @@ function flush(current: ProxyState): void {
   try {
     // The unicorn `targetOrigin` lint targets `window.postMessage`;
     // `Worker.postMessage` does not accept that argument.
-    // eslint-disable-next-line unicorn/require-post-message-target-origin
+    // eslint-disable-next-line unicorn/require-post-message-target-origin -- Worker.postMessage takes no targetOrigin.
     current.transport.postMessage({ type: "measure", id, entries });
   } catch {
     current.inFlightGenerations.delete(id);

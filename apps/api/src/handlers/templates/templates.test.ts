@@ -97,9 +97,8 @@ const makeDocxWithParts = async (opts: {
   return Buffer.from(buf);
 };
 
-// prettier-ignore
 const DOCX_MIME =
-	"application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 const fakeOrgId = toSafeId<"organization">("org_test");
 const fakeUserId = toSafeId<"user">("user_test");
@@ -108,7 +107,7 @@ const fakeUserId = toSafeId<"user">("user_test");
  *  returns `undefined`; sufficient for handlers where the
  *  scopedDb call is best-effort (e.g., analytics inserts). */
 // SAFETY: test stub; shape satisfies ScopedDb interface for handler mocks
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test-only ScopedDb stub
 const stubScopedDb = (async (fn: unknown) => {
   if (typeof fn === "function") {
     // Swallow the result; the callback runs against a

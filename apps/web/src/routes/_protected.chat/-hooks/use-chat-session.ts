@@ -376,7 +376,7 @@ export const useChatSession = ({
       // owns the rewritten parts array.
       const truncated = messages
         .slice(0, targetIndex + 1)
-        // eslint-disable-next-line oxc/no-map-spread
+        // eslint-disable-next-line oxc/no-map-spread -- intentionally builds a new message object to avoid mutating SDK history
         .map((message) => {
           if (message.role !== "assistant") {
             return message;

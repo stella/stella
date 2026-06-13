@@ -52,7 +52,7 @@ function InputGroupAddon({
   ...props
 }: React.ComponentProps<"div"> & VariantProps<typeof inputGroupAddonVariants>) {
   return (
-    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- non-interactive addon container; onMouseDown only forwards focus to the grouped input when clicking dead padding (skips real interactive children)
     <div
       className={cn(inputGroupAddonVariants({ align }), className)}
       data-align={align}

@@ -452,27 +452,27 @@ export function parseTableLook(
   if (val) {
     const flags = Number.parseInt(val, 16);
     if (!Number.isNaN(flags)) {
-      // oxlint-disable-next-line no-bitwise
+      // oxlint-disable-next-line no-bitwise -- OOXML tblLook hex flag bit test
       if (flags & 0x00_20) {
         look.firstRow = true;
       }
-      // oxlint-disable-next-line no-bitwise
+      // oxlint-disable-next-line no-bitwise -- OOXML tblLook hex flag bit test
       if (flags & 0x00_40) {
         look.lastRow = true;
       }
-      // oxlint-disable-next-line no-bitwise
+      // oxlint-disable-next-line no-bitwise -- OOXML tblLook hex flag bit test
       if (flags & 0x00_80) {
         look.firstColumn = true;
       }
-      // oxlint-disable-next-line no-bitwise
+      // oxlint-disable-next-line no-bitwise -- OOXML tblLook hex flag bit test
       if (flags & 0x01_00) {
         look.lastColumn = true;
       }
-      // oxlint-disable-next-line no-bitwise
+      // oxlint-disable-next-line no-bitwise -- OOXML tblLook hex flag bit test
       if (flags & 0x02_00) {
         look.noHBand = true;
       }
-      // oxlint-disable-next-line no-bitwise
+      // oxlint-disable-next-line no-bitwise -- OOXML tblLook hex flag bit test
       if (flags & 0x04_00) {
         look.noVBand = true;
       }

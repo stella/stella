@@ -35,7 +35,7 @@ import type {
   TextFormatting,
   TrackedChangeInfo,
 } from "../../types/document";
-// oxlint-disable-next-line import/no-cycle
+// oxlint-disable-next-line import/no-cycle -- OOXML model is mutually recursive: paragraphs hold runs, shape-textbox runs hold paragraphs
 import { serializeRun, serializeTextFormatting } from "./runSerializer";
 import { serializeSectionProperties } from "./sectionPropertiesSerializer";
 import { escapeXml, intAttr } from "./xmlUtils";

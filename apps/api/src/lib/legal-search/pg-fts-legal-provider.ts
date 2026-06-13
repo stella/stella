@@ -159,10 +159,10 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
     decisionDate: toNullableString(row["decision_date"]),
     decisionType: toNullableString(row["decision_type"]),
     sourceUrl: toNullableString(row["source_url"]),
-    // oxlint-disable-next-line typescript/strict-boolean-expressions -- row.headline from DB (any)
-    headline: row["headline"]
-      ? escapeAndHighlight(JSON.stringify(row["headline"]))
-      : null,
+    headline:
+      typeof row["headline"] === "string" && row["headline"].length > 0
+        ? escapeAndHighlight(JSON.stringify(row["headline"]))
+        : null,
     citationCount: Number(row["citation_count"]) || 0,
     citationAuthority: Number(row["citation_authority"]) || 0,
     score: Number(row["score"]) || 0,

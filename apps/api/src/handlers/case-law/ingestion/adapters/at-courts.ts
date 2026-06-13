@@ -18,6 +18,7 @@ import {
   stripHtml,
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -310,12 +311,11 @@ const fetchFulltext = async (
     });
 
     if (!response.ok) {
-      // eslint-disable-next-line no-console -- adapter diagnostic
-      console.warn(
-        "AT Courts: fulltext fetch failed",
-        response.status,
-        htmlUrl,
-      );
+      logger.warn("case_law.ingestion.fulltext_fetch_failed", {
+        adapterKey: ADAPTER_KEYS.AT_COURTS,
+        httpStatus: response.status,
+        url: htmlUrl,
+      });
       return undefined;
     }
 

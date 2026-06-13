@@ -162,8 +162,7 @@ export function InlineHeaderFooterEditor({
         cancelAnimationFrame(rafId);
       }
     };
-    // getActiveView is a closure over parent state; we only fire on mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- getActiveView is a closure over parent state; focus must fire only on mount, not re-steal focus on every parent re-render
   }, []);
 
   const handleClose = useCallback(() => {

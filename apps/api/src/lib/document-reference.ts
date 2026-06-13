@@ -9,14 +9,14 @@ const VCODE_LENGTH = 10;
 
 /** Rejection-sampling to avoid modulo bias (256 % 31 = 8). */
 const generateCode = (): string => {
-  // eslint-disable-next-line no-bitwise
+  // eslint-disable-next-line no-bitwise -- bit-shift builds the rejection-sampling mask
   const mask = (1 << Math.ceil(Math.log2(VCODE_ALPHABET.length))) - 1;
   const result: string[] = [];
   while (result.length < VCODE_LENGTH) {
     const bytes = new Uint8Array(VCODE_LENGTH * 2);
     crypto.getRandomValues(bytes);
     for (const b of bytes) {
-      // eslint-disable-next-line no-bitwise
+      // eslint-disable-next-line no-bitwise -- mask random byte to the alphabet bit-width
       const idx = b & mask;
       if (idx < VCODE_ALPHABET.length) {
         result.push(VCODE_ALPHABET.at(idx) ?? "");

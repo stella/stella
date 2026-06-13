@@ -48,7 +48,7 @@ export function broadcastMcpOAuthOutcome(outcome: McpOAuthOutcome): void {
     // BroadcastChannel.postMessage takes no targetOrigin; messages are
     // confined to the same origin by the browser's BroadcastChannel
     // contract.
-    // eslint-disable-next-line unicorn/require-post-message-target-origin
+    // eslint-disable-next-line unicorn/require-post-message-target-origin -- BroadcastChannel.postMessage takes no targetOrigin.
     channel.postMessage(message);
     channel.close();
     return;

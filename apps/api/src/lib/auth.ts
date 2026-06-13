@@ -295,7 +295,7 @@ const createAuth = () => {
       emailOTP({
         async sendVerificationOTP({ email, otp, type }, ctx) {
           if (env.isDev) {
-            // eslint-disable-next-line no-console
+            // eslint-disable-next-line no-console -- dev-only OTP echo for local testing (env.isDev gated; value printed verbatim by design)
             console.log(`[DEV] OTP for ${email}: ${otp} (type: ${type})`);
             stashDevOtp(email, otp);
             return;
@@ -322,7 +322,7 @@ const createAuth = () => {
         async sendInvitationEmail(data, request) {
           const inviteLink = `${env.FRONTEND_URL}/auth/accept-invitation/${data.id}`;
           if (env.isDev) {
-            // eslint-disable-next-line no-console
+            // eslint-disable-next-line no-console -- dev-only invitation-link echo for local testing
             console.log(
               `[DEV] Org invitation for ${data.email}: ${inviteLink}`,
             );

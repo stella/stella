@@ -43,7 +43,7 @@ const loadPageFixtures = async (): Promise<
   for await (const filename of glob.scan(fixturePath)) {
     const path = new URL(filename, FIXTURES_DIR);
     const text = await Bun.file(path).text();
-    // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+    // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- committed fixture JSON; the assertions below are the shape validation
     const data = JSON.parse(text) as FixtureRecord;
     results.push({ filename, data });
   }

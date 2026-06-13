@@ -14,7 +14,7 @@ import {
 
 // @valibot/to-json-schema rejects regex flags, so v.regex literals
 // in this file deliberately omit the `u` flag.
-/* eslint-disable require-unicode-regexp */
+/* eslint-disable require-unicode-regexp -- @valibot/to-json-schema rejects regex flags */
 const lawIdSchema = v.pipe(
   v.string(),
   v.regex(

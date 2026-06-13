@@ -161,22 +161,22 @@ const pgSearch = async (
   return { hits, nextCursor };
 };
 
-const mapRowHit = (row: RawRow): LegislationHit => ({
-  documentId: String(row["document_id"]),
-  eli: String(row["eli"]),
-  title: String(row["title"]),
-  country: String(row["country"]),
-  language: String(row["language"]),
-  documentType: toNullableString(row["document_type"]),
-  status: String(row["status"]),
-  effectiveDate: toNullableString(row["effective_date"]),
-  sourceUrl: toNullableString(row["source_url"]),
-  // oxlint-disable-next-line typescript/strict-boolean-expressions -- row.headline from DB (any)
-  headline: row["headline"]
-    ? escapeAndHighlight(toNullableString(row["headline"]) ?? "")
-    : null,
-  score: Number(row["score"]) || 0,
-});
+const mapRowHit = (row: RawRow): LegislationHit => {
+  const headline = toNullableString(row["headline"]);
+  return {
+    documentId: String(row["document_id"]),
+    eli: String(row["eli"]),
+    title: String(row["title"]),
+    country: String(row["country"]),
+    language: String(row["language"]),
+    documentType: toNullableString(row["document_type"]),
+    status: String(row["status"]),
+    effectiveDate: toNullableString(row["effective_date"]),
+    sourceUrl: toNullableString(row["source_url"]),
+    headline: headline ? escapeAndHighlight(headline) : null,
+    score: Number(row["score"]) || 0,
+  };
+};
 
 const buildCorpusIndexQuery = (body: SearchLegislationBody): string | null => {
   const freeText = corpusFreeTextClause(body.query);

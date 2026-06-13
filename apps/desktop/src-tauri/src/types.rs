@@ -113,7 +113,7 @@ impl Default for DesktopUpdateSnapshot {
 /// new bridge endpoint or backwards-compatible field is added so
 /// the web side can gate features on `snapshot.bridgeVersion >= N`
 /// without coupling to the desktop's literal app version.
-pub const BRIDGE_VERSION: u32 = 4;
+pub const BRIDGE_VERSION: u32 = 5;
 
 /// Feature flags advertised to the web app. Add a string here
 /// whenever a new capability lands on the bridge so the web app
@@ -187,6 +187,7 @@ pub struct OpenDocxResponse {
 #[serde(rename_all = "camelCase")]
 pub struct CheckpointResponse {
   pub checkpointed_at: String,
+  // Serde surface: mirrors the server checkpoint contract; not branched on yet.
   #[allow(dead_code)]
   pub noop: bool,
   /// Present when the server rotates the session token on a non-noop checkpoint.
@@ -198,6 +199,8 @@ pub struct CheckpointResponse {
 pub enum FinalizeResponse {
   #[serde(rename_all = "camelCase")]
   Finalized {
+    // Serde surface: mirrors the server finalize contract; not branched on yet.
+    #[allow(dead_code)]
     entity_id: String,
     version_number: i64,
   },

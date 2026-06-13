@@ -10,7 +10,7 @@
  */
 
 import * as cheerio from "cheerio";
-import type { AnyNode } from "domhandler";
+import { type AnyNode, isTag, isText } from "domhandler";
 
 import type {
   Block,
@@ -226,8 +226,7 @@ const walkInlines = (
   const inlines: Inline[] = [];
 
   el.contents().each((_, node) => {
-    // oxlint-disable-next-line typescript/no-unsafe-enum-comparison
-    if (node.type === "text") {
+    if (isText(node)) {
       const text = $(node).text();
       if (text) {
         inlines.push({ type: "text", text });
@@ -235,13 +234,16 @@ const walkInlines = (
       return;
     }
 
-    // oxlint-disable-next-line typescript/no-unsafe-enum-comparison
-    if (node.type !== "tag") {
+    if (!isTag(node)) {
       return;
     }
 
     const tag = node.tagName.toLowerCase();
     const $node = $(node);
+
+    if (tag === "style" || tag === "script") {
+      return;
+    }
 
     if (tag === "br") {
       inlines.push({ type: "line-break" });
@@ -379,8 +381,7 @@ export const extractRawChunks = ($: cheerio.CheerioAPI): RawChunk[] => {
   };
 
   const processNode = (node: AnyNode, parentCentered: boolean) => {
-    // oxlint-disable-next-line typescript/no-unsafe-enum-comparison
-    if (node.type === "text") {
+    if (isText(node)) {
       const text = $(node).text();
       if (text.trim()) {
         appendToBuffer([{ type: "text", text }], parentCentered);
@@ -388,8 +389,7 @@ export const extractRawChunks = ($: cheerio.CheerioAPI): RawChunk[] => {
       return;
     }
 
-    // oxlint-disable-next-line typescript/no-unsafe-enum-comparison
-    if (node.type !== "tag") {
+    if (!isTag(node)) {
       return;
     }
 
@@ -482,8 +482,7 @@ export const extractRawChunks = ($: cheerio.CheerioAPI): RawChunk[] => {
   let afterTable = false;
 
   body.contents().each((_, node) => {
-    // oxlint-disable-next-line typescript/no-unsafe-enum-comparison
-    if (node.type === "tag" && $(node).is("#box-table-a")) {
+    if (isTag(node) && $(node).is("#box-table-a")) {
       afterTable = true;
       return;
     }

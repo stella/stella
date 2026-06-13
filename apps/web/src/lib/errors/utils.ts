@@ -24,7 +24,7 @@ export const transformUnknownError = (error: unknown) => {
 
 export const logDevError = (error: unknown) => {
   if (import.meta.env.DEV) {
-    // eslint-disable-next-line no-console
+    // eslint-disable-next-line no-console -- dev-only error echo
     console.error(error);
   }
 };

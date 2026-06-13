@@ -17,6 +17,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { logger } from "@/api/lib/observability/logger";
 
 /**
  * Czech Supreme Administrative Court adapter.
@@ -231,10 +232,11 @@ const parseResultRows = (html: string): ParsedRow[] => {
     if (!caseNumber || caseNumber.length > 100) {
       // Skip malformed or overly long case numbers
       if (caseNumber) {
-        // eslint-disable-next-line no-console -- adapter diagnostic
-        console.warn(
-          `NSS: skipping malformed case number (${caseNumber.length} chars): ${caseNumber.slice(0, 50)}`,
-        );
+        logger.warn("case_law.ingestion.malformed_case_number_skipped", {
+          adapterKey: ADAPTER_KEYS.CZ_NSS,
+          caseNumberLength: caseNumber.length,
+          caseNumberSample: caseNumber.slice(0, 50),
+        });
       }
       continue;
     }

@@ -44,7 +44,7 @@
  */
 
 import * as cheerio from "cheerio";
-import type { AnyNode } from "domhandler";
+import { type AnyNode, isText } from "domhandler";
 
 import type {
   Block,
@@ -210,8 +210,7 @@ const _walkInlines = (
   const inlines: Inline[] = [];
 
   el.contents().each((_, node) => {
-    // oxlint-disable-next-line typescript/no-unsafe-enum-comparison
-    if (node.type === "text") {
+    if (isText(node)) {
       const text = $(node).text();
       if (text) {
         inlines.push({ type: "text", text });
@@ -219,7 +218,7 @@ const _walkInlines = (
       return;
     }
 
-    // oxlint-disable-next-line typescript/no-unsafe-enum-comparison
+    // oxlint-disable-next-line typescript/no-unsafe-enum-comparison -- isTag() also matches script/style; literal "tag" skips those, and domhandler does not re-export ElementType
     if (node.type !== "tag") {
       return;
     }

@@ -117,8 +117,7 @@ const sanitizeSuggestion = (raw: string): string => {
 
 const suggestPrompt = createSafeHandler(
   config,
-  // `createSafeHandler` requires an AsyncGenerator. No DB ops to yield* over.
-  // eslint-disable-next-line require-yield
+  // eslint-disable-next-line require-yield -- createSafeHandler mandates AsyncGenerator; no DB ops to Result.await
   async function* ({ session, request, body, safeDb, user, workspaceId }) {
     const trimmedName = body.name.trim();
     if (trimmedName.length === 0) {

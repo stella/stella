@@ -93,8 +93,7 @@ export const anonymizeChatTextInWorker = ({
       excludedCanonicals === undefined
         ? { id, text, workspaceId }
         : { id, text, workspaceId, excludedCanonicals };
-    // Worker postMessage doesn't take a targetOrigin.
-    // eslint-disable-next-line unicorn/require-post-message-target-origin
+    // eslint-disable-next-line unicorn/require-post-message-target-origin -- Worker.postMessage has no targetOrigin param (window-only)
     w.postMessage(request);
   });
 };

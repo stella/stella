@@ -21,7 +21,7 @@ const hydrate = () => {
           if (error instanceof CancelledError) {
             return;
           }
-          // eslint-disable-next-line no-console
+          // eslint-disable-next-line no-console -- top-level hydration error boundary, no logger in scope
           console.error(error);
         },
       },

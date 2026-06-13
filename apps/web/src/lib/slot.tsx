@@ -19,8 +19,8 @@
  * are not statically known.
  */
 
-/* eslint-disable typescript-eslint/no-unsafe-type-assertion */
-/* eslint-disable typescript/no-unsafe-type-assertion */
+/* eslint-disable typescript-eslint/no-unsafe-type-assertion -- dynamic prop/ref merge onto an unknown child element; each cast guarded by a typeof/SAFETY check below */
+/* eslint-disable typescript/no-unsafe-type-assertion -- dynamic prop/ref merge onto an unknown child element; each cast guarded by a typeof/SAFETY check below */
 
 import { Children, Fragment, cloneElement, isValidElement } from "react";
 

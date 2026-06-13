@@ -29,7 +29,7 @@ import type { ScopedDb } from "@/api/db";
 // SAFETY: rootDb is used only inside runGeneration, which runs in
 // a fire-and-forget background task after the request scope has
 // ended.
-// eslint-disable-next-line no-restricted-imports
+// eslint-disable-next-line no-restricted-imports -- background task outlives the request scope; no ctx.scopedDb available
 import { rootDb } from "@/api/db/root";
 import { caseLawDecisions } from "@/api/db/schema";
 import { getModelForRole, getModelInfoForRole } from "@/api/lib/ai-models";

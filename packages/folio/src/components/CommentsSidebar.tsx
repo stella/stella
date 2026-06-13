@@ -876,7 +876,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     };
 
     return (
-      // oxlint-disable-next-line jsx-a11y/no-static-element-interactions
+      // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- card is a clickable container with nested buttons/input; role="button" would be invalid, keyboard handler provides Enter/Space access
       <div
         key={comment.id}
         ref={(el) => {

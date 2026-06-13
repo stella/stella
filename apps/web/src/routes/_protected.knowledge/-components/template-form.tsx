@@ -871,7 +871,7 @@ export const TemplateForm = ({
           : // SAFETY: Eden returns a typed object for the fill
             // endpoint, but the actual response is binary
             // data; the double cast bridges the type mismatch.
-            // eslint-disable-next-line typescript/no-unsafe-type-assertion
+            // eslint-disable-next-line typescript/no-unsafe-type-assertion -- Eden binary-response gotcha; runtime payload is bytes, not the inferred object
             new Blob([data as unknown as BlobPart], {
               type: mimeType,
             });

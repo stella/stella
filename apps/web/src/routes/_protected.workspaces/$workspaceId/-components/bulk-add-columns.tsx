@@ -432,7 +432,7 @@ const DraftCard = ({
     }),
     // The editor reads `state.value` only on init; subsequent updates
     // flow through `handleChange`, so a stable handle is fine.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- draft.prompt/onChange intentionally excluded; the editor reads state.value only on init, so the handle must stay stable across keystrokes
     [draft.id],
   );
 

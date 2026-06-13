@@ -1254,8 +1254,7 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
           {relTime}
         </span>
       )}
-      {/* TODO: fix this */}
-      {/* oxlint-disable-next-line jsx_a11y/click-events-have-key-events, jsx_a11y/no-static-element-interactions */}
+      {/* oxlint-disable-next-line jsx_a11y/click-events-have-key-events, jsx_a11y/no-static-element-interactions -- non-interactive wrapper; only stops row-open clicks bubbling from the already-keyboard-accessible RowActions trigger */}
       <span className="shrink-0" onClick={(e) => e.stopPropagation()}>
         <RowActions
           anchor={contextAnchor}
@@ -1287,7 +1286,7 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
     // Use a <div> instead of <button> to avoid invalid
     // nested <button> elements (RowActions renders a
     // <button> menu trigger inside).
-    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- div carries paired role="button"/tabIndex/onKeyDown; can't be a real button (nested buttons)
     <div
       className={cn(
         "group/row hover:bg-muted/50 flex items-center gap-3 px-4 py-2.5",

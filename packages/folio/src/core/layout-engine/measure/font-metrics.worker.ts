@@ -138,7 +138,7 @@ if (typeof self !== "undefined" && typeof addEventListener === "function") {
   };
   addEventListener("message", (event: MessageEvent<MeasureWorkerRequest>) => {
     const reply = handleMeasureRequest(event.data);
-    // eslint-disable-next-line unicorn/require-post-message-target-origin
+    // eslint-disable-next-line unicorn/require-post-message-target-origin -- worker-scope postMessage takes no targetOrigin.
     workerScope.postMessage(reply);
   });
 }

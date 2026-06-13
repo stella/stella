@@ -36,11 +36,9 @@ const CUSTOM_XML_PROPS_PATH = "customXml/itemProps1.xml";
 const CUSTOM_XML_RELS_PATH = "customXml/_rels/item1.xml.rels";
 const CONTENT_TYPES_PATH = "[Content_Types].xml";
 
-// prettier-ignore
 const CUSTOM_XML_CONTENT_TYPE =
   "application/vnd.openxmlformats-officedocument.customXmlProperties+xml";
 
-// prettier-ignore
 const CUSTOM_XML_PROPS_REL_TYPE =
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps";
 

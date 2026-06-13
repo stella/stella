@@ -22,20 +22,17 @@ let dbPromise: Promise<IDBPDatabase<GazetteerDB>> | null = null;
 
 // eslint-disable-next-line @typescript-eslint/promise-function-async -- lazy init, not always async
 const getDb = (): Promise<IDBPDatabase<GazetteerDB>> => {
-  // oxlint-disable-next-line typescript-eslint/prefer-nullish-coalescing
-  if (!dbPromise) {
-    dbPromise = openDB<GazetteerDB>(DB_NAME, DB_VERSION, {
-      upgrade(db) {
-        const store = db.createObjectStore(STORE_NAME, {
-          keyPath: "id",
-        });
-        store.createIndex("by-workspace", "workspaceId");
-      },
-    }).catch((error: unknown) => {
-      dbPromise = null;
-      throw error;
-    });
-  }
+  dbPromise ??= openDB<GazetteerDB>(DB_NAME, DB_VERSION, {
+    upgrade(db) {
+      const store = db.createObjectStore(STORE_NAME, {
+        keyPath: "id",
+      });
+      store.createIndex("by-workspace", "workspaceId");
+    },
+  }).catch((error: unknown) => {
+    dbPromise = null;
+    throw error;
+  });
   return dbPromise;
 };
 

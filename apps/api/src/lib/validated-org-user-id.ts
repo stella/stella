@@ -38,6 +38,6 @@ export const validateOrgUserId = async (
   }
 
   // SAFETY: We verified org membership above; the brand attests to that check.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- branding a server-validated membership at the boundary
   return row.userId as ValidatedOrgUserId;
 };

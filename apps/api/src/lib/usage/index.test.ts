@@ -107,7 +107,7 @@ const withRolledBackTx = async (
       // observable effect on these tests. Casting once at the
       // boundary keeps the usage module honest to its prod
       // Transaction type without importing test-only types.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- PGlite vs BunSQL driver-result HKT only; importing test-only types is disallowed
       const tx = rawTx as unknown as Transaction;
       await fn(tx);
       rawTx.rollback();
