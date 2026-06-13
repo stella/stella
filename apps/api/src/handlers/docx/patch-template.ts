@@ -24,7 +24,11 @@ import {
 import { discoverPlaceholders } from "./discover-placeholders";
 import { processInlineConditions } from "./inline-conditions";
 import { manifestNamedConditions } from "./manifest-conditions";
-import { applyNumbering, hasNumberingMarkers } from "./numbering";
+import {
+  assignNumbersInDoc,
+  mightContainNumberingMarkers,
+  resolveRefsInDoc,
+} from "./numbering";
 import { HEADER_FOOTER_RE, W_NS } from "./ooxml";
 import { patchXmlPart } from "./rich-patch";
 import { readManifestFromZip, stripManifest } from "./template-manifest";
@@ -200,19 +204,54 @@ export const fillTemplate = async (
     panic("fillTemplate received values outside the supported data model");
   }
 
-  // Resolve clause cross-references / numbering on the assembled body — after
+  // Resolve clause cross-references / numbering across the body and every
+  // header/footer part — the same parts fillTemplateWithValues and
+  // discoverPlaceholders cover (`word/document.xml` || HEADER_FOOTER_RE) — after
   // conditional removal, so clauses dropped by a {{#if}} are not numbered and
-  // references to them stay unresolved.
+  // references to them stay unresolved. Numbering shares one counter space and
+  // `@ref` must resolve across parts, so this is two-phase over a parsed DOM
+  // (split-run aware): assignNumbersInDoc over each part threading one shared
+  // `numbers` map (body first so document order drives the count), then
+  // resolveRefsInDoc over each part with the full map. Operating on the DOM
+  // (paragraph span text) rather than the raw string lets a `{{@num}}`/`{{@ref}}`
+  // that Word split across runs be seen and rewritten, the same way the
+  // placeholder pipeline handles split markers.
   const numberingZip = await JSZip.loadAsync(data);
-  const bodyEntry = numberingZip.file("word/document.xml");
-  if (bodyEntry) {
-    const bodyXml = await bodyEntry.async("string");
-    if (hasNumberingMarkers(bodyXml)) {
-      numberingZip.file("word/document.xml", applyNumbering(bodyXml));
-      data = Buffer.from(
-        await numberingZip.generateAsync({ type: "nodebuffer" }),
-      );
+  const numberingParts = [
+    "word/document.xml",
+    ...Object.keys(numberingZip.files).filter((name) =>
+      HEADER_FOOTER_RE.test(name),
+    ),
+  ];
+  const numberingDocs = new Map<string, slimdom.Document>();
+  const numbers = new Map<string, number>();
+
+  for (const partName of numberingParts) {
+    const entry = numberingZip.file(partName);
+    if (!entry) {
+      continue;
     }
+    const partXml = await entry.async("string");
+    // Split-safe pre-filter: skip DOM parsing only for parts that cannot hold a
+    // numbering marker even across runs (a contiguous test would miss a marker
+    // Word split between runs — the exact case this pass exists to handle).
+    if (!mightContainNumberingMarkers(partXml)) {
+      continue;
+    }
+    numberingDocs.set(partName, slimdom.parseXmlDocument(partXml));
+  }
+
+  if (numberingDocs.size > 0) {
+    for (const doc of numberingDocs.values()) {
+      assignNumbersInDoc(doc, numbers);
+    }
+    for (const [partName, doc] of numberingDocs) {
+      resolveRefsInDoc(doc, numbers);
+      numberingZip.file(partName, slimdom.serializeToWellFormedString(doc));
+    }
+    data = Buffer.from(
+      await numberingZip.generateAsync({ type: "nodebuffer" }),
+    );
   }
 
   // Discover what the template actually contains
