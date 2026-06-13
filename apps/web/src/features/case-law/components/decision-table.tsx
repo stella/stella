@@ -36,7 +36,9 @@ type DecisionTableProps = {
 };
 
 // Static table: no optional sorting, filtering, pagination, or selection APIs.
-const decisionTableFeatures = tableFeatures({});
+const decisionTableFeatures = tableFeatures({
+  coreRowModel: createCoreRowModel(),
+});
 type DecisionFeatures = typeof decisionTableFeatures;
 type DecisionCellContext<TValue> = CellContext<
   DecisionFeatures,
@@ -148,7 +150,6 @@ export const DecisionTable = ({ decisions, isLoading }: DecisionTableProps) => {
 
   const table = useTable({
     features: decisionTableFeatures,
-    rowModels: { coreRowModel: createCoreRowModel() },
     data: decisions,
     columns,
     getRowId: (row) => row.id,

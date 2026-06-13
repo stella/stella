@@ -4,6 +4,7 @@ import {
   columnResizingFeature,
   columnSizingFeature,
   columnVisibilityFeature,
+  createCoreRowModel,
   rowExpandingFeature,
   rowSelectionFeature,
   rowSortingFeature,
@@ -13,6 +14,7 @@ import {
 // The registered feature set is both the runtime capability list and the
 // source for the workspace table aliases in `./types`.
 export const workspaceTableFeatures = tableFeatures({
+  coreRowModel: createCoreRowModel(),
   rowSortingFeature,
   rowSelectionFeature,
   rowExpandingFeature,
