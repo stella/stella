@@ -272,6 +272,13 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
 const listTemplatesArgsSchema = v.strictObject({});
 
 const handleListTemplatesTool: McpToolHandler = async ({ args, context }) => {
+  const hasPermission = roles[context.memberRole].authorize({
+    workspace: ["read"],
+  });
+  if (!hasPermission.success) {
+    return errorResult("Forbidden");
+  }
+
   const parsed = v.safeParse(listTemplatesArgsSchema, args);
   if (!parsed.success) {
     return errorResult("Invalid input: list_templates takes no parameters");
@@ -317,6 +324,13 @@ const handleDescribeTemplateTool: McpToolHandler = async ({
   args,
   context,
 }) => {
+  const hasPermission = roles[context.memberRole].authorize({
+    workspace: ["read"],
+  });
+  if (!hasPermission.success) {
+    return errorResult("Forbidden");
+  }
+
   const parsed = v.safeParse(describeTemplateArgsSchema, args);
   if (!parsed.success) {
     return errorResult("Invalid input: expected { template_id: string }");
@@ -339,6 +353,13 @@ const fillTemplateArgsSchema = v.strictObject({
 });
 
 const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
+  const hasPermission = roles[context.memberRole].authorize({
+    template: ["create"],
+  });
+  if (!hasPermission.success) {
+    return errorResult("Forbidden");
+  }
+
   const parsed = v.safeParse(fillTemplateArgsSchema, args);
   if (!parsed.success) {
     return errorResult(
