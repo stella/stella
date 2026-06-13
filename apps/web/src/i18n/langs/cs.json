@@ -21,7 +21,8 @@
       "description": "Přidejte přihlašovací údaje poskytovatele a začněte používat funkce AI.",
       "title": "Připojit poskytovatele AI"
     },
-    "refinePlaceholder": "Jak má AI upravit znění?"
+    "refinePlaceholder": "Jak má AI upravit znění?",
+    "regenerate": "Vygenerovat znovu"
   },
   "anonymize": {
     "addEntity": "Přidat entitu",

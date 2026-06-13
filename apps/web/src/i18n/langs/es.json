@@ -21,7 +21,8 @@
       "description": "Añade credenciales de proveedor para empezar a usar funciones de IA.",
       "title": "Conectar proveedor de IA"
     },
-    "refinePlaceholder": "¿Cómo debe la IA ajustar la redacción?"
+    "refinePlaceholder": "¿Cómo debe la IA ajustar la redacción?",
+    "regenerate": "Regenerar"
   },
   "anonymize": {
     "addEntity": "Añadir entidad",
