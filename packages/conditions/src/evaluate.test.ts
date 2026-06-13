@@ -3,9 +3,11 @@ import * as v from "valibot";
 
 import { type ConditionValue, evaluateCondition } from "./evaluate";
 import {
+  type CompareOp,
   type ConditionNode,
   conditionNodeSchema,
   emptyCondition,
+  type LiteralValue,
   type RefOperand,
 } from "./schema";
 
@@ -19,24 +21,21 @@ const resolverFor =
     if (operand.type === "path") {
       return data[operand.path];
     }
-    if (operand.type === "builtin") {
-      return data[operand.field];
-    }
     if (operand.type === "kind") {
       return data["kind"];
     }
-    return undefined;
+    return data[operand.field];
   };
 
 const compare = (
   left: RefOperand,
-  op: "eq" | "neq" | "gt" | "lt" | "gte" | "lte",
-  literal: ConditionValue,
+  op: CompareOp,
+  literal: LiteralValue,
 ): ConditionNode => ({
   type: "compare",
   left,
   op,
-  right: { type: "literal", value: literal as never },
+  right: { type: "literal", value: literal },
 });
 
 describe("compare operators", () => {

@@ -1,0 +1,186 @@
+import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+import * as v from "valibot";
+
+import {
+  type ConditionValue,
+  evaluateCondition,
+  type OperandResolver,
+} from "./evaluate";
+import {
+  COMPARE_OPS,
+  type Combinator,
+  type ConditionNode,
+  conditionNodeSchema,
+  type Operand,
+  PREDICATE_OPS,
+  type RefOperand,
+} from "./schema";
+
+// A small fixed key space so generated resolvers actually hold values to
+// return (otherwise nearly every operand resolves to undefined).
+const KEYS = ["a", "b", "c", "status", "priority", "kind"] as const;
+
+const refOperandArb: fc.Arbitrary<RefOperand> = fc.oneof(
+  fc
+    .constantFrom("a", "b", "c")
+    .map((propertyId): RefOperand => ({ type: "property", propertyId })),
+  fc
+    .constantFrom("status", "priority")
+    .map((field): RefOperand => ({ type: "builtin", field })),
+  fc.constant<RefOperand>({ type: "kind" }),
+  fc
+    .constantFrom("a", "b", "c")
+    .map((path): RefOperand => ({ type: "path", path })),
+);
+
+const literalArb: fc.Arbitrary<Operand> = fc
+  .oneof(fc.string(), fc.integer(), fc.boolean(), fc.array(fc.string()))
+  .map((value): Operand => ({ type: "literal", value }));
+
+const operandArb: fc.Arbitrary<Operand> = fc.oneof(refOperandArb, literalArb);
+
+const leafArb: fc.Arbitrary<ConditionNode> = fc.oneof(
+  fc.tuple(operandArb, fc.constantFrom(...COMPARE_OPS), operandArb).map(
+    ([left, op, right]): ConditionNode => ({
+      type: "compare",
+      left,
+      op,
+      right,
+    }),
+  ),
+  fc
+    .tuple(
+      operandArb,
+      fc.constantFrom(...PREDICATE_OPS),
+      fc.oneof(fc.string(), fc.array(fc.string())),
+    )
+    .map(
+      ([operand, op, value]): ConditionNode => ({
+        type: "predicate",
+        operand,
+        op,
+        value,
+      }),
+    ),
+);
+
+const { node: nodeArb } = fc.letrec<{ node: ConditionNode }>((tie) => ({
+  node: fc.oneof(
+    { weight: 3, arbitrary: leafArb },
+    {
+      weight: 1,
+      arbitrary: fc
+        .tuple(
+          fc.constantFrom<Combinator>("and", "or"),
+          fc.boolean(),
+          fc.array(tie("node"), { maxLength: 3 }),
+        )
+        .map(
+          ([combinator, negated, children]): ConditionNode => ({
+            type: "group",
+            combinator,
+            negated,
+            children,
+          }),
+        ),
+    },
+  ),
+}));
+
+const valueArb: fc.Arbitrary<ConditionValue> = fc.oneof(
+  fc.string(),
+  fc.integer(),
+  fc.boolean(),
+  fc.array(fc.string()),
+);
+
+const dataArb = fc.dictionary(fc.constantFrom(...KEYS), valueArb);
+
+const makeResolver =
+  (data: Record<string, ConditionValue>): OperandResolver =>
+  (operand) => {
+    if (operand.type === "property") {
+      return data[operand.propertyId];
+    }
+    if (operand.type === "path") {
+      return data[operand.path];
+    }
+    if (operand.type === "kind") {
+      return data["kind"];
+    }
+    return data[operand.field];
+  };
+
+const negate = (child: ConditionNode): ConditionNode => ({
+  type: "group",
+  combinator: "and",
+  negated: true,
+  children: [child],
+});
+
+describe("evaluator invariants (property-based)", () => {
+  test("every generated node is schema-valid and evaluation is total", () => {
+    fc.assert(
+      fc.property(nodeArb, dataArb, (node, data) => {
+        expect(v.is(conditionNodeSchema, node)).toBe(true);
+        expect(typeof evaluateCondition(node, makeResolver(data))).toBe(
+          "boolean",
+        );
+      }),
+    );
+  });
+
+  test("a group combinator equals every/some over its children", () => {
+    fc.assert(
+      fc.property(
+        fc.array(nodeArb, { maxLength: 4 }),
+        fc.constantFrom<Combinator>("and", "or"),
+        dataArb,
+        (children, combinator, data) => {
+          const resolve = makeResolver(data);
+          const group: ConditionNode = { type: "group", combinator, children };
+          const expected =
+            combinator === "and"
+              ? children.every((c) => evaluateCondition(c, resolve))
+              : children.some((c) => evaluateCondition(c, resolve));
+          expect(evaluateCondition(group, resolve)).toBe(expected);
+        },
+      ),
+    );
+  });
+
+  test("double negation is identity", () => {
+    fc.assert(
+      fc.property(nodeArb, dataArb, (node, data) => {
+        const resolve = makeResolver(data);
+        expect(evaluateCondition(negate(negate(node)), resolve)).toBe(
+          evaluateCondition(node, resolve),
+        );
+      }),
+    );
+  });
+
+  test("neq is the negation of eq for the same operands", () => {
+    fc.assert(
+      fc.property(operandArb, operandArb, dataArb, (left, right, data) => {
+        const resolve = makeResolver(data);
+        const eqNode: ConditionNode = {
+          type: "compare",
+          left,
+          op: "eq",
+          right,
+        };
+        const neqNode: ConditionNode = {
+          type: "compare",
+          left,
+          op: "neq",
+          right,
+        };
+        expect(evaluateCondition(eqNode, resolve)).toBe(
+          !evaluateCondition(neqNode, resolve),
+        );
+      }),
+    );
+  });
+});
