@@ -141,6 +141,7 @@ const saveTemplateDocument = createSafeRootHandler(
       optionsFrom: sourceFieldByPath.get(f.path)?.optionsFrom,
       lookup: sourceFieldByPath.get(f.path)?.lookup,
       formula: sourceFieldByPath.get(f.path)?.formula,
+      condition: sourceFieldByPath.get(f.path)?.condition,
       dateFormat: sourceFieldByPath.get(f.path)?.dateFormat,
     }));
 
