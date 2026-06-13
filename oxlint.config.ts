@@ -36,6 +36,7 @@ export default defineConfig({
     "unicorn/no-useless-undefined": "off",
     "unicorn/prefer-array-find": "error",
     "unicorn/prefer-at": "error",
+    "unicorn/prefer-node-protocol": "error",
     // Stylistic only; the negated form (`a !== b ? x : y`) is often
     // clearer than the swapped equivalent. No bug-catching value.
     "unicorn/no-negated-condition": "off",
