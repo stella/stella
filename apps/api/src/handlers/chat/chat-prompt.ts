@@ -928,7 +928,8 @@ export const buildActiveSkillSection = (
   const editability = activeSkillContext.editable
     ? "This skill is editable in this chat. Only use current-skill edit tools when the user asks to create or change this skill's files."
     : "This skill is read-only in this chat; do not attempt to edit its files.";
-  const resourceLines = activeSkillContext.resources
+  const resourcesList = activeSkillContext.resources ?? [];
+  const resourceLines = resourcesList
     .slice(0, ACTIVE_SKILL_RESOURCE_LIST_MAX_COUNT)
     .map(
       (resource) =>
@@ -938,10 +939,9 @@ export const buildActiveSkillSection = (
         })} (${resource.kind})`,
     );
   const resourceOverflow =
-    activeSkillContext.resources.length > ACTIVE_SKILL_RESOURCE_LIST_MAX_COUNT
+    resourcesList.length > ACTIVE_SKILL_RESOURCE_LIST_MAX_COUNT
       ? `\n- ...${String(
-          activeSkillContext.resources.length -
-            ACTIVE_SKILL_RESOURCE_LIST_MAX_COUNT,
+          resourcesList.length - ACTIVE_SKILL_RESOURCE_LIST_MAX_COUNT,
         )} more`
       : "";
   const resources =
