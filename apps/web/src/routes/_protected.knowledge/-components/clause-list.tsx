@@ -11,7 +11,11 @@ import { useDebouncedCallback } from "use-debounce";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
-import { Input } from "@stll/ui/components/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@stll/ui/components/input-group";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { usePermissions } from "@/hooks/use-permissions";
@@ -135,15 +139,17 @@ export const ClauseList = ({
       {/* Clause list */}
       <div className="flex min-h-0 flex-1 flex-col border-s">
         <div className="flex items-center justify-between border-b px-4 py-2">
-          <div className="relative me-3 flex-1">
-            <SearchIcon className="text-muted-foreground absolute start-2.5 top-1/2 size-4 -translate-y-1/2" />
-            <Input
-              className="h-8 ps-8"
+          <InputGroup className="me-3 flex-1">
+            <InputGroupInput
               onChange={handleSearchChange}
               placeholder={t("clauses.searchPlaceholder")}
+              size="sm"
               value={searchInput}
             />
-          </div>
+            <InputGroupAddon>
+              <SearchIcon />
+            </InputGroupAddon>
+          </InputGroup>
           <div className="flex gap-1">
             {canCreateClause && (
               <Button
