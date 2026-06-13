@@ -78,13 +78,15 @@ describe("scanDirectives", () => {
     expect(blockKinds).toEqual(["if", "endif"]);
   });
 
-  test("skips mid-line each markers (inline loops are unsupported)", () => {
+  test("emits mid-line each markers as inline (block:false) ranges", () => {
     const doc = docOf("Items: {{#each items}}{{items.name}}{{/each}} end.");
-    const kinds = scanDirectives(doc).map((r) => r.kind);
+    const tokens = scanDirectives(doc).map(
+      (r) => `${r.kind}:${r.expr}:${String(r.block)}`,
+    );
 
-    expect(kinds).not.toContain("each");
-    expect(kinds).not.toContain("endeach");
-    // The field inside the would-be loop still gets its chip.
-    expect(kinds).toContain("placeholder");
+    expect(tokens).toContain("each:items:false");
+    expect(tokens).toContain("endeach::false");
+    // The field inside the inline loop still gets its chip.
+    expect(tokens).toContain("placeholder:items.name:false");
   });
 });
