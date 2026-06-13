@@ -49,6 +49,20 @@ describe("external MCP chat tools", () => {
     expect(exposed?.lazy).toBe(true);
     expect(exposed?.needsApproval).toBe(true);
   });
+
+  test("forces an approval step even when the upstream tool does not require it", () => {
+    // The normalized tools back the live `mcp` source handed to `chat()`, so a
+    // connector whose server omits `needsApproval` must not let the model
+    // invoke external tools without an approval step.
+    const normalized = normalizeExternalMcpToolsForChat({
+      allowedTools: null,
+      connectorSlug: "registry",
+      tools: [tool("lookup")],
+    });
+
+    expect(tool("lookup").needsApproval).toBeUndefined();
+    expect(normalized.tools["mcp__registry__lookup"]?.needsApproval).toBe(true);
+  });
 });
 
 describe("Stella MCP tool source", () => {

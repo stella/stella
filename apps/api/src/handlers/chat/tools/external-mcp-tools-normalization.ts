@@ -2,6 +2,10 @@ import type {
   ChatTool,
   ChatToolMap,
 } from "@/api/handlers/chat/tools/chat-tool-types";
+import {
+  applyChatToolPolicies,
+  CHAT_TOOL_POLICY_KIND,
+} from "@/api/handlers/chat/tools/tool-policy";
 import { namespaceMcpToolName } from "@/api/lib/mcp-upstream/namespace";
 
 type NormalizeExternalMcpToolsForChatInput = {
@@ -42,5 +46,16 @@ export const normalizeExternalMcpToolsForChat = ({
     };
   }
 
-  return { toolNames, tools: loadedTools };
+  // External MCP tools must always require approval here, regardless of the
+  // upstream server's own (possibly absent) `needsApproval` flag. These
+  // normalized tools back both schema validation and the live `mcp` source
+  // handed to `chat()`, so the policy is stamped on the exact objects the
+  // model can invoke, rather than relying on a `getChatTools` caller.
+  return {
+    toolNames,
+    tools: applyChatToolPolicies({
+      defaultPolicyKind: CHAT_TOOL_POLICY_KIND.external,
+      tools: loadedTools,
+    }),
+  };
 };
