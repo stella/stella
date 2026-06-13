@@ -1734,6 +1734,9 @@
             "location": "apps/web/src/routes/law/-components/public-law-shell.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/law/-components/public-law-shell.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/law/cases/index.tsx#1"
           },
           {
@@ -3433,6 +3436,9 @@
           },
           {
             "location": "apps/web/src/routes/law/-components/public-law-shell.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/law/-components/public-law-shell.tsx#2"
           },
           {
             "location": "apps/web/src/routes/law/cases/index.tsx#1"
@@ -6040,6 +6046,9 @@
             "location": "apps/web/src/routes/law/-components/public-law-shell.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/law/-components/public-law-shell.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/law/cases/index.tsx#1"
           },
           {
@@ -8276,6 +8285,9 @@
             "location": "apps/web/src/routes/law/-components/public-law-shell.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/law/-components/public-law-shell.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/law/cases/index.tsx#1"
           },
           {
@@ -9332,7 +9344,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/law/-components/public-law-shell.tsx#3"
+            "location": "apps/web/src/routes/law/-components/public-law-shell.tsx#4"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/sidebar-preview.tsx#4"
@@ -9810,6 +9822,9 @@
           },
           {
             "location": "apps/web/src/components/selfhost-update-banner.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/sidebar-user-menu.tsx#1"
           },
           {
             "location": "apps/web/src/components/translate-document-dialog.tsx#12"
@@ -10307,9 +10322,6 @@
             "location": "apps/web/src/hooks/use-sign-out.ts#2"
           },
           {
-            "location": "apps/web/src/lib/prompts/use-saved-prompts.ts#4"
-          },
-          {
             "location": "apps/web/src/routes/_protected.contacts/-components/contact-caches.ts#3"
           },
           {
@@ -10341,6 +10353,9 @@
           },
           {
             "location": "apps/web/src/routes/sitemaps/law[.]xml.ts#1"
+          },
+          {
+            "location": "apps/web/src/app-providers.tsx#7"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#28"
@@ -10428,6 +10443,9 @@
           },
           {
             "location": "apps/web/src/components/shortcut-hints-overlay.tsx#5"
+          },
+          {
+            "location": "apps/web/src/components/sidebar-user-menu.tsx#2"
           },
           {
             "location": "apps/web/src/components/translate-document-dialog.tsx#13"
@@ -10539,6 +10557,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/account.beta.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.desktop.tsx#1"
@@ -10712,16 +10733,16 @@
             "location": "apps/web/src/routes/index.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/law/$country/cases/$court/$date/$language/$slug.tsx#1"
+            "location": "apps/web/src/routes/law/$country/cases/$court/$language/$slug.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/law/$country/cases/$court/$date/$slug.tsx#1"
+            "location": "apps/web/src/routes/law/$country/cases/$court/$slug.tsx#1"
           },
           {
             "location": "apps/web/src/routes/law/-case-detail.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/law/-components/public-law-shell.tsx#9"
+            "location": "apps/web/src/routes/law/-components/public-law-shell.tsx#10"
           },
           {
             "location": "apps/web/src/routes/law/cases/index.tsx#8"
@@ -10799,7 +10820,13 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/routeTree.gen.ts#1515"
+            "location": "apps/web/src/lib/beta-features.ts#1"
+          },
+          {
+            "location": "apps/web/src/routeTree.gen.ts#1536"
+          },
+          {
+            "location": "apps/web/src/lib/beta-features.ts#2"
           },
           {
             "location": "apps/web/src/server.ts#1"
@@ -13160,6 +13187,9 @@
           },
           {
             "location": "apps/web/src/routes/law/-components/public-law-shell.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/law/-components/public-law-shell.tsx#2"
           },
           {
             "location": "apps/web/src/routes/law/cases/index.tsx#1"
@@ -19292,7 +19322,7 @@
             "location": "apps/web/src/components/api-version-mismatch-banner.tsx#4"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#32"
+            "location": "apps/web/src/components/app-sidebar.tsx#25"
           },
           {
             "location": "apps/web/src/components/breadcrumbs/workspace-breadcrumb.tsx#6"
@@ -19436,6 +19466,9 @@
             "location": "apps/web/src/components/selfhost-update-banner.tsx#4"
           },
           {
+            "location": "apps/web/src/components/sidebar-user-menu.tsx#11"
+          },
+          {
             "location": "apps/web/src/components/sidebar.tsx#7"
           },
           {
@@ -19574,10 +19607,10 @@
             "location": "apps/web/src/routes/_protected.settings/organization.members.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/route.tsx#11"
+            "location": "apps/web/src/routes/_protected.settings/route.tsx#12"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/route.tsx#12"
+            "location": "apps/web/src/routes/_protected.settings/route.tsx#13"
           },
           {
             "location": "apps/web/src/routes/_protected.todos/index.tsx#17"
@@ -19862,7 +19895,7 @@
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#22"
           },
           {
-            "location": "apps/web/src/routes/law/-components/public-law-shell.tsx#10"
+            "location": "apps/web/src/routes/law/-components/public-law-shell.tsx#16"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/catalogue-detail-preview.tsx#11"
@@ -22854,6 +22887,9 @@
             "location": "apps/web/src/routes/law/-components/public-law-shell.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/law/-components/public-law-shell.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/law/cases/index.tsx#1"
           },
           {
@@ -23512,7 +23548,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state.ts#12"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#33"
+            "location": "apps/web/src/components/app-sidebar.tsx#26"
           },
           {
             "location": "apps/web/src/components/chat-editor-provider.tsx#28"
@@ -23653,7 +23689,7 @@
             "location": "apps/playground/src/main.tsx#5"
           },
           {
-            "location": "apps/web/src/app-providers.tsx#7"
+            "location": "apps/web/src/app-providers.tsx#8"
           },
           {
             "location": "apps/web/src/components/ai-config-providers-editor.tsx#2"
@@ -23674,7 +23710,7 @@
             "location": "apps/web/src/components/api-version-mismatch-banner.tsx#5"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#34"
+            "location": "apps/web/src/components/app-sidebar.tsx#27"
           },
           {
             "location": "apps/web/src/components/auth/inbox-quick-jump.tsx#1"
@@ -23825,6 +23861,9 @@
           },
           {
             "location": "apps/web/src/components/shortcut-hints-overlay.tsx#7"
+          },
+          {
+            "location": "apps/web/src/components/sidebar-user-menu.tsx#12"
           },
           {
             "location": "apps/web/src/components/sidebar.tsx#8"
@@ -24007,6 +24046,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/prompt-caching-card.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/account.beta.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/account.desktop.tsx#2"
           },
           {
@@ -24028,7 +24070,7 @@
             "location": "apps/web/src/routes/_protected.settings/organization.usage.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/route.tsx#13"
+            "location": "apps/web/src/routes/_protected.settings/route.tsx#14"
           },
           {
             "location": "apps/web/src/routes/_protected.todos/index.tsx#18"
@@ -24343,7 +24385,7 @@
             "location": "apps/web/src/routes/consent.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/law/-components/public-law-shell.tsx#11"
+            "location": "apps/web/src/routes/law/-components/public-law-shell.tsx#17"
           },
           {
             "location": "apps/web/src/routes/law/cases/index.tsx#9"
@@ -25129,7 +25171,7 @@
             "location": "apps/web/src/stores/config-store.ts#2"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#35"
+            "location": "apps/web/src/components/app-sidebar.tsx#28"
           },
           {
             "location": "apps/web/src/components/dev-root.tsx#5"
@@ -25204,7 +25246,7 @@
             "location": "apps/web/src/lib/pdf/hooks/use-pdf-fit-to-width.ts#5"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#35"
+            "location": "apps/web/src/components/app-sidebar.tsx#28"
           },
           {
             "location": "apps/web/src/components/dev-root.tsx#5"
