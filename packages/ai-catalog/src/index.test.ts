@@ -6,6 +6,7 @@ import {
   BYOK_DEFAULT_MODELS,
   BYOK_MODEL_OPTIONS,
   DEFAULT_MODELS,
+  MODEL_RATES,
   MODEL_ROLES,
 } from "./index";
 
@@ -68,4 +69,27 @@ describe("anthropic adaptive thinking", () => {
       ).toBe(true);
     }
   });
+});
+
+describe("MODEL_RATES economic ordering", () => {
+  // `satisfies Record<..., ModelRate>` only proves the numeric fields
+  // exist; it cannot prove their ordering. A transposed input/output, a
+  // dropped zero, or a cached rate above the fresh-input rate mis-meters
+  // every call for that model — silently over/under-charging the ledger.
+  // The nightly upstream check validates against external catalogs, not
+  // these internal invariants, and runs after the merge window.
+  for (const [modelId, rate] of Object.entries(MODEL_RATES)) {
+    test(`${modelId}: input>0, output>=input, 0<cached<=input`, () => {
+      expect(rate.inputPerMTok).toBeGreaterThan(0);
+      expect(rate.outputPerMTok).toBeGreaterThanOrEqual(rate.inputPerMTok);
+      if (rate.cachedInputPerMTok !== undefined) {
+        expect(rate.cachedInputPerMTok).toBeGreaterThan(0);
+        // Cache reads must never cost more than fresh input, or caching
+        // becomes a price penalty (computeRawUsageMicroUnits assumes the
+        // opposite).
+        expect(rate.cachedInputPerMTok).toBeLessThanOrEqual(rate.inputPerMTok);
+      }
+      expect(Number.isFinite(rate.outputPerMTok)).toBe(true);
+    });
+  }
 });
