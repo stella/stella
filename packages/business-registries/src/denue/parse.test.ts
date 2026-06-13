@@ -63,6 +63,37 @@ describe("parseEstablishment", () => {
       longitude: null,
     });
   });
+
+  test("parses two-part location as municipality and state", () => {
+    const establishment = parseEstablishment({
+      Id: "34185",
+      Nombre: "MARRIOTT GUADALAJARA",
+      Ubicacion: "ZAPOPAN, JALISCO",
+    });
+
+    expect(establishment.address).toEqual({
+      line1: null,
+      line2: null,
+      postalCode: null,
+      locality: null,
+      municipality: "ZAPOPAN",
+      state: "JALISCO",
+      country: "MX",
+      textAddress: "ZAPOPAN, JALISCO",
+    });
+  });
+
+  test("preserves comma-containing locality prefixes", () => {
+    const establishment = parseEstablishment({
+      Id: "34185",
+      Nombre: "MARRIOTT GUADALAJARA",
+      Ubicacion: "COLONIA A, LOCALIDAD B, ZAPOPAN, JALISCO",
+    });
+
+    expect(establishment.address?.locality).toBe("COLONIA A, LOCALIDAD B");
+    expect(establishment.address?.municipality).toBe("ZAPOPAN");
+    expect(establishment.address?.state).toBe("JALISCO");
+  });
 });
 
 describe("parseSearchEntry", () => {
