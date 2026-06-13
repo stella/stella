@@ -7,8 +7,10 @@ import {
   parseInlineConditions,
   processInlineConditions,
 } from "./inline-conditions";
+import { applyManifestFillSteps } from "./manifest-fill-steps";
 import { paragraphText, W_NS } from "./ooxml";
 import { fillTemplate } from "./patch-template";
+import type { FieldMeta, TemplateData } from "./types";
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -95,7 +97,10 @@ describe("parseInlineConditions", () => {
     expect(text.slice(group?.start, group?.end)).toBe(
       "{{#if hasSpouse}} and their spouse{{/if}}",
     );
-    const branch = group?.branches[0];
+    if (group?.kind !== "if") {
+      throw new Error("expected an inline if group");
+    }
+    const branch = group.branches[0];
     expect(branch?.condition).toBe("hasSpouse");
     expect(text.slice(branch?.contentStart, branch?.contentEnd)).toBe(
       " and their spouse",
@@ -636,5 +641,46 @@ describe("fillTemplate with inline conditions", () => {
     const text = await documentText(filled.buffer);
     expect(text).toBe("Governed by RENDERING-1.Spousal property.");
     expect(text).not.toContain("RENDERING-2");
+  });
+
+  test("inline {{#if dateField > ...}} compares the raw ISO, not the formatted date", async () => {
+    // End-to-end through the boundary recipe: the fill steps format the date in
+    // place AND stash its raw ISO (CONDITION_RAW_VALUES); fillTemplate reads the
+    // overlay so the inline ordering test runs on the ISO value while the
+    // {{signing_date}} marker substitutes the localized display text. The
+    // boolean `notify` keeps a non-string value in the map so fillTemplate
+    // routes through block/inline processing (an all-string map is treated as
+    // pre-expanded patch values), mirroring a real template fill.
+    const docx = await makeDocx(
+      WRAP(
+        P(
+          "Signed {{signing_date}}{{#if signing_date > \"2028-01-01\"}} (after cutoff){{#else}} (before cutoff){{/if}}.",
+        ) +
+          P("{{#if notify}}") +
+          P("Notice sent.") +
+          P("{{/if}}"),
+      ),
+    );
+    const dateField: FieldMeta = {
+      path: "signing_date",
+      inputType: "date",
+      dateFormat: { locale: "cs", style: "long" },
+    };
+
+    const values: TemplateData = { signing_date: "2028-06-13", notify: true };
+    const stepError = await applyManifestFillSteps({
+      values,
+      manifest: { fields: [dateField] },
+      resolveLookup: () => {
+        throw new Error("no lookup field in this manifest");
+      },
+    });
+    expect(stepError).toBeNull();
+
+    const result = await fillTemplate(docx, values);
+    expect(result.structureErrors).toEqual([]);
+    expect(await documentText(result.buffer)).toBe(
+      "Signed 13. června 2028 (after cutoff).Notice sent.",
+    );
   });
 });

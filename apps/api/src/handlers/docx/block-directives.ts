@@ -50,6 +50,42 @@ import type {
 
 export { evaluateCondition, resolvePath };
 
+/**
+ * Symbol key under which the fill pipeline stashes the *raw* (pre-format)
+ * values of fields that a later step rewrites to a display string, so that
+ * `{{#if}}` conditions evaluate against the original value. Today this carries
+ * date fields: a `date` input is submitted as an ISO `YYYY-MM-DD` string, then
+ * `applyDateFields` rewrites it in place to localized display text (e.g.
+ * "13. června 2028") for substitution. The condition engine's ordering
+ * comparisons (`>`, `<`, …) only work on the ISO shape, so a field that is both
+ * formatted *and* referenced by a condition must be compared raw. The overlay
+ * is keyed by field path and read by {@link processBlockDirectives} when
+ * building the condition-evaluation context.
+ *
+ * A Symbol key (not a string) is deliberate: the same shared values map is
+ * iterated as field paths everywhere else (substitution, `flattenTemplateData`,
+ * unmatched/unused diagnostics, `isTemplateData`), all of which use
+ * `Object.keys`/`values`/`entries` and so skip symbol keys. The overlay
+ * therefore travels on the map without ever colliding with a user field path or
+ * leaking into substitution. It survives object spread (`{ ...values }`), so it
+ * reaches `fillTemplate` across the boundaries that copy the map.
+ */
+export const CONDITION_RAW_VALUES = Symbol("condition-raw-values");
+
+/** Read the raw-value condition overlay stashed under {@link CONDITION_RAW_VALUES}. */
+export const readConditionRawValues = (
+  values: object,
+): Record<string, string> | undefined => {
+  const overlay: unknown = Reflect.get(values, CONDITION_RAW_VALUES);
+  return isStringRecord(overlay) ? overlay : undefined;
+};
+
+/** Narrow `unknown` to a `Record<string, string>` (the overlay shape). */
+const isStringRecord = (v: unknown): v is Record<string, string> =>
+  typeof v === "object" &&
+  v !== null &&
+  Object.values(v).every((entry) => typeof entry === "string");
+
 // ── Regex patterns ───────────────────────────────────────
 
 // Canonical patterns from @stll/template-conditions (markers.ts).
@@ -419,6 +455,7 @@ export const processBlockDirectives = (
   body: slimdom.Element,
   data: TemplateData,
   namedConditions?: NamedCondition[],
+  conditionValues?: Record<string, string>,
 ): ProcessResult => {
   const patchValues: Record<string, RichPatchValue> = {};
   const allErrors: TemplateStructureError[] = [];
@@ -429,6 +466,18 @@ export const processBlockDirectives = (
 
   // Flatten top-level nested objects for value substitution.
   Object.assign(patchValues, flattenTemplateData(data));
+
+  // Context for condition/loop evaluation: `data` overlaid with the raw
+  // (pre-format) values of any field a fill step rewrote to a display string
+  // (today: date fields, see CONDITION_RAW_VALUES). Overlay keys are exact
+  // dotted field paths, which `resolvePath` prefers over the nested walk, so
+  // `{{#if signing_date > "2028-01-01"}}` compares the ISO value while
+  // substitution still uses the localized text in `data`/`patchValues`. Plain
+  // `data` when there is no overlay keeps the prior behavior untouched.
+  const conditionData: Record<string, unknown> =
+    conditionValues && Object.keys(conditionValues).length > 0
+      ? { ...data, ...conditionValues }
+      : data;
 
   const process = (
     bodyEl: slimdom.Element,
@@ -707,7 +756,7 @@ export const processBlockDirectives = (
     }
   };
 
-  process(body, data);
+  process(body, conditionData);
 
   return { patchValues, errors: allErrors };
 };
