@@ -20,6 +20,7 @@ import type {
 import { getModelForRole, requireAIAvailable } from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { strictOutputSchema } from "@/api/lib/ai-output-schema";
+import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -117,11 +118,13 @@ const extractFieldValues = async ({
   sources,
   orgAIConfig,
   organizationId,
+  aiAnalytics,
 }: {
   targets: readonly PrefillTarget[];
   sources: readonly PrefillSource[];
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
+  aiAnalytics: ReturnType<typeof createAIAnalyticsCallbacks>;
 }): Promise<PrefillSuggestion[]> => {
   const result = streamText({
     abortSignal: AbortSignal.timeout(PREFILL_TIMEOUT_MS),
@@ -134,6 +137,7 @@ const extractFieldValues = async ({
     }),
     output: Output.object({ schema: strictOutputSchema(prefillOutputSchema) }),
     system: SYSTEM_PROMPT,
+    ...aiAnalytics.stepCallbacks,
   });
   const { fields } = await result.output;
   return mapPrefillResults(targets, fields);
@@ -143,6 +147,7 @@ const config = {
   permissions: { template: ["create"] },
   params: prefillParamsSchema,
   body: prefillBodySchema,
+  requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;
 
 /**
@@ -162,6 +167,7 @@ const prefillTemplate = createSafeRootHandler(
     params,
     body,
     orgAIConfig,
+    user,
   }) {
     const organizationId = session.activeOrganizationId;
 
@@ -323,6 +329,22 @@ const prefillTemplate = createSafeRootHandler(
       return Result.ok({ fields: [] });
     }
 
+    const aiAnalytics = createAIAnalyticsCallbacks({
+      usageMetering: {
+        actionType: "chat",
+        organizationId,
+        safeDb,
+        serviceTier: "standard",
+        userId: user.id,
+        workspaceId: null,
+      },
+      feature: "templates.prefill",
+      modelRole: "fast",
+      orgAIConfig,
+      properties: { organization_id: organizationId },
+      traceId: Bun.randomUUIDv7(),
+    });
+
     const fields = yield* Result.await(
       Result.tryPromise({
         try: async () =>
@@ -331,13 +353,16 @@ const prefillTemplate = createSafeRootHandler(
             sources: boundedSources,
             orgAIConfig,
             organizationId,
+            aiAnalytics,
           }),
-        catch: (cause) =>
-          new HandlerError({
+        catch: (cause) => {
+          aiAnalytics.captureError(cause);
+          return new HandlerError({
             status: 500,
             message: "Failed to extract values from the sources",
             cause,
-          }),
+          });
+        },
       }),
     );
 
