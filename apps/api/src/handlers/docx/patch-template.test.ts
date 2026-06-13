@@ -2,8 +2,10 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
+import { applyManifestFillSteps } from "./manifest-fill-steps";
 import { fillTemplate } from "./patch-template";
 import { writeManifest } from "./template-manifest";
+import type { FieldMeta, TemplateData } from "./types";
 
 // SPA fixture is ~177KB; template filling needs time.
 setDefaultTimeout(15_000);
@@ -196,6 +198,87 @@ describe("fillTemplate — block directives e2e", () => {
     expect(joined).toContain("After");
     expect(joined).not.toContain("Guarantor");
     expect(joined).not.toContain("Should not appear");
+  });
+
+  test("date {{#if}} compares raw ISO while substituting the formatted date", async () => {
+    // The finding: applyManifestFillSteps rewrites a date field to localized
+    // display text, then the SAME map is used to evaluate a {{#if}} on that
+    // field. Without the raw-value overlay, `signing_date > "2028-01-01"` would
+    // compare "13. června 2028" (not an ISO date) and wrongly drop the clause.
+    // The boolean `notify` keeps a non-string value in the map so fillTemplate
+    // routes through block processing (an all-string map is treated as
+    // pre-expanded patch values), as a real fill always does.
+    const xml = WRAP(
+      [
+        P("Signed on {{signing_date}}."),
+        P('{{#if signing_date > "2028-01-01"}}'),
+        P("This is a future-dated agreement."),
+        P("{{/if}}"),
+        P("{{#if notify}}"),
+        P("Counterparty will be notified."),
+        P("{{/if}}"),
+      ].join(""),
+    );
+    const docx = await makeDocx(xml);
+
+    const dateField: FieldMeta = {
+      path: "signing_date",
+      inputType: "date",
+      dateFormat: { locale: "cs", style: "long" },
+    };
+    const values: TemplateData = { signing_date: "2028-06-13", notify: true };
+    const stepError = await applyManifestFillSteps({
+      values,
+      manifest: { fields: [dateField] },
+      resolveLookup: () => {
+        throw new Error("no lookup field in this manifest");
+      },
+    });
+    expect(stepError).toBeNull();
+
+    const { buffer } = await fillTemplate(docx, values);
+    const joined = (await extractTexts(buffer)).join(" ");
+    // The display text is substituted (run boundaries leave the date in its
+    // own w:t, so assert on the localized value, not exact run spacing)…
+    expect(joined).toContain("13. června 2028");
+    expect(joined).not.toContain("{{signing_date}}");
+    // …and the ordering condition kept the clause (raw ISO compared).
+    expect(joined).toContain("This is a future-dated agreement.");
+    expect(joined).toContain("Counterparty will be notified.");
+  });
+
+  test("date {{#if}} drops the clause when the raw ISO fails the comparison", async () => {
+    const xml = WRAP(
+      [
+        P('{{#if signing_date > "2028-01-01"}}'),
+        P("Future clause."),
+        P("{{/if}}"),
+        P("{{#if notify}}"),
+        P("Tail."),
+        P("{{/if}}"),
+      ].join(""),
+    );
+    const docx = await makeDocx(xml);
+
+    const dateField: FieldMeta = {
+      path: "signing_date",
+      inputType: "date",
+      dateFormat: { locale: "cs", style: "long" },
+    };
+    const values: TemplateData = { signing_date: "2020-06-13", notify: true };
+    const stepError = await applyManifestFillSteps({
+      values,
+      manifest: { fields: [dateField] },
+      resolveLookup: () => {
+        throw new Error("no lookup field in this manifest");
+      },
+    });
+    expect(stepError).toBeNull();
+
+    const { buffer } = await fillTemplate(docx, values);
+    const joined = (await extractTexts(buffer)).join(" ");
+    expect(joined).not.toContain("Future clause.");
+    expect(joined).toContain("Tail.");
   });
 
   test("loop + value substitution", async () => {

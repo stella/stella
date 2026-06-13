@@ -8,19 +8,54 @@
  * those results, and before the dependent check so it sees the final
  * values. Date formatting runs last so the AI-adaptation step (which every
  * boundary applies after this pipeline) receives the locale-rendered date
- * as the stub it inflects per occurrence. Mutates `values` in place and
- * returns the first failing step's combined validation message (the
- * boundary rejects with it, naming the field), or null when everything
- * passed.
+ * as the stub it inflects per occurrence. Just before that, each date
+ * field's raw ISO value is stashed on the map (under CONDITION_RAW_VALUES)
+ * so a date both formatted and referenced by a `{{#if}}` still compares as
+ * an ISO date in `fillTemplate`, not as the localized display text. Mutates
+ * `values` in place and returns the first failing step's combined
+ * validation message (the boundary rejects with it, naming the field), or
+ * null when everything passed.
  */
 
+import { resolvePath } from "@stll/template-conditions";
+
 import { checkArrayBounds } from "./array-bounds";
+import { CONDITION_RAW_VALUES } from "./block-directives";
 import { applyCompositeFields } from "./composite-fields";
 import { applyDateFields } from "./date-fields";
 import { checkDependentFields } from "./dependent-fields";
 import { applyFormulaFields } from "./formula-fields";
 import { applyLookupFields, type LookupResolver } from "./lookup-fields";
 import type { FieldMeta } from "./types";
+
+/**
+ * Capture each date field's raw ISO value (the submitted `YYYY-MM-DD`, still
+ * intact at this point in the pipeline) under {@link CONDITION_RAW_VALUES} on
+ * the values map, keyed by field path. `applyDateFields` then rewrites those
+ * paths in `values` to localized display text for substitution; the stashed
+ * overlay lets `{{#if dateField > "2028-01-01"}}` conditions in `fillTemplate`
+ * compare the ISO value instead of the display string. Non-string or empty
+ * values are skipped (nothing to compare, and `applyDateFields` reports the
+ * malformed ones). No-op when the manifest declares no formatted date fields.
+ */
+const stashRawDateValues = (
+  values: Record<string, unknown>,
+  fields: readonly FieldMeta[],
+): void => {
+  const rawDates: Record<string, string> = {};
+  for (const field of fields) {
+    if (field.inputType !== "date" || field.dateFormat === undefined) {
+      continue;
+    }
+    const incoming = resolvePath(field.path, values);
+    if (typeof incoming === "string" && incoming.trim() !== "") {
+      rawDates[field.path] = incoming;
+    }
+  }
+  if (Object.keys(rawDates).length > 0) {
+    Reflect.set(values, CONDITION_RAW_VALUES, rawDates);
+  }
+};
 
 export const applyManifestFillSteps = async ({
   values,
@@ -53,6 +88,13 @@ export const applyManifestFillSteps = async ({
   const arrayBoundsError = checkArrayBounds(values, manifest);
   if (arrayBoundsError !== null) {
     return arrayBoundsError;
+  }
+
+  // Capture raw ISO dates before applyDateFields overwrites them with display
+  // text, so a date field referenced by a condition compares raw (see
+  // stashRawDateValues / CONDITION_RAW_VALUES).
+  if (manifest) {
+    stashRawDateValues(values, manifest.fields);
   }
 
   return applyDateFields(values, manifest);
