@@ -56,11 +56,6 @@
       <Host xsi:type="MailHost">
         <DesktopFormFactor>
           <FunctionFile resid="Commands.Url" />
-          <GetStarted>
-            <Title resid="GetStarted.Title" />
-            <Description resid="GetStarted.Description" />
-            <LearnMoreUrl resid="GetStarted.LearnMoreUrl" />
-          </GetStarted>
           <ExtensionPoint xsi:type="MessageReadCommandSurface">
             <OfficeTab id="TabDefault">
               <Group id="Stella.ReadGroup">
@@ -118,16 +113,13 @@
       </bt:Images>
       <bt:Urls>
         <bt:Url id="Commands.Url" DefaultValue="https://localhost:3002/commands.html" />
-        <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://stll.app" />
         <bt:Url id="Taskpane.Url" DefaultValue="https://localhost:3002/taskpane.html" />
       </bt:Urls>
       <bt:ShortStrings>
-        <bt:String id="GetStarted.Title" DefaultValue="Open stella in Outlook" />
         <bt:String id="Group.Label" DefaultValue="stella" />
         <bt:String id="TaskpaneButton.Label" DefaultValue="stella" />
       </bt:ShortStrings>
       <bt:LongStrings>
-        <bt:String id="GetStarted.Description" DefaultValue="Use stella from the Outlook ribbon to summarize, draft, check, and save the current email to a matter." />
         <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Open stella for this email." />
       </bt:LongStrings>
     </Resources>
