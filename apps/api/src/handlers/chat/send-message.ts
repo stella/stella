@@ -231,6 +231,7 @@ const sendMessage = createSafeRootHandler(
     // explicit user or administrator opt-in.
     const validationTools = getChatTools({
       organizationId: session.activeOrganizationId,
+      memberRole: memberRole.role,
       refRegistry,
       safeDb,
       scopedDb,
@@ -536,6 +537,7 @@ const sendMessage = createSafeRootHandler(
     // DOCX edit tool or the model can chase an impossible path.
     const chatTools = getChatTools({
       organizationId: session.activeOrganizationId,
+      memberRole: memberRole.role,
       orgAIConfig,
       refRegistry,
       safeDb,

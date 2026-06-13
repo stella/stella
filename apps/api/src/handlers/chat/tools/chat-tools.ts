@@ -1,5 +1,6 @@
 import type { ToolSet } from "ai";
 
+import { roles } from "@stll/permissions";
 import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, ScopedDb } from "@/api/db";
@@ -99,6 +100,14 @@ type GetChatToolsProps = {
   safeDb: SafeDb;
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
+  /**
+   * Caller's workspace member role. Gates role-restricted tools so a
+   * chat-capable role without the matching grant cannot reach them.
+   * Template tools require `template: ["create"]` (the same grant the
+   * REST fill route enforces), so a role with `template: []` (e.g.
+   * intern) sees no template tools.
+   */
+  memberRole: keyof typeof roles;
   orgAIConfig?: OrgAIConfig | null;
   threadId: SafeId<"chatThread">;
   excludedChatHistoryMessageIds?: readonly SafeId<"chatMessage">[] | undefined;
@@ -189,6 +198,7 @@ export const getChatTools = ({
   safeDb,
   scopedDb,
   organizationId,
+  memberRole,
   orgAIConfig,
   threadId,
   excludedChatHistoryMessageIds,
@@ -269,12 +279,20 @@ export const getChatTools = ({
     scopedDb,
   });
 
-  // Template library tools: list, describe, and fill templates.
-  const templateTools = createTemplateTools({
-    scopedDb,
-    organizationId,
-    orgAIConfig,
-  });
+  // Template library tools: list, describe, and fill templates. Their
+  // execute fns rely on org RLS alone, so gate registration on the same
+  // `template: ["create"]` grant the REST fill route enforces; a
+  // chat-capable role without it (e.g. intern) sees no template tools.
+  const canUseTemplates = roles[memberRole].authorize({
+    template: ["create"],
+  }).success;
+  const templateTools = canUseTemplates
+    ? createTemplateTools({
+        scopedDb,
+        organizationId,
+        orgAIConfig,
+      })
+    : {};
 
   // create-document is client-executed (no server `execute`) — the
   // chat client picks the destination matter and posts the result
