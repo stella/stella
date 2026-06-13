@@ -107,6 +107,18 @@ export const extractRegistryFields = (
       out.shareCapital = formatShareCapital(shareCapital);
     }
   }
+  if (details?.registry === "ares") {
+    const { shareCapital } = details.company;
+    if (shareCapital) {
+      out.shareCapital = shareCapital;
+    }
+  }
+  if (details?.registry === "orsr") {
+    const { shareCapital } = details.company;
+    if (shareCapital) {
+      out.shareCapital = shareCapital;
+    }
+  }
 
   return out;
 };
