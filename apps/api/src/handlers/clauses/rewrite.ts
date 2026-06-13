@@ -18,9 +18,9 @@ import { Result } from "better-result";
 import { t } from "elysia";
 import * as v from "valibot";
 
-import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { getModelForRole } from "@/api/lib/ai-models";
 import { strictOutputSchema } from "@/api/lib/ai-output-schema";
+import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -89,11 +89,12 @@ ${numbered}`;
 const config = {
   permissions: { clause: ["update"] },
   body: rewriteClauseBodySchema,
+  requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;
 
 const rewriteClause = createSafeRootHandler(
   config,
-  async function* ({ session, body }) {
+  async function* ({ session, body, safeDb, user, orgAIConfig }) {
     const organizationId = session.activeOrganizationId;
 
     // Editable paragraphs = non-directive with non-empty text; directives and
@@ -108,8 +109,23 @@ const rewriteClause = createSafeRootHandler(
       return Result.ok({ body: body.body });
     }
 
-    const orgAIConfig = await loadOrgAIConfig(organizationId);
     const numbered = editable.map((p) => `[${p.index}] ${p.text}`).join("\n");
+
+    const aiAnalytics = createAIAnalyticsCallbacks({
+      usageMetering: {
+        actionType: "chat",
+        organizationId,
+        safeDb,
+        serviceTier: "standard",
+        userId: user.id,
+        workspaceId: null,
+      },
+      feature: "clauses.rewrite",
+      modelRole: "fast",
+      orgAIConfig,
+      properties: { organization_id: organizationId },
+      traceId: Bun.randomUUIDv7(),
+    });
 
     const output = yield* Result.await(
       Result.tryPromise({
@@ -137,15 +153,18 @@ const rewriteClause = createSafeRootHandler(
               schema: strictOutputSchema(rewriteOutputSchema),
             }),
             system: SYSTEM_PROMPT,
+            ...aiAnalytics.stepCallbacks,
           });
           return await result.output;
         },
-        catch: (cause) =>
-          new HandlerError({
+        catch: (cause) => {
+          aiAnalytics.captureError(cause);
+          return new HandlerError({
             status: 502,
             message: "AI rewrite failed",
             cause,
-          }),
+          });
+        },
       }),
     );
 
