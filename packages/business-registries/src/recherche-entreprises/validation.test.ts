@@ -12,6 +12,14 @@ describe("normalizeSiren", () => {
     expect(normalizeSiren(" 552 032 534 ")).toBe("552032534");
     expect(normalizeSiren("552032534\n")).toBe("552032534");
   });
+
+  test("strips dot and dash separators the validators also accept", () => {
+    // Must match what stdnum compacts, so a valid dotted/dashed id
+    // canonicalizes to the digits used for the API query (see client.ts)
+    // instead of resolving to null.
+    expect(normalizeSiren("780.129.987")).toBe("780129987");
+    expect(normalizeSiren("780-129-987")).toBe("780129987");
+  });
 });
 
 describe("validateSiren", () => {

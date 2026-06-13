@@ -9,6 +9,7 @@
 //
 //   import { ares } from "@stll/business-registries";
 //   await ares.lookupByIco("27082440");
+// oxlint-disable-next-line oxc/no-barrel-file -- published package's convenience entry; the per-registry subpaths (@stll/business-registries/<registry>) are the tree-shakeable import path
 export * as ares from "./ares/index.js";
 export * as brreg from "./brreg/index.js";
 export * as companiesHouse from "./companies-house/index.js";
