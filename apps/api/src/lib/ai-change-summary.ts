@@ -12,6 +12,7 @@ import * as v from "valibot";
 import { getModelForRole } from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { strictOutputSchema } from "@/api/lib/ai-output-schema";
+import type { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import type { SafeId } from "@/api/lib/branded-types";
 
 const SUMMARY_TIMEOUT_MS = 30_000;
@@ -31,6 +32,7 @@ type SummarizeVersionDiffOptions = {
   diffText: string;
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
+  aiAnalytics: ReturnType<typeof createAIAnalyticsCallbacks>;
 };
 
 /** Throws on model failure; callers wrap with Result.tryPromise. */
@@ -38,6 +40,7 @@ export const summarizeVersionDiff = async ({
   diffText,
   orgAIConfig,
   organizationId,
+  aiAnalytics,
 }: SummarizeVersionDiffOptions): Promise<string> => {
   const result = streamText({
     abortSignal: AbortSignal.timeout(SUMMARY_TIMEOUT_MS),
@@ -57,6 +60,7 @@ export const summarizeVersionDiff = async ({
       schema: strictOutputSchema(changeSummarySchema),
     }),
     system: SYSTEM_PROMPT,
+    ...aiAnalytics.stepCallbacks,
   });
 
   const { summary } = await result.output;
