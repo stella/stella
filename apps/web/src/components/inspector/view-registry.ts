@@ -134,7 +134,7 @@ export const registerInspectorView = <P>(
   // time, and `validate` re-narrows the payload at retrieval. The
   // assertion is the boundary between the typed registration API
   // and the heterogeneous-registry storage shape.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- heterogeneous-registry boundary; render/railIcon capture typed P via closure, validate re-narrows at retrieval
   registry.set(registration.type, registration as StoredRegistration);
 };
 

@@ -53,6 +53,7 @@ export const cents = (value: number): CentsAmount => {
  * comment naming why the value is already a valid minor-unit integer.
  */
 export const unsafeCents = (value: number): CentsAmount =>
+  // SAFETY: documented escape hatch; caller asserts value is already a valid minor-unit integer.
   // eslint-disable-next-line typescript/no-unsafe-type-assertion
   value as CentsAmount;
 

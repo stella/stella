@@ -130,18 +130,12 @@ export async function parseDocx(
   const warnings: string[] = [];
 
   try {
-    // oxlint-disable-next-line no-inner-declarations -- scoped to try block intentionally
-    function timeStage<T>(_name: string, fn: () => T): T {
-      return fn();
-    }
+    const timeStage = <T>(_name: string, fn: () => T): T => fn();
 
-    // oxlint-disable-next-line no-inner-declarations -- scoped to try block intentionally
-    async function timeStageAsync<T>(
+    const timeStageAsync = async <T>(
       _name: string,
       fn: () => Promise<T>,
-    ): Promise<T> {
-      return await fn();
-    }
+    ): Promise<T> => await fn();
 
     // ========================================================================
     // STAGE 1: Unzip DOCX package (0-10%)

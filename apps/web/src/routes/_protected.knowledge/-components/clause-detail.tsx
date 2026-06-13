@@ -155,9 +155,11 @@ export const ClauseDetailView = ({
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  // SAFETY: The API returns body as ClauseParagraph[]
-  // but Eden types it as unknown due to JSONB.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  // SAFETY: bridges the Eden response and this local ClauseDetail; the
+  // body element type resolves through a separate (web-local)
+  // BlockDirectiveKind than the API's, and the response carries extra
+  // fields (metadata, createdBy) this view does not consume.
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- duplicated web/api paragraph types diverge; not narrowable without a mapper
   const detail = detailQuery.data as unknown as ClauseDetail | undefined;
 
   const refreshDetail = useCallback(() => {

@@ -11,7 +11,7 @@
  */
 
 import * as cheerio from "cheerio";
-import type { AnyNode } from "domhandler";
+import { type AnyNode, isTag, isText } from "domhandler";
 
 import type {
   Block,
@@ -236,19 +236,21 @@ const walkInlines = (
   const inlines: Inline[] = [];
 
   el.contents().each((_, node) => {
-    // oxlint-disable-next-line typescript/no-unsafe-enum-comparison
-    if (node.type === "text") {
+    if (isText(node)) {
       appendTextInline(inlines, $(node).text(), anonymized);
       return;
     }
 
-    // oxlint-disable-next-line typescript/no-unsafe-enum-comparison
-    if (node.type !== "tag") {
+    if (!isTag(node)) {
       return;
     }
 
     const $node = $(node);
     const tag = node.tagName.toLowerCase();
+    // isTag() also matches <script>/<style>; never emit their raw text.
+    if (tag === "script" || tag === "style") {
+      return;
+    }
     const isAnon = anonymized || $node.hasClass("anon-block");
 
     if (tag === "br") {
@@ -460,8 +462,7 @@ const parseChildren = (
   root: cheerio.Cheerio<AnyNode>,
 ): void => {
   root.contents().each((_, node) => {
-    // oxlint-disable-next-line typescript/no-unsafe-enum-comparison
-    if (node.type === "text") {
+    if (isText(node)) {
       const text = normalizeWhitespace($(node).text());
       if (!text) {
         return;
@@ -476,13 +477,17 @@ const parseChildren = (
       return;
     }
 
-    // oxlint-disable-next-line typescript/no-unsafe-enum-comparison
-    if (node.type !== "tag") {
+    if (!isTag(node)) {
       return;
     }
 
     const $node = $(node);
     const tag = node.tagName.toLowerCase();
+
+    // isTag() also matches <script>/<style>; never emit their raw text.
+    if (tag === "script" || tag === "style") {
+      return;
+    }
 
     if (tag === "p" || tag === "li") {
       parseParagraphElement($, state, $node);

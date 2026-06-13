@@ -1,6 +1,6 @@
 // Test fixtures intentionally contain raw hex colors as inputs to the
 // validators under test; they are not rendered styles.
-/* eslint-disable no-inline-style-colors/no-inline-style-colors */
+/* eslint-disable no-inline-style-colors/no-inline-style-colors -- raw hex colors are sanitizer test inputs, not rendered UI styling */
 import { describe, expect, test } from "bun:test";
 
 import {

@@ -15,7 +15,7 @@ import { HistoryExtension } from "./core/HistoryExtension";
 import { ParagraphExtension } from "./core/ParagraphExtension";
 import { TextExtension } from "./core/TextExtension";
 import { BaseKeymapExtension } from "./features/BaseKeymapExtension";
-// oxlint-disable-next-line import/no-cycle
+// oxlint-disable-next-line import/no-cycle -- BidiShortcutExtension reaches the singleton schema for runtime command lookup
 import { BidiShortcutExtension } from "./features/BidiShortcutExtension";
 import { ContentControlWidgetsExtension } from "./features/ContentControlWidgetsExtension";
 import { DropCursorExtension } from "./features/DropCursorExtension";

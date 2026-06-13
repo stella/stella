@@ -85,7 +85,7 @@ export type SafeId<T extends SafeIdType> = string & {
 
 // SAFETY: SafeId is a nominal brand; runtime validation happens at call sites
 export const toSafeId = <T extends SafeIdType>(value: string): SafeId<T> =>
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- canonical brand-application helper; the brand is phantom-only
   value as SafeId<T>;
 
 export const createSafeId = <T extends SafeIdType>(): SafeId<T> =>

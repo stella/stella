@@ -77,8 +77,7 @@ const suppressTransitions = () => {
   style.textContent = "*, *::before, *::after { transition: none !important; }";
   document.head.append(style);
   // Force reflow so suppression takes effect before class changes
-  // oxlint-disable-next-line no-unused-expressions
-  getComputedStyle(document.documentElement).opacity;
+  void getComputedStyle(document.documentElement).opacity;
   return () => requestAnimationFrame(() => style.remove());
 };
 

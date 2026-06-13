@@ -48,7 +48,7 @@ const imports = skillEntries.flatMap((skill) => [
   ),
 ]);
 
-const output = `// eslint-disable-next-line typescript-eslint/triple-slash-reference
+const output = `// eslint-disable-next-line typescript-eslint/triple-slash-reference -- loads the ambient "*.md" module declaration; no ES import equivalent
 /// <reference path="./markdown.d.ts" />
 
 ${imports.join("\n")}

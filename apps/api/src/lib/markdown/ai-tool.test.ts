@@ -110,7 +110,7 @@ describe("ai tool", () => {
   });
 
   test("serialize strips dangerous href schemes", () => {
-    // eslint-disable-next-line no-script-url
+    // eslint-disable-next-line no-script-url -- test fixture asserting the scheme is stripped
     const jsScheme = "javascript:alert(1)";
     const dataScheme = "data:text/html,<script>alert(2)</script>";
     const xss: AITool = {

@@ -34,7 +34,7 @@ type ResolveToolWorkspaceIdsInput = {
 // other code path may construct a value of this brand without
 // going through this function or `intersectAccessibleWorkspaceIds`.
 const brand = (ids: SafeId<"workspace">[]): AuthorizedToolWorkspaceIds =>
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- sole brand-mint boundary; callers verified ids against the accessible set (see SAFETY above)
   ids as AuthorizedToolWorkspaceIds;
 
 export const resolveToolWorkspaceIds = ({

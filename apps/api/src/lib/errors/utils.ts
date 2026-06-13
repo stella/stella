@@ -106,7 +106,7 @@ export const logDevError = (
   if (!envBase.isDev) {
     return;
   }
-  // eslint-disable-next-line no-console
+  // eslint-disable-next-line no-console -- dev-only interactive terminal sink
   console.error(error);
   void appendDevErrorJsonl({ error, context });
 };

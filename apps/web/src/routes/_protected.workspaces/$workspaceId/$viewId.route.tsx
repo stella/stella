@@ -55,7 +55,7 @@ export const Route = createFileRoute(
       /^(?:all|[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12})$/iu;
     if (!VALID_VIEW_ID.test(params.viewId)) {
       if (import.meta.env.DEV) {
-        // eslint-disable-next-line no-console
+        // eslint-disable-next-line no-console -- dev-only stack trace to debug stale doubled URLs
         console.trace(
           `[stella] beforeLoad rejected viewId="${params.viewId}" — redirecting. URL:`,
           globalThis.location.href,

@@ -178,7 +178,7 @@ function TimesheetsPage() {
       }
       // SAFETY: PDF endpoint returns binary; Eden types it
       // as unknown but the response body is an ArrayBuffer
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- binary response body; Eden cannot infer ArrayBuffer for raw-bytes export
       const pdfData = response.data as unknown as ArrayBuffer;
       const blob = new Blob([pdfData], {
         type: "application/pdf",

@@ -3,7 +3,6 @@ import JSZip from "jszip";
 
 import { applyFitToPage, patchSheetXml } from "./xlsx-preprocess";
 
-// biome-ignore lint/security/noSecrets: not a secret, just an XML attribute
 const EXPECTED_FIT_TO_PAGE = 'fitToPage="1"';
 const EXPECTED_FIT_TO_WIDTH = 'fitToWidth="1"';
 const REGEX_WORKSHEET_WITH_SHEET_PR =

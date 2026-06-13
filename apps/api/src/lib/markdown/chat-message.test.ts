@@ -55,7 +55,7 @@ describe("chat message markdown serializer", () => {
     const markdown = normalizeChatMessageHtml(html, []).text;
 
     expect(markdown).not.toContain("script");
-    // oxlint-disable-next-line no-script-url
+    // oxlint-disable-next-line no-script-url -- asserting the unsafe scheme was stripped
     expect(markdown).not.toContain("javascript:");
     expect(markdown).toContain("[good](https://example.com)");
   });

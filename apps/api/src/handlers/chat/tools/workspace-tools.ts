@@ -128,7 +128,7 @@ const requireAllowedWorkspaceId = ({
   workspaceId,
 }: {
   allowedIdsByValue: Map<string, SafeId<"workspace">>;
-  // eslint-disable-next-line no-unbranded-ownership-id-param/no-unbranded-ownership-id-param
+  // eslint-disable-next-line no-unbranded-ownership-id-param/no-unbranded-ownership-id-param -- brand-minting boundary: validates untrusted LLM string into SafeId
   workspaceId: string;
 }): SafeId<"workspace"> => {
   const allowedWorkspaceId = allowedIdsByValue.get(workspaceId);

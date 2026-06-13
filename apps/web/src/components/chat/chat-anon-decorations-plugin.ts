@@ -112,7 +112,7 @@ const createPlugin = (): Plugin<PluginState> =>
         // ProseMirror types `getMeta` as `any`; `setChatAnon-
         // DecorationPairs` is the sole writer for this meta key so
         // the shape is guaranteed at runtime.
-        // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
+        // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment -- getMeta is typed any; setChatAnonDecorationPairs is the sole writer
         const meta: readonly ChatAnonPair[] | undefined = tr.getMeta(META_KEY);
         if (meta !== undefined) {
           return { pairs: meta, decorations: buildDecorations(tr.doc, meta) };
@@ -137,7 +137,7 @@ const createPlugin = (): Plugin<PluginState> =>
           // ProseMirror's DecorationSet.map remaps existing
           // decoration positions through a transaction; not the
           // Array.prototype.map the lint rule assumes.
-          // oxlint-disable-next-line unicorn/no-array-method-this-argument
+          // oxlint-disable-next-line unicorn/no-array-method-this-argument -- DecorationSet.map(mapping, doc), not Array.prototype.map
           decorations: prev.decorations.map(tr.mapping, tr.doc),
         };
       },

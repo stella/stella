@@ -69,7 +69,7 @@ class FakeElement {
       font: "",
       measureText(text: string): { width: number } {
         // Parse "<weight?> <px>px <family>" — grab the numeric pixel size.
-        // eslint-disable-next-line sonarjs/slow-regex
+        // oxlint-disable-next-line sonarjs/slow-regex -- fixed font string from the test, linear backtracking only
         const match = /(\d+(?:\.\d+)?)px/u.exec(ctx.font);
         const fontSizePx = match ? Number(match[1]) : (11 * 96) / 72;
         // 1 char ≈ 0.5 em, so glyph width ≈ fontSizePx / 2.

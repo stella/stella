@@ -27,7 +27,7 @@ type DecryptedFor<P extends SecretPurpose> = Secret<DecryptedKind<P>>;
 // The only MCP secret brand-mint boundary. This module decrypts and validates
 // the envelope before applying the nominal brand selected by SecretPurpose.
 const toDecryptedSecret = <K extends SecretKind>(value: string): Secret<K> =>
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- sole MCP secret brand-mint boundary; brand applied after envelope validation
   value as Secret<K>;
 
 type SecretEnvelope = {

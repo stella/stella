@@ -334,8 +334,7 @@ const OptionsTagInput = ({
   );
 
   return (
-    // TODO: fix this
-    // oxlint-disable-next-line jsx_a11y/no-static-element-interactions, jsx_a11y/click-events-have-key-events
+    // oxlint-disable-next-line jsx_a11y/no-static-element-interactions, jsx_a11y/click-events-have-key-events -- wrapper extends click target to focus the nested input; the input is natively keyboard-focusable
     <div
       className="border-input bg-background ring-ring/24 focus-within:border-ring flex min-h-9 w-full flex-wrap gap-1 rounded-lg border p-[calc(--spacing(1)-1px)] text-base shadow-xs/5 transition-shadow outline-none focus-within:ring-[3px] sm:min-h-8 sm:text-sm"
       onClick={() => inputRef.current?.focus()}

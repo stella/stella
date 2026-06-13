@@ -190,7 +190,7 @@ export const ClauseEditor = ({
   return (
     // Stop modifier key combos from propagating to global
     // hotkeys (e.g., Cmd+B toggles sidebar otherwise).
-    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- non-interactive editor wrapper; onKeyDown only stops modifier combos reaching global hotkeys, real input is the contenteditable inside
     <div
       className="clause-editor rounded-md border"
       onKeyDown={(e) => {

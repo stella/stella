@@ -108,8 +108,6 @@ export const CalendarDayCell = ({
   }, [isEditable]);
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: context menu on day cell
-    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: context menu on day cell
     <div
       ref={dropRef}
       className={cn(

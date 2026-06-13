@@ -472,8 +472,6 @@ export const KanbanColumn = ({
           </Menu>
         )}
       </div>
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: context menu on column body */}
-      {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: context menu on column body */}
       <div
         className="flex-1 overflow-y-auto p-2"
         onContextMenu={handleContextMenu}

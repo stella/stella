@@ -21,6 +21,7 @@ import {
   AdapterFetchError,
   TelemetryError,
 } from "@/api/lib/errors/tagged-errors";
+import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -203,11 +204,11 @@ LIMIT ${SPARQL_LIMIT}`.trim();
   const bindings = json.results.bindings;
 
   if (bindings.length === SPARQL_LIMIT) {
-    // eslint-disable-next-line no-console -- adapter diagnostic
-    console.warn(
-      `[eu-ecj] SPARQL response hit LIMIT ${SPARQL_LIMIT}` +
-        ` for date ${dateFrom}; some decisions may be missing`,
-    );
+    logger.warn("case_law.ingestion.sparql_limit_hit", {
+      adapterKey: ADAPTER_KEYS.EU_ECJ,
+      limit: SPARQL_LIMIT,
+      date: dateFrom,
+    });
   }
 
   return bindings;

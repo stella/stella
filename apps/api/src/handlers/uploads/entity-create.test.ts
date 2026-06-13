@@ -317,8 +317,7 @@ const resolveFileNameInTestTx = async ({
   await resolveEntityCreateFileName({
     // SAFETY: the helper only uses Drizzle query-builder methods shared by
     // the production Bun SQL transaction and the PGlite test transaction.
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion
-    tx: tx as unknown as Transaction,
+    tx: asTestRaw<Transaction>(tx),
     workspaceId: seededWorkspaceId,
     propertyId: seededPropertyId,
     parentId: seededParentId,

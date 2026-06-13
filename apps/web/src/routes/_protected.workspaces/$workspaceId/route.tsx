@@ -76,7 +76,7 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
     // Handles unmatched child routes (e.g. doubled
     // /workspaces/$id/workspaces/$id from stale router state).
     if (import.meta.env.DEV) {
-      // eslint-disable-next-line no-console
+      // eslint-disable-next-line no-console -- dev-only stack trace to debug stale doubled URLs
       console.trace(
         "[stella] notFoundComponent triggered — redirecting to /workspaces. Current URL:",
         globalThis.location.href,

@@ -26,6 +26,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseNsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-ns";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
 const COMMON_HEADERS = {
@@ -389,10 +390,11 @@ export const czNsAdapter: SourceAdapter = {
                 sourceRawContentType: "text/html",
               });
             } else {
-              // eslint-disable-next-line no-console -- adapter diagnostic
-              console.warn(
-                `CZ Supreme: detail fetch for ${unid} returned ${detailResponse.status}`,
-              );
+              logger.warn("case_law.ingestion.detail_fetch_failed", {
+                adapterKey: ADAPTER_KEYS.CZ_NS,
+                documentId: unid,
+                httpStatus: detailResponse.status,
+              });
             }
           } catch (error) {
             // Caller cancelled: return partial results

@@ -94,7 +94,7 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
   // cast is only at the provider boundary because use-intl's Messages
   // type preserves English literal message values while translated
   // locale JSONs necessarily contain different strings.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- i18n provider boundary; locale JSON shape-checked in i18n-store, use-intl's Messages keeps English literal values
   const activeMessages = (
     preHydrationEnglish ? bundledEnglishMessages : messages
   ) as Messages;

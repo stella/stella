@@ -1808,7 +1808,7 @@ export function PagedEditor(
   const { handlePMKeyDown } = useVisualLineNavigation({ pagesContainerRef });
 
   // Stable ref for drag-extend callback (avoids circular deps with getPositionFromMouse)
-  // oxlint-disable-next-line eslint/no-empty-function
+  // oxlint-disable-next-line eslint/no-empty-function -- no-op placeholder until the real callback is assigned
   const dragExtendRef = useRef<(cx: number, cy: number) => void>(() => {});
 
   // Store callbacks in refs to avoid infinite re-render loops
@@ -2353,7 +2353,7 @@ export function PagedEditor(
           firstPageFooterContent: firstPageFooterForRender,
         };
         const hfWarn = (msg: string): void => {
-          // eslint-disable-next-line no-console
+          // eslint-disable-next-line no-console -- standalone editor package has no logger in scope
           console.warn(`[PagedEditor] ${msg}`);
         };
         // Default extender — applied to pages 2+ of every section. It
@@ -2970,7 +2970,7 @@ export function PagedEditor(
       // Signal layout is complete for this sequence
       syncCoordinator.onLayoutComplete(currentEpoch);
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- hand-curated dep set; ref-held values are intentionally omitted
     [
       contentWidth,
       columns,
@@ -4774,7 +4774,7 @@ export function PagedEditor(
 
       startPointerTextSelection(e.clientX, e.clientY);
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- hand-curated dep set; ref-held values are intentionally omitted
     [
       getPositionFromMouse,
       findCellPosFromPmPos,
@@ -5737,7 +5737,7 @@ export function PagedEditor(
         }
       }
     },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- hand-curated dep set; ref-held values are intentionally omitted
     [
       getPositionFromMouse,
       onHeaderFooterDoubleClick,

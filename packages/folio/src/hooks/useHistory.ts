@@ -391,7 +391,8 @@ export function useAutoHistory<T>(
   // Automatically push when value changes
   useEffect(() => {
     history.push(value);
-  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- push only on value change; history.push identity changes after each push, so depending on it would loop
+  }, [value]);
 
   return history;
 }

@@ -918,17 +918,17 @@ function parseTableLook(tblLook: XmlElement | null): TableLook | undefined {
     // val is a hex bitmap: bit 0=firstRow, 1=lastRow, 2=firstCol, 3=lastCol, 4=noHBand, 5=noVBand
     const num = Number.parseInt(val, 16);
     if (!Number.isNaN(num)) {
-      // oxlint-disable-next-line no-bitwise
+      // oxlint-disable-next-line no-bitwise -- decoding OOXML tblLook hex bitmask
       look.firstRow = (num & 0x00_20) !== 0;
-      // oxlint-disable-next-line no-bitwise
+      // oxlint-disable-next-line no-bitwise -- decoding OOXML tblLook hex bitmask
       look.lastRow = (num & 0x00_40) !== 0;
-      // oxlint-disable-next-line no-bitwise
+      // oxlint-disable-next-line no-bitwise -- decoding OOXML tblLook hex bitmask
       look.firstColumn = (num & 0x00_80) !== 0;
-      // oxlint-disable-next-line no-bitwise
+      // oxlint-disable-next-line no-bitwise -- decoding OOXML tblLook hex bitmask
       look.lastColumn = (num & 0x01_00) !== 0;
-      // oxlint-disable-next-line no-bitwise
+      // oxlint-disable-next-line no-bitwise -- decoding OOXML tblLook hex bitmask
       look.noHBand = (num & 0x02_00) !== 0;
-      // oxlint-disable-next-line no-bitwise
+      // oxlint-disable-next-line no-bitwise -- decoding OOXML tblLook hex bitmask
       look.noVBand = (num & 0x04_00) !== 0;
     }
   }
@@ -1572,8 +1572,6 @@ function parseDocDefaults(
 function resolveStyleInheritance(
   style: Style,
   styleMap: StyleMap,
-  // oxlint-disable-next-line unicorn/only-used-in-recursion -- theme is passed through to resolve nested style references
-  theme: Theme | null,
   visited = new Set<string>(),
 ): Style {
   // Prevent circular inheritance
@@ -1597,7 +1595,6 @@ function resolveStyleInheritance(
   const resolvedParent = resolveStyleInheritance(
     parentStyle,
     styleMap,
-    theme,
     visited,
   );
 
@@ -1667,7 +1664,7 @@ function parseStylesFromDocument(
 
     // Second pass: resolve inheritance
     for (const [styleId, style] of styleMap) {
-      const resolved = resolveStyleInheritance(style, styleMap, theme);
+      const resolved = resolveStyleInheritance(style, styleMap);
       styleMap.set(styleId, resolved);
     }
   } catch {

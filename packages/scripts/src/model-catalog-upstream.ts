@@ -332,7 +332,7 @@ const main = async (): Promise<void> => {
     // ACKNOWLEDGED is intentionally empty by default — it's the
     // set maintainers use to park a known new/deprecated model, so an
     // empty default is correct, not dead code.
-    // eslint-disable-next-line sonarjs/no-empty-collection
+    // eslint-disable-next-line sonarjs/no-empty-collection -- maintainer-populated extension point, empty by design
     if (ACKNOWLEDGED.has(acknowledgementKey(entry))) {
       console.log(
         `  · acknowledged ${verdict.kind} ${entry.provider} / ${entry.modelId}`,
@@ -353,7 +353,7 @@ const main = async (): Promise<void> => {
     for (const failure of rateCheck.failures) {
       // ACKNOWLEDGED is intentionally empty by default — see the note
       // on the existence loop above.
-      // eslint-disable-next-line sonarjs/no-empty-collection
+      // eslint-disable-next-line sonarjs/no-empty-collection -- maintainer-populated extension point, empty by design
       if (ACKNOWLEDGED.has(acknowledgementKey(failure.entry))) {
         console.log(
           `  · acknowledged ${failure.label.toLowerCase()} ${failure.entry.provider} / ${failure.entry.modelId}`,

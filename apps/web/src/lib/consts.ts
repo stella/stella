@@ -1,6 +1,5 @@
-// prettier-ignore
 export const DOCX_MIME =
-	"application/vnd.openxmlformats-officedocument.wordprocessingml.document" as const;
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document" as const;
 
 export const PDF_MIME = "application/pdf" as const;
 export const EML_MIME = "message/rfc822" as const;

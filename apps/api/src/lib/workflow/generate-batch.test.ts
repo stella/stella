@@ -204,7 +204,7 @@ describe("justifications", () => {
     // SAFETY: the test deliberately constructs a value that the
     // current typed surface can't express (pre-`kind` legacy shape).
     // The runtime tolerance for that shape is the system under test.
-    // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+    // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- test injects a legacy shape the typed surface can't express; that tolerance is the SUT
     const legacy = legacyContent as unknown as JustificationContent;
     const result = extractJustificationContent(legacy).unwrap();
 

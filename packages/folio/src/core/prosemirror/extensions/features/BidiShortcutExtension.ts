@@ -9,7 +9,7 @@
 
 import { Plugin } from "prosemirror-state";
 
-// oxlint-disable-next-line import/no-cycle
+// oxlint-disable-next-line import/no-cycle -- runtime-only: singletonManager consumed inside handleKeyDown, not at module load
 import { singletonManager } from "../../schema";
 import { createExtension } from "../create";
 import { Priority } from "../types";

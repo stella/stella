@@ -7,7 +7,7 @@
  */
 
 import { ExtensionManager } from "../extensions/ExtensionManager";
-// oxlint-disable-next-line import/no-cycle
+// oxlint-disable-next-line import/no-cycle -- singleton registry; StarterKit pulls in extensions that read back the singleton at runtime
 import { createStarterKit } from "../extensions/StarterKit";
 
 // Re-export type interfaces (used by toProseDoc, fromProseDoc, and other modules)

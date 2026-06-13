@@ -24,6 +24,7 @@
  */
 
 import * as cheerio from "cheerio";
+import { isText } from "domhandler";
 import type { AnyNode } from "domhandler";
 
 import type {
@@ -109,8 +110,7 @@ const walkInlines = (
   const inlines: Inline[] = [];
 
   el.contents().each((_, node) => {
-    // oxlint-disable-next-line typescript/no-unsafe-enum-comparison
-    if (node.type === "text") {
+    if (isText(node)) {
       const text = $(node).text();
       if (text) {
         inlines.push({ type: "text", text });
@@ -118,7 +118,7 @@ const walkInlines = (
       return;
     }
 
-    // oxlint-disable-next-line typescript/no-unsafe-enum-comparison
+    // oxlint-disable-next-line typescript/no-unsafe-enum-comparison -- must skip on exactly "tag"; domhandler isTag() also matches script/style, changing skip behavior
     if (node.type !== "tag") {
       return;
     }

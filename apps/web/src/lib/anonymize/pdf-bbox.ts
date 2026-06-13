@@ -144,8 +144,7 @@ export const mergeAdjacentBBoxes = (bboxes: readonly PDFBBox[]): PDFBBox[] => {
 
   for (let i = 1; i < sorted.length; i++) {
     const current = sorted[i];
-    // eslint-disable-next-line unicorn/prefer-at -- mutated in-place below
-    const prev = merged[merged.length - 1];
+    const prev = merged.at(-1);
     if (current === undefined || prev === undefined) {
       continue;
     }

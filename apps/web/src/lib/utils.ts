@@ -28,7 +28,7 @@ export const stripUndefined = <T extends Record<string, unknown>>(
   }
   // SAFETY: result mirrors input with undefined-valued keys
   // removed; the mapped return type reflects this invariant.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- mapped type the checker cannot infer from the loop
   return result as { [K in keyof T]: Exclude<T[K], undefined> };
 };
 
@@ -51,9 +51,9 @@ export const shuffleArray = <T>(originalArray: readonly T[]): T[] => {
 
     // SAFETY: i is in [1, array.length-1] and randomIndex
     // is in [0, i]; both always in bounds.
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- in-bounds index, noUncheckedIndexedAccess widens to T | undefined
     const a = array[i] as T;
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- in-bounds index, noUncheckedIndexedAccess widens to T | undefined
     const b = array[randomIndex] as T;
     array[randomIndex] = a;
     array[i] = b;

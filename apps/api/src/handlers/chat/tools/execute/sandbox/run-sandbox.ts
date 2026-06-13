@@ -642,7 +642,7 @@ type RunHostCallProps = {
   parsedArgs: unknown;
 };
 
-// oxlint-disable-next-line typescript/promise-function-async
+// oxlint-disable-next-line typescript/promise-function-async -- must synchronously build and return the workPromise reference registered in pendingHostWork
 const runHostCall = ({
   ctx,
   deferred,

@@ -649,8 +649,7 @@ export const PDFProvider = ({
     };
   }, [fieldId, store]);
 
-  // oxlint-disable-next-line eslint-plugin-react-hooks/exhaustive-deps -- mount-only cleanup
-  useEffect(() => destroy, []);
+  useEffect(() => destroy, [destroy]);
 
   return (
     <PDFStoreContext value={store}>

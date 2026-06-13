@@ -187,6 +187,7 @@ pub struct OpenDocxResponse {
 #[serde(rename_all = "camelCase")]
 pub struct CheckpointResponse {
   pub checkpointed_at: String,
+  // Serde surface: mirrors the server checkpoint contract; not branched on yet.
   #[allow(dead_code)]
   pub noop: bool,
   /// Present when the server rotates the session token on a non-noop checkpoint.
@@ -198,6 +199,8 @@ pub struct CheckpointResponse {
 pub enum FinalizeResponse {
   #[serde(rename_all = "camelCase")]
   Finalized {
+    // Serde surface: mirrors the server finalize contract; not branched on yet.
+    #[allow(dead_code)]
     entity_id: String,
     version_number: i64,
   },

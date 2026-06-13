@@ -76,7 +76,7 @@ describe("math equation round-trip", () => {
     // SAFETY: minimal document shape — `toProseDoc`/`fromProseDoc` only
     // touch `package.document.content` in this test path. Building a full
     // `Document` would obscure what we're actually round-tripping.
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- minimal test-only Document shape
     const doc = {
       package: {
         document: {

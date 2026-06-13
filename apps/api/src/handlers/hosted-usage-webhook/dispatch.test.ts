@@ -16,6 +16,7 @@ import type {
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getRemainingUsageUnits } from "@/api/lib/usage";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
@@ -89,8 +90,7 @@ const withRolledBackTx = async (
     await testDb.transaction(async (rawTx) => {
       // SAFETY: PGlite drizzle transaction is structurally compatible
       // with prod BunSQL transaction for the queries we run here.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
-      const tx = rawTx as unknown as Transaction;
+      const tx = asTestRaw<Transaction>(rawTx);
       await fn(tx);
       rawTx.rollback();
     });

@@ -150,13 +150,13 @@ const validateTemporalOrder = (
   // If either date is unknown, allow the match (can't validate)
   if (!citingDate || !citedDate) {
     // SAFETY: branded-type constructor — date is missing so we can't disprove temporal order
-    // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+    // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- branded-type construction at the validated temporal boundary
     return matchedId as ValidCitedDecisionId;
   }
   // ISO dates sort lexicographically; citing must be on or after cited
   if (citingDate >= citedDate) {
     // SAFETY: branded-type constructor — temporal order verified above
-    // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+    // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- branded-type construction at the validated temporal boundary
     return matchedId as ValidCitedDecisionId;
   }
   return null;
