@@ -80,7 +80,7 @@ const extractFormulaPaths = (expression: string): string[] => {
 // @stll/template-conditions (index.ts): string literals and operators are
 // consumed first; group 2 captures candidate identifiers.
 const CONDITION_TOKEN_RE =
-  /("(?:[^"\\]|\\.)*")|==|!=|>=|<=|>|<|!(?!=)|and\b|or\b|[()]|([\p{L}\p{N}_.]+)/gu;
+  /("(?:[^"\\]|\\.)*")|==|!=|>=|<=|>|<|!(?!=)|and\b|or\b|contains\b|[()]|([\p{L}\p{N}_.]+)/gu;
 
 const STARTS_WITH_DIGIT_RE = /^\d/u;
 
