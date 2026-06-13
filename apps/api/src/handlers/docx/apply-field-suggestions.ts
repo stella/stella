@@ -66,28 +66,39 @@ export const applyFieldSuggestions = (
   suggestions: readonly FieldSuggestion[],
 ): ApplyFieldSuggestionsResult => {
   let xml = docXml;
-  const fields: FieldMeta[] = [];
-  const seenPaths = new Set<string>();
-  const unapplied: FieldSuggestion[] = [];
 
+  // Replace longest literals first so a shorter literal cannot match inside a
+  // longer one, but record only which suggestions actually matched — the
+  // emitted fields/unapplied keep document (original) order below.
+  const applied = new Set<FieldSuggestion>();
   for (const suggestion of [...suggestions].sort(
     (a, b) => b.literalText.length - a.literalText.length,
   )) {
     if (!suggestion.literalText || !suggestion.fieldPath) {
       continue;
     }
-
     const before = xml;
     xml = replaceInTextNodes(
       xml,
       suggestion.literalText,
       `{{${suggestion.fieldPath}}}`,
     );
-    if (xml === before) {
+    if (xml !== before) {
+      applied.add(suggestion);
+    }
+  }
+
+  const fields: FieldMeta[] = [];
+  const seenPaths = new Set<string>();
+  const unapplied: FieldSuggestion[] = [];
+  for (const suggestion of suggestions) {
+    if (!suggestion.literalText || !suggestion.fieldPath) {
+      continue;
+    }
+    if (!applied.has(suggestion)) {
       unapplied.push(suggestion);
       continue;
     }
-
     if (!seenPaths.has(suggestion.fieldPath)) {
       seenPaths.add(suggestion.fieldPath);
       const field: FieldMeta = { path: suggestion.fieldPath };
