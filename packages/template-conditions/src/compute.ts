@@ -31,8 +31,16 @@ type Tok =
   | { t: "rp" }
   | { t: "comma" };
 
+// The identifier group accepts hyphenated field paths (`base-rent`, `a.b-c.d`)
+// to match the marker grammar (`isFieldPath`/`FIELD_PATH_RE`), which allows `-`
+// inside paths. A hyphen joins the identifier only when it sits *between* word
+// characters with no surrounding space (`(?:-[\p{L}\p{N}_.]+)*`); a hyphen with
+// adjacent whitespace or a leading hyphen stays a `-` operator, so binary
+// subtraction (`base - rent`) and unary/negative (`-5`, parsed as op + num)
+// are unaffected. The numeric group never starts with `-`, so negatives are
+// always handled by the parser's unary-minus branch, never the identifier.
 const TOKEN_RE =
-  /([0-9][0-9_]*(?:\.[0-9]+)?)|([\p{L}_][\p{L}\p{N}_.]*)|([+\-*/%(),])|(\S)/gu;
+  /([0-9][0-9_]*(?:\.[0-9]+)?)|([\p{L}_][\p{L}\p{N}_.]*(?:-[\p{L}\p{N}_.]+)*)|([+\-*/%(),])|(\S)/gu;
 
 const PRECEDENCE: Record<string, number> = {
   "+": 1,
