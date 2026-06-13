@@ -22,6 +22,7 @@ import { resolveClauseSlots } from "@/api/handlers/docx/resolve-clause-slots";
 import { readManifest } from "@/api/handlers/docx/template-manifest";
 import { isTemplateData } from "@/api/handlers/docx/types";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
+import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -150,6 +151,21 @@ const fillPreviewHandler = async function* ({
   }
 
   if (manifest && (hasAiDraftFields || hasAiAdaptFields)) {
+    const aiAnalytics = createAIAnalyticsCallbacks({
+      usageMetering: {
+        actionType: "chat",
+        organizationId,
+        safeDb,
+        serviceTier: "standard",
+        userId,
+        workspaceId: null,
+      },
+      feature: "templates.fill_preview",
+      modelRole: "fast",
+      orgAIConfig,
+      properties: { organization_id: organizationId },
+      traceId: Bun.randomUUIDv7(),
+    });
     if (hasAiDraftFields) {
       const documentText = await documentTextForAiFields(
         new Uint8Array(buffer),
@@ -163,6 +179,7 @@ const fillPreviewHandler = async function* ({
           orgAIConfig,
           organizationId,
           skillContext: { organizationId, safeDb, userId },
+          aiAnalytics,
         }),
       });
       // Decide AI-decided boolean conditions (a boolean field with an aiPrompt)
@@ -174,6 +191,7 @@ const fillPreviewHandler = async function* ({
           orgAIConfig,
           organizationId,
           skillContext: { organizationId, safeDb, userId },
+          aiAnalytics,
         }),
       });
       for (const [key, value] of Object.entries(aiDecided)) {
@@ -192,6 +210,7 @@ const fillPreviewHandler = async function* ({
           orgAIConfig,
           organizationId,
           skillContext: { organizationId, safeDb, userId },
+          aiAnalytics,
         }),
       });
       fillBuffer = adapted.buffer;
@@ -232,6 +251,7 @@ const config = {
   permissions: { workspace: ["read"] },
   params: fillPreviewParamsSchema,
   body: fillPreviewBodySchema,
+  requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;
 
 const fillTemplatePreview = createSafeRootHandler(

@@ -26,6 +26,7 @@ import type { RichPatchValue } from "@/api/handlers/docx/types";
 import { convertToPdf } from "@/api/handlers/files/gotenberg";
 import { recordTemplateUse } from "@/api/handlers/templates/record-use";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
+import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -212,6 +213,21 @@ const fillByIdHandler = async function* ({
   }
 
   if (manifest && (hasAiDraftFields || hasAiAdaptFields)) {
+    const aiAnalytics = createAIAnalyticsCallbacks({
+      usageMetering: {
+        actionType: "chat",
+        organizationId,
+        safeDb,
+        serviceTier: "standard",
+        userId,
+        workspaceId: null,
+      },
+      feature: "templates.fill",
+      modelRole: "fast",
+      orgAIConfig,
+      properties: { organization_id: organizationId },
+      traceId: Bun.randomUUIDv7(),
+    });
     if (hasAiDraftFields) {
       const documentText = await documentTextForAiFields(
         new Uint8Array(buffer),
@@ -225,6 +241,7 @@ const fillByIdHandler = async function* ({
           orgAIConfig,
           organizationId,
           skillContext: { organizationId, safeDb, userId },
+          aiAnalytics,
         }),
       });
       // Decide AI-decided boolean conditions (a boolean field with an aiPrompt)
@@ -236,6 +253,7 @@ const fillByIdHandler = async function* ({
           orgAIConfig,
           organizationId,
           skillContext: { organizationId, safeDb, userId },
+          aiAnalytics,
         }),
       });
       for (const [key, value] of Object.entries(aiDecided)) {
@@ -255,6 +273,7 @@ const fillByIdHandler = async function* ({
           organizationId,
           documentLanguages: template.languages,
           skillContext: { organizationId, safeDb, userId },
+          aiAnalytics,
         }),
       });
       fillBuffer = adapted.buffer;
@@ -395,6 +414,7 @@ const config = {
   params: fillByIdParamsSchema,
   body: fillByIdBodySchema,
   query: fillByIdQuerySchema,
+  requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;
 
 const fillTemplateById = createSafeRootHandler(

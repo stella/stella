@@ -13,6 +13,7 @@ import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buff
 import { containsNull } from "@/api/handlers/templates/fill";
 import { fillStoredTemplateDocx } from "@/api/handlers/templates/template-fill-service";
 import { captureError } from "@/api/lib/analytics";
+import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -58,6 +59,7 @@ const config = {
   permissions: { template: ["create"], entity: ["create"] },
   params: fillToWorkspaceParamsSchema,
   body: fillToWorkspaceBodySchema,
+  requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;
 
 /**
@@ -136,6 +138,22 @@ const fillTemplateToWorkspace = createSafeHandler(
       }
     }
 
+    const aiAnalytics = createAIAnalyticsCallbacks({
+      usageMetering: {
+        actionType: "chat",
+        organizationId,
+        safeDb,
+        serviceTier: "standard",
+        userId: user.id,
+        workspaceId,
+      },
+      feature: "templates.fill",
+      modelRole: "fast",
+      orgAIConfig,
+      properties: { organization_id: organizationId },
+      traceId: Bun.randomUUIDv7(),
+    });
+
     const filled = yield* Result.await(
       Result.tryPromise({
         try: async () =>
@@ -149,16 +167,19 @@ const fillTemplateToWorkspace = createSafeHandler(
               orgAIConfig,
               organizationId,
               skillContext: { organizationId, safeDb, userId: user.id },
+              aiAnalytics,
             }),
             decideAiCondition: buildAiConditionDecider({
               orgAIConfig,
               organizationId,
               skillContext: { organizationId, safeDb, userId: user.id },
+              aiAnalytics,
             }),
             adaptAiValue: buildAiOccurrenceAdapter({
               orgAIConfig,
               organizationId,
               skillContext: { organizationId, safeDb, userId: user.id },
+              aiAnalytics,
             }),
           }),
         catch: (cause) =>
