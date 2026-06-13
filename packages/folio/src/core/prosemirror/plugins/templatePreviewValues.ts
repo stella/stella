@@ -87,9 +87,19 @@ type TemplatePreviewState = {
   decorationSet: DecorationSet;
 };
 
-export const templatePreviewValuesKey = new PluginKey<TemplatePreviewState>(
-  "templatePreviewValues",
-);
+// Pin the PluginKey to a process-wide symbol so every module
+// evaluation (Vite dev double-serve, @stll/folio re-export) resolves
+// to the same key instance — otherwise host key-based lookups break.
+const KEY_HOLDER_SYMBOL = Symbol.for("stll.folio.templatePreviewValuesKey");
+type KeyHolder = {
+  [KEY_HOLDER_SYMBOL]?: PluginKey<TemplatePreviewState>;
+};
+const keyHolder = globalThis as unknown as KeyHolder;
+export const templatePreviewValuesKey: PluginKey<TemplatePreviewState> =
+  keyHolder[KEY_HOLDER_SYMBOL] ??
+  (keyHolder[KEY_HOLDER_SYMBOL] = new PluginKey<TemplatePreviewState>(
+    "templatePreviewValues",
+  ));
 
 /** A rich span as DOM: text wrapped in `<em>` / `<strong>` per its flags. */
 function buildSpanNode(span: TemplatePreviewSpan): Node {
