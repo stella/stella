@@ -21,7 +21,8 @@
       "description": "Adj hozzá szolgáltatói hitelesítési adatokat az AI-funkciók használatához.",
       "title": "AI-szolgáltató csatlakoztatása"
     },
-    "refinePlaceholder": "Hogyan igazítsa az AI a megfogalmazást?"
+    "refinePlaceholder": "Hogyan igazítsa az AI a megfogalmazást?",
+    "regenerate": "Újragenerálás"
   },
   "anonymize": {
     "addEntity": "Entitás hozzáadása",

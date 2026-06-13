@@ -21,7 +21,8 @@
       "description": "Lisa teenusepakkuja pääsuandmed, et hakata AI-funktsioone kasutama.",
       "title": "Ühenda AI teenusepakkuja"
     },
-    "refinePlaceholder": "Kuidas peaks AI sõnastust kohandama?"
+    "refinePlaceholder": "Kuidas peaks AI sõnastust kohandama?",
+    "regenerate": "Genereeri uuesti"
   },
   "anonymize": {
     "addEntity": "Lisa olem",

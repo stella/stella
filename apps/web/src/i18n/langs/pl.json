@@ -21,7 +21,8 @@
       "description": "Dodaj dane dostępu dostawcy, aby zacząć używać funkcji AI.",
       "title": "Połącz dostawcę AI"
     },
-    "refinePlaceholder": "Jak AI ma dostosować sformułowanie?"
+    "refinePlaceholder": "Jak AI ma dostosować sformułowanie?",
+    "regenerate": "Wygeneruj ponownie"
   },
   "anonymize": {
     "addEntity": "Dodaj podmiot",

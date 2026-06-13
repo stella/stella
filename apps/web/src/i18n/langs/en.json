@@ -21,7 +21,8 @@
       "description": "Add provider credentials to start using AI features.",
       "title": "Connect AI provider"
     },
-    "refinePlaceholder": "How should the AI adjust the wording?"
+    "refinePlaceholder": "How should the AI adjust the wording?",
+    "regenerate": "Regenerate"
   },
   "anonymize": {
     "addEntity": "Add entity",

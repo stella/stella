@@ -21,7 +21,8 @@
       "description": "Adicione credenciais de provedor para começar a usar recursos de IA.",
       "title": "Conectar provedor de IA"
     },
-    "refinePlaceholder": "Como a IA deve ajustar a redação?"
+    "refinePlaceholder": "Como a IA deve ajustar a redação?",
+    "regenerate": "Regenerar"
   },
   "anonymize": {
     "addEntity": "Adicionar entidade",
