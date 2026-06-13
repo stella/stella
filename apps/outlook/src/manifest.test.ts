@@ -1,68 +1,44 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
+import { renderManifest } from "../scripts/render-manifest";
 import {
-  assertValidMailManifest,
-  renderManifest,
-} from "../scripts/render-manifest";
+  ManifestValidationError,
+  validateManifestFile,
+} from "../scripts/validate-manifest";
 
-const wrapDesktopFormFactor = (children: string): string =>
-  `<?xml version="1.0" encoding="UTF-8"?>
-<OfficeApp>
-  <VersionOverrides>
-    <Hosts>
-      <Host xsi:type="MailHost">
-        <DesktopFormFactor>
-          ${children}
-        </DesktopFormFactor>
-      </Host>
-    </Hosts>
-  </VersionOverrides>
-</OfficeApp>`;
+const validateXml = (xml: string): void => {
+  const dir = mkdtempSync(join(tmpdir(), "stella-manifest-"));
+  const path = join(dir, "manifest.xml");
+  writeFileSync(path, xml);
+  try {
+    validateManifestFile(path);
+  } finally {
+    rmSync(dir, { force: true, recursive: true });
+  }
+};
 
-const READ_EXTENSION_POINT =
-  '<ExtensionPoint xsi:type="MessageReadCommandSurface" />';
-
-describe("renderManifest", () => {
-  test("dev and prod render and pass validation", () => {
-    for (const env of ["dev", "prod"] as const) {
-      const xml = renderManifest(env);
-      expect(xml).toContain("<DesktopFormFactor>");
-      // GetStarted is the trap: it is Taskpane-only and breaks mail sideload.
-      expect(xml).not.toContain("GetStarted");
-    }
-  });
-});
-
-describe("assertValidMailManifest", () => {
-  test("accepts FunctionFile + ExtensionPoint", () => {
-    expect(() =>
-      assertValidMailManifest(
-        wrapDesktopFormFactor(
-          `<FunctionFile resid="Commands.Url" />${READ_EXTENSION_POINT}`,
-        ),
-      ),
-    ).not.toThrow();
+describe("manifest XSD validation", () => {
+  test("the rendered dev and prod manifests are schema-valid", () => {
+    expect(() => validateXml(renderManifest("dev"))).not.toThrow();
+    expect(() => validateXml(renderManifest("prod"))).not.toThrow();
   });
 
-  test("rejects a GetStarted child (Taskpane-only element)", () => {
-    expect(() =>
-      assertValidMailManifest(
-        wrapDesktopFormFactor(
-          `<FunctionFile resid="Commands.Url" /><GetStarted><Title resid="x" /></GetStarted>${READ_EXTENSION_POINT}`,
-        ),
-      ),
-    ).toThrow(/GetStarted/u);
+  test("rejects a Taskpane-only GetStarted under the mail DesktopFormFactor", () => {
+    const broken = renderManifest("dev").replace(
+      '<FunctionFile resid="Commands.Url" />',
+      '<FunctionFile resid="Commands.Url" /><GetStarted><Title resid="x" /></GetStarted>',
+    );
+    expect(() => validateXml(broken)).toThrow(ManifestValidationError);
   });
 
-  test("rejects any other unexpected child element", () => {
-    expect(() =>
-      assertValidMailManifest(wrapDesktopFormFactor("<MobileFormFactor />")),
-    ).toThrow(/DesktopFormFactor/u);
-  });
-
-  test("requires a DesktopFormFactor", () => {
-    expect(() =>
-      assertValidMailManifest('<?xml version="1.0"?><OfficeApp></OfficeApp>'),
-    ).toThrow(/DesktopFormFactor/u);
+  test("rejects a v1.1-only SupportsPinning inside a v1.0 Action", () => {
+    const broken = renderManifest("dev").replace(
+      '<SourceLocation resid="Taskpane.Url" />',
+      '<SourceLocation resid="Taskpane.Url" /><SupportsPinning>true</SupportsPinning>',
+    );
+    expect(() => validateXml(broken)).toThrow(ManifestValidationError);
   });
 });
