@@ -113,6 +113,7 @@ describe("chat tool schemas", () => {
 
   test("chat tools expose readonly data through the stella API", () => {
     const tools = getChatTools({
+      memberRole: "owner",
       organizationId,
       refRegistry: createChatRefRegistry(),
       safeDb: unusedSafeDb,
@@ -223,6 +224,7 @@ describe("chat tool schemas", () => {
 
   test("applies approval and anonymization policies by tool risk", () => {
     const tools = getChatTools({
+      memberRole: "owner",
       organizationId,
       refRegistry: createChatRefRegistry(),
       safeDb: unusedSafeDb,
