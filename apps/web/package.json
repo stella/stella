@@ -22,7 +22,7 @@
     "test:e2e:ui": "playwright test --config e2e/playwright.config.ts --ui"
   },
   "dependencies": {
-    "@ai-sdk/react": "3.0.198",
+    "@ai-sdk/react": "3.0.199",
     "@atlaskit/pragmatic-drag-and-drop": "^1.8.1",
     "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^2.1.5",
     "@atlaskit/pragmatic-drag-and-drop-hitbox": "^1.2.0",
@@ -33,7 +33,7 @@
     "@hocuspocus/provider": "^4.1.0",
     "@libpdf/core": "catalog:",
     "@posthog/react": "^1.10.0",
-    "@pydantic/genai-prices": "^0.0.64",
+    "@pydantic/genai-prices": "^0.0.65",
     "@stll/ai-catalog": "workspace:*",
     "@stll/anonymize-chat": "workspace:*",
     "@stll/anonymize-data": "catalog:",
