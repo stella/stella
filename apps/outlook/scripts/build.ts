@@ -62,6 +62,25 @@ if (!build.success) {
   panic(`Outlook build failed:\n${decode(build.stderr)}`);
 }
 
+const tailwindArgs = [
+  "bun",
+  "x",
+  "@tailwindcss/cli",
+  "--input",
+  "./src/styles.css",
+  "--output",
+  "./dist/assets/main.css",
+];
+if (targetEnv === "prod") {
+  tailwindArgs.push("--minify");
+}
+
+const tailwind = Bun.spawnSync(tailwindArgs, { cwd: APP_ROOT });
+
+if (!tailwind.success) {
+  panic(`Outlook CSS build failed:\n${decode(tailwind.stderr)}`);
+}
+
 for (const fileName of readdirSync(PUBLIC_ASSETS_DIR)) {
   if (!fileName.endsWith(".svg")) {
     continue;

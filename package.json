@@ -110,6 +110,7 @@
     "@stll/anonymize-data": "0.0.9",
     "@stll/anonymize-wasm": "2.7.3",
     "@t3-oss/env-core": "0.13.11",
+    "@tailwindcss/cli": "4.3.3",
     "@tailwindcss/postcss": "4.3.3",
     "@tailwindcss/vite": "4.3.3",
     "@tanstack/ai": "0.42.0",
