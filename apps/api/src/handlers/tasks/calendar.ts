@@ -5,16 +5,14 @@ import { t } from "elysia";
 import { entities, fields } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { tConditionNode } from "@/api/lib/conditions/contract";
 import {
   buildFilterConditions,
   buildSortExpressions,
 } from "@/api/lib/entity-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import {
-  tViewFilterConditionSchema,
-  tViewSortSchema,
-} from "@/api/lib/views-schema";
+import { tViewSortSchema } from "@/api/lib/views-schema";
 
 const INTERNAL_DATE_IDS = ["_created-at", "_updated-at"] as const;
 const TASK_DATE_IDS = ["_due-date", "_start-date"] as const;
@@ -29,7 +27,7 @@ const calendarTasksBodySchema = t.Object({
     maxItems: LIMITS.propertiesCount + BUILT_IN_DATE_IDS.length,
   }),
   endDatePropertyId: t.Optional(t.String({ minLength: 1 })),
-  filters: t.Optional(t.Array(tViewFilterConditionSchema)),
+  filters: t.Optional(t.Array(tConditionNode)),
   sorts: t.Optional(t.Array(tViewSortSchema)),
 });
 

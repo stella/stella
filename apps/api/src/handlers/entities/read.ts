@@ -8,16 +8,14 @@ import {
 } from "@/api/handlers/entities/window-cursor";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
-import {
-  tViewFilterConditionSchema,
-  tViewSortSchema,
-} from "@/api/lib/views-schema";
+import { tViewSortSchema } from "@/api/lib/views-schema";
 
 const readEntitiesBodySchema = t.Object({
-  filters: t.Optional(t.Array(tViewFilterConditionSchema)),
+  filters: t.Optional(t.Array(tConditionNode)),
   sorts: t.Optional(t.Array(tViewSortSchema)),
   page: t.Optional(t.Integer({ minimum: 1 })),
   cursor: t.Optional(t.String()),

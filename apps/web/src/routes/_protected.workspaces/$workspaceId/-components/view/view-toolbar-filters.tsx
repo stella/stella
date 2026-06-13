@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import type { BuiltinField, ConditionNode } from "@stll/conditions";
 import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
 import {
@@ -29,7 +30,7 @@ import {
 } from "@stll/ui/components/select";
 
 import type { TranslationKey } from "@/i18n/types";
-import type { ViewFilterCondition, WorkspaceProperty } from "@/lib/types";
+import type { WorkspaceProperty } from "@/lib/types";
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
 
 const KIND_ICONS: Record<string, LucideIcon> = {
@@ -39,9 +40,9 @@ const KIND_ICONS: Record<string, LucideIcon> = {
 };
 
 type FilterChipsProps = {
-  filters: ViewFilterCondition[];
+  filters: ConditionNode[];
   properties: WorkspaceProperty[];
-  onUpdate: (filters: ViewFilterCondition[]) => void;
+  onUpdate: (filters: ConditionNode[]) => void;
 };
 
 export const FilterChips = ({
@@ -49,33 +50,31 @@ export const FilterChips = ({
   properties,
   onUpdate,
 }: FilterChipsProps) => {
-  const handleChange = (id: string, updated: ViewFilterCondition) => {
-    onUpdate(filters.map((f) => (f.id === id ? updated : f)));
+  const handleChange = (index: number, updated: ConditionNode) => {
+    onUpdate(filters.map((node, i) => (i === index ? updated : node)));
   };
 
-  const handleRemove = (id: string) => {
-    onUpdate(filters.filter((f) => f.id !== id));
+  const handleRemove = (index: number) => {
+    onUpdate(filters.filter((_, i) => i !== index));
   };
 
-  const renderChip = (filter: ViewFilterCondition) => {
+  const renderChip = (filter: ConditionNode, index: number) => {
     const shared = {
-      onChange: (updated: ViewFilterCondition) =>
-        handleChange(filter.id, updated),
-      onRemove: () => handleRemove(filter.id),
+      onChange: (updated: ConditionNode) => handleChange(index, updated),
+      onRemove: () => handleRemove(index),
     };
 
-    switch (filter.field) {
+    const kind = kindOf(filter);
+    switch (kind) {
       case "kind":
-        return <KindFilterChip filter={filter} key={filter.id} {...shared} />;
+        return <KindFilterChip filter={filter} key={index} {...shared} />;
       case "builtin":
-        return (
-          <BuiltinFilterChip filter={filter} key={filter.id} {...shared} />
-        );
+        return <BuiltinFilterChip filter={filter} key={index} {...shared} />;
       case "property":
         return (
           <PropertyFilterChip
             filter={filter}
-            key={filter.id}
+            key={index}
             properties={properties}
             {...shared}
           />
@@ -97,22 +96,145 @@ export const FilterChips = ({
   );
 };
 
-type AddFilterButtonProps = {
-  properties: WorkspaceProperty[];
-  filters: ViewFilterCondition[];
-  onAdd: (filter: ViewFilterCondition) => void;
+// -- Node shape helpers --
+
+type FilterKind = "kind" | "builtin" | "property" | null;
+
+/** Classifies a node by the operand its leaf references. */
+const kindOf = (node: ConditionNode): FilterKind => {
+  if (node.type === "predicate") {
+    return operandKind(node.operand.type);
+  }
+  if (node.type === "compare") {
+    return operandKind(node.left.type);
+  }
+  return null;
 };
 
-const hasFilter = (
-  filters: ViewFilterCondition[],
-  field: string,
-  builtinField?: string,
-) =>
+const operandKind = (type: string): FilterKind => {
+  if (type === "kind" || type === "builtin" || type === "property") {
+    return type;
+  }
+  return null;
+};
+
+const kindNode = (values: string[]): ConditionNode => ({
+  type: "predicate",
+  operand: { type: "kind" },
+  op: "in",
+  value: values,
+});
+
+const kindValues = (node: ConditionNode): string[] => {
+  if (node.type === "predicate" && Array.isArray(node.value)) {
+    return node.value;
+  }
+  return [];
+};
+
+type LeafOp = "eq" | "neq" | "contains" | "is_empty";
+
+/** The user-visible operator for a builtin/property leaf node. */
+const leafOp = (node: ConditionNode): LeafOp => {
+  if (node.type === "compare") {
+    return node.op === "neq" ? "neq" : "eq";
+  }
+  if (node.type === "predicate" && node.op === "contains") {
+    return "contains";
+  }
+  return "is_empty";
+};
+
+const leafValue = (node: ConditionNode): string => {
+  if (node.type === "compare" && node.right.type === "literal") {
+    return String(node.right.value ?? "");
+  }
+  if (node.type === "predicate" && typeof node.value === "string") {
+    return node.value;
+  }
+  return "";
+};
+
+type BuiltinOp = "eq" | "neq" | "is_empty";
+
+const builtinNode = (
+  field: BuiltinField,
+  op: BuiltinOp,
+  value: string,
+): ConditionNode => {
+  if (op === "is_empty") {
+    return { type: "predicate", operand: { type: "builtin", field }, op };
+  }
+  return {
+    type: "compare",
+    left: { type: "builtin", field },
+    op,
+    right: { type: "literal", value },
+  };
+};
+
+const builtinField = (node: ConditionNode): BuiltinField => {
+  if (node.type === "compare" && node.left.type === "builtin") {
+    return node.left.field;
+  }
+  if (node.type === "predicate" && node.operand.type === "builtin") {
+    return node.operand.field;
+  }
+  return "status";
+};
+
+const propertyNode = (
+  propertyId: string,
+  op: LeafOp,
+  value: string,
+): ConditionNode => {
+  if (op === "contains") {
+    return {
+      type: "predicate",
+      operand: { type: "property", propertyId },
+      op: "contains",
+      value,
+    };
+  }
+  if (op === "is_empty") {
+    return {
+      type: "predicate",
+      operand: { type: "property", propertyId },
+      op: "is_empty",
+    };
+  }
+  return {
+    type: "compare",
+    left: { type: "property", propertyId },
+    op,
+    right: { type: "literal", value },
+  };
+};
+
+const propertyId = (node: ConditionNode): string => {
+  if (node.type === "compare" && node.left.type === "property") {
+    return node.left.propertyId;
+  }
+  if (node.type === "predicate" && node.operand.type === "property") {
+    return node.operand.propertyId;
+  }
+  return "";
+};
+
+// -- Add filter --
+
+type AddFilterButtonProps = {
+  properties: WorkspaceProperty[];
+  filters: ConditionNode[];
+  onAdd: (filter: ConditionNode) => void;
+};
+
+const hasKindFilter = (filters: ConditionNode[]) =>
+  filters.some((node) => kindOf(node) === "kind");
+
+const hasBuiltinFilter = (filters: ConditionNode[], field: BuiltinField) =>
   filters.some(
-    (f) =>
-      f.field === field &&
-      (builtinField === undefined ||
-        (f.field === "builtin" && f.builtinField === builtinField)),
+    (node) => kindOf(node) === "builtin" && builtinField(node) === field,
   );
 
 const AddFilterButton = ({
@@ -129,45 +251,22 @@ const AddFilterButton = ({
       </MenuTrigger>
       <MenuPopup>
         <MenuItem
-          disabled={hasFilter(filters, "kind")}
-          onClick={() =>
-            onAdd({
-              id: crypto.randomUUID(),
-              field: "kind",
-              op: "in",
-              value: [],
-            })
-          }
+          disabled={hasKindFilter(filters)}
+          onClick={() => onAdd(kindNode([]))}
         >
           <FilterIcon className="size-3.5" />
           {t("common.kind")}
         </MenuItem>
         <MenuItem
-          disabled={hasFilter(filters, "builtin", "status")}
-          onClick={() =>
-            onAdd({
-              id: crypto.randomUUID(),
-              field: "builtin",
-              builtinField: "status",
-              op: "eq",
-              value: "",
-            })
-          }
+          disabled={hasBuiltinFilter(filters, "status")}
+          onClick={() => onAdd(builtinNode("status", "eq", ""))}
         >
           <CircleDotIcon className="size-3.5" />
           {t("common.status")}
         </MenuItem>
         <MenuItem
-          disabled={hasFilter(filters, "builtin", "priority")}
-          onClick={() =>
-            onAdd({
-              id: crypto.randomUUID(),
-              field: "builtin",
-              builtinField: "priority",
-              op: "eq",
-              value: "",
-            })
-          }
+          disabled={hasBuiltinFilter(filters, "priority")}
+          onClick={() => onAdd(builtinNode("priority", "eq", ""))}
         >
           <SignalIcon className="size-3.5" />
           {t("tasks.priority")}
@@ -177,15 +276,7 @@ const AddFilterButton = ({
           .map((prop) => (
             <MenuItem
               key={prop.id}
-              onClick={() =>
-                onAdd({
-                  id: crypto.randomUUID(),
-                  field: "property",
-                  propertyId: prop.id,
-                  op: "eq",
-                  value: "",
-                })
-              }
+              onClick={() => onAdd(propertyNode(prop.id, "eq", ""))}
             >
               <PropertyIcon type={prop.content.type} />
               {prop.name}
@@ -218,9 +309,9 @@ const FilterChipWrapper = ({
   </div>
 );
 
-type KindFilterChipProps = {
-  filter: Extract<ViewFilterCondition, { field: "kind" }>;
-  onChange: (filter: ViewFilterCondition) => void;
+type FilterChipProps = {
+  filter: ConditionNode;
+  onChange: (filter: ConditionNode) => void;
   onRemove: () => void;
 };
 
@@ -234,24 +325,21 @@ const useKindLabels = (): Record<string, string> => {
   };
 };
 
-const KindFilterChip = ({
-  filter,
-  onChange,
-  onRemove,
-}: KindFilterChipProps) => {
+const KindFilterChip = ({ filter, onChange, onRemove }: FilterChipProps) => {
   const t = useTranslations();
   const kindLabels = useKindLabels();
+  const values = kindValues(filter);
   const label =
-    filter.value.length === 0
+    values.length === 0
       ? t("common.all")
-      : filter.value.map((k) => kindLabels[k] ?? k).join(", ");
+      : values.map((k) => kindLabels[k] ?? k).join(", ");
 
   return (
     <FilterChipWrapper label={t("common.kind")} onRemove={onRemove}>
       <Select
         multiple
-        onValueChange={(kinds) => onChange({ ...filter, value: kinds })}
-        value={filter.value}
+        onValueChange={(kinds) => onChange(kindNode(kinds))}
+        value={values}
       >
         <FilterSelectTrigger>{label}</FilterSelectTrigger>
         <SelectPopup alignItemWithTrigger={false}>
@@ -310,28 +398,30 @@ const isStatusValue = (value: string): value is StatusValue =>
 const isPriorityValue = (value: string): value is PriorityValue =>
   PRIORITY_VALUE_SET.has(value);
 
-type BuiltinFilterChipProps = {
-  filter: Extract<ViewFilterCondition, { field: "builtin" }>;
-  onChange: (filter: ViewFilterCondition) => void;
-  onRemove: () => void;
-};
+const isLeafOp = (value: string): value is LeafOp =>
+  value === "eq" ||
+  value === "neq" ||
+  value === "contains" ||
+  value === "is_empty";
 
-const BuiltinFilterChip = ({
-  filter,
-  onChange,
-  onRemove,
-}: BuiltinFilterChipProps) => {
+const isBuiltinOp = (value: string): value is BuiltinOp =>
+  value === "eq" || value === "neq" || value === "is_empty";
+
+const BuiltinFilterChip = ({ filter, onChange, onRemove }: FilterChipProps) => {
   const t = useTranslations();
-  const isStatus = filter.builtinField === "status";
+  const field = builtinField(filter);
+  const rawOp = leafOp(filter);
+  const op: BuiltinOp = isBuiltinOp(rawOp) ? rawOp : "eq";
+  const value = leafValue(filter);
+  const isStatus = field === "status";
   const label = isStatus ? t("common.status") : t("tasks.priority");
   const values = isStatus ? STATUS_VALUES : PRIORITY_VALUES;
 
-  const resolveLabel = (value: string) => {
+  const resolveLabel = (raw: string) => {
     if (isStatus) {
-      return isStatusValue(value) ? t(STATUS_VALUE_LABEL_KEYS[value]) : value;
+      return isStatusValue(raw) ? t(STATUS_VALUE_LABEL_KEYS[raw]) : raw;
     }
-
-    return isPriorityValue(value) ? t(PRIORITY_VALUE_LABEL_KEYS[value]) : value;
+    return isPriorityValue(raw) ? t(PRIORITY_VALUE_LABEL_KEYS[raw]) : raw;
   };
 
   const opOptions = [
@@ -343,35 +433,35 @@ const BuiltinFilterChip = ({
   return (
     <FilterChipWrapper label={label} onRemove={onRemove}>
       <Select
-        onValueChange={(op) => {
-          if (op) {
-            onChange({ ...filter, op });
+        onValueChange={(nextOp) => {
+          if (nextOp && isBuiltinOp(nextOp)) {
+            onChange(builtinNode(field, nextOp, value));
           }
         }}
-        value={filter.op}
+        value={op}
       >
         <FilterSelectTrigger>
-          {opOptions.find((o) => o.value === filter.op)?.label}
+          {opOptions.find((o) => o.value === op)?.label}
         </FilterSelectTrigger>
         <SelectPopup alignItemWithTrigger={false}>
-          {opOptions.map((op) => (
-            <SelectItem key={op.value} value={op.value}>
-              {op.label}
+          {opOptions.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
             </SelectItem>
           ))}
         </SelectPopup>
       </Select>
-      {filter.op !== "is_empty" && (
+      {op !== "is_empty" && (
         <Select
           onValueChange={(val) => {
             if (val !== null) {
-              onChange({ ...filter, value: val });
+              onChange(builtinNode(field, op, val));
             }
           }}
-          value={String(filter.value ?? "")}
+          value={value}
         >
           <FilterSelectTrigger>
-            {filter.value !== "" ? resolveLabel(String(filter.value)) : "…"}
+            {value !== "" ? resolveLabel(value) : "…"}
           </FilterSelectTrigger>
           <SelectPopup alignItemWithTrigger={false}>
             {values.map((val) => (
@@ -386,11 +476,8 @@ const BuiltinFilterChip = ({
   );
 };
 
-type PropertyFilterChipProps = {
-  filter: Extract<ViewFilterCondition, { field: "property" }>;
+type PropertyFilterChipProps = FilterChipProps & {
   properties: WorkspaceProperty[];
-  onChange: (filter: ViewFilterCondition) => void;
-  onRemove: () => void;
 };
 
 const PropertyFilterChip = ({
@@ -400,20 +487,22 @@ const PropertyFilterChip = ({
   onRemove,
 }: PropertyFilterChipProps) => {
   const t = useTranslations();
-  const property = properties.find((p) => p.id === filter.propertyId);
+  const id = propertyId(filter);
+  const property = properties.find((p) => p.id === id);
 
   if (!property) {
     return null;
   }
 
+  const op = leafOp(filter);
+  const value = leafValue(filter);
   const isSingleSelect =
     property.content.type === "single-select" ||
     property.content.type === "multi-select";
 
   const selectOptions =
-    isSingleSelect &&
-    (property.content.type === "single-select" ||
-      property.content.type === "multi-select")
+    property.content.type === "single-select" ||
+    property.content.type === "multi-select"
       ? property.content.options
       : [];
 
@@ -434,36 +523,36 @@ const PropertyFilterChip = ({
   return (
     <FilterChipWrapper label={property.name} onRemove={onRemove}>
       <Select
-        onValueChange={(op) => {
-          if (op) {
-            onChange({ ...filter, op });
+        onValueChange={(nextOp) => {
+          if (nextOp && isLeafOp(nextOp)) {
+            onChange(propertyNode(id, nextOp, value));
           }
         }}
-        value={filter.op}
+        value={op}
       >
         <FilterSelectTrigger>
-          {opOptions.find((o) => o.value === filter.op)?.label}
+          {opOptions.find((o) => o.value === op)?.label}
         </FilterSelectTrigger>
         <SelectPopup alignItemWithTrigger={false}>
-          {opOptions.map((op) => (
-            <SelectItem key={op.value} value={op.value}>
-              {op.label}
+          {opOptions.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
             </SelectItem>
           ))}
         </SelectPopup>
       </Select>
-      {filter.op !== "is_empty" &&
+      {op !== "is_empty" &&
         (isSingleSelect ? (
           <Select
             onValueChange={(val) => {
               if (val !== null) {
-                onChange({ ...filter, value: val });
+                onChange(propertyNode(id, op, val));
               }
             }}
-            value={String(filter.value ?? "")}
+            value={value}
           >
             <FilterSelectTrigger>
-              {filter.value !== "" ? String(filter.value) : "…"}
+              {value !== "" ? value : "…"}
             </FilterSelectTrigger>
             <SelectPopup alignItemWithTrigger={false}>
               {selectOptions.map((opt) => (
@@ -477,13 +566,10 @@ const PropertyFilterChip = ({
           <Input
             className="h-6! w-24 border-0 bg-transparent px-1 text-xs shadow-none"
             onChange={(e) =>
-              onChange({
-                ...filter,
-                value: e.currentTarget.value,
-              })
+              onChange(propertyNode(id, op, e.currentTarget.value))
             }
             size="sm"
-            value={String(filter.value ?? "")}
+            value={value}
           />
         ))}
     </FilterChipWrapper>

@@ -6,7 +6,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/components/button";
 
 import type {
-  ViewFilterCondition,
+  ConditionNode,
   WorkspaceEntity,
   WorkspaceProperty,
 } from "@/lib/types";
@@ -26,7 +26,7 @@ import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-
 import { getFirstFile } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 type PropertyColumnOptions = {
-  filters: ViewFilterCondition[];
+  filters: ConditionNode[];
 };
 
 export const getPropertyColumn = ({

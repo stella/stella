@@ -7,15 +7,15 @@ import { lockWorkspacePropertyWrites } from "@/api/handlers/properties/property-
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  collectNodePropertyIds,
+  remapNodePropertyIds,
+} from "@/api/lib/conditions/ast-utils";
 import { LIMITS } from "@/api/lib/limits";
 import { serializeAITool } from "@/api/lib/markdown/ai-tool";
 import { brandPersistedPropertyId } from "@/api/lib/safe-id-boundaries";
 import { sortDeep } from "@/api/lib/sort-deep";
-import type {
-  ViewFilterCondition,
-  ViewLayout,
-  ViewTemplateProperty,
-} from "@/api/lib/views-schema";
+import type { ViewLayout, ViewTemplateProperty } from "@/api/lib/views-schema";
 
 type WorkspacePropertyTemplateSource = {
   id: string;
@@ -665,10 +665,12 @@ const collectLayoutPropertyIds = (layout: ViewLayout): Set<string> => {
     add(sort.propertyId);
   }
 
-  for (const filter of layout.filters) {
-    if (filter.field === "property") {
-      add(filter.propertyId);
-    }
+  const filterPropertyIds = new Set<string>();
+  for (const node of layout.filters) {
+    collectNodePropertyIds(node, filterPropertyIds);
+  }
+  for (const id of filterPropertyIds) {
+    add(id);
   }
 
   if (layout.type === "table") {
@@ -716,16 +718,9 @@ const remapLayoutPropertyIds = (
     ...sort,
     propertyId: remap(sort.propertyId),
   }));
-  layout.filters = layout.filters.map((filter): ViewFilterCondition => {
-    if (filter.field !== "property") {
-      return filter;
-    }
-
-    return {
-      ...filter,
-      propertyId: remap(filter.propertyId),
-    };
-  });
+  layout.filters = layout.filters.map((node) =>
+    remapNodePropertyIds(node, remap),
+  );
 
   if (layout.type === "table") {
     layout.columnOrder = layout.columnOrder.map(remap);

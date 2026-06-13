@@ -11,14 +11,12 @@ import {
 } from "@/api/handlers/entities/window-cursor";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
-import {
-  tViewFilterConditionSchema,
-  tViewSortSchema,
-} from "@/api/lib/views-schema";
+import { tViewSortSchema } from "@/api/lib/views-schema";
 
 const STATUS_GROUP_ID = "_status";
 const KIND_GROUP_ID = "_kind";
@@ -45,7 +43,7 @@ const isEntityKindValue = (value: string): value is EntityKindValue =>
   ENTITY_KIND_VALUES.some((kind) => kind === value);
 
 const readKanbanGroupBodySchema = t.Object({
-  filters: t.Optional(t.Array(tViewFilterConditionSchema)),
+  filters: t.Optional(t.Array(tConditionNode)),
   sorts: t.Optional(t.Array(tViewSortSchema)),
   limit: t.Optional(
     t.Integer({

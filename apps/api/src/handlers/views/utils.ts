@@ -1,3 +1,6 @@
+import type { ConditionNode } from "@stll/conditions";
+
+import { nodeReferencesOnlyValidProperties } from "@/api/lib/conditions/ast-utils";
 import type {
   ViewLayout,
   ViewLayoutBase,
@@ -28,11 +31,9 @@ export const cleanStalePropertyIds = (
     changed = true;
   }
 
-  const cleanedFilters = layout.filters.filter(
-    (f) =>
-      f.field === "kind" ||
-      f.field === "builtin" ||
-      propertyIds.includes(f.propertyId),
+  const isValidPropertyId = (id: string) => propertyIds.includes(id);
+  const cleanedFilters = layout.filters.filter((node) =>
+    nodeReferencesOnlyValidProperties(node, isValidPropertyId),
   );
   if (cleanedFilters.length !== layout.filters.length) {
     layout.filters = cleanedFilters;
@@ -123,9 +124,12 @@ export const hasDuplicateSorts = (
   return false;
 };
 
+const isKindNode = (node: ConditionNode): boolean =>
+  node.type === "predicate" && node.operand.type === "kind";
+
 export const hasMultipleKindFilters = (
-  filters: readonly { field: string }[],
-): boolean => filters.filter((f) => f.field === "kind").length > 1;
+  filters: readonly ConditionNode[],
+): boolean => filters.filter(isKindNode).length > 1;
 
 export const convertLayout = (
   source: ViewLayout,

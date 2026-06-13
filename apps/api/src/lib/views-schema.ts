@@ -2,24 +2,17 @@ import { Type } from "@sinclair/typebox";
 import { t } from "elysia";
 import * as v from "valibot";
 
+import { conditionNodeSchema } from "@stll/conditions";
+
 import {
   manualInputToolSchema,
   propertyConditionSchema,
   propertyContentSchema,
 } from "@/api/db/schema-validators";
+import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 
 const v1 = v.literal(1);
-
-const entityKindValues = [
-  "document",
-  "folder",
-  "task",
-  "message",
-  "link",
-] as const;
-
-const builtinFieldValues = ["status", "priority"] as const;
 
 const viewLayoutTypeValues = [
   "overview",
@@ -32,93 +25,12 @@ const viewLayoutTypeValues = [
 
 const strictObjectOptions = { additionalProperties: false } as const;
 
-export const viewFilterConditionSchema = v.union([
-  v.strictObject({
-    id: v.string(),
-    field: v.literal("kind"),
-    op: v.literal("in"),
-    value: v.array(v.picklist(entityKindValues)),
-  }),
-  v.strictObject({
-    id: v.string(),
-    field: v.literal("property"),
-    propertyId: v.pipe(v.string(), v.minLength(1)),
-    op: v.picklist(["eq", "neq", "contains", "is_empty"]),
-    value: v.optional(v.union([v.string(), v.array(v.string())])),
-  }),
-  v.strictObject({
-    id: v.string(),
-    field: v.literal("builtin"),
-    builtinField: v.picklist(builtinFieldValues),
-    op: v.picklist(["eq", "neq", "in", "is_empty"]),
-    value: v.optional(v.union([v.string(), v.array(v.string())])),
-  }),
-]);
-
-export type ViewFilterCondition = v.InferOutput<
-  typeof viewFilterConditionSchema
->;
-
 export const viewSortSchema = v.strictObject({
   propertyId: v.pipe(v.string(), v.minLength(1)),
   desc: v.boolean(),
 });
 
 export type ViewSort = v.InferOutput<typeof viewSortSchema>;
-
-export const tViewFilterConditionSchema = t.Union([
-  t.Object(
-    {
-      id: t.String(),
-      field: t.Literal("kind"),
-      op: t.Literal("in"),
-      value: t.Array(
-        t.Union([
-          t.Literal("document"),
-          t.Literal("folder"),
-          t.Literal("task"),
-          t.Literal("message"),
-          t.Literal("link"),
-        ]),
-      ),
-    },
-    strictObjectOptions,
-  ),
-  t.Object(
-    {
-      id: t.String(),
-      field: t.Literal("property"),
-      propertyId: t.String({ minLength: 1 }),
-      op: t.Union([
-        t.Literal("eq"),
-        t.Literal("neq"),
-        t.Literal("contains"),
-        t.Literal("is_empty"),
-      ]),
-      value: t.Optional(
-        t.Union([t.String(), t.Array(t.String()), t.Undefined()]),
-      ),
-    },
-    strictObjectOptions,
-  ),
-  t.Object(
-    {
-      id: t.String(),
-      field: t.Literal("builtin"),
-      builtinField: t.Union([t.Literal("status"), t.Literal("priority")]),
-      op: t.Union([
-        t.Literal("eq"),
-        t.Literal("neq"),
-        t.Literal("in"),
-        t.Literal("is_empty"),
-      ]),
-      value: t.Optional(
-        t.Union([t.String(), t.Array(t.String()), t.Undefined()]),
-      ),
-    },
-    strictObjectOptions,
-  ),
-]);
 
 export const tViewSortSchema = t.Object(
   {
@@ -129,7 +41,7 @@ export const tViewSortSchema = t.Object(
 );
 
 const baseLayoutSchema = {
-  filters: v.array(viewFilterConditionSchema),
+  filters: v.array(conditionNodeSchema),
   sorts: v.array(viewSortSchema),
   hiddenProperties: v.array(v.string()),
 };
@@ -201,8 +113,27 @@ export const viewLayoutSchema = v.variant("type", layoutSchemas);
 export type ViewLayout = v.InferOutput<typeof viewLayoutSchema>;
 export type ViewLayoutType = ViewLayout["type"];
 
+const hasFiltersField = (value: unknown): value is { filters: unknown } =>
+  typeof value === "object" && value !== null && "filters" in value;
+
+/**
+ * Stored filters are validated leniently: any node that does not parse as the
+ * canonical condition AST is dropped, so a stray pre-AST row resets to an empty
+ * filter instead of failing the whole layout read. New writes are AST nodes and
+ * pass through untouched.
+ */
+const withValidFilters = (value: unknown): unknown => {
+  if (!hasFiltersField(value)) {
+    return value;
+  }
+  const filters = Array.isArray(value.filters)
+    ? value.filters.filter((node) => v.is(conditionNodeSchema, node))
+    : [];
+  return { ...value, filters };
+};
+
 export const parseViewLayout = (value: unknown): ViewLayout =>
-  v.parse(viewLayoutSchema, value);
+  v.parse(viewLayoutSchema, withValidFilters(value));
 
 // Recovers a stored layout that fails strict parsing: older views can carry a
 // filter grammar the current schema rejects. Drop the unparseable filters/sorts
@@ -235,7 +166,7 @@ export const parseViewLayoutSafe = (value: unknown): ViewLayout => {
 };
 
 const tBaseLayoutSchema = {
-  filters: t.Array(tViewFilterConditionSchema),
+  filters: t.Array(tConditionNode),
   sorts: t.Array(tViewSortSchema),
   hiddenProperties: t.Array(t.String()),
 };

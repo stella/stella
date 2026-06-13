@@ -24,8 +24,8 @@ import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import type {
+  ConditionNode,
   PropertyDependency,
-  ViewFilterCondition,
   WorkspaceProperty,
 } from "@/lib/types";
 import { CreateProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/create-property";
@@ -45,7 +45,7 @@ import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queri
 type PropertyPopoverProps = {
   property: WorkspaceProperty;
   header: TableHeader;
-  filters: ViewFilterCondition[];
+  filters: ConditionNode[];
 };
 
 type ReplaceAction = {

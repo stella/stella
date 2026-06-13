@@ -6,6 +6,7 @@
  * bodies are typed with `t`. The `_conditionParity` guard below
  * fails typecheck if the two ever drift.
  */
+import { Type } from "@sinclair/typebox";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -34,7 +35,7 @@ const tOperand = t.Union([
   }),
 ]);
 
-export const tConditionNode = t.Recursive((self) =>
+const tConditionNodeRecursive = t.Recursive((self) =>
   t.Union([
     t.Object({
       type: t.Literal("compare"),
@@ -46,15 +47,28 @@ export const tConditionNode = t.Recursive((self) =>
       type: t.Literal("predicate"),
       operand: tOperand,
       op: t.UnionEnum([...PREDICATE_OPS]),
-      value: t.Optional(t.Union([t.String(), t.Array(t.String())])),
+      value: t.Optional(
+        t.Union([t.String(), t.Array(t.String()), t.Undefined()]),
+      ),
     }),
     t.Object({
       type: t.Literal("group"),
       combinator: t.UnionEnum([...COMBINATORS]),
-      negated: t.Optional(t.Boolean()),
+      negated: t.Optional(t.Union([t.Boolean(), t.Undefined()])),
       children: t.Array(self),
     }),
   ]),
+);
+
+/**
+ * Route-contract schema. Validates with the recursive structure above
+ * but presents the canonical `ConditionNode` static type to Eden: the
+ * recursive self-reference otherwise collapses `children` to `never[]`
+ * in TypeScript inference, which would reject every group node at the
+ * client boundary.
+ */
+export const tConditionNode = Type.Unsafe<ConditionNode>(
+  tConditionNodeRecursive,
 );
 
 /** Top-level condition: always the AND/OR root group. */
@@ -70,6 +84,7 @@ export const tCondition = t.Object({
 // constants. The reverse direction is intentionally omitted: TypeBox optionals
 // drop `| undefined` under exactOptionalPropertyTypes, so canonical→mirror
 // would false-positive without guarding anything the spreads don't already.)
-const _mirrorToCanonical = (n: Static<typeof tConditionNode>): ConditionNode =>
-  n;
+const _mirrorToCanonical = (
+  n: Static<typeof tConditionNodeRecursive>,
+): ConditionNode => n;
 void _mirrorToCanonical;

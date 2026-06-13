@@ -15,7 +15,7 @@ import type { FileRouteTypes } from "@/routeTree.gen";
 
 export type {
   EntityKind,
-  ViewFilterCondition,
+  ConditionNode,
   AgendaItemKind,
   AgendaItemSource,
   ViewLayout,

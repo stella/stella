@@ -1,5 +1,5 @@
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
-import type { ViewFilterCondition, WorkspaceEntity } from "@/lib/types";
+import type { ConditionNode, WorkspaceEntity } from "@/lib/types";
 import {
   getEntityName,
   getFirstFile,
@@ -19,7 +19,7 @@ type ViewSort = {
 };
 
 type ViewLayout = {
-  filters: ViewFilterCondition[];
+  filters: ConditionNode[];
   sorts: ViewSort[];
 };
 
