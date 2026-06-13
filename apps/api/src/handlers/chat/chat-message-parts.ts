@@ -70,13 +70,14 @@ export const createChatTextPart = (content: string): ChatPart => ({
 });
 
 export const isChatAttachmentPart = (
-  part: ChatPart,
+  part: unknown,
 ): part is ChatAttachmentPart =>
-  (part.type === "image" || part.type === "document") &&
+  isRecord(part) &&
+  (part["type"] === "image" || part["type"] === "document") &&
   "source" in part &&
-  typeof part.source === "object" &&
-  "value" in part.source &&
-  typeof part.source.value === "string";
+  isRecord(part["source"]) &&
+  "value" in part["source"] &&
+  typeof part["source"]["value"] === "string";
 
 export const getChatAttachmentUrl = (part: ChatAttachmentPart): string =>
   part.source.value;

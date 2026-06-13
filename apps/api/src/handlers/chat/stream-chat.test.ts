@@ -360,6 +360,88 @@ describe("outgoing chat stream message ids", () => {
       "yield:RUN_FINISHED",
     ]);
   });
+
+  test("persists partial assistant messages when the stream aborts after content", async () => {
+    const abortController = new AbortController();
+    const messageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    let responseMessage: ChatMessage | null = null;
+    const processor = new StreamProcessor({
+      events: {
+        onStreamEnd: (message) => {
+          responseMessage = {
+            id: message.id,
+            parts: [
+              {
+                content: message.parts
+                  .map((part) => (part.type === "text" ? part.content : ""))
+                  .join(""),
+                type: "text",
+              },
+            ],
+            role: message.role,
+          };
+        },
+      },
+    });
+    const finishEvents: { isAborted: boolean; text: string }[] = [];
+
+    const stream = processServerChatStream({
+      abortSignal: abortController.signal,
+      getResponseMessage: () => responseMessage,
+      mapMessageId: createChatMessageIdMapper(() => messageId),
+      onFinish: ({ isAborted, responseMessage: finishedMessage }) => {
+        finishEvents.push({
+          isAborted,
+          text: finishedMessage.parts
+            .map((part) => (part.type === "text" ? part.content : ""))
+            .join(""),
+        });
+      },
+      processor,
+      source: streamChunksThenAbort({
+        abortController,
+        chunks: [
+          {
+            type: EventType.RUN_STARTED,
+            runId: "run-1",
+            threadId: "thread-1",
+          },
+          {
+            type: EventType.TEXT_MESSAGE_START,
+            messageId: "provider-message",
+            role: "assistant",
+          },
+          {
+            type: EventType.TEXT_MESSAGE_CONTENT,
+            delta: "Partial answer",
+            messageId: "provider-message",
+          },
+        ],
+      }),
+    });
+
+    expect(stripTimestamps(await collectChunks(stream))).toEqual([
+      { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+      {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId,
+        role: "assistant",
+      },
+      {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        delta: "Partial answer",
+        messageId,
+      },
+      {
+        type: EventType.RUN_ERROR,
+        message: "unknown",
+        code: "unknown",
+      },
+    ]);
+    expect(finishEvents).toEqual([{ isAborted: true, text: "Partial answer" }]);
+  });
 });
 
 describe("chat message usage metadata", () => {
@@ -397,6 +479,19 @@ const streamChunks = async function* (
   chunks: readonly StreamChunk[],
 ): AsyncIterable<StreamChunk> {
   yield* chunks;
+};
+
+const streamChunksThenAbort = async function* ({
+  abortController,
+  chunks,
+}: {
+  abortController: AbortController;
+  chunks: readonly StreamChunk[];
+}): AsyncIterable<StreamChunk> {
+  yield* chunks;
+  const error = new Error("Stream aborted");
+  abortController.abort(error);
+  throw error;
 };
 
 describe("chat stream refs", () => {

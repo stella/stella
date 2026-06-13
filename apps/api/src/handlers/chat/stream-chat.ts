@@ -381,31 +381,83 @@ export const processServerChatStream = async function* ({
       yield chunk;
     }
 
-    const responseMessage = getResponseMessage();
-    if (responseMessage) {
-      await onFinish({
-        isAborted: abortSignal.aborted,
-        responseMessage: attachUsageMetadata({
-          message: normalizeFinalAssistantMessageId({
-            mapMessageId,
-            message: responseMessage,
-          }),
-          usage,
-        }),
-      });
-    }
+    await finishResponseMessage({
+      abortSignal,
+      getResponseMessage,
+      mapMessageId,
+      onFinish,
+      usage,
+    });
     for (const chunk of deferredRunFinishedChunks) {
       yield chunk;
     }
   } catch (error) {
     const kind = classifyAIError(error);
     captureError(error, { kind });
+    if (abortSignal.aborted) {
+      await finishAbortedResponseMessage({
+        abortSignal,
+        getResponseMessage,
+        mapMessageId,
+        onFinish,
+        processor,
+        usage,
+      });
+    }
     yield {
       type: EventType.RUN_ERROR,
       message: kind,
       code: kind,
       timestamp: Date.now(),
     };
+  }
+};
+
+type FinishResponseMessageProps = {
+  abortSignal: AbortSignal;
+  getResponseMessage: () => ChatMessage | null;
+  mapMessageId: MessageIdMapper;
+  onFinish: (event: StreamChatFinishEvent) => Promise<void> | void;
+  usage: TokenUsage | undefined;
+};
+
+const finishResponseMessage = async ({
+  abortSignal,
+  getResponseMessage,
+  mapMessageId,
+  onFinish,
+  usage,
+}: FinishResponseMessageProps): Promise<void> => {
+  const responseMessage = getResponseMessage();
+  if (!responseMessage) {
+    return;
+  }
+
+  await onFinish({
+    isAborted: abortSignal.aborted,
+    responseMessage: attachUsageMetadata({
+      message: normalizeFinalAssistantMessageId({
+        mapMessageId,
+        message: responseMessage,
+      }),
+      usage,
+    }),
+  });
+};
+
+type FinishAbortedResponseMessageProps = FinishResponseMessageProps & {
+  processor: StreamProcessor;
+};
+
+const finishAbortedResponseMessage = async ({
+  processor,
+  ...props
+}: FinishAbortedResponseMessageProps): Promise<void> => {
+  try {
+    processor.finalizeStream();
+    await finishResponseMessage(props);
+  } catch (error) {
+    captureError(error, { kind: "aborted_stream_finish_failed" });
   }
 };
 

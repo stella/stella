@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
+import {
+  chatMessageFromPersisted,
+  isChatAttachmentPart,
+} from "@/api/handlers/chat/chat-message-parts";
 import type { ChatMessageContent } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 
@@ -31,5 +34,11 @@ describe("persisted chat message parts", () => {
         totalTokens: 30,
       },
     });
+  });
+});
+
+describe("chat attachment parts", () => {
+  test("rejects malformed attachment parts with null source", () => {
+    expect(isChatAttachmentPart({ type: "image", source: null })).toBe(false);
   });
 });

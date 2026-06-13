@@ -278,12 +278,11 @@ const validateToolCallParts = ({
   message: ChatMessage;
   tools: ChatToolMap;
 }): Result<void, HandlerError<400>> => {
-  const toolNames = new Set(Object.keys(tools));
   for (const part of message.parts) {
     if (part.type !== "tool-call") {
       continue;
     }
-    if (!toolNames.has(part.name)) {
+    if (tools[part.name] === undefined) {
       return Result.err(
         new HandlerError({
           status: 400,
