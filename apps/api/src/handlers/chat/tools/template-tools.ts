@@ -2,7 +2,7 @@ import { valibotSchema } from "@ai-sdk/valibot";
 import { tool } from "ai";
 import * as v from "valibot";
 
-import type { ScopedDb } from "@/api/db";
+import type { SafeDb, ScopedDb } from "@/api/db";
 import {
   buildAiConditionDecider,
   buildAiFieldGenerator,
@@ -13,6 +13,7 @@ import {
   describeStoredTemplate,
   fillStoredTemplate,
 } from "@/api/handlers/templates/template-fill-service";
+import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -26,7 +27,11 @@ export const SUGGEST_TEMPLATE_FIELDS_TOOL_NAME =
 
 type CreateTemplateToolsArgs = {
   scopedDb: ScopedDb;
+  /** Org-scoped DB used to meter the nested AI-field generation steps. */
+  safeDb: SafeDb;
   organizationId: SafeId<"organization">;
+  /** Acting user for the consumption ledger row. */
+  userId: SafeId<"user">;
   /** Org AI config from the chat turn; enables AI-fillable fields when set. */
   orgAIConfig?: OrgAIConfig | null | undefined;
 };
@@ -40,29 +45,49 @@ type CreateTemplateToolsArgs = {
  */
 export const createTemplateTools = ({
   scopedDb,
+  safeDb,
   organizationId,
+  userId,
   orgAIConfig,
 }: CreateTemplateToolsArgs) => {
+  // Meter the nested fill generation alongside the rest of the chat turn.
+  // workspaceId is null: a chat fill is org-scoped, not bound to a matter.
+  const aiAnalytics = createAIAnalyticsCallbacks({
+    usageMetering: {
+      actionType: "chat",
+      organizationId,
+      safeDb,
+      serviceTier: "standard",
+      userId,
+      workspaceId: null,
+    },
+    feature: "templates.fill",
+    modelRole: "fast",
+    orgAIConfig: orgAIConfig ?? null,
+    properties: { organization_id: organizationId },
+    traceId: Bun.randomUUIDv7(),
+  });
   // Model-backed generator for AI-fillable fields (FieldMeta.aiPrompt); shared
   // with the web fill routes so AI placeholders behave identically. A failed or
   // unavailable model just leaves the field unfilled rather than erroring.
-  // TODO(metering): wire createAIAnalyticsCallbacks so this nested generation
-  // is metered alongside other model calls.
   const generateAiValue = buildAiFieldGenerator({
     orgAIConfig: orgAIConfig ?? null,
     organizationId,
+    aiAnalytics,
   });
   // Decider for AI-decided boolean conditions (a boolean field with an
   // aiPrompt); same fallback semantics as generateAiValue.
   const decideAiCondition = buildAiConditionDecider({
     orgAIConfig: orgAIConfig ?? null,
     organizationId,
+    aiAnalytics,
   });
   // Per-occurrence adapter for aiAdapt fields (stub rewritten to fit each
   // marker's surrounding text); same fallback semantics as generateAiValue.
   const adaptAiValue = buildAiOccurrenceAdapter({
     orgAIConfig: orgAIConfig ?? null,
     organizationId,
+    aiAnalytics,
   });
 
   return {
