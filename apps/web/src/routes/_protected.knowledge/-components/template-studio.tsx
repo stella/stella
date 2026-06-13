@@ -6371,6 +6371,12 @@ const recipeFieldToStudioPatch = (field: RecipeField): Partial<StudioField> => {
     aiAdapt: field.aiAdapt === true,
     aiSeesDocument: field.aiSeesDocument === true,
   };
+  if (field.hint !== undefined) {
+    patch.hint = field.hint;
+  }
+  if (field.dateFormat !== undefined) {
+    patch.dateFormat = field.dateFormat;
+  }
   if (field.optionsFrom !== undefined) {
     patch.optionsFrom = field.optionsFrom;
   }
