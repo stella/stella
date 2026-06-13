@@ -443,7 +443,7 @@ export const TemplateStudioPage = ({
       insertText: (text) => actionsRef.current?.insertText(text),
       isCaretInLoop: () => actionsRef.current?.isCaretInLoop() ?? false,
       makeField: () => actionsRef.current?.makeField(),
-      save: () => actionsRef.current?.save(),
+      save: async () => (await actionsRef.current?.save()) ?? false,
       renameFieldPath: (oldPath, newPath) =>
         actionsRef.current?.renameFieldPath(oldPath, newPath) ?? false,
       rewriteConditionExpr: (next) =>
@@ -1334,17 +1334,17 @@ export const TemplateStudioPage = ({
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<boolean> => {
     const editor = editorRef.current;
     if (!editor) {
-      return;
+      return false;
     }
     setIsSaving(true);
     try {
       const bytes = await editor.save();
       if (!bytes) {
         stellaToast.add({ title: t("templates.saveFailed"), type: "error" });
-        return;
+        return false;
       }
       const file = new File([bytes], fileName, { type: DOCX_MIME });
 
@@ -1367,7 +1367,7 @@ export const TemplateStudioPage = ({
           ),
           type: "error",
         });
-        return;
+        return false;
       }
 
       markSaved();
@@ -1375,8 +1375,10 @@ export const TemplateStudioPage = ({
       void queryClient.invalidateQueries({
         queryKey: knowledgeKeys.templates.all(activeOrganizationId),
       });
+      return true;
     } catch {
       stellaToast.add({ title: t("templates.saveFailed"), type: "error" });
+      return false;
     } finally {
       setIsSaving(false);
     }
@@ -1723,7 +1725,7 @@ export const TemplateStudioPage = ({
     makeField: () => {
       makeField();
     },
-    save: () => void handleSave(),
+    save: async () => await handleSave(),
     focusAdjacentField: (direction) => {
       const view = editorViewRef.current;
       if (!view) {
@@ -1803,24 +1805,41 @@ export const TemplateStudioPage = ({
       if (!isFieldPath(trimmed) || taken) {
         return false;
       }
-      // Rewrite every {{oldPath}} marker, last occurrence first so earlier
-      // positions stay valid while the transaction accumulates.
+      // Rewrite the bare `{{oldPath}}` marker plus every keyed lookup marker
+      // `{{oldPath.<formatKey>}}` (a lookup field's non-default formats are
+      // addressed by `{{path.key}}`; the bare marker renders the default).
+      // Each rewrite carries the path replacement to apply at its range.
+      const renamed = useTemplateStudioStore
+        .getState()
+        .fields.find((f) => f.path === oldPath);
+      const literals: { literal: string; replacement: string }[] = [
+        { literal: `{{${oldPath}}}`, replacement: `{{${trimmed}}}` },
+        ...(renamed?.lookup?.formats ?? []).map((format) => ({
+          literal: `{{${oldPath}.${format.key}}}`,
+          replacement: `{{${trimmed}.${format.key}}}`,
+        })),
+      ];
+      // Last occurrence first so earlier positions stay valid while the
+      // transaction accumulates.
       const positional = buildPositionalText(view.state.doc);
-      const literal = `{{${oldPath}}}`;
-      const ranges: { from: number; to: number }[] = [];
-      let idx = positional.text.indexOf(literal);
-      while (idx !== -1) {
-        ranges.push({
-          from: positional.pmPositionAt(idx),
-          to: positional.pmPositionAt(idx + literal.length - 1) + 1,
-        });
-        idx = positional.text.indexOf(literal, idx + literal.length);
+      const ranges: { from: number; to: number; replacement: string }[] = [];
+      for (const { literal, replacement } of literals) {
+        let idx = positional.text.indexOf(literal);
+        while (idx !== -1) {
+          ranges.push({
+            from: positional.pmPositionAt(idx),
+            to: positional.pmPositionAt(idx + literal.length - 1) + 1,
+            replacement,
+          });
+          idx = positional.text.indexOf(literal, idx + literal.length);
+        }
       }
+      ranges.sort((a, b) => a.from - b.from);
       const first = ranges.at(0);
       if (first !== undefined) {
         const tr = view.state.tr;
         for (const range of ranges.toReversed()) {
-          tr.insertText(`{{${trimmed}}}`, range.from, range.to);
+          tr.insertText(range.replacement, range.from, range.to);
         }
         // Park the caret inside the first rewritten marker (its `from` is
         // unaffected by the later-position edits above) so the selection
@@ -2940,7 +2959,13 @@ const StudioSaveAction = () => {
     return null;
   }
   return (
-    <Button disabled={ui.isSaving} onClick={actions.save} size="xs">
+    <Button
+      disabled={ui.isSaving}
+      onClick={() => {
+        void actions.save();
+      }}
+      size="xs"
+    >
       <SaveIcon className="size-3.5" />
       {t("common.save")}
     </Button>
@@ -3048,7 +3073,7 @@ const TemplateFillFacet = ({
             {t("templates.studio.fillStale")}
           </p>
           <Button
-            onClick={() => fillActions?.save()}
+            onClick={() => void fillActions?.save()}
             size="sm"
             variant="outline"
           >
@@ -5973,30 +5998,41 @@ const parseBound = (value: unknown): number | undefined => {
   return Math.floor(value);
 };
 
-/** Parse just the loop repeat bounds the studio surfaces from a persisted
- *  `validation` record; returns undefined when neither bound is set. */
-const parseLoopBounds = (raw: unknown): FieldValidation | undefined => {
-  if (!isRecord(raw)) {
-    return undefined;
-  }
-  const minItems = parseBound(raw["minItems"]);
-  const maxItems = parseBound(raw["maxItems"]);
-  if (minItems === undefined && maxItems === undefined) {
-    return undefined;
-  }
-  const bounds: FieldValidation = {};
-  if (minItems !== undefined) {
-    bounds.minItems = minItems;
-  }
-  if (maxItems !== undefined) {
-    bounds.maxItems = maxItems;
-  }
-  return bounds;
-};
-
 const fieldHasLoopBounds = (field: StudioField): boolean =>
   field.validation?.minItems !== undefined ||
   field.validation?.maxItems !== undefined;
+
+/** Parse the full persisted `validation` record verbatim so scalar rules the
+ *  Studio UI does not surface (required/minLength/maxLength/min/max/pattern,
+ *  authored via prepare/suggest/import) round-trip through a Studio save
+ *  instead of being dropped. Returns undefined when nothing is set. */
+const parseValidation = (raw: unknown): FieldValidation | undefined => {
+  if (!isRecord(raw)) {
+    return undefined;
+  }
+  const validation: FieldValidation = {};
+  if (typeof raw["required"] === "boolean") {
+    validation.required = raw["required"];
+  }
+  if (typeof raw["pattern"] === "string") {
+    validation.pattern = raw["pattern"];
+  }
+  const numericKeys = [
+    "minLength",
+    "maxLength",
+    "min",
+    "max",
+    "minItems",
+    "maxItems",
+  ] as const;
+  for (const key of numericKeys) {
+    const bound = parseBound(raw[key]);
+    if (bound !== undefined) {
+      validation[key] = bound;
+    }
+  }
+  return Object.keys(validation).length > 0 ? validation : undefined;
+};
 
 const parseFields = (manifest: unknown): StudioField[] => {
   if (!isRecord(manifest) || !Array.isArray(manifest["fields"])) {
@@ -6058,7 +6094,7 @@ const parseFields = (manifest: unknown): StudioField[] => {
           field.dateFormat = { locale: rawDateFormat["locale"], style };
         }
       }
-      const validation = parseLoopBounds(raw["validation"]);
+      const validation = parseValidation(raw["validation"]);
       if (validation !== undefined) {
         field.validation = validation;
       }
@@ -6150,10 +6186,13 @@ const studioFieldToManifestField = (f: StudioField): ManifestField => {
   if (f.dateFormat !== undefined && f.inputType === "date") {
     field.dateFormat = f.dateFormat;
   }
-  // Loop repeat bounds ride on the array-container FieldMeta; emit them before
-  // the value-source early returns so a bounds-only container record (no
-  // marker of its own) still persists.
-  if (fieldHasLoopBounds(f) && f.validation !== undefined) {
+  // Re-emit the full validation record verbatim before the value-source early
+  // returns: loop repeat bounds ride on the array-container FieldMeta (a
+  // bounds-only container record has no marker of its own), and scalar rules
+  // the Studio UI does not surface (required/minLength/maxLength/min/max/
+  // pattern, authored via prepare/suggest/import) must round-trip rather than
+  // be dropped on save.
+  if (f.validation !== undefined && Object.keys(f.validation).length > 0) {
     field.validation = f.validation;
   }
   // A formula is one of the mutually exclusive value sources; the manifest
@@ -6348,20 +6387,36 @@ const prepareRecipeInsert = (
     };
   }
 
-  const fields: PreparedRecipeField[] = [];
+  // Track each recipe field's original path -> final inserted path so
+  // reference metadata (e.g. `optionsFrom`) can be rewritten to point at the
+  // inserted source field instead of the original/now-renamed recipe path.
+  const renames = new Map<string, string>();
+  const prepared: { field: RecipeField; path: string }[] = [];
   for (const field of definition.fields) {
     const path = nextFreePath(mapPath(field.path), (candidate) =>
       taken.has(candidate),
     );
     taken.add(path);
-    fields.push({ path, config: recipeFieldToStudioPatch(field) });
+    renames.set(field.path, path);
+    prepared.push({ field, path });
   }
+  const remapReference = (reference: string): string =>
+    renames.get(reference) ?? mapPath(reference);
+  const fields: PreparedRecipeField[] = prepared.map(({ field, path }) => ({
+    path,
+    config: recipeFieldToStudioPatch(field, remapReference),
+  }));
   return { loopPath, fields };
 };
 
 /** The saved recipe field config as an upsertField patch (path excluded:
- *  the prepared, conflict-free path is passed separately). */
-const recipeFieldToStudioPatch = (field: RecipeField): Partial<StudioField> => {
+ *  the prepared, conflict-free path is passed separately). `remapReference`
+ *  rewrites field-path references (e.g. `optionsFrom`) through the same
+ *  loop/per-field renames applied to the inserted fields. */
+const recipeFieldToStudioPatch = (
+  field: RecipeField,
+  remapReference: (reference: string) => string,
+): Partial<StudioField> => {
   const patch: Partial<StudioField> = {
     label: field.label ?? "",
     inputType: field.inputType ?? "text",
@@ -6378,7 +6433,7 @@ const recipeFieldToStudioPatch = (field: RecipeField): Partial<StudioField> => {
     patch.dateFormat = field.dateFormat;
   }
   if (field.optionsFrom !== undefined) {
-    patch.optionsFrom = field.optionsFrom;
+    patch.optionsFrom = remapReference(field.optionsFrom);
   }
   if (field.lookup !== undefined) {
     patch.lookup = field.lookup;
