@@ -650,6 +650,7 @@
     "actions": "Veiksmai",
     "add": "Pridėti",
     "all": "Visi",
+    "and": "And",
     "anonymizationLabels": {
       "address": "Adresas",
       "bankAccountNumber": "Banko sąskaitos numeris",
@@ -778,6 +779,7 @@
     "open": "Atidaryti",
     "openInNewTab": "Atidaryti naujame skirtuke",
     "options": "Parinktys",
+    "or": "Or",
     "organization": "Organizacija",
     "organizationName": "Organizacijos pavadinimas",
     "pin": "Prisegti",
@@ -1104,8 +1106,14 @@
   },
   "filters": {
     "contains": "apima",
+    "contains_all": "contains all of",
     "eq": "yra",
+    "gt": "is greater than",
+    "gte": "is greater than or equal to",
+    "in": "is any of",
     "is_empty": "yra tuščias",
+    "lt": "is less than",
+    "lte": "is less than or equal to",
     "neq": "nėra"
   },
   "folio": {
@@ -2437,6 +2445,7 @@
     },
     "possibleDuplicates": "Galimi dublikatai",
     "properties": {
+      "addCondition": "Add condition",
       "addInputProperty": "Pridėkite bent vieną įvesties savybę naudodami \"@\"",
       "addOption": "Pridėti parinktį",
       "addPromptForBetterResults": "Pridėkite užklausą geresniems rezultatams",
@@ -2478,6 +2487,7 @@
       "editColumn": "Redaguoti stulpelį",
       "editConditions": "Redaguoti sąlygas",
       "editConditionsDescription": "Nustatykite sąlygas, kada ši savybė turi būti generuojama.",
+      "editConditionsWhen": "Only run extraction when …",
       "enterAValue": "Įveskite reikšmę",
       "extractEntityType": "Ištraukti subjekto tipą",
       "extractEntityTypeDescription": "Sukurkite AI pildomą lentelės stulpelį.",
@@ -2502,6 +2512,7 @@
       "newColumn": "Naujas stulpelis",
       "newColumnDescription": "Pasirinkite, kaip šis lentelės stulpelis turi būti pildomas.",
       "newColumnName": "Stulpelio pavadinimas",
+      "noConditionFields": "No fields available to filter on.",
       "noFirstDocument": "Dar nėra dokumentų peržiūrai.",
       "noPropertiesFound": "Savybių nerasta",
       "optionsHelp": "Apibrėžk reikšmes, iš kurių AI gali rinktis.",
@@ -2524,6 +2535,7 @@
       "scopeMatterDescription": "Naudokite visus failų stulpelius ir paleiskite bylą.",
       "searchOrAddOptions": "Ieškoti arba pridėti parinktis",
       "selectColor": "Pasirinkite spalvą",
+      "selectField": "Select field",
       "selectOperator": "Pasirinkite operatorių",
       "setPromptPlaceholder": "Nustatykite užklausą informacijos išgavimui",
       "singleSelect": "Vienas pasirinkimas",
@@ -2605,6 +2617,8 @@
       "exportXlsx": "Eksportuoti XLSX",
       "fields": "Laukai:",
       "fieldsSelected": "{count, plural, one {# pasirinktas} few {# pasirinkti} many {# pasirinktų} other {# pasirinktų}}",
+      "filter": "Filter",
+      "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Grupuoti pagal:",
       "hideColumn": "Slėpti stulpelį",
       "layouts": {

@@ -653,6 +653,7 @@ type Messages = {
     "actions": "Actions";
     "add": "Add";
     "all": "All";
+    "and": "And";
     "anonymizationLabels": {
       "address": "Address";
       "bankAccountNumber": "Bank account number";
@@ -781,6 +782,7 @@ type Messages = {
     "open": "Open";
     "openInNewTab": "Open in new tab";
     "options": "Options";
+    "or": "Or";
     "organization": "Organization";
     "organizationName": "Organization name";
     "pin": "Pin";
@@ -1107,8 +1109,14 @@ type Messages = {
   };
   "filters": {
     "contains": "contains";
+    "contains_all": "contains all of";
     "eq": "is";
+    "gt": "is greater than";
+    "gte": "is greater than or equal to";
+    "in": "is any of";
     "is_empty": "is empty";
+    "lt": "is less than";
+    "lte": "is less than or equal to";
     "neq": "is not";
   };
   "folio": {
@@ -2440,6 +2448,7 @@ type Messages = {
     };
     "possibleDuplicates": "Possible duplicates";
     "properties": {
+      "addCondition": "Add condition";
       "addInputProperty": "Add at least one input property using \"@\"";
       "addOption": "Add option";
       "addPromptForBetterResults": "Add a prompt for better results";
@@ -2481,6 +2490,7 @@ type Messages = {
       "editColumn": "Edit column";
       "editConditions": "Edit conditions";
       "editConditionsDescription": "Set conditions for when this property should be generated.";
+      "editConditionsWhen": "Only run extraction when …";
       "enterAValue": "Enter a value";
       "extractEntityType": "Extract entity type";
       "extractEntityTypeDescription": "Create an AI-extracted table column.";
@@ -2505,6 +2515,7 @@ type Messages = {
       "newColumn": "New column";
       "newColumnDescription": "Choose how this table column should be filled.";
       "newColumnName": "Column name";
+      "noConditionFields": "No fields available to filter on.";
       "noFirstDocument": "No documents to preview yet.";
       "noPropertiesFound": "No properties found";
       "optionsHelp": "Define the values the AI may pick from.";
@@ -2527,6 +2538,7 @@ type Messages = {
       "scopeMatterDescription": "Use all file columns and run the matter.";
       "searchOrAddOptions": "Search or add options";
       "selectColor": "Select color";
+      "selectField": "Select field";
       "selectOperator": "Select operator";
       "setPromptPlaceholder": "Set a prompt to extract the information";
       "singleSelect": "Single Select";
@@ -2608,6 +2620,8 @@ type Messages = {
       "exportXlsx": "Export XLSX";
       "fields": "Fields:";
       "fieldsSelected": "{count, plural, one {# selected} other {# selected}}";
+      "filter": "Filter";
+      "filtersWithCount": "{count, plural, one {# filter} other {# filters}}";
       "groupBy": "Group by:";
       "hideColumn": "Hide column";
       "layouts": {

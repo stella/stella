@@ -650,6 +650,7 @@
     "actions": "Akcie",
     "add": "Pridať",
     "all": "Všetko",
+    "and": "And",
     "anonymizationLabels": {
       "address": "Adresa",
       "bankAccountNumber": "Číslo bankového účtu",
@@ -778,6 +779,7 @@
     "open": "Otvoriť",
     "openInNewTab": "Otvoriť na novej karte",
     "options": "Možnosti",
+    "or": "Or",
     "organization": "Organizácia",
     "organizationName": "Názov organizácie",
     "pin": "Pripnúť",
@@ -1104,8 +1106,14 @@
   },
   "filters": {
     "contains": "obsahuje",
+    "contains_all": "contains all of",
     "eq": "je",
+    "gt": "is greater than",
+    "gte": "is greater than or equal to",
+    "in": "is any of",
     "is_empty": "je prázdne",
+    "lt": "is less than",
+    "lte": "is less than or equal to",
     "neq": "nie je"
   },
   "folio": {
@@ -2437,6 +2445,7 @@
     },
     "possibleDuplicates": "Možné duplicity",
     "properties": {
+      "addCondition": "Add condition",
       "addInputProperty": "Pridajte aspoň jednu vstupnú vlastnosť pomocou \"@\"",
       "addOption": "Pridať možnosť",
       "addPromptForBetterResults": "Pridajte prompt pre lepšie výsledky",
@@ -2478,6 +2487,7 @@
       "editColumn": "Upraviť stĺpec",
       "editConditions": "Upraviť podmienky",
       "editConditionsDescription": "Nastavte podmienky, kedy sa má táto vlastnosť generovať.",
+      "editConditionsWhen": "Only run extraction when …",
       "enterAValue": "Zadajte hodnotu",
       "extractEntityType": "Extrahovať typ entity",
       "extractEntityTypeDescription": "Vytvorte tabuľkový stĺpec vypĺňaný AI.",
@@ -2502,6 +2512,7 @@
       "newColumn": "Nový stĺpec",
       "newColumnDescription": "Vyberte, ako sa má tento stĺpec tabuľky vypĺňať.",
       "newColumnName": "Názov stĺpca",
+      "noConditionFields": "No fields available to filter on.",
       "noFirstDocument": "Zatiaľ žiadne dokumenty pre náhľad.",
       "noPropertiesFound": "Neboli nájdené žiadne vlastnosti",
       "optionsHelp": "Zadaj hodnoty, z ktorých si AI môže vybrať.",
@@ -2524,6 +2535,7 @@
       "scopeMatterDescription": "Použiť všetky stĺpce súborov a spustiť celý spis.",
       "searchOrAddOptions": "Hľadať alebo pridať možnosti",
       "selectColor": "Vyberte farbu",
+      "selectField": "Select field",
       "selectOperator": "Vyberte operátor",
       "setPromptPlaceholder": "Nastavte prompt na extrakciu informácií",
       "singleSelect": "Jednoduchý výber",
@@ -2605,6 +2617,8 @@
       "exportXlsx": "Exportovať XLSX",
       "fields": "Polia:",
       "fieldsSelected": "{count, plural, one {# vybraný} few {# vybrané} other {# vybraných}}",
+      "filter": "Filter",
+      "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Zoskupiť podľa:",
       "hideColumn": "Skryť stĺpec",
       "layouts": {

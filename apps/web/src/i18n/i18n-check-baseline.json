@@ -28,7 +28,8 @@
     "templates.inputTypes.date",
     "translate.settings.remove",
     "translate.settings.save",
-    "workspaces.properties.optionsLabel"
+    "workspaces.properties.optionsLabel",
+    "workspaces.views.filter"
   ],
   "identicalToSource": {
     "appearance.flexoki": [
@@ -137,6 +138,19 @@
     "common.actions": [
       "fr"
     ],
+    "common.and": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
     "common.anonymizationLabels.date": [
       "fr"
     ],
@@ -175,6 +189,19 @@
     ],
     "common.options": [
       "fr"
+    ],
+    "common.or": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
     ],
     "common.reference": [
       "cs"
@@ -279,6 +306,84 @@
       "de",
       "fr"
     ],
+    "filters.contains_all": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "filters.gt": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "filters.gte": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "filters.in": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "filters.lt": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "filters.lte": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
     "folio.fontGroup": [
       "et"
     ],
@@ -352,19 +457,6 @@
       "hu",
       "lv",
       "pl",
-      "sk"
-    ],
-    "knowledge.agentSkills.newFolderFilenamePlaceholder": [
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
       "sk"
     ],
     "knowledge.agentSkills.selectFileHint": [
@@ -890,6 +982,19 @@
     "workspaces.parties.personalLabel": [
       "es"
     ],
+    "workspaces.properties.addCondition": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
     "workspaces.properties.chipSingle": [
       "pl"
     ],
@@ -907,8 +1012,47 @@
     "workspaces.properties.documentsLabel": [
       "fr"
     ],
+    "workspaces.properties.editConditionsWhen": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "workspaces.properties.noConditionFields": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
     "workspaces.properties.optionsLabel": [
       "fr"
+    ],
+    "workspaces.properties.selectField": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
     ],
     "workspaces.properties.text": [
       "cs",
@@ -932,6 +1076,32 @@
     ],
     "workspaces.views.calendar.additionalDates": [
       "fr"
+    ],
+    "workspaces.views.filter": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "workspaces.views.filtersWithCount": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
     ],
     "workspaces.views.layouts.kanban": [
       "cs",

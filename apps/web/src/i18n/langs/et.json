@@ -650,6 +650,7 @@
     "actions": "Toimingud",
     "add": "Lisa",
     "all": "Kõik",
+    "and": "And",
     "anonymizationLabels": {
       "address": "Aadress",
       "bankAccountNumber": "Pangakonto number",
@@ -778,6 +779,7 @@
     "open": "Ava",
     "openInNewTab": "Ava uuel vahekaardil",
     "options": "Valikud",
+    "or": "Or",
     "organization": "Organisatsioon",
     "organizationName": "Organisatsiooni nimi",
     "pin": "Kinnita",
@@ -1104,8 +1106,14 @@
   },
   "filters": {
     "contains": "sisaldab",
+    "contains_all": "contains all of",
     "eq": "on",
+    "gt": "is greater than",
+    "gte": "is greater than or equal to",
+    "in": "is any of",
     "is_empty": "on tühi",
+    "lt": "is less than",
+    "lte": "is less than or equal to",
     "neq": "ei ole"
   },
   "folio": {
@@ -2437,6 +2445,7 @@
     },
     "possibleDuplicates": "Võimalikud duplikaadid",
     "properties": {
+      "addCondition": "Add condition",
       "addInputProperty": "Lisage vähemalt üks sisestusomadus, kasutades \"@\"",
       "addOption": "Lisa valik",
       "addPromptForBetterResults": "Lisage paremaks tulemuseks päring",
@@ -2478,6 +2487,7 @@
       "editColumn": "Muuda veergu",
       "editConditions": "Muuda tingimusi",
       "editConditionsDescription": "Määrake tingimused, millal seda omadust genereeritakse.",
+      "editConditionsWhen": "Only run extraction when …",
       "enterAValue": "Sisestage väärtus",
       "extractEntityType": "Ekstrakti olemi tüüp",
       "extractEntityTypeDescription": "Looge AI täidetav tabeliveerg.",
@@ -2502,6 +2512,7 @@
       "newColumn": "Uus veerg",
       "newColumnDescription": "Valige, kuidas seda tabeli veergu täidetakse.",
       "newColumnName": "Veeru nimi",
+      "noConditionFields": "No fields available to filter on.",
       "noFirstDocument": "Eelvaateks pole veel dokumente.",
       "noPropertiesFound": "Omadusi ei leitud",
       "optionsHelp": "Määra väärtused, mille hulgast AI võib valida.",
@@ -2524,6 +2535,7 @@
       "scopeMatterDescription": "Kasutage kõiki failiveerge ja käivitage asi.",
       "searchOrAddOptions": "Otsi või lisa valikuid",
       "selectColor": "Valige värv",
+      "selectField": "Select field",
       "selectOperator": "Valige operaator",
       "setPromptPlaceholder": "Määrake päring teabe eraldamiseks",
       "singleSelect": "Ühekordne valik",
@@ -2605,6 +2617,8 @@
       "exportXlsx": "Ekspordi XLSX",
       "fields": "Väljad:",
       "fieldsSelected": "{count, plural, one {# valitud} other {# valitud}}",
+      "filter": "Filter",
+      "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Rühmita:",
       "hideColumn": "Peida veerg",
       "layouts": {

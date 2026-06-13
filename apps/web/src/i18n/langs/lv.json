@@ -650,6 +650,7 @@
     "actions": "Darbības",
     "add": "Pievienot",
     "all": "Visi",
+    "and": "And",
     "anonymizationLabels": {
       "address": "Adrese",
       "bankAccountNumber": "Bankas konta numurs",
@@ -778,6 +779,7 @@
     "open": "Atvērt",
     "openInNewTab": "Atvērt jaunā cilnē",
     "options": "Iespējas",
+    "or": "Or",
     "organization": "Organizācija",
     "organizationName": "Organizācijas nosaukums",
     "pin": "Piespraust",
@@ -1104,8 +1106,14 @@
   },
   "filters": {
     "contains": "satur",
+    "contains_all": "contains all of",
     "eq": "ir",
+    "gt": "is greater than",
+    "gte": "is greater than or equal to",
+    "in": "is any of",
     "is_empty": "ir tukšs",
+    "lt": "is less than",
+    "lte": "is less than or equal to",
     "neq": "nav"
   },
   "folio": {
@@ -2437,6 +2445,7 @@
     },
     "possibleDuplicates": "Iespējamie dublikāti",
     "properties": {
+      "addCondition": "Add condition",
       "addInputProperty": "Pievienojiet vismaz vienu ievades rekvizītu, izmantojot \"@\"",
       "addOption": "Pievienot opciju",
       "addPromptForBetterResults": "Pievienojiet uzvedni labākiem rezultātiem",
@@ -2478,6 +2487,7 @@
       "editColumn": "Rediģēt sleju",
       "editConditions": "Rediģēt nosacījumus",
       "editConditionsDescription": "Iestatiet nosacījumus, kad šis rekvizīts tiks ģenerēts.",
+      "editConditionsWhen": "Only run extraction when …",
       "enterAValue": "Ievadiet vērtību",
       "extractEntityType": "Izvilkt entītijas tipu",
       "extractEntityTypeDescription": "Izveidojiet AI aizpildītu tabulas kolonnu.",
@@ -2502,6 +2512,7 @@
       "newColumn": "Jauna kolonna",
       "newColumnDescription": "Izvēlieties, kā šī tabulas kolonna jāaizpilda.",
       "newColumnName": "Kolonnas nosaukums",
+      "noConditionFields": "No fields available to filter on.",
       "noFirstDocument": "Vēl nav dokumentu priekšskatījumam.",
       "noPropertiesFound": "Rekvizīti nav atrasti",
       "optionsHelp": "Definē vērtības, no kurām AI var izvēlēties.",
@@ -2524,6 +2535,7 @@
       "scopeMatterDescription": "Izmantojiet visas failu kolonnas un palaidiet lietu.",
       "searchOrAddOptions": "Meklēt vai pievienot opcijas",
       "selectColor": "Izvēlieties krāsu",
+      "selectField": "Select field",
       "selectOperator": "Izvēlieties operatoru",
       "setPromptPlaceholder": "Iestatiet uzvedni informācijas ieguvei",
       "singleSelect": "Vienas izvēles",
@@ -2605,6 +2617,8 @@
       "exportXlsx": "Eksportēt XLSX",
       "fields": "Lauki:",
       "fieldsSelected": "{count, plural, zero {# atlasīti} one {# atlasīts} other {# atlasīti}}",
+      "filter": "Filter",
+      "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Grupēt pēc:",
       "hideColumn": "Slēpt kolonnu",
       "layouts": {

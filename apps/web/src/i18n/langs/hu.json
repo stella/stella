@@ -650,6 +650,7 @@
     "actions": "Műveletek",
     "add": "Hozzáadás",
     "all": "Összes",
+    "and": "And",
     "anonymizationLabels": {
       "address": "Cím",
       "bankAccountNumber": "Bankszámlaszám",
@@ -778,6 +779,7 @@
     "open": "Megnyitás",
     "openInNewTab": "Megnyitás új lapon",
     "options": "Beállítások",
+    "or": "Or",
     "organization": "Szervezet",
     "organizationName": "Szervezet neve",
     "pin": "Rögzítés",
@@ -1104,8 +1106,14 @@
   },
   "filters": {
     "contains": "tartalmazza",
+    "contains_all": "contains all of",
     "eq": "egyenlő",
+    "gt": "is greater than",
+    "gte": "is greater than or equal to",
+    "in": "is any of",
     "is_empty": "üres",
+    "lt": "is less than",
+    "lte": "is less than or equal to",
     "neq": "nem egyenlő"
   },
   "folio": {
@@ -2437,6 +2445,7 @@
     },
     "possibleDuplicates": "Lehetséges duplikátumok",
     "properties": {
+      "addCondition": "Add condition",
       "addInputProperty": "Adjon hozzá legalább egy bemeneti tulajdonságot a \"@\" használatával",
       "addOption": "Opció hozzáadása",
       "addPromptForBetterResults": "Adjon hozzá promptot a jobb eredményekért",
@@ -2478,6 +2487,7 @@
       "editColumn": "Oszlop szerkesztése",
       "editConditions": "Feltételek szerkesztése",
       "editConditionsDescription": "Adja meg a feltételeket, amelyek mellett ez a tulajdonság generálódjon.",
+      "editConditionsWhen": "Only run extraction when …",
       "enterAValue": "Adjon meg egy értéket",
       "extractEntityType": "Entitástípus kinyerése",
       "extractEntityTypeDescription": "Hozzon létre AI által kitöltött táblázatoszlopot.",
@@ -2502,6 +2512,7 @@
       "newColumn": "Új oszlop",
       "newColumnDescription": "Válassza ki, hogyan töltődjön ki ez a táblázatoszlop.",
       "newColumnName": "Oszlop neve",
+      "noConditionFields": "No fields available to filter on.",
       "noFirstDocument": "Még nincsenek dokumentumok az előnézethez.",
       "noPropertiesFound": "Nincsenek tulajdonságok",
       "optionsHelp": "Add meg az értékeket, amelyek közül az AI választhat.",
@@ -2524,6 +2535,7 @@
       "scopeMatterDescription": "Használja az összes fájloszlopot, és futtassa az ügyet.",
       "searchOrAddOptions": "Opciók keresése vagy hozzáadása",
       "selectColor": "Szín kiválasztása",
+      "selectField": "Select field",
       "selectOperator": "Operátor kiválasztása",
       "setPromptPlaceholder": "Adjon meg promptot az információ kinyeréséhez",
       "singleSelect": "Egyszeres választás",
@@ -2605,6 +2617,8 @@
       "exportXlsx": "XLSX exportálása",
       "fields": "Mezők:",
       "fieldsSelected": "{count, plural, one {# kiválasztva} other {# kiválasztva}}",
+      "filter": "Filter",
+      "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Csoportosítás:",
       "hideColumn": "Oszlop elrejtése",
       "layouts": {

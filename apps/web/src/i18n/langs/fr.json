@@ -650,6 +650,7 @@
     "actions": "Actions",
     "add": "Ajouter",
     "all": "Tous",
+    "and": "And",
     "anonymizationLabels": {
       "address": "Adresse",
       "bankAccountNumber": "Numéro de compte bancaire",
@@ -778,6 +779,7 @@
     "open": "Ouvrir",
     "openInNewTab": "Ouvrir dans un nouvel onglet",
     "options": "Options",
+    "or": "Or",
     "organization": "Organisation",
     "organizationName": "Nom de l'organisation",
     "pin": "Épingler",
@@ -1104,8 +1106,14 @@
   },
   "filters": {
     "contains": "contient",
+    "contains_all": "contains all of",
     "eq": "est",
+    "gt": "is greater than",
+    "gte": "is greater than or equal to",
+    "in": "is any of",
     "is_empty": "est vide",
+    "lt": "is less than",
+    "lte": "is less than or equal to",
     "neq": "n’est pas"
   },
   "folio": {
@@ -2437,6 +2445,7 @@
     },
     "possibleDuplicates": "Doublons possibles",
     "properties": {
+      "addCondition": "Add condition",
       "addInputProperty": "Ajoutez au moins une propriété d'entrée avec « @ »",
       "addOption": "Ajouter une option",
       "addPromptForBetterResults": "Ajoutez un prompt pour de meilleurs résultats",
@@ -2478,6 +2487,7 @@
       "editColumn": "Modifier la colonne",
       "editConditions": "Modifier les conditions",
       "editConditionsDescription": "Définissez les conditions de génération de cette propriété.",
+      "editConditionsWhen": "Only run extraction when …",
       "enterAValue": "Saisir une valeur",
       "extractEntityType": "Extraire un type d'entité",
       "extractEntityTypeDescription": "Créez une colonne de tableau extraite par l'IA.",
@@ -2502,6 +2512,7 @@
       "newColumn": "Nouvelle colonne",
       "newColumnDescription": "Choisissez comment cette colonne du tableau doit être remplie.",
       "newColumnName": "Nom de la colonne",
+      "noConditionFields": "No fields available to filter on.",
       "noFirstDocument": "Aucun document à prévisualiser.",
       "noPropertiesFound": "Aucune propriété trouvée",
       "optionsHelp": "Définis les valeurs parmi lesquelles l'IA peut choisir.",
@@ -2524,6 +2535,7 @@
       "scopeMatterDescription": "Utiliser toutes les colonnes de fichiers et lancer le Matter.",
       "searchOrAddOptions": "Rechercher ou ajouter des options",
       "selectColor": "Sélectionner une couleur",
+      "selectField": "Select field",
       "selectOperator": "Sélectionner un opérateur",
       "setPromptPlaceholder": "Définir un prompt pour extraire l'information",
       "singleSelect": "Sélection unique",
@@ -2605,6 +2617,8 @@
       "exportXlsx": "Exporter en XLSX",
       "fields": "Champs :",
       "fieldsSelected": "{count, plural, one {# sélectionné} many {# sélectionnés} other {# sélectionnés}}",
+      "filter": "Filter",
+      "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Regrouper par :",
       "hideColumn": "Masquer la colonne",
       "layouts": {

@@ -650,6 +650,7 @@
     "actions": "Acciones",
     "add": "Añadir",
     "all": "Todos",
+    "and": "And",
     "anonymizationLabels": {
       "address": "Dirección",
       "bankAccountNumber": "Número de cuenta bancaria",
@@ -778,6 +779,7 @@
     "open": "Abrir",
     "openInNewTab": "Abrir en una pestaña nueva",
     "options": "Opciones",
+    "or": "Or",
     "organization": "Organización",
     "organizationName": "Nombre de la organización",
     "pin": "Fijar",
@@ -1104,8 +1106,14 @@
   },
   "filters": {
     "contains": "contiene",
+    "contains_all": "contains all of",
     "eq": "es",
+    "gt": "is greater than",
+    "gte": "is greater than or equal to",
+    "in": "is any of",
     "is_empty": "está vacío",
+    "lt": "is less than",
+    "lte": "is less than or equal to",
     "neq": "no es"
   },
   "folio": {
@@ -2437,6 +2445,7 @@
     },
     "possibleDuplicates": "Posibles duplicados",
     "properties": {
+      "addCondition": "Add condition",
       "addInputProperty": "Añada al menos una propiedad de entrada usando \"@\"",
       "addOption": "Añadir opción",
       "addPromptForBetterResults": "Añada una instrucción para mejores resultados",
@@ -2478,6 +2487,7 @@
       "editColumn": "Editar columna",
       "editConditions": "Editar condiciones",
       "editConditionsDescription": "Establezca las condiciones para generar esta propiedad.",
+      "editConditionsWhen": "Only run extraction when …",
       "enterAValue": "Introduzca un valor",
       "extractEntityType": "Extraer tipo de entidad",
       "extractEntityTypeDescription": "Cree una columna de tabla extraída por IA.",
@@ -2502,6 +2512,7 @@
       "newColumn": "Nueva columna",
       "newColumnDescription": "Elija cómo se debe rellenar esta columna de la tabla.",
       "newColumnName": "Nombre de columna",
+      "noConditionFields": "No fields available to filter on.",
       "noFirstDocument": "Aún no hay documentos para previsualizar.",
       "noPropertiesFound": "No se encontraron propiedades",
       "optionsHelp": "Define los valores entre los que la IA puede elegir.",
@@ -2524,6 +2535,7 @@
       "scopeMatterDescription": "Use todas las columnas de archivo y ejecute el Matter.",
       "searchOrAddOptions": "Buscar o añadir opciones",
       "selectColor": "Seleccionar color",
+      "selectField": "Select field",
       "selectOperator": "Seleccionar operador",
       "setPromptPlaceholder": "Defina una instrucción para extraer la información",
       "singleSelect": "Selección única",
@@ -2605,6 +2617,8 @@
       "exportXlsx": "Exportar XLSX",
       "fields": "Campos:",
       "fieldsSelected": "{count, plural, one {# seleccionado} other {# seleccionados}}",
+      "filter": "Filter",
+      "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Agrupar por:",
       "hideColumn": "Ocultar columna",
       "layouts": {

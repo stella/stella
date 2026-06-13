@@ -650,6 +650,7 @@
     "actions": "Akce",
     "add": "Přidat",
     "all": "Vše",
+    "and": "And",
     "anonymizationLabels": {
       "address": "Adresa",
       "bankAccountNumber": "Číslo bankovního účtu",
@@ -778,6 +779,7 @@
     "open": "Otevřít",
     "openInNewTab": "Otevřít na nové kartě",
     "options": "Možnosti",
+    "or": "Or",
     "organization": "Organizace",
     "organizationName": "Název organizace",
     "pin": "Připnout",
@@ -1104,8 +1106,14 @@
   },
   "filters": {
     "contains": "obsahuje",
+    "contains_all": "contains all of",
     "eq": "je",
+    "gt": "is greater than",
+    "gte": "is greater than or equal to",
+    "in": "is any of",
     "is_empty": "je prázdné",
+    "lt": "is less than",
+    "lte": "is less than or equal to",
     "neq": "není"
   },
   "folio": {
@@ -2437,6 +2445,7 @@
     },
     "possibleDuplicates": "Možné duplicity",
     "properties": {
+      "addCondition": "Add condition",
       "addInputProperty": "Přidejte alespoň jednu vstupní vlastnost pomocí \"@\"",
       "addOption": "Přidat možnost",
       "addPromptForBetterResults": "Přidejte prompt pro lepší výsledky",
@@ -2478,6 +2487,7 @@
       "editColumn": "Upravit sloupec",
       "editConditions": "Upravit podmínky",
       "editConditionsDescription": "Nastavte podmínky, za kterých se má tato vlastnost generovat.",
+      "editConditionsWhen": "Only run extraction when …",
       "enterAValue": "Zadejte hodnotu",
       "extractEntityType": "Vytěžit informaci",
       "extractEntityTypeDescription": "Sloupec doplňovaný AI.",
@@ -2502,6 +2512,7 @@
       "newColumn": "Nový sloupec",
       "newColumnDescription": "Vyberte, jak se má tento sloupec tabulky vyplňovat.",
       "newColumnName": "Název sloupce",
+      "noConditionFields": "No fields available to filter on.",
       "noFirstDocument": "Zatím žádné dokumenty pro náhled.",
       "noPropertiesFound": "Nebyly nalezeny žádné vlastnosti",
       "optionsHelp": "Zadej hodnoty, ze kterých může AI vybírat.",
@@ -2524,6 +2535,7 @@
       "scopeMatterDescription": "Použít všechny sloupce souborů a spustit celý spis.",
       "searchOrAddOptions": "Hledat nebo přidat možnosti",
       "selectColor": "Vyberte barvu",
+      "selectField": "Select field",
       "selectOperator": "Vyberte operátor",
       "setPromptPlaceholder": "Nastavte prompt pro extrakci informací",
       "singleSelect": "Jednoduchý výběr",
@@ -2605,6 +2617,8 @@
       "exportXlsx": "Exportovat XLSX",
       "fields": "Pole:",
       "fieldsSelected": "{count, plural, one {# vybraný} few {# vybrané} other {# vybraných}}",
+      "filter": "Filter",
+      "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Seskupit podle:",
       "hideColumn": "Skrýt sloupec",
       "layouts": {

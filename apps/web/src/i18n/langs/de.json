@@ -650,6 +650,7 @@
     "actions": "Aktionen",
     "add": "Hinzufügen",
     "all": "Alle",
+    "and": "And",
     "anonymizationLabels": {
       "address": "Adresse",
       "bankAccountNumber": "Bankkontonummer",
@@ -778,6 +779,7 @@
     "open": "Öffnen",
     "openInNewTab": "In neuem Tab öffnen",
     "options": "Optionen",
+    "or": "Or",
     "organization": "Organisation",
     "organizationName": "Organisationsname",
     "pin": "Anheften",
@@ -1104,8 +1106,14 @@
   },
   "filters": {
     "contains": "enthält",
+    "contains_all": "contains all of",
     "eq": "ist",
+    "gt": "is greater than",
+    "gte": "is greater than or equal to",
+    "in": "is any of",
     "is_empty": "ist leer",
+    "lt": "is less than",
+    "lte": "is less than or equal to",
     "neq": "ist nicht"
   },
   "folio": {
@@ -2437,6 +2445,7 @@
     },
     "possibleDuplicates": "Mögliche Duplikate",
     "properties": {
+      "addCondition": "Add condition",
       "addInputProperty": "Fügen Sie mindestens eine Eingabeeigenschaft mit \"@\" hinzu",
       "addOption": "Option hinzufügen",
       "addPromptForBetterResults": "Fügen Sie einen Prompt für bessere Ergebnisse hinzu",
@@ -2478,6 +2487,7 @@
       "editColumn": "Spalte bearbeiten",
       "editConditions": "Bedingungen bearbeiten",
       "editConditionsDescription": "Legen Sie Bedingungen fest, wann diese Eigenschaft generiert werden soll.",
+      "editConditionsWhen": "Only run extraction when …",
       "enterAValue": "Wert eingeben",
       "extractEntityType": "Entitätstyp extrahieren",
       "extractEntityTypeDescription": "Erstellen Sie eine KI-gefüllte Tabellenspalte.",
@@ -2502,6 +2512,7 @@
       "newColumn": "Neue Spalte",
       "newColumnDescription": "Wählen Sie, wie diese Tabellenspalte gefüllt werden soll.",
       "newColumnName": "Spaltenname",
+      "noConditionFields": "No fields available to filter on.",
       "noFirstDocument": "Noch keine Dokumente für die Vorschau.",
       "noPropertiesFound": "Keine Eigenschaften gefunden",
       "optionsHelp": "Lege die Werte fest, aus denen die KI wählen darf.",
@@ -2524,6 +2535,7 @@
       "scopeMatterDescription": "Alle Dateispalten verwenden und die Akte ausführen.",
       "searchOrAddOptions": "Optionen suchen oder hinzufügen",
       "selectColor": "Farbe auswählen",
+      "selectField": "Select field",
       "selectOperator": "Operator auswählen",
       "setPromptPlaceholder": "Prompt zum Extrahieren der Informationen festlegen",
       "singleSelect": "Einfachauswahl",
@@ -2605,6 +2617,8 @@
       "exportXlsx": "XLSX exportieren",
       "fields": "Felder:",
       "fieldsSelected": "{count, plural, one {# ausgewählt} other {# ausgewählt}}",
+      "filter": "Filter",
+      "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Gruppieren nach:",
       "hideColumn": "Spalte ausblenden",
       "layouts": {
