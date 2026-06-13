@@ -19,6 +19,7 @@ export type UploadPurpose = PendingUploadPurposeData["type"];
  */
 export const UPLOAD_PURPOSE_PERMISSION = {
   entity_create: { entity: ["create"] },
+  email_ingest: { entity: ["create"] },
   entity_version: { entity: ["update"] },
   agent_skill: { agentSkill: ["create"] },
 } as const satisfies Record<UploadPurpose, PermissionInput>;
