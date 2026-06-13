@@ -36,9 +36,9 @@ type Token =
   | { type: "string"; raw: string };
 
 const TOKEN_RE =
-  /("(?:[^"\\]|\\.)*"|==|!=|>=|<=|>|<|!(?!=)|and\b|or\b|contains\b|[()]|[\p{L}\p{N}_.]+)/gu;
+  /("(?:[^"\\]|\\.)*"|==|!=|>=|<=|>|<|!(?!=)|and\b|or\b|contains\b|[()]|-?\d[\p{N}_.]*|[\p{L}\p{N}_.]+)/gu;
 
-const STARTS_WITH_DIGIT_RE = /^\d/u;
+const STARTS_WITH_DIGIT_RE = /^-?\d/u;
 
 /** ISO calendar date (`YYYY-MM-DD`). ISO dates sort chronologically as plain
  *  strings, so ordering comparisons are a lexicographic compare — no Date
