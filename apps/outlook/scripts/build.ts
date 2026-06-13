@@ -9,6 +9,7 @@ import {
 import { resolve } from "node:path";
 
 import { type ManifestEnv, renderManifest } from "./render-manifest";
+import { validateManifestFile } from "./validate-manifest";
 
 const APP_ROOT = resolve(import.meta.dirname, "..");
 const DIST_DIR = resolve(APP_ROOT, "dist");
@@ -147,5 +148,9 @@ writeFileSync(resolve(DIST_DIR, "manifest.xml"), manifest);
 if (targetEnv === "dev") {
   writeFileSync(resolve(APP_ROOT, "manifest.xml"), manifest);
 }
+
+// Validate the rendered manifest against Microsoft's official XSD set so a
+// schema-invalid manifest fails the build instead of failing at sideload.
+validateManifestFile(resolve(DIST_DIR, "manifest.xml"));
 
 console.log(`Built Outlook add-in (${targetEnv}) to apps/outlook/dist`);
