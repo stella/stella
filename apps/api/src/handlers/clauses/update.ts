@@ -223,6 +223,17 @@ const updateClauseHandler = async function* ({
             ),
           )
           .for("update");
+        // Authoritative limit check under the row lock: concurrent snapshot
+        // requests serialize here, so the second one sees the first's
+        // committed insert and cannot push the clause over the cap. The
+        // pre-transaction check above is only a cheap early reject.
+        const lockedVersionCount = await tx.$count(
+          clauseVersions,
+          eq(clauseVersions.clauseId, clauseId),
+        );
+        if (lockedVersionCount >= LIMITS.clauseVersionsPerClause) {
+          return { ok: false as const, reason: "limit" as const };
+        }
         newVersion = (locked?.currentVersion ?? existing.currentVersion) + 1;
         updates.currentVersion = newVersion;
       }
@@ -272,9 +283,18 @@ const updateClauseHandler = async function* ({
         changes,
       });
 
-      return row;
+      return { ok: true as const, row };
     }),
   );
+
+  if (!updated.ok) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Version limit reached for this clause",
+      }),
+    );
+  }
 
   // Re-index search vector when searchable fields change
   const searchFieldsChanged =
@@ -298,11 +318,11 @@ const updateClauseHandler = async function* ({
     }
   }
 
-  if (!updated) {
+  if (!updated.row) {
     panic("Failed to update clause");
   }
 
-  return Result.ok(updated);
+  return Result.ok(updated.row);
 };
 
 const config = {
