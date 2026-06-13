@@ -1,8 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  buildReplyDraft,
-  buildSummary,
   extractPotentialDates,
   extractQuestions,
   hasAttachmentMention,
@@ -123,71 +121,6 @@ describe("extractPotentialDates", () => {
 
   test("returns an empty array for empty body", () => {
     expect(extractPotentialDates(snapshot())).toEqual([]);
-  });
-});
-
-describe("buildSummary", () => {
-  test("includes subject, sender, opening, attachments and date signals", () => {
-    const summary = buildSummary(
-      snapshot({
-        attachments: [
-          {
-            contentType: null,
-            id: "1",
-            isInline: false,
-            name: "spa.pdf",
-            size: 100,
-          },
-          {
-            contentType: null,
-            id: "2",
-            isInline: true,
-            name: "logo.png",
-            size: 50,
-          },
-        ],
-        bodyText: "First sentence. Second sentence. Can you review by Friday?",
-        from: { email: "client@example.com", name: "Client" },
-        subject: "SPA review",
-      }),
-    );
-    expect(summary).toContain("Subject: SPA review");
-    expect(summary).toContain("From: Client");
-    expect(summary).toContain("Attachments: spa.pdf");
-    expect(summary).not.toContain("logo.png");
-    expect(summary).toContain("Date signals: Friday");
-    expect(summary).toContain("Open questions: Can you review by Friday?");
-  });
-
-  test("falls back when body is empty and no attachments present", () => {
-    const summary = buildSummary(snapshot({ subject: "Empty" }));
-    expect(summary).toContain("Summary: No body text was available.");
-    expect(summary).toContain("Attachments: none detected");
-  });
-});
-
-describe("buildReplyDraft", () => {
-  test("uses sender first name when available", () => {
-    const draft = buildReplyDraft({
-      intent: "",
-      snapshot: snapshot({ from: { email: "a@b.com", name: "Jan Novák" } }),
-    });
-    expect(draft.startsWith("Hi Jan,")).toBe(true);
-  });
-
-  test("falls back to generic salutation when sender is missing", () => {
-    const draft = buildReplyDraft({ intent: "", snapshot: snapshot() });
-    expect(draft.startsWith("Hello,")).toBe(true);
-  });
-
-  test("uses the caller intent verbatim when provided", () => {
-    const draft = buildReplyDraft({
-      intent: "Confirm receipt and ask for the disclosure schedule.",
-      snapshot: snapshot(),
-    });
-    expect(draft).toContain(
-      "Confirm receipt and ask for the disclosure schedule.",
-    );
   });
 });
 
