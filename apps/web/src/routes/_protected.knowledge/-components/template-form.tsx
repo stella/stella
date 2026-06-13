@@ -2038,6 +2038,7 @@ export const TemplateForm = ({
       ["fill-to"]({ workspaceId })
       .post({
         values: JSON.stringify(submitValues),
+        clauseOverrides,
         ...(parentId !== null && { parentId: toSafeId<"entity">(parentId) }),
       });
     setLoading(false);

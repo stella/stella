@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { entities, templateFills } from "@/api/db/schema";
+import { clauseBodySchema } from "@/api/handlers/clauses/shared-schemas";
 import {
   buildAiConditionDecider,
   buildAiFieldGenerator,
@@ -28,6 +29,10 @@ const fillToWorkspaceParamsSchema = workspaceParams({
 const fillToWorkspaceBodySchema = t.Object({
   /** JSON-encoded field-path → value map, same contract as the fill route. */
   values: t.String(),
+  /** Per-fill clause edits keyed by slot patch key (`@clause:Name`), same
+   *  contract as the fill route; the override body is inserted for a matching
+   *  slot instead of the linked clause's resolved body. */
+  clauseOverrides: t.Optional(t.Record(t.String(), clauseBodySchema)),
   /** Display name for the created document; defaults to the template's
    *  file name. The `.docx` extension is appended when missing. */
   name: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
@@ -139,6 +144,7 @@ const fillTemplateToWorkspace = createSafeHandler(
             values: parsed,
             scopedDb,
             organizationId,
+            clauseOverrides: body.clauseOverrides,
             generateAiValue: buildAiFieldGenerator({
               orgAIConfig,
               organizationId,
