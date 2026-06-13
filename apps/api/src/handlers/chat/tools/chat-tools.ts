@@ -289,7 +289,9 @@ export const getChatTools = ({
   const templateTools = canUseTemplates
     ? createTemplateTools({
         scopedDb,
+        safeDb,
         organizationId,
+        userId,
         orgAIConfig,
       })
     : {};

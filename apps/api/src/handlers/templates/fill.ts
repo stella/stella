@@ -20,6 +20,7 @@ import { isTemplateData, type TemplateData } from "@/api/handlers/docx/types";
 import { convertToPdf } from "@/api/handlers/files/gotenberg";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics";
+import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -154,6 +155,21 @@ export const fillHandler = async ({
   }
 
   if (manifest && (hasAiDraftFields || hasAiAdaptFields)) {
+    const aiAnalytics = createAIAnalyticsCallbacks({
+      usageMetering: {
+        actionType: "chat",
+        organizationId,
+        safeDb,
+        serviceTier: "standard",
+        userId,
+        workspaceId: null,
+      },
+      feature: "templates.fill",
+      modelRole: "fast",
+      orgAIConfig,
+      properties: { organization_id: organizationId },
+      traceId: Bun.randomUUIDv7(),
+    });
     if (hasAiDraftFields) {
       const documentText = await documentTextForAiFields(
         new Uint8Array(buffer),
@@ -167,6 +183,7 @@ export const fillHandler = async ({
           orgAIConfig,
           organizationId,
           skillContext: { organizationId, safeDb, userId },
+          aiAnalytics,
         }),
       });
       // Decide AI-decided boolean conditions (a boolean field with an aiPrompt)
@@ -178,6 +195,7 @@ export const fillHandler = async ({
           orgAIConfig,
           organizationId,
           skillContext: { organizationId, safeDb, userId },
+          aiAnalytics,
         }),
       });
       if (isTemplateData(decided)) {
@@ -196,6 +214,7 @@ export const fillHandler = async ({
           orgAIConfig,
           organizationId,
           skillContext: { organizationId, safeDb, userId },
+          aiAnalytics,
         }),
       });
       fillBuffer = adapted.buffer;
@@ -303,6 +322,7 @@ const config = {
   permissions: { template: ["create"] },
   body: fillBodySchema,
   query: fillQuerySchema,
+  requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;
 
 const fillTemplateHandler = createSafeRootHandler(

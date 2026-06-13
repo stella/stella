@@ -23,7 +23,17 @@ import type { AiFieldGenerator } from "@/api/handlers/docx/resolve-ai-fields";
 import { getModelForRole } from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { strictOutputSchema } from "@/api/lib/ai-output-schema";
+import type { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import type { SafeId } from "@/api/lib/branded-types";
+
+/**
+ * Usage-metering + analytics callbacks wired into every nested fill
+ * generation. Optional so callers that cannot supply metering context
+ * (or do not need it) keep working; when present, the AI SDK step
+ * callbacks record a consumption ledger row per model step and
+ * `captureError` reports a swallowed model failure.
+ */
+type AiFieldAnalytics = ReturnType<typeof createAIAnalyticsCallbacks>;
 
 const AI_FIELD_TIMEOUT_MS = 20_000;
 const AI_FIELD_MAX_TOKENS = 800;
@@ -35,11 +45,14 @@ export const buildAiFieldGenerator = ({
   orgAIConfig,
   organizationId,
   skillContext,
+  aiAnalytics,
 }: {
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
   /** When present, prompts that reference a skill get load-skill tools. */
   skillContext?: SkillToolsContext | undefined;
+  /** When present, model usage is metered and failures are captured. */
+  aiAnalytics?: AiFieldAnalytics | undefined;
 }): AiFieldGenerator | undefined => {
   if (!orgAIConfig) {
     return undefined;
@@ -75,10 +88,12 @@ Known details (JSON):
 ${JSON.stringify(values)}
 
 Reply with only the text for this field — no preamble, no quotes, no markdown.`,
+        ...aiAnalytics?.stepCallbacks,
       });
       const trimmed = text.trim();
       return trimmed.length > 0 ? trimmed : undefined;
-    } catch {
+    } catch (error) {
+      aiAnalytics?.captureError(error);
       return undefined;
     }
   };
@@ -103,11 +118,14 @@ export const buildAiConditionDecider = ({
   orgAIConfig,
   organizationId,
   skillContext,
+  aiAnalytics,
 }: {
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
   /** When present, prompts that reference a skill get load-skill tools. */
   skillContext?: SkillToolsContext | undefined;
+  /** When present, model usage is metered and failures are captured. */
+  aiAnalytics?: AiFieldAnalytics | undefined;
 }): AiConditionDecider | undefined => {
   if (!orgAIConfig) {
     return undefined;
@@ -140,10 +158,12 @@ Known details (JSON):
 ${JSON.stringify(values)}
 
 Decide true (yes) or false (no) for this condition.`,
+        ...aiAnalytics?.stepCallbacks,
       });
       const { decision } = await result.output;
       return decision;
-    } catch {
+    } catch (error) {
+      aiAnalytics?.captureError(error);
       return undefined;
     }
   };
@@ -205,6 +225,7 @@ export const buildAiOccurrenceAdapter = ({
   organizationId,
   documentLanguages = [],
   skillContext,
+  aiAnalytics,
 }: {
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
@@ -214,6 +235,8 @@ export const buildAiOccurrenceAdapter = ({
   documentLanguages?: readonly string[];
   /** When present, instructions that reference a skill get load-skill tools. */
   skillContext?: SkillToolsContext | undefined;
+  /** When present, model usage is metered and failures are captured. */
+  aiAnalytics?: AiFieldAnalytics | undefined;
 }): AiOccurrenceAdapter | undefined => {
   if (!orgAIConfig) {
     return undefined;
@@ -240,6 +263,7 @@ export const buildAiOccurrenceAdapter = ({
         system: skillTools
           ? `${ADAPT_SYSTEM_PROMPT} ${SKILL_REF_GENERATOR_GUIDANCE}`
           : ADAPT_SYSTEM_PROMPT,
+        ...aiAnalytics?.stepCallbacks,
       });
       const { renderings } = await result.output;
       if (renderings.length !== input.occurrences.length) {
@@ -249,7 +273,8 @@ export const buildAiOccurrenceAdapter = ({
       return trimmed.some((rendering) => rendering.length === 0)
         ? undefined
         : trimmed;
-    } catch {
+    } catch (error) {
+      aiAnalytics?.captureError(error);
       return undefined;
     }
   };
