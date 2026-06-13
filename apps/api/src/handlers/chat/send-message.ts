@@ -56,7 +56,10 @@ import {
   readLatestChatCompaction,
   shouldInvalidateChatCompactionCheckpoint,
 } from "@/api/handlers/chat/persistent-compaction";
-import type { ActiveChatSkillContext } from "@/api/handlers/chat/skills";
+import {
+  resolveActiveChatSkillContext,
+  type ActiveChatSkillContext,
+} from "@/api/handlers/chat/skills";
 import { hydrateMessages, streamChat } from "@/api/handlers/chat/stream-chat";
 import { createChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { shouldMarkThreadUsedAnonymization } from "@/api/handlers/chat/thread-anonymization";
@@ -196,6 +199,15 @@ const sendMessage = createSafeRootHandler(
         workspaceId,
       }),
     );
+    const validationActiveSkillContext = yield* Result.await(
+      resolveActiveChatSkillContext({
+        activeSkill: body.activeSkill,
+        memberRole,
+        organizationId: session.activeOrganizationId,
+        safeDb,
+        userId: user.id,
+      }),
+    );
     const validationExternalMcpTools = messageNeedsExternalMcpValidation(
       body.message,
     )
@@ -232,6 +244,8 @@ const sendMessage = createSafeRootHandler(
       webSearchEnabled: validationThreadState.webSearchEnabled,
       externalTools: validationExternalMcpTools?.tools,
       disabledNativeToolSlugs,
+      activeSkillContext: validationActiveSkillContext,
+      recordAuditEvent,
     });
 
     const validatedMessageResult = await validateMessage({
