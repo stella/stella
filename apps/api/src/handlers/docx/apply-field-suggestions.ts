@@ -70,7 +70,9 @@ export const applyFieldSuggestions = (
   const seenPaths = new Set<string>();
   const unapplied: FieldSuggestion[] = [];
 
-  for (const suggestion of suggestions) {
+  for (const suggestion of [...suggestions].sort(
+    (a, b) => b.literalText.length - a.literalText.length,
+  )) {
     if (!suggestion.literalText || !suggestion.fieldPath) {
       continue;
     }
@@ -91,6 +93,9 @@ export const applyFieldSuggestions = (
       const field: FieldMeta = { path: suggestion.fieldPath };
       if (suggestion.inputType) {
         field.inputType = suggestion.inputType;
+      }
+      if (suggestion.label) {
+        field.label = suggestion.label;
       }
       if (suggestion.aiPrompt) {
         field.aiPrompt = suggestion.aiPrompt;
