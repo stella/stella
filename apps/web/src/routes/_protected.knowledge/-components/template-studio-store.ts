@@ -52,7 +52,10 @@ export type StudioActions = {
    *  so loop-only tokens (`{{@index}}`, `{{@count}}`) are meaningful there. */
   isCaretInLoop: () => boolean;
   makeField: () => void;
-  save: () => void;
+  /** Persist the document + manifest. Resolves true only on a successful
+   *  save, so callers (e.g. "Save and leave") can await it before navigating
+   *  away and unmounting the page (which resets the shared store). */
+  save: () => Promise<boolean>;
   /** Rewrite {{oldPath}} markers in the document and rename the field.
    *  Returns false when the new path is invalid or already taken. */
   renameFieldPath: (oldPath: string, newPath: string) => boolean;
@@ -191,7 +194,10 @@ export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
     }),
   reset: (templateId) =>
     set((state) =>
-      state.templateId === templateId
+      // Skip the reset while a save is in flight: handleSave reads `fields`
+      // after the network round-trip, so clearing them here (e.g. on a
+      // "Save and leave" unmount) would persist an empty field list.
+      state.templateId === templateId && !state.ui.isSaving
         ? {
             templateId: null,
             fields: [],

@@ -204,8 +204,19 @@ function RouteComponent() {
           primary={{
             label: t("templates.saveAndLeave"),
             onClick: () => {
-              useTemplateStudioStore.getState().actions?.save();
-              exitDetail();
+              // Await the save before exiting: exitDetail() unmounts the Studio
+              // page, whose cleanup resets the shared store. Leaving only after
+              // a successful save (and the reset itself is gated on !isSaving)
+              // keeps the unmount from clobbering an in-flight save. On failure
+              // the save toast surfaces and we stay in the detail view.
+              void (async () => {
+                const saved = await useTemplateStudioStore
+                  .getState()
+                  .actions?.save();
+                if (saved) {
+                  exitDetail();
+                }
+              })();
             },
           }}
           secondary={{
