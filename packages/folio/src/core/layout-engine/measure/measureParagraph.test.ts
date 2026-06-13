@@ -367,6 +367,101 @@ describe("inline image paragraph measurement", () => {
     }, fakeMeasure);
   });
 
+  // Regression (eigenpal/docx-editor#767, fixes #766): an inline image that
+  // wraps to its own line must inflate only the line it lands on. The footprint
+  // was recorded on the current line *before* the wrap check, so the preceding
+  // text line inflated to image height while the image's own line stayed
+  // text-height — and following content painted over the overflowing image.
+  test("inline image that wraps reserves its height on its own line, not the text line", () => {
+    withFakeTextMeasure(() => {
+      const imageHeight = 151;
+      const measure = measureParagraph(
+        {
+          kind: "paragraph",
+          id: "wrap-img",
+          runs: [
+            { kind: "text", text: "Some preceding text" },
+            // One px shy of the column, so any preceding text forces the image
+            // onto its own line where it still fits.
+            {
+              kind: "image",
+              src: "data:image/png;base64,",
+              width: 599,
+              height: imageHeight,
+            },
+            { kind: "text", text: "Description" },
+          ],
+        },
+        600,
+      );
+
+      expect(measure.lines.length).toBeGreaterThanOrEqual(2);
+      // The preceding text line stays text-height, not inflated to the image.
+      expect(measure.lines.at(0)?.lineHeight ?? 0).toBeLessThan(imageHeight);
+      // The image lands on the next line, which reserves its full height.
+      expect(measure.lines.at(1)?.lineHeight ?? 0).toBeGreaterThanOrEqual(
+        imageHeight,
+      );
+    }, fakeMeasure);
+  });
+
+  test("inline image that fits inline still grows its shared line to image height", () => {
+    withFakeTextMeasure(() => {
+      const imageHeight = 151;
+      const measure = measureParagraph(
+        {
+          kind: "paragraph",
+          id: "fit-img",
+          runs: [
+            { kind: "text", text: "Hi" },
+            {
+              kind: "image",
+              src: "data:image/png;base64,",
+              width: 100,
+              height: imageHeight,
+            },
+          ],
+        },
+        600,
+      );
+
+      expect(measure.lines).toHaveLength(1);
+      expect(measure.lines.at(0)?.lineHeight ?? 0).toBeGreaterThanOrEqual(
+        imageHeight,
+      );
+    }, fakeMeasure);
+  });
+
+  // An inline image that is the only run on its line stays on that line even
+  // when it is wider than the column, instead of being wrapped to a fresh blank
+  // row above it — wrapping an image that is already alone can't make it fit.
+  // The measurer reserves its intrinsic box (the painter caps the paint with
+  // CSS max-width:100%; see measureParagraph.ts). (eigenpal/docx-editor#760.)
+  test("inline image wider than the column stays on its line and reserves its full height", () => {
+    withFakeTextMeasure(() => {
+      const measure = measureParagraph(
+        {
+          kind: "paragraph",
+          id: "wide-img",
+          runs: [
+            {
+              kind: "image",
+              src: "data:image/png;base64,",
+              width: 1200,
+              height: 800,
+            },
+          ],
+        },
+        600,
+      );
+
+      // No spurious leading empty line; the image is the only line.
+      expect(measure.lines).toHaveLength(1);
+      // The intrinsic height (800) is reserved, never under-reserved.
+      expect(measure.lines.at(0)?.lineHeight ?? 0).toBeGreaterThanOrEqual(800);
+    }, fakeMeasure);
+  });
+
   // Regression: a 100×200 inline image rotated 90° should reserve a 200×100
   // axis-aligned bbox in the measurer, matching the painter's wrapper span
   // (eigenpal #424 follow-up; gemini/codex review on PR 518). Without this,

@@ -190,12 +190,17 @@ export function useVisualLineNavigation({
 
       const emptyRun = lineEl.querySelector(".layout-empty-run");
       if (emptyRun) {
+        // Prefer the empty-run's own PM position — the renderer sets it to the
+        // hard-break position for a paragraph ending in `<w:br/>`, so vertical
+        // navigation into that trailing blank row lands after the break rather
+        // than at the paragraph start. Fall back to the paragraph content start.
+        // (eigenpal/docx-editor#752.)
+        if (emptyRun instanceof HTMLElement && emptyRun.dataset["pmStart"]) {
+          return Number(emptyRun.dataset["pmStart"]);
+        }
         const paragraph = closestHtmlElement(lineEl, ".layout-paragraph");
         if (paragraph?.dataset["pmStart"]) {
           return Number(paragraph.dataset["pmStart"]) + 1;
-        }
-        if (emptyRun instanceof HTMLElement && emptyRun.dataset["pmStart"]) {
-          return Number(emptyRun.dataset["pmStart"]);
         }
         return null;
       }

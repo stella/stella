@@ -198,8 +198,11 @@ describe("inline image rotation bbox wrapper", () => {
     // Fast path: the rendered element is the <img> itself, no <span> wrapper.
     expect(direct.tagName).toBe("img");
     expect(direct.style["position"]).not.toBe("absolute");
+    // Width is pinned; height is `auto` with an aspect ratio so the plain image
+    // fits its container without squashing (eigenpal/docx-editor#760).
     expect(direct.style["width"]).toBe("100px");
-    expect(direct.style["height"]).toBe("200px");
+    expect(direct.style["height"]).toBe("auto");
+    expect(direct.style["aspectRatio"]).toBe("100 / 200");
   });
 
   test("does NOT wrap an image with a 0deg rotation transform", () => {

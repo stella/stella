@@ -1035,23 +1035,40 @@ export function measureParagraph(
       const imageWidth = inlineBbox.width;
       const imageHeight = inlineBbox.height;
 
+      if (
+        currentLine.width > 0 &&
+        currentLine.width + imageWidth >
+          currentLine.availableWidth + WIDTH_TOLERANCE
+      ) {
+        // Image doesn't fit, start new line. Guarded on a non-empty line:
+        // wrapping an image that is already alone on the line can't make it fit
+        // and would just insert a blank row above it.
+        startNewLine(runIndex, 0);
+      }
+
+      // The measurer reserves the image's intrinsic box. The painter fits an
+      // over-wide plain inline image down with CSS `max-width: 100%`
+      // (eigenpal/docx-editor#760), but that is left as a purely visual cap: a
+      // CSS percentage of the line element doesn't correspond to a single
+      // computed width once first-line indents, list markers, or floating-image
+      // line offsets are in play, so predicting it here would under-reserve
+      // height and risk overlap. Reserving the intrinsic box keeps measurement,
+      // selection, and click geometry mutually consistent and never short.
+
       // The image's vertical footprint in the line includes its wp:inline
       // distT/distB wrap distances. These default to 0 for inline images
       // (unlike the block path's synthetic 6px). The painter applies them as
       // top/bottom margins on the <img>, so the run's flex baseline (the
-      // margin-box edge) stays consistent with this reserved height.
+      // margin-box edge) stays consistent with this reserved height. Record it
+      // only after the wrap check above: the footprint belongs to the line the
+      // image actually lands on, not the line it wrapped away from — otherwise
+      // the previous line inflates to image height while the image's own line
+      // stays text-height and following content paints over the overflow.
+      // (eigenpal/docx-editor#767, fixes #766.)
       const imageFootprintPx =
         imageHeight + (run.distTop ?? 0) + (run.distBottom ?? 0);
       if (imageFootprintPx > currentLine.maxImageHeightPx) {
         currentLine.maxImageHeightPx = imageFootprintPx;
-      }
-
-      if (
-        currentLine.width + imageWidth >
-        currentLine.availableWidth + WIDTH_TOLERANCE
-      ) {
-        // Image doesn't fit, start new line
-        startNewLine(runIndex, 0);
       }
 
       currentLine.width += imageWidth;
