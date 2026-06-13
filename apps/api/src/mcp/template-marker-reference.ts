@@ -67,6 +67,19 @@ const DIRECTIVE_DESCRIPTIONS = {
     detail: "Closes the matching `{{#each}}` block.",
     example: "{{/each}}",
   },
+  index: {
+    title: "Loop position",
+    detail:
+      "The 1-based position of the current item within the innermost enclosing " +
+      "`{{#each}}` loop.",
+    example: "{{@index}}",
+  },
+  count: {
+    title: "Loop size",
+    detail:
+      "The total number of items in the innermost enclosing `{{#each}}` loop.",
+    example: "{{@count}}",
+  },
   clause: {
     title: "Clause slot",
     detail:
