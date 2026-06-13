@@ -30,5 +30,5 @@ export type KnownCanonicalIdScheme = (typeof CANONICAL_ID_SCHEMES)[number];
 // is a phantom type; this helper performs no runtime check, so narrowing
 // `string` to `CanonicalId<S>` is the entire point of the helper.
 export const unsafeBrand = <S extends string>(raw: string): CanonicalId<S> =>
-  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- phantom-brand cast with no runtime check is the entire purpose of this helper
   raw as CanonicalId<S>;

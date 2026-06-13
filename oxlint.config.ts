@@ -104,6 +104,18 @@ export default defineConfig({
     ],
     "no-bare-error/no-bare-error": "error",
     "ai-output-strict-schema/ai-output-strict-schema": "error",
+    "suppression-hygiene/require-description": "error",
+    "suppression-hygiene/no-foreign-directive": "error",
+    "typescript/ban-ts-comment": [
+      "error",
+      {
+        "ts-expect-error": "allow-with-description",
+        "ts-ignore": true,
+        "ts-nocheck": false,
+        "ts-check": false,
+        minimumDescriptionLength: 3,
+      },
+    ],
     "no-nanoid/no-nanoid": "error",
     "no-raw-date-input/no-raw-date-input": "error",
     "stella-lowercase/stella-lowercase": "error",
@@ -313,6 +325,7 @@ export default defineConfig({
     "./.oxlint-plugins/public-case-law-db-boundary.ts",
     "./.oxlint-plugins/folio-layer-boundaries.ts",
     "./.oxlint-plugins/require-contained-handler.ts",
+    "./.oxlint-plugins/suppression-hygiene.ts",
   ],
 
   overrides: [
@@ -322,7 +335,7 @@ export default defineConfig({
       // Custom oxlint plugin rules traverse AST nodes that the runtime
       // delivers as untyped (effectively `any`). Strict any-flow rules
       // produce noise without real safety here.
-      files: [".oxlint-plugins/**/*.ts"],
+      files: [".oxlint-plugins/**/*.{ts,tsx}"],
       rules: {
         "typescript/no-unsafe-assignment": "off",
         "typescript/no-unsafe-member-access": "off",
@@ -332,6 +345,11 @@ export default defineConfig({
         "typescript/strict-boolean-expressions": "off",
         "require-unicode-regexp": "off",
         "no-nested-ternary": "off",
+        // Plugin sources and fixtures embed directive strings as
+        // documentation/regression examples; do not lint them as real
+        // directives.
+        "suppression-hygiene/require-description": "off",
+        "suppression-hygiene/no-foreign-directive": "off",
       },
     },
     {

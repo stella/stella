@@ -105,7 +105,7 @@ export const asFetchMock = (fn: TestFetchMock): typeof fetch =>
 // the helper's whole API surface.
 // eslint-disable-next-line typescript/no-unnecessary-type-parameters
 export const asTestRaw = <T>(raw: unknown): T =>
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- centralised test-only raw cast; the helper IS the cast
   raw as T;
 
 /**
@@ -124,5 +124,5 @@ export const asTestRaw = <T>(raw: unknown): T =>
 // helper's whole API surface.
 // eslint-disable-next-line typescript/no-unnecessary-type-parameters
 export const asSdkEvent = <T>(event: object): T =>
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- widens a test fixture to the full SDK event shape (see SAFETY above)
   event as unknown as T;
