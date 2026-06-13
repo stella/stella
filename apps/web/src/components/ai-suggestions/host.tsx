@@ -285,10 +285,13 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
    * still need a value to fall back to in code paths that read it
    * (e.g., the auto-flush effect after unlock); use the host's
    * default. The user-facing "ask once" prompt only blocks the very
-   * first accept attempt.
+   * first accept attempt. A pinned config (promptForApplyMode: false)
+   * wins over the stored preference so the surface stays on its mode.
    */
   const applyMode: AISuggestionApplyMode =
-    applyModeStored ?? config.defaultApplyMode ?? "direct";
+    config.promptForApplyMode === false
+      ? (config.defaultApplyMode ?? "direct")
+      : (applyModeStored ?? config.defaultApplyMode ?? "direct");
 
   const persistApplyMode = useCallback((next: AISuggestionApplyMode) => {
     setApplyModeStored(next);
