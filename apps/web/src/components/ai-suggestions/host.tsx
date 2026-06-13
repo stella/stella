@@ -105,6 +105,7 @@ function htmlToPromptText(html: string): string {
     return html;
   }
   const container = document.createElement("div");
+  // safe-html: detached element, never inserted into the document; innerHTML is set only to read back textContent, and `html` is the TipTap editor's own serialized draft
   container.innerHTML = html;
   for (const mention of container.querySelectorAll("entity-mention")) {
     const label =

@@ -108,6 +108,8 @@ export default defineConfig({
     "no-coerced-optional-union-enum/no-coerced-optional-union-enum": "error",
     "tagged-error-requires-message/tagged-error-requires-message": "error",
     "require-custom-jsonb-column/require-custom-jsonb-column": "error",
+    "no-spread-input-in-query-key/no-spread-input-in-query-key": "error",
+    "no-unsafe-inner-html/no-unsafe-inner-html": "error",
     "suppression-hygiene/require-description": "error",
     "suppression-hygiene/no-foreign-directive": "error",
     "typescript/ban-ts-comment": [
@@ -333,6 +335,8 @@ export default defineConfig({
     "./.oxlint-plugins/no-coerced-optional-union-enum.ts",
     "./.oxlint-plugins/tagged-error-requires-message.ts",
     "./.oxlint-plugins/require-custom-jsonb-column.ts",
+    "./.oxlint-plugins/no-spread-input-in-query-key.ts",
+    "./.oxlint-plugins/no-unsafe-inner-html.ts",
   ],
 
   overrides: [

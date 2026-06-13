@@ -1700,6 +1700,7 @@ const SearchResultItem = ({
           <p
             className="text-muted-foreground [&_mark]:bg-highlight [&_mark]:text-highlight-foreground mt-0.5 line-clamp-2 text-xs font-normal [&_mark]:font-medium"
             dangerouslySetInnerHTML={{
+              // safe-html: server-escaped + <mark>-highlighted by escapeAndHighlight() in the global search mappers
               __html: hit.headline,
             }}
           />

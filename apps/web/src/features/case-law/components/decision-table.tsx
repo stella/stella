@@ -91,7 +91,10 @@ const renderCaseNumberCell = (info: DecisionCellContext<string>) => {
       {headline && (
         <p
           className="text-muted-foreground [&_mark]:text-foreground [&_mark]:bg-warning/30 dark:[&_mark]:bg-warning/20 mt-0.5 line-clamp-2 text-xs [&_mark]:font-medium"
-          dangerouslySetInnerHTML={{ __html: headline }}
+          dangerouslySetInnerHTML={{
+            // safe-html: server-escaped + <mark>-highlighted by escapeAndHighlight() in the case-law decisions search handler
+            __html: headline,
+          }}
         />
       )}
     </div>

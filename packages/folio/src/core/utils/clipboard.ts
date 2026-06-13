@@ -284,6 +284,7 @@ export async function writeToClipboard(
  */
 function writeToClipboardFallback(content: ClipboardContent): boolean {
   const tempDiv = document.createElement("div");
+  // safe-html: content.html is Folio-internal markup from runsToClipboardContent()/paragraphsToClipboardContent(), serialized from editor runs the app controls
   tempDiv.innerHTML = content.html;
   tempDiv.style.position = "fixed";
   tempDiv.style.left = "-9999px";
