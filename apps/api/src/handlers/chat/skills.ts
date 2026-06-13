@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { and, asc, eq, or } from "drizzle-orm";
 
+import { roles } from "@stll/permissions";
 import {
   listSkillMetadata,
   listSkillResources,
@@ -18,6 +19,7 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { isMemberRole } from "@/api/lib/member-roles";
 
 import { requireEditableSkillOrigin } from "../skills/origin";
 
@@ -198,7 +200,7 @@ const resolveInstalledActiveSkill = async ({
   });
 };
 
-const canEditActiveSkill = ({
+export const canEditActiveSkill = ({
   memberRole,
   origin,
   scope,
@@ -211,6 +213,13 @@ const canEditActiveSkill = ({
   skillUserId: string;
   userId: SafeId<"user">;
 }): boolean => {
+  if (
+    !isMemberRole(memberRole.role) ||
+    !roles[memberRole.role].authorize({ agentSkill: ["update"] }).success
+  ) {
+    return false;
+  }
+
   if (scope === "team" && !["admin", "owner"].includes(memberRole.role)) {
     return false;
   }
