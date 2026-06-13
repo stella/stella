@@ -330,7 +330,7 @@ const RuleValueInput = ({
 }: {
   field: RuleField | undefined;
   value: string | number | boolean;
-  onChange: (value: string) => void;
+  onChange: (value: string | number) => void;
 }) => {
   const t = useTranslations();
   const stringValue = String(value);
@@ -367,7 +367,9 @@ const RuleValueInput = ({
       <Input
         aria-label={t("templates.conditionValue")}
         className="w-28"
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) =>
+          onChange(e.target.value === "" ? "" : Number(e.target.value))
+        }
         placeholder={t("templates.conditionValue")}
         type="number"
         value={stringValue}
