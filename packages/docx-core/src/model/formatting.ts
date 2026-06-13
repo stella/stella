@@ -311,6 +311,19 @@ export type ParagraphFormatting = {
     /** List level (0-8) (w:ilvl) */
     ilvl?: number;
   };
+  /**
+   * When `numPr` was resolved from the paragraph STYLE's pPr rather than the
+   * paragraph's own `<w:numPr>`, this records the style-sourced value. The
+   * serializer omits `numPr` while it still equals this value — writing it as
+   * direct formatting would flip Word's indent precedence (a directly
+   * referenced level's indents beat the style's; a style-referenced level's
+   * do not) and break the document on save/reload. Cleared the moment the
+   * user changes the numbering (values diverge).
+   */
+  numPrFromStyle?: {
+    numId?: number;
+    ilvl?: number;
+  };
 
   // Outline level (for TOC)
   /** Outline level 0-9 (w:outlineLvl) */

@@ -27,7 +27,7 @@ import {
 } from "./bookmarkPlacement";
 import type { BookmarkMarker } from "./bookmarkPlacement";
 import { convertBulletToUnicode } from "./bulletMarkers";
-import type { NumberingMap } from "./numberingParser";
+import { padDecimal, type NumberingMap } from "./numberingParser";
 import { parseParagraph } from "./paragraphParser";
 import { parseSdtProperties } from "./sdtProperties";
 import type { StyleMap } from "./styleParser";
@@ -91,8 +91,15 @@ const toRepeatedLetter = (value: number, baseCodePoint: number): string => {
 const formatNumber = (value: number, numFmt: string): string => {
   switch (numFmt) {
     case "decimal":
-    case "decimalZero":
       return String(value);
+    case "decimalZero":
+      return padDecimal(value, 2);
+    case "decimalZero3":
+      return padDecimal(value, 3);
+    case "decimalZero4":
+      return padDecimal(value, 4);
+    case "decimalZero5":
+      return padDecimal(value, 5);
     case "lowerLetter":
       return toRepeatedLetter(value, 97);
     case "upperLetter":

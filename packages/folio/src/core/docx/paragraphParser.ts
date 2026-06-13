@@ -1722,12 +1722,18 @@ export function parseParagraph(
   // Compute list rendering if this is a list item.
   // numPr can come from inline pPr or from the referenced paragraph style.
   let effectiveNumPr = paragraph.formatting?.numPr;
+  let numPrFromStyle = false;
   if (!effectiveNumPr && paragraph.formatting?.styleId && styles) {
     const style = styles.get(paragraph.formatting.styleId);
     if (style?.pPr?.numPr) {
       effectiveNumPr = style.pPr.numPr;
-      // Store it on the paragraph formatting so downstream code sees it
+      numPrFromStyle = true;
+      // Store it on the paragraph formatting so downstream code sees it,
+      // and record the provenance so the serializer can drop it again —
+      // materializing style numbering as direct <w:numPr> flips Word's
+      // level-indent precedence on the saved file.
       paragraph.formatting.numPr = effectiveNumPr;
+      paragraph.formatting.numPrFromStyle = effectiveNumPr;
     }
   }
 
@@ -1862,6 +1868,21 @@ export function parseParagraph(
         // Apply level's paragraph properties (indentation) as defaults.
         // Per OOXML spec, direct w:ind on the paragraph overrides numbering
         // level indent — only use numbering indent as fallback.
+        //
+        // When the numbering reference itself comes from the paragraph STYLE
+        // (style pPr numPr), Word gives the style chain's own w:ind
+        // precedence over the numbering level's — e.g. a "Claim" style with
+        // ind left=1134 hanging=1134 referencing a level with 360/360 lays
+        // out at 1134. Skip the level indents the style chain covers; the
+        // toProseDoc style fallback supplies the style values. Resolution is
+        // per group (left vs firstLine/hanging) so a chain that only defines
+        // `left` (e.g. ListParagraph) still takes the level's hanging —
+        // mirrors listAttrsFromResolvedStyle so the picker and the loader
+        // resolve a style identically. Direct paragraph numPr keeps the
+        // level-over-style behavior (Word's toolbar-list case).
+        const chainInd = numPrFromStyle
+          ? styleChainInd(paragraph.formatting?.styleId, styles)
+          : { left: false, firstLine: false };
         if (level.pPr) {
           if (!paragraph.formatting) {
             paragraph.formatting = {};
@@ -1885,10 +1906,14 @@ export function parseParagraph(
             (directFirstLine !== undefined && directFirstLine !== 0) ||
             (directHanging !== undefined && directHanging !== 0);
 
-          if (!hasDirectLeft && level.pPr.indentLeft !== undefined) {
+          if (
+            !hasDirectLeft &&
+            !chainInd.left &&
+            level.pPr.indentLeft !== undefined
+          ) {
             paragraph.formatting.indentLeft = level.pPr.indentLeft;
           }
-          if (!hasDirectFirstLineOrHanging) {
+          if (!hasDirectFirstLineOrHanging && !chainInd.firstLine) {
             if (level.pPr.indentFirstLine !== undefined) {
               paragraph.formatting.indentFirstLine = level.pPr.indentFirstLine;
             }
@@ -1902,6 +1927,41 @@ export function parseParagraph(
   }
 
   return paragraph;
+}
+
+/**
+ * Which indent groups the basedOn chain defines: `left` (w:ind left) and
+ * `firstLine` (w:ind firstLine/hanging). Walks from the given style up the
+ * chain; cycles are guarded. Grouping matches listAttrsFromResolvedStyle.
+ */
+function styleChainInd(
+  styleId: string | undefined,
+  styles?: StyleMap | null,
+): { left: boolean; firstLine: boolean } {
+  const result = { left: false, firstLine: false };
+  if (!styleId || !styles) {
+    return result;
+  }
+  const seen = new Set<string>();
+  let current: string | undefined = styleId;
+  while (current && !seen.has(current)) {
+    seen.add(current);
+    const style = styles.get(current);
+    if (!style) {
+      break;
+    }
+    const p = style.pPr;
+    if (p) {
+      result.left ||= p.indentLeft !== undefined;
+      result.firstLine ||=
+        p.indentFirstLine !== undefined || p.hangingIndent !== undefined;
+    }
+    if (result.left && result.firstLine) {
+      break;
+    }
+    current = style.basedOn;
+  }
+  return result;
 }
 
 // ============================================================================
