@@ -155,6 +155,7 @@ const importHandler = async function* ({
     safeDb(async (tx) => {
       const insertedIds: SafeId<"clause">[] = [];
       const auditEvents: AuditEvent[] = [];
+      const errors: string[] = [];
 
       for (const item of toProcess) {
         const clauseId = createSafeId<"clause">();
@@ -187,7 +188,18 @@ const importHandler = async function* ({
           body: item.body,
         });
 
-        const variants = item.variants ?? [];
+        // Bound per-clause variants to the same cap the normal create path
+        // enforces (createVariantHandler) and the read path returns; otherwise
+        // imported rows beyond the cap become hidden — never listed by normal
+        // clause reads. Truncate and surface a per-item notice instead of
+        // failing the whole import.
+        const allVariants = item.variants ?? [];
+        const variants = allVariants.slice(0, LIMITS.clauseVariantsPerClause);
+        if (allVariants.length > variants.length) {
+          errors.push(
+            `Clause "${item.title}": kept ${variants.length} of ${allVariants.length} variants (max ${LIMITS.clauseVariantsPerClause} per clause).`,
+          );
+        }
         for (const [variantIndex, variant] of variants.entries()) {
           await tx.insert(clauseVariants).values({
             id: createSafeId<"clauseVariant">(),
@@ -221,7 +233,7 @@ const importHandler = async function* ({
 
       await recordAuditEvent(tx, auditEvents);
 
-      return { count: insertedIds.length, insertedIds };
+      return { count: insertedIds.length, insertedIds, errors };
     }),
   );
 
@@ -255,7 +267,7 @@ const importHandler = async function* ({
     }
   }
 
-  return Result.ok({ created: result.count, skipped, errors: [] });
+  return Result.ok({ created: result.count, skipped, errors: result.errors });
 };
 
 const config = {
