@@ -181,9 +181,19 @@ export type EditableField = {
   validation?: FieldValidation | undefined;
 };
 
-/** Subset of the backend `FieldValidation` the studio surfaces today: only
- *  the `{{#each}}` repeat bounds. Extend as more validation lands in the UI. */
+/** Field-level validation. The studio's UI surfaces only the `{{#each}}`
+ *  repeat bounds (`minItems`/`maxItems`) today; the scalar rules
+ *  (`required`/`minLength`/`maxLength`/`min`/`max`/`pattern`) are carried
+ *  verbatim so manifest validation authored elsewhere (prepare/suggest/import)
+ *  round-trips through a Studio save instead of being dropped. Mirrors the
+ *  backend `FieldValidation` (apps/api/src/handlers/docx/types.ts). */
 export type FieldValidation = {
+  required?: boolean | undefined;
+  minLength?: number | undefined;
+  maxLength?: number | undefined;
+  min?: number | undefined;
+  max?: number | undefined;
+  pattern?: string | undefined;
   minItems?: number | undefined;
   maxItems?: number | undefined;
 };
