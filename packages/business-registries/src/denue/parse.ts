@@ -51,9 +51,9 @@ const parseLocation = (
     .map((part) => part.trim())
     .filter(Boolean);
   return {
-    locality: parts.at(0) ?? null,
-    municipality: parts.at(1) ?? null,
-    state: parts.at(2) ?? null,
+    locality: parts.length > 2 ? parts.slice(0, -2).join(", ") : null,
+    municipality: parts.length > 1 ? (parts.at(-2) ?? null) : null,
+    state: parts.at(-1) ?? null,
     text,
   };
 };
