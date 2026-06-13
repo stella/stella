@@ -16,6 +16,7 @@ import {
   type FieldSuggestion,
 } from "@/api/handlers/docx/apply-field-suggestions";
 import { extractText } from "@/api/handlers/docx/extract-text";
+import { HEADER_FOOTER_RE } from "@/api/handlers/docx/ooxml";
 import { writeManifest } from "@/api/handlers/docx/template-manifest";
 import type { FieldMeta } from "@/api/handlers/docx/types";
 
@@ -49,14 +50,61 @@ export const prepareTemplateFromDocument = async ({
   }
 
   const zip = await JSZip.loadAsync(buffer);
-  const entry = zip.file(DOCUMENT_PATH);
-  if (!entry) {
+  if (!zip.file(DOCUMENT_PATH)) {
     return { buffer, fields: [], unapplied: suggestions };
   }
 
-  const docXml = await entry.async("text");
-  const { xml, fields, unapplied } = applyFieldSuggestions(docXml, suggestions);
-  zip.file(DOCUMENT_PATH, xml);
+  // Rewrite the body and every header/footer part, matching the parts the rest
+  // of the pipeline covers (discoverPlaceholders / fillTemplateWithValues filter
+  // on `word/document.xml` || HEADER_FOOTER_RE). A literal that the model read
+  // from a letterhead or footer (extractText concatenates headers, body, and
+  // footers into the prompt) is then rewritten where it actually lives.
+  const partNames = [
+    DOCUMENT_PATH,
+    ...Object.keys(zip.files).filter((name) => HEADER_FOOTER_RE.test(name)),
+  ];
+
+  // Merge results across parts: a field is added once per path, and a
+  // suggestion is reported unapplied only when no part matched it. Running
+  // applyFieldSuggestions once per part (instead of mutating it to take many)
+  // keeps that low-level function single-part; each part marks a body-only
+  // literal as unapplied, so the global unapplied set is the intersection.
+  const fields: FieldMeta[] = [];
+  const seenPaths = new Set<string>();
+  // Object identity is stable: applyFieldSuggestions pushes the same suggestion
+  // references we pass in, so a Set of objects tracks per-part application.
+  let stillUnapplied: Set<FieldSuggestion> | undefined;
+
+  for (const partName of partNames) {
+    const entry = zip.file(partName);
+    if (!entry) {
+      continue;
+    }
+    const partXml = await entry.async("text");
+    const result = applyFieldSuggestions(partXml, suggestions);
+    if (result.xml !== partXml) {
+      zip.file(partName, result.xml);
+    }
+    for (const field of result.fields) {
+      if (!seenPaths.has(field.path)) {
+        seenPaths.add(field.path);
+        fields.push(field);
+      }
+    }
+    const partUnapplied = new Set(result.unapplied);
+    if (stillUnapplied === undefined) {
+      stillUnapplied = partUnapplied;
+    } else {
+      for (const suggestion of stillUnapplied) {
+        if (!partUnapplied.has(suggestion)) {
+          stillUnapplied.delete(suggestion);
+        }
+      }
+    }
+  }
+
+  const unapplied = stillUnapplied ? [...stillUnapplied] : [];
+
   const rewritten = Buffer.from(
     await zip.generateAsync({ type: "nodebuffer" }),
   );
