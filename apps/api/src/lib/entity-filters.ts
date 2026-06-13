@@ -340,7 +340,7 @@ const compareOpSql = (op: CompareNode["op"], expr: SQL, value: string): SQL => {
 };
 
 const literalString = (operand: Operand): string | null =>
-  operand.type === "literal" ? String(operand.value ?? "") : null;
+  operand.type === "literal" ? String(operand.value) : null;
 
 const compileBuiltinCompare = (
   field: "status" | "priority",

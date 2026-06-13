@@ -1,8 +1,9 @@
 import { deepEquals } from "bun";
 
+import type { ConditionNode } from "@stll/conditions";
+
 import type { Transaction } from "@/api/db";
 import { properties, propertyDependencies } from "@/api/db/schema";
-import type { PropertyCondition } from "@/api/db/schema-validators";
 import { lockWorkspacePropertyWrites } from "@/api/handlers/properties/property-lock";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -11,6 +12,7 @@ import {
   collectNodePropertyIds,
   remapNodePropertyIds,
 } from "@/api/lib/conditions/ast-utils";
+import { parseStoredCondition } from "@/api/lib/conditions/parse-stored";
 import { LIMITS } from "@/api/lib/limits";
 import { serializeAITool } from "@/api/lib/markdown/ai-tool";
 import { brandPersistedPropertyId } from "@/api/lib/safe-id-boundaries";
@@ -28,7 +30,7 @@ type WorkspacePropertyTemplateSource = {
 type WorkspacePropertyDependencySource = {
   propertyId: string;
   dependsOnPropertyId: string;
-  condition: PropertyCondition | null;
+  condition: ConditionNode | null;
 };
 
 type ResolveTemplatePropertiesOptions = {
@@ -60,13 +62,13 @@ export const collectTemplateProperties = ({
   });
   const dependenciesByPropertyId = new Map<
     string,
-    { dependsOnSourceId: string; condition: PropertyCondition | null }[]
+    { dependsOnSourceId: string; condition: ConditionNode | null }[]
   >();
   for (const dep of dependencies) {
     const list = dependenciesByPropertyId.get(dep.propertyId) ?? [];
     list.push({
       dependsOnSourceId: dep.dependsOnPropertyId,
-      condition: dep.condition,
+      condition: parseStoredCondition(dep.condition),
     });
     dependenciesByPropertyId.set(dep.propertyId, list);
   }
@@ -106,7 +108,7 @@ const addDependencySourceIds = (
     string,
     readonly {
       dependsOnSourceId: string;
-      condition: PropertyCondition | null;
+      condition: ConditionNode | null;
     }[]
   >,
 ): void => {

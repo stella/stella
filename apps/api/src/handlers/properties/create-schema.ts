@@ -2,11 +2,11 @@ import { Value } from "@sinclair/typebox/value";
 import { t } from "elysia";
 
 import {
-  propertyConditionSchema,
   propertyContentSchema,
   propertyContentTypeSchema,
 } from "@/api/db/schema-validators";
 import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
+import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { serializeAITool } from "@/api/lib/markdown/ai-tool";
 
@@ -31,7 +31,7 @@ export const createPropertyBodySchema = t.Object({
     t.Array(
       t.Object({
         dependsOnPropertyId: tSafeId("property"),
-        condition: t.Nullable(propertyConditionSchema),
+        condition: t.Nullable(tConditionNode),
       }),
     ),
   ),

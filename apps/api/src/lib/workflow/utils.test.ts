@@ -1,9 +1,8 @@
 import { afterAll, describe, expect, mock, test } from "bun:test";
 
-import type {
-  FieldContent,
-  PropertyCondition,
-} from "@/api/db/schema-validators";
+import type { ConditionNode } from "@stll/conditions";
+
+import type { FieldContent } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
 import type {
   BatchProperty,
@@ -21,7 +20,7 @@ afterAll(() => {
   mock.restore();
 });
 
-const { evaluateCondition, prepareBatch } =
+const { evaluateGatingCondition, prepareBatch } =
   await import("@/api/lib/workflow/utils");
 
 const propertyId = (value: string) => toSafeId<"property">(value);
@@ -48,40 +47,42 @@ const createRawBatch = (
   ...overrides,
 });
 
-describe("evaluateCondition", () => {
-  const eqCondition: PropertyCondition = {
-    version: 1,
-    type: "string",
-    operator: "eq",
-    value: "x",
+describe("evaluateGatingCondition", () => {
+  const DEP = "dep-prop";
+
+  const eqCondition: ConditionNode = {
+    type: "compare",
+    left: { type: "property", propertyId: DEP },
+    op: "eq",
+    right: { type: "literal", value: "x" },
   };
 
-  const textFieldX: FieldContent = {
-    type: "text",
-    version: 1,
-    value: "x",
-  };
-
-  test("returns false for error field content regardless of condition", () => {
-    const fieldContent: FieldContent = {
-      type: "error",
-      version: 1,
-    };
-
-    expect(evaluateCondition(fieldContent, eqCondition)).toBe(false);
+  const containsEvery = (value: string[]): ConditionNode => ({
+    type: "predicate",
+    operand: { type: "property", propertyId: DEP },
+    op: "contains_all",
+    value,
   });
 
-  test("returns false for pending field content regardless of condition", () => {
-    const fieldContent: FieldContent = {
-      type: "pending",
-      version: 1,
-    };
+  const map = (content: FieldContent): Map<string, FieldContent> =>
+    new Map([[DEP, content]]);
 
-    expect(evaluateCondition(fieldContent, eqCondition)).toBe(false);
+  test("returns true for a null condition (no gate)", () => {
+    expect(evaluateGatingCondition(null, new Map())).toBe(true);
   });
 
-  test("returns false for file field content regardless of condition", () => {
-    const fieldContent: FieldContent = {
+  test("returns false for error field content against an eq gate", () => {
+    const content: FieldContent = { type: "error", version: 1 };
+    expect(evaluateGatingCondition(eqCondition, map(content))).toBe(false);
+  });
+
+  test("returns false for pending field content against an eq gate", () => {
+    const content: FieldContent = { type: "pending", version: 1 };
+    expect(evaluateGatingCondition(eqCondition, map(content))).toBe(false);
+  });
+
+  test("returns false for file field content against an eq gate", () => {
+    const content: FieldContent = {
       type: "file",
       version: 1,
       id: "test-id-000000000000",
@@ -93,133 +94,83 @@ describe("evaluateCondition", () => {
         "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       pdfFileId: null,
     };
+    expect(evaluateGatingCondition(eqCondition, map(content))).toBe(false);
+  });
 
-    expect(evaluateCondition(fieldContent, eqCondition)).toBe(false);
+  test("returns false when the dependency field is absent from the map", () => {
+    expect(evaluateGatingCondition(eqCondition, new Map())).toBe(false);
   });
 
   test("returns true for string eq when values match exactly", () => {
-    expect(evaluateCondition(textFieldX, eqCondition)).toBe(true);
+    const content: FieldContent = { type: "text", version: 1, value: "x" };
+    expect(evaluateGatingCondition(eqCondition, map(content))).toBe(true);
   });
 
-  test("returns false for string eq when field has empty string and condition expects non-empty", () => {
-    const fieldContent: FieldContent = {
-      type: "text",
-      version: 1,
-      value: "",
-    };
-
-    expect(evaluateCondition(fieldContent, eqCondition)).toBe(false);
+  test("returns false for string eq when field is empty", () => {
+    const content: FieldContent = { type: "text", version: 1, value: "" };
+    expect(evaluateGatingCondition(eqCondition, map(content))).toBe(false);
   });
 
-  test("returns true for contains-every when field array is superset of condition values", () => {
-    const condition: PropertyCondition = {
-      version: 1,
-      type: "string-array",
-      operator: "contains-every",
-      value: ["a", "b"],
-    };
-    const fieldContent: FieldContent = {
+  test("returns true for contains_all when field is a superset", () => {
+    const content: FieldContent = {
       type: "multi-select",
       version: 1,
       value: ["a", "b", "c"],
     };
-
-    expect(evaluateCondition(fieldContent, condition)).toBe(true);
+    expect(
+      evaluateGatingCondition(containsEvery(["a", "b"]), map(content)),
+    ).toBe(true);
   });
 
-  test("returns true for contains-every when field array matches exactly", () => {
-    const condition: PropertyCondition = {
-      version: 1,
-      type: "string-array",
-      operator: "contains-every",
-      value: ["a", "b"],
-    };
-    const fieldContent: FieldContent = {
+  test("returns true for contains_all when field matches exactly", () => {
+    const content: FieldContent = {
       type: "multi-select",
       version: 1,
       value: ["a", "b"],
     };
-
-    expect(evaluateCondition(fieldContent, condition)).toBe(true);
+    expect(
+      evaluateGatingCondition(containsEvery(["a", "b"]), map(content)),
+    ).toBe(true);
   });
 
-  test("returns false for contains-every when field array lacks one required value", () => {
-    const condition: PropertyCondition = {
-      version: 1,
-      type: "string-array",
-      operator: "contains-every",
-      value: ["a", "b", "c"],
-    };
-    const fieldContent: FieldContent = {
+  test("returns false for contains_all when field lacks a required value", () => {
+    const content: FieldContent = {
       type: "multi-select",
       version: 1,
       value: ["a", "b"],
     };
-
-    expect(evaluateCondition(fieldContent, condition)).toBe(false);
+    expect(
+      evaluateGatingCondition(containsEvery(["a", "b", "c"]), map(content)),
+    ).toBe(false);
   });
 
-  test("returns false for contains-every when field array is empty", () => {
-    const condition: PropertyCondition = {
-      version: 1,
-      type: "string-array",
-      operator: "contains-every",
-      value: ["a"],
-    };
-    const fieldContent: FieldContent = {
+  test("returns false for contains_all when field array is empty", () => {
+    const content: FieldContent = {
       type: "multi-select",
       version: 1,
       value: [],
     };
-
-    expect(evaluateCondition(fieldContent, condition)).toBe(false);
+    expect(evaluateGatingCondition(containsEvery(["a"]), map(content))).toBe(
+      false,
+    );
   });
 
-  test("returns false when condition type is string but field is multi-select", () => {
-    const fieldContent: FieldContent = {
-      type: "multi-select",
-      version: 1,
-      value: ["a"],
-    };
-
-    expect(evaluateCondition(fieldContent, eqCondition)).toBe(false);
-  });
-
-  test("returns false when condition type is string-array but field is text", () => {
-    const condition: PropertyCondition = {
-      version: 1,
-      type: "string-array",
-      operator: "contains-every",
-      value: ["a"],
-    };
-
-    expect(evaluateCondition(textFieldX, condition)).toBe(false);
-  });
-
-  test("returns false for single-select with null value and string condition", () => {
-    const fieldContent: FieldContent = {
+  test("returns false for single-select null value against an eq gate", () => {
+    const content: FieldContent = {
       type: "single-select",
       version: 1,
       value: null,
     };
-
-    expect(evaluateCondition(fieldContent, eqCondition)).toBe(false);
+    expect(evaluateGatingCondition(eqCondition, map(content))).toBe(false);
   });
 
-  test("returns true for contains-every when condition value is empty array (false positive, bad DB data)", () => {
-    const condition: PropertyCondition = {
-      version: 1,
-      type: "string-array",
-      operator: "contains-every",
-      value: [],
-    };
-    const fieldContent: FieldContent = {
+  test("returns true for contains_all when the wanted list is empty", () => {
+    const content: FieldContent = {
       type: "multi-select",
       version: 1,
       value: ["a"],
     };
-
-    expect(evaluateCondition(fieldContent, condition)).toBe(true);
+    expect(evaluateGatingCondition(containsEvery([]), map(content))).toBe(true);
   });
 });
 

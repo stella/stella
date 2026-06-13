@@ -1,13 +1,12 @@
 import { panic } from "better-result";
 
+import type { ConditionNode } from "@stll/conditions";
+
 import type { ScopedDb } from "@/api/db";
 import type { PropertyStatus } from "@/api/db/schema";
-import type {
-  AIModelTool,
-  PropertyCondition,
-  PropertyTool,
-} from "@/api/db/schema-validators";
+import type { AIModelTool, PropertyTool } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
+import { parseStoredCondition } from "@/api/lib/conditions/parse-stored";
 import { brandPersistedPropertyId } from "@/api/lib/safe-id-boundaries";
 import type { PropertyContent } from "@/api/types";
 
@@ -38,7 +37,7 @@ const toPropertyId = (value: string) => brandPersistedPropertyId(value);
 
 export type BatchPropertyDependency = {
   dependsOnPropertyId: string;
-  condition: PropertyCondition | null;
+  condition: ConditionNode | null;
 };
 
 export type BatchProperty = {
@@ -67,7 +66,7 @@ export type ExecutionPlanProperty = {
 export type PropertyDependency = {
   propertyId: string;
   dependsOnPropertyId: string;
-  condition: PropertyCondition | null;
+  condition: ConditionNode | null;
 };
 
 type DependencyGraph = {
@@ -122,7 +121,7 @@ export const getExecutionPlanData = async (
     property.dependencies.map((dep) => ({
       propertyId: property.id,
       dependsOnPropertyId: dep.dependsOnPropertyId,
-      condition: dep.condition,
+      condition: parseStoredCondition(dep.condition),
     })),
   );
 

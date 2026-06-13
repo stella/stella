@@ -4,7 +4,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { RouteIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import type { PropertyCondition } from "@stll/api/types";
+import type { ConditionNode } from "@stll/conditions";
 import { Button } from "@stll/ui/components/button";
 import {
   Dialog,
@@ -35,26 +35,57 @@ import { FieldValueSelect } from "@/routes/_protected.workspaces/$workspaceId/-c
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 
-type StringOperators = Extract<
-  PropertyCondition,
-  { type: "string" }
->["operator"];
-
-type StringArrayOperators = Extract<
-  PropertyCondition,
-  { type: "string-array" }
->["operator"];
+// Surface operators map onto canonical AST shapes:
+//  - "equals" (text/single-select) → compare/eq against a literal
+//  - "contains-every" (multi-select) → predicate/contains_all with a list
+const CONDITION_OPERATORS = ["equals", "contains-every"] as const;
+type ConditionOperator = (typeof CONDITION_OPERATORS)[number];
 
 type ConditionData = {
-  version: 1;
   operator: ConditionOperator;
   value: string | string[];
   options: WorkspacePropertyOption[] | undefined;
 };
 
-type ConditionOperator = PropertyCondition["operator"];
-
 type Condition = PropertyDependency["condition"];
+
+/**
+ * Reads a stored AST node back into the editor's flat
+ * `{ operator, value }` shape for the two surface operators this
+ * builder produces. Any other node shape (or null) yields the
+ * content-type default, so an unrecognized condition simply resets.
+ */
+const readCondition = (
+  condition: Condition,
+  propertyId: string,
+): { operator: ConditionOperator; value: string | string[] } | null => {
+  if (!condition) {
+    return null;
+  }
+
+  if (
+    condition.type === "compare" &&
+    condition.op === "eq" &&
+    condition.left.type === "property" &&
+    condition.left.propertyId === propertyId &&
+    condition.right.type === "literal" &&
+    typeof condition.right.value === "string"
+  ) {
+    return { operator: "equals", value: condition.right.value };
+  }
+
+  if (
+    condition.type === "predicate" &&
+    condition.op === "contains_all" &&
+    condition.operand.type === "property" &&
+    condition.operand.propertyId === propertyId &&
+    Array.isArray(condition.value)
+  ) {
+    return { operator: "contains-every", value: condition.value };
+  }
+
+  return null;
+};
 
 const getConditionData = (
   property: WorkspaceProperty | undefined,
@@ -64,14 +95,14 @@ const getConditionData = (
     return null;
   }
 
-  let defaultOperator: NonNullable<Condition>["operator"] | undefined;
-  let defaultValue: NonNullable<Condition>["value"] | undefined;
+  let defaultOperator: ConditionOperator | undefined;
+  let defaultValue: string | string[] | undefined;
 
   switch (property.content.type) {
     case "text":
     case "single-select":
       defaultValue = "";
-      defaultOperator = "eq";
+      defaultOperator = "equals";
       break;
     case "multi-select":
       defaultValue = [];
@@ -87,10 +118,11 @@ const getConditionData = (
     return null;
   }
 
+  const parsed = readCondition(condition, property.id);
+
   return {
-    version: 1,
-    operator: condition?.operator ?? defaultOperator,
-    value: condition?.value ?? defaultValue,
+    operator: parsed?.operator ?? defaultOperator,
+    value: parsed?.value ?? defaultValue,
     options:
       "options" in property.content ? property.content.options : undefined,
   };
@@ -199,13 +231,13 @@ export const PropertyConditions = ({
 const getOperatorLabels = (): Record<ConditionOperator, string> => {
   const t = getTranslator();
   return {
-    eq: t("workspaces.operators.equals"),
+    equals: t("workspaces.operators.equals"),
     "contains-every": t("workspaces.operators.containsEvery"),
   };
 };
 
-const STRING_OPERATORS: StringOperators[] = ["eq"];
-const STRING_ARRAY_OPERATORS: StringArrayOperators[] = ["contains-every"];
+const STRING_OPERATORS: ConditionOperator[] = ["equals"];
+const STRING_ARRAY_OPERATORS: ConditionOperator[] = ["contains-every"];
 
 const getOperatorOptions = (
   value: string | string[],
@@ -225,32 +257,35 @@ const getOperatorOptions = (
 };
 
 type BuildConditionArgs = {
+  propertyId: string;
   operator: ConditionOperator;
   value: string | string[] | null;
 };
 
 const buildCondition = ({
+  propertyId,
   operator,
   value,
-}: BuildConditionArgs): PropertyCondition | null => {
+}: BuildConditionArgs): ConditionNode | null => {
   if (Array.isArray(value) && operator === "contains-every") {
     return value.length > 0
       ? {
-          version: 1,
-          type: "string-array",
-          operator,
+          type: "predicate",
+          operand: { type: "property", propertyId },
+          op: "contains_all",
           value,
         }
       : null;
   }
 
-  if (typeof value === "string" && operator === "eq") {
-    return value.trim().length > 0
+  if (typeof value === "string" && operator === "equals") {
+    const trimmed = value.trim();
+    return trimmed.length > 0
       ? {
-          version: 1,
-          type: "string",
-          operator,
-          value: value.trim(),
+          type: "compare",
+          left: { type: "property", propertyId },
+          op: "eq",
+          right: { type: "literal", value: trimmed },
         }
       : null;
   }
@@ -260,8 +295,8 @@ const buildCondition = ({
 
 type ConditionRowProps = {
   property: WorkspaceProperty;
-  data: NonNullable<ReturnType<typeof getConditionData>>;
-  onConditionChange: (condition: PropertyCondition | null) => void;
+  data: ConditionData;
+  onConditionChange: (condition: ConditionNode | null) => void;
 };
 
 const ConditionRow = ({
@@ -285,7 +320,11 @@ const ConditionRow = ({
           onValueChange={(newValue) => {
             if (newValue) {
               onConditionChange(
-                buildCondition({ operator: newValue, value: data.value }),
+                buildCondition({
+                  propertyId: property.id,
+                  operator: newValue,
+                  value: data.value,
+                }),
               );
             }
           }}
@@ -312,6 +351,7 @@ const ConditionRow = ({
             onChange={(e) =>
               onConditionChange(
                 buildCondition({
+                  propertyId: property.id,
                   operator: data.operator,
                   value: e.target.value,
                 }),
@@ -325,7 +365,11 @@ const ConditionRow = ({
           <FieldValueSelect
             onChange={(value) => {
               onConditionChange(
-                buildCondition({ operator: data.operator, value }),
+                buildCondition({
+                  propertyId: property.id,
+                  operator: data.operator,
+                  value,
+                }),
               );
             }}
             options={data.options}
@@ -337,7 +381,11 @@ const ConditionRow = ({
           <FieldValueSelect
             onChange={(value) => {
               onConditionChange(
-                buildCondition({ operator: data.operator, value }),
+                buildCondition({
+                  propertyId: property.id,
+                  operator: data.operator,
+                  value,
+                }),
               );
             }}
             options={data.options}

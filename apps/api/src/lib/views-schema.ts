@@ -6,7 +6,6 @@ import { conditionNodeSchema } from "@stll/conditions";
 
 import {
   manualInputToolSchema,
-  propertyConditionSchema,
   propertyContentSchema,
 } from "@/api/db/schema-validators";
 import { tConditionNode } from "@/api/lib/conditions/contract";
@@ -266,7 +265,7 @@ export const tViewTemplatePropertySchema = t.Object(
         t.Object(
           {
             dependsOnSourceId: t.String({ minLength: 1 }),
-            condition: t.Union([propertyConditionSchema, t.Null()]),
+            condition: t.Union([tConditionNode, t.Null()]),
           },
           strictObjectOptions,
         ),

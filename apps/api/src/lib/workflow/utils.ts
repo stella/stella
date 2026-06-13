@@ -1,7 +1,12 @@
-import type {
-  FieldContent,
-  PropertyCondition,
-} from "@/api/db/schema-validators";
+import {
+  type ConditionNode,
+  type ConditionValue,
+  type OperandResolver,
+  type RefOperand,
+  evaluateCondition as evaluateConditionNode,
+} from "@stll/conditions";
+
+import type { FieldContent } from "@/api/db/schema-validators";
 import type { PropertyBatch } from "@/api/lib/workflow/get-execution-plan";
 
 export const prepareBatch = (
@@ -36,51 +41,73 @@ export const prepareBatch = (
   };
 };
 
-export const evaluateCondition = (
-  fieldContent: FieldContent,
-  condition: PropertyCondition,
-): boolean => {
-  if (
-    fieldContent.type === "error" ||
-    fieldContent.type === "pending" ||
-    fieldContent.type === "unsupported" ||
-    fieldContent.type === "file" ||
-    fieldContent.type === "clip"
-  ) {
-    return false;
-  }
-
-  switch (condition.type) {
-    case "string": {
-      if (typeof fieldContent.value !== "string") {
-        return false;
-      }
-      return evaluateStringCondition(condition, fieldContent.value);
+/**
+ * Projects a field's content onto a concrete condition value. Content
+ * types that cannot gate (file, clip, error, pending, unsupported)
+ * resolve to `undefined`, which the evaluator treats as empty/absent.
+ */
+export const fieldContentToValue = (content: FieldContent): ConditionValue => {
+  switch (content.type) {
+    case "text":
+      return content.value;
+    case "single-select":
+      return content.value;
+    case "multi-select":
+      return content.value;
+    case "int":
+      return content.value;
+    case "date":
+      return content.value;
+    case "file":
+    case "clip":
+    case "error":
+    case "pending":
+    case "unsupported":
+      return undefined;
+    default: {
+      const exhaustive: never = content;
+      void exhaustive;
+      return undefined;
     }
-    case "string-array": {
-      if (!Array.isArray(fieldContent.value)) {
-        return false;
-      }
-      return evaluateStringArrayCondition(condition, fieldContent.value);
-    }
-    default:
-      return false;
   }
 };
 
-type StringCondition = Extract<PropertyCondition, { type: "string" }>;
+/**
+ * Builds an `OperandResolver` over the field contents available to a
+ * batch row. Extraction gating only references the dependency property
+ * by id, so a `property` operand resolves from the map; every other
+ * operand kind (builtin/kind/path) is irrelevant here and resolves to
+ * `undefined`.
+ */
+const buildGatingResolver =
+  (
+    fieldContentByPropertyId: ReadonlyMap<string, FieldContent>,
+  ): OperandResolver =>
+  (operand: RefOperand): ConditionValue => {
+    if (operand.type !== "property") {
+      return undefined;
+    }
+    const content = fieldContentByPropertyId.get(operand.propertyId);
+    if (!content) {
+      return undefined;
+    }
+    return fieldContentToValue(content);
+  };
 
-const evaluateStringCondition = (
-  condition: StringCondition,
-  fieldValue: string,
-) => fieldValue === condition.value;
-
-type StringArrayCondition = Extract<
-  PropertyCondition,
-  { type: "string-array" }
->;
-
-const evaluateStringArrayCondition = (
-  condition: StringArrayCondition,
-  fieldValue: string[],
-) => condition.value.every((v) => fieldValue.includes(v));
+/**
+ * Whether a dependent property's AI extraction should run, given the
+ * gating condition and the field contents available to its batch.
+ * A `null` condition always runs (no gate).
+ */
+export const evaluateGatingCondition = (
+  condition: ConditionNode | null,
+  fieldContentByPropertyId: ReadonlyMap<string, FieldContent>,
+): boolean => {
+  if (!condition) {
+    return true;
+  }
+  return evaluateConditionNode(
+    condition,
+    buildGatingResolver(fieldContentByPropertyId),
+  );
+};

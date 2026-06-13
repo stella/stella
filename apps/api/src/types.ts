@@ -19,8 +19,6 @@ export type OptionColor = SchemaValidators.OptionColor;
 
 export type BoundingBox = SchemaValidators.BoundingBoxes["boxes"][number];
 
-export type PropertyCondition = SchemaValidators.PropertyCondition;
-
 export type EntityKind = SchemaValidators.EntityKind;
 export type {
   AgendaItemKind,

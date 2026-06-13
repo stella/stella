@@ -6,7 +6,6 @@ import { properties, propertyDependencies } from "@/api/db/schema";
 import {
   aiModelToolSchema,
   manualInputToolSchema,
-  propertyConditionSchema,
   propertyContentSchema,
 } from "@/api/db/schema-validators";
 import type { PropertyTool } from "@/api/db/schema-validators";
@@ -15,6 +14,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { tConditionNode } from "@/api/lib/conditions/contract";
 import {
   tDefaultVarchar,
   tSafeId,
@@ -135,7 +135,7 @@ const updatePropertyBodySchema = t.Object({
         dependencies: t.Array(
           t.Object({
             dependsOnPropertyId: tSafeId("property"),
-            condition: t.Nullable(propertyConditionSchema),
+            condition: t.Nullable(tConditionNode),
           }),
         ),
       }),

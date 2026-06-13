@@ -2,9 +2,9 @@ import type {
   BoundingBox,
   AgendaItemKind,
   AgendaItemSource,
+  ConditionNode,
   EntityKind,
   OptionColor,
-  PropertyCondition,
   ViewLayout,
   ViewLayoutType,
 } from "@stll/api/types";
@@ -58,7 +58,7 @@ export const isFileDisplayable = (file: {
 
 export type PropertyDependency = {
   dependsOnPropertyId: string;
-  condition: PropertyCondition | null;
+  condition: ConditionNode | null;
 };
 
 type ManualInputTool = {

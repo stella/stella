@@ -147,7 +147,7 @@ const leafOp = (node: ConditionNode): LeafOp => {
 
 const leafValue = (node: ConditionNode): string => {
   if (node.type === "compare" && node.right.type === "literal") {
-    return String(node.right.value ?? "");
+    return String(node.right.value);
   }
   if (node.type === "predicate" && typeof node.value === "string") {
     return node.value;
