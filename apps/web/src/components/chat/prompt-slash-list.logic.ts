@@ -9,8 +9,12 @@ export type SlashItemGroup = {
 
 const SECTION_ORDER: SlashSectionKey[] = ["private", "team", "built-in"];
 
-const getSectionKey = (item: SlashItem): SlashSectionKey =>
-  item.kind === "prompt" ? item.prompt.scope : item.skill.scope;
+const getSectionKey = (item: SlashItem): SlashSectionKey => {
+  if (item.kind === "command") {
+    return "built-in";
+  }
+  return item.kind === "prompt" ? item.prompt.scope : item.skill.scope;
+};
 
 export const groupSlashItemsBySection = (
   items: SlashItem[],

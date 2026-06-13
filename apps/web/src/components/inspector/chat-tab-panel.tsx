@@ -60,10 +60,11 @@ import { useInlineRename } from "@/hooks/use-inline-rename";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import { type ChatThreadRef, createChatThreadId } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { useDevStore } from "@/lib/dev-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
+import { useModelSelectorStore } from "@/lib/model-selector-store";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
 import { toSafeId } from "@/lib/safe-id";
 import { ChatAnonymizedToggle } from "@/routes/_protected.chat/-components/chat-anonymized-toggle";
@@ -143,9 +144,10 @@ export const ChatTabPanel = ({
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const chatContextLabel = useChatContextLabel(tab, activeOrganizationId);
 
-  const { openChat, setChatContext, updateLabel } = useInspectorStore(
+  const { openChat, resetChatTabId, setChatContext, updateLabel } = useInspectorStore(
     useShallow((s) => ({
       openChat: s.openChat,
+      resetChatTabId: s.resetChatTabId,
       setChatContext: s.setChatContext,
       updateLabel: s.updateLabel,
     })),
@@ -431,6 +433,18 @@ export const ChatTabPanel = ({
               void stop();
             }}
             onSubmit={({ prompt }) => {
+              const text = prompt.replace(/<[^>]+>/g, "").trim();
+              if (text === "/new") {
+                resetChatTabId(tab.id, createChatThreadId());
+                editorController.setContent("");
+                return;
+              }
+              if (text === "/model") {
+                editorController.setContent("");
+                useModelSelectorStore.getState().open();
+                return;
+              }
+
               void ensureAIAvailable().then((available) => {
                 if (!available) {
                   return;

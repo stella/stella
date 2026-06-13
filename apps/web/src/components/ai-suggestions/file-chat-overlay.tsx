@@ -57,6 +57,7 @@ import type { ApprovalToolName } from "@/components/chat/chat-ui-tools";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
+import { useModelSelectorStore } from "@/lib/model-selector-store";
 import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useDevStore } from "@/lib/dev-store";
@@ -1292,6 +1293,20 @@ const FileChatOverlayInner = ({
             void stop();
           }}
           onSubmit={({ prompt }) => {
+            const text = prompt.replace(/<[^>]+>/g, "").trim();
+            if (text === "/new") {
+              shouldFocusComposerAfterNewThreadRef.current = true;
+              setPanelOpen(false);
+              onNewThread();
+              editorController.setContent("");
+              return;
+            }
+            if (text === "/model") {
+              editorController.setContent("");
+              useModelSelectorStore.getState().open();
+              return;
+            }
+
             void ensureAIAvailable().then((available) => {
               if (!available) {
                 return;

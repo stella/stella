@@ -43,6 +43,7 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { useDevStore } from "@/lib/dev-store";
 import { toAPIError } from "@/lib/errors";
+import { useModelSelectorStore } from "@/lib/model-selector-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
 import { toSafeId } from "@/lib/safe-id";
@@ -479,6 +480,29 @@ export const ChatThreadPage = ({
                 void stop();
               }}
               onSubmit={async (draft) => {
+                const text = draft.html.replace(/<[^>]+>/g, "").trim();
+                if (text === "/new") {
+                  controller.setContent("");
+                  if (threadRef.scope === "workspace") {
+                    void navigate({
+                      to: "/chat/workspaces/$workspaceId/new",
+                      params: { workspaceId: threadRef.workspaceId },
+                      replace: true,
+                    });
+                  } else {
+                    void navigate({
+                      to: "/chat/new",
+                      replace: true,
+                    });
+                  }
+                  return;
+                }
+                if (text === "/model") {
+                  controller.setContent("");
+                  useModelSelectorStore.getState().open();
+                  return;
+                }
+
                 if (!(await ensureAIAvailable())) {
                   return;
                 }

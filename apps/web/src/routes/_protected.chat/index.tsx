@@ -49,6 +49,7 @@ import { toAPIError } from "@/lib/errors";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
+import { useModelSelectorStore } from "@/lib/model-selector-store";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
@@ -356,6 +357,18 @@ function ChatIndex() {
               autoFocus
               controller={controller}
               onSubmit={async (draft) => {
+                const text = draft.html.replace(/<[^>]+>/g, "").trim();
+                if (text === "/new") {
+                  controller.setContent("");
+                  threadIdRef.current = createChatThreadId();
+                  return;
+                }
+                if (text === "/model") {
+                  controller.setContent("");
+                  useModelSelectorStore.getState().open();
+                  return;
+                }
+
                 if (!(await ensureAIAvailable())) {
                   return;
                 }

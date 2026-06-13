@@ -19,15 +19,33 @@ export type SlashSkill = {
   scope: SlashSkillScope;
 };
 
+export type SlashCommand = {
+  id: string;
+  name: string;
+  command: string;
+  description: string;
+};
+
 export type SlashItem =
   | { kind: "prompt"; prompt: ChatPrompt }
-  | { kind: "skill"; skill: SlashSkill };
+  | { kind: "skill"; skill: SlashSkill }
+  | { kind: "command"; command: SlashCommand };
 
 const insertSlashItem = (
   editor: Editor,
   range: { from: number; to: number },
   item: SlashItem,
 ) => {
+  if (item.kind === "command") {
+    editor
+      .chain()
+      .focus()
+      .deleteRange(range)
+      .insertContent(item.command.command + " ")
+      .run();
+    return;
+  }
+
   if (item.kind === "prompt") {
     insertPastedTextChip(
       editor,
@@ -104,6 +122,14 @@ const filterItems = (items: SlashItem[], query: string): SlashItem[] => {
     return items;
   }
   return items.filter((item) => {
+    if (item.kind === "command") {
+      const { name, command, description } = item.command;
+      return (
+        matchesQuery(name, trimmed) ||
+        matchesQuery(command, trimmed) ||
+        matchesQuery(description, trimmed)
+      );
+    }
     if (item.kind === "prompt") {
       const { name, command, body } = item.prompt;
       return (

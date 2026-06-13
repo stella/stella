@@ -47,6 +47,27 @@ export const buildChatSlashItems = ({
   shortcuts,
   skillPages,
 }: BuildChatSlashItemsInput): SlashItem[] => {
+  const commandItems: SlashItem[] = [
+    {
+      kind: "command",
+      command: {
+        id: "new-chat",
+        name: "new",
+        command: "/new",
+        description: "Start a new chat session",
+      },
+    },
+    {
+      kind: "command",
+      command: {
+        id: "switch-model",
+        name: "model",
+        command: "/model",
+        description: "Switch the AI model used",
+      },
+    },
+  ];
+
   const promptItems: SlashItem[] = shortcuts.map((shortcut) => ({
     kind: "prompt" as const,
     prompt: {
@@ -86,7 +107,7 @@ export const buildChatSlashItems = ({
       },
     }));
 
-  return [...promptItems, ...skillItems];
+  return [...commandItems, ...promptItems, ...skillItems];
 };
 
 const getChatVisibleInstalledSkillRows = (

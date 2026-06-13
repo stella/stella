@@ -42,6 +42,7 @@ import {
 import type { InspectorTab } from "@/components/inspector/inspector-store";
 import { AIAvailabilityProvider } from "@/components/require-ai-key";
 import { SelfhostUpdateBanner } from "@/components/selfhost-update-banner";
+import { ModelSelectorDialog } from "@/components/chat/model-selector-dialog";
 import { ShortcutHintsOverlay } from "@/components/shortcut-hints-overlay";
 import {
   SidebarInset,
@@ -292,6 +293,7 @@ function ProtectedComponent() {
               <ProtectedContent />
               <WorkspaceInspectorSidePanel />
               <ShortcutHintsOverlay />
+              <ModelSelectorDialog />
             </ChatEditorProvider>
           </AIAvailabilityProvider>
         </ChatMentionProviders>
