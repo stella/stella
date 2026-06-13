@@ -168,6 +168,7 @@
     "@stll/folio-core": "0.28.0",
     "@stll/folio-react": "0.16.3",
     "@t3-oss/env-core": "0.13.11",
+    "@tailwindcss/cli": "4.3.3",
     "@tailwindcss/postcss": "4.3.3",
     "@tailwindcss/vite": "4.3.3",
     "@tanstack/ai": "0.48.0",

@@ -15,20 +15,28 @@
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
+    "@base-ui/react": "catalog:",
     "@elysiajs/eden": "^1.4.9",
     "@stll/api": "workspace:*",
     "@stll/i18n": "workspace:*",
+    "@stll/ui": "workspace:*",
     "better-result": "catalog:",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "lucide-react": "catalog:",
+    "mimetext": "^3.0.28",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
+    "tailwind-merge": "^3.6.0",
     "use-intl": "catalog:"
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
+    "@tailwindcss/cli": "catalog:",
     "@types/bun": "catalog:",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
+    "tailwindcss": "catalog:",
     "typescript": "catalog:"
   }
 }
