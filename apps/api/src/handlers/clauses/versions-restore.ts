@@ -96,31 +96,44 @@ const restoreClauseVersion = createSafeRootHandler(
       );
     }
 
-    const versionCount = yield* Result.await(
-      safeDb((tx) =>
-        tx.$count(clauseVersions, eq(clauseVersions.clauseId, clauseId)),
-      ),
-    );
-
-    const plan = planClauseVersionRestore({
-      currentVersion: clause.currentVersion,
-      versionCount,
-    });
-
-    if (plan.type === "at-limit") {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Version limit reached for this clause",
-        }),
-      );
-    }
-
-    const newVersion = plan.newVersion;
     const restoredBody = version.body;
 
     const updated = yield* Result.await(
       safeDb(async (tx) => {
+        // Lock the clause row, then recompute the next version and re-run the
+        // limit check under the lock. Concurrent restores (or a restore racing
+        // the explicit snapshot path in update.ts) serialize here, so the
+        // second request sees the first's committed insert: it cannot reuse the
+        // same (clauseId, version) or push the clause past the cap.
+        const [locked] = await tx
+          .select({ currentVersion: clauses.currentVersion })
+          .from(clauses)
+          .where(
+            and(
+              eq(clauses.id, clauseId),
+              eq(clauses.organizationId, organizationId),
+            ),
+          )
+          .for("update");
+        if (!locked) {
+          return { ok: false as const, reason: "not-found" as const };
+        }
+
+        const versionCount = await tx.$count(
+          clauseVersions,
+          eq(clauseVersions.clauseId, clauseId),
+        );
+
+        const plan = planClauseVersionRestore({
+          currentVersion: locked.currentVersion,
+          versionCount,
+        });
+        if (plan.type === "at-limit") {
+          return { ok: false as const, reason: "limit" as const };
+        }
+
+        const newVersion = plan.newVersion;
+
         const [row] = await tx
           .update(clauses)
           .set({
@@ -154,7 +167,7 @@ const restoreClauseVersion = createSafeRootHandler(
           resourceId: clauseId,
           changes: {
             currentVersion: {
-              old: clause.currentVersion,
+              old: locked.currentVersion,
               new: newVersion,
             },
             restoredFromVersion: {
@@ -164,11 +177,25 @@ const restoreClauseVersion = createSafeRootHandler(
           },
         });
 
-        return row;
+        return { ok: true as const, row };
       }),
     );
 
-    if (!updated) {
+    if (!updated.ok) {
+      if (updated.reason === "not-found") {
+        return Result.err(
+          new HandlerError({ status: 404, message: "Clause not found" }),
+        );
+      }
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Version limit reached for this clause",
+        }),
+      );
+    }
+
+    if (!updated.row) {
       panic("Failed to restore clause version");
     }
 
@@ -184,7 +211,7 @@ const restoreClauseVersion = createSafeRootHandler(
       captureError(searchVectorResult.error, { clauseId });
     }
 
-    return Result.ok(updated);
+    return Result.ok(updated.row);
   },
 );
 
