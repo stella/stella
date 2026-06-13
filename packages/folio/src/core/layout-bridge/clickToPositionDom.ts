@@ -238,6 +238,13 @@ function findNearestSpanInElement(
   // Check for empty paragraphs within this element
   const emptyRun = queryHtmlElement(element, ".layout-empty-run");
   if (emptyRun) {
+    // Prefer the empty-run's own PM position — the renderer sets it to the
+    // hard-break position for a paragraph ending in `<w:br/>`, so a click on
+    // that trailing blank row lands after the break rather than at the
+    // paragraph start. Fall back to the paragraph start. (eigenpal/docx-editor#752.)
+    if (emptyRun.dataset["pmStart"]) {
+      return Number(emptyRun.dataset["pmStart"]);
+    }
     const paragraph = closestHtmlElement(emptyRun, ".layout-paragraph");
     if (paragraph && paragraph.dataset["pmStart"]) {
       return Number(paragraph.dataset["pmStart"]);

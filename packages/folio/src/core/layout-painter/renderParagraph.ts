@@ -752,6 +752,20 @@ function renderInlineImageRun(run: ImageRun, doc: Document): HTMLElement {
   img.style.display = "inline";
   img.style.verticalAlign = "middle";
 
+  // Fit the image to its container's content width (the text column or table
+  // cell) while preserving the run's aspect ratio: cap the width at 100% of the
+  // container and let `aspect-ratio` drive the height. Without this a wide image
+  // in a narrow cell squashes (the explicit height stays while the width is
+  // clamped) or overflows the page. The run's own aspect ratio is used — not the
+  // image's natural one — so a deliberately stretched image keeps its shape.
+  // (eigenpal/docx-editor#760.) Only the plain inline path opts in: the rotated
+  // and cropped paths return earlier and need their explicit pixel geometry.
+  if (run.width > 0 && run.height > 0) {
+    img.style.height = "auto";
+    img.style.aspectRatio = `${run.width} / ${run.height}`;
+    img.style.maxWidth = "100%";
+  }
+
   // wp:inline distT/distB: the measurer folds these into maxImageHeightPx;
   // applying them as margins here keeps the margin-box footprint consistent
   // with the line height the measurer reserved.
@@ -1517,9 +1531,33 @@ export function renderLine(
   if (runsForLine.length === 0) {
     const emptySpan = doc.createElement("span");
     emptySpan.className = `${PARAGRAPH_CLASS_NAMES.run} layout-empty-run`;
+    // A paragraph that ends with a hard break has a trailing blank row whose
+    // sliced runs are empty (measurement starts it past the last run), so it
+    // lands here rather than in the line-break marker path below. Resolve it to
+    // the position *after* that break (the break's `pmEnd`, since a break spans
+    // `[pmStart, pmEnd)`), not the paragraph start, so a click or caret on the
+    // blank line lands after the break rather than back on the previous line.
+    // (eigenpal/docx-editor#752.)
+    const trailingRun = block.runs.at(-1);
+    const trailingBreakEnd =
+      line.fromRun > block.runs.length - 1 &&
+      trailingRun !== undefined &&
+      isLineBreakRun(trailingRun)
+        ? trailingRun.pmEnd
+        : undefined;
     const contentStart =
-      block.pmStart === undefined ? undefined : block.pmStart + 1;
-    applyPmPositions(emptySpan, contentStart, block.pmEnd ?? contentStart);
+      trailingBreakEnd ??
+      (block.pmStart === undefined ? undefined : block.pmStart + 1);
+    // For a trailing break, collapse the span to the after-break position. Its
+    // `&nbsp;` is matched by the generic `span[data-pm-start][data-pm-end]`
+    // resolver (which runs before the empty-run fallback), so a wide range would
+    // let a right-half click resolve to the paragraph end instead of after the
+    // break — disagreeing with vertical navigation. (eigenpal/docx-editor#752.)
+    const contentEnd =
+      trailingBreakEnd !== undefined
+        ? contentStart
+        : (block.pmEnd ?? contentStart);
+    applyPmPositions(emptySpan, contentStart, contentEnd);
     emptySpan.innerHTML = "&nbsp;";
     lineEl.append(emptySpan);
     return lineEl;
@@ -1867,6 +1905,37 @@ export function renderLine(
       const runEl = renderRun(run, doc, options?.context);
       lineEl.append(runEl);
     }
+  }
+
+  // A line whose in-flow runs are all line breaks (a blank row from consecutive
+  // `<w:br/>`) renders as just a `<br>`, whose PM position the click/caret/
+  // visual-line resolvers don't read — they query `span[data-pm-start]`. With no
+  // positioned span on the row those resolvers fall back to the paragraph start,
+  // collapsing clicks, the caret, and arrow navigation onto the first line. Emit
+  // a zero-width positioned marker carrying the break's position so the existing
+  // resolvers can locate the row. (eigenpal/docx-editor#752; derived from the
+  // runs instead of a `querySelector` so the painter stays testable with a
+  // minimal fake Document.) Prepended ahead of the `<br>`: the break pushes any
+  // following node onto the next visual line, so a marker after it would carry
+  // the wrong Y and the caret would land a row too low.
+  //
+  // Floating image runs stay in the line's run range but the painter renders
+  // them in a separate layer (it `continue`s past them), so a break row that
+  // also carries a floating image still paints as only a `<br>`. Exclude them
+  // when deciding whether the row is blank, else the marker is suppressed.
+  const inFlowRuns = runsForLine.filter(
+    (run) => !(isImageRun(run) && isFloatingImageRun(run)),
+  );
+  const blankBreakRun =
+    inFlowRuns.length > 0 && inFlowRuns.every(isLineBreakRun)
+      ? inFlowRuns.find(isLineBreakRun)
+      : undefined;
+  if (blankBreakRun?.pmStart !== undefined) {
+    const marker = doc.createElement("span");
+    marker.className = PARAGRAPH_CLASS_NAMES.run;
+    applyPmPositions(marker, blankBreakRun.pmStart, blankBreakRun.pmStart);
+    marker.textContent = "\u200B";
+    lineEl.prepend(marker);
   }
 
   return lineEl;

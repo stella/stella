@@ -102,7 +102,12 @@ const TEST_EXPLICIT_BLACK_COLOR = " #000000 ";
 const TEST_EXPLICIT_TEXT_COLOR = "#C00000";
 
 describe("renderLine inline image handling", () => {
-  test("pins image dimensions and centers an image-only line", () => {
+  // The plain inline image fits to its container's content width while keeping
+  // the run's aspect ratio: width is pinned but `max-width: 100%` + `aspect-ratio`
+  // let a wide image scale down inside a narrow column/cell instead of squashing
+  // or overflowing the page (eigenpal/docx-editor#760). Height becomes `auto` so
+  // the aspect ratio drives it.
+  test("fits an inline image to the container width and centers an image-only line", () => {
     const imageRun: ImageRun = {
       kind: "image",
       src: "data:image/png;base64,",
@@ -135,7 +140,9 @@ describe("renderLine inline image handling", () => {
     expect(lineEl.style.display).toBe("flex");
     expect(lineEl.style.alignItems).toBe("center");
     expect(imageEl?.style.width).toBe("186px");
-    expect(imageEl?.style.height).toBe("29px");
+    expect(imageEl?.style.height).toBe("auto");
+    expect(imageEl?.style.aspectRatio).toBe("186 / 29");
+    expect(imageEl?.style.maxWidth).toBe("100%");
   });
 
   // eigenpal #424 (image-crop subset): an inline image with crop fractions
