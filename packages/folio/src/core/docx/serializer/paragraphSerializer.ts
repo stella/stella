@@ -35,6 +35,7 @@ import type {
   TextFormatting,
   TrackedChangeInfo,
 } from "../../types/document";
+import { numPrEqual } from "../numberingParser";
 // oxlint-disable-next-line import/no-cycle -- OOXML model is mutually recursive: paragraphs hold runs, shape-textbox runs hold paragraphs
 import { serializeRun, serializeTextFormatting } from "./runSerializer";
 import { serializeSectionProperties } from "./sectionPropertiesSerializer";
@@ -463,8 +464,18 @@ export function serializeParagraphFormatting(
     // Widow control
     pushToggle("widowControl", formatting.widowControl);
 
-    // Numbering
-    const numPrXml = serializeNumbering(formatting.numPr);
+    // Numbering. Skip numPr that still equals its style-sourced value (see
+    // ParagraphFormatting.numPrFromStyle) — the parser materialized it from
+    // the style and writing it back as direct formatting would flip Word's
+    // level-indent precedence on the saved file. Guards the direct
+    // serialize-a-parsed-Document path; the PM save path already drops it
+    // in fromProseDoc.
+    const styleSourcedNumPr =
+      formatting.numPrFromStyle != null &&
+      numPrEqual(formatting.numPr, formatting.numPrFromStyle);
+    const numPrXml = styleSourcedNumPr
+      ? ""
+      : serializeNumbering(formatting.numPr);
     if (numPrXml) {
       parts.push(numPrXml);
     }

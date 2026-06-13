@@ -12,6 +12,7 @@
 
 import type { Node as PMNode, Mark } from "prosemirror-model";
 
+import { numPrEqual } from "../../docx/numberingParser";
 import { narrowEnum, ShapeOutlineStyleSchema } from "../../docx/parserEnums";
 import type {
   ImageWrap,
@@ -678,6 +679,20 @@ function convertPMParagraph(
   return paragraph;
 }
 
+/**
+ * Whether the paragraph's numbering still comes verbatim from its style —
+ * serialize no direct `<w:numPr>` then. The moment a list command changes
+ * `numPr` the values diverge and the numbering serializes as direct
+ * formatting, so a stale provenance value can never swallow a user edit.
+ */
+function isStyleSourcedNumPr(attrs: ParagraphAttrs): boolean {
+  return (
+    attrs.numPrFromStyle != null &&
+    attrs.numPr != null &&
+    numPrEqual(attrs.numPr, attrs.numPrFromStyle)
+  );
+}
+
 function paragraphAttrsToFormatting(
   attrs: ParagraphAttrs,
 ): ParagraphFormatting | undefined {
@@ -703,15 +718,21 @@ function paragraphAttrsToFormatting(
         delete result.alignment;
       }
     }
-    if (
+    if (isStyleSourcedNumPr(attrs)) {
+      // The numbering still comes verbatim from the paragraph style — don't
+      // materialize it as direct formatting (see ParagraphAttrs.numPrFromStyle).
+      delete result.numPr;
+      delete result.numPrFromStyle;
+    } else if (
       attrs.numPr !== orig.numPr &&
-      JSON.stringify(attrs.numPr) !== JSON.stringify(orig.numPr)
+      !numPrEqual(attrs.numPr, orig.numPr)
     ) {
       if (attrs.numPr) {
         result.numPr = attrs.numPr;
       } else {
         delete result.numPr;
       }
+      delete result.numPrFromStyle;
     }
     if (attrs.styleId !== (orig.styleId ?? undefined)) {
       if (attrs.styleId) {
@@ -801,7 +822,7 @@ function paragraphAttrsToFormatting(
   if (attrs.hangingIndent) {
     f.hangingIndent = attrs.hangingIndent;
   }
-  if (attrs.numPr) {
+  if (attrs.numPr && !isStyleSourcedNumPr(attrs)) {
     f.numPr = attrs.numPr;
   }
   if (attrs.styleId) {

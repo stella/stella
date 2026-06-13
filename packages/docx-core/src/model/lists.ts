@@ -37,6 +37,14 @@ export type NumberFormat =
   | "aiueoFullWidth"
   | "irohaFullWidth"
   | "decimalZero"
+  // Synthetic in-memory formats for Word's `w:numFmt w:val="custom"` with an
+  // XSLT-style zero-padded format string ("001, 002, ...", "0001, ...",
+  // "00001, ..."). Not OOXML enum values — never serialized (numbering.xml is
+  // preserved as-is on save); they exist so the render pipeline can carry the
+  // pad width through the existing NumberFormat plumbing.
+  | "decimalZero3"
+  | "decimalZero4"
+  | "decimalZero5"
   | "bullet"
   | "ganada"
   | "chosung"

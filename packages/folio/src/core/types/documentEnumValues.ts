@@ -749,6 +749,12 @@ export const NUMBER_FORMAT_VALUES = [
   "aiueoFullWidth",
   "irohaFullWidth",
   "decimalZero",
+  // Synthetic zero-padded decimal formats (Word `w:numFmt w:val="custom"`).
+  // Included here so the marker pipeline's `isNumberFormat` guard accepts
+  // `listLevelNumFmts` carrying them; they are never serialized back out.
+  "decimalZero3",
+  "decimalZero4",
+  "decimalZero5",
   "bullet",
   "ganada",
   "chosung",

@@ -10,6 +10,7 @@ import { Fragment } from "prosemirror-model";
 import type { Mark, Node as PMNode, NodeSpec, Schema } from "prosemirror-model";
 import type { Command, EditorState, Transaction } from "prosemirror-state";
 
+import type { NumberingMap } from "../../../docx/numberingParser";
 import type {
   ParagraphAlignment,
   LineSpacingRule,
@@ -24,7 +25,10 @@ import { paragraphToStyle } from "../../../utils/formatToStyle";
 import { collectHeadings } from "../../../utils/headingCollector";
 import { expectParagraphAttrs } from "../../attrs";
 import type { ParagraphAttrs } from "../../schema/nodes";
-import { paragraphAttrsFromResolvedStyle } from "../../styles/resolvedStyleAttrs";
+import {
+  paragraphAttrsFromResolvedStyle,
+  listAttrsFromResolvedStyle,
+} from "../../styles/resolvedStyleAttrs";
 import { createNodeExtension } from "../create";
 import type { ExtensionContext, ExtensionRuntime } from "../types";
 
@@ -335,6 +339,7 @@ const paragraphNodeSpec: NodeSpec = {
     indentFirstLine: { default: null },
     hangingIndent: { default: false },
     numPr: { default: null },
+    numPrFromStyle: { default: null },
     listNumFmt: { default: null },
     listIsBullet: { default: null },
     listIsLegal: { default: null },
@@ -539,6 +544,14 @@ function setParagraphAttrsCmd(attrs: Record<string, unknown>): Command {
 export type ResolvedStyleAttrs = {
   paragraphFormatting?: ParagraphFormatting;
   runFormatting?: TextFormatting;
+  /**
+   * Numbering definitions from the document package. When the applied style
+   * carries a `w:numPr`, these resolve the numbering level into the list
+   * marker attrs (template, per-level formats, counter key) so the painter
+   * renders the style's numbering — e.g. "[Claim 1]" — instead of falling
+   * back to a plain decimal marker.
+   */
+  numbering?: NumberingMap | null;
 };
 
 // ============================================================================
@@ -717,6 +730,16 @@ function makeApplyStyle(schema: Schema) {
               newAttrs,
               paragraphAttrsFromResolvedStyle(resolvedAttrs),
             );
+            // A style with `w:numPr` attaches its numbering (numPr + marker
+            // attrs). A style without numbering leaves existing list attrs
+            // untouched — direct numbering survives a style switch in Word.
+            const listAttrs = listAttrsFromResolvedStyle(
+              resolvedAttrs,
+              resolvedAttrs.numbering,
+            );
+            if (listAttrs) {
+              Object.assign(newAttrs, listAttrs);
+            }
           }
 
           tr = tr.setNodeMarkup(pos, undefined, newAttrs);

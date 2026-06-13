@@ -60,6 +60,7 @@ import {
   applyFolioAIEditOperations,
   createFolioAIEditSnapshot,
 } from "../core/ai-edits";
+import { getCachedNumberingMap } from "../core/docx/numberingParser";
 // ProseMirror editor
 import {
   TextSelection,
@@ -2166,6 +2167,9 @@ export function DocxEditor({
               if (resolved.runFormatting) {
                 styleAttrs.runFormatting = resolved.runFormatting;
               }
+              styleAttrs.numbering = currentDoc?.package.numbering
+                ? getCachedNumberingMap(currentDoc.package.numbering)
+                : null;
               applyStyle(action.value, styleAttrs)(commandState, view.dispatch);
             } else {
               // No styles available, just set the styleId

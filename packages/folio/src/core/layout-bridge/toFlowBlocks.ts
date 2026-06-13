@@ -8,6 +8,7 @@
 import type { Node as PMNode, Mark } from "prosemirror-model";
 
 import { convertBulletToUnicode } from "../docx/bulletMarkers";
+import { padDecimal } from "../docx/numberingParser";
 import type {
   FlowBlock,
   ParagraphBlock,
@@ -257,7 +258,13 @@ export function formatCounter(
     case "lowerLetter":
       return toLetter(value, false);
     case "decimalZero":
-      return value < 10 ? `0${value}` : String(value);
+      return padDecimal(value, 2);
+    case "decimalZero3":
+      return padDecimal(value, 3);
+    case "decimalZero4":
+      return padDecimal(value, 4);
+    case "decimalZero5":
+      return padDecimal(value, 5);
     case "none":
       return "";
     default:
