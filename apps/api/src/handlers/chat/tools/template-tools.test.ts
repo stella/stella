@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { ScopedDb } from "@/api/db";
+import type { SafeDb, ScopedDb } from "@/api/db";
 import { toSafeId } from "@/api/lib/branded-types";
 
 import {
@@ -13,6 +13,7 @@ import {
 type TemplateRow = { id: string; name: string; fieldCount: number };
 
 const orgId = toSafeId<"organization">("org-test");
+const userId = toSafeId<"user">("user-test");
 
 /** Minimal scopedDb stub exposing only the templates RQB list_templates calls. */
 const stubScopedDb = (rows: TemplateRow[]): ScopedDb => {
@@ -23,11 +24,22 @@ const stubScopedDb = (rows: TemplateRow[]): ScopedDb => {
     await run(tx)) as unknown as ScopedDb;
 };
 
+/** safeDb stub: the metering callbacks only touch it on a model step, which
+ *  these tool-registration tests never trigger (no orgAIConfig), so it is
+ *  never invoked. */
+// SAFETY: test double — never called because no AI generation runs here.
+// eslint-disable-next-line typescript/no-unsafe-type-assertion
+const stubSafeDb = (() => {
+  throw new Error("safeDb stub must not be called");
+}) as unknown as SafeDb;
+
 describe("createTemplateTools", () => {
   test("registers list, describe and fill template tools", () => {
     const tools = createTemplateTools({
       scopedDb: stubScopedDb([]),
+      safeDb: stubSafeDb,
       organizationId: orgId,
+      userId,
     });
     expect(tools[LIST_TEMPLATES_TOOL_NAME]).toBeDefined();
     expect(tools[DESCRIBE_TEMPLATE_TOOL_NAME]).toBeDefined();
@@ -41,7 +53,9 @@ describe("createTemplateTools", () => {
     ];
     const tools = createTemplateTools({
       scopedDb: stubScopedDb(rows),
+      safeDb: stubSafeDb,
       organizationId: orgId,
+      userId,
     });
     // SAFETY: invoke the tool's execute directly with a stub call context.
     // eslint-disable-next-line typescript/no-unsafe-type-assertion
