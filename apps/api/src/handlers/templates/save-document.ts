@@ -9,7 +9,12 @@ import {
   readManifest,
   writeManifest,
 } from "@/api/handlers/docx/template-manifest";
-import type { FieldMeta, TemplateManifest } from "@/api/handlers/docx/types";
+import type {
+  DiscoveredField,
+  DiscoveredTemplate,
+  FieldMeta,
+  TemplateManifest,
+} from "@/api/handlers/docx/types";
 import { isTemplateManifest } from "@/api/handlers/docx/types";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -27,6 +32,40 @@ const buildVersionS3Key = (
   templateId: SafeId<"template">,
   version: number,
 ) => `${organizationId}/templates/${templateId}/v${version}.docx`;
+
+/** Every path discovery still found in the saved body, including nested
+ *  loop-item paths (prefixed by their array root). A path absent from this set
+ *  has no live `{{marker}}` (or condition/each reference) in the document. */
+const collectDiscoveredPaths = (discovered: DiscoveredTemplate): Set<string> => {
+  const paths = new Set<string>();
+  const visit = (field: DiscoveredField, prefix: string): void => {
+    const fullPath = prefix ? `${prefix}.${field.path}` : field.path;
+    paths.add(fullPath);
+    for (const item of field.itemFields ?? []) {
+      visit(item, fullPath);
+    }
+  };
+  for (const field of discovered.fields) {
+    visit(field, "");
+  }
+  return paths;
+};
+
+/** A manifest field that derives its value from somewhere other than a literal
+ *  body `{{marker}}` (formula/condition derive a value; AI drafts/adapts;
+ *  lookup resolves a registry hit; composite parts join into one marker;
+ *  dependent select binds to another field). Such a field can legitimately
+ *  survive a save even when discovery no longer reports its path, so it is
+ *  never treated as a deleted-marker orphan. */
+const hasDerivedValueSource = (field: FieldMeta): boolean =>
+  field.formula !== undefined ||
+  field.condition !== undefined ||
+  field.aiPrompt !== undefined ||
+  field.aiAdapt === true ||
+  field.lookup !== undefined ||
+  field.parts !== undefined ||
+  field.format !== undefined ||
+  field.optionsFrom !== undefined;
 
 const saveDocumentBodySchema = t.Object({
   file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
@@ -145,9 +184,23 @@ const saveTemplateDocument = createSafeRootHandler(
       dateFormat: sourceFieldByPath.get(f.path)?.dateFormat,
     }));
 
+    // Drop orphaned plain fields: a Studio edit can delete a `{{field}}` marker
+    // from the body without a separate field-delete action, but the client
+    // manifest still carries that field, so the merge re-adds it as a
+    // manifest-only field. Such a field has no live marker (discovery did not
+    // find its path) and no derived value source, so persisting it would keep
+    // the Fill tab prompting for a value the document can never use. Fields with
+    // a derived value source (formula/condition/AI/lookup/composite/dependent)
+    // are kept: they legitimately lack a literal marker.
+    const discoveredPaths = collectDiscoveredPaths(discovered);
+    const prunedFieldMetas = fieldMetas.filter(
+      (field) =>
+        discoveredPaths.has(field.path) || hasDerivedValueSource(field),
+    );
+
     const manifest: TemplateManifest = {
       version: baseManifest?.version ?? 1,
-      fields: fieldMetas,
+      fields: prunedFieldMetas,
     };
 
     // Re-embed the merged manifest so the stored DOCX stays in sync with the DB.
