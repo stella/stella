@@ -1,10 +1,6 @@
 import { runChatAnonPipeline } from "@stll/anonymize-chat";
 import type { ChatAnonResult } from "@stll/anonymize-chat";
-import type {
-  GazetteerEntry,
-  PipelineConfig,
-  PipelineContext,
-} from "@stll/anonymize-wasm";
+import type { GazetteerEntry, PipelineConfig } from "@stll/anonymize-wasm";
 
 import { createPipelineContextRunner } from "@/lib/anonymize/pipeline-context";
 
@@ -16,7 +12,6 @@ export type { ChatAnonPair, ChatAnonResult } from "@stll/anonymize-chat";
 let dictionariesPromise: Promise<
   NonNullable<PipelineConfig["dictionaries"]>
 > | null = null;
-let pipelineContextPromise: Promise<PipelineContext> | null = null;
 const runWithPipelineContext = createPipelineContextRunner();
 
 // eslint-disable-next-line @typescript-eslint/promise-function-async -- lazy init returns the cached promise without awaiting
@@ -30,19 +25,11 @@ const getDictionaries = (): Promise<
   return dictionariesPromise;
 };
 
-const getPipelineContext = async () => {
-  pipelineContextPromise ??= (async () => {
-    const wasm = await import("@stll/anonymize-wasm");
-    return wasm.createPipelineContext();
-  })();
-  return await pipelineContextPromise;
-};
-
 /**
  * Run the same wasm pipeline the server uses against a single
- * chat-sized text from the main thread. Calls share the
- * `PipelineContext` search caches, but run serially so
- * per-document coreference state can be cleared between inputs.
+ * chat-sized text from the main thread. Calls run serially, but
+ * each input gets its own `PipelineContext` so coreference aliases
+ * cannot carry between unrelated drafts.
  */
 export const anonymizeChatText = async ({
   gazetteerEntries = [],
@@ -55,13 +42,12 @@ export const anonymizeChatText = async ({
   workspaceId: string;
   gazetteerEntries?: GazetteerEntry[];
 }): Promise<ChatAnonResult> => {
-  const [wasm, dictionaries, context] = await Promise.all([
+  const [wasm, dictionaries] = await Promise.all([
     import("@stll/anonymize-wasm"),
     getDictionaries(),
-    getPipelineContext(),
   ]);
   return await runWithPipelineContext(async () => {
-    context.corefSourceMap.clear();
+    const context = wasm.createPipelineContext();
     const runtime = {
       createPipelineContext: wasm.createPipelineContext,
       defaultOperatorConfig: wasm.DEFAULT_OPERATOR_CONFIG,

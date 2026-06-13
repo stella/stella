@@ -37,7 +37,6 @@ let dictionariesPromise: Promise<
   NonNullable<PipelineConfig["dictionaries"]>
 > | null = null;
 
-const pipelineContext = anonymizeRuntime.createPipelineContext();
 const runWithPipelineContext = createPipelineContextRunner();
 
 // eslint-disable-next-line @typescript-eslint/promise-function-async -- lazy init returns the cached promise without awaiting
@@ -62,7 +61,7 @@ const handle = async (request: AnonRequest): Promise<AnonResponse> => {
   try {
     const result = await runWithPipelineContext(async () => {
       const dictionaries = await getDictionaries();
-      pipelineContext.corefSourceMap.clear();
+      const context = anonymizeRuntime.createPipelineContext();
       const runtime = {
         createPipelineContext: anonymizeRuntime.createPipelineContext,
         defaultOperatorConfig: anonymizeRuntime.DEFAULT_OPERATOR_CONFIG,
@@ -78,7 +77,7 @@ const handle = async (request: AnonRequest): Promise<AnonResponse> => {
         workspaceId,
         gazetteerEntries,
         excludedCanonicals,
-        context: pipelineContext,
+        context,
       });
     });
     return { id, ok: true, ...result };

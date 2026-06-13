@@ -6,7 +6,6 @@ import {
   redactText,
   runPipeline,
 } from "@stll/anonymize-wasm";
-import type { PipelineContext } from "@stll/anonymize-wasm";
 
 import { loadAnonymizationAllowlistCanonicals } from "@/api/lib/anonymization-allowlist";
 import { loadAnonymizationGazetteerEntries } from "@/api/lib/anonymization-blacklist";
@@ -15,8 +14,6 @@ import { anonymizeTextFieldsWithDependencies } from "@/api/mcp/anonymization-cor
 
 let dictionariesPromise: ReturnType<typeof loadNameDictionaries> | null = null;
 let pipelineQueue: Promise<void> = Promise.resolve();
-
-const pipelineContext: PipelineContext = createPipelineContext();
 
 const getNameDictionaries = async () => {
   dictionariesPromise ??= loadNameDictionaries();
@@ -53,12 +50,12 @@ export const anonymizeTextFields = async (input: AnonymizeTextFieldsInput) => {
     });
   }
 
-  return await runWithPipelineContext(async () => {
-    pipelineContext.corefSourceMap.clear();
-    return await anonymizeTextFieldsWithDependencies({
-      ...input,
-      context: pipelineContext,
-      dependencies: anonymizeTextFieldsDependencies,
-    });
-  });
+  return await runWithPipelineContext(
+    async () =>
+      await anonymizeTextFieldsWithDependencies({
+        ...input,
+        context: createPipelineContext(),
+        dependencies: anonymizeTextFieldsDependencies,
+      }),
+  );
 };

@@ -1,15 +1,11 @@
-import {
-  constructTable,
-  createColumnHelper,
-  createCoreRowModel,
-} from "@tanstack/table-core";
+import { constructTable, createColumnHelper } from "@tanstack/table-core";
 import { storeReactivityBindings } from "@tanstack/table-core/store-reactivity-bindings";
 import { describe, expect, test } from "bun:test";
 
 import { workspaceTableFeatures } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-features";
 
 const testFeatures = {
-  coreReativityFeature: storeReactivityBindings(),
+  coreReactivityFeature: storeReactivityBindings(),
   ...workspaceTableFeatures,
 };
 
@@ -25,7 +21,6 @@ describe("workspace table v9 feature set", () => {
   test("keeps only the APIs the grid render path uses", () => {
     const table = constructTable({
       features: testFeatures,
-      rowModels: { coreRowModel: createCoreRowModel() },
       data: [{ id: "row-a", name: "Alpha" }],
       columns: columnHelper.columns([
         columnHelper.accessor("name", { header: "Name" }),
@@ -35,7 +30,7 @@ describe("workspace table v9 feature set", () => {
 
     expect(table.getRowModel().rows.map((row) => row.id)).toEqual(["row-a"]);
     expect(table.initialState.columnPinning).toEqual({ left: [], right: [] });
-    expect(typeof table.options.rowModels?.coreRowModel).toBe("function");
+    expect(typeof table.options.features.coreRowModel).toBe("function");
 
     expect(typeof table.setColumnOrder).toBe("function");
     expect(typeof table.setColumnPinning).toBe("function");

@@ -5,7 +5,7 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { ClientOnly } from "@tanstack/react-router";
-import { createCoreRowModel, useTable } from "@tanstack/react-table";
+import { useTable } from "@tanstack/react-table";
 import { ClockIcon, HashIcon, TableIcon, UserIcon } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -248,7 +248,6 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
 
   const table = useTable({
     features: workspaceTableFeatures,
-    rowModels: { coreRowModel: createCoreRowModel() },
     columnResizeMode: "onChange",
     data: treeData,
     columns,
