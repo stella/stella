@@ -13,6 +13,7 @@ import { jsonb } from "@/api/db/columns";
 import {
   agentSkillPolicies,
   agentSkillResourcePolicies,
+  aiMemoryPolicies,
   chatMessageSearchDocumentPolicies,
   chatMessagePolicies,
   chatThreadCompactionPolicies,
@@ -1963,6 +1964,9 @@ export const chatThreadCompactions = p.pgTable(
     modelProvider: p.text("model_provider"),
     modelId: p.text("model_id"),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    // Set by the memory extractor once it has proposed memories from
+    // this compaction, so the background job stays idempotent.
+    memoryExtractedAt: p.timestamp("memory_extracted_at"),
   },
   (table) => [
     p
@@ -1973,6 +1977,109 @@ export const chatThreadCompactions = p.pgTable(
       .index("chat_thread_compactions_thread_status_created_idx")
       .on(table.threadId, table.status, table.createdAt),
     ...chatThreadCompactionPolicies(),
+  ],
+);
+
+/**
+ * Persistent AI memory: typed facts and preferences the assistant
+ * recalls across sessions, scoped to the firm (organization), the
+ * lawyer (user), or a matter (workspace). Read precedence is matter
+ * > user > firm. Memories are archive-only (never hard-deleted) and
+ * tenant-isolated via RLS; matter-derived content is additionally
+ * gated by `sourceDataWorkspaceIds` so it cannot cross matters.
+ */
+export const aiMemories = p.pgTable(
+  "ai_memories",
+  {
+    id: pUuid<"aiMemory">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    scope: p
+      .text("scope", { enum: ["organization", "user", "workspace"] })
+      .notNull(),
+    userId: p
+      .text("user_id")
+      .$type<SafeId<"user">>()
+      .references(() => user.id, { onDelete: "cascade" }),
+    workspaceId: safeWorkspaceId("workspace_id").references(
+      () => workspaces.id,
+      { onDelete: "cascade" },
+    ),
+    kind: p
+      .text("kind", {
+        enum: ["preference", "instruction", "fact", "decision", "relationship"],
+      })
+      .notNull(),
+    content: p.text("content").notNull(),
+    language: p.varchar("language", { length: 10 }),
+    // Workspaces whose content this memory was derived from. Gates RLS
+    // reads (subset of session-accessible workspaces). Empty = not
+    // matter-derived (e.g. an explicit user preference).
+    sourceDataWorkspaceIds: safeWorkspaceId("source_data_workspace_ids")
+      .array()
+      .notNull()
+      .default([]),
+    status: p
+      .text("status", { enum: ["suggested", "active", "stale", "archived"] })
+      .notNull()
+      .default("active"),
+    pinned: p.boolean("pinned").notNull().default(false),
+    source: p
+      .text("source", { enum: ["user", "tool", "extracted"] })
+      .notNull(),
+    sourceMessageId: safeUuid<"chatMessage">("source_message_id").references(
+      () => chatMessages.id,
+      { onDelete: "set null" },
+    ),
+    confidence: p.doublePrecision("confidence"),
+    // Null for memories created by the background extractor (no actor).
+    createdBy: p
+      .text("created_by")
+      .$type<SafeId<"user">>()
+      .references(() => user.id, { onDelete: "set null" }),
+    supersededById: safeUuid<"aiMemory">("superseded_by_id").references(
+      (): AnyPgColumn => aiMemories.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    updatedAt: p
+      .timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    // Drives the curator lifecycle (active -> stale -> archived).
+    lastUsedAt: p.timestamp("last_used_at").notNull().defaultNow(),
+    archivedAt: p.timestamp("archived_at"),
+  },
+  (table) => [
+    p
+      .index("ai_memories_org_scope_status_idx")
+      .on(table.organizationId, table.scope, table.status),
+    p
+      .index("ai_memories_user_status_idx")
+      .on(table.userId, table.status)
+      .where(isNotNull(table.userId)),
+    p
+      .index("ai_memories_workspace_status_idx")
+      .on(table.workspaceId, table.status)
+      .where(isNotNull(table.workspaceId)),
+    // Scope/id integrity: exactly the ids for the scope, nothing else.
+    p.check(
+      "ai_memories_scope_ids_check",
+      sql`(
+        (scope = 'organization' AND user_id IS NULL AND workspace_id IS NULL)
+        OR (scope = 'user' AND user_id IS NOT NULL AND workspace_id IS NULL)
+        OR (scope = 'workspace' AND workspace_id IS NOT NULL AND user_id IS NULL)
+      )`,
+    ),
+    // Matter-specific kinds may only live at workspace scope, so a
+    // matter fact can never be stored as user/firm memory.
+    p.check(
+      "ai_memories_kind_scope_check",
+      sql`(kind IN ('preference', 'instruction') OR scope = 'workspace')`,
+    ),
+    ...aiMemoryPolicies(),
   ],
 );
 

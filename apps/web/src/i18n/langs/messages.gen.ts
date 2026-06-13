@@ -1656,6 +1656,39 @@ type Messages = {
     "showFormatted": "Formatted";
     "showRaw": "Show raw";
   };
+  "memory": {
+    "addPlaceholder": "Add a note for the assistant to remember…";
+    "archive": "Archive";
+    "createdToast": "Memory saved";
+    "empty": "No memory yet.";
+    "kinds": {
+      "decision": "Decision";
+      "fact": "Fact";
+      "instruction": "Instruction";
+      "preference": "Preference";
+      "relationship": "Relationship";
+    };
+    "matterPicker": {
+      "empty": "Select a matter to view its memory.";
+      "label": "Matter";
+      "placeholder": "Select a matter";
+    };
+    "pageDescription": "Notes and context the assistant remembers across chats.";
+    "pageTitle": "Memory";
+    "provenance": "{source} · {date}";
+    "sources": {
+      "extracted": "Extracted";
+      "tool": "Tool";
+      "user": "Added by you";
+    };
+    "suggestionsDescription": "The assistant proposed remembering these. Accept to keep them, decline to discard.";
+    "suggestionsTitle": "Suggestions";
+    "tabs": {
+      "firm": "Firm library";
+      "matter": "This matter";
+      "mine": "My notes";
+    };
+  };
   "navigation": {
     "chat": "Chat";
     "contacts": "Contacts";

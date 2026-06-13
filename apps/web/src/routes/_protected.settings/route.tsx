@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 import {
+  BrainIcon,
   FlaskConicalIcon,
   GaugeIcon,
   HashIcon,
@@ -31,6 +32,7 @@ export const Route = createFileRoute("/_protected/settings")({
 type NavTo =
   | "/settings/account/profile"
   | "/settings/account/desktop"
+  | "/settings/account/memory"
   | "/settings/account/beta"
   | "/settings/organization/members"
   | "/settings/organization/matter-numbering"
@@ -69,6 +71,14 @@ const ACCOUNT_SECTION = {
       to: "/settings/account/desktop",
       labelKey: "settings.account.desktop",
       icon: MonitorIcon,
+    },
+    {
+      // Personal + firm + matter memory in one panel. Reachable by
+      // every member (RLS scopes what they see); firm-library
+      // creation is gated inside the panel by the firmMemory role.
+      to: "/settings/account/memory",
+      labelKey: "memory.pageTitle",
+      icon: BrainIcon,
     },
     // Beta features: only on hosts where users may flip them (dev,
     // staging); appended conditionally in SettingsLayout.

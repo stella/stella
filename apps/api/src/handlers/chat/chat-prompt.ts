@@ -24,6 +24,7 @@ import type {
   IncomingActiveTemplate,
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
+import { buildMemoryPromptParts } from "@/api/handlers/chat/memory-context";
 import {
   ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
   type ActiveChatSkillContext,
@@ -361,6 +362,22 @@ export const buildChatSystemPromptParts = async ({
       }
     }
 
+    // Memory retrieval is RLS-scoped and needs both ids to resolve
+    // firm + own-user + accessible-matter rows. Without an authorized
+    // session (e.g. anonymous prompt-preview builders) there is no
+    // memory to inject.
+    const memorySection =
+      organizationId && userId
+        ? yield* Result.await(
+            buildMemoryPromptParts({
+              contextMatterIds,
+              organizationId,
+              safeDb,
+              userId,
+            }),
+          )
+        : "";
+
     const appendedUntrusted = [
       decisionSection,
       externalSection,
@@ -368,6 +385,7 @@ export const buildChatSystemPromptParts = async ({
       matterScopeSection,
       activeFileSection,
       activeTemplateSection,
+      memorySection,
     ]
       .filter((section) => section.length > 0)
       .map((section) => `\n\n${section}`)

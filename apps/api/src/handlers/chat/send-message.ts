@@ -270,6 +270,7 @@ const sendMessage = createSafeRootHandler(
       safeDb,
       scopedDb,
       threadId: body.threadId,
+      workspaceId,
       userId: user.id,
       // Schema validation runs against the user's full accessible
       // set; per-tool scope checks happen at execute time below.
@@ -636,6 +637,7 @@ const sendMessage = createSafeRootHandler(
       safeDb,
       scopedDb,
       threadId: body.threadId,
+      workspaceId,
       excludedChatHistoryMessageIds: deleteMessageIdsBeforeLatest,
       userId: user.id,
       toolWorkspaceIds: resolveToolWorkspaceIds({

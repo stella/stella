@@ -175,6 +175,7 @@ describe("chat tool schemas", () => {
       safeDb: unusedSafeDb,
       scopedDb: unusedScopedDb,
       threadId,
+      workspaceId: null,
       userId,
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],
@@ -294,6 +295,7 @@ describe("chat tool schemas", () => {
       safeDb: unusedSafeDb,
       scopedDb: unusedScopedDb,
       threadId,
+      workspaceId: null,
       userId,
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],

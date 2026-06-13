@@ -4,6 +4,7 @@ export type SafeIdType =
   | "accountDeletionRequest"
   | "agentSkill"
   | "agentSkillResource"
+  | "aiMemory"
   | "anonymizationAllowlistEntry"
   | "anonymizationBlacklistEntry"
   | "auditLog"

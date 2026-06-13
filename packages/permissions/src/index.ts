@@ -32,6 +32,7 @@ export const statements = {
   auditLog: ["read"],
   promptShortcut: ["create", "update", "delete"],
   agentSkill: ["create", "update", "delete"],
+  firmMemory: ["create", "update"],
 } as const;
 
 type PermissionMap = {
@@ -70,6 +71,7 @@ const memberAc = ac.newRole({
   auditLog: [],
   promptShortcut: ["create", "update", "delete"],
   agentSkill: ["create", "update", "delete"],
+  firmMemory: [],
 });
 
 export const roles = {
@@ -97,6 +99,7 @@ export const roles = {
     auditLog: ["read"],
     promptShortcut: ["create", "update", "delete"],
     agentSkill: ["create", "update", "delete"],
+    firmMemory: ["create", "update"],
   }),
   admin: ac.newRole({
     organization: ["update"],
@@ -122,6 +125,7 @@ export const roles = {
     auditLog: ["read"],
     promptShortcut: ["create", "update", "delete"],
     agentSkill: ["create", "update", "delete"],
+    firmMemory: ["create", "update"],
   }),
   member: memberAc,
   intern: ac.newRole({
@@ -148,6 +152,7 @@ export const roles = {
     auditLog: [],
     promptShortcut: [],
     agentSkill: [],
+    firmMemory: [],
   }),
   external: ac.newRole({
     organization: [],
@@ -173,5 +178,6 @@ export const roles = {
     auditLog: [],
     promptShortcut: [],
     agentSkill: [],
+    firmMemory: [],
   }),
 };
