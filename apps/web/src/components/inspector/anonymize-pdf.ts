@@ -1,4 +1,4 @@
-import type { PipelineConfig, PipelineContext } from "@stll/anonymize-wasm";
+import type { PipelineConfig } from "@stll/anonymize-wasm";
 
 import { useAnonymizationMatchesStore } from "@/components/inspector/anonymization-matches-store";
 import { PDF_MIME_TYPE } from "@/consts";
@@ -43,7 +43,6 @@ const cancelledFieldIds = new Set<string>();
 let dictionariesPromise: Promise<
   NonNullable<PipelineConfig["dictionaries"]>
 > | null = null;
-let pipelineContext: PipelineContext | null = null;
 const runWithPipelineContext = createPipelineContextRunner();
 
 export const anonymizePdf = async ({
@@ -124,21 +123,21 @@ const runPipelineAndCommit = async ({
   dictionariesPromise ??= loadNameDictionaries();
   const dictionaries = await dictionariesPromise;
   const entities = await runWithPipelineContext(async () => {
-    pipelineContext ??= wasm.createPipelineContext();
+    const context = wasm.createPipelineContext();
     const config = {
       ...buildPipelineConfig(workspaceId, DEFAULT_ENTITY_LABELS),
       dictionaries,
     };
     await wasm.preparePipelineSearch({
       config,
-      context: pipelineContext,
+      context,
       gazetteerEntries: [],
     });
     return await wasm.runPipeline({
       fullText: text,
       config,
       gazetteerEntries: [],
-      context: pipelineContext,
+      context,
     });
   });
 
