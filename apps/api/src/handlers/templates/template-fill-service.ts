@@ -7,6 +7,8 @@
  */
 
 import type { ScopedDb } from "@/api/db";
+import { clauseBodyToRichPatch } from "@/api/handlers/clauses/clause-to-patch";
+import type { ClauseBody } from "@/api/handlers/clauses/types";
 import {
   adaptAiFields,
   type AiOccurrenceAdapter,
@@ -195,6 +197,10 @@ type FillServiceOptions = {
   values: FillValues;
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
+  /** Per-fill clause edits keyed by slot patch key (`@clause:Name`). When a
+   *  key matches a discovered slot, the override body is inserted for that slot
+   *  instead of the linked clause's resolved body (mirrors fill-by-id). */
+  clauseOverrides?: Record<string, ClauseBody> | undefined;
   /** Optional model-backed generator for AI-fillable fields (aiPrompt). */
   generateAiValue?: AiFieldGenerator | undefined;
   /** Optional model-backed decider for AI-decided boolean fields (a boolean
@@ -226,6 +232,7 @@ export const fillStoredTemplateDocx = async ({
   values,
   scopedDb,
   organizationId,
+  clauseOverrides,
   generateAiValue,
   decideAiCondition,
   adaptAiValue,
@@ -245,6 +252,17 @@ export const fillStoredTemplateDocx = async ({
       scopedDb,
       organizationId,
     );
+    // Per-fill overrides take precedence over the linked clause body for any
+    // slot whose patch key matches a discovered slot (mirrors fill-by-id's
+    // resolveClausePatches).
+    if (clauseOverrides) {
+      const slotKeys = new Set(slots.map((slot) => slot.patchKey));
+      for (const [key, overrideBody] of Object.entries(clauseOverrides)) {
+        if (slotKeys.has(key)) {
+          patches[key] = clauseBodyToRichPatch(overrideBody);
+        }
+      }
+    }
     for (const [key, value] of Object.entries(patches)) {
       record[key] = value;
     }
