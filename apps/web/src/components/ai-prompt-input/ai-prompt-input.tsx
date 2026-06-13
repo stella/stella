@@ -144,6 +144,19 @@ export const AIPromptInput = ({
   const readValue = (editor: Editor): string =>
     valueFormat === "text" ? editor.getText() : editor.getHTML();
 
+  // In text mode the controlled `value` is plain text, not HTML, so build a
+  // ProseMirror JSON doc instead of letting TipTap parse the string as HTML
+  // (which would drop angle-bracket text like `<client>`).
+  const initialContent =
+    valueFormat === "text"
+      ? {
+          type: "doc",
+          content: value
+            ? [{ type: "paragraph", content: [{ type: "text", text: value }] }]
+            : [],
+        }
+      : value;
+
   const editor = useEditor({
     extensions: [
       createPromptEditorDocument(),
@@ -160,7 +173,7 @@ export const AIPromptInput = ({
       }),
       History,
     ],
-    content: value,
+    content: initialContent,
     onUpdate: (props) => {
       onChange(readValue(props.editor));
     },
