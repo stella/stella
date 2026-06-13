@@ -33,11 +33,12 @@ export const Route = createFileRoute("/onboarding")({
 
     return authContext;
   },
-  loader: async ({ context: { queryClient } }) =>
+  loader: async ({ context: { queryClient } }) => {
     await ensureCriticalQueryData(
       queryClient,
       nativeToolDeployAvailabilityOptions,
-    ),
+    );
+  },
   head: () => ({
     meta: [{ title: pageTitle("onboarding.orgTitle") }],
   }),

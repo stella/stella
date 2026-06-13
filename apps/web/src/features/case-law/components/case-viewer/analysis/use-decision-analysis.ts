@@ -96,7 +96,7 @@ export const useDecisionAnalysis = (
 
   const enabled = isGenerating && !hasFreshAnalysis;
 
-  const query = useQuery<AnalysisQueryResult>({
+  const query = useQuery({
     queryKey: ["decision-analysis", decisionId],
     queryFn: async ({ signal }): Promise<AnalysisQueryResult> => {
       const response = await fetch(
