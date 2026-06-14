@@ -105,15 +105,13 @@ const formatMoney = (
     return null;
   }
   const currencyStr = currency ? (CURRENCIES[currency] ?? currency) : "";
-  try {
-    const numeric = value.split(";", 1).at(0) ?? value;
-    const formatted = Number(numeric)
-      .toLocaleString("cs-CZ")
-      .replace(/\u00a0/gu, " ");
-    return `${formatted},- ${currencyStr}`.trim();
-  } catch {
+  const numericPart = value.split(";", 1).at(0) ?? value;
+  const numeric = Number(numericPart);
+  if (!Number.isFinite(numeric)) {
     return `${value} ${currencyStr}`.trim();
   }
+  const formatted = numeric.toLocaleString("cs-CZ").replace(/\u00a0/gu, " ");
+  return `${formatted},- ${currencyStr}`.trim();
 };
 
 /** Extract share capital from VR data. */
