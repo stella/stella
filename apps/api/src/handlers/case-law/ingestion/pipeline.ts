@@ -130,8 +130,16 @@ type ProcessResult = {
  *
  * Safe: won't touch normal text, digits, IČO numbers, or
  * case references (anchored by whitespace/string boundaries).
+ *
+ * Requires at least FOUR letters in the run. Czech/Slovak have many
+ * single-letter words (prepositions a, i, k, o, s, u, v, z), so a 2–3
+ * letter run like `u a v` ("u", "a", "v") is far more likely to be real
+ * words than letter-spaced emphasis; collapsing it to `uav` would corrupt
+ * the search text. Genuine spaced words ("z a m i e t a", "r o z h o d o l")
+ * are always longer, so the floor loses nothing in practice.
  */
-const SPACED_WORD = /(?<=\s|^)(\p{L} (?:\p{L} )*\p{L})( ?[,:;.!?])?(?=\s|$)/gu;
+const SPACED_WORD =
+  /(?<=\s|^)(\p{L} (?:\p{L} ){2,}\p{L})( ?[,:;.!?])?(?=\s|$)/gu;
 
 /**
  * Collapse multiple spaces to single. Applied to all
