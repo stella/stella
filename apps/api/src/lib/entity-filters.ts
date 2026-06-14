@@ -56,6 +56,23 @@ const getFieldValue = (content: FieldContent | undefined): string => {
   }
 };
 
+// Numeric value for sort comparison: int content uses its number; a
+// missing field or a legacy/coerced non-int value parses its string form,
+// returning null when no finite number is available (sorts to the end).
+const numericContentValue = (
+  content: FieldContent | undefined,
+): number | null => {
+  if (content?.type === "int") {
+    return content.value;
+  }
+  const raw = getFieldValue(content);
+  if (raw === "") {
+    return null;
+  }
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+};
+
 const findField = (
   entityFields: EntityField[],
   propertyId: string,
@@ -129,10 +146,26 @@ export const applySorts = <T extends FilterableEntity>(
       const fieldB = findField(b.fields, sort.propertyId);
       const dir = sort.desc ? -1 : 1;
 
-      if (fieldA?.content.type === "int" && fieldB?.content.type === "int") {
-        const cmp = (fieldA.content.value - fieldB.content.value) * dir;
-        if (cmp !== 0) {
-          return cmp;
+      // Numeric ordering whenever the property is numeric on at least one
+      // side. Comparing only when BOTH sides are int dropped to a string
+      // localeCompare the moment a row was missing the field or held a
+      // legacy non-int value, so 10 sorted before 9. Rows without a numeric
+      // value bucket to the end, independent of sort direction.
+      if (fieldA?.content.type === "int" || fieldB?.content.type === "int") {
+        const numA = numericContentValue(fieldA?.content);
+        const numB = numericContentValue(fieldB?.content);
+        if (numA !== null && numB !== null) {
+          const cmp = (numA - numB) * dir;
+          if (cmp !== 0) {
+            return cmp;
+          }
+          continue;
+        }
+        if (numA === null && numB !== null) {
+          return 1;
+        }
+        if (numA !== null && numB === null) {
+          return -1;
         }
         continue;
       }

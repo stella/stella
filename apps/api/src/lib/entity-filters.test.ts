@@ -339,6 +339,102 @@ describe("applySorts (in-memory)", () => {
     expect(sorted.map((item) => item.entityId)).toEqual(["2", "1"]);
   });
 
+  test("orders ints numerically, not lexicographically (10 after 9)", () => {
+    const items = [
+      {
+        entityId: "ten",
+        kind: "task" as const,
+        fields: [makeIntField("ten", "p1", 10)],
+      },
+      {
+        entityId: "nine",
+        kind: "task" as const,
+        fields: [makeIntField("nine", "p1", 9)],
+      },
+      {
+        entityId: "two",
+        kind: "task" as const,
+        fields: [makeIntField("two", "p1", 2)],
+      },
+    ];
+
+    const sorted = applySorts(items, [{ propertyId: "p1", desc: false }]);
+
+    expect(sorted.map((item) => item.entityId)).toEqual(["two", "nine", "ten"]);
+  });
+
+  test("int sort stays numeric when a row is missing the field (missing sorts last)", () => {
+    const items = [
+      {
+        entityId: "ten",
+        kind: "task" as const,
+        fields: [makeIntField("ten", "p1", 10)],
+      },
+      { entityId: "missing", kind: "task" as const, fields: [] },
+      {
+        entityId: "nine",
+        kind: "task" as const,
+        fields: [makeIntField("nine", "p1", 9)],
+      },
+    ];
+
+    const asc = applySorts(items, [{ propertyId: "p1", desc: false }]);
+    expect(asc.map((item) => item.entityId)).toEqual([
+      "nine",
+      "ten",
+      "missing",
+    ]);
+
+    // Missing values bucket to the end regardless of direction.
+    const desc = applySorts(items, [{ propertyId: "p1", desc: true }]);
+    expect(desc.map((item) => item.entityId)).toEqual([
+      "ten",
+      "nine",
+      "missing",
+    ]);
+  });
+
+  test("property: int sort with missing rows is numerically monotonic", () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.option(fc.integer(), { nil: undefined }), {
+          minLength: 1,
+          maxLength: 20,
+        }),
+        (values) => {
+          const items = values.map((value, index) =>
+            value === undefined
+              ? { entityId: String(index), kind: "task" as const, fields: [] }
+              : {
+                  entityId: String(index),
+                  kind: "task" as const,
+                  fields: [makeIntField(String(index), "p1", value)],
+                },
+          );
+
+          const sorted = applySorts(items, [{ propertyId: "p1", desc: false }]);
+          const nums = sorted.map((item) => {
+            const c = item.fields[0]?.content;
+            return c?.type === "int" ? c.value : null;
+          });
+
+          // Defined ints appear before any missing, in non-decreasing order.
+          let seenNull = false;
+          let prev = -Infinity;
+          for (const n of nums) {
+            if (n === null) {
+              seenNull = true;
+              continue;
+            }
+            expect(seenNull).toBe(false);
+            expect(n).toBeGreaterThanOrEqual(prev);
+            prev = n;
+          }
+        },
+      ),
+    );
+  });
+
   test("property: ascending string sort is monotonic", () => {
     fc.assert(
       fc.property(
