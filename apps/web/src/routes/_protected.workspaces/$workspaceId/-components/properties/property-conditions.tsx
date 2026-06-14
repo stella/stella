@@ -151,6 +151,7 @@ const fieldOptionFor = (property: WorkspaceProperty): FieldOption | null => {
       operand: { type: "property", propertyId: property.id },
       label: property.name,
       valueType: content.type,
+      type: content.type,
       options: content.options.map((option) => ({
         value: option.value,
         label: option.value,
@@ -163,5 +164,6 @@ const fieldOptionFor = (property: WorkspaceProperty): FieldOption | null => {
     operand: { type: "property", propertyId: property.id },
     label: property.name,
     valueType: content.type,
+    type: content.type,
   };
 };

@@ -1,3 +1,4 @@
+import type { PropertyContentType } from "@stll/api/types";
 import type {
   CompareOp,
   ConditionNode,
@@ -34,6 +35,8 @@ export type FieldOption = {
   operand: RefOperand;
   label: string;
   valueType: FieldValueType;
+  /** Drives the property-type icon shown in chips and the picker. */
+  type: PropertyContentType;
   options?: FieldOptionChoice[];
 };
 
@@ -47,6 +50,9 @@ export const CONDITION_OPERATORS = [
   "eq",
   "neq",
   "contains",
+  "not_contains",
+  "starts_with",
+  "ends_with",
   "contains_all",
   "in",
   "gt",
@@ -54,6 +60,7 @@ export const CONDITION_OPERATORS = [
   "gte",
   "lte",
   "is_empty",
+  "is_not_empty",
 ] as const;
 
 export type ConditionOperator = (typeof CONDITION_OPERATORS)[number];
@@ -78,10 +85,18 @@ const isCompareOperator = (op: ConditionOperator): op is CompareOperator =>
   op === "gte" ||
   op === "lte";
 
+/**
+ * Default operator labels. A few value types override individual
+ * operators with type-aware wording (e.g. `int` shows `=`/`≠`, `date`
+ * shows `Is after`/`Is before`); see `OPERATOR_LABEL_OVERRIDES`.
+ */
 export const OPERATOR_LABEL_KEYS = {
   eq: "filters.eq",
   neq: "filters.neq",
   contains: "filters.contains",
+  not_contains: "filters.not_contains",
+  starts_with: "filters.starts_with",
+  ends_with: "filters.ends_with",
   contains_all: "filters.contains_all",
   in: "filters.in",
   gt: "filters.gt",
@@ -89,21 +104,80 @@ export const OPERATOR_LABEL_KEYS = {
   gte: "filters.gte",
   lte: "filters.lte",
   is_empty: "filters.is_empty",
+  is_not_empty: "filters.is_not_empty",
 } as const satisfies Record<ConditionOperator, TranslationKey>;
+
+/**
+ * Per-value-type label overrides. Notion renders numeric and date
+ * comparisons differently from the generic "is greater than" wording:
+ * numbers use math symbols, dates use temporal phrasing.
+ */
+const INT_OPERATOR_LABEL_KEYS = {
+  eq: "filters.numEq",
+  neq: "filters.numNeq",
+  gt: "filters.numGt",
+  lt: "filters.numLt",
+  gte: "filters.numGte",
+  lte: "filters.numLte",
+} as const satisfies Partial<Record<ConditionOperator, TranslationKey>>;
+
+const DATE_OPERATOR_LABEL_KEYS = {
+  gt: "filters.dateAfter",
+  lt: "filters.dateBefore",
+  gte: "filters.dateOnOrAfter",
+  lte: "filters.dateOnOrBefore",
+} as const satisfies Partial<Record<ConditionOperator, TranslationKey>>;
+
+/**
+ * The exact label keys an operator may resolve to, derived from the maps
+ * above — not the full `TranslationKey` nor every `filters.*` key (some of
+ * which carry ICU params), so `t()` accepts a single argument.
+ */
+type OperatorLabelKey =
+  | (typeof OPERATOR_LABEL_KEYS)[keyof typeof OPERATOR_LABEL_KEYS]
+  | (typeof INT_OPERATOR_LABEL_KEYS)[keyof typeof INT_OPERATOR_LABEL_KEYS]
+  | (typeof DATE_OPERATOR_LABEL_KEYS)[keyof typeof DATE_OPERATOR_LABEL_KEYS];
+
+const labelFrom = (
+  overrides: Partial<Record<ConditionOperator, OperatorLabelKey>>,
+  operator: ConditionOperator,
+): OperatorLabelKey => overrides[operator] ?? OPERATOR_LABEL_KEYS[operator];
+
+export const operatorLabelKey = (
+  valueType: FieldValueType,
+  operator: ConditionOperator,
+): OperatorLabelKey => {
+  if (valueType === "int") {
+    return labelFrom(INT_OPERATOR_LABEL_KEYS, operator);
+  }
+  if (valueType === "date") {
+    return labelFrom(DATE_OPERATOR_LABEL_KEYS, operator);
+  }
+  return OPERATOR_LABEL_KEYS[operator];
+};
 
 /**
  * Single source of truth mapping a field's value type to the operators
  * the builder offers for it. Order here is the order rendered in the
- * operator Select.
+ * operator Select, and the first entry is the field's default operator.
  */
 const OPERATORS_BY_VALUE_TYPE = {
-  text: ["eq", "neq", "contains", "is_empty"],
-  "single-select": ["eq", "neq", "contains", "is_empty"],
-  status: ["eq", "neq", "contains", "is_empty"],
-  priority: ["eq", "neq", "contains", "is_empty"],
-  "multi-select": ["contains_all", "is_empty"],
-  int: ["eq", "neq", "gt", "lt", "gte", "lte", "is_empty"],
-  date: ["eq", "neq", "gt", "lt", "gte", "lte", "is_empty"],
+  text: [
+    "eq",
+    "neq",
+    "contains",
+    "not_contains",
+    "starts_with",
+    "ends_with",
+    "is_empty",
+    "is_not_empty",
+  ],
+  "single-select": ["eq", "neq", "in", "is_empty", "is_not_empty"],
+  status: ["eq", "neq", "in", "is_empty", "is_not_empty"],
+  priority: ["eq", "neq", "in", "is_empty", "is_not_empty"],
+  "multi-select": ["contains", "not_contains", "is_empty", "is_not_empty"],
+  int: ["eq", "neq", "gt", "lt", "gte", "lte", "is_empty", "is_not_empty"],
+  date: ["eq", "neq", "gt", "lt", "gte", "lte", "is_empty", "is_not_empty"],
   kind: ["in"],
 } as const satisfies Record<FieldValueType, readonly ConditionOperator[]>;
 
@@ -118,7 +192,7 @@ export const valueEditorFor = (
   valueType: FieldValueType,
   operator: ConditionOperator,
 ): ValueEditorKind => {
-  if (operator === "is_empty") {
+  if (operator === "is_empty" || operator === "is_not_empty") {
     return "none";
   }
   if (
@@ -188,9 +262,13 @@ const compareToOperator = (op: CompareOp): ConditionOperator => op;
 const predicateToOperator = (op: PredicateOp): ConditionOperator | null => {
   if (
     op === "contains" ||
+    op === "not_contains" ||
+    op === "starts_with" ||
+    op === "ends_with" ||
     op === "contains_all" ||
     op === "in" ||
-    op === "is_empty"
+    op === "is_empty" ||
+    op === "is_not_empty"
   ) {
     return op;
   }
@@ -250,12 +328,17 @@ export const buildLeaf = ({
       right: { type: "literal", value: scalar },
     };
   }
-  if (operator === "is_empty") {
-    return { type: "predicate", operand, op: "is_empty" };
+  if (operator === "is_empty" || operator === "is_not_empty") {
+    return { type: "predicate", operand, op: operator };
   }
-  if (operator === "contains") {
+  if (
+    operator === "contains" ||
+    operator === "not_contains" ||
+    operator === "starts_with" ||
+    operator === "ends_with"
+  ) {
     const scalar = Array.isArray(value) ? (value.at(0) ?? "") : value;
-    return { type: "predicate", operand, op: "contains", value: scalar };
+    return { type: "predicate", operand, op: operator, value: scalar };
   }
   // contains_all | in — list payloads
   return { type: "predicate", operand, op: operator, value: toList(value) };
@@ -273,6 +356,18 @@ export const leafFromField = (field: FieldOption): ConditionNode => {
   const operator = operatorsFor(field.valueType).at(0) ?? "eq";
   const value = isMultiValue(operator) ? [] : "";
   return buildLeaf({ operand: field.operand, operator, value });
+};
+
+/** Finds the field a leaf node targets, or null when none matches. */
+export const fieldForNode = (
+  node: ConditionNode,
+  fields: FieldOption[],
+): FieldOption | null => {
+  const operand = leafOperand(node);
+  if (!operand) {
+    return null;
+  }
+  return fields.find((field) => operandsEqual(field.operand, operand)) ?? null;
 };
 
 // ── Group helpers ─────────────────────────────────────────

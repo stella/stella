@@ -1110,14 +1110,28 @@ type Messages = {
   "filters": {
     "contains": "contains";
     "contains_all": "contains all of";
+    "dateAfter": "is after";
+    "dateBefore": "is before";
+    "dateOnOrAfter": "is on or after";
+    "dateOnOrBefore": "is on or before";
+    "ends_with": "ends with";
     "eq": "is";
     "gt": "is greater than";
     "gte": "is greater than or equal to";
     "in": "is any of";
     "is_empty": "is empty";
+    "is_not_empty": "is not empty";
     "lt": "is less than";
     "lte": "is less than or equal to";
     "neq": "is not";
+    "not_contains": "does not contain";
+    "numEq": "=";
+    "numGt": ">";
+    "numGte": "≥";
+    "numLt": "<";
+    "numLte": "≤";
+    "numNeq": "≠";
+    "starts_with": "starts with";
   };
   "folio": {
     "acceptChange": "Accept Change";
@@ -2595,7 +2609,10 @@ type Messages = {
     "unarchiveMatter": "Unarchive";
     "uploadDocuments": "Upload documents";
     "views": {
+      "addAdvancedFilter": "Add advanced filter";
       "addFields": "Add fields";
+      "advancedFilter": "Advanced";
+      "advancedFilterCount": "{count, plural, =0 {Any} one {# rule} other {# rules}}";
       "aiGenerated": "AI-generated";
       "calendar": {
         "addDates": "+ Dates";
@@ -2621,6 +2638,7 @@ type Messages = {
       "fields": "Fields:";
       "fieldsSelected": "{count, plural, one {# selected} other {# selected}}";
       "filter": "Filter";
+      "filterByPlaceholder": "Filter by…";
       "filtersWithCount": "{count, plural, one {# filter} other {# filters}}";
       "groupBy": "Group by:";
       "hideColumn": "Hide column";
@@ -2635,6 +2653,7 @@ type Messages = {
         "timeline": "Timeline";
       };
       "newView": "New {layout}";
+      "removeAdvancedFilter": "Remove advanced filter";
       "saveAsTemplate": "Save as template…";
       "selectProperty": "Select property";
       "templates": {

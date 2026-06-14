@@ -1107,14 +1107,28 @@
   "filters": {
     "contains": "tartalmazza",
     "contains_all": "contains all of",
+    "dateAfter": "is after",
+    "dateBefore": "is before",
+    "dateOnOrAfter": "is on or after",
+    "dateOnOrBefore": "is on or before",
+    "ends_with": "ends with",
     "eq": "egyenlő",
     "gt": "is greater than",
     "gte": "is greater than or equal to",
     "in": "is any of",
     "is_empty": "üres",
+    "is_not_empty": "is not empty",
     "lt": "is less than",
     "lte": "is less than or equal to",
-    "neq": "nem egyenlő"
+    "neq": "nem egyenlő",
+    "not_contains": "does not contain",
+    "numEq": "=",
+    "numGt": ">",
+    "numGte": "≥",
+    "numLt": "<",
+    "numLte": "≤",
+    "numNeq": "≠",
+    "starts_with": "starts with"
   },
   "folio": {
     "acceptChange": "Módosítás elfogadása",
@@ -2592,7 +2606,10 @@
     "unarchiveMatter": "Visszaállítás",
     "uploadDocuments": "Dokumentumok feltöltése",
     "views": {
+      "addAdvancedFilter": "Add advanced filter",
       "addFields": "Mezők hozzáadása",
+      "advancedFilter": "Advanced",
+      "advancedFilterCount": "{count, plural, =0 {Any} one {# rule} other {# rules}}",
       "aiGenerated": "MI által generált",
       "calendar": {
         "addDates": "+ Dátumok",
@@ -2618,6 +2635,7 @@
       "fields": "Mezők:",
       "fieldsSelected": "{count, plural, one {# kiválasztva} other {# kiválasztva}}",
       "filter": "Filter",
+      "filterByPlaceholder": "Filter by…",
       "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Csoportosítás:",
       "hideColumn": "Oszlop elrejtése",
@@ -2632,6 +2650,7 @@
         "timeline": "Idővonal"
       },
       "newView": "Új {layout}",
+      "removeAdvancedFilter": "Remove advanced filter",
       "saveAsTemplate": "Mentés sablonként…",
       "selectProperty": "Tulajdonság kiválasztása",
       "templates": {

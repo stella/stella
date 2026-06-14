@@ -1,18 +1,68 @@
-import { FilterIcon } from "lucide-react";
+import { useState } from "react";
+
+import {
+  CircleDotIcon,
+  FilterIcon,
+  FlagIcon,
+  LayersIcon,
+  MoreHorizontalIcon,
+  PlusIcon,
+  SlidersHorizontalIcon,
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { ConditionNode, GroupNode } from "@stll/conditions";
 import { Button } from "@stll/ui/components/button";
 import {
+  Command,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+} from "@stll/ui/components/command";
+import { Input } from "@stll/ui/components/input";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuSeparator,
+  MenuTrigger,
+} from "@stll/ui/components/menu";
+import {
   Popover,
   PopoverPopup,
   PopoverTrigger,
 } from "@stll/ui/components/popover";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/components/select";
 
+import { DatePickerPopover } from "@/components/date-picker-popover";
 import type { TranslationKey } from "@/i18n/types";
 import type { WorkspaceProperty } from "@/lib/types";
 import { ConditionBuilder } from "@/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-builder";
-import type { FieldOption } from "@/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-builder.logic";
+import type {
+  ConditionOperator,
+  FieldOption,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-builder.logic";
+import {
+  buildLeaf,
+  fieldForNode,
+  isMultiValue,
+  leafFromField,
+  leafOperator,
+  leafValueList,
+  leafValueString,
+  operatorLabelKey,
+  operatorsFor,
+  valueEditorFor,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-builder.logic";
+import { SelectColorIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/shared";
+import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
 
 type FilterChipsProps = {
   filters: ConditionNode[];
@@ -28,41 +78,602 @@ export const FilterChips = ({
   const t = useTranslations();
   const fields = useFilterFields(properties);
 
-  // View filters persist as a flat `ConditionNode[]` evaluated with
-  // implicit AND, so the builder runs as a flat AND group and we write
-  // its children straight back to that array.
-  const group: GroupNode = {
-    type: "group",
-    combinator: "and",
-    children: filters,
+  const replaceAt = (index: number, node: ConditionNode) => {
+    onUpdate(filters.map((existing, i) => (i === index ? node : existing)));
   };
-  const count = filters.length;
+  const removeAt = (index: number) => {
+    onUpdate(filters.filter((_, i) => i !== index));
+  };
+  const append = (node: ConditionNode) => {
+    onUpdate([...filters, node]);
+  };
+
+  if (filters.length === 0) {
+    return (
+      <AddFilterPicker
+        fields={fields}
+        onAddAdvanced={() => append(emptyAdvancedGroup())}
+        onAddField={(field) => append(leafFromField(field))}
+        trigger={
+          <Button className="gap-1.5" size="xs" variant="ghost">
+            <FilterIcon className="size-3.5" />
+            {t("workspaces.views.filter")}
+          </Button>
+        }
+      />
+    );
+  }
+
+  return (
+    <>
+      {filters.map((node, index) => {
+        if (node.type === "group") {
+          return (
+            <AdvancedFilterChip
+              fields={fields}
+              key={index}
+              node={node}
+              onChange={(next) => replaceAt(index, next)}
+              onRemove={() => removeAt(index)}
+            />
+          );
+        }
+        return (
+          <FilterChip
+            fields={fields}
+            key={index}
+            node={node}
+            onChange={(next) => replaceAt(index, next)}
+            onRemove={() => removeAt(index)}
+          />
+        );
+      })}
+      <AddFilterPicker
+        fields={fields}
+        onAddAdvanced={() => append(emptyAdvancedGroup())}
+        onAddField={(field) => append(leafFromField(field))}
+        trigger={
+          <Button size="icon-xs" variant="ghost">
+            <PlusIcon />
+          </Button>
+        }
+      />
+    </>
+  );
+};
+
+// ── Simple chip ───────────────────────────────────────────
+
+type FilterChipProps = {
+  node: ConditionNode;
+  fields: FieldOption[];
+  onChange: (next: ConditionNode) => void;
+  onRemove: () => void;
+};
+
+const FilterChip = ({ node, fields, onChange, onRemove }: FilterChipProps) => {
+  const t = useTranslations();
+  const [open, setOpen] = useState(false);
+  const field = fieldForNode(node, fields);
+  const operator = leafOperator(node);
+
+  if (!field || !operator) {
+    return null;
+  }
+
+  return (
+    <Popover onOpenChange={setOpen} open={open}>
+      <PopoverTrigger
+        render={
+          <Button
+            className="gap-1.5 font-normal"
+            size="xs"
+            variant="secondary"
+          />
+        }
+      >
+        <FieldTypeIcon field={field} />
+        <span className="text-foreground">{field.label}</span>
+        <span className="text-muted-foreground">
+          {chipSummary({
+            field,
+            node,
+            operator,
+            operatorLabel: t(operatorLabelKey(field.valueType, operator)),
+          })}
+        </span>
+      </PopoverTrigger>
+      <PopoverPopup align="start" className="w-72 p-0">
+        <FilterEditBody
+          field={field}
+          node={node}
+          onChange={onChange}
+          onRemove={() => {
+            onRemove();
+            setOpen(false);
+          }}
+          operator={operator}
+        />
+      </PopoverPopup>
+    </Popover>
+  );
+};
+
+type FilterEditBodyProps = {
+  field: FieldOption;
+  node: ConditionNode;
+  operator: ConditionOperator;
+  onChange: (next: ConditionNode) => void;
+  onRemove: () => void;
+};
+
+const FilterEditBody = ({
+  field,
+  node,
+  operator,
+  onChange,
+  onRemove,
+}: FilterEditBodyProps) => {
+  const t = useTranslations();
+  const operators = operatorsFor(field.valueType);
+  const editorKind = valueEditorFor(field.valueType, operator);
+
+  return (
+    <div className="flex flex-col">
+      <div className="flex items-center gap-1.5 border-b px-2.5 py-2">
+        <FieldTypeIcon field={field} />
+        <span className="flex-1 truncate text-sm font-medium">
+          {field.label}
+        </span>
+        <Menu>
+          <MenuTrigger render={<Button size="icon-xs" variant="ghost" />}>
+            <MoreHorizontalIcon />
+          </MenuTrigger>
+          <MenuPopup align="end">
+            <MenuItem onClick={() => onChange(leafFromField(field))}>
+              {t("common.duplicate")}
+            </MenuItem>
+            <MenuSeparator />
+            <MenuItem onClick={onRemove} variant="destructive">
+              {t("common.delete")}
+            </MenuItem>
+          </MenuPopup>
+        </Menu>
+      </div>
+
+      <div className="flex flex-col gap-2 p-2.5">
+        <Select
+          onValueChange={(next) => {
+            if (next === null) {
+              return;
+            }
+            onChange(
+              buildLeaf({
+                operand: field.operand,
+                operator: next,
+                value: isMultiValue(next)
+                  ? leafValueList(node)
+                  : leafValueString(node),
+              }),
+            );
+          }}
+          value={operator}
+        >
+          <SelectTrigger className="h-7 min-h-0 w-full text-xs" size="sm">
+            <SelectValue>
+              {() => t(operatorLabelKey(field.valueType, operator))}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectPopup alignItemWithTrigger={false}>
+            {operators.map((op) => (
+              <SelectItem key={op} value={op}>
+                {t(operatorLabelKey(field.valueType, op))}
+              </SelectItem>
+            ))}
+          </SelectPopup>
+        </Select>
+
+        <ValueEditor
+          editorKind={editorKind}
+          field={field}
+          node={node}
+          onChange={onChange}
+          operator={operator}
+        />
+      </div>
+    </div>
+  );
+};
+
+type ValueEditorProps = {
+  editorKind: ReturnType<typeof valueEditorFor>;
+  field: FieldOption;
+  node: ConditionNode;
+  operator: ConditionOperator;
+  onChange: (next: ConditionNode) => void;
+};
+
+const ValueEditor = ({
+  editorKind,
+  field,
+  node,
+  operator,
+  onChange,
+}: ValueEditorProps) => {
+  const t = useTranslations();
+
+  if (editorKind === "none") {
+    return null;
+  }
+
+  const emit = (value: string | string[]) => {
+    onChange(buildLeaf({ operand: field.operand, operator, value }));
+  };
+
+  if (editorKind === "select") {
+    if (isMultiValue(operator)) {
+      return (
+        <MultiSelectValue
+          field={field}
+          onChange={emit}
+          value={leafValueList(node)}
+        />
+      );
+    }
+    return (
+      <SingleSelectValue
+        field={field}
+        onChange={emit}
+        value={leafValueString(node)}
+      />
+    );
+  }
+
+  if (editorKind === "int") {
+    return (
+      <Input
+        autoFocus
+        className="h-7! w-full text-xs"
+        onChange={(e) => emit(e.currentTarget.value)}
+        size="sm"
+        type="number"
+        value={leafValueString(node)}
+      />
+    );
+  }
+
+  if (editorKind === "date") {
+    return (
+      <div className="border-input bg-background rounded-md border px-1">
+        <DatePickerPopover
+          onChange={(next) => emit(next ?? "")}
+          value={leafValueString(node) || null}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <Input
+      autoFocus
+      className="h-7! w-full text-xs"
+      onChange={(e) => emit(e.currentTarget.value)}
+      placeholder={t("workspaces.properties.enterAValue")}
+      size="sm"
+      value={leafValueString(node)}
+    />
+  );
+};
+
+type SingleSelectValueProps = {
+  field: FieldOption;
+  value: string;
+  onChange: (value: string) => void;
+};
+
+const SingleSelectValue = ({
+  field,
+  value,
+  onChange,
+}: SingleSelectValueProps) => {
+  const t = useTranslations();
+  const options = field.options ?? [];
+  const selected = options.find((option) => option.value === value);
+
+  return (
+    <Select
+      onValueChange={(next) => {
+        if (next !== null) {
+          onChange(next);
+        }
+      }}
+      value={value}
+    >
+      <SelectTrigger className="h-7 min-h-0 w-full text-xs" size="sm">
+        <SelectValue placeholder={t("workspaces.fields.selectAValue")}>
+          {() =>
+            selected ? (
+              <span className="flex items-center gap-1.5">
+                {selected.color !== undefined && (
+                  <SelectColorIcon color={selected.color} />
+                )}
+                {selected.label}
+              </span>
+            ) : (
+              t("workspaces.fields.selectAValue")
+            )
+          }
+        </SelectValue>
+      </SelectTrigger>
+      <SelectPopup alignItemWithTrigger={false}>
+        {options.map((option) => (
+          <SelectItem key={option.value} value={option.value}>
+            <span className="flex items-center gap-1.5">
+              {option.color !== undefined && (
+                <SelectColorIcon color={option.color} />
+              )}
+              {option.label}
+            </span>
+          </SelectItem>
+        ))}
+      </SelectPopup>
+    </Select>
+  );
+};
+
+type MultiSelectValueProps = {
+  field: FieldOption;
+  value: string[];
+  onChange: (value: string[]) => void;
+};
+
+const MultiSelectValue = ({
+  field,
+  value,
+  onChange,
+}: MultiSelectValueProps) => {
+  const t = useTranslations();
+  const options = field.options ?? [];
+  const label =
+    value.length === 0
+      ? t("workspaces.fields.selectValues")
+      : value
+          .map((v) => options.find((option) => option.value === v)?.label ?? v)
+          .join(", ");
+
+  return (
+    <Select multiple onValueChange={(next) => onChange(next)} value={value}>
+      <SelectTrigger className="h-7 min-h-0 w-full text-xs" size="sm">
+        <SelectValue>{() => label}</SelectValue>
+      </SelectTrigger>
+      <SelectPopup alignItemWithTrigger={false}>
+        {options.map((option) => (
+          <SelectItem key={option.value} value={option.value}>
+            <span className="flex items-center gap-1.5">
+              {option.color !== undefined && (
+                <SelectColorIcon color={option.color} />
+              )}
+              {option.label}
+            </span>
+          </SelectItem>
+        ))}
+      </SelectPopup>
+    </Select>
+  );
+};
+
+// ── Advanced (AND/OR group) chip ──────────────────────────
+
+type AdvancedFilterChipProps = {
+  node: GroupNode;
+  fields: FieldOption[];
+  onChange: (next: GroupNode) => void;
+  onRemove: () => void;
+};
+
+const AdvancedFilterChip = ({
+  node,
+  fields,
+  onChange,
+  onRemove,
+}: AdvancedFilterChipProps) => {
+  const t = useTranslations();
 
   return (
     <Popover>
       <PopoverTrigger
         render={
           <Button
-            className="gap-1.5"
+            className="gap-1.5 font-normal"
             size="xs"
-            variant={count > 0 ? "secondary" : "ghost"}
+            variant="secondary"
           />
         }
       >
-        <FilterIcon className="size-3.5" />
-        {count > 0
-          ? t("workspaces.views.filtersWithCount", { count })
-          : t("workspaces.views.filter")}
+        <SlidersHorizontalIcon className="size-3.5" />
+        <span className="text-foreground">
+          {t("workspaces.views.advancedFilter")}
+        </span>
+        <span className="text-muted-foreground">
+          {t("workspaces.views.advancedFilterCount", {
+            count: node.children.length,
+          })}
+        </span>
       </PopoverTrigger>
-      <PopoverPopup className="w-auto max-w-[min(36rem,90vw)] p-3">
+      <PopoverPopup
+        align="start"
+        className="w-auto max-w-[min(36rem,90vw)] p-3"
+      >
         <ConditionBuilder
+          allowGroups
           fields={fields}
-          onChange={(next) => onUpdate(next.children)}
-          value={group}
+          onChange={onChange}
+          value={node}
         />
+        <div className="mt-2 border-t pt-2">
+          <Button
+            className="text-muted-foreground"
+            onClick={onRemove}
+            size="xs"
+            variant="ghost"
+          >
+            {t("workspaces.views.removeAdvancedFilter")}
+          </Button>
+        </div>
       </PopoverPopup>
     </Popover>
   );
+};
+
+// ── Add picker ────────────────────────────────────────────
+
+type AddFilterPickerProps = {
+  fields: FieldOption[];
+  trigger: React.ReactElement;
+  onAddField: (field: FieldOption) => void;
+  onAddAdvanced: () => void;
+};
+
+const AddFilterPicker = ({
+  fields,
+  trigger,
+  onAddField,
+  onAddAdvanced,
+}: AddFilterPickerProps) => {
+  const t = useTranslations();
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+
+  const normalized = query.trim().toLowerCase();
+  const visible = normalized
+    ? fields.filter((field) => field.label.toLowerCase().includes(normalized))
+    : fields;
+
+  const close = () => {
+    setOpen(false);
+    setQuery("");
+  };
+
+  return (
+    <Popover onOpenChange={setOpen} open={open}>
+      <PopoverTrigger render={trigger} />
+      <PopoverPopup align="start" className="w-64 p-0">
+        <Command mode="none" onValueChange={setQuery} value={query}>
+          <div className="border-b px-2.5 py-2">
+            <CommandInput
+              autoFocus
+              placeholder={t("workspaces.views.filterByPlaceholder")}
+              size="sm"
+            />
+          </div>
+          <CommandList className="p-1">
+            {visible.length === 0 && (
+              <p className="text-muted-foreground px-2 py-1.5 text-sm">
+                {t("common.noResults")}
+              </p>
+            )}
+            {visible.map((field) => (
+              <CommandItem
+                key={fieldKey(field)}
+                onClick={() => {
+                  onAddField(field);
+                  close();
+                }}
+                value={field.label}
+              >
+                <FieldTypeIcon field={field} />
+                {field.label}
+              </CommandItem>
+            ))}
+            <CommandSeparator className="my-1" />
+            <CommandItem
+              onClick={() => {
+                onAddAdvanced();
+                close();
+              }}
+              value="__advanced__"
+            >
+              <SlidersHorizontalIcon className="text-muted-foreground" />
+              {t("workspaces.views.addAdvancedFilter")}
+            </CommandItem>
+          </CommandList>
+        </Command>
+      </PopoverPopup>
+    </Popover>
+  );
+};
+
+const FieldTypeIcon = ({ field }: { field: FieldOption }) => {
+  if (field.valueType === "kind") {
+    return <LayersIcon className="text-muted-foreground" />;
+  }
+  if (field.valueType === "status") {
+    return <CircleDotIcon className="text-muted-foreground" />;
+  }
+  if (field.valueType === "priority") {
+    return <FlagIcon className="text-muted-foreground" />;
+  }
+  return <PropertyIcon className="text-muted-foreground" type={field.type} />;
+};
+
+// ── Chip summary ──────────────────────────────────────────
+
+type ChipSummaryArgs = {
+  field: FieldOption;
+  node: ConditionNode;
+  operator: ConditionOperator;
+  operatorLabel: string;
+};
+
+const optionLabel = (field: FieldOption, value: string): string =>
+  field.options?.find((option) => option.value === value)?.label ?? value;
+
+const chipSummary = ({
+  field,
+  node,
+  operator,
+  operatorLabel,
+}: ChipSummaryArgs): string => {
+  const editorKind = valueEditorFor(field.valueType, operator);
+
+  if (editorKind === "none") {
+    return operatorLabel;
+  }
+
+  if (isMultiValue(operator)) {
+    const values = leafValueList(node).map((value) =>
+      optionLabel(field, value),
+    );
+    if (values.length === 0) {
+      return operatorLabel;
+    }
+    return `${operatorLabel} ${values.join(", ")}`;
+  }
+
+  const raw = leafValueString(node);
+  if (!raw) {
+    return operatorLabel;
+  }
+  const display = editorKind === "select" ? optionLabel(field, raw) : raw;
+  return `${operatorLabel} ${display}`;
+};
+
+// ── Field catalogue ───────────────────────────────────────
+
+const emptyAdvancedGroup = (): GroupNode => ({
+  type: "group",
+  combinator: "and",
+  children: [],
+});
+
+const fieldKey = (field: FieldOption): string => {
+  if (field.operand.type === "property") {
+    return `property:${field.operand.propertyId}`;
+  }
+  if (field.operand.type === "builtin") {
+    return `builtin:${field.operand.field}`;
+  }
+  return field.operand.type;
 };
 
 const ENTITY_KINDS = ["document", "task"] as const;
@@ -107,6 +718,7 @@ const useFilterFields = (properties: WorkspaceProperty[]): FieldOption[] => {
       operand: { type: "kind" },
       label: t("common.kind"),
       valueType: "kind",
+      type: "text",
       options: ENTITY_KINDS.map((kind) => ({
         value: kind,
         label: t(KIND_LABEL_KEYS[kind]),
@@ -116,6 +728,7 @@ const useFilterFields = (properties: WorkspaceProperty[]): FieldOption[] => {
       operand: { type: "builtin", field: "status" },
       label: t("common.status"),
       valueType: "status",
+      type: "single-select",
       options: STATUS_VALUES.map((value) => ({
         value,
         label: t(STATUS_VALUE_LABEL_KEYS[value]),
@@ -125,6 +738,7 @@ const useFilterFields = (properties: WorkspaceProperty[]): FieldOption[] => {
       operand: { type: "builtin", field: "priority" },
       label: t("tasks.priority"),
       valueType: "priority",
+      type: "single-select",
       options: PRIORITY_VALUES.map((value) => ({
         value,
         label: t(PRIORITY_VALUE_LABEL_KEYS[value]),
@@ -144,6 +758,7 @@ const useFilterFields = (properties: WorkspaceProperty[]): FieldOption[] => {
         operand: { type: "property", propertyId: property.id },
         label: property.name,
         valueType: property.content.type,
+        type: property.content.type,
         options: property.content.options.map((option) => ({
           value: option.value,
           label: option.value,
@@ -156,6 +771,7 @@ const useFilterFields = (properties: WorkspaceProperty[]): FieldOption[] => {
       operand: { type: "property", propertyId: property.id },
       label: property.name,
       valueType: property.content.type,
+      type: property.content.type,
     });
   }
 

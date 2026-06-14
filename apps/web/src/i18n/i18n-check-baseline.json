@@ -319,6 +319,71 @@
       "pt-BR",
       "sk"
     ],
+    "filters.dateAfter": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "filters.dateBefore": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "filters.dateOnOrAfter": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "filters.dateOnOrBefore": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "filters.ends_with": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
     "filters.gt": [
       "cs",
       "de",
@@ -358,6 +423,19 @@
       "pt-BR",
       "sk"
     ],
+    "filters.is_not_empty": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
     "filters.lt": [
       "cs",
       "de",
@@ -372,6 +450,32 @@
       "sk"
     ],
     "filters.lte": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "filters.not_contains": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "filters.starts_with": [
       "cs",
       "de",
       "es",
@@ -1071,6 +1175,45 @@
     "workspaces.team": [
       "de"
     ],
+    "workspaces.views.addAdvancedFilter": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "workspaces.views.advancedFilter": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "workspaces.views.advancedFilterCount": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
     "workspaces.views.calendar.addDates": [
       "fr"
     ],
@@ -1078,6 +1221,19 @@
       "fr"
     ],
     "workspaces.views.filter": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "workspaces.views.filterByPlaceholder": [
       "cs",
       "de",
       "es",
@@ -1104,6 +1260,19 @@
       "sk"
     ],
     "workspaces.views.layouts.kanban": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "workspaces.views.removeAdvancedFilter": [
       "cs",
       "de",
       "es",

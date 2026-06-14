@@ -1107,14 +1107,28 @@
   "filters": {
     "contains": "sisaldab",
     "contains_all": "contains all of",
+    "dateAfter": "is after",
+    "dateBefore": "is before",
+    "dateOnOrAfter": "is on or after",
+    "dateOnOrBefore": "is on or before",
+    "ends_with": "ends with",
     "eq": "on",
     "gt": "is greater than",
     "gte": "is greater than or equal to",
     "in": "is any of",
     "is_empty": "on tühi",
+    "is_not_empty": "is not empty",
     "lt": "is less than",
     "lte": "is less than or equal to",
-    "neq": "ei ole"
+    "neq": "ei ole",
+    "not_contains": "does not contain",
+    "numEq": "=",
+    "numGt": ">",
+    "numGte": "≥",
+    "numLt": "<",
+    "numLte": "≤",
+    "numNeq": "≠",
+    "starts_with": "starts with"
   },
   "folio": {
     "acceptChange": "Nõustu muudatusega",
@@ -2592,7 +2606,10 @@
     "unarchiveMatter": "Taasta arhiivist",
     "uploadDocuments": "Laadi dokumendid üles",
     "views": {
+      "addAdvancedFilter": "Add advanced filter",
       "addFields": "Lisa väljad",
+      "advancedFilter": "Advanced",
+      "advancedFilterCount": "{count, plural, =0 {Any} one {# rule} other {# rules}}",
       "aiGenerated": "Tehisintellektiga loodud",
       "calendar": {
         "addDates": "+ Kuupäevad",
@@ -2618,6 +2635,7 @@
       "fields": "Väljad:",
       "fieldsSelected": "{count, plural, one {# valitud} other {# valitud}}",
       "filter": "Filter",
+      "filterByPlaceholder": "Filter by…",
       "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Rühmita:",
       "hideColumn": "Peida veerg",
@@ -2632,6 +2650,7 @@
         "timeline": "Ajajoon"
       },
       "newView": "Uus {layout}",
+      "removeAdvancedFilter": "Remove advanced filter",
       "saveAsTemplate": "Salvesta mallina…",
       "selectProperty": "Valige omadus",
       "templates": {

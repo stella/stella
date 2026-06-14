@@ -1107,14 +1107,28 @@
   "filters": {
     "contains": "contém",
     "contains_all": "contains all of",
+    "dateAfter": "is after",
+    "dateBefore": "is before",
+    "dateOnOrAfter": "is on or after",
+    "dateOnOrBefore": "is on or before",
+    "ends_with": "ends with",
     "eq": "é",
     "gt": "is greater than",
     "gte": "is greater than or equal to",
     "in": "is any of",
     "is_empty": "está vazio",
+    "is_not_empty": "is not empty",
     "lt": "is less than",
     "lte": "is less than or equal to",
-    "neq": "não é"
+    "neq": "não é",
+    "not_contains": "does not contain",
+    "numEq": "=",
+    "numGt": ">",
+    "numGte": "≥",
+    "numLt": "<",
+    "numLte": "≤",
+    "numNeq": "≠",
+    "starts_with": "starts with"
   },
   "folio": {
     "acceptChange": "Aceitar alteração",
@@ -2592,7 +2606,10 @@
     "unarchiveMatter": "Desarquivar",
     "uploadDocuments": "Carregar documentos",
     "views": {
+      "addAdvancedFilter": "Add advanced filter",
       "addFields": "Adicionar campos",
+      "advancedFilter": "Advanced",
+      "advancedFilterCount": "{count, plural, =0 {Any} one {# rule} other {# rules}}",
       "aiGenerated": "Gerado por IA",
       "calendar": {
         "addDates": "+ Datas",
@@ -2618,6 +2635,7 @@
       "fields": "Campos:",
       "fieldsSelected": "{count, plural, one {# selecionado} many {# selecionados} other {# selecionados}}",
       "filter": "Filter",
+      "filterByPlaceholder": "Filter by…",
       "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Agrupar por:",
       "hideColumn": "Ocultar coluna",
@@ -2632,6 +2650,7 @@
         "timeline": "Linha do tempo"
       },
       "newView": "Novo {layout}",
+      "removeAdvancedFilter": "Remove advanced filter",
       "saveAsTemplate": "Salvar como modelo…",
       "selectProperty": "Selecione a propriedade",
       "templates": {

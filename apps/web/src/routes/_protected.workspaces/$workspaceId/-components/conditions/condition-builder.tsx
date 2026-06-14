@@ -29,8 +29,8 @@ import {
   leafOperator,
   leafValueList,
   leafValueString,
-  OPERATOR_LABEL_KEYS,
   operandsEqual,
+  operatorLabelKey,
   operatorsFor,
   removeChild,
   replaceChild,
@@ -291,12 +291,14 @@ const LeafRow = ({ node, fields, onChange, onRemove }: LeafRowProps) => {
           className="h-7 min-h-0 w-auto min-w-24 text-xs"
           size="sm"
         >
-          <SelectValue>{() => t(OPERATOR_LABEL_KEYS[operator])}</SelectValue>
+          <SelectValue>
+            {() => t(operatorLabelKey(field.valueType, operator))}
+          </SelectValue>
         </SelectTrigger>
         <SelectPopup alignItemWithTrigger={false}>
           {operators.map((op) => (
             <SelectItem key={op} value={op}>
-              {t(OPERATOR_LABEL_KEYS[op])}
+              {t(operatorLabelKey(field.valueType, op))}
             </SelectItem>
           ))}
         </SelectPopup>
