@@ -137,7 +137,11 @@ export default {
 
         return {
           ImportDeclaration(node: AstNode) {
-            if (node.source == null || typeof node.source !== "object") {
+            if (
+              node.source === null ||
+              node.source === undefined ||
+              typeof node.source !== "object"
+            ) {
               return;
             }
             const source = (node.source as { value?: unknown }).value;
