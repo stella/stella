@@ -14,6 +14,13 @@ export type TimesheetTotalEntry = {
 
 export type CurrencyAmount = { currency: string; amount: number };
 
+const sortedCurrencyAmounts = (
+  byCurrency: Map<string, number>,
+): CurrencyAmount[] =>
+  [...byCurrency.entries()]
+    .map(([currency, amount]) => ({ currency, amount }))
+    .sort((a, b) => a.currency.localeCompare(b.currency));
+
 /**
  * Billable amount summed per currency. There is no FX conversion, so a week
  * that mixes currencies must be reported as one subtotal per currency, never
@@ -36,31 +43,40 @@ export const summarizeBillableAmountByCurrency = (
       (byCurrency.get(entry.currency) ?? 0) + amount,
     );
   }
-  return [...byCurrency.entries()]
-    .map(([currency, amount]) => ({ currency, amount }))
-    .sort((a, b) => a.currency.localeCompare(b.currency));
+  return sortedCurrencyAmounts(byCurrency);
 };
 
 /**
- * Each matter's display currency. The row amount is summed from billable
- * entries only, so prefer a billable entry's currency (a non-billable entry
- * in another currency must not mislabel the charged subtotal). Fall back to
- * any entry's currency for matters with no billable time, whose amount is 0
- * and therefore not shown.
+ * Billable amount summed by matter and currency. The matter row cannot use a
+ * single currency label when its charged entries span multiple currencies.
  */
-export const matterCurrencyMap = (
+export const summarizeBillableAmountByMatterAndCurrency = (
   entries: readonly TimesheetTotalEntry[],
-): Map<string, string> => {
-  const map = new Map<string, string>();
+): Map<string, CurrencyAmount[]> => {
+  const byMatter = new Map<string, Map<string, number>>();
   for (const entry of entries) {
-    if (entry.billable && !map.has(entry.matterId)) {
-      map.set(entry.matterId, entry.currency);
+    if (!entry.billable) {
+      continue;
     }
-  }
-  for (const entry of entries) {
-    if (!map.has(entry.matterId)) {
-      map.set(entry.matterId, entry.currency);
+    let byCurrency = byMatter.get(entry.matterId);
+    if (!byCurrency) {
+      byCurrency = new Map<string, number>();
+      byMatter.set(entry.matterId, byCurrency);
     }
+    const amount = prorateHourlyCents({
+      billedMinutes: entry.billedMinutes,
+      hourlyRateCents: entry.rateAtEntry,
+    });
+    byCurrency.set(
+      entry.currency,
+      (byCurrency.get(entry.currency) ?? 0) + amount,
+    );
   }
-  return map;
+
+  return new Map(
+    [...byMatter.entries()].map(([matterId, byCurrency]) => [
+      matterId,
+      sortedCurrencyAmounts(byCurrency),
+    ]),
+  );
 };

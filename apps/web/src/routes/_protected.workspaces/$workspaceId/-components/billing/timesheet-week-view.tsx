@@ -3,20 +3,16 @@ import { useMemo } from "react";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { prorateHourlyCents } from "@stll/money";
 import { cn } from "@stll/ui/lib/utils";
 
 import {
   formatDecimalHours,
   formatMinutes,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/duration-input";
-import {
-  DEFAULT_CURRENCY,
-  formatCurrencyCompact,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
+import { formatCurrencyCompact } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { useMatterNameMap } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-name-map";
 import {
-  matterCurrencyMap,
+  summarizeBillableAmountByMatterAndCurrency,
   summarizeBillableAmountByCurrency,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/timesheet-week-view.logic";
 import { timeEntriesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/time-entries";
@@ -64,8 +60,8 @@ export const TimesheetWeekView = ({
     [weekStart, weekEnd],
   );
 
-  // Grid: matterId -> { day -> { minutes, amount } }
-  type DayData = { minutes: number; amount: number };
+  // Grid: matterId -> { day -> { minutes } }
+  type DayData = { minutes: number };
   const grid = useMemo(() => {
     const map = new Map<string, Map<string, DayData>>();
     for (const entry of entries) {
@@ -76,24 +72,19 @@ export const TimesheetWeekView = ({
       }
       const current = dayMap.get(entry.dateWorked) ?? {
         minutes: 0,
-        amount: 0,
       };
       current.minutes += entry.durationMinutes;
-      if (entry.billable) {
-        current.amount += prorateHourlyCents({
-          billedMinutes: entry.billedMinutes,
-          hourlyRateCents: entry.rateAtEntry,
-        });
-      }
       dayMap.set(entry.dateWorked, current);
     }
     return map;
   }, [entries]);
 
-  // Each matter bills in one currency; week totals are reported per
-  // currency. There is no FX conversion, so amounts in different currencies
-  // are never summed under a single (first-entry) symbol.
-  const matterCurrencies = useMemo(() => matterCurrencyMap(entries), [entries]);
+  // There is no FX conversion, so amounts in different currencies are never
+  // summed under one symbol.
+  const matterAmountsByCurrency = useMemo(
+    () => summarizeBillableAmountByMatterAndCurrency(entries),
+    [entries],
+  );
   const weekAmountsByCurrency = useMemo(
     () => summarizeBillableAmountByCurrency(entries),
     [entries],
@@ -105,27 +96,23 @@ export const TimesheetWeekView = ({
     const totals = new Map<string, DayData>();
     for (const day of days) {
       let minutes = 0;
-      let amount = 0;
       for (const dayMap of grid.values()) {
         const data = dayMap.get(day);
         if (data) {
           minutes += data.minutes;
-          amount += data.amount;
         }
       }
-      totals.set(day, { minutes, amount });
+      totals.set(day, { minutes });
     }
     return totals;
   }, [grid, days]);
 
   const weekTotals = useMemo(() => {
     let minutes = 0;
-    let amount = 0;
     for (const data of columnTotals.values()) {
       minutes += data.minutes;
-      amount += data.amount;
     }
-    return { minutes, amount };
+    return { minutes };
   }, [columnTotals]);
 
   const today = useMemo(() => {
@@ -178,14 +165,14 @@ export const TimesheetWeekView = ({
           {matterIds.map((matterId) => {
             const dayMap = grid.get(matterId);
             let rowMinutes = 0;
-            let rowAmount = 0;
             for (const day of days) {
               const data = dayMap?.get(day);
               if (data) {
                 rowMinutes += data.minutes;
-                rowAmount += data.amount;
               }
             }
+            const rowAmountsByCurrency =
+              matterAmountsByCurrency.get(matterId) ?? [];
 
             return (
               <tr className="hover:bg-muted/30 border-b" key={matterId}>
@@ -212,14 +199,14 @@ export const TimesheetWeekView = ({
                 })}
                 <td className="px-2 py-2 text-center tabular-nums">
                   <div className="font-medium">{formatMinutes(rowMinutes)}</div>
-                  {rowAmount > 0 && (
-                    <div className="text-muted-foreground text-xs">
-                      {formatCurrencyCompact(
-                        rowAmount,
-                        matterCurrencies.get(matterId) ?? DEFAULT_CURRENCY,
-                      )}
+                  {rowAmountsByCurrency.map((total) => (
+                    <div
+                      className="text-muted-foreground text-xs"
+                      key={total.currency}
+                    >
+                      {formatCurrencyCompact(total.amount, total.currency)}
                     </div>
-                  )}
+                  ))}
                 </td>
               </tr>
             );

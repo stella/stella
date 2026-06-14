@@ -19,6 +19,12 @@ import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 
+import {
+  INVOICE_ENTRIES_MODIFIED_MESSAGE,
+  InvoiceEntriesModifiedConcurrentlyError,
+  isInvoiceEntriesModifiedConcurrentlyError,
+} from "./concurrent-modification";
+
 const addEntriesBodySchema = t.Object({
   timeEntryIds: t.Optional(
     t.Array(tSafeId("timeEntry"), { minItems: 1, maxItems: 500 }),
@@ -252,150 +258,160 @@ const addEntries = createSafeHandler(
       }
     }
 
-    const txResult = yield* Result.await(
-      safeDb(async (tx) => {
-        const invoiceCheck = await tx.query.invoices.findFirst({
-          where: {
-            id: { eq: params.invoiceId },
-            workspaceId: { eq: workspaceId },
-            status: { eq: INVOICE_STATUS.DRAFT },
-          },
-          columns: { id: true, totalAmount: true, currency: true },
-        });
-        if (!invoiceCheck) {
-          return { ok: false as const };
-        }
+    const txResult = await safeDb(async (tx) => {
+      const invoiceCheck = await tx.query.invoices.findFirst({
+        where: {
+          id: { eq: params.invoiceId },
+          workspaceId: { eq: workspaceId },
+          status: { eq: INVOICE_STATUS.DRAFT },
+        },
+        columns: { id: true, totalAmount: true, currency: true },
+      });
+      if (!invoiceCheck) {
+        return { ok: false as const };
+      }
 
-        let attachedTimeEntries: { id: SafeId<"timeEntry"> }[] = [];
-        if (timeEntryIds && timeEntryIds.length > 0) {
-          attachedTimeEntries = await tx
-            .update(timeEntries)
-            .set({
-              invoiceId: params.invoiceId,
-              status: BILLING_STATUS.BILLED,
-              updatedAt: now,
-            })
-            .where(
-              and(
-                eq(timeEntries.workspaceId, workspaceId),
-                inArray(timeEntries.id, timeEntryIds),
-                eq(timeEntries.status, BILLING_STATUS.APPROVED),
-                eq(timeEntries.billable, true),
-                isNull(timeEntries.invoiceId),
-                // Re-check currency under the claim so a concurrent edit
-                // cannot attach a mismatched-currency entry (count mismatch
-                // then trips the concurrent-modification retry path).
-                eq(timeEntries.currency, invoiceCheck.currency),
-              ),
-            )
-            .returning({ id: timeEntries.id });
-
-          if (attachedTimeEntries.length !== timeEntryIds.length) {
-            return { ok: false as const };
-          }
-        }
-
-        let attachedExpenses: { id: SafeId<"expense"> }[] = [];
-        if (expenseIds && expenseIds.length > 0) {
-          attachedExpenses = await tx
-            .update(expenses)
-            .set({
-              invoiceId: params.invoiceId,
-              status: BILLING_STATUS.BILLED,
-              updatedAt: now,
-            })
-            .where(
-              and(
-                eq(expenses.workspaceId, workspaceId),
-                inArray(expenses.id, expenseIds),
-                eq(expenses.status, BILLING_STATUS.APPROVED),
-                eq(expenses.billable, true),
-                isNull(expenses.invoiceId),
-                eq(expenses.currency, invoiceCheck.currency),
-              ),
-            )
-            .returning({ id: expenses.id });
-
-          if (attachedExpenses.length !== expenseIds.length) {
-            return { ok: false as const };
-          }
-        }
-
-        const allTimeEntries = await tx
-          .select({
-            billedMinutes: timeEntries.billedMinutes,
-            rateAtEntry: timeEntries.rateAtEntry,
-          })
-          .from(timeEntries)
-          .where(
-            and(
-              eq(timeEntries.invoiceId, params.invoiceId),
-              eq(timeEntries.workspaceId, workspaceId),
-            ),
-          );
-
-        const allExpenses = await tx
-          .select({
-            amount: expenses.amount,
-            markup: expenses.markup,
-          })
-          .from(expenses)
-          .where(
-            and(
-              eq(expenses.invoiceId, params.invoiceId),
-              eq(expenses.workspaceId, workspaceId),
-            ),
-          );
-
-        let totalAmount = 0;
-        for (const entry of allTimeEntries) {
-          totalAmount += prorateHourlyCents({
-            billedMinutes: entry.billedMinutes,
-            hourlyRateCents: entry.rateAtEntry,
-          });
-        }
-        for (const expense of allExpenses) {
-          totalAmount += applyMarkupCents({
-            amountCents: expense.amount,
-            markupPercent: expense.markup,
-          });
-        }
-
-        await tx
-          .update(invoices)
-          .set({ totalAmount: cents(totalAmount), updatedAt: now })
-          .where(
-            and(
-              eq(invoices.id, params.invoiceId),
-              eq(invoices.workspaceId, workspaceId),
-            ),
-          );
-
-        await recordAuditEvent(
-          tx,
-          buildAttachEvents({
+      let attachedTimeEntries: { id: SafeId<"timeEntry"> }[] = [];
+      if (timeEntryIds && timeEntryIds.length > 0) {
+        attachedTimeEntries = await tx
+          .update(timeEntries)
+          .set({
             invoiceId: params.invoiceId,
-            attachedTimeEntries,
-            attachedExpenses,
-            oldTotalAmount: invoiceCheck.totalAmount,
-            totalAmount,
-          }),
+            status: BILLING_STATUS.BILLED,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(timeEntries.workspaceId, workspaceId),
+              inArray(timeEntries.id, timeEntryIds),
+              eq(timeEntries.status, BILLING_STATUS.APPROVED),
+              eq(timeEntries.billable, true),
+              isNull(timeEntries.invoiceId),
+              // Re-check currency under the claim so a concurrent edit
+              // cannot attach a mismatched-currency entry (count mismatch
+              // then trips the concurrent-modification retry path).
+              eq(timeEntries.currency, invoiceCheck.currency),
+            ),
+          )
+          .returning({ id: timeEntries.id });
+
+        if (attachedTimeEntries.length !== timeEntryIds.length) {
+          throw new InvoiceEntriesModifiedConcurrentlyError();
+        }
+      }
+
+      let attachedExpenses: { id: SafeId<"expense"> }[] = [];
+      if (expenseIds && expenseIds.length > 0) {
+        attachedExpenses = await tx
+          .update(expenses)
+          .set({
+            invoiceId: params.invoiceId,
+            status: BILLING_STATUS.BILLED,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(expenses.workspaceId, workspaceId),
+              inArray(expenses.id, expenseIds),
+              eq(expenses.status, BILLING_STATUS.APPROVED),
+              eq(expenses.billable, true),
+              isNull(expenses.invoiceId),
+              eq(expenses.currency, invoiceCheck.currency),
+            ),
+          )
+          .returning({ id: expenses.id });
+
+        if (attachedExpenses.length !== expenseIds.length) {
+          throw new InvoiceEntriesModifiedConcurrentlyError();
+        }
+      }
+
+      const allTimeEntries = await tx
+        .select({
+          billedMinutes: timeEntries.billedMinutes,
+          rateAtEntry: timeEntries.rateAtEntry,
+        })
+        .from(timeEntries)
+        .where(
+          and(
+            eq(timeEntries.invoiceId, params.invoiceId),
+            eq(timeEntries.workspaceId, workspaceId),
+          ),
         );
 
-        return { ok: true as const, totalAmount };
-      }),
-    );
+      const allExpenses = await tx
+        .select({
+          amount: expenses.amount,
+          markup: expenses.markup,
+        })
+        .from(expenses)
+        .where(
+          and(
+            eq(expenses.invoiceId, params.invoiceId),
+            eq(expenses.workspaceId, workspaceId),
+          ),
+        );
 
-    if (!txResult.ok) {
+      let totalAmount = 0;
+      for (const entry of allTimeEntries) {
+        totalAmount += prorateHourlyCents({
+          billedMinutes: entry.billedMinutes,
+          hourlyRateCents: entry.rateAtEntry,
+        });
+      }
+      for (const expense of allExpenses) {
+        totalAmount += applyMarkupCents({
+          amountCents: expense.amount,
+          markupPercent: expense.markup,
+        });
+      }
+
+      await tx
+        .update(invoices)
+        .set({ totalAmount: cents(totalAmount), updatedAt: now })
+        .where(
+          and(
+            eq(invoices.id, params.invoiceId),
+            eq(invoices.workspaceId, workspaceId),
+          ),
+        );
+
+      await recordAuditEvent(
+        tx,
+        buildAttachEvents({
+          invoiceId: params.invoiceId,
+          attachedTimeEntries,
+          attachedExpenses,
+          oldTotalAmount: invoiceCheck.totalAmount,
+          totalAmount,
+        }),
+      );
+
+      return { ok: true as const, totalAmount };
+    });
+
+    if (Result.isError(txResult)) {
+      if (isInvoiceEntriesModifiedConcurrentlyError(txResult.error)) {
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message: INVOICE_ENTRIES_MODIFIED_MESSAGE,
+          }),
+        );
+      }
+      return Result.err(txResult.error);
+    }
+
+    if (!txResult.value.ok) {
       return Result.err(
         new HandlerError({
           status: 409,
-          message: "Some entries were modified concurrently; please retry",
+          message: INVOICE_ENTRIES_MODIFIED_MESSAGE,
         }),
       );
     }
 
-    return Result.ok({ totalAmount: txResult.totalAmount });
+    return Result.ok({ totalAmount: txResult.value.totalAmount });
   },
 );
 

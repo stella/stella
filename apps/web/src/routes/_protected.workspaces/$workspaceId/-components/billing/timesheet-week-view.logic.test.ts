@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { cents } from "@stll/money";
 
 import {
-  matterCurrencyMap,
+  summarizeBillableAmountByMatterAndCurrency,
   summarizeBillableAmountByCurrency,
   type TimesheetTotalEntry,
 } from "./timesheet-week-view.logic";
@@ -50,31 +50,40 @@ describe("summarizeBillableAmountByCurrency", () => {
   });
 });
 
-describe("matterCurrencyMap", () => {
-  test("maps each matter to its own currency", () => {
-    const map = matterCurrencyMap([
+describe("summarizeBillableAmountByMatterAndCurrency", () => {
+  test("maps each matter to its own currency subtotal", () => {
+    const map = summarizeBillableAmountByMatterAndCurrency([
       entry({ matterId: "m1", currency: "USD" }),
       entry({ matterId: "m2", currency: "EUR" }),
       entry({ matterId: "m1", currency: "USD" }),
     ]);
-    expect(map.get("m1")).toBe("USD");
-    expect(map.get("m2")).toBe("EUR");
+    expect(map.get("m1")).toEqual([{ currency: "USD", amount: 20_000 }]);
+    expect(map.get("m2")).toEqual([{ currency: "EUR", amount: 10_000 }]);
   });
 
-  test("prefers a billable entry's currency over an earlier non-billable one", () => {
-    // The row amount is billable-only, so the label must match the charged
-    // currency, not the first (non-billable) entry's.
-    const map = matterCurrencyMap([
+  test("ignores non-billable entries when deriving charged row subtotals", () => {
+    const map = summarizeBillableAmountByMatterAndCurrency([
       entry({ matterId: "m1", currency: "EUR", billable: false }),
       entry({ matterId: "m1", currency: "USD", billable: true }),
     ]);
-    expect(map.get("m1")).toBe("USD");
+    expect(map.get("m1")).toEqual([{ currency: "USD", amount: 10_000 }]);
   });
 
-  test("falls back to any currency for matters with no billable time", () => {
-    const map = matterCurrencyMap([
+  test("keeps same-matter mixed currencies as separate row subtotals", () => {
+    const map = summarizeBillableAmountByMatterAndCurrency([
+      entry({ matterId: "m1", currency: "USD" }),
+      entry({ matterId: "m1", currency: "EUR", rateAtEntry: cents(20_000) }),
+    ]);
+    expect(map.get("m1")).toEqual([
+      { currency: "EUR", amount: 20_000 },
+      { currency: "USD", amount: 10_000 },
+    ]);
+  });
+
+  test("omits matters with no billable amount", () => {
+    const map = summarizeBillableAmountByMatterAndCurrency([
       entry({ matterId: "m1", currency: "EUR", billable: false }),
     ]);
-    expect(map.get("m1")).toBe("EUR");
+    expect(map.has("m1")).toBe(false);
   });
 });

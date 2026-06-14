@@ -185,4 +185,50 @@ describe("createInvoice", () => {
       entryCount: 2,
     });
   });
+
+  test("returns a retryable conflict when the claim count changes", async () => {
+    const entries = [entry("te_1", "USD"), entry("te_2", "USD")];
+    const firstEntry = entries.at(0);
+    if (!firstEntry) {
+      throw new Error("Expected fixture entry");
+    }
+    let auditCalls = 0;
+    const { safeDb, scopedDb } = createScopedDbMock({
+      $count: async () => 0,
+      select: () => ({ from: () => ({ where: async () => entries }) }),
+      insert: () => ({
+        values: () => ({
+          returning: async () => [
+            { id: toSafeId<"invoice">("inv_1"), invoiceNumber: "INV-001" },
+          ],
+        }),
+      }),
+      update: () => ({
+        set: () => ({
+          where: () => ({
+            returning: async () => [{ id: firstEntry.id }],
+          }),
+        }),
+      }),
+    });
+
+    const result = await createInvoice.handler(
+      createContext({
+        body: baseBody("USD", ["te_1", "te_2"]),
+        safeDb,
+        scopedDb,
+        recordAuditEvent: async () => {
+          auditCalls += 1;
+        },
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 409,
+      response: {
+        message: "Some entries were modified concurrently; please retry",
+      },
+    });
+    expect(auditCalls).toBe(0);
+  });
 });

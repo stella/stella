@@ -18,6 +18,12 @@ import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
+import {
+  INVOICE_ENTRIES_MODIFIED_MESSAGE,
+  InvoiceEntriesModifiedConcurrentlyError,
+  isInvoiceEntriesModifiedConcurrentlyError,
+} from "./concurrent-modification";
+
 const createInvoiceBodySchema = t.Object({
   invoiceNumber: t.String({ minLength: 1, maxLength: 64 }),
   invoiceDate: t.String({ format: "date" }),
@@ -171,7 +177,7 @@ const createInvoice = createSafeHandler(
 
       const linkedCount = updated.length;
       if (linkedCount !== expectedCount) {
-        return { ok: false as const };
+        throw new InvoiceEntriesModifiedConcurrentlyError();
       }
 
       await recordAuditEvent(tx, [
@@ -217,6 +223,14 @@ const createInvoice = createSafeHandler(
     });
 
     if (Result.isError(txResult)) {
+      if (isInvoiceEntriesModifiedConcurrentlyError(txResult.error)) {
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message: INVOICE_ENTRIES_MODIFIED_MESSAGE,
+          }),
+        );
+      }
       if (
         DatabaseError.is(txResult.error) &&
         txResult.error.code === PG_ERROR.UNIQUE_VIOLATION
@@ -236,7 +250,7 @@ const createInvoice = createSafeHandler(
       return Result.err(
         new HandlerError({
           status: 409,
-          message: "Some entries were modified concurrently; please retry",
+          message: INVOICE_ENTRIES_MODIFIED_MESSAGE,
         }),
       );
     }
