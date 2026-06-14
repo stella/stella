@@ -431,6 +431,11 @@
     },
     "moveToMain": "Presunúť do hlavného zobrazenia",
     "moveToSide": "Presunúť do bočného panela",
+    "modelSelector": {
+      "defaultLabel": "Predvolené (rola chatu)",
+      "description": "Vyberte model AI používaný pre aktívnu reláciu chatu.",
+      "title": "Vybrať model chatu"
+    },
     "newChat": "Nový chat",
     "noPromptPresetOnly": "Bez správy, iba predvoľba",
     "noThreads": "Zatiaľ žiadne konverzácie",

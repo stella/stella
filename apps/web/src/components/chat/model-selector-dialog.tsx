@@ -49,10 +49,10 @@ export function ModelSelectorDialog() {
         <div className="flex flex-col gap-4">
           <div>
             <h2 className="text-lg font-semibold tracking-tight text-foreground">
-              {t("chat.landing.prompts") ? "Select Chat Model" : "Select Chat Model"}
+              {t("chat.modelSelector.title")}
             </h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Choose the AI model used for the active chat session.
+              {t("chat.modelSelector.description")}
             </p>
           </div>
 
@@ -72,7 +72,9 @@ export function ModelSelectorDialog() {
                   onClick={() => handleSelectModel(model.value)}
                   variant={isActive ? "default" : "ghost"}
                 >
-                  <span className="truncate text-sm">{model.label}</span>
+                  <span className="truncate text-sm">
+                    {model.value === "" ? t("chat.modelSelector.defaultLabel") : model.label}
+                  </span>
                 </Button>
               );
             })}

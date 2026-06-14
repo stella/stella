@@ -431,6 +431,11 @@
     },
     "moveToMain": "Perkelti į pagrindinį rodinį",
     "moveToSide": "Perkelti į šoninį skydelį",
+    "modelSelector": {
+      "defaultLabel": "Numatytasis (pokalbio vaidmuo)",
+      "description": "Pasirinkite AI modelį, naudojamą aktyviai pokalbių sesijai.",
+      "title": "Pasirinkti pokalbių modelį"
+    },
     "newChat": "Naujas pokalbis",
     "noPromptPresetOnly": "Pranešimo nėra, tik išankstinis nustatymas",
     "noThreads": "Pokalbių dar nėra",

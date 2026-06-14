@@ -431,6 +431,11 @@
     },
     "moveToMain": "In Hauptansicht verschieben",
     "moveToSide": "In Seitenleiste verschieben",
+    "modelSelector": {
+      "defaultLabel": "Standard (Chat-Rolle)",
+      "description": "Wählen Sie das KI-Modell aus, das für die aktive Chat-Sitzung verwendet werden soll.",
+      "title": "Chat-Modell auswählen"
+    },
     "newChat": "Neuer Chat",
     "noPromptPresetOnly": "Keine Nachricht, nur Vorlage",
     "noThreads": "Noch keine Konversationen",
