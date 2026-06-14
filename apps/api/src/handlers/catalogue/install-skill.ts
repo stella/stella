@@ -3,7 +3,7 @@ import { t } from "elysia";
 
 import { findCatalogueSkillInstallPayload } from "@stll/catalogue/install-payloads";
 
-import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
+import type { AGENT_SKILL_SCOPES } from "@/api/db/schema";
 import { installSkill } from "@/api/handlers/skills/install";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -14,9 +14,22 @@ import {
   toParsedBundledSkillResources,
 } from "./bundled-skill-resources";
 
+const installSkillScopeValues = [
+  "team",
+  "private",
+] as const satisfies typeof AGENT_SKILL_SCOPES;
+
 const installSkillBody = t.Object({
   slug: t.String({ minLength: 1, maxLength: 64 }),
-  scope: t.Optional(t.UnionEnum(AGENT_SKILL_SCOPES)),
+  // Literals are inlined rather than `AGENT_SKILL_SCOPES.map(...)`: mapping the
+  // const yields a non-tuple union that Elysia infers as `never`, collapsing
+  // `scope` to `undefined`; the tuple above keeps schema drift type-checked.
+  scope: t.Optional(
+    t.Union([
+      t.Literal(installSkillScopeValues[0]),
+      t.Literal(installSkillScopeValues[1]),
+    ]),
+  ),
 });
 
 const config = {

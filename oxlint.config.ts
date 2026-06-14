@@ -105,6 +105,9 @@ export default defineConfig({
     ],
     "no-bare-error/no-bare-error": "error",
     "ai-output-strict-schema/ai-output-strict-schema": "error",
+    "no-coerced-optional-union-enum/no-coerced-optional-union-enum": "error",
+    "tagged-error-requires-message/tagged-error-requires-message": "error",
+    "require-custom-jsonb-column/require-custom-jsonb-column": "error",
     "suppression-hygiene/require-description": "error",
     "suppression-hygiene/no-foreign-directive": "error",
     "typescript/ban-ts-comment": [
@@ -327,6 +330,9 @@ export default defineConfig({
     "./.oxlint-plugins/folio-layer-boundaries.ts",
     "./.oxlint-plugins/require-contained-handler.ts",
     "./.oxlint-plugins/suppression-hygiene.ts",
+    "./.oxlint-plugins/no-coerced-optional-union-enum.ts",
+    "./.oxlint-plugins/tagged-error-requires-message.ts",
+    "./.oxlint-plugins/require-custom-jsonb-column.ts",
   ],
 
   overrides: [

@@ -13,12 +13,12 @@ const paramsSchema = t.Object({
 
 const querySchema = t.Object({
   relationType: t.Optional(
-    t.UnionEnum([
-      RELATION_TYPES.all,
-      RELATION_TYPES.modifies,
-      RELATION_TYPES.modifiedBy,
-      RELATION_TYPES.derogates,
-      RELATION_TYPES.derogatedBy,
+    t.Union([
+      t.Literal(RELATION_TYPES.all),
+      t.Literal(RELATION_TYPES.modifies),
+      t.Literal(RELATION_TYPES.modifiedBy),
+      t.Literal(RELATION_TYPES.derogates),
+      t.Literal(RELATION_TYPES.derogatedBy),
     ]),
   ),
 });

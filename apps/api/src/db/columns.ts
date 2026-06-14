@@ -4,10 +4,10 @@ import { customType } from "drizzle-orm/pg-core";
 /**
  * Safe replacement for `p.jsonb()`.
  *
- * The bun-sql driver binds JS values with the JSONB wire type. When
- * Drizzle's stock `jsonb` column hands the driver a JSON-stringified
- * payload, Postgres receives it as a JSON-string primitive
- * (`jsonb_typeof = 'string'`) rather than the parsed object/array.
+ * Drizzle's stock `jsonb` column hands bun-sql a raw structured value.
+ * The driver then serializes that value in a way Postgres receives as a
+ * JSON-string primitive (`jsonb_typeof = 'string'`) rather than the
+ * parsed object/array.
  *
  * Routing every write through `${JSON.stringify(value)}::text::jsonb`
  * forces the parameter into text first, then re-parses as JSON, so

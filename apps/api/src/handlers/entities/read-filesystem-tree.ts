@@ -15,7 +15,7 @@ const readFilesystemTreeBodySchema = t.Object({
   filters: t.Optional(t.Array(tViewFilterConditionSchema)),
   sorts: t.Optional(t.Array(tViewSortSchema)),
   search: t.Optional(t.String({ maxLength: LIMITS.searchQueryMaxLength })),
-  fieldMode: t.Optional(t.UnionEnum(["full", "visible"])),
+  fieldMode: t.Optional(t.Union([t.Literal("full"), t.Literal("visible")])),
   fieldIds: t.Optional(
     t.Array(tSafeId("property"), {
       maxItems: LIMITS.propertiesCount,

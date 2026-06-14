@@ -24,7 +24,10 @@ const updateExpenseBodySchema = t.Object({
   markup: t.Optional(t.Integer({ minimum: 0, maximum: 100 })),
   matterId: t.Optional(tSafeId("entity")),
   status: t.Optional(
-    t.UnionEnum([BILLING_STATUS.DRAFT, BILLING_STATUS.APPROVED]),
+    t.Union([
+      t.Literal(BILLING_STATUS.DRAFT),
+      t.Literal(BILLING_STATUS.APPROVED),
+    ]),
   ),
 });
 

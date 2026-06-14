@@ -28,7 +28,7 @@ const fillByIdBodySchema = t.Object({
 });
 
 const fillByIdQuerySchema = t.Object({
-  format: t.Optional(t.UnionEnum(["docx", "pdf"])),
+  format: t.Optional(t.Union([t.Literal("docx"), t.Literal("pdf")])),
 });
 
 const fillByIdParamsSchema = t.Object({

@@ -22,7 +22,7 @@ const fillBodySchema = t.Object({
 });
 
 const fillQuerySchema = t.Object({
-  format: t.Optional(t.UnionEnum(["docx", "pdf"])),
+  format: t.Optional(t.Union([t.Literal("docx"), t.Literal("pdf")])),
 });
 
 const PDF_MIME_TYPE = "application/pdf";
