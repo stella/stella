@@ -4,7 +4,7 @@ import type { ScopedDb } from "@/api/db";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-import { exportLedesHandler } from "./export-ledes";
+import { escapeLedesField, exportLedesHandler } from "./export-ledes";
 
 const timeEntryRow = (overrides: Record<string, unknown> = {}) => ({
   id: toSafeId<"timeEntry">("te_1"),
@@ -70,5 +70,56 @@ describe("exportLedesHandler billing integrity", () => {
       .filter((line) => !line.startsWith("INVOICE_DATE"));
 
     expect(dataLines).toHaveLength(2);
+  });
+
+  test("neutralizes delimiter injection in narrative and timekeeper name", async () => {
+    let call = 0;
+    const scopedDb = asTestRaw<ScopedDb>(async () => {
+      call += 1;
+      return call === 1
+        ? [
+            timeEntryRow({
+              narrative: "first line\nspurious|F|999",
+              userId: "user_1",
+            }),
+          ]
+        : [{ id: "user_1", name: "Eve|Hacker" }];
+    });
+
+    const output = await exportLedesHandler({
+      scopedDb,
+      workspaceId: toSafeId<"workspace">("ws_1"),
+      organizationId: toSafeId<"organization">("org_1"),
+      query: {},
+    });
+
+    // One entry must remain exactly one record line: the narrative newline
+    // must not inject a second line.
+    const dataLines = output
+      .split("\n")
+      .filter((line) => line.endsWith("[]") && !line.startsWith("LEDES1998B"))
+      .filter((line) => !line.startsWith("INVOICE_DATE"));
+    expect(dataLines).toHaveLength(1);
+
+    // Delimiters in user-controlled fields are replaced with spaces.
+    expect(output).toContain("first line spurious F 999");
+    expect(output).toContain("Eve Hacker");
+    expect(output).not.toContain("Eve|Hacker");
+  });
+});
+
+describe("escapeLedesField", () => {
+  test("replaces pipes, newlines, and carriage returns with spaces", () => {
+    expect(escapeLedesField("a|b")).toBe("a b");
+    expect(escapeLedesField("line1\nline2")).toBe("line1 line2");
+    expect(escapeLedesField("a\r\nb")).toBe("a  b");
+    expect(escapeLedesField("a|b\nc|d")).toBe("a b c d");
+  });
+
+  test("leaves ordinary text untouched", () => {
+    expect(escapeLedesField("Regular narrative, with punctuation.")).toBe(
+      "Regular narrative, with punctuation.",
+    );
+    expect(escapeLedesField("")).toBe("");
   });
 });

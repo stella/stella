@@ -29,6 +29,15 @@ type ExportLedesHandlerProps = {
 };
 
 /**
+ * Neutralize a user-controlled value for a LEDES 1998B field. The format is
+ * pipe-delimited with one record per line and has no quoting mechanism, so a
+ * value containing a pipe or a line break would split a field or inject a
+ * spurious record. Replace those delimiters with spaces.
+ */
+export const escapeLedesField = (value: string): string =>
+  value.replace(/[\r\n|]/gu, " ");
+
+/**
  * Generates a LEDES 1998B formatted export.
  * LEDES 1998B uses pipe-delimited lines with a fixed header row.
  */
@@ -148,11 +157,10 @@ export const exportLedesHandler = async ({
       hourlyRateCents: row.rateAtEntry,
     });
     const dateFormatted = row.dateWorked.replace(/-/gu, "");
-    const userName = row.userId ? (userMap.get(row.userId) ?? "") : "";
-    const narrative = (row.invoiceNarrative ?? row.narrative).replace(
-      /\|/gu,
-      " ",
+    const userName = escapeLedesField(
+      row.userId ? (userMap.get(row.userId) ?? "") : "",
     );
+    const narrative = escapeLedesField(row.invoiceNarrative ?? row.narrative);
 
     lines.push(
       `${[
@@ -170,9 +178,9 @@ export const exportLedesHandler = async ({
         "0.00", // ADJUSTMENT
         (total / 100).toFixed(2),
         dateFormatted,
-        row.taskCode ?? "",
+        escapeLedesField(row.taskCode ?? ""),
         "", // EXPENSE_CODE
-        row.activityCode ?? "",
+        escapeLedesField(row.activityCode ?? ""),
         row.userId ?? "",
         narrative,
         "", // LAW_FIRM_ID
