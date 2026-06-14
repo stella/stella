@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, eq, inArray, ne } from "drizzle-orm";
 
-import { account, member, oauthAccessToken, oauthClient, oauthConsent, oauthRefreshToken, organization, session, user, verification } from "@/api/db/auth-schema";
+import { account, invitation, member, oauthAccessToken, oauthClient, oauthConsent, oauthRefreshToken, organization, session, user, verification } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import {
   agentSkills,
@@ -22,6 +22,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { SafeId } from "@/api/lib/branded-types";
 
 /**
  * Fetches the user email by ID.
@@ -176,6 +177,13 @@ export const getPendingTasksAndMembers = async (
         .from(taskAssignees)
         .innerJoin(entities, eq(entities.id, taskAssignees.entityId))
         .innerJoin(workspaces, eq(workspaces.id, taskAssignees.workspaceId))
+        .innerJoin(
+          workspaceMembers,
+          and(
+            eq(workspaceMembers.workspaceId, taskAssignees.workspaceId),
+            eq(workspaceMembers.userId, currentUserId),
+          ),
+        )
         .where(eq(taskAssignees.userId, currentUserId));
 
       const workspaceIds = [...new Set(userAssignments.map((a) => a.workspaceId))];
@@ -306,11 +314,12 @@ export const verifyAndDeleteUser = async (
         // constraints trigger automatically — we must clean up every linked table
         // explicitly below.
 
-        // 1. Auth credentials and sessions (auth-schema tables)
+        // 1. Auth credentials, sessions, and invitations (auth-schema tables)
         await tx.delete(account).where(eq(account.userId, currentUserId));
         // eslint-disable-next-line auth-lifecycle/no-direct-auth-artifact-delete
         await tx.delete(session).where(eq(session.userId, currentUserId));
         await tx.delete(member).where(eq(member.userId, currentUserId));
+        await tx.delete(invitation).where(eq(invitation.inviterId, currentUserId));
 
         // 2. OAuth / Better-Auth token tables (auth-schema)
         // eslint-disable-next-line auth-lifecycle/no-direct-auth-artifact-delete
@@ -336,12 +345,57 @@ export const verifyAndDeleteUser = async (
         // 5. Task assignee records (reassign where requested, otherwise cascade)
         if (reassignments && reassignments.length > 0) {
           for (const item of reassignments) {
+            // SAFETY: item.entityId is validated as a valid UUID string at the API boundary
+            const entityId = item.entityId as SafeId<"entity">;
+
+            const assignment = await tx
+              .select({
+                workspaceId: taskAssignees.workspaceId,
+              })
+              .from(taskAssignees)
+              .where(
+                and(
+                  eq(taskAssignees.entityId, entityId),
+                  eq(taskAssignees.userId, currentUserId),
+                ),
+              )
+              .limit(1)
+              .then((rows) => rows[0]);
+
+            if (!assignment) {
+              continue;
+            }
+
+            const isMember = await tx
+              .select({ id: workspaceMembers.id })
+              .from(workspaceMembers)
+              .where(
+                and(
+                  eq(workspaceMembers.workspaceId, assignment.workspaceId),
+                  eq(workspaceMembers.userId, item.reassignedUserId),
+                ),
+              )
+              .limit(1)
+              .then((rows) => rows[0]);
+
+            if (!isMember) {
+              await tx
+                .delete(taskAssignees)
+                .where(
+                  and(
+                    eq(taskAssignees.entityId, entityId),
+                    eq(taskAssignees.userId, currentUserId),
+                  ),
+                );
+              continue;
+            }
+
             const existing = await tx
               .select({ id: taskAssignees.id })
               .from(taskAssignees)
               .where(
                 and(
-                  eq(taskAssignees.entityId, item.entityId),
+                  eq(taskAssignees.entityId, entityId),
                   eq(taskAssignees.userId, item.reassignedUserId),
                 ),
               )
@@ -353,7 +407,7 @@ export const verifyAndDeleteUser = async (
                 .delete(taskAssignees)
                 .where(
                   and(
-                    eq(taskAssignees.entityId, item.entityId),
+                    eq(taskAssignees.entityId, entityId),
                     eq(taskAssignees.userId, currentUserId),
                   ),
                 );
@@ -363,7 +417,7 @@ export const verifyAndDeleteUser = async (
                 .set({ userId: item.reassignedUserId })
                 .where(
                   and(
-                    eq(taskAssignees.entityId, item.entityId),
+                    eq(taskAssignees.entityId, entityId),
                     eq(taskAssignees.userId, currentUserId),
                   ),
                 );
