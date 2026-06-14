@@ -131,7 +131,10 @@ export const exportPdfHandler = async ({
       hourlyRateCents: row.rateAtEntry,
     });
 
-    totalMinutes += row.durationMinutes;
+    // Total Hours must reconcile with the per-row billed hours and the
+    // amount, which are both derived from billedMinutes; summing raw
+    // durationMinutes here produced a total that did not match the lines.
+    totalMinutes += row.billedMinutes;
     totalAmount += amount;
 
     textLines.push(`Date: ${row.dateWorked}  User: ${userName}`);

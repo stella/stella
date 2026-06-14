@@ -40,6 +40,11 @@ export const exportLedesHandler = async ({
 }: ExportLedesHandlerProps) => {
   const conditions = [eq(timeEntries.workspaceId, workspaceId)];
 
+  // LEDES 1998B is a client e-billing file: it must contain only billable,
+  // charged line items, never internal non-billable or written-off time.
+  conditions.push(eq(timeEntries.billable, true));
+  conditions.push(eq(timeEntries.noCharge, false));
+
   if (query.dateFrom) {
     conditions.push(gte(timeEntries.dateWorked, query.dateFrom));
   }
@@ -67,6 +72,7 @@ export const exportLedesHandler = async ({
         narrative: timeEntries.narrative,
         invoiceNarrative: timeEntries.invoiceNarrative,
         billable: timeEntries.billable,
+        noCharge: timeEntries.noCharge,
         status: timeEntries.status,
         taskCode: timeEntries.taskCode,
         activityCode: timeEntries.activityCode,
@@ -130,6 +136,11 @@ export const exportLedesHandler = async ({
   let lineItemNumber = 0;
 
   for (const row of rows) {
+    // Defensive billing-integrity guard alongside the SQL filter: a
+    // non-billable or no-charge entry must never produce a charged line.
+    if (!row.billable || row.noCharge) {
+      continue;
+    }
     lineItemNumber++;
     const hours = row.billedMinutes / 60;
     const total = prorateHourlyCents({
