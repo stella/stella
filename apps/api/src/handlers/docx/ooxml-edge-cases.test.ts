@@ -51,6 +51,7 @@ const runSpanText = (span: ReturnType<typeof buildRunMap>[number]): string => {
     case "tab":
       return "\t";
   }
+  throw new Error("Unhandled run span type");
 };
 
 /** Extract "accepted" text from paragraphs in edited XML. */

@@ -24,11 +24,11 @@ const builder: QueryBuilder = {
   innerJoin: () => builder,
   leftJoin: () => builder,
   where: () => builder,
-  limit: () => Promise.resolve(nextRows),
+  limit: async () => nextRows,
 };
 
-mock.module("@/api/db/root", () => ({ rootDb: builder, rlsDb: {} }));
-mock.module("@/api/lib/root-scoped-db", () => ({
+void mock.module("@/api/db/root", () => ({ rootDb: builder, rlsDb: {} }));
+void mock.module("@/api/lib/root-scoped-db", () => ({
   createRootScopedDb: () => "SCOPED_DB_SENTINEL",
   createRootSafeDb: () => "SAFE_DB_SENTINEL",
 }));
@@ -56,9 +56,9 @@ const validRow = (overrides: Row = {}): Row => ({
   ...overrides,
 });
 
-const authorize = (row: Row | null) => {
+const authorize = async (row: Row | null) => {
   nextRows = row === null ? [] : [row];
-  return authorizeFolioCollabSession({ sessionId, token: "tok" });
+  return await authorizeFolioCollabSession({ sessionId, token: "tok" });
 };
 
 describe("authorizeFolioCollabSession (the collab trust boundary)", () => {

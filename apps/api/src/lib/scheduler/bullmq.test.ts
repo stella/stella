@@ -8,14 +8,14 @@ type AddCall = { name: string; data: unknown; opts: unknown };
 const addCalls: AddCall[] = [];
 
 class MockQueue {
-  add(name: string, data: unknown, opts: unknown) {
+  async add(name: string, data: unknown, opts: unknown) {
     addCalls.push({ name, data, opts });
-    return Promise.resolve({ id: "queued" });
+    return { id: "queued" };
   }
 }
 
-mock.module("bullmq", () => ({ Queue: MockQueue }));
-mock.module("@/api/lib/redis-client", () => ({
+void mock.module("bullmq", () => ({ Queue: MockQueue }));
+void mock.module("@/api/lib/redis-client", () => ({
   createBullMqConnection: () => ({}),
   createRedisClient: () => ({}),
 }));

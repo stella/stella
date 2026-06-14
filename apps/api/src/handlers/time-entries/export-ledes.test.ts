@@ -36,8 +36,8 @@ const scopedDbReturning = (rows: unknown[]): ScopedDb => {
   });
 };
 
-const runExport = (rows: unknown[]) =>
-  exportLedesHandler({
+const runExport = async (rows: unknown[]) =>
+  await exportLedesHandler({
     scopedDb: scopedDbReturning(rows),
     workspaceId: toSafeId<"workspace">("ws_1"),
     organizationId: toSafeId<"organization">("org_1"),

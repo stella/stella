@@ -77,6 +77,10 @@ const extractAcceptedText = (xml: string): string[] => {
         }
         return;
       }
+      if (n.localName === "tab" && n.namespaceURI === W_NS) {
+        text += "\t";
+        return;
+      }
       if (n.localName === "t" && n.namespaceURI === W_NS) {
         text += n.textContent ?? "";
         return;
@@ -442,7 +446,10 @@ describe("property: run map coverage", () => {
         }
 
         // Total length matches text (length > 0 asserted above)
-        const totalLen = spans.reduce((sum, s) => sum + s.length, 0);
+        let totalLen = 0;
+        for (const span of spans) {
+          totalLen += span.length;
+        }
         expect(totalLen).toBe(text.length);
       }),
       { numRuns: 200 },

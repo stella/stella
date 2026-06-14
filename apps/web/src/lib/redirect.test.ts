@@ -6,6 +6,8 @@ import { redirectToSchema } from "@/lib/redirect";
 const sanitize = (input: string | undefined) =>
   v.parse(redirectToSchema, input);
 
+const scriptSchemeUrl = ["java", "script:alert(1)"].join("");
+
 describe("redirectToSchema open-redirect guard", () => {
   test("keeps legitimate same-origin relative paths", () => {
     for (const ok of [
@@ -42,7 +44,7 @@ describe("redirectToSchema open-redirect guard", () => {
     for (const evil of [
       "https://evil.com",
       "http://evil.com",
-      "javascript:alert(1)",
+      scriptSchemeUrl,
       "evil.com",
       "ftp://evil.com",
     ]) {

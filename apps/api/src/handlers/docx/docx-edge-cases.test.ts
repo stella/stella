@@ -38,6 +38,7 @@ const runSpanText = (span: ReturnType<typeof buildRunMap>[number]): string => {
     case "tab":
       return "\t";
   }
+  throw new Error("Unhandled run span type");
 };
 
 /** Build a minimal DOCX buffer from document body XML. */

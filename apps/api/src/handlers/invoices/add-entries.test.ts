@@ -1,11 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
-import {
-  BILLING_STATUS,
-  INVOICE_STATUS,
-  invoices,
-} from "@/api/db/schema";
+import { BILLING_STATUS, INVOICE_STATUS, invoices } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";

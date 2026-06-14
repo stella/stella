@@ -37,10 +37,12 @@ describe("aggregateVerdict (the chokepoint every file-scan gate depends on)", ()
       for (const b of severities) {
         for (const c of severities) {
           const set = [finding(a), finding(b), finding(c)];
-          const expected = set.reduce(
-            (hi, f) => (rank[f.severity] > rank[hi] ? f.severity : hi),
-            "pass" as ScanFinding["severity"],
-          );
+          let expected: ScanFinding["severity"] = "pass";
+          for (const item of set) {
+            if (rank[item.severity] > rank[expected]) {
+              expected = item.severity;
+            }
+          }
           expect(aggregateVerdict(set)).toBe(expected);
           // monotonicity: appending another reject can only raise/keep
           expect(rank[aggregateVerdict([...set, finding("reject")])]).toBe(
