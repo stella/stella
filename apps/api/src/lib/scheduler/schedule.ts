@@ -111,27 +111,39 @@ const getDatePart = (
   return value;
 };
 
+const getOffsetMs = (utcMs: number, timeZone: string): number =>
+  localAsUtcMs(getLocalDateTime(new Date(utcMs), timeZone)) - utcMs;
+
 const zonedDateTimeToUtc = (
   localDateTime: LocalDateTime,
   timeZone: string,
 ): Date => {
-  const targetLocalMs = localAsUtcMs(localDateTime);
-  let utcMs = targetLocalMs;
+  // Interpret the wall-clock time as if it were UTC, then correct by the
+  // zone offset. Sampling the offset a day before and after disambiguates
+  // DST transitions: a previous fixed-point iteration could not converge on
+  // a non-existent (spring-forward) wall time and landed before the gap,
+  // skipping the run. Gaps now roll forward to the next valid instant;
+  // overlaps (fall-back) take the first occurrence.
+  const naiveMs = localAsUtcMs(localDateTime);
+  const guessBefore = naiveMs - getOffsetMs(naiveMs - ONE_DAY_MS, timeZone);
+  const guessAfter = naiveMs - getOffsetMs(naiveMs + ONE_DAY_MS, timeZone);
 
-  for (let iteration = 0; iteration < 3; iteration += 1) {
-    const actualLocalMs = localAsUtcMs(
-      getLocalDateTime(new Date(utcMs), timeZone),
-    );
-    const diffMs = targetLocalMs - actualLocalMs;
+  const mapsBack = (utcMs: number): boolean =>
+    localAsUtcMs(getLocalDateTime(new Date(utcMs), timeZone)) === naiveMs;
 
-    if (diffMs === 0) {
-      break;
-    }
+  const beforeValid = mapsBack(guessBefore);
+  const afterValid = mapsBack(guessAfter);
 
-    utcMs += diffMs;
+  if (beforeValid && afterValid) {
+    return new Date(Math.min(guessBefore, guessAfter));
   }
-
-  return new Date(utcMs);
+  if (beforeValid) {
+    return new Date(guessBefore);
+  }
+  if (afterValid) {
+    return new Date(guessAfter);
+  }
+  return new Date(Math.max(guessBefore, guessAfter));
 };
 
 const localAsUtcMs = ({

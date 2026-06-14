@@ -38,4 +38,27 @@ describe("computeNextRunAt", () => {
 
     expect(nextRunAt.toISOString()).toBe("2026-04-29T00:30:00.000Z");
   });
+
+  test("rolls a spring-forward non-existent time forward instead of skipping it", () => {
+    // Europe/Prague 2026-03-29: 02:00 -> 03:00 local (01:00Z), so 02:30
+    // local does not exist. The run must still fire, rolled forward to the
+    // next valid instant (03:30 local = 01:30Z), not dropped.
+    const nextRunAt = computeNextRunAt(
+      { type: "daily", hour: 2, minute: 30, timeZone: "Europe/Prague" },
+      new Date("2026-03-29T00:00:00.000Z"),
+    );
+
+    expect(nextRunAt.toISOString()).toBe("2026-03-29T01:30:00.000Z");
+  });
+
+  test("resolves a fall-back ambiguous time to its first occurrence", () => {
+    // Europe/Prague 2026-10-25: 03:00 -> 02:00 local (01:00Z), so 02:30
+    // local occurs twice. Take the first (CEST, 00:30Z), never both.
+    const nextRunAt = computeNextRunAt(
+      { type: "daily", hour: 2, minute: 30, timeZone: "Europe/Prague" },
+      new Date("2026-10-25T00:00:00.000Z"),
+    );
+
+    expect(nextRunAt.toISOString()).toBe("2026-10-25T00:30:00.000Z");
+  });
 });
