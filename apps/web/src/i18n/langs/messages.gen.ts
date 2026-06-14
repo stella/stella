@@ -2629,6 +2629,7 @@ type Messages = {
         "year": "Year";
       };
       "cannotDeleteRequired": "At least one view of this type is required";
+      "clearFilters": "Clear filters";
       "copySuffix": "{name} (copy)";
       "deleteView": "Delete view";
       "exportCsv": "Export CSV";
@@ -2653,6 +2654,8 @@ type Messages = {
         "timeline": "Timeline";
       };
       "newView": "New {layout}";
+      "noFilterResults": "No items match these filters";
+      "noFilterResultsHint": "They would show up here if you removed some filters.";
       "removeAdvancedFilter": "Remove advanced filter";
       "saveAsTemplate": "Save as template…";
       "selectProperty": "Select property";

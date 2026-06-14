@@ -2626,6 +2626,7 @@
         "year": "Jahr"
       },
       "cannotDeleteRequired": "Mindestens eine Ansicht dieses Typs ist erforderlich",
+      "clearFilters": "Clear filters",
       "copySuffix": "{name} (Kopie)",
       "deleteView": "Ansicht löschen",
       "exportCsv": "CSV exportieren",
@@ -2650,6 +2651,8 @@
         "timeline": "Zeitleiste"
       },
       "newView": "Neue {layout}",
+      "noFilterResults": "No items match these filters",
+      "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",
       "saveAsTemplate": "Als Vorlage speichern…",
       "selectProperty": "Eigenschaft auswählen",

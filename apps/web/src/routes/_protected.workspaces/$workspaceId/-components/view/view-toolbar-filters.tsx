@@ -6,7 +6,6 @@ import {
   FlagIcon,
   LayersIcon,
   MoreHorizontalIcon,
-  PlusIcon,
   SlidersHorizontalIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -133,8 +132,9 @@ export const FilterChips = ({
         onAddAdvanced={() => append(emptyAdvancedGroup())}
         onAddField={(field) => append(leafFromField(field))}
         trigger={
-          <Button size="icon-xs" variant="ghost">
-            <PlusIcon />
+          <Button className="gap-1.5" size="xs" variant="ghost">
+            <FilterIcon className="size-3.5" />
+            {t("workspaces.views.filter")}
           </Button>
         }
       />
@@ -500,10 +500,7 @@ const AdvancedFilterChip = ({
           })}
         </span>
       </PopoverTrigger>
-      <PopoverPopup
-        align="start"
-        className="w-auto max-w-[min(36rem,90vw)] p-3"
-      >
+      <PopoverPopup align="start" className="w-[34rem] max-w-[90vw] p-3">
         <ConditionBuilder
           allowGroups
           fields={fields}

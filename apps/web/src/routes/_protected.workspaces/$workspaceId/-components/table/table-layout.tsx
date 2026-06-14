@@ -12,7 +12,10 @@ import { useTranslations } from "use-intl";
 
 import { useAIKeyGate } from "@/components/require-ai-key";
 import type { WorkspaceView } from "@/lib/types";
-import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
+import {
+  EmptyState,
+  FilteredEmptyState,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import {
   AuthorCell,
   LastUpdatedCell,
@@ -32,6 +35,7 @@ import { WorkspaceTable } from "@/routes/_protected.workspaces/$workspaceId/-com
 import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import { useSyncJustificationChunks } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
 import { useTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state";
+import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 import {
   DEFAULT_ENTITY_WINDOW_SIZE,
   useEntitiesWindowOptions,
@@ -97,6 +101,7 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
   const t = useTranslations();
   const { openIfAIUnavailable } = useAIKeyGate();
   const tableState = useTableState({ workspaceId, view });
+  const updateView = useUpdateView(workspaceId);
 
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const fieldIds = useMemo(
@@ -263,6 +268,18 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
   });
 
   if (table.getRowModel().rows.length === 0) {
+    if (view.layout.filters.length > 0) {
+      return (
+        <FilteredEmptyState
+          onClearFilters={() =>
+            updateView.mutate({
+              viewId: view.id,
+              layout: { ...view.layout, filters: [] },
+            })
+          }
+        />
+      );
+    }
     return (
       <EmptyState
         icon={TableIcon}

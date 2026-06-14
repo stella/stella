@@ -2626,6 +2626,7 @@
         "year": "Év"
       },
       "cannotDeleteRequired": "Legalább egy ilyen típusú nézet szükséges",
+      "clearFilters": "Clear filters",
       "copySuffix": "{name} (másolat)",
       "deleteView": "Nézet törlése",
       "exportCsv": "CSV exportálása",
@@ -2650,6 +2651,8 @@
         "timeline": "Idővonal"
       },
       "newView": "Új {layout}",
+      "noFilterResults": "No items match these filters",
+      "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",
       "saveAsTemplate": "Mentés sablonként…",
       "selectProperty": "Tulajdonság kiválasztása",

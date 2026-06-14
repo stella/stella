@@ -1220,6 +1220,19 @@
     "workspaces.views.calendar.additionalDates": [
       "fr"
     ],
+    "workspaces.views.clearFilters": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
     "workspaces.views.filter": [
       "cs",
       "de",
@@ -1260,6 +1273,32 @@
       "sk"
     ],
     "workspaces.views.layouts.kanban": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "workspaces.views.noFilterResults": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "workspaces.views.noFilterResultsHint": [
       "cs",
       "de",
       "es",

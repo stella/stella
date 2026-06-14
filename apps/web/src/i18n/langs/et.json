@@ -2626,6 +2626,7 @@
         "year": "Aasta"
       },
       "cannotDeleteRequired": "Vähemalt üks seda tüüpi vaade on nõutav",
+      "clearFilters": "Clear filters",
       "copySuffix": "{name} (koopia)",
       "deleteView": "Kustuta vaade",
       "exportCsv": "Ekspordi CSV",
@@ -2650,6 +2651,8 @@
         "timeline": "Ajajoon"
       },
       "newView": "Uus {layout}",
+      "noFilterResults": "No items match these filters",
+      "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",
       "saveAsTemplate": "Salvesta mallina…",
       "selectProperty": "Valige omadus",

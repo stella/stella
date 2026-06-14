@@ -98,43 +98,21 @@ export const ConditionBuilder = ({
         })}
       </div>
 
-      <div className="flex items-center gap-2">
-        <Button
-          className="justify-start"
-          disabled={!firstField}
-          onClick={() => {
-            if (firstField) {
-              onChange(appendChild(group, leafFromField(firstField)));
-            }
-          }}
-          size="xs"
-          type="button"
-          variant="ghost"
-        >
-          <PlusIcon />
-          {t("workspaces.properties.addCondition")}
-        </Button>
-        {allowGroups && (
-          <Button
-            className="justify-start"
-            onClick={() =>
-              onChange(
-                appendChild(group, {
-                  type: "group",
-                  combinator: "and",
-                  children: firstField ? [leafFromField(firstField)] : [],
-                }),
-              )
-            }
-            size="xs"
-            type="button"
-            variant="ghost"
-          >
-            <PlusIcon />
-            {t("common.add")}
-          </Button>
-        )}
-      </div>
+      <Button
+        className="w-fit justify-start"
+        disabled={!firstField}
+        onClick={() => {
+          if (firstField) {
+            onChange(appendChild(group, leafFromField(firstField)));
+          }
+        }}
+        size="xs"
+        type="button"
+        variant="ghost"
+      >
+        <PlusIcon />
+        {t("workspaces.properties.addCondition")}
+      </Button>
     </div>
   );
 };

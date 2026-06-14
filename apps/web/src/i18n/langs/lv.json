@@ -2626,6 +2626,7 @@
         "year": "Gads"
       },
       "cannotDeleteRequired": "Ir nepieciešams vismaz viens šāda veida skats",
+      "clearFilters": "Clear filters",
       "copySuffix": "{name} (kopija)",
       "deleteView": "Dzēst skatu",
       "exportCsv": "Eksportēt CSV",
@@ -2650,6 +2651,8 @@
         "timeline": "Laika skala"
       },
       "newView": "Jauns {layout}",
+      "noFilterResults": "No items match these filters",
+      "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",
       "saveAsTemplate": "Saglabāt kā veidni…",
       "selectProperty": "Izvēlieties rekvizītu",

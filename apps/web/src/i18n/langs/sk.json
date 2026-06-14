@@ -2626,6 +2626,7 @@
         "year": "Rok"
       },
       "cannotDeleteRequired": "Je vyžadované aspoň jedno zobrazenie tohto typu",
+      "clearFilters": "Clear filters",
       "copySuffix": "{name} (kópia)",
       "deleteView": "Vymazať pohľad",
       "exportCsv": "Exportovať CSV",
@@ -2650,6 +2651,8 @@
         "timeline": "Časová os"
       },
       "newView": "Nový {layout}",
+      "noFilterResults": "No items match these filters",
+      "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",
       "saveAsTemplate": "Uložiť ako šablónu…",
       "selectProperty": "Vybrať vlastnosť",

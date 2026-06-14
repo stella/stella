@@ -2626,6 +2626,7 @@
         "year": "Año"
       },
       "cannotDeleteRequired": "Se requiere al menos una vista de este tipo",
+      "clearFilters": "Clear filters",
       "copySuffix": "{name} (copia)",
       "deleteView": "Eliminar vista",
       "exportCsv": "Exportar CSV",
@@ -2650,6 +2651,8 @@
         "timeline": "Línea de tiempo"
       },
       "newView": "Nueva {layout}",
+      "noFilterResults": "No items match these filters",
+      "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",
       "saveAsTemplate": "Guardar como plantilla…",
       "selectProperty": "Seleccionar propiedad",
