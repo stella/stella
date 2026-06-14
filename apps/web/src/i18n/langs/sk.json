@@ -786,6 +786,7 @@
     "newRow": "Nový riadok",
     "next": "Pokračovať",
     "noResults": "Žiadne výsledky",
+    "none": "None",
     "notes": "Poznámky",
     "open": "Otvoriť",
     "openInNewTab": "Otvoriť na novej karte",
@@ -2651,6 +2652,7 @@
       "filterByPlaceholder": "Filter by…",
       "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Zoskupiť podľa:",
+      "groupItemCount": "{count, plural, one {# item} other {# items}}",
       "hideColumn": "Skryť stĺpec",
       "layouts": {
         "calendar": "Kalendár",

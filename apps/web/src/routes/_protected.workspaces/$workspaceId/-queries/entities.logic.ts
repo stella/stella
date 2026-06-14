@@ -32,6 +32,7 @@ export type FilesystemEntitiesKey = Omit<
 export type KanbanGroupKey = Omit<EntitiesWindowKey, "excludedKinds"> & {
   groupByPropertyId: string;
   groupValue: string | null;
+  includeTotalCount?: boolean;
 };
 
 export const DEFAULT_ENTITY_VIEW_PAGE_SIZE = 100;
@@ -138,6 +139,7 @@ export const entitiesKeys = {
     fieldIds,
     groupByPropertyId,
     groupValue,
+    includeTotalCount,
   }: KanbanGroupKey) => {
     const normalizedFieldMode = fieldMode ?? "full";
     return [
@@ -154,6 +156,7 @@ export const entitiesKeys = {
             : [],
         groupByPropertyId,
         groupValue,
+        includeTotalCount: includeTotalCount ?? false,
       },
     ];
   },

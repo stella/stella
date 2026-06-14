@@ -786,6 +786,7 @@
     "newRow": "Nouvelle ligne",
     "next": "Suivant",
     "noResults": "Aucun résultat",
+    "none": "None",
     "notes": "Notes",
     "open": "Ouvrir",
     "openInNewTab": "Ouvrir dans un nouvel onglet",
@@ -2651,6 +2652,7 @@
       "filterByPlaceholder": "Filter by…",
       "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Regrouper par :",
+      "groupItemCount": "{count, plural, one {# item} other {# items}}",
       "hideColumn": "Masquer la colonne",
       "layouts": {
         "calendar": "Calendrier",

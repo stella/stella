@@ -786,6 +786,7 @@
     "newRow": "Jauna rinda",
     "next": "Tālāk",
     "noResults": "Nav rezultātu",
+    "none": "None",
     "notes": "Piezīmes",
     "open": "Atvērt",
     "openInNewTab": "Atvērt jaunā cilnē",
@@ -2651,6 +2652,7 @@
       "filterByPlaceholder": "Filter by…",
       "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Grupēt pēc:",
+      "groupItemCount": "{count, plural, one {# item} other {# items}}",
       "hideColumn": "Slēpt kolonnu",
       "layouts": {
         "calendar": "Kalendārs",

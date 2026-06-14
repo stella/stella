@@ -786,6 +786,7 @@
     "newRow": "Nauja eilutė",
     "next": "Toliau",
     "noResults": "Rezultatų nėra",
+    "none": "None",
     "notes": "Pastabos",
     "open": "Atidaryti",
     "openInNewTab": "Atidaryti naujame skirtuke",
@@ -2651,6 +2652,7 @@
       "filterByPlaceholder": "Filter by…",
       "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Grupuoti pagal:",
+      "groupItemCount": "{count, plural, one {# item} other {# items}}",
       "hideColumn": "Slėpti stulpelį",
       "layouts": {
         "calendar": "Kalendorius",

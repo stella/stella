@@ -132,7 +132,7 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
       {view.layout.type === "kanban" && (
         <>
           <span className="bg-border mx-1 h-4 w-px" />
-          <KanbanGroupByControl
+          <GroupByControl
             groupByPropertyId={view.layout.groupByPropertyId}
             onChange={(groupByPropertyId) =>
               handleUpdate({ groupByPropertyId })
@@ -206,6 +206,18 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
       {view.layout.type === "table" && (
         <>
           <span className="bg-border mx-1 h-4 w-px" />
+          <GroupByControl
+            allowNone
+            groupByPropertyId={view.layout.groupByPropertyId}
+            onChange={(groupByPropertyId) =>
+              handleUpdate(
+                groupByPropertyId
+                  ? { groupByPropertyId }
+                  : { groupByPropertyId: undefined },
+              )
+            }
+            properties={properties}
+          />
           <TableContentModeControl viewId={view.id} />
           <TableExportMenu view={view} workspaceId={workspaceId} />
           <BulkAddColumns triggerVariant="labelled" workspaceId={workspaceId} />
@@ -551,23 +563,36 @@ const FilesystemOrganizerAction = ({
   );
 };
 
-type KanbanGroupByControlProps = {
+const GROUP_BY_NONE_VALUE = "_none";
+
+type GroupByControlProps = {
   properties: WorkspaceProperty[];
   groupByPropertyId: string | undefined;
   onChange: (propertyId: string) => void;
+  // When true, an explicit "None" option is offered and an unset
+  // grouping resolves to None instead of falling back to a property.
+  // Table views default to flat (no grouping); kanban always groups.
+  allowNone?: boolean;
 };
 
-const KanbanGroupByControl = ({
+const GroupByControl = ({
   properties,
   groupByPropertyId,
   onChange,
-}: KanbanGroupByControlProps) => {
+  allowNone = false,
+}: GroupByControlProps) => {
   const t = useTranslations();
   const eligible = properties.filter((p) => p.content.type === "single-select");
 
-  const resolvedId = resolveKanbanGroupBy(groupByPropertyId ?? "", properties);
+  const resolvedId =
+    allowNone && !groupByPropertyId
+      ? GROUP_BY_NONE_VALUE
+      : resolveKanbanGroupBy(groupByPropertyId ?? "", properties);
 
   const resolvedLabel = (() => {
+    if (resolvedId === GROUP_BY_NONE_VALUE) {
+      return t("common.none");
+    }
     if (resolvedId === getInternalPropertyId("kind")) {
       return t("common.kind");
     }
@@ -587,9 +612,10 @@ const KanbanGroupByControl = ({
       </span>
       <Select
         onValueChange={(v) => {
-          if (v !== null) {
-            onChange(v);
+          if (v === null) {
+            return;
           }
+          onChange(v === GROUP_BY_NONE_VALUE ? "" : v);
         }}
         value={resolvedId}
       >
@@ -597,6 +623,11 @@ const KanbanGroupByControl = ({
           <SelectValue placeholder={resolvedLabel}>{resolvedLabel}</SelectValue>
         </SelectTrigger>
         <SelectPopup>
+          {allowNone && (
+            <SelectItem value={GROUP_BY_NONE_VALUE}>
+              {t("common.none")}
+            </SelectItem>
+          )}
           <SelectItem value={getInternalPropertyId("kind")}>
             {t("common.kind")}
           </SelectItem>

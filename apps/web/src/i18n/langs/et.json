@@ -786,6 +786,7 @@
     "newRow": "Uus rida",
     "next": "Edasi",
     "noResults": "Tulemused puuduvad",
+    "none": "None",
     "notes": "Märkused",
     "open": "Ava",
     "openInNewTab": "Ava uuel vahekaardil",
@@ -2651,6 +2652,7 @@
       "filterByPlaceholder": "Filter by…",
       "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Rühmita:",
+      "groupItemCount": "{count, plural, one {# item} other {# items}}",
       "hideColumn": "Peida veerg",
       "layouts": {
         "calendar": "Kalender",

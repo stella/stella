@@ -789,6 +789,7 @@ type Messages = {
     "newRow": "New row";
     "next": "Next";
     "noResults": "No results";
+    "none": "None";
     "notes": "Notes";
     "open": "Open";
     "openInNewTab": "Open in new tab";
@@ -2654,6 +2655,7 @@ type Messages = {
       "filterByPlaceholder": "Filter by…";
       "filtersWithCount": "{count, plural, one {# filter} other {# filters}}";
       "groupBy": "Group by:";
+      "groupItemCount": "{count, plural, one {# item} other {# items}}";
       "hideColumn": "Hide column";
       "layouts": {
         "calendar": "Calendar";

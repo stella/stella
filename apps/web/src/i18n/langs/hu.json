@@ -786,6 +786,7 @@
     "newRow": "Új sor",
     "next": "Tovább",
     "noResults": "Nincs találat",
+    "none": "None",
     "notes": "Megjegyzések",
     "open": "Megnyitás",
     "openInNewTab": "Megnyitás új lapon",
@@ -2651,6 +2652,7 @@
       "filterByPlaceholder": "Filter by…",
       "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Csoportosítás:",
+      "groupItemCount": "{count, plural, one {# item} other {# items}}",
       "hideColumn": "Oszlop elrejtése",
       "layouts": {
         "calendar": "Naptár",

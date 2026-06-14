@@ -64,6 +64,7 @@ const readKanbanGroupBodySchema = t.Object({
     tSafeId("property"),
   ]),
   groupValue: t.Nullable(t.String({ maxLength: 1000 })),
+  includeTotalCount: t.Optional(t.Boolean()),
 });
 
 const config = {
@@ -175,6 +176,7 @@ const readKanbanGroup = createSafeHandler(
     }
 
     const limit = body.limit ?? LIMITS.entitiesWindowSizeDefault;
+    const includeTotalCount = body.includeTotalCount ?? false;
     const result = yield* Result.await(
       queryEntities({
         safeDb,
@@ -188,21 +190,23 @@ const readKanbanGroup = createSafeHandler(
         fieldMode: body.fieldMode ?? "full",
         fieldIds: body.fieldIds ?? [],
         extraConditions: [conditionResult.value],
-        includeTotalCount: false,
+        includeTotalCount,
       }),
     );
 
-    return Result.ok(
-      createCursorPage({
-        rows: result.entities,
-        limit,
-        cursorForItem: (item) =>
-          encodeEntitiesWindowCursor(
-            result.cursorValuesByEntityId.get(item.entityId) ??
-              panic("Missing cursor values for Kanban group item"),
-          ),
-      }),
-    );
+    const page = createCursorPage({
+      rows: result.entities,
+      limit,
+      cursorForItem: (item) =>
+        encodeEntitiesWindowCursor(
+          result.cursorValuesByEntityId.get(item.entityId) ??
+            panic("Missing cursor values for Kanban group item"),
+        ),
+    });
+
+    // `totalCount` is the per-group rollup that drives the table group
+    // header count; one bounded count per group, only when requested.
+    return Result.ok({ ...page, totalCount: result.totalCount });
   },
 );
 
