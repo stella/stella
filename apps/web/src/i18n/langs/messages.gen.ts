@@ -114,8 +114,10 @@ type Messages = {
       "activityCode": "Activity code";
       "codeLabel": "Code";
       "codeLabelField": "Label";
+      "codePlaceholder": "L110";
       "createCode": "Create code";
       "inactive": "Inactive";
+      "labelPlaceholder": "Research";
       "manageCodes": "Manage codes";
       "noCodesYet": "No billing codes yet";
       "task": "Task";
@@ -1193,7 +1195,6 @@ type Messages = {
       "matchCounter": "{current} / {total}";
       "next": "Next match";
       "nextShortcut": "Next match (Enter)";
-      "noResults": "No results";
       "previous": "Previous match";
       "previousShortcut": "Previous match (Shift+Enter)";
       "replace": "Replace";
@@ -1638,6 +1639,7 @@ type Messages = {
     "jurisdictionSuggested": "Suggested";
     "jurisdictionTitle": "Pick your practice jurisdictions";
     "orgNameLabel": "Team name";
+    "orgNamePlaceholder": "Smith & Associates";
     "orgSubtitle": "This is how your colleagues will find you.";
     "orgTitle": "Name your team";
     "skipStep": "Skip this step";
@@ -2023,7 +2025,6 @@ type Messages = {
     "fieldInputType": "Input type";
     "fieldLabel": "Label";
     "fieldLabelPlaceholder": "e.g. Full Name";
-    "fieldOptions": "Options";
     "fieldOptionsPlaceholder": "Type an option and press Enter";
     "fieldUpdateFailed": "Failed to update fields";
     "fields": "Fields";

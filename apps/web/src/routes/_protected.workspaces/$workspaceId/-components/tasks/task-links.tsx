@@ -1,16 +1,6 @@
 import { LinkIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-// -- Linked entity row --
-
-const LinkedEntityRow = ({ name, kind }: { name: string; kind: string }) => (
-  <div className="flex items-center gap-2 rounded px-1 py-0.5 text-sm">
-    <LinkIcon className="text-muted-foreground size-3" />
-    <span className="truncate">{name}</span>
-    <span className="text-muted-foreground text-xs">{kind}</span>
-  </div>
-);
-
 // -- Links section --
 
 type EntityRef = {
@@ -26,6 +16,7 @@ type LinksSectionProps = {
 
 export const LinksSection = ({ linkedFrom, linkedTo }: LinksSectionProps) => {
   const t = useTranslations("tasks");
+  const tWorkspaces = useTranslations("workspaces");
 
   if (linkedFrom.length === 0 && linkedTo.length === 0) {
     return null;
@@ -41,17 +32,27 @@ export const LinksSection = ({ linkedFrom, linkedTo }: LinksSectionProps) => {
           <LinkedEntityRow
             key={link.targetEntity.id}
             kind={link.targetEntity.kind}
-            name={link.targetEntity.name ?? "Untitled"}
+            name={link.targetEntity.name ?? tWorkspaces("defaultName")}
           />
         ))}
         {linkedTo.map((link) => (
           <LinkedEntityRow
             key={link.sourceEntity.id}
             kind={link.sourceEntity.kind}
-            name={link.sourceEntity.name ?? "Untitled"}
+            name={link.sourceEntity.name ?? tWorkspaces("defaultName")}
           />
         ))}
       </div>
     </div>
   );
 };
+
+// -- Linked entity row --
+
+const LinkedEntityRow = ({ name, kind }: { name: string; kind: string }) => (
+  <div className="flex items-center gap-2 rounded px-1 py-0.5 text-sm">
+    <LinkIcon className="text-muted-foreground size-3" />
+    <span className="truncate">{name}</span>
+    <span className="text-muted-foreground text-xs">{kind}</span>
+  </div>
+);

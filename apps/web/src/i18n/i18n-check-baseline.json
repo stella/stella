@@ -8,7 +8,6 @@
     "folio.copy",
     "folio.copyLink",
     "folio.delete",
-    "folio.findReplace.noResults",
     "folio.historyGroup",
     "folio.somethingWentWrong",
     "knowledge.agentSkills.formDescription",
@@ -24,7 +23,6 @@
     "tasks.status",
     "tasks.statusValues.done",
     "tasks.statusValues.open",
-    "templates.fieldOptions",
     "templates.inputTypes.date",
     "translate.settings.remove",
     "translate.settings.save",
@@ -84,6 +82,19 @@
     "billing.codes.codeLabel": [
       "de",
       "fr"
+    ],
+    "billing.codes.codePlaceholder": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
     ],
     "billing.decimalHours": [
       "fr",
@@ -958,9 +969,6 @@
       "de",
       "pl",
       "pt-BR"
-    ],
-    "templates.fieldOptions": [
-      "fr"
     ],
     "templates.inputTypes.date": [
       "fr"
