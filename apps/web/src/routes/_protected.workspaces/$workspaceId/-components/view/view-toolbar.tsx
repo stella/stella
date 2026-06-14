@@ -113,6 +113,7 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
       )}
 
       <FilterChips
+        facetContext={{ workspaceId, filters }}
         filters={filters}
         onUpdate={(updatedFilters) => handleUpdate({ filters: updatedFilters })}
         properties={properties}
