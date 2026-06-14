@@ -12,6 +12,7 @@ import {
   getEventAttributeMap,
   getFileTransferEventDetailSummary,
   getHearingEventDetailSummary,
+  getNextHearingCaseEvent,
   getStatusEventDetailSummary,
 } from "./event-details.js";
 
@@ -364,5 +365,125 @@ describe("event detail helpers", () => {
       label: "Jednání zrušeno",
       typ: "JED_ZRUS",
     });
+  });
+});
+
+describe("getNextHearingCaseEvent", () => {
+  const makeHearing = ({
+    udalostId,
+    datum,
+    startsAt,
+    cancelledAttr,
+    zruseno,
+  }: {
+    readonly udalostId: number;
+    readonly datum: string;
+    readonly startsAt?: string | undefined;
+    readonly cancelledAttr?: string | undefined;
+    readonly zruseno: boolean;
+  }) => {
+    const attributes: { hodnota: string; typ: string }[] = [
+      { hodnota: "Veřejné zasedání", typ: "JED_DRUH" },
+    ];
+    if (startsAt !== undefined) {
+      attributes.push({ hodnota: startsAt, typ: "JED_D_ZAC" });
+    }
+    if (cancelledAttr !== undefined) {
+      attributes.push({ hodnota: cancelledAttr, typ: "JED_ZRUS" });
+    }
+    return enrichCaseEventWithDetail({
+      detail: createDetail({ attributes, type: "NAR_JED" }),
+      event: {
+        datum,
+        jednani: [],
+        poradi: 1,
+        udalost: "NAR_JED",
+        udalostId,
+        znackaId: {
+          bcVec: 64,
+          cisloSenatu: 1,
+          druhVeci: "T",
+          organizace: "OSSCEDC",
+          rocnik: 2024,
+        },
+        zruseno,
+      },
+    });
+  };
+
+  const now = new Date("2026-06-14T12:00:00Z");
+
+  test("returns the nearest future hearing", () => {
+    const result = getNextHearingCaseEvent(
+      [
+        makeHearing({
+          udalostId: 1,
+          datum: "20.06.2026",
+          startsAt: "20.06.2026 10:00",
+          zruseno: false,
+        }),
+        makeHearing({
+          udalostId: 2,
+          datum: "15.06.2026",
+          startsAt: "15.06.2026 09:00",
+          zruseno: false,
+        }),
+      ],
+      { now },
+    );
+    expect(result?.udalostId).toBe(2);
+  });
+
+  test("skips a hearing cancelled via the JED_ZRUS attribute", () => {
+    const result = getNextHearingCaseEvent(
+      [
+        makeHearing({
+          udalostId: 1,
+          datum: "15.06.2026",
+          startsAt: "15.06.2026 09:00",
+          cancelledAttr: "Ano",
+          zruseno: false,
+        }),
+        makeHearing({
+          udalostId: 2,
+          datum: "20.06.2026",
+          startsAt: "20.06.2026 10:00",
+          zruseno: false,
+        }),
+      ],
+      { now },
+    );
+    expect(result?.udalostId).toBe(2);
+  });
+
+  test("skips a hearing cancelled via event.zruseno when JED_ZRUS is absent", () => {
+    const result = getNextHearingCaseEvent(
+      [
+        makeHearing({
+          udalostId: 1,
+          datum: "15.06.2026",
+          startsAt: "15.06.2026 09:00",
+          zruseno: true,
+        }),
+      ],
+      { now },
+    );
+    expect(result).toBeNull();
+  });
+
+  test("keeps a date-only hearing scheduled for today (afternoon now)", () => {
+    const result = getNextHearingCaseEvent(
+      [makeHearing({ udalostId: 1, datum: "14.06.2026", zruseno: false })],
+      { now },
+    );
+    expect(result?.udalostId).toBe(1);
+  });
+
+  test("drops a date-only hearing from a past day", () => {
+    const result = getNextHearingCaseEvent(
+      [makeHearing({ udalostId: 1, datum: "13.06.2026", zruseno: false })],
+      { now },
+    );
+    expect(result).toBeNull();
   });
 });
