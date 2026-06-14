@@ -191,7 +191,7 @@ const trimSlugHyphens = (value: string): string => {
   return value.slice(start, end);
 };
 
-const slugifyCaseLawPathSegment = (value: string): string => {
+export const slugifyCaseLawPathSegment = (value: string): string => {
   const slug = trimSlugHyphens(
     value
       .normalize("NFKD")
@@ -280,7 +280,7 @@ export const buildCaseLawDecisionAppUrl = (
 ): string | null =>
   isPublicLawAppUrlEnabled() ? buildCaseLawDecisionUrl(input) : null;
 
-const buildCaseLawDecisionUrl = ({
+export const buildCaseLawDecisionUrl = ({
   caseNumber,
   country,
   court,
