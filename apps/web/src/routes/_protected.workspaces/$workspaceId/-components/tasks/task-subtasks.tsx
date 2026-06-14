@@ -6,6 +6,48 @@ import { cn } from "@stll/ui/lib/utils";
 import { isTaskStatus } from "./task-detail-constants";
 import type { TaskStatus } from "./task-detail-constants";
 
+// -- Subtasks section --
+
+export const SubtasksSection = ({
+  subtasks,
+  onToggle,
+}: SubtasksSectionProps) => {
+  const t = useTranslations("tasks");
+
+  if (subtasks.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="border-t px-4 py-3">
+      <h3 className="text-muted-foreground mb-2 text-xs font-medium">
+        {t("subtasks")} ({subtasks.length})
+      </h3>
+      <div className="space-y-1">
+        {subtasks.map((sub) => (
+          <SubtaskRow
+            key={sub.id}
+            name={sub.name ?? t("untitled")}
+            onToggle={() => onToggle(sub.id, sub.status)}
+            status={isTaskStatus(sub.status) ? sub.status : null}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+type Subtask = {
+  id: string;
+  name: string | null;
+  status: string | null;
+};
+
+type SubtasksSectionProps = {
+  subtasks: Subtask[];
+  onToggle: (subtaskId: string, currentStatus: string | null) => void;
+};
+
 // -- Subtask row --
 
 const SubtaskRow = ({
@@ -38,47 +80,5 @@ const SubtaskRow = ({
         {name}
       </span>
     </button>
-  );
-};
-
-// -- Subtasks section --
-
-type Subtask = {
-  id: string;
-  name: string | null;
-  status: string | null;
-};
-
-type SubtasksSectionProps = {
-  subtasks: Subtask[];
-  onToggle: (subtaskId: string, currentStatus: string | null) => void;
-};
-
-export const SubtasksSection = ({
-  subtasks,
-  onToggle,
-}: SubtasksSectionProps) => {
-  const t = useTranslations("tasks");
-
-  if (subtasks.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="border-t px-4 py-3">
-      <h3 className="text-muted-foreground mb-2 text-xs font-medium">
-        {t("subtasks")} ({subtasks.length})
-      </h3>
-      <div className="space-y-1">
-        {subtasks.map((sub) => (
-          <SubtaskRow
-            key={sub.id}
-            name={sub.name ?? t("untitled")}
-            onToggle={() => onToggle(sub.id, sub.status)}
-            status={isTaskStatus(sub.status) ? sub.status : null}
-          />
-        ))}
-      </div>
-    </div>
   );
 };

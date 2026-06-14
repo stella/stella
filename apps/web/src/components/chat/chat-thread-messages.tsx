@@ -49,6 +49,129 @@ import {
 } from "@/lib/user-files";
 import type { QueuedChatMessage } from "@/routes/_protected.chat/-hooks/use-chat-session";
 
+export const ChatThreadMessages = ({
+  approvalPendingMessageId,
+  error,
+  isGenerating = false,
+  messages,
+  onResend,
+  onSendWithoutAnonymization,
+  onAskUserSubmit,
+  onAskUserEditAndRerun,
+  onCreateDocumentResolve,
+  onOpenCreatedDocument,
+  showThinkingIndicator = false,
+  showToolCallDetails,
+  showToolCalls,
+  queuedMessages,
+  onRemoveQueuedMessage,
+  streamdownComponents,
+  workspaceId,
+}: ChatThreadMessagesProps) => {
+  const { activeOrganizationId } = useChatApproval();
+  const retryableAssistantMessageId = useMemo(
+    () => getRetryableAssistantMessageId(messages),
+    [messages],
+  );
+  const shouldShowToolCalls = showToolCallDetails ?? showToolCalls ?? false;
+
+  return (
+    <>
+      {messages.map((message, index) => (
+        <Message
+          className={cn(
+            "transition-opacity duration-200",
+            approvalPendingMessageId &&
+              approvalPendingMessageId !== message.id &&
+              "opacity-40",
+          )}
+          from={message.role}
+          key={message.id}
+        >
+          <MessageContent>
+            {message.role === "assistant" ? (
+              <>
+                <AssistantMessageParts
+                  activeOrganizationId={activeOrganizationId}
+                  isLatestAssistantMessage={
+                    message.id === retryableAssistantMessageId
+                  }
+                  message={message}
+                  onAskUserEditAndRerun={onAskUserEditAndRerun}
+                  onAskUserSubmit={onAskUserSubmit}
+                  onCreateDocumentResolve={onCreateDocumentResolve}
+                  onOpenCreatedDocument={onOpenCreatedDocument}
+                  shouldShowToolCalls={shouldShowToolCalls}
+                  streamdownComponents={streamdownComponents}
+                  workspaceId={workspaceId}
+                />
+                <SourceChips
+                  activeOrganizationId={activeOrganizationId}
+                  messageId={message.id}
+                  parts={message.parts}
+                  workspaceId={workspaceId}
+                />
+                <AssistantMessageActions
+                  isGenerating={isGenerating}
+                  isLatestAssistantMessage={
+                    message.id === retryableAssistantMessageId
+                  }
+                  message={message}
+                  onResend={onResend}
+                />
+              </>
+            ) : (
+              <>
+                {(() => {
+                  const fileParts: FileUIPart[] = [];
+                  for (const part of message.parts) {
+                    if (part.type === "file") {
+                      fileParts.push(part);
+                    }
+                  }
+
+                  return <UserAttachments parts={fileParts} />;
+                })()}
+                {message.parts.map((part, partIndex) =>
+                  part.type === "text" ? (
+                    <UserMessageText
+                      key={`${message.id}-user-text-${partIndex}`}
+                      restorationPairs={getFollowingAssistantRestorations(
+                        messages,
+                        index,
+                      )}
+                      text={normalizeUserMessageTextForDisplay(part.text)}
+                    />
+                  ) : null,
+                )}
+              </>
+            )}
+          </MessageContent>
+        </Message>
+      ))}
+      {error && (
+        <ChatErrorMessage
+          error={error}
+          isGenerating={isGenerating}
+          onResend={onResend}
+          onSendWithoutAnonymization={onSendWithoutAnonymization}
+        />
+      )}
+      {showThinkingIndicator &&
+        isGenerating &&
+        !hasVisibleContent(messages) && <ThinkingIndicator />}
+      {onRemoveQueuedMessage &&
+        queuedMessages !== undefined &&
+        queuedMessages.length > 0 && (
+          <QueuedUserMessages
+            messages={queuedMessages}
+            onRemove={onRemoveQueuedMessage}
+          />
+        )}
+    </>
+  );
+};
+
 const USER_STREAMDOWN_COMPONENTS = {
   a: (props: ComponentProps<"a">) => (
     <StreamdownMentionLink interactive={false} {...props} />
@@ -517,129 +640,6 @@ type ChatThreadMessagesProps = {
 
 type ChatResendOptions = {
   messageId?: string | undefined;
-};
-
-export const ChatThreadMessages = ({
-  approvalPendingMessageId,
-  error,
-  isGenerating = false,
-  messages,
-  onResend,
-  onSendWithoutAnonymization,
-  onAskUserSubmit,
-  onAskUserEditAndRerun,
-  onCreateDocumentResolve,
-  onOpenCreatedDocument,
-  showThinkingIndicator = false,
-  showToolCallDetails,
-  showToolCalls,
-  queuedMessages,
-  onRemoveQueuedMessage,
-  streamdownComponents,
-  workspaceId,
-}: ChatThreadMessagesProps) => {
-  const { activeOrganizationId } = useChatApproval();
-  const retryableAssistantMessageId = useMemo(
-    () => getRetryableAssistantMessageId(messages),
-    [messages],
-  );
-  const shouldShowToolCalls = showToolCallDetails ?? showToolCalls ?? false;
-
-  return (
-    <>
-      {messages.map((message, index) => (
-        <Message
-          className={cn(
-            "transition-opacity duration-200",
-            approvalPendingMessageId &&
-              approvalPendingMessageId !== message.id &&
-              "opacity-40",
-          )}
-          from={message.role}
-          key={message.id}
-        >
-          <MessageContent>
-            {message.role === "assistant" ? (
-              <>
-                <AssistantMessageParts
-                  activeOrganizationId={activeOrganizationId}
-                  isLatestAssistantMessage={
-                    message.id === retryableAssistantMessageId
-                  }
-                  message={message}
-                  onAskUserEditAndRerun={onAskUserEditAndRerun}
-                  onAskUserSubmit={onAskUserSubmit}
-                  onCreateDocumentResolve={onCreateDocumentResolve}
-                  onOpenCreatedDocument={onOpenCreatedDocument}
-                  shouldShowToolCalls={shouldShowToolCalls}
-                  streamdownComponents={streamdownComponents}
-                  workspaceId={workspaceId}
-                />
-                <SourceChips
-                  activeOrganizationId={activeOrganizationId}
-                  messageId={message.id}
-                  parts={message.parts}
-                  workspaceId={workspaceId}
-                />
-                <AssistantMessageActions
-                  isGenerating={isGenerating}
-                  isLatestAssistantMessage={
-                    message.id === retryableAssistantMessageId
-                  }
-                  message={message}
-                  onResend={onResend}
-                />
-              </>
-            ) : (
-              <>
-                {(() => {
-                  const fileParts: FileUIPart[] = [];
-                  for (const part of message.parts) {
-                    if (part.type === "file") {
-                      fileParts.push(part);
-                    }
-                  }
-
-                  return <UserAttachments parts={fileParts} />;
-                })()}
-                {message.parts.map((part, partIndex) =>
-                  part.type === "text" ? (
-                    <UserMessageText
-                      key={`${message.id}-user-text-${partIndex}`}
-                      restorationPairs={getFollowingAssistantRestorations(
-                        messages,
-                        index,
-                      )}
-                      text={normalizeUserMessageTextForDisplay(part.text)}
-                    />
-                  ) : null,
-                )}
-              </>
-            )}
-          </MessageContent>
-        </Message>
-      ))}
-      {error && (
-        <ChatErrorMessage
-          error={error}
-          isGenerating={isGenerating}
-          onResend={onResend}
-          onSendWithoutAnonymization={onSendWithoutAnonymization}
-        />
-      )}
-      {showThinkingIndicator &&
-        isGenerating &&
-        !hasVisibleContent(messages) && <ThinkingIndicator />}
-      {onRemoveQueuedMessage &&
-        queuedMessages !== undefined &&
-        queuedMessages.length > 0 && (
-          <QueuedUserMessages
-            messages={queuedMessages}
-            onRemove={onRemoveQueuedMessage}
-          />
-        )}
-    </>
-  );
 };
 
 type QueuedUserMessagesProps = {

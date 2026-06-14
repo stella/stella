@@ -14,64 +14,6 @@ import { cn } from "@stll/ui/lib/utils";
 import { matchesPattern, previewReference } from "@/lib/matter-reference";
 import { organizationSettingsOptions } from "@/routes/_protected.organization/-settings-queries";
 
-type MatterNumberHintBodyProps = {
-  example: string;
-  showWarning: boolean;
-  error?: string | undefined;
-};
-
-const MatterNumberHintBody = ({
-  example,
-  showWarning,
-  error,
-}: MatterNumberHintBodyProps) => {
-  const t = useTranslations();
-
-  if (error) {
-    return <p className="text-destructive text-xs">{error}</p>;
-  }
-
-  if (showWarning) {
-    return (
-      <div className="space-y-1 text-xs">
-        <p className="text-muted-foreground">
-          {t("workspaces.referenceConventionHint", { example })}
-        </p>
-        <p className="text-warning-foreground">
-          {t("workspaces.referenceFormatWarning")}
-        </p>
-        <Link
-          className="text-foreground inline-flex text-xs font-medium hover:underline"
-          to="/settings/organization/matter-numbering"
-        >
-          {t("settings.organization.matterNumbering")}
-        </Link>
-      </div>
-    );
-  }
-
-  return (
-    <p className="text-muted-foreground truncate text-xs">
-      {t("workspaces.referenceConventionHint", { example })}
-    </p>
-  );
-};
-
-type InlineProps = {
-  variant: "inline";
-  value: string;
-  className?: string | undefined;
-  error?: string | undefined;
-};
-
-type PopoverProps = {
-  variant: "popover";
-  value: string;
-  open: boolean;
-  anchor: HTMLElement | null;
-  error?: string | undefined;
-};
-
 export type MatterNumberHintProps = InlineProps | PopoverProps;
 
 export const MatterNumberHint = (props: MatterNumberHintProps) => {
@@ -148,5 +90,63 @@ export const MatterNumberHint = (props: MatterNumberHintProps) => {
         </div>
       </PopoverPopup>
     </Popover>
+  );
+};
+
+type InlineProps = {
+  variant: "inline";
+  value: string;
+  className?: string | undefined;
+  error?: string | undefined;
+};
+
+type PopoverProps = {
+  variant: "popover";
+  value: string;
+  open: boolean;
+  anchor: HTMLElement | null;
+  error?: string | undefined;
+};
+
+type MatterNumberHintBodyProps = {
+  example: string;
+  showWarning: boolean;
+  error?: string | undefined;
+};
+
+const MatterNumberHintBody = ({
+  example,
+  showWarning,
+  error,
+}: MatterNumberHintBodyProps) => {
+  const t = useTranslations();
+
+  if (error) {
+    return <p className="text-destructive text-xs">{error}</p>;
+  }
+
+  if (showWarning) {
+    return (
+      <div className="space-y-1 text-xs">
+        <p className="text-muted-foreground">
+          {t("workspaces.referenceConventionHint", { example })}
+        </p>
+        <p className="text-warning-foreground">
+          {t("workspaces.referenceFormatWarning")}
+        </p>
+        <Link
+          className="text-foreground inline-flex text-xs font-medium hover:underline"
+          to="/settings/organization/matter-numbering"
+        >
+          {t("settings.organization.matterNumbering")}
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <p className="text-muted-foreground truncate text-xs">
+      {t("workspaces.referenceConventionHint", { example })}
+    </p>
   );
 };

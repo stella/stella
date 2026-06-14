@@ -14,6 +14,45 @@ import { isMentionCategory } from "@/components/chat/chat-mention-href";
 import { getMatterColor } from "@/lib/matter-colors";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 
+export const ChatMentionNode = (props: NodeViewProps) => {
+  const attrs = readChatMentionAttrs(props.node.attrs);
+  const sourceWorkspaceId = attrs.sourceWorkspaceId;
+  const sourceWorkspaceColor = sourceWorkspaceId
+    ? getMatterColor(sourceWorkspaceId)
+    : null;
+
+  return (
+    <NodeViewWrapper className="inline">
+      <span
+        className={cn(
+          "inline-flex max-w-full items-center gap-0.5 align-middle",
+          "bg-accent rounded px-1 py-0.5",
+          "text-accent-foreground text-xs font-medium",
+          sourceWorkspaceColor !== null && "border",
+        )}
+        style={
+          sourceWorkspaceColor
+            ? {
+                backgroundColor: `color-mix(in srgb, ${sourceWorkspaceColor} 18%, transparent)`,
+                borderColor: `color-mix(in srgb, ${sourceWorkspaceColor} 55%, transparent)`,
+              }
+            : undefined
+        }
+      >
+        <CategoryIcon
+          attrId={attrs.id}
+          attrKind={attrs.kind}
+          attrMimeType={attrs.mimeType}
+          category={attrs.category}
+        />
+        <span className={cn("truncate", CHAT_MENTION_LABEL_MAX_WIDTH_CLASS)}>
+          {attrs.label}
+        </span>
+      </span>
+    </NodeViewWrapper>
+  );
+};
+
 const cls = "size-3 shrink-0";
 const CHAT_MENTION_LABEL_MAX_WIDTH_CLASS = "max-w-48";
 
@@ -96,43 +135,4 @@ const CategoryIcon = ({
     return <DocumentIcon className={cls} mimeType={attrMimeType} />;
   }
   return <FileTextIcon className={cls} />;
-};
-
-export const ChatMentionNode = (props: NodeViewProps) => {
-  const attrs = readChatMentionAttrs(props.node.attrs);
-  const sourceWorkspaceId = attrs.sourceWorkspaceId;
-  const sourceWorkspaceColor = sourceWorkspaceId
-    ? getMatterColor(sourceWorkspaceId)
-    : null;
-
-  return (
-    <NodeViewWrapper className="inline">
-      <span
-        className={cn(
-          "inline-flex max-w-full items-center gap-0.5 align-middle",
-          "bg-accent rounded px-1 py-0.5",
-          "text-accent-foreground text-xs font-medium",
-          sourceWorkspaceColor !== null && "border",
-        )}
-        style={
-          sourceWorkspaceColor
-            ? {
-                backgroundColor: `color-mix(in srgb, ${sourceWorkspaceColor} 18%, transparent)`,
-                borderColor: `color-mix(in srgb, ${sourceWorkspaceColor} 55%, transparent)`,
-              }
-            : undefined
-        }
-      >
-        <CategoryIcon
-          attrId={attrs.id}
-          attrKind={attrs.kind}
-          attrMimeType={attrs.mimeType}
-          category={attrs.category}
-        />
-        <span className={cn("truncate", CHAT_MENTION_LABEL_MAX_WIDTH_CLASS)}>
-          {attrs.label}
-        </span>
-      </span>
-    </NodeViewWrapper>
-  );
 };

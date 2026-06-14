@@ -40,268 +40,6 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { propertiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 
-const DOCX_MIME =
-  "application/vnd.openxmlformats-officedocument" +
-  ".wordprocessingml.document";
-
-type UpdateEntityFieldsInput = ChatUITools["update-entity-fields"]["input"];
-type ActiveDocxEditInput = ChatUITools["apply-active-docx-edits"]["input"];
-
-/** Guess a mime type from a file name extension. */
-const mimeFromName = (name: string): string => {
-  const ext = name.split(".").pop()?.toLowerCase();
-
-  if (!ext) {
-    return "application/octet-stream";
-  }
-
-  switch (ext) {
-    case "pdf":
-      return "application/pdf";
-    case "doc":
-      return "application/msword";
-    case "docx":
-      return DOCX_MIME;
-    case "xls":
-      return "application/vnd.ms-excel";
-    case "xlsx":
-      return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-    case "csv":
-      return "text/csv";
-    case "png":
-      return "image/png";
-    case "jpg":
-    case "jpeg":
-      return "image/jpeg";
-    case "txt":
-      return "text/plain";
-    default:
-      return "application/octet-stream";
-  }
-};
-
-const getApprovalId = (part: ApprovalToolPart): string | null => {
-  switch (part.state) {
-    case "input-available":
-    case "input-streaming":
-      return null;
-    case "approval-requested":
-    case "approval-responded":
-    case "output-denied":
-      return part.approval.id;
-    case "output-available":
-    case "output-error":
-      return part.approval?.id ?? null;
-    default:
-      return null;
-  }
-};
-
-const getApprovalPartInput = (part: ApprovalToolPart): unknown => {
-  if (!("input" in part)) {
-    return undefined;
-  }
-
-  // SAFETY: external MCP tool inputs are intentionally schema-less on the
-  // frontend. Treat the payload as unknown before rendering a read-only summary.
-  return (part as { input?: unknown }).input;
-};
-
-// -- Select badge (colored chip matching table UX) --
-
-type SelectBadgeProps = {
-  value: string | null;
-  property: WorkspaceProperty | undefined;
-};
-
-const SelectBadge = ({ value, property }: SelectBadgeProps) => {
-  const t = useTranslations();
-  let color = emptyColor;
-
-  if (value && property?.content.type === "single-select") {
-    const opt = property.content.options.find((o) => o.value === value);
-    if (opt) {
-      color = resolveOptionColor(opt.color);
-    }
-  }
-
-  return (
-    <span
-      className="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] leading-none font-medium"
-      style={{
-        backgroundColor: color.background,
-        color: color.foreground,
-      }}
-    >
-      {value ?? t("common.empty")}
-    </span>
-  );
-};
-
-// -- Update summary (rich rendering) --
-
-type UpdateSummaryProps = {
-  input: UpdateEntityFieldsInput;
-  workspaceId?: string | undefined;
-};
-
-const UpdateSummary = ({ input, workspaceId }: UpdateSummaryProps) => {
-  const t = useTranslations();
-  const qc = useQueryClient();
-  const propName = input.propertyName ?? t("chat.toolCall.field");
-  const entityName = input.entityName;
-  const newVal = input.value;
-  const oldVal = input.oldValue;
-
-  // Look up the property from cache for colors.
-  let property: WorkspaceProperty | undefined;
-  if (workspaceId) {
-    const cached = qc.getQueryData<WorkspaceProperty[]>(
-      propertiesKeys.all(workspaceId),
-    );
-    if (cached !== undefined) {
-      property = cached.find((p) => p.id === input.propertyId);
-    }
-  }
-
-  const isSelect =
-    property?.content.type === "single-select" ||
-    property?.content.type === "multi-select";
-
-  let displayNew: string | null = null;
-  if (Array.isArray(newVal)) {
-    displayNew = newVal.join(", ");
-  } else if (newVal !== null) {
-    displayNew = JSON.stringify(newVal);
-  }
-
-  return (
-    <div className="border-border/50 flex flex-col gap-1.5 border-t px-3 py-2">
-      {/* Property change */}
-      <div className="flex items-center gap-1.5 text-xs">
-        <span className="text-muted-foreground">{propName}:</span>
-        {isSelect ? (
-          <>
-            {oldVal && (
-              <>
-                <SelectBadge property={property} value={oldVal} />
-                <ArrowRightIcon className="text-muted-foreground size-3 shrink-0" />
-              </>
-            )}
-            <SelectBadge property={property} value={displayNew} />
-          </>
-        ) : (
-          <span className="font-medium">
-            {oldVal && (
-              <>
-                <span className="text-muted-foreground line-through">
-                  {oldVal}
-                </span>
-                {" → "}
-              </>
-            )}
-            {displayNew ?? t("common.empty")}
-          </span>
-        )}
-      </div>
-
-      {/* Entity name with icon */}
-      {entityName && (
-        <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
-          <DocumentIcon
-            className="size-3.5 shrink-0"
-            mimeType={
-              entityName.includes(".")
-                ? mimeFromName(entityName)
-                : "application/octet-stream"
-            }
-          />
-          <span className="truncate">{entityName}</span>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// -- Active DOCX edit summary --
-
-type ActiveDocxEditSummaryProps = {
-  input: ActiveDocxEditInput;
-};
-
-const ActiveDocxEditSummary = ({ input }: ActiveDocxEditSummaryProps) => {
-  const t = useTranslations("chat.tool");
-  const previewOperations = input.operations.slice(0, 3);
-  const hiddenCount = input.operations.length - previewOperations.length;
-
-  const renderOperationSummary = (
-    operation: ActiveDocxEditInput["operations"][number],
-  ) => {
-    switch (operation.type) {
-      case "replaceInBlock":
-        return t("docxReplaceSummary", {
-          find: operation.find,
-          replace: operation.replace,
-        });
-      case "replaceBlock":
-        return t("docxReplaceBlockSummary", {
-          blockId: operation.blockId,
-        });
-      case "insertAfterBlock":
-        return t("docxInsertAfterSummary", {
-          blockId: operation.blockId,
-        });
-      case "insertBeforeBlock":
-        return t("docxInsertBeforeSummary", {
-          blockId: operation.blockId,
-        });
-      case "deleteBlock":
-        return t("docxDeleteSummary", {
-          blockId: operation.blockId,
-        });
-      case "commentOnBlock":
-        return t("docxCommentSummary", {
-          blockId: operation.blockId,
-        });
-      case "insertSignatureTable":
-        return t("docxSignatureTableSummary", {
-          blockId: operation.blockId,
-        });
-      default:
-        operation satisfies never;
-        return panic("Unsupported DOCX edit operation");
-    }
-  };
-
-  return (
-    <div className="border-border/50 flex flex-col gap-1.5 border-t px-3 py-2 text-xs">
-      <div className="text-muted-foreground">
-        {t("docxEditSummary", { count: input.operations.length })}
-      </div>
-      {previewOperations.map((operation, index) => (
-        <div
-          className="text-foreground-strong-muted truncate"
-          key={`${operation.blockId}-${operation.type}-${index}`}
-        >
-          {renderOperationSummary(operation)}
-        </div>
-      ))}
-      {hiddenCount > 0 && (
-        <div className="text-muted-foreground">
-          {t("docxEditMore", { count: hiddenCount })}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// -- Main card --
-
-type ToolApprovalCardProps = {
-  part: ApprovalToolPart;
-  workspaceId?: string | undefined;
-};
-
 export const ToolApprovalCard = ({
   part,
   workspaceId,
@@ -588,6 +326,268 @@ export const ToolApprovalCard = ({
         )}
     </div>
   );
+};
+
+const DOCX_MIME =
+  "application/vnd.openxmlformats-officedocument" +
+  ".wordprocessingml.document";
+
+type UpdateEntityFieldsInput = ChatUITools["update-entity-fields"]["input"];
+type ActiveDocxEditInput = ChatUITools["apply-active-docx-edits"]["input"];
+
+/** Guess a mime type from a file name extension. */
+const mimeFromName = (name: string): string => {
+  const ext = name.split(".").pop()?.toLowerCase();
+
+  if (!ext) {
+    return "application/octet-stream";
+  }
+
+  switch (ext) {
+    case "pdf":
+      return "application/pdf";
+    case "doc":
+      return "application/msword";
+    case "docx":
+      return DOCX_MIME;
+    case "xls":
+      return "application/vnd.ms-excel";
+    case "xlsx":
+      return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    case "csv":
+      return "text/csv";
+    case "png":
+      return "image/png";
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "txt":
+      return "text/plain";
+    default:
+      return "application/octet-stream";
+  }
+};
+
+const getApprovalId = (part: ApprovalToolPart): string | null => {
+  switch (part.state) {
+    case "input-available":
+    case "input-streaming":
+      return null;
+    case "approval-requested":
+    case "approval-responded":
+    case "output-denied":
+      return part.approval.id;
+    case "output-available":
+    case "output-error":
+      return part.approval?.id ?? null;
+    default:
+      return null;
+  }
+};
+
+const getApprovalPartInput = (part: ApprovalToolPart): unknown => {
+  if (!("input" in part)) {
+    return undefined;
+  }
+
+  // SAFETY: external MCP tool inputs are intentionally schema-less on the
+  // frontend. Treat the payload as unknown before rendering a read-only summary.
+  return (part as { input?: unknown }).input;
+};
+
+// -- Select badge (colored chip matching table UX) --
+
+type SelectBadgeProps = {
+  value: string | null;
+  property: WorkspaceProperty | undefined;
+};
+
+const SelectBadge = ({ value, property }: SelectBadgeProps) => {
+  const t = useTranslations();
+  let color = emptyColor;
+
+  if (value && property?.content.type === "single-select") {
+    const opt = property.content.options.find((o) => o.value === value);
+    if (opt) {
+      color = resolveOptionColor(opt.color);
+    }
+  }
+
+  return (
+    <span
+      className="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] leading-none font-medium"
+      style={{
+        backgroundColor: color.background,
+        color: color.foreground,
+      }}
+    >
+      {value ?? t("common.empty")}
+    </span>
+  );
+};
+
+// -- Update summary (rich rendering) --
+
+type UpdateSummaryProps = {
+  input: UpdateEntityFieldsInput;
+  workspaceId?: string | undefined;
+};
+
+const UpdateSummary = ({ input, workspaceId }: UpdateSummaryProps) => {
+  const t = useTranslations();
+  const qc = useQueryClient();
+  const propName = input.propertyName ?? t("chat.toolCall.field");
+  const entityName = input.entityName;
+  const newVal = input.value;
+  const oldVal = input.oldValue;
+
+  // Look up the property from cache for colors.
+  let property: WorkspaceProperty | undefined;
+  if (workspaceId) {
+    const cached = qc.getQueryData<WorkspaceProperty[]>(
+      propertiesKeys.all(workspaceId),
+    );
+    if (cached !== undefined) {
+      property = cached.find((p) => p.id === input.propertyId);
+    }
+  }
+
+  const isSelect =
+    property?.content.type === "single-select" ||
+    property?.content.type === "multi-select";
+
+  let displayNew: string | null = null;
+  if (Array.isArray(newVal)) {
+    displayNew = newVal.join(", ");
+  } else if (newVal !== null) {
+    displayNew = JSON.stringify(newVal);
+  }
+
+  return (
+    <div className="border-border/50 flex flex-col gap-1.5 border-t px-3 py-2">
+      {/* Property change */}
+      <div className="flex items-center gap-1.5 text-xs">
+        <span className="text-muted-foreground">{propName}:</span>
+        {isSelect ? (
+          <>
+            {oldVal && (
+              <>
+                <SelectBadge property={property} value={oldVal} />
+                <ArrowRightIcon className="text-muted-foreground size-3 shrink-0" />
+              </>
+            )}
+            <SelectBadge property={property} value={displayNew} />
+          </>
+        ) : (
+          <span className="font-medium">
+            {oldVal && (
+              <>
+                <span className="text-muted-foreground line-through">
+                  {oldVal}
+                </span>
+                {" → "}
+              </>
+            )}
+            {displayNew ?? t("common.empty")}
+          </span>
+        )}
+      </div>
+
+      {/* Entity name with icon */}
+      {entityName && (
+        <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
+          <DocumentIcon
+            className="size-3.5 shrink-0"
+            mimeType={
+              entityName.includes(".")
+                ? mimeFromName(entityName)
+                : "application/octet-stream"
+            }
+          />
+          <span className="truncate">{entityName}</span>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// -- Active DOCX edit summary --
+
+type ActiveDocxEditSummaryProps = {
+  input: ActiveDocxEditInput;
+};
+
+const ActiveDocxEditSummary = ({ input }: ActiveDocxEditSummaryProps) => {
+  const t = useTranslations("chat.tool");
+  const previewOperations = input.operations.slice(0, 3);
+  const hiddenCount = input.operations.length - previewOperations.length;
+
+  const renderOperationSummary = (
+    operation: ActiveDocxEditInput["operations"][number],
+  ) => {
+    switch (operation.type) {
+      case "replaceInBlock":
+        return t("docxReplaceSummary", {
+          find: operation.find,
+          replace: operation.replace,
+        });
+      case "replaceBlock":
+        return t("docxReplaceBlockSummary", {
+          blockId: operation.blockId,
+        });
+      case "insertAfterBlock":
+        return t("docxInsertAfterSummary", {
+          blockId: operation.blockId,
+        });
+      case "insertBeforeBlock":
+        return t("docxInsertBeforeSummary", {
+          blockId: operation.blockId,
+        });
+      case "deleteBlock":
+        return t("docxDeleteSummary", {
+          blockId: operation.blockId,
+        });
+      case "commentOnBlock":
+        return t("docxCommentSummary", {
+          blockId: operation.blockId,
+        });
+      case "insertSignatureTable":
+        return t("docxSignatureTableSummary", {
+          blockId: operation.blockId,
+        });
+      default:
+        operation satisfies never;
+        return panic("Unsupported DOCX edit operation");
+    }
+  };
+
+  return (
+    <div className="border-border/50 flex flex-col gap-1.5 border-t px-3 py-2 text-xs">
+      <div className="text-muted-foreground">
+        {t("docxEditSummary", { count: input.operations.length })}
+      </div>
+      {previewOperations.map((operation, index) => (
+        <div
+          className="text-foreground-strong-muted truncate"
+          key={`${operation.blockId}-${operation.type}-${index}`}
+        >
+          {renderOperationSummary(operation)}
+        </div>
+      ))}
+      {hiddenCount > 0 && (
+        <div className="text-muted-foreground">
+          {t("docxEditMore", { count: hiddenCount })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// -- Main card --
+
+type ToolApprovalCardProps = {
+  part: ApprovalToolPart;
+  workspaceId?: string | undefined;
 };
 
 const ExternalMcpInputSummary = ({
