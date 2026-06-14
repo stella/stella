@@ -35,6 +35,7 @@ import { legislationRoute } from "@/api/handlers/legislation/routes";
 import { mcpConnectorsRoute } from "@/api/handlers/mcp-connectors/routes";
 import { mcpRoute } from "@/api/handlers/mcp/routes";
 import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
+import { playbooksRoute } from "@/api/handlers/playbooks/routes";
 import { propertiesRoute } from "@/api/handlers/properties/routes";
 import { ratesRoute } from "@/api/handlers/rates/routes";
 import { searchRoute } from "@/api/handlers/search/routes";
@@ -336,6 +337,7 @@ const api = new Elysia()
       )
       .use(workspaceEventsRoute)
       .use(workspacesRoute)
+      .use(playbooksRoute)
       .use(propertiesRoute)
       .use(filesRoute)
       .use(
