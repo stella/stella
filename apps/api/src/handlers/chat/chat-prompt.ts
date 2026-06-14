@@ -24,6 +24,7 @@ import type {
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
 import {
+  ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
   type ActiveChatSkillContext,
   getChatSkillMetadata,
   listAvailableChatSkillMetadata,
@@ -45,7 +46,6 @@ import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 const TITLE_MAX_LENGTH = 80;
 const ACTIVE_DECISION_MAX_CHARS = 12_000;
 const ACTIVE_DOCX_EDIT_BLOCK_TEXT_MAX_CHARS = 1200;
-const ACTIVE_SKILL_BODY_MAX_CHARS = 30_000;
 const ACTIVE_SKILL_RESOURCE_LIST_MAX_COUNT = 100;
 /**
  * Cap on the number of editable DOCX blocks embedded in a single
@@ -925,9 +925,20 @@ export const buildActiveSkillSection = (
         text: activeSkillContext.version,
       })}`
     : "";
-  const editability = activeSkillContext.editable
-    ? "This skill is editable in this chat. Only use current-skill edit tools when the user asks to create or change this skill's files."
-    : "This skill is read-only in this chat; do not attempt to edit its files.";
+  const bodyTruncated =
+    activeSkillContext.body.length > ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS;
+  let editability =
+    "This skill is read-only in this chat; do not attempt to edit its files.";
+  if (activeSkillContext.editable) {
+    editability = bodyTruncated
+      ? "This skill is editable in this chat, but SKILL.md is longer than the body prefix shown here. The full-body replacement tool is unavailable; do not attempt to replace SKILL.md from this truncated context."
+      : "This skill is editable in this chat. Only use current-skill edit tools when the user asks to create or change this skill's files.";
+  }
+  const bodyHeading = bodyTruncated
+    ? `Current SKILL.md body prefix (first ${String(
+        ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
+      )} characters; full-body replacement is disabled in this chat):`
+    : "Current SKILL.md body:";
   const resourcesList = activeSkillContext.resources;
   const resourceLines = resourcesList
     .slice(0, ACTIVE_SKILL_RESOURCE_LIST_MAX_COUNT)
@@ -964,8 +975,8 @@ export const buildActiveSkillSection = (
     'When the user says "this skill", "the current skill", "its files", or "SKILL.md", they mean this active skill. Do not propose unrelated skill names.',
     editability,
     resources,
-    `Current SKILL.md body:\n${sanitizePromptBlock({
-      maxLength: ACTIVE_SKILL_BODY_MAX_CHARS,
+    `${bodyHeading}\n${sanitizePromptBlock({
+      maxLength: ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
       text: activeSkillContext.body,
     })}`,
   ].join("\n");

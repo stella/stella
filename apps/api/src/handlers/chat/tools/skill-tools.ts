@@ -10,6 +10,7 @@ import type { SafeDb } from "@/api/db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
 import type { AgentSkillOrigin } from "@/api/db/schema";
 import {
+  ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
   type ActiveChatSkillContext,
   listAvailableChatSkillResources,
   loadAvailableChatSkill,
@@ -245,93 +246,105 @@ const createCurrentSkillEditTools = ({
   organizationId,
   recordAuditEvent,
   safeDb,
-}: CurrentSkillEditToolsContext) => ({
-  "update-current-skill-body": tool({
-    description:
-      "Replace the current active skill's SKILL.md body. This tool is " +
-      "only available in a chat opened from an editable skill. Use it " +
-      "only when the user asks to edit the current skill instructions.",
-    inputSchema: valibotSchema(
-      v.strictObject({
-        content: v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.maxLength(LIMITS.agentSkillBodyMaxChars),
-          v.description("Full replacement markdown body for SKILL.md."),
-        ),
-      }),
-    ),
-    execute: async ({ content }) =>
-      await updateCurrentSkillBody({
-        activeSkillContext,
-        content,
-        recordAuditEvent,
-        safeDb,
-      }),
-  }),
-
-  "update-current-skill-resource": tool({
-    description:
-      "Replace one existing file in the current active skill. This tool " +
-      "is only available in a chat opened from an editable skill. Use " +
-      "paths from the active skill file list or read-skill-resource.",
-    inputSchema: valibotSchema(
-      v.strictObject({
-        path: v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.maxLength(512),
-          v.description("Existing resource path inside the current skill."),
-        ),
-        content: v.pipe(
-          v.string(),
-          v.maxLength(LIMITS.agentSkillResourceMaxChars),
-          v.description("Full replacement text content for the resource."),
-        ),
-      }),
-    ),
-    execute: async ({ content, path }) =>
-      await updateCurrentSkillResource({
-        activeSkillContext,
-        content,
-        path,
-        recordAuditEvent,
-        safeDb,
-      }),
-  }),
-
-  "create-current-skill-resource": tool({
-    description:
-      "Create a new text/markdown file in the current active skill. " +
-      "This tool is only available in a chat opened from an editable skill.",
-    inputSchema: valibotSchema(
-      v.strictObject({
-        path: v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.maxLength(512),
-          v.description(
-            "New resource path inside the current skill, such as knowledge/checklist.md.",
+}: CurrentSkillEditToolsContext) => {
+  const bodyReplacementTools = canReplaceCurrentSkillBody(activeSkillContext)
+    ? {
+        "update-current-skill-body": tool({
+          description:
+            "Replace the current active skill's SKILL.md body. This tool is " +
+            "only available in a chat opened from an editable skill. Use it " +
+            "only when the user asks to edit the current skill instructions.",
+          inputSchema: valibotSchema(
+            v.strictObject({
+              content: v.pipe(
+                v.string(),
+                v.minLength(1),
+                v.maxLength(LIMITS.agentSkillBodyMaxChars),
+                v.description("Full replacement markdown body for SKILL.md."),
+              ),
+            }),
           ),
-        ),
-        content: v.pipe(
-          v.string(),
-          v.maxLength(LIMITS.agentSkillResourceMaxChars),
-          v.description("Text content for the new resource."),
-        ),
-      }),
-    ),
-    execute: async ({ content, path }) =>
-      await createCurrentSkillResource({
-        activeSkillContext,
-        content,
-        organizationId,
-        path,
-        recordAuditEvent,
-        safeDb,
-      }),
-  }),
-});
+          execute: async ({ content }) =>
+            await updateCurrentSkillBody({
+              activeSkillContext,
+              content,
+              recordAuditEvent,
+              safeDb,
+            }),
+        }),
+      }
+    : {};
+
+  return {
+    ...bodyReplacementTools,
+
+    "update-current-skill-resource": tool({
+      description:
+        "Replace one existing file in the current active skill. This tool " +
+        "is only available in a chat opened from an editable skill. Use " +
+        "paths from the active skill file list or read-skill-resource.",
+      inputSchema: valibotSchema(
+        v.strictObject({
+          path: v.pipe(
+            v.string(),
+            v.minLength(1),
+            v.maxLength(512),
+            v.description("Existing resource path inside the current skill."),
+          ),
+          content: v.pipe(
+            v.string(),
+            v.maxLength(LIMITS.agentSkillResourceMaxChars),
+            v.description("Full replacement text content for the resource."),
+          ),
+        }),
+      ),
+      execute: async ({ content, path }) =>
+        await updateCurrentSkillResource({
+          activeSkillContext,
+          content,
+          path,
+          recordAuditEvent,
+          safeDb,
+        }),
+    }),
+
+    "create-current-skill-resource": tool({
+      description:
+        "Create a new text/markdown file in the current active skill. " +
+        "This tool is only available in a chat opened from an editable skill.",
+      inputSchema: valibotSchema(
+        v.strictObject({
+          path: v.pipe(
+            v.string(),
+            v.minLength(1),
+            v.maxLength(512),
+            v.description(
+              "New resource path inside the current skill, such as knowledge/checklist.md.",
+            ),
+          ),
+          content: v.pipe(
+            v.string(),
+            v.maxLength(LIMITS.agentSkillResourceMaxChars),
+            v.description("Text content for the new resource."),
+          ),
+        }),
+      ),
+      execute: async ({ content, path }) =>
+        await createCurrentSkillResource({
+          activeSkillContext,
+          content,
+          organizationId,
+          path,
+          recordAuditEvent,
+          safeDb,
+        }),
+    }),
+  };
+};
+
+const canReplaceCurrentSkillBody = (
+  activeSkillContext: ActiveEditableSkillContext,
+) => activeSkillContext.body.length <= ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS;
 
 type UpdateCurrentSkillBodyProps = {
   activeSkillContext: ActiveEditableSkillContext;

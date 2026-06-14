@@ -106,14 +106,14 @@ const toRowDisplay = (entry: CatalogueEntry): CatalogueRowDisplay => ({
   jurisdictions: entry.jurisdictions,
 });
 
-const getToolDetailPayload = (
+export const getToolDetailPayload = (
   entry: CatalogueEntry,
   organizationId: string,
 ): ToolDetailPayload => {
   const activeSkill =
-    entry.kind === "skill" && entry.installedSkillId !== null
+    entry.kind === "skill" && entry.chatSkillId !== null
       ? {
-          skillId: entry.installedSkillId,
+          skillId: entry.chatSkillId,
           skillName: entry.displayName,
         }
       : undefined;

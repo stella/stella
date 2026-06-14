@@ -29,6 +29,8 @@ type AvailableChatSkill = SkillMetadata & {
   source: "built-in" | "installed";
 };
 
+export const ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS = 30_000;
+
 type ChatSkillContext = {
   organizationId: SafeId<"organization">;
   safeDb: SafeDb;

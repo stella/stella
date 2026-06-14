@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import type { SafeDb, ScopedDb } from "@/api/db";
-import type { ActiveChatSkillContext } from "@/api/handlers/chat/skills";
+import {
+  ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
+  type ActiveChatSkillContext,
+} from "@/api/handlers/chat/skills";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import {
   EXPAND_CHAT_HISTORY_TOOL_NAME,
@@ -183,6 +186,39 @@ describe("chat tool schemas", () => {
         requiresAnonymization: false,
       });
     }
+  });
+
+  test("does not expose full body replacement for truncated active skill bodies", () => {
+    const tools = getChatTools({
+      organizationId,
+      refRegistry: createChatRefRegistry(),
+      safeDb: unusedSafeDb,
+      scopedDb: unusedScopedDb,
+      threadId,
+      userId,
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        pinnedIds: [],
+        accessibleWorkspaceIds: [workspaceId],
+      }),
+      hasActiveFileChat: false,
+      webSearchEnabled: false,
+      activeSkillContext: {
+        ...editableActiveSkillContext,
+        body: "a".repeat(ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS + 1),
+      },
+      recordAuditEvent: noopAuditRecorder,
+      skillMetadata: [
+        {
+          description: editableActiveSkillContext.description,
+          name: editableActiveSkillContext.toolName,
+          version: editableActiveSkillContext.version,
+        },
+      ],
+    });
+
+    expect(tools).toHaveProperty("create-current-skill-resource");
+    expect(tools).not.toHaveProperty("update-current-skill-body");
+    expect(tools).toHaveProperty("update-current-skill-resource");
   });
 
   test("applies approval and anonymization policies by tool risk", () => {

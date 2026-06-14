@@ -21,7 +21,10 @@ import type {
   ChatSafePrompt,
   ChatUntrustedPromptSuffix,
 } from "./chat-prompt";
-import type { ActiveChatSkillContext } from "./skills";
+import {
+  ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
+  type ActiveChatSkillContext,
+} from "./skills";
 import type { ChatMessage } from "./types";
 
 const WORKSPACE_ID = toSafeId<"workspace">("ws_prompt_test");
@@ -219,6 +222,28 @@ describe("chat prompt builders", () => {
     expect(section).toContain("This skill is editable in this chat");
     expect(section).toContain("- knowledge/checklist.md (knowledge)");
     expect(section).toContain("# Skill body");
+  });
+
+  test("marks long active skill bodies as truncated", () => {
+    const hiddenTail = "tail that must not be treated as visible";
+    const activeSkill = {
+      body: `${"a".repeat(ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS)}${hiddenTail}`,
+      description: "Active workflow description.",
+      displayName: "Active Workflow",
+      editable: true,
+      id: toSafeId<"agentSkill">("skill_active"),
+      origin: "authored",
+      resources: [],
+      source: "installed",
+      toolName: "active-workflow",
+      version: null,
+    } satisfies ActiveChatSkillContext;
+
+    const section = buildActiveSkillSection(activeSkill);
+
+    expect(section).toContain("Current SKILL.md body prefix");
+    expect(section).toContain("full-body replacement tool is unavailable");
+    expect(section).not.toContain(hiddenTail);
   });
 
   test("keeps the cache-stable prefix independent from workspace context", () => {
