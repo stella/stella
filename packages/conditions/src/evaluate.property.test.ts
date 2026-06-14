@@ -183,4 +183,53 @@ describe("evaluator invariants (property-based)", () => {
       }),
     );
   });
+
+  test("not_contains is the negation of contains", () => {
+    fc.assert(
+      fc.property(
+        refOperandArb,
+        fc.string(),
+        dataArb,
+        (operand, value, data) => {
+          const resolve = makeResolver(data);
+          const contains: ConditionNode = {
+            type: "predicate",
+            operand,
+            op: "contains",
+            value,
+          };
+          const notContains: ConditionNode = {
+            type: "predicate",
+            operand,
+            op: "not_contains",
+            value,
+          };
+          expect(evaluateCondition(contains, resolve)).toBe(
+            !evaluateCondition(notContains, resolve),
+          );
+        },
+      ),
+    );
+  });
+
+  test("is_not_empty is the negation of is_empty", () => {
+    fc.assert(
+      fc.property(refOperandArb, dataArb, (operand, data) => {
+        const resolve = makeResolver(data);
+        const empty: ConditionNode = {
+          type: "predicate",
+          operand,
+          op: "is_empty",
+        };
+        const notEmpty: ConditionNode = {
+          type: "predicate",
+          operand,
+          op: "is_not_empty",
+        };
+        expect(evaluateCondition(empty, resolve)).toBe(
+          !evaluateCondition(notEmpty, resolve),
+        );
+      }),
+    );
+  });
 });

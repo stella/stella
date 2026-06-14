@@ -18,18 +18,26 @@ import * as v from "valibot";
 export const COMPARE_OPS = ["eq", "neq", "gt", "lt", "gte", "lte"] as const;
 export type CompareOp = (typeof COMPARE_OPS)[number];
 
-/** Operand-plus-payload tests (membership, emptiness, truthiness). */
+/** Operand-plus-payload tests (membership, emptiness, truthiness, text). */
 export const PREDICATE_OPS = [
   "is_empty",
+  "is_not_empty",
   "is_truthy",
   "contains",
+  "not_contains",
+  "starts_with",
+  "ends_with",
   "contains_all",
   "in",
 ] as const;
 export type PredicateOp = (typeof PREDICATE_OPS)[number];
 
 /** Predicate operators that carry no payload value. */
-export const NULLARY_PREDICATE_OPS = ["is_empty", "is_truthy"] as const;
+export const NULLARY_PREDICATE_OPS = [
+  "is_empty",
+  "is_not_empty",
+  "is_truthy",
+] as const;
 
 export const BUILTIN_FIELDS = ["status", "priority"] as const;
 export type BuiltinField = (typeof BUILTIN_FIELDS)[number];

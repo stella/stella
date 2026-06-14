@@ -159,15 +159,22 @@ const evaluatePredicate = (
   switch (node.op) {
     case "is_empty":
       return asArray(actual).length === 0;
+    case "is_not_empty":
+      return asArray(actual).length > 0;
     case "is_truthy":
       return isTruthy(actual);
-    case "contains": {
-      const needle = String(node.value ?? "").toLowerCase();
-      if (Array.isArray(actual)) {
-        return actual.some((item) => item.toLowerCase() === needle);
-      }
-      return normScalar(actual).toLowerCase().includes(needle);
-    }
+    case "contains":
+      return matchesContains(actual, node.value);
+    case "not_contains":
+      return !matchesContains(actual, node.value);
+    case "starts_with":
+      return normScalar(actual)
+        .toLowerCase()
+        .startsWith(String(node.value ?? "").toLowerCase());
+    case "ends_with":
+      return normScalar(actual)
+        .toLowerCase()
+        .endsWith(String(node.value ?? "").toLowerCase());
     case "contains_all": {
       const present = asArray(actual);
       return asArray(node.value).every((want) => present.includes(want));
@@ -177,4 +184,16 @@ const evaluatePredicate = (
     default:
       return false;
   }
+};
+
+/** Substring match on a scalar, or membership on an array. */
+const matchesContains = (
+  actual: ConditionValue,
+  value: string | string[] | undefined,
+): boolean => {
+  const needle = String(value ?? "").toLowerCase();
+  if (Array.isArray(actual)) {
+    return actual.some((item) => item.toLowerCase() === needle);
+  }
+  return normScalar(actual).toLowerCase().includes(needle);
 };

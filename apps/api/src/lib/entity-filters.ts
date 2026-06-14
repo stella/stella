@@ -383,19 +383,32 @@ const compileCompare = (node: CompareNode): SQL | null => {
 
 // -- Predicate nodes --
 
+const propertyLike = (propertyId: string, pattern: string): SQL =>
+  propertyExists(
+    propertyId,
+    sql`${fieldValueExpr(fields.content)} ILIKE ${pattern}`,
+  );
+
 const compilePropertyPredicate = (
   propertyId: string,
   node: PredicateNode,
 ): SQL | null => {
   const valExpr = fieldValueExpr(fields.content);
+  const text = String(node.value ?? "");
   switch (node.op) {
     case "contains":
-      return propertyExists(
-        propertyId,
-        sql`${valExpr} ILIKE ${`%${String(node.value ?? "")}%`}`,
-      );
+      return propertyLike(propertyId, `%${text}%`);
+    case "not_contains":
+      // NOT EXISTS so absent/empty fields count as "does not contain".
+      return sql`NOT ${propertyLike(propertyId, `%${text}%`)}`;
+    case "starts_with":
+      return propertyLike(propertyId, `${text}%`);
+    case "ends_with":
+      return propertyLike(propertyId, `%${text}`);
     case "is_empty":
       return propertyExists(propertyId, sql`${valExpr} = ''`);
+    case "is_not_empty":
+      return propertyExists(propertyId, sql`${valExpr} <> ''`);
     case "contains_all": {
       const wanted = asValueArray(node.value);
       if (wanted.length === 0) {
@@ -433,6 +446,8 @@ const compileBuiltinPredicate = (
     }
     case "is_empty":
       return sql`(${col} IS NULL OR ${col} = '')`;
+    case "is_not_empty":
+      return sql`(${col} IS NOT NULL AND ${col} <> '')`;
     default:
       return null;
   }
