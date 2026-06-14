@@ -54,6 +54,12 @@ type CalendarViewProps = {
   workspaceId: string;
 };
 
+type HandleDropParams = {
+  date: string;
+  entityId: string;
+  kind: string;
+};
+
 const toAllDayAgendaDateTime = (date: string): string =>
   new Date(`${date}T00:00:00.000Z`).toISOString();
 
@@ -389,7 +395,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     pendingScrollMonthKey.current = null;
   }, [mode, monthWindowStart, viewDate]);
 
-  const handleDrop = (date: string, entityId: string, kind: string) => {
+  const handleDrop = ({ date, entityId, kind }: HandleDropParams) => {
     if (!isEditable) {
       return;
     }
@@ -587,7 +593,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
                             });
                           }}
                           onDrop={(entityId, kind) =>
-                            handleDrop(day.date, entityId, kind)
+                            handleDrop({ date: day.date, entityId, kind })
                           }
                           workspaceId={workspaceId}
                         />
@@ -617,7 +623,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
                     });
                   }}
                   onDrop={(entityId, kind) =>
-                    handleDrop(day.date, entityId, kind)
+                    handleDrop({ date: day.date, entityId, kind })
                   }
                   workspaceId={workspaceId}
                 />

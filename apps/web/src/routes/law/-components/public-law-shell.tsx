@@ -327,6 +327,12 @@ function PublicLawTopBar() {
   );
 }
 
+type RailButtonOptions = {
+  icon: ReactNode;
+  label: string;
+  edgeClass: string;
+};
+
 /** Anonymous twin of the inspector side rail: same geometry and chrome
  * as the authenticated rail, with every affordance routed to sign-in. */
 function PublicInspectorRail({
@@ -339,7 +345,7 @@ function PublicInspectorRail({
     select: (state) => state.location.href,
   });
 
-  const railButton = (icon: ReactNode, label: string, edgeClass: string) => (
+  const railButton = ({ icon, label, edgeClass }: RailButtonOptions) => (
     <div
       className={cn(
         "flex w-full shrink-0 items-center justify-center",
@@ -382,17 +388,17 @@ function PublicInspectorRail({
         <div className="bg-sidebar flex h-full w-full flex-col">
           <div className="bg-background flex h-full border-s shadow-lg">
             <div className={SIDE_RAIL_CONTAINER_CLASS}>
-              {railButton(
-                <PanelRightIcon className="size-4" />,
-                t("inspector.showPane"),
-                "border-b",
-              )}
+              {railButton({
+                icon: <PanelRightIcon className="size-4" />,
+                label: t("inspector.showPane"),
+                edgeClass: "border-b",
+              })}
               <div className="flex-1" />
-              {railButton(
-                <MessageSquarePlusIcon className="size-4" />,
-                t("inspector.openChat"),
-                "border-t",
-              )}
+              {railButton({
+                icon: <MessageSquarePlusIcon className="size-4" />,
+                label: t("inspector.openChat"),
+                edgeClass: "border-t",
+              })}
             </div>
           </div>
         </div>
