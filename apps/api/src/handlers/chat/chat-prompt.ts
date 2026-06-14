@@ -890,26 +890,26 @@ const mergeActiveSkillMetadata = ({
     source: activeSkillContext.source,
     version: activeSkillContext.version,
   };
-  let found = false;
-  const merged = skillMetadata.map((skill) => {
-    if (skill.name !== activeMetadata.name) {
+  const activeSkillIndex = skillMetadata.findIndex(
+    (skill) => skill.name === activeMetadata.name,
+  );
+  if (activeSkillIndex === -1) {
+    return [...skillMetadata, activeMetadata].toSorted((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+  }
+
+  return skillMetadata.map((skill, index) => {
+    if (index !== activeSkillIndex) {
       return skill;
     }
-    found = true;
+
     return {
       ...skill,
       displayName: skill.displayName ?? activeMetadata.displayName,
       source: skill.source ?? activeMetadata.source,
     };
   });
-
-  if (found) {
-    return merged;
-  }
-
-  return [...merged, activeMetadata].toSorted((a, b) =>
-    a.name.localeCompare(b.name),
-  );
 };
 
 export const buildActiveSkillSection = (
@@ -928,7 +928,7 @@ export const buildActiveSkillSection = (
   const editability = activeSkillContext.editable
     ? "This skill is editable in this chat. Only use current-skill edit tools when the user asks to create or change this skill's files."
     : "This skill is read-only in this chat; do not attempt to edit its files.";
-  const resourcesList = activeSkillContext.resources ?? [];
+  const resourcesList = activeSkillContext.resources;
   const resourceLines = resourcesList
     .slice(0, ACTIVE_SKILL_RESOURCE_LIST_MAX_COUNT)
     .map(

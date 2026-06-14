@@ -133,6 +133,7 @@ const resolveInstalledActiveSkill = async ({
         id: agentSkills.id,
         body: agentSkills.body,
         description: agentSkills.description,
+        enabled: agentSkills.enabled,
         name: agentSkills.name,
         origin: agentSkills.origin,
         scope: agentSkills.scope,
@@ -164,6 +165,18 @@ const resolveInstalledActiveSkill = async ({
     return Result.err(
       new HandlerError({ status: 404, message: "Skill not found" }),
     );
+  }
+  if (
+    !canReadActiveSkillBody({
+      enabled: skill.enabled,
+      memberRole,
+      origin: skill.origin,
+      scope: skill.scope,
+      skillUserId: skill.userId,
+      userId,
+    })
+  ) {
+    return Result.err(new HandlerError({ status: 403, message: "Forbidden" }));
   }
 
   const resources = await safeDb((tx) =>
@@ -228,6 +241,38 @@ export const canEditActiveSkill = ({
   }
 
   return !Result.isError(requireEditableSkillOrigin(origin));
+};
+
+const canReadActiveSkillBody = ({
+  enabled,
+  memberRole,
+  origin,
+  scope,
+  skillUserId,
+  userId,
+}: {
+  enabled: boolean;
+  memberRole: ChatMemberRole;
+  origin: AgentSkillOrigin;
+  scope: "private" | "team";
+  skillUserId: string;
+  userId: SafeId<"user">;
+}): boolean => {
+  if (scope === "private") {
+    return skillUserId === userId;
+  }
+
+  if (enabled) {
+    return true;
+  }
+
+  return canEditActiveSkill({
+    memberRole,
+    origin,
+    scope,
+    skillUserId,
+    userId,
+  });
 };
 
 export const listAvailableChatSkillMetadata = async ({
