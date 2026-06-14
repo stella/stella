@@ -31,6 +31,13 @@ export const UnsafeTemplateInterpolation = () => {
   return element;
 };
 
+const hoistedPayload = { __html: rawHtml };
+
+export const UnsafeHoistedPayload = () => (
+  // oxlint-disable-next-line no-unsafe-inner-html/no-unsafe-inner-html
+  <div dangerouslySetInnerHTML={hoistedPayload} />
+);
+
 // --- Cases the rule MUST NOT flag ---
 
 export const SafeSanitizedCall = () => (
@@ -58,5 +65,6 @@ export const safeStaticMarkup = () => {
   return element;
 };
 
-// A plain object with a `__html` property is data, not a DOM sink.
+// A plain object with a `__html` property is data, not a DOM sink until it is
+// passed to `dangerouslySetInnerHTML`.
 export const htmlPayload = { __html: rawHtml };

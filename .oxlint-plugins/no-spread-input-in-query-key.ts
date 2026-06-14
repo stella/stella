@@ -27,8 +27,8 @@
 
 import { getPropertyName, unwrapExpression } from "./utils.ts";
 
-// An array element may only spread a query-key composition helper rooted at a
-// `*Keys` identifier (`...entitiesKeys.all(ws)`, `...chatKeys.all`). Other
+// An array element may only spread a query-key composition member/call rooted
+// at a `*Keys` factory (`...entitiesKeys.all(ws)`, `...chatKeys.all`). Other
 // spreads leak undeclared shape into the cache key.
 const rootIdentifier = (node) => {
   const unwrapped = unwrapExpression(node);
@@ -47,12 +47,25 @@ const rootIdentifier = (node) => {
   return null;
 };
 
+const isAllowedCompositionSpread = (node) => {
+  const unwrapped = unwrapExpression(node);
+  if (!unwrapped || typeof unwrapped.type !== "string") {
+    return false;
+  }
+  if (unwrapped.type === "MemberExpression") {
+    return rootIdentifier(unwrapped.object)?.name.endsWith("Keys") === true;
+  }
+  if (unwrapped.type === "CallExpression") {
+    return isAllowedCompositionSpread(unwrapped.callee);
+  }
+  return false;
+};
+
 const isLeakySpread = (element) => {
   if (!element || element.type !== "SpreadElement") {
     return false;
   }
-  const root = rootIdentifier(element.argument);
-  return !root?.name.endsWith("Keys");
+  return !isAllowedCompositionSpread(element.argument);
 };
 
 const parentAfterExpressionWrappers = (node) => {

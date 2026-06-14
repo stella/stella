@@ -43,7 +43,12 @@
 //   // safe-html: server-escaped by escapeAndHighlight()
 //   <div dangerouslySetInnerHTML={{ __html: hit.headline }} />
 
-import { getCalleeName, getPropertyName, isIdentifier } from "./utils.ts";
+import {
+  getCalleeName,
+  getPropertyName,
+  isIdentifier,
+  unwrapExpression,
+} from "./utils.ts";
 
 // Callee names that prove the value was run through a sanitizer / escaper.
 // Matched against the resolved dotted callee path; the leaf name must start
@@ -202,6 +207,24 @@ export default {
         return {
           Program(node) {
             recordEscapeHatches(node);
+          },
+
+          // Reject hoisted payloads such as
+          // `dangerouslySetInnerHTML={payload}`. Keeping the `__html` object
+          // inline lets this rule inspect the actual HTML expression.
+          JSXAttribute(node) {
+            if (!isJsxIdentifier(node.name, "dangerouslySetInnerHTML")) {
+              return;
+            }
+            const value = node.value;
+            if (value?.type !== "JSXExpressionContainer") {
+              return;
+            }
+            const expression = unwrapExpression(value.expression);
+            if (expression?.type === "ObjectExpression") {
+              return;
+            }
+            reportIfUnsafe(value.expression);
           },
 
           // Sink 1: `dangerouslySetInnerHTML={{ __html: <expr> }}`.
