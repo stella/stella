@@ -1,6 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
-import { getFileExtension, resolveUploadMime } from "./utils";
+import { toSafeId } from "@/api/lib/branded-types";
+
+import {
+  createFileKey,
+  createUserFileKey,
+  getFileExtension,
+  resolveUploadMime,
+} from "./utils";
 
 describe("resolveUploadMime", () => {
   test("recovers .msg reported as octet-stream", () => {
@@ -58,5 +65,40 @@ describe("resolveUploadMime", () => {
 describe("getFileExtension", () => {
   test("keeps text/markdown on the legacy fallback storage extension", () => {
     expect(getFileExtension("text/markdown")).toBe("bin");
+  });
+});
+
+describe("S3 object-key tenant scoping", () => {
+  test("createFileKey is prefixed by organization then workspace", () => {
+    const key = createFileKey({
+      organizationId: toSafeId<"organization">("org_1"),
+      workspaceId: toSafeId<"workspace">("ws_1"),
+      fileId: "file_1",
+      mimeType: "text/markdown",
+    });
+    expect(key).toBe("org_1/ws_1/file_1.bin");
+    // The tenant prefix is the durable isolation boundary; it must lead.
+    expect(key.startsWith("org_1/ws_1/")).toBe(true);
+  });
+
+  test("createUserFileKey is prefixed by the owning user", () => {
+    const key = createUserFileKey({
+      userId: toSafeId<"user">("user_1"),
+      fileId: "file_1",
+      mimeType: "text/markdown",
+    });
+    expect(key).toBe("user_1/file_1.bin");
+    expect(key.startsWith("user_1/")).toBe(true);
+  });
+
+  test("keys contain no path-traversal segments for branded ids", () => {
+    const key = createFileKey({
+      organizationId: toSafeId<"organization">("org_1"),
+      workspaceId: toSafeId<"workspace">("ws_1"),
+      fileId: "file_1",
+      mimeType: "application/pdf",
+    });
+    expect(key).not.toContain("..");
+    expect(key.split("/")).toHaveLength(3);
   });
 });
