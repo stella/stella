@@ -1882,7 +1882,11 @@
       "wordEditIdentitySaved": "Word-Bearbeitungsidentität aktualisiert",
       "wordEditShortcut": "Word-Bearbeitungskürzel",
       "wordEditShortcutDescription": "Kurzes Kürzel für Ihre Initialen bei Word-Bearbeitungen.",
-      "wordEditShortcutPlaceholder": "z. B. JK"
+      "wordEditShortcutPlaceholder": "z. B. JK",
+      "deleteAccountTasksTitle": "Ausstehende Aufgaben neu zuweisen",
+      "deleteAccountTasksDescription": "Ihnen sind ausstehende Aufgaben zugewiesen. Weisen Sie diese anderen Mitgliedern des Arbeitsbereichs zu, um die Kontinuität zu gewährleisten.",
+      "deleteAccountTaskReassignPlaceholder": "Mitglied auswählen...",
+      "deleteAccountTaskReassignNone": "Keine anderen Mitglieder in diesem Arbeitsbereich"
     },
     "organization": {
       "activeMembers": "Aktive Mitglieder",

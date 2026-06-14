@@ -3,6 +3,7 @@ import { useFormStatus } from "react-dom";
 
 import {
   useMutation,
+  useQuery,
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
@@ -168,6 +169,25 @@ function ProfilePageBody() {
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState("");
   const [otpError, setOtpError] = useState<string | null>(null);
+  const [step, setStep] = useState<"loading" | "tasks" | "confirm" | "otp">("loading");
+  const [reassignments, setReassignments] = useState<Record<string, string>>({});
+
+  const { data: pendingTasksData } = useQuery({
+    queryKey: ["me", "delete", "pending-tasks"],
+    queryFn: async () => {
+      const res = await api.me.delete["pending-tasks"].get();
+      if (res.error) {
+        throw toAPIError(res.error);
+      }
+      if (res.data && res.data.tasks.length > 0) {
+        setStep("tasks");
+      } else {
+        setStep("confirm");
+      }
+      return res.data;
+    },
+    enabled: isDeleteDialogOpen,
+  });
 
   const sendOtpMutation = useMutation({
     mutationFn: async () => {
@@ -179,6 +199,7 @@ function ProfilePageBody() {
       return res.data;
     },
     onSuccess: () => {
+      setStep("otp");
       setOtpSent(true);
       stellaToast.add({
         title: t("settings.account.otpSentSuccess"),
@@ -192,9 +213,12 @@ function ProfilePageBody() {
   });
 
   const verifyDeleteMutation = useMutation({
-    mutationFn: async (code: string) => {
+    mutationFn: async (payload: {
+      code: string;
+      reassignments?: { entityId: string; reassignedUserId: string }[];
+    }) => {
       setOtpError(null);
-      const res = await api.me.delete.verify.post({ code });
+      const res = await api.me.delete.verify.post(payload);
       if (res.error) {
         throw toAPIError(res.error);
       }
@@ -398,16 +422,24 @@ function ProfilePageBody() {
             setOtpSent(false);
             setOtpCode("");
             setOtpError(null);
+            setReassignments({});
+            setStep("loading");
           }
         }}
       >
         <DialogPopup>
           <DialogHeader>
-            <DialogTitle>{t("settings.account.deleteAccount")}</DialogTitle>
+            <DialogTitle>
+              {step === "tasks"
+                ? t("settings.account.deleteAccountTasksTitle")
+                : t("settings.account.deleteAccount")}
+            </DialogTitle>
             <DialogDescription>
-              {otpSent
+              {step === "otp"
                 ? t("settings.account.deleteAccountOtpDescription")
-                : t("settings.account.deleteAccountConfirmDescription")}
+                : step === "tasks"
+                  ? ""
+                  : t("settings.account.deleteAccountConfirmDescription")}
             </DialogDescription>
           </DialogHeader>
           <DialogPanel>
@@ -417,7 +449,81 @@ function ProfilePageBody() {
                   {otpError}
                 </div>
               )}
-              {otpSent ? (
+              {step === "loading" && (
+                <div className="flex justify-center py-4">
+                  <span className="animate-spin rounded-full h-6 w-6 border-2 border-primary border-t-transparent" />
+                </div>
+              )}
+              {step === "tasks" && (
+                <div className="flex flex-col gap-4">
+                  <p className="text-muted-foreground text-sm">
+                    {t("settings.account.deleteAccountTasksDescription")}
+                  </p>
+                  <div className="flex flex-col gap-3 max-h-[280px] overflow-y-auto pr-1">
+                    {pendingTasksData?.tasks.map((task) => {
+                      const candidates =
+                        pendingTasksData?.members.filter(
+                          (m) => m.workspaceId === task.workspaceId,
+                        ) ?? [];
+                      return (
+                        <div
+                          key={task.assigneeId}
+                          className="flex flex-col gap-1 border-border rounded-lg border p-3 bg-muted/20"
+                        >
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>{task.workspaceName}</span>
+                            <span className="font-mono bg-muted px-1.5 py-0.5 rounded capitalize text-[10px]">
+                              {task.role}
+                            </span>
+                          </div>
+                          <span className="text-sm font-medium">{task.taskName}</span>
+                          <div className="mt-2">
+                            {candidates.length > 0 ? (
+                              <Select
+                                value={reassignments[task.entityId] || ""}
+                                onValueChange={(val) => {
+                                  setReassignments((prev) => ({
+                                    ...prev,
+                                    [task.entityId]: val || "",
+                                  }));
+                                }}
+                              >
+                                <SelectTrigger className="w-full">
+                                  <SelectValue
+                                    placeholder={t(
+                                      "settings.account.deleteAccountTaskReassignPlaceholder",
+                                    )}
+                                  />
+                                </SelectTrigger>
+                                <SelectPopup>
+                                  {candidates.map((candidate) => (
+                                    <SelectItem
+                                      key={candidate.userId}
+                                      value={candidate.userId}
+                                    >
+                                      {candidate.userName}
+                                    </SelectItem>
+                                  ))}
+                                </SelectPopup>
+                              </Select>
+                            ) : (
+                              <p className="text-xs text-muted-foreground italic">
+                                {t("settings.account.deleteAccountTaskReassignNone")}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {step === "confirm" && (
+                <p className="text-muted-foreground text-sm">
+                  {t("settings.account.deleteAccountWarningExplanation")}
+                </p>
+              )}
+              {step === "otp" && (
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="otp-input">
                     {t("settings.account.enterOtp")}
@@ -433,10 +539,6 @@ function ProfilePageBody() {
                     className="max-w-[200px] text-center text-lg tracking-widest"
                   />
                 </div>
-              ) : (
-                <p className="text-muted-foreground text-sm">
-                  {t("settings.account.deleteAccountWarningExplanation")}
-                </p>
               )}
             </div>
           </DialogPanel>
@@ -448,6 +550,8 @@ function ProfilePageBody() {
                 setOtpSent(false);
                 setOtpCode("");
                 setOtpError(null);
+                setReassignments({});
+                setStep("loading");
               }}
               disabled={
                 sendOtpMutation.isPending || verifyDeleteMutation.isPending
@@ -455,10 +559,20 @@ function ProfilePageBody() {
             >
               {t("common.cancel")}
             </Button>
-            {otpSent ? (
+            {step === "otp" ? (
               <Button
                 variant="destructive"
-                onClick={() => verifyDeleteMutation.mutate(otpCode)}
+                onClick={() =>
+                  verifyDeleteMutation.mutate({
+                    code: otpCode,
+                    reassignments: Object.entries(reassignments)
+                      .filter(([_, val]) => !!val)
+                      .map(([entityId, reassignedUserId]) => ({
+                        entityId,
+                        reassignedUserId,
+                      })),
+                  })
+                }
                 disabled={
                   otpCode.length !== 6 || verifyDeleteMutation.isPending
                 }
@@ -470,7 +584,7 @@ function ProfilePageBody() {
               <Button
                 variant="destructive"
                 onClick={() => sendOtpMutation.mutate()}
-                disabled={sendOtpMutation.isPending}
+                disabled={sendOtpMutation.isPending || step === "loading"}
                 loading={sendOtpMutation.isPending}
               >
                 {t("settings.account.sendOtpCode")}

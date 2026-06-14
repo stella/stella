@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 
 import { account, member, oauthAccessToken, oauthClient, oauthConsent, oauthRefreshToken, organization, session, user, verification } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
@@ -8,6 +8,7 @@ import {
   chatThreads,
   desktopEditHandoffs,
   desktopEditSessions,
+  entities,
   fileChatThreads,
   folioCollabSessions,
   mcpOAuthState,
@@ -140,6 +141,76 @@ export const createDeleteAccountOtp = async (
       }),
   });
 
+export interface PendingTask {
+  assigneeId: string;
+  entityId: string;
+  role: "assignee" | "reviewer";
+  taskName: string;
+  workspaceId: string;
+  workspaceName: string;
+}
+
+export interface WorkspaceMemberInfo {
+  workspaceId: string;
+  userId: string;
+  userName: string;
+}
+
+/**
+ * Fetches all pending tasks assigned to the user along with other workspace members for reassignment.
+ */
+export const getPendingTasksAndMembers = async (
+  currentUserId: string,
+): Promise<Result<{ tasks: PendingTask[]; members: WorkspaceMemberInfo[] }, HandlerError>> =>
+  await Result.tryPromise({
+    try: async () => {
+      const userAssignments = await rootDb
+        .select({
+          assigneeId: taskAssignees.id,
+          entityId: taskAssignees.entityId,
+          role: taskAssignees.role,
+          taskName: entities.displayName,
+          workspaceId: taskAssignees.workspaceId,
+          workspaceName: workspaces.name,
+        })
+        .from(taskAssignees)
+        .innerJoin(entities, eq(entities.id, taskAssignees.entityId))
+        .innerJoin(workspaces, eq(workspaces.id, taskAssignees.workspaceId))
+        .where(eq(taskAssignees.userId, currentUserId));
+
+      const workspaceIds = [...new Set(userAssignments.map((a) => a.workspaceId))];
+
+      const otherMembers =
+        workspaceIds.length > 0
+          ? await rootDb
+              .select({
+                workspaceId: workspaceMembers.workspaceId,
+                userId: user.id,
+                userName: user.name,
+              })
+              .from(workspaceMembers)
+              .innerJoin(user, eq(user.id, workspaceMembers.userId))
+              .where(
+                and(
+                  inArray(workspaceMembers.workspaceId, workspaceIds),
+                  ne(workspaceMembers.userId, currentUserId),
+                ),
+              )
+          : [];
+
+      return {
+        tasks: userAssignments as PendingTask[],
+        members: otherMembers,
+      };
+    },
+    catch: (err) =>
+      new HandlerError({
+        status: 500,
+        message: "Database query failed",
+        cause: err,
+      }),
+  });
+
 
 /**
  * Verifies the OTP and deletes the user from the database.
@@ -148,6 +219,7 @@ export const verifyAndDeleteUser = async (
   currentUserId: string,
   email: string,
   code: string,
+  reassignments?: readonly { entityId: string; reassignedUserId: string }[],
 ): Promise<Result<void, HandlerError>> =>
   await Result.tryPromise({
     try: async () => {
@@ -261,7 +333,43 @@ export const verifyAndDeleteUser = async (
           .delete(workspaceMembers)
           .where(eq(workspaceMembers.userId, currentUserId));
 
-        // 5. Task assignee records (cascade on user.id)
+        // 5. Task assignee records (reassign where requested, otherwise cascade)
+        if (reassignments && reassignments.length > 0) {
+          for (const item of reassignments) {
+            const existing = await tx
+              .select({ id: taskAssignees.id })
+              .from(taskAssignees)
+              .where(
+                and(
+                  eq(taskAssignees.entityId, item.entityId),
+                  eq(taskAssignees.userId, item.reassignedUserId),
+                ),
+              )
+              .limit(1)
+              .then((rows) => rows[0]);
+
+            if (existing) {
+              await tx
+                .delete(taskAssignees)
+                .where(
+                  and(
+                    eq(taskAssignees.entityId, item.entityId),
+                    eq(taskAssignees.userId, currentUserId),
+                  ),
+                );
+            } else {
+              await tx
+                .update(taskAssignees)
+                .set({ userId: item.reassignedUserId })
+                .where(
+                  and(
+                    eq(taskAssignees.entityId, item.entityId),
+                    eq(taskAssignees.userId, currentUserId),
+                  ),
+                );
+            }
+          }
+        }
         await tx.delete(taskAssignees).where(eq(taskAssignees.userId, currentUserId));
 
         // 6. Desktop edit sessions and handoffs (cascade on createdBy → user.id)

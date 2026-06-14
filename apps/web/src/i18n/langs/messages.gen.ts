@@ -1886,6 +1886,10 @@ type Messages = {
       "wordEditShortcut": "Word edit shortcut";
       "wordEditShortcutDescription": "Short tag for your initials on Word edits.";
       "wordEditShortcutPlaceholder": "e.g. JK";
+      "deleteAccountTasksTitle": "Reassign pending tasks";
+      "deleteAccountTasksDescription": "You have pending tasks assigned to you. Reassign them to other workspace members to ensure continuity.";
+      "deleteAccountTaskReassignPlaceholder": "Select a member...";
+      "deleteAccountTaskReassignNone": "No other members in this workspace";
     };
     "organization": {
       "activeMembers": "Active members";

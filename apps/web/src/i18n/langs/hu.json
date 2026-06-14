@@ -1882,7 +1882,11 @@
       "wordEditIdentitySaved": "Word-szerkesztési azonosító frissítve",
       "wordEditShortcut": "Word-szerkesztési rövidítés",
       "wordEditShortcutDescription": "Rövid jelölés a Word-szerkesztéseknél megjelenő monogramjához.",
-      "wordEditShortcutPlaceholder": "pl. KJ"
+      "wordEditShortcutPlaceholder": "pl. KJ",
+      "deleteAccountTasksTitle": "Függőben lévő feladatok újbóli kiosztása",
+      "deleteAccountTasksDescription": "Függőben lévő feladatok vannak hozzárendelve Önhöz. A folytonosság biztosítása érdekében ossza ki azokat a munkaterület más tagjainak.",
+      "deleteAccountTaskReassignPlaceholder": "Tag kiválasztása...",
+      "deleteAccountTaskReassignNone": "Nincs más tag ezen a munkaterületen"
     },
     "organization": {
       "activeMembers": "Aktív tagok",

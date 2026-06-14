@@ -1,6 +1,7 @@
 import Elysia from "elysia";
 import { rateLimit } from "elysia-rate-limit";
 
+import deleteAccountPendingTasks from "@/api/handlers/me/pending-tasks";
 import deleteAccountSendOtp from "@/api/handlers/me/send-otp";
 import deleteAccountVerify from "@/api/handlers/me/verify-delete";
 import { sessionAuthMacro } from "@/api/lib/auth";
@@ -15,6 +16,7 @@ export const meRoute = new Elysia({ prefix: "/me" })
   .guard({ validateSession: true })
   .group("/delete", (app) =>
     app
+      .get("/pending-tasks", deleteAccountPendingTasks.handler)
       .use(
         rateLimit({
           scoping: "scoped",

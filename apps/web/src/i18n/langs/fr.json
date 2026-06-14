@@ -1882,7 +1882,11 @@
       "wordEditIdentitySaved": "Identité d’édition Word mise à jour",
       "wordEditShortcut": "Initiales d’édition Word",
       "wordEditShortcutDescription": "Tag court pour vos initiales sur les modifications Word.",
-      "wordEditShortcutPlaceholder": "p. ex. JK"
+      "wordEditShortcutPlaceholder": "p. ex. JK",
+      "deleteAccountTasksTitle": "Réassigner les tâches en attente",
+      "deleteAccountTasksDescription": "Des tâches en attente vous sont attribuées. Réassignez-les à d'autres membres de l'espace de travail pour assurer la continuité.",
+      "deleteAccountTaskReassignPlaceholder": "Sélectionner un membre...",
+      "deleteAccountTaskReassignNone": "Aucun autre membre dans cet espace de travail"
     },
     "organization": {
       "activeMembers": "Membres actifs",

@@ -1882,7 +1882,11 @@
       "wordEditIdentitySaved": "Word rediģēšanas identitāte atjaunināta",
       "wordEditShortcut": "Word rediģēšanas saīsne",
       "wordEditShortcutDescription": "Īss apzīmējums jūsu iniciāļiem Word rediģējumos.",
-      "wordEditShortcutPlaceholder": "piem., JK"
+      "wordEditShortcutPlaceholder": "piem., JK",
+      "deleteAccountTasksTitle": "Pārdalīt nepabeigtos uzdevumus",
+      "deleteAccountTasksDescription": "Jums ir piešķirti nepabeigti uzdevumi. Pārdaliet tos citiem darba vietas dalībniekiem, lai nodrošinātu nepārtrauktību.",
+      "deleteAccountTaskReassignPlaceholder": "Izvēlēties dalībnieku...",
+      "deleteAccountTaskReassignNone": "Šajā darba vietā nav citu dalībnieku"
     },
     "organization": {
       "activeMembers": "Aktīvie dalībnieki",

@@ -1882,7 +1882,11 @@
       "wordEditIdentitySaved": "Identidad de edición en Word actualizada",
       "wordEditShortcut": "Abreviatura de edición en Word",
       "wordEditShortcutDescription": "Etiqueta corta con tus iniciales en las ediciones de Word.",
-      "wordEditShortcutPlaceholder": "p. ej. JK"
+      "wordEditShortcutPlaceholder": "p. ej. JK",
+      "deleteAccountTasksTitle": "Reasignar tareas pendientes",
+      "deleteAccountTasksDescription": "Tiene tareas pendientes asignadas. Reasígnalas a otros miembros del espacio de trabajo para garantizar la continuidad.",
+      "deleteAccountTaskReassignPlaceholder": "Seleccionar un miembro...",
+      "deleteAccountTaskReassignNone": "No hay otros miembros en este espacio de trabajo"
     },
     "organization": {
       "activeMembers": "Miembros activos",

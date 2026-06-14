@@ -1882,7 +1882,11 @@
       "wordEditIdentitySaved": "Zaktualizowano tożsamość do edycji w programie Word",
       "wordEditShortcut": "Skrót do edycji w programie Word",
       "wordEditShortcutDescription": "Krótki znacznik z Twoimi inicjałami przy edycji w programie Word.",
-      "wordEditShortcutPlaceholder": "np. JK"
+      "wordEditShortcutPlaceholder": "np. JK",
+      "deleteAccountTasksTitle": "Ponownie przypisz oczekujące zadania",
+      "deleteAccountTasksDescription": "Masz przypisane oczekujące zadania. Przypisz je ponownie innym członkom obszaru roboczego, aby zapewnić ciągłość.",
+      "deleteAccountTaskReassignPlaceholder": "Wybierz członka...",
+      "deleteAccountTaskReassignNone": "Brak innych członków w tym obszarze roboczym"
     },
     "organization": {
       "activeMembers": "Aktywni członkowie",

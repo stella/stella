@@ -1882,7 +1882,11 @@
       "wordEditIdentitySaved": "Identidade de edição do Word atualizada",
       "wordEditShortcut": "Atalho de edição do Word",
       "wordEditShortcutDescription": "Tag curta para suas iniciais nas edições do Word.",
-      "wordEditShortcutPlaceholder": "por exemplo JK"
+      "wordEditShortcutPlaceholder": "por exemplo JK",
+      "deleteAccountTasksTitle": "Reatribuir tarefas pendentes",
+      "deleteAccountTasksDescription": "Você tem tarefas pendentes atribuídas. Reatribua-as para outros membros do espaço de trabalho para garantir a continuidade.",
+      "deleteAccountTaskReassignPlaceholder": "Selecionar um membro...",
+      "deleteAccountTaskReassignNone": "Nenhum outro membro neste espaço de trabalho"
     },
     "organization": {
       "activeMembers": "Membros ativos",

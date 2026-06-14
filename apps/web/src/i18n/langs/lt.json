@@ -1882,7 +1882,11 @@
       "wordEditIdentitySaved": "Word redagavimo tapatybė atnaujinta",
       "wordEditShortcut": "Word redagavimo žyma",
       "wordEditShortcutDescription": "Trumpa jūsų inicialų žyma Word pakeitimuose.",
-      "wordEditShortcutPlaceholder": "pvz., JK"
+      "wordEditShortcutPlaceholder": "pvz., JK",
+      "deleteAccountTasksTitle": "Perleisti laukiančias užduotis",
+      "deleteAccountTasksDescription": "Jums priskirtos laukiančios užduotys. Perleiskite jas kitiems darbo srities nariams, kad užtikrintumėte veiklos tęstenumą.",
+      "deleteAccountTaskReassignPlaceholder": "Pasirinkite narį...",
+      "deleteAccountTaskReassignNone": "Šioje darbo srityje nėra kitų narių"
     },
     "organization": {
       "activeMembers": "Aktyvūs nariai",

@@ -1882,7 +1882,11 @@
       "wordEditIdentitySaved": "Identita pre úpravy vo Worde aktualizovaná",
       "wordEditShortcut": "Skratka pre úpravy vo Worde",
       "wordEditShortcutDescription": "Krátka značka pre vaše iniciály pri úpravách vo Worde.",
-      "wordEditShortcutPlaceholder": "napr. JK"
+      "wordEditShortcutPlaceholder": "napr. JK",
+      "deleteAccountTasksTitle": "Znovu priradiť čakajúce úlohy",
+      "deleteAccountTasksDescription": "Máte priradené čakajúce úlohy. Znovu ich priraďte ostatným členom pracovného priestoru, aby ste zaistili kontinuitu.",
+      "deleteAccountTaskReassignPlaceholder": "Vybrať člena...",
+      "deleteAccountTaskReassignNone": "Žiadni iní členovia v tomto pracovnom priestore"
     },
     "organization": {
       "activeMembers": "Aktívni členovia",

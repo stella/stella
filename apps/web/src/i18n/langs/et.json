@@ -1882,7 +1882,11 @@
       "wordEditIdentitySaved": "Wordi muudatuste isik uuendatud",
       "wordEditShortcut": "Wordi muudatuste lühend",
       "wordEditShortcutDescription": "Lühike silt teie initsiaalide jaoks Wordi muudatustes.",
-      "wordEditShortcutPlaceholder": "nt JK"
+      "wordEditShortcutPlaceholder": "nt JK",
+      "deleteAccountTasksTitle": "Määra ootel ülesanded uuesti",
+      "deleteAccountTasksDescription": "Teile on määratud ootel ülesandeid. Jätkusuutlikkuse tagamiseks määrake need teistele tööruumi liikmetele.",
+      "deleteAccountTaskReassignPlaceholder": "Vali liige...",
+      "deleteAccountTaskReassignNone": "Selles tööruumis pole teisi liikmeid"
     },
     "organization": {
       "activeMembers": "Aktiivsed liikmed",

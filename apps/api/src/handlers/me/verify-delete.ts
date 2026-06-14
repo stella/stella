@@ -11,6 +11,14 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 export const deleteAccountVerifyBody = t.Object({
   code: t.String({ minLength: 6, maxLength: 6 }),
+  reassignments: t.Optional(
+    t.Array(
+      t.Object({
+        entityId: t.String(),
+        reassignedUserId: t.String(),
+      }),
+    ),
+  ),
 });
 
 const config = {
@@ -21,7 +29,7 @@ const deleteAccountVerify = createSafeSessionHandler(
   config,
   async function* (ctx) {
     const currentUserId = ctx.user.id;
-    const { code } = ctx.body;
+    const { code, reassignments } = ctx.body;
 
     // 1. Fetch user details to get email
     const emailStr = yield* Result.await(getUserEmail(currentUserId));
@@ -41,7 +49,7 @@ const deleteAccountVerify = createSafeSessionHandler(
     }
 
     // 3. Verify and delete the user
-    yield* Result.await(verifyAndDeleteUser(currentUserId, emailStr, code));
+    yield* Result.await(verifyAndDeleteUser(currentUserId, emailStr, code, reassignments));
 
     return Result.ok({ success: true });
   },
