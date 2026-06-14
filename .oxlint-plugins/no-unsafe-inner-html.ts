@@ -1,0 +1,281 @@
+// Forbid injecting un-proven HTML into the DOM.
+//
+// Raw HTML may only reach the DOM from a value that is provably
+// sanitized / escaped. Stella renders server-highlighted legal content
+// via `dangerouslySetInnerHTML` (search headlines escaped + <mark>-wrapped
+// server-side by `escapeAndHighlight`). `react/no-danger` is OFF in
+// oxlint.config.ts, so without this rule a future engineer could pipe an
+// un-escaped DB / AI / user string into `__html` or `el.innerHTML` and turn
+// stored data into stored XSS inside a privileged workspace.
+//
+// Two sinks share one allowlist:
+//   • JSX `__html` property of a `dangerouslySetInnerHTML` object literal
+//     (report on the value expression).
+//   • `AssignmentExpression` whose LHS is a non-computed `.innerHTML`
+//     MemberExpression (report on the RHS).
+//
+// A value is allowed when it is:
+//   • a string Literal or TemplateLiteral whose interpolations are all
+//     independently proven safe (static markup, no raw injection), OR
+//   • a CallExpression whose callee is an HTML/DOM sanitizer or escaper
+//     (`escapeHtml`, `escapeXml`, `sanitizeHtml`, `sanitizeDom`,
+//     `DOMPurify.sanitize`), including a `.value` / `.data` / `.html`-style
+//     member read OFF such a call (some sanitizers return `{ value }`), OR
+//   • carries an explicit `// safe-html:` escape-hatch comment on the line
+//     directly above the sink (loc adjacency, like suppression-hygiene.ts).
+//
+// A value is NOT auto-allowed just because the identifier is named
+// `html` / `content` / `headline` / `body` — those are the sinks, not
+// proof of safety. Prove safety at the source or annotate with a reason.
+//
+// Flagged:
+//   <div dangerouslySetInnerHTML={{ __html: userInput }} />
+//   <div dangerouslySetInnerHTML={{ __html: hit.headline }} />   // unless annotated
+//   el.innerHTML = html;                                         // unless annotated
+//   el.innerHTML = data.body;
+//
+// Allowed:
+//   <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(x) }} />
+//   <div dangerouslySetInnerHTML={{ __html: `<b>${escapeXml(n)}</b>` }} />
+//   <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(x) }} />
+//   el.innerHTML = "";
+//   el.innerHTML = "&nbsp;";
+//   // safe-html: server-escaped by escapeAndHighlight()
+//   <div dangerouslySetInnerHTML={{ __html: hit.headline }} />
+
+import {
+  getCalleeName,
+  getPropertyName,
+  isIdentifier,
+  unwrapExpression,
+} from "./utils.ts";
+
+// Callee names that prove the value was run through an HTML/DOM sanitizer or
+// escaper. Keep this narrow: `escapeRegex()` and `sanitizeFilename()` are not
+// HTML-safe.
+const HTML_SANITIZER_LEAF_RE =
+  /^(?:escape(?:html|xml)|sanitize(?:html|dom)|purify(?:html|dom)|dompurify)$/iu;
+
+const DOM_PURIFY_RE = /^dompurify$/iu;
+
+// Members that some sanitizers expose on their result object
+// (`sanitizeHtml(x).value`, `sanitizeHtml(x).html`). Reading one of these OFF a
+// sanitizer call is still proven-safe.
+const SANITIZER_RESULT_MEMBERS = new Set(["value", "data", "html"]);
+
+const ESCAPE_HATCH_RE = /^\s*safe-html:/u;
+
+const isComment = (value) =>
+  typeof value === "object" &&
+  value !== null &&
+  typeof value.value === "string" &&
+  typeof value.loc === "object" &&
+  value.loc !== null;
+
+const isJsxIdentifier = (node, name) =>
+  typeof node === "object" &&
+  node !== null &&
+  node.type === "JSXIdentifier" &&
+  node.name === name;
+
+const isHtmlSanitizerCalleeName = (dotted) => {
+  const parts = dotted.split(".");
+  const leaf = parts.at(-1);
+  if (leaf === undefined) {
+    return false;
+  }
+  if (HTML_SANITIZER_LEAF_RE.test(leaf)) {
+    return true;
+  }
+  const objectName = parts.at(-2);
+  return leaf === "sanitize" && DOM_PURIFY_RE.test(objectName ?? "");
+};
+
+const isSanitizerCall = (node) => {
+  if (node.type !== "CallExpression") {
+    return false;
+  }
+  const dotted = getCalleeName(node.callee);
+  return dotted !== null && isHtmlSanitizerCalleeName(dotted);
+};
+
+// A value is proven safe by its own shape (independent of any comment):
+// static string, or the result of a sanitizer call (directly, or via a
+// `.value`/`.data`/`.html` accessor off the call).
+const isProvenSafeValue = (node) => {
+  if (!node || typeof node.type !== "string") {
+    return false;
+  }
+  if (node.type === "Literal" && typeof node.value === "string") {
+    return true;
+  }
+  if (node.type === "TemplateLiteral") {
+    return (
+      Array.isArray(node.expressions) &&
+      node.expressions.every(isProvenSafeValue)
+    );
+  }
+  if (isSanitizerCall(node)) {
+    return true;
+  }
+  // `sanitize(x).value`, `purify(x).html` — a result accessor off a call.
+  if (
+    node.type === "MemberExpression" &&
+    node.computed === false &&
+    isProvenSafeMemberLeaf(node)
+  ) {
+    return true;
+  }
+  return false;
+};
+
+const isProvenSafeMemberLeaf = (node) => {
+  const propertyName = getPropertyName(node.property);
+  if (propertyName === null || !SANITIZER_RESULT_MEMBERS.has(propertyName)) {
+    return false;
+  }
+  return isSanitizerCall(node.object);
+};
+
+const isDangerouslySetInnerHtmlValue = (property) => {
+  if (getPropertyName(property.key) !== "__html") {
+    return false;
+  }
+  const objectExpression = property.parent;
+  if (objectExpression?.type !== "ObjectExpression") {
+    return false;
+  }
+
+  let current = objectExpression.parent;
+  while (
+    current?.type === "TSAsExpression" ||
+    current?.type === "TSSatisfiesExpression"
+  ) {
+    current = current.parent;
+  }
+
+  if (current?.type !== "JSXExpressionContainer") {
+    return false;
+  }
+  const attribute = current.parent;
+  return (
+    attribute?.type === "JSXAttribute" &&
+    isJsxIdentifier(attribute.name, "dangerouslySetInnerHTML")
+  );
+};
+
+export default {
+  meta: { name: "no-unsafe-inner-html" },
+  rules: {
+    "no-unsafe-inner-html": {
+      meta: {
+        type: "problem",
+        messages: {
+          unsafeInnerHtml:
+            "Raw HTML injected into the DOM must come from a provably " +
+            "sanitized/escaped value: a static string, an HTML/DOM " +
+            "sanitize/escape call (or its .value/.data/.html result). " +
+            "Wrap the value in a sanitizer, or add a `// safe-html: <reason " +
+            "naming the sanitizer/source>` comment on the line directly above " +
+            "if it is escaped at its source.",
+          unsafeInnerHtmlSpread:
+            "Do not spread an object into dangerouslySetInnerHTML. Keep " +
+            "`__html` inline so this rule can prove the HTML value is " +
+            "sanitized or escaped.",
+        },
+      },
+      create(context) {
+        const escapeHatchLines = new Set();
+
+        const recordEscapeHatches = (node) => {
+          const comments =
+            node && Array.isArray(node.comments)
+              ? node.comments.filter(isComment)
+              : [];
+          for (const comment of comments) {
+            if (ESCAPE_HATCH_RE.test(comment.value)) {
+              escapeHatchLines.add(comment.loc.end.line);
+            }
+          }
+        };
+
+        // The escape-hatch comment sits on the line directly above the
+        // reported node's first line. Sink expressions inside JSX object
+        // literals span multiple lines, so anchor on the node's start line.
+        const hasEscapeHatchAbove = (node) =>
+          escapeHatchLines.has(node.loc.start.line - 1);
+
+        const reportIfUnsafe = (node) => {
+          if (isProvenSafeValue(node)) {
+            return;
+          }
+          if (hasEscapeHatchAbove(node)) {
+            return;
+          }
+          context.report({ node, messageId: "unsafeInnerHtml" });
+        };
+
+        const reportPayloadSpreads = (objectNode) => {
+          for (const property of objectNode.properties) {
+            if (property?.type !== "SpreadElement") {
+              continue;
+            }
+            context.report({
+              node: property,
+              messageId: "unsafeInnerHtmlSpread",
+            });
+          }
+        };
+
+        return {
+          Program(node) {
+            recordEscapeHatches(node);
+          },
+
+          // Reject hoisted payloads such as
+          // `dangerouslySetInnerHTML={payload}`. Keeping the `__html` object
+          // inline lets this rule inspect the actual HTML expression.
+          JSXAttribute(node) {
+            if (!isJsxIdentifier(node.name, "dangerouslySetInnerHTML")) {
+              return;
+            }
+            const value = node.value;
+            if (value?.type !== "JSXExpressionContainer") {
+              return;
+            }
+            if (!value.expression) {
+              return;
+            }
+            const expression = unwrapExpression(value.expression);
+            if (expression?.type === "ObjectExpression") {
+              reportPayloadSpreads(expression);
+              return;
+            }
+            reportIfUnsafe(value.expression);
+          },
+
+          // Sink 1: `dangerouslySetInnerHTML={{ __html: <expr> }}`.
+          Property(node) {
+            if (!isDangerouslySetInnerHtmlValue(node)) {
+              return;
+            }
+            reportIfUnsafe(node.value);
+          },
+
+          // Sink 2: `<el>.innerHTML = <expr>` (non-computed member LHS).
+          AssignmentExpression(node) {
+            const target = node.left;
+            if (
+              target.type !== "MemberExpression" ||
+              target.computed !== false ||
+              !isIdentifier(target.property, "innerHTML")
+            ) {
+              return;
+            }
+            reportIfUnsafe(node.right);
+          },
+        };
+      },
+    },
+  },
+};

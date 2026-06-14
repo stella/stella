@@ -43,8 +43,8 @@ const findValibotSchemaCalls = (
   }
   visited.add(node);
   if (
-    node["type"] === "CallExpression" &&
-    isIdentifier(node["callee"], "valibotSchema")
+    node.type === "CallExpression" &&
+    isIdentifier(node.callee, "valibotSchema")
   ) {
     found.push(node);
   }

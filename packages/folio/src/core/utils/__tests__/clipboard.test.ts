@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { getClipboardImageFiles } from "../clipboard";
+import type { Run } from "../../types/document";
+import { getClipboardImageFiles, runsToClipboardContent } from "../clipboard";
 
 describe("getClipboardImageFiles", () => {
   test("returns image files from clipboardData.files", () => {
@@ -105,5 +106,35 @@ describe("getClipboardImageFiles", () => {
 
   test("returns empty array when clipboardData is null", () => {
     expect(getClipboardImageFiles(null)).toEqual([]);
+  });
+});
+
+describe("runsToClipboardContent", () => {
+  test("escapes formatting fields before serializing clipboard HTML", () => {
+    const scriptScheme = ["java", "script:"].join("");
+    const run: Run = {
+      type: "run",
+      content: [{ type: "text", text: "Client <draft>" }],
+      formatting: {
+        fontSize: 24,
+        fontFamily: {
+          ascii: 'Bad";" onmouseover="alert(1)<img src=x>',
+        },
+        color: { rgb: `000000;background:url(${scriptScheme}alert(1))` },
+        shading: { fill: { rgb: 'ffffff"><img src=x onerror=alert(1)>' } },
+      },
+    };
+
+    const { html } = runsToClipboardContent([run]);
+
+    expect(html).toContain("Client &lt;draft&gt;");
+    expect(html).toContain("font-size: 12pt");
+    expect(html).toContain("font-family:");
+    expect(html).toContain("\\&quot;");
+    expect(html).not.toContain('" onmouseover=');
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain(scriptScheme);
+    expect(html).not.toContain("color: #000000;background");
+    expect(html).not.toContain("background-color:");
   });
 });

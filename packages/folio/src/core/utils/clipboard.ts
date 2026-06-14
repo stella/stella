@@ -284,6 +284,7 @@ export async function writeToClipboard(
  */
 function writeToClipboardFallback(content: ClipboardContent): boolean {
   const tempDiv = document.createElement("div");
+  // safe-html: clipboard HTML is serialized by runsToHtml()/paragraphsToHtml(); text is HTML-escaped and formatting style fields are escaped or validated below
   tempDiv.innerHTML = content.html;
   tempDiv.style.position = "fixed";
   tempDiv.style.left = "-9999px";
@@ -811,28 +812,51 @@ function runToHtml(run: Run): string {
   // Build inline styles
   const styles: string[] = [];
 
-  if (formatting.fontSize) {
-    const sizePt = formatting.fontSize / 2;
+  const fontSize = formatting.fontSize;
+  if (fontSize !== undefined && Number.isFinite(fontSize) && fontSize > 0) {
+    const sizePt = fontSize / 2;
     styles.push(`font-size: ${sizePt}pt`);
   }
 
   if (formatting.fontFamily?.ascii) {
-    styles.push(`font-family: "${formatting.fontFamily.ascii}"`);
+    styles.push(
+      `font-family: "${escapeCssString(formatting.fontFamily.ascii)}"`,
+    );
   }
 
-  if (formatting.color?.rgb) {
-    styles.push(`color: #${formatting.color.rgb}`);
+  const textColor = formatCssRgb(formatting.color?.rgb);
+  if (textColor !== null) {
+    styles.push(`color: ${textColor}`);
   }
 
-  if (formatting.shading?.fill?.rgb) {
-    styles.push(`background-color: #${formatting.shading.fill.rgb}`);
+  const fillColor = formatCssRgb(formatting.shading?.fill?.rgb);
+  if (fillColor !== null) {
+    styles.push(`background-color: ${fillColor}`);
   }
 
   if (styles.length > 0) {
-    html = `<span style="${styles.join("; ")}">${html}</span>`;
+    html = `<span style="${escapeHtml(styles.join("; "))}">${html}</span>`;
   }
 
   return html;
+}
+
+const CSS_RGB_RE = /^[\dA-F]{6}$/iu;
+
+function formatCssRgb(value: string | undefined): string | null {
+  if (value === undefined || !CSS_RGB_RE.test(value)) {
+    return null;
+  }
+  return `#${value}`;
+}
+
+function escapeCssString(value: string): string {
+  return value
+    .replaceAll("\\", "\\\\")
+    .replaceAll('"', '\\"')
+    .replaceAll("\n", "\\A ")
+    .replaceAll("\r", "\\D ")
+    .replaceAll("\f", "\\C ");
 }
 
 /**

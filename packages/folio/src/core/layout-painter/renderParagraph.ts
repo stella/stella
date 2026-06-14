@@ -1068,6 +1068,7 @@ function renderMathRun(run: MathRun, doc: Document): HTMLElement {
     '"Cambria Math", "Latin Modern Math", "STIX Two Math", serif';
 
   try {
+    // safe-html: mathml is built by ommlToMathml(), which escapes every text token via escapeXml() and emits only a fixed MathML tag vocabulary
     host.innerHTML = mathml;
   } catch {
     return renderMathFallback(run, doc, fallbackText, "1");
