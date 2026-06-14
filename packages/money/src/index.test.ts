@@ -32,18 +32,25 @@ describe("minor-unit billing arithmetic", () => {
 });
 
 // Deterministic LCG so a fuzz failure is reproducible, never flaky.
+const LCG_MODULUS = 2 ** 32;
+const LCG_MULTIPLIER = 1_664_525;
+const LCG_INCREMENT = 1_013_904_223;
+
 const makePrng = (seed: number) => {
-  let state = seed >>> 0;
+  let state = Math.trunc(seed) % LCG_MODULUS;
+  if (state < 0) {
+    state += LCG_MODULUS;
+  }
   return () => {
-    state = (state * 1664525 + 1013904223) >>> 0;
-    return state / 0x100000000;
+    state = (state * LCG_MULTIPLIER + LCG_INCREMENT) % LCG_MODULUS;
+    return state / LCG_MODULUS;
   };
 };
 
 describe("cents() brand constructor", () => {
   test("accepts integer-valued floats and zero", () => {
     expect(cents(0)).toBe(cents(0));
-    expect(cents(2.0)).toBe(cents(2));
+    expect(cents(Number.parseFloat("2.0"))).toBe(cents(2));
   });
 
   test("rejects non-integer, NaN and infinite inputs", () => {
@@ -85,10 +92,10 @@ describe("prorateHourlyCents invariants", () => {
   });
 
   test("INVARIANT: result is the exact round-half-up of (minutes*rate)/60", () => {
-    const rand = makePrng(0x5eed01);
-    for (let n = 0; n < 5000; n++) {
+    const rand = makePrng(6_220_033);
+    for (let n = 0; n < 5_000; n++) {
       const billedMinutes = Math.floor(rand() * 600); // up to 10h
-      const rate = Math.floor(rand() * 5_000_00); // up to $5000/h
+      const rate = Math.floor(rand() * 500_000); // up to $5000/h
       const r = prorateHourlyCents({
         billedMinutes,
         hourlyRateCents: cents(rate),
@@ -112,7 +119,7 @@ describe("prorateHourlyCents invariants", () => {
     }
     const minutes = 137;
     prev = -1;
-    for (let rc = 0; rc <= 2000; rc++) {
+    for (let rc = 0; rc <= 2_000; rc++) {
       const v = prorateHourlyCents({
         billedMinutes: minutes,
         hourlyRateCents: cents(rc),
@@ -125,10 +132,10 @@ describe("prorateHourlyCents invariants", () => {
   test("stays exact for large but realistic invoices (no float drift)", () => {
     // 100h at $9,999.99/h: product is ~6e9, well under MAX_SAFE_INTEGER.
     const r = prorateHourlyCents({
-      billedMinutes: 6000,
+      billedMinutes: 6_000,
       hourlyRateCents: cents(999_999),
     });
-    const x = 6000 * 999_999;
+    const x = 6_000 * 999_999;
     expect(r).toBe(cents(Math.floor((x + 30) / 60)));
     expect(Number.isSafeInteger(r)).toBe(true);
   });
@@ -145,8 +152,8 @@ describe("prorateHourlyCents invariants", () => {
 
 describe("applyMarkupCents invariants", () => {
   test("IDENTITY: zero markup returns the amount unchanged", () => {
-    const rand = makePrng(0x1de77a);
-    for (let n = 0; n < 1000; n++) {
+    const rand = makePrng(1_959_802);
+    for (let n = 0; n < 1_000; n++) {
       const amount = Math.floor(rand() * 1_000_000);
       expect(
         applyMarkupCents({ amountCents: cents(amount), markupPercent: 0 }),
@@ -166,9 +173,9 @@ describe("applyMarkupCents invariants", () => {
   });
 
   test("INVARIANT: result is the exact round-half-up of amount*(100+markup)/100", () => {
-    const rand = makePrng(0x5eed02);
-    for (let n = 0; n < 5000; n++) {
-      const amount = Math.floor(rand() * 5_000_00);
+    const rand = makePrng(6_220_034);
+    for (let n = 0; n < 5_000; n++) {
+      const amount = Math.floor(rand() * 500_000);
       const markup = Math.floor(rand() * 300); // up to +300%
       const r = applyMarkupCents({
         amountCents: cents(amount),

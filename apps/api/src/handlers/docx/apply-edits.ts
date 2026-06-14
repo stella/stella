@@ -186,17 +186,13 @@ const createDel = (
   return del;
 };
 
-/** True when a w:r still contains at least one w:t child. */
-// A run is non-empty if it still carries any rendered content. w:tab and
-// w:br count: a run holding only a tab/break must not be cleaned up as an
-// "empty shell", or deleting an adjacent w:t would silently drop the tab or
-// line break and shift every following character's offset.
+/** True when a w:r still contains content other than run properties. */
+// A run is non-empty if it still carries rendered content or structural
+// children. OOXML elements such as w:tab, w:br, w:sym, w:drawing, and
+// references must not be cleaned up as empty shells.
 const runHasContent = (run: slimdom.Element): boolean =>
   [...run.childNodes].some(
-    (c) =>
-      isElement(c) &&
-      c.namespaceURI === W_NS &&
-      (c.localName === "t" || c.localName === "tab" || c.localName === "br"),
+    (c) => isElement(c) && (c.namespaceURI !== W_NS || c.localName !== "rPr"),
   );
 
 // ── Run splitting for multi-w:t ──────────────────────────
@@ -223,15 +219,10 @@ const splitPrecedingSiblings = (
     if (child === firstAffectedTNode) {
       break;
     }
-    // Isolate preceding text AND tab/break siblings: a leading w:tab/w:br
-    // must stay before the edit fragments, or deleting the following w:t
-    // would reorder the tab/break after the inserted text.
-    if (
-      child.namespaceURI === W_NS &&
-      (child.localName === "t" ||
-        child.localName === "tab" ||
-        child.localName === "br")
-    ) {
+    // Isolate all preceding children except run properties. Otherwise
+    // references, drawings, symbols, tabs, or breaks before this text node
+    // can be reordered after the edit fragments.
+    if (child.namespaceURI !== W_NS || child.localName !== "rPr") {
       preceding.push(child);
     }
   }

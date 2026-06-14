@@ -394,6 +394,30 @@ describe("applySorts (in-memory)", () => {
     ]);
   });
 
+  test("int sort treats whitespace-only legacy text as missing", () => {
+    const items = [
+      makeEntity("whitespace", "task", [["p1", "   "]]),
+      {
+        entityId: "negative",
+        kind: "task" as const,
+        fields: [makeIntField("negative", "p1", -1)],
+      },
+      {
+        entityId: "positive",
+        kind: "task" as const,
+        fields: [makeIntField("positive", "p1", 1)],
+      },
+    ];
+
+    const sorted = applySorts(items, [{ propertyId: "p1", desc: false }]);
+
+    expect(sorted.map((item) => item.entityId)).toEqual([
+      "negative",
+      "positive",
+      "whitespace",
+    ]);
+  });
+
   test("property: int sort with missing rows is numerically monotonic", () => {
     fc.assert(
       fc.property(

@@ -66,7 +66,7 @@ const numericContentValue = (
     return content.value;
   }
   const raw = getFieldValue(content);
-  if (raw === "") {
+  if (raw.trim() === "") {
     return null;
   }
   const n = Number(raw);

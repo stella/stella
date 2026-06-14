@@ -282,6 +282,10 @@ const addEntries = createSafeHandler(
                 eq(timeEntries.status, BILLING_STATUS.APPROVED),
                 eq(timeEntries.billable, true),
                 isNull(timeEntries.invoiceId),
+                // Re-check currency under the claim so a concurrent edit
+                // cannot attach a mismatched-currency entry (count mismatch
+                // then trips the concurrent-modification retry path).
+                eq(timeEntries.currency, invoice.currency),
               ),
             )
             .returning({ id: timeEntries.id });
@@ -307,6 +311,7 @@ const addEntries = createSafeHandler(
                 eq(expenses.status, BILLING_STATUS.APPROVED),
                 eq(expenses.billable, true),
                 isNull(expenses.invoiceId),
+                eq(expenses.currency, invoice.currency),
               ),
             )
             .returning({ id: expenses.id });

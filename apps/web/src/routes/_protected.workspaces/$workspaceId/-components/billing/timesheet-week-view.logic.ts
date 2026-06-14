@@ -41,11 +41,22 @@ export const summarizeBillableAmountByCurrency = (
     .sort((a, b) => a.currency.localeCompare(b.currency));
 };
 
-/** Each matter's currency (a matter bills in a single currency). */
+/**
+ * Each matter's display currency. The row amount is summed from billable
+ * entries only, so prefer a billable entry's currency (a non-billable entry
+ * in another currency must not mislabel the charged subtotal). Fall back to
+ * any entry's currency for matters with no billable time, whose amount is 0
+ * and therefore not shown.
+ */
 export const matterCurrencyMap = (
   entries: readonly TimesheetTotalEntry[],
 ): Map<string, string> => {
   const map = new Map<string, string>();
+  for (const entry of entries) {
+    if (entry.billable && !map.has(entry.matterId)) {
+      map.set(entry.matterId, entry.currency);
+    }
+  }
   for (const entry of entries) {
     if (!map.has(entry.matterId)) {
       map.set(entry.matterId, entry.currency);

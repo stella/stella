@@ -154,6 +154,10 @@ const createInvoice = createSafeHandler(
             inArray(timeEntries.id, body.timeEntryIds),
             eq(timeEntries.status, BILLING_STATUS.APPROVED),
             eq(timeEntries.billable, true),
+            // Re-check currency in the claiming update: if an entry's currency
+            // changed between the preflight read and now, it is not claimed,
+            // the count mismatch trips, and the caller retries.
+            eq(timeEntries.currency, body.currency),
           ),
         )
         .returning({ id: timeEntries.id });

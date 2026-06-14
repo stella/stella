@@ -60,4 +60,21 @@ describe("matterCurrencyMap", () => {
     expect(map.get("m1")).toBe("USD");
     expect(map.get("m2")).toBe("EUR");
   });
+
+  test("prefers a billable entry's currency over an earlier non-billable one", () => {
+    // The row amount is billable-only, so the label must match the charged
+    // currency, not the first (non-billable) entry's.
+    const map = matterCurrencyMap([
+      entry({ matterId: "m1", currency: "EUR", billable: false }),
+      entry({ matterId: "m1", currency: "USD", billable: true }),
+    ]);
+    expect(map.get("m1")).toBe("USD");
+  });
+
+  test("falls back to any currency for matters with no billable time", () => {
+    const map = matterCurrencyMap([
+      entry({ matterId: "m1", currency: "EUR", billable: false }),
+    ]);
+    expect(map.get("m1")).toBe("EUR");
+  });
 });

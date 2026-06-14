@@ -260,4 +260,49 @@ describe("applyEdits", () => {
     expect(result).toContain("world");
     expect(result).not.toContain(">\nworld<");
   });
+
+  test("deleting adjacent text preserves non-text run children", () => {
+    const xml = WRAP(
+      '<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Text</w:t><w:sym w:font="Symbol" w:char="00A7"/></w:r></w:p>',
+    );
+    const edits: DocxEdit[] = [
+      {
+        kind: "delete",
+        paragraphIndex: 0,
+        charOffset: 0,
+        length: 4,
+      },
+    ];
+
+    nextId = 1;
+    const result = applyEdits(xml, edits, AUTHOR, idGen);
+
+    expect(result).toContain('w:sym w:font="Symbol" w:char="00A7"');
+  });
+
+  test("inserting before later text preserves preceding non-text child order", () => {
+    const xml = WRAP(
+      '<w:p><w:r><w:sym w:font="Symbol" w:char="00A7"/><w:t>See </w:t><w:t>42</w:t></w:r></w:p>',
+    );
+    const edits: DocxEdit[] = [
+      {
+        kind: "insert",
+        paragraphIndex: 0,
+        charOffset: 4,
+        text: "section ",
+      },
+    ];
+
+    nextId = 1;
+    const result = applyEdits(xml, edits, AUTHOR, idGen);
+    const symbolIndex = result.indexOf("<w:sym");
+    const seeIndex = result.indexOf(">See <");
+    const insertIndex = result.indexOf(">section <");
+    const targetIndex = result.indexOf(">42<");
+
+    expect(symbolIndex).toBeGreaterThanOrEqual(0);
+    expect(symbolIndex).toBeLessThan(seeIndex);
+    expect(seeIndex).toBeLessThan(insertIndex);
+    expect(insertIndex).toBeLessThan(targetIndex);
+  });
 });
