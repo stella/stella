@@ -25,6 +25,9 @@ type CompoundQuery = QueryStringClause & Partial<RangeClause>;
  * Build the JSON-DSL query string the BOE search endpoint expects.
  * Mirrors the shape used by the upstream MCP-BOE client.
  */
+const escapeQueryStringPhrase = (value: string): string =>
+  value.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
+
 export const buildSearchQuery = (input: BoeSearchQuery): string => {
   const parts: string[] = [];
   if (input.text) {
@@ -39,7 +42,7 @@ export const buildSearchQuery = (input: BoeSearchQuery): string => {
     }
   }
   if (input.title) {
-    parts.push(`titulo:"${input.title.replaceAll('"', '\\"')}"`);
+    parts.push(`titulo:"${escapeQueryStringPhrase(input.title)}"`);
   }
   if (input.departmentCode) {
     parts.push(`departamento@codigo:${input.departmentCode}`);

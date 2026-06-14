@@ -13,6 +13,18 @@ describe("BOE search query builder", () => {
     );
   });
 
+  test("tokenizes query_string reserved characters in free text", () => {
+    expect(buildSearchQuery({ text: "39/2015" })).toBe(
+      JSON.stringify({
+        query: {
+          query_string: {
+            query: '(titulo:("39" AND "2015") OR texto:("39" AND "2015"))',
+          },
+        },
+      }),
+    );
+  });
+
   test("keeps publication date filters inside the JSON DSL range", () => {
     expect(buildSearchQuery({ dateFrom: "18890101", dateTo: "18891231" })).toBe(
       JSON.stringify({
