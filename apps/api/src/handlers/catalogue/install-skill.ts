@@ -15,6 +15,9 @@ import {
 
 const installSkillBody = t.Object({
   slug: t.String({ minLength: 1, maxLength: 64 }),
+  // Literals are inlined rather than `AGENT_SKILL_SCOPES.map(...)`: mapping the
+  // const yields a non-tuple union that Elysia infers as `never`, collapsing
+  // `scope` to `undefined`. Keep in sync with AGENT_SKILL_SCOPES in db/schema.ts.
   scope: t.Optional(t.Union([t.Literal("team"), t.Literal("private")])),
 });
 

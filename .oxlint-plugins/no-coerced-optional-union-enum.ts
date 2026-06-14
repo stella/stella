@@ -18,14 +18,29 @@
 // Allowed:
 //   type: t.Optional(t.Union([t.Literal("person"), t.Literal("organization")]))
 //   fieldMode: t.Optional(t.Union([t.Literal("full"), t.Literal("visible")]))
+//
+// Both callees are matched by leaf name, so the namespaced
+// `t.Optional(t.UnionEnum(...))` and a destructured `Optional(UnionEnum(...))`
+// (`const { Optional, UnionEnum } = t`) are caught the same way.
 
-const memberName = (node) =>
-  node &&
-  node.type === "MemberExpression" &&
-  node.property &&
-  node.property.type === "Identifier"
-    ? node.property.name
-    : null;
+// Resolve a callee's leaf name whether it is namespaced (`t.Optional`,
+// a MemberExpression) or a bare/destructured `Optional` (an Identifier).
+const memberName = (node) => {
+  if (!node) {
+    return null;
+  }
+  if (node.type === "Identifier") {
+    return node.name;
+  }
+  if (
+    node.type === "MemberExpression" &&
+    node.property &&
+    node.property.type === "Identifier"
+  ) {
+    return node.property.name;
+  }
+  return null;
+};
 
 export default {
   meta: { name: "no-coerced-optional-union-enum" },

@@ -208,7 +208,10 @@ const translateEntity = createSafeHandler(
           mimeType: sourceContent.mimeType,
           targetLang: body.targetLang,
           sourceLang: body.sourceLang,
-          formality: body.formality ?? "default",
+          // Pass `undefined` through when omitted so translateDocument applies
+          // its documented `prefer_more` default (legal register), which the
+          // translate dialog relies on. Do not default to "default" here.
+          formality: body.formality,
         }),
       catch: (error: unknown) => error,
     });

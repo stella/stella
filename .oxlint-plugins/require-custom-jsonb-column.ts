@@ -19,7 +19,7 @@
 //   value: jsonb("value")
 //   apps/api/src/db/columns.ts                      // defines the safe type
 
-import { getImportedName, isIdentifier } from "./utils.ts";
+import { getImportedName, isIdentifier, isStringLiteral } from "./utils.ts";
 
 type AstNode = { type: string } & Record<string, unknown>;
 
@@ -47,13 +47,42 @@ const filenameForContext = (context: RuleContext): string =>
 const isAllowlistedFile = (filename: string): boolean =>
   filename.endsWith(ALLOWLISTED_FILE);
 
-// `() => "jsonb"` arrow body, used to detect a hand-rolled customType.
-const returnsJsonbLiteral = (node: unknown): boolean =>
-  isAstNode(node) &&
-  node.type === "ArrowFunctionExpression" &&
-  isAstNode(node.body) &&
-  node.body.type === "Literal" &&
-  node.body.value === "jsonb";
+const isJsonbLiteral = (node: unknown): boolean =>
+  isStringLiteral(node) && node.value === "jsonb";
+
+// A `dataType` callback whose body yields the "jsonb" string. Covers the
+// arrow-expression body `() => "jsonb"`, the block-bodied arrow
+// `() => { return "jsonb"; }`, and function expressions / object-method
+// shorthand `function () { return "jsonb"; }` / `dataType() { return "jsonb"; }`.
+// Block bodies are scanned for a `return "jsonb"` so switching function form
+// can't sidestep the guard.
+const returnsJsonbLiteral = (node: unknown): boolean => {
+  if (!isAstNode(node)) {
+    return false;
+  }
+  if (
+    node.type !== "ArrowFunctionExpression" &&
+    node.type !== "FunctionExpression"
+  ) {
+    return false;
+  }
+  if (!isAstNode(node.body)) {
+    return false;
+  }
+  if (node.body.type !== "BlockStatement") {
+    return isJsonbLiteral(node.body);
+  }
+  const statements = node.body.body;
+  if (!Array.isArray(statements)) {
+    return false;
+  }
+  return statements.some(
+    (statement) =>
+      isAstNode(statement) &&
+      statement.type === "ReturnStatement" &&
+      isJsonbLiteral(statement.argument),
+  );
+};
 
 // `{ dataType: () => "jsonb" }` config object passed to customType.
 const hasJsonbDataType = (node: unknown): boolean => {

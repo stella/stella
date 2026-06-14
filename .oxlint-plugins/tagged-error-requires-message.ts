@@ -20,6 +20,9 @@
 //     id: string; message: string;
 //   }>() {}
 //   class HandlerError extends TaggedError("HandlerError")<HandlerProps>() {}
+//
+// The `message` member must be present, non-optional, and typed `string`;
+// `message?: string` or `message: <not string>` is flagged too.
 
 export default {
   meta: { name: "tagged-error-requires-message" },
@@ -66,14 +69,24 @@ export default {
             return;
           }
 
+          // A bare member named `message` is not enough: it must be a
+          // non-optional property typed with the `string` keyword. `message?:
+          // string`, `message: unknown`, or a method signature would otherwise
+          // satisfy the rule while leaving callers free to omit human-readable
+          // text.
           const hasMessage = (firstTypeArg.members ?? []).some((member) => {
+            if (member.type !== "TSPropertySignature" || member.optional) {
+              return false;
+            }
             const key = member.key;
-            if (!key) {
+            const isMessageKey =
+              (key?.type === "Identifier" && key.name === "message") ||
+              (key?.type === "Literal" && key.value === "message");
+            if (!isMessageKey) {
               return false;
             }
             return (
-              (key.type === "Identifier" && key.name === "message") ||
-              (key.type === "Literal" && key.value === "message")
+              member.typeAnnotation?.typeAnnotation?.type === "TSStringKeyword"
             );
           });
 
