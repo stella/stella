@@ -240,9 +240,6 @@ export default {
               return;
             }
             const value = unwrapExpression(node.value);
-            if (value?.type !== "ArrayExpression") {
-              return;
-            }
             reportLeakyValue(value);
           },
 

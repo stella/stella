@@ -58,6 +58,16 @@ export const nestedObjectSpreadQueryOptions = {
   ] as const,
 };
 
+export const conditionalQueryOptions = {
+  queryKey: includeFilters
+    ? [
+        ...rootKeys.all,
+        // oxlint-disable-next-line no-spread-input-in-query-key/no-spread-input-in-query-key
+        ...input,
+      ]
+    : [...rootKeys.all],
+};
+
 export const fixtureKeys = {
   all: ["fixture"] as const,
 
