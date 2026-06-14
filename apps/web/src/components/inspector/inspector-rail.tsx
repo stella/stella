@@ -41,6 +41,7 @@ import {
 } from "@/lib/consts";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
+import { catalogueOptions } from "@/routes/_protected.knowledge/-queries/catalogue";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
 
@@ -76,7 +77,15 @@ export const InspectorRail = ({
 }: InspectorRailProps) => {
   const t = useTranslations();
   const activeTab = tabs.find((tab) => tab.id === activeId);
-  const activeSkill = getActiveSkillChatContext(activeTab);
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const { data: activeSkillCatalogueData } = useQuery({
+    ...catalogueOptions(activeOrganizationId),
+    enabled: activeTab?.type === "view" && activeTab.viewType === "tool-detail",
+  });
+  const activeSkill = getActiveSkillChatContext(
+    activeTab,
+    activeSkillCatalogueData?.entries,
+  );
   const railContextMenu = useRailContextMenu({ activeSkill, workspaceId });
 
   const openContextChat = () => {

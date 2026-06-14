@@ -45,6 +45,10 @@ const SKILL_RESOURCE_OUTPUT_TOOL_NAMES = new Set([
   "update-current-skill-body",
   "update-current-skill-resource",
 ]);
+const SKILL_RESOURCE_REFRESH_OUTPUT_TOOL_NAMES = new Set([
+  "update-current-skill-body",
+  "update-current-skill-resource",
+]);
 
 const getCodeToolSource = (
   part: ToolPart,
@@ -415,6 +419,8 @@ export const ToolCallCard = ({
                 mimeType: skillResourceOutput.mimeType,
                 content: skillResourceOutput.content,
                 label: basenameOf(skillResourceOutput.path),
+                refreshContent:
+                  SKILL_RESOURCE_REFRESH_OUTPUT_TOOL_NAMES.has(name),
                 ...(skillResourceOutput.target
                   ? { target: skillResourceOutput.target }
                   : {}),

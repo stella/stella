@@ -300,6 +300,39 @@ describe("openSkillResourceTab", () => {
       skillId: "agentSkill_1",
     });
   });
+
+  test("refreshes content when explicitly requested for the same source", () => {
+    const resource = {
+      content: "Original content",
+      label: "Guidance",
+      mimeType: "text/markdown",
+      origin: "authored" as const,
+      resourcePath: "knowledge/guidance.md",
+      skillId: "agentSkill_1",
+      skillName: "review",
+    };
+
+    useInspectorStore.getState().openSkillResourceTab(resource);
+    useInspectorStore
+      .getState()
+      .updateSkillResourceTabContent(
+        buildSkillResourceTabId(resource),
+        "Edited buffer",
+      );
+    useInspectorStore.getState().openSkillResourceTab({
+      ...resource,
+      content: "Tool output",
+      refreshContent: true,
+    });
+
+    const tab = useInspectorStore
+      .getState()
+      .tabs.find((item) => item.id === buildSkillResourceTabId(resource));
+    expect(tab).toMatchObject({
+      type: "skill-resource",
+      content: "Tool output",
+    });
+  });
 });
 
 describe("replaceFileFieldId", () => {

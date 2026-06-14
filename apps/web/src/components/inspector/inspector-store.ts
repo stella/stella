@@ -307,6 +307,7 @@ type Actions = {
   }) => void;
   openSkillResourceTab: (
     tab: Omit<SkillResourceTab, "type" | "id" | "target"> & {
+      refreshContent?: boolean | undefined;
       skillName: string;
       resourcePath: string;
       target?: SkillResourceTab["target"];
@@ -1175,6 +1176,7 @@ export const useInspectorStore = create<State & Actions>()(
       label,
       mimeType,
       content,
+      refreshContent = false,
       target = "resource",
     }) =>
       set((state) => {
@@ -1203,7 +1205,7 @@ export const useInspectorStore = create<State & Actions>()(
           existing.target = target;
           existing.resourcePath = resourcePath;
           existing.mimeType = mimeType;
-          if (sourceChanged) {
+          if (sourceChanged || refreshContent) {
             existing.content = content;
           }
         }

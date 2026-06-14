@@ -52,6 +52,73 @@ describe("getActiveSkillChatContext", () => {
     });
   });
 
+  test("uses live catalogue state for skill detail tabs", () => {
+    const tab = {
+      type: "view",
+      viewType: "tool-detail",
+      id: "tool-detail:skill:review",
+      label: "Review Skill",
+      payload: {
+        kind: "skill",
+        slug: "review",
+        organizationId: "org-1",
+        iconHint: {
+          icon: null,
+          iconUrl: null,
+        },
+      },
+      ownerRouteId: "/_protected/knowledge/tools",
+    } satisfies InspectorTab;
+
+    expect(
+      getActiveSkillChatContext(tab, [
+        {
+          chatSkillId: "skill-live",
+          displayName: "Review Skill",
+          kind: "skill",
+          slug: "review",
+        },
+      ]),
+    ).toEqual({
+      skillId: "skill-live",
+      skillName: "Review Skill",
+    });
+  });
+
+  test("drops stale skill detail payload when live catalogue state is no longer chat-readable", () => {
+    const tab = {
+      type: "view",
+      viewType: "tool-detail",
+      id: "tool-detail:skill:review",
+      label: "Review Skill",
+      payload: {
+        kind: "skill",
+        slug: "review",
+        organizationId: "org-1",
+        activeSkill: {
+          skillId: "skill-stale",
+          skillName: "Review Skill",
+        },
+        iconHint: {
+          icon: null,
+          iconUrl: null,
+        },
+      },
+      ownerRouteId: "/_protected/knowledge/tools",
+    } satisfies InspectorTab;
+
+    expect(
+      getActiveSkillChatContext(tab, [
+        {
+          chatSkillId: null,
+          displayName: "Review Skill",
+          kind: "skill",
+          slug: "review",
+        },
+      ]),
+    ).toBeUndefined();
+  });
+
   test("ignores non-skill catalogue detail tabs", () => {
     const tab = {
       type: "view",
