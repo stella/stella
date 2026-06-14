@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
 import { prorateHourlyCents } from "@stll/money";
@@ -62,6 +62,7 @@ const createInvoice = createSafeHandler(
             status: timeEntries.status,
             billable: timeEntries.billable,
             currency: timeEntries.currency,
+            invoiceId: timeEntries.invoiceId,
           })
           .from(timeEntries)
           .where(
@@ -83,13 +84,18 @@ const createInvoice = createSafeHandler(
     }
 
     const invalid = entries.some(
-      (e) => e.status !== BILLING_STATUS.APPROVED || !e.billable,
+      (e) =>
+        e.status !== BILLING_STATUS.APPROVED ||
+        !e.billable ||
+        e.invoiceId !== null,
     );
     if (invalid) {
       return Result.err(
         new HandlerError({
           status: 400,
-          message: "All entries must be approved and billable",
+          message:
+            "All entries must be approved, billable," +
+            " and not already on an invoice",
         }),
       );
     }
@@ -154,6 +160,7 @@ const createInvoice = createSafeHandler(
             inArray(timeEntries.id, body.timeEntryIds),
             eq(timeEntries.status, BILLING_STATUS.APPROVED),
             eq(timeEntries.billable, true),
+            isNull(timeEntries.invoiceId),
             // Re-check currency in the claiming update: if an entry's currency
             // changed between the preflight read and now, it is not claimed,
             // the count mismatch trips, and the caller retries.

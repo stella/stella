@@ -2,12 +2,16 @@ import { describe, expect, test } from "bun:test";
 
 import { createZipBombGuard } from "@/api/lib/file-scan/scanner";
 
-const u16 = (n: number): number[] => [n & 0xff, (n >> 8) & 0xff];
+const BYTE_MODULUS = 256;
+const byteAt = (n: number, byteIndex: number): number =>
+  Math.trunc(n / BYTE_MODULUS ** byteIndex) % BYTE_MODULUS;
+
+const u16 = (n: number): number[] => [byteAt(n, 0), byteAt(n, 1)];
 const u32 = (n: number): number[] => [
-  n & 0xff,
-  (n >> 8) & 0xff,
-  (n >> 16) & 0xff,
-  (n >> 24) & 0xff,
+  byteAt(n, 0),
+  byteAt(n, 1),
+  byteAt(n, 2),
+  byteAt(n, 3),
 ];
 
 // A raw ZIP local file header with sizes written into the header itself.
@@ -25,12 +29,12 @@ const localFileHeader = ({
   fileName?: string;
 }): number[] => {
   const name = [...new TextEncoder().encode(fileName)];
-  const data = new Array<number>(compressedSize).fill(0);
+  const data = Array.from({ length: compressedSize }, () => 0);
   return [
-    0x50,
-    0x4b,
-    0x03,
-    0x04, // PK\x03\x04
+    80,
+    75,
+    3,
+    4, // PK\x03\x04
     ...u16(20), // version needed
     ...u16(flags),
     ...u16(8), // method: deflate
@@ -100,7 +104,7 @@ describe("createZipBombGuard", () => {
   test("flags a data-descriptor entry whose header sizes are zero", async () => {
     const bytes = zip(
       localFileHeader({
-        flags: 0x08,
+        flags: 8,
         compressedSize: 0,
         uncompressedSize: 0,
       }),

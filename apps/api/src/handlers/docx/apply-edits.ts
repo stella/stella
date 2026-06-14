@@ -99,21 +99,39 @@ const createTextWrappingBreak = (doc: slimdom.Document): slimdom.Element => {
   return br;
 };
 
-const appendTextWithLineBreaks = (
+const createTab = (doc: slimdom.Document): slimdom.Element =>
+  doc.createElementNS(W_NS, "w:tab");
+
+const appendTextWithControls = (
   doc: slimdom.Document,
   run: slimdom.Element,
   text: string,
   createTextElement: (doc: slimdom.Document, text: string) => slimdom.Element,
 ) => {
-  const parts = text.split("\n");
-  for (const [index, part] of parts.entries()) {
-    if (index > 0) {
+  let buffer = "";
+  const flush = () => {
+    if (buffer.length === 0) {
+      return;
+    }
+    run.append(createTextElement(doc, buffer));
+    buffer = "";
+  };
+
+  for (const char of text) {
+    if (char === "\n") {
+      flush();
       run.append(createTextWrappingBreak(doc));
+      continue;
     }
-    if (part.length > 0) {
-      run.append(createTextElement(doc, part));
+    if (char === "\t") {
+      flush();
+      run.append(createTab(doc));
+      continue;
     }
+    buffer += char;
   }
+
+  flush();
 };
 
 const createRun = (
@@ -125,7 +143,7 @@ const createRun = (
   if (rPr) {
     r.append(rPr);
   }
-  appendTextWithLineBreaks(doc, r, text, createT);
+  appendTextWithControls(doc, r, text, createT);
   return r;
 };
 
@@ -148,7 +166,7 @@ const createDelRun = (
   if (rPr) {
     r.append(rPr);
   }
-  appendTextWithLineBreaks(doc, r, text, createDelText);
+  appendTextWithControls(doc, r, text, createDelText);
   return r;
 };
 
@@ -198,11 +216,11 @@ const runHasContent = (run: slimdom.Element): boolean =>
 // ── Run splitting for multi-w:t ──────────────────────────
 
 /**
- * When a w:r contains multiple w:t nodes and an edit targets
- * a non-first w:t, fragments inserted before the run would
- * appear before unaffected preceding text, corrupting order.
+ * When a w:r contains multiple rendered children and an edit targets
+ * a non-first child, fragments inserted before the run would appear
+ * before unaffected preceding content, corrupting order.
  *
- * This helper splits unaffected preceding w:t nodes into a
+ * This helper splits unaffected preceding children into a
  * separate run, preserving document order.
  */
 const splitPrecedingSiblings = (
@@ -314,11 +332,18 @@ const applyInsert = (
     const spanEnd = span.start + span.length;
     if (charOffset >= span.start && charOffset < spanEnd) {
       const localOffset = charOffset - span.start;
-      const fullText = span.tNode.textContent ?? "";
 
-      // Isolate preceding w:t siblings so insertions
-      // appear after them, not before.
-      splitPrecedingSiblings(doc, span.run, span.tNode, idGenerator);
+      // Isolate preceding siblings so insertions appear after them,
+      // not before.
+      splitPrecedingSiblings(doc, span.run, span.node, idGenerator);
+
+      if (span.type !== "text") {
+        const parent = span.run.parentNode ?? p;
+        parent.insertBefore(makeIns(span.run), span.run);
+        return;
+      }
+
+      const fullText = span.node.textContent ?? "";
 
       if (localOffset === 0) {
         const parent = span.run.parentNode ?? p;
@@ -345,7 +370,7 @@ const applyInsert = (
           parent.insertBefore(afterRun, span.run);
           // Remove only the affected w:t node. A multi-w:t
           // run may have siblings that must be preserved.
-          span.run.removeChild(span.tNode);
+          span.run.removeChild(span.node);
           if (!runHasContent(span.run)) {
             parent.removeChild(span.run);
           }
@@ -385,7 +410,7 @@ const applyDelete = (
       continue;
     }
     splitRuns.add(span.run);
-    splitPrecedingSiblings(doc, span.run, span.tNode, idGenerator);
+    splitPrecedingSiblings(doc, span.run, span.node, idGenerator);
   }
 
   const end = charOffset + length;
@@ -398,7 +423,22 @@ const applyDelete = (
       continue;
     }
     const spanEnd = span.start + span.length;
-    const fullText = span.tNode.textContent ?? "";
+    if (span.type !== "text") {
+      const deletedText = span.type === "break" ? "\n" : "\t";
+      const delRun = createDelRun(
+        doc,
+        deletedText,
+        cloneRunProps(span.run, idGenerator),
+      );
+      nodesToInsert.push({
+        node: createDel(doc, idGenerator(), author, [delRun]),
+        before: span.run,
+      });
+      nodesToRemove.push(span.node);
+      continue;
+    }
+
+    const fullText = span.node.textContent ?? "";
 
     const delStart = Math.max(charOffset, span.start) - span.start;
     const delEnd = Math.min(end, spanEnd) - span.start;
@@ -437,7 +477,7 @@ const applyDelete = (
     // Remove the specific w:t node, not the entire w:r.
     // A single w:r may contain multiple w:t nodes; removing
     // the run would destroy text from unaffected siblings.
-    nodesToRemove.push(span.tNode);
+    nodesToRemove.push(span.node);
   }
 
   // Apply mutations: insert fragments then remove originals.

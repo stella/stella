@@ -260,7 +260,7 @@ const addEntries = createSafeHandler(
             workspaceId: { eq: workspaceId },
             status: { eq: INVOICE_STATUS.DRAFT },
           },
-          columns: { id: true, totalAmount: true },
+          columns: { id: true, totalAmount: true, currency: true },
         });
         if (!invoiceCheck) {
           return { ok: false as const };
@@ -285,7 +285,7 @@ const addEntries = createSafeHandler(
                 // Re-check currency under the claim so a concurrent edit
                 // cannot attach a mismatched-currency entry (count mismatch
                 // then trips the concurrent-modification retry path).
-                eq(timeEntries.currency, invoice.currency),
+                eq(timeEntries.currency, invoiceCheck.currency),
               ),
             )
             .returning({ id: timeEntries.id });
@@ -311,7 +311,7 @@ const addEntries = createSafeHandler(
                 eq(expenses.status, BILLING_STATUS.APPROVED),
                 eq(expenses.billable, true),
                 isNull(expenses.invoiceId),
-                eq(expenses.currency, invoice.currency),
+                eq(expenses.currency, invoiceCheck.currency),
               ),
             )
             .returning({ id: expenses.id });

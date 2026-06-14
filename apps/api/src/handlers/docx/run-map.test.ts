@@ -15,7 +15,12 @@ const parseParagraph = (inner: string): slimdom.Element => {
 };
 
 const offsets = (p: slimdom.Element) =>
-  buildRunMap(p).map((s) => [s.start, s.length] as const);
+  buildRunMap(p)
+    .filter((s) => s.type === "text")
+    .map((s) => [s.start, s.length] as const);
+
+const spans = (p: slimdom.Element) =>
+  buildRunMap(p).map((s) => [s.type, s.start, s.length] as const);
 
 describe("buildRunMap offset alignment with collectText", () => {
   test("a leading tab occupies one offset so following text is not skewed", () => {
@@ -30,6 +35,18 @@ describe("buildRunMap offset alignment with collectText", () => {
     expect(offsets(p)).toEqual([
       [0, 1],
       [2, 1],
+    ]);
+  });
+
+  test("tabs and breaks are addressable spans", () => {
+    const p = parseParagraph(
+      "<w:r><w:t>A</w:t><w:br/><w:tab/><w:t>B</w:t></w:r>",
+    );
+    expect(spans(p)).toEqual([
+      ["text", 0, 1],
+      ["break", 1, 1],
+      ["tab", 2, 1],
+      ["text", 3, 1],
     ]);
   });
 

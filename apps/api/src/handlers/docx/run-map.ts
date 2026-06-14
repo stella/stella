@@ -9,12 +9,23 @@ import type * as slimdom from "slimdom";
 
 import { isElement, W_NS } from "./ooxml";
 
-export type RunSpan = {
+type TextRunSpan = {
+  type: "text";
   run: slimdom.Element;
-  tNode: slimdom.Element;
+  node: slimdom.Element;
   start: number;
   length: number;
 };
+
+type ControlRunSpan = {
+  type: "break" | "tab";
+  run: slimdom.Element;
+  node: slimdom.Element;
+  start: number;
+  length: 1;
+};
+
+export type RunSpan = TextRunSpan | ControlRunSpan;
 
 /** Build a character-offset map for a single `w:p` element. */
 export const buildRunMap = (p: slimdom.Element): RunSpan[] => {
@@ -64,8 +75,9 @@ export const buildRunMap = (p: slimdom.Element): RunSpan[] => {
             const text = rc.textContent ?? "";
             if (text.length > 0) {
               spans.push({
+                type: "text",
                 run: child,
-                tNode: rc,
+                node: rc,
                 start: offset,
                 length: text.length,
               });
@@ -77,8 +89,15 @@ export const buildRunMap = (p: slimdom.Element): RunSpan[] => {
           ) {
             // collectText (the coordinate system edit/comment offsets are
             // computed against) counts a tab as "\t" and a break as "\n".
-            // Advance the offset by one so text after a tab/break maps to
-            // the correct run span instead of being skewed left.
+            // Keep a real span so edits that target the control character
+            // can delete or replace it instead of falling through.
+            spans.push({
+              type: rc.localName === "tab" ? "tab" : "break",
+              run: child,
+              node: rc,
+              start: offset,
+              length: 1,
+            });
             offset += 1;
           }
         }

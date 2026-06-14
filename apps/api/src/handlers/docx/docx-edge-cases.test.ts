@@ -29,6 +29,17 @@ const WRAP = (body: string) =>
   `<w:document xmlns:w="${W_NS}">` +
   `<w:body>${body}</w:body></w:document>`;
 
+const runSpanText = (span: ReturnType<typeof buildRunMap>[number]): string => {
+  switch (span.type) {
+    case "text":
+      return span.node.textContent ?? "";
+    case "break":
+      return "\n";
+    case "tab":
+      return "\t";
+  }
+};
+
 /** Build a minimal DOCX buffer from document body XML. */
 const buildDocx = async (bodyXml: string): Promise<Buffer> => {
   const zip = new JSZip();
@@ -415,8 +426,8 @@ describe("run-map vs extract-text consistency", () => {
       }
       const spans = buildRunMap(p);
 
-      // Concatenate all RunSpan text
-      const runMapText = spans.map((s) => s.tNode.textContent ?? "").join("");
+      // Concatenate all RunSpan text/control characters.
+      const runMapText = spans.map(runSpanText).join("");
 
       // Extract text the same way extractText does
       const extractedText = collectTextFromParagraph(p);
@@ -441,6 +452,10 @@ describe("run-map vs extract-text consistency", () => {
       }
       if (node.localName === "t" && node.namespaceURI === W_NS) {
         text += node.textContent ?? "";
+      } else if (node.localName === "br" && node.namespaceURI === W_NS) {
+        text += "\n";
+      } else if (node.localName === "tab" && node.namespaceURI === W_NS) {
+        text += "\t";
       } else if (
         node.localName !== "delText" &&
         node.localName !== "del" &&

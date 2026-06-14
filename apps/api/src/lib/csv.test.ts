@@ -36,11 +36,18 @@ const readCsvField = (cell: string): string => {
 const FORMULA_PREFIX_RE = /^\s*[=+\-@\t\r\n]/u;
 
 // Deterministic LCG so a fuzz failure is reproducible, never flaky.
+const LCG_MODULUS = 2 ** 32;
+const LCG_MULTIPLIER = 1_664_525;
+const LCG_INCREMENT = 1_013_904_223;
+
 const makePrng = (seed: number) => {
-  let state = seed >>> 0;
+  let state = Math.trunc(seed) % LCG_MODULUS;
+  if (state < 0) {
+    state += LCG_MODULUS;
+  }
   return () => {
-    state = (state * 1664525 + 1013904223) >>> 0;
-    return state / 0x100000000;
+    state = (state * LCG_MULTIPLIER + LCG_INCREMENT) % LCG_MODULUS;
+    return state / LCG_MODULUS;
   };
 };
 
@@ -111,7 +118,7 @@ describe("escapeCSV", () => {
   // ----- invariants over a large, fuzzed input space -----
 
   test("INVARIANT: a flagged formula value always gets the tab guard", () => {
-    const rand = makePrng(0xc0ffee);
+    const rand = makePrng(12_648_430);
     for (let n = 0; n < 4000; n++) {
       const len = 1 + Math.floor(rand() * 6);
       let v = "";
@@ -126,7 +133,7 @@ describe("escapeCSV", () => {
   });
 
   test("INVARIANT: roundtrips through an RFC-4180 reader without data loss", () => {
-    const rand = makePrng(0x1337);
+    const rand = makePrng(4919);
     for (let n = 0; n < 4000; n++) {
       const len = Math.floor(rand() * 8);
       let v = "";
@@ -142,7 +149,7 @@ describe("escapeCSV", () => {
   });
 
   test("INVARIANT: the decoded cell never begins with a live formula char", () => {
-    const rand = makePrng(0xabcdef);
+    const rand = makePrng(11_259_375);
     const liveFormula = /^[=+\-@]/u;
     for (let n = 0; n < 4000; n++) {
       const len = 1 + Math.floor(rand() * 6);

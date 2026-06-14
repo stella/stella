@@ -42,11 +42,27 @@ describe("BOE search query builder", () => {
     );
   });
 
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null;
+
   const extractQueryString = (raw: string): string => {
-    const parsed = JSON.parse(raw) as {
-      query: { query_string: { query: string } };
-    };
-    return parsed.query.query_string.query;
+    const parsed: unknown = JSON.parse(raw);
+    if (!isRecord(parsed)) {
+      throw new Error("Expected JSON object");
+    }
+    const query = parsed["query"];
+    if (!isRecord(query)) {
+      throw new Error("Expected query object");
+    }
+    const queryString = query["query_string"];
+    if (!isRecord(queryString)) {
+      throw new Error("Expected query_string object");
+    }
+    const value = queryString["query"];
+    if (typeof value !== "string") {
+      throw new TypeError("Expected query string");
+    }
+    return value;
   };
 
   // A balanced-parens / balanced-quotes check: every "(" has a matching
@@ -56,10 +72,16 @@ describe("BOE search query builder", () => {
     let depth = 0;
     let quotes = 0;
     for (const ch of q) {
-      if (ch === "(") depth++;
-      else if (ch === ")") depth--;
-      else if (ch === '"') quotes++;
-      if (depth < 0) return false;
+      if (ch === "(") {
+        depth++;
+      } else if (ch === ")") {
+        depth--;
+      } else if (ch === '"') {
+        quotes++;
+      }
+      if (depth < 0) {
+        return false;
+      }
     }
     return depth === 0 && quotes % 2 === 0;
   };

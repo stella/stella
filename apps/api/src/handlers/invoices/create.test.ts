@@ -19,6 +19,7 @@ const entry = (id: string, currency: string) => ({
   status: BILLING_STATUS.APPROVED,
   billable: true,
   currency,
+  invoiceId: null,
 });
 
 const createContext = ({
@@ -114,6 +115,36 @@ describe("createInvoice", () => {
     expect(result).toEqual({
       code: 409,
       response: { message: "An invoice with this number already exists" },
+    });
+  });
+
+  test("rejects entries that are already attached to another invoice", async () => {
+    const entries = [
+      {
+        ...entry("te_1", "USD"),
+        invoiceId: toSafeId<"invoice">("inv_existing"),
+      },
+    ];
+    const { safeDb, scopedDb } = createScopedDbMock({
+      $count: async () => 0,
+      select: () => ({ from: () => ({ where: async () => entries }) }),
+    });
+
+    const result = await createInvoice.handler(
+      createContext({
+        body: baseBody("USD", ["te_1"]),
+        safeDb,
+        scopedDb,
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 400,
+      response: {
+        message:
+          "All entries must be approved, billable," +
+          " and not already on an invoice",
+      },
     });
   });
 

@@ -17,6 +17,7 @@ class MockQueue {
 mock.module("bullmq", () => ({ Queue: MockQueue }));
 mock.module("@/api/lib/redis-client", () => ({
   createBullMqConnection: () => ({}),
+  createRedisClient: () => ({}),
 }));
 
 const { createBullMqDispatchTask } = await import("@/api/lib/scheduler/bullmq");
