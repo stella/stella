@@ -195,9 +195,20 @@ const serializeParagraphProperties = (paragraph: Paragraph): string => {
     return "";
   }
 
+  // Children must follow the ECMA-376 CT_PPr sequence: pStyle, keepNext,
+  // keepLines, pageBreakBefore, numPr, spacing, ind, jc, sectPr.
   const parts: string[] = [];
   if (formatting?.styleId) {
     parts.push(`<w:pStyle w:val="${escapeXml(formatting.styleId)}"/>`);
+  }
+  if (formatting?.keepNext) {
+    parts.push("<w:keepNext/>");
+  }
+  if (formatting?.keepLines) {
+    parts.push("<w:keepLines/>");
+  }
+  if (formatting?.pageBreakBefore) {
+    parts.push("<w:pageBreakBefore/>");
   }
   if (formatting?.numPr?.numId !== undefined) {
     parts.push(
@@ -206,9 +217,6 @@ const serializeParagraphProperties = (paragraph: Paragraph): string => {
         `<w:numId w:val="${formatting.numPr.numId}"/>` +
         "</w:numPr>",
     );
-  }
-  if (formatting?.alignment) {
-    parts.push(`<w:jc w:val="${formatting.alignment}"/>`);
   }
   if (
     formatting?.spaceBefore !== undefined ||
@@ -240,14 +248,8 @@ const serializeParagraphProperties = (paragraph: Paragraph): string => {
       )}/>`,
     );
   }
-  if (formatting?.keepNext) {
-    parts.push("<w:keepNext/>");
-  }
-  if (formatting?.keepLines) {
-    parts.push("<w:keepLines/>");
-  }
-  if (formatting?.pageBreakBefore) {
-    parts.push("<w:pageBreakBefore/>");
+  if (formatting?.alignment) {
+    parts.push(`<w:jc w:val="${formatting.alignment}"/>`);
   }
   if (paragraph.sectionProperties) {
     parts.push(serializeSectionProperties(paragraph.sectionProperties));
@@ -563,13 +565,14 @@ const serializeNumbering = (
 
 const serializeNumberingLevel = (level: ListLevel): string =>
   [
+    // CT_Lvl order: start, numFmt, isLgl, suff, lvlText, lvlJc, pPr, rPr.
     `<w:lvl w:ilvl="${level.ilvl}">`,
     `<w:start w:val="${level.start ?? 1}"/>`,
     `<w:numFmt w:val="${level.numFmt}"/>`,
+    level.isLgl ? "<w:isLgl/>" : "",
+    level.suffix ? `<w:suff w:val="${level.suffix}"/>` : "",
     `<w:lvlText w:val="${escapeXml(level.lvlText)}"/>`,
     `<w:lvlJc w:val="${level.lvlJc ?? "left"}"/>`,
-    level.suffix ? `<w:suff w:val="${level.suffix}"/>` : "",
-    level.isLgl ? "<w:isLgl/>" : "",
     level.pPr
       ? serializeParagraphProperties({
           type: "paragraph",

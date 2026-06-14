@@ -356,9 +356,10 @@ describe("Stella Legal Source", () => {
     expect(zip.file("word/numbering.xml")).toBeTruthy();
 
     const documentXml = await zip.file("word/document.xml")?.async("string");
-    expect(documentXml).toContain(
-      "Mutual Non-Disclosure Agreement".toUpperCase(),
-    );
+    // Title text is stored in original case; the Title style's allCaps renders it
+    // uppercase in Word (a manual toUpperCase would corrupt non-English casing).
+    expect(documentXml).toContain("Mutual Non-Disclosure Agreement");
+    expect(documentXml).not.toContain("MUTUAL NON-DISCLOSURE AGREEMENT");
     expect(documentXml).toContain("<w:numPr>");
     expect(documentXml).toContain("<w:tbl>");
     expect(documentXml).toContain("<w:tblGrid>");
@@ -366,5 +367,8 @@ describe("Stella Legal Source", () => {
     const numberingXml = await zip.file("word/numbering.xml")?.async("string");
     expect(numberingXml).toContain("<w:nsid");
     expect(numberingXml).toContain("<w:lvlJc");
+    // CT_Lvl child order (ECMA-376): isLgl and suff must precede lvlText.
+    expect(numberingXml).toContain('<w:isLgl/><w:suff w:val="tab"/>');
+    expect(numberingXml).toContain('<w:suff w:val="tab"/><w:lvlText');
   });
 });
