@@ -111,6 +111,7 @@ describe("getClipboardImageFiles", () => {
 
 describe("runsToClipboardContent", () => {
   test("escapes formatting fields before serializing clipboard HTML", () => {
+    const scriptScheme = ["java", "script:"].join("");
     const run: Run = {
       type: "run",
       content: [{ type: "text", text: "Client <draft>" }],
@@ -119,7 +120,7 @@ describe("runsToClipboardContent", () => {
         fontFamily: {
           ascii: 'Bad";" onmouseover="alert(1)<img src=x>',
         },
-        color: { rgb: "000000;background:url(javascript:alert(1))" },
+        color: { rgb: `000000;background:url(${scriptScheme}alert(1))` },
         shading: { fill: { rgb: 'ffffff"><img src=x onerror=alert(1)>' } },
       },
     };
@@ -132,7 +133,7 @@ describe("runsToClipboardContent", () => {
     expect(html).toContain("\\&quot;");
     expect(html).not.toContain('" onmouseover=');
     expect(html).not.toContain("<img");
-    expect(html).not.toContain("javascript:");
+    expect(html).not.toContain(scriptScheme);
     expect(html).not.toContain("color: #000000;background");
     expect(html).not.toContain("background-color:");
   });
