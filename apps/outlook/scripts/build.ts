@@ -83,7 +83,7 @@ if (!tailwind.success) {
 }
 
 for (const fileName of readdirSync(PUBLIC_ASSETS_DIR)) {
-  if (!fileName.endsWith(".svg")) {
+  if (!fileName.endsWith(".png")) {
     continue;
   }
   copyFileSync(
