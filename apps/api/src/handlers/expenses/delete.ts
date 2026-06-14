@@ -46,6 +46,17 @@ const deleteExpense = createSafeHandler(
       );
     }
 
+    // A billed expense is attached to an invoice; writing it off here would
+    // leave the invoice total stale. Match batch-delete, which excludes BILLED.
+    if (existing.status === BILLING_STATUS.BILLED) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Cannot delete a billed expense; revert the invoice first",
+        }),
+      );
+    }
+
     if (existing.status === BILLING_STATUS.DRAFT) {
       yield* Result.await(
         safeDb(async (tx) => {
