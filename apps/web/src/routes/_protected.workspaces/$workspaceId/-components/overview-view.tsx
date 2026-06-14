@@ -327,7 +327,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         const daily = Array.from({ length: 7 }, () => 0);
         const dailyEntries: Record<
           number,
-          { description: string; hours: number }[]
+          { id: string; description: string; hours: number }[]
         > = {};
 
         for (const entry of timeEntries) {
@@ -349,6 +349,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
 
           const entries = dailyEntries[dayIdx] ?? [];
           entries.push({
+            id: entry.id,
             description: entry.narrative || entry.taskCode || "—",
             hours,
           });
@@ -378,7 +379,12 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const tasksWithDue = useMemo(
     () =>
       tasks
-        .filter((task) => task.dueDate !== null && task.status !== "closed")
+        .filter(
+          (task) =>
+            task.dueDate !== null &&
+            task.status !== "done" &&
+            task.status !== "cancelled",
+        )
         .toSorted(
           (a, b) =>
             new Date(a.dueDate ?? 0).getTime() -
@@ -797,7 +803,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                                         {entries.map((entry) => (
                                           <div
                                             className="flex items-start justify-between gap-2"
-                                            key={entry.description}
+                                            key={entry.id}
                                           >
                                             <span className="text-xs">
                                               {entry.description}
