@@ -1,5 +1,6 @@
 import { Queue } from "bullmq";
 
+import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
@@ -40,7 +41,7 @@ export const createBullMqDispatchTask =
         schedulerRunId: runId,
         ...(payload.data && { payload: payload.data }),
       },
-      { jobId: `scheduler:${job.id}:${runId}` },
+      { jobId: createBullMqJobId("scheduler", job.id, runId) },
     );
   };
 

@@ -17,6 +17,7 @@ import {
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { createBullMqConnection } from "@/api/lib/redis-client";
@@ -102,7 +103,7 @@ export const enqueuePdfDerivative = async ({
       workspaceId,
     },
     {
-      jobId: `${workspaceId}:${fieldId}:pdf`,
+      jobId: createBullMqJobId(workspaceId, fieldId, "pdf"),
     },
   );
 };
@@ -157,7 +158,7 @@ export const enqueueImageThumbnail = async ({
       workspaceId,
     },
     {
-      jobId: `${workspaceId}:${fieldId}:thumbnail`,
+      jobId: createBullMqJobId(workspaceId, fieldId, "thumbnail"),
     },
   );
 };

@@ -41,7 +41,7 @@ describe("createBullMqDispatchTask idempotency", () => {
     expect(addCalls).toHaveLength(2);
     for (const call of addCalls) {
       expect(call.name).toBe("sendDigest");
-      expect(call.opts).toMatchObject({ jobId: "scheduler:job_1:run_1" });
+      expect(call.opts).toMatchObject({ jobId: "scheduler-job_1-run_1" });
     }
     expect(addCalls[0]?.opts).toEqual(addCalls[1]?.opts);
   });
