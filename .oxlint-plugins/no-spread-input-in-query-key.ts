@@ -25,7 +25,7 @@
 //   // destructuring rest is not an array spread element:
 //   const { search, ...listFilters } = filters
 
-import { getPropertyName } from "./utils.ts";
+import { getPropertyName, unwrapExpression } from "./utils.ts";
 
 // An array element that spreads a bare Identifier or inline object literal
 // leaks unknown properties into the cache key. A spread of a CallExpression
@@ -42,18 +42,29 @@ const isLeakySpread = (element) => {
   return argument.type === "Identifier" || argument.type === "ObjectExpression";
 };
 
+const parentAfterExpressionWrappers = (node) => {
+  let current = node.parent;
+  while (
+    current?.type === "TSAsExpression" ||
+    current?.type === "TSSatisfiesExpression"
+  ) {
+    current = current.parent;
+  }
+  return current;
+};
+
 // Walk up from an ArrayExpression to decide whether it is the array returned
 // by an arrow function that is a property value of a `const <name>Keys = {...}`
 // query-key-factory object. Handles direct arrow bodies (`() => [...]`),
 // block bodies (`() => { return [...] }`), and ternary branches
 // (`(key) => cond ? [...] : [...]`).
 const isQueryKeyFactoryReturn = (arrayNode) => {
-  let current = arrayNode.parent;
+  let current = parentAfterExpressionWrappers(arrayNode);
 
   // Unwrap a ReturnStatement and/or a ConditionalExpression sitting between
   // the array and the arrow function.
   if (current?.type === "ConditionalExpression") {
-    current = current.parent;
+    current = parentAfterExpressionWrappers(current);
   }
   if (current?.type === "ReturnStatement") {
     // `return <array>` or `return cond ? <array> : ...`; climb to the
@@ -78,7 +89,7 @@ const isQueryKeyFactoryReturn = (arrayNode) => {
     return false;
   }
 
-  const declarator = objectExpression.parent;
+  const declarator = parentAfterExpressionWrappers(objectExpression);
   if (declarator?.type !== "VariableDeclarator") {
     return false;
   }
@@ -121,10 +132,11 @@ export default {
             if (getPropertyName(node.key) !== "queryKey") {
               return;
             }
-            if (node.value?.type !== "ArrayExpression") {
+            const value = unwrapExpression(node.value);
+            if (value?.type !== "ArrayExpression") {
               return;
             }
-            reportLeakyElements(node.value);
+            reportLeakyElements(value);
           },
 
           // Scope 2: the array returned by a `*Keys` factory helper arrow.

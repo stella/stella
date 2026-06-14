@@ -15,7 +15,8 @@
 //     MemberExpression (report on the RHS).
 //
 // A value is allowed when it is:
-//   • a string Literal or TemplateLiteral (static markup, no injection), OR
+//   • a string Literal or TemplateLiteral whose interpolations are all
+//     independently proven safe (static markup, no raw injection), OR
 //   • a CallExpression whose callee name matches
 //     /^(sanitize|escape|purify|dompurify)/i — a sanitizer/escaper —
 //     including a `.value` / `.data` / `.html`-style member read OFF such a
@@ -63,13 +64,19 @@ const isComment = (value) =>
   typeof value.loc === "object" &&
   value.loc !== null;
 
+const isJsxIdentifier = (node, name) =>
+  typeof node === "object" &&
+  node !== null &&
+  node.type === "JSXIdentifier" &&
+  node.name === name;
+
 const leafCalleeName = (callee) => {
   const dotted = getCalleeName(callee);
   if (dotted === null) {
     return null;
   }
   const parts = dotted.split(".");
-  return parts[parts.length - 1] ?? null;
+  return parts.at(-1) ?? null;
 };
 
 const isSanitizerCall = (node) => {
@@ -91,7 +98,10 @@ const isProvenSafeValue = (node) => {
     return true;
   }
   if (node.type === "TemplateLiteral") {
-    return true;
+    return (
+      Array.isArray(node.expressions) &&
+      node.expressions.every(isProvenSafeValue)
+    );
   }
   if (isSanitizerCall(node)) {
     return true;
@@ -113,6 +123,33 @@ const isProvenSafeMemberLeaf = (node) => {
     return false;
   }
   return isSanitizerCall(node.object);
+};
+
+const isDangerouslySetInnerHtmlValue = (property) => {
+  if (getPropertyName(property.key) !== "__html") {
+    return false;
+  }
+  const objectExpression = property.parent;
+  if (objectExpression?.type !== "ObjectExpression") {
+    return false;
+  }
+
+  let current = objectExpression.parent;
+  while (
+    current?.type === "TSAsExpression" ||
+    current?.type === "TSSatisfiesExpression"
+  ) {
+    current = current.parent;
+  }
+
+  if (current?.type !== "JSXExpressionContainer") {
+    return false;
+  }
+  const attribute = current.parent;
+  return (
+    attribute?.type === "JSXAttribute" &&
+    isJsxIdentifier(attribute.name, "dangerouslySetInnerHTML")
+  );
 };
 
 export default {
@@ -169,7 +206,7 @@ export default {
 
           // Sink 1: `dangerouslySetInnerHTML={{ __html: <expr> }}`.
           Property(node) {
-            if (getPropertyName(node.key) !== "__html") {
+            if (!isDangerouslySetInnerHtmlValue(node)) {
               return;
             }
             reportIfUnsafe(node.value);
