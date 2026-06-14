@@ -13,6 +13,7 @@ const rootKeys = {
 const input = ["leaked"] as const;
 const inputKeys = ["leaked"] as const;
 const filterInput = { filters: ["leaked"] as const };
+declare const includeFilters: boolean;
 
 // Direct `queryKey` arrays must not spread caller-controlled identifiers.
 export const directQueryOptions = {
@@ -107,7 +108,7 @@ export const safeConditionalFieldQueryOptions = {
   queryKey: [
     ...rootKeys.all,
     {
-      ...(filterInput.filters.length > 0 && {
+      ...(includeFilters && {
         filters: filterInput.filters,
       }),
     },
