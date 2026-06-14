@@ -35,6 +35,16 @@ export const bareKeysIdentifierQueryOptions = {
   queryKey: [...inputKeys] as const,
 };
 
+export const objectSpreadQueryOptions = {
+  queryKey: [
+    ...rootKeys.all,
+    {
+      // oxlint-disable-next-line no-spread-input-in-query-key/no-spread-input-in-query-key
+      ...filterInput,
+    },
+  ] as const,
+};
+
 export const fixtureKeys = {
   all: ["fixture"] as const,
 

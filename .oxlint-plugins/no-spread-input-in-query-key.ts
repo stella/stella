@@ -141,6 +141,18 @@ export default {
         },
       },
       create(context) {
+        const reportObjectSpreads = (objectNode) => {
+          for (const property of objectNode.properties) {
+            if (property?.type !== "SpreadElement") {
+              continue;
+            }
+            context.report({
+              node: property,
+              messageId: "spreadInputInQueryKey",
+            });
+          }
+        };
+
         const reportLeakyElements = (arrayNode) => {
           for (const element of arrayNode.elements) {
             if (isLeakySpread(element)) {
@@ -148,6 +160,11 @@ export default {
                 node: element,
                 messageId: "spreadInputInQueryKey",
               });
+              continue;
+            }
+            const value = unwrapExpression(element);
+            if (value?.type === "ObjectExpression") {
+              reportObjectSpreads(value);
             }
           }
         };

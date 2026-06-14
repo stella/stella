@@ -38,6 +38,17 @@ export const UnsafeHoistedPayload = () => (
   <div dangerouslySetInnerHTML={hoistedPayload} />
 );
 
+const spreadPayload = { __html: rawHtml };
+
+export const UnsafeSpreadPayload = () => (
+  <div
+    dangerouslySetInnerHTML={{
+      // oxlint-disable-next-line no-unsafe-inner-html/no-unsafe-inner-html
+      ...spreadPayload,
+    }}
+  />
+);
+
 // --- Cases the rule MUST NOT flag ---
 
 export const SafeSanitizedCall = () => (

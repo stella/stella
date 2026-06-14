@@ -171,6 +171,10 @@ export default {
             "Wrap the value in a sanitizer, or add a `// safe-html: <reason " +
             "naming the sanitizer/source>` comment on the line directly above " +
             "if it is escaped at its source.",
+          unsafeInnerHtmlSpread:
+            "Do not spread an object into dangerouslySetInnerHTML. Keep " +
+            "`__html` inline so this rule can prove the HTML value is " +
+            "sanitized or escaped.",
         },
       },
       create(context) {
@@ -204,6 +208,18 @@ export default {
           context.report({ node, messageId: "unsafeInnerHtml" });
         };
 
+        const reportPayloadSpreads = (objectNode) => {
+          for (const property of objectNode.properties) {
+            if (property?.type !== "SpreadElement") {
+              continue;
+            }
+            context.report({
+              node: property,
+              messageId: "unsafeInnerHtmlSpread",
+            });
+          }
+        };
+
         return {
           Program(node) {
             recordEscapeHatches(node);
@@ -220,8 +236,12 @@ export default {
             if (value?.type !== "JSXExpressionContainer") {
               return;
             }
+            if (!value.expression) {
+              return;
+            }
             const expression = unwrapExpression(value.expression);
             if (expression?.type === "ObjectExpression") {
+              reportPayloadSpreads(expression);
               return;
             }
             reportIfUnsafe(value.expression);
