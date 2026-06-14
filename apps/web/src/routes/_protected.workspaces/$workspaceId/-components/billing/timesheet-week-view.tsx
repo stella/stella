@@ -15,6 +15,10 @@ import {
   formatCurrencyCompact,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { useMatterNameMap } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-name-map";
+import {
+  matterCurrencyMap,
+  summarizeBillableAmountByCurrency,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/timesheet-week-view.logic";
 import { timeEntriesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/time-entries";
 
 type TimesheetWeekViewProps = {
@@ -86,13 +90,14 @@ export const TimesheetWeekView = ({
     return map;
   }, [entries]);
 
-  // Find dominant currency
-  const dominantCurrency = useMemo(() => {
-    if (entries.length === 0) {
-      return DEFAULT_CURRENCY;
-    }
-    return entries.at(0)?.currency ?? DEFAULT_CURRENCY;
-  }, [entries]);
+  // Each matter bills in one currency; week totals are reported per
+  // currency. There is no FX conversion, so amounts in different currencies
+  // are never summed under a single (first-entry) symbol.
+  const matterCurrencies = useMemo(() => matterCurrencyMap(entries), [entries]);
+  const weekAmountsByCurrency = useMemo(
+    () => summarizeBillableAmountByCurrency(entries),
+    [entries],
+  );
 
   const matterIds = [...grid.keys()];
 
@@ -209,7 +214,10 @@ export const TimesheetWeekView = ({
                   <div className="font-medium">{formatMinutes(rowMinutes)}</div>
                   {rowAmount > 0 && (
                     <div className="text-muted-foreground text-xs">
-                      {formatCurrencyCompact(rowAmount, dominantCurrency)}
+                      {formatCurrencyCompact(
+                        rowAmount,
+                        matterCurrencies.get(matterId) ?? DEFAULT_CURRENCY,
+                      )}
                     </div>
                   )}
                 </td>
@@ -254,11 +262,11 @@ export const TimesheetWeekView = ({
                     hours: formatDecimalHours(weekTotals.minutes),
                   })}
                 </div>
-                {weekTotals.amount > 0 && (
-                  <div className="text-xs">
-                    {formatCurrencyCompact(weekTotals.amount, dominantCurrency)}
+                {weekAmountsByCurrency.map((total) => (
+                  <div className="text-xs" key={total.currency}>
+                    {formatCurrencyCompact(total.amount, total.currency)}
                   </div>
-                )}
+                ))}
               </td>
             </tr>
           </tfoot>
