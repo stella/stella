@@ -15,6 +15,7 @@ import {
   mcpUserConnections,
   pendingUploads,
   promptShortcuts,
+  rateEntries,
   taskAssignees,
   userFiles,
   workspaceMembers,
@@ -23,6 +24,8 @@ import {
 } from "@/api/db/schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createUserFileKey, deleteS3Keys } from "@/api/handlers/files/utils";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 /**
  * Fetches the user email by ID.
@@ -234,6 +237,13 @@ export const verifyAndDeleteUser = async (
       const identifier = `delete-account:${email}`;
 
       await rootDb.transaction(async (tx) => {
+        // Lock the user row to serialize deletion of this account
+        await tx
+          .select({ id: user.id })
+          .from(user)
+          .where(eq(user.id, currentUserId))
+          .for("update");
+
         const verificationRow = await tx
           .select()
           .from(verification)
@@ -319,7 +329,9 @@ export const verifyAndDeleteUser = async (
         // eslint-disable-next-line auth-lifecycle/no-direct-auth-artifact-delete
         await tx.delete(session).where(eq(session.userId, currentUserId));
         await tx.delete(member).where(eq(member.userId, currentUserId));
+        // Delete invitations sent by the user, and also invitations sent to the user's email
         await tx.delete(invitation).where(eq(invitation.inviterId, currentUserId));
+        await tx.delete(invitation).where(eq(invitation.email, email));
 
         // 2. OAuth / Better-Auth token tables (auth-schema)
         // eslint-disable-next-line auth-lifecycle/no-direct-auth-artifact-delete
@@ -444,6 +456,38 @@ export const verifyAndDeleteUser = async (
 
         // 9. Personal user files (private S3 uploads) — must delete userFiles before chatThreads
         // because userFiles.threadId has onDelete: "restrict" reference to chatThreads.id
+        const files = await tx
+          .select({
+            id: userFiles.id,
+            s3Key: userFiles.s3Key,
+            thumbnailFileId: userFiles.thumbnailFileId,
+            userId: userFiles.userId,
+          })
+          .from(userFiles)
+          .where(eq(userFiles.userId, currentUserId));
+
+        if (files.length > 0) {
+          const s3Keys = files.flatMap((file) =>
+            file.thumbnailFileId
+              ? [
+                  file.s3Key,
+                  createUserFileKey({
+                    fileId: file.thumbnailFileId,
+                    mimeType: "image/webp",
+                    userId: brandPersistedUserId(file.userId),
+                  }),
+                ]
+              : [file.s3Key],
+          );
+          const deleteResult = await deleteS3Keys(s3Keys);
+          if (Result.isError(deleteResult)) {
+            throw new HandlerError({
+              status: 500,
+              message: "Failed to delete user files from storage",
+              cause: deleteResult.error,
+            });
+          }
+        }
         await tx.delete(userFiles).where(eq(userFiles.userId, currentUserId));
 
         // 10. AI chat threads — messages and fileChatThreads cascade on thread deletion
@@ -456,6 +500,9 @@ export const verifyAndDeleteUser = async (
           .where(eq(workspaceViewTemplates.userId, currentUserId));
         await tx.delete(promptShortcuts).where(eq(promptShortcuts.userId, currentUserId));
         await tx.delete(agentSkills).where(eq(agentSkills.userId, currentUserId));
+
+        // 12. Personal billing rates
+        await tx.delete(rateEntries).where(eq(rateEntries.userId, currentUserId));
 
         // 3. Clear personal data in the user table and release the original email address
         await tx
