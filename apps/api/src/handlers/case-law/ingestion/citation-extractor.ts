@@ -110,8 +110,7 @@ export const isSelfCitation = (
 export const extractCitations = (
   sections: { index: number; text: string }[],
 ): ExtractedCitation[] => {
-  const seen = new Set<string>();
-  const citations: ExtractedCitation[] = [];
+  const byKey = new Map<string, ExtractedCitation>();
 
   for (const section of sections) {
     for (const pattern of CITATION_PATTERNS) {
@@ -130,18 +129,24 @@ export const extractCitations = (
         // of which fires first.
         const dedupKey = match[1]?.trim() ?? citationText;
 
-        if (seen.has(dedupKey)) {
+        const existing = byKey.get(dedupKey);
+        if (!existing) {
+          byKey.set(dedupKey, { citationText, sectionIndex: section.index });
           continue;
         }
-        seen.add(dedupKey);
-
-        citations.push({
-          citationText,
-          sectionIndex: section.index,
-        });
+        // Prefer a later occurrence over an earlier one: a case is often
+        // listed bare in the header (low section index) and then discussed
+        // in the reasoning. The discussion carries the polarity signal, so
+        // record the later section's context, not the header's.
+        if (
+          existing.sectionIndex === null ||
+          section.index > existing.sectionIndex
+        ) {
+          existing.sectionIndex = section.index;
+        }
       }
     }
   }
 
-  return citations;
+  return [...byKey.values()];
 };

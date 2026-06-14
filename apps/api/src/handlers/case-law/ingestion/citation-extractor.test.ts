@@ -42,6 +42,23 @@ describe("extractCitations", () => {
     expect(texts).toContain("II ACa 45/20");
   });
 
+  test("records the later (reasoning) section for a cross-section citation", () => {
+    // The same case is listed bare in the header (section 0) and discussed
+    // in the reasoning (section 2). The reasoning context carries polarity,
+    // so the citation must be anchored to section 2, not the header.
+    const citations = extractCitations([
+      { index: 0, text: "Související: sp. zn. 21 Cdo 1234/2020." },
+      { index: 1, text: "Skutkový stav bez citací." },
+      {
+        index: 2,
+        text: "Soud se odchýlil od sp. zn. 21 Cdo 1234/2020 a rozhodl jinak.",
+      },
+    ]);
+
+    expect(citations).toHaveLength(1);
+    expect(citations[0]?.sectionIndex).toBe(2);
+  });
+
   test("does not capture Roman-numeral prose as a phantom citation", () => {
     // The unprefixed Polish pattern previously matched any mixed-case word
     // for the division code, so ordinary prose became a citation.
