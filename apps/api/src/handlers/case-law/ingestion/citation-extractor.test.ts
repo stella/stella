@@ -32,6 +32,27 @@ describe("extractCitations", () => {
     const citations = extractCitations([{ index: 0, text }]);
     expect(citations).toHaveLength(2);
   });
+
+  test("extracts an unprefixed Polish case number", () => {
+    const citations = extractCitations([
+      { index: 0, text: "Por. wyrok II CSK 123/20 oraz II ACa 45/20." },
+    ]);
+    const texts = citations.map((c) => c.citationText);
+    expect(texts).toContain("II CSK 123/20");
+    expect(texts).toContain("II ACa 45/20");
+  });
+
+  test("does not capture Roman-numeral prose as a phantom citation", () => {
+    // The unprefixed Polish pattern previously matched any mixed-case word
+    // for the division code, so ordinary prose became a citation.
+    for (const text of [
+      "Article XV See 12/20 for details",
+      "see point III the 4/19 below",
+      "as in II and 5/20 of the act",
+    ]) {
+      expect(extractCitations([{ index: 0, text }])).toHaveLength(0);
+    }
+  });
 });
 
 describe("isSelfCitation", () => {

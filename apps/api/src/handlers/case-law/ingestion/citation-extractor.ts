@@ -40,8 +40,12 @@ const CITATION_PATTERNS: RegExp[] = [
 
   PL_PREFIXED_PATTERN,
 
-  // Polish case number without prefix: "II CSK 123/20", "II ACa 45/20"
-  /\b[IVX]{2,4}\s+[A-Za-z]{2,5}\s+\d{1,6}\/\d{2,4}\b/gu,
+  // Polish case number without prefix: "II CSK 123/20", "II ACa 45/20".
+  // The division code is an uppercase chamber code (CSK, KK, CSKP) or an
+  // uppercase code with an appellate suffix (ACa, ACz, AKa). Requiring that
+  // shape stops ordinary mixed-case prose like "Article XV See 12/20" from
+  // being captured as a phantom citation.
+  /\b[IVX]{2,4}\s+(?:[A-Z]{2,5}|[A-Z]{1,4}[az])\s+\d{1,6}\/\d{2,4}\b/gu,
 ];
 
 /** Strip known prefixes to get the bare case number. */
