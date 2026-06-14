@@ -156,8 +156,47 @@ const resolveToken = (
   return undefined;
 };
 
+/**
+ * Convert a plain numeric string to a number, else undefined. Empty /
+ * whitespace-only strings are not numbers (avoids `"" == 0` surprises).
+ */
+const numericString = (value: unknown): number | undefined => {
+  if (typeof value !== "string" || value.trim() === "") {
+    return undefined;
+  }
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
+};
+
+/**
+ * When one operand is a number and the other is a numeric-looking string,
+ * compare them numerically. Form number inputs and JSON payloads serialize
+ * numbers as strings, so `contractValue > 100000` must still hold when
+ * `contractValue` arrives as `"150000"`. Non-numeric operands are left
+ * untouched so `"abc" == 0` stays false.
+ */
+const coerceNumericPair = (
+  left: unknown,
+  right: unknown,
+): [unknown, unknown] => {
+  if (typeof left === "number" && typeof right === "string") {
+    const r = numericString(right);
+    if (r !== undefined) {
+      return [left, r];
+    }
+  }
+  if (typeof right === "number" && typeof left === "string") {
+    const l = numericString(left);
+    if (l !== undefined) {
+      return [l, right];
+    }
+  }
+  return [left, right];
+};
+
 /** Evaluate a comparison between two resolved values. */
-const compare = (left: unknown, op: string, right: unknown): boolean => {
+const compare = (rawLeft: unknown, op: string, rawRight: unknown): boolean => {
+  const [left, right] = coerceNumericPair(rawLeft, rawRight);
   switch (op) {
     case "==":
       return left === right;

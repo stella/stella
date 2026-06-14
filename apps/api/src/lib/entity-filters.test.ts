@@ -339,6 +339,150 @@ describe("applySorts (in-memory)", () => {
     expect(sorted.map((item) => item.entityId)).toEqual(["2", "1"]);
   });
 
+  test("orders ints numerically, not lexicographically (10 after 9)", () => {
+    const items = [
+      {
+        entityId: "ten",
+        kind: "task" as const,
+        fields: [makeIntField("ten", "p1", 10)],
+      },
+      {
+        entityId: "nine",
+        kind: "task" as const,
+        fields: [makeIntField("nine", "p1", 9)],
+      },
+      {
+        entityId: "two",
+        kind: "task" as const,
+        fields: [makeIntField("two", "p1", 2)],
+      },
+    ];
+
+    const sorted = applySorts(items, [{ propertyId: "p1", desc: false }]);
+
+    expect(sorted.map((item) => item.entityId)).toEqual(["two", "nine", "ten"]);
+  });
+
+  test("int sort stays numeric when a row is missing the field (missing sorts last)", () => {
+    const items = [
+      {
+        entityId: "ten",
+        kind: "task" as const,
+        fields: [makeIntField("ten", "p1", 10)],
+      },
+      { entityId: "missing", kind: "task" as const, fields: [] },
+      {
+        entityId: "nine",
+        kind: "task" as const,
+        fields: [makeIntField("nine", "p1", 9)],
+      },
+    ];
+
+    const asc = applySorts(items, [{ propertyId: "p1", desc: false }]);
+    expect(asc.map((item) => item.entityId)).toEqual([
+      "nine",
+      "ten",
+      "missing",
+    ]);
+
+    // Missing values bucket to the end regardless of direction.
+    const desc = applySorts(items, [{ propertyId: "p1", desc: true }]);
+    expect(desc.map((item) => item.entityId)).toEqual([
+      "ten",
+      "nine",
+      "missing",
+    ]);
+  });
+
+  test("int sort treats whitespace-only legacy text as missing", () => {
+    const items = [
+      makeEntity("whitespace", "task", [["p1", "   "]]),
+      {
+        entityId: "negative",
+        kind: "task" as const,
+        fields: [makeIntField("negative", "p1", -1)],
+      },
+      {
+        entityId: "positive",
+        kind: "task" as const,
+        fields: [makeIntField("positive", "p1", 1)],
+      },
+    ];
+
+    const sorted = applySorts(items, [{ propertyId: "p1", desc: false }]);
+
+    expect(sorted.map((item) => item.entityId)).toEqual([
+      "negative",
+      "positive",
+      "whitespace",
+    ]);
+  });
+
+  test("int sort parses legacy numeric text values", () => {
+    const items = [
+      {
+        entityId: "twenty",
+        kind: "task" as const,
+        fields: [makeIntField("twenty", "p1", 20)],
+      },
+      makeEntity("ten", "task", [["p1", "10"]]),
+      {
+        entityId: "nine",
+        kind: "task" as const,
+        fields: [makeIntField("nine", "p1", 9)],
+      },
+    ];
+
+    const sorted = applySorts(items, [{ propertyId: "p1", desc: false }]);
+
+    expect(sorted.map((item) => item.entityId)).toEqual([
+      "nine",
+      "ten",
+      "twenty",
+    ]);
+  });
+
+  test("property: int sort with missing rows is numerically monotonic", () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.option(fc.integer(), { nil: undefined }), {
+          minLength: 1,
+          maxLength: 20,
+        }),
+        (values) => {
+          const items = values.map((value, index) =>
+            value === undefined
+              ? { entityId: String(index), kind: "task" as const, fields: [] }
+              : {
+                  entityId: String(index),
+                  kind: "task" as const,
+                  fields: [makeIntField(String(index), "p1", value)],
+                },
+          );
+
+          const sorted = applySorts(items, [{ propertyId: "p1", desc: false }]);
+          const nums = sorted.map((item) => {
+            const c = item.fields[0]?.content;
+            return c?.type === "int" ? c.value : null;
+          });
+
+          // Defined ints appear before any missing, in non-decreasing order.
+          let seenNull = false;
+          let prev = -Infinity;
+          for (const n of nums) {
+            if (n === null) {
+              seenNull = true;
+              continue;
+            }
+            expect(seenNull).toBe(false);
+            expect(n).toBeGreaterThanOrEqual(prev);
+            prev = n;
+          }
+        },
+      ),
+    );
+  });
+
   test("property: ascending string sort is monotonic", () => {
     fc.assert(
       fc.property(
@@ -428,5 +572,43 @@ describe("buildSortExpressions", () => {
       expect(sql).toContain(`"entities".${column}`);
       expect(sql).not.toContain('"fields"."property_id" =');
     }
+  });
+
+  test("property sort emits a numeric key so int fields order numerically", () => {
+    const dialect = new PgDialect();
+    const expressions = buildSortExpressions([
+      { propertyId: "p1", desc: false },
+    ]);
+
+    // A guarded numeric cast, ordered before the text key.
+    const numericExpr = expressions[0];
+    const textExpr = expressions[1];
+    if (!numericExpr || !textExpr) {
+      throw new Error("expected numeric and text sort expressions");
+    }
+
+    const numericSql = dialect.sqlToQuery(numericExpr).sql;
+    expect(numericSql).toContain("::numeric");
+    expect(numericSql).toContain("BTRIM");
+    expect(numericSql).toContain('"properties"');
+    expect(numericSql).toContain("'int'");
+    expect(numericSql).toContain("~");
+    expect(numericSql).toContain("NULLS LAST");
+
+    const textSql = dialect.sqlToQuery(textExpr).sql;
+    expect(textSql).toContain("->>'value'");
+    expect(textSql).not.toContain("::numeric");
+  });
+
+  test("descending property sort keeps missing/non-int values last", () => {
+    const dialect = new PgDialect();
+    const [numericExpr] = buildSortExpressions([
+      { propertyId: "p1", desc: true },
+    ]);
+    if (!numericExpr) {
+      throw new Error("expected numeric sort expression");
+    }
+    const sql = dialect.sqlToQuery(numericExpr).sql;
+    expect(sql).toContain("DESC NULLS LAST");
   });
 });

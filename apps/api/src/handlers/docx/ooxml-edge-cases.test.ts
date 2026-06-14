@@ -42,6 +42,18 @@ const firstParagraph = (xml: string): slimdom.Element => {
   return p;
 };
 
+const runSpanText = (span: ReturnType<typeof buildRunMap>[number]): string => {
+  switch (span.type) {
+    case "text":
+      return span.node.textContent ?? "";
+    case "break":
+      return "\n";
+    case "tab":
+      return "\t";
+  }
+  throw new Error("Unhandled run span type");
+};
+
 /** Extract "accepted" text from paragraphs in edited XML. */
 const extractAcceptedText = (xml: string): string[] => {
   const doc = slimdom.parseXmlDocument(xml);
@@ -99,7 +111,7 @@ describe("edge case: runs inside w:hyperlink", () => {
   test("buildRunMap includes text inside w:hyperlink", () => {
     const p = firstParagraph(HYPERLINK_XML);
     const spans = buildRunMap(p);
-    const fullText = spans.map((s) => s.tNode.textContent).join("");
+    const fullText = spans.map(runSpanText).join("");
     expect(fullText).toBe("Click here to continue");
   });
 
@@ -139,7 +151,7 @@ describe("edge case: runs inside w:sdt", () => {
   test("buildRunMap includes text inside w:sdt", () => {
     const p = firstParagraph(SDT_XML);
     const spans = buildRunMap(p);
-    const fullText = spans.map((s) => s.tNode.textContent).join("");
+    const fullText = spans.map(runSpanText).join("");
     expect(fullText).toBe("Name: John Doe");
   });
 });
@@ -160,7 +172,7 @@ describe("edge case: runs inside w:fldSimple", () => {
   test("buildRunMap includes text inside w:fldSimple", () => {
     const p = firstParagraph(FLD_XML);
     const spans = buildRunMap(p);
-    const fullText = spans.map((s) => s.tNode.textContent).join("");
+    const fullText = spans.map(runSpanText).join("");
     expect(fullText).toBe("See Section 1 for details");
   });
 });
@@ -184,7 +196,7 @@ describe("edge case: move revisions (w:moveFrom / w:moveTo)", () => {
   test("buildRunMap skips w:moveFrom (like w:del)", () => {
     const p = firstParagraph(MOVE_XML);
     const spans = buildRunMap(p);
-    const fullText = spans.map((s) => s.tNode.textContent).join("");
+    const fullText = spans.map(runSpanText).join("");
     // Accepted view: moveFrom excluded, moveTo included
     expect(fullText).toBe("Start moved here end");
   });
@@ -351,7 +363,7 @@ describe("edge case: runs inside w:smartTag", () => {
   test("buildRunMap includes text inside w:smartTag", () => {
     const p = firstParagraph(SMART_TAG_XML);
     const spans = buildRunMap(p);
-    const fullText = spans.map((s) => s.tNode.textContent).join("");
+    const fullText = spans.map(runSpanText).join("");
     expect(fullText).toBe("Date: January 1, 2026");
   });
 });
@@ -375,7 +387,7 @@ describe("edge case: complex field codes (w:fldChar)", () => {
   test("buildRunMap includes field result text but not instrText", () => {
     const p = firstParagraph(FIELD_XML);
     const spans = buildRunMap(p);
-    const fullText = spans.map((s) => s.tNode.textContent).join("");
+    const fullText = spans.map(runSpanText).join("");
     // instrText should NOT appear in the map; field result ("3") should
     expect(fullText).toBe("Page 3 of 10");
   });

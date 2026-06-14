@@ -1,5 +1,6 @@
 import { Queue } from "bullmq";
 
+import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
@@ -30,11 +31,18 @@ export const createBullMqDispatchTask =
     }
 
     const queue = getSchedulerQueue(payload.queueName);
-    await queue.add(payload.jobName, {
-      schedulerJobId: job.id,
-      schedulerRunId: runId,
-      ...(payload.data && { payload: payload.data }),
-    });
+    const scheduledFor = job.nextRunAt.toISOString();
+    // Deterministic per scheduled occurrence: if the runner crashes after
+    // enqueue but before recording success, the retry run uses the same id.
+    await queue.add(
+      payload.jobName,
+      {
+        schedulerJobId: job.id,
+        schedulerRunId: runId,
+        ...(payload.data && { payload: payload.data }),
+      },
+      { jobId: createBullMqJobId("scheduler", job.id, scheduledFor) },
+    );
   };
 
 const getConnection = () => {

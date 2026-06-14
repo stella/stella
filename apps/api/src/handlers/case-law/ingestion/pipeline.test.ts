@@ -182,4 +182,43 @@ describe("sanitizeResult — documentAst text fields", () => {
     expect(concatInlineText(spacedCell.inlines)).toBe("z a m i e t a");
     expect(concatInlineText(plainCell.inlines)).toBe("plain cell");
   });
+
+  test("keeps short runs of Czech/Slovak single-letter words intact", () => {
+    const para = (id: string, text: string) => ({
+      id,
+      anchorId: id,
+      type: "paragraph" as const,
+      inlines: [{ type: "text" as const, text }],
+      plainText: text,
+    });
+    const ast: DocumentAst = {
+      version: 1,
+      source: { system: "test", documentId: "x", webUrl: "", printUrl: "" },
+      metadata: astMetadata,
+      blocks: [
+        // "u a v" are three real prepositions, not letter-spaced emphasis.
+        para("p1", "bydlel u a v dome"),
+        para("p2", "podiel i s príslušenstvom"),
+        // A genuine letter-spaced word (>= 4 letters) must still collapse.
+        para("p3", "súd r o z h o d o l takto"),
+      ],
+    };
+
+    const sanitized = sanitizeResult(baseResult(ast));
+    if (!("blocks" in sanitized.documentAst)) {
+      throw new Error("sanitized documentAst should be a DocumentAst");
+    }
+    const [prep1, prep2, spaced] = sanitized.documentAst.blocks;
+    if (
+      prep1?.type !== "paragraph" ||
+      prep2?.type !== "paragraph" ||
+      spaced?.type !== "paragraph"
+    ) {
+      throw new Error("unexpected block types");
+    }
+
+    expect(prep1.plainText).toBe("bydlel u a v dome");
+    expect(prep2.plainText).toBe("podiel i s príslušenstvom");
+    expect(spaced.plainText).toBe("súd rozhodol takto");
+  });
 });

@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, ne } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -7,7 +7,7 @@ import { prorateHourlyCents } from "@stll/money";
 import type { ScopedDb } from "@/api/db";
 import { member, user } from "@/api/db/auth-schema";
 import { timeEntryStatusSchema } from "@/api/db/billing-validators";
-import { timeEntries } from "@/api/db/schema";
+import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
@@ -29,6 +29,15 @@ type ExportLedesHandlerProps = {
 };
 
 /**
+ * Neutralize a user-controlled value for a LEDES 1998B field. The format is
+ * pipe-delimited with one record per line and has no quoting mechanism, so a
+ * value containing a pipe or a line break would split a field or inject a
+ * spurious record. Replace those delimiters with spaces.
+ */
+export const escapeLedesField = (value: string): string =>
+  value.replace(/[\r\n|]/gu, " ");
+
+/**
  * Generates a LEDES 1998B formatted export.
  * LEDES 1998B uses pipe-delimited lines with a fixed header row.
  */
@@ -39,6 +48,12 @@ export const exportLedesHandler = async ({
   query,
 }: ExportLedesHandlerProps) => {
   const conditions = [eq(timeEntries.workspaceId, workspaceId)];
+
+  // LEDES 1998B is a client e-billing file: it must contain only billable,
+  // charged line items, never internal non-billable or written-off time.
+  conditions.push(eq(timeEntries.billable, true));
+  conditions.push(eq(timeEntries.noCharge, false));
+  conditions.push(ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF));
 
   if (query.dateFrom) {
     conditions.push(gte(timeEntries.dateWorked, query.dateFrom));
@@ -67,6 +82,7 @@ export const exportLedesHandler = async ({
         narrative: timeEntries.narrative,
         invoiceNarrative: timeEntries.invoiceNarrative,
         billable: timeEntries.billable,
+        noCharge: timeEntries.noCharge,
         status: timeEntries.status,
         taskCode: timeEntries.taskCode,
         activityCode: timeEntries.activityCode,
@@ -130,6 +146,16 @@ export const exportLedesHandler = async ({
   let lineItemNumber = 0;
 
   for (const row of rows) {
+    // Defensive billing-integrity guard alongside the SQL filter: a
+    // non-billable, no-charge, or written-off entry must never produce a
+    // charged line.
+    if (
+      !row.billable ||
+      row.noCharge ||
+      row.status === BILLING_STATUS.WRITTEN_OFF
+    ) {
+      continue;
+    }
     lineItemNumber++;
     const hours = row.billedMinutes / 60;
     const total = prorateHourlyCents({
@@ -137,11 +163,10 @@ export const exportLedesHandler = async ({
       hourlyRateCents: row.rateAtEntry,
     });
     const dateFormatted = row.dateWorked.replace(/-/gu, "");
-    const userName = row.userId ? (userMap.get(row.userId) ?? "") : "";
-    const narrative = (row.invoiceNarrative ?? row.narrative).replace(
-      /\|/gu,
-      " ",
+    const userName = escapeLedesField(
+      row.userId ? (userMap.get(row.userId) ?? "") : "",
     );
+    const narrative = escapeLedesField(row.invoiceNarrative ?? row.narrative);
 
     lines.push(
       `${[
@@ -159,9 +184,9 @@ export const exportLedesHandler = async ({
         "0.00", // ADJUSTMENT
         (total / 100).toFixed(2),
         dateFormatted,
-        row.taskCode ?? "",
+        escapeLedesField(row.taskCode ?? ""),
         "", // EXPENSE_CODE
-        row.activityCode ?? "",
+        escapeLedesField(row.activityCode ?? ""),
         row.userId ?? "",
         narrative,
         "", // LAW_FIRM_ID

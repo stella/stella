@@ -5,9 +5,14 @@ import {
   clientRegistrationMode,
   getMcpClientMetadataDocumentUrl,
   getMcpOAuthRedirectUri,
+  tokenExpiresAt,
 } from "@/api/handlers/mcp-connectors/oauth";
-import type { AuthorizationServerMetadata } from "@/api/handlers/mcp-connectors/oauth";
+import type {
+  AuthorizationServerMetadata,
+  TokenResponse,
+} from "@/api/handlers/mcp-connectors/oauth";
 import { redactMcpOAuthRegistrationResponse } from "@/api/handlers/mcp-connectors/oauth-registration-response";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const authorizationServer = (
   overrides: Partial<AuthorizationServerMetadata>,
@@ -92,5 +97,54 @@ describe("redactMcpOAuthRegistrationResponse", () => {
       },
       token_endpoint_auth_method: "none",
     });
+  });
+
+  test("redacts secrets inside an array of objects, preserving siblings", () => {
+    const redacted = redactMcpOAuthRegistrationResponse({
+      keys: [{ client_secret: "x", kid: "ok" }],
+    });
+    expect(redacted).toEqual({
+      keys: [{ client_secret: "[redacted]", kid: "ok" }],
+    });
+  });
+
+  test("redacts suffix-matched keys case-insensitively", () => {
+    const redacted = redactMcpOAuthRegistrationResponse({
+      app_secret: "x",
+      DB_PASSWORD: "y",
+      jwt_assertion: "z",
+      keep_me: "ok",
+    });
+    expect(redacted).toEqual({
+      app_secret: "[redacted]",
+      DB_PASSWORD: "[redacted]",
+      jwt_assertion: "[redacted]",
+      keep_me: "ok",
+    });
+  });
+});
+
+describe("tokenExpiresAt", () => {
+  const token = (expires_in: number | undefined): TokenResponse =>
+    asTestRaw<TokenResponse>({
+      access_token: "a",
+      token_type: "Bearer",
+      expires_in,
+    });
+
+  test("returns null when expires_in is absent or non-positive", () => {
+    expect(tokenExpiresAt(token(undefined))).toBeNull();
+    expect(tokenExpiresAt(token(0))).toBeNull();
+    expect(tokenExpiresAt(token(-5))).toBeNull();
+  });
+
+  test("returns a future instant ~expires_in seconds out", () => {
+    const before = Date.now();
+    const result = tokenExpiresAt(token(3600));
+    const after = Date.now();
+    expect(result).not.toBeNull();
+    const ms = result?.getTime() ?? 0;
+    expect(ms).toBeGreaterThanOrEqual(before + 3_600_000);
+    expect(ms).toBeLessThanOrEqual(after + 3_600_000);
   });
 });

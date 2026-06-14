@@ -29,6 +29,18 @@ const WRAP = (body: string) =>
   `<w:document xmlns:w="${W_NS}">` +
   `<w:body>${body}</w:body></w:document>`;
 
+const runSpanText = (span: ReturnType<typeof buildRunMap>[number]): string => {
+  switch (span.type) {
+    case "text":
+      return span.node.textContent ?? "";
+    case "break":
+      return "\n";
+    case "tab":
+      return "\t";
+  }
+  throw new Error("Unhandled run span type");
+};
+
 /** Build a minimal DOCX buffer from document body XML. */
 const buildDocx = async (bodyXml: string): Promise<Buffer> => {
   const zip = new JSZip();
@@ -87,6 +99,11 @@ const extractAcceptedText = (xml: string): string[] => {
       }
       if (n.localName === "t" && n.namespaceURI === W_NS) {
         text += n.textContent ?? "";
+      } else if (n.localName === "br" && n.namespaceURI === W_NS) {
+        // Mirror collectText: a break is one "\n" in the text coordinate.
+        text += "\n";
+      } else if (n.localName === "tab" && n.namespaceURI === W_NS) {
+        text += "\t";
       } else {
         for (const c of n.childNodes) {
           walk(c);
@@ -410,8 +427,8 @@ describe("run-map vs extract-text consistency", () => {
       }
       const spans = buildRunMap(p);
 
-      // Concatenate all RunSpan text
-      const runMapText = spans.map((s) => s.tNode.textContent ?? "").join("");
+      // Concatenate all RunSpan text/control characters.
+      const runMapText = spans.map(runSpanText).join("");
 
       // Extract text the same way extractText does
       const extractedText = collectTextFromParagraph(p);
@@ -436,6 +453,10 @@ describe("run-map vs extract-text consistency", () => {
       }
       if (node.localName === "t" && node.namespaceURI === W_NS) {
         text += node.textContent ?? "";
+      } else if (node.localName === "br" && node.namespaceURI === W_NS) {
+        text += "\n";
+      } else if (node.localName === "tab" && node.namespaceURI === W_NS) {
+        text += "\t";
       } else if (
         node.localName !== "delText" &&
         node.localName !== "del" &&
@@ -633,11 +654,12 @@ describe("pipeline roundtrip: real OOXML patterns", () => {
 
     pipelineRoundtrip(
       bodyXml,
-      [{ index: 0, text: "Before breakAfter break" }],
+      // collectText renders the w:br as "\n"; the diff coordinate must match.
+      [{ index: 0, text: "Before break\nAfter break" }],
       [
         {
           paragraphIndex: 0,
-          newText: "Before breakAfter edit",
+          newText: "Before break\nAfter edit",
         },
       ],
     );
@@ -653,11 +675,11 @@ describe("pipeline roundtrip: real OOXML patterns", () => {
 
     pipelineRoundtrip(
       bodyXml,
-      [{ index: 0, text: "Line oneLine two" }],
+      [{ index: 0, text: "Line one\nLine two" }],
       [
         {
           paragraphIndex: 0,
-          newText: "First lineLine two",
+          newText: "First line\nLine two",
         },
       ],
     );
@@ -672,11 +694,12 @@ describe("pipeline roundtrip: real OOXML patterns", () => {
 
     pipelineRoundtrip(
       bodyXml,
-      [{ index: 0, text: "BeforeAfter tab" }],
+      // collectText renders the w:tab as "\t"; the diff coordinate must match.
+      [{ index: 0, text: "Before\tAfter tab" }],
       [
         {
           paragraphIndex: 0,
-          newText: "BeforeEdited tab",
+          newText: "Before\tEdited tab",
         },
       ],
     );
@@ -902,14 +925,16 @@ describe("pipeline roundtrip: real OOXML patterns", () => {
       [
         {
           index: 0,
-          text: "1.1 Definitions. The following terms shall have the meanings set forth below.",
+          // collectText: leading w:tab "\t", then text, a space, the w:br
+          // "\n", then the second segment.
+          text: "\t1.1 Definitions. \nThe following terms shall have the meanings set forth below.",
         },
       ],
       [
         {
           paragraphIndex: 0,
           newText:
-            "1.1 Definitions. The terms below have the following meanings.",
+            "\t1.1 Definitions. \nThe terms below have the following meanings.",
         },
       ],
     );

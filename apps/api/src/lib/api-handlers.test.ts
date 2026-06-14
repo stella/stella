@@ -152,8 +152,10 @@ const createContext = (
   safeDb: SafeDb,
   {
     orgAIConfig = null,
+    role = "owner",
   }: {
     orgAIConfig?: OrgAIConfig | null;
+    role?: "owner" | "admin" | "member" | "intern" | "external";
   } = {},
 ): Parameters<typeof endpoint.handler>[0] =>
   // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields used before the handler body can run
@@ -168,7 +170,7 @@ const createContext = (
         "019e7000-0000-7000-8000-000000000002",
       ),
     },
-    memberRole: { role: "owner" },
+    memberRole: { role },
     safeDb,
     scopedDb: async () => {
       throw new DatabaseError({ message: "scopedDb should not be called" });
@@ -189,4 +191,52 @@ const createOrgAIConfig = (): OrgAIConfig => ({
     pdf: { provider: "openai", modelId: "gpt-4.1" },
     reasoning: { provider: "openai", modelId: "o3" },
   },
+});
+
+describe("createSafeRootHandler permission gate", () => {
+  test("denies the handler when the member role lacks the permission", async () => {
+    let bodyRan = false;
+    const endpoint = createSafeRootHandler(
+      { permissions: { organization: ["delete"] } },
+      async function* () {
+        bodyRan = true;
+        return Result.ok({ ok: true });
+      },
+    );
+    const safeDb: SafeDb = async <T>() =>
+      Result.err<T, SafeDbError>(
+        new DatabaseError({ message: "db should not be read on deny" }),
+      );
+
+    const result = await endpoint.handler(
+      createContext(endpoint, safeDb, { role: "member" }),
+    );
+
+    expect(bodyRan).toBe(false);
+    if (!("code" in result)) {
+      throw new Error("expected a status response");
+    }
+    expect(result.code).toBe(403);
+    expect(result.response).toEqual({ message: "Forbidden" });
+  });
+
+  test("runs the handler when the role holds the permission", async () => {
+    let bodyRan = false;
+    const endpoint = createSafeRootHandler(
+      { permissions: { organization: ["delete"] } },
+      async function* () {
+        bodyRan = true;
+        return Result.ok({ ok: true });
+      },
+    );
+    const safeDb: SafeDb = async <T>() =>
+      Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
+
+    const result = await endpoint.handler(
+      createContext(endpoint, safeDb, { role: "owner" }),
+    );
+
+    expect(bodyRan).toBe(true);
+    expect(result).toEqual({ ok: true });
+  });
 });

@@ -188,4 +188,26 @@ describe("owned OOXML placeholder patching", () => {
     expect(result.xml).toContain("First paragraph");
     expect(result.xml).toContain("Second paragraph");
   });
+
+  // A substituted value that itself looks like a marker must NOT be
+  // re-expanded against the value map, or one field could pull another
+  // field's value into a place the author never intended (injection).
+  test("does not re-expand a substituted value that looks like a marker (text)", () => {
+    const result = replacePlaceholdersInText("Pay {{a}}", {
+      a: "{{b}}",
+      b: "SECRET",
+    });
+
+    expect(result.text).toBe("Pay {{b}}");
+    expect(result.text).not.toContain("SECRET");
+  });
+
+  test("does not re-expand a marker-shaped value across the XML part", () => {
+    const xml = WRAP("<w:p><w:r><w:t>{{a}}</w:t></w:r></w:p>");
+
+    const result = patchXmlPart(xml, { a: "{{b}}", b: "SECRET" });
+
+    expect(result.xml).toContain("{{b}}");
+    expect(result.xml).not.toContain("SECRET");
+  });
 });

@@ -2,7 +2,7 @@ import { asc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { user } from "@/api/db/auth-schema";
-import { entities, entityVersions, fields } from "@/api/db/schema";
+import { entities, entityVersions, fields, properties } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
 import type { ViewFilterCondition } from "@/api/lib/views-schema";
 
@@ -27,6 +27,10 @@ type ViewSort = {
 };
 
 // -- Helpers --
+
+const NUMERIC_TEXT_PATTERN =
+  "^[+-]?(?:(?:[0-9]+(?:\\.[0-9]*)?)|(?:\\.[0-9]+))(?:[eE][+-]?[0-9]+)?$";
+const NUMERIC_TEXT_RE = new RegExp(NUMERIC_TEXT_PATTERN, "u");
 
 const getFieldValue = (content: FieldContent | undefined): string => {
   if (!content) {
@@ -54,6 +58,23 @@ const getFieldValue = (content: FieldContent | undefined): string => {
     default:
       return "";
   }
+};
+
+// Numeric value for sort comparison: int content uses its number; a
+// missing field or a legacy/coerced non-int value parses its string form,
+// returning null when no finite number is available (sorts to the end).
+const numericContentValue = (
+  content: FieldContent | undefined,
+): number | null => {
+  if (content?.type === "int") {
+    return content.value;
+  }
+  const raw = getFieldValue(content).trim();
+  if (raw === "" || !NUMERIC_TEXT_RE.test(raw)) {
+    return null;
+  }
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
 };
 
 const findField = (
@@ -129,10 +150,26 @@ export const applySorts = <T extends FilterableEntity>(
       const fieldB = findField(b.fields, sort.propertyId);
       const dir = sort.desc ? -1 : 1;
 
-      if (fieldA?.content.type === "int" && fieldB?.content.type === "int") {
-        const cmp = (fieldA.content.value - fieldB.content.value) * dir;
-        if (cmp !== 0) {
-          return cmp;
+      // Numeric ordering whenever the property is numeric on at least one
+      // side. Comparing only when BOTH sides are int dropped to a string
+      // localeCompare the moment a row was missing the field or held a
+      // legacy non-int value, so 10 sorted before 9. Rows without a numeric
+      // value bucket to the end, independent of sort direction.
+      if (fieldA?.content.type === "int" || fieldB?.content.type === "int") {
+        const numA = numericContentValue(fieldA?.content);
+        const numB = numericContentValue(fieldB?.content);
+        if (numA !== null && numB !== null) {
+          const cmp = (numA - numB) * dir;
+          if (cmp !== 0) {
+            return cmp;
+          }
+          continue;
+        }
+        if (numA === null && numB !== null) {
+          return 1;
+        }
+        if (numA !== null && numB === null) {
+          return -1;
         }
         continue;
       }
@@ -159,6 +196,17 @@ export const applySorts = <T extends FilterableEntity>(
  */
 const fieldValueExpr = (contentCol: typeof fields.content): SQL =>
   sql`COALESCE(${contentCol}->>'value', ${contentCol}->>'fileName', '')`;
+
+const numericFieldValueExpr = (contentCol: typeof fields.content): SQL => {
+  const valueExpr = fieldValueExpr(contentCol);
+  const trimmed = sql`BTRIM(${valueExpr})`;
+
+  return sql`CASE
+    WHEN ${trimmed} ~ ${NUMERIC_TEXT_PATTERN}
+    THEN ${trimmed}::numeric
+    ELSE NULL
+  END`;
+};
 
 /**
  * Builds an EXISTS subquery that checks whether an entity's
@@ -355,7 +403,30 @@ export const buildSortExpressions = (sorts: readonly ViewSort[]): SQL[] => {
       continue;
     }
 
-    const sortKeySubquery = sql`(
+    const propertyIsInt = sql`EXISTS (
+      SELECT 1 FROM ${properties}
+      WHERE ${properties.workspaceId} = ${entities.workspaceId}
+        AND ${properties.id} = ${sort.propertyId}
+        AND ${properties.content}->>'type' = 'int'
+      LIMIT 1
+    )`;
+
+    // Numeric sort key: `content->>'value'` is text, so a plain ORDER BY sorts
+    // "10" before "9". Use numeric mode for int fields and int properties
+    // with legacy text content, then break ties with the text key.
+    const numericSortKey = sql`(
+      SELECT CASE
+        WHEN ${fields.content}->>'type' = 'int' OR ${propertyIsInt}
+        THEN ${numericFieldValueExpr(fields.content)}
+        ELSE NULL
+      END
+      FROM ${fields}
+      WHERE ${fields.workspaceId} = ${entities.workspaceId}
+        AND ${fields.entityVersionId} = ${entities.currentVersionId}
+        AND ${fields.propertyId} = ${sort.propertyId}
+      LIMIT 1
+    )`;
+    const textSortKey = sql`(
       SELECT COALESCE(
         ${fields.content}->>'value',
         ${fields.content}->>'fileName',
@@ -369,7 +440,12 @@ export const buildSortExpressions = (sorts: readonly ViewSort[]): SQL[] => {
     )`;
 
     expressions.push(
-      sort.desc ? sql`${sortKeySubquery} DESC` : sql`${sortKeySubquery} ASC`,
+      sort.desc
+        ? sql`${numericSortKey} DESC NULLS LAST`
+        : sql`${numericSortKey} ASC NULLS LAST`,
+    );
+    expressions.push(
+      sort.desc ? sql`${textSortKey} DESC` : sql`${textSortKey} ASC`,
     );
   }
 

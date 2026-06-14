@@ -2,7 +2,12 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import { INVOICE_STATUS, invoices } from "@/api/db/schema";
+import {
+  expenses,
+  INVOICE_STATUS,
+  invoices,
+  timeEntries,
+} from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
@@ -31,6 +36,11 @@ type InvoiceUpdateSource = {
 };
 
 type InvoiceUpdateChanges = Partial<InvoiceUpdateSource>;
+
+type InvoiceUpdateResult =
+  | { status: "updated"; id: string }
+  | { status: "not-updated" }
+  | { status: "currency-has-entries" };
 
 const buildInvoiceUpdateAuditChanges = (
   existing: InvoiceUpdateSource,
@@ -117,7 +127,44 @@ const updateInvoice = createSafeHandler(
           .for("update");
         const existing = existingRows.at(0);
         if (!existing) {
-          return [];
+          return { status: "not-updated" } satisfies InvoiceUpdateResult;
+        }
+
+        if (
+          changedFields.currency !== undefined &&
+          changedFields.currency !== existing.currency
+        ) {
+          const attachedTimeEntry = await tx
+            .select({ id: timeEntries.id })
+            .from(timeEntries)
+            .where(
+              and(
+                eq(timeEntries.invoiceId, params.invoiceId),
+                eq(timeEntries.workspaceId, workspaceId),
+              ),
+            )
+            .limit(1);
+          if (attachedTimeEntry.at(0)) {
+            return {
+              status: "currency-has-entries",
+            } satisfies InvoiceUpdateResult;
+          }
+
+          const attachedExpense = await tx
+            .select({ id: expenses.id })
+            .from(expenses)
+            .where(
+              and(
+                eq(expenses.invoiceId, params.invoiceId),
+                eq(expenses.workspaceId, workspaceId),
+              ),
+            )
+            .limit(1);
+          if (attachedExpense.at(0)) {
+            return {
+              status: "currency-has-entries",
+            } satisfies InvoiceUpdateResult;
+          }
         }
 
         const updated = await tx
@@ -141,12 +188,22 @@ const updateInvoice = createSafeHandler(
             changes: buildInvoiceUpdateAuditChanges(existing, changedFields),
           });
         }
-        return updated;
+        if (!row) {
+          return { status: "not-updated" } satisfies InvoiceUpdateResult;
+        }
+        return { status: "updated", id: row.id } satisfies InvoiceUpdateResult;
       }),
     );
 
-    const updated = result.at(0);
-    if (!updated) {
+    if (result.status === "currency-has-entries") {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Invoice currency cannot change while entries are attached",
+        }),
+      );
+    }
+    if (result.status === "not-updated") {
       return Result.err(
         new HandlerError({
           status: 409,
@@ -154,7 +211,7 @@ const updateInvoice = createSafeHandler(
         }),
       );
     }
-    return Result.ok({ id: updated.id });
+    return Result.ok({ id: result.id });
   },
 );
 

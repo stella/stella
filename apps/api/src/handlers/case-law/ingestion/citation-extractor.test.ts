@@ -32,6 +32,45 @@ describe("extractCitations", () => {
     const citations = extractCitations([{ index: 0, text }]);
     expect(citations).toHaveLength(2);
   });
+
+  test("extracts an unprefixed Polish case number", () => {
+    const citations = extractCitations([
+      { index: 0, text: "Por. wyrok II CSK 123/20 oraz II ACa 45/20." },
+    ]);
+    const texts = citations.map((c) => c.citationText);
+    expect(texts).toContain("II CSK 123/20");
+    expect(texts).toContain("II ACa 45/20");
+  });
+
+  test("records the later (reasoning) section for a cross-section citation", () => {
+    // The same case is listed bare in the header (section 0) and discussed
+    // in the reasoning (section 2). The reasoning context carries polarity,
+    // so the citation must be anchored to section 2, not the header.
+    const citations = extractCitations([
+      { index: 0, text: "Související: sp. zn. 21 Cdo 1234/2020." },
+      { index: 1, text: "Skutkový stav bez citací." },
+      {
+        index: 2,
+        text: "Soud se odchýlil od č. j. 21 Cdo 1234/2020 a rozhodl jinak.",
+      },
+    ]);
+
+    expect(citations).toHaveLength(1);
+    expect(citations[0]?.sectionIndex).toBe(2);
+    expect(citations[0]?.citationText).toBe("č. j. 21 Cdo 1234/2020");
+  });
+
+  test("does not capture Roman-numeral prose as a phantom citation", () => {
+    // The unprefixed Polish pattern previously matched any mixed-case word
+    // for the division code, so ordinary prose became a citation.
+    for (const text of [
+      "Article XV See 12/20 for details",
+      "see point III the 4/19 below",
+      "as in II and 5/20 of the act",
+    ]) {
+      expect(extractCitations([{ index: 0, text }])).toHaveLength(0);
+    }
+  });
 });
 
 describe("isSelfCitation", () => {

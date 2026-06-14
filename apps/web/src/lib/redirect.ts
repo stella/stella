@@ -14,8 +14,11 @@ const ACCEPT_INVITATION_ROUTE_PREFIX: AcceptInvitationPath extends `${infer P}$i
 export const isAcceptInvitationRedirect = (path: string) =>
   path.startsWith(ACCEPT_INVITATION_ROUTE_PREFIX);
 
-const isSafeRedirectPath = (s: string) =>
-  s.startsWith("/") && !s.startsWith("//");
+// A redirect target is safe only when it is a relative path whose second
+// character is neither "/" nor "\": browsers normalize both "//host" and
+// "/\host" (and "\/host") to a protocol-relative external origin, so the
+// "//"-only check is insufficient to prevent open redirects.
+const isSafeRedirectPath = (s: string) => /^\/(?![/\\])/u.test(s);
 
 const DEFAULT_REDIRECT: FileRouteTypes["to"] = "/";
 

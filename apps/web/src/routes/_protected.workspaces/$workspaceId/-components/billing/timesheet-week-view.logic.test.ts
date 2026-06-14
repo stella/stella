@@ -1,0 +1,89 @@
+import { describe, expect, test } from "bun:test";
+
+import { cents } from "@stll/money";
+
+import {
+  summarizeBillableAmountByMatterAndCurrency,
+  summarizeBillableAmountByCurrency,
+  type TimesheetTotalEntry,
+} from "./timesheet-week-view.logic";
+
+const entry = (
+  overrides: Partial<TimesheetTotalEntry> = {},
+): TimesheetTotalEntry => ({
+  matterId: "m1",
+  currency: "USD",
+  billable: true,
+  billedMinutes: 60,
+  rateAtEntry: cents(10_000),
+  ...overrides,
+});
+
+describe("summarizeBillableAmountByCurrency", () => {
+  test("sums a single-currency week into one subtotal", () => {
+    const totals = summarizeBillableAmountByCurrency([entry(), entry()]);
+    expect(totals).toEqual([{ currency: "USD", amount: 20_000 }]);
+  });
+
+  test("keeps mixed currencies as separate subtotals, never summed together", () => {
+    const totals = summarizeBillableAmountByCurrency([
+      entry({ currency: "USD" }),
+      entry({ currency: "EUR", rateAtEntry: cents(20_000) }),
+    ]);
+    // Sorted by currency code; 100 USD + 200 EUR is NOT "300 USD".
+    expect(totals).toEqual([
+      { currency: "EUR", amount: 20_000 },
+      { currency: "USD", amount: 10_000 },
+    ]);
+  });
+
+  test("excludes non-billable entries from the amount", () => {
+    const totals = summarizeBillableAmountByCurrency([
+      entry(),
+      entry({ billable: false }),
+    ]);
+    expect(totals).toEqual([{ currency: "USD", amount: 10_000 }]);
+  });
+
+  test("empty entries produce no subtotals", () => {
+    expect(summarizeBillableAmountByCurrency([])).toEqual([]);
+  });
+});
+
+describe("summarizeBillableAmountByMatterAndCurrency", () => {
+  test("maps each matter to its own currency subtotal", () => {
+    const map = summarizeBillableAmountByMatterAndCurrency([
+      entry({ matterId: "m1", currency: "USD" }),
+      entry({ matterId: "m2", currency: "EUR" }),
+      entry({ matterId: "m1", currency: "USD" }),
+    ]);
+    expect(map.get("m1")).toEqual([{ currency: "USD", amount: 20_000 }]);
+    expect(map.get("m2")).toEqual([{ currency: "EUR", amount: 10_000 }]);
+  });
+
+  test("ignores non-billable entries when deriving charged row subtotals", () => {
+    const map = summarizeBillableAmountByMatterAndCurrency([
+      entry({ matterId: "m1", currency: "EUR", billable: false }),
+      entry({ matterId: "m1", currency: "USD", billable: true }),
+    ]);
+    expect(map.get("m1")).toEqual([{ currency: "USD", amount: 10_000 }]);
+  });
+
+  test("keeps same-matter mixed currencies as separate row subtotals", () => {
+    const map = summarizeBillableAmountByMatterAndCurrency([
+      entry({ matterId: "m1", currency: "USD" }),
+      entry({ matterId: "m1", currency: "EUR", rateAtEntry: cents(20_000) }),
+    ]);
+    expect(map.get("m1")).toEqual([
+      { currency: "EUR", amount: 20_000 },
+      { currency: "USD", amount: 10_000 },
+    ]);
+  });
+
+  test("omits matters with no billable amount", () => {
+    const map = summarizeBillableAmountByMatterAndCurrency([
+      entry({ matterId: "m1", currency: "EUR", billable: false }),
+    ]);
+    expect(map.has("m1")).toBe(false);
+  });
+});

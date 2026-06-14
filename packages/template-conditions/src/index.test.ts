@@ -59,6 +59,37 @@ describe("evaluateCondition", () => {
     expect(evaluateCondition("amount > 1000", { amount: 5000 })).toBe(true);
   });
 
+  // ── String-encoded numbers (form/JSON inputs serialize as strings) ──
+
+  test("ordering coerces a numeric-string field value", () => {
+    expect(
+      evaluateCondition("contractValue > 100000", { contractValue: "150000" }),
+    ).toBe(true);
+    expect(
+      evaluateCondition("contractValue < 100000", { contractValue: "150000" }),
+    ).toBe(false);
+    expect(
+      evaluateCondition("contractValue >= 150000", { contractValue: "150000" }),
+    ).toBe(true);
+  });
+
+  test("equality coerces a numeric-string field value", () => {
+    expect(evaluateCondition("amount == 5000", { amount: "5000" })).toBe(true);
+    expect(evaluateCondition("amount != 5000", { amount: "5000" })).toBe(false);
+  });
+
+  test("does not coerce non-numeric strings or empty strings", () => {
+    // "abc" must not become 0; "" must not become 0.
+    expect(evaluateCondition("v == 0", { v: "abc" })).toBe(false);
+    expect(evaluateCondition("v == 0", { v: "" })).toBe(false);
+    expect(evaluateCondition("v > 0", { v: "abc" })).toBe(false);
+  });
+
+  test("string-vs-string equality is unaffected by numeric coercion", () => {
+    expect(evaluateCondition('code == "5000"', { code: "5000" })).toBe(true);
+    expect(evaluateCondition('code == "UK"', { code: "UK" })).toBe(true);
+  });
+
   // ── Logical operators ─────────────────────────────────
 
   test("and: both true", () => {
