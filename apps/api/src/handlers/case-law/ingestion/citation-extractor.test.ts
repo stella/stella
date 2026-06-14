@@ -51,12 +51,13 @@ describe("extractCitations", () => {
       { index: 1, text: "Skutkový stav bez citací." },
       {
         index: 2,
-        text: "Soud se odchýlil od sp. zn. 21 Cdo 1234/2020 a rozhodl jinak.",
+        text: "Soud se odchýlil od č. j. 21 Cdo 1234/2020 a rozhodl jinak.",
       },
     ]);
 
     expect(citations).toHaveLength(1);
     expect(citations[0]?.sectionIndex).toBe(2);
+    expect(citations[0]?.citationText).toBe("č. j. 21 Cdo 1234/2020");
   });
 
   test("does not capture Roman-numeral prose as a phantom citation", () => {

@@ -142,6 +142,7 @@ export const extractCitations = (
           existing.sectionIndex === null ||
           section.index > existing.sectionIndex
         ) {
+          existing.citationText = citationText;
           existing.sectionIndex = section.index;
         }
       }
