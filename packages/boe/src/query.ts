@@ -21,13 +21,13 @@ type RangeClause = {
 };
 type CompoundQuery = QueryStringClause & Partial<RangeClause>;
 
+const escapeQueryStringPhrase = (value: string): string =>
+  value.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
+
 /**
  * Build the JSON-DSL query string the BOE search endpoint expects.
  * Mirrors the shape used by the upstream MCP-BOE client.
  */
-const escapeQueryStringPhrase = (value: string): string =>
-  value.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
-
 export const buildSearchQuery = (input: BoeSearchQuery): string => {
   const parts: string[] = [];
   if (input.text) {
