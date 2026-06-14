@@ -18,7 +18,7 @@ export type DecisionListFilters = {
   sourceId?: string;
 };
 
-const caseLawDecisionKeys = {
+export const caseLawDecisionKeys = {
   all: ["case-law-decisions"],
   facets: () => [...caseLawDecisionKeys.all, "facets"],
   list: (key: DecisionListFilters) => [

@@ -15,6 +15,7 @@ import {
   isDecisionAnalysis,
 } from "@stll/legal-ast/analysis";
 
+import { caseLawDecisionKeys } from "@/features/case-law/queries/decisions";
 import { apiUrl } from "@/lib/api-url";
 
 type AnalysisState =
@@ -144,7 +145,7 @@ export const useDecisionAnalysis = (
     }
     const analysis = query.data.analysis;
     queryClient.setQueryData(
-      ["case-law-decisions", decisionId],
+      caseLawDecisionKeys.byId(decisionId),
       (old: Record<string, unknown> | undefined) =>
         old ? { ...old, analysis } : old,
     );
