@@ -75,7 +75,7 @@ export const buildMemoryPromptParts = async ({
                   eq(aiMemories.scope, "user"),
                   eq(aiMemories.userId, userId),
                 ),
-                matterScope,
+                ...(matterScope ? [matterScope] : []),
               ),
             ),
           )
@@ -110,10 +110,8 @@ const renderMemoryBlock = ({
   }
 
   const matterSet = new Set<string>(contextMatterIds);
-  // matter > you > firm: matter rows whose workspace is in scope
-  // first, then user-scope, then firm (organization) rows. Everything
-  // else (e.g. workspace rows outside the pinned set, still visible
-  // under RLS) trails the explicit groups but stays inside the cap.
+  // matter > you > firm: this thread's matter rows first, then
+  // user-scope, then firm (organization) rows.
   const grouped = orderMemoryRows({ matterSet, rows });
 
   const bullets: string[] = [];

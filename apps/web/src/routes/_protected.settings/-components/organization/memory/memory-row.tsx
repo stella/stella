@@ -28,7 +28,7 @@ const MEMORY_KIND_KEYS = {
   fact: "memory.kinds.fact",
   decision: "memory.kinds.decision",
   relationship: "memory.kinds.relationship",
-} as const satisfies Record<string, TranslationKey>;
+} as const satisfies Record<MemoryListItem["kind"], TranslationKey>;
 
 const MEMORY_SOURCE_KEYS = {
   user: "memory.sources.user",

@@ -6,19 +6,24 @@ import { t } from "elysia";
 import { aiMemories } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
+  isMicrosecondTimestampPaginationCursorPart,
   isUuidPaginationCursorPart,
-  parseDateTimePaginationCursorPart,
 } from "@/api/lib/pagination";
 import type { Page } from "@/api/lib/pagination";
+import { brandPersistedAiMemoryId } from "@/api/lib/safe-id-boundaries";
 
 const DEFAULT_LIMIT = 50;
 
 const config = {
+  // Memory is an AI-assistant capability; gate reads on chat access.
+  // Row visibility (firm / own / accessible matters) is enforced by RLS,
+  // so firm memory still reads org-wide for any chat-capable member.
   permissions: { chat: ["create"] },
   query: t.Object({
     scope: t.Optional(t.UnionEnum(["organization", "user", "workspace"])),
@@ -48,14 +53,19 @@ type MemoryListItem = {
 
 const decodeCursor = (
   cursor: string,
-): { createdAt: string; id: string } | null => {
+): { createdAt: string; id: SafeId<"aiMemory"> } | null => {
   const parts = decodePaginationCursor(cursor);
-  const createdAt = parseDateTimePaginationCursorPart(parts?.at(0));
+  const createdAt = parts?.at(0);
   const id = parts?.at(1);
-  if (!createdAt || !isUuidPaginationCursorPart(id)) {
+  if (
+    !isMicrosecondTimestampPaginationCursorPart(createdAt) ||
+    !isUuidPaginationCursorPart(id)
+  ) {
     return null;
   }
-  return { createdAt: createdAt.toISOString(), id };
+  // Keep the microsecond timestamp verbatim for the keyset
+  // `::timestamp` comparison; a Date round-trip would truncate it.
+  return { createdAt, id: brandPersistedAiMemoryId(id) };
 };
 
 const listMemories = createSafeRootHandler(
