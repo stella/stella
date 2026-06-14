@@ -45,6 +45,18 @@ export const objectSpreadQueryOptions = {
   ] as const,
 };
 
+export const nestedObjectSpreadQueryOptions = {
+  queryKey: [
+    ...rootKeys.all,
+    {
+      filters: {
+        // oxlint-disable-next-line no-spread-input-in-query-key/no-spread-input-in-query-key
+        ...filterInput,
+      },
+    },
+  ] as const,
+};
+
 export const fixtureKeys = {
   all: ["fixture"] as const,
 
@@ -71,6 +83,20 @@ export const constObjectKeys = {
   // Whole-object `as const` wrappers must not hide factory returns.
   // oxlint-disable-next-line no-spread-input-in-query-key/no-spread-input-in-query-key
   list: (key: readonly unknown[]) => [...constObjectKeys.all, ...key] as const,
+} as const;
+
+export const nestedFixtureKeys = {
+  skills: {
+    all: ["nested-skills"] as const,
+    list: (key: { filters: readonly string[] }) =>
+      [
+        ...nestedFixtureKeys.skills.all,
+        {
+          // oxlint-disable-next-line no-spread-input-in-query-key/no-spread-input-in-query-key
+          ...key,
+        },
+      ] as const,
+  },
 } as const;
 
 export const safeQueryOptions = {

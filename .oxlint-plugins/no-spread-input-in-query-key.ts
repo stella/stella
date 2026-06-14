@@ -108,10 +108,31 @@ const parentAfterExpressionWrappers = (node) => {
   return current;
 };
 
+const isInsideKeysFactoryObject = (objectExpression) => {
+  let current = objectExpression;
+  while (current?.type === "ObjectExpression") {
+    const owner = parentAfterExpressionWrappers(current);
+    if (owner?.type === "VariableDeclarator") {
+      const id = owner.id;
+      return id?.type === "Identifier" && id.name.endsWith("Keys");
+    }
+    if (owner?.type !== "Property") {
+      return false;
+    }
+    const parentObject = owner.parent;
+    if (parentObject?.type !== "ObjectExpression") {
+      return false;
+    }
+    current = parentObject;
+  }
+  return false;
+};
+
 // Walk up from an ArrayExpression to decide whether it is the array returned
 // by an arrow function that is a property value of a `const <name>Keys = {...}`
-// query-key-factory object. Handles direct arrow bodies (`() => [...]`),
-// block bodies (`() => { return [...] }`), and ternary branches
+// query-key-factory object, including nested namespaces under that object.
+// Handles direct arrow bodies (`() => [...]`), block bodies
+// (`() => { return [...] }`), and ternary branches
 // (`(key) => cond ? [...] : [...]`).
 const isQueryKeyFactoryReturn = (arrayNode) => {
   let current = parentAfterExpressionWrappers(arrayNode);
@@ -144,13 +165,7 @@ const isQueryKeyFactoryReturn = (arrayNode) => {
     return false;
   }
 
-  const declarator = parentAfterExpressionWrappers(objectExpression);
-  if (declarator?.type !== "VariableDeclarator") {
-    return false;
-  }
-
-  const id = declarator.id;
-  return id?.type === "Identifier" && id.name.endsWith("Keys");
+  return isInsideKeysFactoryObject(objectExpression);
 };
 
 export default {
@@ -170,30 +185,50 @@ export default {
         },
       },
       create(context) {
-        const reportObjectSpreads = (objectNode) => {
-          for (const property of objectNode.properties) {
-            if (!isLeakyObjectSpread(property)) {
-              continue;
-            }
-            context.report({
-              node: property,
-              messageId: "spreadInputInQueryKey",
-            });
+        const reportLeakyValue = (node) => {
+          const value = unwrapExpression(node);
+          if (!value || typeof value.type !== "string") {
+            return;
           }
-        };
-
-        const reportLeakyElements = (arrayNode) => {
-          for (const element of arrayNode.elements) {
-            if (isLeakySpread(element)) {
+          if (value.type === "LogicalExpression" && value.operator === "&&") {
+            reportLeakyValue(value.right);
+            return;
+          }
+          if (value.type === "ConditionalExpression") {
+            reportLeakyValue(value.consequent);
+            reportLeakyValue(value.alternate);
+            return;
+          }
+          if (value.type === "ArrayExpression") {
+            for (const element of value.elements) {
+              if (isLeakySpread(element)) {
+                context.report({
+                  node: element,
+                  messageId: "spreadInputInQueryKey",
+                });
+                continue;
+              }
+              reportLeakyValue(element);
+            }
+            return;
+          }
+          if (value.type !== "ObjectExpression") {
+            return;
+          }
+          for (const property of value.properties) {
+            if (isLeakyObjectSpread(property)) {
               context.report({
-                node: element,
+                node: property,
                 messageId: "spreadInputInQueryKey",
               });
               continue;
             }
-            const value = unwrapExpression(element);
-            if (value?.type === "ObjectExpression") {
-              reportObjectSpreads(value);
+            if (property?.type === "SpreadElement") {
+              reportLeakyValue(property.argument);
+              continue;
+            }
+            if (property?.type === "Property") {
+              reportLeakyValue(property.value);
             }
           }
         };
@@ -208,7 +243,7 @@ export default {
             if (value?.type !== "ArrayExpression") {
               return;
             }
-            reportLeakyElements(value);
+            reportLeakyValue(value);
           },
 
           // Scope 2: the array returned by a `*Keys` factory helper arrow.
@@ -216,7 +251,7 @@ export default {
             if (!isQueryKeyFactoryReturn(node)) {
               return;
             }
-            reportLeakyElements(node);
+            reportLeakyValue(node);
           },
         };
       },

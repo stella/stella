@@ -17,10 +17,10 @@
 // A value is allowed when it is:
 //   • a string Literal or TemplateLiteral whose interpolations are all
 //     independently proven safe (static markup, no raw injection), OR
-//   • a CallExpression whose callee name matches
-//     /^(sanitize|escape|purify|dompurify)/i — a sanitizer/escaper —
-//     including a `.value` / `.data` / `.html`-style member read OFF such a
-//     call (some sanitizers return `{ value }`), OR
+//   • a CallExpression whose callee is an HTML/DOM sanitizer or escaper
+//     (`escapeHtml`, `escapeXml`, `sanitizeHtml`, `sanitizeDom`,
+//     `DOMPurify.sanitize`), including a `.value` / `.data` / `.html`-style
+//     member read OFF such a call (some sanitizers return `{ value }`), OR
 //   • carries an explicit `// safe-html:` escape-hatch comment on the line
 //     directly above the sink (loc adjacency, like suppression-hygiene.ts).
 //
@@ -37,7 +37,7 @@
 // Allowed:
 //   <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(x) }} />
 //   <div dangerouslySetInnerHTML={{ __html: `<b>${escapeXml(n)}</b>` }} />
-//   <div dangerouslySetInnerHTML={{ __html: purify(x).value }} />
+//   <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(x) }} />
 //   el.innerHTML = "";
 //   el.innerHTML = "&nbsp;";
 //   // safe-html: server-escaped by escapeAndHighlight()
@@ -50,13 +50,16 @@ import {
   unwrapExpression,
 } from "./utils.ts";
 
-// Callee names that prove the value was run through a sanitizer / escaper.
-// Matched against the resolved dotted callee path; the leaf name must start
-// with one of these stems (case-insensitive).
-const SANITIZER_CALLEE_RE = /^(sanitize|escape|purify|dompurify)/i;
+// Callee names that prove the value was run through an HTML/DOM sanitizer or
+// escaper. Keep this narrow: `escapeRegex()` and `sanitizeFilename()` are not
+// HTML-safe.
+const HTML_SANITIZER_LEAF_RE =
+  /^(?:escape(?:html|xml)|sanitize(?:html|dom)|purify(?:html|dom)|dompurify)$/iu;
+
+const DOM_PURIFY_RE = /^dompurify$/iu;
 
 // Members that some sanitizers expose on their result object
-// (`purify(x).value`, `sanitize(x).html`). Reading one of these OFF a
+// (`sanitizeHtml(x).value`, `sanitizeHtml(x).html`). Reading one of these OFF a
 // sanitizer call is still proven-safe.
 const SANITIZER_RESULT_MEMBERS = new Set(["value", "data", "html"]);
 
@@ -75,21 +78,25 @@ const isJsxIdentifier = (node, name) =>
   node.type === "JSXIdentifier" &&
   node.name === name;
 
-const leafCalleeName = (callee) => {
-  const dotted = getCalleeName(callee);
-  if (dotted === null) {
-    return null;
-  }
+const isHtmlSanitizerCalleeName = (dotted) => {
   const parts = dotted.split(".");
-  return parts.at(-1) ?? null;
+  const leaf = parts.at(-1);
+  if (leaf === undefined) {
+    return false;
+  }
+  if (HTML_SANITIZER_LEAF_RE.test(leaf)) {
+    return true;
+  }
+  const objectName = parts.at(-2);
+  return leaf === "sanitize" && DOM_PURIFY_RE.test(objectName ?? "");
 };
 
 const isSanitizerCall = (node) => {
   if (node.type !== "CallExpression") {
     return false;
   }
-  const leaf = leafCalleeName(node.callee);
-  return leaf !== null && SANITIZER_CALLEE_RE.test(leaf);
+  const dotted = getCalleeName(node.callee);
+  return dotted !== null && isHtmlSanitizerCalleeName(dotted);
 };
 
 // A value is proven safe by its own shape (independent of any comment):
@@ -166,8 +173,8 @@ export default {
         messages: {
           unsafeInnerHtml:
             "Raw HTML injected into the DOM must come from a provably " +
-            "sanitized/escaped value: a static string, a sanitize*/escape*/" +
-            "purify*/dompurify* call (or its .value/.data/.html result). " +
+            "sanitized/escaped value: a static string, an HTML/DOM " +
+            "sanitize/escape call (or its .value/.data/.html result). " +
             "Wrap the value in a sanitizer, or add a `// safe-html: <reason " +
             "naming the sanitizer/source>` comment on the line directly above " +
             "if it is escaped at its source.",

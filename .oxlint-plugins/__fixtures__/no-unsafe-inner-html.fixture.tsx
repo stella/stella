@@ -12,6 +12,12 @@ const escapeHtml = (value: string): string =>
 
 const sanitizeHtml = (value: string): string => escapeHtml(value);
 
+const escapeRegex = (value: string): string =>
+  value.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const sanitizeFilename = (value: string): string =>
+  value.replaceAll("/", "_");
+
 export const UnsafeDangerouslySetInnerHtml = () => (
   // oxlint-disable-next-line no-unsafe-inner-html/no-unsafe-inner-html
   <div dangerouslySetInnerHTML={{ __html: rawHtml }} />
@@ -30,6 +36,22 @@ export const UnsafeTemplateInterpolation = () => {
   element.innerHTML = `<strong>${rawHtml}</strong>`;
   return element;
 };
+
+export const UnsafeRegexEscaper = () => {
+  const element = document.createElement("div");
+  // oxlint-disable-next-line no-unsafe-inner-html/no-unsafe-inner-html
+  element.innerHTML = escapeRegex(rawHtml);
+  return element;
+};
+
+export const UnsafeFilenameSanitizer = () => (
+  <div
+    dangerouslySetInnerHTML={{
+      // oxlint-disable-next-line no-unsafe-inner-html/no-unsafe-inner-html
+      __html: sanitizeFilename(rawHtml),
+    }}
+  />
+);
 
 const hoistedPayload = { __html: rawHtml };
 
