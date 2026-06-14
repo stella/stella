@@ -2494,6 +2494,10 @@
       "chipNumber": "Skaitlis",
       "chipSingle": "Birka",
       "chipText": "Teksts",
+      "classify": {
+        "action": "Classify documents",
+        "rerun": "Reclassify documents"
+      },
       "clip": "Izgriezums",
       "composerTitle": "Pasakiet stella, ko meklēt",
       "conditionSeparator": "UN",

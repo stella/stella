@@ -2494,6 +2494,10 @@
       "chipNumber": "Número",
       "chipSingle": "Etiqueta",
       "chipText": "Texto",
+      "classify": {
+        "action": "Classify documents",
+        "rerun": "Reclassify documents"
+      },
       "clip": "Clipe",
       "composerTitle": "Diga a stella o que encontrar",
       "conditionSeparator": "E",

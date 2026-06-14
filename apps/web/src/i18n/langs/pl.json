@@ -2494,6 +2494,10 @@
       "chipNumber": "Liczba",
       "chipSingle": "Tag",
       "chipText": "Tekst",
+      "classify": {
+        "action": "Classify documents",
+        "rerun": "Reclassify documents"
+      },
       "clip": "Clip",
       "composerTitle": "Co stella ma znaleźć?",
       "conditionSeparator": "I",

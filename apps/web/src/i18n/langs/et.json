@@ -2494,6 +2494,10 @@
       "chipNumber": "Arv",
       "chipSingle": "Silt",
       "chipText": "Tekst",
+      "classify": {
+        "action": "Classify documents",
+        "rerun": "Reclassify documents"
+      },
       "clip": "Kärbi",
       "composerTitle": "Ütle stellale, mida otsida",
       "conditionSeparator": "JA",

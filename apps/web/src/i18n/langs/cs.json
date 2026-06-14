@@ -2494,6 +2494,10 @@
       "chipNumber": "Číslo",
       "chipSingle": "Štítek",
       "chipText": "Text",
+      "classify": {
+        "action": "Classify documents",
+        "rerun": "Reclassify documents"
+      },
       "clip": "Oříznout",
       "composerTitle": "Co má stella najít?",
       "conditionSeparator": "A",

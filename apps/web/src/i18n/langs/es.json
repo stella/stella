@@ -2494,6 +2494,10 @@
       "chipNumber": "Número",
       "chipSingle": "Etiqueta",
       "chipText": "Texto",
+      "classify": {
+        "action": "Classify documents",
+        "rerun": "Reclassify documents"
+      },
       "clip": "Recortar",
       "composerTitle": "Indique a stella qué debe buscar",
       "conditionSeparator": "Y",
