@@ -54,6 +54,28 @@ describe("Stella Legal Source", () => {
     expect(definitions).toBeDefined();
   });
 
+  test("keeps a pipe-table row that omits the trailing pipe", () => {
+    const source = `@doc kind=agreement locale=en-GB numbering=legal page=A4
+@title T
+
+@table
+| Item | Party |
+| --- | --- |
+| Approval | Alpha Ltd |
+| Consent | Beta Ltd
+| Funding | Gamma Ltd |
+`;
+    const result = parseLegalSource(source);
+    const table = result.draft.blocks.find((block) => block.type === "table");
+    if (table?.type !== "table") {
+      throw new Error("expected a table block");
+    }
+    expect(table.table.rows).toHaveLength(3);
+    const cells = table.table.rows.flat();
+    expect(cells).toContain("Consent");
+    expect(cells).toContain("Beta Ltd");
+  });
+
   test("parses quoted doc attributes and reports invalid known values", () => {
     const result = parseLegalSource(
       [
