@@ -27,19 +27,32 @@
 
 import { getPropertyName, unwrapExpression } from "./utils.ts";
 
-// An array element that spreads a bare Identifier or inline object literal
-// leaks unknown properties into the cache key. A spread of a CallExpression
-// (`...entitiesKeys.all(ws)`) or a member access (`...chatKeys.all`) is a
-// sanctioned composition spread and is allowed.
+// An array element may only spread a query-key composition helper rooted at a
+// `*Keys` identifier (`...entitiesKeys.all(ws)`, `...chatKeys.all`). Other
+// spreads leak undeclared shape into the cache key.
+const rootIdentifier = (node) => {
+  const unwrapped = unwrapExpression(node);
+  if (!unwrapped || typeof unwrapped.type !== "string") {
+    return null;
+  }
+  if (unwrapped.type === "Identifier") {
+    return unwrapped;
+  }
+  if (unwrapped.type === "MemberExpression") {
+    return rootIdentifier(unwrapped.object);
+  }
+  if (unwrapped.type === "CallExpression") {
+    return rootIdentifier(unwrapped.callee);
+  }
+  return null;
+};
+
 const isLeakySpread = (element) => {
   if (!element || element.type !== "SpreadElement") {
     return false;
   }
-  const argument = element.argument;
-  if (!argument) {
-    return false;
-  }
-  return argument.type === "Identifier" || argument.type === "ObjectExpression";
+  const root = rootIdentifier(element.argument);
+  return !root?.name.endsWith("Keys");
 };
 
 const parentAfterExpressionWrappers = (node) => {

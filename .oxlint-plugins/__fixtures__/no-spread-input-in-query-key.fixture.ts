@@ -11,6 +11,7 @@ const rootKeys = {
 };
 
 const input = ["leaked"] as const;
+const filterInput = { filters: ["leaked"] as const };
 
 // Direct `queryKey` arrays must not spread caller-controlled identifiers.
 export const directQueryOptions = {
@@ -21,6 +22,11 @@ export const directQueryOptions = {
 export const directConstQueryOptions = {
   // oxlint-disable-next-line no-spread-input-in-query-key/no-spread-input-in-query-key
   queryKey: [...input] as const,
+};
+
+export const memberExpressionQueryOptions = {
+  // oxlint-disable-next-line no-spread-input-in-query-key/no-spread-input-in-query-key
+  queryKey: [...filterInput.filters] as const,
 };
 
 export const fixtureKeys = {
