@@ -25,7 +25,7 @@
 //   // destructuring rest is not an array spread element:
 //   const { search, ...listFilters } = filters
 
-import { getPropertyName, unwrapExpression } from "./utils.ts";
+import { getPropertyName, isIdentifier, unwrapExpression } from "./utils.ts";
 
 // An array element may only spread a query-key composition member/call rooted
 // at a `*Keys` factory (`...entitiesKeys.all(ws)`, `...chatKeys.all`). Other
@@ -96,6 +96,60 @@ const isExplicitObjectSpreadValue = (node) => {
 const isLeakyObjectSpread = (property) =>
   property?.type === "SpreadElement" &&
   !isExplicitObjectSpreadValue(property.argument);
+
+const startsBefore = (candidate, node) => {
+  const candidateStart = candidate?.loc?.start;
+  const nodeStart = node?.loc?.start;
+  if (
+    typeof candidateStart?.line !== "number" ||
+    typeof candidateStart.column !== "number" ||
+    typeof nodeStart?.line !== "number" ||
+    typeof nodeStart.column !== "number"
+  ) {
+    return true;
+  }
+  if (candidateStart.line !== nodeStart.line) {
+    return candidateStart.line < nodeStart.line;
+  }
+  return candidateStart.column < nodeStart.column;
+};
+
+const findConstInitializer = (scopeNode, identifier) => {
+  if (!Array.isArray(scopeNode.body)) {
+    return null;
+  }
+  for (const statement of scopeNode.body) {
+    if (!startsBefore(statement, identifier)) {
+      continue;
+    }
+    if (
+      statement?.type !== "VariableDeclaration" ||
+      statement.kind !== "const"
+    ) {
+      continue;
+    }
+    for (const declarator of statement.declarations ?? []) {
+      if (isIdentifier(declarator.id, identifier.name)) {
+        return declarator.init ?? null;
+      }
+    }
+  }
+  return null;
+};
+
+const findVisibleConstInitializer = (identifier) => {
+  let current = identifier.parent;
+  while (current) {
+    if (current.type === "BlockStatement" || current.type === "Program") {
+      const initializer = findConstInitializer(current, identifier);
+      if (initializer !== null) {
+        return initializer;
+      }
+    }
+    current = current.parent;
+  }
+  return null;
+};
 
 const parentAfterExpressionWrappers = (node) => {
   let current = node.parent;
@@ -240,6 +294,10 @@ export default {
               return;
             }
             const value = unwrapExpression(node.value);
+            if (isIdentifier(value)) {
+              reportLeakyValue(findVisibleConstInitializer(value));
+              return;
+            }
             reportLeakyValue(value);
           },
 

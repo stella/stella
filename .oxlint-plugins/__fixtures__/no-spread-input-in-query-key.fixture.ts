@@ -68,6 +68,15 @@ export const conditionalQueryOptions = {
     : [...rootKeys.all],
 };
 
+export const hoistedQueryOptions = () => {
+  const queryKey = [
+    ...rootKeys.all,
+    // oxlint-disable-next-line no-spread-input-in-query-key/no-spread-input-in-query-key
+    ...input,
+  ] as const;
+  return { queryKey };
+};
+
 export const fixtureKeys = {
   all: ["fixture"] as const,
 
