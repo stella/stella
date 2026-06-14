@@ -1,7 +1,11 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 
-import { BILLING_STATUS, INVOICE_STATUS } from "@/api/db/schema";
+import {
+  BILLING_STATUS,
+  INVOICE_STATUS,
+  invoices,
+} from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -75,6 +79,13 @@ describe("addEntries currency enforcement", () => {
 
   test("returns a retryable conflict when a claim count changes", async () => {
     let auditCalls = 0;
+    const lockInvoiceForUpdate = mock(async () => [
+      {
+        id: toSafeId<"invoice">("inv_test"),
+        totalAmount: 0,
+        currency: "USD",
+      },
+    ]);
     const { safeDb } = createScopedDbMock({
       query: {
         invoices: {
@@ -87,17 +98,29 @@ describe("addEntries currency enforcement", () => {
         },
       },
       select: () => ({
-        from: () => ({
-          where: async () => [
-            {
-              id: toSafeId<"timeEntry">("te_1"),
-              status: BILLING_STATUS.APPROVED,
-              billable: true,
-              invoiceId: null,
-              currency: "USD",
-            },
-          ],
-        }),
+        from: (table: unknown) => {
+          if (table === invoices) {
+            return {
+              where: () => ({
+                limit: () => ({
+                  for: lockInvoiceForUpdate,
+                }),
+              }),
+            };
+          }
+
+          return {
+            where: async () => [
+              {
+                id: toSafeId<"timeEntry">("te_1"),
+                status: BILLING_STATUS.APPROVED,
+                billable: true,
+                invoiceId: null,
+                currency: "USD",
+              },
+            ],
+          };
+        },
       }),
       update: () => ({
         set: () => ({
@@ -131,5 +154,6 @@ describe("addEntries currency enforcement", () => {
       },
     });
     expect(auditCalls).toBe(0);
+    expect(lockInvoiceForUpdate).toHaveBeenCalledWith("update");
   });
 });

@@ -259,14 +259,23 @@ const addEntries = createSafeHandler(
     }
 
     const txResult = await safeDb(async (tx) => {
-      const invoiceCheck = await tx.query.invoices.findFirst({
-        where: {
-          id: { eq: params.invoiceId },
-          workspaceId: { eq: workspaceId },
-          status: { eq: INVOICE_STATUS.DRAFT },
-        },
-        columns: { id: true, totalAmount: true, currency: true },
-      });
+      const invoiceRows = await tx
+        .select({
+          id: invoices.id,
+          totalAmount: invoices.totalAmount,
+          currency: invoices.currency,
+        })
+        .from(invoices)
+        .where(
+          and(
+            eq(invoices.id, params.invoiceId),
+            eq(invoices.workspaceId, workspaceId),
+            eq(invoices.status, INVOICE_STATUS.DRAFT),
+          ),
+        )
+        .limit(1)
+        .for("update");
+      const invoiceCheck = invoiceRows.at(0);
       if (!invoiceCheck) {
         return { ok: false as const };
       }
