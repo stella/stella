@@ -6,6 +6,7 @@ import { templateFills } from "@/api/db/schema";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
 import { isTemplateData } from "@/api/handlers/docx/types";
 import { convertToPdf } from "@/api/handlers/files/gotenberg";
+import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -127,7 +128,13 @@ export const fillHandler = async ({
       structureErrors:
         result.structureErrors.length > 0 ? result.structureErrors : null,
     });
-  }).catch(() => undefined);
+  }).catch((error: unknown) => {
+    captureError(error, {
+      operation: "template_fill_analytics",
+      organizationId,
+      userId,
+    });
+  });
 
   // PDF conversion via Gotenberg
   if (format === "pdf") {
