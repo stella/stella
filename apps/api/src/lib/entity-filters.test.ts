@@ -418,6 +418,30 @@ describe("applySorts (in-memory)", () => {
     ]);
   });
 
+  test("int sort parses legacy numeric text values", () => {
+    const items = [
+      {
+        entityId: "twenty",
+        kind: "task" as const,
+        fields: [makeIntField("twenty", "p1", 20)],
+      },
+      makeEntity("ten", "task", [["p1", "10"]]),
+      {
+        entityId: "nine",
+        kind: "task" as const,
+        fields: [makeIntField("nine", "p1", 9)],
+      },
+    ];
+
+    const sorted = applySorts(items, [{ propertyId: "p1", desc: false }]);
+
+    expect(sorted.map((item) => item.entityId)).toEqual([
+      "nine",
+      "ten",
+      "twenty",
+    ]);
+  });
+
   test("property: int sort with missing rows is numerically monotonic", () => {
     fc.assert(
       fc.property(
@@ -556,7 +580,7 @@ describe("buildSortExpressions", () => {
       { propertyId: "p1", desc: false },
     ]);
 
-    // A numeric cast guarded by the int type, ordered before the text key.
+    // A guarded numeric cast, ordered before the text key.
     const numericExpr = expressions[0];
     const textExpr = expressions[1];
     if (!numericExpr || !textExpr) {
@@ -565,7 +589,8 @@ describe("buildSortExpressions", () => {
 
     const numericSql = dialect.sqlToQuery(numericExpr).sql;
     expect(numericSql).toContain("::numeric");
-    expect(numericSql).toContain("'int'");
+    expect(numericSql).toContain("BTRIM");
+    expect(numericSql).toContain("~");
     expect(numericSql).toContain("NULLS LAST");
 
     const textSql = dialect.sqlToQuery(textExpr).sql;

@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, ne } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -7,7 +7,7 @@ import { prorateHourlyCents } from "@stll/money";
 import type { ScopedDb } from "@/api/db";
 import { member, user } from "@/api/db/auth-schema";
 import { timeEntryStatusSchema } from "@/api/db/billing-validators";
-import { timeEntries } from "@/api/db/schema";
+import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
@@ -53,6 +53,7 @@ export const exportLedesHandler = async ({
   // charged line items, never internal non-billable or written-off time.
   conditions.push(eq(timeEntries.billable, true));
   conditions.push(eq(timeEntries.noCharge, false));
+  conditions.push(ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF));
 
   if (query.dateFrom) {
     conditions.push(gte(timeEntries.dateWorked, query.dateFrom));
@@ -146,8 +147,13 @@ export const exportLedesHandler = async ({
 
   for (const row of rows) {
     // Defensive billing-integrity guard alongside the SQL filter: a
-    // non-billable or no-charge entry must never produce a charged line.
-    if (!row.billable || row.noCharge) {
+    // non-billable, no-charge, or written-off entry must never produce a
+    // charged line.
+    if (
+      !row.billable ||
+      row.noCharge ||
+      row.status === BILLING_STATUS.WRITTEN_OFF
+    ) {
       continue;
     }
     lineItemNumber++;

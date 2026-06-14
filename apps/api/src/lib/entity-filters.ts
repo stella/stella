@@ -28,6 +28,10 @@ type ViewSort = {
 
 // -- Helpers --
 
+const NUMERIC_TEXT_PATTERN =
+  "^[+-]?(?:(?:[0-9]+(?:\\.[0-9]*)?)|(?:\\.[0-9]+))(?:[eE][+-]?[0-9]+)?$";
+const NUMERIC_TEXT_RE = new RegExp(NUMERIC_TEXT_PATTERN, "u");
+
 const getFieldValue = (content: FieldContent | undefined): string => {
   if (!content) {
     return "";
@@ -65,8 +69,8 @@ const numericContentValue = (
   if (content?.type === "int") {
     return content.value;
   }
-  const raw = getFieldValue(content);
-  if (raw.trim() === "") {
+  const raw = getFieldValue(content).trim();
+  if (raw === "" || !NUMERIC_TEXT_RE.test(raw)) {
     return null;
   }
   const n = Number(raw);
@@ -192,6 +196,17 @@ export const applySorts = <T extends FilterableEntity>(
  */
 const fieldValueExpr = (contentCol: typeof fields.content): SQL =>
   sql`COALESCE(${contentCol}->>'value', ${contentCol}->>'fileName', '')`;
+
+const numericFieldValueExpr = (contentCol: typeof fields.content): SQL => {
+  const valueExpr = fieldValueExpr(contentCol);
+  const trimmed = sql`BTRIM(${valueExpr})`;
+
+  return sql`CASE
+    WHEN ${trimmed} ~ ${NUMERIC_TEXT_PATTERN}
+    THEN ${trimmed}::numeric
+    ELSE NULL
+  END`;
+};
 
 /**
  * Builds an EXISTS subquery that checks whether an entity's
@@ -388,16 +403,11 @@ export const buildSortExpressions = (sorts: readonly ViewSort[]): SQL[] => {
       continue;
     }
 
-    // Numeric sort key for int fields: `content->>'value'` is text, so a
-    // plain ORDER BY sorts "10" before "9". Cast to numeric for int fields
-    // (NULL otherwise, bucketed last via NULLS LAST), then break ties with
-    // the text key so text properties still order correctly.
+    // Numeric sort key: `content->>'value'` is text, so a plain ORDER BY sorts
+    // "10" before "9". Cast safe numeric text, including legacy text content
+    // left behind by property type changes, then break ties with the text key.
     const numericSortKey = sql`(
-      SELECT CASE
-        WHEN ${fields.content}->>'type' = 'int'
-        THEN (${fields.content}->>'value')::numeric
-        ELSE NULL
-      END
+      SELECT ${numericFieldValueExpr(fields.content)}
       FROM ${fields}
       WHERE ${fields.workspaceId} = ${entities.workspaceId}
         AND ${fields.entityVersionId} = ${entities.currentVersionId}

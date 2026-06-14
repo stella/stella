@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { ScopedDb } from "@/api/db";
+import { BILLING_STATUS } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -19,7 +20,7 @@ const timeEntryRow = (overrides: Record<string, unknown> = {}) => ({
   invoiceNarrative: null,
   billable: true,
   noCharge: false,
-  status: "approved",
+  status: BILLING_STATUS.APPROVED,
   taskCode: null,
   activityCode: null,
   ...overrides,
@@ -45,16 +46,21 @@ const runExport = async (rows: unknown[]) =>
   });
 
 describe("exportLedesHandler billing integrity", () => {
-  test("excludes non-billable and no-charge entries from the LEDES file", async () => {
+  test("excludes non-billable, no-charge, and written-off entries from the LEDES file", async () => {
     const output = await runExport([
       timeEntryRow({ narrative: "Billable work" }),
       timeEntryRow({ billable: false, narrative: "Internal non-billable" }),
       timeEntryRow({ noCharge: true, narrative: "Written off" }),
+      timeEntryRow({
+        narrative: "Deleted approved time",
+        status: BILLING_STATUS.WRITTEN_OFF,
+      }),
     ]);
 
     expect(output).toContain("Billable work");
     expect(output).not.toContain("Internal non-billable");
     expect(output).not.toContain("Written off");
+    expect(output).not.toContain("Deleted approved time");
   });
 
   test("emits one line item per billable charged entry", async () => {
