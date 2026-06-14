@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { mcpConnectors, mcpUserConnections } from "@/api/db/schema";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { LIMITS } from "@/api/lib/limits";
 
 const config = {
   permissions: { workspace: ["read"] },
@@ -41,7 +42,7 @@ const listMcpConnections = createSafeRootHandler(
               eq(mcpUserConnections.userId, user.id),
             ),
           )
-          .limit(100),
+          .limit(LIMITS.mcpConnectionsPageSizeMax),
       ),
     );
 

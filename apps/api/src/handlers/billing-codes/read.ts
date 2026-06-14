@@ -7,6 +7,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
   decodePaginationCursor,
@@ -16,7 +17,9 @@ import {
 import { brandPersistedBillingCodeId } from "@/api/lib/safe-id-boundaries";
 
 const readBillingCodesQuerySchema = t.Object({
-  limit: t.Optional(t.Integer({ minimum: 1, maximum: 1000 })),
+  limit: t.Optional(
+    t.Integer({ minimum: 1, maximum: LIMITS.billingCodesPageSizeMax }),
+  ),
   cursor: t.Optional(t.String({ maxLength: 512 })),
   type: t.Optional(t.Union([t.Literal("task"), t.Literal("activity")])),
   active: t.Optional(t.BooleanString()),
@@ -53,7 +56,7 @@ const decodeBillingCodeCursor = (cursor: string): BillingCodeCursor | null => {
 const readBillingCodes = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, query }) {
-    const limit = query.limit ?? 500;
+    const limit = query.limit ?? LIMITS.billingCodesPageSizeDefault;
 
     const conditions = [eq(billingCodes.workspaceId, workspaceId)];
 

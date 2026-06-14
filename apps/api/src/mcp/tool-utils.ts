@@ -4,14 +4,16 @@ import { TaggedError } from "better-result";
 
 import { env } from "@/api/env";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
+import { LIMITS } from "@/api/lib/limits";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { getAccessibleWorkspaceId } from "@/api/mcp/context";
 
-export const DEFAULT_LIST_LIMIT = 25;
-export const DEFAULT_SEARCH_LIMIT = 10;
-export const MAX_LIST_LIMIT = 100;
-export const MAX_SEARCH_LIMIT = 20;
-export const DEFAULT_COMPAT_SEARCH_LIMIT = 8;
+export const DEFAULT_LIST_LIMIT = LIMITS.mcpListPageSizeDefault;
+export const DEFAULT_SEARCH_LIMIT = LIMITS.mcpSearchPageSizeDefault;
+export const MAX_LIST_LIMIT = LIMITS.mcpListPageSizeMax;
+export const MAX_SEARCH_LIMIT = LIMITS.mcpSearchPageSizeMax;
+export const DEFAULT_COMPAT_SEARCH_LIMIT =
+  LIMITS.mcpCompatSearchPageSizeDefault;
 
 export const MCP_TOOL_EXECUTION_OPTIONS: ToolExecutionOptions = {
   messages: [],

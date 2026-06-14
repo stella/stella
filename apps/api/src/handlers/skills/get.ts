@@ -7,6 +7,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 
 const getSkillParamsSchema = t.Object({
   skillId: tSafeId("agentSkill"),
@@ -87,7 +88,8 @@ const getSkill = createSafeRootHandler(
           })
           .from(agentSkillResources)
           .where(eq(agentSkillResources.skillId, skill.id))
-          .orderBy(asc(agentSkillResources.path)),
+          .orderBy(asc(agentSkillResources.path))
+          .limit(LIMITS.agentSkillResourcesPerSkill),
       ),
     );
 
