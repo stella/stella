@@ -71,6 +71,15 @@ export const buildRunMap = (p: slimdom.Element): RunSpan[] => {
               });
               offset += text.length;
             }
+          } else if (
+            rc.namespaceURI === W_NS &&
+            (rc.localName === "tab" || rc.localName === "br")
+          ) {
+            // collectText (the coordinate system edit/comment offsets are
+            // computed against) counts a tab as "\t" and a break as "\n".
+            // Advance the offset by one so text after a tab/break maps to
+            // the correct run span instead of being skewed left.
+            offset += 1;
           }
         }
       }

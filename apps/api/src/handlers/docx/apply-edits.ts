@@ -187,9 +187,16 @@ const createDel = (
 };
 
 /** True when a w:r still contains at least one w:t child. */
-const runHasText = (run: slimdom.Element): boolean =>
+// A run is non-empty if it still carries any rendered content. w:tab and
+// w:br count: a run holding only a tab/break must not be cleaned up as an
+// "empty shell", or deleting an adjacent w:t would silently drop the tab or
+// line break and shift every following character's offset.
+const runHasContent = (run: slimdom.Element): boolean =>
   [...run.childNodes].some(
-    (c) => isElement(c) && c.localName === "t" && c.namespaceURI === W_NS,
+    (c) =>
+      isElement(c) &&
+      c.namespaceURI === W_NS &&
+      (c.localName === "t" || c.localName === "tab" || c.localName === "br"),
   );
 
 // ── Run splitting for multi-w:t ──────────────────────────
@@ -216,7 +223,15 @@ const splitPrecedingSiblings = (
     if (child === firstAffectedTNode) {
       break;
     }
-    if (child.localName === "t" && child.namespaceURI === W_NS) {
+    // Isolate preceding text AND tab/break siblings: a leading w:tab/w:br
+    // must stay before the edit fragments, or deleting the following w:t
+    // would reorder the tab/break after the inserted text.
+    if (
+      child.namespaceURI === W_NS &&
+      (child.localName === "t" ||
+        child.localName === "tab" ||
+        child.localName === "br")
+    ) {
       preceding.push(child);
     }
   }
@@ -340,7 +355,7 @@ const applyInsert = (
           // Remove only the affected w:t node. A multi-w:t
           // run may have siblings that must be preserved.
           span.run.removeChild(span.tNode);
-          if (!runHasText(span.run)) {
+          if (!runHasContent(span.run)) {
             parent.removeChild(span.run);
           }
         }
@@ -464,7 +479,7 @@ const applyDelete = (
     if (!run.parentNode) {
       continue;
     }
-    if (!runHasText(run)) {
+    if (!runHasContent(run)) {
       run.parentNode.removeChild(run);
     }
   }

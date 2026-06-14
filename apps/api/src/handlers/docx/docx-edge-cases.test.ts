@@ -87,6 +87,11 @@ const extractAcceptedText = (xml: string): string[] => {
       }
       if (n.localName === "t" && n.namespaceURI === W_NS) {
         text += n.textContent ?? "";
+      } else if (n.localName === "br" && n.namespaceURI === W_NS) {
+        // Mirror collectText: a break is one "\n" in the text coordinate.
+        text += "\n";
+      } else if (n.localName === "tab" && n.namespaceURI === W_NS) {
+        text += "\t";
       } else {
         for (const c of n.childNodes) {
           walk(c);
@@ -633,11 +638,12 @@ describe("pipeline roundtrip: real OOXML patterns", () => {
 
     pipelineRoundtrip(
       bodyXml,
-      [{ index: 0, text: "Before breakAfter break" }],
+      // collectText renders the w:br as "\n"; the diff coordinate must match.
+      [{ index: 0, text: "Before break\nAfter break" }],
       [
         {
           paragraphIndex: 0,
-          newText: "Before breakAfter edit",
+          newText: "Before break\nAfter edit",
         },
       ],
     );
@@ -653,11 +659,11 @@ describe("pipeline roundtrip: real OOXML patterns", () => {
 
     pipelineRoundtrip(
       bodyXml,
-      [{ index: 0, text: "Line oneLine two" }],
+      [{ index: 0, text: "Line one\nLine two" }],
       [
         {
           paragraphIndex: 0,
-          newText: "First lineLine two",
+          newText: "First line\nLine two",
         },
       ],
     );
@@ -672,11 +678,12 @@ describe("pipeline roundtrip: real OOXML patterns", () => {
 
     pipelineRoundtrip(
       bodyXml,
-      [{ index: 0, text: "BeforeAfter tab" }],
+      // collectText renders the w:tab as "\t"; the diff coordinate must match.
+      [{ index: 0, text: "Before\tAfter tab" }],
       [
         {
           paragraphIndex: 0,
-          newText: "BeforeEdited tab",
+          newText: "Before\tEdited tab",
         },
       ],
     );
@@ -902,14 +909,16 @@ describe("pipeline roundtrip: real OOXML patterns", () => {
       [
         {
           index: 0,
-          text: "1.1 Definitions. The following terms shall have the meanings set forth below.",
+          // collectText: leading w:tab "\t", then text, a space, the w:br
+          // "\n", then the second segment.
+          text: "\t1.1 Definitions. \nThe following terms shall have the meanings set forth below.",
         },
       ],
       [
         {
           paragraphIndex: 0,
           newText:
-            "1.1 Definitions. The terms below have the following meanings.",
+            "\t1.1 Definitions. \nThe terms below have the following meanings.",
         },
       ],
     );
