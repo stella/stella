@@ -5,7 +5,7 @@ import type { PDF, PdfDict, PdfRef } from "@libpdf/core";
  * A redaction region on a specific page for content stream
  * neutralisation. Coordinates are in PDF user space.
  */
-type RedactionBox = {
+export type RedactionBox = {
   x: number;
   y: number;
   width: number;
@@ -147,7 +147,7 @@ const isInRedactionZone = (
  * text positioning operators (Td, TD, Tm) and replaces string
  * content in text-showing operators (Tj, TJ, ', ") with spaces.
  */
-const neutraliseTextOperators = (
+export const neutraliseTextOperators = (
   content: string,
   boxes: RedactionBox[],
 ): string => {
@@ -312,7 +312,7 @@ const isHexDigit = (c: string | undefined): boolean =>
  * E.g., "(Hello)" -> "(     )"
  *       "<48656C6C6F>" -> "<2020202020>"
  */
-const replaceStringContent = (line: string): string => {
+export const replaceStringContent = (line: string): string => {
   let i = 0;
   const result: string[] = [];
 
