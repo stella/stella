@@ -76,3 +76,14 @@ export const constObjectKeys = {
 export const safeQueryOptions = {
   queryKey: [...rootKeys.all, "safe"] as const,
 };
+
+export const safeConditionalFieldQueryOptions = {
+  queryKey: [
+    ...rootKeys.all,
+    {
+      ...(filterInput.filters.length > 0 && {
+        filters: filterInput.filters,
+      }),
+    },
+  ] as const,
+};

@@ -68,6 +68,35 @@ const isLeakySpread = (element) => {
   return !isAllowedCompositionSpread(element.argument);
 };
 
+const isExplicitObjectSpreadValue = (node) => {
+  const unwrapped = unwrapExpression(node);
+  if (!unwrapped || typeof unwrapped.type !== "string") {
+    return false;
+  }
+  if (unwrapped.type === "ObjectExpression") {
+    return unwrapped.properties.every((property) => {
+      if (property?.type === "SpreadElement") {
+        return isExplicitObjectSpreadValue(property.argument);
+      }
+      return property?.computed !== true;
+    });
+  }
+  if (unwrapped.type === "LogicalExpression" && unwrapped.operator === "&&") {
+    return isExplicitObjectSpreadValue(unwrapped.right);
+  }
+  if (unwrapped.type === "ConditionalExpression") {
+    return (
+      isExplicitObjectSpreadValue(unwrapped.consequent) &&
+      isExplicitObjectSpreadValue(unwrapped.alternate)
+    );
+  }
+  return false;
+};
+
+const isLeakyObjectSpread = (property) =>
+  property?.type === "SpreadElement" &&
+  !isExplicitObjectSpreadValue(property.argument);
+
 const parentAfterExpressionWrappers = (node) => {
   let current = node.parent;
   while (
@@ -143,7 +172,7 @@ export default {
       create(context) {
         const reportObjectSpreads = (objectNode) => {
           for (const property of objectNode.properties) {
-            if (property?.type !== "SpreadElement") {
+            if (!isLeakyObjectSpread(property)) {
               continue;
             }
             context.report({
