@@ -652,12 +652,19 @@ const buildColumnsXml = (
   return `<cols>${columnXml}</cols>`;
 };
 
-const buildInlineStringCellXml = (
-  value: string,
-  rowIndex: number,
-  columnIndex: number,
-  styleId: number,
-) => {
+type BuildInlineStringCellXmlOptions = {
+  value: string;
+  rowIndex: number;
+  columnIndex: number;
+  styleId: number;
+};
+
+const buildInlineStringCellXml = ({
+  value,
+  rowIndex,
+  columnIndex,
+  styleId,
+}: BuildInlineStringCellXmlOptions) => {
   const preserveWhitespace = /^\s|\s$/u.test(value)
     ? ' xml:space="preserve"'
     : "";
@@ -666,23 +673,30 @@ const buildInlineStringCellXml = (
   )}</t></is></c>`;
 };
 
-const buildNumberCellXml = (
-  value: number,
-  rowIndex: number,
-  columnIndex: number,
-  styleId: number,
-): string =>
+type BuildNumberCellXmlOptions = {
+  value: number;
+  rowIndex: number;
+  columnIndex: number;
+  styleId: number;
+};
+
+const buildNumberCellXml = ({
+  value,
+  rowIndex,
+  columnIndex,
+  styleId,
+}: BuildNumberCellXmlOptions): string =>
   `<c r="${columnName(columnIndex)}${rowIndex}" s="${styleId}"><v>${value}</v></c>`;
 
 const buildHeaderRowXml = (columns: ExportColumn[]): string => {
   const cells = columns
     .map((column, columnIndex) =>
-      buildInlineStringCellXml(
-        sanitizeSpreadsheetHeader(column.header),
-        1,
+      buildInlineStringCellXml({
+        value: sanitizeSpreadsheetHeader(column.header),
+        rowIndex: 1,
         columnIndex,
-        HEADER_STYLE_ID,
-      ),
+        styleId: HEADER_STYLE_ID,
+      }),
     )
     .join("");
 
@@ -696,20 +710,20 @@ const buildCellXml = (
   styleRegistry: StyleRegistry,
 ): string => {
   if (cell.type === "number") {
-    return buildNumberCellXml(
-      cell.value,
+    return buildNumberCellXml({
+      value: cell.value,
       rowIndex,
       columnIndex,
-      numberCellStyleId(cell, styleRegistry),
-    );
+      styleId: numberCellStyleId(cell, styleRegistry),
+    });
   }
 
-  return buildInlineStringCellXml(
-    cell.value,
+  return buildInlineStringCellXml({
+    value: cell.value,
     rowIndex,
     columnIndex,
-    textCellStyleId(cell.style),
-  );
+    styleId: textCellStyleId(cell.style),
+  });
 };
 
 const buildBodyRowsXml = (
