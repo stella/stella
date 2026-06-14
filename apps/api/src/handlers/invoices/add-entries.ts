@@ -114,7 +114,7 @@ const addEntries = createSafeHandler(
             id: { eq: params.invoiceId },
             workspaceId: { eq: workspaceId },
           },
-          columns: { id: true, status: true },
+          columns: { id: true, status: true, currency: true },
         }),
       ),
     );
@@ -144,6 +144,7 @@ const addEntries = createSafeHandler(
               status: timeEntries.status,
               billable: timeEntries.billable,
               invoiceId: timeEntries.invoiceId,
+              currency: timeEntries.currency,
             })
             .from(timeEntries)
             .where(
@@ -180,6 +181,15 @@ const addEntries = createSafeHandler(
           }),
         );
       }
+
+      if (entries.some((entry) => entry.currency !== invoice.currency)) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "All time entries must match the invoice currency",
+          }),
+        );
+      }
     }
 
     const expenseIds = body.expenseIds;
@@ -192,6 +202,7 @@ const addEntries = createSafeHandler(
               status: expenses.status,
               billable: expenses.billable,
               invoiceId: expenses.invoiceId,
+              currency: expenses.currency,
             })
             .from(expenses)
             .where(
@@ -225,6 +236,17 @@ const addEntries = createSafeHandler(
             message:
               "All expenses must be approved, billable," +
               " and not already on an invoice",
+          }),
+        );
+      }
+
+      if (
+        expenseRows.some((expense) => expense.currency !== invoice.currency)
+      ) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "All expenses must match the invoice currency",
           }),
         );
       }
