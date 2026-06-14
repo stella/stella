@@ -1,47 +1,46 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
-import type { Document } from "../model/document";
+import type { Document, Table } from "../model/document";
 import { serializeDocumentToDocx } from "./docx";
 
-const docWithBorder = (style: string, rgb: string): Document =>
-  ({
-    package: {
-      document: {
-        content: [
+const docWithBorder = (style: string, rgb: string): Document => {
+  const table: Table = {
+    type: "table",
+    rows: [
+      {
+        type: "tableRow",
+        cells: [
           {
-            type: "table",
-            rows: [
+            type: "tableCell",
+            content: [
               {
-                type: "tableRow",
-                cells: [
+                type: "paragraph",
+                content: [
                   {
-                    type: "tableCell",
-                    content: [
-                      {
-                        type: "paragraph",
-                        content: [
-                          {
-                            type: "run",
-                            content: [{ type: "text", text: "x" }],
-                          },
-                        ],
-                      },
-                    ],
+                    type: "run",
+                    content: [{ type: "text", text: "x" }],
                   },
                 ],
               },
             ],
-            formatting: {
-              borders: { top: { style, size: 4, color: { rgb } } },
-            },
           },
         ],
       },
+    ],
+    formatting: {
+      borders: { top: { style, size: 4, color: { rgb } } },
     },
-    // SAFETY: minimal hand-built model for serialization; the serializer only
-    // reads the fields set here.
-  }) as unknown as Document;
+  };
+
+  return {
+    package: {
+      document: {
+        content: [table],
+      },
+    },
+  };
+};
 
 const readDocumentXml = async (buf: ArrayBuffer): Promise<string> => {
   const zip = await JSZip.loadAsync(buf);
