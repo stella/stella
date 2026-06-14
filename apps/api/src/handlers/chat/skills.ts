@@ -516,7 +516,13 @@ const findInstalledSkill = async ({
 
   return Result.ok(
     rows.value
-      .toSorted((a, b) => scopePriority(a.scope) - scopePriority(b.scope))
+      .toSorted(
+        (a, b) =>
+          activeSkillPriority(a.id, activeSkillId) -
+            activeSkillPriority(b.id, activeSkillId) ||
+          scopePriority(a.scope) - scopePriority(b.scope) ||
+          a.id.localeCompare(b.id),
+      )
       .at(0) ?? null,
   );
 };
@@ -576,3 +582,8 @@ const resolveSkillPrecedence = (
 
 const scopePriority = (scope: "team" | "private") =>
   scope === "private" ? 0 : 1;
+
+const activeSkillPriority = (
+  skillId: SafeId<"agentSkill">,
+  activeSkillId: SafeId<"agentSkill"> | undefined,
+) => (skillId === activeSkillId ? 0 : 1);

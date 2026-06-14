@@ -5,6 +5,8 @@ import type { SafeDb, Transaction } from "@/api/db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
 import {
   canEditActiveSkill,
+  loadAvailableChatSkill,
+  readAvailableChatSkillResource,
   resolveActiveChatSkillContext,
 } from "@/api/handlers/chat/skills";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
@@ -218,6 +220,76 @@ describe("resolveActiveChatSkillContext", () => {
   });
 });
 
+describe("available active chat skills", () => {
+  test("prioritizes the active skill row over an enabled private slug collision", async () => {
+    const slug = `shared-${Bun.randomUUIDv7()}`;
+    const activeTeamSkillId = await insertSkill({
+      body: "Team skill body",
+      enabled: true,
+      scope: "team",
+      slug,
+      userId: ids.userA1,
+    });
+    const privateSkillId = await insertSkill({
+      body: "Private skill body",
+      enabled: true,
+      scope: "private",
+      slug,
+      userId: ids.userA2,
+    });
+    await insertResource({
+      content: "team resource",
+      path: "knowledge/shared.md",
+      skillId: activeTeamSkillId,
+    });
+    await insertResource({
+      content: "private resource",
+      path: "knowledge/shared.md",
+      skillId: privateSkillId,
+    });
+
+    const activeLoadResult = await loadAvailableChatSkill({
+      activeSkillId: activeTeamSkillId,
+      organizationId: ids.orgA,
+      safeDb,
+      skillName: slug,
+      userId: ids.userA2,
+    });
+    const fallbackLoadResult = await loadAvailableChatSkill({
+      organizationId: ids.orgA,
+      safeDb,
+      skillName: slug,
+      userId: ids.userA2,
+    });
+    const activeReadResult = await readAvailableChatSkillResource({
+      activeSkillId: activeTeamSkillId,
+      organizationId: ids.orgA,
+      path: "knowledge/shared.md",
+      safeDb,
+      skillName: slug,
+      userId: ids.userA2,
+    });
+
+    if (Result.isError(activeLoadResult)) {
+      throw activeLoadResult.error;
+    }
+    if (Result.isError(fallbackLoadResult)) {
+      throw fallbackLoadResult.error;
+    }
+    if (Result.isError(activeReadResult)) {
+      throw activeReadResult.error;
+    }
+
+    expect(activeLoadResult.value.body).toBe("Team skill body");
+    expect(fallbackLoadResult.value.body).toBe("Private skill body");
+    expect(activeReadResult.value).toEqual({
+      content: "team resource",
+      origin: "authored",
+      skillId: activeTeamSkillId,
+    });
+  });
+});
+
 type ActiveSkillContextResult = Awaited<
   ReturnType<typeof resolveActiveChatSkillContext>
 >;
@@ -243,12 +315,14 @@ const expectHandlerStatus = ({
 };
 
 const insertSkill = async ({
+  body = "Use this only for chat tests.",
   enabled,
   origin = "authored",
   scope,
   slug,
   userId: skillUserId,
 }: {
+  body?: string;
   enabled: boolean;
   origin?: "authored" | "bundled" | "upload" | "url";
   scope: "private" | "team";
@@ -267,26 +341,29 @@ const insertSkill = async ({
     description: "Chat test skill",
     metadata: {},
     contentHash: "0".repeat(64),
-    body: "Use this only for chat tests.",
+    body,
     enabled,
   });
   return skillId;
 };
 
 const insertResource = async ({
+  content = "resource",
   path,
   skillId,
 }: {
+  content?: string;
   path: string;
   skillId: SafeId<"agentSkill">;
 }) => {
+  const sizeBytes = new TextEncoder().encode(content).byteLength;
   await testDb.insert(agentSkillResources).values({
     id: testId(),
     organizationId: ids.orgA,
     skillId,
     path,
     kind: "knowledge",
-    content: "resource",
-    sizeBytes: 8,
+    content,
+    sizeBytes,
   });
 };
