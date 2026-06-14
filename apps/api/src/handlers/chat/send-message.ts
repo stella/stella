@@ -25,6 +25,7 @@ import type {
   IncomingActiveDecision,
   IncomingActiveExternal,
   IncomingActiveFile,
+  IncomingActiveSkill,
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
 import {
@@ -55,6 +56,10 @@ import {
   readLatestChatCompaction,
   shouldInvalidateChatCompactionCheckpoint,
 } from "@/api/handlers/chat/persistent-compaction";
+import {
+  resolveActiveChatSkillContext,
+  type ActiveChatSkillContext,
+} from "@/api/handlers/chat/skills";
 import { hydrateMessages, streamChat } from "@/api/handlers/chat/stream-chat";
 import { createChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { shouldMarkThreadUsedAnonymization } from "@/api/handlers/chat/thread-anonymization";
@@ -116,6 +121,7 @@ const sendMessage = createSafeRootHandler(
   async function* ({
     activeWorkspaceIds,
     body,
+    memberRole,
     orgAIConfig,
     promptCachingEnabled,
     recordAuditEvent,
@@ -193,6 +199,15 @@ const sendMessage = createSafeRootHandler(
         workspaceId,
       }),
     );
+    const validationActiveSkillContext = yield* Result.await(
+      resolveActiveChatSkillContext({
+        activeSkill: body.activeSkill,
+        memberRole,
+        organizationId: session.activeOrganizationId,
+        safeDb,
+        userId: user.id,
+      }),
+    );
     const validationExternalMcpTools = messageNeedsExternalMcpValidation(
       body.message,
     )
@@ -229,6 +244,8 @@ const sendMessage = createSafeRootHandler(
       webSearchEnabled: validationThreadState.webSearchEnabled,
       externalTools: validationExternalMcpTools?.tools,
       disabledNativeToolSlugs,
+      activeSkillContext: validationActiveSkillContext,
+      recordAuditEvent,
     });
 
     const validatedMessageResult = await validateMessage({
@@ -422,7 +439,9 @@ const sendMessage = createSafeRootHandler(
       activeDecision: body.activeDecision,
       activeExternal: body.activeExternal,
       activeFile: body.activeFile,
+      activeSkill: body.activeSkill,
       contextMatterIds: effectiveContextMatterIds,
+      memberRole,
       messageWindow: messagesForContextResult.value,
       organizationId: session.activeOrganizationId,
       safeDb,
@@ -529,6 +548,8 @@ const sendMessage = createSafeRootHandler(
       externalTools: externalMcpTools.tools,
       disabledNativeToolSlugs,
       skillMetadata: chatContext.skillMetadata,
+      activeSkillContext: chatContext.activeSkillContext,
+      recordAuditEvent,
     });
 
     const externalMcpSystemHint = buildExternalMcpSystemHint(
@@ -1377,7 +1398,9 @@ type PrepareChatContextProps = {
   activeDecision: IncomingActiveDecision | undefined;
   activeExternal: IncomingActiveExternal | undefined;
   activeFile: IncomingActiveFile | undefined;
+  activeSkill: IncomingActiveSkill | undefined;
   contextMatterIds: SafeId<"workspace">[];
+  memberRole: { role: string };
   messageWindow: ChatMessage[];
   organizationId: SafeId<"organization">;
   refRegistry: ReturnType<typeof createChatRefRegistry>;
@@ -1404,15 +1427,18 @@ type PrepareChatContextResult = Result<
      */
     systemUntrusted: ChatUntrustedPromptSuffix;
     skillMetadata: readonly SkillMetadata[];
+    activeSkillContext: ActiveChatSkillContext | null;
   },
-  HandlerError<422 | 500> | SafeDbError
+  HandlerError<403 | 404 | 422 | 500> | SafeDbError
 >;
 
 const prepareChatContext = async ({
   activeDecision,
   activeExternal,
   activeFile,
+  activeSkill,
   contextMatterIds,
+  memberRole,
   messageWindow,
   organizationId,
   refRegistry,
@@ -1438,7 +1464,9 @@ const prepareChatContext = async ({
         activeDecision,
         activeExternal,
         activeFile,
+        activeSkill,
         contextMatterIds,
+        memberRole,
         organizationId,
         practiceJurisdictions,
         refRegistry,
@@ -1481,6 +1509,7 @@ const prepareChatContext = async ({
       systemSafe: systemPrompt.safePrompt,
       systemUntrusted: systemPrompt.untrustedSuffix,
       skillMetadata: systemPrompt.skillMetadata,
+      activeSkillContext: systemPrompt.activeSkillContext,
       hydratedMessages: hydrateAssistantMessageRefs({
         messages: messagesWithActiveFileFallback,
         refRegistry,

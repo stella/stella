@@ -111,6 +111,12 @@ export type ChatTab = {
    * user's current route.
    */
   activeDecisionId?: string | undefined;
+  activeSkill?:
+    | {
+        skillId?: string | undefined;
+        skillName: string;
+      }
+    | undefined;
 };
 
 export type MatterTabId = `matter:${string}`;
@@ -160,7 +166,7 @@ export type SkillResourceTab = {
   skillId: string | null;
   /** Resource source — built-in skills are immutable, the others
    *  can be edited in place. */
-  origin: "built-in" | "upload" | "url";
+  origin: "authored" | "built-in" | "bundled" | "upload" | "url";
   /** Which part of the skill this tab edits: a companion resource
    *  (saved via /resources) or the SKILL.md body (saved via the skill
    *  itself). Defaults to "resource" for callers that predate the body
@@ -301,6 +307,7 @@ type Actions = {
   }) => void;
   openSkillResourceTab: (
     tab: Omit<SkillResourceTab, "type" | "id" | "target"> & {
+      refreshContent?: boolean | undefined;
       skillName: string;
       resourcePath: string;
       target?: SkillResourceTab["target"];
@@ -331,6 +338,7 @@ type Actions = {
     workspaceId?: string | undefined;
     contextMatterIds?: string[];
     activeDecisionId?: string;
+    activeSkill?: ChatTab["activeSkill"];
   }) => void;
   /**
    * Replace a chat tab's matter context. Used by the matter
@@ -778,6 +786,19 @@ const isPdfFacet = (
 const isMetadataLane = (value: unknown): value is FileTab["metadataLane"] =>
   value === undefined || value === "closed" || value === "expanded";
 
+const isActiveSkillContext = (
+  value: unknown,
+): value is ChatTab["activeSkill"] => {
+  if (value === undefined) {
+    return true;
+  }
+  if (!isRecord(value) || typeof value["skillName"] !== "string") {
+    return false;
+  }
+
+  return isOptionalString(value["skillId"]);
+};
+
 const isInspectorTab = (value: unknown): value is InspectorTab => {
   if (!isRecord(value)) {
     return false;
@@ -805,7 +826,8 @@ const isInspectorTab = (value: unknown): value is InspectorTab => {
       typeof label === "string" &&
       isOptionalString(value["workspaceId"]) &&
       isStringArray(value["contextMatterIds"]) &&
-      isOptionalString(value["activeDecisionId"])
+      isOptionalString(value["activeDecisionId"]) &&
+      isActiveSkillContext(value["activeSkill"])
     );
   }
 
@@ -840,7 +862,11 @@ const isInspectorTab = (value: unknown): value is InspectorTab => {
       typeof label === "string" &&
       typeof value["skillName"] === "string" &&
       (skillId === null || typeof skillId === "string") &&
-      (origin === "built-in" || origin === "upload" || origin === "url") &&
+      (origin === "authored" ||
+        origin === "built-in" ||
+        origin === "bundled" ||
+        origin === "upload" ||
+        origin === "url") &&
       (target === undefined || target === "body" || target === "resource") &&
       typeof value["resourcePath"] === "string" &&
       typeof value["mimeType"] === "string" &&
@@ -1150,6 +1176,7 @@ export const useInspectorStore = create<State & Actions>()(
       label,
       mimeType,
       content,
+      refreshContent = false,
       target = "resource",
     }) =>
       set((state) => {
@@ -1178,7 +1205,7 @@ export const useInspectorStore = create<State & Actions>()(
           existing.target = target;
           existing.resourcePath = resourcePath;
           existing.mimeType = mimeType;
-          if (sourceChanged) {
+          if (sourceChanged || refreshContent) {
             existing.content = content;
           }
         }
@@ -1207,6 +1234,7 @@ export const useInspectorStore = create<State & Actions>()(
             workspaceId: args.workspaceId,
             contextMatterIds: args.contextMatterIds ?? [],
             activeDecisionId: args.activeDecisionId,
+            activeSkill: args.activeSkill,
           });
         } else if (existing.type === "chat") {
           if (args.label !== undefined) {
@@ -1220,6 +1248,9 @@ export const useInspectorStore = create<State & Actions>()(
           }
           if (args.activeDecisionId !== undefined) {
             existing.activeDecisionId = args.activeDecisionId;
+          }
+          if (args.activeSkill !== undefined) {
+            existing.activeSkill = args.activeSkill;
           }
         }
         state.activeId = id;

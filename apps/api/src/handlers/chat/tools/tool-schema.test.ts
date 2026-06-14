@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import type { SafeDb, ScopedDb } from "@/api/db";
+import {
+  ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
+  type ActiveChatSkillContext,
+} from "@/api/handlers/chat/skills";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import {
   EXPAND_CHAT_HISTORY_TOOL_NAME,
@@ -9,6 +13,7 @@ import {
 import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { getChatToolPolicy } from "@/api/handlers/chat/tools/tool-policy";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 
 import { createOrgTools } from "./org-tools";
@@ -27,6 +32,7 @@ const workspaceId = toSafeId<"workspace">(
 );
 const entityId = toSafeId<"entity">("44444444-4444-4444-8444-444444444444");
 const threadId = toSafeId<"chatThread">("55555555-5555-4555-8555-555555555555");
+const skillId = toSafeId<"agentSkill">("66666666-6666-4666-8666-666666666666");
 
 const unusedScopedDb: ScopedDb = async () => {
   throw new Error("This test only constructs tool schemas.");
@@ -34,6 +40,21 @@ const unusedScopedDb: ScopedDb = async () => {
 
 const unusedSafeDb: SafeDb = async () => {
   throw new Error("This test only constructs tool schemas.");
+};
+
+const noopAuditRecorder: AuditRecorder = async () => undefined;
+
+const editableActiveSkillContext: ActiveChatSkillContext = {
+  body: "# Instructions\nUse the checklist.",
+  description: "Review closing files.",
+  displayName: "Closing Review",
+  editable: true,
+  id: skillId,
+  origin: "authored",
+  resources: [{ kind: "knowledge", path: "knowledge/checklist.md" }],
+  source: "installed",
+  toolName: "closing-review",
+  version: null,
 };
 
 describe("chat tool schemas", () => {
@@ -107,6 +128,9 @@ describe("chat tool schemas", () => {
     });
 
     expect(tools).toHaveProperty("ask-user");
+    expect(tools).not.toHaveProperty("create-current-skill-resource");
+    expect(tools).not.toHaveProperty("update-current-skill-body");
+    expect(tools).not.toHaveProperty("update-current-skill-resource");
     expect(tools).toHaveProperty(SEARCH_CHAT_HISTORY_TOOL_NAME);
     expect(tools).toHaveProperty(EXPAND_CHAT_HISTORY_TOOL_NAME);
     expect(tools).toHaveProperty("run-stella-query");
@@ -115,6 +139,86 @@ describe("chat tool schemas", () => {
     expect(tools).not.toHaveProperty("search-across-matters");
     expect(tools).not.toHaveProperty("read-content-across-matters");
     expect(tools).not.toHaveProperty("read-contact");
+  });
+
+  test("only exposes current skill edit tools for editable active skill chats", () => {
+    const tools = getChatTools({
+      organizationId,
+      refRegistry: createChatRefRegistry(),
+      safeDb: unusedSafeDb,
+      scopedDb: unusedScopedDb,
+      threadId,
+      userId,
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        pinnedIds: [],
+        accessibleWorkspaceIds: [workspaceId],
+      }),
+      hasActiveFileChat: false,
+      webSearchEnabled: false,
+      activeSkillContext: editableActiveSkillContext,
+      recordAuditEvent: noopAuditRecorder,
+      skillMetadata: [
+        {
+          description: editableActiveSkillContext.description,
+          name: editableActiveSkillContext.toolName,
+          version: editableActiveSkillContext.version,
+        },
+      ],
+    });
+
+    const createResource = tools["create-current-skill-resource"];
+    const updateBody = tools["update-current-skill-body"];
+    const updateResource = tools["update-current-skill-resource"];
+
+    expect(createResource).toBeDefined();
+    expect(updateBody).toBeDefined();
+    expect(updateResource).toBeDefined();
+
+    if (!createResource || !updateBody || !updateResource) {
+      throw new Error("Expected current skill edit tools to be registered");
+    }
+
+    for (const editTool of [createResource, updateBody, updateResource]) {
+      expect(editTool.needsApproval).toBe(true);
+      expect(getChatToolPolicy(editTool)).toEqual({
+        kind: "mutation",
+        needsApproval: true,
+        requiresAnonymization: false,
+      });
+    }
+  });
+
+  test("does not expose full body replacement for truncated active skill bodies", () => {
+    const tools = getChatTools({
+      organizationId,
+      refRegistry: createChatRefRegistry(),
+      safeDb: unusedSafeDb,
+      scopedDb: unusedScopedDb,
+      threadId,
+      userId,
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        pinnedIds: [],
+        accessibleWorkspaceIds: [workspaceId],
+      }),
+      hasActiveFileChat: false,
+      webSearchEnabled: false,
+      activeSkillContext: {
+        ...editableActiveSkillContext,
+        body: "a".repeat(ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS + 1),
+      },
+      recordAuditEvent: noopAuditRecorder,
+      skillMetadata: [
+        {
+          description: editableActiveSkillContext.description,
+          name: editableActiveSkillContext.toolName,
+          version: editableActiveSkillContext.version,
+        },
+      ],
+    });
+
+    expect(tools).toHaveProperty("create-current-skill-resource");
+    expect(tools).not.toHaveProperty("update-current-skill-body");
+    expect(tools).toHaveProperty("update-current-skill-resource");
   });
 
   test("applies approval and anonymization policies by tool risk", () => {

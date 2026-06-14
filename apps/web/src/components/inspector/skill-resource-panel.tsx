@@ -60,7 +60,10 @@ export const SkillResourcePanel = ({
 
   const renderMode = detectRenderMode(tab.mimeType, tab.resourcePath);
   const isEditable =
-    renderMode !== "pdf" && tab.origin !== "built-in" && tab.skillId !== null;
+    renderMode !== "pdf" &&
+    tab.origin !== "built-in" &&
+    tab.origin !== "bundled" &&
+    tab.skillId !== null;
   // Markdown edits in the shared Folio WYSIWYG editor (auto-saving), so the ICP
   // never touches raw markdown (a "Show raw" toggle is there for power users).
   // Other text files keep the raw editor below.

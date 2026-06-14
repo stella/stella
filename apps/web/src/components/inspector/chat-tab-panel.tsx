@@ -108,6 +108,8 @@ export const ChatTabPanel = ({
       ? { decisionId: toSafeId<"caseLawDecision">(tabDecisionId) }
       : undefined,
   );
+  const tabActiveSkill = tab.activeSkill;
+  const getActiveSkill = useEffectEvent(() => tabActiveSkill);
   const t = useTranslations();
   const { ensureAIAvailable, openIfAIUnavailable } = useAIKeyGate();
 
@@ -179,6 +181,7 @@ export const ChatTabPanel = ({
         allowMissingThread: true,
         getUserContext,
         getActiveDecision,
+        ...(tabActiveSkill ? { getActiveSkill } : {}),
         getContextMatterIds,
         getSendMode,
       },
@@ -305,6 +308,7 @@ export const ChatTabPanel = ({
               ...(tab.activeDecisionId
                 ? { activeDecisionId: tab.activeDecisionId }
                 : {}),
+              ...(tab.activeSkill ? { activeSkill: tab.activeSkill } : {}),
             })
           }
           onSetAnonymized={setAnonymized}
@@ -401,6 +405,10 @@ const useChatContextLabel = (tab: ChatTab, activeOrganizationId: string) => {
   const fallbackLabel = tab.label.trim().length > 0 ? tab.label : "chat";
 
   return useMemo(() => {
+    if (tab.activeSkill) {
+      return tab.activeSkill.skillName;
+    }
+
     const workspaces = data?.workspaces;
     if (workspaces === undefined || tab.contextMatterIds.length === 0) {
       return fallbackLabel;
@@ -420,7 +428,7 @@ const useChatContextLabel = (tab: ChatTab, activeOrganizationId: string) => {
     }
 
     return `${firstName} +${String(selectedNames.length - 1)}`;
-  }, [data?.workspaces, fallbackLabel, tab.contextMatterIds]);
+  }, [data?.workspaces, fallbackLabel, tab.activeSkill, tab.contextMatterIds]);
 };
 
 type ChatEmptyStateProps = {

@@ -7,6 +7,7 @@ import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import type { ActiveSkillChatContext } from "@/components/inspector/inspector-active-skill";
 import type {
   InspectorRailIconProps,
   InspectorViewRenderProps,
@@ -22,11 +23,11 @@ import { useUninstallEntry } from "./use-uninstall-entry";
 
 /**
  * Payload for the `tool-detail` inspector view. Strictly
- * structured-cloneable: just the slug + org id. The view re-reads
- * the live entry from the catalogue query data inside its render
- * so install/remove/toggle state updates flow through automatically
- * after their mutations invalidate the query — the tab payload
- * doesn't go stale.
+ * structured-cloneable: just catalogue identity, icon hints, and
+ * optional skill chat context. The view re-reads the live entry
+ * from the catalogue query data inside its render so install/remove/
+ * toggle state updates flow through automatically after mutations
+ * invalidate the query — the tab payload doesn't go stale.
  *
  * Cached entry data for the rail icon (so the icon survives even
  * if the entry temporarily disappears between refetches) lives in
@@ -45,6 +46,12 @@ export type ToolDetailPayload = {
   kind: ToolDetailKind;
   slug: string;
   organizationId: string;
+  /**
+   * Context used when a chat is opened from this detail tab. Present
+   * only for installed skill entries; MCP/native-tool details are
+   * not skill editing surfaces.
+   */
+  activeSkill?: ActiveSkillChatContext | undefined;
   /**
    * Frozen icon hint captured when the tab was opened. The
    * rail icon falls back to this if the entry is briefly absent

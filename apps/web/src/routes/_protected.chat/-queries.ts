@@ -65,6 +65,11 @@ type ActiveExternalContext = {
   url: string;
 };
 
+export type ActiveSkillContext = {
+  skillId?: string | undefined;
+  skillName: string;
+};
+
 type ChatThreadKey = ChatThreadRef;
 
 type FileChatThreadKey = {
@@ -96,6 +101,7 @@ type ChatThreadOptionsContext = {
   getActiveDecision?: (() => ActiveDecisionContext | undefined) | undefined;
   getActiveExternal?: (() => ActiveExternalContext | undefined) | undefined;
   getActiveFile?: (() => ActiveFileContext | undefined) | undefined;
+  getActiveSkill?: (() => ActiveSkillContext | undefined) | undefined;
   /**
    * Matters this chat draws context from. The transport sends the
    * current value (an empty array means "no matters pinned"). The
@@ -117,6 +123,7 @@ type ChatRuntimeContextKind =
   | "active-docx-edit"
   | "active-external"
   | "active-file"
+  | "active-skill"
   | "plain";
 
 type ChatThreadQueryKey = ChatThreadRef & {
@@ -137,6 +144,10 @@ const getChatRuntimeContextKind = (
 
   if (context?.getActiveExternal) {
     return "active-external";
+  }
+
+  if (context?.getActiveSkill) {
+    return "active-skill";
   }
 
   return "plain";
@@ -379,6 +390,7 @@ export const buildSendRequestBody = ({
     activeDecision?: ActiveDecisionContext | undefined;
     activeExternal?: ActiveExternalContext | undefined;
     activeFile?: ActiveFileContext | undefined;
+    activeSkill?: ActiveSkillContext | undefined;
     contextMatterIds?: string[] | undefined;
     devModelId?: string | undefined;
     message: PersistedChatMessage;
@@ -419,6 +431,11 @@ export const buildSendRequestBody = ({
   const activeExternal = context?.getActiveExternal?.();
   if (activeExternal) {
     body.activeExternal = activeExternal;
+  }
+
+  const activeSkill = context?.getActiveSkill?.();
+  if (activeSkill) {
+    body.activeSkill = activeSkill;
   }
 
   const contextMatterIds = context?.getContextMatterIds?.();

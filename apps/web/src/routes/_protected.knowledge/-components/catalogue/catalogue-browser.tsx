@@ -63,7 +63,7 @@ import {
 import { AddMcpServerSheet } from "./add-mcp-server-sheet";
 import { isEffectivelyInstalled, type CatalogueEntry } from "./catalogue-types";
 import { InstallPackButton } from "./install-pack-button";
-import { toolDetailTabId } from "./tool-detail-view";
+import { toolDetailTabId, type ToolDetailPayload } from "./tool-detail-view";
 import { useInstallEntry } from "./use-install-entry";
 import { useUninstallEntry } from "./use-uninstall-entry";
 
@@ -105,6 +105,30 @@ const toRowDisplay = (entry: CatalogueEntry): CatalogueRowDisplay => ({
   iconUrl: entry.iconUrl,
   jurisdictions: entry.jurisdictions,
 });
+
+export const getToolDetailPayload = (
+  entry: CatalogueEntry,
+  organizationId: string,
+): ToolDetailPayload => {
+  const activeSkill =
+    entry.kind === "skill" && entry.chatSkillId !== null
+      ? {
+          skillId: entry.chatSkillId,
+          skillName: entry.displayName,
+        }
+      : undefined;
+
+  return {
+    kind: entry.kind,
+    slug: entry.slug,
+    organizationId,
+    ...(activeSkill === undefined ? {} : { activeSkill }),
+    iconHint: {
+      icon: entry.icon,
+      iconUrl: entry.iconUrl ?? null,
+    },
+  };
+};
 
 export const CatalogueBrowser = ({
   organizationId,
@@ -225,15 +249,7 @@ export const CatalogueBrowser = ({
       type: "tool-detail",
       id: tabId,
       label: entry.displayName,
-      payload: {
-        kind: entry.kind,
-        slug: entry.slug,
-        organizationId,
-        iconHint: {
-          icon: entry.icon,
-          iconUrl: entry.iconUrl ?? null,
-        },
-      },
+      payload: getToolDetailPayload(entry, organizationId),
       ownerRouteId: "/_protected/knowledge/tools",
     });
   };

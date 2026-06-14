@@ -180,6 +180,32 @@ describe("openChat", () => {
     expect(tab.workspaceId).toBe("ws-1");
     expect(tab.contextMatterIds).toEqual(["ws-2"]);
   });
+
+  test("preserves active skill context on chat tabs", () => {
+    const threadId = toChatThreadId("thread-skill");
+    useInspectorStore.getState().openChat({
+      id: threadId,
+      activeSkill: { skillId: "skill-1", skillName: "Review Skill" },
+    });
+
+    useInspectorStore.getState().openChat({
+      id: threadId,
+      label: "Renamed skill chat",
+    });
+
+    const tab = useInspectorStore
+      .getState()
+      .tabs.find((t) => t.id === threadId);
+    if (tab?.type !== "chat") {
+      throw new Error("expected chat tab");
+    }
+
+    expect(tab.activeSkill).toEqual({
+      skillId: "skill-1",
+      skillName: "Review Skill",
+    });
+    expect(tab.label).toBe("Renamed skill chat");
+  });
 });
 
 describe("openExternal", () => {
@@ -272,6 +298,39 @@ describe("openSkillResourceTab", () => {
       content: "Installed content",
       origin: "upload",
       skillId: "agentSkill_1",
+    });
+  });
+
+  test("refreshes content when explicitly requested for the same source", () => {
+    const resource = {
+      content: "Original content",
+      label: "Guidance",
+      mimeType: "text/markdown",
+      origin: "authored" as const,
+      resourcePath: "knowledge/guidance.md",
+      skillId: "agentSkill_1",
+      skillName: "review",
+    };
+
+    useInspectorStore.getState().openSkillResourceTab(resource);
+    useInspectorStore
+      .getState()
+      .updateSkillResourceTabContent(
+        buildSkillResourceTabId(resource),
+        "Edited buffer",
+      );
+    useInspectorStore.getState().openSkillResourceTab({
+      ...resource,
+      content: "Tool output",
+      refreshContent: true,
+    });
+
+    const tab = useInspectorStore
+      .getState()
+      .tabs.find((item) => item.id === buildSkillResourceTabId(resource));
+    expect(tab).toMatchObject({
+      type: "skill-resource",
+      content: "Tool output",
     });
   });
 });

@@ -31,6 +31,13 @@ type CommonFields = {
    * need a separate handle here.
    */
   installedSkillId: string | null;
+  /**
+   * Skill id that can be sent as chat active-skill context. This can
+   * be present when `installedSkillId` is null, because members can
+   * chat with enabled team skills without receiving an edit/delete
+   * handle for them.
+   */
+  chatSkillId: string | null;
   installedConnectorSlug: string | null;
   /**
    * Whether the installed entry is currently enabled for use in chat.

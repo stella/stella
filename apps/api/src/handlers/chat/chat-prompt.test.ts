@@ -7,6 +7,7 @@ import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
 import {
   appendAnonymizedModeHintToChatSafePrompt,
   appendActiveFilePromptIfEntityExists,
+  buildActiveSkillSection,
   buildChatPromptCacheKey,
   buildGlobalPrompt,
   buildGlobalPromptParts,
@@ -20,6 +21,10 @@ import type {
   ChatSafePrompt,
   ChatUntrustedPromptSuffix,
 } from "./chat-prompt";
+import {
+  ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
+  type ActiveChatSkillContext,
+} from "./skills";
 import type { ChatMessage } from "./types";
 
 const WORKSPACE_ID = toSafeId<"workspace">("ws_prompt_test");
@@ -174,6 +179,7 @@ describe("chat prompt builders", () => {
       skillMetadata: [
         {
           description: "Use the Acme acquisition playbook.",
+          displayName: "Acme Acquisition Review",
           name: "acme-acquisition-review",
           source: "installed",
           version: null,
@@ -184,9 +190,60 @@ describe("chat prompt builders", () => {
 
     expect(prompt.cacheStablePrefix).not.toContain("acme-acquisition-review");
     expect(prompt.safePrompt).not.toContain("Acme acquisition");
-    expect(prompt.untrustedSuffix).toContain("acme-acquisition-review");
+    expect(prompt.untrustedSuffix).toContain(
+      "Acme Acquisition Review (skillName: acme-acquisition-review)",
+    );
     expect(prompt.untrustedSuffix).toContain("Acme acquisition");
     expect(prompt.fullPrompt).toContain("acme-acquisition-review");
+  });
+
+  test("active skill section anchors this skill and its editable files", () => {
+    const activeSkill = {
+      body: "# Skill body\nUse the active workflow.",
+      description: "Active workflow description.",
+      displayName: "Active Workflow",
+      editable: true,
+      id: toSafeId<"agentSkill">("skill_active"),
+      origin: "authored",
+      resources: [{ kind: "knowledge", path: "knowledge/checklist.md" }],
+      source: "installed",
+      toolName: "active-workflow",
+      version: "1.0",
+    } satisfies ActiveChatSkillContext;
+
+    const section = buildActiveSkillSection(activeSkill);
+
+    expect(section).toContain("The user is currently inside this stella skill");
+    expect(section).toContain("Display name: Active Workflow");
+    expect(section).toContain(
+      "Canonical skill name for load-skill/read-skill-resource: active-workflow",
+    );
+    expect(section).toContain('When the user says "this skill"');
+    expect(section).toContain("This skill is editable in this chat");
+    expect(section).toContain("- knowledge/checklist.md (knowledge)");
+    expect(section).toContain("# Skill body");
+  });
+
+  test("marks long active skill bodies as truncated", () => {
+    const hiddenTail = "tail that must not be treated as visible";
+    const activeSkill = {
+      body: `${"a".repeat(ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS)}${hiddenTail}`,
+      description: "Active workflow description.",
+      displayName: "Active Workflow",
+      editable: true,
+      id: toSafeId<"agentSkill">("skill_active"),
+      origin: "authored",
+      resources: [],
+      source: "installed",
+      toolName: "active-workflow",
+      version: null,
+    } satisfies ActiveChatSkillContext;
+
+    const section = buildActiveSkillSection(activeSkill);
+
+    expect(section).toContain("Current SKILL.md body prefix");
+    expect(section).toContain("full-body replacement tool is unavailable");
+    expect(section).not.toContain(hiddenTail);
   });
 
   test("keeps the cache-stable prefix independent from workspace context", () => {
