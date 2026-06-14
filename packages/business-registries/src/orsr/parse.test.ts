@@ -136,6 +136,28 @@ describe("parseExtract (ESET)", () => {
     expect(predecessors?.[0]?.identifier).toMatch(/^\d+$/u);
   });
 
+  test("matches shareholder deposits against normalized stakeholder names", async () => {
+    const raw = await readFixture<OrsrRawExtractResponse>("extract-eset.json");
+    const peterDeposit = raw.legalPerson?.corporateBody?.deposits?.find(
+      (deposit) =>
+        deposit.stakeholder?.some(
+          (stakeholder) => stakeholder.value === "Ing. Peter Paško",
+        ) ?? false,
+    );
+    const stakeholder = peterDeposit?.stakeholder?.at(0);
+    if (!stakeholder) {
+      throw new Error("Expected Peter Paško deposit in ORSR fixture");
+    }
+    stakeholder.value = ' "Ing. Peter   Paško" ';
+
+    const company = parseExtract(raw);
+    const peter = company?.stakeholders.find(
+      (item) => item.name === "Ing. Peter Paško",
+    );
+    expect(peter?.share).toContain("Výška vkladu");
+    expect(peter?.share).toContain("30 800 EUR");
+  });
+
   test("filters out non-current stakeholders", async () => {
     const raw = await readFixture<OrsrRawExtractResponse>("extract-eset.json");
     // Flip every stakeholder's `current` flag off and confirm none surface.

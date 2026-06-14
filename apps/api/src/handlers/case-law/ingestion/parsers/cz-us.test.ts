@@ -235,6 +235,45 @@ describe("parseUsDecisionHtml", () => {
       expect(h3s.some((h) => h.plainText.includes("Posouzení"))).toBe(true);
     });
 
+    test("does not turn punctuation-only lines into Roman numeral headings", () => {
+      const rtf = [
+        "\\pard NÁLEZ",
+        "\\par",
+        "t a k t o :",
+        "\\par",
+        "Ústavní stížnost se odmítá.",
+        "\\par",
+        "O d ů v o d n ě n í :",
+        "\\par",
+        ".",
+        "\\par",
+        "Skutečný odstavec odůvodnění.",
+      ].join("\n");
+      const input = baseInput(`
+        <html><body>
+          <span id="lblDecisionForm">NÁLEZ</span>
+          <input id="docContentHidden" value="${rtf}" />
+          <input id="registrySignHidden" value="I.ÚS 100/25 #1" />
+          <input id="paralellQuotationHidden" value="" />
+          <input id="popularNameHidden" value="" />
+          <input id="docIdHidden" value="99999" />
+        </body></html>
+      `);
+      const { documentAst } = parseUsDecisionHtml(input);
+
+      const h3s = documentAst.blocks.filter(
+        (b) => b.type === "heading" && "level" in b && b.level === 3,
+      );
+      expect(h3s).toHaveLength(0);
+      expect(
+        documentAst.blocks.some(
+          (b) =>
+            b.type === "paragraph" &&
+            b.plainText === "Skutečný odstavec odůvodnění.",
+        ),
+      ).toBe(true);
+    });
+
     test("strips numbered prefix from paragraphs", () => {
       const input = baseInput(rtfDecisionHtml);
       const { documentAst } = parseUsDecisionHtml(input);

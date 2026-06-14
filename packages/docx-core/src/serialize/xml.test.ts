@@ -29,4 +29,10 @@ describe("escapeXml", () => {
     const doc = String.fromCodePoint(0x1_f4_c4);
     expect(escapeXml(`page ${doc} 1`)).toBe(`page ${doc} 1`);
   });
+
+  test("strips unpaired surrogate halves", () => {
+    const high = String.fromCodePoint(0xd8_00);
+    const low = String.fromCodePoint(0xdc_00);
+    expect(escapeXml(`a${high}b${low}c`)).toBe("abc");
+  });
 });
