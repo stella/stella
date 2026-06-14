@@ -525,4 +525,39 @@ describe("buildSortExpressions", () => {
       expect(sql).not.toContain('"fields"."property_id" =');
     }
   });
+
+  test("property sort emits a numeric key so int fields order numerically", () => {
+    const dialect = new PgDialect();
+    const expressions = buildSortExpressions([
+      { propertyId: "p1", desc: false },
+    ]);
+
+    // A numeric cast guarded by the int type, ordered before the text key.
+    const numericExpr = expressions[0];
+    const textExpr = expressions[1];
+    if (!numericExpr || !textExpr) {
+      throw new Error("expected numeric and text sort expressions");
+    }
+
+    const numericSql = dialect.sqlToQuery(numericExpr).sql;
+    expect(numericSql).toContain("::numeric");
+    expect(numericSql).toContain("'int'");
+    expect(numericSql).toContain("NULLS LAST");
+
+    const textSql = dialect.sqlToQuery(textExpr).sql;
+    expect(textSql).toContain("->>'value'");
+    expect(textSql).not.toContain("::numeric");
+  });
+
+  test("descending property sort keeps missing/non-int values last", () => {
+    const dialect = new PgDialect();
+    const [numericExpr] = buildSortExpressions([
+      { propertyId: "p1", desc: true },
+    ]);
+    if (!numericExpr) {
+      throw new Error("expected numeric sort expression");
+    }
+    const sql = dialect.sqlToQuery(numericExpr).sql;
+    expect(sql).toContain("DESC NULLS LAST");
+  });
 });

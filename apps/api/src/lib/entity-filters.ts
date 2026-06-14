@@ -388,7 +388,23 @@ export const buildSortExpressions = (sorts: readonly ViewSort[]): SQL[] => {
       continue;
     }
 
-    const sortKeySubquery = sql`(
+    // Numeric sort key for int fields: `content->>'value'` is text, so a
+    // plain ORDER BY sorts "10" before "9". Cast to numeric for int fields
+    // (NULL otherwise, bucketed last via NULLS LAST), then break ties with
+    // the text key so text properties still order correctly.
+    const numericSortKey = sql`(
+      SELECT CASE
+        WHEN ${fields.content}->>'type' = 'int'
+        THEN (${fields.content}->>'value')::numeric
+        ELSE NULL
+      END
+      FROM ${fields}
+      WHERE ${fields.workspaceId} = ${entities.workspaceId}
+        AND ${fields.entityVersionId} = ${entities.currentVersionId}
+        AND ${fields.propertyId} = ${sort.propertyId}
+      LIMIT 1
+    )`;
+    const textSortKey = sql`(
       SELECT COALESCE(
         ${fields.content}->>'value',
         ${fields.content}->>'fileName',
@@ -402,7 +418,12 @@ export const buildSortExpressions = (sorts: readonly ViewSort[]): SQL[] => {
     )`;
 
     expressions.push(
-      sort.desc ? sql`${sortKeySubquery} DESC` : sql`${sortKeySubquery} ASC`,
+      sort.desc
+        ? sql`${numericSortKey} DESC NULLS LAST`
+        : sql`${numericSortKey} ASC NULLS LAST`,
+    );
+    expressions.push(
+      sort.desc ? sql`${textSortKey} DESC` : sql`${textSortKey} ASC`,
     );
   }
 
