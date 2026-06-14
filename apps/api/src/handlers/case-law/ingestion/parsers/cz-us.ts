@@ -537,7 +537,7 @@ const ODUVODNENI_RE =
  * or Roman numeral followed by a short title on the same or
  * next line.
  */
-const SECTION_ROMAN_RE = /^((?:X{0,3}(?:IX|IV|V?I{0,3})))\.?\s*$/u;
+const SECTION_ROMAN_RE = /^(?=[IVX])(X{0,3}(?:IX|IV|V?I{0,3}))\.?\s*$/u;
 
 /** Numbered paragraph: "1. ...", "2. ..." */
 const NUMBERED_PARA_RE = /^(\d+)\.\s+/u;
