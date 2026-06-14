@@ -388,12 +388,13 @@ export const verifyAndDeleteUser = async (
         // 8. Pending (in-flight) S3 uploads
         await tx.delete(pendingUploads).where(eq(pendingUploads.userId, currentUserId));
 
-        // 9. AI chat threads — messages and fileChatThreads cascade on thread deletion
+        // 9. Personal user files (private S3 uploads) — must delete userFiles before chatThreads
+        // because userFiles.threadId has onDelete: "restrict" reference to chatThreads.id
+        await tx.delete(userFiles).where(eq(userFiles.userId, currentUserId));
+
+        // 10. AI chat threads — messages and fileChatThreads cascade on thread deletion
         await tx.delete(fileChatThreads).where(eq(fileChatThreads.userId, currentUserId));
         await tx.delete(chatThreads).where(eq(chatThreads.userId, currentUserId));
-
-        // 10. Personal user files (private S3 uploads)
-        await tx.delete(userFiles).where(eq(userFiles.userId, currentUserId));
 
         // 11. Personal workspace view templates, prompt shortcuts, agent skills
         await tx
