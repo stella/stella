@@ -311,6 +311,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-unbranded-ownership-id-param.ts",
     "./.oxlint-plugins/no-raw-user-id-schema.ts",
     "./.oxlint-plugins/no-offset-pagination.ts",
+    "./.oxlint-plugins/require-query-limit.ts",
     "./.oxlint-plugins/mcp-security.ts",
     "./.oxlint-plugins/auth-lifecycle.ts",
     "./.oxlint-plugins/stella-toast.ts",
@@ -911,6 +912,22 @@ export default defineConfig({
       excludeFiles: ["apps/api/src/handlers/**/*.test.ts"],
       rules: {
         "require-audit-on-mutation/require-audit-on-mutation": "error",
+      },
+    },
+    {
+      // require-query-limit flags unbounded Drizzle reads (a `findMany`
+      // with no `limit`, or an ordered `select` chain with no `.limit()`)
+      // per conventions-db / conventions-scale. It ships OFF: the API
+      // still has a sizable backlog of internal bounded-relation findMany
+      // calls, so turning it to "error" needs a one-time triage pass —
+      // bound the real unbounded list endpoints, and add a `// SAFETY:`
+      // disable to reads already capped on the write path. To enable: set
+      // "error" below and run `bun run lint`. Test files run unbounded
+      // fixtures intentionally and are excluded.
+      files: ["apps/api/src/**/*.ts"],
+      excludeFiles: ["apps/api/src/**/*.test.ts", "apps/api/src/tests/**/*.ts"],
+      rules: {
+        "require-query-limit/require-query-limit": "off",
       },
     },
     {
