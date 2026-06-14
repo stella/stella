@@ -444,7 +444,10 @@ const borderEdgeXml = (tag: string, spec: BorderSpec | undefined): string => {
   }
   const sz = spec.size ?? 4;
   const color = spec.color?.rgb ?? "CCCCCC";
-  return `<${tag} w:val="${spec.style}" w:sz="${sz}" w:space="0" w:color="${color}"/>`;
+  // style/color are typed `string` and may carry preserved "unknown OOXML"
+  // values from parsed input; escape them like every other attribute so a
+  // value containing a quote or angle bracket cannot break the XML.
+  return `<${tag} w:val="${escapeXml(spec.style)}" w:sz="${sz}" w:space="0" w:color="${escapeXml(color)}"/>`;
 };
 
 const defaultBorderXml = (): string =>
