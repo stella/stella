@@ -590,6 +590,8 @@ describe("buildSortExpressions", () => {
     const numericSql = dialect.sqlToQuery(numericExpr).sql;
     expect(numericSql).toContain("::numeric");
     expect(numericSql).toContain("BTRIM");
+    expect(numericSql).toContain('"properties"');
+    expect(numericSql).toContain("'int'");
     expect(numericSql).toContain("~");
     expect(numericSql).toContain("NULLS LAST");
 

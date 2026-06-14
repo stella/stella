@@ -31,9 +31,9 @@ export const createBullMqDispatchTask =
     }
 
     const queue = getSchedulerQueue(payload.queueName);
-    // Deterministic jobId so a re-fired scheduler run (retry, or a DST
-    // double-fire) enqueues at most one BullMQ job: a second add with the
-    // same jobId is ignored while the first exists.
+    const scheduledFor = job.nextRunAt.toISOString();
+    // Deterministic per scheduled occurrence: if the runner crashes after
+    // enqueue but before recording success, the retry run uses the same id.
     await queue.add(
       payload.jobName,
       {
@@ -41,7 +41,7 @@ export const createBullMqDispatchTask =
         schedulerRunId: runId,
         ...(payload.data && { payload: payload.data }),
       },
-      { jobId: createBullMqJobId("scheduler", job.id, runId) },
+      { jobId: createBullMqJobId("scheduler", job.id, scheduledFor) },
     );
   };
 

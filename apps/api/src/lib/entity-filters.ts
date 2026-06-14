@@ -2,7 +2,7 @@ import { asc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { user } from "@/api/db/auth-schema";
-import { entities, entityVersions, fields } from "@/api/db/schema";
+import { entities, entityVersions, fields, properties } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
 import type { ViewFilterCondition } from "@/api/lib/views-schema";
 
@@ -403,11 +403,23 @@ export const buildSortExpressions = (sorts: readonly ViewSort[]): SQL[] => {
       continue;
     }
 
+    const propertyIsInt = sql`EXISTS (
+      SELECT 1 FROM ${properties}
+      WHERE ${properties.workspaceId} = ${entities.workspaceId}
+        AND ${properties.id} = ${sort.propertyId}
+        AND ${properties.content}->>'type' = 'int'
+      LIMIT 1
+    )`;
+
     // Numeric sort key: `content->>'value'` is text, so a plain ORDER BY sorts
-    // "10" before "9". Cast safe numeric text, including legacy text content
-    // left behind by property type changes, then break ties with the text key.
+    // "10" before "9". Use numeric mode for int fields and int properties
+    // with legacy text content, then break ties with the text key.
     const numericSortKey = sql`(
-      SELECT ${numericFieldValueExpr(fields.content)}
+      SELECT CASE
+        WHEN ${fields.content}->>'type' = 'int' OR ${propertyIsInt}
+        THEN ${numericFieldValueExpr(fields.content)}
+        ELSE NULL
+      END
       FROM ${fields}
       WHERE ${fields.workspaceId} = ${entities.workspaceId}
         AND ${fields.entityVersionId} = ${entities.currentVersionId}
