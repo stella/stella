@@ -1209,9 +1209,6 @@
             "location": "apps/web/src/features/case-law/components/decision-filters.tsx#1"
           },
           {
-            "location": "apps/web/src/features/case-law/components/decision-table.tsx#1"
-          },
-          {
             "location": "apps/web/src/lib/analytics/provider.tsx#1"
           },
           {
@@ -2082,7 +2079,7 @@
             "location": "apps/api/src/handlers/chat/tools/org-tools.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#4"
+            "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#5"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/web-search-tools.ts#3"
@@ -2911,9 +2908,6 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/decision-filters.tsx#1"
-          },
-          {
-            "location": "apps/web/src/features/case-law/components/decision-table.tsx#1"
           },
           {
             "location": "apps/web/src/lib/analytics/provider.tsx#1"
@@ -5521,9 +5515,6 @@
             "location": "apps/web/src/features/case-law/components/decision-filters.tsx#1"
           },
           {
-            "location": "apps/web/src/features/case-law/components/decision-table.tsx#1"
-          },
-          {
             "location": "apps/web/src/lib/analytics/provider.tsx#1"
           },
           {
@@ -7758,9 +7749,6 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/decision-filters.tsx#1"
-          },
-          {
-            "location": "apps/web/src/features/case-law/components/decision-table.tsx#1"
           },
           {
             "location": "apps/web/src/lib/analytics/provider.tsx#1"
@@ -10451,7 +10439,7 @@
             "location": "apps/web/src/components/translate-document-dialog.tsx#13"
           },
           {
-            "location": "apps/web/src/features/case-law/components/decision-table.tsx#3"
+            "location": "apps/web/src/features/case-law/components/decision-table.tsx#1"
           },
           {
             "location": "apps/web/src/router.tsx#2"
@@ -11139,12 +11127,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state.ts#11"
-          },
-          {
-            "location": "apps/web/src/features/case-law/components/decision-table.tsx#10"
-          },
-          {
-            "location": "apps/web/src/features/case-law/components/decision-table.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx#8"
@@ -12664,9 +12646,6 @@
             "location": "apps/web/src/features/case-law/components/decision-filters.tsx#1"
           },
           {
-            "location": "apps/web/src/features/case-law/components/decision-table.tsx#1"
-          },
-          {
             "location": "apps/web/src/lib/analytics/provider.tsx#1"
           },
           {
@@ -14174,6 +14153,9 @@
           },
           {
             "location": "apps/api/src/handlers/catalogue/native-tool-deploy-availability.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/catalogue/skill-handles.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/attachment-validation.ts#3"
@@ -16590,6 +16572,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/tools/execute/org-function-registry.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#4"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#4"
@@ -19309,7 +19294,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx#16"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx#17"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-category-sidebar.tsx#8"
@@ -22115,9 +22100,6 @@
             "location": "apps/web/src/features/case-law/components/decision-filters.tsx#1"
           },
           {
-            "location": "apps/web/src/features/case-law/components/decision-table.tsx#1"
-          },
-          {
             "location": "apps/web/src/lib/analytics/provider.tsx#1"
           },
           {
@@ -23643,7 +23625,7 @@
             "location": "apps/web/src/features/case-law/components/decision-filters.tsx#4"
           },
           {
-            "location": "apps/web/src/features/case-law/components/decision-table.tsx#12"
+            "location": "apps/web/src/features/case-law/components/decision-table.tsx#2"
           },
           {
             "location": "apps/web/src/lib/pdf/pdf-viewport.tsx#13"
@@ -23730,7 +23712,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/paragraph-rendering.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx#17"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx#18"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-category-sidebar.tsx#9"
@@ -24456,7 +24438,7 @@
             "location": "apps/api/src/handlers/chat/tools/org-tools.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#4"
+            "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#5"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/web-search-tools.ts#3"
