@@ -31,7 +31,7 @@ import type {
 
 const HEARING_EVENT_TYPES = new Set(["NAR_JED", "ZRUS_JED"]);
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+const LAST_MILLISECOND_OF_SECOND = 999;
 const DECISION_EVENT_TYPES = new Set(["VYD_ROZH"]);
 const APPEAL_SUBMISSION_EVENT_TYPES = new Set(["POD_OP_PR"]);
 const APPEAL_DISPOSITION_EVENT_TYPES = new Set(["VYR_OP_PR"]);
@@ -104,6 +104,24 @@ const getEventAttributeMapFromEntries = (
 
 const parseEventDate = (value: string | null | undefined) =>
   parseInfoSoudDate(value);
+
+const getDateOnlyHearingCutoffUnixMs = (
+  value: string | null | undefined,
+): number | null => {
+  const parsed = parseEventDate(value);
+  if (!parsed.isoDate) {
+    return null;
+  }
+
+  // Date-only hearing rows are Czech court days; keep them selectable through
+  // the end of that day in the same Prague wall-time model as timed hearings.
+  const endOfPragueDayUnixMs = parseInfoSoudDateTime(
+    `${parsed.isoDate}T23:59:59`,
+  ).unixMs;
+  return endOfPragueDayUnixMs === null
+    ? null
+    : endOfPragueDayUnixMs + LAST_MILLISECOND_OF_SECOND;
+};
 
 const buildDecodedBase = (
   detail: EventDetailResult,
@@ -404,15 +422,11 @@ export const getNextHearingCaseEvent = (
       if (timedUnixMs !== null) {
         return { event, sortUnixMs: timedUnixMs, cutoffUnixMs: timedUnixMs };
       }
-      // Date-only event (no decoded hearing time): parseEventDate yields UTC
-      // midnight of the day. Keep it selectable until the end of that calendar
-      // day so a hearing scheduled for today is not classified as past when
-      // `now` is later the same day.
       const dayUnixMs = parseEventDate(event.datum).unixMs;
       return {
         event,
         sortUnixMs: dayUnixMs,
-        cutoffUnixMs: dayUnixMs === null ? null : dayUnixMs + DAY_MS - 1,
+        cutoffUnixMs: getDateOnlyHearingCutoffUnixMs(event.datum),
       };
     })
     .filter(

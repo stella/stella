@@ -479,6 +479,22 @@ describe("getNextHearingCaseEvent", () => {
     expect(result?.udalostId).toBe(1);
   });
 
+  test("keeps a date-only hearing through the end of the Prague day", () => {
+    const result = getNextHearingCaseEvent(
+      [makeHearing({ udalostId: 1, datum: "14.06.2026", zruseno: false })],
+      { now: new Date("2026-06-14T21:59:59.999Z") },
+    );
+    expect(result?.udalostId).toBe(1);
+  });
+
+  test("drops a date-only hearing after the Prague day ends", () => {
+    const result = getNextHearingCaseEvent(
+      [makeHearing({ udalostId: 1, datum: "14.06.2026", zruseno: false })],
+      { now: new Date("2026-06-14T22:30:00Z") },
+    );
+    expect(result).toBeNull();
+  });
+
   test("drops a date-only hearing from a past day", () => {
     const result = getNextHearingCaseEvent(
       [makeHearing({ udalostId: 1, datum: "13.06.2026", zruseno: false })],
