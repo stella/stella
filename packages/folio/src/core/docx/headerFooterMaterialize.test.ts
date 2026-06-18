@@ -217,7 +217,8 @@ describe("header/footer part materialization on save", () => {
 
     const zip = await JSZip.loadAsync(out);
     const docXml = await zip.file("word/document.xml")!.async("text");
-    const refRId = /<w:headerReference[^>]*\br:id="([^"]+)"/u.exec(docXml)?.[1];
+    const refRId = /<w:headerReference[^>]*\br:id="(?<rid>[^"]+)"/u.exec(docXml)
+      ?.groups?.["rid"];
     expect(refRId).toBeDefined();
     // The section reference was re-pointed off the taken id to a fresh one...
     expect(refRId).not.toBe("rId_new_default");

@@ -2,7 +2,7 @@
 // Redis/DB/queue imports so the reconciler's logic is unit-testable and
 // importing it never triggers a connection or worker side effect.
 
-const RUNNING_LOCK_KEY = /^workflow:([^:]+):running$/u;
+const RUNNING_LOCK_KEY = /^workflow:(?<workspaceId>[^:]+):running$/u;
 
 /**
  * Extract the workspace id from a `workflow:<workspaceId>:running` lock
@@ -11,7 +11,7 @@ const RUNNING_LOCK_KEY = /^workflow:([^:]+):running$/u;
  * considered for reconciliation.
  */
 export const parseRunningLockWorkspaceId = (key: string): string | null =>
-  RUNNING_LOCK_KEY.exec(key)?.[1] ?? null;
+  RUNNING_LOCK_KEY.exec(key)?.groups?.["workspaceId"] ?? null;
 
 type OrphanSelectionInput = {
   candidateWorkspaceIds: readonly string[];

@@ -84,7 +84,7 @@ function paragraphAttrsToDOMStyle(attrs: ParagraphAttrs): string {
   }
   return Object.entries({ ...style, ...customStyle })
     .map(([key, value]) => {
-      const cssKey = key.replace(/([A-Z])/gu, "-$1").toLowerCase();
+      const cssKey = key.replace(/(?<char>[A-Z])/gu, "-$<char>").toLowerCase();
       return `${cssKey}: ${value}`;
     })
     .join("; ");

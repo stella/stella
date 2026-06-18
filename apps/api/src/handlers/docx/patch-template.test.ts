@@ -134,9 +134,9 @@ const extractTexts = async (buffer: Buffer): Promise<string[]> => {
   const xml = (await zip.file("word/document.xml")?.async("string")) ?? "";
   // Simple extraction: find all w:t content
   const texts: string[] = [];
-  for (const match of xml.matchAll(/<w:t[^>]*>(.*?)<\/w:t>/gu)) {
-    if (match[1] !== undefined) {
-      texts.push(match[1]);
+  for (const match of xml.matchAll(/<w:t[^>]*>(?<text>.*?)<\/w:t>/gu)) {
+    if (match.groups?.["text"] !== undefined) {
+      texts.push(match.groups["text"]);
     }
   }
   return texts;

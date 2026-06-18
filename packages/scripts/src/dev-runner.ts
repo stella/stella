@@ -548,8 +548,8 @@ export const parseForeignPortOwners = ({
     }
 
     const seen = new Set<number>();
-    for (const match of (portsField ?? "").matchAll(/:(\d+)->/gu)) {
-      const hostPort = Number.parseInt(match[1] ?? "", 10);
+    for (const match of (portsField ?? "").matchAll(/:(?<hostPort>\d+)->/gu)) {
+      const hostPort = Number.parseInt(match.groups?.["hostPort"] ?? "", 10);
       if (
         Number.isNaN(hostPort) ||
         !portSet.has(hostPort) ||
@@ -1214,13 +1214,13 @@ export const expandEnvMap = (
     visiting.add(key);
     const resolved = rawVal
       .replace(
-        /(?<!\\)\$(?:\{([^}]+)\}|([a-zA-Z_][a-zA-Z0-9_]*))/gu,
-        (_, p1, p2) => {
-          const varName = p1 || p2;
+        /(?<!\\)\$(?:\{(?<braced>[^}]+)\}|(?<bare>[a-zA-Z_][a-zA-Z0-9_]*))/gu,
+        (_, braced, bare) => {
+          const varName = braced || bare;
           return resolveKey(varName);
         },
       )
-      .replace(/\\(\$)/gu, "$1");
+      .replace(/\\(?<dollar>\$)/gu, "$<dollar>");
     visiting.delete(key);
     cache[key] = resolved;
     return resolved;

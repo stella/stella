@@ -2,10 +2,10 @@ import * as cheerio from "cheerio";
 import { isTag, isText } from "domhandler";
 import type { AnyNode, Element } from "domhandler";
 
-const INLINE_ESCAPE = /([\\`*_~[\]<>])/g;
+const INLINE_ESCAPE = /(?<ch>[\\`*_~[\]<>])/g;
 
 const escapeText = (text: string): string =>
-  text.replace(INLINE_ESCAPE, "\\$1");
+  text.replace(INLINE_ESCAPE, "\\$<ch>");
 
 const collapseWhitespace = (text: string): string => text.replace(/\s+/g, " ");
 
@@ -258,7 +258,10 @@ const renderBlock = (el: Element): string => {
       const codeEl = el.children.find(
         (c): c is Element => isTag(c) && tagNameOf(c) === "code",
       );
-      const lang = codeEl?.attribs["class"]?.match(/language-(\S+)/)?.[1] ?? "";
+      const lang =
+        codeEl?.attribs["class"]?.match(/language-(?<lang>\S+)/)?.groups?.[
+          "lang"
+        ] ?? "";
       const text = trimTrailingNewlines(rawText(codeEl ?? el));
       return `\`\`\`${lang}\n${text}\n\`\`\``;
     }

@@ -40,7 +40,7 @@ const fetchCzSupremeFulltext = async (
     const html = await response.text();
 
     const parts = html.match(
-      /<font[^>]*face="Times New Roman"[^>]*>([\s\S]*?)<\/font>/giu,
+      /<font[^>]*face="Times New Roman"[^>]*>(?:[\s\S]*?)<\/font>/giu,
     );
     if (!parts || parts.length === 0) {
       return undefined;
@@ -73,14 +73,14 @@ const fetchCzSupremeAdminFulltext = async (
   documentUrl: string,
 ): Promise<string | undefined> => {
   // Extract document ID from URL like .../DokumentDetail/Index/744029
-  const idMatch = /\/(\d+)$/u.exec(documentUrl);
-  if (!idMatch?.[1]) {
+  const idMatch = /\/(?<id>\d+)$/u.exec(documentUrl);
+  if (!idMatch?.groups?.["id"]) {
     return undefined;
   }
 
   try {
     const response = await fetch(
-      `https://vyhledavac.nssoud.cz/DokumentOriginal/Text/${idMatch[1]}`,
+      `https://vyhledavac.nssoud.cz/DokumentOriginal/Text/${idMatch.groups["id"]}`,
       { signal: AbortSignal.timeout(15_000) },
     );
     if (!response.ok) {

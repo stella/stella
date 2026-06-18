@@ -25,10 +25,12 @@ export const TextColorExtension = createMarkExtension({
       {
         style: "color",
         getAttrs: (value) => {
-          const hexMatch = /#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})/u.exec(value);
+          const hexMatch = /#(?<hex>[0-9a-fA-F]{6}|[0-9a-fA-F]{3})/u.exec(
+            value,
+          );
           if (hexMatch) {
-            // SAFETY: capture group [1] always present when regex matches
-            return { rgb: (hexMatch[1] ?? "").toUpperCase() };
+            // SAFETY: capture group always present when regex matches
+            return { rgb: (hexMatch.groups?.["hex"] ?? "").toUpperCase() };
           }
           return false;
         },

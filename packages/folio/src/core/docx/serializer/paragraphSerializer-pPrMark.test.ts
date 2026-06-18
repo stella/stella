@@ -52,9 +52,9 @@ describe("serializeParagraph — paragraph-mark tracked change", () => {
 
     const xml = serializeParagraph(paragraph);
 
-    const rPrMatch = /<w:rPr>([\s\S]*?)<\/w:rPr>/u.exec(xml);
+    const rPrMatch = /<w:rPr>(?<inner>[\s\S]*?)<\/w:rPr>/u.exec(xml);
     expect(rPrMatch).not.toBeNull();
-    const inner = rPrMatch?.[1] ?? "";
+    const inner = rPrMatch?.groups?.["inner"] ?? "";
     const insIdx = inner.indexOf("<w:ins ");
     const boldIdx = inner.indexOf("<w:b/>");
     expect(insIdx).toBeGreaterThanOrEqual(0);

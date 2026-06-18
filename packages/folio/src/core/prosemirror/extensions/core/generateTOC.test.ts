@@ -114,9 +114,9 @@ describe("generateTOC", () => {
           node.type.name === "field" &&
           node.attrs["fieldType"] === "PAGEREF"
         ) {
-          target = /^PAGEREF (\S+) /u.exec(
+          target = /^PAGEREF (?<bookmark>\S+) /u.exec(
             node.attrs["instruction"] as string,
-          )?.[1];
+          )?.groups?.["bookmark"];
         }
       });
       expect(target).toBeDefined();

@@ -112,25 +112,30 @@ function parseCssColorToColorValue(cssColor: string): ColorValue | null {
   if (!cssColor || cssColor === "transparent" || cssColor === "inherit") {
     return null;
   }
-  const hexMatch = /#([0-9a-fA-F]{6})/u.exec(cssColor);
+  const hexMatch = /#(?<hex>[0-9a-fA-F]{6})/u.exec(cssColor);
   if (hexMatch) {
-    // SAFETY: capture group 1 exists when match succeeds
-    return { rgb: (hexMatch[1] ?? "").toUpperCase() };
+    // SAFETY: capture group exists when match succeeds
+    return { rgb: (hexMatch.groups?.["hex"] ?? "").toUpperCase() };
   }
-  const shortHex = /#([0-9a-fA-F]{3})$/u.exec(cssColor);
+  const shortHex = /#(?<hex>[0-9a-fA-F]{3})$/u.exec(cssColor);
   if (shortHex) {
-    // SAFETY: capture group 1 exists when match succeeds
-    const hex3 = shortHex[1] ?? "";
+    // SAFETY: capture group exists when match succeeds
+    const hex3 = shortHex.groups?.["hex"] ?? "";
     // SAFETY: regex guarantees exactly 3 hex chars
     const r = hex3[0] ?? "";
     const g = hex3[1] ?? "";
     const b = hex3[2] ?? "";
     return { rgb: (r + r + g + g + b + b).toUpperCase() };
   }
-  const rgbMatch = /rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/u.exec(cssColor);
+  const rgbMatch =
+    /rgb\(\s*(?<r>\d+)\s*,\s*(?<g>\d+)\s*,\s*(?<b>\d+)\s*\)/u.exec(cssColor);
   if (rgbMatch) {
-    // SAFETY: capture groups 1-3 exist when the rgb() regex matches
-    const hex = [rgbMatch[1] ?? "0", rgbMatch[2] ?? "0", rgbMatch[3] ?? "0"]
+    // SAFETY: capture groups exist when the rgb() regex matches
+    const hex = [
+      rgbMatch.groups?.["r"] ?? "0",
+      rgbMatch.groups?.["g"] ?? "0",
+      rgbMatch.groups?.["b"] ?? "0",
+    ]
       .map((v) => Number.parseInt(v, 10).toString(16).padStart(2, "0"))
       .join("")
       .toUpperCase();

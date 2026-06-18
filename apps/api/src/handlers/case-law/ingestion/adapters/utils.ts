@@ -11,7 +11,8 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 export const INGESTION_USER_AGENT =
   process.env["INGESTION_USER_AGENT"] ?? "Mozilla/5.0 (compatible)";
 
-const CE_DATE_PATTERN = /^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})$/;
+const CE_DATE_PATTERN =
+  /^(?<day>\d{1,2})\.\s*(?<month>\d{1,2})\.\s*(?<year>\d{4})$/;
 
 /** SHA-256 content hash via Bun.CryptoHasher. */
 export const hashContent = (input: string): string => {
@@ -73,14 +74,14 @@ export const stripHtml = (html: string): string =>
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
-    .replace(/&#x([0-9a-f]+);/gi, (match, hex: string) => {
+    .replace(/&#x(?<hex>[0-9a-f]+);/gi, (match, hex: string) => {
       try {
         return String.fromCodePoint(Number.parseInt(hex, 16));
       } catch {
         return match;
       }
     })
-    .replace(/&#(\d+);/g, (match, dec: string) => {
+    .replace(/&#(?<dec>\d+);/g, (match, dec: string) => {
       try {
         return String.fromCodePoint(Number.parseInt(dec, 10));
       } catch {
@@ -95,13 +96,13 @@ export const stripHtml = (html: string): string =>
  * Accepts "D. M. YYYY" (CZ) and "DD.MM.YYYY" (SK).
  */
 export const parseCeDate = (dateStr: string): string | undefined => {
-  const m = CE_DATE_PATTERN.exec(dateStr.trim());
-  if (!m?.[1] || !m[2] || !m[3]) {
+  const groups = CE_DATE_PATTERN.exec(dateStr.trim())?.groups;
+  if (!groups?.["day"] || !groups["month"] || !groups["year"]) {
     return undefined;
   }
-  const day = m[1].padStart(2, "0");
-  const month = m[2].padStart(2, "0");
-  return `${m[3]}-${month}-${day}`;
+  const day = groups["day"].padStart(2, "0");
+  const month = groups["month"].padStart(2, "0");
+  return `${groups["year"]}-${month}-${day}`;
 };
 
 /** Check if an error is a per-request timeout (not a cycle/page abort). */

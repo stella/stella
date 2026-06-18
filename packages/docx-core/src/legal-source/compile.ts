@@ -256,7 +256,7 @@ const paragraph = (
 // reviewing lawyer sees at a glance everything still pending.
 // Surrounding text inherits the run options (bold/italic) but not
 // the highlight.
-const PLACEHOLDER_PATTERN = /\[\[([^\][]+?)\]\]/gu;
+const PLACEHOLDER_PATTERN = /\[\[(?<inner>[^\][]+?)\]\]/gu;
 
 const textRunsWithPlaceholders = (
   text: string,
@@ -272,7 +272,7 @@ const textRunsWithPlaceholders = (
     if (start > cursor) {
       runs.push(textRun(text.slice(cursor, start), options));
     }
-    const inner = match[1] ?? "";
+    const inner = match.groups?.["inner"] ?? "";
     runs.push(textRun(inner, options, { highlight: "yellow" }));
     cursor = start + match[0].length;
   }

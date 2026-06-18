@@ -34,7 +34,7 @@ const COMMENTS_REL_TYPE =
 
 // ── Settings: enable track-revisions ──────────────────────
 
-const SETTINGS_OPEN_RE = /(<w:settings\b[^>]*>)/u;
+const SETTINGS_OPEN_RE = /(?<open><w:settings\b[^>]*>)/u;
 
 const ensureTrackRevisions = (settingsXml: string): string => {
   if (settingsXml.includes("w:trackRevisions")) {
@@ -42,7 +42,7 @@ const ensureTrackRevisions = (settingsXml: string): string => {
   }
 
   // Insert <w:trackRevisions/> as first child of w:settings
-  return settingsXml.replace(SETTINGS_OPEN_RE, "$1<w:trackRevisions/>");
+  return settingsXml.replace(SETTINGS_OPEN_RE, "$<open><w:trackRevisions/>");
 };
 
 // ── Content types: ensure comments entry exists ───────────
@@ -67,10 +67,10 @@ const ensureCommentsRel = (relsXml: string): string => {
   }
 
   // Find the highest rId to generate a new unique one
-  const idMatches = [...relsXml.matchAll(/rId(\d+)/gu)];
+  const idMatches = [...relsXml.matchAll(/rId(?<num>\d+)/gu)];
   let maxId = 0;
   for (const match of idMatches) {
-    maxId = Math.max(maxId, Number.parseInt(match[1] ?? "0", 10));
+    maxId = Math.max(maxId, Number.parseInt(match.groups?.["num"] ?? "0", 10));
   }
   const newId = `rId${maxId + 1}`;
 

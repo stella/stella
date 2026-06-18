@@ -77,12 +77,14 @@ export const parseNsDecisionHtml = (
 // ── Metadata extraction ────────────────────────────────────
 
 const parseDominoDate = (raw: string): string | null => {
-  const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/u.exec(raw);
+  const match = /^(?<month>\d{1,2})\/(?<day>\d{1,2})\/(?<year>\d{4})$/u.exec(
+    raw,
+  );
   if (!match) {
     return null;
   }
-  const [, month, day, year] = match;
-  // SAFETY: regex guarantees 3 capture groups
+  // SAFETY: regex guarantees the month/day/year groups
+  const { month, day, year } = match.groups ?? {};
   return `${year}-${month?.padStart(2, "0") ?? ""}-${day?.padStart(2, "0") ?? ""}`;
 };
 
@@ -555,7 +557,7 @@ const DECISION_TYPE_WORDS = new Set([
 const SECTION_HEADING_RE =
   /^(?:S\s*t\s*r\s*u\s*[čc]\s*n\s*[ée]\s+)?O\s*d\s*[uů]\s*v\s*o\s*d\s*n\s*[eě]\s*n\s*[ií]/iu;
 
-const RULING_ITEM_RE = /^([IVXLCDM]+\.)\s+/u;
+const RULING_ITEM_RE = /^(?:[IVXLCDM]+\.)\s+/u;
 
 const isDecisionTitle = (plainText: string): boolean => {
   const trimmed = plainText.trim();
@@ -688,14 +690,18 @@ const mergeBlocks = (
       // Check for embedded title
       const titleMatch =
         // oxlint-disable-next-line sonarjs/slow-regex -- first paragraph text is bounded by parser block splitting
-        /([A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]\s+[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ\s]{5,})\s*$/u.exec(text);
+        /(?<title>[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]\s+[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ\s]{5,})\s*$/u.exec(
+          text,
+        );
       // oxlint-disable-next-line sonarjs/slow-regex -- first paragraph text is bounded by parser block splitting
-      const caseMatch = /(\d+\s+\w+\s+\d+\/\d{4}[^\s]*)/u.exec(text);
+      const caseMatch = /(?<caseNumber>\d+\s+\w+\s+\d+\/\d{4}[^\s]*)/u.exec(
+        text,
+      );
 
       if (titleMatch && caseMatch) {
         // Replace the merged block with case-number + title
-        const caseNum = (caseMatch[1] ?? "").trim();
-        const title = (titleMatch[1] ?? "").trim();
+        const caseNum = (caseMatch.groups?.["caseNumber"] ?? "").trim();
+        const title = (titleMatch.groups?.["title"] ?? "").trim();
 
         const replacements: Block[] = [
           {

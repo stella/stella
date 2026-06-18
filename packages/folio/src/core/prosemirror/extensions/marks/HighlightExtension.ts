@@ -81,22 +81,23 @@ const readHighlightName = (value: string): HighlightColor | null => {
 
 export const normalizeCssColorKey = (value: string): string => {
   const compact = value.trim().toLowerCase().replace(/\s+/gu, "");
-  const hexMatch = /^#([0-9a-f]{3}|[0-9a-f]{6})$/u.exec(compact);
-  const hex = hexMatch?.[1];
+  const hexMatch = /^#(?<hex>[0-9a-f]{3}|[0-9a-f]{6})$/u.exec(compact);
+  const hex = hexMatch?.groups?.["hex"];
   if (hex) {
     return hex.length === 3
       ? `#${hex[0]}${hex[0]}${hex[1]}${hex[1]}${hex[2]}${hex[2]}`
       : `#${hex}`;
   }
 
-  const rgbMatch = /^rgba?\((\d{1,3}),(\d{1,3}),(\d{1,3})(?:,[^)]+)?\)$/u.exec(
-    compact,
-  );
-  if (!rgbMatch) {
+  const rgbMatch =
+    /^rgba?\((?<red>\d{1,3}),(?<green>\d{1,3}),(?<blue>\d{1,3})(?:,[^)]+)?\)$/u.exec(
+      compact,
+    );
+  if (!rgbMatch?.groups) {
     return compact;
   }
 
-  const [, red, green, blue] = rgbMatch;
+  const { red, green, blue } = rgbMatch.groups;
   return `#${cssColorComponentToHex(red)}${cssColorComponentToHex(green)}${cssColorComponentToHex(blue)}`;
 };
 

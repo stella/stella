@@ -26,15 +26,15 @@
 // Either a real two-letter prefix or the special-case `R0` (the only
 // prefix where the second character is a digit — see the
 // `CANONICAL_PATTERN` note below).
-const TWO_LETTER_PREFIX_PATTERN = /^(R0|[A-Z]{2})(\d{1,6})$/u;
+const TWO_LETTER_PREFIX_PATTERN = /^(?<prefix>R0|[A-Z]{2})(?<digits>\d{1,6})$/u;
 const ALL_DIGITS_PATTERN = /^\d{1,8}$/u;
 
 export const normalizeCompanyNumber = (input: string): string => {
   const upper = input.trim().replaceAll(/\s/gu, "").toUpperCase();
   const prefixed = TWO_LETTER_PREFIX_PATTERN.exec(upper);
   if (prefixed) {
-    const prefix = prefixed[1] ?? "";
-    const digits = prefixed[2] ?? "";
+    const prefix = prefixed.groups?.["prefix"] ?? "";
+    const digits = prefixed.groups?.["digits"] ?? "";
     return `${prefix}${digits.padStart(6, "0")}`;
   }
   if (ALL_DIGITS_PATTERN.test(upper)) {

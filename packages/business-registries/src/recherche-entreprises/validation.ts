@@ -28,4 +28,4 @@ export const validateSiret = (input: string): boolean =>
 // Cheap shape-only check used by the dispatch layer's `isCanonicalId`
 // (which deliberately does not validate checksums — see dispatch.ts).
 export const hasCanonicalShape = (input: string): boolean =>
-  /^(\d{9}|\d{14})$/u.test(normalizeSiren(input));
+  /^(?:\d{9}|\d{14})$/u.test(normalizeSiren(input));

@@ -64,9 +64,9 @@ export class DocxPackageFidelityError extends Error {
  */
 export function findMaxRId(relsXml: string): number {
   let maxId = 0;
-  for (const match of relsXml.matchAll(/Id="rId(\d+)"/gu)) {
-    // SAFETY: capture group [1] always present when regex matches
-    const id = Number.parseInt(match[1]!, 10);
+  for (const match of relsXml.matchAll(/Id="rId(?<id>\d+)"/gu)) {
+    // SAFETY: named group `id` always present when regex matches
+    const id = Number.parseInt(match.groups!["id"]!, 10);
     if (id > maxId) {
       maxId = id;
     }
@@ -87,12 +87,13 @@ const extractHeaderFooterReferences = (
   xml: string,
 ): HeaderFooterReference[] => {
   const references: HeaderFooterReference[] = [];
-  const pattern = /<w:(headerReference|footerReference)\b[^>]*>/gu;
+  const pattern = /<w:(?<element>headerReference|footerReference)\b[^>]*>/gu;
   for (const match of xml.matchAll(pattern)) {
     const tag = match[0];
-    const type = /\bw:type="([^"]+)"/u.exec(tag)?.at(1) ?? "default";
-    const rId = /\br:id="([^"]+)"/u.exec(tag)?.at(1);
-    const element = match[1];
+    const type =
+      /\bw:type="(?<type>[^"]+)"/u.exec(tag)?.groups?.["type"] ?? "default";
+    const rId = /\br:id="(?<rId>[^"]+)"/u.exec(tag)?.groups?.["rId"];
+    const element = match.groups?.["element"];
     if (
       !rId ||
       (element !== "headerReference" && element !== "footerReference")
@@ -273,18 +274,18 @@ async function readRelsOrStub(zip: JSZip, relsPath: string): Promise<string> {
   const file = zip.file(relsPath);
   const xml = file ? await file.async("text") : EMPTY_RELS_XML;
   return xml.replace(
-    /<Relationships([^>]*)\/>/u,
-    "<Relationships$1></Relationships>",
+    /<Relationships(?<attrs>[^>]*)\/>/u,
+    "<Relationships$<attrs>></Relationships>",
   );
 }
 
 function findMaxImageNum(zip: JSZip): number {
   let maxImageNum = 0;
   zip.forEach((relativePath) => {
-    const m = /^word\/media\/image(\d+)\./u.exec(relativePath);
+    const m = /^word\/media\/image(?<num>\d+)\./u.exec(relativePath);
     if (m) {
-      // SAFETY: capture group [1] always present when regex matches
-      const num = Number.parseInt(m[1]!, 10);
+      // SAFETY: named group `num` always present when regex matches
+      const num = Number.parseInt(m.groups!["num"]!, 10);
       if (num > maxImageNum) {
         maxImageNum = num;
       }
@@ -405,19 +406,22 @@ function decodeDataUrl(dataUrl: string): {
   data: ArrayBuffer;
   extension: string;
 } {
-  const match = /^data:([^;]+);base64,(.+)$/u.exec(dataUrl);
+  const match = /^data:(?<mime>[^;]+);base64,(?<data>.+)$/u.exec(dataUrl);
   if (!match) {
     panic("Invalid data URL");
   }
 
-  // SAFETY: capture groups [1] and [2] always present when regex matches
-  const binary = atob(match[2]!);
+  // SAFETY: named groups `mime` and `data` always present when regex matches
+  const binary = atob(match.groups!["data"]!);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) {
     bytes[i] = binary.codePointAt(i) ?? 0;
   }
 
-  return { data: bytes.buffer, extension: MIME_TO_EXT[match[1]!] ?? "png" };
+  return {
+    data: bytes.buffer,
+    extension: MIME_TO_EXT[match.groups!["mime"]!] ?? "png",
+  };
 }
 
 /**
@@ -1256,10 +1260,10 @@ async function materializeNewHeaderFooterParts(
   // can never collide with another (possibly not-yet-materialized) part.
   let maxRId = 0;
   const considerNumericRId = (id: string): void => {
-    const match = /^rId(\d+)$/u.exec(id);
+    const match = /^rId(?<num>\d+)$/u.exec(id);
     if (match) {
-      // SAFETY: capture group [1] always present when the regex matches.
-      const n = Number.parseInt(match[1]!, 10);
+      // SAFETY: named group `num` always present when the regex matches.
+      const n = Number.parseInt(match.groups!["num"]!, 10);
       if (n > maxRId) {
         maxRId = n;
       }
@@ -1384,7 +1388,8 @@ async function materializeNewHeaderFooterParts(
   if (ctFile) {
     let ctXml = await ctFile.async("text");
     const missing = overrides.filter((override) => {
-      const partName = /PartName="([^"]+)"/u.exec(override)?.[1];
+      const partName = /PartName="(?<partName>[^"]+)"/u.exec(override)
+        ?.groups?.["partName"];
       return partName ? !ctXml.includes(`PartName="${partName}"`) : true;
     });
     if (missing.length > 0) {

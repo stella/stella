@@ -76,7 +76,7 @@ const POLISH_MONTHS: Record<string, string> = {
 };
 
 const POLISH_DATE_RE =
-  /(?:^|[\s,])(?:z dnia\s+)?(\d{1,2})\s+(stycznia|lutego|marca|kwietnia|maja|czerwca|lipca|sierpnia|września|października|listopada|grudnia)\s+(\d{4})\s*r?(?:oku)?\.?/iu;
+  /(?:^|[\s,])(?:z dnia\s+)?(?<day>\d{1,2})\s+(?<monthName>stycznia|lutego|marca|kwietnia|maja|czerwca|lipca|sierpnia|września|października|listopada|grudnia)\s+(?<year>\d{4})\s*r?(?:oku)?\.?/iu;
 
 type SaosJudge = {
   name: string;
@@ -332,10 +332,10 @@ const parseDecisionDateFromContent = (
   }
 
   const text = stripHtml(content);
-  const match = POLISH_DATE_RE.exec(text);
-  const day = match?.[1]?.padStart(2, "0");
-  const monthName = match?.[2]?.toLocaleLowerCase("pl-PL");
-  const year = match?.[3];
+  const groups = POLISH_DATE_RE.exec(text)?.groups;
+  const day = groups?.["day"]?.padStart(2, "0");
+  const monthName = groups?.["monthName"]?.toLocaleLowerCase("pl-PL");
+  const year = groups?.["year"];
 
   if (!day || !monthName || !year) {
     return undefined;

@@ -99,7 +99,7 @@ function applyMarks(text: string, marks: MarkKey[]): string {
   // fence must be longer than the longest backtick run in the content, and a
   // space is padded inside when the content begins or ends with a backtick.
   if (marks.includes("code")) {
-    const literal = text.replace(/\\([\\`*[\]_<])/gu, "$1");
+    const literal = text.replace(/\\(?<char>[\\`*[\]_<])/gu, "$<char>");
     let longestRun = 0;
     for (const m of literal.matchAll(/`+/gu)) {
       longestRun = Math.max(longestRun, m[0].length);

@@ -318,7 +318,7 @@ const RTF_NUMERIC_CONTROL_WORDS = new Set([
   "tx",
 ]);
 
-const RTF_CONTROL_WORD_RE = /\\([a-z]+)(-?\d*)\s?/giu;
+const RTF_CONTROL_WORD_RE = /\\(?<word>[a-z]+)(?<numericValue>-?\d*)\s?/giu;
 
 const stripIgnoredRtfControlWord = (
   match: string,
@@ -368,7 +368,7 @@ const parseRtfInlines = (rtf: string): Inline[] => {
   const inlines: Inline[] = [];
 
   // Split on \b and \b0 markers, keeping the delimiters
-  const parts = cleaned.split(/(\\b0?\s?)/u);
+  const parts = cleaned.split(/(?<marker>\\b0?\s?)/u);
   let bold = false;
 
   for (const part of parts) {
@@ -517,11 +517,11 @@ const SKIP_RE = /^\[OBRÁZEK\]|^Česká republika$|^ČESKÁ REPUBLIKA$/u;
 
 /** Decision title (level 1). */
 const TITLE_RE =
-  /^(N\s*[ÁA]\s*L\s*[ÉE]\s*Z|U\s*S\s*N\s*E\s*S\s*E\s*N\s*[ÍI]|Ústavního soudu|Jménem republiky)$/iu;
+  /^(?:N\s*[ÁA]\s*L\s*[ÉE]\s*Z|U\s*S\s*N\s*E\s*S\s*E\s*N\s*[ÍI]|Ústavního soudu|Jménem republiky)$/iu;
 
 /** Normalize spaced text like "t a k t o" -> "takto". */
 const collapseSpaces = (text: string): string =>
-  text.replace(/(\S)\s+(?=\S)/gu, "$1");
+  text.replace(/(?<keep>\S)\s+(?=\S)/gu, "$<keep>");
 
 /** "takto:" separator (with spaced variants). */
 // oxlint-disable-next-line sonarjs/slow-regex -- matched against individual normalized parser lines
@@ -537,10 +537,10 @@ const ODUVODNENI_RE =
  * or Roman numeral followed by a short title on the same or
  * next line.
  */
-const SECTION_ROMAN_RE = /^(?=[IVX])(X{0,3}(?:IX|IV|V?I{0,3}))\.?\s*$/u;
+const SECTION_ROMAN_RE = /^(?=[IVX])(?<roman>X{0,3}(?:IX|IV|V?I{0,3}))\.?\s*$/u;
 
 /** Numbered paragraph: "1. ...", "2. ..." */
-const NUMBERED_PARA_RE = /^(\d+)\.\s+/u;
+const NUMBERED_PARA_RE = /^(?:\d+)\.\s+/u;
 
 // ── Block classification ───────────────────────────────────
 
@@ -786,7 +786,7 @@ const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
           !CLOSING_RE.test(nextNonEmpty.plainText)
         ) {
           // Combine Roman numeral + title line
-          const combinedText = `${romanMatch[1] ?? ""}. ${nextNonEmpty.plainText}`;
+          const combinedText = `${romanMatch.groups?.["roman"] ?? ""}. ${nextNonEmpty.plainText}`;
           blockIndex += 1;
           blocks.push({
             id: makeBlockId(),

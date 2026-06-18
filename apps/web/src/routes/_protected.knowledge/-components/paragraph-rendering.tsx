@@ -2,7 +2,7 @@ import { useTranslations } from "use-intl";
 
 // ── Placeholder regex ────────────────────────────────
 
-const PLACEHOLDER_RE = /\{\{([^{}]+)\}\}/gu;
+const PLACEHOLDER_RE = /\{\{(?<inner>[^{}]+)\}\}/gu;
 
 // ── Types ────────────────────────────────────────────
 
@@ -28,7 +28,7 @@ export const HighlightedText = ({ text }: { text: string }) => {
       parts.push(text.slice(lastIndex, start));
     }
 
-    const inner = match[1] ?? "";
+    const inner = match.groups?.["inner"] ?? "";
     const isClauseSlot = inner.startsWith(CLAUSE_MARKER_PREFIX);
 
     parts.push(

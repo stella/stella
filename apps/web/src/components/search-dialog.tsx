@@ -1187,7 +1187,7 @@ type SummaryBodyProps = {
   onCitationClick: (citationId: string) => void;
 };
 
-const CITATION_RE = /\[(\d+)\]/gu;
+const CITATION_RE = /\[(?<number>\d+)\]/gu;
 
 const SummaryBody = ({
   citations,
@@ -1202,7 +1202,7 @@ const SummaryBody = ({
 
   for (const match of text.matchAll(CITATION_RE)) {
     const start = match.index;
-    const numberText = match[1];
+    const numberText = match.groups?.["number"];
     const number = numberText ? Number(numberText) : Number.NaN;
     const citation = citationByNumber.get(number);
 

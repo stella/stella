@@ -488,7 +488,7 @@ const DECISION_TITLES = new Set([
  * Canonical location: pipeline.ts SPACED_WORD regex.
  */
 const SPACED_WORD_RE =
-  /(?<=\s|^)(\p{L} (?:\p{L} )*\p{L})( ?[,:;.!?])?(?=\s|$)/gu;
+  /(?<=\s|^)(?:\p{L} (?:\p{L} )*\p{L})(?: ?[,:;.!?])?(?=\s|$)/gu;
 
 const normalizeSpaced = (text: string): string =>
   text

@@ -69,7 +69,7 @@ const DOCUMENT_MIME_BY_EXTENSION: Record<string, string> = {
   xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 };
 
-const ENTITY_EXTENSION_RE = /\.([A-Za-z0-9]{1,8})$/u;
+const ENTITY_EXTENSION_RE = /\.(?<ext>[A-Za-z0-9]{1,8})$/u;
 const FOLDER_LABEL_RE = /^(?:folder|složka|priečinok)\b/iu;
 const TASK_LABEL_RE = /^(?:task|úkol|úloha)\b/iu;
 
@@ -109,7 +109,7 @@ const getHttpUrl = (href: string): URL | null => {
 };
 
 const getDocumentMimeFromLabel = (label: string): string | null => {
-  const extension = ENTITY_EXTENSION_RE.exec(label.trim())?.at(1);
+  const extension = ENTITY_EXTENSION_RE.exec(label.trim())?.groups?.["ext"];
   if (!extension) {
     return null;
   }

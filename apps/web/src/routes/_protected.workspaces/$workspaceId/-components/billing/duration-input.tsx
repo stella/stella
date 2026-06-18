@@ -7,10 +7,10 @@ import { cn } from "@stll/ui/lib/utils";
 
 const BILLING_INCREMENT = 6;
 
-const RE_HM = /^(?:(\d+)h)?\s*(?:(\d+)m)?$/iu;
-const RE_COLON = /^(\d+):(\d{1,2})$/u;
-const RE_DECIMAL = /^(\d+(?:\.\d+))$/u;
-const RE_PLAIN = /^(\d+)$/u;
+const RE_HM = /^(?:(?<hours>\d+)h)?\s*(?:(?<mins>\d+)m)?$/iu;
+const RE_COLON = /^(?<hours>\d+):(?<mins>\d{1,2})$/u;
+const RE_DECIMAL = /^(?<value>\d+(?:\.\d+))$/u;
+const RE_PLAIN = /^(?<value>\d+)$/u;
 
 /**
  * Parses a user-entered duration string into minutes.
@@ -25,28 +25,30 @@ const parseDuration = (raw: string): number | null => {
 
   // "1h30m" or "1h" or "30m"
   const hm = RE_HM.exec(s);
-  if (hm && (hm[1] || hm[2])) {
-    const hours = Number(hm[1] ?? 0);
-    const mins = Number(hm[2] ?? 0);
+  if (hm?.groups && (hm.groups["hours"] || hm.groups["mins"])) {
+    const hours = Number(hm.groups["hours"] ?? 0);
+    const mins = Number(hm.groups["mins"] ?? 0);
     return hours * 60 + mins;
   }
 
   // "1:30" (h:mm)
   const colon = RE_COLON.exec(s);
   if (colon) {
-    return Number(colon[1]) * 60 + Number(colon[2]);
+    return (
+      Number(colon.groups?.["hours"]) * 60 + Number(colon.groups?.["mins"])
+    );
   }
 
   // Decimal hours: "1.5"
   const decimal = RE_DECIMAL.exec(s);
   if (decimal) {
-    return Math.round(Number(decimal[1]) * 60);
+    return Math.round(Number(decimal.groups?.["value"]) * 60);
   }
 
   // Plain integer: treated as minutes
   const plain = RE_PLAIN.exec(s);
   if (plain) {
-    return Number(plain[1]);
+    return Number(plain.groups?.["value"]);
   }
 
   return null;

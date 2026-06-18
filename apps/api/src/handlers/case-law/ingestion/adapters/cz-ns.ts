@@ -116,17 +116,18 @@ const entryField = (
 /** Metadata label patterns on detail pages. */
 const LABEL_PATTERNS: Record<string, RegExp> = {
   decisionDate:
-    /Datum rozhodnutí:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>([\s\S]*?)<\/font>/iu,
-  ecli: /ECLI:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>([\s\S]*?)<\/font>/iu,
+    /Datum rozhodnutí:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>(?<value>[\s\S]*?)<\/font>/iu,
+  ecli: /ECLI:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>(?<value>[\s\S]*?)<\/font>/iu,
   decisionType:
-    /Typ rozhodnutí:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>([\s\S]*?)<\/font>/iu,
+    /Typ rozhodnutí:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>(?<value>[\s\S]*?)<\/font>/iu,
   keywords:
-    /Heslo:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>([\s\S]*?)<\/font>/iu,
+    /Heslo:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>(?<value>[\s\S]*?)<\/font>/iu,
   statutes:
-    /Dotčené předpisy:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>([\s\S]*?)<\/font>/iu,
+    /Dotčené předpisy:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>(?<value>[\s\S]*?)<\/font>/iu,
   category:
-    /Kategorie rozhodnutí:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>([\s\S]*?)<\/font>/iu,
-  legalSentence: /Právní věta:<\/font><\/b><\/td><td[^>]*>([\s\S]*?)<\/td>/iu,
+    /Kategorie rozhodnutí:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>(?<value>[\s\S]*?)<\/font>/iu,
+  legalSentence:
+    /Právní věta:<\/font><\/b><\/td><td[^>]*>(?<value>[\s\S]*?)<\/td>/iu,
 };
 
 /**
@@ -161,7 +162,7 @@ const BODY_END_MARKER = "Citace rozhodnutí";
 const extractFulltext = (html: string): string | undefined => {
   // Decision text is in <font face="Times New Roman"> tags
   const parts = html.match(
-    /<font[^>]*face="Times New Roman"[^>]*>([\s\S]*?)<\/font>/giu,
+    /<font[^>]*face="Times New Roman"[^>]*>(?:[\s\S]*?)<\/font>/giu,
   );
   if (!parts || parts.length === 0) {
     return undefined;
@@ -193,8 +194,8 @@ const parseDetailPage = (html: string): Record<string, string | undefined> => {
 
   for (const [key, pattern] of Object.entries(LABEL_PATTERNS)) {
     const match = html.match(pattern);
-    if (match?.[1]) {
-      const text = stripHtml(match[1]).trim();
+    if (match?.groups?.["value"]) {
+      const text = stripHtml(match.groups["value"]).trim();
       if (text) {
         result[key] = text;
       }

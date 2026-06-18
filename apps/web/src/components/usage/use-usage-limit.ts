@@ -43,7 +43,8 @@ const INITIAL_STATE: ModalState = {
   reason: "usage_limit_exceeded",
 };
 
-const NEED_HAVE_PATTERN = /need\s+(\d+),\s+have\s+(\d+)/iu;
+const NEED_HAVE_PATTERN =
+  /need\s+(?<required>\d+),\s+have\s+(?<available>\d+)/iu;
 
 const isReason = (value: unknown): value is UsageLimitExceededReason =>
   value === "no_entitlement" ||
@@ -189,8 +190,8 @@ export const parseAmounts = (
     return { required: 0, available: 0 };
   }
   return {
-    required: Number.parseInt(match[1] ?? "0", 10),
-    available: Number.parseInt(match[2] ?? "0", 10),
+    required: Number.parseInt(match.groups?.["required"] ?? "0", 10),
+    available: Number.parseInt(match.groups?.["available"] ?? "0", 10),
   };
 };
 

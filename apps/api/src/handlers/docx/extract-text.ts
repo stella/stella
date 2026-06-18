@@ -23,7 +23,7 @@ import type {
  */
 const DIRECTIVE_RE =
   // oxlint-disable-next-line sonarjs/slow-regex -- DOCX directive text is one paragraph collected from OOXML
-  /^\s*\{\{(#if|#elseif|#else|#each|\/if|\/each)\s*(.*?)\}\}\s*$/u;
+  /^\s*\{\{(?<tag>#if|#elseif|#else|#each|\/if|\/each)\s*(?<expr>.*?)\}\}\s*$/u;
 
 const DIRECTIVE_KIND_MAP: Record<string, BlockDirectiveKind> = {
   "#if": "if",
@@ -203,8 +203,8 @@ const extractParagraphsFromContainer = (
     const dm = DIRECTIVE_RE.exec(text);
     if (dm) {
       entry.isDirective = true;
-      const tag = dm[1];
-      const expr = dm[2];
+      const tag = dm.groups?.["tag"];
+      const expr = dm.groups?.["expr"];
       if (tag !== undefined) {
         entry.directiveKind = DIRECTIVE_KIND_MAP[tag];
       }

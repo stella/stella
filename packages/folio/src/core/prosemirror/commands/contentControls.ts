@@ -243,7 +243,7 @@ function ensureSdtNotLocked(node: PMNode, options: ForceOption): void {
   }
 }
 
-const DATA_BINDING_RE = /<\w+:dataBinding\b([^>]*)\/?>/iu;
+const DATA_BINDING_RE = /<\w+:dataBinding\b(?<attrs>[^>]*)\/?>/iu;
 
 /**
  * Refuse content mutations on bound SDTs unless force; on force, return
@@ -263,14 +263,16 @@ function ensureContentNotBound(
     return { strippedRawPropertiesXml: undefined };
   }
   if (!options.force) {
-    const attrs = match[1] ?? "";
-    const xpathMatch = /\bxpath="([^"]*)"/iu.exec(attrs);
-    const storeMatch = /\bstoreItemID="([^"]*)"/iu.exec(attrs);
+    const attrs = match.groups?.["attrs"] ?? "";
+    const xpathMatch = /\bxpath="(?<xpath>[^"]*)"/iu.exec(attrs);
+    const storeMatch = /\bstoreItemID="(?<storeItemID>[^"]*)"/iu.exec(attrs);
     const props = attrsToProperties(node);
     throw new ContentControlBoundError({
-      message: `Control "${props.tag ?? props.alias ?? "(unnamed)"}" is bound to ${xpathMatch?.[1] ?? "(unknown xpath)"}. Word regenerates the body from the bound XML on open; pass { force: true } to strip the binding inline, or remove it explicitly before writing.`,
-      xpath: xpathMatch?.[1] ?? "",
-      ...(storeMatch?.[1] !== undefined ? { storeItemID: storeMatch[1] } : {}),
+      message: `Control "${props.tag ?? props.alias ?? "(unnamed)"}" is bound to ${xpathMatch?.groups?.["xpath"] ?? "(unknown xpath)"}. Word regenerates the body from the bound XML on open; pass { force: true } to strip the binding inline, or remove it explicitly before writing.`,
+      xpath: xpathMatch?.groups?.["xpath"] ?? "",
+      ...(storeMatch?.groups?.["storeItemID"] !== undefined
+        ? { storeItemID: storeMatch.groups["storeItemID"] }
+        : {}),
       ...(props.tag !== undefined ? { tag: props.tag } : {}),
       ...(props.alias !== undefined ? { alias: props.alias } : {}),
     });
@@ -517,17 +519,18 @@ function formatDateForBody(
 // particular the optional fractional-seconds group.
 const SDT_DATE_RE =
   // oxlint-disable-next-line sonarjs/regex-complexity -- mirrors headless helper
-  /^(\d{4})-(\d{2})-(\d{2})(?:[Tt](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?)?(?:[Zz]|[+-]\d{2}:?\d{2})?$/u;
+  /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})(?:[Tt](?<hours>\d{2}):(?<minutes>\d{2})(?::(?<seconds>\d{2})(?:\.\d+)?)?)?(?:[Zz]|[+-]\d{2}:?\d{2})?$/u;
 
 function parseSdtDate(iso: string): Date | null {
   const match = SDT_DATE_RE.exec(iso);
   if (match) {
-    const year = Number(match[1]);
-    const month = Number(match[2]);
-    const day = Number(match[3]);
-    const hours = match[4] ? Number(match[4]) : 0;
-    const minutes = match[5] ? Number(match[5]) : 0;
-    const seconds = match[6] ? Number(match[6]) : 0;
+    const groups = match.groups!;
+    const year = Number(groups["year"]);
+    const month = Number(groups["month"]);
+    const day = Number(groups["day"]);
+    const hours = groups["hours"] ? Number(groups["hours"]) : 0;
+    const minutes = groups["minutes"] ? Number(groups["minutes"]) : 0;
+    const seconds = groups["seconds"] ? Number(groups["seconds"]) : 0;
     const candidate = new Date(year, month - 1, day, hours, minutes, seconds);
     // See headless helper: JS silently normalizes overflow components;
     // reject the parse when the result disagrees with what was asked for.

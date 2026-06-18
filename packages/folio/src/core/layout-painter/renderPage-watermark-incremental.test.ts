@@ -207,10 +207,10 @@ class FakeElement {
   }
 }
 
-const CLASS_SELECTOR_RE = /\.([\w-]+)/u;
+const CLASS_SELECTOR_RE = /\.(?<cls>[\w-]+)/u;
 
 const classFromSelector = (selector: string): string =>
-  CLASS_SELECTOR_RE.exec(selector)?.at(1) ?? "";
+  CLASS_SELECTOR_RE.exec(selector)?.groups?.["cls"] ?? "";
 
 const isScopeChild = (selector: string): boolean =>
   selector.includes(":scope >");

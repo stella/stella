@@ -314,14 +314,14 @@ const SAFE_PROVIDER_CODES: ReadonlySet<string> = new Set([
   "UNKNOWN",
 ]);
 
-const SAFE_PROVIDER_CODE_PREFIX = /^([A-Z][A-Z_]+)(?::|\s|$)/u;
+const SAFE_PROVIDER_CODE_PREFIX = /^(?<code>[A-Z][A-Z_]+)(?::|\s|$)/u;
 
 const extractSafeProviderCode = (message: string): string | undefined => {
   const match = SAFE_PROVIDER_CODE_PREFIX.exec(message);
   if (!match) {
     return undefined;
   }
-  const code = match[1];
+  const code = match.groups?.["code"];
   if (code === undefined || !SAFE_PROVIDER_CODES.has(code)) {
     return undefined;
   }

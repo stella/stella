@@ -85,12 +85,12 @@ class FakeElement {
   }
 }
 
-const CLASS_SELECTOR_RE = /\.([\w-]+)/u;
+const CLASS_SELECTOR_RE = /\.(?<cls>[\w-]+)/u;
 
 const classFromSelector = (selector: string): string => {
   // Tests pass either `.layout-page-border` or `:scope > .layout-page-border`.
   const match = CLASS_SELECTOR_RE.exec(selector);
-  return match ? (match[1] ?? "") : selector;
+  return match ? (match.groups?.["cls"] ?? "") : selector;
 };
 
 const findByClass = (

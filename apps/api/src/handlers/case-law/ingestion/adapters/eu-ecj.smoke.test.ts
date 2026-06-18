@@ -34,11 +34,11 @@ describe.skipIf(SKIP)("euEcjAdapter smoke (live)", () => {
       for (const d of page.decisions) {
         expect(d.caseNumber).toBeTruthy();
         expect(d.ecli).toMatch(/^ECLI:EU:[CT]:/u);
-        expect(d.court).toMatch(/^(Court of Justice|General Court)$/u);
+        expect(d.court).toMatch(/^(?:Court of Justice|General Court)$/u);
         expect(d.country).toBe("EU");
         expect(d.language).toMatch(/^[a-z]{2}$/u);
         expect(d.decisionDate).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
-        expect(d.decisionType).toMatch(/^(judgment|order|opinion|unknown)$/u);
+        expect(d.decisionType).toMatch(/^(?:judgment|order|opinion|unknown)$/u);
         expect(d.sourceUrl).toContain("eur-lex");
         expect(d.metadata).toHaveProperty("celex");
         expect(d.rawHash).toHaveLength(64);

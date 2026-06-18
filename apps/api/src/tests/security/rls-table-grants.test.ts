@@ -47,7 +47,8 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   "legislation_index_jobs",
 ]);
 
-const SQL_IDENTIFIER_PATTERN = /"([^"]+)"|([a-z_][a-z0-9_]*)/giu;
+const SQL_IDENTIFIER_PATTERN =
+  /"(?<quoted>[^"]+)"|(?<unquoted>[a-z_][a-z0-9_]*)/giu;
 
 type RlsTableIntroduction = {
   migration: string;
@@ -56,11 +57,11 @@ type RlsTableIntroduction = {
 
 const identifierNamesFromSql = (sqlList: string): string[] =>
   [...sqlList.matchAll(SQL_IDENTIFIER_PATTERN)].map((match) => {
-    if (match[1] !== undefined) {
-      return match[1];
+    if (match.groups?.["quoted"] !== undefined) {
+      return match.groups["quoted"];
     }
 
-    return match[2]?.toLowerCase() ?? "";
+    return match.groups?.["unquoted"]?.toLowerCase() ?? "";
   });
 
 const tableNameFromSql = (sqlTarget: string): string | null =>

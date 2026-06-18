@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 
 const PREFIX_QUERY_TOKEN_LIMIT = 8;
 const ADVANCED_QUERY_OPERATOR_RE =
-  /(^|\s)(AND|OR|NOT)(\s|$)|(^|\s)-(?=\S)|["()]/u;
+  /(?:^|\s)(?:AND|OR|NOT)(?:\s|$)|(?:^|\s)-(?=\S)|["()]/u;
 const FILE_EXTENSION_RE = /^[\p{L}\p{N}]{1,10}$/u;
 
 const compact = (parts: readonly (string | null | undefined)[]): string =>

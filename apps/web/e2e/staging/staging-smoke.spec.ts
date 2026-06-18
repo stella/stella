@@ -21,7 +21,7 @@ test.beforeEach(({ page }) => {
 
 test("deployed app serves the authenticated shell", async ({ page }) => {
   await page.goto("/");
-  await expect(page).not.toHaveURL(/\/auth(\/|$)/u);
+  await expect(page).not.toHaveURL(/\/auth(?:\/|$)/u);
 });
 
 test("chat thread page renders for an entitlement-less owner", async ({

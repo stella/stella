@@ -392,11 +392,13 @@ export function parseClipboardHtml(
   // If from our editor, try to parse internal format
   if (fromEditor) {
     // Look for internal data in HTML comments or data attributes
-    const internalMatch = /data-folio-content="([^"]+)"/.exec(html);
+    const internalMatch = /data-folio-content="(?<content>[^"]+)"/.exec(html);
     if (internalMatch) {
       try {
-        // SAFETY: match group 1 always captures in this regex
-        const runs = JSON.parse(decodeURIComponent(internalMatch[1]!));
+        // SAFETY: `content` group always captures when this regex matches
+        const runs = JSON.parse(
+          decodeURIComponent(internalMatch.groups!["content"]!),
+        );
         return { runs, fromWord: false, fromEditor: true, plainText };
       } catch {
         // Fall through to HTML parsing
@@ -704,12 +706,13 @@ function colorToHex(color: string): string | null {
   }
 
   // RGB/RGBA
-  const rgbMatch = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(color);
+  const rgbMatch = /rgba?\((?<r>\d+),\s*(?<g>\d+),\s*(?<b>\d+)/.exec(color);
   if (rgbMatch) {
-    // SAFETY: regex has 3 capture groups; all present when match succeeds
-    const r = Number.parseInt(rgbMatch[1]!, 10).toString(16).padStart(2, "0");
-    const g = Number.parseInt(rgbMatch[2]!, 10).toString(16).padStart(2, "0");
-    const b = Number.parseInt(rgbMatch[3]!, 10).toString(16).padStart(2, "0");
+    // SAFETY: `r`/`g`/`b` groups all present when match succeeds
+    const groups = rgbMatch.groups!;
+    const r = Number.parseInt(groups["r"]!, 10).toString(16).padStart(2, "0");
+    const g = Number.parseInt(groups["g"]!, 10).toString(16).padStart(2, "0");
+    const b = Number.parseInt(groups["b"]!, 10).toString(16).padStart(2, "0");
     return (r + g + b).toUpperCase();
   }
 

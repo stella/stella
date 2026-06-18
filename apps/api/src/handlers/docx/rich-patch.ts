@@ -12,7 +12,7 @@ import * as slimdom from "slimdom";
 import { isElement, paragraphText, W_NS } from "./ooxml";
 import type { RichPatchValue } from "./types";
 
-export const PLACEHOLDER_RE = /\{\{([\p{L}\p{N}_.@:-]+)\}\}/gu;
+export const PLACEHOLDER_RE = /\{\{(?<name>[\p{L}\p{N}_.@:-]+)\}\}/gu;
 
 const XML_NS = "http://www.w3.org/XML/1998/namespace";
 
@@ -32,17 +32,13 @@ const isStandalonePlaceholder = (
 ): { key: string; value: RichPatchValue } | null => {
   const matches = [...text.matchAll(PLACEHOLDER_RE)];
   const match = matches.at(0);
-  if (
-    !match ||
-    matches.length > 1 ||
-    match[0] !== text ||
-    match[1] === undefined
-  ) {
+  const key = match?.groups?.["name"];
+  if (!match || matches.length > 1 || match[0] !== text || key === undefined) {
     return null;
   }
 
-  const value = values[match[1]];
-  return value === undefined ? null : { key: match[1], value };
+  const value = values[key];
+  return value === undefined ? null : { key, value };
 };
 
 export const replacePlaceholdersInText = (
@@ -315,7 +311,7 @@ const findPlaceholderMatches = (
   const matches: PlaceholderMatch[] = [];
   PLACEHOLDER_RE.lastIndex = 0;
   for (const match of text.matchAll(PLACEHOLDER_RE)) {
-    const key = match[1];
+    const key = match.groups?.["name"];
     if (!key) {
       continue;
     }

@@ -58,7 +58,7 @@ const SKILL_BODY_FILE_NAME = "SKILL.md";
 // Mirrors apps/api/src/handlers/skills/resources/resource-path.ts.
 // Keep the two in sync.
 const RESOURCE_PATH_PATTERN =
-  /^[a-z0-9][a-z0-9._-]*(\/[a-z0-9][a-z0-9._-]*)*$/u;
+  /^[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)*$/u;
 const FILENAME_PATTERN = /^[a-z0-9][a-z0-9._-]*$/u;
 
 // Default name for a freshly created (still empty) folder. A path segment,
@@ -585,7 +585,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     // For binary uploads we replace the extension with `.md` because the
     // stored resource holds the extracted text, not the original bytes.
     const baseName = binary
-      ? `${file.name.replace(/\.(docx|pdf)$/iu, "")}.md`
+      ? `${file.name.replace(/\.(?:docx|pdf)$/iu, "")}.md`
       : file.name;
     const sanitizedName = baseName
       .toLowerCase()
@@ -603,7 +603,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     let suffix = 1;
     while (existingPaths.has(path)) {
       suffix += 1;
-      path = `knowledge/${sanitizedName.replace(/(\.[^.]+)?$/u, `-${suffix}$1`)}`;
+      path = `knowledge/${sanitizedName.replace(/(?<ext>\.[^.]+)?$/u, `-${suffix}$<ext>`)}`;
     }
     if (binary) {
       uploadResource.mutate({ path, file });

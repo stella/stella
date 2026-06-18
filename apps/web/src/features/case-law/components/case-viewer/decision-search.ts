@@ -23,7 +23,7 @@ const LETTER_OR_NUMBER_RE = /[\p{L}\p{N}]/u;
 // so users can search "rozhodol" and find the spaced heading.
 // Mirrors `collapseSpacedLetters` in the API pipeline.
 const SPACED_LETTER_RUN_RE =
-  /(?<=\s|^)(\p{L} (?:\p{L} )*\p{L})( ?[,:;.!?])?(?=\s|$)/gu;
+  /(?<=\s|^)(?:\p{L} (?:\p{L} )*\p{L})(?: ?[,:;.!?])?(?=\s|$)/gu;
 
 type NormalizedText = {
   endMap: number[];

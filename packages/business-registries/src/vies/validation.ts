@@ -94,11 +94,11 @@ export type ParsedVatNumber = {
  */
 export const parseVatNumber = (input: string): ParsedVatNumber | null => {
   const compact = normalizeVatNumber(input);
-  const match = /^([A-Z]{2})([A-Z0-9+*]+)$/u.exec(compact);
+  const match = /^(?<country>[A-Z]{2})(?<vat>[A-Z0-9+*]+)$/u.exec(compact);
   if (!match) {
     return null;
   }
-  const [, country, vat] = match;
+  const { country, vat } = match.groups ?? {};
   if (country === undefined || vat === undefined) {
     return null;
   }

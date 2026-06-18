@@ -29,36 +29,37 @@ const BASE_URL = "https://vyhledavac.nssoud.cz";
 const parseResultRows = (html: string): ParsedRow[] => {
   const rows: ParsedRow[] = [];
 
-  const tbodyPattern = /<tbody>([\s\S]*?)<\/tbody>/giu;
+  const tbodyPattern = /<tbody>(?<block>[\s\S]*?)<\/tbody>/giu;
   let tbodyMatch: RegExpExecArray | null;
 
   while ((tbodyMatch = tbodyPattern.exec(html)) !== null) {
-    const block = tbodyMatch[1];
+    const block = tbodyMatch.groups?.["block"];
     if (!block?.includes("Citace")) {
       continue;
     }
 
     const citMatch =
       // oxlint-disable-next-line sonarjs/slow-regex -- test fixture rows are bounded representative NSS HTML snippets
-      /title="Citace:[^"]*?(?:čj\.|č\.\s*j\.)[\s]*([^"]+?)(?:-\d+)?"/iu.exec(
+      /title="Citace:[^"]*?(?:čj\.|č\.\s*j\.)[\s]*(?<caseNumber>[^"]+?)(?:-\d+)?"/iu.exec(
         block,
       );
-    const caseNumber = citMatch?.[1]?.trim();
+    const caseNumber = citMatch?.groups?.["caseNumber"]?.trim();
     if (!caseNumber) {
       continue;
     }
 
-    const detailMatch = /href="(\/DokumentDetail\/Index\/\d+)"/u.exec(block);
-    const documentUrl = detailMatch?.[1]
-      ? `${BASE_URL}${detailMatch[1]}`
-      : undefined;
+    const detailMatch =
+      /href="(?<documentPath>\/DokumentDetail\/Index\/\d+)"/u.exec(block);
+    const documentPath = detailMatch?.groups?.["documentPath"];
+    const documentUrl = documentPath ? `${BASE_URL}${documentPath}` : undefined;
 
     const cells: string[] = [];
-    const cellPattern = /<td[^>]*>([\s\S]*?)<\/td>/giu;
+    const cellPattern = /<td[^>]*>(?<cell>[\s\S]*?)<\/td>/giu;
     let cellMatch: RegExpExecArray | null;
     while ((cellMatch = cellPattern.exec(block)) !== null) {
-      if (cellMatch[1]) {
-        cells.push(stripHtml(cellMatch[1]).trim());
+      const cell = cellMatch.groups?.["cell"];
+      if (cell) {
+        cells.push(stripHtml(cell).trim());
       }
     }
 

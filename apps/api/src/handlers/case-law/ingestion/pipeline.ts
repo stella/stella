@@ -139,7 +139,7 @@ type ProcessResult = {
  * are always longer, so the floor loses nothing in practice.
  */
 const SPACED_WORD =
-  /(?<=\s|^)(\p{L} (?:\p{L} ){2,}\p{L})( ?[,:;.!?])?(?=\s|$)/gu;
+  /(?<=\s|^)(?:\p{L} (?:\p{L} ){2,}\p{L})(?: ?[,:;.!?])?(?=\s|$)/gu;
 
 /**
  * Collapse multiple spaces to single. Applied to all

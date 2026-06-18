@@ -273,11 +273,11 @@ function parseRotationDegrees(transform: string | undefined): number {
   if (!transform) {
     return 0;
   }
-  const match = /rotate\(\s*([-\d.]+)\s*deg\s*\)/u.exec(transform);
+  const match = /rotate\(\s*(?<degrees>[-\d.]+)\s*deg\s*\)/u.exec(transform);
   if (!match) {
     return 0;
   }
-  const raw = Number.parseFloat(match[1]!);
+  const raw = Number.parseFloat(match.groups!["degrees"]!);
   if (!Number.isFinite(raw)) {
     return 0;
   }
@@ -354,9 +354,10 @@ function hasStackedMathLayout(run: MathRun): boolean {
   if (run.display === "block") {
     return true;
   }
-  const tagPattern = /<([A-Za-z_][\w.-]*(?::[A-Za-z_][\w.-]*)?)(?:\s|\/|>)/gu;
+  const tagPattern =
+    /<(?<tag>[A-Za-z_][\w.-]*(?::[A-Za-z_][\w.-]*)?)(?:\s|\/|>)/gu;
   for (const match of run.ommlXml.matchAll(tagPattern)) {
-    const tagName = match[1];
+    const tagName = match.groups?.["tag"];
     if (!tagName) {
       continue;
     }

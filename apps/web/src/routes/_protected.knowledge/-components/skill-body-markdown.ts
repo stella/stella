@@ -16,10 +16,10 @@
 const GUIDE_CALLOUT_LEAD = "💡 ";
 // The captured text is whitespace-normalised by the caller, so the pattern
 // keeps no `\s*` around the lazy capture (that ambiguity is backtracking-prone).
-const GUIDE_COMMENT_PATTERN = /<!--\s*guide:([\s\S]*?)-->/gu;
+const GUIDE_COMMENT_PATTERN = /<!--\s*guide:(?<text>[\s\S]*?)-->/gu;
 // One callout line: `> 💡 text`. Matched per line (toMarkdown renders a
 // single-line blockquote for a single-line quote paragraph).
-const GUIDE_CALLOUT_PATTERN = /^> 💡 (.*)$/gmu;
+const GUIDE_CALLOUT_PATTERN = /^> 💡 (?<text>.*)$/gmu;
 
 type SplitBody = {
   /** Frontmatter block including the closing `---` and trailing newline, or "". */
@@ -68,9 +68,10 @@ const calloutsToGuides = (md: string): string =>
 // emphasised, so the inner bold is redundant noise in the stored body. Strip it
 // only when it wraps the whole heading (a partial emphasis like `# Foo **bar**`
 // is intentional and left alone).
-const HEADING_WHOLE_BOLD_PATTERN = /^(#{1,6}) \*\*(.+?)\*\*$/gmu;
+const HEADING_WHOLE_BOLD_PATTERN =
+  /^(?<hashes>#{1,6}) \*\*(?<title>.+?)\*\*$/gmu;
 const stripRedundantHeadingBold = (md: string): string =>
-  md.replace(HEADING_WHOLE_BOLD_PATTERN, "$1 $2");
+  md.replace(HEADING_WHOLE_BOLD_PATTERN, "$<hashes> $<title>");
 
 /** Stored markdown → what the editor opens: frontmatter stripped, guides shown. */
 export const toEditorMarkdown = (raw: string): string =>

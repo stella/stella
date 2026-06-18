@@ -69,15 +69,15 @@ const normalizeCitation = (
   }
 
   // Czech: "sp. zn. 33 Cdo 2178/2018" → "33 Cdo 2178/2018"
-  const spZn = /^sp\.\s*zn\.\s*(.+)/iu.exec(trimmed);
-  if (spZn?.[1]) {
-    return { caseNumber: spZn[1].trim() };
+  const spZn = /^sp\.\s*zn\.\s*(?<caseNumber>.+)/iu.exec(trimmed);
+  if (spZn?.groups?.["caseNumber"]) {
+    return { caseNumber: spZn.groups["caseNumber"].trim() };
   }
 
   // Czech file number: "č. j. 5 As 123/2020" → "5 As 123/2020"
-  const cj = /^[čc]\.\s*j\.\s*(.+)/iu.exec(trimmed);
-  if (cj?.[1]) {
-    return { caseNumber: cj[1].trim() };
+  const cj = /^[čc]\.\s*j\.\s*(?<caseNumber>.+)/iu.exec(trimmed);
+  if (cj?.groups?.["caseNumber"]) {
+    return { caseNumber: cj.groups["caseNumber"].trim() };
   }
 
   // Czech collection: "č. 123/2020 Sb. rozh. tr." — no case number
@@ -86,9 +86,9 @@ const normalizeCitation = (
   }
 
   // Polish: "sygn. akt II CSK 123/20" → "II CSK 123/20"
-  const sygn = /^sygn\.\s*(?:akt\s+)?(.+)/iu.exec(trimmed);
-  if (sygn?.[1]) {
-    return { caseNumber: sygn[1].trim() };
+  const sygn = /^sygn\.\s*(?:akt\s+)?(?<caseNumber>.+)/iu.exec(trimmed);
+  if (sygn?.groups?.["caseNumber"]) {
+    return { caseNumber: sygn.groups["caseNumber"].trim() };
   }
 
   // Polish bare: "II CSK 123/20" — already a case number

@@ -102,11 +102,11 @@ const parseRocDate = (input: string | undefined): string | null => {
   }
   const trimmed = input.trim();
   // Expect 6-7 digits: 2-3 year digits + 2 month + 2 day.
-  const match = /^(\d{1,3})(\d{2})(\d{2})$/u.exec(trimmed);
+  const match = /^(?<year>\d{1,3})(?<month>\d{2})(?<day>\d{2})$/u.exec(trimmed);
   if (!match) {
     return null;
   }
-  const [, yearStr, monthStr, dayStr] = match;
+  const { year: yearStr, month: monthStr, day: dayStr } = match.groups ?? {};
   if (!yearStr || !monthStr || !dayStr) {
     return null;
   }

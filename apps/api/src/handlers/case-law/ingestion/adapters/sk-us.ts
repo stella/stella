@@ -89,11 +89,11 @@ const parseCursor = (cursor: string | null): YearCursor => {
   }
 
   // New format: "YYYY:offset"
-  const match = /^(\d{4}):(\d+)$/u.exec(cursor);
-  if (match?.[1] && match[2]) {
+  const match = /^(?<year>\d{4}):(?<offset>\d+)$/u.exec(cursor);
+  if (match?.groups?.["year"] && match.groups["offset"]) {
     return {
-      year: Number.parseInt(match[1], 10),
-      offset: Number.parseInt(match[2], 10),
+      year: Number.parseInt(match.groups["year"], 10),
+      offset: Number.parseInt(match.groups["offset"], 10),
     };
   }
 
@@ -230,11 +230,13 @@ const parseApiDate = (raw: string | undefined): string | undefined => {
   if (!raw) {
     return undefined;
   }
-  const match = /^(\d{2})\/(\d{2})\/(\d{4})/u.exec(raw);
-  if (!match?.[1] || !match[2] || !match[3]) {
+  const groups = /^(?<month>\d{2})\/(?<day>\d{2})\/(?<year>\d{4})/u.exec(
+    raw,
+  )?.groups;
+  if (!groups?.["month"] || !groups["day"] || !groups["year"]) {
     return undefined;
   }
-  return `${match[3]}-${match[1]}-${match[2]}`;
+  return `${groups["year"]}-${groups["month"]}-${groups["day"]}`;
 };
 
 // ── PDF download ─────────────────────────────────────────

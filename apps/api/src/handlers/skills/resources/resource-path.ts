@@ -17,7 +17,7 @@ import type { AgentSkillResourceKind } from "@/api/db/schema";
 // `create.ts` and `rename.ts` to reject paths that the file tree
 // would otherwise be unable to render correctly.
 export const RESOURCE_PATH_PATTERN =
-  /^[a-z0-9][a-z0-9._-]*(\/[a-z0-9][a-z0-9._-]*)*$/u;
+  /^[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)*$/u;
 
 const REFERENCE_PREFIX = "references/";
 const PROMPT_PREFIX = "prompts/";

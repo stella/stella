@@ -224,14 +224,16 @@ LIMIT ${SPARQL_LIMIT}`.trim();
  *      "62023TJ0201" → "T-201/23"
  */
 export const celexToCaseNumber = (celex: string): string => {
-  const match = /^6(\d{4})(CJ|TJ|CC|CO|TO|FJ)(\d+)/u.exec(celex);
+  const match = /^6(?<year>\d{4})(?<type>CJ|TJ|CC|CO|TO|FJ)(?<num>\d+)/u.exec(
+    celex,
+  );
   if (!match) {
     return celex;
   }
 
-  const yearStr = match[1];
-  const typeStr = match[2];
-  const numStr = match[3];
+  const yearStr = match.groups?.["year"];
+  const typeStr = match.groups?.["type"];
+  const numStr = match.groups?.["num"];
   if (!yearStr || !typeStr || !numStr) {
     return celex;
   }
@@ -277,21 +279,23 @@ const fetchFulltext = async (
     // everything up to the outermost </div> before <!--,
     // avoiding early termination on inner div comments.
     const bodyMatch =
-      /<div[^>]*id="TexteOnly"[^>]*>([\s\S]*)<\/div>\s*<!--/iu.exec(html);
+      /<div[^>]*id="TexteOnly"[^>]*>(?<body>[\s\S]*)<\/div>\s*<!--/iu.exec(
+        html,
+      );
     if (!bodyMatch) {
       // Fallback: extract <body> content
-      const fallback = /<body[^>]*>([\s\S]*)<\/body>/iu.exec(html);
-      if (!fallback?.[1]) {
+      const fallback = /<body[^>]*>(?<body>[\s\S]*)<\/body>/iu.exec(html);
+      if (!fallback?.groups?.["body"]) {
         return undefined;
       }
-      const text = stripHtml(fallback[1])
+      const text = stripHtml(fallback.groups["body"])
         // eslint-disable-next-line no-control-regex -- strip control chars for PG
         .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/gu, "")
         .trim();
       return text.length > 100 ? text : undefined;
     }
 
-    const text = stripHtml(bodyMatch[1] ?? "")
+    const text = stripHtml(bodyMatch.groups?.["body"] ?? "")
       // eslint-disable-next-line no-control-regex -- strip control chars for PG
       .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/gu, "")
       .trim();

@@ -27,7 +27,7 @@ const SECTION_PATTERNS: {
     type: "dissent",
     pattern:
       // oxlint-disable-next-line sonarjs/slow-regex -- section patterns are matched against a single trimmed line
-      /^(Odli[šs]n[ée]\s+stanovisko|Stanovisko\s+men[šs]iny)\s*[:.]?\s*$/imu,
+      /^(?:Odli[šs]n[ée]\s+stanovisko|Stanovisko\s+men[šs]iny)\s*[:.]?\s*$/imu,
   },
   {
     type: "footer",
@@ -68,7 +68,7 @@ const SECTION_PATTERNS: {
   {
     type: "ruling",
     // oxlint-disable-next-line sonarjs/slow-regex -- section patterns are matched against a single trimmed line
-    pattern: /^(V[ýy]rok|Rozhodnutie)\s*[:.]?\s*$/imu,
+    pattern: /^(?:V[ýy]rok|Rozhodnutie)\s*[:.]?\s*$/imu,
   },
   {
     type: "argumentation",
@@ -86,14 +86,14 @@ const SECTION_PATTERNS: {
     type: "history",
     pattern:
       // oxlint-disable-next-line sonarjs/slow-regex -- section patterns are matched against a single trimmed line
-      /^(Pr[uů]b[eě]h\s+[řr][ií]zen[ií]|Procesn[ií]\s+historie)\s*[:.]?\s*$/imu,
+      /^(?:Pr[uů]b[eě]h\s+[řr][ií]zen[ií]|Procesn[ií]\s+historie)\s*[:.]?\s*$/imu,
   },
 
   // Polish patterns
   {
     type: "ruling",
     // oxlint-disable-next-line sonarjs/slow-regex -- section patterns are matched against a single trimmed line
-    pattern: /^(Sentencja|Tenor)\s*[:.]?\s*$/imu,
+    pattern: /^(?:Sentencja|Tenor)\s*[:.]?\s*$/imu,
   },
   {
     type: "argumentation",

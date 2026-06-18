@@ -142,7 +142,8 @@ describe("picture watermark relationship rebinding (eigenpal #684)", () => {
 
     // header2's imagedata rId must resolve in header2's own rels.
     const header2Xml = await zip.file("word/header2.xml")!.async("text");
-    const usedRId = /<v:imagedata[^>]*\br:id="([^"]+)"/u.exec(header2Xml)?.[1];
+    const usedRId = /<v:imagedata[^>]*\br:id="(?<rid>[^"]+)"/u.exec(header2Xml)
+      ?.groups?.["rid"];
     expect(usedRId).toBeDefined();
     expect(header2Rels).toContain(`Id="${usedRId}"`);
   });
@@ -288,7 +289,8 @@ describe("picture watermark relationship rebinding (eigenpal #684)", () => {
 
     const outZip = await JSZip.loadAsync(out);
     const header2Xml = await outZip.file("word/header2.xml")!.async("text");
-    const usedRId = /<v:imagedata[^>]*\br:id="([^"]+)"/u.exec(header2Xml)?.[1];
+    const usedRId = /<v:imagedata[^>]*\br:id="(?<rid>[^"]+)"/u.exec(header2Xml)
+      ?.groups?.["rid"];
     expect(usedRId).toBeDefined();
     const header2Rels = await outZip
       .file("word/_rels/header2.xml.rels")!
@@ -641,7 +643,8 @@ describe("picture watermark relationship rebinding (eigenpal #684)", () => {
 
     const outZip = await JSZip.loadAsync(out);
     const header2Xml = await outZip.file("word/header2.xml")!.async("text");
-    const usedRId = /<v:imagedata[^>]*\br:id="([^"]+)"/u.exec(header2Xml)?.[1];
+    const usedRId = /<v:imagedata[^>]*\br:id="(?<rid>[^"]+)"/u.exec(header2Xml)
+      ?.groups?.["rid"];
     expect(usedRId).toBeDefined();
     const header2Rels = await outZip
       .file("word/_rels/header2.xml.rels")!

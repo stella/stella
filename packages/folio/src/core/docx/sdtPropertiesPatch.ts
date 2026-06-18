@@ -128,18 +128,18 @@ function upsertSdtPrChild(
   // (`<ns0:sdtPr>...</ns0:sdtPr>`) doesn't end up with a mismatched
   // `</w:sdtPr>` — the resulting XML would be malformed and Word would
   // refuse the file.
-  const closing = /<\/(\w+):sdtPr>/iu;
+  const closing = /<\/(?<prefix>\w+):sdtPr>/iu;
   const closingMatch = closing.exec(raw);
   if (closingMatch) {
-    const closingPrefix = closingMatch[1];
+    const closingPrefix = closingMatch.groups?.["prefix"];
     return raw.replace(closing, `${replacement}</${closingPrefix}:sdtPr>`);
   }
   // Self-closing `<w:sdtPr/>` — expand to a container.
-  const selfClosingPr = /<(\w+):sdtPr([^/>]*)\/>/iu;
+  const selfClosingPr = /<(?<prefix>\w+):sdtPr(?<attrs>[^/>]*)\/>/iu;
   if (selfClosingPr.test(raw)) {
     return raw.replace(
       selfClosingPr,
-      (_match, prefix: string, attrs: string) =>
+      (_match: string, prefix: string, attrs: string) =>
         `<${prefix}:sdtPr${attrs}>${replacement}</${prefix}:sdtPr>`,
     );
   }
@@ -195,22 +195,24 @@ export function reconcileRawSdtPr(
     // would leave a stray closing tag behind). Then the self-closing
     // form, then folding into an existing <w14:checkbox> wrapper, then a
     // synthesized wrapper as the last resort.
-    const checkedOpened = /<(\w+):checked\b[^>]*>[\s\S]*?<\/\w+:checked>/iu;
-    const checkedSelfClosing = /<(\w+):checked\b[^>]*\/>/iu;
+    const checkedOpened = /<(?:\w+):checked\b[^>]*>[\s\S]*?<\/\w+:checked>/iu;
+    const checkedSelfClosing = /<(?:\w+):checked\b[^>]*\/>/iu;
     if (checkedOpened.test(next)) {
       next = next.replaceAll(
-        /<(\w+):checked\b[^>]*>[\s\S]*?<\/\w+:checked>/giu,
-        (_m, prefix: string) => `<${prefix}:checked ${prefix}:val="${val}"/>`,
+        /<(?<prefix>\w+):checked\b[^>]*>[\s\S]*?<\/\w+:checked>/giu,
+        (_match: string, prefix: string) =>
+          `<${prefix}:checked ${prefix}:val="${val}"/>`,
       );
     } else if (checkedSelfClosing.test(next)) {
       next = next.replaceAll(
-        /<(\w+):checked\b[^>]*\/>/giu,
-        (_m, prefix: string) => `<${prefix}:checked ${prefix}:val="${val}"/>`,
+        /<(?<prefix>\w+):checked\b[^>]*\/>/giu,
+        (_match: string, prefix: string) =>
+          `<${prefix}:checked ${prefix}:val="${val}"/>`,
       );
     } else if (/<\w+:checkbox\b[^>]*>/iu.test(next)) {
       next = next.replace(
-        /<(\w+):checkbox\b[^>]*>/iu,
-        (match, prefix: string) =>
+        /<(?<prefix>\w+):checkbox\b[^>]*>/iu,
+        (match: string, prefix: string) =>
           `${match}<${prefix}:checked ${prefix}:val="${val}"/>`,
       );
     } else {
@@ -230,8 +232,9 @@ export function reconcileRawSdtPr(
     const dateFormat = props.dateFormat;
     if (fullDate !== undefined || dateFormat !== undefined) {
       // Patch <w:date> in place when present, otherwise insert a fresh one.
-      const wDate = /<(\w+):date\b([^>]*)>([\s\S]*?)<\/\w+:date>/iu;
-      const wDateSelf = /<(\w+):date\b([^/>]*)\/>/iu;
+      const wDate =
+        /<(?<prefix>\w+):date\b(?<attrs>[^>]*)>(?<inner>[\s\S]*?)<\/\w+:date>/iu;
+      const wDateSelf = /<(?<prefix>\w+):date\b(?<attrs>[^/>]*)\/>/iu;
       const fullDateAttr =
         fullDate !== undefined
           ? ` w:fullDate="${escapeXmlAttr(fullDate)}"`
@@ -243,7 +246,12 @@ export function reconcileRawSdtPr(
       if (wDate.test(next)) {
         next = next.replace(
           wDate,
-          (_m, prefix: string, _attrs: string, inner: string) => {
+          (
+            _match: string,
+            prefix: string,
+            matchedAttrs: string,
+            inner: string,
+          ) => {
             // Remove any existing w:dateFormat, re-emit ours if provided.
             // Single alternation covers BOTH the self-closing form
             // (`<w:dateFormat …/>`) and the expanded-empty form
@@ -262,14 +270,14 @@ export function reconcileRawSdtPr(
             if (formatChild) {
               body = `${formatChild}${body}`;
             }
-            const attrs = fullDate !== undefined ? fullDateAttr : _attrs;
+            const attrs = fullDate !== undefined ? fullDateAttr : matchedAttrs;
             return `<${prefix}:date${attrs}>${body}</${prefix}:date>`;
           },
         );
       } else if (wDateSelf.test(next)) {
         next = next.replace(
           wDateSelf,
-          (_m, prefix: string) =>
+          (_match: string, prefix: string) =>
             `<${prefix}:date${fullDateAttr}>${formatChild}</${prefix}:date>`,
         );
       } else {
@@ -290,12 +298,19 @@ export function reconcileRawSdtPr(
   ) {
     const escapedValue = escapeXmlAttr(options.dropdownLastValue);
     const opened =
-      /<(\w+):(dropDownList|comboBox)\b([^>]*)>([\s\S]*?)<\/\w+:(?:dropDownList|comboBox)>/iu;
-    const selfClosing = /<(\w+):(dropDownList|comboBox)\b([^/>]*)\/>/iu;
+      /<(?<prefix>\w+):(?<name>dropDownList|comboBox)\b(?<attrs>[^>]*)>(?<inner>[\s\S]*?)<\/\w+:(?:dropDownList|comboBox)>/iu;
+    const selfClosing =
+      /<(?<prefix>\w+):(?<name>dropDownList|comboBox)\b(?<attrs>[^/>]*)\/>/iu;
     if (opened.test(next)) {
       next = next.replace(
         opened,
-        (_m, prefix: string, name: string, attrs: string, inner: string) => {
+        (
+          _match: string,
+          prefix: string,
+          name: string,
+          attrs: string,
+          inner: string,
+        ) => {
           const stripped = stripLastValueAttr(attrs);
           // Re-emit under the SOURCE prefix so a producer that bound w:
           // under `ns0` ends up with `ns0:lastValue` rather than mixing
@@ -306,7 +321,7 @@ export function reconcileRawSdtPr(
     } else if (selfClosing.test(next)) {
       next = next.replace(
         selfClosing,
-        (_m, prefix: string, name: string, attrs: string) => {
+        (_match: string, prefix: string, name: string, attrs: string) => {
           const stripped = stripLastValueAttr(attrs);
           return `<${prefix}:${name}${stripped} ${prefix}:lastValue="${escapedValue}"/>`;
         },

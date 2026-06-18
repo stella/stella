@@ -127,9 +127,9 @@ function parseTransformAttr(
     return undefined;
   }
   const transform: ImageTransform = {};
-  const rotateMatch = /rotate\(([-\d.]+)deg\)/u.exec(transformStr);
+  const rotateMatch = /rotate\((?<deg>[-\d.]+)deg\)/u.exec(transformStr);
   if (rotateMatch) {
-    const rotation = Number.parseFloat(rotateMatch[1]!);
+    const rotation = Number.parseFloat(rotateMatch.groups!["deg"]!);
     if (Number.isFinite(rotation)) {
       transform.rotation = rotation;
     }

@@ -12,7 +12,7 @@ const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/u;
 // starts alphanumeric. A `_guide.md`-style segment stores fine via the loader
 // but breaks rename/create later, so guard it here at authoring time.
 const FILE_TREE_PATH_PATTERN =
-  /^[a-z0-9][a-z0-9._-]*(\/[a-z0-9][a-z0-9._-]*)*$/u;
+  /^[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)*$/u;
 
 describe("skill blueprints", () => {
   test("every advertised blueprint id resolves", () => {

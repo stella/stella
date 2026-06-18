@@ -24,7 +24,8 @@ export type ClauseSlot = {
 
 // ── Regex ────────────────────────────────────────────
 
-const CLAUSE_SLOT_RE = /\{\{@clause:([^:}]+)(?::([^}]+))?\}\}/gu;
+const CLAUSE_SLOT_RE =
+  /\{\{@clause:(?<name>[^:}]+)(?::(?<modifier>[^}]+))?\}\}/gu;
 
 // ── Scanning ─────────────────────────────────────────
 
@@ -37,11 +38,11 @@ const scanParagraphs = (
   for (const p of paragraphs) {
     const text = paragraphText(p);
     for (const match of text.matchAll(CLAUSE_SLOT_RE)) {
-      const name = match[1];
+      const name = match.groups?.["name"];
       if (!name) {
         continue;
       }
-      const modifier = match[2] || undefined;
+      const modifier = match.groups?.["modifier"] || undefined;
       const patchKey = modifier
         ? `@clause:${name}:${modifier}`
         : `@clause:${name}`;

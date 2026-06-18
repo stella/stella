@@ -88,9 +88,9 @@ const extractJavaScriptUrls = (html: string): string[] =>
   Array.from(
     new Set(
       Array.from(
-        html.matchAll(/(?:src|href)="([^"]+\.js(?:\?[^"]*)?)"/gu),
+        html.matchAll(/(?:src|href)="(?<url>[^"]+\.js(?:\?[^"]*)?)"/gu),
         (match) => {
-          const url = match[1];
+          const url = match.groups?.["url"];
           if (!url) {
             throw new TypeError("Matched script URL was unexpectedly empty");
           }
@@ -277,8 +277,8 @@ const normalizeJavaScriptStrings = (literal: string): string => {
 
 const toJsonObjectLiteral = (literal: string): string =>
   normalizeJavaScriptStrings(literal).replaceAll(
-    /([{,]\s*)([A-Za-z_][A-Za-z0-9_]*):/gu,
-    (_match, prefix: string, key: string) => `${prefix}"${key}":`,
+    /(?<prefix>[{,]\s*)(?<key>[A-Za-z_][A-Za-z0-9_]*):/gu,
+    (_match: string, prefix: string, key: string) => `${prefix}"${key}":`,
   );
 
 const parseCatalogObject = (
