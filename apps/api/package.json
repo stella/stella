@@ -88,7 +88,7 @@
     "elysia-rate-limit": "^4.6.2",
     "jose": "^6.2.3",
     "jszip": "catalog:",
-    "nodemailer": "^8.0.11",
+    "nodemailer": "^9.0.1",
     "postal-mime": "^2.7.4",
     "posthog-node": "^5.37.0",
     "quickjs-emscripten": "^0.32.0",
