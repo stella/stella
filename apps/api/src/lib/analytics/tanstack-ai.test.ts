@@ -73,6 +73,18 @@ const createMiddlewareContext = (
   accumulatedContent: "",
   messages: [],
   createId: (prefix) => `${prefix}_1`,
+  // The capability registry and accessors are part of TanStack's middleware
+  // context contract, but the analytics callbacks under test read only the
+  // plain context fields above, never the capability machinery.
+  // SAFETY: stub registry; `CapabilityRegistry` is not publicly constructible
+  // and the hooks never touch `capabilities`/`get`/`getOptional`/`provide`.
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  capabilities: {} as unknown as ChatMiddlewareContext["capabilities"],
+  get: () => {
+    throw new Error("capability access is not exercised in these tests");
+  },
+  getOptional: () => undefined,
+  provide: () => undefined,
 });
 
 describe("createTanStackAIAnalyticsCallbacks", () => {

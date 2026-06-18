@@ -834,6 +834,12 @@ const estimateModelMessageTokens = (message: ModelMessage): number =>
 const renderPartForCompaction = (
   part: ChatMessage["parts"][number],
 ): string => {
+  // The bundled UI-message parts union is narrower than the parts that
+  // appear at runtime (tool, reasoning, structured output), so capture the
+  // discriminant before the guards narrow `part` to `never`; the final
+  // branch could not otherwise read its tag.
+  const partType: string = part.type;
+
   if (isChatTextPart(part)) {
     return renderTaggedValue(
       "text",
@@ -860,7 +866,7 @@ const renderPartForCompaction = (
   }
 
   return renderTaggedValue(
-    part.type,
+    partType,
     truncateForCompaction(safeStringify(part), MAX_STRUCTURED_PART_CHARS),
   );
 };
