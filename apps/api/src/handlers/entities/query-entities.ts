@@ -862,29 +862,33 @@ const queryEntitiesGenerator = async function* ({
         "session_editor_members",
       );
 
-      return tx
-        .select({
-          entityId: desktopEditSessions.entityId,
-          createdBy: desktopEditSessions.createdBy,
-          editorName: sessionEditor.name,
-          editorImage: sessionEditor.image,
-        })
-        .from(desktopEditSessions)
-        .innerJoin(
-          sessionEditorMembers,
-          eq(desktopEditSessions.createdBy, sessionEditorMembers.userId),
-        )
-        .innerJoin(
-          sessionEditor,
-          eq(sessionEditorMembers.userId, sessionEditor.id),
-        )
-        .where(
-          and(
-            inArray(desktopEditSessions.entityId, pageIds),
-            ...liveDesktopEditSessionPredicates(new Date()),
-          ),
-        )
-        .orderBy(desktopEditSessions.createdAt);
+      return (
+        tx
+          .select({
+            entityId: desktopEditSessions.entityId,
+            createdBy: desktopEditSessions.createdBy,
+            editorName: sessionEditor.name,
+            editorImage: sessionEditor.image,
+          })
+          .from(desktopEditSessions)
+          .innerJoin(
+            sessionEditorMembers,
+            eq(desktopEditSessions.createdBy, sessionEditorMembers.userId),
+          )
+          .innerJoin(
+            sessionEditor,
+            eq(sessionEditorMembers.userId, sessionEditor.id),
+          )
+          .where(
+            and(
+              inArray(desktopEditSessions.entityId, pageIds),
+              ...liveDesktopEditSessionPredicates(new Date()),
+            ),
+          )
+          // SAFETY: live (open, unexpired) edit sessions for the current page of entities (pageIds); per entity the open-session count is bounded by the desktop_edit_sessions_open_uidx unique index on (createdBy, entityId, propertyId), i.e. members (LIMITS.workspaceMembersCount) x properties (LIMITS.propertiesCount)
+          // eslint-disable-next-line require-query-limit/require-query-limit
+          .orderBy(desktopEditSessions.createdAt)
+      );
     }),
   ]);
 

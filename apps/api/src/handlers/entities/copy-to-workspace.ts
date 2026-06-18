@@ -293,10 +293,12 @@ const copyToWorkspaceHandler = async function* ({
               id: { in: [...requiredPropertyIds] },
             },
             columns: { id: true, name: true, content: true },
+            limit: LIMITS.propertiesCount,
           }),
           tx.query.properties.findMany({
             where: { workspaceId: { eq: targetWorkspaceId } },
             columns: { id: true, name: true, content: true },
+            limit: LIMITS.propertiesCount,
           }),
         ]);
 

@@ -490,6 +490,7 @@ const exportTableView = createSafeHandler(
             name: true,
           },
           orderBy: { createdAt: "asc" },
+          limit: LIMITS.propertiesCount,
         }),
       ),
     );

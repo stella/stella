@@ -43,6 +43,8 @@ const deleteEntitiesHandler = async function* ({
 }: DeleteEntitiesHandlerProps) {
   const readOnlyEntities = yield* Result.await(
     safeDb((tx) =>
+      // SAFETY: result pinned to the caller-supplied body.entityIds via id IN (...), so it cannot return more rows than the request enumerated
+      // eslint-disable-next-line require-query-limit/require-query-limit
       tx.query.entities.findMany({
         where: {
           id: { in: body.entityIds },

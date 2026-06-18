@@ -189,7 +189,8 @@ const resolveInstalledActiveSkill = async ({
       })
       .from(agentSkillResources)
       .where(eq(agentSkillResources.skillId, skill.id))
-      .orderBy(asc(agentSkillResources.path)),
+      .orderBy(asc(agentSkillResources.path))
+      .limit(LIMITS.agentSkillResourcesPerSkill),
   );
   if (Result.isError(resources)) {
     return Result.err(resources.error);

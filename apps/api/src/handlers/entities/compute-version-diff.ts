@@ -72,12 +72,16 @@ export const computeVersionDiffStats = async ({
   // Get DOCX file fields for both versions
   const [newFields, prevFields] = await Promise.all([
     scopedDb((tx) =>
+      // SAFETY: one entity version's fields, bounded by LIMITS.propertiesCount via the unique (propertyId, entityVersionId) index
+      // eslint-disable-next-line require-query-limit/require-query-limit
       tx.query.fields.findMany({
         where: { entityVersionId: { eq: versionId } },
         columns: { content: true },
       }),
     ),
     scopedDb((tx) =>
+      // SAFETY: one entity version's fields, bounded by LIMITS.propertiesCount via the unique (propertyId, entityVersionId) index
+      // eslint-disable-next-line require-query-limit/require-query-limit
       tx.query.fields.findMany({
         where: { entityVersionId: { eq: prevVersionId } },
         columns: { content: true },

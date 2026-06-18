@@ -212,6 +212,8 @@ const getSources = () =>
       lastSyncAt: caseLawSources.lastSyncAt,
     })
     .from(caseLawSources)
+    // SAFETY: all configured case-law sources — a finite, code-defined adapter set; root-scoped maintenance script.
+    // eslint-disable-next-line require-query-limit/require-query-limit
     .orderBy(caseLawSources.adapterKey);
 
 const getDecisionCounts = () =>

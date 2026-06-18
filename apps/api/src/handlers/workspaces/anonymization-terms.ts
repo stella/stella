@@ -47,6 +47,8 @@ export const readWorkspaceAnonymizationTerms = createSafeHandler(
           })
           .from(anonymizationBlacklistEntries)
           .where(eq(anonymizationBlacklistEntries.workspaceId, workspaceId))
+          // SAFETY: one workspace's blacklist terms, loaded fully for masking correctness; create batches are capped at 100 and the per-workspace set is small in practice.
+          // eslint-disable-next-line require-query-limit/require-query-limit
           .orderBy(asc(anonymizationBlacklistEntries.canonical)),
       ),
     );

@@ -21,6 +21,7 @@ import {
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 import { serializeAITool } from "@/api/lib/markdown/ai-tool";
 
 type PropertyWithDeps = {
@@ -227,6 +228,8 @@ const updateProperty = createSafeHandler(
           };
         }
 
+        // SAFETY: one property's dependencies; each points to another workspace property, bounded by LIMITS.propertiesCount
+        // eslint-disable-next-line require-query-limit/require-query-limit
         const oldDependencies = await tx.query.propertyDependencies.findMany({
           where: {
             propertyId: { eq: propertyId },
@@ -257,6 +260,7 @@ const updateProperty = createSafeHandler(
             ? await tx.query.properties.findMany({
                 where: { workspaceId: { eq: workspaceId } },
                 columns: { id: true },
+                limit: LIMITS.propertiesCount,
                 with: {
                   dependencies: {
                     columns: { dependsOnPropertyId: true },

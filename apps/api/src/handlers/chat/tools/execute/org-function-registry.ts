@@ -107,6 +107,8 @@ export const createReadonlyOrgFunctionRegistry = ({
       });
 
       const workspaceRows = yield* await safeDb((tx) =>
+        // SAFETY: pinned to scopedWorkspaceIds, capped at LIMITS.chatExecuteDetailIdsMax by matterRefsSchema
+        // eslint-disable-next-line require-query-limit/require-query-limit
         tx.query.workspaces.findMany({
           where: {
             id: { in: scopedWorkspaceIds },
@@ -236,6 +238,8 @@ export const createReadonlyOrgFunctionRegistry = ({
               inArray(contacts.id, contactIds),
             ),
           )
+          // SAFETY: pinned to contactIds, capped at LIMITS.chatExecuteDetailIdsMax by contactRefsSchema
+          // eslint-disable-next-line require-query-limit/require-query-limit
           .orderBy(asc(contacts.displayName)),
       );
 

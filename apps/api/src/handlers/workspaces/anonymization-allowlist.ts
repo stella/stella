@@ -76,6 +76,8 @@ export const readWorkspaceAnonymizationAllowlist = createSafeHandler(
                   ),
             ),
           )
+          // SAFETY: anonymization allowlist (never-mask overrides) must load fully to avoid over-masking; bounded per document in practice.
+          // eslint-disable-next-line require-query-limit/require-query-limit
           .orderBy(asc(anonymizationAllowlistEntries.canonical)),
       ),
     );

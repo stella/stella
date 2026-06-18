@@ -7,6 +7,7 @@ import type { PropertyStatus } from "@/api/db/schema";
 import type { AIModelTool, PropertyTool } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import { parseStoredCondition } from "@/api/lib/conditions/parse-stored";
+import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedPropertyId } from "@/api/lib/safe-id-boundaries";
 import type { PropertyContent } from "@/api/types";
 
@@ -105,6 +106,7 @@ export const getExecutionPlanData = async (
       where: {
         workspaceId: { eq: workspaceId },
       },
+      limit: LIMITS.propertiesCount,
     }),
   );
 

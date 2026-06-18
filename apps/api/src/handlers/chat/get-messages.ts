@@ -160,6 +160,8 @@ const getMessages = createSafeRootHandler(
     if (referencedFileIds.size > 0) {
       const fileRows = yield* Result.await(
         safeDb((tx) =>
+          // SAFETY: bounded by the `id IN (...)` set of file ids referenced by this thread's messages (userFiles.id is the PK).
+          // eslint-disable-next-line require-query-limit/require-query-limit
           tx.query.userFiles.findMany({
             where: {
               id: { in: [...referencedFileIds] },

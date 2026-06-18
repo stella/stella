@@ -229,6 +229,8 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
       );
 
       const properties = yield* await safeDb((tx) =>
+        // SAFETY: pinned to propertyIds, capped at LIMITS.chatExecuteDetailIdsMax by propertyRefsSchema
+        // eslint-disable-next-line require-query-limit/require-query-limit
         tx.query.properties.findMany({
           where: {
             id: { in: propertyIds },
@@ -388,6 +390,8 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
       const entityIds = yield* refRegistry.resolveEntityRefs(input.entityRefs);
 
       const entities = yield* await safeDb((tx) =>
+        // SAFETY: pinned to entityIds, capped at LIMITS.chatExecuteDetailIdsMax by entityRefsSchema
+        // eslint-disable-next-line require-query-limit/require-query-limit
         tx.query.entities.findMany({
           where: {
             id: { in: entityIds },
@@ -485,6 +489,8 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
       const entityIds = yield* refRegistry.resolveEntityRefs(input.entityRefs);
 
       const contentRows = yield* await safeDb((tx) =>
+        // SAFETY: pinned to entityIds, capped at LIMITS.chatExecuteContentIdsMax by contentEntityRefsSchema
+        // eslint-disable-next-line require-query-limit/require-query-limit
         tx.query.extractedContent.findMany({
           where: {
             entityId: { in: entityIds },
@@ -590,6 +596,8 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
       const entityIds = yield* refRegistry.resolveEntityRefs(input.entityRefs);
 
       const contentRows = yield* await safeDb((tx) =>
+        // SAFETY: pinned to entityIds, capped at LIMITS.chatExecuteContentIdsMax by contentEntityRefsSchema
+        // eslint-disable-next-line require-query-limit/require-query-limit
         tx.query.extractedContent.findMany({
           where: {
             entityId: { in: entityIds },

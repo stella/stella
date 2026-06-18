@@ -193,7 +193,13 @@ export default {
             // but not limited is unbounded. Guarding on `from` keeps
             // non-Drizzle `.orderBy` calls out of scope.
             if (chain.has("from") && !chain.has("limit")) {
-              context.report({ node, messageId: "orderByNoLimit" });
+              // Report on the `orderBy` member identifier, not the whole
+              // chain CallExpression (which starts at the chain root, often
+              // several lines up), so the diagnostic — and any
+              // disable-next-line — lands on the `.orderBy(` line.
+              const callee = getField(node, "callee");
+              const reportNode = getField(callee, "property") ?? node;
+              context.report({ node: reportNode, messageId: "orderByNoLimit" });
             }
           },
         };

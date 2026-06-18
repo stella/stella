@@ -8,6 +8,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 
 const readVersionsParamsSchema = workspaceParams({
   entityId: tSafeId("entity"),
@@ -72,7 +73,8 @@ const readVersionsHandler = async function* ({
             eq(entityVersions.workspaceId, workspaceId),
           ),
         )
-        .orderBy(desc(entityVersions.versionNumber)),
+        .orderBy(desc(entityVersions.versionNumber))
+        .limit(LIMITS.versionsPerEntity),
     ),
     // Get finalized sessions to map version → author
     safeDb((tx) =>
@@ -125,6 +127,8 @@ const readVersionsHandler = async function* ({
     authorUserIds.size > 0
       ? yield* Result.await(
           safeDb((tx) =>
+            // SAFETY: distinct version authors of one entity, an IN-list of user IDs bounded by LIMITS.workspaceMembersCount
+            // eslint-disable-next-line require-query-limit/require-query-limit
             tx.query.user.findMany({
               where: { id: { in: [...authorUserIds] } },
               columns: { id: true, name: true, image: true },
@@ -143,6 +147,7 @@ const readVersionsHandler = async function* ({
           safeDb((tx) =>
             tx.query.fields.findMany({
               where: { entityVersionId: { in: versionIds } },
+              limit: LIMITS.versionFieldsScanLimit,
               columns: {
                 id: true,
                 entityVersionId: true,

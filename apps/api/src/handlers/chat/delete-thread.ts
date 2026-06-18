@@ -63,6 +63,8 @@ const deleteThread = createSafeRootHandler(
 
     const files = yield* Result.await(
       safeDb((tx) =>
+        // SAFETY: delete-time cleanup of one thread's uploaded files — must scan every row to avoid orphaning S3 objects and DB rows (a cap would leak storage). Per-message attachments are capped at LIMITS.chatContextFilesPerMessage.
+        // eslint-disable-next-line require-query-limit/require-query-limit
         tx.query.userFiles.findMany({
           where: {
             threadId: { eq: params.threadId },

@@ -118,6 +118,8 @@ export const loadAnonymizationGazetteerEntries = async ({
           workspaceMatch,
         ),
       )
+      // SAFETY: anonymization detection gazetteer must load every term to avoid under-masking; org-wide entries are capped at LIMITS.anonymizationBlacklistEntriesPerOrganization and workspace terms are small in practice.
+      // eslint-disable-next-line require-query-limit/require-query-limit
       .orderBy(asc(anonymizationBlacklistEntries.canonical)),
   );
 

@@ -51,6 +51,8 @@ export const getIngestionStatus = async (
         enabled: caseLawSources.enabled,
       })
       .from(caseLawSources)
+      // SAFETY: one row per ADAPTER_KEYS entry, enforced by the unique case_law_sources_adapter_key_idx
+      // eslint-disable-next-line require-query-limit/require-query-limit
       .orderBy(caseLawSources.adapterKey);
 
     const sourceStatuses: SourceStatus[] = [];

@@ -157,7 +157,8 @@ export const listSitemapShardsHandler = async (
         asc(caseLawDecisions.country),
         desc(decisionYearSql),
         desc(decisionMonthSql),
-      );
+      )
+      .limit(LIMITS.caseLawSitemapIndexEntryLimit);
     const needsBucketShards = natural.some(
       (shard) => shard.total > LIMITS.caseLawSitemapShardUrlLimit,
     );
@@ -189,6 +190,7 @@ export const listSitemapShardsHandler = async (
             desc(decisionMonthSql),
             asc(decisionBucketSql),
           )
+          .limit(LIMITS.caseLawSitemapIndexEntryLimit)
       : [];
 
     return { naturalShards: natural, bucketShardRows: buckets };
@@ -329,6 +331,8 @@ export const listSitemapShardDecisionsHandler = async (
             redistributableCaseLawSource,
           ),
         )
+        // SAFETY: language variants of at most SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE decision groups; rows per languageGroupKey = languages one decision is published in
+        // eslint-disable-next-line require-query-limit/require-query-limit
         .orderBy(asc(caseLawDecisions.language), asc(caseLawDecisions.id));
       alternateRows.push(...batchRows);
     }

@@ -4,6 +4,7 @@ import { and, desc, eq, or } from "drizzle-orm";
 import { promptShortcuts, PROMPT_SHORTCUT_SCOPES } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { LIMITS } from "@/api/lib/limits";
 
 const config = {
   permissions: { promptShortcut: ["create"] },
@@ -35,7 +36,8 @@ const listShortcuts = createSafeRootHandler(
               ),
             ),
           )
-          .orderBy(desc(promptShortcuts.createdAt)),
+          .orderBy(desc(promptShortcuts.createdAt))
+          .limit(LIMITS.promptShortcutsListMax),
       ),
     );
 

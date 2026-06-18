@@ -78,6 +78,8 @@ const readVersionByIdHandler = async function* ({
   // Fetch fields for this version
   const versionFields = yield* Result.await(
     safeDb((tx) =>
+      // SAFETY: fields of one entity version, bounded by properties-per-workspace (LIMITS.propertiesCount)
+      // eslint-disable-next-line require-query-limit/require-query-limit
       tx.query.fields.findMany({
         where: { entityVersionId: { eq: versionId } },
         columns: {

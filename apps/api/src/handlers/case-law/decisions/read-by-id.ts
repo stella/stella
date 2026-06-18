@@ -100,6 +100,8 @@ const listPublicDecisionLanguageAlternates = async ({
           redistributableCaseLawSource,
         ),
       )
+      // SAFETY: language variants of one decision (a single languageGroupKey); rows = languages this decision is published in
+      // eslint-disable-next-line require-query-limit/require-query-limit
       .orderBy(asc(caseLawDecisions.language), asc(caseLawDecisions.id)),
   );
   const dedupedAlternates = dedupeAlternatesByLanguage(alternates);
