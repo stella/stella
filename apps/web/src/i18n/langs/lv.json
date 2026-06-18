@@ -1192,6 +1192,7 @@
       "matchCounter": "{current} / {total}",
       "next": "Nākamā atbilstība",
       "nextShortcut": "Nākamā atbilstība (Enter)",
+      "noResults": "Nav rezultātu",
       "previous": "Iepriekšējā atbilstība",
       "previousShortcut": "Iepriekšējā atbilstība (Shift+Enter)",
       "replace": "Aizstāt",

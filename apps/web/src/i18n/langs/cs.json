@@ -1192,6 +1192,7 @@
       "matchCounter": "{current} / {total}",
       "next": "Další výskyt",
       "nextShortcut": "Další výskyt (Enter)",
+      "noResults": "Žádné výsledky",
       "previous": "Předchozí výskyt",
       "previousShortcut": "Předchozí výskyt (Shift+Enter)",
       "replace": "Nahradit",

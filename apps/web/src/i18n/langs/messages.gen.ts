@@ -1195,6 +1195,7 @@ type Messages = {
       "matchCounter": "{current} / {total}";
       "next": "Next match";
       "nextShortcut": "Next match (Enter)";
+      "noResults": "No results";
       "previous": "Previous match";
       "previousShortcut": "Previous match (Shift+Enter)";
       "replace": "Replace";

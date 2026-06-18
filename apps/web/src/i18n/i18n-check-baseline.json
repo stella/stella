@@ -8,6 +8,7 @@
     "folio.copy",
     "folio.copyLink",
     "folio.delete",
+    "folio.findReplace.noResults",
     "folio.historyGroup",
     "folio.somethingWentWrong",
     "knowledge.agentSkills.formDescription",

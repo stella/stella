@@ -1192,6 +1192,7 @@
       "matchCounter": "{current} / {total}",
       "next": "Próxima ocorrência",
       "nextShortcut": "Próxima ocorrência (Enter)",
+      "noResults": "Nenhum resultado",
       "previous": "Ocorrência anterior",
       "previousShortcut": "Ocorrência anterior (Shift+Enter)",
       "replace": "Substituir",

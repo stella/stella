@@ -1192,6 +1192,7 @@
       "matchCounter": "{current} / {total}",
       "next": "Következő találat",
       "nextShortcut": "Következő találat (Enter)",
+      "noResults": "Nincs találat",
       "previous": "Előző találat",
       "previousShortcut": "Előző találat (Shift+Enter)",
       "replace": "Csere",

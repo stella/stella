@@ -1192,6 +1192,7 @@
       "matchCounter": "{current} / {total}",
       "next": "Kitas atitikmuo",
       "nextShortcut": "Kitas atitikmuo (Enter)",
+      "noResults": "Rezultatų nėra",
       "previous": "Ankstesnis atitikmuo",
       "previousShortcut": "Ankstesnis atitikmuo (Shift+Enter)",
       "replace": "Pakeisti",

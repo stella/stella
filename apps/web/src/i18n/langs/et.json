@@ -1192,6 +1192,7 @@
       "matchCounter": "{current} / {total}",
       "next": "Järgmine vaste",
       "nextShortcut": "Järgmine vaste (Enter)",
+      "noResults": "Tulemusi pole",
       "previous": "Eelmine vaste",
       "previousShortcut": "Eelmine vaste (Shift+Enter)",
       "replace": "Asenda",
