@@ -514,7 +514,13 @@ function layoutParagraph(
     // and bumped the *whole* fragment to the next page. Result: page-end
     // paragraphs with multi-line content didn't split — they jumped the
     // page boundary, leaving a chunk of empty space above.
-    const firstFragmentSpaceBefore = currentLineIndex === 0 ? spaceBefore : 0;
+    //
+    // `addFragment` collapses `spaceBefore` with the previous block's trailing
+    // spacing (`max(spaceBefore, trailingSpacing)`), so the fit loop must
+    // reserve the same collapsed amount; otherwise a large preceding
+    // `spaceAfter` repeats the same over-count (eigenpal/docx-editor#782).
+    const firstFragmentSpaceBefore =
+      currentLineIndex === 0 ? Math.max(spaceBefore, state.trailingSpacing) : 0;
 
     for (let j = currentLineIndex; j < lines.length; j++) {
       const line = lines[j]!; // SAFETY: j < lines.length
@@ -1265,13 +1271,25 @@ function handleSectionBreak(
       break;
     }
 
-    case "continuous":
-      paginator.updatePageLayout(
-        nextSectionConfig.pageSize,
-        nextSectionConfig.margins,
-        false,
-      );
+    case "continuous": {
+      // ECMA-376 §17.6.22: a `continuous` break normally keeps the current
+      // page geometry and defers the new size/margins to the next natural
+      // page break. But a break that changes page size or orientation cannot
+      // share a physical sheet with the preceding section, so Word and
+      // LibreOffice promote it to a page break (eigenpal/docx-editor#841).
+      const currentSize = paginator.getCurrentState().page.size;
+      const nextSize = nextSectionConfig.pageSize;
+      const pageSizeChanges =
+        Math.round(nextSize.w) !== Math.round(currentSize.w) ||
+        Math.round(nextSize.h) !== Math.round(currentSize.h);
+      if (pageSizeChanges) {
+        paginator.updatePageLayout(nextSize, nextSectionConfig.margins);
+        paginator.forcePageBreak();
+      } else {
+        paginator.updatePageLayout(nextSize, nextSectionConfig.margins, false);
+      }
       break;
+    }
     default:
       break;
   }

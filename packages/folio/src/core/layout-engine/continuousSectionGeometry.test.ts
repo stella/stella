@@ -77,4 +77,49 @@ describe("continuous section break geometry", () => {
     const lastPage = result.pages.at(-1);
     expect(lastPage?.size).toEqual({ w: 1200, h: 700 });
   });
+
+  test("orientation-changing continuous break is promoted to a page break", () => {
+    // Regression (eigenpal/docx-editor#841): a `continuous` break normally
+    // defers the new geometry, but a break that changes page size/orientation
+    // cannot share a physical sheet with the preceding section. Word and
+    // LibreOffice promote it to a page break; match that.
+    const first = paragraph("a", 200);
+    // The break block describes the section it terminates (the portrait first
+    // section, which sets the initial page geometry); the next/body section is
+    // landscape via `finalPageSize`.
+    const sectionBreak: SectionBreakBlock = {
+      kind: "sectionBreak",
+      id: "sb",
+      type: "continuous",
+      pageSize: { w: 800, h: 1000 },
+      margins: { top: 50, right: 50, bottom: 50, left: 50 },
+    };
+    const second = paragraph("b", 200);
+
+    const blocks: FlowBlock[] = [first.block, sectionBreak, second.block];
+    const measures = [
+      first.measure,
+      { kind: "sectionBreak" },
+      second.measure,
+    ] as never;
+
+    const result = layoutDocument(blocks, measures, {
+      pageSize: { w: 800, h: 1000 },
+      margins: { top: 50, right: 50, bottom: 50, left: 50 },
+      finalPageSize: { w: 1000, h: 800 },
+      finalMargins: { top: 50, right: 50, bottom: 50, left: 50 },
+    });
+
+    // "b" must land on a NEW page that already carries the landscape geometry,
+    // not share the portrait page with "a" (the pre-fix behavior).
+    expect(result.pages.length).toBeGreaterThanOrEqual(2);
+    const pageWithB = result.pages.find((page) =>
+      page.fragments.some((f) => f.kind === "paragraph" && f.blockId === "b"),
+    );
+    expect(pageWithB?.size).toEqual({ w: 1000, h: 800 });
+    const pageWithA = result.pages.find((page) =>
+      page.fragments.some((f) => f.kind === "paragraph" && f.blockId === "a"),
+    );
+    expect(pageWithA?.size).toEqual({ w: 800, h: 1000 });
+  });
 });

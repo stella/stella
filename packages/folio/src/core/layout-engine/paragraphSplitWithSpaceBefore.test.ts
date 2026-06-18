@@ -99,6 +99,51 @@ describe("paragraph split with spaceBefore", () => {
     expect(page2SecondPara).toBeDefined();
   });
 
+  test("first fragment reserves collapsed trailing spacing so a page-end line still fits", () => {
+    // Regression (eigenpal/docx-editor#782): the line-fit loop reserved only
+    // this paragraph's own `spaceBefore`, while `addFragment` reserves
+    // `max(spaceBefore, trailingSpacing)` — the spacing collapsed with the
+    // previous block's `spaceAfter`. When the previous block's trailing
+    // spacing exceeded this paragraph's `spaceBefore`, the loop over-counted
+    // the lines that fit; `addFragment` then refused the oversized fragment
+    // and bumped the WHOLE first fragment to the next page, stranding the
+    // paragraph below a page-end gap.
+    const layoutOptions: LayoutOptions = {
+      pageSize: { w: 600, h: 200 },
+      margins: MARGINS,
+      pageGap: 0,
+    };
+
+    // First paragraph: 170 px tall with 15 px space-after. That trailing
+    // spacing collapses into the next paragraph's (zero) space-before,
+    // leaving 30 px at the bottom of page 1.
+    const first = makePara(0, "filler", { after: 15 }, 17, 10);
+    // Second paragraph: no own space-before, 5 lines of 10 px.
+    const second = makePara(1, "splitMe", { before: 0 }, 5, 10);
+
+    const layout = layoutDocument(
+      [first.block, second.block],
+      [first.measure, second.measure],
+      layoutOptions,
+    );
+
+    // With the collapsed 15 px reserved, exactly one line of the second
+    // paragraph fits the 30 px page-end (15 spacing + 10 line + the line is
+    // forced once the remaining lines no longer fit), so its first fragment
+    // lands on page 1 instead of jumping wholesale to page 2.
+    const page1 = layout.pages[0]!;
+    const page1Second = page1.fragments.find(
+      (f) => f.kind === "paragraph" && f.blockId === 1,
+    );
+    expect(page1Second).toBeDefined();
+
+    expect(layout.pages.length).toBeGreaterThanOrEqual(2);
+    const page2Second = layout.pages[1]!.fragments.find(
+      (f) => f.kind === "paragraph" && f.blockId === 1,
+    );
+    expect(page2Second).toBeDefined();
+  });
+
   test("paragraph that does not fit at all still splits a single line on the current page when forced", () => {
     // Sanity: existing `fittingLines === 0` fallback still places at
     // least one line on the current page even when nothing fits, to
