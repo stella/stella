@@ -44,17 +44,25 @@ type ClassifyResult = {
  * 2. If no match, classify with LLM
  * 3. Track the LLM's key phrase for future rule generation
  */
-export const classifyCitation = async (
-  context: string,
-  citationText: string,
-  language: string,
-  scopedDb: ScopedDb,
+type ClassifyCitationArgs = {
+  context: string;
+  citationText: string;
+  language: string;
+  scopedDb: ScopedDb;
   options?: {
     abortSignal?: AbortSignal;
     ruleCache?: RuleCache;
     dryRun?: boolean;
-  },
-): Promise<ClassifyResult> => {
+  };
+};
+
+export const classifyCitation = async ({
+  context,
+  citationText,
+  language,
+  scopedDb,
+  options,
+}: ClassifyCitationArgs): Promise<ClassifyResult> => {
   // Tier 1: regex rules
   const ruleMatch = await matchRule(
     context,
@@ -82,12 +90,12 @@ export const classifyCitation = async (
   // Tier 2: LLM classification
   // Note: LLM is called even in dry-run mode (only DB writes
   // are suppressed). Use small --limit values for cost preview.
-  const llmResult = await classifyWithLLM(
+  const llmResult = await classifyWithLLM({
     context,
     citationText,
     language,
-    options?.abortSignal,
-  );
+    abortSignal: options?.abortSignal,
+  });
 
   if (llmResult.isErr()) {
     return {
