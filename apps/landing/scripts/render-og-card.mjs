@@ -14,9 +14,9 @@ const HEIGHT = 630;
 const cabinetFontPath = path.join(FONT_DIR, "CabinetGrotesk-Regular.otf");
 const logoSvg = readFileSync(path.join(IMAGE_DIR, "stella-logo.svg"), "utf-8");
 const logoSvgBase64 = Buffer.from(logoSvg).toString("base64");
-const gradientPng = readFileSync(path.join(IMAGE_DIR, "gradient-hero.png")).toString(
-  "base64",
-);
+const gradientPng = readFileSync(
+  path.join(IMAGE_DIR, "gradient-hero.png"),
+).toString("base64");
 
 const sourceSvg = String.raw`<svg width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
