@@ -124,6 +124,21 @@ Small, almost invisible touches. Linear is a good reference.
 - **Inline spinners over full-page loaders.** Scope loading
   indicators to the region that's actually waiting. A full-page
   spinner for a sidebar fetch is disorienting.
+- **Render the destination's structure, not a logo.** When a route
+  loads, show its real shape (table chrome with header and columns,
+  toolbar, section cards) with the values shimmering in. The centered
+  glowing logo (`DefaultPendingComponent`) is the last-resort
+  fallback, not the default. Give each route its own
+  `pendingComponent` so the route you navigate to picks its own shape.
+- **Skeletons must be structurally drift-proof.** Generate the
+  skeleton from the same source as the real UI, never a hand-copied
+  parallel tree. For tables, render the header, rows, and skeleton
+  from one column model (`@stll/ui` table plus the shared
+  `TableSkeletonRows` helper) so adding or reordering a column moves
+  all three at once. Where the page chrome does not need the data,
+  move the Suspense boundary inward (render the real chrome, suspend
+  only the leaves). For scaffolds that cannot share a source, mirror
+  the real layout faithfully.
 
 ## Viewport & Responsive
 

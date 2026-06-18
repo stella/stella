@@ -92,6 +92,8 @@ export const DevSidebarGroup = () => {
       setReactGrab: s.setReactGrab,
       publicLawPreview: s.publicLawPreview,
       setPublicLawPreview: s.setPublicLawPreview,
+      simulateSlowLoad: s.simulateSlowLoad,
+      setSimulateSlowLoad: s.setSimulateSlowLoad,
     })),
   );
 
@@ -224,6 +226,13 @@ export const DevSidebarGroup = () => {
           variant="switch"
         >
           Public law preview
+        </MenuCheckboxItem>
+        <MenuCheckboxItem
+          checked={dev.simulateSlowLoad}
+          onClick={() => dev.setSimulateSlowLoad(!dev.simulateSlowLoad)}
+          variant="switch"
+        >
+          Simulate slow load
         </MenuCheckboxItem>
         <MenuSeparator />
         <MenuGroup>

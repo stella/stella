@@ -5,6 +5,7 @@ import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import { Skeleton } from "@stll/ui/components/skeleton";
 
 import { ExpenseListView } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/expense-list-view";
 
@@ -13,6 +14,40 @@ export const Route = createFileRoute(
 )({
   component: ExpensesPage,
 });
+
+const EXPENSE_ROW_KEYS = ["a", "b", "c", "d", "e", "f"];
+
+// Mirrors ExpenseListView's rest layout: the summary bar (totals + add entry)
+// above a list of expense rows, so only the values pop in once data lands.
+const ExpenseListSkeleton = () => (
+  <div className="flex flex-col gap-3">
+    {/* Summary bar */}
+    <div className="flex items-center justify-between">
+      <Skeleton className="h-5 w-32" />
+      <Skeleton className="h-8 w-28 rounded-md" />
+    </div>
+
+    {/* Expenses list */}
+    <div className="flex flex-col gap-1.5">
+      {EXPENSE_ROW_KEYS.map((key) => (
+        <div
+          className="flex items-center gap-3 rounded-md border px-3 py-2"
+          key={key}
+        >
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-4 w-40" />
+              <Skeleton className="h-4 w-14 rounded" />
+              <Skeleton className="h-4 w-12 rounded" />
+            </div>
+            <Skeleton className="h-3 w-56" />
+          </div>
+          <Skeleton className="h-4 w-20 shrink-0" />
+        </div>
+      ))}
+    </div>
+  </div>
+);
 
 const formatDateISO = (d: Date): string => {
   const y = d.getFullYear();
@@ -102,13 +137,7 @@ function ExpensesPage() {
 
       {/* Content */}
       <div className="flex-1 overflow-auto p-4">
-        <Suspense
-          fallback={
-            <div className="text-muted-foreground py-8 text-center text-sm">
-              {t("billing.loading")}
-            </div>
-          }
-        >
+        <Suspense fallback={<ExpenseListSkeleton />}>
           <ExpenseListView
             dateFrom={dateFrom}
             dateTo={dateTo}

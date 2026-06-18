@@ -1,4 +1,4 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
   Outlet,
@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-router";
 import * as v from "valibot";
 
+import { Skeleton } from "@stll/ui/components/skeleton";
 import { cn } from "@stll/ui/lib/utils";
 
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -16,7 +17,7 @@ import {
   prefetchNonCriticalQuery,
 } from "@/lib/react-query";
 import { optionalSearchStringSchema } from "@/lib/schema";
-import type { WorkspaceView } from "@/lib/types";
+import type { ViewLayout, WorkspaceView } from "@/lib/types";
 import { ViewSwitcher } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher";
 import { ViewToolbar } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar";
 import {
@@ -47,6 +48,7 @@ export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/$viewId",
 )({
   component: RouteComponent,
+  pendingComponent: ViewPendingComponent,
   validateSearch: searchSchema,
   beforeLoad: ({ params }) => {
     // Reject obviously invalid viewIds (e.g. "workspaces" from stale doubled
@@ -309,6 +311,129 @@ function ViewShell({ activeView, workspaceId }: ViewContentProps) {
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex-1 overflow-auto">
           <Outlet />
+        </div>
+      </div>
+    </>
+  );
+}
+
+const PENDING_TABLE_ROW_KEYS = [
+  "r1",
+  "r2",
+  "r3",
+  "r4",
+  "r5",
+  "r6",
+  "r7",
+  "r8",
+  "r9",
+  "r10",
+  "r11",
+  "r12",
+];
+const PENDING_TABLE_CELLS = [
+  { key: "name", width: "w-48" },
+  { key: "c2", width: "w-28" },
+  { key: "c3", width: "w-20" },
+  { key: "c4", width: "w-32" },
+  { key: "c5", width: "w-24" },
+] as const;
+const PENDING_KANBAN_COLUMN_KEYS = ["k1", "k2", "k3", "k4"];
+const PENDING_KANBAN_CARD_KEYS = ["card1", "card2", "card3"];
+const PENDING_OVERVIEW_CARD_KEYS = ["o1", "o2", "o3", "o4"];
+
+const PendingTableBody = () => (
+  <div className="flex flex-col">
+    <div className="flex items-center gap-4 border-b px-3 py-2">
+      <Skeleton className="size-4 rounded" />
+      {PENDING_TABLE_CELLS.map((cell) => (
+        <Skeleton className={cn("h-3", cell.width)} key={cell.key} />
+      ))}
+    </div>
+    {PENDING_TABLE_ROW_KEYS.map((rowKey) => (
+      <div
+        className="flex items-center gap-4 border-b px-3 py-2.5"
+        key={rowKey}
+      >
+        <Skeleton className="size-4 rounded" />
+        {PENDING_TABLE_CELLS.map((cell) => (
+          <Skeleton className={cn("h-4", cell.width)} key={cell.key} />
+        ))}
+      </div>
+    ))}
+  </div>
+);
+
+const PendingKanbanBody = () => (
+  <div className="flex gap-3 p-3">
+    {PENDING_KANBAN_COLUMN_KEYS.map((columnKey) => (
+      <div className="flex w-72 shrink-0 flex-col gap-2" key={columnKey}>
+        <Skeleton className="h-5 w-32" />
+        {PENDING_KANBAN_CARD_KEYS.map((cardKey) => (
+          <Skeleton className="h-20 w-full rounded-lg" key={cardKey} />
+        ))}
+      </div>
+    ))}
+  </div>
+);
+
+const PendingOverviewBody = () => (
+  <div className="grid gap-4 p-4 md:grid-cols-2 lg:grid-cols-4">
+    {PENDING_OVERVIEW_CARD_KEYS.map((cardKey) => (
+      <Skeleton className="h-28 rounded-xl" key={cardKey} />
+    ))}
+  </div>
+);
+
+const ViewBodySkeleton = ({
+  layoutType,
+}: {
+  layoutType: ViewLayout["type"] | undefined;
+}) => {
+  if (layoutType === "kanban") {
+    return <PendingKanbanBody />;
+  }
+  if (layoutType === "overview") {
+    return <PendingOverviewBody />;
+  }
+  // table / filesystem / calendar / unknown all fall back to the row list.
+  return <PendingTableBody />;
+};
+
+// Route-pending shell for the matter data-grid: the view chrome row plus a
+// layout-aware body skeleton (rows / kanban columns / overview cards), read
+// from the cached view so opening a matter shows its structure, not the logo.
+function ViewPendingComponent() {
+  const { workspaceId, viewId } = Route.useParams({
+    select: (p) => ({ workspaceId: p.workspaceId, viewId: p.viewId }),
+  });
+  const { data: layoutType } = useQuery({
+    ...viewsOptions(workspaceId),
+    select: (views) =>
+      (views.find((view) => view.id === viewId) ?? views.at(0))?.layout.type,
+  });
+
+  return (
+    <>
+      <div
+        className={cn(
+          "flex min-w-0 items-center justify-between border-b px-3",
+          TOOLBAR_ROW_HEIGHT,
+        )}
+      >
+        <div className="flex items-center gap-1.5">
+          <Skeleton className="h-7 w-24 rounded-md" />
+          <Skeleton className="h-7 w-20 rounded-md" />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Skeleton className="size-7 rounded-md" />
+          <Skeleton className="size-7 rounded-md" />
+          <Skeleton className="h-7 w-24 rounded-md" />
+        </div>
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex-1 overflow-auto">
+          <ViewBodySkeleton layoutType={layoutType} />
         </div>
       </div>
     </>

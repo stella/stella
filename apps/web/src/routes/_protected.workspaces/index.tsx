@@ -3,23 +3,44 @@ import type { ReactNode } from "react";
 
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { PlusIcon } from "lucide-react";
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  LayoutGridIcon,
+  ListIcon,
+  PlusIcon,
+  SlidersHorizontalIcon,
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
+import { Button } from "@stll/ui/components/button";
+import { Frame } from "@stll/ui/components/frame";
+import { Input } from "@stll/ui/components/input";
 import {
   Menu,
   MenuItem,
   MenuPopup,
   MenuTrigger,
 } from "@stll/ui/components/menu";
+import { Separator } from "@stll/ui/components/separator";
 import { Skeleton } from "@stll/ui/components/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@stll/ui/components/table";
+import { cn } from "@stll/ui/lib/utils";
 
 import {
   EMPTY_SCREEN_MATTERS_VIDEO,
   EmptyScreen,
 } from "@/components/empty-screen";
 import { usePermissions } from "@/hooks/use-permissions";
+import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { pageTitle } from "@/lib/page-title";
 import { AlphabetIndex } from "@/routes/_protected.workspaces/-components/alphabet-index";
 import { ClientGroupHeader } from "@/routes/_protected.workspaces/-components/client-group-header";
@@ -28,6 +49,8 @@ import { MattersTable } from "@/routes/_protected.workspaces/-components/matters
 import { MattersToolbar } from "@/routes/_protected.workspaces/-components/matters-toolbar";
 import { ActiveFilterChips } from "@/routes/_protected.workspaces/-filters/active-filter-chips";
 import { applyMattersFilters } from "@/routes/_protected.workspaces/-filters/filter-pipeline";
+import { useColumnLabels } from "@/routes/_protected.workspaces/-hooks/use-column-labels";
+import { useSortLabels } from "@/routes/_protected.workspaces/-hooks/use-sort-labels";
 import { getMatterOrganizationResetPatch } from "@/routes/_protected.workspaces/-organization-reset";
 import {
   workspacesKeys,
@@ -35,9 +58,11 @@ import {
 } from "@/routes/_protected.workspaces/-queries";
 import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
 import type {
+  MattersColumnId,
   Workspace,
   WorkspaceGroup,
 } from "@/routes/_protected.workspaces/-types";
+import { ALL_COLUMNS } from "@/routes/_protected.workspaces/-types";
 import {
   compareWorkspacesByKey,
   groupByClient,
@@ -49,13 +74,7 @@ export const Route = createFileRoute("/_protected/workspaces/")({
     meta: [{ title: pageTitle("common.matters") }],
   }),
   component: RouteComponent,
-  pendingComponent: () => (
-    <div className="grid auto-rows-min gap-4 border-t p-4 md:grid-cols-3">
-      <Skeleton className="h-22 w-full rounded-xl" />
-      <Skeleton className="h-22 w-full rounded-xl" />
-      <Skeleton className="h-22 w-full rounded-xl" />
-    </div>
-  ),
+  pendingComponent: MattersPending,
 });
 
 function RouteComponent() {
@@ -230,6 +249,228 @@ function RouteComponent() {
     </MattersPageContextMenu>
   );
 }
+
+const SKELETON_TABLE_ROW_KEYS = [
+  "a",
+  "b",
+  "c",
+  "d",
+  "e",
+  "f",
+  "g",
+  "h",
+] as const;
+
+const SKELETON_CARD_KEYS = ["a", "b", "c", "d", "e", "f"] as const;
+
+// Mirrors the fixed widths in matters-table.tsx's COLUMNS model so the pending
+// table reserves the same column geometry. `name` is the flexible first column
+// (no fixed width) and is always rendered; the rest follow ALL_COLUMNS order.
+const SKELETON_COLUMN_WIDTHS: Record<MattersColumnId, string> = {
+  client: "240px",
+  team: "160px",
+  reference: "120px",
+  entityCount: "96px",
+  lastActivityAt: "140px",
+  createdAt: "120px",
+};
+
+type SkeletonColumn =
+  | { id: "name"; width?: undefined }
+  | { id: MattersColumnId; width: string };
+
+// Faithful placeholder of the matters page during route suspension: the real
+// toolbar chrome plus a content skeleton that follows the live view mode, so the
+// page does not jump or change shape when the suspended query resolves.
+function MattersPending() {
+  const viewMode = useConfigStore((s) => s.matters.viewMode);
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <MattersToolbarSkeleton />
+      <div className="relative flex-1">
+        <div className="absolute inset-0 overflow-y-auto">
+          <div className="p-2">
+            {viewMode === "table" ? (
+              <MattersTableSkeleton />
+            ) : (
+              <MatterCardGridSkeleton />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Inert mirror of MattersToolbar: same h-12 bordered row, search input, sort and
+// view-toggle ghost buttons, and a trailing create button. Real (disabled)
+// primitives keep sizing, radii, and spacing identical to the live toolbar.
+const MattersToolbarSkeleton = () => {
+  const t = useTranslations();
+  const config = useConfigStore(useShallow((s) => s.matters));
+  const sortLabels = useSortLabels();
+
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-1 border-b px-2",
+        TOOLBAR_ROW_HEIGHT,
+      )}
+    >
+      <Input
+        className="w-64 max-w-[40%]"
+        disabled
+        placeholder={t("common.search")}
+        size="sm"
+      />
+      <Separator className="mx-1 h-4" orientation="vertical" />
+      <Button disabled size="xs" variant="ghost">
+        <SlidersHorizontalIcon />
+        <span className="text-muted-foreground text-xs">
+          {sortLabels[config.sortKey]}
+        </span>
+        {config.sortDesc ? (
+          <ArrowDownIcon className="size-3" />
+        ) : (
+          <ArrowUpIcon className="size-3" />
+        )}
+      </Button>
+      <Button disabled size="xs" variant="ghost">
+        {config.viewMode === "grid" ? (
+          <>
+            <ListIcon />
+            {t("workspaces.views.layouts.table")}
+          </>
+        ) : (
+          <>
+            <LayoutGridIcon />
+            {t("workspaces.views.layouts.grid")}
+          </>
+        )}
+      </Button>
+      <Button className="ms-auto" disabled size="xs">
+        <PlusIcon />
+        {t("workspaces.newMatter")}
+      </Button>
+    </div>
+  );
+};
+
+// Table skeleton derived from the same column model the real MattersTable reads
+// (ALL_COLUMNS order, fixed widths, name always first) gated by the live
+// hiddenColumns set, so columns appear, disappear, or move in lockstep.
+const MattersTableSkeleton = () => {
+  const columnLabels = useColumnLabels();
+  const sortLabels = useSortLabels();
+  const hiddenColumns = useConfigStore(
+    useShallow((s) => s.matters.hiddenColumns),
+  );
+
+  const hiddenColumnSet = new Set(hiddenColumns);
+  const columns: SkeletonColumn[] = [
+    { id: "name" },
+    ...ALL_COLUMNS.filter((id) => !hiddenColumnSet.has(id)).map((id) => ({
+      id,
+      width: SKELETON_COLUMN_WIDTHS[id],
+    })),
+  ];
+
+  const headerLabel = (id: SkeletonColumn["id"]): string =>
+    id === "name" ? sortLabels.name : columnLabels[id];
+
+  return (
+    <Frame>
+      <Table className="table-fixed">
+        <colgroup>
+          {columns.map((col) => (
+            <col
+              key={col.id}
+              style={col.width ? { width: col.width } : undefined}
+            />
+          ))}
+        </colgroup>
+        <TableHeader>
+          <TableRow>
+            {columns.map((col) => (
+              <TableHead key={col.id}>
+                <span className="truncate">{headerLabel(col.id)}</span>
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {SKELETON_TABLE_ROW_KEYS.map((rowKey) => (
+            <TableRow key={rowKey}>
+              {columns.map((col) => (
+                <TableCell key={col.id}>
+                  <SkeletonTableCell columnId={col.id} />
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </Frame>
+  );
+};
+
+const SkeletonTableCell = ({
+  columnId,
+}: {
+  columnId: SkeletonColumn["id"];
+}) => {
+  if (columnId === "name") {
+    return (
+      <div className="flex min-w-0 items-center gap-2">
+        <Skeleton className="size-2 shrink-0 rounded-full" />
+        <Skeleton className="h-4 w-2/5" />
+      </div>
+    );
+  }
+  if (columnId === "team") {
+    return (
+      <div className="flex items-center -space-x-1">
+        <Skeleton className="size-6 rounded-full" />
+        <Skeleton className="size-6 rounded-full" />
+        <Skeleton className="size-6 rounded-full" />
+      </div>
+    );
+  }
+  if (columnId === "entityCount") {
+    return <Skeleton className="h-4 w-6" />;
+  }
+  return <Skeleton className="h-4 w-3/5" />;
+};
+
+// Card grid skeleton mirroring the MatterCard grid: md:grid-cols-3 of bordered,
+// rounded-xl cards with the name+reference, items, and avatars+activity lines.
+const MatterCardGridSkeleton = () => (
+  <div className="grid auto-rows-min gap-3 md:grid-cols-3">
+    {SKELETON_CARD_KEYS.map((cardKey) => (
+      <div
+        className="bg-card flex flex-col gap-1 overflow-hidden rounded-xl border px-3 py-2"
+        key={cardKey}
+      >
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-4 min-w-0 flex-1" />
+          <Skeleton className="h-3 w-16 shrink-0" />
+        </div>
+        <Skeleton className="-mt-1 h-3 w-24" />
+        <div className="flex items-center justify-between gap-2">
+          <Skeleton className="h-3 w-20" />
+          <div className="flex items-center gap-2">
+            <div className="flex items-center -space-x-1">
+              <Skeleton className="size-5 rounded-full" />
+              <Skeleton className="size-5 rounded-full" />
+            </div>
+            <Skeleton className="h-3 w-10" />
+          </div>
+        </div>
+      </div>
+    ))}
+  </div>
+);
 
 type MattersPageContextMenuProps = {
   canCreateMatter: boolean;

@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Frame, FramePanel } from "@stll/ui/components/frame";
+import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import type { TranslationKey } from "@/i18n/types";
@@ -48,14 +49,40 @@ function UsageBody({
   data: UsageEntitlement | null;
   isLoading: boolean;
 }) {
-  const t = useTranslations();
   if (isLoading) {
-    return <FramePanel>{t("settings.organization.usageLoading")}</FramePanel>;
+    return <EntitlementCardSkeleton />;
   }
   if (data) {
     return <ActiveEntitlementCard data={data} />;
   }
   return <EmptyStateCard />;
+}
+
+// Mirrors ActiveEntitlementCard: title + meta row with a trailing action,
+// then the usage label/value row above the meter, so the card does not
+// jump when the entitlement query resolves.
+function EntitlementCardSkeleton() {
+  return (
+    <Frame>
+      <FramePanel>
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <Skeleton className="h-6 w-40" />
+            <Skeleton className="h-4 w-72 max-w-full" />
+          </div>
+          <Skeleton className="h-8 w-20 rounded-md" />
+        </div>
+
+        <div className="mt-6 space-y-2">
+          <div className="flex justify-between gap-4">
+            <Skeleton className="h-4 w-36" />
+            <Skeleton className="h-4 w-24" />
+          </div>
+          <Skeleton className="h-2 w-full rounded-full" />
+        </div>
+      </FramePanel>
+    </Frame>
+  );
 }
 
 function ActiveEntitlementCard({ data }: { data: UsageEntitlement }) {

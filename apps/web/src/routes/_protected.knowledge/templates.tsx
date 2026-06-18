@@ -15,6 +15,7 @@ import { useFormatter, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
+import { Skeleton } from "@stll/ui/components/skeleton";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/components/tabs";
 import { stellaToast } from "@stll/ui/components/toast";
 
@@ -85,6 +86,47 @@ export const Route = createFileRoute("/_protected/knowledge/templates")({
 });
 
 const protectedRouteApi = getRouteApi("/_protected");
+
+const TEMPLATE_SIDEBAR_KEYS = ["a", "b", "c", "d", "e"];
+const TEMPLATE_ROW_KEYS = ["a", "b", "c", "d", "e", "f"];
+
+// Mirrors the TemplateList layout (w-48 category sidebar + bordered list
+// pane with count/new-template toolbar and divided rows) so the page
+// keeps its shape while templates load; only the values fade in.
+function TemplatesPageSkeleton() {
+  return (
+    <div className="flex min-h-0 flex-1">
+      <div className="flex w-48 shrink-0 flex-col overflow-y-auto">
+        <nav className="flex-1 space-y-1 p-2">
+          <Skeleton className="h-7 w-full rounded-md" />
+          <div className="my-1 border-t" />
+          {TEMPLATE_SIDEBAR_KEYS.map((key) => (
+            <Skeleton className="h-7 w-2/3 rounded-md" key={key} />
+          ))}
+        </nav>
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col border-s">
+        <div className="flex items-center justify-between border-b px-4 py-2">
+          <Skeleton className="h-4 w-8" />
+          <Skeleton className="h-8 w-32 rounded-md" />
+        </div>
+
+        <ul className="flex-1 divide-y overflow-y-auto">
+          {TEMPLATE_ROW_KEYS.map((key) => (
+            <li className="flex items-center gap-4 px-4 py-3" key={key}>
+              <Skeleton className="size-9 shrink-0 rounded-lg" />
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <Skeleton className="h-4 w-48" />
+                <Skeleton className="h-3 w-32" />
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
 
 function RouteComponent() {
   const t = useTranslations();
@@ -268,13 +310,7 @@ function RouteComponent() {
   }
 
   if (templatesLoading) {
-    return (
-      <div className="flex flex-1 items-center justify-center p-8">
-        <p className="text-muted-foreground text-sm">
-          {t("templates.discovering")}
-        </p>
-      </div>
-    );
+    return <TemplatesPageSkeleton />;
   }
 
   if (templatesError) {

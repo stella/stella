@@ -10,6 +10,7 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { Button } from "@stll/ui/components/button";
+import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { DecisionFilters } from "@/features/case-law/components/decision-filters";
@@ -164,7 +165,28 @@ export const Route = createFileRoute("/law/cases/")({
     });
   },
   component: PublicCaseLawIndex,
+  pendingComponent: PublicCaseLawIndexPending,
 });
+
+// The loader fetches decisions + facets (both delayed by slow-load), so without
+// a pendingComponent the route flashes the glowing logo. Reuse the real
+// DecisionTable skeleton plus the page chrome during route-pending.
+function PublicCaseLawIndexPending() {
+  const t = useTranslations();
+  return (
+    <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-lg font-semibold">{t("common.caseLaw")}</h1>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Skeleton className="h-9 w-40 rounded-md" />
+        <Skeleton className="h-9 w-32 rounded-md" />
+        <Skeleton className="h-9 w-32 rounded-md" />
+      </div>
+      <DecisionTable decisions={[]} isLoading />
+    </main>
+  );
+}
 
 function PublicCaseLawIndex() {
   const t = useTranslations();

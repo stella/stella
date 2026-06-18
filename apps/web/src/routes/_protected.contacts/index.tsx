@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import type { ReactNode } from "react";
 
 import { useForm } from "@tanstack/react-form";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -9,6 +10,14 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 import { useSelector } from "@tanstack/react-store";
+import {
+  createColumnHelper,
+  createCoreRowModel,
+  flexRender,
+  tableFeatures,
+  useTable,
+} from "@tanstack/react-table";
+import type { Column, ReactTable, Row } from "@tanstack/react-table";
 import {
   BuildingIcon,
   EllipsisVerticalIcon,
@@ -47,6 +56,7 @@ import {
   MenuPopup,
   MenuTrigger,
 } from "@stll/ui/components/menu";
+import { Skeleton } from "@stll/ui/components/skeleton";
 import {
   Table,
   TableBody,
@@ -58,6 +68,7 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { EmptyScreen } from "@/components/empty-screen";
+import { TableSkeletonRows } from "@/components/table-skeleton-rows";
 import Tooltip from "@/components/tooltip";
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
@@ -84,6 +95,7 @@ export const Route = createFileRoute("/_protected/contacts/")({
     meta: [{ title: pageTitle("navigation.contacts") }],
   }),
   component: ContactsPage,
+  pendingComponent: ContactsPendingComponent,
 });
 
 const protectedRouteApi = getRouteApi("/_protected");
@@ -113,12 +125,21 @@ function ContactsPage() {
     }),
   );
 
-  const items = data?.items ?? [];
+  const items: ContactItem[] = data?.items ?? [];
   const isFirstUseEmpty =
     !isLoading &&
     items.length === 0 &&
     searchQuery.trim() === "" &&
     filter === "all";
+
+  const columns = useContactColumns();
+
+  const table = useTable({
+    features: contactTableFeatures,
+    data: items,
+    columns,
+    getRowId: (row) => row.id,
+  });
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto border-t p-4">
@@ -173,36 +194,7 @@ function ContactsPage() {
           title={tContacts("emptyTitle")}
         />
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-8" />
-              <TableHead>{t("common.name")}</TableHead>
-              <TableHead>{t("common.email")}</TableHead>
-              <TableHead>{t("contacts.columns.phone")}</TableHead>
-              <TableHead className="text-end">{t("common.matters")}</TableHead>
-              <TableHead />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {items.map((contact) => (
-              <ContactRow contact={contact} key={contact.id} />
-            ))}
-            {!isLoading && items.length === 0 && (
-              <TableRow>
-                <TableCell
-                  className="text-muted-foreground py-8 text-center"
-                  colSpan={6}
-                >
-                  <p>{t("contacts.noContactsFound")}</p>
-                  <p className="text-sm">
-                    {t("contacts.noContactsDescription")}
-                  </p>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+        <ContactsTable isLoading={isLoading} table={table} />
       )}
     </div>
   );
@@ -235,27 +227,166 @@ type ContactItem = {
   clientMatterCount: number;
 };
 
-const ContactRow = ({ contact }: { contact: ContactItem }) => {
+const contactTableFeatures = tableFeatures({
+  coreRowModel: createCoreRowModel(),
+});
+type ContactTableFeatures = typeof contactTableFeatures;
+
+const columnHelper = createColumnHelper<ContactTableFeatures, ContactItem>();
+
+// Single column source of truth: the page table, its loading skeleton, and the
+// route-level pending shell all derive from this, so none can drift.
+const useContactColumns = () => {
   const t = useTranslations();
+  return useMemo(
+    () =>
+      columnHelper.columns([
+        columnHelper.display({
+          id: "icon",
+          header: () => null,
+          cell: ({ row }) =>
+            row.original.type === "person" ? (
+              <UserIcon className="text-muted-foreground size-4" />
+            ) : (
+              <BuildingIcon className="text-muted-foreground size-4" />
+            ),
+        }),
+        columnHelper.accessor("displayName", {
+          id: "name",
+          header: t("common.name"),
+          cell: ({ row, getValue }) => (
+            <Link
+              className="font-medium hover:underline"
+              onClick={(event) => event.stopPropagation()}
+              params={{ contactId: row.original.id }}
+              to="/contacts/$contactId"
+            >
+              {getValue()}
+            </Link>
+          ),
+        }),
+        columnHelper.display({
+          id: "email",
+          header: t("common.email"),
+          cell: ({ row }) => {
+            const primaryEmail =
+              row.original.emails?.find((e) => e.isPrimary) ??
+              row.original.emails?.at(0);
+            if (!primaryEmail) {
+              return null;
+            }
+            return (
+              <a
+                className="text-muted-foreground hover:text-foreground hover:underline"
+                href={`mailto:${primaryEmail.address}`}
+              >
+                {primaryEmail.address}
+              </a>
+            );
+          },
+        }),
+        columnHelper.display({
+          id: "phone",
+          header: t("contacts.columns.phone"),
+          cell: ({ row }) => {
+            const primaryPhone =
+              row.original.phones?.find((p) => p.isPrimary) ??
+              row.original.phones?.at(0);
+            return (
+              <span className="text-muted-foreground">
+                {primaryPhone?.number}
+              </span>
+            );
+          },
+        }),
+        columnHelper.accessor("clientMatterCount", {
+          id: "matters",
+          header: () => <div className="text-end">{t("common.matters")}</div>,
+          cell: ({ getValue }) => (
+            <div className="text-end tabular-nums">{getValue()}</div>
+          ),
+        }),
+        columnHelper.display({
+          id: "actions",
+          header: () => null,
+          cell: ({ row }) => <ContactRowActions contact={row.original} />,
+        }),
+      ]),
+    [t],
+  );
+};
+
+// Placeholder cells keyed off each column's stable id, so the loading state
+// stays aligned with the column definitions above without a parallel skeleton.
+const renderContactSkeletonCell = (
+  column: Column<ContactTableFeatures, ContactItem>,
+): ReactNode => {
+  if (column.id === "icon") {
+    return <Skeleton className="size-4 rounded" />;
+  }
+  if (column.id === "matters") {
+    return <Skeleton className="ms-auto h-4 w-6" />;
+  }
+  if (column.id === "actions") {
+    return null;
+  }
+  return undefined;
+};
+
+const ContactTableRow = ({
+  row,
+}: {
+  row: Row<ContactTableFeatures, ContactItem>;
+}) => {
   const navigate = useNavigate();
+
+  const openContact = () => {
+    void navigate({
+      to: "/contacts/$contactId",
+      params: { contactId: row.original.id },
+    });
+  };
+
+  return (
+    <TableRow
+      className="hover:bg-accent/30 focus-visible:ring-ring group cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset"
+      onClick={openContact}
+      onKeyDown={(event) => {
+        if (event.currentTarget !== event.target) {
+          return;
+        }
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openContact();
+        }
+      }}
+      tabIndex={0}
+    >
+      {row.getAllCells().map((cell) => {
+        const stopsRowClick =
+          cell.column.id === "email" || cell.column.id === "actions";
+        return (
+          <TableCell
+            key={cell.id}
+            onClick={
+              stopsRowClick ? (event) => event.stopPropagation() : undefined
+            }
+          >
+            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+          </TableCell>
+        );
+      })}
+    </TableRow>
+  );
+};
+
+const ContactRowActions = ({ contact }: { contact: ContactItem }) => {
+  const t = useTranslations();
   const canDeleteContact = usePermissions({ contact: ["delete"] });
   const deleteContact = useDeleteContact();
   const queryClient = useQueryClient();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const deleteBlockedDescription = t("contacts.deleteContactBlockedByMatters");
-
-  const primaryEmail =
-    contact.emails?.find((e) => e.isPrimary) ?? contact.emails?.at(0);
-
-  const primaryPhone =
-    contact.phones?.find((p) => p.isPrimary) ?? contact.phones?.at(0);
-
-  const openContact = () => {
-    void navigate({
-      to: "/contacts/$contactId",
-      params: { contactId: contact.id },
-    });
-  };
 
   const handleDelete = async () => {
     await deleteContact.mutateAsync(
@@ -294,100 +425,148 @@ const ContactRow = ({ contact }: { contact: ContactItem }) => {
   };
 
   return (
-    <TableRow
-      className="hover:bg-accent/30 focus-visible:ring-ring group cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset"
-      onClick={openContact}
-      onKeyDown={(event) => {
-        if (event.currentTarget !== event.target) {
-          return;
-        }
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          openContact();
-        }
-      }}
-      tabIndex={0}
-    >
-      <TableCell>
-        {contact.type === "person" ? (
-          <UserIcon className="text-muted-foreground size-4" />
-        ) : (
-          <BuildingIcon className="text-muted-foreground size-4" />
-        )}
-      </TableCell>
-      <TableCell>
-        <Link
-          className="font-medium hover:underline"
-          onClick={(event) => event.stopPropagation()}
-          params={{ contactId: contact.id }}
-          to="/contacts/$contactId"
+    <div className="flex justify-end">
+      <Menu>
+        <Tooltip
+          content={t("common.actions")}
+          render={
+            <MenuTrigger
+              className="opacity-0! transition-opacity group-hover:opacity-100!"
+              render={<Button size="icon-xs" variant="ghost" />}
+            />
+          }
         >
-          {contact.displayName}
-        </Link>
-      </TableCell>
-      <TableCell
-        className="text-muted-foreground"
-        onClick={(event) => event.stopPropagation()}
-      >
-        {primaryEmail && (
-          <a
-            className="hover:text-foreground hover:underline"
-            href={`mailto:${primaryEmail.address}`}
-          >
-            {primaryEmail.address}
-          </a>
-        )}
-      </TableCell>
-      <TableCell className="text-muted-foreground">
-        {primaryPhone?.number}
-      </TableCell>
-      <TableCell className="text-end tabular-nums">
-        {contact.clientMatterCount}
-      </TableCell>
-      <TableCell
-        className="w-10 text-end"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <Menu>
-          <Tooltip
-            content={t("common.actions")}
-            render={
-              <MenuTrigger
-                className="opacity-0! transition-opacity group-hover:opacity-100!"
-                render={<Button size="icon-xs" variant="ghost" />}
-              />
-            }
-          >
-            <EllipsisVerticalIcon />
-          </Tooltip>
-          <MenuPopup>
-            {canDeleteContact && (
-              <MenuItem
-                disabled={deleteContact.isPending}
-                onClick={handleDeleteOpen}
-                variant="destructive"
-              >
-                {t("contacts.deleteContact")}
-              </MenuItem>
-            )}
-          </MenuPopup>
-        </Menu>
-        <DestructiveConfirmDialog
-          cancelLabel={t("common.cancel")}
-          confirmLabel={t("common.delete")}
-          confirmation={contact.displayName}
-          description={t("contacts.deleteContactConfirmDescription")}
-          inputLabel={t("common.typeNameToConfirm")}
-          loading={deleteContact.isPending}
-          onConfirm={handleDelete}
-          onOpenChange={setDeleteOpen}
-          open={deleteOpen}
-          title={t("contacts.deleteContact")}
-        />
-      </TableCell>
-    </TableRow>
+          <EllipsisVerticalIcon />
+        </Tooltip>
+        <MenuPopup>
+          {canDeleteContact && (
+            <MenuItem
+              disabled={deleteContact.isPending}
+              onClick={handleDeleteOpen}
+              variant="destructive"
+            >
+              {t("contacts.deleteContact")}
+            </MenuItem>
+          )}
+        </MenuPopup>
+      </Menu>
+      <DestructiveConfirmDialog
+        cancelLabel={t("common.cancel")}
+        confirmLabel={t("common.delete")}
+        confirmation={contact.displayName}
+        description={t("contacts.deleteContactConfirmDescription")}
+        inputLabel={t("common.typeNameToConfirm")}
+        loading={deleteContact.isPending}
+        onConfirm={handleDelete}
+        onOpenChange={setDeleteOpen}
+        open={deleteOpen}
+        title={t("contacts.deleteContact")}
+      />
+    </div>
   );
 };
+
+const EMPTY_CONTACTS: ContactItem[] = [];
+
+type ContactsTableProps = {
+  table: ReactTable<ContactTableFeatures, ContactItem>;
+  isLoading: boolean;
+};
+
+// Shared table render for both the live page and the route pending shell:
+// header, rows, and skeleton all come off the same TanStack column model.
+const ContactsTable = ({ table, isLoading }: ContactsTableProps) => {
+  const t = useTranslations();
+  const rows = table.getRowModel().rows;
+
+  return (
+    <Table>
+      <TableHeader>
+        {table.getHeaderGroups().map((headerGroup) => (
+          <TableRow key={headerGroup.id}>
+            {headerGroup.headers.map((header) => (
+              <TableHead key={header.id}>
+                {flexRender(
+                  header.column.columnDef.header,
+                  header.getContext(),
+                )}
+              </TableHead>
+            ))}
+          </TableRow>
+        ))}
+      </TableHeader>
+      <TableBody>
+        {isLoading ? (
+          <TableSkeletonRows
+            columns={table.getAllLeafColumns()}
+            renderCell={renderContactSkeletonCell}
+          />
+        ) : (
+          rows.map((row) => <ContactTableRow key={row.id} row={row} />)
+        )}
+        {!isLoading && rows.length === 0 && (
+          <TableRow>
+            <TableCell
+              className="text-muted-foreground py-8 text-center"
+              colSpan={table.getAllLeafColumns().length}
+            >
+              <p>{t("contacts.noContactsFound")}</p>
+              <p className="text-sm">{t("contacts.noContactsDescription")}</p>
+            </TableCell>
+          </TableRow>
+        )}
+      </TableBody>
+    </Table>
+  );
+};
+
+// Inert toolbar matching the live layout, so the pending shell reserves the
+// same space and the page does not jump when it swaps in.
+const ContactsToolbarPlaceholder = () => {
+  const t = useTranslations();
+
+  return (
+    <div className="flex items-center gap-2">
+      <InputGroup className="me-auto max-w-sm flex-1">
+        <InputGroupInput disabled placeholder={t("contacts.search")} />
+        <InputGroupAddon>
+          <SearchIcon />
+        </InputGroupAddon>
+      </InputGroup>
+      <div className="flex gap-1">
+        <Button disabled size="sm" variant="default">
+          {t("common.all")}
+        </Button>
+        <Button disabled size="sm" variant="outline">
+          {t("contacts.filterPersons")}
+        </Button>
+        <Button disabled size="sm" variant="outline">
+          {t("contacts.filterOrganizations")}
+        </Button>
+      </div>
+      <Button disabled size="sm">
+        <PlusIcon />
+        {t("contacts.newContact")}
+      </Button>
+    </div>
+  );
+};
+
+function ContactsPendingComponent() {
+  const columns = useContactColumns();
+  const table = useTable({
+    features: contactTableFeatures,
+    data: EMPTY_CONTACTS,
+    columns,
+  });
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto border-t p-4">
+      <ContactsToolbarPlaceholder />
+      <ContactsTable isLoading table={table} />
+    </div>
+  );
+}
 
 const trimmedString = (maxLength: number) =>
   v.pipe(v.string(), v.trim(), v.maxLength(maxLength));

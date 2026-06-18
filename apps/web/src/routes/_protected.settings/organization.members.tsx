@@ -6,12 +6,22 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { createFileRoute, useSearch } from "@tanstack/react-router";
-import { ArrowDownIcon, ArrowUpIcon, EllipsisVerticalIcon } from "lucide-react";
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  EllipsisVerticalIcon,
+  SearchIcon,
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { DestructiveConfirmDialog } from "@stll/ui/components/destructive-confirm-dialog";
-import { Frame } from "@stll/ui/components/frame";
+import { Frame, FramePanel } from "@stll/ui/components/frame";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@stll/ui/components/input-group";
 import {
   Menu,
   MenuItem,
@@ -25,6 +35,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/components/select";
+import { Skeleton } from "@stll/ui/components/skeleton";
 import {
   Table,
   TableBody,
@@ -72,10 +83,63 @@ type SortKey = "name" | "role" | "joined";
 type SortDir = "asc" | "desc";
 type Sort = { key: SortKey; dir: SortDir };
 
+const MEMBERS_SKELETON_ROW_COUNT = 8;
+const INVITATIONS_SKELETON_ROW_COUNT = 3;
+
+// Stable keys so loading rows never fall back to array-index keys.
+const SKELETON_ROW_KEYS = ["a", "b", "c", "d", "e", "f", "g", "h"] as const;
+
+// The members and invitations tables are hand-rolled @stll/ui markup (no
+// TanStack), so a single column descriptor array per table is the source of
+// truth: both the real header and the loading skeleton map over it, so they
+// cannot drift. `sortKey` distinguishes sortable heads from inert ones (the
+// trailing actions column has no header). `skeleton` shapes the placeholder.
+type MemberSkeletonShape = "identity" | "control" | "text" | "none";
+
+type MemberColumn = {
+  id: "user" | "role" | "joined" | "actions";
+  sortKey: SortKey | null;
+  label: "common.user" | "common.role" | "organization.members.joined" | null;
+  skeleton: MemberSkeletonShape;
+};
+
+const MEMBER_COLUMNS: readonly MemberColumn[] = [
+  { id: "user", sortKey: "name", label: "common.user", skeleton: "identity" },
+  { id: "role", sortKey: "role", label: "common.role", skeleton: "control" },
+  {
+    id: "joined",
+    sortKey: "joined",
+    label: "organization.members.joined",
+    skeleton: "text",
+  },
+  { id: "actions", sortKey: null, label: null, skeleton: "none" },
+];
+
+type InvitationColumn = {
+  id: "email" | "role" | "status" | "invited" | "expires" | "actions";
+  label:
+    | "common.email"
+    | "common.role"
+    | "common.status"
+    | "organization.invitations.invited"
+    | "organization.invitations.expires"
+    | null;
+};
+
+const INVITATION_COLUMNS: readonly InvitationColumn[] = [
+  { id: "email", label: "common.email" },
+  { id: "role", label: "common.role" },
+  { id: "status", label: "common.status" },
+  { id: "invited", label: "organization.invitations.invited" },
+  { id: "expires", label: "organization.invitations.expires" },
+  { id: "actions", label: null },
+];
+
 export const Route = createFileRoute(
   "/_protected/settings/organization/members",
 )({
   component: Members,
+  pendingComponent: MembersPendingComponent,
 });
 
 function Members() {
@@ -166,26 +230,7 @@ function Members() {
         <Frame>
           <OrganizationListToolbar />
           <Table>
-            <TableHeader>
-              <TableRow>
-                <SortableHead
-                  active={sort.key === "name" ? sort.dir : null}
-                  label={t("common.user")}
-                  onClick={() => toggleSort("name")}
-                />
-                <SortableHead
-                  active={sort.key === "role" ? sort.dir : null}
-                  label={t("common.role")}
-                  onClick={() => toggleSort("role")}
-                />
-                <SortableHead
-                  active={sort.key === "joined" ? sort.dir : null}
-                  label={t("organization.members.joined")}
-                  onClick={() => toggleSort("joined")}
-                />
-                <TableHead />
-              </TableRow>
-            </TableHeader>
+            <MembersTableHeader sort={sort} toggleSort={toggleSort} />
             <TableBody>
               {filteredMembers.map((member) => {
                 const isSelf = member.userId === userId;
@@ -262,16 +307,7 @@ function Members() {
           </h2>
           <Frame>
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t("common.email")}</TableHead>
-                  <TableHead>{t("common.role")}</TableHead>
-                  <TableHead>{t("common.status")}</TableHead>
-                  <TableHead>{t("organization.invitations.invited")}</TableHead>
-                  <TableHead>{t("organization.invitations.expires")}</TableHead>
-                  <TableHead />
-                </TableRow>
-              </TableHeader>
+              <InvitationsTableHeader />
               <TableBody>
                 {filteredInvitations.map((invitation) => (
                   <TableRow key={invitation.id}>
@@ -527,3 +563,192 @@ const SortableHead = ({ label, active, onClick }: SortableHeadProps) => (
     </button>
   </TableHead>
 );
+
+type MembersTableHeaderProps = {
+  sort: Sort;
+  toggleSort: (key: SortKey) => void;
+};
+
+// Real header and skeleton both map over MEMBER_COLUMNS, so adding, removing,
+// or reordering a column updates both at once.
+const MembersTableHeader = ({ sort, toggleSort }: MembersTableHeaderProps) => {
+  const t = useTranslations();
+
+  return (
+    <TableHeader>
+      <TableRow>
+        {MEMBER_COLUMNS.map((column) => {
+          if (column.sortKey === null || column.label === null) {
+            return <TableHead key={column.id} />;
+          }
+          const sortKey = column.sortKey;
+          return (
+            <SortableHead
+              active={sort.key === sortKey ? sort.dir : null}
+              key={column.id}
+              label={t(column.label)}
+              onClick={() => toggleSort(sortKey)}
+            />
+          );
+        })}
+      </TableRow>
+    </TableHeader>
+  );
+};
+
+const InvitationsTableHeader = () => {
+  const t = useTranslations();
+
+  return (
+    <TableHeader>
+      <TableRow>
+        {INVITATION_COLUMNS.map((column) =>
+          column.label === null ? (
+            <TableHead key={column.id} />
+          ) : (
+            <TableHead key={column.id}>{t(column.label)}</TableHead>
+          ),
+        )}
+      </TableRow>
+    </TableHeader>
+  );
+};
+
+const MemberSkeletonCell = ({ shape }: { shape: MemberSkeletonShape }) => {
+  if (shape === "identity") {
+    return (
+      <div className="flex items-center gap-2">
+        <Skeleton className="size-8 shrink-0 rounded-full" />
+        <div className="flex flex-col gap-1">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-3 w-40" />
+        </div>
+      </div>
+    );
+  }
+  if (shape === "control") {
+    return <Skeleton className="h-8 w-32" />;
+  }
+  if (shape === "none") {
+    return null;
+  }
+  return <Skeleton className="h-4 w-24" />;
+};
+
+// Skeleton body derived from MEMBER_COLUMNS: one cell per column, in order, so
+// it stays aligned with both the real header and the real rows.
+const MembersSkeletonRows = () =>
+  SKELETON_ROW_KEYS.slice(0, MEMBERS_SKELETON_ROW_COUNT).map((rowKey) => (
+    <TableRow key={rowKey}>
+      {MEMBER_COLUMNS.map((column) => (
+        <TableCell key={column.id}>
+          <MemberSkeletonCell shape={column.skeleton} />
+        </TableCell>
+      ))}
+    </TableRow>
+  ));
+
+const InvitationsSkeletonRows = () =>
+  SKELETON_ROW_KEYS.slice(0, INVITATIONS_SKELETON_ROW_COUNT).map((rowKey) => (
+    <TableRow key={rowKey}>
+      {INVITATION_COLUMNS.map((column) => (
+        <TableCell key={column.id}>
+          {column.id === "actions" ? null : <Skeleton className="h-4 w-24" />}
+        </TableCell>
+      ))}
+    </TableRow>
+  ));
+
+// Inert toolbar matching OrganizationListToolbar's layout so the pending shell
+// reserves the same space and the page does not jump when data resolves.
+const MembersToolbarPlaceholder = () => {
+  const t = useTranslations();
+
+  return (
+    <div className="border-border/60 flex items-center gap-2 border-b px-2 py-2">
+      <InputGroup className="max-w-sm flex-1">
+        <InputGroupInput disabled placeholder={t("common.search")} />
+        <InputGroupAddon>
+          <SearchIcon />
+        </InputGroupAddon>
+      </InputGroup>
+    </div>
+  );
+};
+
+const NOOP_SORT: Sort = { key: "name", dir: "asc" };
+const noopToggleSort = () => undefined;
+
+// Card placeholder for the profile/jurisdictions sections. The real cards
+// (OrganizationProfileCard, OrganizationJurisdictionsCard) call their own
+// suspense/queries against organizationOptions, so rendering them here would
+// re-suspend the pending shell and fall back to the bare logo. A static
+// skeleton keeps this component fully synchronous.
+const CardSkeletonPlaceholder = () => (
+  <Frame>
+    <FramePanel className="flex flex-col gap-3">
+      <Skeleton className="h-4 w-40" />
+      <Skeleton className="h-9 w-full max-w-sm" />
+    </FramePanel>
+  </Frame>
+);
+
+// Structural skeleton for route-pending: the section headers plus the members
+// table chrome (headers from MEMBER_COLUMNS) with shimmer rows, and the
+// invitations table chrome with a few shimmer rows. Hoisted `function` so the
+// Route literal above can reference it.
+function MembersPendingComponent() {
+  const t = useTranslations();
+
+  return (
+    <>
+      <SettingsPageHeader
+        description={t("settings.organization.membersDescription")}
+        title={t("navigation.members")}
+      />
+
+      <section className="flex flex-col gap-2">
+        <h2 className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
+          {t("settings.organization.profile")}
+        </h2>
+        <CardSkeletonPlaceholder />
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h2 className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
+          {t("settings.organization.practiceJurisdictions")}
+        </h2>
+        <CardSkeletonPlaceholder />
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h2 className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
+          {t("settings.organization.activeMembers")}
+        </h2>
+        <Frame>
+          <MembersToolbarPlaceholder />
+          <Table>
+            <MembersTableHeader sort={NOOP_SORT} toggleSort={noopToggleSort} />
+            <TableBody>
+              <MembersSkeletonRows />
+            </TableBody>
+          </Table>
+        </Frame>
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h2 className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
+          {t("settings.organization.pendingInvitations")}
+        </h2>
+        <Frame>
+          <Table>
+            <InvitationsTableHeader />
+            <TableBody>
+              <InvitationsSkeletonRows />
+            </TableBody>
+          </Table>
+        </Frame>
+      </section>
+    </>
+  );
+}

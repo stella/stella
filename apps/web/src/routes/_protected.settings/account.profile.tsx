@@ -26,6 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/components/select";
+import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { authClient } from "@/lib/auth";
@@ -38,7 +39,67 @@ import { SettingsPageHeader } from "@/routes/_protected.settings/-components/set
 
 export const Route = createFileRoute("/_protected/settings/account/profile")({
   component: ProfilePage,
+  pendingComponent: ProfilePagePending,
 });
+
+const SESSION_ROW_KEYS = ["a", "b", "c"];
+
+// Mirrors the real profile fragment: settings header, the timezone +
+// word-edit-identity Frame, and the sessions section, so the layout does
+// not jump when the session query resolves.
+function ProfilePagePending() {
+  return (
+    <>
+      <header className="flex flex-col gap-1">
+        <Skeleton className="h-7 w-32" />
+        <Skeleton className="h-4 w-80 max-w-full" />
+      </header>
+      <Frame>
+        <FrameHeader>
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="mt-1.5 h-4 w-64 max-w-full" />
+        </FrameHeader>
+        <FramePanel>
+          <div className="flex flex-col gap-2 p-4">
+            <Skeleton className="h-9 w-72 max-w-full rounded-md" />
+          </div>
+          <div className="border-border flex flex-col gap-4 border-t p-4">
+            <div className="flex max-w-lg flex-col gap-2">
+              <Skeleton className="h-4 w-28" />
+              <Skeleton className="h-4 w-72 max-w-full" />
+              <Skeleton className="h-9 w-full rounded-md" />
+            </div>
+            <div className="flex max-w-xs flex-col gap-2">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-4 w-64 max-w-full" />
+              <Skeleton className="h-9 w-full rounded-md" />
+            </div>
+            <Skeleton className="h-9 w-20 rounded-md" />
+          </div>
+        </FramePanel>
+      </Frame>
+
+      <section className="flex flex-col gap-2">
+        <Skeleton className="h-3 w-20" />
+        <Frame>
+          <div className="flex flex-col gap-3 p-4">
+            {SESSION_ROW_KEYS.map((key) => (
+              <div
+                className="flex items-center justify-between gap-4"
+                key={key}
+              >
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-5 w-16 rounded-md" />
+              </div>
+            ))}
+          </div>
+        </Frame>
+      </section>
+    </>
+  );
+}
 
 function isCommonTimezone(tz: string): tz is CommonTimezone {
   const timezones: readonly string[] = COMMON_TIMEZONES;
