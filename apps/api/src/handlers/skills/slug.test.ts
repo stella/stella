@@ -68,7 +68,7 @@ describe("slugify", () => {
   });
 
   test("invariant: output is a valid slug and slugify is stable under reapplication", () => {
-    const validSlug = /^(skill|[a-z0-9]+(?:-[a-z0-9]+)*)$/;
+    const validSlug = /^(skill|[a-z0-9]+(?:-[a-z0-9]+)*)$/u;
     const sample = "abcdefghijklmnopqrstuvwxyz0123456789 -_.!@/\\éžñ日";
     const rand = (n: number) => Math.floor(Math.random() * n);
 
@@ -99,18 +99,18 @@ describe("collisionSuffix", () => {
       const suffix = collisionSuffix();
       expect(suffix.length).toBeGreaterThan(0);
       expect(suffix.length).toBeLessThanOrEqual(7);
-      expect(suffix).toMatch(/^[0-9a-z]+$/);
+      expect(suffix).toMatch(/^[0-9a-z]+$/u);
     }
   });
 });
 
 describe("uniqueSlug", () => {
   test("appends a hyphen-separated collision suffix", () => {
-    expect(uniqueSlug("Hello World")).toMatch(/^hello-world-[0-9a-z]{1,7}$/);
+    expect(uniqueSlug("Hello World")).toMatch(/^hello-world-[0-9a-z]{1,7}$/u);
   });
 
   test("uses the 'skill' fallback base when the name slugifies to empty", () => {
-    expect(uniqueSlug("日本語")).toMatch(/^skill-[0-9a-z]{1,7}$/);
+    expect(uniqueSlug("日本語")).toMatch(/^skill-[0-9a-z]{1,7}$/u);
   });
 
   test("clips the composed slug to 64 chars", () => {

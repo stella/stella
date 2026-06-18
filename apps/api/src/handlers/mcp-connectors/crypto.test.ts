@@ -48,7 +48,7 @@ describe("encryptMcpSecret / decryptMcpSecret", () => {
     for (let i = 0; i < 64; i++) {
       const length = Math.floor(Math.random() * 256);
       const payload = Array.from({ length }, () =>
-        String.fromCodePoint(Math.floor(Math.random() * 0x10_000)),
+        String.fromCodePoint(Math.floor(Math.random() * 2 ** 16)),
       ).join("");
 
       const { ciphertext, iv } = await encryptMcpSecret({

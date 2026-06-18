@@ -179,22 +179,12 @@ const updateClauseHandler = async function* ({
         });
       }
 
-      const previousValues: Record<string, unknown> = {
-        title: existing.title,
-        categoryId: existing.categoryId,
-        language: existing.language,
-        body: existing.body,
-        description: existing.description,
-        usageNotes: existing.usageNotes,
-        metadata: existing.metadata,
-        currentVersion: existing.currentVersion,
-      };
       const changes: FieldDiffs = {};
       for (const [key, newValue] of Object.entries(updates)) {
         if (key === "updatedAt") {
           continue;
         }
-        const oldValue = previousValues[key];
+        const oldValue = (existing as Record<string, unknown>)[key];
         if (oldValue !== newValue) {
           changes[key] = { old: oldValue ?? null, new: newValue };
         }
