@@ -76,6 +76,15 @@ export type RunShadingAttrs = TextColorAttrs & {
   patternColor?: string;
 };
 
+/**
+ * Run character-style reference mark attributes (w:rStyle). Inert: it carries
+ * only the named style id so the reference survives the PM round-trip; the
+ * style's formatting itself is already flattened onto direct marks.
+ */
+export type RunStyleAttrs = {
+  styleId: string;
+};
+
 export type CharacterSpacingAttrs = {
   spacing?: number;
   position?: number;

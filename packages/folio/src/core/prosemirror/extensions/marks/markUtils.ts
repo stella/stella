@@ -109,6 +109,13 @@ function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
       case "subscript":
         formatting.vertAlign = "subscript";
         break;
+      case "rtl":
+        // eigenpal/docx-editor#806 — keep per-run RTL direction through the
+        // live-edit/clipboard/keymap mark paths (the `rtl=false` negative
+        // override rides `runFormattingOverride`, so only the `true` case
+        // needs an explicit branch here).
+        formatting.rtl = true;
+        break;
       case "runFormattingOverride":
         applyRunFormattingOverrideMark(formatting, mark);
         break;
@@ -362,6 +369,9 @@ export function textFormattingToMarks(
   }
   if (formatting.vertAlign === "subscript" && schema.marks["subscript"]) {
     marks.push(schema.marks["subscript"].create());
+  }
+  if (formatting.rtl && schema.marks["rtl"]) {
+    marks.push(schema.marks["rtl"].create());
   }
 
   return marks;

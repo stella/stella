@@ -60,6 +60,21 @@ describe("EmptyParagraphFormatExtension", () => {
     expect(markNames(state.storedMarks)).toContain("fontSize");
   });
 
+  test("re-derives the rtl mark for an empty paragraph styled right-to-left", () => {
+    // A run-level RTL default must be re-derived so typed text keeps `w:rtl`
+    // (eigenpal/docx-editor#822). Before, the gate omitted `rtl` and the caret
+    // entered the empty paragraph mark-free, producing LTR text.
+    const rtlPara = schema.node("paragraph", {
+      defaultTextFormatting: { rtl: true },
+    });
+    let state = stateWith(schema.node("doc", null, [rtlPara]));
+    state = state.apply(
+      state.tr.setSelection(TextSelection.create(state.doc, 1)),
+    );
+
+    expect(markNames(state.storedMarks)).toContain("rtl");
+  });
+
   test("leaves a plain body paragraph mark-free (font/size handled by the painter)", () => {
     const body = schema.node("paragraph", {
       defaultTextFormatting: {

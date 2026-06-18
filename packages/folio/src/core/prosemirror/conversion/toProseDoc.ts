@@ -87,7 +87,14 @@ export function toProseDoc(
   const paragraphs = document.package.document.content;
   const nodes: PMNode[] = [];
 
-  const styleResolver = createStyleEngine(options?.styles);
+  // Default to the document's own styles (symmetric with `theme` below) so a
+  // run's character-style formatting is always flattened onto direct marks.
+  // The save-side `w:rStyle` reconciliation relies on this: without it, an
+  // unexpanded run would look like the user stripped the style's formatting
+  // (eigenpal/docx-editor#833).
+  const styleResolver = createStyleEngine(
+    options?.styles ?? document.package.styles,
+  );
   const theme = options?.theme ?? document.package.theme ?? null;
   let textBoxGroupIndex = 0;
 
@@ -322,7 +329,9 @@ function convertParagraph(
       content.type === "simpleField" ||
       content.type === "complexField"
     ) {
-      emitInlineNode(convertField(content, getInheritedRunFormatting));
+      emitInlineNode(
+        convertField(content, getInheritedRunFormatting, styleResolver),
+      );
     } else if (content.type === "inlineSdt") {
       emitInlineNode(
         convertInlineSdt(content, getInheritedRunFormatting, styleResolver),
@@ -1799,6 +1808,7 @@ function convertTableCell(
 function convertField(
   field: SimpleField | ComplexField,
   getInheritedRunFormatting: RunFormattingResolver,
+  styleResolver?: StyleEngine | null,
 ): PMNode | null {
   // Extract display text and formatting from field content/result
   let displayText = "";
@@ -1818,10 +1828,31 @@ function convertField(
     }
   }
 
-  // Merge style formatting with field run formatting (inline takes precedence)
+  // Collapsed complex field with no result run at all — fall back to the field's
+  // captured run formatting so a footer PAGE number keeps its size/color instead
+  // of rendering at the default (eigenpal/docx-editor#909). Only when the result
+  // is genuinely empty: a present-but-unformatted result run intentionally
+  // inherits paragraph defaults and must not adopt the field code's formatting.
+  if (
+    !fieldFormatting &&
+    field.type === "complexField" &&
+    field.fieldResult.length === 0
+  ) {
+    fieldFormatting = field.formatting;
+  }
+
+  // Merge inherited paragraph formatting, the field run's own character style,
+  // then its inline formatting (each later layer wins) — the same precedence as
+  // `convertRun`. Flattening the character style here means a field result
+  // styled only by a `w:rStyle` (e.g. a PAGE/REF field) keeps its style-derived
+  // marks, so the save-side `w:rStyle` reconciliation does not treat the field
+  // as diverging and strip the link (eigenpal/docx-editor#833).
   const inheritedFormatting = getInheritedRunFormatting(fieldFormatting);
+  const fieldStyleFormatting = fieldFormatting?.styleId
+    ? styleResolver?.getRunStyleOwnProperties(fieldFormatting.styleId)
+    : undefined;
   const mergedFormatting = mergeTextFormatting(
-    inheritedFormatting,
+    mergeTextFormatting(inheritedFormatting, fieldStyleFormatting),
     fieldFormatting,
   );
   const marks = textFormattingToMarks(mergedFormatting);
@@ -1886,7 +1917,11 @@ function convertInlineSdt(
       content.type === "simpleField" ||
       content.type === "complexField"
     ) {
-      const fieldNode = convertField(content, getInheritedRunFormatting);
+      const fieldNode = convertField(
+        content,
+        getInheritedRunFormatting,
+        styleResolver,
+      );
       if (fieldNode) {
         inlineNodes.push(fieldNode);
       }
@@ -2343,7 +2378,7 @@ function convertHyperlink(
 /**
  * Convert TextFormatting to ProseMirror marks
  */
-function textFormattingToMarks(
+export function textFormattingToMarks(
   formatting: TextFormatting | undefined,
 ): ReturnType<typeof schema.mark>[] {
   if (!formatting) {
@@ -2414,6 +2449,13 @@ function textFormattingToMarks(
   const runShadingMarkAttrs = shadingToRunShadingAttrs(formatting.shading);
   if (runShadingMarkAttrs) {
     marks.push(schema.mark("runShading", runShadingMarkAttrs));
+  }
+
+  // Character-style reference (w:rStyle). The style's formatting is already
+  // flattened onto the direct marks above; this inert mark carries the named
+  // reference so `<w:rStyle>` survives the round-trip (eigenpal/docx-editor#833).
+  if (formatting.styleId) {
+    marks.push(schema.mark("runStyle", { styleId: formatting.styleId }));
   }
 
   // Font size
