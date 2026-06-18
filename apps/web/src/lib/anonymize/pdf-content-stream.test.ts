@@ -29,18 +29,16 @@ const encodedByteLength = (s: string): number => {
   return bytes.length;
 };
 
-/** Deterministic xorshift PRNG for reproducible property loops. */
+/** Deterministic Park-Miller PRNG for reproducible property loops (no
+ *  bitwise ops; state * 16807 stays within the safe-integer range). */
 const makeRng = (seed: number): (() => number) => {
-  let state = seed >>> 0;
+  let state = seed % 2_147_483_647;
+  if (state <= 0) {
+    state += 2_147_483_646;
+  }
   return () => {
-    // xorshift32
-    // eslint-disable-next-line no-bitwise -- PRNG bit ops
-    state ^= state << 13;
-    // eslint-disable-next-line no-bitwise -- PRNG bit ops
-    state ^= state >>> 17;
-    // eslint-disable-next-line no-bitwise -- PRNG bit ops
-    state ^= state << 5;
-    return (state >>> 0) / 0xffffffff;
+    state = (state * 16_807) % 2_147_483_647;
+    return (state - 1) / 2_147_483_646;
   };
 };
 
@@ -175,7 +173,7 @@ describe("replaceStringContent — byte-length invariant (property)", () => {
   const alphabet = "()<>\\ AZ09afHELLO\t/[]";
 
   test("output byte length equals input byte length for random lines", () => {
-    const rng = makeRng(0x1234_5678);
+    const rng = makeRng(12_345);
     for (let iter = 0; iter < 2000; iter++) {
       const len = Math.floor(rng() * 40);
       let line = "";
@@ -189,7 +187,7 @@ describe("replaceStringContent — byte-length invariant (property)", () => {
   });
 
   test("output is idempotent under re-application", () => {
-    const rng = makeRng(0xfeed_face);
+    const rng = makeRng(98_765);
     for (let iter = 0; iter < 500; iter++) {
       const len = Math.floor(rng() * 30);
       let line = "";

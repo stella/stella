@@ -153,27 +153,6 @@ const getChatRuntimeContextKind = (
   return "plain";
 };
 
-// The per-thread cache-key prefix (chat, org, thread, scope, …ids)
-// shared by `thread` and `recap` so both compose the same identity
-// and `invalidateChatThread` drops them together.
-const threadPrefix = (activeOrganizationId: string, threadRef: ChatThreadRef) =>
-  threadRef.scope === "global"
-    ? [
-        ...chatKeys.all,
-        activeOrganizationId,
-        "thread",
-        threadRef.scope,
-        threadRef.threadId,
-      ]
-    : [
-        ...chatKeys.all,
-        activeOrganizationId,
-        "thread",
-        threadRef.scope,
-        threadRef.workspaceId,
-        threadRef.threadId,
-      ];
-
 export const chatKeys = {
   all: ["chat"],
   fileThread: (activeOrganizationId: string, key: FileChatThreadKey) => [
@@ -190,12 +169,29 @@ export const chatKeys = {
     "threads",
     "grouped",
   ],
-  thread: (activeOrganizationId: string, key: ChatThreadQueryKey) => [
-    ...threadPrefix(activeOrganizationId, key),
-    key.allowMissingThread ?? false,
-    key.contextKind ?? "plain",
-    CHAT_TRANSPORT_VERSION,
-  ],
+  thread: (activeOrganizationId: string, key: ChatThreadQueryKey) =>
+    key.scope === "global"
+      ? [
+          ...chatKeys.all,
+          activeOrganizationId,
+          "thread",
+          key.scope,
+          key.threadId,
+          key.allowMissingThread ?? false,
+          key.contextKind ?? "plain",
+          CHAT_TRANSPORT_VERSION,
+        ]
+      : [
+          ...chatKeys.all,
+          activeOrganizationId,
+          "thread",
+          key.scope,
+          key.workspaceId,
+          key.threadId,
+          key.allowMissingThread ?? false,
+          key.contextKind ?? "plain",
+          CHAT_TRANSPORT_VERSION,
+        ],
   // Sits under the per-thread prefix (chat, org, thread, scope, …ids)
   // so `invalidateChatThread` drops it too; keyed by the latest
   // message id so a new turn yields a fresh entry.
@@ -203,11 +199,27 @@ export const chatKeys = {
     activeOrganizationId: string,
     threadRef: ChatThreadRef,
     lastMessageId: string,
-  ) => [
-    ...threadPrefix(activeOrganizationId, threadRef),
-    "recap",
-    lastMessageId,
-  ],
+  ) =>
+    threadRef.scope === "global"
+      ? [
+          ...chatKeys.all,
+          activeOrganizationId,
+          "thread",
+          threadRef.scope,
+          threadRef.threadId,
+          "recap",
+          lastMessageId,
+        ]
+      : [
+          ...chatKeys.all,
+          activeOrganizationId,
+          "thread",
+          threadRef.scope,
+          threadRef.workspaceId,
+          threadRef.threadId,
+          "recap",
+          lastMessageId,
+        ],
 };
 
 type ChatThreadOptionsInput = QueryOptionsInput<

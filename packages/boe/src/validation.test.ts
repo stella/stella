@@ -11,7 +11,7 @@ describe("validateLawId", () => {
 
   test("accepts every uppercase section letter for forward compatibility", () => {
     for (let code = 0x41; code <= 0x5a; code++) {
-      const letter = String.fromCharCode(code);
+      const letter = String.fromCodePoint(code);
       expect(validateLawId(`BOE-${letter}-2026-1`)).toBe(true);
     }
   });
