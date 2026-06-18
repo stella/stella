@@ -14,7 +14,7 @@ export type Match = {
 };
 
 export type Scanner = {
-  scan(bytes: Uint8Array): Promise<Match[]>;
+  scan: (bytes: Uint8Array) => Promise<Match[]>;
 };
 
 export type ScanContext = {

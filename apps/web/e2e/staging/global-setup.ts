@@ -1,5 +1,5 @@
 import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import path from "node:path";
 
 import { STAGING_STORAGE_STATE } from "../playwright.staging.config";
 
@@ -141,7 +141,7 @@ const globalSetup = async (): Promise<void> => {
     origins: [],
   };
 
-  mkdirSync(dirname(STAGING_STORAGE_STATE), { recursive: true });
+  mkdirSync(path.dirname(STAGING_STORAGE_STATE), { recursive: true });
   writeFileSync(STAGING_STORAGE_STATE, JSON.stringify(storageState, null, 2));
 };
 

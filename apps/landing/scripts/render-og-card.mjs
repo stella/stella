@@ -1,22 +1,22 @@
 import { Resvg } from "@resvg/resvg-js";
 import { readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import path from "node:path";
 
-const SCRIPT_DIR = dirname(new URL(import.meta.url).pathname);
-const LANDING_DIR = join(SCRIPT_DIR, "..");
-const PUBLIC_DIR = join(LANDING_DIR, "public");
-const IMAGE_DIR = join(PUBLIC_DIR, "images");
-const FONT_DIR = join(PUBLIC_DIR, "fonts");
+const SCRIPT_DIR = path.dirname(new URL(import.meta.url).pathname);
+const LANDING_DIR = path.join(SCRIPT_DIR, "..");
+const PUBLIC_DIR = path.join(LANDING_DIR, "public");
+const IMAGE_DIR = path.join(PUBLIC_DIR, "images");
+const FONT_DIR = path.join(PUBLIC_DIR, "fonts");
 
 const WIDTH = 1200;
 const HEIGHT = 630;
 
-const cabinetFontPath = join(FONT_DIR, "CabinetGrotesk-Regular.otf");
-const logoSvg = readFileSync(join(IMAGE_DIR, "stella-logo.svg"), "utf-8");
+const cabinetFontPath = path.join(FONT_DIR, "CabinetGrotesk-Regular.otf");
+const logoSvg = readFileSync(path.join(IMAGE_DIR, "stella-logo.svg"), "utf-8");
 const logoSvgBase64 = Buffer.from(logoSvg).toString("base64");
-const gradientPng = readFileSync(join(IMAGE_DIR, "gradient-hero.png")).toString(
-  "base64",
-);
+const gradientPng = readFileSync(
+  path.join(IMAGE_DIR, "gradient-hero.png"),
+).toString("base64");
 
 const sourceSvg = String.raw`<svg width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -46,8 +46,8 @@ const sourceSvg = String.raw`<svg width="${WIDTH}" height="${HEIGHT}" viewBox="0
   <text x="84" y="450" class="display" font-size="92">Open source.</text>
 </svg>`;
 
-const svgPath = join(IMAGE_DIR, "og-card.svg");
-const pngPath = join(IMAGE_DIR, "og-card.png");
+const svgPath = path.join(IMAGE_DIR, "og-card.svg");
+const pngPath = path.join(IMAGE_DIR, "og-card.png");
 
 const png = new Resvg(sourceSvg, {
   fitTo: {

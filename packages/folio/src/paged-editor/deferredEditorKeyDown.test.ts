@@ -33,11 +33,11 @@ type FakeTextInputHandler = (
 ) => unknown;
 
 type FakeTextInputView = {
-  dispatch(tr: Transaction): void;
-  someProp(
+  dispatch: (tr: Transaction) => void;
+  someProp: (
     propName: "handleTextInput",
     f: (handler: FakeTextInputHandler) => unknown,
-  ): unknown;
+  ) => unknown;
   state: EditorState;
 };
 

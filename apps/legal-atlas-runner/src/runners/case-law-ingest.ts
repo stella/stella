@@ -181,7 +181,7 @@ const releaseDbSlot = (): void => {
   activeDbSlots--;
   const next = dbSlotQueue.shift();
   if (next) {
-    next();
+    return next();
   }
 };
 

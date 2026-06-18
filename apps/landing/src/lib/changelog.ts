@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 
 export type ChangelogRelease = {
   description: string;
@@ -33,7 +33,7 @@ export const getChangelogReleases = (): ChangelogRelease[] => {
     }
 
     const tagName = fileName.replace(/\.md$/u, "");
-    const markdown = readFileSync(join(CHANGELOG_DIR, fileName), "utf-8");
+    const markdown = readFileSync(path.join(CHANGELOG_DIR, fileName), "utf-8");
     const heading = findHeading(markdown, 1);
     const description =
       findHeading(markdown, 2) ??
@@ -107,10 +107,10 @@ const formatReleaseName = (tagName: string) => {
 };
 
 function resolveRepoPath(...segments: string[]) {
-  const fromRoot = join(process.cwd(), ...segments);
+  const fromRoot = path.join(process.cwd(), ...segments);
   if (existsSync(fromRoot)) {
     return fromRoot;
   }
 
-  return join(process.cwd(), "..", "..", ...segments);
+  return path.join(process.cwd(), "..", "..", ...segments);
 }

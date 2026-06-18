@@ -9,12 +9,7 @@ import {
   symlinkSync,
 } from "node:fs";
 import { createServer, Socket } from "node:net";
-import {
-  basename,
-  dirname,
-  isAbsolute,
-  resolve as pathResolve,
-} from "node:path";
+import path from "node:path";
 
 const DEV_MODES = ["dev", "dev:web", "dev:api", "dev:desktop"] as const;
 const ENV_FILE_SPECS = [
@@ -185,7 +180,7 @@ const normalizeCommandOutput = (output: string) => {
 const resolveCommandPath = (command: string) => Bun.which(command) ?? command;
 
 const resolveMaybeRelativePath = (cwd: string, value: string) =>
-  isAbsolute(value) ? value : pathResolve(cwd, value);
+  path.isAbsolute(value) ? value : path.resolve(cwd, value);
 
 const validateOffset = (offset: number, source: string) => {
   if (!Number.isInteger(offset) || offset < 0 || offset > MAX_PORT_OFFSET) {
@@ -896,12 +891,12 @@ export const findFirstAvailableOffset = async ({
 };
 
 export const isWorktreeCheckout = (rootDir: string) => {
-  const gitPath = pathResolve(rootDir, ".git");
+  const gitPath = path.resolve(rootDir, ".git");
   return existsSync(gitPath) && lstatSync(gitPath).isFile();
 };
 
 export const resolveMainRootFromCommonDir = (commonGitDir: string) =>
-  pathResolve(commonGitDir, "..");
+  path.resolve(commonGitDir, "..");
 
 export const ensureWorktreeEnvLinks = ({
   currentRoot,
@@ -915,14 +910,14 @@ export const ensureWorktreeEnvLinks = ({
   let preparedFiles = 0;
 
   for (const spec of ENV_FILE_SPECS) {
-    const targetPath = pathResolve(currentRoot, spec.path);
+    const targetPath = path.resolve(currentRoot, spec.path);
     if (existsSync(targetPath)) {
       continue;
     }
 
-    const mainEnvPath = pathResolve(mainRoot, spec.path);
+    const mainEnvPath = path.resolve(mainRoot, spec.path);
     if (isWorktree && existsSync(mainEnvPath)) {
-      mkdirSync(dirname(targetPath), { recursive: true });
+      mkdirSync(path.dirname(targetPath), { recursive: true });
       try {
         symlinkSync(mainEnvPath, targetPath);
       } catch {
@@ -932,12 +927,12 @@ export const ensureWorktreeEnvLinks = ({
       continue;
     }
 
-    const examplePath = pathResolve(currentRoot, spec.example);
+    const examplePath = path.resolve(currentRoot, spec.example);
     if (!existsSync(examplePath)) {
       continue;
     }
 
-    mkdirSync(dirname(targetPath), { recursive: true });
+    mkdirSync(path.dirname(targetPath), { recursive: true });
     copyFileSync(examplePath, targetPath);
     preparedFiles++;
   }
@@ -1426,13 +1421,13 @@ export const buildPreparationSteps = ({
   if (!skipDbPush && modeIncludesApi(mode)) {
     const apiBaseEnv = stripAppEnvKeys({
       baseEnv: process.env,
-      envFilePath: pathResolve(rootDir, "apps/api/.env"),
+      envFilePath: path.resolve(rootDir, "apps/api/.env"),
     });
     steps.push({
       cmd: [resolveCommandPath("bun"), "run", "db:migrate"],
-      cwd: pathResolve(rootDir, "apps/api"),
+      cwd: path.resolve(rootDir, "apps/api"),
       env: {
-        ...expandEnvMap(loadEnvFile(pathResolve(rootDir, "apps/api/.env"))),
+        ...expandEnvMap(loadEnvFile(path.resolve(rootDir, "apps/api/.env"))),
         ...createApiEnv({
           baseEnv: apiBaseEnv,
           infraOffset,
@@ -1464,18 +1459,18 @@ const buildPersistentSteps = ({
 }): PersistentSteps => {
   const apiBaseEnv = stripAppEnvKeys({
     baseEnv: process.env,
-    envFilePath: pathResolve(rootDir, "apps/api/.env"),
+    envFilePath: path.resolve(rootDir, "apps/api/.env"),
   });
   const webBaseEnv = stripAppEnvKeys({
     baseEnv: process.env,
-    envFilePath: pathResolve(rootDir, "apps/web/.env"),
+    envFilePath: path.resolve(rootDir, "apps/web/.env"),
   });
   const desktopBaseEnv = stripAppEnvKeys({
     baseEnv: process.env,
-    envFilePath: pathResolve(rootDir, "apps/desktop/.env"),
+    envFilePath: path.resolve(rootDir, "apps/desktop/.env"),
   });
   const apiEnv = {
-    ...expandEnvMap(loadEnvFile(pathResolve(rootDir, "apps/api/.env"))),
+    ...expandEnvMap(loadEnvFile(path.resolve(rootDir, "apps/api/.env"))),
     ...createApiEnv({
       baseEnv: apiBaseEnv,
       infraOffset,
@@ -1484,7 +1479,7 @@ const buildPersistentSteps = ({
     }),
   };
   const webEnv = {
-    ...expandEnvMap(loadEnvFile(pathResolve(rootDir, "apps/web/.env"))),
+    ...expandEnvMap(loadEnvFile(path.resolve(rootDir, "apps/web/.env"))),
     ...createWebEnv({
       aiDevtoolsEnabled,
       baseEnv: webBaseEnv,
@@ -1492,7 +1487,7 @@ const buildPersistentSteps = ({
     }),
   };
   const desktopEnv = {
-    ...expandEnvMap(loadEnvFile(pathResolve(rootDir, "apps/desktop/.env"))),
+    ...expandEnvMap(loadEnvFile(path.resolve(rootDir, "apps/desktop/.env"))),
     ...createDesktopEnv({
       baseEnv: desktopBaseEnv,
       ports,
@@ -1510,7 +1505,7 @@ const buildPersistentSteps = ({
         "--watch",
         "src/index.ts",
       ],
-      cwd: pathResolve(rootDir, "apps/api"),
+      cwd: path.resolve(rootDir, "apps/api"),
       env: apiEnv,
       label: "API server",
     });
@@ -1522,7 +1517,7 @@ const buildPersistentSteps = ({
     if (aiDevtoolsEnabled) {
       secondary.push({
         cmd: [resolveCommandPath("bun"), "run", "dev:ai-tools"],
-        cwd: pathResolve(rootDir, "apps/api"),
+        cwd: path.resolve(rootDir, "apps/api"),
         env: apiEnv,
         label: "AI SDK Devtools",
       });
@@ -1542,7 +1537,7 @@ const buildPersistentSteps = ({
         "localhost",
         "--strictPort",
       ],
-      cwd: pathResolve(rootDir, "apps/web"),
+      cwd: path.resolve(rootDir, "apps/web"),
       env: webEnv,
       label: "Web server",
     });
@@ -1564,7 +1559,7 @@ const buildPersistentSteps = ({
         "-c",
         tauriConfigOverride,
       ],
-      cwd: pathResolve(rootDir, "apps/desktop"),
+      cwd: path.resolve(rootDir, "apps/desktop"),
       env: desktopEnv,
       label: "Desktop app",
     });
@@ -1813,10 +1808,10 @@ const main = async () => {
       (process.env["STELLA_PORT_OFFSET"]
         ? Number.parseInt(process.env["STELLA_PORT_OFFSET"], 10)
         : undefined),
-    worktreeName: basename(gitContext.currentRoot),
+    worktreeName: path.basename(gitContext.currentRoot),
   });
   const aiDevtoolsEnabled = readEnvFlag({
-    envFilePath: pathResolve(gitContext.currentRoot, "apps/api/.env"),
+    envFilePath: path.resolve(gitContext.currentRoot, "apps/api/.env"),
     key: "AI_DEVTOOLS_ENABLED",
     processEnv: process.env,
   });

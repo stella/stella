@@ -326,6 +326,7 @@ const createScopedDb = (
           select: () => ReturnType<typeof createSelectBuilder>;
         }) => unknown,
       ) =>
+        // oxlint-disable-next-line node/callback-return -- arrow body already returns the callback result
         await callback({
           query: {
             extractedContent: {

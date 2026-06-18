@@ -1,12 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 
 const readSecurityFixture = (relativePath: string) =>
-  readFileSync(join(import.meta.dir, relativePath), "utf-8");
+  readFileSync(path.join(import.meta.dir, relativePath), "utf-8");
 
 const readRootFixture = (relativePath: string) =>
-  readFileSync(join(import.meta.dir, "../../../../..", relativePath), "utf-8");
+  readFileSync(
+    path.join(import.meta.dir, "../../../../..", relativePath),
+    "utf-8",
+  );
 
 describe("organization member auth lifecycle", () => {
   test("member removal routes cleanup through the shared helper", () => {

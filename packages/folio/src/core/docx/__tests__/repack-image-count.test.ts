@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 
 import type {
   BlockContent,
@@ -23,7 +23,7 @@ import { repackDocx } from "../rezip";
  * next parse counted the now-bare shapes as plain drawings.
  */
 
-const FIXTURE_PATH = join(
+const FIXTURE_PATH = path.join(
   import.meta.dir,
   "__fixtures__/regressions/repack-image-count.docx",
 );

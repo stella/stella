@@ -11,7 +11,7 @@
  *          would be generated from en.json. Exits non-zero on
  *          drift without writing.
  */
-import { resolve } from "node:path";
+import path from "node:path";
 
 type JsonValue = string | JsonObject;
 type JsonObject = {
@@ -48,8 +48,8 @@ if (!langsDir) {
   process.exit(1);
 }
 
-const inputPath = resolve(langsDir, "en.json");
-const outputPath = resolve(langsDir, "messages.gen.ts");
+const inputPath = path.resolve(langsDir, "en.json");
+const outputPath = path.resolve(langsDir, "messages.gen.ts");
 
 const json = await Bun.file(inputPath).text();
 const messages = parseMessages(json);

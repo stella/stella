@@ -21,7 +21,7 @@
 import { panic } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 import { mkdirSync } from "node:fs";
-import { resolve } from "node:path";
+import path from "node:path";
 
 import { member, organization, session, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
@@ -346,10 +346,10 @@ async function seed() {
     origins: [],
   };
 
-  const outDir = resolve(import.meta.dir, "../../../.playwright");
+  const outDir = path.resolve(import.meta.dir, "../../../.playwright");
   mkdirSync(outDir, { recursive: true });
 
-  const outPath = resolve(outDir, "storage-state.json");
+  const outPath = path.resolve(outDir, "storage-state.json");
   await Bun.write(outPath, JSON.stringify(storageState, null, 2));
   console.log("Wrote storage state to:", outPath);
 

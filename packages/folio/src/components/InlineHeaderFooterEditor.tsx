@@ -59,13 +59,13 @@ export type InlineHeaderFooterEditorProps = {
 
 export type InlineHeaderFooterEditorRef = {
   /** Get the active HF PM EditorView (the persistent hidden one). */
-  getView(): EditorView | null;
+  getView: () => EditorView | null;
   /** Focus the active HF PM. */
-  focus(): void;
+  focus: () => void;
   /** Undo on the active HF PM. */
-  undo(): boolean;
+  undo: () => boolean;
   /** Redo on the active HF PM. */
-  redo(): boolean;
+  redo: () => boolean;
 };
 
 // ============================================================================

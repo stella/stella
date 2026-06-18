@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import path from "node:path";
 
 export const WORKSPACE_PARENT_DIRS = ["apps", "packages"] as const;
 const DEPENDENCY_FIELDS = [
@@ -131,12 +131,12 @@ const findCssFiles = (directoryPath: string): string[] => {
         continue;
       }
 
-      cssFiles.push(...findCssFiles(join(directoryPath, entry.name)));
+      cssFiles.push(...findCssFiles(path.join(directoryPath, entry.name)));
       continue;
     }
 
     if (entry.isFile() && entry.name.endsWith(".css")) {
-      cssFiles.push(join(directoryPath, entry.name));
+      cssFiles.push(path.join(directoryPath, entry.name));
     }
   }
 
@@ -186,14 +186,18 @@ export const validateWorkspaceRoot = (rootDir: string): WorkspaceIssue[] => {
   const issues: WorkspaceIssue[] = [];
 
   for (const parentDir of WORKSPACE_PARENT_DIRS) {
-    const parentPath = resolve(rootDir, parentDir);
+    const parentPath = path.resolve(rootDir, parentDir);
     const entries = readdirSync(parentPath, { withFileTypes: true })
       .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
       .toSorted((a, b) => a.name.localeCompare(b.name));
 
     for (const entry of entries) {
       const relativePath = `${parentDir}/${entry.name}`;
-      const packageJsonPath = resolve(parentPath, entry.name, "package.json");
+      const packageJsonPath = path.resolve(
+        parentPath,
+        entry.name,
+        "package.json",
+      );
 
       if (!existsSync(packageJsonPath)) {
         issues.push({
@@ -235,7 +239,7 @@ export const validateWorkspaceRoot = (rootDir: string): WorkspaceIssue[] => {
 
       issues.push(
         ...validateCssImportOwnership(
-          resolve(parentPath, entry.name),
+          path.resolve(parentPath, entry.name),
           relativePath,
           dependencyNames,
         ),

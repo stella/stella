@@ -7,7 +7,7 @@
  */
 import JSZip from "jszip";
 import { writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import path from "node:path";
 
 const contentTypesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -38,6 +38,6 @@ const out = await zip.generateAsync({
   type: "uint8array",
   compression: "DEFLATE",
 });
-const target = resolve(import.meta.dirname, "simple.docx");
+const target = path.resolve(import.meta.dirname, "simple.docx");
 await writeFile(target, out);
 console.log(`wrote ${target} (${String(out.byteLength)} bytes)`);

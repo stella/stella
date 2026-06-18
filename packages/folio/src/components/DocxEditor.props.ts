@@ -209,9 +209,9 @@ export type DocxEditorCollaboration = {
   awareness?:
     | {
         clientID: number;
-        getStates(): Map<number, unknown>;
-        off(event: "change" | "update", handler: () => void): void;
-        on(event: "change" | "update", handler: () => void): void;
+        getStates: () => Map<number, unknown>;
+        off: (event: "change" | "update", handler: () => void) => void;
+        on: (event: "change" | "update", handler: () => void) => void;
       }
     | undefined;
   onSeeded?: (() => void) | undefined;

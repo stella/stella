@@ -20,12 +20,12 @@ import type {
 } from "./types";
 
 export type FeatureRegistry = {
-  register<TKind extends Fragment["kind"]>(mod: FeatureModule<TKind>): void;
-  get<TKind extends Fragment["kind"]>(
+  register: <TKind extends Fragment["kind"]>(mod: FeatureModule<TKind>) => void;
+  get: <TKind extends Fragment["kind"]>(
     kind: TKind,
-  ): FeatureModule<TKind> | undefined;
-  has(kind: Fragment["kind"]): boolean;
-  render(input: FeatureDispatchInput): HTMLElement;
+  ) => FeatureModule<TKind> | undefined;
+  has: (kind: Fragment["kind"]) => boolean;
+  render: (input: FeatureDispatchInput) => HTMLElement;
 };
 
 export type CreateFeatureRegistryOptions = {

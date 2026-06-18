@@ -70,19 +70,19 @@ export type MarkExtensionConfig = {
 export type Extension = {
   type: "extension";
   config: ExtensionConfig;
-  onSchemaReady(ctx: ExtensionContext): ExtensionRuntime;
+  onSchemaReady: (ctx: ExtensionContext) => ExtensionRuntime;
 };
 
 export type NodeExtension = {
   type: "node";
   config: NodeExtensionConfig;
-  onSchemaReady(ctx: ExtensionContext): ExtensionRuntime;
+  onSchemaReady: (ctx: ExtensionContext) => ExtensionRuntime;
 };
 
 export type MarkExtension = {
   type: "mark";
   config: MarkExtensionConfig;
-  onSchemaReady(ctx: ExtensionContext): ExtensionRuntime;
+  onSchemaReady: (ctx: ExtensionContext) => ExtensionRuntime;
 };
 
 export type AnyExtension = Extension | NodeExtension | MarkExtension;
@@ -97,7 +97,7 @@ type ExtensionDefinitionWithDefaults<TOptions extends ExtensionOptions> = {
   name: string;
   priority?: ExtensionPriority;
   defaultOptions: TOptions;
-  onSchemaReady(ctx: ExtensionContext, options: TOptions): ExtensionRuntime;
+  onSchemaReady: (ctx: ExtensionContext, options: TOptions) => ExtensionRuntime;
 };
 
 type ExtensionDefinitionWithoutDefaults<
@@ -106,10 +106,10 @@ type ExtensionDefinitionWithoutDefaults<
   name: string;
   priority?: ExtensionPriority;
   defaultOptions?: undefined;
-  onSchemaReady(
+  onSchemaReady: (
     ctx: ExtensionContext,
     options: Partial<TOptions>,
-  ): ExtensionRuntime;
+  ) => ExtensionRuntime;
 };
 
 export type ExtensionDefinition<
@@ -124,7 +124,10 @@ type NodeExtensionDefinitionWithDefaults<TOptions extends ExtensionOptions> = {
   defaultOptions: TOptions;
   schemaNodeName: string;
   nodeSpec: NodeSpec | ((options: TOptions) => NodeSpec);
-  onSchemaReady?(ctx: ExtensionContext, options: TOptions): ExtensionRuntime;
+  onSchemaReady?: (
+    ctx: ExtensionContext,
+    options: TOptions,
+  ) => ExtensionRuntime;
 };
 
 type NodeExtensionDefinitionWithoutDefaults<
@@ -135,10 +138,10 @@ type NodeExtensionDefinitionWithoutDefaults<
   defaultOptions?: undefined;
   schemaNodeName: string;
   nodeSpec: NodeSpec | ((options: Partial<TOptions>) => NodeSpec);
-  onSchemaReady?(
+  onSchemaReady?: (
     ctx: ExtensionContext,
     options: Partial<TOptions>,
-  ): ExtensionRuntime;
+  ) => ExtensionRuntime;
 };
 
 export type NodeExtensionDefinition<
@@ -153,7 +156,10 @@ type MarkExtensionDefinitionWithDefaults<TOptions extends ExtensionOptions> = {
   defaultOptions: TOptions;
   schemaMarkName: string;
   markSpec: MarkSpec | ((options: TOptions) => MarkSpec);
-  onSchemaReady?(ctx: ExtensionContext, options: TOptions): ExtensionRuntime;
+  onSchemaReady?: (
+    ctx: ExtensionContext,
+    options: TOptions,
+  ) => ExtensionRuntime;
 };
 
 type MarkExtensionDefinitionWithoutDefaults<
@@ -164,10 +170,10 @@ type MarkExtensionDefinitionWithoutDefaults<
   defaultOptions?: undefined;
   schemaMarkName: string;
   markSpec: MarkSpec | ((options: Partial<TOptions>) => MarkSpec);
-  onSchemaReady?(
+  onSchemaReady?: (
     ctx: ExtensionContext,
     options: Partial<TOptions>,
-  ): ExtensionRuntime;
+  ) => ExtensionRuntime;
 };
 
 export type MarkExtensionDefinition<

@@ -72,49 +72,49 @@ export type StyleEngineCacheStats = {
  */
 export type StyleEngine = {
   /** Look up a single named style by id. */
-  getStyle(styleId: string): Style | undefined;
+  getStyle: (styleId: string) => Style | undefined;
   /** True if a style with the given id is registered. */
-  hasStyle(styleId: string): boolean;
+  hasStyle: (styleId: string) => boolean;
   /** Return the document-wide defaults (`w:docDefaults`). */
-  getDocDefaults(): DocDefaults | undefined;
+  getDocDefaults: () => DocDefaults | undefined;
   /** The style flagged `w:default="1"` for paragraphs, else "Normal". */
-  getDefaultParagraphStyle(): Style | undefined;
+  getDefaultParagraphStyle: () => Style | undefined;
   /** The style flagged `w:default="1"` for character styles. */
-  getDefaultCharacterStyle(): Style | undefined;
+  getDefaultCharacterStyle: () => Style | undefined;
   /** The style flagged `w:default="1"` for tables. */
-  getDefaultTableStyle(): Style | undefined;
+  getDefaultTableStyle: () => Style | undefined;
   /** All visible paragraph styles, sorted for toolbar use. */
-  getParagraphStyles(): Style[];
+  getParagraphStyles: () => Style[];
   /** All visible table styles, sorted for the table-style gallery. */
-  getTableStyles(): Style[];
+  getTableStyles: () => Style[];
 
   /**
    * Resolve the full paragraph cascade for a given styleId.
    * Returned object is cached and must not be mutated.
    */
-  resolveParagraphStyle(
+  resolveParagraphStyle: (
     styleId: string | undefined | null,
-  ): ResolvedParagraphStyle;
+  ) => ResolvedParagraphStyle;
   /**
    * Resolve a run/character style with docDefaults applied.
    * Returns `undefined` when the cascade yields nothing.
    */
-  resolveRunStyle(
+  resolveRunStyle: (
     styleId: string | undefined | null,
-  ): TextFormatting | undefined;
+  ) => TextFormatting | undefined;
   /**
    * Return a run style's own properties without docDefaults applied —
    * used when the caller has already merged docDefaults via the
    * paragraph cascade and would otherwise double-apply font defaults.
    */
-  getRunStyleOwnProperties(
+  getRunStyleOwnProperties: (
     styleId: string | undefined | null,
-  ): TextFormatting | undefined;
+  ) => TextFormatting | undefined;
 
   /** Drop every memoized cascade result. */
-  invalidate(): void;
+  invalidate: () => void;
   /** Inspect cache effectiveness (hits, misses, current size). */
-  stats(): StyleEngineCacheStats;
+  stats: () => StyleEngineCacheStats;
 };
 
 /**

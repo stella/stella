@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import nodePath from "node:path";
 
-const HANDLERS_DIR = join(import.meta.dir, "../../handlers");
+const HANDLERS_DIR = nodePath.join(import.meta.dir, "../../handlers");
 const FILE_SCHEMA_START = "t.File(";
 
 const listTypeScriptFiles = async (dir: string): Promise<string[]> => {
@@ -10,7 +10,7 @@ const listTypeScriptFiles = async (dir: string): Promise<string[]> => {
   const files: string[] = [];
 
   for (const entry of entries) {
-    const path = join(dir, entry.name);
+    const path = nodePath.join(dir, entry.name);
     if (entry.isDirectory()) {
       files.push(...(await listTypeScriptFiles(path)));
       continue;

@@ -394,6 +394,7 @@ const withHttpServer = async (
       throw new Error("Expected TCP server address");
     }
 
+    // oxlint-disable-next-line node/callback-return -- callback returns void; returning it trips no-confusing-void-expression, and the finally block runs cleanup after it resolves
     await callback(address.port);
   } finally {
     await new Promise<void>((resolve, reject) => {

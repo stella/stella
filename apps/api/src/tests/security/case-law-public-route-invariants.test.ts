@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { resolve } from "node:path";
+import nodePath from "node:path";
 
 import type { ScopedDb } from "@/api/db";
 import type {
@@ -31,9 +31,9 @@ const SITEMAP_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/sitemap.ts";
 const PUBLIC_READ_DB_FILE = "apps/api/src/lib/case-law-public-read-db.ts";
 
-const repoRoot = resolve(import.meta.dir, "../../../../..");
+const repoRoot = nodePath.resolve(import.meta.dir, "../../../../..");
 const readSource = async (path: string) =>
-  await Bun.file(resolve(repoRoot, path)).text();
+  await Bun.file(nodePath.resolve(repoRoot, path)).text();
 
 const readRoutesSource = async () => await readSource(ROUTES_FILE);
 const readListSource = async () => await readSource(LIST_DECISIONS_FILE);

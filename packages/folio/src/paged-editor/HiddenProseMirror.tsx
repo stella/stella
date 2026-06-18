@@ -144,44 +144,44 @@ export type HiddenProseMirrorRemoteSelection = {
 
 type CollaborationAwareness = {
   clientID: number;
-  getStates(): Map<number, unknown>;
-  off(event: "change" | "update", handler: () => void): void;
-  on(event: "change" | "update", handler: () => void): void;
+  getStates: () => Map<number, unknown>;
+  off: (event: "change" | "update", handler: () => void) => void;
+  on: (event: "change" | "update", handler: () => void) => void;
 };
 
 export type HiddenProseMirrorRef = {
   /** Get the ProseMirror EditorState */
-  getState(): EditorState | null;
+  getState: () => EditorState | null;
   /** Get the ProseMirror EditorView */
-  getView(): EditorView | null;
+  getView: () => EditorView | null;
   /** Get the current Document from PM state */
-  getDocument(): Document | null;
+  getDocument: () => Document | null;
   /** Focus the hidden editor */
-  focus(): void;
+  focus: () => void;
   /** Blur the hidden editor */
-  blur(): void;
+  blur: () => void;
   /** Check if focused */
-  isFocused(): boolean;
+  isFocused: () => boolean;
   /** Dispatch a transaction */
-  dispatch(tr: Transaction): void;
+  dispatch: (tr: Transaction) => void;
   /** Execute a ProseMirror command */
-  executeCommand(command: Command): boolean;
+  executeCommand: (command: Command) => boolean;
   /** Undo */
-  undo(): boolean;
+  undo: () => boolean;
   /** Redo */
-  redo(): boolean;
+  redo: () => boolean;
   /** Check if undo is available */
-  canUndo(): boolean;
+  canUndo: () => boolean;
   /** Check if redo is available */
-  canRedo(): boolean;
+  canRedo: () => boolean;
   /** Set selection by PM position */
-  setSelection(anchor: number, head?: number): void;
+  setSelection: (anchor: number, head?: number) => void;
   /** Set node selection at a PM position (for images, etc.) */
-  setNodeSelection(pos: number): void;
+  setNodeSelection: (pos: number) => void;
   /** Set cell selection between two positions inside table cells */
-  setCellSelection(anchorCellPos: number, headCellPos: number): void;
+  setCellSelection: (anchorCellPos: number, headCellPos: number) => void;
   /** Scroll the PM view to selection (no-op since hidden) */
-  scrollToSelection(): void;
+  scrollToSelection: () => void;
 };
 
 type YSyncState = {

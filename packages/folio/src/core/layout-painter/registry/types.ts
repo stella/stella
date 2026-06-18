@@ -78,7 +78,7 @@ export type FeatureRenderInput<TKind extends Fragment["kind"]> = {
  */
 export type FeatureModule<TKind extends Fragment["kind"] = Fragment["kind"]> = {
   readonly kind: TKind;
-  render(input: FeatureRenderInput<TKind>): HTMLElement;
+  render: (input: FeatureRenderInput<TKind>) => HTMLElement;
 };
 
 /**

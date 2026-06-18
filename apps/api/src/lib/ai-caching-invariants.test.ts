@@ -1,7 +1,7 @@
 import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import path from "node:path";
 
 /**
  * Caching middleware enforcement: model factories must only be
@@ -17,7 +17,7 @@ import { resolve } from "node:path";
  */
 describe("ai-models.ts is the only model-factory boundary", () => {
   test("no other file imports model factories from @ai-sdk/* or @openrouter/*", async () => {
-    const apiSrc = resolve(import.meta.dir, "..");
+    const apiSrc = path.resolve(import.meta.dir, "..");
     const glob = new Glob("**/*.ts");
     const ALLOWED = new Set(["lib/ai-models.ts"]);
     const FORBIDDEN_NAMES = [
@@ -42,7 +42,7 @@ describe("ai-models.ts is the only model-factory boundary", () => {
       if (relative.endsWith(".test.ts")) {
         continue;
       }
-      const contents = await readFile(resolve(apiSrc, relative), "utf-8");
+      const contents = await readFile(path.resolve(apiSrc, relative), "utf-8");
       if (!FORBIDDEN_RE.test(contents)) {
         continue;
       }

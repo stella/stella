@@ -76,7 +76,7 @@ export type WebSearchProviderResponse = {
 
 export type WebSearchProvider = {
   readonly name: WebSearchProviderName;
-  search(args: WebSearchProviderArgs): Promise<WebSearchProviderResponse>;
+  search: (args: WebSearchProviderArgs) => Promise<WebSearchProviderResponse>;
 };
 
 export type UrlFetcherArgs = {
@@ -87,7 +87,7 @@ export type UrlFetcherArgs = {
 
 export type UrlFetcher = {
   readonly name: UrlFetcherName;
-  fetch(args: UrlFetcherArgs): Promise<FetchUrlOutput>;
+  fetch: (args: UrlFetcherArgs) => Promise<FetchUrlOutput>;
 };
 
 export class WebSearchProviderError extends TaggedError(

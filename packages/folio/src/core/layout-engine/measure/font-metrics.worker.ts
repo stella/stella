@@ -31,7 +31,7 @@ class WorkerInitError extends TaggedError("WorkerInitError")<{
 
 type WorkerCanvasContext = {
   font: string;
-  measureText(text: string): { width: number };
+  measureText: (text: string) => { width: number };
 };
 
 let ctx: WorkerCanvasContext | null = null;

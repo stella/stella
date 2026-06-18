@@ -5,14 +5,14 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import path from "node:path";
 import { visualizer } from "rollup-plugin-visualizer";
 import { defineConfig, type Plugin } from "vite";
 
 const APP_ROOT = import.meta.dirname;
 const ANALYZE_MODE = "analyze";
 const APP_VERSION = readFileSync(
-  resolve(APP_ROOT, "../../VERSION"),
+  path.resolve(APP_ROOT, "../../VERSION"),
   "utf-8",
 ).trim();
 
@@ -24,7 +24,7 @@ const readCommitSha = () => {
 
   try {
     return execFileSync("git", ["rev-parse", "HEAD"], {
-      cwd: resolve(APP_ROOT, "../.."),
+      cwd: path.resolve(APP_ROOT, "../.."),
       encoding: "utf-8",
     }).trim();
   } catch {

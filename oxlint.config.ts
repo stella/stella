@@ -179,6 +179,17 @@ export default defineConfig({
     "func-style": "off",
     "func-names": "off",
 
+    // Deferred: ultracite 7.8.3 promoted these to error. Each needs a
+    // dedicated, per-site review rather than a bulk autofix, so they are
+    // adopted in their own follow-up PRs:
+    //   - no-await-in-loop: many sequential awaits are intentional
+    //     (ordering, rate limits, transaction sequencing); parallelizing
+    //     would change behavior.
+    //   - prefer-named-capture-group: requires naming groups and rewriting
+    //     index-based match access.
+    "no-await-in-loop": "off",
+    "prefer-named-capture-group": "off",
+
     "typescript/no-inferrable-types": "off",
     "typescript/consistent-return": "error",
     "typescript/dot-notation": "error",

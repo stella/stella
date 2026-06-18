@@ -1,27 +1,29 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
-import { extname, join, relative } from "node:path";
+import nodePath from "node:path";
 
-const REPO_ROOT = join(import.meta.dirname, "../../../../..");
+const REPO_ROOT = nodePath.join(import.meta.dirname, "../../../../..");
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx"]);
 const TEST_FILE_PATTERN = /\.(test|spec)\.tsx?$/u;
 
 const listSourceFiles = (relativeDir: string): string[] => {
-  const root = join(REPO_ROOT, relativeDir);
+  const root = nodePath.join(REPO_ROOT, relativeDir);
   const files: string[] = [];
 
   for (const entry of readdirSync(root, { withFileTypes: true })) {
-    const path = join(root, entry.name);
+    const path = nodePath.join(root, entry.name);
 
     if (entry.isDirectory()) {
-      for (const nested of listSourceFiles(relative(REPO_ROOT, path))) {
+      for (const nested of listSourceFiles(
+        nodePath.relative(REPO_ROOT, path),
+      )) {
         files.push(nested);
       }
       continue;
     }
 
     if (
-      !SOURCE_EXTENSIONS.has(extname(entry.name)) ||
+      !SOURCE_EXTENSIONS.has(nodePath.extname(entry.name)) ||
       TEST_FILE_PATTERN.test(entry.name)
     ) {
       continue;

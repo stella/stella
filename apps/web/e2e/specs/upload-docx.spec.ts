@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import path from "node:path";
 
 import { apiGet, apiStatus, apiUploadDocx } from "../helpers/api";
 import {
@@ -11,7 +11,7 @@ import {
 
 const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-const DOCX_PATH = resolve(import.meta.dirname, "../fixtures/simple.docx");
+const DOCX_PATH = path.resolve(import.meta.dirname, "../fixtures/simple.docx");
 
 test.describe("DOCX upload + inspector", () => {
   let workspace: TestWorkspace | null = null;

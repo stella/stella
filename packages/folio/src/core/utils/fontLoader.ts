@@ -162,6 +162,7 @@ export function onFontsLoaded(callback: (fonts: string[]) => void): () => void {
 function notifyCallbacks(fonts: string[]): void {
   for (const callback of loadCallbacks) {
     try {
+      // oxlint-disable-next-line node/callback-return -- notify every registered callback; returning would stop the loop early
       callback(fonts);
     } catch {
       // ignore

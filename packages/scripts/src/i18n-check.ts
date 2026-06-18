@@ -12,7 +12,7 @@
  *                    the current untranslated/duplicate debt so the gate
  *                    stays green while catching new regressions.
  */
-import { resolve } from "node:path";
+import path from "node:path";
 
 export type NestedMessages = {
   [key: string]: string | NestedMessages;
@@ -338,7 +338,7 @@ if (import.meta.main) {
   }
 
   const readLang = async (filename: string): Promise<NestedMessages> => {
-    const content = await Bun.file(resolve(langsDir, filename)).text();
+    const content = await Bun.file(path.resolve(langsDir, filename)).text();
     // SAFETY: i18n JSON files conform to NestedMessages; script validates
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     return JSON.parse(content) as NestedMessages;
@@ -350,7 +350,7 @@ if (import.meta.main) {
 
   // Baseline grandfathers existing untranslated/duplicate debt (kept beside
   // the langs dir so the *.json glob does not treat it as a locale).
-  const baselinePath = resolve(langsDir, "..", "i18n-check-baseline.json");
+  const baselinePath = path.resolve(langsDir, "..", "i18n-check-baseline.json");
   const readBaseline = async (): Promise<CheckBaseline> => {
     const file = Bun.file(baselinePath);
     if (!(await file.exists())) {
@@ -409,7 +409,7 @@ if (import.meta.main) {
 
   // Check and sort en.json
   if (!isSorted(enRaw)) {
-    const enPath = resolve(langsDir, "en.json");
+    const enPath = path.resolve(langsDir, "en.json");
     console.log(`\n${enPath}:`);
     console.log("  ~ unsorted keys");
     hasIssues = true;
@@ -427,7 +427,7 @@ if (import.meta.main) {
     const duplicates = findCommonDuplicates(enMessages, baseline);
     if (duplicates.length > 0) {
       hasIssues = true;
-      console.log(`\n${resolve(langsDir, "en.json")}:`);
+      console.log(`\n${path.resolve(langsDir, "en.json")}:`);
       for (const { key, reuse } of duplicates) {
         console.log(
           `  = duplicate of ${reuse}: ${key} (reuse it, or baseline it)`,
@@ -458,7 +458,7 @@ if (import.meta.main) {
     }
 
     hasIssues = true;
-    const filePath = resolve(langsDir, file);
+    const filePath = path.resolve(langsDir, file);
     console.log(`\n${filePath}:`);
 
     for (const key of missing) {

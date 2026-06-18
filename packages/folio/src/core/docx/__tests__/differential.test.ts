@@ -17,11 +17,11 @@
 
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { join } from "node:path";
+import path from "node:path";
 
 import { runDifferential } from "../../../../scripts/differential/diff";
 
-const FIXTURE_PATH = join(
+const FIXTURE_PATH = path.join(
   import.meta.dir,
   "__fixtures__",
   "regressions",

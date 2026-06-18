@@ -11,10 +11,10 @@ import { describe, expect, test } from "bun:test";
 // mode is a regression that drops the prefix and re-introduces the HF
 // bleed at the page-container or page-element level.
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 
 const SOURCE = readFileSync(
-  join(import.meta.dirname, "clickToPositionDom.ts"),
+  path.join(import.meta.dirname, "clickToPositionDom.ts"),
   "utf-8",
 );
 

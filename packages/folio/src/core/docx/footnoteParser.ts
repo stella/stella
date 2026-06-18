@@ -58,19 +58,19 @@ export type FootnoteMap = {
   footnotes: Footnote[];
 
   /** Get footnote by ID */
-  getFootnote(id: number): Footnote | undefined;
+  getFootnote: (id: number) => Footnote | undefined;
 
   /** Check if footnote exists */
-  hasFootnote(id: number): boolean;
+  hasFootnote: (id: number) => boolean;
 
   /** Get all normal (non-separator) footnotes */
-  getNormalFootnotes(): Footnote[];
+  getNormalFootnotes: () => Footnote[];
 
   /** Get separator footnote if exists */
-  getSeparator(): Footnote | undefined;
+  getSeparator: () => Footnote | undefined;
 
   /** Get continuation separator if exists */
-  getContinuationSeparator(): Footnote | undefined;
+  getContinuationSeparator: () => Footnote | undefined;
 };
 
 /**
@@ -84,19 +84,19 @@ export type EndnoteMap = {
   endnotes: Endnote[];
 
   /** Get endnote by ID */
-  getEndnote(id: number): Endnote | undefined;
+  getEndnote: (id: number) => Endnote | undefined;
 
   /** Check if endnote exists */
-  hasEndnote(id: number): boolean;
+  hasEndnote: (id: number) => boolean;
 
   /** Get all normal (non-separator) endnotes */
-  getNormalEndnotes(): Endnote[];
+  getNormalEndnotes: () => Endnote[];
 
   /** Get separator endnote if exists */
-  getSeparator(): Endnote | undefined;
+  getSeparator: () => Endnote | undefined;
 
   /** Get continuation separator if exists */
-  getContinuationSeparator(): Endnote | undefined;
+  getContinuationSeparator: () => Endnote | undefined;
 };
 
 // ============================================================================

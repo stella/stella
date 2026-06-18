@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import path from "node:path";
 
 import {
   getRlsFixture,
@@ -9,7 +9,7 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-const MIGRATION_PATH = resolve(
+const MIGRATION_PATH = path.resolve(
   import.meta.dir,
   "../../../drizzle/20260603120000_case_law_public_slugs/migration.sql",
 );

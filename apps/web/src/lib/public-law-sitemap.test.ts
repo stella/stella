@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { resolve } from "node:path";
+import nodePath from "node:path";
 
 Object.assign(import.meta.env, {
   VITE_API_URL: "http://localhost:3001",
@@ -22,9 +22,9 @@ const { isWorkspaceDocumentRoutePath } =
 const { WORKSPACE_PRIMARY_NAV_ITEMS } =
   await import("@/components/workspace-primary-nav");
 
-const repoRoot = resolve(import.meta.dir, "../../../..");
+const repoRoot = nodePath.resolve(import.meta.dir, "../../../..");
 const readSource = async (path: string) =>
-  await Bun.file(resolve(repoRoot, path)).text();
+  await Bun.file(nodePath.resolve(repoRoot, path)).text();
 const expectNoDirectAuthImport = (source: string) => {
   expect(source).not.toMatch(/@\/lib\/auth["']/u);
 };

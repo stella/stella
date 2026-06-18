@@ -64,16 +64,16 @@ export type HeaderFooterMap = {
   byId: Map<string, HeaderFooter>;
 
   /** Get header/footer by rId */
-  get(rId: string): HeaderFooter | undefined;
+  get: (rId: string) => HeaderFooter | undefined;
 
   /** Check if header/footer exists */
-  has(rId: string): boolean;
+  has: (rId: string) => boolean;
 
   /** Get all headers/footers */
-  getAll(): HeaderFooter[];
+  getAll: () => HeaderFooter[];
 
   /** Get by type */
-  getByType(type: HeaderFooterType): HeaderFooter | undefined;
+  getByType: (type: HeaderFooterType) => HeaderFooter | undefined;
 };
 
 /**

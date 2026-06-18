@@ -33,6 +33,7 @@ beforeAll(async () => {
   ids = fixture.ids;
   safeDb = async (callback) =>
     await Result.tryPromise(
+      // oxlint-disable-next-line node/callback-return -- arrow body already returns the callback result
       async () => await callback(asTestRaw<Transaction>(testDb)),
     );
 });
