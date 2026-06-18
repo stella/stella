@@ -204,6 +204,36 @@ export type ViewLayoutType = ViewLayout["type"];
 export const parseViewLayout = (value: unknown): ViewLayout =>
   v.parse(viewLayoutSchema, value);
 
+// Recovers a stored layout that fails strict parsing: older views can carry a
+// filter grammar the current schema rejects. Drop the unparseable filters/sorts
+// and retry so a single legacy view can't fail the whole views response; fall
+// back to a minimal filesystem layout only if the row is otherwise unrecoverable.
+export const parseViewLayoutSafe = (value: unknown): ViewLayout => {
+  const direct = v.safeParse(viewLayoutSchema, value);
+  if (direct.success) {
+    return direct.output;
+  }
+
+  if (typeof value === "object" && value !== null) {
+    const sanitized = v.safeParse(viewLayoutSchema, {
+      ...value,
+      filters: [],
+      sorts: [],
+    });
+    if (sanitized.success) {
+      return sanitized.output;
+    }
+  }
+
+  return {
+    type: "filesystem",
+    version: 1,
+    filters: [],
+    sorts: [],
+    hiddenProperties: [],
+  };
+};
+
 const tBaseLayoutSchema = {
   filters: t.Array(tViewFilterConditionSchema),
   sorts: t.Array(tViewSortSchema),

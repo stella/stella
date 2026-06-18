@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import {
   parseViewLayout,
+  parseViewLayoutSafe,
   tViewFilterConditionSchema,
   tViewLayoutSchema,
   tViewTemplatePropertySchema,
@@ -39,6 +40,75 @@ describe("parseViewLayout", () => {
     };
 
     expect(() => parseViewLayout(layout)).toThrow();
+  });
+});
+
+describe("parseViewLayoutSafe", () => {
+  test("returns a well-formed layout unchanged", () => {
+    const layout = {
+      version: 1,
+      type: "table",
+      filters: [],
+      sorts: [],
+      hiddenProperties: [],
+      columnOrder: ["name"],
+      columnPinning: [],
+    } satisfies ViewLayout;
+
+    expect(parseViewLayoutSafe(layout)).toEqual(layout);
+  });
+
+  test("recovers a layout whose filters use a retired grammar by dropping them", () => {
+    // Legacy group/predicate filter AST the current schema no longer accepts.
+    const legacy = {
+      version: 1,
+      type: "table",
+      filters: [
+        {
+          type: "group",
+          combinator: "and",
+          children: [
+            {
+              type: "predicate",
+              operand: { type: "kind" },
+              op: "in",
+              value: [],
+            },
+          ],
+        },
+      ],
+      sorts: [],
+      hiddenProperties: [],
+      columnOrder: ["name"],
+      columnPinning: ["name"],
+    };
+
+    // The raw layout throws under strict parsing...
+    expect(() => parseViewLayout(legacy)).toThrow();
+
+    // ...but the safe parser keeps the table view and its columns, only
+    // dropping the unparseable filters so one legacy view can't fail the list.
+    expect(parseViewLayoutSafe(legacy)).toEqual({
+      version: 1,
+      type: "table",
+      filters: [],
+      sorts: [],
+      hiddenProperties: [],
+      columnOrder: ["name"],
+      columnPinning: ["name"],
+    });
+  });
+
+  test("falls back to a minimal layout for an unrecoverable value and never throws", () => {
+    expect(parseViewLayoutSafe({ type: "garbage" })).toEqual({
+      type: "filesystem",
+      version: 1,
+      filters: [],
+      sorts: [],
+      hiddenProperties: [],
+    });
+    expect(() => parseViewLayoutSafe(null)).not.toThrow();
+    expect(() => parseViewLayoutSafe("not a layout")).not.toThrow();
   });
 });
 
