@@ -320,23 +320,40 @@ const asValueArray = (value: string | string[] | undefined): string[] => {
 
 // -- Compare nodes --
 
-const compareOpSql = (op: CompareNode["op"], expr: SQL, value: string): SQL => {
-  switch (op) {
-    case "eq":
-      return sql`${expr} = ${value}`;
-    case "neq":
-      return sql`${expr} != ${value}`;
-    case "gt":
-      return sql`(${expr})::numeric > ${value}::numeric`;
-    case "lt":
-      return sql`(${expr})::numeric < ${value}::numeric`;
-    case "gte":
-      return sql`(${expr})::numeric >= ${value}::numeric`;
-    case "lte":
-      return sql`(${expr})::numeric <= ${value}::numeric`;
-    default:
-      return sql`TRUE`;
+// Safe numeric form of an arbitrary text expression: non-numeric content
+// becomes NULL (and drops out of comparisons) instead of crashing the cast.
+const safeNumericExpr = (expr: SQL): SQL =>
+  sql`CASE WHEN BTRIM(${expr}::text) ~ ${NUMERIC_TEXT_PATTERN}
+    THEN BTRIM(${expr}::text)::numeric ELSE NULL END`;
+
+const orderedSql = (op: "gt" | "lt" | "gte" | "lte", l: SQL, r: SQL): SQL => {
+  if (op === "gt") {
+    return sql`${l} > ${r}`;
   }
+  if (op === "lt") {
+    return sql`${l} < ${r}`;
+  }
+  if (op === "gte") {
+    return sql`${l} >= ${r}`;
+  }
+  return sql`${l} <= ${r}`;
+};
+
+const compareOpSql = (op: CompareNode["op"], expr: SQL, value: string): SQL => {
+  if (op === "eq") {
+    return sql`${expr} = ${value}`;
+  }
+  if (op === "neq") {
+    return sql`${expr} != ${value}`;
+  }
+  // Ordered comparison: numeric when the literal is a number (non-numeric
+  // field values become NULL and drop out); otherwise a plain text compare so
+  // ISO dates and other strings order correctly, without a cast that would
+  // crash on non-numeric input.
+  if (NUMERIC_TEXT_RE.test(value.trim())) {
+    return orderedSql(op, safeNumericExpr(expr), sql`${Number(value)}`);
+  }
+  return orderedSql(op, expr, sql`${value}`);
 };
 
 const literalString = (operand: Operand): string | null =>
@@ -383,39 +400,59 @@ const compileCompare = (node: CompareNode): SQL | null => {
 
 // -- Predicate nodes --
 
-const propertyLike = (propertyId: string, pattern: string): SQL =>
-  propertyExists(
+/**
+ * Builds an EXISTS predicate over a property's value, transparently handling
+ * multi-select arrays (the value matches if ANY element does) and scalar
+ * values. `elemMatch` receives the per-element/per-scalar text expression.
+ */
+const propertyValueMatches = (
+  propertyId: string,
+  elemMatch: (valueExpr: SQL) => SQL,
+): SQL => {
+  const content = fields.content;
+  const anyElement = sql`EXISTS (
+    SELECT 1 FROM jsonb_array_elements_text(${content}->'value') AS elem
+    WHERE ${elemMatch(sql`elem`)}
+  )`;
+  return propertyExists(
     propertyId,
-    sql`${fieldValueExpr(fields.content)} ILIKE ${pattern}`,
+    sql`CASE WHEN jsonb_typeof(${content}->'value') = 'array'
+      THEN ${anyElement}
+      ELSE ${elemMatch(fieldValueExpr(content))}
+    END`,
   );
+};
 
 const compilePropertyPredicate = (
   propertyId: string,
   node: PredicateNode,
 ): SQL | null => {
-  const valExpr = fieldValueExpr(fields.content);
   const text = String(node.value ?? "");
+  const like = (pattern: string) =>
+    propertyValueMatches(propertyId, (v) => sql`${v} ILIKE ${pattern}`);
   switch (node.op) {
     case "contains":
-      return propertyLike(propertyId, `%${text}%`);
+      return like(`%${text}%`);
     case "not_contains":
       // NOT EXISTS so absent/empty fields count as "does not contain".
-      return sql`NOT ${propertyLike(propertyId, `%${text}%`)}`;
+      return sql`NOT ${like(`%${text}%`)}`;
     case "starts_with":
-      return propertyLike(propertyId, `${text}%`);
+      return like(`${text}%`);
     case "ends_with":
-      return propertyLike(propertyId, `%${text}`);
-    case "is_empty":
-      return propertyExists(propertyId, sql`${valExpr} = ''`);
+      return like(`%${text}`);
     case "is_not_empty":
-      return propertyExists(propertyId, sql`${valExpr} <> ''`);
+      return propertyValueMatches(propertyId, (v) => sql`${v} <> ''`);
+    case "is_empty":
+      // Empty when no non-empty value exists: covers an absent field, an empty
+      // scalar, and an empty array.
+      return sql`NOT ${propertyValueMatches(propertyId, (v) => sql`${v} <> ''`)}`;
     case "contains_all": {
       const wanted = asValueArray(node.value);
       if (wanted.length === 0) {
         return null;
       }
       const clauses = wanted.map((want) =>
-        propertyExists(propertyId, sql`${valExpr} = ${want}`),
+        propertyValueMatches(propertyId, (v) => sql`${v} = ${want}`),
       );
       return and(...clauses) ?? null;
     }
@@ -424,7 +461,10 @@ const compilePropertyPredicate = (
       if (values.length === 0) {
         return null;
       }
-      return propertyExists(propertyId, sql`${valExpr} = ANY(${values})`);
+      return propertyValueMatches(
+        propertyId,
+        (v) => sql`${v} = ANY(${values})`,
+      );
     }
     default:
       return null;
