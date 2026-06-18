@@ -30,7 +30,7 @@
     "@better-auth/oauth-provider": "catalog:",
     "@elysiajs/eden": "^1.4.9",
     "@fontsource-variable/source-serif-4": "^5.2.9",
-    "@hocuspocus/provider": "^4.1.0",
+    "@hocuspocus/provider": "^4.2.0",
     "@libpdf/core": "catalog:",
     "@posthog/react": "^1.10.1",
     "@pydantic/genai-prices": "^0.0.65",
