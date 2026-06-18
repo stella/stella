@@ -121,7 +121,10 @@ schema_file_has_migration_relevant_diff() {
         keptLines.push(line);
       }
 
-      return keptLines.join("\n");
+      // `$type<...>` is a TypeScript-only column annotation with no effect on
+      // the generated DDL (the column stays the same SQL type), so normalize
+      // its generic argument away — like type-only imports above.
+      return keptLines.join("\n").replace(/\.\$type<.*>/gu, ".$type<>");
     };
 
     const currentSource = fs.readFileSync(changedFile, "utf8");
