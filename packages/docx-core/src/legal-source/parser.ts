@@ -589,7 +589,9 @@ const parseTableBlock = (
 ): LegalDraftBlock => {
   const tableLines = pending.lines
     .map((line) => line.trim())
-    .filter((line) => line.startsWith("|") && line.endsWith("|"));
+    // A leading pipe is enough to recognise a row; tolerate a missing trailing
+    // pipe (a common hand-written/AI variant) so the row is not silently dropped.
+    .filter((line) => line.startsWith("|"));
   const rows = tableLines.map(parsePipeRow).filter((row) => row.length > 0);
 
   const header = rows.at(0) ?? [];

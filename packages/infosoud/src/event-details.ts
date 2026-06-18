@@ -30,6 +30,8 @@ import type {
 } from "./types.js";
 
 const HEARING_EVENT_TYPES = new Set(["NAR_JED", "ZRUS_JED"]);
+
+const LAST_MILLISECOND_OF_SECOND = 999;
 const DECISION_EVENT_TYPES = new Set(["VYD_ROZH"]);
 const APPEAL_SUBMISSION_EVENT_TYPES = new Set(["POD_OP_PR"]);
 const APPEAL_DISPOSITION_EVENT_TYPES = new Set(["VYR_OP_PR"]);
@@ -102,6 +104,24 @@ const getEventAttributeMapFromEntries = (
 
 const parseEventDate = (value: string | null | undefined) =>
   parseInfoSoudDate(value);
+
+const getDateOnlyHearingCutoffUnixMs = (
+  value: string | null | undefined,
+): number | null => {
+  const parsed = parseEventDate(value);
+  if (!parsed.isoDate) {
+    return null;
+  }
+
+  // Date-only hearing rows are Czech court days; keep them selectable through
+  // the end of that day in the same Prague wall-time model as timed hearings.
+  const endOfPragueDayUnixMs = parseInfoSoudDateTime(
+    `${parsed.isoDate}T23:59:59`,
+  ).unixMs;
+  return endOfPragueDayUnixMs === null
+    ? null
+    : endOfPragueDayUnixMs + LAST_MILLISECOND_OF_SECOND;
+};
 
 const buildDecodedBase = (
   detail: EventDetailResult,
@@ -386,20 +406,42 @@ export const getNextHearingCaseEvent = (
     .filter((event) => HEARING_EVENT_TYPES.has(event.udalost))
     .filter((event) => {
       if ("decodedDetail" in event && event.decodedDetail?.kind === "hearing") {
-        return !event.decodedDetail.hearing.cancelled;
+        // `cancelled` is null when the JED_ZRUS attribute is absent or
+        // unrecognised; fall back to the event-level `zruseno` flag so a
+        // cancelled hearing whose detail omits JED_ZRUS is still excluded.
+        return event.decodedDetail.hearing.cancelled !== true && !event.zruseno;
       }
 
       return !event.zruseno;
     })
-    .map((event) => ({
-      event,
-      unixMs: getCaseEventDateUnixMs(event),
-    }))
+    .map((event) => {
+      const timedUnixMs =
+        "decodedDetail" in event && event.decodedDetail?.kind === "hearing"
+          ? event.decodedDetail.hearing.startsAtDateTime.unixMs
+          : null;
+      if (timedUnixMs !== null) {
+        return { event, sortUnixMs: timedUnixMs, cutoffUnixMs: timedUnixMs };
+      }
+      const dayUnixMs = parseEventDate(event.datum).unixMs;
+      return {
+        event,
+        sortUnixMs: dayUnixMs,
+        cutoffUnixMs: getDateOnlyHearingCutoffUnixMs(event.datum),
+      };
+    })
     .filter(
-      (value): value is { event: EventWithMaybeDetail; unixMs: number } =>
-        value.unixMs !== null && value.unixMs >= nowUnixMs,
+      (
+        value,
+      ): value is {
+        event: EventWithMaybeDetail;
+        sortUnixMs: number;
+        cutoffUnixMs: number;
+      } =>
+        value.sortUnixMs !== null &&
+        value.cutoffUnixMs !== null &&
+        value.cutoffUnixMs >= nowUnixMs,
     )
-    .toSorted((left, right) => left.unixMs - right.unixMs);
+    .toSorted((left, right) => left.sortUnixMs - right.sortUnixMs);
 
   return futureHearings.at(0)?.event ?? null;
 };

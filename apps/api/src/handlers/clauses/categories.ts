@@ -239,6 +239,37 @@ export const updateCategoryHandler = async function* ({
         }),
       );
     }
+
+    // Walk the ancestor chain to reject a reparent that would create a cycle
+    // (mirrors the template category handler).
+    const visited = new Set<SafeId<"clauseCategory">>([categoryId]);
+    let checkId: SafeId<"clauseCategory"> | null = parentId;
+    while (checkId) {
+      if (visited.has(checkId)) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Cannot create circular category hierarchy",
+          }),
+        );
+      }
+      visited.add(checkId);
+      const currentId: SafeId<"clauseCategory"> = checkId;
+      const ancestor:
+        | { parentId: SafeId<"clauseCategory"> | null }
+        | undefined = yield* Result.await(
+        safeDb((tx) =>
+          tx.query.clauseCategories.findFirst({
+            where: {
+              id: { eq: currentId },
+              organizationId: { eq: organizationId },
+            },
+            columns: { parentId: true },
+          }),
+        ),
+      );
+      checkId = ancestor?.parentId ?? null;
+    }
   }
 
   const updates = {

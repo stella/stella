@@ -1,9 +1,10 @@
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { roundToIncrement } from "@/api/handlers/time-entries/create";
+import { apportionSplitDurations } from "@/api/handlers/time-entries/split-durations";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -112,28 +113,10 @@ const splitEntry = createSafeHandler(
     const now = new Date();
     const newEntryIds: SafeId<"timeEntry">[] = [];
 
-    // Pre-compute durations, assigning remainder to last split
-    // to preserve total duration exactly.
-    const durations: number[] = [];
-    let remaining = original.durationMinutes;
-    for (let i = 0; i < body.splits.length; i++) {
-      const currentSplit = body.splits[i];
-      if (!currentSplit) {
-        panic(`Split at index ${i} is unexpectedly undefined`);
-      }
-      if (i === body.splits.length - 1) {
-        durations.push(Math.max(1, remaining));
-      } else {
-        const d = Math.max(
-          1,
-          Math.round(
-            (original.durationMinutes * currentSplit.percentage) / 100,
-          ),
-        );
-        durations.push(d);
-        remaining -= d;
-      }
-    }
+    const durations = apportionSplitDurations(
+      original.durationMinutes,
+      body.splits.map((split) => split.percentage),
+    );
 
     // Limit check + delete + inserts in one transaction with
     // advisory lock to prevent TOCTOU on the workspace limit.

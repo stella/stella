@@ -341,7 +341,7 @@ const buildSharesByName = (
       continue;
     }
     const stakeholder = deposit.stakeholder?.at(0);
-    const name = stakeholder?.value;
+    const name = normalizeName(stakeholder?.value);
     if (name && !result.has(name)) {
       result.set(name, deposit);
     }

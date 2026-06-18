@@ -2,6 +2,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { isPublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
 import { getTranslator } from "@/i18n/i18n-store";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import {
   createCaseLawDecisionRouteParams,
@@ -110,6 +111,7 @@ export const openCaseLawDecision = async (
       params,
     });
   } catch (error) {
+    getAnalytics().captureError(error);
     const t = getTranslator();
     stellaToast.add({
       title: error instanceof Error ? error.message : t("errors.actionFailed"),

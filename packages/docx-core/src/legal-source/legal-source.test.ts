@@ -54,6 +54,28 @@ describe("Stella Legal Source", () => {
     expect(definitions).toBeDefined();
   });
 
+  test("keeps a pipe-table row that omits the trailing pipe", () => {
+    const source = `@doc kind=agreement locale=en-GB numbering=legal page=A4
+@title T
+
+@table
+| Item | Party |
+| --- | --- |
+| Approval | Alpha Ltd |
+| Consent | Beta Ltd
+| Funding | Gamma Ltd |
+`;
+    const result = parseLegalSource(source);
+    const table = result.draft.blocks.find((block) => block.type === "table");
+    if (table?.type !== "table") {
+      throw new Error("expected a table block");
+    }
+    expect(table.table.rows).toHaveLength(3);
+    const cells = table.table.rows.flat();
+    expect(cells).toContain("Consent");
+    expect(cells).toContain("Beta Ltd");
+  });
+
   test("parses quoted doc attributes and reports invalid known values", () => {
     const result = parseLegalSource(
       [
@@ -334,9 +356,10 @@ describe("Stella Legal Source", () => {
     expect(zip.file("word/numbering.xml")).toBeTruthy();
 
     const documentXml = await zip.file("word/document.xml")?.async("string");
-    expect(documentXml).toContain(
-      "Mutual Non-Disclosure Agreement".toUpperCase(),
-    );
+    // Title text is stored in original case; the Title style's allCaps renders it
+    // uppercase in Word (a manual toUpperCase would corrupt non-English casing).
+    expect(documentXml).toContain("Mutual Non-Disclosure Agreement");
+    expect(documentXml).not.toContain("MUTUAL NON-DISCLOSURE AGREEMENT");
     expect(documentXml).toContain("<w:numPr>");
     expect(documentXml).toContain("<w:tbl>");
     expect(documentXml).toContain("<w:tblGrid>");
@@ -344,5 +367,8 @@ describe("Stella Legal Source", () => {
     const numberingXml = await zip.file("word/numbering.xml")?.async("string");
     expect(numberingXml).toContain("<w:nsid");
     expect(numberingXml).toContain("<w:lvlJc");
+    // CT_Lvl child order (ECMA-376): isLgl and suff must precede lvlText.
+    expect(numberingXml).toContain('<w:isLgl/><w:suff w:val="tab"/>');
+    expect(numberingXml).toContain('<w:suff w:val="tab"/><w:lvlText');
   });
 });

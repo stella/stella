@@ -160,6 +160,20 @@ const updateProperty = createSafeHandler(
     recordAuditEvent,
   }) {
     const { name, content } = body;
+
+    if (
+      (content.type === "single-select" || content.type === "multi-select") &&
+      content.fallback !== null &&
+      !content.options.some((option) => option.value === content.fallback)
+    ) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Fallback must match one of the supplied options",
+        }),
+      );
+    }
+
     const tool =
       body.tool.type === "ai-model" ? serializeAITool(body.tool) : body.tool;
 
