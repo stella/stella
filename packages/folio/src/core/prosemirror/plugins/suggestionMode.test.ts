@@ -4,7 +4,7 @@
 
 import { describe, test, expect } from "bun:test";
 import { history, undo } from "prosemirror-history";
-import { Schema } from "prosemirror-model";
+import { Fragment, Schema, Slice } from "prosemirror-model";
 import { EditorState, TextSelection } from "prosemirror-state";
 import type { Transaction } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
@@ -14,6 +14,7 @@ import {
   suggestionModeKey,
   setSuggestionMode,
   handleSuggestionEnter,
+  handleSuggestionPaste,
 } from "./suggestionMode";
 
 // Minimal schema with insertion/deletion marks
@@ -199,6 +200,99 @@ describe("SuggestionMode Plugin", () => {
       const worldEntry = marks.find((m) => m.text.includes("World"));
       expect(worldEntry).toBeDefined();
       expect(worldEntry?.marks).toContain("deletion");
+    });
+  });
+
+  describe("handlePaste (#784)", () => {
+    function mockView(state: EditorState): {
+      view: EditorView;
+      get: () => EditorState;
+    } {
+      let current = state;
+      const view = {
+        get state() {
+          return current;
+        },
+        dispatch(tr: Transaction) {
+          current = current.apply(tr);
+        },
+      } as unknown as EditorView;
+      return { view, get: () => current };
+    }
+
+    test("pasting over a selection marks the replacement as deletion + insertion", () => {
+      // "The lazy dog": select "lazy" ([5,9)) and paste "quick".
+      let state = createState("The lazy dog", true);
+      const sel = TextSelection.create(state.doc, 5, 9);
+      state = state.apply(state.tr.setSelection(sel));
+
+      const { view, get } = mockView(state);
+      const slice = new Slice(Fragment.from(schema.text("quick")), 0, 0);
+      const pluginState = suggestionModeKey.getState(state)!;
+
+      const handled = handleSuggestionPaste(view, slice, pluginState);
+      expect(handled).toBe(true);
+
+      const marks = getMarks(get());
+      const deleted = marks.find((m) => m.text.includes("lazy"));
+      expect(deleted?.marks).toContain("deletion");
+      const inserted = marks.find((m) => m.text.includes("quick"));
+      expect(inserted?.marks).toContain("insertion");
+      expect(inserted?.marks).not.toContain("deletion");
+      // The replaced text is preserved (struck through), not destroyed.
+      expect(getText(get())).toContain("lazy");
+      // The selection collapses after the pasted content, so the next keystroke
+      // does not delete the struck-through original plus the paste.
+      expect(get().selection.empty).toBe(true);
+    });
+
+    test("pasting block content over a selection fits the slice and tracks it", () => {
+      // Select "lazy" and paste two whole paragraphs (block content). A raw
+      // `replace` at the inline point would fail or drop structure; the
+      // slice-fitting `replaceRange` places the blocks and tracks them.
+      let state = createState("The lazy dog", true);
+      state = state.apply(
+        state.tr.setSelection(TextSelection.create(state.doc, 5, 9)),
+      );
+
+      const { view, get } = mockView(state);
+      const blockSlice = new Slice(
+        Fragment.from([
+          schema.node("paragraph", null, [schema.text("one")]),
+          schema.node("paragraph", null, [schema.text("two")]),
+        ]),
+        1,
+        1,
+      );
+      const pluginState = suggestionModeKey.getState(state)!;
+
+      const handled = handleSuggestionPaste(view, blockSlice, pluginState);
+      expect(handled).toBe(true);
+
+      const text = getText(get());
+      expect(text).toContain("one");
+      expect(text).toContain("two");
+      // The replaced original is struck through, not destroyed.
+      expect(text).toContain("lazy");
+      const marks = getMarks(get());
+      expect(marks.find((m) => m.text.includes("one"))?.marks).toContain(
+        "insertion",
+      );
+      expect(marks.find((m) => m.text.includes("lazy"))?.marks).toContain(
+        "deletion",
+      );
+    });
+
+    test("pasting at a collapsed cursor is declined (default paste handles it)", () => {
+      let state = createState("abc", true);
+      state = state.apply(
+        state.tr.setSelection(TextSelection.create(state.doc, 2)),
+      );
+      const { view } = mockView(state);
+      const slice = new Slice(Fragment.from(schema.text("X")), 0, 0);
+      const pluginState = suggestionModeKey.getState(state)!;
+
+      expect(handleSuggestionPaste(view, slice, pluginState)).toBe(false);
     });
   });
 

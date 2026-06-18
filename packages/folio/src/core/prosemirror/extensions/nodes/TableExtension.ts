@@ -15,6 +15,9 @@ import {
   mergeCells as pmMergeCells,
   splitCell as pmSplitCell,
   CellSelection,
+  selectedRect,
+  removeRow,
+  TableMap,
 } from "prosemirror-tables";
 import { Decoration, DecorationSet } from "prosemirror-view";
 
@@ -1252,21 +1255,70 @@ export const TablePluginExtension = createExtension({
         !context.isInTable ||
         context.rowIndex === undefined ||
         !context.table ||
-        context.tablePos === undefined ||
-        (context.rowCount ?? 0) <= 1
+        context.tablePos === undefined
       ) {
         return false;
       }
+      const tablePos = context.tablePos;
+      const table = context.table;
+      const rowCount = context.rowCount ?? 0;
+      if (rowCount <= 0) {
+        return false;
+      }
+
+      // A CellSelection deletes every row it covers; a plain caret deletes only
+      // its own row — even inside a vertically merged cell, whose rowspan would
+      // otherwise make `selectedRect` cover the whole merged span
+      // (eigenpal/docx-editor#783).
+      let firstRow: number;
+      let lastRow: number;
+      if (state.selection instanceof CellSelection) {
+        const rect = selectedRect(state);
+        firstRow = Math.max(0, Math.min(rect.top, rowCount - 1));
+        lastRow = Math.min(Math.max(rect.bottom - 1, firstRow), rowCount - 1);
+      } else {
+        firstRow = context.rowIndex;
+        lastRow = context.rowIndex;
+      }
+      const coversAllRows = firstRow === 0 && lastRow >= rowCount - 1;
 
       if (dispatch) {
         const tr = state.tr;
-        let rowStart = context.tablePos + 1;
-        for (let i = 0; i < context.rowIndex; i++) {
-          rowStart += context.table.child(i).nodeSize;
+        if (coversAllRows) {
+          // Deleting every row deletes the table (Word drops an emptied table).
+          // If the table is its parent's only child, a bare delete would leave
+          // an empty doc/cell, which the schema forbids — replace it with an
+          // empty paragraph in that case so the parent keeps a valid block.
+          const tableEnd = tablePos + table.nodeSize;
+          const parent = state.doc.resolve(tablePos).parent;
+          const emptyParagraph =
+            parent.childCount === 1
+              ? state.schema.nodes["paragraph"]?.createAndFill()
+              : null;
+          if (emptyParagraph) {
+            tr.replaceWith(tablePos, tableEnd, emptyParagraph);
+            tr.setSelection(TextSelection.near(tr.doc.resolve(tablePos + 1)));
+          } else {
+            tr.delete(tablePos, tableEnd);
+          }
+          dispatch(tr.scrollIntoView());
+          return true;
         }
-        const rowEnd =
-          rowStart + context.table.child(context.rowIndex).nodeSize;
-        tr.delete(rowStart, rowEnd);
+        // Remove rows bottom-up through prosemirror-tables so cells that span
+        // into a deleted row have their rowspan adjusted (and their content
+        // preserved) instead of being orphaned. `removeRow` mutates the table,
+        // so the map is re-read after each removal.
+        const rect = selectedRect(state);
+        for (let row = lastRow; row >= firstRow; row--) {
+          removeRow(tr, rect, row);
+          if (row > firstRow) {
+            const updated = tr.doc.nodeAt(rect.tableStart - 1);
+            if (updated) {
+              rect.table = updated;
+              rect.map = TableMap.get(updated);
+            }
+          }
+        }
         dispatch(tr.scrollIntoView());
       }
       return true;
