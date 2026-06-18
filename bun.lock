@@ -630,7 +630,7 @@
   "catalog": {
     "@base-ui/react": "1.5.0",
     "@better-auth/oauth-provider": "1.6.12",
-    "@libpdf/core": "0.3.6",
+    "@libpdf/core": "0.4.0",
     "@stll/anonymize-data": "0.0.6",
     "@stll/anonymize-wasm": "1.4.11",
     "@t3-oss/env-core": "0.13.11",
@@ -1099,7 +1099,7 @@
 
     "@js-temporal/polyfill": ["@js-temporal/polyfill@0.5.1", "", { "dependencies": { "jsbi": "^4.3.0" } }, "sha512-hloP58zRVCRSpgDxmqCWJNlizAlUgJFqG2ypq79DCvyv9tHjRYMDOcPFjzfl/A1/YxDvRCZz8wvZvmapQnKwFQ=="],
 
-    "@libpdf/core": ["@libpdf/core@0.3.6", "", { "dependencies": { "@noble/ciphers": "^2.2.0", "@noble/hashes": "^2.2.0", "@scure/base": "^2.2.0", "asn1js": "^3.0.10", "lru-cache": "^11.4.0", "pako": "^2.1.0", "pkijs": "^3.4.0" }, "peerDependencies": { "@google-cloud/kms": "^5.0.0", "@google-cloud/secret-manager": "^6.0.0" }, "optionalPeers": ["@google-cloud/kms", "@google-cloud/secret-manager"] }, "sha512-VzRUXaDq+M9qrroKiipCgePK2mwKM3M6DY7B0yfXnxD4aYnUxD/nUtkcsHCBUUnJpkX9rWikdEhYa5vU8ZlReg=="],
+    "@libpdf/core": ["@libpdf/core@0.4.0", "", { "dependencies": { "@noble/ciphers": "^2.2.0", "@noble/hashes": "^2.2.0", "@scure/base": "^2.2.0", "asn1js": "^3.0.10", "lru-cache": "^11.5.1", "pako": "^2.1.0", "pkijs": "^3.4.0" }, "peerDependencies": { "@google-cloud/kms": "^5.0.0", "@google-cloud/secret-manager": "^6.0.0" }, "optionalPeers": ["@google-cloud/kms", "@google-cloud/secret-manager"] }, "sha512-G9nZRjf9DGDJaS/C23YWogk8akPM7O/6HfMslxVsKTKRbbbb+0szpQIetcGGUGRu7KtmBDmGDWCgz//DXSmq8A=="],
 
     "@lifeomic/attempt": ["@lifeomic/attempt@3.1.0", "", {}, "sha512-QZqem4QuAnAyzfz+Gj5/+SLxqwCAw2qmt7732ZXodr6VDWGeYLG6w1i/vYLa55JQM9wRuBKLmXmiZ2P0LtE5rw=="],
 
@@ -2833,7 +2833,7 @@
 
     "longest-streak": ["longest-streak@3.1.0", "", {}, "sha512-9Ri+o0JYgehTaVBBDoMqIl8GXtbWg711O3srftcHhZ0dqnETqLaoIK0x17fUw9rFSlK/0NlsKe0Ahhyl5pXE2g=="],
 
-    "lru-cache": ["lru-cache@11.5.0", "", {}, "sha512-5YgH9UJd7wVb9hIouI2adWpgqrrICkt070Dnj8EUY1+B4B2P9eRLPAkAAo6NICA7CEhOIeBHl46u9zSNpNu7zA=="],
+    "lru-cache": ["lru-cache@11.5.1", "", {}, "sha512-RPimw/7aMdv2oqRrxKwvZXcPfwBrn/JZ2xYcY9Hus/6LaS3VOAKVWKWgNLCFSiOm1ESXinjsDlidVU7JlnCN2A=="],
 
     "lucide-react": ["lucide-react@1.17.0", "", { "peerDependencies": { "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-9FA9evdox/JQL5PT57fdA1x/yg8T7knJ98+zjTL3UfKza6pflQUUh3XtaQIHKvnsJw1lmsEyHVlt5jchYxOQ5w=="],
 
