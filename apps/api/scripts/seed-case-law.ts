@@ -19,7 +19,7 @@
 import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { readdir } from "node:fs/promises";
-import { join } from "node:path";
+import path from "node:path";
 import * as v from "valibot";
 
 import type { PersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
@@ -35,7 +35,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 
 import { DEFAULT_ORG_ID, DEFAULT_USER_ID, seedId } from "./seed-utils";
 
-const FIXTURES_DIR = join(import.meta.dir, "__fixtures__", "case-law");
+const FIXTURES_DIR = path.join(import.meta.dir, "__fixtures__", "case-law");
 
 const sourceIdFor = (adapterKey: string) =>
   seedId(`case-law-source-${adapterKey}`);
@@ -107,7 +107,7 @@ const loadFixtures = async (): Promise<CaseLawFixture[]> => {
     if (!entry.endsWith(".json")) {
       continue;
     }
-    const file = Bun.file(join(FIXTURES_DIR, entry));
+    const file = Bun.file(path.join(FIXTURES_DIR, entry));
     const raw = v.parse(fixtureSchema, await file.json());
     // SAFETY: structural fields validated by fixtureSchema; deep JSON
     // (sections, document_ast, analysis) is checked into the repo

@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import nodePath from "node:path";
 
 import { AUTH_USER_STELLA_SELECT_COLUMN_NAMES } from "@/api/db/auth-schema";
 
-const DRIZZLE_DIR = resolve(import.meta.dir, "../../../drizzle");
+const DRIZZLE_DIR = nodePath.resolve(import.meta.dir, "../../../drizzle");
 const SQL_IDENTIFIER_PATTERN = /"([^"]+)"|([a-z_][a-z0-9_]*)/giu;
 const GRANT_SELECT_COLUMN_PREFIX_PATTERN = /^GRANT\s+SELECT\s*\(/iu;
 const GRANT_SELECT_COLUMN_TABLE_PATTERN = /\)\s+ON\s+TABLE\s+/iu;
@@ -102,7 +102,7 @@ const isStellaIdentifier = (value: string): boolean =>
 const migrationSqlFiles = () =>
   readdirSync(DRIZZLE_DIR, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
-    .map((entry) => resolve(DRIZZLE_DIR, entry.name, "migration.sql"))
+    .map((entry) => nodePath.resolve(DRIZZLE_DIR, entry.name, "migration.sql"))
     .filter((path) => existsSync(path))
     .toSorted();
 

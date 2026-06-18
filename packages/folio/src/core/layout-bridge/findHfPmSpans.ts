@@ -169,7 +169,7 @@ export function findHfCaretSpan(
  * slot (body or unrelated chrome).
  */
 type ClosestCapable = {
-  closest(selector: string): HTMLElement | null;
+  closest: (selector: string) => HTMLElement | null;
 };
 
 function hasCloset(value: unknown): value is ClosestCapable {

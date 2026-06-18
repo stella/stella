@@ -1,5 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
-import { resolve } from "node:path";
+import path from "node:path";
 
 // Post-deploy verification against a live deployed environment
 // (deploy-staging.yml `verify-staging`). Unlike playwright.config.ts
@@ -10,7 +10,7 @@ import { resolve } from "node:path";
 const STAGING_WEB_URL =
   process.env["E2E_WEB_URL"] ?? "https://staging.stll.app";
 
-export const STAGING_STORAGE_STATE = resolve(
+export const STAGING_STORAGE_STATE = path.resolve(
   import.meta.dirname,
   "../../../.playwright/staging-storage-state.json",
 );

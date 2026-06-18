@@ -1,16 +1,16 @@
 import { compile } from "@litko/yara-x";
 import type { RuleMatch } from "@litko/yara-x";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 
 import type { Match, Scanner } from "@/api/lib/file-scan/scanner";
 import { isRecord } from "@/api/lib/type-guards";
 
-const YARA_DIR = join(import.meta.dir, "yara");
+const YARA_DIR = path.join(import.meta.dir, "yara");
 
 const compiled = compile(
   [...new Bun.Glob("*.yar").scanSync(YARA_DIR)]
-    .map((f) => readFileSync(join(YARA_DIR, f), "utf-8"))
+    .map((f) => readFileSync(path.join(YARA_DIR, f), "utf-8"))
     .join("\n"),
 );
 

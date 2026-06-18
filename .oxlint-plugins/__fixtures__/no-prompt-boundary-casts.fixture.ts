@@ -152,6 +152,7 @@ interface ChatSafePromptInterface {
 }
 
 interface ChatSafePromptMethodInterface {
+  // oxlint-disable-next-line typescript/method-signature-style -- fixture exercises no-prompt-boundary-casts
   build(): ChatSafePrompt;
 }
 
@@ -214,7 +215,7 @@ const functionParam = ((prompt: string) => prompt) as (
 // oxlint-disable-next-line no-prompt-boundary-casts/no-prompt-boundary-casts
 const objectFunctionProperty = raw as { readonly build: () => ChatSafePrompt };
 
-// oxlint-disable-next-line no-prompt-boundary-casts/no-prompt-boundary-casts
+// oxlint-disable-next-line no-prompt-boundary-casts/no-prompt-boundary-casts, typescript/method-signature-style -- fixture exercises no-prompt-boundary-casts on a method signature
 const objectMethodSignature = raw as { build(): ChatSafePrompt };
 
 // oxlint-disable-next-line no-prompt-boundary-casts/no-prompt-boundary-casts

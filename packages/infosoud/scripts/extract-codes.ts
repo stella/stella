@@ -1,9 +1,9 @@
 import { panic } from "better-result";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import path from "node:path";
 
 const ROOT_URL = "https://infosoud.gov.cz/";
-const OUTPUT_PATH = resolve(
+const OUTPUT_PATH = path.resolve(
   import.meta.dir,
   "../src/code-catalog.generated.ts",
 );
@@ -475,7 +475,7 @@ const main = async (): Promise<void> => {
     return;
   }
 
-  await mkdir(resolve(import.meta.dir, "../src"), { recursive: true });
+  await mkdir(path.resolve(import.meta.dir, "../src"), { recursive: true });
   await writeFile(OUTPUT_PATH, nextContents);
   console.log(`Wrote ${OUTPUT_PATH}`);
   console.log(`Source bundle: ${catalog.bundleUrl}`);

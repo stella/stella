@@ -17,7 +17,7 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 
 import { fromProseDoc } from "../../prosemirror/conversion/fromProseDoc";
 import { toProseDoc } from "../../prosemirror/conversion/toProseDoc";
@@ -31,10 +31,10 @@ import type {
 import { parseDocx } from "../parser";
 import { repackDocx } from "../rezip";
 
-const FIXTURES_DIR = join(import.meta.dir, "__fixtures__", "corpus");
+const FIXTURES_DIR = path.join(import.meta.dir, "__fixtures__", "corpus");
 
 const readFixture = (filename: string): ArrayBuffer => {
-  const bytes = readFileSync(join(FIXTURES_DIR, filename));
+  const bytes = readFileSync(path.join(FIXTURES_DIR, filename));
   return bytes.buffer.slice(
     bytes.byteOffset,
     bytes.byteOffset + bytes.byteLength,

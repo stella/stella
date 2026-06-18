@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import path from "node:path";
 
 import {
   buildPreparationSteps,
@@ -30,7 +30,7 @@ import {
 const tempDirs: string[] = [];
 
 const createTempDir = () => {
-  const dir = mkdtempSync(resolve(tmpdir(), "stella-dev-runner-"));
+  const dir = mkdtempSync(path.resolve(tmpdir(), "stella-dev-runner-"));
   tempDirs.push(dir);
   return dir;
 };
@@ -536,9 +536,9 @@ describe("worktree helpers", () => {
     const mainRoot = createTempDir();
     const worktreeRoot = createTempDir();
 
-    mkdirSync(resolve(mainRoot, ".git"), { recursive: true });
+    mkdirSync(path.resolve(mainRoot, ".git"), { recursive: true });
     writeFileSync(
-      resolve(worktreeRoot, ".git"),
+      path.resolve(worktreeRoot, ".git"),
       "gitdir: /tmp/example/.git/worktrees/linked-worktree\n",
     );
 
@@ -549,7 +549,7 @@ describe("worktree helpers", () => {
   test("resolves the main root from the common git dir", () => {
     const mainRoot = createTempDir();
 
-    expect(resolveMainRootFromCommonDir(resolve(mainRoot, ".git"))).toBe(
+    expect(resolveMainRootFromCommonDir(path.resolve(mainRoot, ".git"))).toBe(
       mainRoot,
     );
   });
@@ -558,13 +558,13 @@ describe("worktree helpers", () => {
     const mainRoot = createTempDir();
     const worktreeRoot = createTempDir();
 
-    mkdirSync(resolve(mainRoot, "apps/api"), { recursive: true });
-    mkdirSync(resolve(mainRoot, "apps/web"), { recursive: true });
-    mkdirSync(resolve(worktreeRoot, "apps/api"), { recursive: true });
-    mkdirSync(resolve(worktreeRoot, "apps/web"), { recursive: true });
+    mkdirSync(path.resolve(mainRoot, "apps/api"), { recursive: true });
+    mkdirSync(path.resolve(mainRoot, "apps/web"), { recursive: true });
+    mkdirSync(path.resolve(worktreeRoot, "apps/api"), { recursive: true });
+    mkdirSync(path.resolve(worktreeRoot, "apps/web"), { recursive: true });
 
-    writeFileSync(resolve(mainRoot, "apps/api/.env"), "API=1\n");
-    writeFileSync(resolve(mainRoot, "apps/web/.env"), "WEB=1\n");
+    writeFileSync(path.resolve(mainRoot, "apps/api/.env"), "API=1\n");
+    writeFileSync(path.resolve(mainRoot, "apps/web/.env"), "WEB=1\n");
 
     const createdLinks = ensureWorktreeEnvLinks({
       currentRoot: worktreeRoot,
@@ -574,21 +574,21 @@ describe("worktree helpers", () => {
 
     expect(createdLinks).toBe(2);
     expect(
-      Bun.file(resolve(worktreeRoot, "apps/api/.env")).size,
+      Bun.file(path.resolve(worktreeRoot, "apps/api/.env")).size,
     ).toBeGreaterThan(0);
     expect(
-      Bun.file(resolve(worktreeRoot, "apps/web/.env")).size,
+      Bun.file(path.resolve(worktreeRoot, "apps/web/.env")).size,
     ).toBeGreaterThan(0);
   });
 
   test("bootstraps missing env files from .env.example in the main checkout", () => {
     const mainRoot = createTempDir();
 
-    mkdirSync(resolve(mainRoot, "apps/api"), { recursive: true });
-    mkdirSync(resolve(mainRoot, "apps/web"), { recursive: true });
+    mkdirSync(path.resolve(mainRoot, "apps/api"), { recursive: true });
+    mkdirSync(path.resolve(mainRoot, "apps/web"), { recursive: true });
 
-    writeFileSync(resolve(mainRoot, "apps/api/.env.example"), "API=1\n");
-    writeFileSync(resolve(mainRoot, "apps/web/.env.example"), "WEB=1\n");
+    writeFileSync(path.resolve(mainRoot, "apps/api/.env.example"), "API=1\n");
+    writeFileSync(path.resolve(mainRoot, "apps/web/.env.example"), "WEB=1\n");
 
     const createdLinks = ensureWorktreeEnvLinks({
       currentRoot: mainRoot,
@@ -597,10 +597,10 @@ describe("worktree helpers", () => {
     });
 
     expect(createdLinks).toBe(2);
-    expect(Bun.file(resolve(mainRoot, "apps/api/.env")).size).toBe(
+    expect(Bun.file(path.resolve(mainRoot, "apps/api/.env")).size).toBe(
       "API=1\n".length,
     );
-    expect(Bun.file(resolve(mainRoot, "apps/web/.env")).size).toBe(
+    expect(Bun.file(path.resolve(mainRoot, "apps/web/.env")).size).toBe(
       "WEB=1\n".length,
     );
   });
@@ -609,14 +609,14 @@ describe("worktree helpers", () => {
     const mainRoot = createTempDir();
     const worktreeRoot = createTempDir();
 
-    mkdirSync(resolve(mainRoot, "apps/api"), { recursive: true });
-    mkdirSync(resolve(mainRoot, "apps/web"), { recursive: true });
-    mkdirSync(resolve(worktreeRoot, "apps/api"), { recursive: true });
-    mkdirSync(resolve(worktreeRoot, "apps/web"), { recursive: true });
+    mkdirSync(path.resolve(mainRoot, "apps/api"), { recursive: true });
+    mkdirSync(path.resolve(mainRoot, "apps/web"), { recursive: true });
+    mkdirSync(path.resolve(worktreeRoot, "apps/api"), { recursive: true });
+    mkdirSync(path.resolve(worktreeRoot, "apps/web"), { recursive: true });
 
-    writeFileSync(resolve(mainRoot, "apps/api/.env"), "API=1\n");
-    writeFileSync(resolve(mainRoot, "apps/web/.env"), "WEB=1\n");
-    writeFileSync(resolve(worktreeRoot, "apps/api/.env"), "LOCAL=1\n");
+    writeFileSync(path.resolve(mainRoot, "apps/api/.env"), "API=1\n");
+    writeFileSync(path.resolve(mainRoot, "apps/web/.env"), "WEB=1\n");
+    writeFileSync(path.resolve(worktreeRoot, "apps/api/.env"), "LOCAL=1\n");
 
     const createdLinks = ensureWorktreeEnvLinks({
       currentRoot: worktreeRoot,
@@ -625,7 +625,7 @@ describe("worktree helpers", () => {
     });
 
     expect(createdLinks).toBe(1);
-    expect(Bun.file(resolve(worktreeRoot, "apps/api/.env")).size).toBe(
+    expect(Bun.file(path.resolve(worktreeRoot, "apps/api/.env")).size).toBe(
       "LOCAL=1\n".length,
     );
   });
@@ -634,7 +634,7 @@ describe("worktree helpers", () => {
 describe("env flag parsing", () => {
   test("accepts single-quoted truthy values from env files", () => {
     const rootDir = createTempDir();
-    const envFilePath = resolve(rootDir, ".env");
+    const envFilePath = path.resolve(rootDir, ".env");
     writeFileSync(envFilePath, "AI_DEVTOOLS_ENABLED='true'\n");
 
     expect(
@@ -648,7 +648,7 @@ describe("env flag parsing", () => {
 
   test("keeps hash characters inside quoted env file values", () => {
     const rootDir = createTempDir();
-    const envFilePath = resolve(rootDir, ".env");
+    const envFilePath = path.resolve(rootDir, ".env");
     writeFileSync(envFilePath, 'AI_DEVTOOLS_ENABLED="true#still-value"\n');
 
     expect(
@@ -662,7 +662,7 @@ describe("env flag parsing", () => {
 
   test("strips comments from unquoted env file values", () => {
     const rootDir = createTempDir();
-    const envFilePath = resolve(rootDir, ".env");
+    const envFilePath = path.resolve(rootDir, ".env");
     writeFileSync(envFilePath, "AI_DEVTOOLS_ENABLED=true # local devtools\n");
 
     expect(
@@ -677,7 +677,7 @@ describe("env flag parsing", () => {
   test("parses quoted process env values consistently", () => {
     expect(
       readEnvFlag({
-        envFilePath: resolve(createTempDir(), ".env"),
+        envFilePath: path.resolve(createTempDir(), ".env"),
         key: "AI_DEVTOOLS_ENABLED",
         processEnv: { AI_DEVTOOLS_ENABLED: "'yes'" },
       }),
@@ -688,7 +688,7 @@ describe("env flag parsing", () => {
 describe("dev env factories", () => {
   test("prepares API databases by applying migrations", () => {
     const rootDir = createTempDir();
-    mkdirSync(resolve(rootDir, "apps/api"), { recursive: true });
+    mkdirSync(path.resolve(rootDir, "apps/api"), { recursive: true });
 
     const steps = buildPreparationSteps({
       infraOffset: 10,
@@ -702,7 +702,7 @@ describe("dev env factories", () => {
 
     expect(steps).toHaveLength(1);
     expect(steps.at(0)?.cmd.slice(1)).toEqual(["run", "db:migrate"]);
-    expect(steps.at(0)?.cwd).toBe(resolve(rootDir, "apps/api"));
+    expect(steps.at(0)?.cwd).toBe(path.resolve(rootDir, "apps/api"));
     expect(steps.at(0)?.env).toMatchObject({
       DATABASE_URL: "postgres://postgres:postgres@localhost:5442/stella",
     });
@@ -852,7 +852,7 @@ describe("browser behavior", () => {
 describe("loadEnvFile and expandEnvMap", () => {
   test("correctly parses single and double quoted variables, and expands variables", () => {
     const rootDir = createTempDir();
-    const envFilePath = resolve(rootDir, ".env");
+    const envFilePath = path.resolve(rootDir, ".env");
     writeFileSync(
       envFilePath,
       [

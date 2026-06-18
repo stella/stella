@@ -1,7 +1,7 @@
 import { eq, inArray } from "drizzle-orm";
 import Elysia, { t } from "elysia";
 import { rmSync } from "node:fs";
-import { resolve } from "node:path";
+import path from "node:path";
 
 import {
   contacts,
@@ -17,7 +17,7 @@ import { popDevOtp } from "@/api/lib/dev-otp-store";
 import { rebuildSupplementalSearchIndex } from "@/api/lib/search/index-global";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
-const VITE_CACHE_DIR = resolve(
+const VITE_CACHE_DIR = path.resolve(
   import.meta.dir,
   "../../../../../apps/web/node_modules/.vite",
 );

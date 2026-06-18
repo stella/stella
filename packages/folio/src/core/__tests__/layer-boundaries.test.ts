@@ -23,7 +23,9 @@
 import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { dirname, posix, resolve } from "node:path";
+import path from "node:path";
+
+const { dirname, posix, resolve } = path;
 
 const CORE_DIR = resolve(import.meta.dir, "..");
 

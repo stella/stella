@@ -15,7 +15,7 @@
 
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import path from "node:path";
 
 import { parseDocx } from "../../src/core/docx/parser";
 import {
@@ -26,7 +26,7 @@ import {
 } from "./projection";
 
 const HERE = import.meta.dirname;
-const PYTHON_SCRIPT = join(HERE, "python_docx_project.py");
+const PYTHON_SCRIPT = path.join(HERE, "python_docx_project.py");
 
 const EXIT_OK = 0;
 const EXIT_DIVERGED = 1;
@@ -53,7 +53,7 @@ export async function runDifferential(
   options: { pythonBin?: string } = {},
 ): Promise<DifferentialResult> {
   const pythonBin = options.pythonBin ?? "python3";
-  const resolved = resolve(docxPath);
+  const resolved = path.resolve(docxPath);
   if (!existsSync(resolved)) {
     return {
       ok: false,

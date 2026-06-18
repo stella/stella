@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import path from "node:path";
 
 const WORKER_DIR_ENV = "STELLA_WORKER_DIR";
 
@@ -13,8 +13,8 @@ export const resolveRuntimeWorkerPath = ({
 }): string => {
   const workerDir = process.env[WORKER_DIR_ENV];
   if (workerDir) {
-    return resolve(workerDir, outputFile);
+    return path.resolve(workerDir, outputFile);
   }
 
-  return resolve(sourceDir, sourceFile);
+  return path.resolve(sourceDir, sourceFile);
 };

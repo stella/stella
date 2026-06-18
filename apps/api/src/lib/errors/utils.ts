@@ -1,6 +1,6 @@
 import { isTaggedError } from "better-result";
 import { appendFile, mkdir, stat, truncate } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import path from "node:path";
 
 import { envBase } from "@/api/env-base";
 
@@ -116,7 +116,7 @@ export const logDevError = (
 // Resolve apps/api/.dev-logs/errors.jsonl regardless of where the
 // process was launched from — `import.meta.dir` points at this
 // file's directory; we walk up to apps/api.
-const DEV_LOG_PATH = join(
+const DEV_LOG_PATH = path.join(
   import.meta.dir,
   "..",
   "..",
@@ -133,7 +133,7 @@ const MAX_BYTES = 5 * 1024 * 1024;
 
 let dirReady: Promise<void> | null = null;
 const ensureLogDir = async (): Promise<void> => {
-  dirReady ??= mkdir(dirname(DEV_LOG_PATH), { recursive: true }).then(
+  dirReady ??= mkdir(path.dirname(DEV_LOG_PATH), { recursive: true }).then(
     () => undefined,
   );
   await dirReady;

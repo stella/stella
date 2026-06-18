@@ -6,7 +6,7 @@
  */
 
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 
 import { fillTemplate } from "../handlers/docx/patch-template";
 
@@ -28,7 +28,7 @@ const MOCK_VALUES = {
 
 const run = async () => {
   const { buffer } = await fillTemplate(TEMPLATE, MOCK_VALUES);
-  const outputPath = join(tmpdir(), "stella-spa-filled.docx");
+  const outputPath = path.join(tmpdir(), "stella-spa-filled.docx");
   await Bun.write(outputPath, buffer);
   console.log(`Wrote ${outputPath}`);
 };

@@ -1,12 +1,12 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { resolve } from "node:path";
+import path from "node:path";
 
 import { spawnWorker } from "@/api/lib/subprocess";
 
-const FIXTURES_DIR = resolve(import.meta.dir, "__fixtures__");
-const ECHO_WORKER = resolve(FIXTURES_DIR, "echo-worker.ts");
-const FAIL_WORKER = resolve(FIXTURES_DIR, "fail-worker.ts");
+const FIXTURES_DIR = path.resolve(import.meta.dir, "__fixtures__");
+const ECHO_WORKER = path.resolve(FIXTURES_DIR, "echo-worker.ts");
+const FAIL_WORKER = path.resolve(FIXTURES_DIR, "fail-worker.ts");
 
 describe("spawnWorker", () => {
   test("returns stdout on success", async () => {

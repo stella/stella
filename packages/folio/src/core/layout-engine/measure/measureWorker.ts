@@ -46,13 +46,15 @@ import type {
  * real `Worker`. Mirrors the subset of `Worker` we use.
  */
 export type MeasureWorkerTransport = {
-  postMessage(message: MeasureWorkerRequest): void;
-  addEventListener(
-    type: "message",
-    listener: (event: { data: MeasureWorkerResponse }) => void,
-  ): void;
-  addEventListener(type: "error", listener: (event: unknown) => void): void;
-  terminate(): void;
+  postMessage: (message: MeasureWorkerRequest) => void;
+  addEventListener: {
+    (
+      type: "message",
+      listener: (event: { data: MeasureWorkerResponse }) => void,
+    ): void;
+    (type: "error", listener: (event: unknown) => void): void;
+  };
+  terminate: () => void;
 };
 
 type TransportFactory = () => MeasureWorkerTransport;

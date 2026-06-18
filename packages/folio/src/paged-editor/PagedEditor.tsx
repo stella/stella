@@ -337,53 +337,53 @@ export type PagedEditorProps = {
 
 export type PagedEditorRef = {
   /** Get the current document. */
-  getDocument(): Document | null;
+  getDocument: () => Document | null;
   /** Get the ProseMirror EditorState. */
-  getState(): EditorState | null;
+  getState: () => EditorState | null;
   /** Get the ProseMirror EditorView. */
-  getView(): EditorView | null;
+  getView: () => EditorView | null;
   /**
    * Look up the persistent hidden HF EditorView by `rId`. Returns null when
    * the slot isn't mounted (e.g. document has no HF for that rId, or the
    * hidden host hasn't mounted yet).
    */
-  getHfView(rId: string): EditorView | null;
+  getHfView: (rId: string) => EditorView | null;
   /**
    * Force-create the hidden editor view if it has been deferred.
    * Use from surfaces that need a live view before any user
    * interaction (e.g. AI chat reading a snapshot of the doc).
    */
-  ensureView(options?: { focus?: boolean }): void;
+  ensureView: (options?: { focus?: boolean }) => void;
   /** Focus the editor. */
-  focus(): void;
+  focus: () => void;
   /** Blur the editor. */
-  blur(): void;
+  blur: () => void;
   /** Check if focused. */
-  isFocused(): boolean;
+  isFocused: () => boolean;
   /** Dispatch a transaction. */
-  dispatch(tr: Transaction): void;
+  dispatch: (tr: Transaction) => void;
   /** Undo. */
-  undo(): boolean;
+  undo: () => boolean;
   /** Redo. */
-  redo(): boolean;
+  redo: () => boolean;
   /** Check whether undo is available. */
-  canUndo(): boolean;
+  canUndo: () => boolean;
   /** Check whether redo is available. */
-  canRedo(): boolean;
+  canRedo: () => boolean;
   /** Set selection by PM position. */
-  setSelection(anchor: number, head?: number): void;
+  setSelection: (anchor: number, head?: number) => void;
   /** Get current layout. */
-  getLayout(): Layout | null;
+  getLayout: () => Layout | null;
   /** Force re-layout. */
-  relayout(): void;
+  relayout: () => void;
   /** Scroll the visible pages to bring a PM position into view. */
-  scrollToPosition(pmPos: number): void;
+  scrollToPosition: (pmPos: number) => void;
   /** Scroll the visible pages to bring a page into view. */
-  scrollToPage(pageNumber: number): void;
+  scrollToPage: (pageNumber: number) => void;
   /** Resolve the page number (1-indexed) that contains the given PM position,
    *  or null if no layout is available yet. Works for unrendered pages too via
    *  the page shell map. */
-  getPageNumberForPmPos(pmPos: number): number | null;
+  getPageNumberForPmPos: (pmPos: number) => number | null;
 };
 
 type PendingHiddenEditorSelection =
@@ -408,11 +408,11 @@ type TextInputHandler<TView> = (
 ) => unknown;
 
 type TextInputDispatchTarget<TView> = {
-  dispatch(tr: Transaction): void;
-  someProp(
+  dispatch: (tr: Transaction) => void;
+  someProp: (
     propName: "handleTextInput",
     f: (handler: TextInputHandler<TView>) => unknown,
-  ): unknown;
+  ) => unknown;
   state: EditorState;
 };
 

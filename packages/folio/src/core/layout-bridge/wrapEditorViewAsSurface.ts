@@ -18,12 +18,12 @@ export type Surface = {
   kind: "body" | "hf";
   /** rId of the source HF part; `null` for the body surface. */
   rId: string | null;
-  getState(): EditorState | null;
-  getView(): EditorView | null;
-  focus(): void;
-  isFocused(): boolean;
-  dispatch(tr: Transaction): void;
-  setSelection(anchor: number, head?: number): void;
+  getState: () => EditorState | null;
+  getView: () => EditorView | null;
+  focus: () => void;
+  isFocused: () => boolean;
+  dispatch: (tr: Transaction) => void;
+  setSelection: (anchor: number, head?: number) => void;
 };
 
 export function wrapEditorViewAsSurface(

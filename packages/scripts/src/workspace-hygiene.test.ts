@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 
 import { validateWorkspaceRoot } from "./workspace-hygiene";
 
@@ -25,7 +25,7 @@ describe("workspace hygiene", () => {
     });
 
     writeFileSync(
-      join(rootDir, "apps/web/src/reader.css"),
+      path.join(rootDir, "apps/web/src/reader.css"),
       '@import "@fontsource-variable/source-serif-4";\n',
     );
 
@@ -49,7 +49,7 @@ describe("workspace hygiene", () => {
     });
 
     writeFileSync(
-      join(rootDir, "apps/web/src/reader.css"),
+      path.join(rootDir, "apps/web/src/reader.css"),
       '@import "@fontsource-variable/source-serif-4";\n',
     );
 
@@ -65,7 +65,7 @@ describe("workspace hygiene", () => {
     });
 
     writeFileSync(
-      join(rootDir, "apps/web/src/reader.css"),
+      path.join(rootDir, "apps/web/src/reader.css"),
       '/*\n@import "@fontsource-variable/source-serif-4";\n*/\n',
     );
 
@@ -80,13 +80,13 @@ type CreateWorkspaceRootOptions = {
 const createWorkspaceRoot = ({
   webPackageJson,
 }: CreateWorkspaceRootOptions) => {
-  const rootDir = mkdtempSync(join(tmpdir(), "stella-workspace-hygiene-"));
+  const rootDir = mkdtempSync(path.join(tmpdir(), "stella-workspace-hygiene-"));
   tempRoots.push(rootDir);
 
-  mkdirSync(join(rootDir, "apps/web/src"), { recursive: true });
-  mkdirSync(join(rootDir, "packages"), { recursive: true });
+  mkdirSync(path.join(rootDir, "apps/web/src"), { recursive: true });
+  mkdirSync(path.join(rootDir, "packages"), { recursive: true });
   writeFileSync(
-    join(rootDir, "apps/web/package.json"),
+    path.join(rootDir, "apps/web/package.json"),
     JSON.stringify(webPackageJson),
   );
 

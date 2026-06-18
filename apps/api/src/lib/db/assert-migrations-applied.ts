@@ -1,12 +1,12 @@
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import { existsSync, readdirSync } from "node:fs";
-import { join, resolve } from "node:path";
+import nodePath from "node:path";
 
 import { rootDb } from "@/api/db/root";
 import { logger } from "@/api/lib/observability/logger";
 
-const MIGRATIONS_DIR = resolve(process.cwd(), "drizzle");
+const MIGRATIONS_DIR = nodePath.resolve(process.cwd(), "drizzle");
 const ESCAPE_HATCH_ENV = "SKIP_MIGRATION_CHECK";
 
 type LocalMigration = { name: string; hash: string };
@@ -20,12 +20,14 @@ const hashMigrationFile = async (path: string): Promise<string> =>
 const listLocalMigrations = async (): Promise<LocalMigration[]> =>
   await Promise.all(
     readdirSync(MIGRATIONS_DIR)
-      .filter((name) => existsSync(join(MIGRATIONS_DIR, name, "migration.sql")))
+      .filter((name) =>
+        existsSync(nodePath.join(MIGRATIONS_DIR, name, "migration.sql")),
+      )
       .sort()
       .map(async (name) => ({
         name,
         hash: await hashMigrationFile(
-          join(MIGRATIONS_DIR, name, "migration.sql"),
+          nodePath.join(MIGRATIONS_DIR, name, "migration.sql"),
         ),
       })),
   );

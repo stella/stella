@@ -16,9 +16,9 @@
 
 import JSZip from "jszip";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 
-const FIXTURES_DIR = join(
+const FIXTURES_DIR = path.join(
   import.meta.dir,
   "..",
   "src",
@@ -634,7 +634,7 @@ async function main(): Promise<void> {
   mkdirSync(FIXTURES_DIR, { recursive: true });
   for (const fixture of FIXTURES) {
     const buf = await buildFixture(fixture);
-    const outPath = join(FIXTURES_DIR, fixture.filename);
+    const outPath = path.join(FIXTURES_DIR, fixture.filename);
     writeFileSync(outPath, Buffer.from(buf));
     console.log(`wrote ${outPath} (${buf.byteLength} bytes)`);
   }

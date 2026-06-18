@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 
 import { parseDocx } from "../parser";
 import { repackDocx } from "../rezip";
 
-const FIXTURE_PATH = join(
+const FIXTURE_PATH = path.join(
   import.meta.dir,
   "__fixtures__",
   "regressions",

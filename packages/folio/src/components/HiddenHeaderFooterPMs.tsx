@@ -70,12 +70,12 @@ export type HiddenHeaderFooterPMsRef = {
    * Look up the persistent EditorView for a given HF part. Returns `null`
    * before mount or when the rId is not present in the loaded document.
    */
-  getView(rId: string): EditorView | null;
+  getView: (rId: string) => EditorView | null;
   /**
    * Enumerate every currently mounted slot. Used by the pointer pipeline
    * to translate painted DOM targets back to the owning PM view.
    */
-  listSlots(): HfPartKey[];
+  listSlots: () => HfPartKey[];
 };
 
 export type HiddenHeaderFooterPMsProps = {

@@ -24,7 +24,7 @@ import {
 
 type CanvasStub = {
   font: string;
-  measureText(text: string): { width: number };
+  measureText: (text: string) => { width: number };
 };
 
 class FakeOffscreenCanvas {

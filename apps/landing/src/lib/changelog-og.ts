@@ -1,6 +1,6 @@
 import { Resvg } from "@resvg/resvg-js";
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 
 import type { ChangelogRelease } from "./changelog";
 
@@ -279,10 +279,10 @@ const escapeXml = (value: string) =>
     .replace(/"/gu, "&quot;");
 
 function resolveLandingPath(...segments: string[]) {
-  const fromLanding = join(process.cwd(), ...segments);
+  const fromLanding = path.join(process.cwd(), ...segments);
   if (existsSync(fromLanding)) {
     return fromLanding;
   }
 
-  return join(process.cwd(), "apps", "landing", ...segments);
+  return path.join(process.cwd(), "apps", "landing", ...segments);
 }

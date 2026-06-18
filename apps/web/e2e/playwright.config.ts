@@ -1,9 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
-import { resolve } from "node:path";
+import path from "node:path";
 
 // Mirrors apps/api/scripts/seed-test-user.ts:349 — repo-root .playwright/
-const REPO_ROOT = resolve(import.meta.dirname, "../../..");
-const STORAGE_STATE = resolve(REPO_ROOT, ".playwright/storage-state.json");
+const REPO_ROOT = path.resolve(import.meta.dirname, "../../..");
+const STORAGE_STATE = path.resolve(REPO_ROOT, ".playwright/storage-state.json");
 
 const WEB_BASE_URL = process.env["E2E_WEB_URL"] ?? "http://localhost:3000";
 const API_BASE_URL = process.env["E2E_API_URL"] ?? "http://localhost:3001";

@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { basename, resolve } from "node:path";
+import nodePath from "node:path";
 
-const DRIZZLE_DIR = resolve(import.meta.dir, "../../../drizzle");
+const DRIZZLE_DIR = nodePath.resolve(import.meta.dir, "../../../drizzle");
 const BOOTSTRAP_MIGRATION = "20260510140000_document_rls_role_bootstrap";
 
 // These migrations were already in the tree when the bootstrap migration
@@ -90,7 +90,7 @@ const isStellaIdentifier = (value: string): boolean =>
 const migrationSqlFiles = () =>
   readdirSync(DRIZZLE_DIR, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
-    .map((entry) => resolve(DRIZZLE_DIR, entry.name, "migration.sql"))
+    .map((entry) => nodePath.resolve(DRIZZLE_DIR, entry.name, "migration.sql"))
     .filter((path) => existsSync(path))
     .toSorted();
 
@@ -158,7 +158,7 @@ const collectRlsGrantState = () => {
   const explicitGrantMigrationsByTable = new Map<string, string[]>();
 
   for (const path of migrationSqlFiles()) {
-    const migration = basename(resolve(path, ".."));
+    const migration = nodePath.basename(nodePath.resolve(path, ".."));
     const statements = sqlStatements(readFileSync(path, "utf-8"));
 
     for (const statement of statements) {

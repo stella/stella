@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { resolve } from "node:path";
+import path from "node:path";
 
 import { resolveRuntimeWorkerPath } from "@/api/lib/runtime-worker-path";
 
@@ -25,7 +25,7 @@ describe("runtime worker paths", () => {
         sourceDir: "/repo/apps/api/src/lib/search",
         sourceFile: "worker.ts",
       }),
-    ).toBe(resolve("/repo/apps/api/src/lib/search", "worker.ts"));
+    ).toBe(path.resolve("/repo/apps/api/src/lib/search", "worker.ts"));
   });
 
   test("uses bundled worker artifact when runtime worker directory is configured", () => {
@@ -37,6 +37,6 @@ describe("runtime worker paths", () => {
         sourceDir: "/repo/apps/api/src/lib/search",
         sourceFile: "worker.ts",
       }),
-    ).toBe(resolve("/runtime/workers", "worker.js"));
+    ).toBe(path.resolve("/runtime/workers", "worker.js"));
   });
 });

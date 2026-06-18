@@ -132,6 +132,7 @@ export class LayoutSelectionGate {
   #executeRender(): void {
     for (const callback of this.#renderCallbacks) {
       try {
+        // oxlint-disable-next-line node/callback-return -- run every render callback; returning would stop the loop early
         callback();
       } catch {
         // render callback error — swallow silently

@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 
 const readRootFixture = (relativePath: string) =>
-  readFileSync(join(import.meta.dir, "../../../../..", relativePath), "utf-8");
+  readFileSync(
+    path.join(import.meta.dir, "../../../../..", relativePath),
+    "utf-8",
+  );
 
 describe("custom oxlint guardrails", () => {
   test("process.env rule treats only static computed keys as known names", () => {
