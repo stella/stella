@@ -46,7 +46,7 @@ import {
   hasImageVisualAttrs,
   wrapImageWithCrop,
 } from "./renderImage";
-import { isFloatingImageRun } from "./renderUtils";
+import { isFloatingImageRun, resolveImageLineAlign } from "./renderUtils";
 import type { RenderContext } from "./renderUtils";
 import { applySdtDataAttrs } from "./sdtBoundary";
 
@@ -459,13 +459,22 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
     element.style.textDecorationLine = decorations.join(" ");
   }
 
-  // Superscript/subscript
+  // Superscript/subscript. Raise/lower the glyph with a paint-only
+  // `position: relative` offset rather than `vertical-align: super/sub`. CSS
+  // grows the line box to contain a vertical-align shift, so `super`/`sub`
+  // inflated the height of any line carrying a superscript (e.g. a footnote
+  // anchor) past the base-font height the measurer reserved. A relative offset
+  // moves only where the glyph paints, leaving the line box intact
+  // (eigenpal/docx-editor#846). The reduced `fontSize` from
+  // `getRaisedRunFontSize` already keeps the glyph shorter than the line.
   if (run.superscript) {
-    element.style.verticalAlign = "super";
+    element.style.position = "relative";
+    element.style.top = "-0.4em";
     element.style.fontSize = getRaisedRunFontSize(run);
   }
   if (run.subscript) {
-    element.style.verticalAlign = "sub";
+    element.style.position = "relative";
+    element.style.top = "0.2em";
     element.style.fontSize = getRaisedRunFontSize(run);
   }
 }
@@ -1490,12 +1499,15 @@ export function renderLine(
     lineEl.style.alignItems = "center";
     // Flex defaults to flex-start regardless of the parent's text-align, so
     // an image-only line in a centred / right-aligned paragraph would
-    // left-align after the flex switch. Mirror the paragraph alignment onto
-    // justify-content so logo-only header lines stay centred / right-aligned
-    // like Word.
-    if (alignment === "center") {
+    // left-align after the flex switch. An ANCHORED image is positioned by its
+    // own `wp:positionH` (defaulting to left like Word); an inline image
+    // follows the paragraph alignment. Mirror the resolved alignment onto
+    // justify-content so logo-only header lines stay placed like Word
+    // (eigenpal/docx-editor#787).
+    const imageAlign = resolveImageLineAlign(runsForLine[0]!, alignment);
+    if (imageAlign === "center") {
       lineEl.style.justifyContent = "center";
-    } else if (alignment === "right") {
+    } else if (imageAlign === "right") {
       lineEl.style.justifyContent = "flex-end";
     }
   } else if (runsForLine.some((r) => isImageRun(r) && !isFloatingImageRun(r))) {
@@ -2309,19 +2321,16 @@ export function renderParagraphFragment(
     const lineLeftOffset = line.leftOffset ?? 0;
     const lineRightOffset = line.rightOffset ?? 0;
 
-    // For first line, adjust available width for hanging/firstLine indent
-    // Measurement uses: baseFirstLineWidth = bodyContentWidth - (firstLine - hanging)
-    // So hanging gives MORE width, firstLine gives LESS width
-    let lineAvailableWidth = availableWidth;
-    if (isFirstLine) {
-      const hasHangingIndent = indent?.hanging && indent.hanging > 0;
-      const hasFirstLineIndent = indent?.firstLine && indent.firstLine > 0;
-      if (hasHangingIndent && indent.hanging) {
-        lineAvailableWidth = availableWidth + indent.hanging;
-      } else if (hasFirstLineIndent && indent.firstLine) {
-        lineAvailableWidth = availableWidth - indent.firstLine;
-      }
-    }
+    // The justify box width (and the floating-image width constraint below) is
+    // the full content width on every line, including the first. The first
+    // line's hanging/firstLine shift is realized purely by `text-indent` /
+    // padding further down: the shift moves where the line STARTS, but justify
+    // still stretches to the content box's right edge. Narrowing the box by
+    // `firstLine` (or widening it by `hanging`) here as well double-counted the
+    // indent, so the first line's right edge fell short of (or past) the margin
+    // while body lines reached it. Measurement separately accounts for the
+    // indent when deciding how much text fits the first line (eigenpal/docx-editor#868).
+    const lineAvailableWidth = availableWidth;
 
     const lineEl = renderLine(block, line, effectiveAlignment, doc, {
       availableWidth: lineAvailableWidth - lineLeftOffset - lineRightOffset,

@@ -161,7 +161,11 @@ describe("renderLine box model", () => {
     }) as unknown as FakeElement;
     const noteMarker = lineEl.children.at(0);
 
-    expect(noteMarker?.style["verticalAlign"]).toBe("super");
+    // eigenpal/docx-editor#846: raised via a paint-only `position`/`top`
+    // offset, never `vertical-align` (which would inflate the line box).
+    expect(noteMarker?.style["verticalAlign"]).not.toBe("super");
+    expect(noteMarker?.style["position"]).toBe("relative");
+    expect(noteMarker?.style["top"]).toBe("-0.4em");
     expect(noteMarker?.style["textDecorationLine"]).toBeUndefined();
   });
 
@@ -199,7 +203,11 @@ describe("renderLine box model", () => {
     }) as unknown as FakeElement;
     const noteMarker = lineEl.children.at(0);
 
-    expect(noteMarker?.style["verticalAlign"]).toBe("super");
+    // eigenpal/docx-editor#846: paint-only offset, font size still derived
+    // from the run (folio keeps `getRaisedRunFontSize`, not a hardcoded ratio).
+    expect(noteMarker?.style["verticalAlign"]).not.toBe("super");
+    expect(noteMarker?.style["position"]).toBe("relative");
+    expect(noteMarker?.style["top"]).toBe("-0.4em");
     expect(noteMarker?.style["fontFamily"]).toContain("Times New Roman");
     expect(noteMarker?.style["fontSize"]).toBe("10px");
   });

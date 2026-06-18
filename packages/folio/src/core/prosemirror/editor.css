@@ -663,6 +663,24 @@
   padding: 4px 0;
 }
 
+/* Header/footer CONTENT is non-interactive in normal mode: a single click on a
+   header/footer is already a no-op (Word parity), and — crucially — a page- or
+   margin-anchored shape (e.g. a full-page letterhead in a header) that
+   overflows the band must not sit on top of the body and swallow clicks meant
+   for the document text. The band element itself keeps pointer events so it
+   stays the double-click-to-edit target; only its content is passed through.
+   See eigenpal/docx-editor#869. */
+.layout-page-header > *,
+.layout-page-footer > * {
+  pointer-events: none;
+}
+/* While editing a region, its content is hittable again so clicks map to
+   header/footer caret positions. */
+.paged-editor--editing-header .layout-page-header > *,
+.paged-editor--editing-footer .layout-page-footer > * {
+  pointer-events: auto;
+}
+
 /* Header/footer editor ProseMirror styles */
 .hf-editor-pm.prosemirror-editor {
   width: 100%;

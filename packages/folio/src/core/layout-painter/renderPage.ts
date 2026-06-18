@@ -2216,13 +2216,25 @@ export function renderPage(
     const headerVisualTop = options.headerContent?.visualTop ?? 0;
     const headerVisualBottom =
       options.headerContent?.visualBottom ?? options.headerContent?.height ?? 0;
-    const actualHeaderHeight = Math.max(
-      headerVisualBottom - headerVisualTop,
+    // The interactive box height tracks the in-flow band (`height`), NOT the
+    // float-inclusive `visualBottom`. A page/margin-anchored shape (e.g. a
+    // full-page letterhead in a header) overflows the band visually but must
+    // not inflate the box, which would then sit over the body and intercept its
+    // clicks. The floating content still paints (overflow stays visible below)
+    // and is made non-interactive in normal mode via CSS (eigenpal/docx-editor#869).
+    // Normal headers (visualBottom === height, visualTop === 0) are unaffected.
+    const headerFlowHeight = options.headerContent?.height ?? 0;
+    const interactiveHeaderHeight = Math.max(
+      headerFlowHeight - Math.min(0, headerVisualTop),
       24,
     );
-    // If header content fits in the original space, clip overflow; otherwise
-    // margins.top was already expanded so let content show fully.
+    // Clip overflow only when the content fits both the page margin AND the
+    // (shrunk) interactive box. Content that extends past the flow band — a
+    // floating table, positioned text box, or image — must stay visible rather
+    // than be cut off by the smaller box (eigenpal/docx-editor#869).
     const headerOverflows = headerVisualBottom > availableHeaderHeight;
+    const headerContentFitsBox =
+      headerVisualBottom - headerVisualTop <= interactiveHeaderHeight;
 
     const headerEl = doc.createElement("div");
     headerEl.className = PAGE_CLASS_NAMES.header;
@@ -2234,11 +2246,11 @@ export function renderPage(
     headerEl.style.left = `${page.margins.left}px`;
     headerEl.style.right = `${page.margins.right}px`;
     headerEl.style.width = `${headerContentWidth}px`;
-    headerEl.style.height = `${actualHeaderHeight}px`;
-    headerEl.style.minHeight = `${actualHeaderHeight}px`;
+    headerEl.style.height = `${interactiveHeaderHeight}px`;
+    headerEl.style.minHeight = `${interactiveHeaderHeight}px`;
     headerEl.style.opacity = "0.62";
 
-    let shouldClipHeader = !headerOverflows;
+    let shouldClipHeader = !headerOverflows && headerContentFitsBox;
     if (options.headerContent && options.headerContent.blocks.length > 0) {
       const headerContentEl = renderHeaderFooterContent(
         options.headerContent,
@@ -2295,31 +2307,42 @@ export function renderPage(
       24,
     );
     const footerOverflows = actualFooterHeight > availableFooterHeight;
+    // Like the header, the interactive box tracks the in-flow band, not a
+    // floating shape's extent — otherwise a footer object anchored above the
+    // footer line would cover the body and swallow its clicks. Folio anchors
+    // the footer at the flow origin (not bottom-pinned like upstream), so the
+    // box covers exactly [footerNaturalTop, footerNaturalTop + flow band]; the
+    // content offset is zeroed so in-flow content still paints at the flow
+    // origin (a no-op for a normal footer, where visualTop === 0). Overflowing
+    // content renders outside the box (visible) and is made non-interactive in
+    // normal mode via CSS (eigenpal/docx-editor#869).
+    const interactiveFooterHeight = Math.max(footerFlowHeight, 24);
 
-    // Anchor the footer container at the *flow* origin, then let it stretch
-    // upward (above-flow image overflow via negative visualTop) and downward
-    // (below-flow floating-table overflow via visualBottom > flowHeight).
-    // Anchoring at the flow origin keeps in-flow content rendered at the
-    // natural footer line (page.h - footerDistance - flowHeight) and keeps
-    // the resolver's `flowTop` consistent with where the in-flow first
-    // paragraph actually paints.
+    // Anchor the footer container at the *flow* origin. In-flow content renders
+    // at the natural footer line (page.h - footerDistance - flowHeight) and the
+    // resolver's `flowTop` stays consistent with where the in-flow first
+    // paragraph actually paints; floating content overflows the box (visible).
     const footerNaturalTop = page.size.h - footerDistance - footerFlowHeight;
-    const footerContainerTop = footerNaturalTop + footerVisualTop;
     const footerEl = doc.createElement("div");
     footerEl.className = PAGE_CLASS_NAMES.footer;
     if (options.footerContent?.rId) {
       footerEl.dataset["rid"] = options.footerContent.rId;
     }
     footerEl.style.position = "absolute";
-    footerEl.style.top = `${footerContainerTop}px`;
+    footerEl.style.top = `${footerNaturalTop}px`;
     footerEl.style.left = `${page.margins.left}px`;
     footerEl.style.right = `${page.margins.right}px`;
     footerEl.style.width = `${footerContentWidth}px`;
-    footerEl.style.height = `${actualFooterHeight}px`;
-    footerEl.style.minHeight = `${actualFooterHeight}px`;
+    footerEl.style.height = `${interactiveFooterHeight}px`;
+    footerEl.style.minHeight = `${interactiveFooterHeight}px`;
     footerEl.style.opacity = "0.62";
 
-    let shouldClipFooter = !footerOverflows;
+    // As with the header, only clip when the content fits the shrunk box; a
+    // floating object extending past the flow band must stay visible
+    // (eigenpal/docx-editor#869).
+    const footerContentFitsBox =
+      footerVisualBottom - footerVisualTop <= interactiveFooterHeight;
+    let shouldClipFooter = !footerOverflows && footerContentFitsBox;
     if (options.footerContent && options.footerContent.blocks.length > 0) {
       const footerContentEl = renderHeaderFooterContent(
         options.footerContent,
@@ -2334,7 +2357,11 @@ export function renderPage(
           margins: page.margins,
         },
       );
-      footerContentEl.style.top = `${-footerVisualTop}px`;
+      // The box top moved from `footerNaturalTop + footerVisualTop` to
+      // `footerNaturalTop`, so zero the content offset to keep in-flow content
+      // painted at the flow origin (a no-op for a normal footer, where
+      // visualTop === 0). Above-flow content overflows the box upward.
+      footerContentEl.style.top = "0px";
       if (footerContentEl.querySelector("img")) {
         shouldClipFooter = false;
       }

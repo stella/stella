@@ -552,6 +552,149 @@ describe("selection rect geometry", () => {
     expect(rects.every((rect) => rect.y >= 0 && rect.y < 40)).toBe(true);
   });
 
+  test("paints a fixed-width sliver for an empty paragraph the selection spans (#836)", () => {
+    // A genuinely empty paragraph has a zero-length line (pmStart === pmEnd),
+    // so the run-span overlap (sliceFrom >= sliceTo) produced no rect and
+    // dragging across blank lines showed no highlight. Emit a caret-height
+    // sliver instead.
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "empty",
+      pmStart: 10,
+      pmEnd: 12,
+      runs: [{ kind: "text", text: "" }],
+    };
+    const measures: Measure[] = [
+      {
+        kind: "paragraph",
+        lines: [
+          {
+            fromRun: 0,
+            toRun: 0,
+            fromChar: 0,
+            toChar: 0,
+            width: 0,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 16,
+          },
+        ],
+        totalHeight: 16,
+      },
+    ];
+    const layout: Layout = {
+      pageGap: 0,
+      pages: [
+        {
+          number: 1,
+          size: { w: 600, h: 800 },
+          margins: { top: 0, right: 0, bottom: 0, left: 0 },
+          fragments: [
+            {
+              kind: "paragraph",
+              blockId: "empty",
+              x: 0,
+              y: 0,
+              width: 500,
+              height: 16,
+              fromLine: 0,
+              toLine: 1,
+            },
+          ],
+        },
+      ],
+    };
+
+    // Selection strictly contains the empty paragraph's pm position (11).
+    const rects = selectionToRects(layout, [block], measures, 10, 12);
+
+    expect(rects).toHaveLength(1);
+    expect(rects[0]?.width).toBe(4);
+    expect(rects[0]?.height).toBe(16);
+
+    // A drag that ENDS exactly at the empty paragraph (to === 11) still slivers
+    // it — the zero-length line overlaps inclusive of the endpoint (#836).
+    const endpointRects = selectionToRects(layout, [block], measures, 10, 11);
+    expect(endpointRects).toHaveLength(1);
+    expect(endpointRects[0]?.width).toBe(4);
+
+    // A collapsed selection (caret) draws no sliver.
+    expect(selectionToRects(layout, [block], measures, 11, 11)).toHaveLength(0);
+  });
+
+  test("does not sliver the blank row a trailing hard break leaves (#836)", () => {
+    // A paragraph that ends with a hard break has a trailing blank row whose
+    // `fromRun` is past the last run; `computeLinePmRange` resolves it to the
+    // paragraph start, so a selection entering the paragraph from before it
+    // must NOT draw a sliver for that row — only the real content highlights.
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p",
+      pmStart: 10,
+      pmEnd: 15,
+      runs: [{ kind: "text", text: "abc" }],
+    };
+    const measures: Measure[] = [
+      {
+        kind: "paragraph",
+        lines: [
+          {
+            fromRun: 0,
+            toRun: 0,
+            fromChar: 0,
+            toChar: 3,
+            width: 21,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 16,
+          },
+          // Trailing blank row left by the hard break: fromRun === runs.length.
+          {
+            fromRun: 1,
+            toRun: 1,
+            fromChar: 0,
+            toChar: 0,
+            width: 0,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 16,
+          },
+        ],
+        totalHeight: 32,
+      },
+    ];
+    const layout: Layout = {
+      pageGap: 0,
+      pages: [
+        {
+          number: 1,
+          size: { w: 600, h: 800 },
+          margins: { top: 0, right: 0, bottom: 0, left: 0 },
+          fragments: [
+            {
+              kind: "paragraph",
+              blockId: "p",
+              x: 0,
+              y: 0,
+              width: 500,
+              height: 32,
+              fromLine: 0,
+              toLine: 2,
+            },
+          ],
+        },
+      ],
+    };
+
+    // Enter the paragraph from before its content (10) into "a" (12): the
+    // trailing blank row (resolved to pos 11) would be spuriously slivered
+    // pre-fix. Only the content line should highlight.
+    const rects = selectionToRects(layout, [block], measures, 10, 12);
+
+    expect(rects).toHaveLength(1);
+    expect(rects[0]?.width).not.toBe(4);
+  });
+
   test("table hit testing maps clipped continuations to row-local coordinates", () => {
     const { layout, block, measure } = clippedTableFixture();
     const page = layout.pages[0]!;
