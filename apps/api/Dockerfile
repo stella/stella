@@ -6,7 +6,7 @@ WORKDIR /app
 FROM base AS pruner
 # Keep in sync with the turbo version in the root package.json; an unpinned
 # major lets a new turbo release change `turbo prune` lockfile output mid-flight.
-RUN bun install -g turbo@2.9.16
+RUN bun install -g turbo@2.9.18
 COPY . .
 RUN turbo prune @stll/api @stll/legal-atlas-runner --docker
 
