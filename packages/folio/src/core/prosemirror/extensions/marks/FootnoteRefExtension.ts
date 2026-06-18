@@ -11,6 +11,16 @@ import { expectFootnoteRefMarkAttrs } from "../../attrs";
 import { createMarkExtension } from "../create";
 import type { ExtensionContext, ExtensionRuntime } from "../types";
 
+const noteRefAttrsFromDom = (
+  dom: HTMLElement,
+  noteType: "footnote" | "endnote",
+  vertAlign?: "baseline",
+): Record<string, string> => ({
+  id: dom.dataset["id"] ?? "",
+  noteType: dom.dataset["noteType"] ?? noteType,
+  ...(vertAlign ? { vertAlign } : {}),
+});
+
 export const FootnoteRefExtension = createMarkExtension({
   name: "footnoteRef",
   schemaMarkName: "footnoteRef",
@@ -18,22 +28,33 @@ export const FootnoteRefExtension = createMarkExtension({
     attrs: {
       id: {},
       noteType: { default: "footnote" },
+      vertAlign: { default: null },
     },
     parseDOM: [
       {
         tag: "sup.docx-footnote-ref",
-        getAttrs: (dom) => ({
-          id: dom.dataset["id"] ?? "",
-          noteType: dom.dataset["noteType"] ?? "footnote",
-        }),
+        getAttrs: (dom) => noteRefAttrsFromDom(dom, "footnote"),
+      },
+      {
+        tag: "sup.docx-endnote-ref",
+        getAttrs: (dom) => noteRefAttrsFromDom(dom, "endnote"),
+      },
+      {
+        tag: "span.docx-footnote-ref",
+        getAttrs: (dom) => noteRefAttrsFromDom(dom, "footnote", "baseline"),
+      },
+      {
+        tag: "span.docx-endnote-ref",
+        getAttrs: (dom) => noteRefAttrsFromDom(dom, "endnote", "baseline"),
       },
     ],
     toDOM(mark) {
       const attrs = expectFootnoteRefMarkAttrs(mark);
       const id = String(attrs.id);
       const noteType = attrs.noteType ?? "footnote";
+      const tagName = attrs.vertAlign === "baseline" ? "span" : "sup";
       return [
-        "sup",
+        tagName,
         {
           class: `docx-${noteType}-ref`,
           "data-id": id,

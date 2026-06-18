@@ -51,8 +51,32 @@ const schema = new Schema({
     textEffect: {
       attrs: { effect: {} },
     },
+    footnoteRef: {
+      attrs: {
+        id: { default: null },
+        noteType: { default: "footnote" },
+        vertAlign: { default: null },
+      },
+    },
+    subscript: {},
   },
 });
+
+function buildRunWithMarks(
+  text: string,
+  specs: { markName: string; attrs?: Record<string, unknown> }[],
+) {
+  const marks = specs.map(({ markName, attrs }) => {
+    const mark = schema.marks[markName]?.create(attrs);
+    if (!mark) {
+      throw new Error(`Unknown mark: ${markName}`);
+    }
+    return mark;
+  });
+  return schema.node("doc", null, [
+    schema.node("paragraph", null, [schema.text(text, marks)]),
+  ]);
+}
 
 function buildSingleRunDoc(
   text: string,
@@ -151,6 +175,59 @@ describe("toFlowBlocks run-level OOXML marks", () => {
       {},
     );
     expect(firstRun(blocks).textEffect).toBe("shimmer");
+  });
+
+  test("raises footnote/endnote reference anchors to superscript by default", () => {
+    // eigenpal/docx-editor#845: Word's FootnoteReference/EndnoteReference
+    // character style is superscript, but the OOXML frequently omits an
+    // explicit run-level vertAlign (e.g. a bare `<w:footnoteReference/>`), so
+    // the flow run must carry superscript regardless of the source mark.
+    const footnote = toFlowBlocks(
+      buildSingleRunDoc("1", "footnoteRef", { id: 1, noteType: "footnote" }),
+      {},
+    );
+    const footnoteRun = firstRun(footnote);
+    expect(footnoteRun.footnoteRefId).toBe(1);
+    expect(footnoteRun.superscript).toBe(true);
+
+    const endnote = toFlowBlocks(
+      buildSingleRunDoc("i", "footnoteRef", { id: 2, noteType: "endnote" }),
+      {},
+    );
+    const endnoteRun = firstRun(endnote);
+    expect(endnoteRun.endnoteRefId).toBe(2);
+    expect(endnoteRun.superscript).toBe(true);
+  });
+
+  test("does not raise a footnote anchor that carries an explicit subscript", () => {
+    // The superscript default must never override an explicit subscript on the
+    // same run, regardless of mark order (eigenpal/docx-editor#845).
+    const blocks = toFlowBlocks(
+      buildRunWithMarks("1", [
+        { markName: "footnoteRef", attrs: { id: 1, noteType: "footnote" } },
+        { markName: "subscript" },
+      ]),
+      {},
+    );
+    const run = firstRun(blocks);
+    expect(run.footnoteRefId).toBe(1);
+    expect(run.subscript).toBe(true);
+    expect(run.superscript).toBeUndefined();
+  });
+
+  test("does not raise a footnote anchor with explicit baseline vertAlign", () => {
+    const blocks = toFlowBlocks(
+      buildSingleRunDoc("1", "footnoteRef", {
+        id: 1,
+        noteType: "footnote",
+        vertAlign: "baseline",
+      }),
+      {},
+    );
+    const run = firstRun(blocks);
+    expect(run.footnoteRefId).toBe(1);
+    expect(run.superscript).toBeUndefined();
+    expect(run.subscript).toBeUndefined();
   });
 
   test("propagates emphasis mark variants", () => {

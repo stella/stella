@@ -36,6 +36,20 @@ describe("serializeParagraphFormatting style-sourced numPr (#765)", () => {
   });
 });
 
+describe("serializeParagraphFormatting auto-spacing overrides (#823)", () => {
+  test("serializes explicit false auto-spacing values", () => {
+    const xml = serializeParagraphFormatting({
+      spaceBefore: 240,
+      beforeAutospacing: false,
+      afterAutospacing: false,
+    });
+
+    expect(xml).toContain('w:before="240"');
+    expect(xml).toContain('w:beforeAutospacing="0"');
+    expect(xml).toContain('w:afterAutospacing="0"');
+  });
+});
+
 // toProseDoc load-side: a paragraph that removes the style's numbering
 // (direct numId=0 under a numbered style) drops the style's hanging slot too
 // and keeps only the indent it states itself.

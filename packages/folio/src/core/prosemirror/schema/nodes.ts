@@ -190,6 +190,13 @@ export type ParagraphAttrs = {
    *  Used by fromProseDoc for lossless round-trip serialization. */
   _originalFormatting?: ParagraphFormatting;
 
+  /** Import-effective spacing baseline for HTML auto-spacing detection.
+   *  PM-only; never serialized back into DOCX formatting. */
+  _autospacingBase?: {
+    before?: number | null;
+    after?: number | null;
+  };
+
   /** Full section properties for paragraphs that end a section.
    *  Used by layout engine for per-section column/page config and round-trip. */
   _sectionProperties?: SectionProperties;

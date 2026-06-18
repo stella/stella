@@ -399,7 +399,7 @@ export function serializeTextFormatting(
   }
 
   // Vertical alignment
-  if (formatting.vertAlign && formatting.vertAlign !== "baseline") {
+  if (formatting.vertAlign) {
     parts.push(`<w:vertAlign w:val="${formatting.vertAlign}"/>`);
   }
 

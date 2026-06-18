@@ -268,12 +268,16 @@ function serializeSpacing(formatting: ParagraphFormatting): string {
     attrs.push(`w:lineRule="${formatting.lineSpacingRule}"`);
   }
 
-  if (formatting.beforeAutospacing) {
-    attrs.push('w:beforeAutospacing="1"');
+  if (formatting.beforeAutospacing !== undefined) {
+    attrs.push(
+      `w:beforeAutospacing="${formatting.beforeAutospacing ? "1" : "0"}"`,
+    );
   }
 
-  if (formatting.afterAutospacing) {
-    attrs.push('w:afterAutospacing="1"');
+  if (formatting.afterAutospacing !== undefined) {
+    attrs.push(
+      `w:afterAutospacing="${formatting.afterAutospacing ? "1" : "0"}"`,
+    );
   }
 
   if (attrs.length === 0) {

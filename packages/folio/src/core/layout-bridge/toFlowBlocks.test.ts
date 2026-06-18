@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { schema } from "../prosemirror/schema";
+import { AUTO_PARAGRAPH_SPACING_PX } from "../utils/units";
 import { toFlowBlocks } from "./toFlowBlocks";
 
 describe("toFlowBlocks paragraph formatting", () => {
@@ -85,6 +86,140 @@ describe("toFlowBlocks paragraph formatting", () => {
     expect(paragraph?.kind).toBe("paragraph");
     expect(paragraph?.attrs?.spacing).toBeUndefined();
     expect(paragraph?.attrs?.indent).toBeUndefined();
+  });
+
+  test("surfaces auto spacing (beforeAutospacing/afterAutospacing) as ~14px for pagination", () => {
+    // eigenpal/docx-editor#823: the paged layout reads spacing from the flow
+    // block, so auto spacing must override the imported before/after (Word
+    // writes `0`) and render the ~14px auto gap while still unedited.
+    const doc = schema.node("doc", null, [
+      schema.node(
+        "paragraph",
+        {
+          spaceBefore: 0,
+          spaceAfter: 0,
+          _originalFormatting: {
+            beforeAutospacing: true,
+            afterAutospacing: true,
+            spaceBefore: 0,
+            spaceAfter: 0,
+          },
+          _autospacingBase: { before: 0, after: 0 },
+        },
+        [schema.text("auto-spaced")],
+      ),
+    ]);
+
+    const paragraph = toFlowBlocks(doc).at(0);
+
+    expect(paragraph?.kind).toBe("paragraph");
+    expect(paragraph?.attrs?.spacing?.before).toBe(AUTO_PARAGRAPH_SPACING_PX);
+    expect(paragraph?.attrs?.spacing?.after).toBe(AUTO_PARAGRAPH_SPACING_PX);
+  });
+
+  test("an explicit spacing edit overrides imported auto-spacing (#823)", () => {
+    // Imported with before=0 + beforeAutospacing; the editor then set 240 twips.
+    // The edit must win over the now-stale auto-spacing flag.
+    const doc = schema.node("doc", null, [
+      schema.node(
+        "paragraph",
+        {
+          spaceBefore: 240, // edited away from the imported 0
+          _originalFormatting: {
+            beforeAutospacing: true,
+            spaceBefore: 0,
+          },
+          _autospacingBase: { before: 0 },
+        },
+        [schema.text("edited")],
+      ),
+    ]);
+
+    const paragraph = toFlowBlocks(doc).at(0);
+
+    expect(paragraph?.attrs?.spacing?.before).toBe(16); // 240 twips, not the 14px auto gap
+  });
+
+  test("auto spacing still applies when a style supplies spacing the import lacked (#823)", () => {
+    // beforeAutospacing with no DIRECT w:before; a style/default placed 200
+    // twips into the PM attr. The untouched paragraph is not an edit, so the
+    // auto gap must still win over the inherited value.
+    const doc = schema.node("doc", null, [
+      schema.node(
+        "paragraph",
+        {
+          spaceBefore: 200, // inherited from a style, not a user edit
+          _originalFormatting: { beforeAutospacing: true }, // no direct spaceBefore
+          _autospacingBase: { before: 200 },
+        },
+        [schema.text("inherited")],
+      ),
+    ]);
+
+    const paragraph = toFlowBlocks(doc).at(0);
+
+    expect(paragraph?.attrs?.spacing?.before).toBe(AUTO_PARAGRAPH_SPACING_PX);
+  });
+
+  test("auto spacing applies when the auto flag itself came from a style (#823)", () => {
+    const doc = schema.node("doc", null, [
+      schema.node(
+        "paragraph",
+        {
+          spaceBefore: 200,
+          _originalFormatting: { styleId: "AutoSpacing" },
+          _autospacingBase: { before: 200 },
+        },
+        [schema.text("style auto")],
+      ),
+    ]);
+
+    const paragraph = toFlowBlocks(doc).at(0);
+
+    expect(paragraph?.attrs?.spacing?.before).toBe(AUTO_PARAGRAPH_SPACING_PX);
+  });
+
+  test("an edit overrides auto spacing when the import baseline came from a style (#823)", () => {
+    const doc = schema.node("doc", null, [
+      schema.node(
+        "paragraph",
+        {
+          spaceBefore: 240,
+          _originalFormatting: { beforeAutospacing: true },
+          _autospacingBase: { before: 200 },
+        },
+        [schema.text("edited inherited spacing")],
+      ),
+    ]);
+
+    const paragraph = toFlowBlocks(doc).at(0);
+
+    expect(paragraph?.attrs?.spacing?.before).toBe(16);
+  });
+
+  test("keeps auto spacing on an empty paragraph by marking it explicit (#823)", () => {
+    // An imported empty paragraph whose only spacing is auto-spacing must keep
+    // the ~14px gap; without `spacingExplicit` the empty-paragraph collapse
+    // rule in the layout engine would suppress it.
+    const doc = schema.node("doc", null, [
+      schema.node(
+        "paragraph",
+        {
+          _originalFormatting: {
+            beforeAutospacing: true,
+            afterAutospacing: true,
+          },
+          _autospacingBase: { before: null, after: null },
+        },
+        [],
+      ),
+    ]);
+
+    const paragraph = toFlowBlocks(doc).at(0);
+
+    expect(paragraph?.attrs?.spacing?.before).toBe(AUTO_PARAGRAPH_SPACING_PX);
+    expect(paragraph?.attrs?.spacingExplicit?.before).toBe(true);
+    expect(paragraph?.attrs?.spacingExplicit?.after).toBe(true);
   });
 
   test("preserves explicit automatic line spacing", () => {

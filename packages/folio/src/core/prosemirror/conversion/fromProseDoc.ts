@@ -97,6 +97,10 @@ import {
   expectTrackedChangeMarkAttrs,
   expectUnderlineMarkAttrs,
 } from "../attrs";
+import {
+  autospacingMatchesBase,
+  hasAutospacingBaseSide,
+} from "../autospacingBase";
 import type { RunFormattingOverrideAttrs } from "../schema/marks";
 import type {
   ParagraphAttrs,
@@ -872,9 +876,53 @@ function paragraphAttrsToFormatting(
   //
   // We then apply overrides for any properties the user may have changed
   // via editor commands (alignment, list toggle, etc.).
+  const spaceBefore = Reflect.get(attrs, "spaceBefore");
+  const spaceAfter = Reflect.get(attrs, "spaceAfter");
+  const beforeHasAutospacingBase = hasAutospacingBaseSide(
+    attrs._autospacingBase,
+    "before",
+  );
+  const afterHasAutospacingBase = hasAutospacingBaseSide(
+    attrs._autospacingBase,
+    "after",
+  );
+  const beforeOriginalAutospacing =
+    attrs._originalFormatting?.beforeAutospacing === true;
+  const afterOriginalAutospacing =
+    attrs._originalFormatting?.afterAutospacing === true;
+  const beforeAutospacingEdited = beforeHasAutospacingBase
+    ? !autospacingMatchesBase(attrs._autospacingBase, "before", spaceBefore)
+    : beforeOriginalAutospacing && attrs._autospacingBase == null;
+  const afterAutospacingEdited = afterHasAutospacingBase
+    ? !autospacingMatchesBase(attrs._autospacingBase, "after", spaceAfter)
+    : afterOriginalAutospacing && attrs._autospacingBase == null;
+  const shouldSerializeSpaceBefore =
+    typeof spaceBefore === "number" &&
+    (!beforeHasAutospacingBase || beforeAutospacingEdited);
+  const shouldSerializeSpaceAfter =
+    typeof spaceAfter === "number" &&
+    (!afterHasAutospacingBase || afterAutospacingEdited);
+
   if (attrs._originalFormatting) {
     const orig = attrs._originalFormatting;
     const result = { ...orig };
+
+    if (beforeAutospacingEdited) {
+      result.beforeAutospacing = false;
+      if (typeof spaceBefore === "number") {
+        result.spaceBefore = spaceBefore;
+      } else {
+        delete result.spaceBefore;
+      }
+    }
+    if (afterAutospacingEdited) {
+      result.afterAutospacing = false;
+      if (typeof spaceAfter === "number") {
+        result.spaceAfter = spaceAfter;
+      } else {
+        delete result.spaceAfter;
+      }
+    }
 
     // Override properties that user may have changed via editor commands.
     // Only override if the PM attr differs from the original value.
@@ -938,8 +986,10 @@ function paragraphAttrsToFormatting(
   const outlineLevel = Reflect.get(attrs, "outlineLevel");
   const hasFormatting =
     attrs.alignment ||
-    attrs.spaceBefore ||
-    attrs.spaceAfter ||
+    shouldSerializeSpaceBefore ||
+    shouldSerializeSpaceAfter ||
+    beforeAutospacingEdited ||
+    afterAutospacingEdited ||
     attrs.lineSpacing ||
     attrs.indentLeft ||
     attrs.indentRight ||
@@ -962,11 +1012,17 @@ function paragraphAttrsToFormatting(
   if (attrs.alignment) {
     f.alignment = attrs.alignment;
   }
-  if (attrs.spaceBefore) {
-    f.spaceBefore = attrs.spaceBefore;
+  if (shouldSerializeSpaceBefore) {
+    f.spaceBefore = spaceBefore;
   }
-  if (attrs.spaceAfter) {
-    f.spaceAfter = attrs.spaceAfter;
+  if (beforeAutospacingEdited) {
+    f.beforeAutospacing = false;
+  }
+  if (shouldSerializeSpaceAfter) {
+    f.spaceAfter = spaceAfter;
+  }
+  if (afterAutospacingEdited) {
+    f.afterAutospacing = false;
   }
   if (attrs.lineSpacing) {
     f.lineSpacing = attrs.lineSpacing;
@@ -1486,10 +1542,14 @@ function createNoteReferenceRun(noteRefMark: Mark): Run {
     type: noteType,
     id: noteId,
   };
-  return {
+  const run: Run = {
     type: "run",
     content: [noteRef],
   };
+  if (noteAttrs.vertAlign === "baseline") {
+    run.formatting = { vertAlign: "baseline" };
+  }
+  return run;
 }
 
 /**

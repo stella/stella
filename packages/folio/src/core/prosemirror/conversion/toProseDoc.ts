@@ -48,6 +48,7 @@ import type {
 import { resolveColor } from "../../utils/colorResolver";
 import { mergeTextFormatting } from "../../utils/textFormattingMerge";
 import { emuToPixels } from "../../utils/units";
+import { setAutospacingBaseValue } from "../autospacingBase";
 import { buildRunFormattingOverrideAttrs } from "../extensions/marks/RunFormattingOverrideExtension";
 import { schema } from "../schema";
 import type {
@@ -576,9 +577,10 @@ function paragraphFormattingToAttrs(
   };
 
   // If we have a style resolver, resolve the style and get base properties
+  let stylePpr: Paragraph["formatting"] | undefined;
   if (styleResolver) {
     const resolved = styleResolver.resolveParagraphStyle(styleId);
-    const stylePpr = resolved.paragraphFormatting;
+    stylePpr = resolved.paragraphFormatting;
 
     // Apply style-based values as defaults (inline overrides)
     set("alignment", formatting?.alignment ?? stylePpr?.alignment);
@@ -698,6 +700,21 @@ function paragraphFormattingToAttrs(
   }
   if (paragraph.renderedPageBreakBefore) {
     attrs.renderedPageBreakBefore = true;
+  }
+
+  const beforeAutospacing =
+    formatting?.beforeAutospacing ?? stylePpr?.beforeAutospacing;
+  const afterAutospacing =
+    formatting?.afterAutospacing ?? stylePpr?.afterAutospacing;
+  if (beforeAutospacing || afterAutospacing) {
+    const base: NonNullable<ParagraphAttrs["_autospacingBase"]> = {};
+    if (beforeAutospacing) {
+      setAutospacingBaseValue(base, "before", attrs.spaceBefore);
+    }
+    if (afterAutospacing) {
+      setAutospacingBaseValue(base, "after", attrs.spaceAfter);
+    }
+    attrs._autospacingBase = base;
   }
 
   return attrs;
@@ -1992,7 +2009,7 @@ function convertRun(
   const marks = textFormattingToMarks(mergedFormatting);
 
   for (const content of run.content) {
-    const contentNodes = convertRunContent(content, marks);
+    const contentNodes = convertRunContent(content, marks, mergedFormatting);
     nodes.push(...contentNodes);
   }
 
@@ -2005,6 +2022,7 @@ function convertRun(
 function convertRunContent(
   content: RunContent,
   marks: ReturnType<typeof schema.mark>[],
+  formatting?: TextFormatting,
 ): PMNode[] {
   switch (content.type) {
     case "text":
@@ -2057,6 +2075,7 @@ function convertRunContent(
       const footnoteMark = schema.mark("footnoteRef", {
         id: content.id.toString(),
         noteType: "footnote",
+        vertAlign: formatting?.vertAlign === "baseline" ? "baseline" : null,
       });
       return [schema.text(content.id.toString(), [...marks, footnoteMark])];
     }
@@ -2066,6 +2085,7 @@ function convertRunContent(
       const endnoteMark = schema.mark("footnoteRef", {
         id: content.id.toString(),
         noteType: "endnote",
+        vertAlign: formatting?.vertAlign === "baseline" ? "baseline" : null,
       });
       return [schema.text(content.id.toString(), [...marks, endnoteMark])];
     }
@@ -2367,7 +2387,7 @@ function convertHyperlink(
       // silently dropped TOC entries' tab between title and page number,
       // collapsing the right-aligned page number flush against the title.
       for (const content of child.content) {
-        nodes.push(...convertRunContent(content, allMarks));
+        nodes.push(...convertRunContent(content, allMarks, mergedFormatting));
       }
     }
   }

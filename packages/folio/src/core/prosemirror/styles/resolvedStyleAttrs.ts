@@ -13,6 +13,8 @@ import {
   computeListRendering,
   type NumberingMap,
 } from "../../docx/numberingParser";
+import { setAutospacingBaseValue } from "../autospacingBase";
+import type { ParagraphAttrs } from "../schema/nodes";
 import type { ResolvedParagraphStyle } from "./styleResolver";
 
 /**
@@ -52,7 +54,22 @@ export function paragraphAttrsFromResolvedStyle(
     // The style's run defaults drive the caret height in an empty paragraph
     // and the formatting typed text inherits (see EmptyParagraphFormatExtension).
     defaultTextFormatting: hasRunFormatting ? runFormatting : null,
+    _autospacingBase: autospacingBaseFromResolvedParagraphFormatting(ppr),
   };
+}
+
+function autospacingBaseFromResolvedParagraphFormatting(
+  ppr: ResolvedParagraphStyle["paragraphFormatting"],
+): ParagraphAttrs["_autospacingBase"] | null {
+  const base: NonNullable<ParagraphAttrs["_autospacingBase"]> = {};
+  if (ppr?.beforeAutospacing) {
+    setAutospacingBaseValue(base, "before", ppr.spaceBefore);
+  }
+  if (ppr?.afterAutospacing) {
+    setAutospacingBaseValue(base, "after", ppr.spaceAfter);
+  }
+
+  return Object.keys(base).length > 0 ? base : null;
 }
 
 /**
