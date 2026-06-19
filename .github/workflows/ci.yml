@@ -691,10 +691,11 @@ jobs:
           set -euo pipefail
           rm -rf install-json
           mkdir -p install-json
-          cp bun.lock bunfig.toml .npmrc package.json install-json/
+          cp bun.lock package.json install-json/
+          for f in bunfig.toml .npmrc; do [ ! -e "$f" ] || cp "$f" install-json/; done
           find apps packages -mindepth 2 -maxdepth 2 -name package.json \
             -not -path '*/node_modules/*' \
-            -exec cp --parents {} install-json/ \;
+            -exec cp --parents -t install-json/ {} +
 
       - name: Prune monorepo for API image source
         if: steps.changed.outputs.run == 'true'

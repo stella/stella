@@ -8,10 +8,11 @@ FROM base AS install-inputs
 # Bun's catalog/resolution semantics.
 COPY . .
 RUN mkdir -p /json && \
-    cp bun.lock bunfig.toml .npmrc package.json /json/ && \
+    cp bun.lock package.json /json/ && \
+    for f in bunfig.toml .npmrc; do [ ! -e "$f" ] || cp "$f" /json/; done && \
     find apps packages -mindepth 2 -maxdepth 2 -name package.json \
       -not -path '*/node_modules/*' \
-      -exec cp --parents {} /json/ \;
+      -exec cp --parents -t /json/ {} +
 
 # Prune the monorepo for the API
 FROM base AS pruner
