@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildClauseCategoryPath } from "@/api/handlers/clauses/export";
+import { buildClauseCategoryPath } from "@/api/handlers/clauses/category-path";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 

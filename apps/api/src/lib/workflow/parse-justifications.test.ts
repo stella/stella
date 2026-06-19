@@ -244,12 +244,11 @@ describe("normalizeJustification — multi-file aggregation", () => {
     const result = unwrap(normalizeJustification({ justification, filenames }));
 
     expect(result).not.toBeNull();
-    const value = result as {
-      content: { blocks: { kind: string }[] };
-      fileFieldIds: SafeId<"field">[];
-    };
-    expect(value.fileFieldIds).toEqual([field("fa"), field("fb")]);
-    expect(value.content.blocks.map((b) => b.kind)).toEqual([
+    if (result === null) {
+      throw new Error("expected a normalized justification");
+    }
+    expect(result.fileFieldIds).toEqual([field("fa"), field("fb")]);
+    expect(result.content.blocks.map((b) => b.kind)).toEqual([
       "pdf-bates",
       "docx-folio",
     ]);

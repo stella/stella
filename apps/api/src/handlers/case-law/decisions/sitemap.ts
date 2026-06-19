@@ -153,12 +153,16 @@ export const listSitemapShardsHandler = async (
       )
       .where(redistributableCaseLawSource)
       .groupBy(caseLawDecisions.country, decisionYearSql, decisionMonthSql)
+      // SAFETY: the sitemap index must enumerate every natural (country x
+      // year-month) shard; capping here would silently drop URLs. Overflow
+      // past caseLawSitemapIndexEntryLimit is detected and split by the
+      // explicit guard below, not by truncating this query.
+      // eslint-disable-next-line require-query-limit/require-query-limit
       .orderBy(
         asc(caseLawDecisions.country),
         desc(decisionYearSql),
         desc(decisionMonthSql),
-      )
-      .limit(LIMITS.caseLawSitemapIndexEntryLimit);
+      );
     const needsBucketShards = natural.some(
       (shard) => shard.total > LIMITS.caseLawSitemapShardUrlLimit,
     );
@@ -184,13 +188,16 @@ export const listSitemapShardsHandler = async (
             decisionMonthSql,
             decisionBucketSql,
           )
+          // SAFETY: bucket shards for overflowing months must all be
+          // enumerated; the sitemap-index overflow guard below handles the
+          // cap, not a truncating query limit.
+          // eslint-disable-next-line require-query-limit/require-query-limit
           .orderBy(
             asc(caseLawDecisions.country),
             desc(decisionYearSql),
             desc(decisionMonthSql),
             asc(decisionBucketSql),
           )
-          .limit(LIMITS.caseLawSitemapIndexEntryLimit)
       : [];
 
     return { naturalShards: natural, bucketShardRows: buckets };

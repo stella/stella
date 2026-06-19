@@ -109,7 +109,9 @@ describe("escapeLike", () => {
   test("invariant: escaped length equals input length plus metachar count", () => {
     fc.assert(
       fc.property(fc.string(), (input) => {
-        const metaCount = [...input].filter((char) => SPECIAL.has(char)).length;
+        const metaCount = Array.from(input).filter((char) =>
+          SPECIAL.has(char),
+        ).length;
         expect(escapeLike(input).length).toBe(input.length + metaCount);
       }),
     );
