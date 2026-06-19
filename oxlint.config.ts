@@ -179,12 +179,6 @@ export default defineConfig({
     "func-style": "off",
     "func-names": "off",
 
-    // Deferred: ultracite 7.8.3 promoted no-await-in-loop to error. Many
-    // sequential awaits are intentional (ordering, rate limits, transaction
-    // sequencing); parallelizing would change behavior, so it is adopted in
-    // its own follow-up PR.
-    "no-await-in-loop": "off",
-
     "typescript/no-inferrable-types": "off",
     "typescript/consistent-return": "error",
     "typescript/dot-notation": "error",

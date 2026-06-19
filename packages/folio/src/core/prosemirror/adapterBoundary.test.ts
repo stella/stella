@@ -28,6 +28,7 @@ describe("ProseMirror adapter attr boundaries", () => {
     const violations: string[] = [];
 
     for (const file of ADAPTER_BOUNDARY_FILES) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential test scan that accumulates violations in source order for a stable assertion
       const source = await Bun.file(file).text();
       const lines = source.split("\n");
 

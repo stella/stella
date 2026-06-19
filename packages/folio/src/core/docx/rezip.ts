@@ -445,6 +445,7 @@ async function processNewImages(
       continue;
     }
 
+    // oxlint-disable-next-line no-await-in-loop -- each part's rels feed shared maxImageNum/maxId counters that must advance sequentially
     const relsXml = await readRelsOrStub(zip, relsPath);
     let maxId = findMaxRId(relsXml);
     const relEntries: string[] = [];
@@ -644,6 +645,7 @@ export async function repackDocx(
     }
 
     // Get original file content
+    // oxlint-disable-next-line no-await-in-loop -- entries are decoded and written into the shared newZip in original order to keep deterministic output
     const content = await file.async("arraybuffer");
 
     // Add to new ZIP (we'll update specific files below)
@@ -775,6 +777,7 @@ export async function repackDocxFromRaw(
     }
 
     // Get original file content
+    // oxlint-disable-next-line no-await-in-loop -- entries are decoded and written into the shared newZip in original order to keep deterministic output
     const content = await file.async("arraybuffer");
 
     // Add to new ZIP
@@ -1482,6 +1485,7 @@ async function rebindWatermarkRelIds(
     }
   }
   for (const relsPath of headerRelsPaths) {
+    // oxlint-disable-next-line no-await-in-loop -- sequential rels reads populate the shared relsXmlByPath map keyed by path
     relsXmlByPath.set(relsPath, await readRelsOrStub(zip, relsPath));
   }
 

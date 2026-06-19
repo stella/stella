@@ -198,6 +198,7 @@ export const backfillChatThreadSearchIndex = async (): Promise<number> => {
   let total = 0;
 
   for (;;) {
+    // oxlint-disable-next-line no-await-in-loop -- keyset pagination: each batch depends on the previous cursor
     const batch = await rootDb.execute<{ id: SafeId<"chatThread"> }>(sql`
       SELECT t.id
       FROM chat_threads t
@@ -225,6 +226,7 @@ export const backfillChatThreadSearchIndex = async (): Promise<number> => {
 
     for (const row of batch) {
       try {
+        // oxlint-disable-next-line no-await-in-loop -- sequential per-thread backfill writes bound DB load
         await upsertChatThreadSearchDocument(row.id);
       } catch (error) {
         captureError(error, {

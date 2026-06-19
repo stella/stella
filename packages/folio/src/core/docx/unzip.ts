@@ -249,6 +249,7 @@ export async function unzipDocx(
     // Determine file type and extract
     if (lowerPath.endsWith(".xml") || lowerPath.endsWith(".rels")) {
       assertEntrySize(path, declaredSize, limits.maxXmlBytes);
+      // oxlint-disable-next-line no-await-in-loop -- entries share a running totalUncompressedBytes budget and write into ordered content maps
       const xmlContent = await file.async("text");
       assertExtractedSize(path, xmlContent.length, limits.maxXmlBytes);
       content.allXml.set(path, xmlContent);
@@ -309,6 +310,7 @@ export async function unzipDocx(
         );
         continue;
       }
+      // oxlint-disable-next-line no-await-in-loop -- entries share a running totalUncompressedBytes budget and write into ordered content maps
       const binaryContent = await file.async("arraybuffer");
       if (binaryContent.byteLength > limits.maxMediaBytes) {
         content.warnings.push(
@@ -326,6 +328,7 @@ export async function unzipDocx(
       if (isEntryTooLarge(declaredSize, limits.maxFontBytes)) {
         continue;
       }
+      // oxlint-disable-next-line no-await-in-loop -- entries share a running totalUncompressedBytes budget and write into ordered content maps
       const binaryContent = await file.async("arraybuffer");
       if (binaryContent.byteLength > limits.maxFontBytes) {
         continue;

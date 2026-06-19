@@ -843,6 +843,7 @@ const driveVmUntilSettled = async ({
     }
 
     if (state.pendingHostWork.size > 0) {
+      // oxlint-disable-next-line no-await-in-loop -- VM event loop: must wait for host progress before pumping the next VM step
       const waitResult = await waitForHostProgress({
         pendingHostWork: state.pendingHostWork,
         deadline,
@@ -860,6 +861,7 @@ const driveVmUntilSettled = async ({
       continue;
     }
 
+    // oxlint-disable-next-line no-await-in-loop -- VM event loop: yields the microtask queue before pumping the next VM step
     await Promise.resolve();
   }
 };

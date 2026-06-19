@@ -78,6 +78,7 @@ const seedRules = async () => {
   console.log(`Seeding ${SEED_RULES.length} polarity rules...`);
 
   for (const rule of SEED_RULES) {
+    // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves insert order across rules
     await rootDb
       .insert(caseLawPolarityRules)
       .values({
@@ -162,6 +163,7 @@ const main = async () => {
     }
 
     try {
+      // oxlint-disable-next-line no-await-in-loop -- ordered, rate-limited backfill: classifies one citation at a time
       const result = await classifyCitation(
         context,
         citation.citationText,
@@ -179,11 +181,13 @@ const main = async () => {
       }
 
       if (!args.dryRun && result.source !== "fallback") {
+        // oxlint-disable-next-line no-await-in-loop -- ordered, rate-limited backfill: persists one citation's result at a time
         await persistPolarity(citation.id, result, scopedDb);
       }
 
       // Rate limit LLM calls
       if (result.source === "llm") {
+        // oxlint-disable-next-line no-await-in-loop -- ordered, rate-limited backfill: throttles sequential LLM calls
         await Bun.sleep(200);
       }
     } catch (error) {

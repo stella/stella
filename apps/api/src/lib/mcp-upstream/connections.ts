@@ -233,14 +233,14 @@ const normalizeConnectionRows = async ({
   rows: RawConnectionRow[];
   safeDb: SafeDb;
 }): Promise<LoadedMcpConnection[]> => {
-  const normalized: LoadedMcpConnection[] = [];
-  for (const rawRow of rows) {
-    const row = await normalizeMcpConnectionRow({ rawRow, safeDb });
-    if (row) {
-      normalized.push(row);
-    }
-  }
-  return normalized;
+  const normalizedRows = await Promise.all(
+    rows.map(
+      async (rawRow) => await normalizeMcpConnectionRow({ rawRow, safeDb }),
+    ),
+  );
+  return normalizedRows.filter(
+    (row): row is LoadedMcpConnection => row !== null,
+  );
 };
 
 export const createMcpClientForConnection = async ({

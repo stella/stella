@@ -146,6 +146,7 @@ const main = async () => {
 
   while (true) {
     const batchStart = performance.now();
+    // oxlint-disable-next-line no-await-in-loop -- sequential keyset pagination: next cursor depends on this batch's result
     const result = await repairBatch(cursor);
 
     if (!result || result.scanned === 0) {

@@ -144,6 +144,7 @@ const anonymizeCompatSearchResults = async ({
     Array.from({ length: results.length });
 
   for (const [workspaceId, group] of byWorkspace) {
+    // oxlint-disable-next-line no-await-in-loop -- per-workspace anonymization bounds gazetteer/DB load across tenants
     const anonymized = await anonymizeTextFields({
       fields: group.titles,
       gazetteerEntries,

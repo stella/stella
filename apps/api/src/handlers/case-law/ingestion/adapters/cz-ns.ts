@@ -310,6 +310,7 @@ export const czNsAdapter: SourceAdapter = {
                 ])
               : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST);
 
+            // oxlint-disable-next-line no-await-in-loop -- polite sequential crawl of one court detail page per entry, rate-limited via Bun.sleep below
             const [detailResponse, printResponse] = await Promise.all([
               fetch(webUrl, { signal: requestSignal, headers: COMMON_HEADERS }),
               fetch(printUrl, {
@@ -319,10 +320,13 @@ export const czNsAdapter: SourceAdapter = {
             ]);
 
             if (detailResponse.ok) {
+              // oxlint-disable-next-line no-await-in-loop -- reads the body of the per-entry detail fetch in this sequential crawl loop
               const webHtml = await detailResponse.text();
-              const printHtml = printResponse.ok
-                ? await printResponse.text()
-                : "";
+              let printHtml = "";
+              if (printResponse.ok) {
+                // oxlint-disable-next-line no-await-in-loop -- reads the body of the per-entry print fetch in this sequential crawl loop
+                printHtml = await printResponse.text();
+              }
 
               const meta = parseDetailPage(webHtml);
               const raw = `${caseNumber}|${meta["ecli"] ?? ""}|${meta["decisionDate"] ?? ""}`;
@@ -425,6 +429,7 @@ export const czNsAdapter: SourceAdapter = {
 
           // Rate limit between detail fetches (skip for last entry)
           if (i < entries.length - 1) {
+            // oxlint-disable-next-line no-await-in-loop -- deliberate crawl delay between sequential court detail fetches
             await Bun.sleep(50);
           }
         }

@@ -338,6 +338,7 @@ export const refineSearchQuery = async ({
   let lastValidationError: string | null = null;
 
   for (let attempt = 1; attempt <= SEARCH_REFINE_MAX_ATTEMPTS; attempt++) {
+    // oxlint-disable-next-line no-await-in-loop -- retry loop: each attempt consumes the validation error from the previous attempt
     const result = await generateRefinedSearchQuery({
       attempt,
       body,
@@ -378,6 +379,7 @@ export const refineSearchQuery = async ({
       continue;
     }
 
+    // oxlint-disable-next-line no-await-in-loop -- retry loop: only validates the candidate query produced by this attempt; returns on success
     const postgresValidation = await validateSearchQueryWithPostgres({
       query: refinedQuery,
       scopedDb,
@@ -897,6 +899,7 @@ const buildSearchResultContexts = async ({
       continue;
     }
 
+    // oxlint-disable-next-line no-await-in-loop -- ordered char budget: each hit consumes remainingChars and assigns the next context number; stops when budget is exhausted
     const content = await loadSearchHitContent({
       hit,
       organizationId,

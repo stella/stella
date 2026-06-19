@@ -396,6 +396,7 @@ const fetchPreviewUrl = async (
       let currentTarget = target;
 
       for (let redirects = 0; redirects <= MAX_PREVIEW_REDIRECTS; redirects++) {
+        // oxlint-disable-next-line no-await-in-loop -- sequential redirect chain: each fetch targets the location resolved from the previous response
         const response = await fetchWithResolvedAddress({
           addresses: currentTarget.addresses,
           headers: {
@@ -428,6 +429,7 @@ const fetchPreviewUrl = async (
             });
           }
 
+          // oxlint-disable-next-line no-await-in-loop -- sequential redirect chain: validate the next hop derived from this response's location before continuing
           const nextTarget = await validatePreviewUrl(
             new URL(location, currentTarget.url).toString(),
           );

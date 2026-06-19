@@ -330,6 +330,7 @@ const deleteStagedUploadObjects = async ({
   workspaceId,
 }: StagedUploadKeyProps & { stage: string }) => {
   for (const key of tmpUploadKeys({ organizationId, uploadId, workspaceId })) {
+    // oxlint-disable-next-line no-await-in-loop -- sequential S3 tmp-object cleanup after multipart finalize
     await getS3()
       .delete(key)
       .catch((deleteError: unknown) =>

@@ -107,6 +107,7 @@ export const readCorpusIndexSearchPage = async <TContext>({
     // Sort by BM25 explicitly: without it the engine returns hits in
     // document-id order and the rank-based lexical score below would be
     // meaningless.
+    // oxlint-disable-next-line no-await-in-loop -- offset pagination: each scan depends on the previous startOffset
     const result = await getCorpusIndexClient().search({
       indexId,
       query,
@@ -145,6 +146,7 @@ export const readCorpusIndexSearchPage = async <TContext>({
     }
 
     startOffset += hits.length;
+    // oxlint-disable-next-line no-await-in-loop -- ranks the accumulated candidates each round to decide whether to stop early
     ranking = await rankCandidates(candidates);
     windowed = windowAfterCursor(ranking.ranked, parsedCursor);
     if (windowed.length > limit) {

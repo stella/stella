@@ -146,6 +146,7 @@ async function waitForServer(url: string): Promise<void> {
   const startedAt = performance.now();
   while (performance.now() - startedAt < 15_000) {
     try {
+      // oxlint-disable-next-line no-await-in-loop -- sequential readiness polling: each probe must wait for the previous to resolve before retrying
       const response = await fetch(url);
       if (response.ok) {
         return;
@@ -153,6 +154,7 @@ async function waitForServer(url: string): Promise<void> {
     } catch {
       // Server not ready yet.
     }
+    // oxlint-disable-next-line no-await-in-loop -- fixed back-off delay between sequential readiness probes
     await new Promise<void>((resolve) => {
       setTimeout(resolve, 100);
     });
@@ -174,6 +176,7 @@ async function profileScenarios(): Promise<PerfResult[]> {
 
     for (const fixtureName of fixtureNames) {
       results.push(
+        // oxlint-disable-next-line no-await-in-loop -- performance scenarios must run sequentially so concurrent loads do not skew timing measurements
         await profileLoad(
           context,
           `load ${fixtureName}`,

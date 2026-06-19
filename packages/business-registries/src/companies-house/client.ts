@@ -374,6 +374,7 @@ export const lookupOfficersByCompanyNumber = async (
       start_index: String(page * OFFICERS_PAGE_SIZE),
     });
     const url = `${COMPANIES_HOUSE_BASE}/company/${encodeURIComponent(normalized)}/officers?${params.toString()}`;
+    // oxlint-disable-next-line no-await-in-loop -- paged cursor crawl; each page's start_index and termination depend on the prior page
     const raw = await companiesHouseGet<CompaniesHouseRawOfficersResponse>(
       url,
       config.apiKey,

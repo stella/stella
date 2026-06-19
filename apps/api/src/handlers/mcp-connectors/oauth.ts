@@ -173,6 +173,7 @@ export const discoverOAuthMetadata = async (
 
   let protectedResource: ProtectedResourceMetadata | null = null;
   for (const metadataUrl of mcpWellKnownProtectedResourceUrls(parsedUrl)) {
+    // oxlint-disable-next-line no-await-in-loop -- ordered metadata discovery: probe well-known URLs in priority order, stop at first hit
     const result = await fetchJson({
       schema: protectedResourceMetadataSchema,
       url: metadataUrl,
@@ -199,11 +200,13 @@ export const discoverOAuthMetadata = async (
   for (const metadataUrl of authorizationServerMetadataUrls(
     authorizationServerUrl,
   )) {
+    // oxlint-disable-next-line no-await-in-loop -- ordered metadata discovery: probe well-known URLs in priority order, stop at first hit
     const result = await fetchJson({
       schema: authorizationServerMetadataSchema,
       url: metadataUrl,
     });
     if (Result.isOk(result)) {
+      // oxlint-disable-next-line no-await-in-loop -- runs only on the first successful probe before breaking out of the discovery loop
       const safeMetadata = await validateAuthorizationServerMetadata(
         result.value,
       );
@@ -514,11 +517,13 @@ const discoverAuthorizationServer = async (
   for (const metadataUrl of authorizationServerMetadataUrls(
     new URL(authorizationServerUrl),
   )) {
+    // oxlint-disable-next-line no-await-in-loop -- ordered metadata discovery: probe well-known URLs in priority order, stop at first hit
     const result = await fetchJson({
       schema: authorizationServerMetadataSchema,
       url: metadataUrl,
     });
     if (Result.isOk(result)) {
+      // oxlint-disable-next-line no-await-in-loop -- runs only on the first successful probe before returning out of the discovery loop
       const safeMetadata = await validateAuthorizationServerMetadata(
         result.value,
       );
@@ -548,6 +553,7 @@ const validateAuthorizationServerMetadata = async (
   ].filter((url) => url !== undefined);
 
   for (const url of urls) {
+    // oxlint-disable-next-line no-await-in-loop -- sequential SSRF safety check: bail on the first unsafe metadata URL
     const safe = await validateOutboundFetchTarget(url);
     if (Result.isError(safe)) {
       return Result.err(

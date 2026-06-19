@@ -54,6 +54,7 @@ export const acquireCellLocks = async ({
   // can deadlock.
   const sorted = [...propertyIds].sort();
   for (const propertyId of sorted) {
+    // oxlint-disable-next-line no-await-in-loop -- locks acquired in sorted order within one tx to avoid deadlock
     await acquireCellLock({ tx, entityVersionId, propertyId });
   }
 };

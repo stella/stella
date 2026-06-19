@@ -47,6 +47,7 @@ describe("MCP gateway rate limiter", () => {
 
     for (let index = 0; index < LIMITS.mcpGatewayRateLimitMax; index += 1) {
       expect(
+        // oxlint-disable-next-line no-await-in-loop -- each consume mutates the limiter budget; order under test
         await limiter.consume({ connectorSlug: "registry", userId: "user_1" }),
       ).toBe(true);
     }
@@ -80,6 +81,7 @@ describe("MCP gateway rate limiter", () => {
 
     for (let index = 0; index < LIMITS.mcpGatewayRateLimitMax; index += 1) {
       expect(
+        // oxlint-disable-next-line no-await-in-loop -- each consume mutates the limiter budget; order under test
         await limiter.consume({ connectorSlug: "registry", userId: "user_1" }),
       ).toBe(true);
     }

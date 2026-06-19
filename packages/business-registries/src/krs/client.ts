@@ -156,6 +156,7 @@ export const lookupByKrsNumber = async (
   const registers =
     options?.register === undefined ? REGISTER_PROBE_ORDER : [options.register];
   for (const register of registers) {
+    // oxlint-disable-next-line no-await-in-loop -- sequential sub-register probe, return on first hit, fall through on 404
     const { status, body } = await krsGet(buildLookupUrl(normalized, register));
     if (status === 404 || !body?.odpis) {
       continue;

@@ -1010,6 +1010,7 @@ const main = async () => {
     for (const surface of selectedSurfaces(args.surface)) {
       for (const task of tasks) {
         runs.push(
+          // oxlint-disable-next-line no-await-in-loop -- sequential benchmark runs; parallelism would distort per-task timings
           await runBenchTask({
             model: benchModel.model,
             repeat,

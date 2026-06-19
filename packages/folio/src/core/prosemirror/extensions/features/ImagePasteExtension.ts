@@ -56,12 +56,14 @@ async function insertImageFiles(
   let insertPos = view.state.selection.from;
 
   for (const file of files) {
+    // oxlint-disable-next-line no-await-in-loop -- images insert sequentially at the moving insertPos cursor; ordering must be preserved
     if (!(await isSafeImageFile(file))) {
       continue;
     }
 
     let dataUrl: string;
     try {
+      // oxlint-disable-next-line no-await-in-loop -- images insert sequentially at the moving insertPos cursor; ordering must be preserved
       dataUrl = await readFileAsDataUrl(file);
     } catch {
       continue;
@@ -70,8 +72,10 @@ async function insertImageFiles(
     let naturalWidth: number;
     let naturalHeight: number;
     try {
-      ({ width: naturalWidth, height: naturalHeight } =
-        await loadImageSize(dataUrl));
+      // oxlint-disable-next-line no-await-in-loop -- images insert sequentially at the moving insertPos cursor; ordering must be preserved
+      const size = await loadImageSize(dataUrl);
+      naturalWidth = size.width;
+      naturalHeight = size.height;
     } catch {
       // Fall back to a safe minimal size if the image can't be decoded
       naturalWidth = 1;

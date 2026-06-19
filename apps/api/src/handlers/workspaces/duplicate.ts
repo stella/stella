@@ -308,6 +308,7 @@ const copyWorkspaceFiles = async ({
         return;
       }
 
+      // oxlint-disable-next-line no-await-in-loop -- worker drains the shared queue sequentially; bounded concurrency comes from running multiple copyNext workers
       const key = await copyWorkspaceFile({
         copy,
         organizationId,
@@ -705,12 +706,14 @@ const duplicateWorkspace = createSafeHandler(
           const newVersionId = createSafeId<"entityVersion">();
           const entityStamp =
             source.kind === "document"
-              ? await allocateEntityStamp(tx, targetWorkspaceId)
+              ? // oxlint-disable-next-line no-await-in-loop -- stamp allocation is a sequential per-workspace counter; must run in order within the transaction
+                await allocateEntityStamp(tx, targetWorkspaceId)
               : null;
           const newParentId = source.parentId
             ? (entityIdMap.get(source.parentId) ?? null)
             : null;
 
+          // oxlint-disable-next-line no-await-in-loop -- sequential inserts; children reference parent IDs created in earlier iterations via entityIdMap
           await tx.insert(entities).values({
             id: newEntityId,
             workspaceId: targetWorkspaceId,
@@ -748,6 +751,7 @@ const duplicateWorkspace = createSafeHandler(
             metadata: source.metadata,
           });
 
+          // oxlint-disable-next-line no-await-in-loop -- sequential version insert depends on the entity row created just above in this iteration
           await tx.insert(entityVersions).values({
             id: newVersionId,
             workspaceId: targetWorkspaceId,
@@ -758,6 +762,7 @@ const duplicateWorkspace = createSafeHandler(
             createdBy: user.id,
           });
 
+          // oxlint-disable-next-line no-await-in-loop -- sequential update sets currentVersionId on the just-created entity/version pair
           await tx
             .update(entities)
             .set({ currentVersionId: newVersionId })
@@ -778,6 +783,7 @@ const duplicateWorkspace = createSafeHandler(
             ];
           });
           if (newFields.length > 0) {
+            // oxlint-disable-next-line no-await-in-loop -- sequential field insert depends on the version created in this iteration
             await tx.insert(fields).values(newFields);
           }
 

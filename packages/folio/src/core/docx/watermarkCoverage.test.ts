@@ -45,6 +45,7 @@ describe("watermark header coverage on save (eigenpal #684)", () => {
     // Default header + the coverage-created first-page header.
     expect(headerFiles).toHaveLength(2);
     for (const path of headerFiles) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential test assertion over each extracted header entry
       expect(await zip.file(path)!.async("text")).toContain("CONFIDENTIAL");
     }
 

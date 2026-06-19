@@ -211,6 +211,7 @@ export const backfillCorpusIndex = async (
   const docs: { row: IndexableRow; doc: Record<string, unknown> }[] = [];
   for (let i = 0; i < rows.length; i += INDEX_CONCURRENCY) {
     const chunk = rows.slice(i, i + INDEX_CONCURRENCY);
+    // oxlint-disable-next-line no-await-in-loop -- bounded concurrency: drain one INDEX_CONCURRENCY chunk before loading the next so S3 reads stay capped
     const built = await Promise.all(
       chunk.map(async (row) => ({
         row,
@@ -255,6 +256,7 @@ export const backfillCorpusIndex = async (
     );
     let staleError: CorpusIndexError | null = null;
     for (const entry of moved) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential deletes that early-break on the first error
       const removed = await removeDecisionFromCorpusIndex(
         entry.id,
         scopedDb,
@@ -270,16 +272,19 @@ export const backfillCorpusIndex = async (
       continue;
     }
 
+    // oxlint-disable-next-line no-await-in-loop -- per-jurisdiction indexes are ensured/ingested sequentially to avoid overwhelming the search backend
     const ensured = await ensureIndex(indexId);
     const ingest = ensured.isErr()
       ? ensured
-      : await getCorpusIndexClient().ingestBatch(
+      : // oxlint-disable-next-line no-await-in-loop -- sequential per-group ingest paces NDJSON pushes to the search backend
+        await getCorpusIndexClient().ingestBatch(
           indexId,
           group.map(({ doc }) => JSON.stringify(doc)).join("\n"),
         );
 
     if (ingest.isErr()) {
       firstError ??= ingest.error;
+      // oxlint-disable-next-line no-await-in-loop -- sequential per-group audit write preserves job ordering
       await recordJobs(
         scopedDb,
         group.map(({ row }) => ({
@@ -295,6 +300,7 @@ export const backfillCorpusIndex = async (
     }
 
     const casMissed: SafeId<"caseLawDecision">[] = [];
+    // oxlint-disable-next-line no-await-in-loop -- one CAS transaction per group; sequential to keep index writes and audit rows consistent
     await scopedDb(async (tx) => {
       // audit: skip — search index maintenance; rebuilds derived state
       for (const { row } of group) {
@@ -303,6 +309,7 @@ export const backfillCorpusIndex = async (
         // when the row was already pending) and bumps updatedAt, and an
         // unconditional write would mask that refresh so the stale index
         // document would never be retried.
+        // oxlint-disable-next-line no-await-in-loop -- sequential CAS updates within the transaction; ordering preserved
         const marked = await tx
           .update(caseLawDecisions)
           .set({
@@ -340,6 +347,7 @@ export const backfillCorpusIndex = async (
     // so delete the unrecorded copy now; the refreshed row is re-indexed
     // by a later cycle.
     for (const missedId of casMissed) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential cleanup deletes of the unrecorded copies
       const removed = await removeDecisionFromCorpusIndex(
         missedId,
         scopedDb,

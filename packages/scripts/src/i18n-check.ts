@@ -372,6 +372,7 @@ if (import.meta.main) {
     const identicalToSource: Record<string, string[]> = {};
     for (const file of localeFiles) {
       const locale = file.replace(/\.json$/u, "");
+      // oxlint-disable-next-line no-await-in-loop -- locales must be processed in sorted order so identicalToSource accumulates deterministically
       const messages = await readLang(file);
       for (const key of findUntranslated(
         enMessages,
@@ -438,6 +439,7 @@ if (import.meta.main) {
 
   for (const file of localeFiles) {
     const locale = file.replace(/\.json$/u, "");
+    // oxlint-disable-next-line no-await-in-loop -- locales reported in sorted order; console output and sync writes must stay deterministic per file
     const messages = await readLang(file);
     const langKeys = new Set(flattenKeys(messages));
 
@@ -479,6 +481,7 @@ if (import.meta.main) {
 
     if (shouldSync) {
       const synced = syncMessages(enMessages, messages);
+      // oxlint-disable-next-line no-await-in-loop -- sequential per-locale file write paired with ordered console output
       await Bun.write(filePath, `${JSON.stringify(synced, null, 2)}\n`);
       console.log("  ✓ synced");
     }

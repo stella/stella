@@ -107,6 +107,7 @@ export const DevSidebarGroup = () => {
     }
 
     for (let i = 0; i < SEED_STATUS_MAX_POLLS; i++) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential status poll: each probe reflects progress after the prior interval
       const status = await api.dev.seed.get();
       if (status.error) {
         setSeeding(false);
@@ -126,6 +127,7 @@ export const DevSidebarGroup = () => {
 
       if (status.data.status === "succeeded") {
         setSeeding(false);
+        // oxlint-disable-next-line no-await-in-loop -- terminal poll branch: returns right after, runs at most once
         await queryClient.invalidateQueries();
         stellaToast.add({
           title: "Dev data seeded",
@@ -134,6 +136,7 @@ export const DevSidebarGroup = () => {
         return;
       }
 
+      // oxlint-disable-next-line no-await-in-loop -- sequential poll backoff: wait between seed status probes
       await sleep(SEED_STATUS_POLL_INTERVAL_MS);
     }
 

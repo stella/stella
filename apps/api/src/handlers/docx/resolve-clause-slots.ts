@@ -41,6 +41,7 @@ export const resolveClauseSlots = async (
   const patches: Record<string, RichPatchValue> = {};
 
   for (const slot of slots) {
+    // oxlint-disable-next-line no-await-in-loop -- sequential clause resolution accumulating into shared patches map
     const link = await scopedDb((tx) =>
       tx.query.templateClauses.findFirst({
         where: {
@@ -59,6 +60,7 @@ export const resolveClauseSlots = async (
       continue;
     }
 
+    // oxlint-disable-next-line no-await-in-loop -- consumes the link resolved in this iteration; sequential per slot
     const versionRow = await resolveVersion(
       link.clauseId,
       link.clauseVersionId,

@@ -34,6 +34,7 @@ const loadAllAdapters = async (): Promise<LoadResult[]> => {
   const results: LoadResult[] = [];
   for (const key of Object.keys(ADAPTER_MODULES)) {
     try {
+      // oxlint-disable-next-line no-await-in-loop -- sequential adapter module loads preserve deterministic result ordering
       const adapter = await loadAdapterByKey(key);
       if (adapter) {
         results.push({ adapter, key });
@@ -222,6 +223,7 @@ export const checkAllAdapters = async (
       continue;
     }
 
+    // oxlint-disable-next-line no-await-in-loop -- sequential health probes avoid hammering multiple court servers concurrently
     const result = await checkAdapterHealth(entry.adapter, timeoutMs);
     results.push(result);
   }

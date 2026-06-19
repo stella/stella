@@ -12,6 +12,7 @@ const listTypeScriptFiles = async (dir: string): Promise<string[]> => {
   for (const entry of entries) {
     const path = nodePath.join(dir, entry.name);
     if (entry.isDirectory()) {
+      // oxlint-disable-next-line no-await-in-loop -- recursive depth-first traversal accumulates files in directory order
       files.push(...(await listTypeScriptFiles(path)));
       continue;
     }
@@ -34,6 +35,7 @@ describe("file upload limits", () => {
         continue;
       }
 
+      // oxlint-disable-next-line no-await-in-loop -- sequential reads keep offender ordering deterministic for the assertion
       const source = await readFile(file, "utf-8");
       for (const args of extractFileSchemaArgs(source)) {
         if (!args.includes("maxSize")) {

@@ -342,6 +342,7 @@ const fetchAllWorkspaceFolders = async ({
   const folders: WorkspaceFolder[] = [];
   let cursor: string | undefined;
   do {
+    // oxlint-disable-next-line no-await-in-loop -- cursor pagination: each page depends on the previous response's nextCursor, so requests are strictly sequential
     const response = await api
       .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
       .folders.get({
@@ -397,6 +398,7 @@ const fetchAllWorkspaceFiles = async ({
   const files: WorkspaceFile[] = [];
   let cursor: string | undefined;
   do {
+    // oxlint-disable-next-line no-await-in-loop -- cursor pagination: each page depends on the previous response's nextCursor, so requests are strictly sequential
     const response = await api
       .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
       .files.get({

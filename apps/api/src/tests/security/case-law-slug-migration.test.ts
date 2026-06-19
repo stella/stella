@@ -69,6 +69,7 @@ const runSlugMigration = async ({
     if (!statement.trim()) {
       continue;
     }
+    // oxlint-disable-next-line no-await-in-loop -- ordered migration statements run sequentially on one test DB connection
     await testDb.execute(sql.raw(statement));
   }
 };

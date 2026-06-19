@@ -393,12 +393,14 @@ export const translateDocument = async (
       });
     }
 
+    // oxlint-disable-next-line no-await-in-loop -- sequential poll backoff: each delay precedes the next status check
     await delay(pollDelay);
     pollDelay = Math.min(
       Math.round(pollDelay * POLL_BACKOFF_FACTOR),
       POLL_MAX_DELAY_MS,
     );
 
+    // oxlint-disable-next-line no-await-in-loop -- polling loop: status is fetched once per interval until DeepL is done
     const status = await fetchStatus(input.apiKey, handle);
 
     if (status.status === "error") {
@@ -409,6 +411,7 @@ export const translateDocument = async (
     }
 
     if (status.status === "done") {
+      // oxlint-disable-next-line no-await-in-loop -- terminal download runs once when polling completes, then returns
       const bytes = await downloadResult(input.apiKey, handle);
       return {
         bytes,

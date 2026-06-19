@@ -126,6 +126,7 @@ const extractEmailPlaintext = async ({
       continue;
     }
 
+    // oxlint-disable-next-line no-await-in-loop -- sequential recursive extraction preserves attachment order and bounds memory
     const text = await extractAttachmentPlaintext({
       bytes: attachment.bytes,
       maxChars,

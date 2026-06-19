@@ -388,6 +388,7 @@ const copyToWorkspaceHandler = async function* ({
       // Delete in reverse order (children first) to respect FK constraints.
       // The cascade will handle versions and fields.
       for (const id of sourceEntityIds.toReversed()) {
+        // oxlint-disable-next-line no-await-in-loop -- sequential deletes in reverse (children-first) order respect FK constraints within the transaction
         await tx.delete(entities).where(eq(entities.id, id));
       }
 

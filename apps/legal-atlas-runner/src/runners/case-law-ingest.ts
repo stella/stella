@@ -412,6 +412,7 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
 
   while (true) {
     try {
+      // oxlint-disable-next-line no-await-in-loop -- continuous daemon: each adapter cycle must finish before the next so the persisted cursor advances in order
       const { outcome, inserted } = await runOneCycle(adapterKey, name);
 
       if (outcome === "failed") {
@@ -471,6 +472,7 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
     } else {
       delayMs = CYCLE_DELAY_MS;
     }
+    // oxlint-disable-next-line no-await-in-loop -- inter-cycle backoff/idle delay; the loop must pause before the next cycle, so this await is intentionally sequential
     await Bun.sleep(delayMs);
   }
 };
@@ -569,13 +571,16 @@ export const runCaseLawIngest = async (
   // Health loop: heartbeat + S3 credential refresh.
   const healthLoop = (async () => {
     while (true) {
+      // oxlint-disable-next-line no-await-in-loop -- fixed-interval health poll; the loop must wait HEALTH_INTERVAL_MS between heartbeats, so this await is intentionally sequential
       await Bun.sleep(HEALTH_INTERVAL_MS);
       writeHeartbeat();
       try {
         if (isS3Stale()) {
+          // oxlint-disable-next-line no-await-in-loop -- credential refresh per poll cycle; must complete before the loop sleeps and re-checks staleness
           await refreshS3();
         }
         if (isCorpusS3Stale()) {
+          // oxlint-disable-next-line no-await-in-loop -- credential refresh per poll cycle; must complete before the loop sleeps and re-checks staleness
           await refreshCorpusS3();
         }
       } catch (error) {
@@ -591,8 +596,10 @@ export const runCaseLawIngest = async (
   // timeout so long texts don't block other work.
   const searchIndexLoop = (async () => {
     while (true) {
+      // oxlint-disable-next-line no-await-in-loop -- fixed-interval backfill poll; the loop must wait SEARCH_INDEX_INTERVAL_MS between batches, so this await is intentionally sequential
       await Bun.sleep(SEARCH_INDEX_INTERVAL_MS);
       try {
+        // oxlint-disable-next-line no-await-in-loop -- one bounded backfill batch per interval; the next poll only runs after this batch completes
         const indexed = await backfillSearchIndex(
           ingestionDb,
           SEARCH_INDEX_BATCH_SIZE,
@@ -616,8 +623,10 @@ export const runCaseLawIngest = async (
   // continuous daemon). Runs via the ingestion role outside the DB slot.
   const citationAuthorityLoop = (async () => {
     while (true) {
+      // oxlint-disable-next-line no-await-in-loop -- fixed-interval recompute poll; the loop must wait CITATION_AUTHORITY_INTERVAL_MS between recomputes, so this await is intentionally sequential
       await Bun.sleep(CITATION_AUTHORITY_INTERVAL_MS);
       try {
+        // oxlint-disable-next-line no-await-in-loop -- one full recompute per interval; the next poll only runs after this recompute completes
         const updated = await ingestionDb(async (tx) => {
           const count = await recomputeCitationAuthorityForAll(tx);
           return count;
@@ -646,8 +655,10 @@ export const runCaseLawIngest = async (
     const generation = envBase.LEGAL_SEARCH_INDEX_GENERATION;
     logInfo(`[corpus-index] Enabled for generation ${generation}`);
     while (true) {
+      // oxlint-disable-next-line no-await-in-loop -- fixed-interval backfill poll; the loop must wait CORPUS_INDEX_INTERVAL_MS between batches, so this await is intentionally sequential
       await Bun.sleep(CORPUS_INDEX_INTERVAL_MS);
       try {
+        // oxlint-disable-next-line no-await-in-loop -- one bounded backfill batch per interval; the next poll only runs after this batch completes
         const indexed = await backfillCorpusIndex(
           ingestionDb,
           LIMITS.corpusIndexBatchSize,
@@ -671,8 +682,10 @@ export const runCaseLawIngest = async (
   // corpus daemon maintains both families' search projections.
   const legislationSearchIndexLoop = (async () => {
     while (true) {
+      // oxlint-disable-next-line no-await-in-loop -- fixed-interval backfill poll; the loop must wait SEARCH_INDEX_INTERVAL_MS between batches, so this await is intentionally sequential
       await Bun.sleep(SEARCH_INDEX_INTERVAL_MS);
       try {
+        // oxlint-disable-next-line no-await-in-loop -- one bounded backfill batch per interval; the next poll only runs after this batch completes
         const indexed = await backfillLegislationSearchIndex(
           ingestionDb,
           SEARCH_INDEX_BATCH_SIZE,
@@ -701,8 +714,10 @@ export const runCaseLawIngest = async (
     const generation = corpusGeneration("legislation");
     logInfo(`[legislation-corpus-index] Enabled for generation ${generation}`);
     while (true) {
+      // oxlint-disable-next-line no-await-in-loop -- fixed-interval backfill poll; the loop must wait CORPUS_INDEX_INTERVAL_MS between batches, so this await is intentionally sequential
       await Bun.sleep(CORPUS_INDEX_INTERVAL_MS);
       try {
+        // oxlint-disable-next-line no-await-in-loop -- one bounded backfill batch per interval; the next poll only runs after this batch completes
         const indexed = await backfillLegislationCorpusIndex(
           ingestionDb,
           LIMITS.corpusIndexBatchSize,

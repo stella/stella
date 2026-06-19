@@ -126,6 +126,7 @@ const discoverCatalogBundleUrl = async (): Promise<string> => {
       break;
     }
 
+    // oxlint-disable-next-line no-await-in-loop -- sequential BFS crawl; each fetch enqueues the next chunk URLs to discover
     const scriptText = await fetchText(candidate);
     if (
       scriptText.includes("udalost:{") &&

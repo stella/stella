@@ -44,6 +44,7 @@ export const loadExternalMcpToolsForUser = async ({
   });
 
   for (const row of rows) {
+    // oxlint-disable-next-line no-await-in-loop -- sequential per-connector load; mutates shared clients/connectors/loadedTools and avoids fanning out concurrent external MCP connections
     await loadConnectorTools({
       clients,
       connectors,

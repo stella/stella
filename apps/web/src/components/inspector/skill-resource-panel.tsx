@@ -155,8 +155,10 @@ export const SkillResourcePanel = ({
       const stored = toStoredMarkdown(next, content);
       const response =
         target === "body"
-          ? await skill.patch({ body: stored, queryKey: ["skills"] })
-          : await skill.resources.patch({
+          ? // oxlint-disable-next-line no-await-in-loop -- sequential save queue: each write must land before retrying with newer markdown
+            await skill.patch({ body: stored, queryKey: ["skills"] })
+          : // oxlint-disable-next-line no-await-in-loop -- sequential save queue: each write must land before retrying with newer markdown
+            await skill.resources.patch({
               path: resourcePath,
               content: stored,
               queryKey: ["skills"],

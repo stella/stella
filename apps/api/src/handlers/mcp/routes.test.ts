@@ -71,6 +71,7 @@ describe("MCP protected resource discovery routes", () => {
     });
 
     for (const method of ["OPTIONS", "GET", "POST", "DELETE"]) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential test setup: asserts the recorded call order below
       const response = await route.handle(
         new Request(`http://localhost${MCP_HTTP_PATH}`, { method }),
       );
@@ -95,6 +96,7 @@ describe("MCP protected resource discovery routes", () => {
     });
 
     for (const method of ["OPTIONS", "GET", "POST", "DELETE"]) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential test setup: asserts the recorded call order below
       const response = await route.handle(
         new Request(`http://localhost${MCP_ANONYMIZED_HTTP_PATH}`, { method }),
       );
@@ -120,6 +122,7 @@ describe("MCP protected resource discovery routes", () => {
 
     for (const path of [MCP_HTTP_PATH, MCP_ANONYMIZED_HTTP_PATH]) {
       for (const method of ["PATCH", "PUT"]) {
+        // oxlint-disable-next-line no-await-in-loop -- deterministic sequential test setup over a small fixed method list
         const response = await route.handle(
           new Request(`http://localhost${path}`, { method }),
         );

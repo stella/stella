@@ -96,6 +96,7 @@ const consumeAutocompleteStream = async (
   const decoder = new TextDecoder();
   let buffer = "";
   while (true) {
+    // oxlint-disable-next-line no-await-in-loop -- sequential stream read: each chunk must be decoded before the next
     const chunk = await reader.read();
     if (chunk.done) {
       cb.onDone();

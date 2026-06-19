@@ -43,12 +43,14 @@ console.log("\n=== Case Law Ingestion Status ===\n");
 
 for (const source of sources) {
   // Total decisions for this source
+  // oxlint-disable-next-line no-await-in-loop -- sequential status check; output is printed in order per source
   const [totalRow] = await rootDb
     .select({ total: count() })
     .from(caseLawDecisions)
     .where(eq(caseLawDecisions.sourceId, source.id));
 
   // Decisions inserted in last hour
+  // oxlint-disable-next-line no-await-in-loop -- sequential status check; output is printed in order per source
   const [hourRow] = await rootDb
     .select({
       inserted: sql<number>`coalesce(sum(${caseLawIngestionEvents.inserted}), 0)`,
@@ -60,6 +62,7 @@ for (const source of sources) {
     );
 
   // Decisions inserted in last 24h
+  // oxlint-disable-next-line no-await-in-loop -- sequential status check; output is printed in order per source
   const [dayRow] = await rootDb
     .select({
       inserted: sql<number>`coalesce(sum(${caseLawIngestionEvents.inserted}), 0)`,
@@ -71,6 +74,7 @@ for (const source of sources) {
     );
 
   // Recent failures count
+  // oxlint-disable-next-line no-await-in-loop -- sequential status check; output is printed in order per source
   const [failRow] = await rootDb
     .select({ total: count() })
     .from(caseLawIngestionFailures)
@@ -80,6 +84,7 @@ for (const source of sources) {
     );
 
   // Last event
+  // oxlint-disable-next-line no-await-in-loop -- sequential status check; output is printed in order per source
   const [lastEvent] = await rootDb
     .select({
       status: caseLawIngestionEvents.status,
@@ -95,6 +100,7 @@ for (const source of sources) {
     .limit(1);
 
   // Top failure types (last 24h)
+  // oxlint-disable-next-line no-await-in-loop -- sequential status check; output is printed in order per source
   const topFailures = await rootDb
     .select({
       errorType: caseLawIngestionFailures.errorType,
