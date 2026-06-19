@@ -161,6 +161,36 @@ export function createPaginator(options: PaginatorOptions) {
     columns,
   );
 
+  function recalculateColumnWidth(): void {
+    columnWidth = calculateColumnWidth(
+      pageSize.w,
+      margins.left,
+      margins.right,
+      columns,
+    );
+  }
+
+  function applyPendingLayout(): void {
+    if (pendingPageSize) {
+      pageSize = pendingPageSize;
+    }
+    if (pendingMargins) {
+      margins = pendingMargins;
+    }
+    pendingPageSize = undefined;
+    pendingMargins = undefined;
+    if (getContentHeight() <= 0) {
+      panic("Paginator: section page size and margins yield no content area");
+    }
+    recalculateColumnWidth();
+  }
+
+  function getPageMargins(pageNumber: number): PageMargins {
+    return pageNumber === 1 && options.firstPageMargins
+      ? { ...options.firstPageMargins }
+      : { ...margins };
+  }
+
   // Track where column content starts on the current page.
   // Defaults to topMargin but gets updated when columns change mid-page
   // (continuous section break). When advanceColumn moves to the next column,
@@ -179,20 +209,7 @@ export function createPaginator(options: PaginatorOptions) {
    */
   function createNewPage(): PageState {
     if (pendingPageSize || pendingMargins) {
-      if (pendingPageSize) {
-        pageSize = pendingPageSize;
-      }
-      if (pendingMargins) {
-        margins = pendingMargins;
-      }
-      pendingPageSize = undefined;
-      pendingMargins = undefined;
-      columnWidth = calculateColumnWidth(
-        pageSize.w,
-        margins.left,
-        margins.right,
-        columns,
-      );
+      applyPendingLayout();
     }
 
     const pageNumber = pages.length + 1;
@@ -203,10 +220,7 @@ export function createPaginator(options: PaginatorOptions) {
     // every page in the section would inherit page 1's title-page top
     // margin, leaving large empty space at the top of pages 2+ on
     // first-page-header docs (NVCA-style templates).
-    const pageMargins =
-      pageNumber === 1 && options.firstPageMargins
-        ? { ...options.firstPageMargins }
-        : { ...margins };
+    const pageMargins = getPageMargins(pageNumber);
     const topMargin = pageMargins.top;
     const contentBottom = pageSize.h - pageMargins.bottom;
 
@@ -441,6 +455,53 @@ export function createPaginator(options: PaginatorOptions) {
     return createNewPage();
   }
 
+  function retargetCurrentBlankPage(): boolean {
+    const current = states.at(-1);
+    if (
+      !current ||
+      current.page.fragments.length > 0 ||
+      current.cursorY !== current.topMargin
+    ) {
+      return false;
+    }
+
+    if (pendingPageSize || pendingMargins) {
+      applyPendingLayout();
+    }
+
+    const pageMargins = getPageMargins(current.page.number);
+    const topMargin = pageMargins.top;
+    const rawContentBottom = pageSize.h - pageMargins.bottom;
+    const footnoteHeight =
+      options.footnoteReservedHeights?.get(current.page.number) ?? 0;
+
+    current.page.size = { ...pageSize };
+    current.page.margins = pageMargins;
+    if (footnoteHeight > 0) {
+      current.page.footnoteReservedHeight = footnoteHeight;
+    } else {
+      delete current.page.footnoteReservedHeight;
+    }
+    if (columns.count > 1) {
+      current.page.columns = { ...columns };
+    } else {
+      delete current.page.columns;
+    }
+
+    current.topMargin = topMargin;
+    current.cursorY = topMargin;
+    current.columnIndex = 0;
+    current.rawContentBottom = rawContentBottom;
+    current.footnoteHeight = footnoteHeight;
+    current.contentBottom = rawContentBottom - footnoteHeight;
+    current.trailingSpacing = 0;
+    columnRegionTop = topMargin;
+
+    currentSectionPageNumber = 1;
+    applySectionMetadata(current.page);
+    return true;
+  }
+
   /**
    * Force a column break - move to next column or new page.
    */
@@ -501,12 +562,7 @@ export function createPaginator(options: PaginatorOptions) {
     if (getContentHeight() <= 0) {
       panic("Paginator: section page size and margins yield no content area");
     }
-    columnWidth = calculateColumnWidth(
-      pageSize.w,
-      margins.left,
-      margins.right,
-      columns,
-    );
+    recalculateColumnWidth();
     pendingPageSize = undefined;
     pendingMargins = undefined;
   }
@@ -558,6 +614,8 @@ export function createPaginator(options: PaginatorOptions) {
     addFootnoteHeight,
     /** Force a page break. */
     forcePageBreak,
+    /** Reuse an already blank current page for the active section/layout. */
+    retargetCurrentBlankPage,
     /** Force a column break. */
     forceColumnBreak,
     /** Get X position for column. */

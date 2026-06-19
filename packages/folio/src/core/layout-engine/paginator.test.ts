@@ -49,6 +49,42 @@ describe("paginator forcePageBreak", () => {
     expect(state.topMargin).toBe(nextMargins.top);
     expect(state.contentBottom).toBe(nextSize.h - nextMargins.bottom);
   });
+
+  test("retargetCurrentBlankPage applies the active layout and section metadata", () => {
+    const paginator = createPaginator({ pageSize: SIZE, margins: MARGINS });
+    paginator.forcePageBreak();
+
+    const nextSize = { w: 600, h: 700 };
+    const nextMargins = { top: 30, right: 40, bottom: 50, left: 60 };
+    paginator.updatePageLayout(nextSize, nextMargins);
+    paginator.startSection(1);
+
+    expect(paginator.retargetCurrentBlankPage()).toBe(true);
+    expect(paginator.pages.length).toBe(1);
+
+    const state = paginator.getCurrentState();
+    expect(state.page.size).toEqual(nextSize);
+    expect(state.page.margins).toEqual(nextMargins);
+    expect(state.page.sectionIndex).toBe(1);
+    expect(state.page.sectionPageNumber).toBe(1);
+    expect(state.topMargin).toBe(nextMargins.top);
+    expect(state.cursorY).toBe(nextMargins.top);
+    expect(state.contentBottom).toBe(nextSize.h - nextMargins.bottom);
+  });
+
+  test("retargetCurrentBlankPage leaves nonblank pages unchanged", () => {
+    const paginator = createPaginator({ pageSize: SIZE, margins: MARGINS });
+    const state = paginator.getCurrentState();
+    state.page.fragments.push({ kind: "paragraph" } as never);
+
+    const nextSize = { w: 600, h: 700 };
+    paginator.updatePageLayout(nextSize, MARGINS);
+    paginator.startSection(1);
+
+    expect(paginator.retargetCurrentBlankPage()).toBe(false);
+    expect(state.page.size).toEqual(SIZE);
+    expect(state.page.sectionIndex).toBe(0);
+  });
 });
 
 describe("paginator block spacing", () => {

@@ -498,6 +498,44 @@ function layoutParagraph(
     const state = paginator.getCurrentState();
     const availableHeight = paginator.getAvailableHeight();
 
+    // If the paragraph cannot begin on this page solely because its leading
+    // spacing collapses with the previous block's trailing spacing — spacing
+    // the next page sheds — advance first so the whole paragraph re-fits there.
+    // Otherwise the `fittingLines === 0` fallback below strands its first line
+    // here and `addFragment` carries it to the next page alone, splitting a
+    // paragraph that fits whole into an artificial intra-page continuation
+    // (eigenpal/docx-editor#782 follow-up).
+    //
+    // Only when the page already holds content (`cursorY !== topMargin`):
+    // advancing then lands on a fresh page that resets `trailingSpacing` to 0,
+    // so the re-entry takes the normal path. At a fresh page top, `ensureFits`
+    // deliberately does not advance oversized content, so continuing there
+    // would loop forever — fall through and let the fallback place the line.
+    if (
+      currentLineIndex === 0 &&
+      state.trailingSpacing > 0 &&
+      state.cursorY !== state.topMargin
+    ) {
+      const firstLine = lines[0]!; // SAFETY: lines.length > 0 in while guard
+      const firstLineRefs = getLineFootnoteRefs(
+        block,
+        firstLine.fromRun,
+        firstLine.toRun,
+        footnoteHeightById,
+      );
+      const firstLineHeight =
+        measuredLineAdvance(firstLine) + firstLineRefs.height;
+      const collapsedLead = Math.max(spaceBefore, state.trailingSpacing);
+      const columnCapacity = state.contentBottom - state.topMargin;
+      if (
+        collapsedLead + firstLineHeight > availableHeight &&
+        spaceBefore + firstLineHeight <= columnCapacity
+      ) {
+        paginator.ensureFits(collapsedLead + firstLineHeight);
+        continue;
+      }
+    }
+
     // Calculate how many lines fit
     let linesHeight = 0;
     let linesFnHeight = 0;
@@ -514,7 +552,13 @@ function layoutParagraph(
     // and bumped the *whole* fragment to the next page. Result: page-end
     // paragraphs with multi-line content didn't split — they jumped the
     // page boundary, leaving a chunk of empty space above.
-    const firstFragmentSpaceBefore = currentLineIndex === 0 ? spaceBefore : 0;
+    //
+    // `addFragment` collapses `spaceBefore` with the previous block's trailing
+    // spacing (`max(spaceBefore, trailingSpacing)`), so the fit loop must
+    // reserve the same collapsed amount; otherwise a large preceding
+    // `spaceAfter` repeats the same over-count (eigenpal/docx-editor#782).
+    const firstFragmentSpaceBefore =
+      currentLineIndex === 0 ? Math.max(spaceBefore, state.trailingSpacing) : 0;
 
     for (let j = currentLineIndex; j < lines.length; j++) {
       const line = lines[j]!; // SAFETY: j < lines.length
@@ -1265,13 +1309,39 @@ function handleSectionBreak(
       break;
     }
 
-    case "continuous":
-      paginator.updatePageLayout(
-        nextSectionConfig.pageSize,
-        nextSectionConfig.margins,
-        false,
-      );
+    case "continuous": {
+      // ECMA-376 §17.6.22: a `continuous` break normally keeps the current
+      // page geometry and defers the new size/margins to the next natural
+      // page break. But a break that changes page size or orientation cannot
+      // share a physical sheet with the preceding section, so Word and
+      // LibreOffice promote it to a page break (eigenpal/docx-editor#841).
+      //
+      // Compare against the last laid-out page without materializing one: a
+      // break before any content has no sheet to share, so it defers (the first
+      // content then opens a page with the new geometry) rather than stranding
+      // a blank leading page.
+      const currentPage = paginator.pages.at(-1);
+      const nextSize = nextSectionConfig.pageSize;
+      const pageSizeChanges =
+        currentPage != null &&
+        (Math.round(nextSize.w) !== Math.round(currentPage.size.w) ||
+          Math.round(nextSize.h) !== Math.round(currentPage.size.h));
+      if (nextSectionIndex !== undefined) {
+        paginator.startSection(nextSectionIndex);
+      }
+      if (pageSizeChanges) {
+        // Promote to a page break, but reuse an already blank current page as
+        // the next section's first page instead of leaving it stranded.
+        paginator.updatePageLayout(nextSize, nextSectionConfig.margins);
+        if (!paginator.retargetCurrentBlankPage()) {
+          paginator.forcePageBreak({ coalesceBlankPage: true });
+        }
+      } else {
+        paginator.updatePageLayout(nextSize, nextSectionConfig.margins, false);
+        paginator.retargetCurrentBlankPage();
+      }
       break;
+    }
     default:
       break;
   }
