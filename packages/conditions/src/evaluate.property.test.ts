@@ -232,4 +232,30 @@ describe("evaluator invariants (property-based)", () => {
       }),
     );
   });
+
+  // An absolute oracle for the ordered operators: any value compared to itself
+  // must satisfy gte/lte and fail gt/lt, whatever its type. The totality and
+  // complement properties above all pass on a uniformly wrong-but-boolean
+  // result (e.g. gt/lt always false for dates), so this is what actually pins
+  // gt/lt/gte/lte semantics — and what would have caught the ISO-date bug.
+  test("ordered comparisons are reflexive for any literal value", () => {
+    fc.assert(
+      fc.property(
+        fc.oneof(fc.string(), fc.integer(), fc.boolean()),
+        (value) => {
+          const resolve = makeResolver({});
+          const cmp = (op: "gt" | "lt" | "gte" | "lte"): ConditionNode => ({
+            type: "compare",
+            left: { type: "literal", value },
+            op,
+            right: { type: "literal", value },
+          });
+          expect(evaluateCondition(cmp("gte"), resolve)).toBe(true);
+          expect(evaluateCondition(cmp("lte"), resolve)).toBe(true);
+          expect(evaluateCondition(cmp("gt"), resolve)).toBe(false);
+          expect(evaluateCondition(cmp("lt"), resolve)).toBe(false);
+        },
+      ),
+    );
+  });
 });

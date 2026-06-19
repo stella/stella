@@ -61,6 +61,32 @@ describe("compare operators", () => {
     expect(evaluateCondition(gt, resolverFor({ amount: "500" }))).toBe(false);
     expect(evaluateCondition(gt, resolverFor({ amount: "n/a" }))).toBe(false);
   });
+
+  test("non-numeric literals compare lexicographically (ISO dates order chronologically)", () => {
+    const after = compare(
+      { type: "property", propertyId: "due" },
+      "gt",
+      "2026-01-01",
+    );
+    expect(evaluateCondition(after, resolverFor({ due: "2026-06-01" }))).toBe(
+      true,
+    );
+    expect(evaluateCondition(after, resolverFor({ due: "2025-12-31" }))).toBe(
+      false,
+    );
+
+    const onOrBefore = compare(
+      { type: "property", propertyId: "due" },
+      "lte",
+      "2026-06-18",
+    );
+    expect(
+      evaluateCondition(onOrBefore, resolverFor({ due: "2026-06-18" })),
+    ).toBe(true);
+    expect(
+      evaluateCondition(onOrBefore, resolverFor({ due: "2026-07-01" })),
+    ).toBe(false);
+  });
 });
 
 describe("predicate operators", () => {

@@ -103,23 +103,40 @@ const compareValues = (
     return normScalar(left) !== normScalar(right);
   }
 
-  const ln = toNumber(left);
+  // Numeric comparison when the right-hand value (the literal, in Table
+  // filters) is a number: a non-numeric left value is then excluded. When the
+  // right value is non-numeric — e.g. an ISO date string — compare
+  // lexicographically so dates order chronologically, matching the SQL side.
   const rn = toNumber(right);
-  if (ln === undefined || rn === undefined) {
-    return false;
-  }
-  switch (op) {
-    case "gt":
-      return ln > rn;
-    case "lt":
-      return ln < rn;
-    case "gte":
-      return ln >= rn;
-    case "lte":
-      return ln <= rn;
-    default:
+  if (rn !== undefined) {
+    const ln = toNumber(left);
+    if (ln === undefined) {
       return false;
+    }
+    if (op === "gt") {
+      return ln > rn;
+    }
+    if (op === "lt") {
+      return ln < rn;
+    }
+    if (op === "gte") {
+      return ln >= rn;
+    }
+    return ln <= rn;
   }
+
+  const ls = normScalar(left);
+  const rs = normScalar(right);
+  if (op === "gt") {
+    return ls > rs;
+  }
+  if (op === "lt") {
+    return ls < rs;
+  }
+  if (op === "gte") {
+    return ls >= rs;
+  }
+  return ls <= rs;
 };
 
 // ── Predicates ────────────────────────────────────────────
