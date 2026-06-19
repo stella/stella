@@ -26,7 +26,7 @@ import type { SafeId } from "@/api/lib/branded-types";
  * skill chips as `[label](#stella-skill-ref=slug)`). The slug sits inside the
  * markdown link target, so it runs up to the closing paren or whitespace.
  */
-const SKILL_REF_RE = /#stella-skill-ref=([^)\s]+)/u;
+const SKILL_REF_RE = /#stella-skill-ref=(?<slug>[^)\s]+)/u;
 
 /** Server-validated identity the skill tools resolve skills against. */
 export type SkillToolsContext = {

@@ -536,8 +536,8 @@ describe("property: loop-expanded @num markers number sequentially", () => {
           });
 
           const joined = (await extractTexts(buffer)).join(" ");
-          const numbers = [...joined.matchAll(/Clause (\d+)\./gu)].map((m) =>
-            Number(m[1]),
+          const numbers = [...joined.matchAll(/Clause (?<num>\d+)\./gu)].map(
+            (m) => Number(m[1]),
           );
           expect(numbers).toEqual(names.map((_, i) => i + 1));
         },
@@ -563,7 +563,7 @@ describe("property: loop-expanded @num markers number sequentially", () => {
 
         const joined = (await extractTexts(buffer)).join(" ");
         const pairs = [
-          ...joined.matchAll(/Clause (\d+) refers to (\d+) end/gu),
+          ...joined.matchAll(/Clause (?<num>\d+) refers to (?<ref>\d+) end/gu),
         ];
         expect(pairs).toHaveLength(count);
         for (const [i, pair] of pairs.entries()) {
@@ -592,7 +592,7 @@ describe("property: loop-expanded @num markers number sequentially", () => {
         });
 
         const joined = (await extractTexts(buffer)).join(" ");
-        const refs = [...joined.matchAll(/Item under (\d+) end/gu)].map(
+        const refs = [...joined.matchAll(/Item under (?<ref>\d+) end/gu)].map(
           (m) => m[1],
         );
         expect(refs).toEqual(Array.from({ length: count }, () => "1"));

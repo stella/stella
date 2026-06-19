@@ -35,7 +35,7 @@ const escapeXml = (value: string): string =>
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
 
-const W_T_RE = /(<w:t[^>]*>)([\s\S]*?)(<\/w:t>)/gu;
+const W_T_RE = /(?<open><w:t[^>]*>)(?<content>[\s\S]*?)(?<close><\/w:t>)/gu;
 
 /** Replace `literal` with `replacement` only inside `<w:t>` text content. */
 const replaceInTextNodes = (

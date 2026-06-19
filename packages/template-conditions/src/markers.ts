@@ -78,23 +78,23 @@ export const markerPattern = (): RegExp =>
   // A single greedy `[^{}]*` matches the inner text in one pass. The previous
   // `\s*([^{}]*?)\s*` form backtracks polynomially on a `{{` with no closing
   // `}}` (\s overlaps [^{}]); this scans the whole document, so keep it linear.
-  /\{\{([^{}]*)\}\}/gu;
+  /\{\{(?<inner>[^{}]*)\}\}/gu;
 
 /** Inline field / clause / numbering marker (inner allows the directive sigils). */
 export const placeholderPattern = (): RegExp =>
-  /\{\{\s*([\p{L}\p{N}_.@:-]+)\s*\}\}/gu;
+  /\{\{\s*(?<name>[\p{L}\p{N}_.@:-]+)\s*\}\}/gu;
 
-/** `{{@clause:Name}}` / `{{@clause:Name:v3}}` — group 1 name, group 2 version. */
+/** `{{@clause:Name}}` / `{{@clause:Name:v3}}` — `name` and `modifier` groups. */
 export const clauseSlotPattern = (): RegExp =>
-  /\{\{\s*@clause:([^:}\s]+)(?::([^}\s]+))?\s*\}\}/gu;
+  /\{\{\s*@clause:(?<name>[^:}\s]+)(?::(?<modifier>[^}\s]+))?\s*\}\}/gu;
 
-/** `{{@num:Key}}` — group 1 is the key. */
+/** `{{@num:Key}}` — the `key` group. */
 export const numPattern = (): RegExp =>
-  /\{\{\s*@num:([\p{L}\p{N}_.-]+)\s*\}\}/gu;
+  /\{\{\s*@num:(?<key>[\p{L}\p{N}_.-]+)\s*\}\}/gu;
 
-/** `{{@ref:Key}}` — group 1 is the key. */
+/** `{{@ref:Key}}` — the `key` group. */
 export const refPattern = (): RegExp =>
-  /\{\{\s*@ref:([\p{L}\p{N}_.-]+)\s*\}\}/gu;
+  /\{\{\s*@ref:(?<key>[\p{L}\p{N}_.-]+)\s*\}\}/gu;
 
 /** `{{@index}}` — the 1-based position within the innermost enclosing loop. */
 export const indexPattern = (): RegExp => /\{\{\s*@index\s*\}\}/gu;
@@ -108,10 +108,10 @@ export const hasNumberingPattern = (): RegExp => /\{\{\s*@(?:num|ref):/u;
 /** Cheap presence test for any block directive (no capture). */
 export const hasBlockDirectivePattern = (): RegExp => /\{\{\s*[#/]/u;
 
-/** A whole line that is a single block directive — group 1 token, group 2 expr. */
+/** A whole line that is a single block directive — `tag` and `expr` groups. */
 export const blockDirectiveLinePattern = (): RegExp =>
   // oxlint-disable-next-line sonarjs/slow-regex -- runs on one OOXML paragraph at a time
-  /^\s*\{\{\s*(#if|#elseif|#else|#each|\/if|\/each)\s*(.*?)\}\}\s*$/u;
+  /^\s*\{\{\s*(?<tag>#if|#elseif|#else|#each|\/if|\/each)\s*(?<expr>.*?)\}\}\s*$/u;
 
 // ── Classifier ───────────────────────────────────────────
 
@@ -122,14 +122,15 @@ const FIELD_PATH_RE = /^[\p{L}\p{N}_.-]+$/u;
  *  segments of letters/digits/underscore/dash — no brackets or spaces). */
 export const isFieldPath = (value: string): boolean =>
   FIELD_PATH_RE.test(value);
-const CLAUSE_INNER_RE = /^@clause:([^:}\s]+)(?::([^}\s]+))?$/u;
-const NUM_INNER_RE = /^@num:([\p{L}\p{N}_.-]+)$/u;
-const REF_INNER_RE = /^@ref:([\p{L}\p{N}_.-]+)$/u;
+const CLAUSE_INNER_RE = /^@clause:(?<name>[^:}\s]+)(?::(?<version>[^}\s]+))?$/u;
+const NUM_INNER_RE = /^@num:(?<key>[\p{L}\p{N}_.-]+)$/u;
+const REF_INNER_RE = /^@ref:(?<key>[\p{L}\p{N}_.-]+)$/u;
 const INDEX_INNER_RE = /^@index$/u;
 const COUNT_INNER_RE = /^@count$/u;
 // `\b(.*)` rather than `\b\s*(.*)`: the overlapping `\s*`/`.*` quantifiers are
 // polynomial; group 2 is trimmed at the use site below, so drop the `\s*`.
-const BLOCK_INNER_RE = /^(#if|#elseif|#else|#each|\/if|\/each)\b(.*)$/u;
+const BLOCK_INNER_RE =
+  /^(?<token>#if|#elseif|#else|#each|\/if|\/each)\b(?<expr>.*)$/u;
 
 /**
  * Classify the inner text of a `{{...}}` marker. Returns `null` when the text is
@@ -140,8 +141,8 @@ export const classifyMarker = (innerRaw: string): MarkerMeta | null => {
 
   const block = BLOCK_INNER_RE.exec(inner);
   if (block) {
-    const token = block[1] ?? "";
-    const expr = (block[2] ?? "").trim();
+    const token = block.groups?.["token"] ?? "";
+    const expr = (block.groups?.["expr"] ?? "").trim();
     if (token === "#if") {
       return { kind: "if", expr };
     }
@@ -164,17 +165,21 @@ export const classifyMarker = (innerRaw: string): MarkerMeta | null => {
 
   const clause = CLAUSE_INNER_RE.exec(inner);
   if (clause) {
-    return { kind: "clause", name: clause[1] ?? "", version: clause[2] };
+    return {
+      kind: "clause",
+      name: clause.groups?.["name"] ?? "",
+      version: clause.groups?.["version"],
+    };
   }
 
   const num = NUM_INNER_RE.exec(inner);
   if (num) {
-    return { kind: "num", key: num[1] ?? "" };
+    return { kind: "num", key: num.groups?.["key"] ?? "" };
   }
 
   const ref = REF_INNER_RE.exec(inner);
   if (ref) {
-    return { kind: "ref", key: ref[1] ?? "" };
+    return { kind: "ref", key: ref.groups?.["key"] ?? "" };
   }
 
   if (INDEX_INNER_RE.test(inner)) {

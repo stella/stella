@@ -226,8 +226,8 @@ const NUMBERING_XML =
 const numIdsOf = async (buffer: Buffer): Promise<string[]> => {
   const zip = await JSZip.loadAsync(buffer);
   const xml = (await zip.file("word/document.xml")?.async("string")) ?? "";
-  return [...xml.matchAll(/<w:numId w:val="(\d+)"\s*\/?>/gu)].flatMap((m) =>
-    m[1] ? [m[1]] : [],
+  return [...xml.matchAll(/<w:numId w:val="(?<numId>\d+)"\s*\/?>/gu)].flatMap(
+    (m) => (m[1] ? [m[1]] : []),
   );
 };
 
