@@ -1141,4 +1141,26 @@ describe("computeCachingParams system cache boundary", () => {
       systems[0]?.providerOptions?.["anthropic"]?.["cacheControl"],
     ).toBeUndefined();
   });
+
+  test("a whitespace-only tail adds no boundary and yields one marked block", () => {
+    const whitespaceOnly = composeSystemWithCacheBoundary({
+      cacheablePrefix: "STABLE_SCAFFOLD",
+      dynamicTail: "\n\n",
+    });
+    expect(whitespaceOnly).toBe("STABLE_SCAFFOLD");
+
+    const result = computeCachingParams(
+      paramsWithSystem(whitespaceOnly),
+      "anthropic",
+      enabled,
+      "claude-sonnet-4-6",
+    );
+    const systems = systemMessages(result);
+
+    expect(systems).toHaveLength(1);
+    expect(systems[0]?.content).toBe("STABLE_SCAFFOLD");
+    expect(
+      systems[0]?.providerOptions?.["anthropic"]?.["cacheControl"],
+    ).toEqual({ type: "ephemeral" });
+  });
 });

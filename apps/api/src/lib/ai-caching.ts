@@ -70,14 +70,18 @@ type SystemCacheParts = {
 
 /**
  * Join the cacheable system prefix and the dynamic system tail with
- * the cache boundary marker. An empty tail yields just the prefix (no
- * marker), matching the previous plain-concatenation behaviour.
+ * the cache boundary marker. An empty (or whitespace-only) tail yields
+ * just the prefix with no marker, matching the previous
+ * plain-concatenation behaviour.
  */
 export const composeSystemWithCacheBoundary = ({
   cacheablePrefix,
   dynamicTail,
 }: SystemCacheParts): string => {
-  if (dynamicTail.length === 0) {
+  // Whitespace-only tails (e.g. a global chat with no user context or
+  // installed skills) carry no content; treat them as empty so the
+  // split never emits a blank second system block.
+  if (dynamicTail.trim().length === 0) {
     return cacheablePrefix;
   }
   const separator = dynamicTail.startsWith("\n") ? "" : "\n\n";

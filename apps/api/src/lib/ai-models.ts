@@ -828,7 +828,7 @@ const markAnthropicSystem = (
   prompt: CallOptions["prompt"],
 ): CallOptions["prompt"] =>
   prompt.flatMap((message): CallOptions["prompt"] => {
-    if (message.role !== "system") {
+    if (message.role !== "system" || typeof message.content !== "string") {
       return [message];
     }
     const { cacheablePrefix, dynamicTail } = splitSystemCacheBoundary(
@@ -864,7 +864,7 @@ const stripSystemCacheBoundaryFromPrompt = (
   prompt: CallOptions["prompt"],
 ): CallOptions["prompt"] =>
   prompt.map((message): PromptMessage => {
-    if (message.role !== "system") {
+    if (message.role !== "system" || typeof message.content !== "string") {
       return message;
     }
     const stripped = stripSystemCacheBoundary(message.content);
