@@ -387,7 +387,14 @@ const recreateTemplateDependencies = async ({
             workspaceId,
             propertyId: brandPersistedPropertyId(propertyId),
             dependsOnPropertyId: brandPersistedPropertyId(dependsOnPropertyId),
-            condition: dep.condition,
+            // The gate's operands carry source ids too; remap them like the
+            // edge so the applied gate resolves against the target columns.
+            condition: dep.condition
+              ? remapNodePropertyIds(
+                  dep.condition,
+                  (id) => propertyIdBySourceId.get(id) ?? id,
+                )
+              : null,
           },
         ];
       },

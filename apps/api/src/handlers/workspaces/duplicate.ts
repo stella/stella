@@ -643,7 +643,13 @@ const duplicateWorkspace = createSafeHandler(
             workspaceId: targetWorkspaceId,
             propertyId,
             dependsOnPropertyId,
-            condition: dependency.condition,
+            // The gate's operands reference source property ids too, so remap
+            // them like the edge — otherwise the copied gate resolves nothing.
+            condition: dependency.condition
+              ? remapNodePropertyIds(dependency.condition, (id) =>
+                  remapPropertyId(id, propertyIdMap),
+                )
+              : null,
           };
         })
         .filter((dependency) => dependency !== null);
