@@ -2188,12 +2188,12 @@ const GESTURE_PREVIEW_SAMPLE = {
   clauseText: "Neither party is liable for indirect or consequential loss.",
 } as const;
 
-const CONCEPT_KEY: Record<GestureInsertKind, TranslationKey> = {
+const CONCEPT_KEY = {
   field: "templates.studio.conceptField",
   if: "templates.studio.conceptCondition",
   each: "templates.studio.conceptLoop",
   clause: "templates.studio.conceptClause",
-};
+} as const satisfies Record<GestureInsertKind, TranslationKey>;
 
 /** One-shot reveal: fills in after a short beat and stays (no loop). */
 const useFillReveal = (): boolean => {
@@ -5374,7 +5374,7 @@ const FieldFace = ({
 }: {
   field: StudioField;
   onUpdate: (patch: Partial<StudioField>) => void;
-  onBack?: () => void;
+  onBack?: (() => void) | undefined;
 }) => {
   const t = useTranslations();
   const actions = useTemplateStudioStore((s) => s.actions);
