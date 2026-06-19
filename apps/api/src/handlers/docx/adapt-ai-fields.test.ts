@@ -32,7 +32,7 @@ const documentText = async (buffer: Buffer): Promise<string> => {
   const zip = await JSZip.loadAsync(buffer);
   const xml = (await zip.file("word/document.xml")?.async("string")) ?? "";
   const texts: string[] = [];
-  for (const match of xml.matchAll(/<w:t[^>]*>(.*?)<\/w:t>/gu)) {
+  for (const match of xml.matchAll(/<w:t[^>]*>(?<text>.*?)<\/w:t>/gu)) {
     if (match[1] !== undefined) {
       texts.push(match[1]);
     }

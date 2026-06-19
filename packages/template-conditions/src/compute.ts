@@ -40,7 +40,7 @@ type Tok =
 // are unaffected. The numeric group never starts with `-`, so negatives are
 // always handled by the parser's unary-minus branch, never the identifier.
 const TOKEN_RE =
-  /([0-9][0-9_]*(?:\.[0-9]+)?)|([\p{L}_][\p{L}\p{N}_.]*(?:-[\p{L}\p{N}_.]+)*)|([+\-*/%(),])|(\S)/gu;
+  /(?<numeric>[0-9][0-9_]*(?:\.[0-9]+)?)|(?<ident>[\p{L}_][\p{L}\p{N}_.]*(?:-[\p{L}\p{N}_.]+)*)|(?<punct>[+\-*/%(),])|(?<invalid>\S)/gu;
 
 const PRECEDENCE: Record<string, number> = {
   "+": 1,
@@ -53,7 +53,7 @@ const PRECEDENCE: Record<string, number> = {
 const tokenize = (expression: string): Tok[] => {
   const tokens: Tok[] = [];
   for (const match of expression.matchAll(TOKEN_RE)) {
-    const [, numeric, ident, punct, invalid] = match;
+    const { numeric, ident, punct, invalid } = match.groups ?? {};
     if (invalid !== undefined) {
       throw new Error(`Unexpected token: ${invalid}`);
     }

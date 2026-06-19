@@ -144,7 +144,7 @@ export const renderLookupTemplate = (
   const tokens = lookupTemplateTokens(hit);
   return template
     .replace(
-      /\[([^[\]]{1,64})\]/gu,
+      /\[(?<token>[^[\]]{1,64})\]/gu,
       (_match, raw: string) => tokens[raw.trim()] ?? "",
     )
     .replace(/ {2,}/gu, " ")
@@ -170,7 +170,8 @@ export const renderLookupOutput = (
  *  not nest and cannot contain asterisks, and an italic `*` never pairs
  *  against a `**` delimiter (lookarounds); anything unmatched (a stray `*`,
  *  empty `****`, an asterisk inside a substituted value) stays literal. */
-const LOOKUP_MARKDOWN_RE = /\*\*([^*]+)\*\*|(?<!\*)\*([^*]+)\*(?!\*)/gu;
+const LOOKUP_MARKDOWN_RE =
+  /\*\*(?<bold>[^*]+)\*\*|(?<!\*)\*(?<italic>[^*]+)\*(?!\*)/gu;
 
 /**
  * Parse a rendered lookup output into formatted runs: `**bold**` and

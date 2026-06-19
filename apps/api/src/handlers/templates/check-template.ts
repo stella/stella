@@ -54,7 +54,7 @@ export const MAX_CHECK_FINDINGS = 200;
 // extractor: numeric literals (group 1, with `_` separators) are consumed
 // first so they are never mistaken for identifiers (group 2).
 const FORMULA_TOKEN_RE =
-  /([0-9][0-9_]*(?:\.[0-9]+)?)|([\p{L}_][\p{L}\p{N}_.]*)/gu;
+  /(?<number>[0-9][0-9_]*(?:\.[0-9]+)?)|(?<ident>[\p{L}_][\p{L}\p{N}_.]*)/gu;
 
 const FORMULA_FUNCTIONS: ReadonlySet<string> = new Set([
   "min",
@@ -80,7 +80,7 @@ const extractFormulaPaths = (expression: string): string[] => {
 // @stll/template-conditions (index.ts): string literals and operators are
 // consumed first; group 2 captures candidate identifiers.
 const CONDITION_TOKEN_RE =
-  /("(?:[^"\\]|\\.)*")|==|!=|>=|<=|>|<|!(?!=)|and\b|or\b|contains\b|[()]|([\p{L}\p{N}_.]+)/gu;
+  /(?<string>"(?:[^"\\]|\\.)*")|==|!=|>=|<=|>|<|!(?!=)|and\b|or\b|contains\b|[()]|(?<ident>[\p{L}\p{N}_.]+)/gu;
 
 const STARTS_WITH_DIGIT_RE = /^\d/u;
 

@@ -71,7 +71,9 @@ const documentText = async (buffer: Buffer): Promise<string> => {
   const xml = (await zip.file("word/document.xml")?.async("string")) ?? "";
   const texts: string[] = [];
   // Cut spans leave empty self-closing <w:t/> runs behind; match both forms.
-  for (const match of xml.matchAll(/<w:t[^>]*?(?:\/>|>(.*?)<\/w:t>)/gu)) {
+  for (const match of xml.matchAll(
+    /<w:t[^>]*?(?:\/>|>(?<text>.*?)<\/w:t>)/gu,
+  )) {
     texts.push(match[1] ?? "");
   }
   return texts.join("");
@@ -654,7 +656,7 @@ describe("fillTemplate with inline conditions", () => {
     const docx = await makeDocx(
       WRAP(
         P(
-          "Signed {{signing_date}}{{#if signing_date > \"2028-01-01\"}} (after cutoff){{#else}} (before cutoff){{/if}}.",
+          'Signed {{signing_date}}{{#if signing_date > "2028-01-01"}} (after cutoff){{#else}} (before cutoff){{/if}}.',
         ) +
           P("{{#if notify}}") +
           P("Notice sent.") +
