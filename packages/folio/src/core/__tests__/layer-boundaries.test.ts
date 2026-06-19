@@ -71,7 +71,7 @@ const layerOfPath = (absolutePath: string): Layer | null => {
 // `specifier.startsWith(".")` check — only relative paths are checked. The
 // regex itself uses bounded character classes to keep matching linear.
 const IMPORT_REGEX =
-  /\bfrom\s*["']([^"']+)["']|\bimport\s*["']([^"']+)["']|\bimport\s*\(\s*["']([^"']+)["']\s*\)/gu;
+  /\bfrom\s*["'](?<fromSpec>[^"']+)["']|\bimport\s*["'](?<importSpec>[^"']+)["']|\bimport\s*\(\s*["'](?<dynImportSpec>[^"']+)["']\s*\)/gu;
 
 type EdgeViolation = {
   importer: string;
@@ -95,7 +95,10 @@ const violationsForSource = (
   }
   const violations: EdgeViolation[] = [];
   for (const match of source.matchAll(IMPORT_REGEX)) {
-    const specifier = match[1] ?? match[2] ?? match[3];
+    const specifier =
+      match.groups?.["fromSpec"] ??
+      match.groups?.["importSpec"] ??
+      match.groups?.["dynImportSpec"];
     if (specifier === undefined || !specifier.startsWith(".")) {
       continue;
     }

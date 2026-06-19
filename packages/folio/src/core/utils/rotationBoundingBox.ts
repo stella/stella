@@ -20,11 +20,11 @@ export function parseRotationDegrees(transform: string | undefined): number {
   if (!transform) {
     return 0;
   }
-  const match = /rotate\(\s*([-\d.]+)\s*deg\s*\)/iu.exec(transform);
+  const match = /rotate\(\s*(?<degrees>[-\d.]+)\s*deg\s*\)/iu.exec(transform);
   if (!match) {
     return 0;
   }
-  const raw = Number.parseFloat(match[1]!);
+  const raw = Number.parseFloat(match.groups!["degrees"]!);
   if (!Number.isFinite(raw)) {
     return 0;
   }

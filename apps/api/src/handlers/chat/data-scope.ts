@@ -137,7 +137,7 @@ const collectStructuralWorkspaceIds = (
 // The entity form's second segment (the entity UUID) is intentionally
 // not captured — only the workspace it belongs to gates RLS.
 const STELLA_TEXT_REF_WORKSPACE_REGEX =
-  /#stella-(?:workspace|entity)=([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gu;
+  /#stella-(?:workspace|entity)=(?<workspaceId>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gu;
 
 const collectTextRefWorkspaceIds = (
   part: unknown,
@@ -153,7 +153,7 @@ const collectTextRefWorkspaceIds = (
     return;
   }
   for (const match of part.text.matchAll(STELLA_TEXT_REF_WORKSPACE_REGEX)) {
-    const captured = match[1];
+    const captured = match.groups?.["workspaceId"];
     if (captured) {
       ids.add(brandPersistedWorkspaceId(captured));
     }

@@ -29,7 +29,7 @@ import type {
  * Strips string literals, operators, and keywords.
  */
 const CONDITION_TOKEN_RE =
-  /"(?:[^"\\]|\\.)*"|==|!=|>=|<=|>|<|!(?!=)|and\b|or\b|([\p{L}\p{N}_.]+)/gu;
+  /"(?:[^"\\]|\\.)*"|==|!=|>=|<=|>|<|!(?!=)|and\b|or\b|(?<ident>[\p{L}\p{N}_.]+)/gu;
 
 const NUMERIC_LITERAL_RE = /^[\d_]+$/u;
 
@@ -290,7 +290,7 @@ const analyzeContainer = (
         const text = paragraphText(para);
         const prefix = `${block.arrayPath}.`;
         for (const match of text.matchAll(PLACEHOLDER_RE)) {
-          const name = match[1];
+          const name = match.groups?.["name"];
           if (!name) {
             continue;
           }
@@ -321,7 +321,7 @@ const analyzeContainer = (
           if (!raw) {
             continue;
           }
-          const ident = m[1];
+          const ident = m.groups?.["ident"];
 
           if (raw === "and" || raw === "or") {
             current = { paths: [], hasComparison: false };
@@ -361,7 +361,7 @@ const analyzeContainer = (
     const paraCondition = conditionMap.get(i);
 
     for (const match of text.matchAll(PLACEHOLDER_RE)) {
-      const name = match[1];
+      const name = match.groups?.["name"];
       if (!name) {
         continue;
       }

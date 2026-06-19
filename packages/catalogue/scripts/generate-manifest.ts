@@ -216,8 +216,9 @@ function pluralize(kind: (typeof CATALOGUE_KINDS)[number]): string {
 }
 
 function toImportName(kind: string, slug: string): string {
-  const camel = `${kind}-${slug}`.replace(/-([a-z0-9])/gu, (_, ch: string) =>
-    ch.toUpperCase(),
+  const camel = `${kind}-${slug}`.replace(
+    /-(?<ch>[a-z0-9])/gu,
+    (_, ch: string) => ch.toUpperCase(),
   );
   return camel.replace(/^[a-z]/u, (ch) => ch.toLowerCase());
 }

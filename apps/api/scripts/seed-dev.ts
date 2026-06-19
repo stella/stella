@@ -81,7 +81,7 @@ import {
 
 // ─── Mock file generators ───────────────────────────────
 
-const fileExtRe = /\.(pdf|docx)$/u;
+const fileExtRe = /\.(?:pdf|docx)$/u;
 
 const PDF_MIME = "application/pdf" as const;
 const DOCX_MIME =

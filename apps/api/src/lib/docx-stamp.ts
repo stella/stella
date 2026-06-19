@@ -52,21 +52,21 @@ const FMTID = "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}";
 
 // ── Top-level regex (oxlint: prefer-regex-literals) ───────────
 
-const PID_RE = /pid="(\d+)"/gu;
-const WID_RE = /w:id="(\d+)"/gu;
+const PID_RE = /pid="(?<pid>\d+)"/gu;
+const WID_RE = /w:id="(?<id>\d+)"/gu;
 const FOOTER_FILE_RE = /^word\/footer\d+\.xml$/u;
-const WT_TEXT_RE = /<w:t[^>]*>([^<]*)<\/w:t>/gu;
-const STL_CODE_RE = /stl:([abcdefghjkmnpqrstuvwxyz23456789]{10})/u;
+const WT_TEXT_RE = /<w:t[^>]*>(?<text>[^<]*)<\/w:t>/gu;
+const STL_CODE_RE = /stl:(?<code>[abcdefghjkmnpqrstuvwxyz23456789]{10})/u;
 // oxlint-disable-next-line sonarjs/slow-regex -- footer text is bounded OOXML text and suffix is short
 const STL_SUFFIX_RE = /\s*stl:[abcdefghjkmnpqrstuvwxyz23456789]+\s*$/u;
-const SECT_PR_RE = /(<w:sectPr[^>]*>)/u;
+const SECT_PR_RE = /(?<sect><w:sectPr[^>]*>)/u;
 const CLOSING_BODY_RE = /<\/w:body>/u;
 const CLOSING_FTR_RE = /<\/w:ftr>/u;
 const STRIP_PATH_RE = /^.*\//u;
 const FOOTER_REL_RE =
-  /Id="([^"]+)"[^>]*Type="[^"]*\/footer"[^>]*Target="([^"]+)"/gu;
+  /Id="(?<id>[^"]+)"[^>]*Type="[^"]*\/footer"[^>]*Target="(?<target>[^"]+)"/gu;
 const DEFAULT_FOOTER_REF_RE =
-  /w:footerReference[^>]*w:type="default"[^>]*r:id="([^"]+)"/u;
+  /w:footerReference[^>]*w:type="default"[^>]*r:id="(?<rid>[^"]+)"/u;
 const PLACEHOLDER_REF_RE = /\{\{STELLA_REF\}\}/gu;
 const PLACEHOLDER_CODE_RE = /\{\{STELLA_CODE\}\}/gu;
 const PLACEHOLDER_ID_RE = /\{\{STELLA_ID\}\}/gu;
@@ -264,7 +264,10 @@ const upsertProperty = (xml: string, name: string, value: string): string => {
   const pidMatches = [...xml.matchAll(PID_RE)];
   let maxPid = 1;
   for (const match of pidMatches) {
-    maxPid = Math.max(maxPid, Number.parseInt(match[1] ?? "0", 10));
+    maxPid = Math.max(
+      maxPid,
+      Number.parseInt(match.groups?.["pid"] ?? "0", 10),
+    );
   }
   const prop = [
     `  <property fmtid="${FMTID}" pid="${maxPid + 1}"`,
@@ -481,8 +484,8 @@ const findExistingFooter = (
   // Build a map of relationship ID → target path
   const relMap = new Map<string, string>();
   for (const m of docRels.matchAll(FOOTER_REL_RE)) {
-    const id = m[1];
-    const target = m[2];
+    const id = m.groups?.["id"];
+    const target = m.groups?.["target"];
     if (id && target) {
       relMap.set(id, target);
     }
@@ -494,7 +497,7 @@ const findExistingFooter = (
 
   // Prefer the default footer reference from document.xml
   const defaultRef = DEFAULT_FOOTER_REF_RE.exec(docXml);
-  const rId = defaultRef?.[1];
+  const rId = defaultRef?.groups?.["rid"];
   const target = (rId ? relMap.get(rId) : null) ?? relMap.values().next().value;
 
   if (!target) {
@@ -637,7 +640,7 @@ const findAvailableFooterName = (archive: DocxArchive): string => {
 
 const findNextBookmarkId = (xml: string): string => {
   const ids = [...xml.matchAll(WID_RE)].map((m) =>
-    Number.parseInt(m[1] ?? "0", 10),
+    Number.parseInt(m.groups?.["id"] ?? "0", 10),
   );
   const max = ids.length > 0 ? Math.max(...ids) : -1;
   return String(max + 1);
@@ -707,7 +710,7 @@ const addFooterReference = (docXml: string, footerRId: string): string => {
 
   // If there's already a sectPr, add footer reference inside
   if (docXml.includes("<w:sectPr")) {
-    return docXml.replace(SECT_PR_RE, `$1\n    ${footerRef}`);
+    return docXml.replace(SECT_PR_RE, `$<sect>\n    ${footerRef}`);
   }
 
   // No sectPr: create one before </w:body>
@@ -783,7 +786,7 @@ const extractBookmarkText = (
   // Extract all <w:t> text
   const texts: string[] = [];
   for (const tMatch of region.matchAll(WT_TEXT_RE)) {
-    const text = tMatch[1];
+    const text = tMatch.groups?.["text"];
     if (text) {
       texts.push(text);
     }
@@ -796,7 +799,7 @@ const extractBookmarkText = (
 
   // Parse "2026/001/015.v3  stl:kx8mq2n4p3"
   const stlMatch = STL_CODE_RE.exec(fullText);
-  const verificationCode = stlMatch?.[1] ?? null;
+  const verificationCode = stlMatch?.groups?.["code"] ?? null;
 
   // Stamp is everything before "stl:"
   const stampPart = fullText.replace(STL_SUFFIX_RE, "").trim();

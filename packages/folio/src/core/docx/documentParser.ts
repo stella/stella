@@ -40,7 +40,7 @@ import type { XmlElement } from "./xmlParser";
 /**
  * Regular expression to match template variables {{...}}
  */
-const TEMPLATE_VARIABLE_REGEX = /\{([a-zA-Z_][a-zA-Z0-9_\-.]*)\}/gu;
+const TEMPLATE_VARIABLE_REGEX = /\{(?<name>[a-zA-Z_][a-zA-Z0-9_\-.]*)\}/gu;
 
 /**
  * Extract template variables from text
@@ -56,8 +56,8 @@ export function extractTemplateVariables(text: string): string[] {
   TEMPLATE_VARIABLE_REGEX.lastIndex = 0;
 
   while ((match = TEMPLATE_VARIABLE_REGEX.exec(text)) !== null) {
-    // SAFETY: capture group [1] always present when regex matches
-    const varName = match[1]!.trim();
+    // SAFETY: named group always present when regex matches
+    const varName = match.groups!["name"]!.trim();
     if (varName && !variables.includes(varName)) {
       variables.push(varName);
     }

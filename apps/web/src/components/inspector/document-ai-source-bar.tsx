@@ -510,10 +510,10 @@ const findFolioBlockPage = (blockId: string): number | null => {
 
   // Direct fallback for `seq-NNNN` ids — those map to layout
   // block ids by extracting the numeric suffix.
-  const seqMatch = /^seq-(\d+)$/u.exec(blockId);
+  const seqMatch = /^seq-(?<seq>\d+)$/u.exec(blockId);
   if (seqMatch) {
     const direct = document.querySelector(
-      `.layout-page [data-block-id="block-${Number.parseInt(seqMatch[1] ?? "0", 10)}"]`,
+      `.layout-page [data-block-id="block-${Number.parseInt(seqMatch.groups?.["seq"] ?? "0", 10)}"]`,
     );
     if (direct) {
       const page = getPageNumberFromElement(direct);

@@ -180,8 +180,8 @@ const DIRECTIVE_NAMES = new Set([
 ]);
 const DIRECTIVE_NAME_CHAR_RE = /[a-z_]/iu;
 // oxlint-disable-next-line sonarjs/slow-regex -- input is single-line paragraph text; linear backtracking only
-const PLACEHOLDER_RE = /\[\[([^\]]+?)\]\]/gu;
-const CLAUSE_HEADING_RE = /^@clause +\d+ *"([^"]*)" *$/iu;
+const PLACEHOLDER_RE = /\[\[(?<inner>[^\]]+?)\]\]/gu;
+const CLAUSE_HEADING_RE = /^@clause +\d+ *"(?<title>[^"]*)" *$/iu;
 const stripDirectivePrefix = (line: string): string => {
   const trimmed = line.trimStart();
   if (!trimmed.startsWith("@")) {
@@ -214,7 +214,7 @@ const cleanDirectiveText = (text: string): string => {
   const lines = text.split("\n").map((line) => {
     const clauseMatch = CLAUSE_HEADING_RE.exec(line);
     if (clauseMatch) {
-      return clauseMatch[1] ?? "";
+      return clauseMatch.groups?.["title"] ?? "";
     }
     return stripDirectivePrefix(line);
   });

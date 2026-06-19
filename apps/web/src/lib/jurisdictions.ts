@@ -57,7 +57,7 @@ const COUNTRY_CODE_BY_EMAIL_TLD = new Map<string, CountryCode>(
 );
 COUNTRY_CODE_BY_EMAIL_TLD.set("uk", "GB");
 
-const LOCALE_REGION_PATTERN = /[-_]([A-Za-z]{2})\b/u;
+const LOCALE_REGION_PATTERN = /[-_](?<region>[A-Za-z]{2})\b/u;
 
 export const createCountryOptions = (locale: string): CountryOption[] => {
   const names = new Intl.DisplayNames([locale], { type: "region" });
@@ -85,7 +85,8 @@ export const suggestedCountryCodes = ({
   locale: string;
 }): CountryCode[] => {
   const suggestions: string[] = [];
-  const regionFromLocale = LOCALE_REGION_PATTERN.exec(locale)?.at(1);
+  const regionFromLocale =
+    LOCALE_REGION_PATTERN.exec(locale)?.groups?.["region"];
   const emailTld = email.split(".").at(-1)?.toLowerCase();
 
   if (regionFromLocale) {

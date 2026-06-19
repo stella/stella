@@ -3,7 +3,7 @@ import { brandPersistedChatThreadId } from "@/api/lib/safe-id-boundaries";
 
 const CURSOR_SEPARATOR = "|";
 const CURSOR_TIMESTAMP_RE =
-  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})\.(\d{6})$/u;
+  /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})\.(?<microsecond>\d{6})$/u;
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
@@ -40,7 +40,8 @@ const isValidCursorTimestamp = (timestamp: string): boolean => {
     return false;
   }
 
-  const [, year, month, day, hour, minute, second, microsecond] = match;
+  const { year, month, day, hour, minute, second, microsecond } =
+    match.groups ?? {};
   const parts = [year, month, day, hour, minute, second, microsecond].map(
     Number,
   );

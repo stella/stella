@@ -63,9 +63,15 @@ function escapeLeadingBlockMarker(text: string): string {
   // a later line. Only horizontal whitespace `[ \t]` leads the marker so the
   // anchor doesn't cross the newline.
   return text
-    .replace(/^([ \t]*)([#>])/gmu, "$1\\$2")
-    .replace(/^([ \t]*)([-+*])([ \t])/gmu, "$1\\$2$3")
-    .replace(/^([ \t]*)(\d{1,9})([.)])([ \t])/gmu, "$1$2\\$3$4");
+    .replace(/^(?<ws>[ \t]*)(?<marker>[#>])/gmu, "$<ws>\\$<marker>")
+    .replace(
+      /^(?<ws>[ \t]*)(?<marker>[-+*])(?<after>[ \t])/gmu,
+      "$<ws>\\$<marker>$<after>",
+    )
+    .replace(
+      /^(?<ws>[ \t]*)(?<num>\d{1,9})(?<marker>[.)])(?<after>[ \t])/gmu,
+      "$<ws>$<num>\\$<marker>$<after>",
+    );
 }
 
 function renderListItem(

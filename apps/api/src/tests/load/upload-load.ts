@@ -121,7 +121,9 @@ const authenticate = async (
 
   // Extract the session cookie name and value. Dev runs may use a
   // per-port cookie prefix so multiple localhost servers can coexist.
-  const match = /^([^=]*\.session_token)=([^;]+)/u.exec(setCookie);
+  const match = /^(?<name>[^=]*\.session_token)=(?<value>[^;]+)/u.exec(
+    setCookie,
+  );
   if (!match) {
     throw new FetchBoundaryError({
       url: response.url,
@@ -131,7 +133,7 @@ const authenticate = async (
     });
   }
 
-  return `${match[1]}=${match[2]}`;
+  return `${match.groups?.["name"]}=${match.groups?.["value"]}`;
 };
 
 // -- Upload --

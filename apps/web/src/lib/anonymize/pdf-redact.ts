@@ -240,10 +240,12 @@ export const redactPdf = async (
         // If still too wide at MIN size, abbreviate
         if (!fitsAtSize(displayText, size)) {
           // [CZECH_BIRTH_NUMBER_1] → [CZE_B_N_1]
-          const m = /^\[(.+?)(?:_(\d+))?\]$/u.exec(displayText);
+          const m = /^\[(?<label>.+?)(?:_(?<suffix>\d+))?\]$/u.exec(
+            displayText,
+          );
           if (m) {
-            const label = m[1] ?? "";
-            const suffix = m[2] ?? "";
+            const label = m.groups?.["label"] ?? "";
+            const suffix = m.groups?.["suffix"] ?? "";
             const parts = label.split("_");
 
             // Try 3-letter abbreviation: [PER_1]

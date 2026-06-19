@@ -259,9 +259,9 @@ const stripFences = (raw: string): string => {
   if (!trimmed) {
     return "";
   }
-  const fencePattern = /^```(?:[a-zA-Z0-9_-]*)\n([\s\S]*?)\n```$/u;
+  const fencePattern = /^```(?:[a-zA-Z0-9_-]*)\n(?<body>[\s\S]*?)\n```$/u;
   const fenceMatch = fencePattern.exec(trimmed);
-  return fenceMatch?.at(1)?.trim() ?? trimmed;
+  return fenceMatch?.groups?.["body"]?.trim() ?? trimmed;
 };
 
 export default generateSkillDraft;

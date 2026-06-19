@@ -3,7 +3,7 @@ const DATE_PATTERNS = [
   /(?:^|[\s._-])(?<day>0?[1-9]|[12]\d|3[01])[._-](?<month>0?[1-9]|1[0-2])[._-](?<year>20\d{2}|19\d{2})(?:$|[\s._-])/u,
 ] as const;
 
-const EXTENSION_PATTERN = /(\.[A-Za-z0-9]{1,12})$/u;
+const EXTENSION_PATTERN = /(?<ext>\.[A-Za-z0-9]{1,12})$/u;
 const RESERVED_PATH_CHARS = /[<>:"/\\|?*]/gu;
 const TOKEN_SEPARATORS = /[\s._-]+/gu;
 const MAX_SUGGESTED_FILENAME_LENGTH = 180;
@@ -143,7 +143,7 @@ const stripExtension = (fileName: string): string =>
 
 const getExtension = (fileName: string): string => {
   const match = EXTENSION_PATTERN.exec(fileName);
-  return match?.[1] ?? "";
+  return match?.groups?.["ext"] ?? "";
 };
 
 const sanitizePathSegment = (value: string): string =>

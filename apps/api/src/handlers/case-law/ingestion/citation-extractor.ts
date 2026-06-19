@@ -20,11 +20,11 @@ type ExtractedCitation = {
 // Group 1 captures the bare case number to deduplicate
 // against the unprefixed pattern below.
 const PL_PREFIXED_PATTERN =
-  /sygn\.\s*(?:akt\s+)?([IVX]{1,4}\s+[A-Za-z]{1,5}\s+\d{1,6}\/\d{2,4})/gu;
+  /sygn\.\s*(?:akt\s+)?(?<caseNumber>[IVX]{1,4}\s+[A-Za-z]{1,5}\s+\d{1,6}\/\d{2,4})/gu;
 
 const CITATION_PATTERNS: RegExp[] = [
   // Czech case number: "sp. zn. 21 Cdo 1234/2020"
-  /sp\.\s*zn\.\s*(\d{1,3}\s+[A-Za-z]{1,5}\s+\d{1,6}\/\d{4})/gu,
+  /sp\.\s*zn\.\s*(?<caseNumber>\d{1,3}\s+[A-Za-z]{1,5}\s+\d{1,6}\/\d{4})/gu,
 
   // ECLI: "ECLI:CZ:NS:2020:21.CDO.1234.2020.1"
   /ECLI:[A-Z]{2}:[A-Z]{1,8}:\d{4}:[\w.]+/gu,
@@ -36,7 +36,7 @@ const CITATION_PATTERNS: RegExp[] = [
   /sp\.\s*zn\.\s*\d{1,3}[A-Za-z]{1,5}\/\d{1,6}\/\d{4}/gu,
 
   // Generic: "rozsudek č.j. 5 As 123/2020"
-  /[čc]\.\s*j\.\s*(\d{1,3}\s+[A-Za-z]{1,5}\s+\d{1,6}\/\d{4})/gu,
+  /[čc]\.\s*j\.\s*(?<caseNumber>\d{1,3}\s+[A-Za-z]{1,5}\s+\d{1,6}\/\d{4})/gu,
 
   PL_PREFIXED_PATTERN,
 
@@ -53,21 +53,21 @@ const stripPrefix = (text: string): string => {
   const trimmed = text.trim();
 
   // Czech: "sp. zn. 21 Cdo 1234/2020"
-  const spZn = /^sp\.\s*zn\.\s*(.+)/iu.exec(trimmed);
-  if (spZn?.[1]) {
-    return spZn[1].trim();
+  const spZn = /^sp\.\s*zn\.\s*(?<caseNumber>.+)/iu.exec(trimmed);
+  if (spZn?.groups?.["caseNumber"]) {
+    return spZn.groups["caseNumber"].trim();
   }
 
   // Czech: "č. j. 5 As 123/2020" or "č.j. 5 As 123/2020"
-  const cj = /^[čc]\.\s*j\.\s*(.+)/iu.exec(trimmed);
-  if (cj?.[1]) {
-    return cj[1].trim();
+  const cj = /^[čc]\.\s*j\.\s*(?<caseNumber>.+)/iu.exec(trimmed);
+  if (cj?.groups?.["caseNumber"]) {
+    return cj.groups["caseNumber"].trim();
   }
 
   // Polish: "sygn. akt II CSK 123/20"
-  const sygn = /^sygn\.\s*(?:akt\s+)?(.+)/iu.exec(trimmed);
-  if (sygn?.[1]) {
-    return sygn[1].trim();
+  const sygn = /^sygn\.\s*(?:akt\s+)?(?<caseNumber>.+)/iu.exec(trimmed);
+  if (sygn?.groups?.["caseNumber"]) {
+    return sygn.groups["caseNumber"].trim();
   }
 
   return trimmed;
@@ -127,7 +127,7 @@ export const extractCitations = (
         // canonical dedup key so both "sygn. akt II CSK 123/20"
         // and "II CSK 123/20" resolve to the same key regardless
         // of which fires first.
-        const dedupKey = match[1]?.trim() ?? citationText;
+        const dedupKey = match.groups?.["caseNumber"]?.trim() ?? citationText;
 
         const existing = byKey.get(dedupKey);
         if (!existing) {

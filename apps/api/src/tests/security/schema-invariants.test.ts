@@ -29,9 +29,9 @@ const extractCheckValues = (
       Array.isArray(chunk.value)
     ) {
       const str = String(chunk.value[0] ?? "");
-      const match = /IN\s*\(([^)]+)\)/iu.exec(str);
-      if (match?.[1]) {
-        inList = match[1];
+      const match = /IN\s*\((?<inList>[^)]+)\)/iu.exec(str);
+      if (match?.groups?.["inList"]) {
+        inList = match.groups["inList"];
         break;
       }
     }

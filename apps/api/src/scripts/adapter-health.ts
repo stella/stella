@@ -159,9 +159,9 @@ const parseWindowArg = (args: readonly string[]): number => {
   if (!raw) {
     return 24;
   }
-  const match = /^(\d+)\s*h$/iu.exec(raw);
-  if (match?.[1]) {
-    return Number.parseInt(match[1], 10);
+  const match = /^(?<hours>\d+)\s*h$/iu.exec(raw);
+  if (match?.groups?.["hours"]) {
+    return Number.parseInt(match.groups["hours"], 10);
   }
   return 24;
 };

@@ -70,10 +70,10 @@ const toYearSuffix = (year: number): string =>
   String(year % 100).padStart(2, "0");
 
 // oxlint-disable-next-line sonarjs/slow-regex -- registry sign is a short label extracted from NALUS metadata
-const REGISTRY_SIGN_PATTERN = /^(.+?)\s+ze\s+dne\s+(.+)$/u;
-const DOC_CONTENT_PATTERN = /class="DocContent">([\s\S]*?)<\/table>/u;
+const REGISTRY_SIGN_PATTERN = /^(?<caseNumber>.+?)\s+ze\s+dne\s+(?<date>.+)$/u;
+const DOC_CONTENT_PATTERN = /class="DocContent">(?<body>[\s\S]*?)<\/table>/u;
 // oxlint-disable-next-line sonarjs/slow-regex -- judge extraction scans one decision signature block
-const JUDGE_PATTERN = /(\S+(?:\s+\S+){0,2})\s+\(soudce\s+zpravodaj\)/iu;
+const JUDGE_PATTERN = /(?<judge>\S+(?:\s+\S+){0,2})\s+\(soudce\s+zpravodaj\)/iu;
 
 /** Extract text from a labeled span. */
 const extractLabel = (html: string, labelId: string): string | undefined => {
@@ -112,12 +112,16 @@ const buildEcli = (
   counter: number,
 ): string | undefined => {
   // "II.ÚS 3436/14" or "Pl.ÚS 24/10"
-  const match = /^([IVX]+|Pl)\.ÚS\s+(\d+)\/(\d+)$/u.exec(caseNumber);
-  if (!match?.[1] || !match[2] || !match[3]) {
+  const match =
+    /^(?<senate>[IVX]+|Pl)\.ÚS\s+(?<caseIndex>\d+)\/(?<shortYear>\d+)$/u.exec(
+      caseNumber,
+    );
+  const { senate, caseIndex, shortYear } = match?.groups ?? {};
+  if (!senate || !caseIndex || !shortYear) {
     return undefined;
   }
-  const senate = SENATE_MAP[match[1]] ?? match[1].toUpperCase();
-  return `ECLI:CZ:US:${decisionYear}:${senate}.US.${match[2]}.${match[3]}.${counter}`;
+  const mappedSenate = SENATE_MAP[senate] ?? senate.toUpperCase();
+  return `ECLI:CZ:US:${decisionYear}:${mappedSenate}.US.${caseIndex}.${shortYear}.${counter}`;
 };
 
 /** Extract case number and date from the registry sign label. */
@@ -128,14 +132,14 @@ const parseRegistrySign = (
   decisionDate?: string | undefined;
 } | null => {
   // Format: "Pl.ÚS 24/10 ze dne 22. 3. 2011" (visible label, no counter)
-  const match = REGISTRY_SIGN_PATTERN.exec(raw);
-  if (!match?.[1] || !match[2]) {
+  const { caseNumber, date } = REGISTRY_SIGN_PATTERN.exec(raw)?.groups ?? {};
+  if (!caseNumber || !date) {
     return null;
   }
 
   return {
-    caseNumber: match[1].trim(),
-    decisionDate: parseCeDate(match[2]),
+    caseNumber: caseNumber.trim(),
+    decisionDate: parseCeDate(date),
   };
 };
 
@@ -147,29 +151,32 @@ const parseRegistrySign = (
  * Returns undefined if the counter is not present.
  */
 const extractEcliCounter = (html: string): number | undefined => {
-  const hidden = /name="registrySignHidden"[^>]*value="([^"]*)"/u.exec(html);
-  if (!hidden?.[1]) {
+  const hidden = /name="registrySignHidden"[^>]*value="(?<value>[^"]*)"/u.exec(
+    html,
+  );
+  const hiddenValue = hidden?.groups?.["value"];
+  if (!hiddenValue) {
     return undefined;
   }
-  const counterMatch = /#(\d+)/u.exec(hidden[1]);
-  return counterMatch?.[1] ? Number.parseInt(counterMatch[1], 10) : undefined;
+  const counter = /#(?<counter>\d+)/u.exec(hiddenValue)?.groups?.["counter"];
+  return counter ? Number.parseInt(counter, 10) : undefined;
 };
 
 /** Extract fulltext body from DocContent table. */
 const extractFulltext = (html: string): string | undefined => {
-  const match = DOC_CONTENT_PATTERN.exec(html);
-  if (!match?.[1]) {
+  const body = DOC_CONTENT_PATTERN.exec(html)?.groups?.["body"];
+  if (!body) {
     return undefined;
   }
 
-  const text = stripHtml(match[1]);
+  const text = stripHtml(body);
   return text.length > 50 ? text : undefined;
 };
 
 /** Extract the rapporteur judge name from the body. */
 const extractJudge = (html: string): string | undefined => {
-  const match = JUDGE_PATTERN.exec(html);
-  return match?.[1] ? stripHtml(match[1]) : undefined;
+  const judge = JUDGE_PATTERN.exec(html)?.groups?.["judge"];
+  return judge ? stripHtml(judge) : undefined;
 };
 
 /** Extract abstract and legal sentence from GetAbstract.aspx. */

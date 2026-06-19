@@ -4,7 +4,7 @@ import nodePath from "node:path";
 
 const REPO_ROOT = nodePath.join(import.meta.dirname, "../../../../..");
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx"]);
-const TEST_FILE_PATTERN = /\.(test|spec)\.tsx?$/u;
+const TEST_FILE_PATTERN = /\.(?:test|spec)\.tsx?$/u;
 
 const listSourceFiles = (relativeDir: string): string[] => {
   const root = nodePath.join(REPO_ROOT, relativeDir);

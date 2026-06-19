@@ -14,7 +14,7 @@ import type { RichPatchValue } from "./types";
 
 // ── Version parsing ──────────────────────────────────
 
-const VERSION_NUM_RE = /^v(\d+)$/u;
+const VERSION_NUM_RE = /^v(?<num>\d+)$/u;
 
 // ── Public API ───────────────────────────────────────
 
@@ -121,7 +121,7 @@ const resolveVersion = async (
   // :vN — use a specific version number
   const vMatch = modifier?.match(VERSION_NUM_RE);
   if (vMatch) {
-    const version = Number.parseInt(vMatch[1] ?? "0", 10);
+    const version = Number.parseInt(vMatch.groups?.["num"] ?? "0", 10);
     return scopedDb((tx) =>
       tx.query.clauseVersions.findFirst({
         where: {

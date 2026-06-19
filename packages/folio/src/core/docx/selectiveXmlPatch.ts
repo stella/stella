@@ -138,11 +138,11 @@ export function countParagraphElements(xml: string): number {
  */
 function collectParaIds(xml: string): Map<string, number> {
   const ids = new Map<string, number>();
-  const pattern = /w14:paraId="([^"]+)"/gu;
+  const pattern = /w14:paraId="(?<id>[^"]+)"/gu;
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(xml)) !== null) {
-    // SAFETY: capture group [1] always present when regex matches
-    const id = match[1]!;
+    // SAFETY: named group always present when regex matches
+    const id = match.groups!["id"]!;
     ids.set(id, (ids.get(id) ?? 0) + 1);
   }
   return ids;

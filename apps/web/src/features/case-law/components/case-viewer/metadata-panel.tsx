@@ -20,11 +20,10 @@ const MONOLINGUAL_COUNTRIES = new Set(["CZE", "SVK", "POL", "AUT"]);
  */
 const humanizeSourceUrl = (url: string): string => {
   // Regional courts: API endpoint → public page
-  const finaldocMatch = /rozhodnuti\.justice\.cz\/api\/finaldoc\/(.+)/u.exec(
-    url,
-  );
+  const finaldocMatch =
+    /rozhodnuti\.justice\.cz\/api\/finaldoc\/(?<id>.+)/u.exec(url);
   if (finaldocMatch) {
-    return `https://rozhodnuti.justice.cz/rozhodnuti/${finaldocMatch[1]}`;
+    return `https://rozhodnuti.justice.cz/rozhodnuti/${finaldocMatch.groups?.["id"]}`;
   }
   return url;
 };

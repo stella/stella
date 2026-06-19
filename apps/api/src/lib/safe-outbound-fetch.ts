@@ -766,8 +766,10 @@ const isBlockedIPv6 = (host: string): boolean => {
     return true;
   }
 
-  const dotted = /^::(?:ffff:)?(\d{1,3}(?:\.\d{1,3}){3})$/u.exec(compressed);
-  const dottedIp = dotted?.[1];
+  const dotted = /^::(?:ffff:)?(?<dottedIp>\d{1,3}(?:\.\d{1,3}){3})$/u.exec(
+    compressed,
+  );
+  const dottedIp = dotted?.groups?.["dottedIp"];
   if (dottedIp !== undefined) {
     const ipv4 = parseIPv4(dottedIp);
     if (ipv4 && isBlockedIPv4(ipv4)) {
@@ -777,9 +779,12 @@ const isBlockedIPv6 = (host: string): boolean => {
 
   // The URL parser normalizes ::ffff:127.0.0.1 → ::ffff:7f00:1.
   // Decode the trailing two hextets back to four IPv4 octets.
-  const hex = /^::(?:ffff:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/u.exec(compressed);
-  const hexHigh = hex?.[1];
-  const hexLow = hex?.[2];
+  const hex =
+    /^::(?:ffff:)?(?<high>[0-9a-f]{1,4}):(?<low>[0-9a-f]{1,4})$/u.exec(
+      compressed,
+    );
+  const hexHigh = hex?.groups?.["high"];
+  const hexLow = hex?.groups?.["low"];
   if (hexHigh !== undefined && hexLow !== undefined) {
     const high = Number.parseInt(hexHigh, 16);
     const low = Number.parseInt(hexLow, 16);

@@ -278,8 +278,12 @@ export function resolveListTemplate(
   levelFormats: NumberFormat[] | undefined,
   forceDecimal = false,
 ): string {
-  return template.replace(/%(\d)([.):\]])?/gu, (_match, digit, punct = "") => {
-    const index = Number.parseInt(String(digit), 10) - 1;
+  return template.replace(/%(?<digit>\d)(?<punct>[.):\]])?/gu, (...args) => {
+    const { digit, punct = "" } = args.at(-1) as {
+      digit: string;
+      punct?: string;
+    };
+    const index = Number.parseInt(digit, 10) - 1;
     if (index < 0) {
       return "";
     }
@@ -287,7 +291,7 @@ export function resolveListTemplate(
       counters[index] ?? 0,
       forceDecimal ? "decimal" : levelFormats?.[index],
     );
-    return formatted ? `${formatted}${String(punct)}` : "";
+    return formatted ? `${formatted}${punct}` : "";
   });
 }
 

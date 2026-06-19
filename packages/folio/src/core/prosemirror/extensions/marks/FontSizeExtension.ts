@@ -20,18 +20,20 @@ export const FontSizeExtension = createMarkExtension({
       {
         style: "font-size",
         getAttrs: (value) => {
-          const pxMatch = /^([\d.]+)px$/u.exec(value);
+          const pxMatch = /^(?<value>[\d.]+)px$/u.exec(value);
           if (pxMatch) {
-            // SAFETY: capture group [1] always present when regex matches
-            const px = Number.parseFloat(pxMatch[1] ?? "0");
+            // SAFETY: capture group always present when regex matches
+            const px = Number.parseFloat(pxMatch.groups?.["value"] ?? "0");
             const pt = px * 0.75;
             return { size: Math.round(pt * 2) };
           }
-          const ptMatch = /^([\d.]+)pt$/u.exec(value);
+          const ptMatch = /^(?<value>[\d.]+)pt$/u.exec(value);
           if (ptMatch) {
-            // SAFETY: capture group [1] always present when regex matches
+            // SAFETY: capture group always present when regex matches
             return {
-              size: Math.round(Number.parseFloat(ptMatch[1] ?? "0") * 2),
+              size: Math.round(
+                Number.parseFloat(ptMatch.groups?.["value"] ?? "0") * 2,
+              ),
             };
           }
           return false;

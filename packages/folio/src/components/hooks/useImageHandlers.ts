@@ -193,11 +193,13 @@ export const useImageHandlers = ({
       const currentTransform = expectImageAttrs(node).transform ?? "";
 
       // Parse current rotation and flip state
-      const rotateMatch = /rotate\((-?\d+(?:\.\d+)?)deg\)/u.exec(
+      const rotateMatch = /rotate\((?<degrees>-?\d+(?:\.\d+)?)deg\)/u.exec(
         currentTransform,
       );
-      // SAFETY: capture group [1] always present when regex matches
-      let rotation = rotateMatch ? Number.parseFloat(rotateMatch[1]!) : 0;
+      // SAFETY: `degrees` group always present when regex matches
+      let rotation = rotateMatch
+        ? Number.parseFloat(rotateMatch.groups!["degrees"]!)
+        : 0;
       let hasFlipH = currentTransform.includes("scaleX(-1)");
       let hasFlipV = currentTransform.includes("scaleY(-1)");
 

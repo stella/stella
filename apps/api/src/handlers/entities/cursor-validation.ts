@@ -1,6 +1,6 @@
-const dateCursorPattern = /^(\d{4})-(\d{2})-(\d{2})$/u;
+const dateCursorPattern = /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/u;
 const timestampCursorPattern =
-  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})\.\d{6}$/u;
+  /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})\.\d{6}$/u;
 
 type DateCursorParts = {
   year: number;
@@ -26,9 +26,7 @@ const daysInMonth = (year: number, month: number): number => {
 const parseDateCursorParts = (
   match: RegExpExecArray,
 ): DateCursorParts | null => {
-  const yearPart = match.at(1);
-  const monthPart = match.at(2);
-  const dayPart = match.at(3);
+  const { year: yearPart, month: monthPart, day: dayPart } = match.groups ?? {};
   if (!yearPart || !monthPart || !dayPart) {
     return null;
   }
@@ -58,9 +56,9 @@ export const isValidTimestampCursorValue = (value: string): boolean => {
     return false;
   }
 
-  const hourPart = match.at(4);
-  const minutePart = match.at(5);
-  const secondPart = match.at(6);
+  const hourPart = match.groups?.["hour"];
+  const minutePart = match.groups?.["minute"];
+  const secondPart = match.groups?.["second"];
   if (!hourPart || !minutePart || !secondPart) {
     return false;
   }

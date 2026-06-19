@@ -5,7 +5,7 @@
 export const DEFAULT_MATTER_NUMBER_PATTERN = "{SEQ}";
 export const DEFAULT_MATTER_NUMBER_PADDING = 3;
 
-const TOKEN_REGEX = /\{(SEQ|YYYY|YY|MM)\}/gu;
+const TOKEN_REGEX = /\{(?:SEQ|YYYY|YY|MM)\}/gu;
 
 const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 

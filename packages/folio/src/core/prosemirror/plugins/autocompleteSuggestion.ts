@@ -387,8 +387,8 @@ export const acceptAutocompleteWord = (
   if (current.text.length === 0) {
     return { accepted: false };
   }
-  const match = /^(\s*\S+\s?)/u.exec(current.text);
-  const word = match === null ? current.text : match[1];
+  const match = /^(?<word>\s*\S+\s?)/u.exec(current.text);
+  const word = match === null ? current.text : match.groups?.["word"];
   if (word === undefined || word.length === 0) {
     return { accepted: false };
   }

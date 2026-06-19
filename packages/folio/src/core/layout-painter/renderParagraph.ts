@@ -2014,17 +2014,19 @@ function paragraphBaseIsRtl(block: ParagraphBlock): boolean {
   // letter (`\p{L}`). Digits, combining marks, punctuation and spaces are
   // weak/neutral and skipped. The first letter's script decides; nothing
   // strong => honor w:rtl.
-  const match = /(\u200F|\u061C)|(\u200E)|(\p{L})/u.exec(text);
+  const match =
+    /(?<rtlMark>\u200F|\u061C)|(?<lrmMark>\u200E)|(?<letter>\p{L})/u.exec(text);
   if (!match) {
     return true;
   }
-  if (match[1] !== undefined) {
+  const { rtlMark, lrmMark, letter } = match.groups ?? {};
+  if (rtlMark !== undefined) {
     return true; // RLM or ALM
   }
-  if (match[2] !== undefined) {
+  if (lrmMark !== undefined) {
     return false; // LRM
   }
-  return match[3] !== undefined && RTL_STRONG_LETTER.test(match[3]);
+  return letter !== undefined && RTL_STRONG_LETTER.test(letter);
 }
 
 /**

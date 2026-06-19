@@ -432,10 +432,10 @@ const getExportFileName = (
     return null;
   }
 
-  const encodedMatch = /(?:^|;)\s*filename\*=UTF-8''([^;]+)/iu.exec(
+  const encodedMatch = /(?:^|;)\s*filename\*=UTF-8''(?<name>[^;]+)/iu.exec(
     contentDisposition,
   );
-  const encodedFileName = encodedMatch?.[1];
+  const encodedFileName = encodedMatch?.groups?.["name"];
   if (encodedFileName) {
     const decodedResult = Result.try(() => decodeURIComponent(encodedFileName));
     if (!Result.isError(decodedResult)) {
@@ -443,12 +443,18 @@ const getExportFileName = (
     }
   }
 
-  const quotedMatch = /(?:^|;)\s*filename="([^"]*)"/iu.exec(contentDisposition);
-  if (quotedMatch?.[1]) {
-    return quotedMatch[1];
+  const quotedMatch = /(?:^|;)\s*filename="(?<name>[^"]*)"/iu.exec(
+    contentDisposition,
+  );
+  if (quotedMatch?.groups?.["name"]) {
+    return quotedMatch.groups["name"];
   }
 
-  return /(?:^|;)\s*filename=([^;]+)/iu.exec(contentDisposition)?.[1] ?? null;
+  return (
+    /(?:^|;)\s*filename=(?<name>[^;]+)/iu.exec(contentDisposition)?.groups?.[
+      "name"
+    ] ?? null
+  );
 };
 
 type FilesystemOrganizerActionProps = {

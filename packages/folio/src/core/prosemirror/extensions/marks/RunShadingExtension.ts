@@ -40,9 +40,9 @@ export const RunShadingExtension = createMarkExtension({
           if (parseDOMHighlightColor(value)) {
             return false;
           }
-          const hex = /^#([0-9a-fA-F]{6})$/u.exec(
+          const hex = /^#(?<hex>[0-9a-fA-F]{6})$/u.exec(
             normalizeCssColorKey(value),
-          )?.[1];
+          )?.groups?.["hex"];
           return hex ? { rgb: hex.toUpperCase() } : false;
         },
       },

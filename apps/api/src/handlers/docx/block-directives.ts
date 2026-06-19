@@ -35,7 +35,7 @@ export { evaluateCondition, resolvePath };
 /** Matches a block directive as the sole paragraph content. */
 const DIRECTIVE_RE =
   // oxlint-disable-next-line sonarjs/slow-regex -- directive matching runs on one OOXML paragraph at a time
-  /^\s*\{\{(#if|#elseif|#else|#each|\/if|\/each)\s*(.*?)\}\}\s*$/u;
+  /^\s*\{\{(?<tag>#if|#elseif|#else|#each|\/if|\/each)\s*(?<expr>.*?)\}\}\s*$/u;
 
 /** Fast-path: does the raw XML contain any block directives? */
 export const HAS_BLOCK_DIRECTIVES_RE = /\{\{[#/]/u;
@@ -85,8 +85,8 @@ export const scanBlockDirectives = (
       continue;
     }
 
-    const tag = match[1];
-    const rawExpr = match[2];
+    const tag = match.groups?.["tag"];
+    const rawExpr = match.groups?.["expr"];
     if (!tag || rawExpr === undefined) {
       continue;
     }

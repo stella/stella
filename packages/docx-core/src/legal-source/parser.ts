@@ -822,9 +822,9 @@ const parseSignatureParties = (
   });
 };
 
-const ORDERED_LIST_MARKER_RE = /^(\d+(?:\.\d+)+|\d+[.)])\s+/u;
+const ORDERED_LIST_MARKER_RE = /^(?:\d+(?:\.\d+)+|\d+[.)])\s+/u;
 const MANUAL_NUMBERING_PREFIX_RE =
-  /^(\d+(?:\.\d+)+|\d+[.)]|[A-Za-z][.)]|\([a-zivx]+\))\s+/u;
+  /^(?:\d+(?:\.\d+)+|\d+[.)]|[A-Za-z][.)]|\([a-zivx]+\))\s+/u;
 
 const stripListMarker = (line: string, ordered: boolean): string => {
   const trimmed = line.trim();

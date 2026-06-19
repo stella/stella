@@ -129,14 +129,14 @@ export function parseFieldType(instruction: string): FieldType {
 
   // Trim and extract the field name (first word, may have leading backslash)
   const trimmed = instruction.trim();
-  const match = /^\\?([A-Z][A-Z0-9]*)/iu.exec(trimmed);
+  const match = /^\\?(?<name>[A-Z][A-Z0-9]*)/iu.exec(trimmed);
 
   if (!match) {
     return "UNKNOWN";
   }
 
-  // SAFETY: match succeeded and group 1 always captures in this regex
-  const fieldName = match[1]!.toUpperCase();
+  // SAFETY: match succeeded and named group `name` always captures in this regex
+  const fieldName = match.groups!["name"]!.toUpperCase();
   return narrowEnum(fieldName, FieldTypeSchema) ?? "UNKNOWN";
 }
 
@@ -194,29 +194,31 @@ export function parseFieldInstruction(
   const switches: FieldSwitch[] = [];
 
   // Extract the field name part
-  const nameMatch = /^\\?([A-Z][A-Z0-9]*)/iu.exec(trimmed);
+  const nameMatch = /^\\?(?:[A-Z][A-Z0-9]*)/iu.exec(trimmed);
   const fieldNameEnd = nameMatch ? nameMatch[0].length : 0;
 
   // Everything after the field name
   const remaining = trimmed.slice(fieldNameEnd).trim();
 
   // Extract switches (start with \)
-  const switchRegex = /\\(\*|@|#|!|[a-z])\s*(?:"([^"]*)"|([\S]*))?/giu;
+  const switchRegex =
+    /\\(?<switch>\*|@|#|!|[a-z])\s*(?:"(?<quoted>[^"]*)"|(?<unquoted>[\S]*))?/giu;
   let switchMatch;
   const switchPositions: { start: number; end: number }[] = [];
 
   while ((switchMatch = switchRegex.exec(remaining)) !== null) {
+    const groups = switchMatch.groups!;
     const sw: FieldSwitch = {
-      // SAFETY: group 1 always captures in this regex pattern
-      switch: switchMatch[1]!,
+      // SAFETY: named group `switch` always captures in this regex pattern
+      switch: groups["switch"]!,
     };
 
-    if (switchMatch[2]) {
+    if (groups["quoted"]) {
       // Quoted value
-      sw.value = switchMatch[2];
-    } else if (switchMatch[3]) {
+      sw.value = groups["quoted"];
+    } else if (groups["unquoted"]) {
       // Unquoted value
-      sw.value = switchMatch[3];
+      sw.value = groups["unquoted"];
     }
 
     switches.push(sw);

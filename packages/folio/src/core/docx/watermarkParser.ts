@@ -632,7 +632,8 @@ function parseInlineStyleNumber(
   return Number.isFinite(num) ? num : undefined;
 }
 
-const CSS_LENGTH_RE = /^([+-]?(?:\d+|\d*\.\d+))(pt|in|cm|mm|px)?$/iu;
+const CSS_LENGTH_RE =
+  /^(?<amount>[+-]?(?:\d+|\d*\.\d+))(?<unit>pt|in|cm|mm|px)?$/iu;
 
 function parseInlineStyleLengthPt(
   style: string,
@@ -643,7 +644,7 @@ function parseInlineStyleLengthPt(
     return undefined;
   }
   const match = CSS_LENGTH_RE.exec(raw.trim());
-  const amountText = match?.at(1);
+  const amountText = match?.groups?.["amount"];
   if (amountText === undefined) {
     return undefined;
   }
@@ -651,7 +652,7 @@ function parseInlineStyleLengthPt(
   if (!Number.isFinite(amount) || amount <= 0) {
     return undefined;
   }
-  const unit = match?.at(2)?.toLowerCase() ?? "pt";
+  const unit = match?.groups?.["unit"]?.toLowerCase() ?? "pt";
   if (unit === "pt") {
     return amount;
   }

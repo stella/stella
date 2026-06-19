@@ -61,8 +61,8 @@ export const normalizeCourtQuery = (value: string): string => {
     .trim()
     .toLocaleLowerCase("cs-CZ")
     .normalize("NFD")
-    .replaceAll(/([a-z])(\d)/gu, "$1 $2")
-    .replaceAll(/(\d)([a-z])/gu, "$1 $2")
+    .replaceAll(/(?<letter>[a-z])(?<digit>\d)/gu, "$<letter> $<digit>")
+    .replaceAll(/(?<digit>\d)(?<letter>[a-z])/gu, "$<digit> $<letter>")
     .replaceAll(/\p{Diacritic}/gu, "")
     .replaceAll(/[-–—,/]+/gu, " ")
     .replaceAll(/\s+/gu, " ");

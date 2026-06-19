@@ -16,14 +16,14 @@
  * when to escape those.
  */
 export function escapeInline(text: string): string {
-  let out = text.replace(/([\\`*[\]])/gu, "\\$1");
+  let out = text.replace(/(?<ch>[\\`*[\]])/gu, "\\$<ch>");
   // Underscore as emphasis marker: only at word boundaries.
-  out = out.replace(/(^|\s)_/gu, "$1\\_");
-  out = out.replace(/_(\s|$)/gu, "\\_$1");
+  out = out.replace(/(?<pre>^|\s)_/gu, "$<pre>\\_");
+  out = out.replace(/_(?<post>\s|$)/gu, "\\_$<post>");
   // Angle brackets only escaped when they form a plausible HTML tag — an
   // alphabetic name immediately followed by attributes/end. Prose like `x < y`
   // and `i < n` stays untouched.
-  out = out.replace(/<(\/?[A-Za-z][\w-]*)(?=[\s/>])/gu, "\\<$1");
+  out = out.replace(/<(?<tag>\/?[A-Za-z][\w-]*)(?=[\s/>])/gu, "\\<$<tag>");
   return out;
 }
 
@@ -61,5 +61,5 @@ export function escapeLinkUrl(url: string): string {
  * newlines so the alt stays single-line.
  */
 export function escapeAltText(text: string): string {
-  return text.replace(/([\\[\]])/gu, "\\$1").replace(/\r?\n/gu, " ");
+  return text.replace(/(?<ch>[\\[\]])/gu, "\\$<ch>").replace(/\r?\n/gu, " ");
 }

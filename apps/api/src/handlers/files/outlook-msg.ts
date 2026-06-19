@@ -30,7 +30,7 @@ const RECIPIENT_TYPE = {
 
 const RECIPIENT_STORAGE_PREFIX = "__recip_version1.0_";
 const ATTACHMENT_STORAGE_PREFIX = "__attach_version1.0_";
-const PROPERTY_STREAM_RE = /^__substg1\.0_([0-9a-f]{8})$/iu;
+const PROPERTY_STREAM_RE = /^__substg1\.0_(?<tag>[0-9a-f]{8})$/iu;
 
 const PROPERTY_TYPE = {
   int32: "0003",
@@ -474,7 +474,7 @@ const collectProperties = (
     if (!match) {
       continue;
     }
-    const propertyTag = match[1]?.toLowerCase();
+    const propertyTag = match.groups?.["tag"]?.toLowerCase();
     if (!propertyTag) {
       continue;
     }

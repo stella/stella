@@ -73,9 +73,9 @@ describe("czUsAdapter.fetchPage", () => {
         if (url.includes("GetAbstract")) {
           return Promise.resolve(new Response(makeEmptyPage()));
         }
-        const match = /sz=I-(\d+)-(\d+)_1/u.exec(url);
-        const n = match ? Number(match[1]) : 0;
-        const yr = match ? Number(match[2]) : 0;
+        const match = /sz=I-(?<n>\d+)-(?<yr>\d+)_1/u.exec(url);
+        const n = match ? Number(match.groups?.["n"]) : 0;
+        const yr = match ? Number(match.groups?.["yr"]) : 0;
 
         if (yr === Number(curYr) && n === 1) {
           return Promise.resolve(
@@ -120,9 +120,9 @@ describe("czUsAdapter.fetchPage", () => {
         if (url.includes("GetAbstract")) {
           return Promise.resolve(new Response(makeEmptyPage()));
         }
-        const match = /sz=I-(\d+)-(\d+)_1/u.exec(url);
-        const n = match ? Number(match[1]) : 0;
-        const yr = match ? Number(match[2]) : 0;
+        const match = /sz=I-(?<n>\d+)-(?<yr>\d+)_1/u.exec(url);
+        const n = match ? Number(match.groups?.["n"]) : 0;
+        const yr = match ? Number(match.groups?.["yr"]) : 0;
         const body =
           yr === 25 && hitNumbers.has(n)
             ? makeTextPage(`II.ÚS ${n}/25`, "1. 1. 2025")
@@ -154,13 +154,13 @@ describe("czUsAdapter.fetchPage", () => {
           return Promise.resolve(new Response(makeEmptyPage()));
         }
 
-        const yearMatch = /sz=I-(\d+)-(\d+)_1/u.exec(url);
+        const yearMatch = /sz=I-(?<n>\d+)-(?<yr>\d+)_1/u.exec(url);
         if (!yearMatch) {
           return Promise.resolve(new Response(makeEmptyPage()));
         }
 
-        const n = Number(yearMatch[1]);
-        const yr = Number(yearMatch[2]);
+        const n = Number(yearMatch.groups?.["n"]);
+        const yr = Number(yearMatch.groups?.["yr"]);
 
         if (yr === 25 && n === 1) {
           return Promise.resolve(
@@ -203,8 +203,8 @@ describe("czUsAdapter.fetchPage", () => {
           return Promise.resolve(new Response(makeEmptyPage()));
         }
 
-        const match = /sz=I-(\d+)-93_1/u.exec(url);
-        if (match && Number(match[1]) === 1) {
+        const match = /sz=I-(?<n>\d+)-93_1/u.exec(url);
+        if (match && Number(match.groups?.["n"]) === 1) {
           return Promise.resolve(
             new Response(makeTextPage("I.ÚS 1/93", "11. 11. 1993")),
           );
@@ -235,8 +235,8 @@ describe("czUsAdapter.fetchPage", () => {
         if (url.includes("GetAbstract")) {
           return Promise.resolve(new Response(makeEmptyPage()));
         }
-        const match = /sz=I-(\d+)-25_1/u.exec(url);
-        const n = match ? Number(match[1]) : 0;
+        const match = /sz=I-(?<n>\d+)-25_1/u.exec(url);
+        const n = match ? Number(match.groups?.["n"]) : 0;
         return Promise.resolve(
           new Response(makeTextPage(`I.ÚS ${n}/25`, "1. 6. 2025")),
         );
@@ -261,8 +261,8 @@ describe("czUsAdapter.fetchPage", () => {
         if (url.includes("GetAbstract")) {
           return Promise.reject(new Error("Network error"));
         }
-        const match = /sz=I-(\d+)-/u.exec(url);
-        const n = match ? Number(match[1]) : 0;
+        const match = /sz=I-(?<n>\d+)-/u.exec(url);
+        const n = match ? Number(match.groups?.["n"]) : 0;
         if (n === 1) {
           return Promise.resolve(
             new Response(makeTextPage("IV.ÚS 1/25", "5. 2. 2025")),
@@ -298,8 +298,8 @@ describe("czUsAdapter.fetchPage", () => {
         if (url.includes("GetAbstract")) {
           return Promise.resolve(new Response(makeAbstractPage(longAbstract)));
         }
-        const match = /sz=I-(\d+)-/u.exec(url);
-        const n = match ? Number(match[1]) : 0;
+        const match = /sz=I-(?<n>\d+)-/u.exec(url);
+        const n = match ? Number(match.groups?.["n"]) : 0;
         if (n === 1) {
           return Promise.resolve(
             new Response(makeTextPage("I.ÚS 1/25", "1. 1. 2025")),
@@ -374,8 +374,8 @@ describe("czUsAdapter.fetchPage", () => {
         if (url.includes("GetAbstract")) {
           return Promise.resolve(new Response(makeEmptyPage()));
         }
-        const match = /sz=I-(\d+)-/u.exec(url);
-        const n = match ? Number(match[1]) : 0;
+        const match = /sz=I-(?<n>\d+)-/u.exec(url);
+        const n = match ? Number(match.groups?.["n"]) : 0;
         if (n === 1) {
           return Promise.resolve(new Response(html));
         }

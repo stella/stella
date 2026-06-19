@@ -5,17 +5,18 @@ import nodePath from "node:path";
 import { AUTH_USER_STELLA_SELECT_COLUMN_NAMES } from "@/api/db/auth-schema";
 
 const DRIZZLE_DIR = nodePath.resolve(import.meta.dir, "../../../drizzle");
-const SQL_IDENTIFIER_PATTERN = /"([^"]+)"|([a-z_][a-z0-9_]*)/giu;
+const SQL_IDENTIFIER_PATTERN =
+  /"(?<quoted>[^"]+)"|(?<unquoted>[a-z_][a-z0-9_]*)/giu;
 const GRANT_SELECT_COLUMN_PREFIX_PATTERN = /^GRANT\s+SELECT\s*\(/iu;
 const GRANT_SELECT_COLUMN_TABLE_PATTERN = /\)\s+ON\s+TABLE\s+/iu;
 
 const identifierNamesFromSql = (sqlList: string): string[] =>
   [...sqlList.matchAll(SQL_IDENTIFIER_PATTERN)].map((match) => {
-    if (match[1] !== undefined) {
-      return match[1];
+    if (match.groups?.["quoted"] !== undefined) {
+      return match.groups["quoted"];
     }
 
-    return match[2]?.toLowerCase() ?? "";
+    return match.groups?.["unquoted"]?.toLowerCase() ?? "";
   });
 
 const parseColumnList = (sqlList: string): string[] =>
