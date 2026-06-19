@@ -623,25 +623,14 @@ jobs:
             /tmp/web.log
           retention-days: 7
 
-  # Pruned-subset lockfile + prod-deps guard. The staging API image
-  # is built via `turbo prune @stll/api --docker` followed by
-  # `bun install --frozen-lockfile` against the pruned bun.lock.
-  # The other CI jobs all install against the full repo lockfile,
-  # so a workspace dep that resolves transitively from outside
-  # @stll/api's tree (e.g. via apps/web) can be missing from the
-  # relevant workspace block and still satisfy the full install —
-  # only to fail at deploy time when the prune drops the masking
-  # workspace. Mirror the Dockerfile's install path here so that
-  # class of drift fails the PR instead of the deploy.
+  # Image dependency guard. The API and legal-atlas-runner Dockerfiles use
+  # Turbo only for pruned source overlays; dependency installs come from the
+  # committed root bun.lock plus every workspace package.json so Bun remains
+  # the lockfile source of truth. Mirror that install path here so deploy-time
+  # lockfile drift fails the PR instead of the deploy.
   #
-  # The job then re-runs the install with `--production` (no
-  # devDependencies) and compiles + smokes the API entrypoints
-  # against that tree. This catches the second class of deploy-time
-  # failure: prod code (apps/api/src/** or apps/api/scripts/**) that
-  # imports a devDependency, or a `@stll/*` workspace package whose
-  # runtime imports are mis-classified as devDependencies. Without
-  # this gate, flipping the Dockerfile to `--production` would only
-  # fail at deploy time.
+  # The job then compiles the API entrypoints and runs the legal atlas runner
+  # production smoke against those Docker-style dependency trees.
   api-image-deps:
     needs: trust-check
     if: >-
@@ -682,7 +671,7 @@ jobs:
           done
           echo "run=$run" >> "$GITHUB_OUTPUT"
           if [[ "$run" != "true" ]]; then
-            echo "::notice::No API/runner-image-affecting paths changed; skipping pruned-lockfile guard."
+            echo "::notice::No API/runner-image-affecting paths changed; skipping image dependency guard."
           fi
 
       - name: Setup Bun
@@ -693,45 +682,44 @@ jobs:
 
       - name: Install turbo
         if: steps.changed.outputs.run == 'true'
-        # Match apps/api/Dockerfile: a global turbo install, no
-        # workspace dependency resolution beforehand.
-        run: bun install -g turbo@^2
+        # Match the Dockerfiles: Turbo is only used for pruned source overlays.
+        run: bun install -g turbo@2.9.18
 
-      - name: Prune monorepo for @stll/api
+      - name: Prepare Docker install inputs
         if: steps.changed.outputs.run == 'true'
-        run: turbo prune @stll/api --docker
-
-      - name: Install pruned deps with frozen lockfile
-        if: steps.changed.outputs.run == 'true'
-        # This is the exact command the Docker build runs against
-        # the pruned bun.lock in `apps/api/Dockerfile`. It is the
-        # only place that catches workspace-block drift in the
-        # repo lockfile, because the full-repo `bun ci` other jobs
-        # use accepts a stale workspace block as long as the
-        # package resolves transitively somewhere in the graph.
         run: |
-          cd out/json
-          bun install --frozen-lockfile --ignore-scripts
+          set -euo pipefail
+          rm -rf install-json
+          mkdir -p install-json
+          cp bun.lock bunfig.toml .npmrc package.json install-json/
+          find apps packages -mindepth 2 -maxdepth 2 -name package.json \
+            -not -path '*/node_modules/*' \
+            -exec cp --parents {} install-json/ \;
+
+      - name: Prune monorepo for API image source
+        if: steps.changed.outputs.run == 'true'
+        run: turbo prune @stll/api @stll/legal-atlas-runner --docker
+
+      - name: Install API image deps with frozen root lockfile
+        if: steps.changed.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          rm -rf api-install
+          cp -a install-json api-install
+          cd api-install
+          bun install --filter @stll/api --filter @stll/legal-atlas-runner --frozen-lockfile --ignore-scripts
         env:
           NPM_TOKEN: ""
 
-      - name: Prod-deps API compile smoke
+      - name: API image compile smoke
         if: steps.changed.outputs.run == 'true'
-        # Empirically prove the pruned API tree builds and its
-        # runtime worker entrypoints resolve with devDependencies
-        # stripped. Runs a fresh `bun install --production` in a
-        # parallel dir (so the lockfile-drift install above stays
-        # unchanged), overlays the full pruned source via
-        # `cp -a ../full/. .` (mirrors `COPY --from=pruner
-        # /app/out/full/ .` in `apps/api/Dockerfile`), and compiles the
-        # API binary plus runtime workers.
+        # Overlay pruned source the same way apps/api/Dockerfile copies
+        # /app/out/full/ onto the dependency layer, then compile the API
+        # binary and runtime workers.
         run: |
           set -euo pipefail
-          rm -rf out-prod
-          cp -a out out-prod
-          cd out-prod/json
-          bun install --production --frozen-lockfile --ignore-scripts
-          cp -a ../full/. .
+          cd api-install
+          cp -a ../out/full/. .
           export NODE_ENV=production
           bun build \
             --compile \
@@ -758,9 +746,11 @@ jobs:
           set -euo pipefail
           rm -rf out-runner
           turbo prune @stll/legal-atlas-runner --docker --out-dir out-runner
-          cd out-runner/json
-          bun install --production --frozen-lockfile --ignore-scripts
-          cp -a ../full/. .
+          rm -rf runner-install
+          cp -a install-json runner-install
+          cd runner-install
+          bun install --filter @stll/legal-atlas-runner --production --frozen-lockfile --ignore-scripts
+          cp -a ../out-runner/full/. .
           bun --filter @stll/legal-atlas-runner build
           bun apps/legal-atlas-runner/dist/index.js smoke
           set +e
