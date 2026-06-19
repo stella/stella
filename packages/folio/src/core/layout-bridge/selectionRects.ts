@@ -39,6 +39,14 @@ import type {
 import { inlineImageBoundingBox } from "../utils/rotationBoundingBox";
 import { getPageTop } from "./hitTest";
 
+/**
+ * Width (px) of the highlight sliver painted for an empty paragraph the
+ * selection spans. A genuinely empty paragraph has a zero-length line, so the
+ * normal run-span overlap produces no rect; a fixed sliver keeps drag-selection
+ * across blank lines visible (eigenpal/docx-editor#836).
+ */
+const EMPTY_PARAGRAPH_SLIVER_WIDTH = 4;
+
 // =============================================================================
 // TYPES
 // =============================================================================
@@ -246,8 +254,15 @@ function findLinesInRange(
       continue;
     }
 
-    // Check if line overlaps with selection
-    if (range.pmEnd > from && range.pmStart < to) {
+    // A zero-length line (an empty paragraph) overlaps the selection when its
+    // caret position is anywhere within it, INCLUSIVE of the endpoints, so a
+    // drag that starts or ends exactly there still selects it. A non-empty line
+    // uses the strict overlap test (eigenpal/docx-editor#836).
+    const overlaps =
+      range.pmStart === range.pmEnd
+        ? from < to && range.pmStart >= from && range.pmStart <= to
+        : range.pmEnd > from && range.pmStart < to;
+    if (overlaps) {
       result.push({ line, index: i });
     }
   }
@@ -456,10 +471,21 @@ export function selectionToRects(
             continue;
           }
 
-          // Calculate overlap with selection
+          // Calculate overlap with selection. A zero-length line is either a
+          // genuinely empty paragraph (a caret-only line) or the blank row a
+          // trailing hard break leaves behind. The latter starts past the last
+          // run and `computeLinePmRange` resolves it to the paragraph START, so
+          // only a true empty paragraph draws a sliver — never the trailing
+          // break row, which would otherwise highlight whenever the selection
+          // merely crosses the paragraph start (eigenpal/docx-editor#836).
+          const isTrailingBreakRow =
+            paragraphBlock.runs.length > 0 &&
+            line.fromRun >= paragraphBlock.runs.length;
+          const isEmptyLine =
+            range.pmStart === range.pmEnd && !isTrailingBreakRow;
           const sliceFrom = Math.max(range.pmStart, selFrom);
           const sliceTo = Math.min(range.pmEnd, selTo);
-          if (sliceFrom >= sliceTo) {
+          if (!isEmptyLine && sliceFrom >= sliceTo) {
             continue;
           }
 
@@ -513,7 +539,9 @@ export function selectionToRects(
           // Create selection rectangle
           const rectX =
             fragment.x + indentLeft + alignmentOffset + Math.min(startX, endX);
-          const rectWidth = Math.max(1, Math.abs(endX - startX));
+          const rectWidth = isEmptyLine
+            ? EMPTY_PARAGRAPH_SLIVER_WIDTH
+            : Math.max(1, Math.abs(endX - startX));
           const rectY = fragment.y + lineOffset;
 
           rects.push({
@@ -635,9 +663,16 @@ export function selectionToRects(
                   continue;
                 }
 
+                // Only a true empty paragraph draws a sliver — not the blank row
+                // a trailing hard break leaves behind (eigenpal/docx-editor#836).
+                const isTrailingBreakRow =
+                  paragraphBlock.runs.length > 0 &&
+                  line.fromRun >= paragraphBlock.runs.length;
+                const isEmptyLine =
+                  range.pmStart === range.pmEnd && !isTrailingBreakRow;
                 const sliceFrom = Math.max(range.pmStart, selFrom);
                 const sliceTo = Math.min(range.pmEnd, selTo);
-                if (sliceFrom >= sliceTo) {
+                if (!isEmptyLine && sliceFrom >= sliceTo) {
                   continue;
                 }
 
@@ -685,7 +720,9 @@ export function selectionToRects(
                     contentOffsetX +
                     Math.min(startX, endX),
                   y: tableFragment.y + rowY + clippedLineY - clipTop + pageTopY,
-                  width: Math.max(1, Math.abs(endX - startX)),
+                  width: isEmptyLine
+                    ? EMPTY_PARAGRAPH_SLIVER_WIDTH
+                    : Math.max(1, Math.abs(endX - startX)),
                   height: line.lineHeight,
                   pageIndex,
                 });

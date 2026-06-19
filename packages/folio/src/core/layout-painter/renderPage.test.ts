@@ -639,6 +639,99 @@ describe("header and footer rendering", () => {
     expect(afterParagraph?.style.top).toBe("40px");
   });
 
+  test("interactive header/footer box tracks the flow band, not a floating shape's extent (#869)", () => {
+    const para = (id: string): ParagraphBlock => ({
+      kind: "paragraph",
+      id,
+      runs: [{ kind: "text", text: "x" }],
+    });
+    const measure = { kind: "paragraph" as const, lines: [], totalHeight: 30 };
+
+    // Header with a page-anchored shape whose visualBottom extends far below the
+    // 30px flow band: the interactive box must stay 30px (not 600px), or it
+    // would sit over the body and swallow its clicks.
+    const headerPage = renderPage(
+      { ...page, fragments: [] },
+      { pageNumber: 1, totalPages: 1, section: "body" },
+      {
+        document: fakeDocument,
+        headerContent: {
+          blocks: [para("h")],
+          measures: [measure],
+          height: 30,
+          visualTop: 0,
+          visualBottom: 600,
+        },
+      },
+    );
+    expect(
+      findByClass(headerPage as unknown as FakeElement, "layout-page-header")
+        ?.style.height,
+    ).toBe("30px");
+
+    // Footer with a shape anchored ABOVE the footer line (very negative
+    // visualTop): the box must not grow upward into the body.
+    const renderFooter = (visualTop: number, visualBottom: number) =>
+      renderPage(
+        { ...page, fragments: [] },
+        { pageNumber: 1, totalPages: 1, section: "body" },
+        {
+          document: fakeDocument,
+          footerContent: {
+            blocks: [para("f")],
+            measures: [measure],
+            height: 30,
+            visualTop,
+            visualBottom,
+          },
+        },
+      );
+    const plainFooter = findByClass(
+      renderFooter(0, 30) as unknown as FakeElement,
+      "layout-page-footer",
+    );
+    const shapedFooter = findByClass(
+      renderFooter(-500, 30) as unknown as FakeElement,
+      "layout-page-footer",
+    );
+    // Height pins to the 30px flow band regardless of the above-flow shape...
+    expect(shapedFooter?.style.height).toBe("30px");
+    // ...and the box top does not move up with the shape (no body coverage).
+    expect(shapedFooter?.style.top).toBe(plainFooter?.style.top);
+  });
+
+  test("does not clip header content overflowing the flow band within the margin (#869)", () => {
+    // A non-image floating object (e.g. a positioned text box) extends past the
+    // 30px flow band but stays within the page margin. After the box shrank to
+    // the flow band, clipping it to the box would cut the object off; it must
+    // stay visible.
+    const headerPage = renderPage(
+      { ...page, fragments: [] },
+      { pageNumber: 1, totalPages: 1, section: "body" },
+      {
+        document: fakeDocument,
+        headerContent: {
+          blocks: [
+            {
+              kind: "paragraph",
+              id: "h",
+              runs: [{ kind: "text", text: "x" }],
+            } as ParagraphBlock,
+          ],
+          measures: [{ kind: "paragraph", lines: [], totalHeight: 30 }],
+          height: 30,
+          visualTop: 0,
+          visualBottom: 45,
+        },
+      },
+    );
+    const header = findByClass(
+      headerPage as unknown as FakeElement,
+      "layout-page-header",
+    );
+    expect(header?.style.overflow).not.toBe("hidden");
+  });
+
   test("preserves footer content offset when moving behind images to the page layer", () => {
     const footerNaturalTop = page.size.h - 48;
     const footerImageBlock: ParagraphBlock = {
