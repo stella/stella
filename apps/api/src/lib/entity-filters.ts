@@ -407,18 +407,19 @@ const compileCompare = (node: CompareNode): SQL | null => {
  */
 const propertyValueMatches = (
   propertyId: string,
-  elemMatch: (valueExpr: SQL) => SQL,
+  arrayMatch: (valueExpr: SQL) => SQL,
+  scalarMatch: (valueExpr: SQL) => SQL,
 ): SQL => {
   const content = fields.content;
   const anyElement = sql`EXISTS (
     SELECT 1 FROM jsonb_array_elements_text(${content}->'value') AS elem
-    WHERE ${elemMatch(sql`elem`)}
+    WHERE ${arrayMatch(sql`elem`)}
   )`;
   return propertyExists(
     propertyId,
     sql`CASE WHEN jsonb_typeof(${content}->'value') = 'array'
       THEN ${anyElement}
-      ELSE ${elemMatch(fieldValueExpr(content))}
+      ELSE ${scalarMatch(fieldValueExpr(content))}
     END`,
   );
 };
@@ -428,32 +429,40 @@ const compilePropertyPredicate = (
   node: PredicateNode,
 ): SQL | null => {
   const text = String(node.value ?? "");
-  const like = (pattern: string) =>
-    propertyValueMatches(propertyId, (v) => sql`${v} ILIKE ${pattern}`);
+  // Same matcher for arrays and scalars (membership/emptiness ops).
+  const same = (match: (v: SQL) => SQL) =>
+    propertyValueMatches(propertyId, match, match);
+  // `contains` differs by shape: exact (case-insensitive) option membership for
+  // multi-select array elements, substring for scalar text — matching the
+  // in-memory evaluator (so e.g. "NDA" does not match the option "Non-NDA").
+  const contains = () =>
+    propertyValueMatches(
+      propertyId,
+      (v) => sql`LOWER(${v}) = LOWER(${text})`,
+      (v) => sql`${v} ILIKE ${`%${text}%`}`,
+    );
   switch (node.op) {
     case "contains":
-      return like(`%${text}%`);
+      return contains();
     case "not_contains":
       // NOT EXISTS so absent/empty fields count as "does not contain".
-      return sql`NOT ${like(`%${text}%`)}`;
+      return sql`NOT ${contains()}`;
     case "starts_with":
-      return like(`${text}%`);
+      return same((v) => sql`${v} ILIKE ${`${text}%`}`);
     case "ends_with":
-      return like(`%${text}`);
+      return same((v) => sql`${v} ILIKE ${`%${text}`}`);
     case "is_not_empty":
-      return propertyValueMatches(propertyId, (v) => sql`${v} <> ''`);
+      return same((v) => sql`${v} <> ''`);
     case "is_empty":
       // Empty when no non-empty value exists: covers an absent field, an empty
       // scalar, and an empty array.
-      return sql`NOT ${propertyValueMatches(propertyId, (v) => sql`${v} <> ''`)}`;
+      return sql`NOT ${same((v) => sql`${v} <> ''`)}`;
     case "contains_all": {
       const wanted = asValueArray(node.value);
       if (wanted.length === 0) {
         return null;
       }
-      const clauses = wanted.map((want) =>
-        propertyValueMatches(propertyId, (v) => sql`${v} = ${want}`),
-      );
+      const clauses = wanted.map((want) => same((v) => sql`${v} = ${want}`));
       return and(...clauses) ?? null;
     }
     case "in": {
@@ -461,10 +470,7 @@ const compilePropertyPredicate = (
       if (values.length === 0) {
         return null;
       }
-      return propertyValueMatches(
-        propertyId,
-        (v) => sql`${v} = ANY(${values})`,
-      );
+      return same((v) => sql`${v} = ANY(${values})`);
     }
     default:
       return null;

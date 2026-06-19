@@ -1,6 +1,6 @@
 import type { ConditionNode } from "@stll/conditions";
 
-import { nodeReferencesOnlyValidProperties } from "@/api/lib/conditions/ast-utils";
+import { pruneStaleNode } from "@/api/lib/conditions/ast-utils";
 import type {
   ViewLayout,
   ViewLayoutBase,
@@ -32,10 +32,13 @@ export const cleanStalePropertyIds = (
   }
 
   const isValidPropertyId = (id: string) => propertyIds.includes(id);
-  const cleanedFilters = layout.filters.filter((node) =>
-    nodeReferencesOnlyValidProperties(node, isValidPropertyId),
-  );
-  if (cleanedFilters.length !== layout.filters.length) {
+  // Prune stale leaves recursively so an advanced group keeps its valid
+  // siblings instead of being dropped whole. Compare structurally because
+  // in-group pruning may not change the top-level array length.
+  const cleanedFilters = layout.filters
+    .map((node) => pruneStaleNode(node, isValidPropertyId))
+    .filter((node): node is ConditionNode => node !== null);
+  if (JSON.stringify(cleanedFilters) !== JSON.stringify(layout.filters)) {
     layout.filters = cleanedFilters;
     changed = true;
   }

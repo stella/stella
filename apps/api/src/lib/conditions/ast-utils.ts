@@ -89,3 +89,26 @@ export const nodeReferencesOnlyValidProperties = (
   }
   return true;
 };
+
+/**
+ * Drops only the leaf conditions that reference a deleted property, recursing
+ * into groups so valid siblings survive. Returns `null` when a leaf is invalid
+ * or a group is left empty — so one stale child no longer drops a whole group.
+ */
+export const pruneStaleNode = (
+  node: ConditionNode,
+  isValidPropertyId: (id: string) => boolean,
+): ConditionNode | null => {
+  if (node.type === "group") {
+    const children = node.children
+      .map((child) => pruneStaleNode(child, isValidPropertyId))
+      .filter((child): child is ConditionNode => child !== null);
+    if (children.length === 0) {
+      return null;
+    }
+    return { ...node, children };
+  }
+  return nodeReferencesOnlyValidProperties(node, isValidPropertyId)
+    ? node
+    : null;
+};
