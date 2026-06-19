@@ -2,7 +2,7 @@
   "bomFormat": "CycloneDX",
   "components": [
     {
-      "bom-ref": "pkg:npm/@ai-sdk/anthropic@3.0.81",
+      "bom-ref": "pkg:npm/@ai-sdk/anthropic@3.0.84",
       "evidence": {
         "identity": [
           {
@@ -50,16 +50,16 @@
           "value": "node_modules/@ai-sdk/anthropic/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/anthropic@3.0.81",
+      "purl": "pkg:npm/%40ai-sdk/anthropic@3.0.84",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.0.81"
+      "version": "3.0.84"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/azure@3.0.70",
+      "bom-ref": "pkg:npm/@ai-sdk/azure@3.0.74",
       "evidence": {
         "identity": [
           {
@@ -107,13 +107,13 @@
           "value": "node_modules/@ai-sdk/azure/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/azure@3.0.70",
+      "purl": "pkg:npm/%40ai-sdk/azure@3.0.74",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.0.70"
+      "version": "3.0.74"
     },
     {
       "bom-ref": "pkg:npm/@ai-sdk/devtools@0.0.18",
@@ -173,7 +173,7 @@
       "version": "0.0.18"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/google-vertex@4.0.142",
+      "bom-ref": "pkg:npm/@ai-sdk/google-vertex@4.0.145",
       "evidence": {
         "identity": [
           {
@@ -221,16 +221,16 @@
           "value": "node_modules/@ai-sdk/google-vertex/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/google-vertex@4.0.142",
+      "purl": "pkg:npm/%40ai-sdk/google-vertex@4.0.145",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "4.0.142"
+      "version": "4.0.145"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/google@3.0.80",
+      "bom-ref": "pkg:npm/@ai-sdk/google@3.0.82",
       "evidence": {
         "identity": [
           {
@@ -281,16 +281,16 @@
           "value": "node_modules/@ai-sdk/google/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/google@3.0.80",
+      "purl": "pkg:npm/%40ai-sdk/google@3.0.82",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.0.80"
+      "version": "3.0.82"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/mcp@1.0.46",
+      "bom-ref": "pkg:npm/@ai-sdk/mcp@1.0.50",
       "evidence": {
         "identity": [
           {
@@ -347,16 +347,16 @@
           "value": "node_modules/@ai-sdk/mcp/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/mcp@1.0.46",
+      "purl": "pkg:npm/%40ai-sdk/mcp@1.0.50",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "1.0.46"
+      "version": "1.0.50"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/mistral@3.0.37",
+      "bom-ref": "pkg:npm/@ai-sdk/mistral@3.0.39",
       "evidence": {
         "identity": [
           {
@@ -404,16 +404,16 @@
           "value": "node_modules/@ai-sdk/mistral/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/mistral@3.0.37",
+      "purl": "pkg:npm/%40ai-sdk/mistral@3.0.39",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.0.37"
+      "version": "3.0.39"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/openai@3.0.68",
+      "bom-ref": "pkg:npm/@ai-sdk/openai@3.0.71",
       "evidence": {
         "identity": [
           {
@@ -464,17 +464,74 @@
           "value": "node_modules/@ai-sdk/openai/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/openai@3.0.68",
+      "purl": "pkg:npm/%40ai-sdk/openai@3.0.71",
       "scope": "required",
       "tags": [
         "framework",
         "ml"
       ],
       "type": "framework",
-      "version": "3.0.68"
+      "version": "3.0.71"
     },
     {
       "bom-ref": "pkg:npm/@ai-sdk/provider-utils@4.0.27",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@ai-sdk/react/node_modules/@ai-sdk/provider-utils/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@ai-sdk/react/node_modules/@ai-sdk/provider-utils/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/mcp-upstream/connections.ts#3"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://ai-sdk.dev/docs"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/vercel/ai"
+        }
+      ],
+      "group": "@ai-sdk",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
+          }
+        }
+      ],
+      "name": "provider-utils",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@ai-sdk/react/node_modules/@ai-sdk/provider-utils/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40ai-sdk/provider-utils@4.0.27",
+      "scope": "required",
+      "tags": [
+        "framework"
+      ],
+      "type": "framework",
+      "version": "4.0.27"
+    },
+    {
+      "bom-ref": "pkg:npm/@ai-sdk/provider-utils@4.0.29",
       "evidence": {
         "identity": [
           {
@@ -522,13 +579,13 @@
           "value": "node_modules/@ai-sdk/provider-utils/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/provider-utils@4.0.27",
+      "purl": "pkg:npm/%40ai-sdk/provider-utils@4.0.29",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "4.0.27"
+      "version": "4.0.29"
     },
     {
       "bom-ref": "pkg:npm/@ai-sdk/provider@3.0.10",
@@ -1176,6 +1233,9 @@
             "location": "apps/web/src/components/stella-wordmark.tsx#1"
           },
           {
+            "location": "apps/web/src/components/table-skeleton-rows.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/theme-provider.tsx#1"
           },
           {
@@ -1297,6 +1357,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.dev_.autocomplete.tsx#1"
@@ -1662,6 +1725,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx#1"
           },
           {
@@ -2004,7 +2070,7 @@
       "version": "3.0.199"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/valibot@2.0.28",
+      "bom-ref": "pkg:npm/@ai-sdk/valibot@2.0.30",
       "evidence": {
         "identity": [
           {
@@ -2199,7 +2265,7 @@
             "location": "apps/web/src/routes/_protected.contacts/-components/contact-communication-editor.tsx#7"
           },
           {
-            "location": "apps/web/src/routes/_protected.contacts/index.tsx#21"
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#30"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/tools.tsx#6"
@@ -2283,13 +2349,13 @@
           "value": "node_modules/@ai-sdk/valibot/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/valibot@2.0.28",
+      "purl": "pkg:npm/%40ai-sdk/valibot@2.0.30",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "2.0.28"
+      "version": "2.0.30"
     },
     {
       "authors": [
@@ -2877,6 +2943,9 @@
             "location": "apps/web/src/components/stella-wordmark.tsx#1"
           },
           {
+            "location": "apps/web/src/components/table-skeleton-rows.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/theme-provider.tsx#1"
           },
           {
@@ -2998,6 +3067,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.dev_.autocomplete.tsx#1"
@@ -3361,6 +3433,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx#1"
@@ -4651,7 +4726,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1063.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1068.0",
       "description": "AWS SDK for JavaScript S3 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -4700,13 +4775,13 @@
           "value": "node_modules/@aws-sdk/client-s3/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1063.0",
+      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1068.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1063.0"
+      "version": "3.1068.0"
     },
     {
       "authors": [
@@ -4714,7 +4789,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1063.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1068.0",
       "description": "AWS SDK for JavaScript Sesv2 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -4763,13 +4838,13 @@
           "value": "node_modules/@aws-sdk/client-sesv2/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1063.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1068.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1063.0"
+      "version": "3.1068.0"
     },
     {
       "authors": [
@@ -4777,7 +4852,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1063.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1068.0",
       "description": "AWS SDK for JavaScript Sts Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -4826,13 +4901,13 @@
           "value": "node_modules/@aws-sdk/client-sts/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1063.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1068.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1063.0"
+      "version": "3.1068.0"
     },
     {
       "authors": [
@@ -4840,7 +4915,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1063.0",
+      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1068.0",
       "evidence": {
         "identity": [
           {
@@ -4888,13 +4963,13 @@
           "value": "node_modules/@aws-sdk/s3-request-presigner/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1063.0",
+      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1068.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1063.0"
+      "version": "3.1068.0"
     },
     {
       "authors": [
@@ -5482,6 +5557,9 @@
             "location": "apps/web/src/components/stella-wordmark.tsx#1"
           },
           {
+            "location": "apps/web/src/components/table-skeleton-rows.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/theme-provider.tsx#1"
           },
           {
@@ -5603,6 +5681,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.dev_.autocomplete.tsx#1"
@@ -5966,6 +6047,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx#1"
@@ -6605,7 +6689,7 @@
       "version": "2.1.8"
     },
     {
-      "bom-ref": "pkg:npm/@hocuspocus/provider@4.1.0",
+      "bom-ref": "pkg:npm/@hocuspocus/provider@4.2.0",
       "description": "hocuspocus provider",
       "evidence": {
         "identity": [
@@ -6657,13 +6741,13 @@
           "value": "node_modules/@hocuspocus/provider/package.json"
         }
       ],
-      "purl": "pkg:npm/%40hocuspocus/provider@4.1.0",
+      "purl": "pkg:npm/%40hocuspocus/provider@4.2.0",
       "scope": "required",
       "type": "library",
-      "version": "4.1.0"
+      "version": "4.2.0"
     },
     {
-      "bom-ref": "pkg:npm/@hocuspocus/server@4.1.0",
+      "bom-ref": "pkg:npm/@hocuspocus/server@4.2.0",
       "description": "plug & play collaboration backend",
       "evidence": {
         "identity": [
@@ -6715,10 +6799,10 @@
           "value": "node_modules/@hocuspocus/server/package.json"
         }
       ],
-      "purl": "pkg:npm/%40hocuspocus/server@4.1.0",
+      "purl": "pkg:npm/%40hocuspocus/server@4.2.0",
       "scope": "required",
       "type": "library",
-      "version": "4.1.0"
+      "version": "4.2.0"
     },
     {
       "authors": [
@@ -6726,7 +6810,7 @@
           "name": "Lucas Smith"
         }
       ],
-      "bom-ref": "pkg:npm/@libpdf/core@0.3.6",
+      "bom-ref": "pkg:npm/@libpdf/core@0.4.0",
       "description": "A modern PDF library for TypeScript - parsing and generation",
       "evidence": {
         "identity": [
@@ -6799,10 +6883,10 @@
           "value": "node_modules/@libpdf/core/package.json"
         }
       ],
-      "purl": "pkg:npm/%40libpdf/core@0.3.6",
+      "purl": "pkg:npm/%40libpdf/core@0.4.0",
       "scope": "required",
       "type": "library",
-      "version": "0.3.6"
+      "version": "0.4.0"
     },
     {
       "bom-ref": "pkg:npm/@litko/yara-x@0.5.2",
@@ -6955,7 +7039,7 @@
       "version": "1.29.0"
     },
     {
-      "bom-ref": "pkg:npm/@openrouter/ai-sdk-provider@2.9.0",
+      "bom-ref": "pkg:npm/@openrouter/ai-sdk-provider@2.9.1",
       "evidence": {
         "identity": [
           {
@@ -7003,10 +7087,10 @@
           "value": "node_modules/@openrouter/ai-sdk-provider/package.json"
         }
       ],
-      "purl": "pkg:npm/%40openrouter/ai-sdk-provider@2.9.0",
+      "purl": "pkg:npm/%40openrouter/ai-sdk-provider@2.9.1",
       "scope": "required",
       "type": "library",
-      "version": "2.9.0"
+      "version": "2.9.1"
     },
     {
       "authors": [
@@ -7138,7 +7222,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/@posthog/react@1.10.0",
+      "bom-ref": "pkg:npm/@posthog/react@1.10.1",
       "description": "Provides components and hooks for React integrations of PostHog.",
       "evidence": {
         "identity": [
@@ -7718,6 +7802,9 @@
             "location": "apps/web/src/components/stella-wordmark.tsx#1"
           },
           {
+            "location": "apps/web/src/components/table-skeleton-rows.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/theme-provider.tsx#1"
           },
           {
@@ -7839,6 +7926,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.dev_.autocomplete.tsx#1"
@@ -8204,6 +8294,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx#1"
           },
           {
@@ -8537,10 +8630,10 @@
           "value": "node_modules/@posthog/react/package.json"
         }
       ],
-      "purl": "pkg:npm/%40posthog/react@1.10.0",
+      "purl": "pkg:npm/%40posthog/react@1.10.1",
       "scope": "required",
       "type": "library",
-      "version": "1.10.0"
+      "version": "1.10.1"
     },
     {
       "authors": [
@@ -9212,7 +9305,7 @@
             "location": "apps/web/src/components/auth/sign-in-panel.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.contacts/index.tsx#3"
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.organization/-components/invite-member-dialog.tsx#4"
@@ -9854,7 +9947,7 @@
             "location": "apps/web/src/routes/_protected.contacts/-components/editable-row.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.contacts/index.tsx#4"
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#3"
@@ -10079,7 +10172,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices.tsx#3"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx#4"
@@ -10484,7 +10577,7 @@
             "location": "apps/web/src/routes/_protected.contacts/-components/editable-row.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.contacts/index.tsx#10"
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.dev_.autocomplete.tsx#3"
@@ -10664,7 +10757,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices.tsx#10"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx#11"
@@ -10883,7 +10976,7 @@
             "location": "apps/web/src/components/auth/sign-in-panel.tsx#6"
           },
           {
-            "location": "apps/web/src/routes/_protected.contacts/index.tsx#11"
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#12"
           },
           {
             "location": "apps/web/src/routes/_protected.organization/-components/invite-member-dialog.tsx#6"
@@ -10967,7 +11060,7 @@
             "location": "apps/web/src/components/auth/sign-in-panel.tsx#6"
           },
           {
-            "location": "apps/web/src/routes/_protected.contacts/index.tsx#11"
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#12"
           },
           {
             "location": "apps/web/src/routes/_protected.organization/-components/invite-member-dialog.tsx#6"
@@ -11127,6 +11220,15 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state.ts#11"
+          },
+          {
+            "location": "apps/web/src/components/table-skeleton-rows.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#19"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#20"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx#8"
@@ -11304,7 +11406,7 @@
       "version": "2.11.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/core@3.26.0",
+      "bom-ref": "pkg:npm/@tiptap/core@3.26.1",
       "description": "headless rich text editor",
       "evidence": {
         "identity": [
@@ -11362,13 +11464,13 @@
           "value": "node_modules/@tiptap/core/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/core@3.26.0",
+      "purl": "pkg:npm/%40tiptap/core@3.26.1",
       "scope": "required",
       "type": "library",
-      "version": "3.26.0"
+      "version": "3.26.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-bold@3.26.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-bold@3.26.1",
       "description": "bold extension for tiptap",
       "evidence": {
         "identity": [
@@ -11417,13 +11519,13 @@
           "value": "node_modules/@tiptap/extension-bold/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-bold@3.26.0",
+      "purl": "pkg:npm/%40tiptap/extension-bold@3.26.1",
       "scope": "required",
       "type": "library",
-      "version": "3.26.0"
+      "version": "3.26.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-document@3.26.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-document@3.26.1",
       "description": "document extension for tiptap",
       "evidence": {
         "identity": [
@@ -11475,13 +11577,13 @@
           "value": "node_modules/@tiptap/extension-document/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-document@3.26.0",
+      "purl": "pkg:npm/%40tiptap/extension-document@3.26.1",
       "scope": "required",
       "type": "library",
-      "version": "3.26.0"
+      "version": "3.26.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-hard-break@3.26.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-hard-break@3.26.1",
       "description": "hard break extension for tiptap",
       "evidence": {
         "identity": [
@@ -11530,13 +11632,13 @@
           "value": "node_modules/@tiptap/extension-hard-break/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-hard-break@3.26.0",
+      "purl": "pkg:npm/%40tiptap/extension-hard-break@3.26.1",
       "scope": "required",
       "type": "library",
-      "version": "3.26.0"
+      "version": "3.26.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-heading@3.26.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-heading@3.26.1",
       "description": "heading extension for tiptap",
       "evidence": {
         "identity": [
@@ -11585,13 +11687,13 @@
           "value": "node_modules/@tiptap/extension-heading/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-heading@3.26.0",
+      "purl": "pkg:npm/%40tiptap/extension-heading@3.26.1",
       "scope": "required",
       "type": "library",
-      "version": "3.26.0"
+      "version": "3.26.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-history@3.26.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-history@3.26.1",
       "description": "history extension for tiptap",
       "evidence": {
         "identity": [
@@ -11646,13 +11748,13 @@
           "value": "node_modules/@tiptap/extension-history/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-history@3.26.0",
+      "purl": "pkg:npm/%40tiptap/extension-history@3.26.1",
       "scope": "required",
       "type": "library",
-      "version": "3.26.0"
+      "version": "3.26.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-italic@3.26.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-italic@3.26.1",
       "description": "italic extension for tiptap",
       "evidence": {
         "identity": [
@@ -11701,13 +11803,13 @@
           "value": "node_modules/@tiptap/extension-italic/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-italic@3.26.0",
+      "purl": "pkg:npm/%40tiptap/extension-italic@3.26.1",
       "scope": "required",
       "type": "library",
-      "version": "3.26.0"
+      "version": "3.26.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-mention@3.26.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-mention@3.26.1",
       "description": "mention extension for tiptap",
       "evidence": {
         "identity": [
@@ -11765,13 +11867,13 @@
           "value": "node_modules/@tiptap/extension-mention/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-mention@3.26.0",
+      "purl": "pkg:npm/%40tiptap/extension-mention@3.26.1",
       "scope": "required",
       "type": "library",
-      "version": "3.26.0"
+      "version": "3.26.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-paragraph@3.26.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-paragraph@3.26.1",
       "description": "paragraph extension for tiptap",
       "evidence": {
         "identity": [
@@ -11826,13 +11928,13 @@
           "value": "node_modules/@tiptap/extension-paragraph/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-paragraph@3.26.0",
+      "purl": "pkg:npm/%40tiptap/extension-paragraph@3.26.1",
       "scope": "required",
       "type": "library",
-      "version": "3.26.0"
+      "version": "3.26.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-placeholder@3.26.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-placeholder@3.26.1",
       "description": "placeholder extension for tiptap",
       "evidence": {
         "identity": [
@@ -11887,13 +11989,13 @@
           "value": "node_modules/@tiptap/extension-placeholder/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-placeholder@3.26.0",
+      "purl": "pkg:npm/%40tiptap/extension-placeholder@3.26.1",
       "scope": "required",
       "type": "library",
-      "version": "3.26.0"
+      "version": "3.26.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-text@3.26.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-text@3.26.1",
       "description": "text extension for tiptap",
       "evidence": {
         "identity": [
@@ -11948,13 +12050,13 @@
           "value": "node_modules/@tiptap/extension-text/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-text@3.26.0",
+      "purl": "pkg:npm/%40tiptap/extension-text@3.26.1",
       "scope": "required",
       "type": "library",
-      "version": "3.26.0"
+      "version": "3.26.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/pm@3.26.0",
+      "bom-ref": "pkg:npm/@tiptap/pm@3.26.1",
       "description": "prosemirror wrapper package for tiptap",
       "evidence": {
         "identity": [
@@ -12027,13 +12129,13 @@
           "value": "node_modules/@tiptap/pm/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/pm@3.26.0",
+      "purl": "pkg:npm/%40tiptap/pm@3.26.1",
       "scope": "required",
       "type": "library",
-      "version": "3.26.0"
+      "version": "3.26.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/react@3.26.0",
+      "bom-ref": "pkg:npm/@tiptap/react@3.26.1",
       "description": "React components for tiptap",
       "evidence": {
         "identity": [
@@ -12613,6 +12715,9 @@
             "location": "apps/web/src/components/stella-wordmark.tsx#1"
           },
           {
+            "location": "apps/web/src/components/table-skeleton-rows.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/theme-provider.tsx#1"
           },
           {
@@ -12734,6 +12839,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.dev_.autocomplete.tsx#1"
@@ -13099,6 +13207,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx#1"
           },
           {
@@ -13432,13 +13543,13 @@
           "value": "node_modules/@tiptap/react/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/react@3.26.0",
+      "purl": "pkg:npm/%40tiptap/react@3.26.1",
       "scope": "required",
       "type": "library",
-      "version": "3.26.0"
+      "version": "3.26.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/suggestion@3.26.0",
+      "bom-ref": "pkg:npm/@tiptap/suggestion@3.26.1",
       "description": "suggestion plugin for tiptap",
       "evidence": {
         "identity": [
@@ -13505,10 +13616,10 @@
           "value": "node_modules/@tiptap/suggestion/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/suggestion@3.26.0",
+      "purl": "pkg:npm/%40tiptap/suggestion@3.26.1",
       "scope": "required",
       "type": "library",
-      "version": "3.26.0"
+      "version": "3.26.1"
     },
     {
       "authors": [
@@ -13516,7 +13627,7 @@
           "name": "Fabian Hiller"
         }
       ],
-      "bom-ref": "pkg:npm/@valibot/to-json-schema@1.7.0",
+      "bom-ref": "pkg:npm/@valibot/to-json-schema@1.7.1",
       "description": "The official JSON schema converter for Valibot",
       "evidence": {
         "identity": [
@@ -13574,16 +13685,269 @@
           "value": "node_modules/@valibot/to-json-schema/package.json"
         }
       ],
-      "purl": "pkg:npm/%40valibot/to-json-schema@1.7.0",
+      "purl": "pkg:npm/%40valibot/to-json-schema@1.7.1",
       "scope": "required",
       "tags": [
         "json"
       ],
       "type": "library",
-      "version": "1.7.0"
+      "version": "1.7.1"
     },
     {
       "bom-ref": "pkg:npm/ai@6.0.197",
+      "description": "AI SDK by Vercel - build apps like ChatGPT, Claude, Gemini, and more with a single interface for any model using the Vercel AI Gateway or go direct to OpenAI, Anthropic, Google, or any other model provider.",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@ai-sdk/react/node_modules/ai/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@ai-sdk/react/node_modules/ai/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/scripts/benchmark-chat-read-surface.ts#13"
+          },
+          {
+            "location": "apps/api/scripts/benchmark-chat-read-surface.ts#14"
+          },
+          {
+            "location": "apps/api/src/dev/register-mock-ai.ts#2"
+          },
+          {
+            "location": "apps/api/src/dev/register-mock-ai.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/ai-autocomplete/stream.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/analysis/generate.ts#9"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#10"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/attachment-validation.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/attachment-validation.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/chat-schema.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/chat-schema.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/compaction.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/compaction.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/generate-thread-title.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/loop-detector.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/persistent-compaction.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/stream-chat.ts#8"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/stream-chat.ts#14"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/third-party-boundary.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/third-party-boundary.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/thread-recap.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/active-docx-edit-tool.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/boe-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/business-registry-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/chat-tools.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/create-document-tool.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/execute/chat-execution-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/external-mcp-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/infosoud-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/org-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/tool-policy.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/web-search-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/types.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/upload-files.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/upload-files.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/properties/suggest-prompt.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/search/ai.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/generate-draft.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/resources/rewrite.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/ai-caching.ts#16"
+          },
+          {
+            "location": "apps/api/src/lib/ai-error.ts#9"
+          },
+          {
+            "location": "apps/api/src/lib/ai-models.ts#43"
+          },
+          {
+            "location": "apps/api/src/lib/ai-models.ts#44"
+          },
+          {
+            "location": "apps/api/src/lib/ai-output-schema.ts#27"
+          },
+          {
+            "location": "apps/api/src/lib/ai-output-schema.ts#28"
+          },
+          {
+            "location": "apps/api/src/lib/analytics/ai.ts#6"
+          },
+          {
+            "location": "apps/api/src/lib/bbox/ai-generate-b-boxes.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/workflow/ai-generate-batch.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/workflow/ai-generate-batch.ts#2"
+          },
+          {
+            "location": "apps/api/src/mcp/tool-utils.ts#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#14"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.chat/-lib/build-chat-request-message.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.chat/-queries.ts#8"
+          },
+          {
+            "location": "apps/web/src/components/ai-elements/message.tsx#6"
+          },
+          {
+            "location": "apps/web/src/components/chat/ask-user-card.tsx#4"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#4"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#5"
+          },
+          {
+            "location": "apps/web/src/components/chat/needs-matter-card.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/chat/source-chips.tsx#5"
+          },
+          {
+            "location": "apps/web/src/components/chat/source-chips.tsx#6"
+          },
+          {
+            "location": "apps/web/src/components/chat/tool-call-card.tsx#4"
+          },
+          {
+            "location": "apps/api/src/dev/register-mock-ai.ts#3"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://ai-sdk.dev/docs"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/vercel/ai"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
+          }
+        }
+      ],
+      "name": "ai",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@ai-sdk/react/node_modules/ai/package.json"
+        }
+      ],
+      "purl": "pkg:npm/ai@6.0.197",
+      "scope": "required",
+      "tags": [
+        "ai"
+      ],
+      "type": "library",
+      "version": "6.0.197"
+    },
+    {
+      "bom-ref": "pkg:npm/ai@6.0.204",
       "description": "AI SDK by Vercel - build apps like ChatGPT, Claude, Gemini, and more with a single interface for any model using the Vercel AI Gateway or go direct to OpenAI, Anthropic, Google, or any other model provider.",
       "evidence": {
         "identity": [
@@ -13827,13 +14191,13 @@
           "value": "node_modules/ai/package.json"
         }
       ],
-      "purl": "pkg:npm/ai@6.0.197",
+      "purl": "pkg:npm/ai@6.0.204",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "6.0.197"
+      "version": "6.0.204"
     },
     {
       "authors": [
@@ -13841,7 +14205,7 @@
           "name": "withastro"
         }
       ],
-      "bom-ref": "pkg:npm/astro@6.4.4",
+      "bom-ref": "pkg:npm/astro@6.4.6",
       "description": "Astro is a modern site builder with web best practices, performance, and DX front-of-mind.",
       "evidence": {
         "identity": [
@@ -13896,13 +14260,13 @@
           "value": "node_modules/astro/package.json"
         }
       ],
-      "purl": "pkg:npm/astro@6.4.4",
+      "purl": "pkg:npm/astro@6.4.6",
       "scope": "required",
       "tags": [
         "web"
       ],
       "type": "library",
-      "version": "6.4.4"
+      "version": "6.4.6"
     },
     {
       "bom-ref": "pkg:npm/better-auth@1.6.12",
@@ -15976,7 +16340,7 @@
       "version": "0.3.5"
     },
     {
-      "bom-ref": "pkg:npm/crossws@0.4.5",
+      "bom-ref": "pkg:npm/crossws@0.4.6",
       "description": "Cross-platform WebSocket Servers for Node.js, Deno, Bun and Cloudflare Workers",
       "evidence": {
         "identity": [
@@ -16027,10 +16391,10 @@
           "value": "node_modules/crossws/package.json"
         }
       ],
-      "purl": "pkg:npm/crossws@0.4.5",
+      "purl": "pkg:npm/crossws@0.4.6",
       "scope": "required",
       "type": "library",
-      "version": "0.4.5"
+      "version": "0.4.6"
     },
     {
       "bom-ref": "pkg:npm/diff@8.0.4",
@@ -19255,7 +19619,7 @@
             "location": "apps/web/src/routes/_protected.contacts/-components/party-matter-row.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.contacts/index.tsx#18"
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#27"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#9"
@@ -19342,7 +19706,7 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/organization.members.tsx#9"
+            "location": "apps/web/src/routes/_protected.settings/organization.members.tsx#14"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/route.tsx#12"
@@ -19582,7 +19946,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx#19"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices.tsx#11"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices.tsx#12"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/timesheets.tsx#10"
@@ -19627,7 +19991,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/-filters/team-filter-popover.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/index.tsx#6"
+            "location": "apps/web/src/routes/_protected.workspaces/index.tsx#13"
           },
           {
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#22"
@@ -20011,7 +20375,7 @@
           "name": "Andris Reinman"
         }
       ],
-      "bom-ref": "pkg:npm/nodemailer@8.0.10",
+      "bom-ref": "pkg:npm/nodemailer@9.0.1",
       "description": "Easy as cake e-mail sending from your Node.js applications",
       "evidence": {
         "identity": [
@@ -20060,10 +20424,10 @@
           "value": "node_modules/nodemailer/package.json"
         }
       ],
-      "purl": "pkg:npm/nodemailer@8.0.10",
+      "purl": "pkg:npm/nodemailer@9.0.1",
       "scope": "required",
       "type": "library",
-      "version": "8.0.10"
+      "version": "9.0.1"
     },
     {
       "bom-ref": "pkg:npm/pdfjs-dist@6.0.227",
@@ -20202,7 +20566,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-js@1.382.0",
+      "bom-ref": "pkg:npm/posthog-js@1.386.6",
       "description": "Posthog-js allows you to automatically capture usage and send events to PostHog.",
       "evidence": {
         "identity": [
@@ -20251,10 +20615,10 @@
           "value": "node_modules/posthog-js/lib/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-js@1.382.0",
+      "purl": "pkg:npm/posthog-js@1.386.6",
       "scope": "required",
       "type": "library",
-      "version": "1.382.0"
+      "version": "1.386.6"
     },
     {
       "authors": [
@@ -20262,7 +20626,7 @@
           "name": "PostHog <engineering@posthog.com> (https://posthog.com)"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-node@5.36.4",
+      "bom-ref": "pkg:npm/posthog-node@5.37.0",
       "description": "PostHog Node.js integration",
       "evidence": {
         "identity": [
@@ -20307,10 +20671,10 @@
           "value": "node_modules/posthog-node/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-node@5.36.4",
+      "purl": "pkg:npm/posthog-node@5.37.0",
       "scope": "required",
       "type": "library",
-      "version": "5.36.4"
+      "version": "5.37.0"
     },
     {
       "bom-ref": "pkg:npm/prosemirror-commands@1.7.1",
@@ -20604,7 +20968,7 @@
       "version": "1.2.3"
     },
     {
-      "bom-ref": "pkg:npm/prosemirror-model@1.25.7",
+      "bom-ref": "pkg:npm/prosemirror-model@1.25.8",
       "description": "ProseMirror's document model",
       "evidence": {
         "identity": [
@@ -20763,10 +21127,10 @@
           "value": "node_modules/prosemirror-model/package.json"
         }
       ],
-      "purl": "pkg:npm/prosemirror-model@1.25.7",
+      "purl": "pkg:npm/prosemirror-model@1.25.8",
       "scope": "required",
       "type": "library",
-      "version": "1.25.7"
+      "version": "1.25.8"
     },
     {
       "bom-ref": "pkg:npm/prosemirror-state@1.4.4",
@@ -21112,7 +21476,7 @@
       "version": "1.12.0"
     },
     {
-      "bom-ref": "pkg:npm/prosemirror-view@1.41.8",
+      "bom-ref": "pkg:npm/prosemirror-view@1.41.9",
       "description": "ProseMirror's view component",
       "evidence": {
         "identity": [
@@ -21256,10 +21620,10 @@
           "value": "node_modules/prosemirror-view/package.json"
         }
       ],
-      "purl": "pkg:npm/prosemirror-view@1.41.8",
+      "purl": "pkg:npm/prosemirror-view@1.41.9",
       "scope": "required",
       "type": "library",
-      "version": "1.41.8"
+      "version": "1.41.9"
     },
     {
       "authors": [
@@ -22067,6 +22431,9 @@
             "location": "apps/web/src/components/stella-wordmark.tsx#1"
           },
           {
+            "location": "apps/web/src/components/table-skeleton-rows.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/theme-provider.tsx#1"
           },
           {
@@ -22188,6 +22555,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.dev_.autocomplete.tsx#1"
@@ -22551,6 +22921,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx#1"
@@ -23304,7 +23677,7 @@
             "location": "apps/web/src/features/case-law/components/decision-filters.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.contacts/index.tsx#19"
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#28"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx#14"
@@ -23670,7 +24043,7 @@
             "location": "apps/web/src/routes/_protected.contacts/-components/party-matter-row.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.contacts/index.tsx#20"
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#29"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#10"
@@ -23799,7 +24172,7 @@
             "location": "apps/web/src/routes/_protected.settings/organization.matter-numbering.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/organization.members.tsx#10"
+            "location": "apps/web/src/routes/_protected.settings/organization.members.tsx#15"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization.usage.tsx#5"
@@ -24060,7 +24433,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx#20"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices.tsx#12"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices.tsx#13"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/timesheets.tsx#11"
@@ -24105,7 +24478,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/-filters/team-filter-popover.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/index.tsx#7"
+            "location": "apps/web/src/routes/_protected.workspaces/index.tsx#14"
           },
           {
             "location": "apps/web/src/routes/auth/accept-invitation.$invitationId.tsx#10"
@@ -24558,7 +24931,7 @@
             "location": "apps/web/src/routes/_protected.contacts/-components/contact-communication-editor.tsx#7"
           },
           {
-            "location": "apps/web/src/routes/_protected.contacts/index.tsx#21"
+            "location": "apps/web/src/routes/_protected.contacts/index.tsx#30"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/tools.tsx#6"
@@ -24960,7 +25333,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/-filters/active-filter-chips.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/index.tsx#8"
+            "location": "apps/web/src/routes/_protected.workspaces/index.tsx#15"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-store.ts#3"
@@ -25050,7 +25423,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/-filters/active-filter-chips.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/index.tsx#8"
+            "location": "apps/web/src/routes/_protected.workspaces/index.tsx#15"
           }
         ]
       },

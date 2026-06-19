@@ -20518,7 +20518,7 @@
       "version": "0.12.16"
     },
     {
-      "bom-ref": "pkg:cargo/tauri@2.11.2",
+      "bom-ref": "pkg:cargo/tauri@2.11.3",
       "evidence": {
         "identity": [
           {
@@ -20539,7 +20539,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "437404997acf375d85f1177afa7e11bb971f274ed6a7b83a2a3e339015f4cc28"
+          "content": "c2616f96cb644bf2c5c456d9de4d5d5100e592d7424c74d8b55c5cb96e359e93"
         }
       ],
       "licenses": [
@@ -20561,12 +20561,12 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/tauri@2.11.2",
+      "purl": "pkg:cargo/tauri@2.11.3",
       "type": "library",
-      "version": "2.11.2"
+      "version": "2.11.3"
     },
     {
-      "bom-ref": "pkg:cargo/tauri-build@2.6.2",
+      "bom-ref": "pkg:cargo/tauri-build@2.6.3",
       "evidence": {
         "identity": [
           {
@@ -20587,7 +20587,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "4aa1f9055fc23919a54e4e125052bed16ed04aef0487086e758fe01a67b451c7"
+          "content": "bc9ce40b16101cb6ea63d3e221567affd1c3a9205f95d7bc574941a10636b632"
         }
       ],
       "licenses": [
@@ -20609,12 +20609,12 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/tauri-build@2.6.2",
+      "purl": "pkg:cargo/tauri-build@2.6.3",
       "type": "library",
-      "version": "2.6.2"
+      "version": "2.6.3"
     },
     {
-      "bom-ref": "pkg:cargo/tauri-codegen@2.6.2",
+      "bom-ref": "pkg:cargo/tauri-codegen@2.6.3",
       "evidence": {
         "identity": [
           {
@@ -20635,7 +20635,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "e4a0319528a025a38c4078e7dae2c446f4e63620ddb0659a643ede1cb38f90e9"
+          "content": "08279169ff42f8fc45a1dbc9dcae888893ba95288142e5880c59b93a26d2cfc5"
         }
       ],
       "licenses": [
@@ -20657,12 +20657,12 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/tauri-codegen@2.6.2",
+      "purl": "pkg:cargo/tauri-codegen@2.6.3",
       "type": "library",
-      "version": "2.6.2"
+      "version": "2.6.3"
     },
     {
-      "bom-ref": "pkg:cargo/tauri-macros@2.6.2",
+      "bom-ref": "pkg:cargo/tauri-macros@2.6.3",
       "evidence": {
         "identity": [
           {
@@ -20683,7 +20683,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "ae6cb4e3896c21d2f6da5b31251d2faea0153bba56ed0e970f918115dbee4924"
+          "content": "e8b394794f399a421811d06966343e7933fcae92d59f5180b9388d1174497a45"
         }
       ],
       "licenses": [
@@ -20705,9 +20705,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/tauri-macros@2.6.2",
+      "purl": "pkg:cargo/tauri-macros@2.6.3",
       "type": "library",
-      "version": "2.6.2"
+      "version": "2.6.3"
     },
     {
       "bom-ref": "pkg:cargo/tauri-plugin@2.6.2",
@@ -21142,7 +21142,7 @@
       "version": "2.10.1"
     },
     {
-      "bom-ref": "pkg:cargo/tauri-runtime@2.11.2",
+      "bom-ref": "pkg:cargo/tauri-runtime@2.11.3",
       "evidence": {
         "identity": [
           {
@@ -21163,7 +21163,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "48222d7116c8807eaa6fe2f372e023fae125084e61e6eca6d70b7961cdf129ef"
+          "content": "b0b4bc95aed361b0019067d189a1174a603d460d0f6c72606512d59fc9c12ec8"
         }
       ],
       "licenses": [
@@ -21185,12 +21185,12 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/tauri-runtime@2.11.2",
+      "purl": "pkg:cargo/tauri-runtime@2.11.3",
       "type": "library",
-      "version": "2.11.2"
+      "version": "2.11.3"
     },
     {
-      "bom-ref": "pkg:cargo/tauri-runtime-wry@2.11.2",
+      "bom-ref": "pkg:cargo/tauri-runtime-wry@2.11.3",
       "evidence": {
         "identity": [
           {
@@ -21211,7 +21211,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "b83849ee63ecb27a8e8d0fe51915ca215076914aca43f96db1179f0f415f6cd9"
+          "content": "fe41e015bf8fc4d6477ff4926a0ef769dc64ff34c7b0038b6f7cacae892acb5c"
         }
       ],
       "licenses": [
@@ -21233,12 +21233,12 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/tauri-runtime-wry@2.11.2",
+      "purl": "pkg:cargo/tauri-runtime-wry@2.11.3",
       "type": "library",
-      "version": "2.11.2"
+      "version": "2.11.3"
     },
     {
-      "bom-ref": "pkg:cargo/tauri-utils@2.9.2",
+      "bom-ref": "pkg:cargo/tauri-utils@2.9.3",
       "evidence": {
         "identity": [
           {
@@ -21259,7 +21259,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "092379df9a707631978e6c56b1bc2401d387f01e2d4a3c123360d167bbb9aa95"
+          "content": "3e176a18e67764923c4f1ce66f25ae4abe5f688384d5eb1a0fa6c77f3d90f887"
         }
       ],
       "licenses": [
@@ -21281,9 +21281,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/tauri-utils@2.9.2",
+      "purl": "pkg:cargo/tauri-utils@2.9.3",
       "type": "library",
-      "version": "2.9.2"
+      "version": "2.9.3"
     },
     {
       "bom-ref": "pkg:cargo/tauri-winres@0.3.6",
@@ -23103,7 +23103,7 @@
       "version": "0.3.23"
     },
     {
-      "bom-ref": "pkg:cargo/tray-icon@0.23.1",
+      "bom-ref": "pkg:cargo/tray-icon@0.24.1",
       "evidence": {
         "identity": [
           {
@@ -23124,7 +23124,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "15edbb0d80583e85ee8df283410038e17314df5cba30da2087a54a85216c0773"
+          "content": "65ba1e5f6b9ef9fd87e21b9c6f351554dbd717960089168fcfdef854686961dc"
         }
       ],
       "licenses": [
@@ -23146,9 +23146,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/tray-icon@0.23.1",
+      "purl": "pkg:cargo/tray-icon@0.24.1",
       "type": "library",
-      "version": "0.23.1"
+      "version": "0.24.1"
     },
     {
       "bom-ref": "pkg:cargo/tree_magic_mini@3.2.2",
@@ -25954,54 +25954,6 @@
       "version": "0.61.2"
     },
     {
-      "bom-ref": "pkg:cargo/windows-core@0.62.2",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "Cargo.lock",
-            "confidence": 0.6,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.6,
-                "technique": "manifest-analysis",
-                "value": "Cargo.lock"
-              }
-            ]
-          }
-        ]
-      },
-      "group": "",
-      "hashes": [
-        {
-          "alg": "SHA-256",
-          "content": "b8e83a14d34d0623b51dce9581199302a221863196a1dde71a7663a4c2be9deb"
-        }
-      ],
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0"
-          }
-        },
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "name": "windows-core",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "Cargo.lock"
-        }
-      ],
-      "purl": "pkg:cargo/windows-core@0.62.2",
-      "type": "library",
-      "version": "0.62.2"
-    },
-    {
       "bom-ref": "pkg:cargo/windows-future@0.2.1",
       "evidence": {
         "identity": [
@@ -26389,54 +26341,6 @@
       "version": "0.5.3"
     },
     {
-      "bom-ref": "pkg:cargo/windows-registry@0.6.1",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "Cargo.lock",
-            "confidence": 0.6,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.6,
-                "technique": "manifest-analysis",
-                "value": "Cargo.lock"
-              }
-            ]
-          }
-        ]
-      },
-      "group": "",
-      "hashes": [
-        {
-          "alg": "SHA-256",
-          "content": "02752bf7fbdcce7f2a27a742f798510f3e5ad88dbe84871e5168e2120c3d5720"
-        }
-      ],
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0"
-          }
-        },
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "name": "windows-registry",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "Cargo.lock"
-        }
-      ],
-      "purl": "pkg:cargo/windows-registry@0.6.1",
-      "type": "library",
-      "version": "0.6.1"
-    },
-    {
       "bom-ref": "pkg:cargo/windows-result@0.3.4",
       "evidence": {
         "identity": [
@@ -26485,54 +26389,6 @@
       "version": "0.3.4"
     },
     {
-      "bom-ref": "pkg:cargo/windows-result@0.4.1",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "Cargo.lock",
-            "confidence": 0.6,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.6,
-                "technique": "manifest-analysis",
-                "value": "Cargo.lock"
-              }
-            ]
-          }
-        ]
-      },
-      "group": "",
-      "hashes": [
-        {
-          "alg": "SHA-256",
-          "content": "7781fa89eaf60850ac3d2da7af8e5242a5ea78d1a11c49bf2910bb5a73853eb5"
-        }
-      ],
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0"
-          }
-        },
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "name": "windows-result",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "Cargo.lock"
-        }
-      ],
-      "purl": "pkg:cargo/windows-result@0.4.1",
-      "type": "library",
-      "version": "0.4.1"
-    },
-    {
       "bom-ref": "pkg:cargo/windows-strings@0.4.2",
       "evidence": {
         "identity": [
@@ -26579,54 +26435,6 @@
       "purl": "pkg:cargo/windows-strings@0.4.2",
       "type": "library",
       "version": "0.4.2"
-    },
-    {
-      "bom-ref": "pkg:cargo/windows-strings@0.5.1",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "Cargo.lock",
-            "confidence": 0.6,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.6,
-                "technique": "manifest-analysis",
-                "value": "Cargo.lock"
-              }
-            ]
-          }
-        ]
-      },
-      "group": "",
-      "hashes": [
-        {
-          "alg": "SHA-256",
-          "content": "7837d08f69c77cf6b07689544538e017c1bfcf57e34b4c0ff58e6c2cd3b37091"
-        }
-      ],
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0"
-          }
-        },
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "name": "windows-strings",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "Cargo.lock"
-        }
-      ],
-      "purl": "pkg:cargo/windows-strings@0.5.1",
-      "type": "library",
-      "version": "0.5.1"
     },
     {
       "bom-ref": "pkg:cargo/windows-sys@0.45.0",
@@ -30736,7 +30544,7 @@
         "pkg:cargo/libc@0.2.186",
         "pkg:cargo/option-ext@0.2.0",
         "pkg:cargo/redox_users@0.5.2",
-        "pkg:cargo/windows-sys@0.59.0"
+        "pkg:cargo/windows-sys@0.60.2"
       ],
       "ref": "pkg:cargo/dirs-sys@0.5.0"
     },
@@ -31422,7 +31230,7 @@
         "pkg:cargo/tokio@1.52.3",
         "pkg:cargo/tower-service@0.3.3",
         "pkg:cargo/tracing@0.1.44",
-        "pkg:cargo/windows-registry@0.6.1"
+        "pkg:cargo/windows-registry@0.5.3"
       ],
       "ref": "pkg:cargo/hyper-util@0.1.20"
     },
@@ -31434,7 +31242,7 @@
         "pkg:cargo/js-sys@0.3.99",
         "pkg:cargo/log@0.4.32",
         "pkg:cargo/wasm-bindgen@0.2.122",
-        "pkg:cargo/windows-core@0.62.2"
+        "pkg:cargo/windows-core@0.61.2"
       ],
       "ref": "pkg:cargo/iana-time-zone@0.1.65"
     },
@@ -31951,7 +31759,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/windows-sys@0.59.0"
+        "pkg:cargo/windows-sys@0.60.2"
       ],
       "ref": "pkg:cargo/nu-ansi-term@0.50.3"
     },
@@ -33067,7 +32875,7 @@
         "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/sha2@0.11.0",
         "pkg:cargo/sys-locale@0.3.2",
-        "pkg:cargo/tauri-build@2.6.2",
+        "pkg:cargo/tauri-build@2.6.3",
         "pkg:cargo/tauri-plugin-autostart@2.5.1",
         "pkg:cargo/tauri-plugin-clipboard-manager@2.3.2",
         "pkg:cargo/tauri-plugin-deep-link@2.4.9",
@@ -33076,9 +32884,8 @@
         "pkg:cargo/tauri-plugin-process@2.3.1",
         "pkg:cargo/tauri-plugin-single-instance@2.4.2",
         "pkg:cargo/tauri-plugin-updater@2.10.1",
-        "pkg:cargo/tauri@2.11.2",
+        "pkg:cargo/tauri@2.11.3",
         "pkg:cargo/tokio@1.52.3",
-        "pkg:cargo/tower-http@0.6.11",
         "pkg:cargo/tower@0.5.3",
         "pkg:cargo/tracing-subscriber@0.3.23",
         "pkg:cargo/tracing@0.1.44",
@@ -33265,21 +33072,21 @@
         "pkg:cargo/serde_repr@0.1.20",
         "pkg:cargo/serialize-to-javascript@0.1.2",
         "pkg:cargo/swift-rs@1.0.7",
-        "pkg:cargo/tauri-build@2.6.2",
-        "pkg:cargo/tauri-macros@2.6.2",
-        "pkg:cargo/tauri-runtime-wry@2.11.2",
-        "pkg:cargo/tauri-runtime@2.11.2",
-        "pkg:cargo/tauri-utils@2.9.2",
+        "pkg:cargo/tauri-build@2.6.3",
+        "pkg:cargo/tauri-macros@2.6.3",
+        "pkg:cargo/tauri-runtime-wry@2.11.3",
+        "pkg:cargo/tauri-runtime@2.11.3",
+        "pkg:cargo/tauri-utils@2.9.3",
         "pkg:cargo/thiserror@2.0.18",
         "pkg:cargo/tokio@1.52.3",
-        "pkg:cargo/tray-icon@0.23.1",
+        "pkg:cargo/tray-icon@0.24.1",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/webkit2gtk@2.0.2",
         "pkg:cargo/webview2-com@0.38.2",
         "pkg:cargo/window-vibrancy@0.6.0",
         "pkg:cargo/windows@0.61.3"
       ],
-      "ref": "pkg:cargo/tauri@2.11.2"
+      "ref": "pkg:cargo/tauri@2.11.3"
     },
     {
       "dependsOn": [
@@ -33293,11 +33100,11 @@
         "pkg:cargo/semver@1.0.28",
         "pkg:cargo/serde@1.0.228",
         "pkg:cargo/serde_json@1.0.150",
-        "pkg:cargo/tauri-utils@2.9.2",
+        "pkg:cargo/tauri-utils@2.9.3",
         "pkg:cargo/tauri-winres@0.3.6",
         "pkg:cargo/walkdir@2.5.0"
       ],
-      "ref": "pkg:cargo/tauri-build@2.6.2"
+      "ref": "pkg:cargo/tauri-build@2.6.3"
     },
     {
       "dependsOn": [
@@ -33314,14 +33121,14 @@
         "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/sha2@0.10.9",
         "pkg:cargo/syn@2.0.117",
-        "pkg:cargo/tauri-utils@2.9.2",
+        "pkg:cargo/tauri-utils@2.9.3",
         "pkg:cargo/thiserror@2.0.18",
         "pkg:cargo/time@0.3.47",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/uuid@1.23.3",
         "pkg:cargo/walkdir@2.5.0"
       ],
-      "ref": "pkg:cargo/tauri-codegen@2.6.2"
+      "ref": "pkg:cargo/tauri-codegen@2.6.3"
     },
     {
       "dependsOn": [
@@ -33329,10 +33136,10 @@
         "pkg:cargo/proc-macro2@1.0.106",
         "pkg:cargo/quote@1.0.45",
         "pkg:cargo/syn@2.0.117",
-        "pkg:cargo/tauri-codegen@2.6.2",
-        "pkg:cargo/tauri-utils@2.9.2"
+        "pkg:cargo/tauri-codegen@2.6.3",
+        "pkg:cargo/tauri-utils@2.9.3"
       ],
-      "ref": "pkg:cargo/tauri-macros@2.6.2"
+      "ref": "pkg:cargo/tauri-macros@2.6.3"
     },
     {
       "dependsOn": [
@@ -33342,7 +33149,7 @@
         "pkg:cargo/schemars@0.8.22",
         "pkg:cargo/serde@1.0.228",
         "pkg:cargo/serde_json@1.0.150",
-        "pkg:cargo/tauri-utils@2.9.2",
+        "pkg:cargo/tauri-utils@2.9.3",
         "pkg:cargo/walkdir@2.5.0"
       ],
       "ref": "pkg:cargo/tauri-plugin@2.6.2"
@@ -33353,7 +33160,7 @@
         "pkg:cargo/serde@1.0.228",
         "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/tauri-plugin@2.6.2",
-        "pkg:cargo/tauri@2.11.2",
+        "pkg:cargo/tauri@2.11.3",
         "pkg:cargo/thiserror@2.0.18"
       ],
       "ref": "pkg:cargo/tauri-plugin-autostart@2.5.1"
@@ -33365,7 +33172,7 @@
         "pkg:cargo/serde@1.0.228",
         "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/tauri-plugin@2.6.2",
-        "pkg:cargo/tauri@2.11.2",
+        "pkg:cargo/tauri@2.11.3",
         "pkg:cargo/thiserror@2.0.18"
       ],
       "ref": "pkg:cargo/tauri-plugin-clipboard-manager@2.3.2"
@@ -33378,8 +33185,8 @@
         "pkg:cargo/serde@1.0.228",
         "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/tauri-plugin@2.6.2",
-        "pkg:cargo/tauri-utils@2.9.2",
-        "pkg:cargo/tauri@2.11.2",
+        "pkg:cargo/tauri-utils@2.9.3",
+        "pkg:cargo/tauri@2.11.3",
         "pkg:cargo/thiserror@2.0.18",
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/url@2.5.8",
@@ -33397,7 +33204,7 @@
         "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/serde_repr@0.1.20",
         "pkg:cargo/tauri-plugin@2.6.2",
-        "pkg:cargo/tauri@2.11.2",
+        "pkg:cargo/tauri@2.11.3",
         "pkg:cargo/thiserror@2.0.18",
         "pkg:cargo/time@0.3.47",
         "pkg:cargo/url@2.5.8"
@@ -33415,7 +33222,7 @@
         "pkg:cargo/serde@1.0.228",
         "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/tauri-plugin@2.6.2",
-        "pkg:cargo/tauri@2.11.2",
+        "pkg:cargo/tauri@2.11.3",
         "pkg:cargo/thiserror@2.0.18",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/windows@0.61.3",
@@ -33426,7 +33233,7 @@
     {
       "dependsOn": [
         "pkg:cargo/tauri-plugin@2.6.2",
-        "pkg:cargo/tauri@2.11.2"
+        "pkg:cargo/tauri@2.11.3"
       ],
       "ref": "pkg:cargo/tauri-plugin-process@2.3.1"
     },
@@ -33435,7 +33242,7 @@
         "pkg:cargo/serde@1.0.228",
         "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/tauri-plugin-deep-link@2.4.9",
-        "pkg:cargo/tauri@2.11.2",
+        "pkg:cargo/tauri@2.11.3",
         "pkg:cargo/thiserror@2.0.18",
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/windows-sys@0.60.2",
@@ -33462,7 +33269,7 @@
         "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/tar@0.4.46",
         "pkg:cargo/tauri-plugin@2.6.2",
-        "pkg:cargo/tauri@2.11.2",
+        "pkg:cargo/tauri@2.11.3",
         "pkg:cargo/tempfile@3.27.0",
         "pkg:cargo/thiserror@2.0.18",
         "pkg:cargo/time@0.3.47",
@@ -33486,14 +33293,14 @@
         "pkg:cargo/raw-window-handle@0.6.2",
         "pkg:cargo/serde@1.0.228",
         "pkg:cargo/serde_json@1.0.150",
-        "pkg:cargo/tauri-utils@2.9.2",
+        "pkg:cargo/tauri-utils@2.9.3",
         "pkg:cargo/thiserror@2.0.18",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/webkit2gtk@2.0.2",
         "pkg:cargo/webview2-com@0.38.2",
         "pkg:cargo/windows@0.61.3"
       ],
-      "ref": "pkg:cargo/tauri-runtime@2.11.2"
+      "ref": "pkg:cargo/tauri-runtime@2.11.3"
     },
     {
       "dependsOn": [
@@ -33508,15 +33315,15 @@
         "pkg:cargo/raw-window-handle@0.6.2",
         "pkg:cargo/softbuffer@0.4.8",
         "pkg:cargo/tao@0.35.3",
-        "pkg:cargo/tauri-runtime@2.11.2",
-        "pkg:cargo/tauri-utils@2.9.2",
+        "pkg:cargo/tauri-runtime@2.11.3",
+        "pkg:cargo/tauri-utils@2.9.3",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/webkit2gtk@2.0.2",
         "pkg:cargo/webview2-com@0.38.2",
         "pkg:cargo/windows@0.61.3",
         "pkg:cargo/wry@0.55.1"
       ],
-      "ref": "pkg:cargo/tauri-runtime-wry@2.11.2"
+      "ref": "pkg:cargo/tauri-runtime-wry@2.11.3"
     },
     {
       "dependsOn": [
@@ -33551,7 +33358,7 @@
         "pkg:cargo/uuid@1.23.3",
         "pkg:cargo/walkdir@2.5.0"
       ],
-      "ref": "pkg:cargo/tauri-utils@2.9.2"
+      "ref": "pkg:cargo/tauri-utils@2.9.3"
     },
     {
       "dependsOn": [
@@ -33573,7 +33380,7 @@
     {
       "dependsOn": [
         "pkg:cargo/fastrand@2.4.1",
-        "pkg:cargo/getrandom@0.3.4",
+        "pkg:cargo/getrandom@0.4.2",
         "pkg:cargo/once_cell@1.21.4",
         "pkg:cargo/rustix@1.1.4",
         "pkg:cargo/windows-sys@0.52.0"
@@ -33840,7 +33647,7 @@
         "pkg:cargo/thiserror@2.0.18",
         "pkg:cargo/windows-sys@0.60.2"
       ],
-      "ref": "pkg:cargo/tray-icon@0.23.1"
+      "ref": "pkg:cargo/tray-icon@0.24.1"
     },
     {
       "dependsOn": [
@@ -34287,11 +34094,11 @@
       "dependsOn": [
         "pkg:cargo/windows-implement@0.60.2",
         "pkg:cargo/windows-interface@0.59.3",
-        "pkg:cargo/windows-link@0.2.1",
-        "pkg:cargo/windows-result@0.4.1",
-        "pkg:cargo/windows-strings@0.5.1"
+        "pkg:cargo/windows-link@0.1.3",
+        "pkg:cargo/windows-result@0.3.4",
+        "pkg:cargo/windows-strings@0.4.2"
       ],
-      "ref": "pkg:cargo/windows-core@0.62.2"
+      "ref": "pkg:cargo/windows-core@0.61.2"
     },
     {
       "dependsOn": [
@@ -34340,23 +34147,23 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/windows-link@0.2.1",
-        "pkg:cargo/windows-result@0.4.1",
-        "pkg:cargo/windows-strings@0.5.1"
+        "pkg:cargo/windows-link@0.1.3",
+        "pkg:cargo/windows-result@0.3.4",
+        "pkg:cargo/windows-strings@0.4.2"
       ],
-      "ref": "pkg:cargo/windows-registry@0.6.1"
+      "ref": "pkg:cargo/windows-registry@0.5.3"
     },
     {
       "dependsOn": [
-        "pkg:cargo/windows-link@0.2.1"
+        "pkg:cargo/windows-link@0.1.3"
       ],
-      "ref": "pkg:cargo/windows-result@0.4.1"
+      "ref": "pkg:cargo/windows-result@0.3.4"
     },
     {
       "dependsOn": [
-        "pkg:cargo/windows-link@0.2.1"
+        "pkg:cargo/windows-link@0.1.3"
       ],
-      "ref": "pkg:cargo/windows-strings@0.5.1"
+      "ref": "pkg:cargo/windows-strings@0.4.2"
     },
     {
       "dependsOn": [
