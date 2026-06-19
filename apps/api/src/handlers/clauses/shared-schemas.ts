@@ -11,7 +11,7 @@ const clauseParagraphSchema = t.Object({
   style: t.Optional(t.String()),
   level: t.Optional(t.Integer()),
   runs: t.Optional(t.Array(clauseRunSchema)),
-  listKind: t.Optional(t.UnionEnum(["bullet", "ordered"])),
+  listKind: t.Optional(t.Union([t.Literal("bullet"), t.Literal("ordered")])),
   listLevel: t.Optional(t.Integer()),
   isDirective: t.Optional(t.Boolean()),
   directiveKind: t.Optional(
