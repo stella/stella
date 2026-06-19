@@ -447,6 +447,8 @@ type Messages = {
       "prompts": "Skills";
       "recentChats": "Recent chats";
     };
+    "loadEarlierMessages": "Load earlier messages";
+    "loadingEarlierMessages": "Loading earlier messages…";
     "maxAttachmentsReached": "Maximum {count} files per message";
     "mention": {
       "category": {

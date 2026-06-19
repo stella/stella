@@ -169,6 +169,12 @@ export const LIMITS = {
   chatThreadListPageSizeDefault: 50,
   /** Max page size for the user's chat thread history. */
   chatThreadListPageSizeMax: 100,
+  /** Default page size for one chat thread's message history. The reader
+   *  loads the most recent page first and fetches older pages on demand
+   *  as the user scrolls up, so a long conversation never loads in full. */
+  chatMessagesPageSizeDefault: 50,
+  /** Max page size for one chat thread's message history. */
+  chatMessagesPageSizeMax: 100,
   /** Max characters of TypeScript source the chat run-stella-query tool accepts. */
   chatRunCodeMaxLength: 16_000,
   /** Default page size for readonly chat execute functions. */

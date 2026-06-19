@@ -444,6 +444,8 @@
       "prompts": "Habilidades",
       "recentChats": "Chats recientes"
     },
+    "loadEarlierMessages": "Cargar mensajes anteriores",
+    "loadingEarlierMessages": "Cargando mensajes anteriores…",
     "maxAttachmentsReached": "Máximo {count} archivos por mensaje",
     "mention": {
       "category": {

@@ -444,6 +444,8 @@
       "prompts": "Oskused",
       "recentChats": "Hiljutised vestlused"
     },
+    "loadEarlierMessages": "Laadi varasemad sõnumid",
+    "loadingEarlierMessages": "Varasemate sõnumite laadimine…",
     "maxAttachmentsReached": "Maksimaalselt {count} faili sõnumi kohta",
     "mention": {
       "category": {

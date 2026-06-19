@@ -229,6 +229,8 @@ type ChatThreadOptionsInput = QueryOptionsInput<
 
 type ThreadFetch = {
   messages: PersistedChatMessage[];
+  /** Cursor for the page before the oldest loaded message; null when none. */
+  olderCursor: string | null;
   contextMatterIds: string[];
   /** ISO timestamp of the most recent message, or null when empty. */
   lastActivityAt: string | null;
@@ -261,6 +263,7 @@ const fetchThreadMessages = async (
     if (allowMissingThread && APIError.is(error) && error.status === 404) {
       return {
         messages: [],
+        olderCursor: null,
         contextMatterIds: [],
         lastActivityAt: null,
         webSearchAvailable: false,
@@ -273,10 +276,44 @@ const fetchThreadMessages = async (
 
   return {
     messages: response.data.messages,
+    olderCursor: response.data.olderCursor,
     contextMatterIds: response.data.contextMatterIds,
     lastActivityAt: response.data.lastActivityAt,
     webSearchAvailable: response.data.webSearchAvailable,
     webSearchEnabled: response.data.webSearchEnabled,
+  };
+};
+
+type OlderMessagesFetch = {
+  messages: PersistedChatMessage[];
+  olderCursor: string | null;
+};
+
+export const fetchOlderMessages = async ({
+  key,
+  before,
+}: {
+  key: ChatThreadKey;
+  before: string;
+}): Promise<OlderMessagesFetch> => {
+  const response = await api.chat
+    .threads({ threadId: key.threadId })
+    .messages.older.get({
+      query: {
+        before,
+        ...(key.scope === "workspace"
+          ? { workspaceId: toSafeId<"workspace">(key.workspaceId) }
+          : {}),
+      },
+    });
+
+  if (response.error) {
+    throw toAPIError(response.error);
+  }
+
+  return {
+    messages: response.data.messages,
+    olderCursor: response.data.olderCursor,
   };
 };
 
@@ -638,6 +675,13 @@ const getAutoSendFingerprint = (
 export type ChatThreadFetched = {
   chat: Chat<PersistedChatMessage>;
   /**
+   * Cursor for the page of messages immediately older than the
+   * oldest message in `chat`. Null when the thread's full history
+   * is already loaded. Consumers seed local load-older state from
+   * this and replace it with each older-page response's cursor.
+   */
+  olderCursor: string | null;
+  /**
    * Persisted contextMatterIds for this thread, fresh from the
    * server. Consumers feed this into local picker state on mount;
    * subsequent changes flow back through `getContextMatterIds` on
@@ -695,6 +739,7 @@ export const chatThreadOptions = ({
     queryFn: async ({ client: queryClient }): Promise<ChatThreadFetched> => {
       const {
         messages,
+        olderCursor,
         contextMatterIds,
         lastActivityAt,
         webSearchAvailable,
@@ -739,6 +784,7 @@ export const chatThreadOptions = ({
 
       return {
         chat,
+        olderCursor,
         contextMatterIds,
         lastActivityAt,
         webSearchAvailable,

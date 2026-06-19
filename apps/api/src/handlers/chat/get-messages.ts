@@ -2,36 +2,13 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
-import { normalizeLegacyToolInputs } from "@/api/handlers/chat/legacy-tool-compat";
+import { loadChatMessagePage } from "@/api/handlers/chat/message-page";
 import { isWebSearchAvailable } from "@/api/handlers/chat/tools/chat-tools";
 import { getDisabledNativeToolSlugs } from "@/api/handlers/mcp-connectors/catalog-metadata";
-import { parseUserFileId } from "@/api/handlers/user-files/types";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-
-type ChatPart = ReturnType<typeof normalizeLegacyToolInputs>[number];
-
-/**
- * Attach the stored blur placeholder to image file parts so the client can
- * render a blur-up while the thumbnail loads. The thumbnail URL itself is
- * derived client-side from the user-file id, so only the DB-sourced
- * placeholder needs to travel with the message.
- */
-const attachPlaceholders = (
-  parts: ChatPart[],
-  placeholderById: Map<string, string>,
-): ChatPart[] =>
-  parts.map((part) => {
-    if (part.type !== "file") {
-      return part;
-    }
-    const fileId = parseUserFileId(part.url);
-    const placeholder = fileId ? placeholderById.get(fileId) : undefined;
-    return placeholder ? { ...part, placeholder } : part;
-  });
 
 const config = {
   permissions: { chat: ["create"] },
@@ -52,9 +29,8 @@ const getMessages = createSafeRootHandler(
     session,
     user,
   }) {
-    const accessibleWorkspaceIds = activeWorkspaceIds;
     const scope = yield* resolveChatScope({
-      accessibleWorkspaceIds,
+      accessibleWorkspaceIds: activeWorkspaceIds,
       workspaceId,
     });
 
@@ -69,17 +45,6 @@ const getMessages = createSafeRootHandler(
             workspaceId: true,
             contextMatterIds: true,
             webSearchEnabled: true,
-          },
-          with: {
-            messages: {
-              columns: {
-                id: true,
-                role: true,
-                content: true,
-                createdAt: true,
-              },
-              orderBy: { createdAt: "asc" },
-            },
           },
         }),
       ),
@@ -107,6 +72,7 @@ const getMessages = createSafeRootHandler(
       if (allowMissingThread) {
         return Result.ok({
           messages: [],
+          olderCursor: null,
           contextMatterIds: [],
           lastActivityAt: null,
           webSearchAvailable,
@@ -138,57 +104,19 @@ const getMessages = createSafeRootHandler(
       );
     }
 
-    // Most recent message timestamp; the client compares it against
-    // the recap staleness window to decide whether to ask for a recap.
-    const lastActivityAt =
-      thread.messages.at(-1)?.createdAt.toISOString() ?? null;
-
-    const referencedFileIds = new Set<SafeId<"userFile">>();
-    for (const row of thread.messages) {
-      for (const part of row.content.data) {
-        if (part.type !== "file") {
-          continue;
-        }
-        const fileId = parseUserFileId(part.url);
-        if (fileId) {
-          referencedFileIds.add(fileId);
-        }
-      }
-    }
-
-    const placeholderById = new Map<string, string>();
-    if (referencedFileIds.size > 0) {
-      const fileRows = yield* Result.await(
-        safeDb((tx) =>
-          // SAFETY: bounded by the `id IN (...)` set of file ids referenced by this thread's messages (userFiles.id is the PK).
-          // eslint-disable-next-line require-query-limit/require-query-limit
-          tx.query.userFiles.findMany({
-            where: {
-              id: { in: [...referencedFileIds] },
-              userId: { eq: user.id },
-            },
-            columns: { id: true, placeholder: true },
-          }),
-        ),
-      );
-      for (const fileRow of fileRows) {
-        if (fileRow.placeholder !== null) {
-          placeholderById.set(fileRow.id, fileRow.placeholder);
-        }
-      }
-    }
+    // The most-recent page is loaded first; older pages are fetched on
+    // demand from the sibling /messages/older endpoint as the user
+    // scrolls up. lastActivityAt is the newest message's timestamp,
+    // which the client compares against the recap staleness window.
+    const page = yield* Result.await(
+      loadChatMessagePage({ safeDb, threadId, userId: user.id }),
+    );
 
     return Result.ok({
-      messages: thread.messages.map((row) => ({
-        id: row.id,
-        role: row.role,
-        parts: attachPlaceholders(
-          normalizeLegacyToolInputs(row.content.data),
-          placeholderById,
-        ),
-      })),
+      messages: page.messages,
+      olderCursor: page.olderCursor,
       contextMatterIds: thread.contextMatterIds,
-      lastActivityAt,
+      lastActivityAt: page.lastActivityAt,
       webSearchAvailable,
       webSearchEnabled: thread.webSearchEnabled,
     });

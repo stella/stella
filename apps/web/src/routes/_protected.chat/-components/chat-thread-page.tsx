@@ -136,6 +136,9 @@ export const ChatThreadPage = ({
   const {
     error,
     messages,
+    loadOlder,
+    olderCursor,
+    isLoadingOlder,
     resendLatestMessage,
     sendMessage,
     queuedMessages,
@@ -160,6 +163,8 @@ export const ChatThreadPage = ({
     chat,
     conversationId: threadRef.threadId,
     getSendMode,
+    initialOlderCursor: data.olderCursor,
+    threadRef,
     workspaceId,
   });
 
@@ -366,8 +371,11 @@ export const ChatThreadPage = ({
                   <ChatThreadMessages
                     approvalPendingMessageId={approvalPendingMessageId}
                     error={error}
+                    hasOlderMessages={olderCursor !== null}
                     isGenerating={isGenerating}
+                    isLoadingOlder={isLoadingOlder}
                     messages={messages}
+                    onLoadOlder={loadOlder}
                     onAskUserEditAndRerun={handleAskUserEditAndRerun}
                     onAskUserSubmit={handleAskUserSubmit}
                     onCreateDocumentResolve={handleCreateDocumentResolve}

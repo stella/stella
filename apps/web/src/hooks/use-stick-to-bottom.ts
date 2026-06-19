@@ -28,6 +28,15 @@ export const useStickToBottomContext = (): StickToBottomContext => {
 };
 
 /**
+ * Like {@link useStickToBottomContext} but returns null instead of
+ * panicking when no provider is present. For components that may
+ * render both inside a `Conversation` and inside a bespoke scroll
+ * container (e.g. the file-chat overlay).
+ */
+export const useMaybeStickToBottomContext = (): StickToBottomContext | null =>
+  use(StickToBottomContext);
+
+/**
  * Checks whether the user is actively selecting text inside
  * the scroll container. Based on the original
  * `use-stick-to-bottom` library's `isSelecting()` logic:

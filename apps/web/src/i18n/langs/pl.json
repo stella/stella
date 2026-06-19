@@ -444,6 +444,8 @@
       "prompts": "Umiejętności",
       "recentChats": "Ostatnie chaty"
     },
+    "loadEarlierMessages": "Załaduj wcześniejsze wiadomości",
+    "loadingEarlierMessages": "Ładowanie wcześniejszych wiadomości…",
     "maxAttachmentsReached": "Maksymalnie {count} plików na wiadomość",
     "mention": {
       "category": {

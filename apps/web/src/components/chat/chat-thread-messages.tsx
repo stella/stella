@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import type { ComponentProps } from "react";
 
 import { isToolUIPart } from "ai";
@@ -7,6 +7,7 @@ import {
   ClockIcon,
   CopyIcon,
   FileTextIcon,
+  Loader2Icon,
   PaperclipIcon,
   RotateCcwIcon,
   XIcon,
@@ -42,6 +43,7 @@ import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link
 import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
+import { useMaybeStickToBottomContext } from "@/hooks/use-stick-to-bottom";
 import type { TranslationKey } from "@/i18n/types";
 import {
   getUserFileContentUrl,
@@ -52,8 +54,11 @@ import type { QueuedChatMessage } from "@/routes/_protected.chat/-hooks/use-chat
 export const ChatThreadMessages = ({
   approvalPendingMessageId,
   error,
+  hasOlderMessages = false,
   isGenerating = false,
+  isLoadingOlder = false,
   messages,
+  onLoadOlder,
   onResend,
   onSendWithoutAnonymization,
   onAskUserSubmit,
@@ -75,8 +80,85 @@ export const ChatThreadMessages = ({
   );
   const shouldShowToolCalls = showToolCallDetails ?? showToolCalls ?? false;
 
+  // Null when this list renders outside a `Conversation` (the file-chat
+  // overlay uses its own scroll container and never wires load-older).
+  const stick = useMaybeStickToBottomContext();
+  const scrollRef = stick?.scrollRef ?? null;
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const firstMessageId = messages.at(0)?.id ?? null;
+  const prevFirstMessageIdRef = useRef(firstMessageId);
+  // Scroll height captured the instant a load-older request fires,
+  // before the prepend grows the container above the viewport. Set
+  // back to null once consumed so only a genuine prepend (not a
+  // bottom-append/stream or a thread switch) restores scroll.
+  const anchorScrollHeightRef = useRef<number | null>(null);
+  const canLoadOlder = hasOlderMessages && onLoadOlder !== undefined;
+
+  const triggerLoadOlder = () => {
+    const container = scrollRef?.current;
+    if (container) {
+      anchorScrollHeightRef.current = container.scrollHeight;
+    }
+    void onLoadOlder?.();
+  };
+
+  // Drive the trigger from a top sentinel: when it scrolls into view
+  // (with a buffer) and an older page exists, fetch it. The observer
+  // re-arms each render so it tracks the latest `canLoadOlder` /
+  // `isLoadingOlder` without firing while a fetch is in flight.
+  useEffect(() => {
+    const root = scrollRef?.current;
+    const target = sentinelRef.current;
+    if (!root || !target || !canLoadOlder || isLoadingOlder) {
+      return undefined;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries.at(0);
+        if (!entry?.isIntersecting) {
+          return;
+        }
+        triggerLoadOlder();
+      },
+      { root, rootMargin: "240px 0px 0px 0px" },
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- triggerLoadOlder/scrollRef are stable; re-arm only on paging state changes
+  }, [canLoadOlder, isLoadingOlder]);
+
+  // Scroll anchoring: a prepend changes the first message id and grows
+  // scrollHeight above the viewport. Restore the previous offset before
+  // paint so the message under the user's eye stays put. Bottom-appends
+  // and streaming keep the first id, so they skip this and stick-to-
+  // bottom handles them; a thread switch changes the id too but has no
+  // captured anchor, so it is also skipped.
+  useLayoutEffect(() => {
+    const previousFirstId = prevFirstMessageIdRef.current;
+    prevFirstMessageIdRef.current = firstMessageId;
+    const previousScrollHeight = anchorScrollHeightRef.current;
+    anchorScrollHeightRef.current = null;
+    if (previousFirstId === firstMessageId || previousScrollHeight === null) {
+      return;
+    }
+    const container = scrollRef?.current;
+    if (!container) {
+      return;
+    }
+    container.scrollTop += container.scrollHeight - previousScrollHeight;
+  }, [firstMessageId, scrollRef]);
+
   return (
     <>
+      {canLoadOlder && (
+        <LoadOlderSentinel
+          isLoadingOlder={isLoadingOlder}
+          onLoadOlder={triggerLoadOlder}
+          ref={sentinelRef}
+        />
+      )}
       {messages.map((message, index) => (
         <Message
           className={cn(
@@ -169,6 +251,42 @@ export const ChatThreadMessages = ({
           />
         )}
     </>
+  );
+};
+
+type LoadOlderSentinelProps = {
+  isLoadingOlder: boolean;
+  onLoadOlder: () => void;
+  ref: React.Ref<HTMLDivElement>;
+};
+
+/**
+ * Top-of-list paging affordance. The `div` is the IntersectionObserver
+ * target that auto-loads when scrolled near; the button is the manual,
+ * keyboard-accessible fallback. While a page is in flight it shows a
+ * spinner instead so the observer (re-armed only when idle) cannot
+ * stack requests.
+ */
+const LoadOlderSentinel = ({
+  isLoadingOlder,
+  onLoadOlder,
+  ref,
+}: LoadOlderSentinelProps) => {
+  const t = useTranslations();
+
+  return (
+    <div className="flex justify-center py-1" ref={ref}>
+      {isLoadingOlder ? (
+        <span className="text-muted-foreground flex items-center gap-2 text-xs">
+          <Loader2Icon aria-hidden="true" className="size-3.5 animate-spin" />
+          {t("chat.loadingEarlierMessages")}
+        </span>
+      ) : (
+        <Button onClick={onLoadOlder} size="sm" variant="ghost">
+          {t("chat.loadEarlierMessages")}
+        </Button>
+      )}
+    </div>
   );
 };
 
@@ -589,8 +707,14 @@ const getRetryableAssistantMessageId = (
 type ChatThreadMessagesProps = {
   approvalPendingMessageId: string | null;
   error?: Error | undefined;
+  /** Whether an older page exists to load above the current top. */
+  hasOlderMessages?: boolean | undefined;
   isGenerating?: boolean | undefined;
+  /** True while an older page is being fetched + prepended. */
+  isLoadingOlder?: boolean | undefined;
   messages: PersistedChatMessage[];
+  /** Fetch + prepend the page immediately older than the current top. */
+  onLoadOlder?: (() => void | PromiseLike<void>) | undefined;
   onResend?:
     | ((options?: ChatResendOptions) => void | PromiseLike<void>)
     | undefined;

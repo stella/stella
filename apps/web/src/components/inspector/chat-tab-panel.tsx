@@ -192,6 +192,9 @@ export const ChatTabPanel = ({
   const {
     error,
     messages,
+    loadOlder,
+    olderCursor,
+    isLoadingOlder,
     resendLatestMessage,
     sendMessage,
     queuedMessages,
@@ -216,6 +219,8 @@ export const ChatTabPanel = ({
     chat,
     conversationId: threadRef.threadId,
     getSendMode,
+    initialOlderCursor: data.olderCursor,
+    threadRef,
     workspaceId: tabWorkspaceId,
   });
 
@@ -337,9 +342,12 @@ export const ChatTabPanel = ({
                 <ChatThreadMessages
                   approvalPendingMessageId={approvalPendingMessageId}
                   error={error}
+                  hasOlderMessages={olderCursor !== null}
                   isGenerating={isGenerating}
+                  isLoadingOlder={isLoadingOlder}
                   messages={messages}
                   onAskUserEditAndRerun={handleAskUserEditAndRerun}
+                  onLoadOlder={loadOlder}
                   onAskUserSubmit={handleAskUserSubmit}
                   onCreateDocumentResolve={handleCreateDocumentResolve}
                   onOpenCreatedDocument={handleOpenCreatedDocument}

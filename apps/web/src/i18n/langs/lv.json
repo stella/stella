@@ -444,6 +444,8 @@
       "prompts": "Prasmes",
       "recentChats": "Nesenie čati"
     },
+    "loadEarlierMessages": "Ielādēt vecākus ziņojumus",
+    "loadingEarlierMessages": "Ielādē vecākus ziņojumus…",
     "maxAttachmentsReached": "Maksimāli {count} faili vienā ziņojumā",
     "mention": {
       "category": {

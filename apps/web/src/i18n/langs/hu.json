@@ -444,6 +444,8 @@
       "prompts": "Skillek",
       "recentChats": "Legutóbbi chatek"
     },
+    "loadEarlierMessages": "Korábbi üzenetek betöltése",
+    "loadingEarlierMessages": "Korábbi üzenetek betöltése…",
     "maxAttachmentsReached": "Üzenetenként legfeljebb {count} fájl",
     "mention": {
       "category": {

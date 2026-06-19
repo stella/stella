@@ -12,6 +12,7 @@ import { useChat } from "@ai-sdk/react";
 import type { Chat } from "@ai-sdk/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { isToolUIPart } from "ai";
+import { Result } from "better-result";
 import { v7 as uuidv7 } from "uuid";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
@@ -36,10 +37,13 @@ import {
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import type { NeedsMatterMatter } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
+import { fetchOlderMessages } from "@/routes/_protected.chat/-queries";
 import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
 import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
@@ -54,6 +58,9 @@ type UseChatSessionOptions = {
   chat: Chat<PersistedChatMessage>;
   conversationId: string;
   getSendMode?: (() => ChatSendMode) | undefined;
+  /** Cursor for the first older page, seeded from the thread fetch. */
+  initialOlderCursor: string | null;
+  threadRef: ChatThreadRef;
   workspaceId?: string | undefined;
 };
 
@@ -119,6 +126,8 @@ export const useChatSession = ({
   chat,
   conversationId,
   getSendMode,
+  initialOlderCursor,
+  threadRef,
   workspaceId,
 }: UseChatSessionOptions) => {
   const organizationId = useAuthenticatedUser().activeOrganizationId;
@@ -143,6 +152,61 @@ export const useChatSession = ({
     addToolApprovalResponse,
     addToolOutput,
   } = useChat({ chat });
+
+  // Load-older paging. `olderCursor` seeds from the thread fetch and
+  // advances with each older page; re-seeds when the page navigates to
+  // a different thread inside the same mounted component. `isLoadingOlder`
+  // gates the IntersectionObserver trigger and shows the top spinner.
+  const [olderCursor, setOlderCursor] = useState(initialOlderCursor);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  const [seededOlderCursorForId, setSeededOlderCursorForId] =
+    useState(conversationId);
+  const isLoadingOlderRef = useRef(false);
+  const olderCursorRef = useRef(olderCursor);
+  if (seededOlderCursorForId !== conversationId) {
+    setSeededOlderCursorForId(conversationId);
+    setOlderCursor(initialOlderCursor);
+    setIsLoadingOlder(false);
+    olderCursorRef.current = initialOlderCursor;
+    isLoadingOlderRef.current = false;
+  }
+
+  const loadOlder = useCallback(async () => {
+    const before = olderCursorRef.current;
+    if (before === null || isLoadingOlderRef.current) {
+      return;
+    }
+    isLoadingOlderRef.current = true;
+    setIsLoadingOlder(true);
+
+    const result = await Result.tryPromise(
+      async () => await fetchOlderMessages({ key: threadRef, before }),
+    );
+
+    isLoadingOlderRef.current = false;
+    setIsLoadingOlder(false);
+
+    if (Result.isError(result)) {
+      // `fetchOlderMessages` already throws a converted APIError; capture
+      // it for telemetry and leave the cursor so the user can retry.
+      getAnalytics().captureError(result.error);
+      return;
+    }
+
+    const older = result.value;
+    setMessages((current) => {
+      const existingIds = new Set(current.map((message) => message.id));
+      const prepend = older.messages.filter(
+        (message) => !existingIds.has(message.id),
+      );
+      if (prepend.length === 0) {
+        return current;
+      }
+      return [...prepend, ...current];
+    });
+    olderCursorRef.current = older.olderCursor;
+    setOlderCursor(older.olderCursor);
+  }, [setMessages, threadRef]);
 
   // Mirror `isGenerating` (computed below) and the live queue into
   // refs so the stable `sendMessage` callback can branch on the
@@ -658,6 +722,9 @@ export const useChatSession = ({
   return {
     error,
     messages,
+    loadOlder,
+    olderCursor,
+    isLoadingOlder,
     resendLatestMessage,
     sendMessage,
     queuedMessages,
