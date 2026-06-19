@@ -46,3 +46,65 @@ export const markCacheBreakpoint = <P extends CacheablePart>(
     },
   };
 };
+
+/**
+ * In-band marker separating the cacheable system prefix from the
+ * dynamic, per-request system tail in the chat system prompt. The
+ * caching middleware in `ai-models.ts` consumes it before the payload
+ * reaches any provider: for Anthropic it splits the system into two
+ * consecutive system blocks (the stable prefix carries the cache
+ * breakpoint, the volatile tail — user name, current date, matter /
+ * active-file context — stays unmarked); for every other provider and
+ * whenever caching is off it is stripped, leaving a single system
+ * string byte-identical to a plain concatenation.
+ *
+ * Uses a private-use codepoint plus a literal tag so it cannot collide
+ * with real prompt text, and is visibly traceable if it ever leaks.
+ */
+export const SYSTEM_CACHE_BOUNDARY = "__stella_system_cache_boundary__";
+
+type SystemCacheParts = {
+  cacheablePrefix: string;
+  dynamicTail: string;
+};
+
+/**
+ * Join the cacheable system prefix and the dynamic system tail with
+ * the cache boundary marker. An empty tail yields just the prefix (no
+ * marker), matching the previous plain-concatenation behaviour.
+ */
+export const composeSystemWithCacheBoundary = ({
+  cacheablePrefix,
+  dynamicTail,
+}: SystemCacheParts): string => {
+  if (dynamicTail.length === 0) {
+    return cacheablePrefix;
+  }
+  const separator = dynamicTail.startsWith("\n") ? "" : "\n\n";
+  return `${cacheablePrefix}${SYSTEM_CACHE_BOUNDARY}${separator}${dynamicTail}`;
+};
+
+/**
+ * Split a composed system string back into its prefix and tail. When
+ * the marker is absent the whole string is the prefix and the tail is
+ * empty.
+ */
+export const splitSystemCacheBoundary = (system: string): SystemCacheParts => {
+  const index = system.indexOf(SYSTEM_CACHE_BOUNDARY);
+  if (index === -1) {
+    return { cacheablePrefix: system, dynamicTail: "" };
+  }
+  return {
+    cacheablePrefix: system.slice(0, index),
+    dynamicTail: system.slice(index + SYSTEM_CACHE_BOUNDARY.length),
+  };
+};
+
+/**
+ * Remove the boundary marker, yielding the plain concatenation
+ * (`cacheablePrefix` + separator + `dynamicTail`).
+ */
+export const stripSystemCacheBoundary = (system: string): string =>
+  system.includes(SYSTEM_CACHE_BOUNDARY)
+    ? system.split(SYSTEM_CACHE_BOUNDARY).join("")
+    : system;

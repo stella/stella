@@ -48,6 +48,7 @@ import { repairActiveDocxEditToolCall } from "@/api/handlers/chat/tools/active-d
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { hydrateFilePart } from "@/api/handlers/chat/upload-files";
+import { composeSystemWithCacheBoundary } from "@/api/lib/ai-caching";
 import { classifyAIError } from "@/api/lib/ai-error";
 import type { OrgAIConfig, ResolvedModelInfo } from "@/api/lib/ai-models";
 import {
@@ -420,10 +421,16 @@ export const streamChat = async ({
       },
     );
   }
-  const system =
-    preparedUntrusted.value.length > 0
-      ? `${systemSafe}${preparedUntrusted.value.startsWith("\n") ? "" : "\n\n"}${preparedUntrusted.value}`
-      : systemSafe;
+  // Keep the stable scaffold and the dynamic tail separable for the
+  // caching layer: the marker lets the middleware place the Anthropic
+  // cache breakpoint at the prefix boundary (so the volatile tail —
+  // user name, current date, matter / active-file context — does not
+  // invalidate the cached scaffold). Stripped to a plain concatenation
+  // for every other provider and when caching is off.
+  const system = composeSystemWithCacheBoundary({
+    cacheablePrefix: systemSafe,
+    dynamicTail: preparedUntrusted.value,
+  });
 
   const preparedMessages = await prepareMessagesForThirdParty({
     boundary: thirdPartyBoundary,
