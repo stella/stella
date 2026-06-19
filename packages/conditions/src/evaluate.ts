@@ -127,6 +127,12 @@ const compareValues = (
 
   const ls = normScalar(left);
   const rs = normScalar(right);
+  // A blank/absent value is not comparable: exclude it from ordered
+  // comparisons (so "date is before X" never matches rows with no date),
+  // mirroring the numeric branch's exclusion of non-numeric values.
+  if (ls === "") {
+    return false;
+  }
   if (op === "gt") {
     return ls > rs;
   }

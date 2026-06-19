@@ -238,10 +238,12 @@ describe("evaluator invariants (property-based)", () => {
   // complement properties above all pass on a uniformly wrong-but-boolean
   // result (e.g. gt/lt always false for dates), so this is what actually pins
   // gt/lt/gte/lte semantics — and what would have caught the ISO-date bug.
-  test("ordered comparisons are reflexive for any literal value", () => {
+  test("ordered comparisons are reflexive for any non-blank literal value", () => {
     fc.assert(
       fc.property(
-        fc.oneof(fc.string(), fc.integer(), fc.boolean()),
+        // Exclude the empty string: a blank value is the "not comparable"
+        // sentinel and is intentionally excluded from ordered comparisons.
+        fc.oneof(fc.string({ minLength: 1 }), fc.integer(), fc.boolean()),
         (value) => {
           const resolve = makeResolver({});
           const cmp = (op: "gt" | "lt" | "gte" | "lte"): ConditionNode => ({
@@ -254,6 +256,27 @@ describe("evaluator invariants (property-based)", () => {
           expect(evaluateCondition(cmp("lte"), resolve)).toBe(true);
           expect(evaluateCondition(cmp("gt"), resolve)).toBe(false);
           expect(evaluateCondition(cmp("lt"), resolve)).toBe(false);
+        },
+      ),
+    );
+  });
+
+  // Another absolute oracle: an absent value (resolves to undefined) is not
+  // comparable, so no ordered operator may match it against a real literal.
+  // The lexicographic fallback would otherwise rank "" before every date.
+  test("an absent value never satisfies an ordered comparison", () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom<"gt" | "lt" | "gte" | "lte">("gt", "lt", "gte", "lte"),
+        fc.oneof(fc.string({ minLength: 1 }), fc.integer()),
+        (op, literal) => {
+          const node: ConditionNode = {
+            type: "compare",
+            left: { type: "property", propertyId: "missing" },
+            op,
+            right: { type: "literal", value: literal },
+          };
+          expect(evaluateCondition(node, makeResolver({}))).toBe(false);
         },
       ),
     );

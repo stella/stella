@@ -353,7 +353,9 @@ const compareOpSql = (op: CompareNode["op"], expr: SQL, value: string): SQL => {
   if (NUMERIC_TEXT_RE.test(value.trim())) {
     return orderedSql(op, safeNumericExpr(expr), sql`${Number(value)}`);
   }
-  return orderedSql(op, expr, sql`${value}`);
+  // Exclude blank/absent values: '' would otherwise sort before every date and
+  // leak rows with no value into "is before/on or before" filters.
+  return sql`${expr} <> '' AND ${orderedSql(op, expr, sql`${value}`)}`;
 };
 
 const literalString = (operand: Operand): string | null =>
