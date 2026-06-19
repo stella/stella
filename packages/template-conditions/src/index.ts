@@ -54,14 +54,14 @@ type Token =
   | { type: "string"; raw: string };
 
 const TOKEN_RE =
-  /(?<token>"[^"\\]*(?:\\.[^"\\]*)*"|==|!=|>=|<=|>|<|!(?!=)|and\b|or\b|[()]|[\p{L}\p{N}_.]+)/gu;
+  /("(?:[^"\\]|\\.)*"|==|!=|>=|<=|>|<|!(?!=)|and\b|or\b|[()]|[\p{L}\p{N}_.]+)/gu;
 
 const STARTS_WITH_DIGIT_RE = /^\d/u;
 
 const tokenize = (expr: string): Token[] => {
   const tokens: Token[] = [];
   for (const m of expr.matchAll(TOKEN_RE)) {
-    const raw = m.groups?.["token"] ?? m[0];
+    const raw = m[1] ?? m[0];
     if (raw === "and") {
       tokens.push({ type: "and" });
     } else if (raw === "or") {
