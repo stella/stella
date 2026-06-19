@@ -60,35 +60,32 @@ describe("parseViewLayoutSafe", () => {
   });
 
   test("recovers a layout whose filters use a retired grammar by dropping them", () => {
-    // Legacy group/predicate filter AST the current schema no longer accepts.
+    // Legacy ViewFilterCondition grammar (field/op/value) that the current AST
+    // schema no longer accepts.
     const legacy = {
       version: 1,
       type: "table",
-      filters: [
-        {
-          type: "group",
-          combinator: "and",
-          children: [
-            {
-              type: "predicate",
-              operand: { type: "kind" },
-              op: "in",
-              value: [],
-            },
-          ],
-        },
-      ],
+      filters: [{ id: "f1", field: "kind", op: "in", value: ["document"] }],
       sorts: [],
       hiddenProperties: [],
       columnOrder: ["name"],
       columnPinning: ["name"],
     };
 
-    // The raw layout throws under strict parsing...
-    expect(() => parseViewLayout(legacy)).toThrow();
+    // The strict parser now drops the unparseable legacy filters itself rather
+    // than throwing, keeping the table view with an empty filter set...
+    expect(parseViewLayout(legacy)).toEqual({
+      version: 1,
+      type: "table",
+      filters: [],
+      sorts: [],
+      hiddenProperties: [],
+      columnOrder: ["name"],
+      columnPinning: ["name"],
+    });
 
-    // ...but the safe parser keeps the table view and its columns, only
-    // dropping the unparseable filters so one legacy view can't fail the list.
+    // ...and the safe parser returns the same recovered layout, so one legacy
+    // view can't fail the list.
     expect(parseViewLayoutSafe(legacy)).toEqual({
       version: 1,
       type: "table",
