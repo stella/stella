@@ -90,6 +90,7 @@ const loadPortfolioPages = async (
       enableXfa: true,
     });
     attachmentLoadingTasks.push(attLoadingTask);
+    // oxlint-disable-next-line no-await-in-loop -- ordered: page IDs use a running pageCounter that advances per attachment
     const attDoc = await attLoadingTask.promise;
 
     const firstPageId = getPageId(instanceId, pageCounter);

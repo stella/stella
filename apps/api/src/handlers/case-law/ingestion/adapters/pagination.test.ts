@@ -256,6 +256,7 @@ describe("createPagePaginatedFetch", () => {
 
     let cursor: string | null = null;
     for (let i = 0; i < 3; i++) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential paginated fetch (each page's cursor depends on the previous page)
       const result = await fetchAtPageSize20(cursor, {});
       const page = result.unwrap();
       cursor = page.nextCursor;

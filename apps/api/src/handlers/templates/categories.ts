@@ -212,15 +212,17 @@ export const updateTemplateCategoryHandler = async ({
       const currentId: SafeId<"templateCategory"> = checkId;
       const ancestor:
         | { parentId: SafeId<"templateCategory"> | null }
-        | undefined = await scopedDb((tx) =>
-        tx.query.templateCategories.findFirst({
-          where: {
-            id: { eq: currentId },
-            organizationId: { eq: organizationId },
-          },
-          columns: { parentId: true },
-        }),
-      );
+        | undefined =
+        // oxlint-disable-next-line no-await-in-loop -- ancestor-chain walk: each lookup depends on the prior row's parentId
+        await scopedDb((tx) =>
+          tx.query.templateCategories.findFirst({
+            where: {
+              id: { eq: currentId },
+              organizationId: { eq: organizationId },
+            },
+            columns: { parentId: true },
+          }),
+        );
       checkId = ancestor?.parentId ?? null;
     }
   }

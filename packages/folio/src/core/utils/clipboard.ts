@@ -344,13 +344,17 @@ async function parseClipboardItems(
   for (const item of items) {
     // Get HTML content
     if (item.types.includes(CLIPBOARD_TYPES.HTML)) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential reads from a shared clipboard item; html accumulates into one outer variable
       const blob = await item.getType(CLIPBOARD_TYPES.HTML);
+      // oxlint-disable-next-line no-await-in-loop -- sequential reads from a shared clipboard item; html accumulates into one outer variable
       html = await blob.text();
     }
 
     // Get plain text
     if (item.types.includes(CLIPBOARD_TYPES.PLAIN)) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential reads from a shared clipboard item; plainText accumulates into one outer variable
       const blob = await item.getType(CLIPBOARD_TYPES.PLAIN);
+      // oxlint-disable-next-line no-await-in-loop -- sequential reads from a shared clipboard item; plainText accumulates into one outer variable
       plainText = await blob.text();
     }
   }

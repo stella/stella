@@ -71,6 +71,7 @@ const backfillEntityFields = async (): Promise<number> => {
   let enqueued = 0;
 
   for (;;) {
+    // oxlint-disable-next-line no-await-in-loop -- sequential keyset pagination: next page cursor depends on this batch
     const batch = await rootDb.execute<EntityFieldRow>(sql`
       SELECT
         f.id AS field_id,
@@ -104,6 +105,7 @@ const backfillEntityFields = async (): Promise<number> => {
         organizationId: row.organization_id,
         workspaceId: row.workspace_id,
       });
+      // oxlint-disable-next-line no-await-in-loop -- enqueue one job per row; jobId dedupe relies on processing rows in order
       await enqueueImageThumbnailOrMarkFailed({
         encrypted: row.encrypted,
         entityId: brandPersistedEntityId(row.entity_id),
@@ -132,6 +134,7 @@ const backfillChatFiles = async (): Promise<number> => {
   let generated = 0;
 
   for (;;) {
+    // oxlint-disable-next-line no-await-in-loop -- sequential keyset pagination: next page cursor depends on this batch
     const rows = await rootDb
       .select({
         id: userFiles.id,
@@ -155,6 +158,7 @@ const backfillChatFiles = async (): Promise<number> => {
     }
 
     for (const row of rows) {
+      // oxlint-disable-next-line no-await-in-loop -- bounded memory: read one source image from S3 at a time per row
       const source = await Result.tryPromise({
         try: async () => await getS3().file(row.s3Key).bytes(),
         catch: (cause) => cause,
@@ -164,6 +168,7 @@ const backfillChatFiles = async (): Promise<number> => {
         continue;
       }
 
+      // oxlint-disable-next-line no-await-in-loop -- bounded memory: resize one source image at a time per row
       const thumbnail = await generateImageThumbnail(source.value);
       if (Result.isError(thumbnail)) {
         console.warn(`  chat: skip ${row.id} (generate failed)`);
@@ -176,7 +181,9 @@ const backfillChatFiles = async (): Promise<number> => {
         mimeType: THUMBNAIL_MIME_TYPE,
         userId: row.userId,
       });
+      // oxlint-disable-next-line no-await-in-loop -- writes one thumbnail per row before patching the row; sequential keeps S3 write and DB update paired
       await getS3().write(thumbnailKey, thumbnail.value.webp);
+      // oxlint-disable-next-line no-await-in-loop -- compare-and-set row update depends on the just-written thumbnail object
       const updatedRows = await Result.tryPromise({
         try: async () =>
           await rootDb
@@ -189,10 +196,12 @@ const backfillChatFiles = async (): Promise<number> => {
         catch: (cause) => cause,
       });
       if (Result.isError(updatedRows)) {
+        // oxlint-disable-next-line no-await-in-loop -- best-effort S3 cleanup for this row before rethrowing
         await deleteThumbnailBestEffort(thumbnailKey);
         throw updatedRows.error;
       }
       if (updatedRows.value.length === 0) {
+        // oxlint-disable-next-line no-await-in-loop -- best-effort S3 cleanup for this row before continuing
         await deleteThumbnailBestEffort(thumbnailKey);
         continue;
       }

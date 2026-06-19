@@ -545,6 +545,7 @@ export const czRegionalAdapter: SourceAdapter = {
           }
 
           try {
+            // oxlint-disable-next-line no-await-in-loop -- sequential retry loop; each attempt awaits the previous attempt's outcome before retrying
             response = await fetch(url, {
               signal: signal
                 ? AbortSignal.any([
@@ -569,6 +570,7 @@ export const czRegionalAdapter: SourceAdapter = {
                   maxRetries: LIST_FETCH_RETRIES,
                   retryDelayMs: delayMs,
                 });
+                // oxlint-disable-next-line no-await-in-loop -- exponential backoff delay between sequential retry attempts
                 await Bun.sleep(delayMs);
                 continue;
               }
@@ -595,6 +597,7 @@ export const czRegionalAdapter: SourceAdapter = {
               retry: attempt + 1,
               maxRetries: LIST_FETCH_RETRIES,
             });
+            // oxlint-disable-next-line no-await-in-loop -- backoff delay between sequential server-error retry attempts
             await Bun.sleep(LIST_FETCH_RETRY_DELAY_MS);
           }
         }
@@ -685,8 +688,10 @@ export const czRegionalAdapter: SourceAdapter = {
 
         for (let i = 0; i < decisions.length; i += FINALDOC_CONCURRENCY) {
           if (i > 0) {
+            // oxlint-disable-next-line no-await-in-loop -- deliberate crawl delay between sequential enrichment batches against the court server
             await Bun.sleep(FINALDOC_BATCH_DELAY_MS);
           }
+          // oxlint-disable-next-line no-await-in-loop -- batches must run sequentially with delays between them to respect the court server; parallelism is bounded within each batch
           await Promise.all(
             decisions.slice(i, i + FINALDOC_CONCURRENCY).map(enrichDecision),
           );

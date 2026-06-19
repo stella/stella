@@ -1019,6 +1019,7 @@ describe("Selective save with headers/footers", () => {
     let found = false;
     for (const [filePath, file] of Object.entries(zip.files)) {
       if (/word\/(?:header|footer)\d*\.xml/u.test(filePath)) {
+        // oxlint-disable-next-line no-await-in-loop -- sequential test scan that breaks on the first matching entry
         const xml = await file.async("text");
         if (xml.includes("[HF_MODIFIED]")) {
           found = true;

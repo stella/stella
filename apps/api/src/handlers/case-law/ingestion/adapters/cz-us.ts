@@ -348,6 +348,7 @@ export const czUsAdapter: SourceAdapter = {
           // by ~5x without meaningful server load increase.
           const yearSuffix = toYearSuffix(state.year);
 
+          // oxlint-disable-next-line no-await-in-loop -- sequential probe batches; each batch advances the cursor based on the previous batch's results and consecutive-miss count
           const probeResults = await Promise.allSettled(
             Array.from({ length: PROBE_CONCURRENCY }, async (_, i) => {
               const num = state.number + i;
@@ -436,11 +437,13 @@ export const czUsAdapter: SourceAdapter = {
                     AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
                   ])
                 : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST);
+              // oxlint-disable-next-line no-await-in-loop -- sequential per-decision abstract fetch within the ordered result-processing loop
               const absResp = await fetch(`${ABSTRACT_URL}?sz=${szParam}`, {
                 headers: COMMON_HEADERS,
                 signal: absSignal,
               });
               if (absResp.ok) {
+                // oxlint-disable-next-line no-await-in-loop -- reads the body of the per-decision abstract fetch in this ordered loop
                 const absHtml = await absResp.text();
                 const { abstract, legalSentence } = extractAbstract(absHtml);
                 if (abstract) {
@@ -467,6 +470,7 @@ export const czUsAdapter: SourceAdapter = {
           if (!rateLimited) {
             state.number += PROBE_CONCURRENCY;
           } else {
+            // oxlint-disable-next-line no-await-in-loop -- rate-limit backoff between probe batches after a 429 from the court server
             await Bun.sleep(backoffMs(0, 2000));
           }
 
@@ -485,6 +489,7 @@ export const czUsAdapter: SourceAdapter = {
           }
 
           // Rate limit between batches
+          // oxlint-disable-next-line no-await-in-loop -- deliberate crawl delay between sequential probe batches against the court server
           await Bun.sleep(100);
         }
 

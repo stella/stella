@@ -620,6 +620,7 @@ export const runIngestionPipeline = async ({
       ? AbortSignal.any([signal, AbortSignal.timeout(pageTimeout)])
       : AbortSignal.timeout(pageTimeout);
     recentCursors.add(cursor);
+    // oxlint-disable-next-line no-await-in-loop -- sequential paginated crawl (each page's cursor depends on the previous page)
     const pageResult = await adapter.fetchPage(
       cursor,
       source.config ?? {},
@@ -651,6 +652,7 @@ export const runIngestionPipeline = async ({
     // unexpected exceptions.
     if (dbSlot) {
       try {
+        // oxlint-disable-next-line no-await-in-loop -- sequential per-page DB-slot acquisition bounds concurrent DB pressure
         await dbSlot.acquire(signal);
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
@@ -673,6 +675,7 @@ export const runIngestionPipeline = async ({
           break;
         }
         try {
+          // oxlint-disable-next-line no-await-in-loop -- sequential decision inserts: consecutive-failure halting and per-page counters depend on ordering
           const outcome = await processDecision(result, source.id, scopedDb);
 
           if (outcome.inserted) {
@@ -712,6 +715,7 @@ export const runIngestionPipeline = async ({
 
           // Persist failure for later analysis
           try {
+            // oxlint-disable-next-line no-await-in-loop -- failure logged inline within the sequential decision loop
             await logIngestionFailure(scopedDb, {
               sourceId: source.id,
               caseNumber: result.caseNumber,
@@ -787,6 +791,7 @@ export const runIngestionPipeline = async ({
     }
 
     if (adapter.minRequestIntervalMs > 0) {
+      // oxlint-disable-next-line no-await-in-loop -- polite crawl delay between page fetches
       await Bun.sleep(adapter.minRequestIntervalMs);
     }
   }

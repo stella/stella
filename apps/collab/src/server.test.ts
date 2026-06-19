@@ -41,6 +41,7 @@ const waitFor = async (
       return;
     }
 
+    // oxlint-disable-next-line no-await-in-loop -- polling delay between predicate checks until the condition is met
     await Bun.sleep(10);
   }
 

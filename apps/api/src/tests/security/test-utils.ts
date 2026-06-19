@@ -66,6 +66,7 @@ const createTestDb = async (): Promise<TestDatabase> => {
 
   const { sqlStatements } = await pushSchema(allSchema, pushSchemaDb);
   for (const statement of sqlStatements) {
+    // oxlint-disable-next-line no-await-in-loop -- ordered DDL statements run sequentially on one test DB connection
     await testDb.execute(sql.raw(statement));
   }
 

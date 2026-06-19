@@ -456,6 +456,7 @@ async function buildMediaMap(
     // with the original TIFF data — the round-trip survives even if the
     // in-browser preview is broken.
     if (isTiffMimeType(mimeType)) {
+      // oxlint-disable-next-line no-await-in-loop -- TIFF decode uses a shared Canvas; conversions must stay serialized to avoid contention
       const converted = await convertTiffToPngDataUrl(data);
       if (converted) {
         const mediaFile: MediaFile = {

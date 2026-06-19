@@ -8,14 +8,14 @@ const requiredFiles = [
   "dist/client/dark-mode-init.js",
 ] as const;
 
-const missingPaths: string[] = [];
-for (const path of requiredFiles) {
-  if (await Bun.file(new URL(path, WEB_ROOT_URL)).exists()) {
-    continue;
-  }
-
-  missingPaths.push(path);
-}
+const requiredFileExistence = await Promise.all(
+  requiredFiles.map(
+    async (path) => await Bun.file(new URL(path, WEB_ROOT_URL)).exists(),
+  ),
+);
+const missingPaths: string[] = requiredFiles.filter(
+  (_, index) => !requiredFileExistence[index],
+);
 
 const clientAssetGlob = new Bun.Glob("dist/client/assets/*");
 let hasClientAsset = false;

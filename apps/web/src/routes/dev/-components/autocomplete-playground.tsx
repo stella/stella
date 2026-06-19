@@ -152,6 +152,7 @@ const consumeStream = async (
   let buffer = "";
   let done = false;
   while (!done) {
+    // oxlint-disable-next-line no-await-in-loop -- streaming reader: each read advances the same ReadableStream and must complete before the next, so reads are inherently sequential
     const chunk = await reader.read();
     if (chunk.done) {
       break;

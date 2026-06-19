@@ -41,9 +41,11 @@ const collectNamedPlugins = async (
       continue;
     }
 
+    // oxlint-disable-next-line no-await-in-loop -- ordered: plugins are collected in declaration order into a shared array
     const resolved = await option;
 
     if (Array.isArray(resolved)) {
+      // oxlint-disable-next-line no-await-in-loop -- ordered: nested plugins are collected in declaration order into a shared array
       plugins.push(...(await collectNamedPlugins(resolved)));
       continue;
     }

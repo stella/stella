@@ -103,6 +103,7 @@ const updateAnonymizationBlacklist = createSafeRootHandler(
           );
 
           if (existing) {
+            // oxlint-disable-next-line no-await-in-loop -- sequential blacklist upserts inside one transaction
             await tx
               .update(anonymizationBlacklistEntries)
               .set({
@@ -126,6 +127,7 @@ const updateAnonymizationBlacklist = createSafeRootHandler(
             continue;
           }
 
+          // oxlint-disable-next-line no-await-in-loop -- sequential blacklist upserts inside one transaction
           await tx.insert(anonymizationBlacklistEntries).values({
             id: createSafeId<"anonymizationBlacklistEntry">(),
             organizationId: session.activeOrganizationId,

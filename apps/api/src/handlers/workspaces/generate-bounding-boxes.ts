@@ -57,6 +57,7 @@ const generateBoundingBoxes = createSafeHandler(
     const boxes: BoundingBox[] = [];
 
     for (const pageNumber of preparedData.pageNumbers) {
+      // oxlint-disable-next-line no-await-in-loop -- pages processed sequentially to bound concurrent AI calls and accumulate boxes in page order
       const pageBoxesResult = await generateFn({
         abortSignal: AbortSignal.timeout(60_000),
         justificationId,

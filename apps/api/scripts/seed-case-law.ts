@@ -108,6 +108,7 @@ const loadFixtures = async (): Promise<CaseLawFixture[]> => {
       continue;
     }
     const file = Bun.file(path.join(FIXTURES_DIR, entry));
+    // oxlint-disable-next-line no-await-in-loop -- bounded memory: read and parse one fixture file at a time
     const raw = v.parse(fixtureSchema, await file.json());
     // SAFETY: structural fields validated by fixtureSchema; deep JSON
     // (sections, document_ast, analysis) is checked into the repo
@@ -179,9 +180,11 @@ export async function seedCaseLaw() {
         columns: { id: true },
       });
 
+    // oxlint-disable-next-line no-await-in-loop -- per-fixture lookup decides whether to reuse or create the source
     const existingSource = await findSourceId();
     let sourceId = existingSource?.id;
     if (!sourceId) {
+      // oxlint-disable-next-line no-await-in-loop -- each fixture's source must exist before its decisions are inserted
       const inserted = await rootDb
         .insert(caseLawSources)
         .values({
@@ -199,6 +202,7 @@ export async function seedCaseLaw() {
       // it returns no rows and the actual source id is whatever
       // that writer set. Re-read so we don't FK-violate against a
       // deterministic id that does not match what's on disk.
+      // oxlint-disable-next-line no-await-in-loop -- conflict-recovery re-read when the insert raced and returned no rows
       sourceId = inserted.at(0)?.id ?? (await findSourceId())?.id;
       if (!sourceId) {
         panic(`Could not resolve source id for ${adapterKey}`);
@@ -211,6 +215,7 @@ export async function seedCaseLaw() {
       const fulltext =
         d.fulltext ?? d.sections?.map((s) => s.text).join("\n\n") ?? "";
 
+      // oxlint-disable-next-line no-await-in-loop -- FK dependency: each decision references the source resolved above
       const result = await rootDb
         .insert(caseLawDecisions)
         .values({
@@ -247,6 +252,7 @@ export async function seedCaseLaw() {
       // the actual row.
       let decisionId = result.at(0)?.id;
       if (!decisionId) {
+        // oxlint-disable-next-line no-await-in-loop -- conflict-recovery re-read for this decision's actual row id
         const existing = await rootDb
           .select({ id: caseLawDecisions.id })
           .from(caseLawDecisions)
@@ -266,6 +272,7 @@ export async function seedCaseLaw() {
         );
       }
 
+      // oxlint-disable-next-line no-await-in-loop -- depends on the decision id resolved earlier this iteration
       await indexDecision(decisionId, scopedDb);
 
       if (result.length > 0) {

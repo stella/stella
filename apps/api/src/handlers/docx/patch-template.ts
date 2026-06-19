@@ -51,6 +51,7 @@ const fillTemplateWithValues = async (
     if (!entry) {
       continue;
     }
+    // oxlint-disable-next-line no-await-in-loop -- mutates the shared zip in place; bounded memory while streaming docx parts
     const xml = await entry.async("string");
     const patched = patchXmlPart(xml, values);
     if (patched.changed) {

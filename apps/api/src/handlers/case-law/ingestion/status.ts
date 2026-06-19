@@ -56,11 +56,13 @@ export const getIngestionStatus = async (
     const sourceStatuses: SourceStatus[] = [];
 
     for (const source of sources) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential per-source aggregation reads on a single scoped connection
       const [totalRow] = await db
         .select({ total: count() })
         .from(caseLawDecisions)
         .where(sql`${caseLawDecisions.sourceId} = ${source.id}`);
 
+      // oxlint-disable-next-line no-await-in-loop -- sequential per-source aggregation reads on a single scoped connection
       const [hourRow] = await db
         .select({
           inserted: sql<number>`coalesce(sum(${caseLawIngestionEvents.inserted}), 0)`,
@@ -71,6 +73,7 @@ export const getIngestionStatus = async (
             AND ${caseLawIngestionEvents.finishedAt} >= ${oneHourAgo}`,
         );
 
+      // oxlint-disable-next-line no-await-in-loop -- sequential per-source aggregation reads on a single scoped connection
       const [dayRow] = await db
         .select({
           inserted: sql<number>`coalesce(sum(${caseLawIngestionEvents.inserted}), 0)`,
@@ -81,6 +84,7 @@ export const getIngestionStatus = async (
             AND ${caseLawIngestionEvents.finishedAt} >= ${oneDayAgo}`,
         );
 
+      // oxlint-disable-next-line no-await-in-loop -- sequential per-source aggregation reads on a single scoped connection
       const [failRow] = await db
         .select({ total: count() })
         .from(caseLawIngestionFailures)
@@ -89,6 +93,7 @@ export const getIngestionStatus = async (
             AND ${caseLawIngestionFailures.createdAt} >= ${oneDayAgo}`,
         );
 
+      // oxlint-disable-next-line no-await-in-loop -- sequential per-source aggregation reads on a single scoped connection
       const [lastEvent] = await db
         .select({
           status: caseLawIngestionEvents.status,
@@ -103,6 +108,7 @@ export const getIngestionStatus = async (
         .orderBy(desc(caseLawIngestionEvents.finishedAt))
         .limit(1);
 
+      // oxlint-disable-next-line no-await-in-loop -- sequential per-source aggregation reads on a single scoped connection
       const topFailures = await db
         .select({
           errorType: caseLawIngestionFailures.errorType,

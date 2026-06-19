@@ -260,24 +260,27 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
   const searchMentionItems = useCallback(async (query: string) => {
     const items: ChatMentionOption[] = [];
 
-    for (const { registration } of registrationsRef.current.values()) {
-      if (!registration.mentionSources) {
+    // Mention sources are independent; query them in parallel and append
+    // results in registration/source order (preserved by Promise.all).
+    const sources = Array.from(registrationsRef.current.values()).flatMap(
+      ({ registration }) => registration.mentionSources ?? [],
+    );
+    const results = await Promise.all(
+      sources.map(
+        async (source) =>
+          await Result.tryPromise(
+            async () => await source.searchItems?.(query),
+          ),
+      ),
+    );
+
+    for (const result of results) {
+      if (Result.isError(result)) {
+        getAnalytics().captureError(result.error);
         continue;
       }
-
-      for (const source of registration.mentionSources) {
-        const nextItemsResult = await Result.tryPromise(
-          async () => await source.searchItems?.(query),
-        );
-        if (Result.isError(nextItemsResult)) {
-          getAnalytics().captureError(nextItemsResult.error);
-          continue;
-        }
-
-        const nextItems = nextItemsResult.value;
-        if (nextItems !== undefined) {
-          items.push(...nextItems);
-        }
+      if (result.value !== undefined) {
+        items.push(...result.value);
       }
     }
 

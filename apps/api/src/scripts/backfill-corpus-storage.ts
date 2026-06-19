@@ -91,6 +91,7 @@ while (true) {
     ? and(isNull(caseLawDecisions.textS3Key), idFilter)
     : isNull(caseLawDecisions.textS3Key);
 
+  // oxlint-disable-next-line no-await-in-loop -- sequential keyset pagination: next page cursor (lastId) depends on this query
   const rows: BackfillRow[] = await ingestionDb((tx) =>
     tx
       .select({
@@ -112,6 +113,7 @@ while (true) {
   }
 
   for (let i = 0; i < rows.length; i += CONCURRENCY) {
+    // oxlint-disable-next-line no-await-in-loop -- bounded concurrency: drain one CONCURRENCY-sized chunk before starting the next
     await Promise.all(rows.slice(i, i + CONCURRENCY).map(backfillRow));
   }
 

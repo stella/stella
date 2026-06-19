@@ -157,9 +157,11 @@ const importHandler = async function* ({
 
         let categoryId: SafeId<"clauseCategory"> | null = null;
         if (item.categoryName) {
+          // oxlint-disable-next-line no-await-in-loop -- dedups via shared categoryByName map; must run sequentially to avoid duplicate category inserts
           categoryId = await findOrCreateCategory(tx, item.categoryName);
         }
 
+        // oxlint-disable-next-line no-await-in-loop -- sequential clause inserts in one transaction preserve insertion order
         await tx.insert(clauses).values({
           id: clauseId,
           organizationId,
@@ -174,6 +176,7 @@ const importHandler = async function* ({
           createdBy: userId,
         });
 
+        // oxlint-disable-next-line no-await-in-loop -- sequential version inserts in one transaction preserve insertion order
         await tx.insert(clauseVersions).values({
           id: versionId,
           organizationId,

@@ -172,6 +172,7 @@ export async function ensureSeedColleagueUsers({
   colleagueCount?: number;
 } = {}) {
   for (const colleague of getSeedColleagues(colleagueCount)) {
+    // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves insert order across colleague users
     await ensureUserExists(colleague);
   }
 }
@@ -186,6 +187,7 @@ export async function ensureSeedColleaguesInOrganization({
   await ensureSeedColleagueUsers({ colleagueCount });
 
   for (const colleague of getSeedColleagues(colleagueCount)) {
+    // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves FK dependencies (memberships need users to exist)
     await ensureMembershipExists({
       organizationId,
       userId: colleague.id,
@@ -239,6 +241,7 @@ export async function ensureTestUsers(organizationId: string = TEST_ORG.id) {
   await ensureSeedColleagueUsers();
 
   for (const colleague of COLLEAGUES) {
+    // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves FK dependencies (memberships need users to exist)
     await ensureMembershipExists({
       organizationId,
       userId: colleague.id,

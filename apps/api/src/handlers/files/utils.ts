@@ -156,6 +156,7 @@ export const deleteS3Keys = async (
   for (let i = 0; i < dedupedKeys.length; i += S3_DELETE_CONCURRENCY) {
     const chunk = dedupedKeys.slice(i, i + S3_DELETE_CONCURRENCY);
 
+    // oxlint-disable-next-line no-await-in-loop -- chunks run sequentially for bounded S3 concurrency and early return on the first failed chunk
     const result = await Result.tryPromise(
       async () =>
         await Promise.all(chunk.map(async (key) => await getS3().delete(key))),

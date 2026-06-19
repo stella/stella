@@ -186,6 +186,7 @@ export const backfillLegislationSearchIndex = async (
   let indexed = 0;
   for (let i = 0; i < rows.length; i += SEARCH_INDEX_CONCURRENCY) {
     const chunk = rows.slice(i, i + SEARCH_INDEX_CONCURRENCY);
+    // oxlint-disable-next-line no-await-in-loop -- bounded concurrency: each SEARCH_INDEX_CONCURRENCY chunk drains before the next so tsvector upserts don't overwhelm Postgres
     const results = await Promise.all(chunk.map(indexRow));
     for (const result of results) {
       indexed += result;

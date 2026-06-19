@@ -185,6 +185,7 @@ Instructions.`,
     ];
 
     for (const url of unsafeUrls) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential test assertions over a fixed input list
       const result = await fetchSkillPackageFromUrl(url);
       expect(Result.isError(result)).toBe(true);
     }

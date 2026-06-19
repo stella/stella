@@ -201,6 +201,7 @@ const runPool = async <T>(
       if (!task) {
         continue;
       }
+      // oxlint-disable-next-line no-await-in-loop -- bounded-concurrency worker draining a shared task queue; the pool runs in parallel
       results[taskIndex] = await task();
     }
   };

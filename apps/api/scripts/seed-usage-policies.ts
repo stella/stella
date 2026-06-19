@@ -39,6 +39,7 @@ const seed = async (): Promise<void> => {
     // Upsert by policyKey so edits to the config (display name, units,
     // or a newly created hostedPolicyRef) propagate to the existing row
     // instead of being skipped.
+    // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves upsert order across policies
     await rootDb
       .insert(usagePolicies)
       .values({

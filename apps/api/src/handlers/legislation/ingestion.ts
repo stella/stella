@@ -330,9 +330,11 @@ export const runLegislationIngestion = async ({
     if (signal.aborted) {
       break;
     }
+    // oxlint-disable-next-line no-await-in-loop -- cursor pagination: each page consumes the cursor returned by the prior page
     const { documents, nextCursor } = await adapter.fetchPage(cursor, signal);
     let corpusWriteFailures = 0;
     for (const doc of documents) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential ingestion: ordered counters and per-page cursor hold on corpus-write failure
       const result = await processLegislationDocument(doc, scopedDb);
       if (result.skipped) {
         skipped += 1;

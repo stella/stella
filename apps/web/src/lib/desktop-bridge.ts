@@ -137,10 +137,12 @@ const wakeDesktopAndReadBridgeHealth =
 
     const deadline = Date.now() + DESKTOP_BRIDGE_START_TIMEOUT_MS;
     while (Date.now() < deadline) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential poll backoff: must wait before re-checking the bridge
       await wait(
         Math.min(DESKTOP_BRIDGE_START_POLL_INTERVAL_MS, deadline - Date.now()),
       );
 
+      // oxlint-disable-next-line no-await-in-loop -- sequential health poll: each probe depends on the prior wait elapsing
       const health = await readBridgeHealth(1000);
       if (health) {
         return health;
@@ -245,6 +247,7 @@ const waitForDesktopEditHandoffOpened = async ({
     : Date.now() + 30_000;
 
   while (Date.now() < deadline) {
+    // oxlint-disable-next-line no-await-in-loop -- sequential status poll: deadline may extend per status response, so probes must be ordered
     const handoffStatus = await readDesktopEditHandoffStatus({
       handoffId,
       workspaceId,
@@ -263,6 +266,7 @@ const waitForDesktopEditHandoffOpened = async ({
       deadline = nextDeadline;
     }
 
+    // oxlint-disable-next-line no-await-in-loop -- sequential poll backoff: must wait between handoff status probes
     await wait(
       Math.max(
         0,

@@ -241,6 +241,7 @@ const extractHeaderFooterParagraphs = async (
     .toSorted();
 
   for (const path of entries) {
+    // oxlint-disable-next-line no-await-in-loop -- sequential to keep running paragraph index contiguous across parts
     const xml = await archive.readEntryString(path);
     if (xml === null) {
       continue;

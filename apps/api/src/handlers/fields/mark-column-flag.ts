@@ -148,6 +148,7 @@ const processColumnFlagBatch = async ({
     }
 
     for (const target of targets) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential lock acquisition in a deterministic order avoids deadlocks within the transaction
       await acquireCellLock({
         tx,
         entityVersionId: target.entityVersionId,

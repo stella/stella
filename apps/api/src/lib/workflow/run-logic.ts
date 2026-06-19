@@ -121,6 +121,7 @@ export const runWorkflowBatchGenerationWithRetry = async <TValue>({
   let attempt = 1;
 
   while (true) {
+    // oxlint-disable-next-line no-await-in-loop -- retry loop: each attempt must complete before deciding to retry
     const batchResult = await generate();
 
     if (!Result.isError(batchResult)) {
@@ -138,6 +139,7 @@ export const runWorkflowBatchGenerationWithRetry = async <TValue>({
 
     onRetryError(batchResult.error, attempt);
     throwIfAborted();
+    // oxlint-disable-next-line no-await-in-loop -- sequential backoff delay between retry attempts
     await sleep(WORKFLOW_INTEGRATION_ERROR_RETRY_DELAY_MS);
     throwIfAborted();
     attempt++;

@@ -352,6 +352,7 @@ const replacePlaceholders = async (
   let replaced = false;
 
   for (const path of xmlPaths) {
+    // oxlint-disable-next-line no-await-in-loop -- read-modify-write against the shared mutable JSZip archive
     const xml = await archive.readEntryString(path);
     if (!xml) {
       continue;
@@ -751,6 +752,7 @@ const parseFooterStamp = async (
   );
 
   for (const path of footerFiles) {
+    // oxlint-disable-next-line no-await-in-loop -- scans footers in order and returns on the first match
     const xml = await archive.readEntryString(path);
     if (!xml || !xml.includes(STAMP_BOOKMARK)) {
       continue;

@@ -115,6 +115,7 @@ export const generateBatchMock = async ({
       switch (content.type) {
         case "text": {
           const value = `${inputFieldValue} + ${faker.lorem.word()}`;
+          // oxlint-disable-next-line no-await-in-loop -- mock emits partial answers sequentially to mirror streaming order
           await onPartialAnswer?.({ propertyId: property.id, answer: value });
           aiResults.push({
             fieldId,
@@ -131,6 +132,7 @@ export const generateBatchMock = async ({
         case "single-select": {
           const possibleValues = content.options.map((option) => option.value);
           const value = faker.helpers.arrayElement(possibleValues);
+          // oxlint-disable-next-line no-await-in-loop -- mock emits partial answers sequentially to mirror streaming order
           await onPartialAnswer?.({ propertyId: property.id, answer: value });
           aiResults.push({
             fieldId,
@@ -150,6 +152,7 @@ export const generateBatchMock = async ({
             min: 1,
             max: possibleValues.length,
           });
+          // oxlint-disable-next-line no-await-in-loop -- mock emits partial answers sequentially to mirror streaming order
           await onPartialAnswer?.({
             propertyId: property.id,
             answer: value.join(", "),
@@ -170,6 +173,7 @@ export const generateBatchMock = async ({
         case "date": {
           const value =
             faker.date.past().toISOString().split("T")[0] ?? "1970-01-01";
+          // oxlint-disable-next-line no-await-in-loop -- mock emits partial answers sequentially to mirror streaming order
           await onPartialAnswer?.({ propertyId: property.id, answer: value });
           aiResults.push({
             fieldId,
@@ -187,6 +191,7 @@ export const generateBatchMock = async ({
           const currencies = ["USD", "EUR", "CZK", null];
           const value = faker.number.int({ min: 0, max: 1_000_000 });
           const currency = faker.helpers.arrayElement(currencies);
+          // oxlint-disable-next-line no-await-in-loop -- mock emits partial answers sequentially to mirror streaming order
           await onPartialAnswer?.({
             propertyId: property.id,
             answer: currency ? `${value} ${currency}` : String(value),

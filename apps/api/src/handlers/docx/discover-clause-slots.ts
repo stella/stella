@@ -88,6 +88,7 @@ export const discoverClauseSlots = async (
       continue;
     }
 
+    // oxlint-disable-next-line no-await-in-loop -- bounded memory while streaming docx parts; accumulates into shared slots map
     const xml = await entry.async("string");
     scanParagraphs(slimdom.parseXmlDocument(xml), slots);
   }

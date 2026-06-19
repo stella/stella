@@ -75,6 +75,7 @@ export const runSchedulerOnce = async ({
     for (const [index, job] of jobs.entries()) {
       if (signal?.aborted) {
         const unstartedJobs = jobs.slice(index);
+        // oxlint-disable-next-line no-await-in-loop -- runs once before the break on abort; jobs are drained sequentially
         await releaseUnstartedJobs({
           jobs: unstartedJobs,
           runnerId,
@@ -83,6 +84,7 @@ export const runSchedulerOnce = async ({
         break;
       }
 
+      // oxlint-disable-next-line no-await-in-loop -- jobs run sequentially; lease renewal must precede this job's run
       const leasedJob = await renewJobLeaseBeforeStart({
         job,
         leaseMs,
@@ -94,6 +96,7 @@ export const runSchedulerOnce = async ({
         continue;
       }
 
+      // oxlint-disable-next-line no-await-in-loop -- scheduler runs leased jobs one at a time, in order, honouring the abort signal
       const status = await runJob({
         job: leasedJob,
         leaseMs,
@@ -234,6 +237,7 @@ const acquireDueJobs = async ({
   const acquired: SchedulerJob[] = [];
 
   for (const candidate of candidates) {
+    // oxlint-disable-next-line no-await-in-loop -- sequential conditional locking preserves due-order acquisition
     const [job] = await rootDb
       .update(schedulerJobs)
       .set({

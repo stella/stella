@@ -41,6 +41,7 @@ beforeAll(async () => {
   await db.execute(sql.raw("CREATE ROLE stella_ingestion NOLOGIN"));
   const { sqlStatements } = await pushSchema(allSchema, db);
   for (const statement of sqlStatements) {
+    // oxlint-disable-next-line no-await-in-loop -- DDL statements must apply in emitted order (deterministic test schema setup)
     await db.execute(sql.raw(statement));
   }
 

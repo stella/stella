@@ -899,6 +899,7 @@ export const czNssAdapter: SourceAdapter = {
 
           if (row.documentId) {
             // Fetch detail metadata first (needed by parser)
+            // oxlint-disable-next-line no-await-in-loop -- sequential per-row crawl against one court session; content fetch below depends on this detail
             detail = await fetchDetailMetadata(
               row.documentId,
               session,
@@ -913,6 +914,7 @@ export const czNssAdapter: SourceAdapter = {
           };
 
           if (row.documentId) {
+            // oxlint-disable-next-line no-await-in-loop -- sequential per-row crawl; consumes detail fetched above and shares one court session
             content = await fetchDecisionContent(
               row.documentId,
               row,

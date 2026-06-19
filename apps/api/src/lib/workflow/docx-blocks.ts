@@ -900,6 +900,7 @@ export const extractFolioBlockTextFromDocxBuffer = async (
   let blockIndex = 0;
 
   for (const path of sortedDocxPartPaths(zip, DOCX_HEADER_RE)) {
+    // oxlint-disable-next-line no-await-in-loop -- each part consumes the running blockIndex and shared `taken` set from the previous iteration
     const result = await extractBlocksFromZipEntry({
       comments,
       path,
@@ -923,6 +924,7 @@ export const extractFolioBlockTextFromDocxBuffer = async (
   blockIndex = bodyResult.nextBlockIndex;
 
   for (const path of sortedDocxPartPaths(zip, DOCX_FOOTER_RE)) {
+    // oxlint-disable-next-line no-await-in-loop -- each part consumes the running blockIndex and shared `taken` set from the previous iteration
     const result = await extractBlocksFromZipEntry({
       comments,
       path,

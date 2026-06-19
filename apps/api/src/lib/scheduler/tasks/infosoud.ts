@@ -27,6 +27,7 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
   let total = 0;
 
   while (!signal.aborted) {
+    // oxlint-disable-next-line no-await-in-loop -- sequential sweep: each batch is processed before loading the next
     const trackedCases = await loadNextTrackedCaseBatch(syncStartedAt);
     if (trackedCases.length === 0) {
       break;
@@ -41,6 +42,7 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
       }
 
       try {
+        // oxlint-disable-next-line no-await-in-loop -- rate-limited external court lookups must run one at a time
         const lookupResult = await client.searchCaseWithHearings({
           courtCode: trackedCase.courtCode,
           signal,
@@ -57,6 +59,7 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
         }
 
         if (agendaItems.length > LIMITS.infoSoudAgendaImportItemsMax) {
+          // oxlint-disable-next-line no-await-in-loop -- sequential per-case sweep with abort checks and ordered counters
           await markTrackedCaseFailed({
             error: "InfoSoudAgendaImportLimit",
             trackedCaseId: trackedCase.id,
@@ -65,6 +68,7 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
           continue;
         }
 
+        // oxlint-disable-next-line no-await-in-loop -- per-case import transaction commits before the next case is processed
         const importResult = await rootDb.transaction(async (tx) => {
           const result = await importInfoSoudAgendaItems({
             actorUserId: trackedCase.createdBy,
@@ -86,6 +90,7 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
         });
 
         if (!importResult.ok) {
+          // oxlint-disable-next-line no-await-in-loop -- sequential per-case sweep with abort checks and ordered counters
           await markTrackedCaseFailed({
             error: "InfoSoudAgendaImportFailed",
             trackedCaseId: trackedCase.id,
@@ -101,6 +106,7 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
           break;
         }
 
+        // oxlint-disable-next-line no-await-in-loop -- sequential per-case sweep with abort checks and ordered counters
         await markTrackedCaseFailed({
           error: errorTag(error),
           trackedCaseId: trackedCase.id,

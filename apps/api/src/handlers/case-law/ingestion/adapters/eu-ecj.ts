@@ -372,6 +372,7 @@ export const euEcjAdapter: SourceAdapter = {
 
           // 3. Fetch fulltext in each language
           for (const lang of ECJ_LANGUAGES) {
+            // oxlint-disable-next-line no-await-in-loop -- polite sequential fulltext fetch per language against EUR-Lex
             const fulltext = await fetchFulltext(
               celex,
               lang,
@@ -412,6 +413,7 @@ export const euEcjAdapter: SourceAdapter = {
           // Rate-limit per decision (not per language) to
           // keep total sleep within the page timeout budget.
           if (!abortSignal.aborted) {
+            // oxlint-disable-next-line no-await-in-loop -- deliberate crawl delay between sequential per-decision fetches against EUR-Lex
             await Bun.sleep(500);
           }
         }

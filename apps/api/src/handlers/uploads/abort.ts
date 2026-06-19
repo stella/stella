@@ -141,6 +141,7 @@ const abortUpload = createSafeHandler(
       uploadId,
       workspaceId,
     })) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential S3 tmp-object cleanup after multipart abort
       await getS3()
         .delete(key)
         .catch((error: unknown) =>

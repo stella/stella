@@ -175,6 +175,7 @@ const parseZipSkillPackage = async (
       assertZipUncompressedLimit(totalUncompressedBytes + declaredSize);
     }
 
+    // oxlint-disable-next-line no-await-in-loop -- sequential unzip enforces a running cumulative-byte limit
     const bytes = await file.async("uint8array");
     totalUncompressedBytes += bytes.byteLength;
     assertZipUncompressedLimit(totalUncompressedBytes);
@@ -429,6 +430,7 @@ const fetchGithubSkillFiles = async (
       break;
     }
 
+    // oxlint-disable-next-line no-await-in-loop -- breadth-first GitHub traversal: each directory's contents enqueue the next
     const contents = await fetchGithubContents({ target, path: directory });
     for (const item of contents) {
       const relativePath = relativeGithubSkillPath({
@@ -477,6 +479,7 @@ const fetchGithubSkillFiles = async (
         assertGithubTotalFileBytes(totalFileBytes + item.size);
       }
 
+      // oxlint-disable-next-line no-await-in-loop -- sequential fetch enforces a running cumulative-byte limit across files
       const raw = await fetchSafeBytes(
         githubRawUrl({
           owner: target.owner,
@@ -815,6 +818,7 @@ export const resolveGithubRefAndPath = async ({
     const ref = parts.slice(0, refPartCount).join("/");
     if (
       !GITHUB_COMMIT_SHA_PATTERN.test(ref) &&
+      // oxlint-disable-next-line no-await-in-loop -- ordered ref-candidate probe: longest match wins, returns on first hit
       !(await refExists({ owner, ref, repo }))
     ) {
       continue;

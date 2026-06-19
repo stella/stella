@@ -411,6 +411,7 @@ describe("table export", () => {
       Object.keys(zip.files).some((path) => path.includes("externalLink")),
     ).toBe(false);
     for (const relFile of relFiles) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential test assertions over the archive's .rels entries
       const relXml = await zip.file(relFile)?.async("text");
       expect(relXml).not.toContain('TargetMode="External"');
       expect(relXml).not.toContain("hyperlink");
