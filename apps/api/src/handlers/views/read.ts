@@ -9,7 +9,7 @@ import type { AuditEvent } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { extractLangFromRequest } from "@/api/lib/locale";
 import { getDefaultViews } from "@/api/lib/views";
-import { parseViewLayout } from "@/api/lib/views-schema";
+import { parseViewLayoutSafe } from "@/api/lib/views-schema";
 
 const config = {
   permissions: { workspace: ["read"] },
@@ -23,7 +23,7 @@ const toViewResponse = (
     position: number;
     createdAt: Date;
   },
-  layout = parseViewLayout(view.layout),
+  layout = parseViewLayoutSafe(view.layout),
 ) => ({
   version: 1 as const,
   id: view.id,
@@ -87,7 +87,7 @@ const readViews = createSafeHandler(
                 old: null,
                 new: {
                   name: row.name,
-                  layoutType: parseViewLayout(row.layout).type,
+                  layoutType: parseViewLayoutSafe(row.layout).type,
                   position: row.position,
                 },
               },
@@ -132,7 +132,7 @@ const readViews = createSafeHandler(
 
     return Result.ok(
       views.map((view) => {
-        const layout = parseViewLayout(view.layout);
+        const layout = parseViewLayoutSafe(view.layout);
         cleanStalePropertyIds(layout, propertyIds);
         return toViewResponse(view, layout);
       }),

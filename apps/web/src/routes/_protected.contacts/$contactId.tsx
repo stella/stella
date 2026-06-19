@@ -13,6 +13,7 @@ import { Button } from "@stll/ui/components/button";
 import { DestructiveConfirmDialog } from "@stll/ui/components/destructive-confirm-dialog";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { ContactCommunicationEditor } from "@/routes/_protected.contacts/-components/contact-communication-editor";
@@ -35,13 +36,57 @@ import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/crea
 
 export const Route = createFileRoute("/_protected/contacts/$contactId")({
   component: ContactDetailPage,
-  pendingComponent: () => (
-    <div className="flex flex-1 flex-col gap-4 border-t p-4">
-      <Skeleton className="h-8 w-64" />
-      <Skeleton className="h-48 w-full" />
-    </div>
-  ),
+  pendingComponent: ContactDetailPending,
 });
+
+const SECTION_ROW_KEYS = ["a", "b", "c", "d", "e", "f"];
+
+const ContactSectionSkeleton = ({
+  rows,
+  className,
+}: {
+  rows: number;
+  className?: string;
+}) => (
+  <section className={cn("rounded-lg border p-4", className)}>
+    <Skeleton className="mb-3 h-4 w-28" />
+    <div className="space-y-2.5">
+      {SECTION_ROW_KEYS.slice(0, rows).map((key) => (
+        <div className="flex items-center justify-between gap-4" key={key}>
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-4 w-32" />
+        </div>
+      ))}
+    </div>
+  </section>
+);
+
+// Mirrors the real detail layout: header (back/icon/title/badge/actions) above a
+// two-column grid of section cards, so the page does not jump when data lands.
+function ContactDetailPending() {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto border-t p-4">
+      <div className="flex items-center gap-3">
+        <Skeleton className="size-7 rounded-md" />
+        <Skeleton className="size-5 rounded-full" />
+        <Skeleton className="h-6 w-48" />
+        <Skeleton className="h-5 w-16 rounded-md" />
+        <div className="ms-auto flex items-center gap-2">
+          <Skeleton className="h-8 w-28 rounded-md" />
+          <Skeleton className="h-8 w-24 rounded-md" />
+        </div>
+      </div>
+      <div className="grid gap-6 md:grid-cols-2">
+        <ContactSectionSkeleton rows={5} />
+        <ContactSectionSkeleton rows={4} />
+        <ContactSectionSkeleton rows={3} />
+        <ContactSectionSkeleton rows={3} />
+        <ContactSectionSkeleton className="md:col-span-2" rows={2} />
+        <ContactSectionSkeleton className="md:col-span-2" rows={3} />
+      </div>
+    </div>
+  );
+}
 
 const protectedRouteApi = getRouteApi("/_protected");
 

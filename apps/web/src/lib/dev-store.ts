@@ -11,6 +11,7 @@ type State = {
   showToolCallDetails: boolean;
   reactGrab: boolean;
   publicLawPreview: boolean;
+  simulateSlowLoad: boolean;
 };
 
 type Actions = {
@@ -20,6 +21,7 @@ type Actions = {
   setShowToolCallDetails: (value: boolean) => void;
   setReactGrab: (value: boolean) => void;
   setPublicLawPreview: (value: boolean) => void;
+  setSimulateSlowLoad: (value: boolean) => void;
 };
 
 const serverStorage: StateStorage = {
@@ -37,6 +39,7 @@ export const useDevStore = create<State & Actions>()(
       showToolCallDetails: false,
       reactGrab: false,
       publicLawPreview: false,
+      simulateSlowLoad: false,
 
       setTanstackDevtools: (tanstackDevtools) => {
         void set({ tanstackDevtools });
@@ -56,6 +59,9 @@ export const useDevStore = create<State & Actions>()(
       setPublicLawPreview: (publicLawPreview) => {
         void set({ publicLawPreview });
       },
+      setSimulateSlowLoad: (simulateSlowLoad) => {
+        void set({ simulateSlowLoad });
+      },
     }),
     {
       storage: createJSONStorage(() =>
@@ -65,3 +71,20 @@ export const useDevStore = create<State & Actions>()(
     },
   ),
 );
+
+/** Artificial per-request delay (ms) injected into every API fetch while
+ *  the "Simulate slow load" dev toggle is on, so loading screens stay
+ *  visible long enough to inspect and restyle. */
+export const SIMULATE_SLOW_LOAD_DELAY_MS = 3000;
+
+/** Current artificial API delay, read outside React for the fetch layer.
+ *  Returns 0 in production builds and during SSR so the delay only ever
+ *  applies to a developer's own client session. */
+export const getSimulateSlowLoadDelayMs = (): number => {
+  if (!import.meta.env.DEV || typeof window === "undefined") {
+    return 0;
+  }
+  return useDevStore.getState().simulateSlowLoad
+    ? SIMULATE_SLOW_LOAD_DELAY_MS
+    : 0;
+};
