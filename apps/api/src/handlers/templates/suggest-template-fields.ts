@@ -67,7 +67,7 @@ If the document is bilingual or multi-column (e.g. a two-column table with paral
 // path would insert a {{marker}} nothing can highlight, discover, or fill.
 const sanitizeFieldPath = (raw: string): string | null => {
   const dotted = raw
-    .replaceAll(/\[(\d+)\]/gu, ".$1")
+    .replaceAll(/\[(?<index>\d+)\]/gu, ".$1")
     .replaceAll(/\.{2,}/gu, ".")
     .replace(/^\./u, "")
     .replace(/\.$/u, "");
