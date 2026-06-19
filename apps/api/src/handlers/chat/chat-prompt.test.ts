@@ -102,7 +102,10 @@ describe("chat prompt builders", () => {
 
     expect(prompt).toContain("User registered as: Jan Kubica");
     expect(prompt).toContain("User UI language (BCP-47): cs");
-    expect(prompt).toContain("Current date/time:");
+    // Day granularity only: a minute-precise timestamp would change
+    // the prompt on every request and defeat prompt caching.
+    expect(prompt).toContain("Current date:");
+    expect(prompt).not.toMatch(/Current date:[^\n]*\d{1,2}:\d{2}/u);
   });
 
   test("keeps the cache-stable prefix independent from volatile user context", () => {
@@ -126,7 +129,7 @@ describe("chat prompt builders", () => {
     expect(first.cacheStablePrefix).toBe(second.cacheStablePrefix);
     expect(first.cacheStablePrefix).toContain("legal-interpretation");
     expect(first.cacheStablePrefix).not.toContain("First User");
-    expect(first.cacheStablePrefix).not.toContain("Current date/time");
+    expect(first.cacheStablePrefix).not.toContain("Current date");
     expect(first.fullPrompt).not.toBe(second.fullPrompt);
     expect(buildChatPromptCacheKey(first.cacheStablePrefix)).toBe(
       buildChatPromptCacheKey(second.cacheStablePrefix),

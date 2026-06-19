@@ -9,6 +9,10 @@ import type {
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import {
+  composeSystemWithCacheBoundary,
+  SYSTEM_CACHE_BOUNDARY,
+} from "@/api/lib/ai-caching";
 import type { AIProvider, ModelRole, OrgAIConfig } from "@/api/lib/ai-models";
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 
@@ -27,6 +31,7 @@ const {
   FALLBACK_FROM_SERVICE_TIER_PROVIDER_METADATA_KEY,
   SERVICE_TIER_PROVIDER_METADATA_KEY,
   STELLA_PROVIDER_METADATA_KEY,
+  computeCachingParams,
   createServiceTierMiddleware,
   defaultsForRole,
   getModelForRole,
@@ -992,5 +997,170 @@ describe("defaultsForRole", () => {
       const settings = settingsForRole(role, "openai");
       expect(settings.providerOptions).toBeUndefined();
     }
+  });
+});
+
+describe("computeCachingParams system cache boundary", () => {
+  const enabled = resolveCaching({
+    promptCachingEnabled: true,
+    role: "chat",
+    scopeKey: "thread-1",
+  });
+  const disabled = resolveCaching({
+    promptCachingEnabled: false,
+    role: "chat",
+    scopeKey: "thread-1",
+  });
+  const composed = composeSystemWithCacheBoundary({
+    cacheablePrefix: "STABLE_SCAFFOLD",
+    dynamicTail: "VOLATILE_TAIL",
+  });
+  const paramsWithSystem = (system: string): LanguageModelV3CallOptions => ({
+    prompt: [
+      { role: "system", content: system },
+      { role: "user", content: [{ type: "text", text: "hi" }] },
+    ],
+  });
+  const systemMessages = (params: LanguageModelV3CallOptions) =>
+    params.prompt.filter((message) => message.role === "system");
+
+  test("anthropic splits the system at the boundary, marking only the prefix", () => {
+    const result = computeCachingParams(
+      paramsWithSystem(composed),
+      "anthropic",
+      enabled,
+      "claude-sonnet-4-6",
+    );
+    const systems = systemMessages(result);
+
+    expect(systems).toHaveLength(2);
+    expect(systems[0]?.content).toBe("STABLE_SCAFFOLD");
+    expect(
+      systems[0]?.providerOptions?.["anthropic"]?.["cacheControl"],
+    ).toEqual({ type: "ephemeral" });
+    expect(systems[1]?.content).toBe("\n\nVOLATILE_TAIL");
+    expect(
+      systems[1]?.providerOptions?.["anthropic"]?.["cacheControl"],
+    ).toBeUndefined();
+    for (const message of systems) {
+      expect(message.content).not.toContain(SYSTEM_CACHE_BOUNDARY);
+    }
+  });
+
+  test("anthropic without a boundary marks the single system block (back-compat)", () => {
+    const result = computeCachingParams(
+      paramsWithSystem("PLAIN_SYSTEM"),
+      "anthropic",
+      enabled,
+      "claude-sonnet-4-6",
+    );
+    const systems = systemMessages(result);
+
+    expect(systems).toHaveLength(1);
+    expect(systems[0]?.content).toBe("PLAIN_SYSTEM");
+    expect(
+      systems[0]?.providerOptions?.["anthropic"]?.["cacheControl"],
+    ).toEqual({ type: "ephemeral" });
+  });
+
+  test("non-anthropic providers strip the boundary to one clean block", () => {
+    const result = computeCachingParams(
+      paramsWithSystem(composed),
+      "openai",
+      enabled,
+      "gpt-5.4",
+    );
+    const systems = systemMessages(result);
+
+    expect(systems).toHaveLength(1);
+    expect(systems[0]?.content).toBe("STABLE_SCAFFOLD\n\nVOLATILE_TAIL");
+    expect(systems[0]?.content).not.toContain(SYSTEM_CACHE_BOUNDARY);
+    expect(
+      systems[0]?.providerOptions?.["anthropic"]?.["cacheControl"],
+    ).toBeUndefined();
+    expect(result.providerOptions?.["openai"]?.["promptCacheKey"]).toBeTypeOf(
+      "string",
+    );
+  });
+
+  test("caching off strips the boundary and all cache markers", () => {
+    const result = computeCachingParams(
+      paramsWithSystem(composed),
+      "anthropic",
+      disabled,
+      "claude-sonnet-4-6",
+    );
+    const systems = systemMessages(result);
+
+    expect(systems).toHaveLength(1);
+    expect(systems[0]?.content).toBe("STABLE_SCAFFOLD\n\nVOLATILE_TAIL");
+    expect(systems[0]?.content).not.toContain(SYSTEM_CACHE_BOUNDARY);
+    expect(
+      systems[0]?.providerOptions?.["anthropic"]?.["cacheControl"],
+    ).toBeUndefined();
+  });
+
+  test("openrouter splits the system for anthropic-family models", () => {
+    const result = computeCachingParams(
+      paramsWithSystem(composed),
+      "openrouter",
+      enabled,
+      "anthropic/claude-opus-4.8",
+    );
+    const systems = systemMessages(result);
+
+    expect(systems).toHaveLength(2);
+    expect(systems[0]?.content).toBe("STABLE_SCAFFOLD");
+    // OpenRouter's converter reads `providerOptions.anthropic.cacheControl`
+    // for its Anthropic upstreams, so the native marker carries through.
+    expect(
+      systems[0]?.providerOptions?.["anthropic"]?.["cacheControl"],
+    ).toEqual({ type: "ephemeral" });
+    expect(systems[1]?.content).toBe("\n\nVOLATILE_TAIL");
+    expect(
+      systems[1]?.providerOptions?.["anthropic"]?.["cacheControl"],
+    ).toBeUndefined();
+    for (const message of systems) {
+      expect(message.content).not.toContain(SYSTEM_CACHE_BOUNDARY);
+    }
+  });
+
+  test("openrouter strips the boundary for non-anthropic models", () => {
+    const result = computeCachingParams(
+      paramsWithSystem(composed),
+      "openrouter",
+      enabled,
+      "google/gemini-3.5-flash",
+    );
+    const systems = systemMessages(result);
+
+    expect(systems).toHaveLength(1);
+    expect(systems[0]?.content).toBe("STABLE_SCAFFOLD\n\nVOLATILE_TAIL");
+    expect(systems[0]?.content).not.toContain(SYSTEM_CACHE_BOUNDARY);
+    expect(
+      systems[0]?.providerOptions?.["anthropic"]?.["cacheControl"],
+    ).toBeUndefined();
+  });
+
+  test("a whitespace-only tail adds no boundary and yields one marked block", () => {
+    const whitespaceOnly = composeSystemWithCacheBoundary({
+      cacheablePrefix: "STABLE_SCAFFOLD",
+      dynamicTail: "\n\n",
+    });
+    expect(whitespaceOnly).toBe("STABLE_SCAFFOLD");
+
+    const result = computeCachingParams(
+      paramsWithSystem(whitespaceOnly),
+      "anthropic",
+      enabled,
+      "claude-sonnet-4-6",
+    );
+    const systems = systemMessages(result);
+
+    expect(systems).toHaveLength(1);
+    expect(systems[0]?.content).toBe("STABLE_SCAFFOLD");
+    expect(
+      systems[0]?.providerOptions?.["anthropic"]?.["cacheControl"],
+    ).toEqual({ type: "ephemeral" });
   });
 });

@@ -56,6 +56,10 @@ import type { AIProvider, BYOKProvider, ModelRole } from "@stll/ai-catalog";
 import type { UsageServiceTier } from "@/api/db/schema";
 import { env } from "@/api/env";
 import {
+  splitSystemCacheBoundary,
+  stripSystemCacheBoundary,
+} from "@/api/lib/ai-caching";
+import {
   AZURE_FOUNDRY_DEFAULT_API_VERSION,
   normalizeAzureFoundryBaseURL,
 } from "@/api/lib/azure-foundry";
@@ -810,20 +814,31 @@ const stripCacheMarkersFromPrompt = (
     };
   });
 
-const markAnthropicSystemEphemeral = (
+// Anthropic prompt caching, boundary-aware. A chat system prompt
+// carries `SYSTEM_CACHE_BOUNDARY` between its stable scaffold and its
+// volatile tail (user name, current date, matter / active-file
+// context). The provider groups consecutive system messages into the
+// top-level system array as one text block each, preserving per-block
+// cache_control — so emitting two system messages places the cache
+// breakpoint at the prefix boundary: the stable scaffold is cached
+// and the volatile tail no longer invalidates it. System prompts
+// without the marker (title generation, compaction, chat with no
+// dynamic tail) keep the previous single-block behaviour.
+const markAnthropicSystem = (
   prompt: CallOptions["prompt"],
 ): CallOptions["prompt"] =>
-  prompt.map((message) => {
-    if (message.role !== "system") {
-      return message;
+  prompt.flatMap((message): CallOptions["prompt"] => {
+    if (message.role !== "system" || typeof message.content !== "string") {
+      return [message];
     }
+    const { cacheablePrefix, dynamicTail } = splitSystemCacheBoundary(
+      message.content,
+    );
     const existingMessageOptions = message.providerOptions ?? {};
     const existingAnthropic = existingMessageOptions["anthropic"] ?? {};
-    if (existingAnthropic["cacheControl"] !== undefined) {
-      return message;
-    }
-    return {
+    const markedPrefix = {
       ...message,
+      content: cacheablePrefix,
       providerOptions: {
         ...existingMessageOptions,
         anthropic: {
@@ -832,17 +847,60 @@ const markAnthropicSystemEphemeral = (
         },
       },
     };
+    if (dynamicTail.length > 0) {
+      return [markedPrefix, { ...message, content: dynamicTail }];
+    }
+    if (existingAnthropic["cacheControl"] !== undefined) {
+      return [message];
+    }
+    return [markedPrefix];
   });
 
-const computeCachingParams = (
+// Drop the boundary marker, collapsing the system back to a single
+// clean block (used for every non-Anthropic provider and whenever
+// caching is off). Yields a string byte-identical to a plain
+// scaffold + tail concatenation.
+const stripSystemCacheBoundaryFromPrompt = (
+  prompt: CallOptions["prompt"],
+): CallOptions["prompt"] =>
+  prompt.map((message): PromptMessage => {
+    if (message.role !== "system" || typeof message.content !== "string") {
+      return message;
+    }
+    const stripped = stripSystemCacheBoundary(message.content);
+    return stripped === message.content
+      ? message
+      : { ...message, content: stripped };
+  });
+
+// Providers whose system `cache_control` breakpoint we place
+// explicitly. Native Anthropic always honours it. OpenRouter forwards
+// `providerOptions.anthropic.cacheControl` to its upstreams (its
+// message converter falls back to the anthropic provider key), so
+// Anthropic-routed OpenRouter models (`anthropic/...`) get the same
+// prefix-boundary breakpoint. Other OpenRouter upstreams and every
+// other provider fall through to the strip path.
+const usesAnthropicSystemCaching = (
+  provider: AIProvider,
+  modelId: string,
+): boolean =>
+  provider === "anthropic" ||
+  (provider === "openrouter" && modelId.startsWith("anthropic/"));
+
+export const computeCachingParams = (
   params: CallOptions,
   provider: AIProvider,
   decision: CachingDecision,
+  modelId: string,
 ): CallOptions => {
   // OFF: strip every cache marker the caller may have set so the
   // wire payload carries no caching state regardless of provider.
+  // The system cache boundary marker is internal plumbing, so it is
+  // removed here too.
   if (!decision.enabled) {
-    const strippedPrompt = stripCacheMarkersFromPrompt(params.prompt);
+    const strippedPrompt = stripCacheMarkersFromPrompt(
+      stripSystemCacheBoundaryFromPrompt(params.prompt),
+    );
     const strippedProviderOptions = stripCacheMarkersFromProviderOptions(
       params.providerOptions,
     );
@@ -858,13 +916,14 @@ const computeCachingParams = (
   // ON: preserve caller-placed breakpoints (e.g. `markCacheBreakpoint`
   // on the document content in workflow extraction) and only add
   // baseline markers — Anthropic system cacheControl if absent,
-  // OpenAI promptCacheKey derived from scopeKey.
-  let nextPrompt = params.prompt;
+  // OpenAI promptCacheKey derived from scopeKey. The boundary marker
+  // splits the system into a cached prefix + unmarked tail for
+  // Anthropic-family models (native or via OpenRouter); every other
+  // provider/model gets it stripped so no marker reaches the wire.
   let nextProviderOptions = params.providerOptions;
-
-  if (provider === "anthropic") {
-    nextPrompt = markAnthropicSystemEphemeral(params.prompt);
-  }
+  const nextPrompt = usesAnthropicSystemCaching(provider, modelId)
+    ? markAnthropicSystem(params.prompt)
+    : stripSystemCacheBoundaryFromPrompt(params.prompt);
 
   if (
     (provider === "openai" || provider === "azure_foundry") &&
@@ -892,10 +951,13 @@ const computeCachingParams = (
 const cachingMiddleware = (
   provider: AIProvider,
   decision: CachingDecision,
+  modelId: string,
 ): SingleMiddleware => ({
   specificationVersion: "v3",
   transformParams: async ({ params }) =>
-    await Promise.resolve(computeCachingParams(params, provider, decision)),
+    await Promise.resolve(
+      computeCachingParams(params, provider, decision, modelId),
+    ),
 });
 
 // -- Provider service tier routing ------------------------------
@@ -1453,7 +1515,7 @@ const withInstrumentation = (
     middlewares.push(fixedSamplingMiddleware);
   }
   middlewares.push(
-    cachingMiddleware(ctx.provider, ctx.decision),
+    cachingMiddleware(ctx.provider, ctx.decision, ctx.modelId),
     createServiceTierMiddleware(ctx.serviceTierTarget, ctx.serviceTier, {
       allowFallbackToStandard: ctx.allowServiceTierFallback,
     }),

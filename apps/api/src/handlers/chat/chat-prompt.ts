@@ -39,7 +39,7 @@ import { readonlyWorkspaceFunctionContracts } from "@/api/handlers/chat/tools/ex
 import { CHAT_REFERENCE_HREF_PREFIXES } from "@/api/handlers/chat/types";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { formatDateTimeInTimeZone } from "@/api/lib/date-format";
+import { formatDateInTimeZone } from "@/api/lib/date-format";
 import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -1242,7 +1242,7 @@ export const buildUserContextBlock = (userContext: UserContext | null) => {
 
   if (userContext.timezone) {
     lines.push(
-      `Current date/time: ${formatDateTimeInTimeZone({
+      `Current date: ${formatDateInTimeZone({
         timezone: userContext.timezone,
       })} (${userContext.timezone})`,
     );
