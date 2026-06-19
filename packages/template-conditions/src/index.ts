@@ -54,7 +54,7 @@ type Token =
   | { type: "string"; raw: string };
 
 const TOKEN_RE =
-  /(?<token>"(?:[^"\\]|\\.)*"|==|!=|>=|<=|>|<|!(?!=)|and\b|or\b|[()]|[\p{L}\p{N}_.]+)/gu;
+  /(?<token>"[^"\\]*(?:\\.[^"\\]*)*"|==|!=|>=|<=|>|<|!(?!=)|and\b|or\b|[()]|[\p{L}\p{N}_.]+)/gu;
 
 const STARTS_WITH_DIGIT_RE = /^\d/u;
 

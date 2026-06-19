@@ -116,12 +116,12 @@ const buildEcli = (
     /^(?<senate>[IVX]+|Pl)\.ÚS\s+(?<caseIndex>\d+)\/(?<shortYear>\d+)$/u.exec(
       caseNumber,
     );
-  const groups = match?.groups;
-  if (!groups?.["senate"] || !groups["caseIndex"] || !groups["shortYear"]) {
+  const { senate, caseIndex, shortYear } = match?.groups ?? {};
+  if (!senate || !caseIndex || !shortYear) {
     return undefined;
   }
-  const senate = SENATE_MAP[groups["senate"]] ?? groups["senate"].toUpperCase();
-  return `ECLI:CZ:US:${decisionYear}:${senate}.US.${groups["caseIndex"]}.${groups["shortYear"]}.${counter}`;
+  const mappedSenate = SENATE_MAP[senate] ?? senate.toUpperCase();
+  return `ECLI:CZ:US:${decisionYear}:${mappedSenate}.US.${caseIndex}.${shortYear}.${counter}`;
 };
 
 /** Extract case number and date from the registry sign label. */
@@ -132,14 +132,14 @@ const parseRegistrySign = (
   decisionDate?: string | undefined;
 } | null => {
   // Format: "Pl.ÚS 24/10 ze dne 22. 3. 2011" (visible label, no counter)
-  const groups = REGISTRY_SIGN_PATTERN.exec(raw)?.groups;
-  if (!groups?.["caseNumber"] || !groups["date"]) {
+  const { caseNumber, date } = REGISTRY_SIGN_PATTERN.exec(raw)?.groups ?? {};
+  if (!caseNumber || !date) {
     return null;
   }
 
   return {
-    caseNumber: groups["caseNumber"].trim(),
-    decisionDate: parseCeDate(groups["date"]),
+    caseNumber: caseNumber.trim(),
+    decisionDate: parseCeDate(date),
   };
 };
 
@@ -154,11 +154,11 @@ const extractEcliCounter = (html: string): number | undefined => {
   const hidden = /name="registrySignHidden"[^>]*value="(?<value>[^"]*)"/u.exec(
     html,
   );
-  if (!hidden?.groups?.["value"]) {
+  const hiddenValue = hidden?.groups?.["value"];
+  if (!hiddenValue) {
     return undefined;
   }
-  const counterMatch = /#(?<counter>\d+)/u.exec(hidden.groups["value"]);
-  const counter = counterMatch?.groups?.["counter"];
+  const counter = /#(?<counter>\d+)/u.exec(hiddenValue)?.groups?.["counter"];
   return counter ? Number.parseInt(counter, 10) : undefined;
 };
 

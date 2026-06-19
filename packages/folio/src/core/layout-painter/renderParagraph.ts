@@ -2019,13 +2019,13 @@ function paragraphBaseIsRtl(block: ParagraphBlock): boolean {
   if (!match) {
     return true;
   }
-  if (match.groups?.["rtlMark"] !== undefined) {
+  const { rtlMark, lrmMark, letter } = match.groups ?? {};
+  if (rtlMark !== undefined) {
     return true; // RLM or ALM
   }
-  if (match.groups?.["lrmMark"] !== undefined) {
+  if (lrmMark !== undefined) {
     return false; // LRM
   }
-  const letter = match.groups?.["letter"];
   return letter !== undefined && RTL_STRONG_LETTER.test(letter);
 }
 

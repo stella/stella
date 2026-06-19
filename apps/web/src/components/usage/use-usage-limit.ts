@@ -189,9 +189,10 @@ export const parseAmounts = (
   if (!match) {
     return { required: 0, available: 0 };
   }
+  const { required, available } = match.groups ?? {};
   return {
-    required: Number.parseInt(match.groups?.["required"] ?? "0", 10),
-    available: Number.parseInt(match.groups?.["available"] ?? "0", 10),
+    required: Number.parseInt(required ?? "0", 10),
+    available: Number.parseInt(available ?? "0", 10),
   };
 };
 

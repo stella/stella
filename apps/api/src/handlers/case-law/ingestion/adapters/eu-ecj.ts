@@ -231,9 +231,7 @@ export const celexToCaseNumber = (celex: string): string => {
     return celex;
   }
 
-  const yearStr = match.groups?.["year"];
-  const typeStr = match.groups?.["type"];
-  const numStr = match.groups?.["num"];
+  const { year: yearStr, type: typeStr, num: numStr } = match.groups ?? {};
   if (!yearStr || !typeStr || !numStr) {
     return celex;
   }

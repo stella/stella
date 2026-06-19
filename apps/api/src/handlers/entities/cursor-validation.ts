@@ -26,9 +26,7 @@ const daysInMonth = (year: number, month: number): number => {
 const parseDateCursorParts = (
   match: RegExpExecArray,
 ): DateCursorParts | null => {
-  const yearPart = match.groups?.["year"];
-  const monthPart = match.groups?.["month"];
-  const dayPart = match.groups?.["day"];
+  const { year: yearPart, month: monthPart, day: dayPart } = match.groups ?? {};
   if (!yearPart || !monthPart || !dayPart) {
     return null;
   }

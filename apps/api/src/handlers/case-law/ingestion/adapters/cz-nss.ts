@@ -109,11 +109,12 @@ const extractAntiforgeryToken = (html: string): string | undefined =>
 const extractCurrParams = (html: string): string | undefined => {
   // currParams is passed to the JavaScript pagination function
   const match = /currParams\s*[:=]\s*["'](?<value>[^"']+)["']/u.exec(html);
-  if (match?.groups?.["value"]) {
+  const value = match?.groups?.["value"];
+  if (value) {
     try {
-      return decodeURIComponent(match.groups["value"]);
+      return decodeURIComponent(value);
     } catch {
-      return match.groups["value"];
+      return value;
     }
   }
 

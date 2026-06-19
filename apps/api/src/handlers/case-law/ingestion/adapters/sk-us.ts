@@ -90,10 +90,11 @@ const parseCursor = (cursor: string | null): YearCursor => {
 
   // New format: "YYYY:offset"
   const match = /^(?<year>\d{4}):(?<offset>\d+)$/u.exec(cursor);
-  if (match?.groups?.["year"] && match.groups["offset"]) {
+  const { year, offset } = match?.groups ?? {};
+  if (year && offset) {
     return {
-      year: Number.parseInt(match.groups["year"], 10),
-      offset: Number.parseInt(match.groups["offset"], 10),
+      year: Number.parseInt(year, 10),
+      offset: Number.parseInt(offset, 10),
     };
   }
 
