@@ -72,11 +72,11 @@ const createScopedDb = (templates: unknown[] = []) =>
   asTestRaw<McpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
     mock(
       async (
-        callback: (tx: {
+        run: (tx: {
           query: { templates: { findMany: () => Promise<unknown[]> } };
         }) => unknown,
       ) =>
-        await callback({
+        await run({
           query: { templates: { findMany: async () => templates } },
         }),
     ),
