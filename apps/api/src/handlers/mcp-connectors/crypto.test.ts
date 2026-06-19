@@ -1,11 +1,26 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 
-import {
-  decryptMcpSecret,
-  encryptMcpSecret,
-} from "@/api/handlers/mcp-connectors/crypto";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+
+// Sibling test files (mcp/tools.test, entities/translate.test) mock
+// @/api/lib/content-encryption globally, and bun's mock.module persists
+// across the shared test process. Pin a faithful in-memory passthrough so
+// these envelope-binding assertions exercise crypto.ts's real logic on a
+// stable encrypt/decrypt instead of inheriting a leaked stub. Import crypto
+// dynamically AFTER the mock so it binds to the passthrough (static imports
+// hoist above this line).
+void mock.module("@/api/lib/content-encryption", () => ({
+  encryptContent: (_organizationId: unknown, plaintext: string) => ({
+    ciphertext: Buffer.from(plaintext, "utf-8"),
+    iv: Buffer.alloc(12),
+  }),
+  decryptContent: (_organizationId: unknown, ciphertext: Buffer) =>
+    ciphertext.toString("utf-8"),
+}));
+
+const { decryptMcpSecret, encryptMcpSecret } =
+  await import("@/api/handlers/mcp-connectors/crypto");
 
 const rejectionOf = async (promise: Promise<unknown>): Promise<unknown> => {
   try {
