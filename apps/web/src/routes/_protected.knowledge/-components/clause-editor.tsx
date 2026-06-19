@@ -350,7 +350,7 @@ type ClauseEditorProps = {
   /** Fired when the editor loses focus, carrying the current body. */
   onBlur?: (body: ClauseParagraph[]) => void;
   /** Context passed to the AI refine assist (current, possibly unsaved values). */
-  usageNotes?: string;
+  usageNotes?: string | undefined;
   title?: string;
 };
 

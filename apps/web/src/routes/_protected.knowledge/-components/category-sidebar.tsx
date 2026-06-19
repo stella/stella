@@ -433,8 +433,8 @@ type CategoryFormDialogProps = {
   ops: CategoryOps;
   /** Fires after a successful create (not edit) with the new category, so
    *  callers can act on it — e.g. assign the row that triggered the create. */
-  onCreated?: (category: CategoryEntity) => void;
-  initial?: CategoryEntity;
+  onCreated?: ((category: CategoryEntity) => void) | undefined;
+  initial?: CategoryEntity | undefined;
 };
 
 export const CategoryFormDialog = ({
@@ -470,7 +470,7 @@ type CategoryFormDialogBodyProps = {
   onChanged: () => void;
   labels: CategoryLabels;
   ops: CategoryOps;
-  onCreated?: (category: CategoryEntity) => void;
+  onCreated?: ((category: CategoryEntity) => void) | undefined;
   initial: CategoryEntity | undefined;
 };
 
