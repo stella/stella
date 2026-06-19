@@ -3021,7 +3021,7 @@ const TemplateFillFacet = ({
     isError,
   } = useQuery({
     queryKey: [
-      ...detailOptions.queryKey,
+      ...knowledgeKeys.templates.detail(activeOrganizationId, templateId),
       "fill-discover",
       presignedUrl,
       fileName,

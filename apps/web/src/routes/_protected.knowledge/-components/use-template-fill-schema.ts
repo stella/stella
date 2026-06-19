@@ -5,7 +5,10 @@ import { panic } from "better-result";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors";
-import { templateDetailOptions } from "@/routes/_protected.knowledge/-queries";
+import {
+  knowledgeKeys,
+  templateDetailOptions,
+} from "@/routes/_protected.knowledge/-queries";
 
 /**
  * The fillable shape of a *saved* template, for hosts that render the fill
@@ -51,7 +54,7 @@ export const useTemplateFillSchema = (
     isLoading: discovering,
   } = useQuery({
     queryKey: [
-      ...detailOptions.queryKey,
+      ...knowledgeKeys.templates.detail(activeOrganizationId, templateId),
       "fill-discover",
       presignedUrl,
       fileName,
