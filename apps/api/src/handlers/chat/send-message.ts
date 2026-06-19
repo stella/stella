@@ -1150,6 +1150,14 @@ const loadThread = async ({
                 role: true,
                 content: true,
               },
+              // SAFETY: the full ordered history is structurally required here
+              // to locate the edit/truncation target by id (findIndex over
+              // thread.data.messages) and to reconcile persistence; a bounded
+              // window would make an older truncation target unfindable. The
+              // model context itself is bounded downstream by
+              // compactChatMessagesForModel, so this load never feeds an
+              // unbounded context to the model.
+              // eslint-disable-next-line require-query-limit/require-query-limit
               orderBy: { createdAt: "asc" },
             },
           },

@@ -6,7 +6,7 @@
 // unbounded read is invisible in dev (small tables) and turns into a
 // memory / latency cliff at Magic Circle scale.
 //
-// This rule covers the two Drizzle read shapes that are unbounded by
+// This rule covers the three Drizzle read shapes that are unbounded by
 // default, using high-signal triggers to avoid false positives on
 // single-row reads, counts, and aggregations:
 //
@@ -21,10 +21,19 @@
 //      `exists`, single-row lookups, joins) are intentionally NOT
 //      flagged here to keep the rule false-positive-free.
 //
+//   3. Eager-loaded relations — a `with: { rel: { orderBy: ... } }`
+//      relation config (on either `findMany` or `findFirst`) with no
+//      `limit` key. A relation that bothers to ORDER BY is a to-many
+//      list, so a bounded parent row can still pull an unbounded child
+//      list (e.g. every message in a chat thread). Scanned recursively
+//      through nested `with`. A `true` / variable relation config is a
+//      to-one or opaque relation and is left alone.
+//
 // Flags:
 //   tx.query.foo.findMany()                          // no options
 //   tx.query.foo.findMany({ where: ... })            // options w/o limit
 //   tx.select({...}).from(foo).where(...).orderBy(x) // ordered, no limit
+//   tx.query.foo.findFirst({ with: { bars: { orderBy: x } } }) // ordered relation, no limit
 //
 // Allows:
 //   tx.query.foo.findMany({ where: ..., limit: LIMITS.x })
@@ -32,6 +41,8 @@
 //   tx.select({...}).from(foo).where(...).orderBy(x).limit(n)
 //   tx.select({...}).from(foo).where(...)            // unordered: not flagged
 //   tx.query.foo.findMany(opts)                       // opaque options: skip
+//   tx.query.foo.findFirst({ with: { bars: { orderBy: x, limit: LIMITS.y } } })
+//   tx.query.foo.findFirst({ with: { bar: true } })  // to-one / opaque: skip
 //
 // Escape hatch (genuinely bounded, e.g. a full per-org config set that
 // is already capped on the write path, or a deliberate aggregation):
@@ -151,6 +162,92 @@ const findManyLimitState = (callExpression: unknown): FindManyState => {
   return "missing";
 };
 
+// Recursively flag eager-loaded relations that ORDER BY without a LIMIT.
+// `withObject` is the value of a `with:` property — an object whose keys
+// are relation names and whose values are either a config object literal
+// or `true` (to-one / load-all, left alone). A relation config that has
+// an `orderBy` but no `limit` is an unbounded ordered list read, the same
+// signal the SQL-builder branch uses. Nested `with` is walked too.
+const scanWithObject = (context: unknown, withObject: unknown): void => {
+  if (getType(withObject) !== "ObjectExpression") {
+    return;
+  }
+  const relations = getField(withObject, "properties");
+  if (!Array.isArray(relations)) {
+    return;
+  }
+  for (const relation of relations) {
+    if (getType(relation) !== "Property") {
+      continue;
+    }
+    const config = getField(relation, "value");
+    if (getType(config) !== "ObjectExpression") {
+      continue;
+    }
+    const configProperties = getField(config, "properties");
+    if (!Array.isArray(configProperties)) {
+      continue;
+    }
+    let orderByKey: unknown = null;
+    let hasLimit = false;
+    let nestedWith: unknown = null;
+    for (const property of configProperties) {
+      if (getType(property) !== "Property") {
+        continue;
+      }
+      const name = getPropertyName(getField(property, "key"));
+      if (name === "orderBy") {
+        orderByKey = getField(property, "key");
+      } else if (name === "limit") {
+        hasLimit = true;
+      } else if (name === "with") {
+        nestedWith = getField(property, "value");
+      }
+    }
+    if (orderByKey !== null && !hasLimit) {
+      // Report on the `orderBy` key so the diagnostic — and any
+      // disable-next-line — lands on the `orderBy:` line.
+      (context as { report: (descriptor: unknown) => void }).report({
+        node: orderByKey,
+        messageId: "withRelationNoLimit",
+      });
+    }
+    if (nestedWith !== null) {
+      scanWithObject(context, nestedWith);
+    }
+  }
+};
+
+// Scan the `with` property of a relational-query options object literal
+// for unbounded eager-loaded relations. Applies to both `findMany` and
+// `findFirst` (a bounded parent row can still eager-load an unbounded
+// child list).
+const scanRelationalWith = (
+  context: unknown,
+  callExpression: unknown,
+): void => {
+  const args = getField(callExpression, "arguments");
+  if (!Array.isArray(args) || args.length === 0) {
+    return;
+  }
+  const options = args[0];
+  if (getType(options) !== "ObjectExpression") {
+    return;
+  }
+  const properties = getField(options, "properties");
+  if (!Array.isArray(properties)) {
+    return;
+  }
+  for (const property of properties) {
+    if (getType(property) !== "Property") {
+      continue;
+    }
+    if (getPropertyName(getField(property, "key")) === "with") {
+      scanWithObject(context, getField(property, "value"));
+    }
+  }
+};
+
 export default {
   meta: { name: "require-query-limit" },
   rules: {
@@ -168,6 +265,12 @@ export default {
             "`.limit(...)` so it cannot return an unbounded ordered list. " +
             "Add `.limit(LIMITS.x)` / cursor pagination, or disable with a " +
             "`// SAFETY:` note when the set is provably bounded.",
+          withRelationNoLimit:
+            "An eager-loaded Drizzle relation (`with: { rel: { orderBy: " +
+            "... } }`) must also set a `limit` so a bounded parent row " +
+            "cannot pull an unbounded ordered child list. Add `limit: " +
+            "LIMITS.x` / paginate, or disable with a `// SAFETY:` note " +
+            "when the relation is provably bounded.",
         },
       },
       create(context) {
@@ -178,10 +281,16 @@ export default {
               return;
             }
 
-            if (method === "findMany") {
-              if (findManyLimitState(node) === "missing") {
+            // Both relational reads can eager-load an unbounded ordered
+            // relation via `with`; only `findMany` is itself unbounded.
+            if (method === "findMany" || method === "findFirst") {
+              if (
+                method === "findMany" &&
+                findManyLimitState(node) === "missing"
+              ) {
                 context.report({ node, messageId: "findManyNoLimit" });
               }
+              scanRelationalWith(context, node);
               return;
             }
 

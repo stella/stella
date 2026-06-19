@@ -105,6 +105,12 @@ export const upsertChatThreadSearchDocument = async (
           content: true,
           createdAt: true,
         },
+        // SAFETY: search indexing intentionally reads the thread's full
+        // message history to (re)build the per-message search documents;
+        // truncating to a window would leave older messages permanently
+        // unsearchable. This runs as a background derived-document refresh
+        // after a thread mutation, not on the request hot path.
+        // eslint-disable-next-line require-query-limit/require-query-limit
         orderBy: { createdAt: "asc" },
       },
     },
