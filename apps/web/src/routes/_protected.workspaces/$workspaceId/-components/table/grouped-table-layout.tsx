@@ -10,9 +10,9 @@ import {
 } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
 
+import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import type {
   WorkspaceEntity,
   WorkspaceProperty,
@@ -154,16 +154,25 @@ export const GroupedTableLayout = ({
         />
       ))}
       {/* One add-row for the whole grouped view (order-last keeps it below
-          even the sunk empty categories), instead of one per subtable. */}
+          even the sunk empty categories), instead of one per subtable. Mirrors
+          the flat table's BottomRow: a + in the 48px select column, a divider,
+          then the label aligned to the first data column. */}
       <AddEntityMenu
         render={
-          <Button
-            className="bg-background text-muted-foreground hover:text-foreground sticky bottom-0 z-20 order-last h-10 w-full justify-start gap-2 rounded-none border-t px-3 font-normal transition-colors duration-150"
-            variant="ghost"
+          <button
+            className={cn(
+              "bg-background text-muted-foreground hover:text-foreground sticky bottom-0 z-20 order-last flex w-full items-stretch border-t transition-colors duration-150",
+              TOOLBAR_ROW_HEIGHT,
+            )}
+            type="button"
           >
-            <PlusIcon className="size-3.5" />
-            {t("workspaces.newDocument")}
-          </Button>
+            <span className="flex w-12 shrink-0 items-center justify-center border-e">
+              <PlusIcon className="size-3.5" />
+            </span>
+            <span className="flex items-center px-3 text-sm">
+              {t("workspaces.newDocument")}
+            </span>
+          </button>
         }
         uploadOnly
         workspaceId={workspaceId}
@@ -257,7 +266,7 @@ const GroupSection = ({
           // virtualizer needs a sized scroll element), so the section is
           // bounded; the outer page scrolls between sections. This mirrors
           // kanban columns, which each scroll independently.
-          <div className="flex max-h-[70vh] min-h-32 flex-col">
+          <div className="flex max-h-[70vh] flex-col">
             <WorkspaceTable
               contentMode={tableState.contentMode}
               hasNextPage={query.hasNextPage}
