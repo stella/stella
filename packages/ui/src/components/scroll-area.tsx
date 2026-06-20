@@ -1,5 +1,7 @@
 "use client";
 
+import type { Ref } from "react";
+
 import { ScrollArea as ScrollAreaPrimitive } from "@base-ui/react/scroll-area";
 
 import { cn } from "@stll/ui/lib/utils";
@@ -9,10 +11,12 @@ function ScrollArea({
   children,
   scrollFade = false,
   scrollbarGutter = false,
+  viewportRef,
   ...props
 }: ScrollAreaPrimitive.Root.Props & {
   scrollFade?: boolean;
   scrollbarGutter?: boolean;
+  viewportRef?: Ref<HTMLDivElement>;
 }) {
   return (
     <ScrollAreaPrimitive.Root
@@ -20,6 +24,7 @@ function ScrollArea({
       {...props}
     >
       <ScrollAreaPrimitive.Viewport
+        ref={viewportRef}
         className={cn(
           "transition-shadows focus-visible:ring-ring focus-visible:ring-offset-background h-full overscroll-contain rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-offset-1 data-has-overflow-x:overscroll-x-contain",
           scrollFade &&

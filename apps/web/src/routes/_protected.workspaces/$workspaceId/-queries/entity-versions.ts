@@ -46,6 +46,26 @@ export const entityVersionsOptions = ({
     },
   });
 
+export const fetchOlderVersions = async ({
+  workspaceId,
+  entityId,
+  before,
+}: EntityVersionsKey & { before: string }) => {
+  const response = await api
+    .entities({ workspaceId })
+    .entity({ entityId })
+    .versions.get({ query: { before } });
+
+  if (response.error) {
+    throw toAPIError(response.error);
+  }
+
+  return {
+    versions: response.data.versions,
+    olderCursor: response.data.olderCursor,
+  };
+};
+
 export const entityVersionDetailOptions = ({
   workspaceId,
   entityId,

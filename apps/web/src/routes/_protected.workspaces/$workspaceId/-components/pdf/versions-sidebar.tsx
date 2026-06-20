@@ -1,10 +1,11 @@
-import { useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import {
   CheckIcon,
   DownloadIcon,
   HistoryIcon,
+  Loader2Icon,
   PlusIcon,
   Trash2Icon,
 } from "lucide-react";
@@ -47,6 +48,15 @@ type VersionsSidebarProps = {
   onSwitchVersion: (fieldId: string, versionId: string) => Promise<void> | void;
   onClearCompare: () => void;
   isComparing: boolean;
+  /** Whether an older page exists to load above the current top. */
+  hasOlderVersions?: boolean | undefined;
+  /** True while an older page is being fetched + prepended. */
+  isLoadingOlder?: boolean | undefined;
+  /** True after an older-page fetch failed; pauses the auto-trigger so the
+   *  sentinel cannot loop the request (the manual button still retries). */
+  loadOlderError?: boolean | undefined;
+  /** Fetch + prepend the page immediately older than the current top. */
+  onLoadOlder?: (() => void | PromiseLike<void>) | undefined;
 };
 
 export type { Version };
@@ -96,6 +106,10 @@ export function VersionsSidebar({
   onSwitchVersion,
   onClearCompare,
   isComparing,
+  hasOlderVersions = false,
+  isLoadingOlder = false,
+  loadOlderError = false,
+  onLoadOlder,
 }: VersionsSidebarProps) {
   const t = useTranslations();
   const locale = useLocale();
@@ -103,6 +117,84 @@ export function VersionsSidebar({
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
+
+  // The viewport is the scrollable element of the Base UI ScrollArea
+  // (forwarded via `viewportRef`); it is both the IntersectionObserver
+  // root and the element whose scrollTop we adjust to anchor a prepend.
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const canLoadOlder = hasOlderVersions && onLoadOlder !== undefined;
+  // The list renders oldest → newest, so an older page lands at the
+  // TOP of the first version's id. Track it to detect a genuine
+  // prepend in the layout effect below (vs. a bottom-append upload or
+  // an entity switch).
+  const firstVersionId = versions.at(0)?.id ?? null;
+  const prevFirstVersionIdRef = useRef(firstVersionId);
+  // scrollHeight captured the instant a load-older request fires,
+  // before the prepend grows the container above the viewport. Reset
+  // to null once consumed so only a real prepend restores scroll.
+  const anchorScrollHeightRef = useRef<number | null>(null);
+
+  const triggerLoadOlder = () => {
+    const container = viewportRef.current;
+    if (container) {
+      anchorScrollHeightRef.current = container.scrollHeight;
+    }
+    void onLoadOlder?.();
+  };
+
+  // Drive the trigger from a top sentinel: when it scrolls into view
+  // (with a buffer) and an older page exists, fetch it. The observer
+  // re-arms each render so it tracks the latest `canLoadOlder` /
+  // `isLoadingOlder` without firing while a fetch is in flight.
+  // `loadOlderError` keeps the observer detached after a failure so it
+  // cannot loop the request; the manual button is the only retry path.
+  useEffect(() => {
+    const root = viewportRef.current;
+    const target = sentinelRef.current;
+    if (!root || !target || !canLoadOlder || isLoadingOlder || loadOlderError) {
+      return undefined;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries.at(0);
+        if (!entry?.isIntersecting) {
+          return;
+        }
+        triggerLoadOlder();
+      },
+      { root, rootMargin: "240px 0px 0px 0px" },
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+    // Re-arm on paging state AND when the bound load callback changes:
+    // its identity changes on entity switch, so this stops the observer
+    // from fetching the previous entity's older page into the current
+    // list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- triggerLoadOlder is a stable closure over refs; onLoadOlder tracks the active entity
+  }, [canLoadOlder, isLoadingOlder, loadOlderError, onLoadOlder]);
+
+  // Scroll anchoring: a prepend changes the first version id and grows
+  // scrollHeight above the viewport. Restore the previous offset before
+  // paint so the version under the user's eye stays put. Bottom-appends
+  // (uploads) keep the first id and skip this; an entity switch changes
+  // the id too but has no captured anchor, so it is also skipped.
+  useLayoutEffect(() => {
+    const previousFirstId = prevFirstVersionIdRef.current;
+    prevFirstVersionIdRef.current = firstVersionId;
+    const previousScrollHeight = anchorScrollHeightRef.current;
+    anchorScrollHeightRef.current = null;
+    if (previousFirstId === firstVersionId || previousScrollHeight === null) {
+      return;
+    }
+    const container = viewportRef.current;
+    if (!container) {
+      return;
+    }
+    container.scrollTop += container.scrollHeight - previousScrollHeight;
+  }, [firstVersionId]);
 
   const invalidateVersions = async () => {
     await queryClient.invalidateQueries({
@@ -256,8 +348,16 @@ export function VersionsSidebar({
       />
 
       {/* Version list */}
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1" viewportRef={viewportRef}>
         <div className="flex flex-col gap-px p-1">
+          {canLoadOlder && (
+            <LoadOlderVersions
+              isLoadingOlder={isLoadingOlder}
+              loadOlderError={loadOlderError}
+              onLoadOlder={triggerLoadOlder}
+              ref={sentinelRef}
+            />
+          )}
           {orderedVersions.map((version, idx) => (
             <VersionItem
               key={version.id}
@@ -309,6 +409,56 @@ export function VersionsSidebar({
           <span className="truncate">{t("fileDetail.uploadNewVersion")}</span>
         </Button>
       </div>
+    </div>
+  );
+}
+
+// -- Load-older paging affordance --
+
+type LoadOlderVersionsProps = {
+  isLoadingOlder: boolean;
+  loadOlderError: boolean;
+  onLoadOlder: () => void;
+  ref: React.Ref<HTMLDivElement>;
+};
+
+/**
+ * Top-of-list paging affordance. The `div` is the IntersectionObserver
+ * target that auto-loads when scrolled near; the button is the manual,
+ * keyboard-accessible fallback. While a page is in flight it shows a
+ * spinner instead so the observer (re-armed only when idle) cannot
+ * stack requests; after a failure it surfaces the error and the button
+ * stays the only retry path.
+ */
+function LoadOlderVersions({
+  isLoadingOlder,
+  loadOlderError,
+  onLoadOlder,
+  ref,
+}: LoadOlderVersionsProps) {
+  const t = useTranslations();
+
+  if (isLoadingOlder) {
+    return (
+      <div className="flex justify-center py-1" ref={ref}>
+        <span className="text-muted-foreground flex items-center gap-2 text-xs">
+          <Loader2Icon aria-hidden="true" className="size-3.5 animate-spin" />
+          {t("common.loading")}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-1 py-1" ref={ref}>
+      {loadOlderError && (
+        <span className="text-destructive text-xs">
+          {t("common.somethingWentWrong")}
+        </span>
+      )}
+      <Button onClick={onLoadOlder} size="sm" variant="ghost">
+        {t("common.loadMore")}
+      </Button>
     </div>
   );
 }

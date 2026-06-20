@@ -1,8 +1,13 @@
 import { Result } from "better-result";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, or } from "drizzle-orm";
+import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db";
 import { desktopEditSessions, entityVersions } from "@/api/db/schema";
+import {
+  decodeVersionCursor,
+  encodeVersionCursor,
+} from "@/api/handlers/entities/version-cursor";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -14,17 +19,30 @@ const readVersionsParamsSchema = workspaceParams({
   entityId: tSafeId("entity"),
 });
 
+const readVersionsQuerySchema = t.Object({
+  before: t.Optional(t.String()),
+});
+
 type ReadVersionsHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   entityId: SafeId<"entity">;
+  before: string | undefined;
 };
 
 const readVersionsHandler = async function* ({
   safeDb,
   workspaceId,
   entityId,
+  before,
 }: ReadVersionsHandlerProps) {
+  const cursor = before !== undefined ? decodeVersionCursor(before) : null;
+  if (before !== undefined && cursor === null) {
+    return Result.err(
+      new HandlerError({ status: 400, message: "Invalid cursor" }),
+    );
+  }
+
   // Validate entity exists in workspace and get entity-level author
   const entity = yield* Result.await(
     safeDb((tx) =>
@@ -50,9 +68,19 @@ const readVersionsHandler = async function* ({
     );
   }
 
-  // Fetch all versions with their file fields, author from desktop edit
-  // sessions (for v2+), and user info
-  const [versionsResult, sessionsResult] = await Promise.all([
+  const pageSize = LIMITS.versionsPageSizeDefault;
+
+  const keyset = cursor
+    ? or(
+        lt(entityVersions.versionNumber, cursor.versionNumber),
+        and(
+          eq(entityVersions.versionNumber, cursor.versionNumber),
+          lt(entityVersions.id, cursor.id),
+        ),
+      )
+    : undefined;
+
+  const rows = yield* Result.await(
     safeDb((tx) =>
       tx
         .select({
@@ -71,12 +99,40 @@ const readVersionsHandler = async function* ({
           and(
             eq(entityVersions.entityId, entityId),
             eq(entityVersions.workspaceId, workspaceId),
+            keyset,
           ),
         )
-        .orderBy(desc(entityVersions.versionNumber))
-        .limit(LIMITS.versionsPerEntity),
+        .orderBy(desc(entityVersions.versionNumber), desc(entityVersions.id))
+        .limit(pageSize + 1),
     ),
-    // Get finalized sessions to map version → author
+  );
+
+  const hasOlder = rows.length > pageSize;
+  const versions = rows.slice(0, pageSize);
+  const oldest = versions.at(-1);
+  const olderCursor =
+    hasOlder && oldest
+      ? encodeVersionCursor({
+          versionNumber: oldest.versionNumber,
+          id: oldest.id,
+        })
+      : null;
+
+  if (versions.length === 0) {
+    return Result.ok({
+      entityId: entity.id,
+      entityName: entity.name,
+      kind: entity.kind,
+      currentVersionId: entity.currentVersionId,
+      versions: [],
+      olderCursor,
+    });
+  }
+
+  const pageVersionIds = versions.map((v) => v.id);
+
+  // Get finalized sessions for this page to map version → author (for v2+).
+  const sessions = yield* Result.await(
     safeDb((tx) =>
       tx
         .select({
@@ -89,13 +145,11 @@ const readVersionsHandler = async function* ({
             eq(desktopEditSessions.entityId, entityId),
             eq(desktopEditSessions.workspaceId, workspaceId),
             eq(desktopEditSessions.status, "finalized"),
+            inArray(desktopEditSessions.finalizedVersionId, pageVersionIds),
           ),
         ),
     ),
-  ]);
-
-  const versions = yield* versionsResult;
-  const sessions = yield* sessionsResult;
+  );
 
   // Build session author lookup: versionId → userId
   const sessionAuthorMap = new Map<string, string>();
@@ -127,7 +181,7 @@ const readVersionsHandler = async function* ({
     authorUserIds.size > 0
       ? yield* Result.await(
           safeDb((tx) =>
-            // SAFETY: distinct version authors of one entity, an IN-list of user IDs bounded by LIMITS.workspaceMembersCount
+            // SAFETY: distinct version authors of one entity page, an IN-list of user IDs bounded by LIMITS.workspaceMembersCount
             // eslint-disable-next-line require-query-limit/require-query-limit
             tx.query.user.findMany({
               where: { id: { in: [...authorUserIds] } },
@@ -139,25 +193,21 @@ const readVersionsHandler = async function* ({
 
   const userMap = new Map(authorUsers.map((u) => [u.id, u]));
 
-  // Fetch file fields for all versions
-  const versionIds = versions.map((v) => v.id);
-  const versionFields =
-    versionIds.length > 0
-      ? yield* Result.await(
-          safeDb((tx) =>
-            tx.query.fields.findMany({
-              where: { entityVersionId: { in: versionIds } },
-              limit: LIMITS.versionFieldsScanLimit,
-              columns: {
-                id: true,
-                entityVersionId: true,
-                propertyId: true,
-                content: true,
-              },
-            }),
-          ),
-        )
-      : [];
+  // Fetch file fields for this page's versions
+  const versionFields = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.fields.findMany({
+        where: { entityVersionId: { in: pageVersionIds } },
+        limit: LIMITS.versionFieldsScanLimit,
+        columns: {
+          id: true,
+          entityVersionId: true,
+          propertyId: true,
+          content: true,
+        },
+      }),
+    ),
+  );
 
   // Build version → file field map (pick the first file-type field)
   const versionFileMap = new Map<
@@ -212,21 +262,24 @@ const readVersionsHandler = async function* ({
     kind: entity.kind,
     currentVersionId: entity.currentVersionId,
     versions: versionsList,
+    olderCursor,
   });
 };
 
 const config = {
   permissions: { workspace: ["read"] },
   params: readVersionsParamsSchema,
+  query: readVersionsQuerySchema,
 } satisfies HandlerConfig;
 
 const readVersions = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, params }) {
+  async function* ({ safeDb, workspaceId, params, query }) {
     return yield* readVersionsHandler({
       safeDb,
       workspaceId,
       entityId: params.entityId,
+      before: query.before,
     });
   },
 );

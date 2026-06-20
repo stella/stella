@@ -8,12 +8,23 @@
  * the selection). Compare is owned by the document route.
  */
 
+import { useCallback, useRef, useState } from "react";
+
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { Result } from "better-result";
+import { useTranslations } from "use-intl";
+
+import { stellaToast } from "@stll/ui/components/toast";
 
 import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { VersionsSidebar } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar";
-import { entityVersionsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
+import type { Version } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar";
+import {
+  entityVersionsOptions,
+  fetchOlderVersions,
+} from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
 
 type VersionsFacetProps = {
   workspaceId: string;
@@ -26,12 +37,100 @@ export const VersionsFacet = ({
   entityId,
   currentFieldId,
 }: VersionsFacetProps) => {
+  const t = useTranslations();
   const navigate = useNavigate();
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
   const openFileForEntity = useInspectorStore((s) => s.openFileForEntity);
   const { data } = useQuery(entityVersionsOptions({ workspaceId, entityId }));
+
+  // Accumulated list seeded from the query's newest page and extended
+  // by each older page. Re-seed whenever a fresh `data` object arrives:
+  // an upload / restore / delete invalidates `entityVersionsKeys.all`,
+  // the query refetches the newest page, and TanStack hands back a new
+  // `data` identity. Keying the re-seed on that identity (the chat
+  // pattern, which keys on the `Chat` instance) keeps the cursor and
+  // accumulator from going stale after such a refetch or an entity
+  // switch. Refs mirror the state so the stable `loadOlder` callback
+  // can read the latest committed values.
+  const [accumulated, setAccumulated] = useState<Version[]>([]);
+  const [olderCursor, setOlderCursor] = useState<string | null>(null);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  const [loadOlderError, setLoadOlderError] = useState(false);
+  const [seededData, setSeededData] = useState(data);
+  const olderCursorRef = useRef<string | null>(null);
+  const isLoadingOlderRef = useRef(false);
+  // Render-current entity id for the stale-response guard in
+  // `loadOlder`. Written during render (when a fresh page is seeded)
+  // rather than in a passive effect, so a response resolving in the
+  // window between an entity-switch render committing and effects
+  // running is still discarded.
+  const seededEntityIdRef = useRef(entityId);
+  if (data !== undefined && seededData !== data) {
+    setSeededData(data);
+    setAccumulated(data.versions);
+    setOlderCursor(data.olderCursor);
+    setIsLoadingOlder(false);
+    setLoadOlderError(false);
+    olderCursorRef.current = data.olderCursor;
+    isLoadingOlderRef.current = false;
+    seededEntityIdRef.current = entityId;
+  }
+
+  const loadOlder = useCallback(async () => {
+    const before = olderCursorRef.current;
+    if (before === null || isLoadingOlderRef.current) {
+      return;
+    }
+    const requestedEntityId = entityId;
+    isLoadingOlderRef.current = true;
+    setIsLoadingOlder(true);
+    setLoadOlderError(false);
+
+    const result = await Result.tryPromise(
+      async () => await fetchOlderVersions({ workspaceId, entityId, before }),
+    );
+
+    // Discard a response that resolved after the user switched entities:
+    // the re-seed already reset paging for the new entity, so applying
+    // this would corrupt its cursor and prepend the previous entity's
+    // versions.
+    if (seededEntityIdRef.current !== requestedEntityId) {
+      return;
+    }
+
+    isLoadingOlderRef.current = false;
+    setIsLoadingOlder(false);
+
+    if (Result.isError(result)) {
+      // `fetchOlderVersions` already throws a converted APIError; capture
+      // it for telemetry and surface a toast. Keep the cursor but flag
+      // the error so auto-loading pauses (the manual button retries)
+      // instead of looping the request.
+      getAnalytics().captureError(result.error);
+      setLoadOlderError(true);
+      stellaToast.add({
+        title: t("common.somethingWentWrong"),
+        type: "error",
+      });
+      return;
+    }
+
+    const older = result.value;
+    setAccumulated((current) => {
+      const existingIds = new Set(current.map((version) => version.id));
+      const prepend = older.versions.filter(
+        (version) => !existingIds.has(version.id),
+      );
+      if (prepend.length === 0) {
+        return current;
+      }
+      return [...prepend, ...current];
+    });
+    olderCursorRef.current = older.olderCursor;
+    setOlderCursor(older.olderCursor);
+  }, [entityId, t, workspaceId]);
 
   if (!data) {
     return null;
@@ -43,14 +142,18 @@ export const VersionsFacet = ({
         currentFieldId={currentFieldId}
         currentVersionId={data.currentVersionId}
         entityId={entityId}
+        hasOlderVersions={olderCursor !== null}
         isComparing={false}
-        versions={data.versions}
+        isLoadingOlder={isLoadingOlder}
+        loadOlderError={loadOlderError}
+        versions={accumulated}
         workspaceId={workspaceId}
+        onLoadOlder={loadOlder}
         onClearCompare={() => {
           // No-op; compare flow is owned by the document route.
         }}
         onSwitchVersion={async (fieldId, versionId) => {
-          const target = data.versions.find((v) => v.id === versionId);
+          const target = accumulated.find((v) => v.id === versionId);
           if (!target?.file) {
             return;
           }

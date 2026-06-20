@@ -12,6 +12,11 @@ export const LIMITS = {
    *  write-side cap; 1000 is far above realistic editing histories. Cursor
    *  pagination is the proper long-term fix. */
   versionsPerEntity: 1000,
+  /** Page size for one entity's version-history listing (newest first).
+   *  The reader loads the most recent page first and walks older pages via
+   *  the `before` cursor, so a heavily-revised entity never loses access to
+   *  older versions. */
+  versionsPageSizeDefault: 50,
   /** Worst-case file fields scanned across one entity's versions
    *  (versionsPerEntity * propertiesCount). */
   versionFieldsScanLimit: 20_000,

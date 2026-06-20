@@ -201,6 +201,7 @@ export const entitiesRoute = new Elysia({
   })
   .get("/entity/:entityId/versions", readVersions.handler, {
     params: readVersions.config.params,
+    query: readVersions.config.query,
     permissions: readVersions.config.permissions,
   })
   .get("/entity/:entityId/versions/:versionId", readVersionById.handler, {
