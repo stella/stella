@@ -615,10 +615,10 @@ export const createSendAutomaticallyPredicate =
       state.fires = 0;
     }
     // Hard cap: any future regression that reopens the loop hits
-    // this ceiling and stops automatically. 3 covers the
-    // legitimate sequential-tool-call case (each tool result lands
-    // with a new fingerprint, so each new fingerprint gets its own
-    // budget).
+    // this ceiling and stops automatically. One fire per fingerprint
+    // is enough — each tool result lands with a new fingerprint (new
+    // message id or tool part), so every legitimate step gets its own
+    // budget.
     if (state.fires >= MAX_AUTO_FIRES_PER_FINGERPRINT) {
       threadAutoFireState.set(threadKey, state);
       return false;

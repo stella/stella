@@ -614,6 +614,12 @@ export default defineConfig({
       },
     },
     {
+      files: [".oxlint-plugins/__fixtures__/require-query-limit.fixture.ts"],
+      rules: {
+        "require-query-limit/require-query-limit": "error",
+      },
+    },
+    {
       files: ["apps/web/src/components/date-picker-popover.tsx"],
       rules: {
         "no-restricted-imports": [
