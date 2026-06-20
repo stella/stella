@@ -75,7 +75,7 @@
     "@stll/transactional": "workspace:*",
     "@t3-oss/env-core": "catalog:",
     "@valibot/to-json-schema": "^1.7.1",
-    "ai": "^6.0.204",
+    "ai": "^6.0.205",
     "better-auth": "catalog:",
     "better-result": "catalog:",
     "bullmq": "^5.78.0",
