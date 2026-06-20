@@ -302,7 +302,7 @@ jobs:
           run=false
           for file in "${changed_files[@]}"; do
             case "$file" in
-              apps/web/*|packages/*|VERSION|bun.lock|package.json|.github/workflows/ci.yml)
+              apps/web/*|packages/*|VERSION|bun.lock|bunfig.toml|package.json|.npmrc|.github/workflows/ci.yml)
                 run=true
                 break
                 ;;
@@ -663,7 +663,7 @@ jobs:
           run=false
           for file in "${changed_files[@]}"; do
             case "$file" in
-              apps/api/*|apps/legal-atlas-runner/*|packages/*|bun.lock|package.json|turbo.json|.github/workflows/ci.yml)
+              apps/api/*|apps/legal-atlas-runner/*|packages/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|.github/workflows/ci.yml)
                 run=true
                 break
                 ;;
