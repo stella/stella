@@ -1,6 +1,8 @@
 import { Result } from "better-result";
+import { and, desc, eq, sql } from "drizzle-orm";
 
 import type { SafeDb, SafeDbError } from "@/api/db";
+import { chatMessages } from "@/api/db/schema";
 import { normalizeLegacyToolInputs } from "@/api/handlers/chat/legacy-tool-compat";
 import type {
   ChatMessageRole,
@@ -12,6 +14,7 @@ import { LIMITS } from "@/api/lib/limits";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
+  isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 
@@ -21,11 +24,6 @@ export type ClientMessage = {
   id: SafeId<"chatMessage">;
   role: ChatMessageRole;
   parts: ChatPart[];
-};
-
-type MessagePageCursor = {
-  createdAt: Date;
-  id: SafeId<"chatMessage">;
 };
 
 /**
@@ -47,38 +45,36 @@ export const attachPlaceholders = (
     return placeholder ? { ...part, placeholder } : part;
   });
 
-export const encodeMessagePageCursor = ({
-  createdAt,
-  id,
-}: MessagePageCursor): string =>
-  encodePaginationCursor([createdAt.toISOString(), id]);
+// The cursor is the boundary message id alone. loadChatMessagePage resolves
+// that row's exact (createdAt, id) in-DB, so the cursor never round-trips a
+// timestamp through a millisecond-precision JS Date; messages sharing a
+// millisecond (e.g. inserted in one transaction, which share now()) cannot be
+// skipped. A malformed id is rejected here so it never reaches the uuid cast.
+export const encodeMessagePageCursor = (id: SafeId<"chatMessage">): string =>
+  encodePaginationCursor([id]);
 
 export const decodeMessagePageCursor = (
   cursor: string,
-): MessagePageCursor | null => {
+): SafeId<"chatMessage"> | null => {
   const parts = decodePaginationCursor(cursor);
-  if (!parts || parts.length !== 2) {
+  if (!parts || parts.length !== 1) {
     return null;
   }
 
-  const [rawCreatedAt, rawId] = parts;
-  if (typeof rawCreatedAt !== "string" || typeof rawId !== "string") {
+  const [rawId] = parts;
+  if (!isUuidPaginationCursorPart(rawId)) {
     return null;
   }
 
-  const createdAt = new Date(rawCreatedAt);
-  if (Number.isNaN(createdAt.getTime())) {
-    return null;
-  }
-
-  return { createdAt, id: brandPersistedChatMessageId(rawId) };
+  return brandPersistedChatMessageId(rawId);
 };
 
 type LoadChatMessagePageArgs = {
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
-  before?: MessagePageCursor | undefined;
+  /** Boundary message id; the page returns rows strictly older than it. */
+  before?: SafeId<"chatMessage"> | undefined;
 };
 
 export type ChatMessagePage = {
@@ -107,30 +103,28 @@ export const loadChatMessagePage = async ({
 
     const rows = yield* Result.await(
       safeDb((tx) =>
-        tx.query.chatMessages.findMany({
-          where: {
-            threadId: { eq: threadId },
-            ...(before
-              ? {
-                  OR: [
-                    { createdAt: { lt: before.createdAt } },
-                    {
-                      createdAt: { eq: before.createdAt },
-                      id: { lt: before.id },
-                    },
-                  ],
-                }
-              : {}),
-          },
-          columns: {
-            id: true,
-            role: true,
-            content: true,
-            createdAt: true,
-          },
-          orderBy: { createdAt: "desc", id: "desc" },
-          limit: pageSize + 1,
-        }),
+        tx
+          .select({
+            id: chatMessages.id,
+            role: chatMessages.role,
+            content: chatMessages.content,
+            createdAt: chatMessages.createdAt,
+          })
+          .from(chatMessages)
+          .where(
+            and(
+              eq(chatMessages.threadId, threadId),
+              // Compare the full-precision (createdAt, id) tuple in-DB against
+              // the boundary row (looked up by id), so the comparison stays at
+              // the column's microsecond precision instead of the cursor's
+              // millisecond JS Date.
+              before
+                ? sql`(${chatMessages.createdAt}, ${chatMessages.id}) < (select b.created_at, b.id from chat_messages b where b.id = ${before})`
+                : undefined,
+            ),
+          )
+          .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
+          .limit(pageSize + 1),
       ),
     );
 
@@ -139,12 +133,7 @@ export const loadChatMessagePage = async ({
 
     const oldest = pageAscending.at(0);
     const olderCursor =
-      hasOlder && oldest
-        ? encodeMessagePageCursor({
-            createdAt: oldest.createdAt,
-            id: oldest.id,
-          })
-        : null;
+      hasOlder && oldest ? encodeMessagePageCursor(oldest.id) : null;
 
     const placeholderById = yield* Result.await(
       loadPlaceholders({ safeDb, userId, rows: pageAscending }),

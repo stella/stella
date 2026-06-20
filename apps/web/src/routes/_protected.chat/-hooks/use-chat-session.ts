@@ -13,9 +13,11 @@ import type { Chat } from "@ai-sdk/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { isToolUIPart } from "ai";
 import { Result } from "better-result";
+import { useTranslations } from "use-intl";
 import { v7 as uuidv7 } from "uuid";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { stellaToast } from "@stll/ui/components/toast";
 
 import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import type {
@@ -131,6 +133,7 @@ export const useChatSession = ({
   workspaceId,
 }: UseChatSessionOptions) => {
   const organizationId = useAuthenticatedUser().activeOrganizationId;
+  const t = useTranslations();
   const { data: mcpCatalog } = useQuery(mcpConnectorsOptions(organizationId));
   const mcpConnectorIdentities =
     mcpCatalog?.connectors ?? EMPTY_MCP_CONNECTOR_IDENTITIES;
@@ -187,9 +190,14 @@ export const useChatSession = ({
     setIsLoadingOlder(false);
 
     if (Result.isError(result)) {
-      // `fetchOlderMessages` already throws a converted APIError; capture
-      // it for telemetry and leave the cursor so the user can retry.
+      // `fetchOlderMessages` already throws a converted APIError; capture it
+      // for telemetry and surface a toast so the user knows the older history
+      // failed to load. The cursor is left intact so they can retry.
       getAnalytics().captureError(result.error);
+      stellaToast.add({
+        title: t("chat.loadEarlierMessagesError"),
+        type: "error",
+      });
       return;
     }
 
@@ -206,7 +214,7 @@ export const useChatSession = ({
     });
     olderCursorRef.current = older.olderCursor;
     setOlderCursor(older.olderCursor);
-  }, [setMessages, threadRef]);
+  }, [setMessages, t, threadRef]);
 
   // Mirror `isGenerating` (computed below) and the live queue into
   // refs so the stable `sendMessage` callback can branch on the

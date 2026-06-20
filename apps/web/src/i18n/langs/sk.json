@@ -445,6 +445,7 @@
       "recentChats": "Nedávne chaty"
     },
     "loadEarlierMessages": "Načítať staršie správy",
+    "loadEarlierMessagesError": "Staršie správy sa nepodarilo načítať",
     "loadingEarlierMessages": "Načítavajú sa staršie správy…",
     "maxAttachmentsReached": "Maximálne {count} súborov na správu",
     "mention": {

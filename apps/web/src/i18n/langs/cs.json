@@ -445,6 +445,7 @@
       "recentChats": "Nedávné chaty"
     },
     "loadEarlierMessages": "Načíst starší zprávy",
+    "loadEarlierMessagesError": "Starší zprávy se nepodařilo načíst",
     "loadingEarlierMessages": "Načítání starších zpráv…",
     "maxAttachmentsReached": "Maximálně {count} souborů na zprávu",
     "mention": {

@@ -445,6 +445,7 @@
       "recentChats": "Neseniai naudoti pokalbiai"
     },
     "loadEarlierMessages": "Įkelti ankstesnes žinutes",
+    "loadEarlierMessagesError": "Nepavyko įkelti ankstesnių žinučių",
     "loadingEarlierMessages": "Kraunamos ankstesnės žinutės…",
     "maxAttachmentsReached": "Daugiausiai {count} failų vienoje žinutėje",
     "mention": {

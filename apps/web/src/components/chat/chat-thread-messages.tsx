@@ -127,8 +127,11 @@ export const ChatThreadMessages = ({
 
     observer.observe(target);
     return () => observer.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- triggerLoadOlder/scrollRef are stable; re-arm only on paging state changes
-  }, [canLoadOlder, isLoadingOlder]);
+    // Re-arm on paging state AND when the bound load callback changes: its
+    // identity changes on thread switch, so this stops the observer from
+    // fetching the previous thread's older page into the current transcript.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- triggerLoadOlder/scrollRef are stable refs; onLoadOlder tracks the active thread
+  }, [canLoadOlder, isLoadingOlder, onLoadOlder]);
 
   // Scroll anchoring: a prepend changes the first message id and grows
   // scrollHeight above the viewport. Restore the previous offset before

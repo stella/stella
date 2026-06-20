@@ -445,6 +445,7 @@
       "recentChats": "Nesenie čati"
     },
     "loadEarlierMessages": "Ielādēt vecākus ziņojumus",
+    "loadEarlierMessagesError": "Neizdevās ielādēt vecākus ziņojumus",
     "loadingEarlierMessages": "Ielādē vecākus ziņojumus…",
     "maxAttachmentsReached": "Maksimāli {count} faili vienā ziņojumā",
     "mention": {

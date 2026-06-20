@@ -445,6 +445,7 @@
       "recentChats": "Legutóbbi chatek"
     },
     "loadEarlierMessages": "Korábbi üzenetek betöltése",
+    "loadEarlierMessagesError": "A korábbi üzenetek betöltése sikertelen",
     "loadingEarlierMessages": "Korábbi üzenetek betöltése…",
     "maxAttachmentsReached": "Üzenetenként legfeljebb {count} fájl",
     "mention": {

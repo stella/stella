@@ -445,6 +445,7 @@
       "recentChats": "Ostatnie chaty"
     },
     "loadEarlierMessages": "Załaduj wcześniejsze wiadomości",
+    "loadEarlierMessagesError": "Nie udało się załadować wcześniejszych wiadomości",
     "loadingEarlierMessages": "Ładowanie wcześniejszych wiadomości…",
     "maxAttachmentsReached": "Maksymalnie {count} plików na wiadomość",
     "mention": {

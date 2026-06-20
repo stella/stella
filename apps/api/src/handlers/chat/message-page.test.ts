@@ -10,15 +10,14 @@ const MESSAGE_ID = brandPersistedChatMessageId(
   "018f4ad2-3a6d-7000-8b1d-44f76f5df001",
 );
 
-describe("chat message page cursor", () => {
-  test("roundtrips the createdAt timestamp and message id", () => {
-    const createdAt = new Date("2026-05-16T08:30:00.123Z");
-    const cursor = encodeMessagePageCursor({ createdAt, id: MESSAGE_ID });
+const encodeParts = (parts: unknown): string =>
+  Buffer.from(JSON.stringify(parts)).toString("base64url");
 
-    expect(decodeMessagePageCursor(cursor)).toEqual({
-      createdAt,
-      id: MESSAGE_ID,
-    });
+describe("chat message page cursor", () => {
+  test("roundtrips the message id", () => {
+    expect(decodeMessagePageCursor(encodeMessagePageCursor(MESSAGE_ID))).toBe(
+      MESSAGE_ID,
+    );
   });
 
   test("rejects a cursor that is not valid base64url JSON", () => {
@@ -27,32 +26,18 @@ describe("chat message page cursor", () => {
 
   test("rejects a cursor whose array shape is wrong", () => {
     expect(
-      decodeMessagePageCursor(
-        Buffer.from(JSON.stringify([MESSAGE_ID])).toString("base64url"),
-      ),
+      decodeMessagePageCursor(encodeParts([MESSAGE_ID, MESSAGE_ID])),
     ).toBeNull();
-    expect(
-      decodeMessagePageCursor(
-        Buffer.from(JSON.stringify({ id: MESSAGE_ID })).toString("base64url"),
-      ),
-    ).toBeNull();
+    expect(decodeMessagePageCursor(encodeParts({ id: MESSAGE_ID }))).toBeNull();
   });
 
-  test("rejects a cursor whose parts are not strings", () => {
-    expect(
-      decodeMessagePageCursor(
-        Buffer.from(JSON.stringify([42, MESSAGE_ID])).toString("base64url"),
-      ),
-    ).toBeNull();
+  // A tampered cursor whose id is a valid string but not a uuid must be
+  // rejected here so it never reaches the DB's uuid cast (a 400, not a 500).
+  test("rejects a tampered id that is not a uuid", () => {
+    expect(decodeMessagePageCursor(encodeParts(["not-a-uuid"]))).toBeNull();
   });
 
-  test("rejects a cursor with an unparseable timestamp", () => {
-    expect(
-      decodeMessagePageCursor(
-        Buffer.from(JSON.stringify(["not-a-date", MESSAGE_ID])).toString(
-          "base64url",
-        ),
-      ),
-    ).toBeNull();
+  test("rejects a non-string id", () => {
+    expect(decodeMessagePageCursor(encodeParts([42]))).toBeNull();
   });
 });

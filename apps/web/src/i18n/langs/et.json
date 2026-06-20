@@ -445,6 +445,7 @@
       "recentChats": "Hiljutised vestlused"
     },
     "loadEarlierMessages": "Laadi varasemad sõnumid",
+    "loadEarlierMessagesError": "Varasemate sõnumite laadimine ebaõnnestus",
     "loadingEarlierMessages": "Varasemate sõnumite laadimine…",
     "maxAttachmentsReached": "Maksimaalselt {count} faili sõnumi kohta",
     "mention": {

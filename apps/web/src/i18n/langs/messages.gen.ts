@@ -448,6 +448,7 @@ type Messages = {
       "recentChats": "Recent chats";
     };
     "loadEarlierMessages": "Load earlier messages";
+    "loadEarlierMessagesError": "Couldn't load earlier messages";
     "loadingEarlierMessages": "Loading earlier messages…";
     "maxAttachmentsReached": "Maximum {count} files per message";
     "mention": {

@@ -445,6 +445,7 @@
       "recentChats": "Bate-papos recentes"
     },
     "loadEarlierMessages": "Carregar mensagens anteriores",
+    "loadEarlierMessagesError": "Não foi possível carregar as mensagens anteriores",
     "loadingEarlierMessages": "Carregando mensagens anteriores…",
     "maxAttachmentsReached": "Máximo de arquivos {count} por mensagem",
     "mention": {
