@@ -1,6 +1,10 @@
 import { type RefObject, useMemo, useRef, useState } from "react";
 
-import { useInfiniteQuery, useSuspenseQuery } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 import { useTable } from "@tanstack/react-table";
 import { ChevronDownIcon, ChevronRightIcon, TableIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
@@ -40,6 +44,7 @@ import {
 import type { WorkspaceGridStyle } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
 import { useTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state";
 import {
+  groupCountsOptions,
   useKanbanGroupOptions,
   visibleEntityFieldIds,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
@@ -108,6 +113,25 @@ export const GroupedTableLayout = ({
     grouping.type === "built-in" &&
     groupByPropertyId !== getInternalPropertyId("kind");
 
+  // One query for every group's count, so a group only fires its row query
+  // when it actually has rows (empty groups never round-trip).
+  const groupCounts = useQuery({
+    ...groupCountsOptions({
+      workspaceId,
+      filters: view.layout.filters,
+      groupByPropertyId: groupByPropertyId ?? "",
+    }),
+    enabled: groupByPropertyId !== null && !isUnsupportedBuiltIn,
+  });
+  const countByValue = useMemo(() => {
+    const map = new Map<string | null, number>();
+    for (const entry of groupCounts.data ?? []) {
+      map.set(entry.value, entry.count);
+    }
+    return map;
+  }, [groupCounts.data]);
+  const countsLoaded = groupCounts.data !== undefined;
+
   if (groupByPropertyId === null || isUnsupportedBuiltIn) {
     return (
       <EmptyState
@@ -155,6 +179,9 @@ export const GroupedTableLayout = ({
       {groups.map((group) => (
         <GroupSection
           columns={columns}
+          count={
+            countsLoaded ? (countByValue.get(group.value) ?? 0) : undefined
+          }
           fieldIds={fieldIds}
           group={group}
           groupByPropertyId={groupByPropertyId}
@@ -242,6 +269,9 @@ type GroupSectionProps = {
   view: WorkspaceView<"table">;
   group: EntityGroup;
   groupByPropertyId: string;
+  // Authoritative row count from the one upfront group-counts query;
+  // `undefined` while that query is still loading.
+  count: number | undefined;
   fieldIds: string[];
   columns: TableColumnDef[];
   sumProperties: WorkspaceProperty[];
@@ -254,6 +284,7 @@ const GroupSection = ({
   view,
   group,
   groupByPropertyId,
+  count,
   fieldIds,
   columns,
   sumProperties,
@@ -262,8 +293,13 @@ const GroupSection = ({
 }: GroupSectionProps) => {
   const [collapsed, setCollapsed] = useState(false);
 
-  const query = useInfiniteQuery(
-    useKanbanGroupOptions({
+  // A category with no rows (an option no document carries yet) collapses to a
+  // slim header; only groups known to have rows fire their row query.
+  const isEmpty = count === 0;
+  const hasRows = count !== undefined && count > 0;
+
+  const query = useInfiniteQuery({
+    ...useKanbanGroupOptions({
       workspaceId,
       filters: view.layout.filters,
       sorts: view.layout.sorts,
@@ -272,21 +308,15 @@ const GroupSection = ({
       fieldIds,
       groupByPropertyId,
       groupValue: group.value,
-      includeTotalCount: true,
     }),
-  );
+    enabled: hasRows,
+  });
 
   const entities = useMemo(
     () => query.data?.pages.flatMap((page) => page.entities) ?? [],
     [query.data],
   );
-  const totalCount = query.data?.pages.at(0)?.totalCount ?? null;
   const loadedCount = entities.length;
-
-  // A category with no rows (an option no document carries yet) collapses
-  // to a slim header instead of an empty table body. `isLoading` guards the
-  // first fetch so a not-yet-resolved group never flashes as empty.
-  const isEmpty = !query.isLoading && (totalCount ?? loadedCount) === 0;
 
   const treeData = useMemo(() => toTableEntities(entities), [entities]);
 
@@ -318,10 +348,10 @@ const GroupSection = ({
         loadedCount={loadedCount}
         onToggle={() => setCollapsed((prev) => !prev)}
         sumProperties={sumProperties}
-        totalCount={totalCount}
+        totalCount={count ?? null}
       />
       {!collapsed &&
-        !isEmpty && (
+        hasRows && (
           // The table flows inline in the shared outer scroll (no nested scroll
           // box), so its rows render directly and the sticky group header stacks
           // cleanly above the columns.

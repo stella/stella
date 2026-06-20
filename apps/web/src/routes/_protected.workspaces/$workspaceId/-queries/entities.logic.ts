@@ -35,6 +35,12 @@ export type KanbanGroupKey = Omit<EntitiesWindowKey, "excludedKinds"> & {
   includeTotalCount?: boolean;
 };
 
+export type GroupCountsKey = {
+  workspaceId: string;
+  filters: ConditionNode[];
+  groupByPropertyId: string;
+};
+
 export const DEFAULT_ENTITY_VIEW_PAGE_SIZE = 100;
 export const DEFAULT_ENTITY_WINDOW_SIZE = 200;
 
@@ -160,6 +166,15 @@ export const entitiesKeys = {
       },
     ];
   },
+  groupCounts: ({
+    workspaceId,
+    filters,
+    groupByPropertyId,
+  }: GroupCountsKey) => [
+    ...entitiesKeys.all(workspaceId),
+    "group-counts",
+    { filters, groupByPropertyId },
+  ],
   summaries: (workspaceId: string) => [
     ...entitiesKeys.all(workspaceId),
     "summaries",

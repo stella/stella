@@ -18,6 +18,7 @@ import type {
   EntitiesPageKey,
   EntitiesWindowKey,
   FilesystemEntitiesKey,
+  GroupCountsKey,
   KanbanGroupKey,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities.logic";
 
@@ -27,6 +28,7 @@ type EntitiesOptionsInput = QueryOptionsInput<EntitiesPageKey>;
 type EntitiesWindowOptionsInput = QueryOptionsInput<EntitiesWindowKey>;
 type FilesystemEntitiesOptionsInput = QueryOptionsInput<FilesystemEntitiesKey>;
 type KanbanGroupOptionsInput = QueryOptionsInput<KanbanGroupKey>;
+type GroupCountsOptionsInput = QueryOptionsInput<GroupCountsKey>;
 
 type RawWorkspaceEntity = Omit<
   WorkspaceEntity,
@@ -257,6 +259,34 @@ export const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+  });
+
+// Per-group entity counts in one query, so the grouped table can skip
+// firing a row query for empty groups.
+export const groupCountsOptions = (key: GroupCountsOptionsInput) =>
+  queryOptions({
+    queryKey: entitiesKeys.groupCounts(key),
+    queryFn: async ({ signal }) => {
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
+        ["group-counts"].post(
+          {
+            filters: key.filters,
+            groupByPropertyId:
+              key.groupByPropertyId === "_status" ||
+              key.groupByPropertyId === "_kind"
+                ? key.groupByPropertyId
+                : toSafeId<"property">(key.groupByPropertyId),
+          },
+          { fetch: { signal } },
+        );
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data.counts;
+    },
   });
 
 // Defers the key so useSuspenseInfiniteQuery keeps showing stale

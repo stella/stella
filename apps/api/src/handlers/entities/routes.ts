@@ -23,6 +23,7 @@ import organizeSuggestions from "@/api/handlers/entities/organize-suggestions";
 import readEntities from "@/api/handlers/entities/read";
 import readEntityById from "@/api/handlers/entities/read-by-id";
 import readFilesystemTree from "@/api/handlers/entities/read-filesystem-tree";
+import readGroupCounts from "@/api/handlers/entities/read-group-counts";
 import readKanbanGroup from "@/api/handlers/entities/read-kanban-group";
 import readEntitySummaries from "@/api/handlers/entities/read-summaries";
 import readVersionById from "@/api/handlers/entities/read-version-by-id";
@@ -145,6 +146,10 @@ export const entitiesRoute = new Elysia({
   .post("/kanban-group", readKanbanGroup.handler, {
     body: readKanbanGroup.config.body,
     permissions: readKanbanGroup.config.permissions,
+  })
+  .post("/group-counts", readGroupCounts.handler, {
+    body: readGroupCounts.config.body,
+    permissions: readGroupCounts.config.permissions,
   })
   .post("/organize-suggestions", organizeSuggestions.handler, {
     body: organizeSuggestions.config.body,
