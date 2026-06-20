@@ -244,20 +244,16 @@ describe("semantic ProseMirror round-trip fixture", () => {
     const paragraph = firstParagraph(roundtripped);
 
     expect(pmValidation.valid).toBe(true);
-    // The shape now carries marks (eigenpal #641 — `Shape.nodeSpec.marks = "_"`
-    // so a tracked or commented shape survives the round-trip), so the
-    // comment range correctly re-opens around the shape-bearing run too. The
-    // mid-paragraph atom inserts split it from `mathEquation`.
+    // One comment id round-trips to one contiguous range (eigenpal/docx-editor
+    // #927): the range spans the `simpleField` and `mathEquation` atoms whose
+    // node specs drop the comment mark, instead of splitting into three ranges
+    // (the shape carries marks via eigenpal #641 `Shape.nodeSpec.marks = "_"`).
     expect(paragraph.content.map((content) => content.type)).toEqual([
       "commentRangeStart",
       "run",
-      "commentRangeEnd",
       "simpleField",
-      "commentRangeStart",
       "inlineSdt",
-      "commentRangeEnd",
       "mathEquation",
-      "commentRangeStart",
       "run",
       "commentRangeEnd",
     ]);

@@ -640,6 +640,66 @@ function handleSuggestionDelete(
 }
 
 /**
+ * Mark the text committed by an IME composition as a tracked insertion.
+ *
+ * Invoked from `compositionend` (deferred to a microtask) rather than from the
+ * `appendTransaction` catch-all. ProseMirror commits composed text as part of
+ * its own composition-end flush; adding the insertion mark *synchronously*
+ * during that flush re-wraps the very text node the IME just finalized, which
+ * corrupts CJK (Japanese / Chinese / Korean) input — characters duplicate or
+ * garble. Running one tick later, after the composition has settled, wraps the
+ * committed range safely. `markRangeAsInserted` skips nodes that already carry a
+ * tracked-change mark, so this is idempotent. eigenpal/docx-editor#938.
+ */
+function markComposedAsInsertion(
+  view: EditorView,
+  from: number,
+  pluginState: SuggestionModeState,
+): void {
+  const insertionType = view.state.schema.marks["insertion"];
+  const deletionType = view.state.schema.marks["deletion"];
+  if (!insertionType || !deletionType) {
+    return;
+  }
+  // PM leaves the cursor at the end of the committed composition.
+  const to = view.state.selection.to;
+  if (to <= from) {
+    return;
+  }
+
+  const tr = view.state.tr;
+  tr.setMeta(SUGGESTION_META, true);
+  const markAttrs =
+    findAdjacentRevisionForRange(
+      view.state.doc,
+      from,
+      to,
+      "insertion",
+      pluginState.author,
+    ) || makeMarkAttrs(pluginState);
+  markRangeAsInserted(
+    tr,
+    view.state.doc,
+    from,
+    to,
+    insertionType,
+    deletionType,
+    markAttrs,
+  );
+  if (tr.steps.length === 0) {
+    return;
+  }
+
+  // Collapse the caret right after the committed text, mirroring
+  // applySuggestionInsert. Re-rendering the now-marked run can otherwise leave
+  // the painted caret before the range; positions are stable across add-mark
+  // steps but map anyway to stay correct if that changes.
+  const caret = tr.mapping.map(to);
+  tr.setSelection(TextSelection.create(tr.doc, caret));
+  view.dispatch(tr);
+}
+
+/**
  * Create the suggestion mode plugin.
  * When active, text edits become tracked changes.
  */
@@ -647,6 +707,19 @@ export function createSuggestionModePlugin(
   initialActive = false,
   author = "User",
 ): Plugin {
+  // IME composition tracking. Each call returns a fresh Plugin, so a separate
+  // view never shares this closure — the flag is per editor instance.
+  //   - `composing` gates the `appendTransaction` catch-all so it never mutates
+  //     the document mid-composition (mid-composition mark changes corrupt CJK
+  //     input). It stays true until the deferred `compositionend` marking runs,
+  //     so the catch-all also skips PM's own composition-commit transaction:
+  //     `view.composing` flips false slightly before that final flush, hence the
+  //     manual flag. eigenpal/docx-editor#938.
+  //   - `compositionFrom` records where the composition began so
+  //     `compositionend` can mark exactly the committed range as an insertion.
+  let composing = false;
+  let compositionFrom: number | null = null;
+
   return new Plugin({
     key: suggestionModeKey,
 
@@ -665,6 +738,73 @@ export function createSuggestionModePlugin(
 
     props: {
       handleDOMEvents: {
+        // Remember where the composition starts and suppress the catch-all
+        // while it runs. Composed text is marked as an insertion later, on
+        // compositionend — never mid-composition. eigenpal/docx-editor#938.
+        compositionstart(view: EditorView) {
+          const pluginState = suggestionModeKey.getState(view.state);
+          if (!pluginState?.active) {
+            return false;
+          }
+          composing = true;
+          const { from, to } = view.state.selection;
+          // Composing over a non-empty selection: record the replaced range as a
+          // tracked deletion up front (mirrors applySuggestionInsert) and
+          // collapse the caret after it, so the composed text commits as an
+          // insertion on compositionend instead of the selected text being
+          // dropped natively with no redline. eigenpal/docx-editor#938.
+          if (from !== to) {
+            const insertionType = view.state.schema.marks["insertion"];
+            const deletionType = view.state.schema.marks["deletion"];
+            if (insertionType && deletionType) {
+              const tr = view.state.tr;
+              tr.setMeta(SUGGESTION_META, true);
+              markRangeAsDeleted(
+                tr,
+                view.state.doc,
+                from,
+                to,
+                insertionType,
+                deletionType,
+                pluginState,
+              );
+              const caret = tr.mapping.map(to);
+              tr.setSelection(TextSelection.create(tr.doc, caret));
+              view.dispatch(tr);
+              compositionFrom = caret;
+              return false;
+            }
+          }
+          compositionFrom = from;
+          return false;
+        },
+        // Mark the committed text as a tracked insertion AFTER the composition
+        // settles. PM commits the composed text in its own compositionend flush
+        // (which runs after this handler); `composing` stays true across that
+        // flush so the catch-all skips it, then the range is marked and the flag
+        // cleared one microtask later. See `markComposedAsInsertion`.
+        compositionend(view: EditorView) {
+          const pluginState = suggestionModeKey.getState(view.state);
+          const from = compositionFrom;
+          compositionFrom = null;
+          if (!pluginState?.active || from == null) {
+            composing = false;
+            return false;
+          }
+          queueMicrotask(() => {
+            try {
+              // Re-read state: suggestion mode may have been toggled off (or the
+              // author changed) between scheduling and running this callback.
+              const current = suggestionModeKey.getState(view.state);
+              if (current?.active) {
+                markComposedAsInsertion(view, from, current);
+              }
+            } finally {
+              composing = false;
+            }
+          });
+          return false;
+        },
         // Intercept text input at the DOM level. ProseMirror's handleTextInput
         // is NOT reliably called when the hidden PM has complex mark structures
         // (it requires the change to span exactly one text node). By handling
@@ -672,6 +812,14 @@ export function createSuggestionModePlugin(
         beforeinput(view: EditorView, event: InputEvent) {
           const pluginState = suggestionModeKey.getState(view.state);
           if (!pluginState?.active) {
+            return false;
+          }
+
+          // Never intercept while an IME composition is active. Calling
+          // preventDefault() or dispatching a transaction here desyncs the
+          // browser's composition from the DOM and garbles CJK input — the
+          // committed text is handled by compositionend instead.
+          if (composing || event.isComposing) {
             return false;
           }
 
@@ -727,6 +875,13 @@ export function createSuggestionModePlugin(
         if (!pluginState?.active) {
           return false;
         }
+        // During / right after an IME composition, ProseMirror has already
+        // applied the composed text from the DOM. Re-inserting it here would
+        // duplicate it (and desync the view), so defer to compositionend.
+        // eigenpal/docx-editor#938.
+        if (composing || view.composing) {
+          return false;
+        }
         return applySuggestionInsert(view, from, to, text, pluginState);
       },
 
@@ -746,6 +901,15 @@ export function createSuggestionModePlugin(
     appendTransaction(transactions, _oldState, newState) {
       const pluginState = suggestionModeKey.getState(newState);
       if (!pluginState?.active) {
+        return null;
+      }
+
+      // Leave composed text un-marked while an IME composition is in flight.
+      // `compositionend` marks the final committed range once, after the IME
+      // settles; marking here (mid-composition, or during PM's compositionend
+      // commit) re-wraps the active text node and corrupts CJK input.
+      // eigenpal/docx-editor#938.
+      if (composing) {
         return null;
       }
 

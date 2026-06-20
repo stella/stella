@@ -554,6 +554,8 @@ export type TableBlock = {
   justification?: "left" | "center" | "right";
   /** Table indent from left margin (in pixels, from w:tblInd) */
   indent?: number;
+  /** Right-to-left column order (w:bidiVisual): logical column 0 paints on the right. */
+  bidi?: boolean;
   /** Floating table properties (pixel values). */
   floating?: FloatingTablePosition;
   pmStart?: number;
