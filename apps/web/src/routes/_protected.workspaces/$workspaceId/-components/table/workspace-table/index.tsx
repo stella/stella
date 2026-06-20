@@ -270,8 +270,12 @@ export const WorkspaceTable = ({
     centerColumns: table.getCenterLeafColumns(),
     rightColumns: table.getRightLeafColumns(),
   }).filter((column) => column.getIsVisible());
-  const addPropertyColumn =
-    orderedColumns.find((column) => column.id === addPropertyColId) ?? null;
+  // Grouped sections drop the per-group add-column rail: it would repeat under
+  // every group and the toolbar already offers "+ new column". (Its trigger is
+  // absolute-positioned, so it also wouldn't pin in the shared scroll.)
+  const addPropertyColumn = inlineFlow
+    ? null
+    : (orderedColumns.find((column) => column.id === addPropertyColId) ?? null);
   const renderColumns = orderedColumns.filter(
     (column) => column.id !== addPropertyColId,
   );
