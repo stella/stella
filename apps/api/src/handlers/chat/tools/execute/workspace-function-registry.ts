@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
+import { and, count, inArray } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db";
+import { entityVersions } from "@/api/db/schema";
 import { buildChatSourceDocument } from "@/api/handlers/chat/tools/chat-source-document";
 import { createToolFunction } from "@/api/handlers/chat/tools/execute/execute-tool-function";
 import { buildPaginatedResult } from "@/api/handlers/chat/tools/execute/pagination";
@@ -407,7 +409,6 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
           },
           with: {
             createdByUser: { columns: { name: true } },
-            versions: { columns: { id: true } },
             currentVersion: {
               columns: { id: true },
               with: {
@@ -424,6 +425,29 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
             createdAt: "asc",
           },
         }),
+      );
+
+      // Count versions per entity with a DB-side aggregate rather than eager-
+      // loading every version row: an entity's version history is unbounded
+      // (see the version-history pagination), so `with: { versions }` would
+      // pull thousands of rows for a heavily-revised document.
+      const versionCountRows = yield* await safeDb((tx) =>
+        tx
+          .select({
+            entityId: entityVersions.entityId,
+            total: count(),
+          })
+          .from(entityVersions)
+          .where(
+            and(
+              inArray(entityVersions.entityId, entityIds),
+              inArray(entityVersions.workspaceId, scopedWorkspaceIds),
+            ),
+          )
+          .groupBy(entityVersions.entityId),
+      );
+      const versionCountByEntityId = new Map(
+        versionCountRows.map((row) => [row.entityId, row.total]),
       );
 
       return Result.ok({
@@ -469,7 +493,7 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
               refRegistry,
               workspaceId: entity.workspaceId,
             }),
-            versionCount: entity.versions.length,
+            versionCount: versionCountByEntityId.get(entity.id) ?? 0,
           };
         }),
       });
