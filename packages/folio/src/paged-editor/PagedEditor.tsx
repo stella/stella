@@ -208,6 +208,7 @@ import {
   twipsToPixels,
 } from "./sectionGeometry";
 import { SelectionOverlay } from "./SelectionOverlay";
+import { resizeColumnPair } from "./tableColumnResize";
 import { tableInsertButtonOffset } from "./tableInsertButtonGeometry";
 import { getTransactionDirtyRange } from "./transactionDirtyRange";
 import { useDragAutoScroll } from "./useDragAutoScroll";
@@ -2049,6 +2050,7 @@ export function PagedEditor(
     right: 0,
   });
   const resizeHandleRef = useRef<HTMLElement | null>(null);
+  const resizeBidiRef = useRef(false);
 
   // Row resize state
   const isResizingRowRef = useRef(false);
@@ -4576,6 +4578,7 @@ export function PagedEditor(
           : null;
         resizeStartXRef.current = e.clientX;
         resizeHandleRef.current = target;
+        resizeBidiRef.current = target.dataset["bidi"] === "true";
         target.classList.add("dragging");
 
         const colIndex = Number.parseInt(
@@ -4864,11 +4867,13 @@ export function PagedEditor(
           // Update stored widths (convert pixel delta to twips: 1px ≈ 15 twips at 96dpi)
           const deltaTwips = Math.round(delta * 15);
           const minWidth = 300; // ~0.2 inches minimum
-          const newLeft = resizeOrigWidthsRef.current.left + deltaTwips;
-          const newRight = resizeOrigWidthsRef.current.right - deltaTwips;
-          if (newLeft >= minWidth && newRight >= minWidth) {
-            resizeOrigWidthsRef.current = { left: newLeft, right: newRight };
-          }
+          resizeOrigWidthsRef.current = resizeColumnPair(
+            resizeOrigWidthsRef.current.left,
+            resizeOrigWidthsRef.current.right,
+            deltaTwips,
+            resizeBidiRef.current,
+            minWidth,
+          );
         }
         return;
       }

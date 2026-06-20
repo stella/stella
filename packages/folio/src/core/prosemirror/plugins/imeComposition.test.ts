@@ -30,12 +30,15 @@ const schema = new Schema({
     text: { group: "inline" },
   },
   marks: {
+    // Mirror the production tracked-change marks (TrackedChangeExtensions):
+    // inclusive: false so text typed at a revision boundary does not inherit it.
     insertion: {
       attrs: {
         revisionId: { default: 0 },
         author: { default: "" },
         date: { default: "" },
       },
+      inclusive: false,
       toDOM: () => ["ins", 0],
     },
     deletion: {
@@ -44,6 +47,7 @@ const schema = new Schema({
         author: { default: "" },
         date: { default: "" },
       },
+      inclusive: false,
       toDOM: () => ["del", 0],
     },
   },
@@ -196,6 +200,28 @@ describe("SuggestionMode IME composition", () => {
     // Tracking is off now, so the composed text must NOT be marked.
     expect(insertionText(view.state)).toEqual([]);
     expect(view.state.doc.textContent).toBe("Hello日本語");
+  });
+
+  test("composing over a selection records the replaced text as a tracked deletion (eigenpal/docx-editor#938)", async () => {
+    const { view, domEvents } = setup("Hello World");
+    // Select "World" (positions 7..12) and start composing over it.
+    view.dispatch(
+      view.state.tr.setSelection(TextSelection.create(view.state.doc, 7, 12)),
+    );
+
+    domEvents.compositionstart(view);
+    // compositionstart struck the selection and collapsed the caret after it;
+    // PM then commits the composed text at the caret.
+    const caret = view.state.selection.from;
+    view.dispatch(view.state.tr.insertText("世界", caret, caret));
+    domEvents.compositionend(view);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Redline preserved: the replaced selection is struck, the composed text inserted.
+    expect(deletionText(view.state)).toEqual(["World"]);
+    expect(insertionText(view.state)).toEqual(["世界"]);
+    expect(view.state.doc.textContent).toBe("Hello World世界");
   });
 
   test("the catch-all resumes for non-composition input after composing ends", async () => {

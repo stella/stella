@@ -654,6 +654,11 @@ export function renderTableFragment(
     handle.style.zIndex = "10";
     handle.dataset["columnIndex"] = String(col);
     handle.dataset["tableBlockId"] = String(fragment.blockId);
+    // RTL boundary: the two columns are visually mirrored, so the resize path
+    // must invert the drag delta (eigenpal/docx-editor#940).
+    if (block.bidi) {
+      handle.dataset["bidi"] = "true";
+    }
     if (fragment.pmStart !== undefined) {
       handle.dataset["tablePmStart"] = String(fragment.pmStart);
     }
@@ -813,8 +818,11 @@ export function renderTableFragment(
     rightHandle.style.height = "100%";
     rightHandle.style.cursor = "col-resize";
     rightHandle.style.zIndex = "10";
+    // The visual right edge belongs to logical column 0 in an RTL table, so the
+    // edge handle resizes that column instead of the last one
+    // (eigenpal/docx-editor#940).
     rightHandle.dataset["columnIndex"] = String(
-      measure.columnWidths.length - 1,
+      block.bidi ? 0 : measure.columnWidths.length - 1,
     );
     rightHandle.dataset["tableBlockId"] = String(fragment.blockId);
     rightHandle.dataset["isEdge"] = "right";

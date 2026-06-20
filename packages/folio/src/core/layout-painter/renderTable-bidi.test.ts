@@ -219,5 +219,33 @@ describe("renderTableFragment RTL column order (w:bidiVisual)", () => {
     );
     // Boundary after logical column 0 is at x=100; mirrored to 250-100=150, less the 3px grab offset.
     expect(handle?.style["left"]).toBe("147px");
+    // Tagged bidi so the resize path inverts the drag delta.
+    expect(handle?.dataset["bidi"]).toBe("true");
+  });
+
+  test("bidiVisual edge handle resizes logical column 0 (the visual right edge)", () => {
+    const renderTable = (bidi: boolean): FakeElement => {
+      const { fragment, block, measure } = buildTwoColumnTable(bidi);
+      return renderTableFragment(fragment, block, measure, renderContext, {
+        document: fakeDocument,
+      }) as unknown as FakeElement;
+    };
+    const ltr = renderTable(false);
+    const rtl = renderTable(true);
+
+    const edgeOf = (el: FakeElement): FakeElement | undefined =>
+      el.children.find(
+        (child) => child.className === TABLE_CLASS_NAMES.tableEdgeHandleRight,
+      );
+
+    // LTR: the right edge resizes the last logical column.
+    expect(edgeOf(ltr)?.dataset["columnIndex"]).toBe("1");
+    expect(edgeOf(ltr)?.dataset["bidi"]).toBeUndefined();
+    // RTL: the visual right edge is logical column 0; internal handle is bidi-tagged.
+    expect(edgeOf(rtl)?.dataset["columnIndex"]).toBe("0");
+    const internal = rtl.children.find(
+      (child) => child.className === TABLE_CLASS_NAMES.resizeHandle,
+    );
+    expect(internal?.dataset["bidi"]).toBe("true");
   });
 });

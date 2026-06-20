@@ -747,7 +747,35 @@ export function createSuggestionModePlugin(
             return false;
           }
           composing = true;
-          compositionFrom = view.state.selection.from;
+          const { from, to } = view.state.selection;
+          // Composing over a non-empty selection: record the replaced range as a
+          // tracked deletion up front (mirrors applySuggestionInsert) and
+          // collapse the caret after it, so the composed text commits as an
+          // insertion on compositionend instead of the selected text being
+          // dropped natively with no redline. eigenpal/docx-editor#938.
+          if (from !== to) {
+            const insertionType = view.state.schema.marks["insertion"];
+            const deletionType = view.state.schema.marks["deletion"];
+            if (insertionType && deletionType) {
+              const tr = view.state.tr;
+              tr.setMeta(SUGGESTION_META, true);
+              markRangeAsDeleted(
+                tr,
+                view.state.doc,
+                from,
+                to,
+                insertionType,
+                deletionType,
+                pluginState,
+              );
+              const caret = tr.mapping.map(to);
+              tr.setSelection(TextSelection.create(tr.doc, caret));
+              view.dispatch(tr);
+              compositionFrom = caret;
+              return false;
+            }
+          }
+          compositionFrom = from;
           return false;
         },
         // Mark the committed text as a tracked insertion AFTER the composition
