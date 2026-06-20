@@ -6,6 +6,7 @@ import { ChevronDownIcon, ChevronRightIcon, TableIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import { cn } from "@stll/ui/lib/utils";
 
 import type {
   WorkspaceEntity,
@@ -190,6 +191,11 @@ const GroupSection = ({
   const totalCount = query.data?.pages.at(0)?.totalCount ?? null;
   const loadedCount = entities.length;
 
+  // A category with no rows (an option no document carries yet) collapses
+  // to a slim header instead of an empty table body. `isLoading` guards the
+  // first fetch so a not-yet-resolved group never flashes as empty.
+  const isEmpty = !query.isLoading && (totalCount ?? loadedCount) === 0;
+
   const treeData = useMemo(() => toTableEntities(entities), [entities]);
 
   const table = useTable({
@@ -212,6 +218,7 @@ const GroupSection = ({
     <section>
       <GroupHeader
         collapsed={collapsed}
+        empty={isEmpty}
         entities={entities}
         group={group}
         loadedCount={loadedCount}
@@ -219,26 +226,27 @@ const GroupSection = ({
         sumProperties={sumProperties}
         totalCount={totalCount}
       />
-      {!collapsed && (
-        // Each section's table owns an internal scroll container (the
-        // virtualizer needs a sized scroll element), so the section is
-        // bounded; the outer page scrolls between sections. This mirrors
-        // kanban columns, which each scroll independently.
-        <div className="flex max-h-[70vh] min-h-32 flex-col">
-          <WorkspaceTable
-            contentMode={tableState.contentMode}
-            hasNextPage={query.hasNextPage}
-            isFetchingNextPage={query.isFetchingNextPage}
-            onLoadMore={() => {
-              if (query.hasNextPage && !query.isFetchingNextPage) {
-                void query.fetchNextPage();
-              }
-            }}
-            table={table}
-            workspaceId={workspaceId}
-          />
-        </div>
-      )}
+      {!collapsed &&
+        !isEmpty && (
+          // Each section's table owns an internal scroll container (the
+          // virtualizer needs a sized scroll element), so the section is
+          // bounded; the outer page scrolls between sections. This mirrors
+          // kanban columns, which each scroll independently.
+          <div className="flex max-h-[70vh] min-h-32 flex-col">
+            <WorkspaceTable
+              contentMode={tableState.contentMode}
+              hasNextPage={query.hasNextPage}
+              isFetchingNextPage={query.isFetchingNextPage}
+              onLoadMore={() => {
+                if (query.hasNextPage && !query.isFetchingNextPage) {
+                  void query.fetchNextPage();
+                }
+              }}
+              table={table}
+              workspaceId={workspaceId}
+            />
+          </div>
+        )}
     </section>
   );
 };
@@ -246,6 +254,7 @@ const GroupSection = ({
 type GroupHeaderProps = {
   group: EntityGroup;
   collapsed: boolean;
+  empty: boolean;
   onToggle: () => void;
   loadedCount: number;
   totalCount: number | null;
@@ -256,6 +265,7 @@ type GroupHeaderProps = {
 const GroupHeader = ({
   group,
   collapsed,
+  empty,
   onToggle,
   loadedCount,
   totalCount,
@@ -268,17 +278,28 @@ const GroupHeader = ({
   const ChevronIcon = collapsed ? ChevronRightIcon : ChevronDownIcon;
 
   return (
-    <div className="bg-muted/40 sticky top-0 z-20 flex items-center gap-2 border-b px-3 py-1.5">
-      <Button
-        aria-expanded={!collapsed}
-        className="text-muted-foreground size-5 min-h-0 p-0"
-        onClick={onToggle}
-        size="icon-xs"
-        type="button"
-        variant="ghost"
-      >
-        <ChevronIcon className="size-3.5" />
-      </Button>
+    <div
+      className={cn(
+        "bg-muted/40 sticky top-0 z-20 flex items-center gap-2 border-b px-3 py-1.5",
+        // An empty category recedes into the background, surfacing on hover
+        // so it stays scannable without competing with populated groups.
+        empty && "opacity-60 transition-opacity duration-200 hover:opacity-100",
+      )}
+    >
+      {empty ? (
+        <span aria-hidden className="size-5 shrink-0" />
+      ) : (
+        <Button
+          aria-expanded={!collapsed}
+          className="text-muted-foreground size-5 min-h-0 p-0"
+          onClick={onToggle}
+          size="icon-xs"
+          type="button"
+          variant="ghost"
+        >
+          <ChevronIcon className="size-3.5" />
+        </Button>
+      )}
       {group.color && (
         <span
           className="size-2.5 shrink-0 rounded-full"
@@ -288,22 +309,23 @@ const GroupHeader = ({
       <span className="text-foreground truncate text-sm font-medium">
         {group.label}
       </span>
-      <span className="text-muted-foreground text-xs">
+      <span className="text-muted-foreground text-xs tabular-nums">
         {t("workspaces.views.groupItemCount", { count })}
       </span>
-      {sumProperties.map((property) => {
-        const sum = sumIntProperty(entities, property.id);
-        return (
-          <span
-            className="text-muted-foreground ms-1 text-xs"
-            key={property.id}
-          >
-            <span className="font-medium">{property.name}</span>
-            {": "}
-            {format.number(sum)}
-          </span>
-        );
-      })}
+      {!empty &&
+        sumProperties.map((property) => {
+          const sum = sumIntProperty(entities, property.id);
+          return (
+            <span
+              className="text-muted-foreground ms-1 text-xs tabular-nums"
+              key={property.id}
+            >
+              <span className="font-medium">{property.name}</span>
+              {": "}
+              {format.number(sum)}
+            </span>
+          );
+        })}
     </div>
   );
 };
