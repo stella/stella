@@ -1499,6 +1499,51 @@ describe("fromProseDoc", () => {
     expect(comment?.attrs.commentId).toBe(123);
   });
 
+  test("keeps one comment range across an interrupting tracked-change run (eigenpal/docx-editor#927)", () => {
+    const commentMark = schema.mark("comment", { commentId: 17 });
+    const insertionMark = schema.mark("insertion", {
+      revisionId: 1,
+      author: "Reviewer",
+      date: "2026-06-20T00:00:00Z",
+    });
+    const pmDoc = schema.node("doc", null, [
+      schema.node("paragraph", null, [
+        schema.text("hello", [commentMark]),
+        schema.text("XXX", [insertionMark]),
+        schema.text("world", [commentMark]),
+      ]),
+    ]);
+
+    const document = fromProseDoc(pmDoc);
+    const paragraph = document.package.document.content[0];
+
+    expect(paragraph?.type).toBe("paragraph");
+    if (paragraph?.type !== "paragraph") {
+      return;
+    }
+
+    // A single comment id must yield exactly one range; the tracked-change run
+    // that drops the comment mark sits inside it, not between two ranges.
+    expect(paragraph.content.map((content) => content.type)).toEqual([
+      "commentRangeStart",
+      "run",
+      "insertion",
+      "run",
+      "commentRangeEnd",
+    ]);
+
+    const starts = paragraph.content.filter(
+      (content) => content.type === "commentRangeStart",
+    );
+    const ends = paragraph.content.filter(
+      (content) => content.type === "commentRangeEnd",
+    );
+    expect(starts).toHaveLength(1);
+    expect(ends).toHaveLength(1);
+    expect(starts[0]?.id).toBe(17);
+    expect(ends[0]?.id).toBe(17);
+  });
+
   test("preserves comment ranges across multiple paragraphs", () => {
     const commentMark = schema.mark("comment", { commentId: 456 });
     const pmDoc = schema.node("doc", null, [

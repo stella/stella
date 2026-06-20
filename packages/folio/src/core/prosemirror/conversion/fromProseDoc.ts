@@ -1103,6 +1103,20 @@ function extractParagraphContent(
   let currentHyperlinkKey: string | null = null;
   const openedComments = new Set<number>();
 
+  // A single comment id must round-trip to a single contiguous comment range.
+  // Pre-compute the last offset at which each comment appears so the range
+  // spans any interrupting node that drops the mark (a tracked-change run, or
+  // an atom whose node spec can't carry the comment mark) instead of being
+  // split into several ranges for one id — invalid OOXML that Word rejects as
+  // unreadable content (eigenpal/docx-editor#927).
+  const commentLastOffset = new Map<number, number>();
+  // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
+  paragraph.forEach((node, offset) => {
+    for (const commentId of getCommentMarkIds(node.marks)) {
+      commentLastOffset.set(commentId, offset);
+    }
+  });
+
   const flushCurrentInline = () => {
     if (currentRun) {
       content.push(currentRun);
@@ -1116,41 +1130,41 @@ function extractParagraphContent(
     }
   };
 
-  const syncCommentRanges = (node: PMNode) => {
+  const syncCommentRanges = (node: PMNode, offset: number) => {
     const nodeCommentIds = getCommentMarkIds(node.marks);
-    let changed = false;
+
+    // Close an open range only once this node is past the comment's last
+    // occurrence; a comment that reappears later stays open so the range spans
+    // the gap (eigenpal/docx-editor#927).
+    const toClose: number[] = [];
     for (const commentId of openedComments) {
-      if (!nodeCommentIds.has(commentId)) {
-        changed = true;
-        break;
+      const lastOffset = commentLastOffset.get(commentId) ?? offset;
+      if (!nodeCommentIds.has(commentId) && lastOffset <= offset) {
+        toClose.push(commentId);
       }
     }
-    if (!changed) {
-      for (const commentId of nodeCommentIds) {
-        if (!openedComments.has(commentId)) {
-          changed = true;
-          break;
-        }
+
+    const toOpen: number[] = [];
+    for (const commentId of nodeCommentIds) {
+      if (!openedComments.has(commentId)) {
+        toOpen.push(commentId);
       }
     }
-    if (!changed) {
+
+    if (toClose.length === 0 && toOpen.length === 0) {
       return;
     }
 
     flushCurrentInline();
 
-    for (const commentId of [...openedComments]) {
-      if (!nodeCommentIds.has(commentId)) {
-        content.push({ type: "commentRangeEnd", id: commentId });
-        openedComments.delete(commentId);
-      }
+    // Stable id ordering keeps shared-boundary emission deterministic.
+    for (const commentId of toClose.toSorted((a, b) => a - b)) {
+      content.push({ type: "commentRangeEnd", id: commentId });
+      openedComments.delete(commentId);
     }
-
-    for (const commentId of nodeCommentIds) {
-      if (!openedComments.has(commentId)) {
-        content.push({ type: "commentRangeStart", id: commentId });
-        openedComments.add(commentId);
-      }
+    for (const commentId of toOpen.toSorted((a, b) => a - b)) {
+      content.push({ type: "commentRangeStart", id: commentId });
+      openedComments.add(commentId);
     }
   };
 
@@ -1166,8 +1180,8 @@ function extractParagraphContent(
     }
   };
 
-  const processInlineNode = (node: PMNode): void => {
-    syncCommentRanges(node);
+  const processInlineNode = (node: PMNode, offset: number): void => {
+    syncCommentRanges(node, offset);
     const linkMark = node.marks.find((m) => m.type.name === "hyperlink");
 
     // Check for footnote/endnote reference mark
@@ -1315,7 +1329,7 @@ function extractParagraphContent(
         const splitOffset = Math.max(item.attrs.offset - offset, consumed);
         const segment = node.text.slice(consumed, splitOffset);
         if (segment) {
-          processInlineNode(node.type.schema.text(segment, node.marks));
+          processInlineNode(node.type.schema.text(segment, node.marks), offset);
         }
         flushCurrentInline();
         content.push(createEmptyHyperlink(item.attrs));
@@ -1325,12 +1339,12 @@ function extractParagraphContent(
 
       const remainder = node.text.slice(consumed);
       if (remainder) {
-        processInlineNode(node.type.schema.text(remainder, node.marks));
+        processInlineNode(node.type.schema.text(remainder, node.marks), offset);
       }
       return;
     }
 
-    processInlineNode(node);
+    processInlineNode(node, offset);
   });
 
   flushEmptyHyperlinksThroughOffset(Number.POSITIVE_INFINITY);
