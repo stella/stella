@@ -272,6 +272,7 @@ export const resolveLookupFields = async ({
       continue;
     }
 
+    // oxlint-disable-next-line no-await-in-loop -- sequential: rate-limited external registry lookup that appends to the shared `errors`/`resolved` accumulators
     const outcome = await resolve({
       registry: lookup.registry,
       query: incoming,

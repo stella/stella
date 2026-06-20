@@ -251,6 +251,7 @@ export const fillTemplate = async (
     if (!entry) {
       continue;
     }
+    // oxlint-disable-next-line no-await-in-loop -- sequential: numbering shares one counter across parts and body must be read first to drive document-order counts
     const partXml = await entry.async("string");
     // Split-safe pre-filter: skip DOM parsing only for parts that cannot hold a
     // numbering marker even across runs (a contiguous test would miss a marker

@@ -100,6 +100,7 @@ export const adaptAiFields = async ({
     if (!entry) {
       continue;
     }
+    // oxlint-disable-next-line no-await-in-loop -- sequential: builds `parts` in the sorted part order the patch pass relies on so occurrence indices line up
     parts.push({ name, xml: await entry.async("string") });
   }
 
@@ -112,6 +113,7 @@ export const adaptAiFields = async ({
     if (occurrences.length === 0) {
       continue;
     }
+    // oxlint-disable-next-line no-await-in-loop -- sequential: metered per-field AI adaptation call; must not fan out across fields
     const renderings = await adapt({
       stub,
       fieldPath: field.path,
